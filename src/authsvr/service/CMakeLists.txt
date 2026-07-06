@@ -16,5 +16,5 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/log"
   USE_SERVICE_PROTOCOL
   "authsvr-config"
-  GENERATED_OUTPUT_FILES
+  GENERATED_FLOW_NAMES
   "${PROJECT_NAMESPACE}.AuthsvrClientService")

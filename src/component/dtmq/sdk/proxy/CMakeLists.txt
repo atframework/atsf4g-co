@@ -20,6 +20,6 @@ project_component_declare_sdk(
   ${DTMQ_PROXY_SERVICE_HEADERS}
   SOURCES
   ${DTMQ_PROXY_SERVICE_SOURCES}
-  GENERATED_OUTPUT_FILES
+  GENERATED_FLOW_NAMES
   "atframework.dtmq.DtmqProxysvrService"
   "atframework.dtmq.DtmqProxysvrNotifyService")

@@ -1449,150 +1449,53 @@ def generate_group(options, group):
 
         selected_inner_items[inner_key] = inner_obj
 
-    # generate global templates
-    for outer_rule in group.outer_templates:
-        render_args = {
-            "generator": os.path.basename(__file__),
-            "local_vcs_user_name": group.local_vcs_user_name,
-            group.outer_name: group.outer_inst,
-            group.inner_set_name: selected_inner_items,
-            "output_file_path": None,
-            "output_render_path": None,
-            "current_instance": group.outer_inst,
-            group.outer_name + "_dllexport_decl": group.outer_dllexport_decl,
-            group.inner_name + "_dllexport_decl": group.inner_dllexport_decl,
-            "PbConvertRule": PbConvertRule,
-        }
-        for k in group.custom_variables:
-            render_args[k] = group.custom_variables[k]
+    # generate outer templates
+    if group.outer_templates  is not None:
+        for outer_rule in group.outer_templates:
+            render_args = {
+                "generator": os.path.basename(__file__),
+                "local_vcs_user_name": group.local_vcs_user_name,
+                "database": group.database,
+                group.outer_name: group.outer_inst,
+                group.inner_set_name: selected_inner_items,
+                "output_file_path": None,
+                "output_render_path": None,
+                "current_instance": group.outer_inst,
+                group.outer_name + "_dllexport_decl": group.outer_dllexport_decl,
+                group.inner_name + "_dllexport_decl": group.inner_dllexport_decl,
+                "PbConvertRule": PbConvertRule,
+            }
+            for k in group.custom_variables:
+                render_args[k] = group.custom_variables[k]
 
-        try:
-            (
-                input_template,
-                output_rule,
-                output_render,
-                rewrite_overwrite,
-            ) = parse_generate_rule(outer_rule)
-            if not os.path.exists(input_template):
-                cprintf_stderr(
-                    [print_style.FC_RED, print_style.FW_BOLD],
-                    "[INFO]: template file {0} not found.\n",
-                    input_template,
-                )
-                continue
-
-            lookup = TemplateLookup(
-                directories=[os.path.dirname(input_template)],
-                module_directory=make_module_cache_dir,
-            )
-            if output_render:
-                output_file = Template(output_rule,
-                                       lookup=lookup).render(**render_args)
-            else:
-                output_file = output_rule
-            render_args["output_render_path"] = output_file
-
-            if group.output_directory:
-                output_file = os.path.join(group.output_directory, output_file)
-            elif options.output_dir:
-                output_file = os.path.join(options.output_dir, output_file)
-
-            output_file = os.path.normpath(output_file)
-            if options.print_output_files:
-                print(output_file)
-            else:
-                if os.path.exists(output_file):
-                    force_overwrite = rewrite_overwrite
-                    if force_overwrite is None:
-                        force_overwrite = group.overwrite
-                    if force_overwrite is None:
-                        force_overwrite = not options.no_overwrite
-                    if not force_overwrite:
-                        if not options.quiet:
-                            cprintf_stdout(
-                                [print_style.FC_YELLOW, print_style.FW_BOLD],
-                                "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
-                                output_file,
-                                input_template,
-                            )
-                        continue
-
-                render_args["output_file_path"] = output_file
-                source_tmpl = lookup.get_template(
-                    os.path.basename(input_template))
-                final_output_dir = os.path.dirname(output_file)
-                if final_output_dir and not os.path.exists(final_output_dir):
-                    os.makedirs(final_output_dir, 0o777)
-                write_code_if_different(
-                    group.project_dir,
-                    output_file,
-                    options.encoding,
-                    source_tmpl.render(**render_args),
-                    group.clang_format_path,
-                    group.clang_format_rule_re,
-                )
-
-                if not options.quiet:
-                    cprintf_stdout(
-                        [print_style.FC_GREEN, print_style.FW_BOLD],
-                        "[INFO]: generate {0} to {1} success.\n",
-                        input_template,
-                        output_file,
-                    )
-        except Exception as e:
-            print_exception_with_traceback(e)
-            raise
-
-    # generate per inner templates
-    for inner_rule in group.inner_templates:
-        render_args = {
-            "generator": os.path.basename(__file__),
-            "local_vcs_user_name": group.local_vcs_user_name,
-            group.outer_name: group.outer_inst,
-            group.inner_set_name: selected_inner_items,
-            group.inner_name: None,
-            "output_file_path": None,
-            "output_render_path": None,
-            "current_instance": None,
-            group.outer_name + "_dllexport_decl": group.outer_dllexport_decl,
-            group.inner_name + "_dllexport_decl": group.inner_dllexport_decl,
-            "PbConvertRule": PbConvertRule,
-        }
-        for k in group.custom_variables:
-            render_args[k] = group.custom_variables[k]
-
-        (
-            input_template,
-            output_rule,
-            output_render,
-            rewrite_overwrite,
-        ) = parse_generate_rule(inner_rule)
-        if not os.path.exists(input_template):
-            cprintf_stderr(
-                [print_style.FC_RED, print_style.FW_BOLD],
-                "[INFO]: template file {0} not found.\n",
-                input_template,
-            )
-            continue
-        lookup = TemplateLookup(
-            directories=[os.path.dirname(input_template)],
-            module_directory=make_module_cache_dir,
-        )
-
-        for selected_inner in selected_inner_items.values():
-            render_args[group.inner_name] = selected_inner
-            render_args["current_instance"] = selected_inner
             try:
+                (
+                    input_template,
+                    output_rule,
+                    output_render,
+                    rewrite_overwrite,
+                ) = parse_generate_rule(outer_rule)
+                if not os.path.exists(input_template):
+                    cprintf_stderr(
+                        [print_style.FC_RED, print_style.FW_BOLD],
+                        "[INFO]: template file {0} not found.\n",
+                        input_template,
+                    )
+                    continue
+
+                lookup = TemplateLookup(
+                    directories=[os.path.dirname(input_template)],
+                    module_directory=make_module_cache_dir,
+                )
                 if output_render:
                     output_file = Template(output_rule,
-                                           lookup=lookup).render(**render_args)
+                                        lookup=lookup).render(**render_args)
                 else:
                     output_file = output_rule
                 render_args["output_render_path"] = output_file
 
                 if group.output_directory:
-                    output_file = os.path.join(group.output_directory,
-                                               output_file)
+                    output_file = os.path.join(group.output_directory, output_file)
                 elif options.output_dir:
                     output_file = os.path.join(options.output_dir, output_file)
 
@@ -1609,10 +1512,7 @@ def generate_group(options, group):
                         if not force_overwrite:
                             if not options.quiet:
                                 cprintf_stdout(
-                                    [
-                                        print_style.FC_YELLOW,
-                                        print_style.FW_BOLD
-                                    ],
+                                    [print_style.FC_YELLOW, print_style.FW_BOLD],
                                     "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
                                     output_file,
                                     input_template,
@@ -1623,8 +1523,7 @@ def generate_group(options, group):
                     source_tmpl = lookup.get_template(
                         os.path.basename(input_template))
                     final_output_dir = os.path.dirname(output_file)
-                    if final_output_dir and not os.path.exists(
-                            final_output_dir):
+                    if final_output_dir and not os.path.exists(final_output_dir):
                         os.makedirs(final_output_dir, 0o777)
                     write_code_if_different(
                         group.project_dir,
@@ -1645,6 +1544,111 @@ def generate_group(options, group):
             except Exception as e:
                 print_exception_with_traceback(e)
                 raise
+
+    # generate per inner templates
+    if group.inner_templates  is not None:
+        for inner_rule in group.inner_templates:
+            render_args = {
+                "generator": os.path.basename(__file__),
+                "local_vcs_user_name": group.local_vcs_user_name,
+                "database": group.database,
+                group.outer_name: group.outer_inst,
+                group.inner_set_name: selected_inner_items,
+                group.inner_name: None,
+                "output_file_path": None,
+                "output_render_path": None,
+                "current_instance": None,
+                group.outer_name + "_dllexport_decl": group.outer_dllexport_decl,
+                group.inner_name + "_dllexport_decl": group.inner_dllexport_decl,
+                "PbConvertRule": PbConvertRule,
+            }
+            for k in group.custom_variables:
+                render_args[k] = group.custom_variables[k]
+
+            (
+                input_template,
+                output_rule,
+                output_render,
+                rewrite_overwrite,
+            ) = parse_generate_rule(inner_rule)
+            if not os.path.exists(input_template):
+                cprintf_stderr(
+                    [print_style.FC_RED, print_style.FW_BOLD],
+                    "[INFO]: template file {0} not found.\n",
+                    input_template,
+                )
+                continue
+            lookup = TemplateLookup(
+                directories=[os.path.dirname(input_template)],
+                module_directory=make_module_cache_dir,
+            )
+
+            for selected_inner in selected_inner_items.values():
+                render_args[group.inner_name] = selected_inner
+                render_args["current_instance"] = selected_inner
+                try:
+                    if output_render:
+                        output_file = Template(output_rule,
+                                            lookup=lookup).render(**render_args)
+                    else:
+                        output_file = output_rule
+                    render_args["output_render_path"] = output_file
+
+                    if group.output_directory:
+                        output_file = os.path.join(group.output_directory,
+                                                output_file)
+                    elif options.output_dir:
+                        output_file = os.path.join(options.output_dir, output_file)
+
+                    output_file = os.path.normpath(output_file)
+                    if options.print_output_files:
+                        print(output_file)
+                    else:
+                        if os.path.exists(output_file):
+                            force_overwrite = rewrite_overwrite
+                            if force_overwrite is None:
+                                force_overwrite = group.overwrite
+                            if force_overwrite is None:
+                                force_overwrite = not options.no_overwrite
+                            if not force_overwrite:
+                                if not options.quiet:
+                                    cprintf_stdout(
+                                        [
+                                            print_style.FC_YELLOW,
+                                            print_style.FW_BOLD
+                                        ],
+                                        "[INFO]: file {0} is already exists, we will ignore generating template {1} to it.\n",
+                                        output_file,
+                                        input_template,
+                                    )
+                                continue
+
+                        render_args["output_file_path"] = output_file
+                        source_tmpl = lookup.get_template(
+                            os.path.basename(input_template))
+                        final_output_dir = os.path.dirname(output_file)
+                        if final_output_dir and not os.path.exists(
+                                final_output_dir):
+                            os.makedirs(final_output_dir, 0o777)
+                        write_code_if_different(
+                            group.project_dir,
+                            output_file,
+                            options.encoding,
+                            source_tmpl.render(**render_args),
+                            group.clang_format_path,
+                            group.clang_format_rule_re,
+                        )
+
+                        if not options.quiet:
+                            cprintf_stdout(
+                                [print_style.FC_GREEN, print_style.FW_BOLD],
+                                "[INFO]: generate {0} to {1} success.\n",
+                                input_template,
+                                output_file,
+                            )
+                except Exception as e:
+                    print_exception_with_traceback(e)
+                    raise
 
 
 class PbGlobalGenerator(object):

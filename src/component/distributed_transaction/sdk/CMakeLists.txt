@@ -16,5 +16,5 @@ project_component_declare_sdk(
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}
-  GENERATED_OUTPUT_FILES
+  GENERATED_FLOW_NAMES
   "atframework.distributed_system.DtcoordsvrService")

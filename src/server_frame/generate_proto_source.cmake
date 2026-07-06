@@ -264,13 +264,80 @@ project_server_frame_create_protocol_target(
   PUBLIC_LINK_LIBRARIES
   ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_NET})
 
+# 定义 SERVER_FRAME_BASE_PROTOCOLS Target
+execute_process(
+  COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
+    "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}" --proto_path
+    "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}" --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
+    --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LOG_DIR}"
+    --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+    --proto_path "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
+    --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" -o "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
+    # Protocol buffer files
+    ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON}
+    ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_EXTENSION} ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_PBDESC}
+    ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_LOG}
+    "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/atapp_conf.proto"
+    "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/libatbus_protocol.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/any.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/empty.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto"
+  WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+)
+add_custom_command(
+  OUTPUT "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
+  COMMAND "${CMAKE_COMMAND}" -E remove -f "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
+  COMMAND
+    "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
+    "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}" --proto_path
+    "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}" --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
+    --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LOG_DIR}"
+    --proto_path "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+    --proto_path "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}" --proto_path "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include"
+    --proto_path "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include" -o "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
+    # Protocol buffer files
+    ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON}
+    ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_EXTENSION} ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_PBDESC}
+    ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_LOG}
+    "${ATFRAMEWORK_LIBATAPP_REPO_DIR}/include/atframe/atapp_conf.proto"
+    "${ATFRAMEWORK_LIBATBUS_REPO_DIR}/include/libatbus_protocol.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/any.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/empty.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto"
+    "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto"
+  WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+  DEPENDS ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_EXTENSION} ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_COMMON}
+          ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_PBDESC}
+          ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_LOG}
+          "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto"
+  COMMENT "Generate [@${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}] ${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb")
+
+add_custom_command(
+  OUTPUT "${PROJECT_INSTALL_RES_PBD_DIR}/serverframe_all.pb"
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
+          "${PROJECT_INSTALL_RES_PBD_DIR}"
+  WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+  DEPENDS "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
+  COMMENT "Generate [@${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}] ${PROJECT_INSTALL_RES_PBD_DIR}/serverframe_all.pb")
+
+add_custom_target(
+  serverframe_all_pb
+  DEPENDS "${PROJECT_INSTALL_RES_PBD_DIR}/serverframe_all.pb"
+  SOURCES "${PROJECT_INSTALL_RES_PBD_DIR}/serverframe_all.pb")
+set(SERVER_FRAME_BASE_PROTOCOLS
+    serverframe_all_pb
+    CACHE STRING "serverframe_all_pb target name.")
+set_property(TARGET ${SERVER_FRAME_BASE_PROTOCOLS} PROPERTY "PBFILE" "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb")
+set_property(TARGET ${SERVER_FRAME_BASE_PROTOCOLS} PROPERTY FOLDER "${PROJECT_NAME}/protocol")
+
 # ============= protocol target =============
 add_custom_target(protocol)
 foreach(PROJECT_SERVER_FRAME_PROTO_SUB_TARGET protocol-extension protocol-common protocol-config protocol-net protocol-log)
   add_dependencies(protocol ${PROJECT_SERVER_FRAME_PROTO_SUB_TARGET})
 endforeach()
-generate_for_pb_register_protocol_codegen_target(protocol DEFAULT)
-
 set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
 
 add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol INTERFACE)

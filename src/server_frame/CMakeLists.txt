@@ -22,14 +22,6 @@ file(
 # add generated files
 include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_proto_source.cmake")
 include("${PROJECT_SERVER_FRAME_BAS_DIR}/generate_config_codes.cmake")
-generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}"
-                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_EXTENSION})
-generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}"
-                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON})
-generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
-                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG})
-generate_for_pb_register_protocol_inputs("${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
-                                         ${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_PBDESC})
 
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.RouterService"
@@ -60,42 +52,76 @@ generate_for_pb_add_ss_service(
   SERVER_FRAME_API)
 
 generate_for_pb_add_custom_configure(
-  "db_code_generate"
+  "db_code_generate_local"
+  RULE_BODY_HEAD
   "
-- global:
-    overwrite: true
-    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
-    output: 'local_db_interface.cpp'
-    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
-    custom_variables:
-      generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
-      include_cpp: 'local_db_interface.h'
-- global:
-    overwrite: true
-    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
-    output: 'local_db_interface.h'
-    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
-    custom_variables:
-      generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
-- global:
-    overwrite: true
-    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
-    output: 'global_db_interface.cpp'
-    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
-    custom_variables:
-      generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
-      include_cpp: 'global_db_interface.h'
-- global:
-    overwrite: true
-    input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
-    output: 'global_db_interface.h'
-    output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
-    custom_variables:
-      generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
-")
-generate_output_file_add_to_list(SRC_LIST "db_code_generate")
-generate_output_file_add_to_list(SRC_LIST "${PROJECT_NAMESPACE}.RouterService")
-generate_output_file_add_to_list(SRC_LIST "${PROJECT_NAMESPACE}.LogicCommonService")
+  - file:
+      overwrite: false
+      output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+      custom_variables:
+        generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
+        include_cpp: 'local_db_interface.h'
+"
+  OVERWRITE_RULE
+  "
+      file_template:
+        - overwrite: true
+          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
+          output: 'local_db_interface.cpp'
+        - overwrite: true
+          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+          output: 'local_db_interface.h'
+"
+  PROTOCOL_TARGET
+  "${SERVER_FRAME_BASE_PROTOCOLS}"
+  TEMPLATE_DEPENDS
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako"
+)
+generate_for_pb_add_custom_configure(
+  "db_code_generate_global"
+  RULE_BODY_HEAD
+  "
+  - file:
+      overwrite: false
+      output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+      custom_variables:
+        generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
+        include_cpp: 'global_db_interface.h'
+"
+  OVERWRITE_RULE
+  "
+      file_template:
+        - overwrite: true
+          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
+          output: 'global_db_interface.cpp'
+        - overwrite: true
+          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+          output: 'global_db_interface.h'
+"
+  PROTOCOL_TARGET
+  "${SERVER_FRAME_BASE_PROTOCOLS}"
+  TEMPLATE_DEPENDS
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako"
+)
+
+set(PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES
+    "${PROJECT_NAMESPACE}.RouterService"
+    "${PROJECT_NAMESPACE}.LogicCommonService"
+    "db_code_generate_local"
+    "db_code_generate_global")
+generate_for_pb_collect_output_from_flows("${PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
+generate_for_pb_collect_filtered_output_files(
+  "${CMAKE_CURRENT_LIST_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}"
+  _PROJECT_COMPONENT_GENERATED_SOURCE_FILES _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+if(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
+  list(APPEND SRC_LIST ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES})
+endif()
+if(_PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+  list(APPEND SRC_LIST ${_PROJECT_COMPONENT_GENERATED_HEADER_FILES})
+endif()
+
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "")
 foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
   get_filename_component(SRC_DIRPATH_REALPATH ${SRC_FILE_REALPATH} DIRECTORY)
@@ -155,7 +181,8 @@ target_compile_definitions(${PROJECT_SERVER_FRAME_LIB_LINK} PRIVATE "SERVER_FRAM
 set_target_properties(${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
                                                                                                "hidden")
 
-add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} ${GENERATE_FOR_PB_TARGET} protocol config-loader)
+add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} protocol config-loader)
+generate_for_pb_add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK} "${PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES}")
 target_link_libraries(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}-config
                                                               ${PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES})
 

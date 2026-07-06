@@ -30,5 +30,3 @@ add_subdirectory(orbitsvr)
 
 add_subdirectory(tools)
 add_subdirectory(robot)
-
-generate_for_pb_run_generator()

@@ -175,7 +175,7 @@ fall back to `OUTPUT_TARGET_NAME` + `target_link_libraries` only for custom prop
 - `OUTPUT_TARGET_NAME` stores the real target in parent scope; alias names are still preferred for dependencies.
 - For protobuf import resolution, declare protocol dependencies via `USE_COMPONENTS` or `USE_SERVICE_PROTOCOL` so the
   helper can extend protoc search paths.
-- Helper internals use the misspelled property `PORJECT_PROTOCOL_DIR`. Preserve the spelling unless intentionally
+- Helper internals use the misspelled property `PROJECT_PROTOCOL_DIR`. Preserve the spelling unless intentionally
   refactoring.
 - Component helper deps all use `USE_COMPONENTS`; no `USE_SERVICE_PROTOCOL`/`USE_SERVICE_SDK` equivalents exist for
   components.

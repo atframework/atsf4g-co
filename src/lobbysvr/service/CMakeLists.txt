@@ -20,7 +20,9 @@ generate_for_pb_add_ss_service(
   EXTERNAL_COMPONENT_PROTOCOLS
   "dtmq-protocol-proxy-pbdesc"
   INCLUDE_HEADERS
-  "protocol/pbdesc/dtmq_proxy.pb.h")
+  "protocol/pbdesc/dtmq_proxy.pb.h"
+  GENERATED_FLOW_NAME
+  "atframework.dtmq.DtmqProxysvrNotifyService.lobbysvr")
 
 project_service_declare_instance(
   ${SERVICE_TARGET_NAME}
@@ -46,7 +48,7 @@ project_service_declare_instance(
   "cachesvr-sdk"
   USE_SERVICE_PROTOCOL
   "lobbysvr-config"
-  GENERATED_OUTPUT_FILES
-  "atframework.dtmq.DtmqProxysvrNotifyService"
+  GENERATED_FLOW_NAMES
+  "atframework.dtmq.DtmqProxysvrNotifyService.lobbysvr"
   "${PROJECT_NAMESPACE}.LobbysvrClientService"
   "${PROJECT_NAMESPACE}.LobbysvrService")

@@ -16,5 +16,5 @@ project_component_declare_service(
   USE_COMPONENTS
   "distributed-transaction-protocol"
   "dtcoordsvr-config"
-  GENERATED_OUTPUT_FILES
+  GENERATED_FLOW_NAMES
   "atframework.distributed_system.DtcoordsvrService")

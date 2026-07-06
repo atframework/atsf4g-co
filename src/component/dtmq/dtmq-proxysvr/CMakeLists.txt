@@ -16,6 +16,6 @@ project_component_declare_service(
   USE_COMPONENTS
   "dtmq-protocol-proxy-pbdesc"
   "dtmq-protocol-proxy-config"
-  GENERATED_OUTPUT_FILES
+  GENERATED_FLOW_NAMES
   "atframework.dtmq.DtmqProxysvrService"
   "atframework.dtmq.DtmqProxysvrNotifyService")

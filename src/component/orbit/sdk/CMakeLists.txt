@@ -7,6 +7,8 @@ project_component_declare_sdk(
   ORBIT_AGENT_SDK_API
   USE_COMPONENTS
   "orbit-agent-protocol"
+  GENERATED_FLOW_NAMES
+  "orbit.ControllerToServerService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.atfw.gen.h"
   SOURCES
@@ -21,6 +23,8 @@ project_component_declare_sdk(
   ORBIT_CONTROLLER_SDK_API
   USE_COMPONENTS
   "orbit-controller-protocol"
+  GENERATED_FLOW_NAMES
+  "orbit.AgentToControllerService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.h"
   SOURCES
@@ -35,6 +39,8 @@ project_component_declare_sdk(
   ORBIT_SLAVE_SDK_API
   USE_COMPONENTS
   "orbit-client-protocol"
+  GENERATED_FLOW_NAMES
+  "orbit.AgentToClientService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.atfw.gen.h"
   SOURCES
@@ -49,6 +55,8 @@ project_component_declare_sdk(
   ORBIT_CONTROLLER_SDK_API
   USE_COMPONENTS
   "orbit-server-protocol"
+  GENERATED_FLOW_NAMES
+  "orbit.ServerToControllerService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.h"
   SOURCES
@@ -63,6 +71,8 @@ project_component_declare_sdk(
   ORBIT_SERVER_SDK_API
   USE_COMPONENTS
   "orbit-server-protocol"
+  GENERATED_FLOW_NAMES
+  "orbit.ControllerToServerService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.atfw.gen.h"
   SOURCES
@@ -81,6 +91,8 @@ project_component_declare_sdk(
   ORBIT_SERVER_SDK_NATIVE
   USE_COMPONENTS
   "orbit-server-controller-sdk"
+  GENERATED_FLOW_NAMES
+  "orbit.ControllerToServerService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.atfw.gen.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.h"

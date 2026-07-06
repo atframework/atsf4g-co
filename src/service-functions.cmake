@@ -303,7 +303,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       if(NOT __RESOLVE_PROTO_ALIAS_TARGET)
         set(__RESOLVE_PROTO_ALIAS_TARGET "components::${USE_COMPONENT}")
       endif()
-      get_target_property(__FIND_PROTO_DIR "${__RESOLVE_PROTO_ALIAS_TARGET}" PORJECT_PROTOCOL_DIR)
+      get_target_property(__FIND_PROTO_DIR "${__RESOLVE_PROTO_ALIAS_TARGET}" PROJECT_PROTOCOL_DIR)
       if(__FIND_PROTO_DIR)
         list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${__FIND_PROTO_DIR}")
       endif()
@@ -317,7 +317,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       if(NOT __RESOLVE_PROTO_ALIAS_TARGET)
         set(__RESOLVE_PROTO_ALIAS_TARGET "protocol::${USE_SERVICE_PROTOCOL}")
       endif()
-      get_target_property(__FIND_PROTO_DIR "${__RESOLVE_PROTO_ALIAS_TARGET}" PORJECT_PROTOCOL_DIR)
+      get_target_property(__FIND_PROTO_DIR "${__RESOLVE_PROTO_ALIAS_TARGET}" PROJECT_PROTOCOL_DIR)
       if(__FIND_PROTO_DIR)
         list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${__FIND_PROTO_DIR}")
       endif()
@@ -325,20 +325,24 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     endforeach()
   endif()
 
+  set(__GENERATED_PB_FILE_NAME "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb")
   if(project_component_declare_protocol_OUTPUT_PBFILE_PATH)
     set(${project_component_declare_protocol_OUTPUT_PBFILE_PATH}
-        "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+        "${__GENERATED_PB_FILE_NAME}"
         PARENT_SCOPE)
   endif()
-  generate_for_pb_register_protocol_inputs("${PROTOCOL_DIR}" ${project_service_declare_protocol_PROTOCOLS})
-  generate_for_pb_register_protocol_pb_file("${TARGET_NAME}" "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb")
+  execute_process(
+    COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} -o
+                  "${__GENERATED_PB_FILE_NAME}"
+                  ${project_service_declare_protocol_PROTOCOLS}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   add_custom_command(
     OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
-           "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+           "${__GENERATED_PB_FILE_NAME}"
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
       "dllexport_decl=${project_service_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}" -o
-      "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+      "${__GENERATED_PB_FILE_NAME}"
       # Protocol buffer files
       ${project_service_declare_protocol_PROTOCOLS} ${FINAL_GENERATED_COPY_COMMANDS}
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_THIRD_PARTY_ROOT_DIR}/.clang-tidy"
@@ -352,14 +356,13 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   else()
     set(TARGET_FULL_NAME "${PROJECT_NAME}-protocol-${TARGET_NAME}")
   endif()
-  set(TARGET_CODEGEN_NAME "${TARGET_FULL_NAME}-codegen")
+  set(TARGET_CODEGEN_NAME "${TARGET_FULL_NAME}-protoc-codegen")
   add_custom_target(
     ${TARGET_CODEGEN_NAME}
     DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
-            "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+            "${__GENERATED_PB_FILE_NAME}"
     SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
   set_property(TARGET ${TARGET_CODEGEN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/service/protocol")
-  generate_for_pb_register_protocol_codegen_target(${TARGET_CODEGEN_NAME} PROTOCOL_NAMES "${TARGET_NAME}")
   source_group(TREE ${project_service_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
                                                                          ${__FINAL_GENERATED_HEADER_FILES})
   if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
@@ -380,6 +383,34 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
   add_dependencies(${TARGET_FULL_NAME} ${TARGET_CODEGEN_NAME})
+  # 记录自己的 pb 文件路径 以及使用的组件的 pb 文件路径
+  unset(__PBFILE)
+  list(APPEND __PBFILE ${__GENERATED_PB_FILE_NAME})
+  foreach(USE_COMPONENT ${project_component_declare_protocol_USE_COMPONENTS})
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+      set(USE_COMPONENT "pc-${USE_COMPONENT}")
+    else()
+      set(USE_COMPONENT "${PROJECT_NAME}-component-${USE_COMPONENT}")
+    endif()
+    get_target_property(__USE_COMPONENT_PBFILE "${USE_COMPONENT}" PBFILE)
+    if(NOT __USE_COMPONENT_PBFILE)
+      message(FATAL_ERROR "Component ${USE_COMPONENT} does not have PBFILE property set.")
+    endif()
+    list(APPEND __PBFILE ${__USE_COMPONENT_PBFILE})
+  endforeach()
+  foreach(USE_SERVICE_PROTOCOL ${project_component_declare_protocol_USE_SERVICE_PROTOCOL})
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+      set(USE_SERVICE_PROTOCOL "pp-${USE_SERVICE_PROTOCOL}")
+    else()
+      set(USE_SERVICE_PROTOCOL "${PROJECT_NAME}-protocol-${USE_SERVICE_PROTOCOL}")
+    endif()
+    get_target_property(__USE_COMPONENT_PBFILE "${USE_SERVICE_PROTOCOL}" PBFILE)
+    if(NOT __USE_COMPONENT_PBFILE)
+      message(FATAL_ERROR "Service protocol ${USE_SERVICE_PROTOCOL} does not have PBFILE property set.")
+    endif()
+    list(APPEND __PBFILE ${__USE_COMPONENT_PBFILE})
+  endforeach()
+  set_property(TARGET ${TARGET_FULL_NAME} PROPERTY "PBFILE" ${__PBFILE})
 
   if(COMMAND project_build_tools_patch_protobuf_targets)
     project_build_tools_patch_protobuf_targets(${TARGET_FULL_NAME})
@@ -401,7 +432,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   add_custom_command(
     TARGET ${TARGET_FULL_NAME}
     POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/service-${TARGET_NAME}.pb"
+    COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${__GENERATED_PB_FILE_NAME}"
             "${PROJECT_INSTALL_RES_PBD_DIR}")
 
   set(TARGET_INSTALL_RPATH
@@ -417,7 +448,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
                VERSION "${PROJECT_VERSION}"
                SOVERSION "${PROJECT_VERSION}"
                BUILD_RPATH_USE_ORIGIN YES
-               PORJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
+               PROJECT_PROTOCOL_DIR "${PROTOCOL_DIR}"
                INSTALL_RPATH "${TARGET_INSTALL_RPATH}"
                CXX_INCLUDE_WHAT_YOU_USE ""
                CXX_CLANG_TIDY "")
@@ -480,11 +511,12 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
       USE_SERVICE_SDK
       USE_SERVICE_PROTOCOL
       PRECOMPILE_HEADERS
-      GENERATED_OUTPUT_FILES)
+      GENERATED_FLOW_NAMES)
   cmake_parse_arguments(project_service_declare_instance "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+  generate_for_pb_collect_output_from_flows("${project_service_declare_instance_GENERATED_FLOW_NAMES}" _PROJECT_SERVICE_GENERATED_OUTPUT_FILES)
   generate_for_pb_collect_filtered_output_files(
-    "${SERVICE_ROOT_DIR}" "${project_service_declare_instance_GENERATED_OUTPUT_FILES}"
+    "${SERVICE_ROOT_DIR}" "${_PROJECT_SERVICE_GENERATED_OUTPUT_FILES}"
     _PROJECT_SERVICE_GENERATED_SOURCE_FILES _PROJECT_SERVICE_GENERATED_HEADER_FILES)
   if(_PROJECT_SERVICE_GENERATED_SOURCE_FILES)
     list(APPEND project_service_declare_instance_SOURCES ${_PROJECT_SERVICE_GENERATED_SOURCE_FILES})
@@ -502,7 +534,7 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   add_executable(${TARGET_NAME} ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES})
 
   project_tool_split_target_debug_sybmol(${TARGET_NAME})
-  add_dependencies(${TARGET_NAME} ${GENERATE_FOR_PB_TARGET})
+  generate_for_pb_add_dependencies(${TARGET_NAME} "${project_service_declare_instance_GENERATED_FLOW_NAMES}")
 
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
