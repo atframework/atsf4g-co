@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include <logic/rank_mirror_global.h>
 
 // clang-format off
@@ -17,6 +19,7 @@
 
 #include <logic/rank_manager.h>
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 int rank_mirror_global::init() { return 0; }
 void rank_mirror_global::tick() {
   rpc::context ctx{rpc::context::create_without_task()};
@@ -37,9 +40,10 @@ void rank_mirror_global::add_failed_task(const dump_mirror_task_ptr& task) {
 }
 
 void rank_mirror_global::add_dump_task(const dump_mirror_task_ptr& task) {
-  size_t max_dunmp_task_num = static_cast<size_t>(logic_config::me()
-                                 ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                                 .rank_dunmp_task_max_num());
+  size_t max_dunmp_task_num =
+      static_cast<size_t>(logic_config::me()
+                              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                              .rank_dunmp_task_max_num());
   if (task_list_.size() >= max_dunmp_task_num + 1) {
     FWLOGWARNING("rank_mirror_global.add_dump_task failed, task_list_ size:{} reach max num", task_list_.size());
   }
@@ -103,7 +107,7 @@ rpc::result_code_type rank_mirror_global::tick_dump(rpc::context& ctx) {
     int ret = 0;
     auto tmp = task->total_rank_size_ % rank_per_slice_max_count;
     auto max_slice_count = tmp == 0 ? task->total_rank_size_ / rank_per_slice_max_count
-                                    : task->total_rank_size_ / rank_per_slice_max_count + 1;
+                                    : (task->total_rank_size_ / rank_per_slice_max_count) + 1;
     while (task->cur_slice_index_ <= max_slice_count && cur_io_num < tick_io_max) {
       auto begin_rank_no = task->cur_rank_no_;
 
@@ -122,8 +126,8 @@ rpc::result_code_type rank_mirror_global::tick_dump(rpc::context& ctx) {
 
       while ((task->cur_rank_no_ - begin_rank_no < rank_per_slice_max_count) &&
              task->iter_ != task->mirror_ptr_->end()) {
-        auto rank_info = db_data->mutable_blob_data()->mutable_data()->Add();
-        if (rank_info) {
+        auto* rank_info = db_data->mutable_blob_data()->mutable_data()->Add();
+        if (rank_info != nullptr) {
           rank_info->set_rank_no(static_cast<uint32_t>(++task->cur_rank_no_));
           protobuf_copy_message(*rank_info->mutable_data()->mutable_sort_data(), *task->iter_);
         }

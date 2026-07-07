@@ -1,8 +1,11 @@
+// Copyright 2026 atframework
+
 #include "logic/rank_wal_handle.h"
 
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/config/com.const.config.pb.h>
+#include <protocol/config/rank_board_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
@@ -27,6 +30,8 @@
 
 rank_wal_publisher_context::rank_wal_publisher_context(rpc::context& ctx, int32_t& output_result)
     : context(std::ref(ctx)), result_code(std::ref(output_result)) {}
+
+namespace {
 
 static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
   using wal_object_type = rank_wal_publisher_type::object_type;
@@ -90,7 +95,7 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
     if (log.event_id() > 0) {
       return wal_object_type::log_key_result_type::make_success(log.event_id());
     }
-    auto private_data = wal.get_private_data();
+    auto* private_data = wal.get_private_data();
     FWLOGERROR("log event id must invalid rank_type: {} event_cast:{}",
                private_data ? private_data->get_key().rank_type() : 0, static_cast<int32_t>(log.event_case()));
 
@@ -123,11 +128,11 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
   };
 
   ret->send_logs = [](wal_publisher_type& publisher, wal_publisher_type::log_const_iterator log_begin,
-                      wal_publisher_type::log_const_iterator log_end,
+                      wal_publisher_type::log_const_iterator log_end,  // NOLINT(performance-unnecessary-value-param)
                       wal_publisher_type::subscriber_iterator subscriber_begin,
                       wal_publisher_type::subscriber_iterator subscriber_end,
                       wal_publisher_type::callback_param_type param) -> wal_result_code {
-    auto publish_private_data = publisher.get_private_data();
+    auto* publish_private_data = publisher.get_private_data();
     if (!publish_private_data) {
       return wal_result_code::kInvalidParam;
     }
@@ -136,7 +141,7 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
     protobuf_copy_message(*sync_body->mutable_rank_key(), publish_private_data->get_key());
 
     for (; log_begin != log_end; ++log_begin) {
-      auto log = sync_body->add_event_logs();
+      auto* log = sync_body->add_event_logs();
       if (nullptr == log) {
         WLOGERROR("malloc event log failed");
         break;
@@ -177,9 +182,10 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
     return wal_result_code::kOk;
   };
 
-  ret->on_subscriber_removed =
-      [](wal_publisher_type& publisher, const wal_publisher_type::subscriber_pointer& subscribe,
-         atfw::util::distributed_system::wal_unsubscribe_reason reason, wal_publisher_type::callback_param_type) -> bool {
+  ret->on_subscriber_removed = [](wal_publisher_type& publisher,
+                                  const wal_publisher_type::subscriber_pointer& subscribe,
+                                  atfw::util::distributed_system::wal_unsubscribe_reason reason,
+                                  wal_publisher_type::callback_param_type) -> bool {
     FWLOGDEBUG("on_subscriber_removed rank_type: {} cur_server:{} slave_server:{} reason:{}",
                publisher.get_private_data() ? publisher.get_private_data()->get_key().rank_type() : 0,
                logic_config::me()->get_local_server_id(),
@@ -215,6 +221,8 @@ static rank_wal_publisher_type::configure_pointer create_rank_publisher_congigur
 
   return ret;
 }
+
+}  // namespace
 
 rank_wal_publisher_log_operator::strong_ptr<rank_wal_publisher_type> create_rank_publisher(rank& rank_obj) {
   return rank_wal_publisher_type::create(create_rank_publisher_vtable(), create_rank_publisher_congigure(), &rank_obj);

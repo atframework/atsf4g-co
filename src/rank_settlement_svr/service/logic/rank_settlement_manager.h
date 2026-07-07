@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <design_pattern/singleton.h>
@@ -43,5 +45,4 @@ class rank_settlement_manager : public atfw::util::design_pattern::singleton<ran
   bool is_exiting_;
   std::chrono::system_clock::time_point next_update_timepoint_;
   mutable task_type_trait::task_type update_task_;
-
 };

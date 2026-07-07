@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "task_action_rank_event_sync.h"
 
 #include <curl/curl.h>
@@ -44,9 +46,9 @@ RANK_SERVICE_API task_action_rank_event_sync::result_type task_action_rank_event
                req_body.rank_key().rank_instance_id(), logic_config::me()->get_local_server_id());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_IS_NOT_SLAVE);
   }
-  // TODO 比较数据版本号
+  // TODO(jijunliang): 比较数据版本号
 
-  for (auto& event : req_body.event_logs()) {
+  for (const auto& event : req_body.event_logs()) {
     if (event.event_id() <= rank->get_data_version()) {
       continue;
     }

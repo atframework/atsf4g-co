@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic/action/task_action_rank_update_settlement.h"
 
 #include <log/log_wrapper.h>
@@ -13,6 +15,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/config/rank_settlement_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -32,8 +35,8 @@
 #include <rpc/db/local_db_interface.h>
 #include <rpc/rank_board/rank.h>
 
-#include <assert.h>
 #include <algorithm>
+#include <cassert>
 #include <memory>
 #include <unordered_set>
 
@@ -64,7 +67,7 @@ task_action_rank_send_settlement::result_type task_action_rank_update_settlement
   }
 
   // foreach rank
-  for (auto& rank_rule : group->ExcelRankRule.get_all_of_rank_type_rank_instance_id()) {
+  for (const auto& rank_rule : group->ExcelRankRule.get_all_of_rank_type_rank_instance_id()) {
     bool allow_continue = true;
     TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
     check_trigger_exit(get_shared_context(), allow_continue, current_task_status);
@@ -98,7 +101,7 @@ int task_action_rank_update_settlement::on_complete() {
       logic_config::me()
           ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>()
           .settle_interval());
-  if (update_offset <= update_offset.zero()) {
+  if (update_offset <= std::chrono::system_clock::duration::zero()) {
     update_offset = task_manager::make_timeout_duration(logic_config::me()->get_cfg_task().nomsg().timeout());
   }
 
@@ -128,7 +131,7 @@ rpc::result_code_type task_action_rank_update_settlement::await_all(
   }
 
   // 所有的都成功才返回true
-  for (auto& task : tasks) {
+  for (const auto& task : tasks) {
     if (!task_type_trait::empty(task) && task_type_trait::get_result(task) < 0) {
       RPC_RETURN_CODE(task_type_trait::get_result(task));
     }
@@ -154,6 +157,8 @@ void task_action_rank_update_settlement::check_trigger_exit(rpc::context& /*ctx*
     allow_continue = false;
   }
 }
+
+namespace {
 
 static rpc::rpc_result<int64_t> fetch_rank_total_count(rpc::context& ctx, logic_rank_handle_variant& rank_handle,
                                                        const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg,
@@ -219,6 +224,8 @@ static rpc::result_void_type refresh_new_peried(
   RPC_RETURN_VOID;
 }
 
+}  // namespace
+
 rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
     rpc::context& ctx, bool& allow_continue,
     ATFW_EXPLICIT_UNUSED_ATTR const ::excel::excel_config_type_traits::shared_ptr<excel::config_group_t>& group,
@@ -254,7 +261,7 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
   }
 
   // try to settle rank
-  uint32_t next_settlement_rank;
+  uint32_t next_settlement_rank = 0;
   uint32_t pull_start_no = static_cast<uint32_t>(rank_settle_db_data.latest_settlement_rank());
   uint32_t pull_count = settle_loop_count;
   if (pull_start_no > settle_loop_count) {
@@ -350,7 +357,6 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
     if (task_type_trait::empty(task_inst)) {
       FWLOGERROR("create task_action_rank_send_settlement failed");
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-      break;
     } else {
       task_type_trait::task_type subtask = task_inst;
 
@@ -362,7 +368,6 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
             "start task_action_rank_send_settlement failed, "
             "ret: {}({})",
             ret, protobuf_mini_dumper_get_error_msg(ret));
-        break;
       } else {
         // 刷新下一次结算排名,前面排过序，所以这里一定是递减的
         next_settlement_rank = current_no > 0 ? current_no - 1 : 0;
@@ -377,9 +382,9 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
   FWLOGINFO(
       "Await for rank {},{}-{},{},{},{} settlement for {}, "
       "latest_settlement_rank: {}, await_tasks size {} ",
-      rank_handle.get_world_id(), rank_handle.get_zone_id(), cfg.rank_type(), cfg.rank_instance_id(),
+      "ret = {}", rank_handle.get_world_id(), rank_handle.get_zone_id(), cfg.rank_type(), cfg.rank_instance_id(),
       cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), next_settlement_rank,
-      rank_settlement_dbdata->blob_data().latest_settlement_rank(), await_tasks.size());
+      rank_settlement_dbdata->blob_data().latest_settlement_rank(), await_tasks.size(), ret);
   // 等待并发执行的结算任务
   ret = RPC_AWAIT_CODE_RESULT(await_all(ctx, await_tasks));
   if (ret == 0) {
@@ -434,7 +439,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
 
   // 准备清理奖励榜
 
-  rank_callback_private_data callback_data;
+  rank_callback_private_data callback_data{};
   memset(&callback_data, 0, sizeof(callback_data));
   callback_data.submit_timepoint = atfw::util::time::time_utility::get_now();
 
@@ -442,7 +447,8 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
   std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> prev_round_user_keys;
   prev_round_user_keys.reserve(settle_loop_count);
   size_t repeated_count = 0;
-  for (bool loop_again = true; loop_again && repeated_count < 2 * settle_loop_count;) {
+  for (bool loop_again = true;
+       loop_again && repeated_count < static_cast<size_t>(2) * static_cast<size_t>(settle_loop_count);) {
     {
       TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
       check_trigger_exit(ctx, allow_continue, current_task_status);
@@ -539,6 +545,8 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
   RPC_RETURN_CODE(ret);
 }
 
+namespace {
+
 static rpc::result_void_type query_mirror_create(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg,
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_settlement>& rank_settle_db_data,
@@ -570,6 +578,8 @@ static rpc::result_void_type query_mirror_create(
 
   RPC_RETURN_VOID;
 }
+
+}  // namespace
 
 rpc::result_code_type task_action_rank_update_settlement::process_rank(
     rpc::context& ctx, bool& allow_continue,

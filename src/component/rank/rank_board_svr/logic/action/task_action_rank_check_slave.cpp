@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "task_action_rank_check_slave.h"
 
 #include <log/log_wrapper.h>

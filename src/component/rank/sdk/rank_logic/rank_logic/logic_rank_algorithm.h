@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <config/compile_optimize.h>
@@ -50,15 +52,16 @@ struct UTIL_SYMBOL_VISIBLE logic_rank_open_period_t {
       : begin_time(begin), end_time(end), writable_begin_time(writable_begin), writable_end_time(writable_end) {}
 };  // 有效时间为 begin_time <= T < end_time
 
+RANK_LOGIC_SDK_API bool logic_rank_has_rank_daily_reward(
+    const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept;
 
-RANK_LOGIC_SDK_API bool logic_rank_has_rank_daily_reward(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept;
-
-RANK_LOGIC_SDK_API bool logic_rank_has_rank_custom_reward(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept;
+RANK_LOGIC_SDK_API bool logic_rank_has_rank_custom_reward(
+    const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept;
 
 bool logic_rank_has_rank_reward(int32_t reward_pool_id, PROJECT_NAMESPACE_ID::EnRankPeriodRewardType reward_type);
 
-RANK_LOGIC_SDK_API time_t logic_rank_get_current_settlement_daily_id(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& incfg,
-                                                               time_t now);
+RANK_LOGIC_SDK_API time_t
+logic_rank_get_current_settlement_daily_id(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& incfg, time_t now);
 
 RANK_LOGIC_SDK_API time_t logic_rank_get_current_settlement_daily_start_time(
     const PROJECT_NAMESPACE_ID::config::ExcelRankRule& incfg, time_t now);
@@ -85,7 +88,7 @@ RANK_LOGIC_SDK_API std::pair<time_t, time_t> logic_rank_get_final_settlement_cus
  * @return 指定时间所在的每日开放的开始和结束时间
  */
 RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_period(const logic_rank_rule_cfg_t& cfg,
-                                                                             time_t now);
+                                                                                   time_t now);
 
 /**
  * @brief 传入排行榜配置和指定时间，返回该排行榜指定时间所在的自定义周期的开放的开始和结束时间
@@ -96,7 +99,7 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_peri
  * @return 指定时间所在的自定义周期的开放的开始和结束时间
  */
 RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_custom_valid_period(const logic_rank_rule_cfg_t& cfg,
-                                                                              time_t now);
+                                                                                    time_t now);
 
 RANK_LOGIC_SDK_API time_t logic_rank_get_rank_next_valid_time(const logic_rank_rule_cfg_t& cfg, time_t now);
 
@@ -120,20 +123,21 @@ RANK_LOGIC_SDK_API time_t logic_rank_get_record_expire_time(const logic_rank_rul
           A失败: R_a'= R_a - E_a
           $$
  */
-RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_ea(uint32_t ra, uint32_t rb, uint32_t k = 16, uint32_t rating_point = 400);
+RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_ea(uint32_t ra, uint32_t rb, uint32_t k = 16,
+                                                  uint32_t rating_point = 400);
 
-RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(uint32_t winner_score, uint32_t loser_socre, uint32_t k = 16,
-                                                      uint32_t rating_point = 400);
+RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(uint32_t winner_score, uint32_t loser_socre,
+                                                            uint32_t k = 16, uint32_t rating_point = 400);
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(const PROJECT_NAMESPACE_ID::DRankRuleContent& cfg,
-                                                      uint32_t winner_score, uint32_t winner_rank_no,
-                                                      uint32_t loser_socre, uint32_t loser_rank_no);
+                                                            uint32_t winner_score, uint32_t winner_rank_no,
+                                                            uint32_t loser_socre, uint32_t loser_rank_no);
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_loser_score(uint32_t winner_score, uint32_t loser_socre, uint32_t k = 16,
-                                                     uint32_t rating_point = 400);
+                                                           uint32_t rating_point = 400);
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_loser_score(const PROJECT_NAMESPACE_ID::DRankRuleContent& cfg,
-                                                     uint32_t winner_score, uint32_t winner_rank_no,
-                                                     uint32_t loser_socre, uint32_t loser_rank_no);
+                                                           uint32_t winner_score, uint32_t winner_rank_no,
+                                                           uint32_t loser_socre, uint32_t loser_rank_no);
 
 RANK_LOGIC_SDK_API bool logic_rank_is_self_rank(const PROJECT_NAMESPACE_ID::config::ExcelRankRule& cfg) noexcept;

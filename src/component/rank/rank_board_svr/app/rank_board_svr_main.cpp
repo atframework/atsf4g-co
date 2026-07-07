@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -27,8 +29,17 @@
 
 #include "app/handle_ss_rpc_rankboardservice.atfw.gen.h"
 
-class main_service_module : public atapp::module_impl, public std::enable_shared_from_this<main_service_module> {
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+#include <protocol/config/rank_board_config.pb.h>
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+namespace {
+
+class main_service_module : public atapp::module_impl {
  public:
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
   int init() override {
     {
       // register all router managers
@@ -67,6 +78,8 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
   }
 };
 
+}  // namespace
+
 int main(int argc, char *argv[]) {
   atfw::atapp::app app;
 
@@ -93,5 +106,5 @@ int main(int argc, char *argv[]) {
   app.add_module(std::make_shared<main_service_module>());
 
   // run
-  return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+  return app.run(uv_default_loop(), argc, const_cast<const char **>(argv), nullptr);
 }

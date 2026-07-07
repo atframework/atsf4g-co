@@ -21,10 +21,11 @@
 #  define RANK_SERVICE_API UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_rank_check_slave
-    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankCheckSlaveReq, PROJECT_NAMESPACE_ID::SSRankCheckSlaveRsp> {
+class task_action_rank_check_slave : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankCheckSlaveReq,
+                                                                    PROJECT_NAMESPACE_ID::SSRankCheckSlaveRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankCheckSlaveReq, PROJECT_NAMESPACE_ID::SSRankCheckSlaveRsp>;
+  using base_type =
+      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankCheckSlaveReq, PROJECT_NAMESPACE_ID::SSRankCheckSlaveRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -35,7 +36,7 @@ class task_action_rank_check_slave
 
  public:
   RANK_SERVICE_API explicit task_action_rank_check_slave(dispatcher_start_data_type&& param);
-  RANK_SERVICE_API ~task_action_rank_check_slave();
+  RANK_SERVICE_API ~task_action_rank_check_slave() override;
 
   RANK_SERVICE_API const char* name() const override;
 

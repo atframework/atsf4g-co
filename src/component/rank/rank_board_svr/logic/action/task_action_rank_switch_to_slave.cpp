@@ -58,7 +58,7 @@ RANK_SERVICE_API task_action_rank_switch_to_slave::result_type task_action_rank_
                req_body.rank_key().sub_rank_instance_id());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN);
   }
-  auto& router_data = rank_ptr->get_router_data();
+  const auto& router_data = rank_ptr->get_router_data();
   if (router_data.router_version() > req_body.router_data().router_version()) {
     // 当前的路由数据版本比请求版本高，说明请求数据不是最新的，直接返回
     FWLOGWARNING("node:{} rank:({}:{}:{}:{}) router_data.version:{} > req.version:{}",

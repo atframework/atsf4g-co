@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic/action/task_action_rank_send_settlement.h"
 
 #include <log/log_wrapper.h>
@@ -15,6 +17,7 @@
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
+#include <protocol/config/rank_settlement_config.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
@@ -27,11 +30,12 @@
 
 #include <utility/rank_util.h>
 
-#include <assert.h>
+#include <cassert>
 #include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <utility>
 
 #include "logic/rank_settlement_manager.h"
 
@@ -86,12 +90,13 @@ task_action_rank_send_settlement::result_type task_action_rank_send_settlement::
     if (res < 0) {
       ret = res;
     }
-    // TODO jijunliang 历史数据日志
+    // TODO(jijunliang): 历史数据日志
   }
 
   TASK_ACTION_RETURN_CODE(ret);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc::context& ctx,
                                                                              logic_rank_handle_variant& /*rank_handle*/,
                                                                              const std::string& user_openid,
@@ -140,7 +145,7 @@ rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc
   }
 
   do {
-    auto rank_data = job_body->mutable_rank_board_basic_data();
+    auto* rank_data = job_body->mutable_rank_board_basic_data();
     if (nullptr == rank_data) {
       break;
     }
@@ -164,7 +169,7 @@ rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc
       }
     }
 
-    auto rank_key = rank_data->mutable_rank_key();
+    auto* rank_key = rank_data->mutable_rank_key();
     if (nullptr == rank_key) {
       break;
     }
@@ -201,11 +206,12 @@ rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc
       param_.daily_settlement_pool_id, static_cast<int32_t>(param_.daily_settlement_pool_type), param_.score,
       param_.rank_no, param_.settle_rank_no, param_.zone_id, param_.user_id, param_.instance_type, param_.instance_id);
 
-  // TODO jijunliang 每日奖励日志
+  // TODO(jijunliang): 每日奖励日志
 
   RPC_RETURN_CODE(0);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 rpc::result_code_type task_action_rank_send_settlement::settle_custom_rewards(
     rpc::context& ctx, logic_rank_handle_variant& /*rank_handle*/, const std::string& user_openid, int64_t& sub_score,
     int64_t& set_score, int32_t& score_change_type) {
@@ -259,7 +265,7 @@ rpc::result_code_type task_action_rank_send_settlement::settle_custom_rewards(
   }
 
   do {
-    auto rank_data = job_body->mutable_rank_board_basic_data();
+    auto* rank_data = job_body->mutable_rank_board_basic_data();
     if (nullptr == rank_data) {
       break;
     }
@@ -284,7 +290,7 @@ rpc::result_code_type task_action_rank_send_settlement::settle_custom_rewards(
       }
     }
 
-    auto rank_key = rank_data->mutable_rank_key();
+    auto* rank_key = rank_data->mutable_rank_key();
     if (nullptr == rank_key) {
       break;
     }
@@ -322,16 +328,17 @@ rpc::result_code_type task_action_rank_send_settlement::settle_custom_rewards(
       param_.custom_settlement_pool_id, static_cast<int32_t>(param_.custom_settlement_pool_id), param_.score,
       param_.rank_no, param_.settle_rank_no, param_.zone_id, param_.user_id, param_.instance_type, param_.instance_id);
 
-  // TODO jijunliang 自定义奖励日志
+  // TODO(jijunliang): 自定义奖励日志
 
   RPC_RETURN_CODE(0);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 rpc::result_code_type task_action_rank_send_settlement::update_sub_period_score(rpc::context& ctx,
                                                                                 logic_rank_handle_variant& rank_handle,
                                                                                 const std::string& user_openid,
                                                                                 int64_t sub_score, int64_t set_score) {
-  rank_callback_private_data callback_data;
+  rank_callback_private_data callback_data{};
   memset(&callback_data, 0, sizeof(callback_data));
   callback_data.submit_timepoint = atfw::util::time::time_utility::get_now();
 
@@ -339,7 +346,7 @@ rpc::result_code_type task_action_rank_send_settlement::update_sub_period_score(
   if (set_score != 0) {
     sub_score = static_cast<int64_t>(param_.score) - set_score;
   } else {
-    if (sub_score > static_cast<int64_t>(param_.score)) {
+    if (std::cmp_greater(sub_score, param_.score)) {
       sub_score = static_cast<int64_t>(param_.score);
     }
   }
@@ -385,7 +392,7 @@ rpc::result_code_type task_action_rank_send_settlement::update_sub_period_score(
   }
 
   do {
-    auto rank_key = job_body->mutable_rank_key();
+    auto* rank_key = job_body->mutable_rank_key();
     if (nullptr == rank_key) {
       break;
     }
@@ -413,6 +420,7 @@ rpc::result_code_type task_action_rank_send_settlement::update_sub_period_score(
   RPC_RETURN_CODE(0);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 rpc::result_code_type task_action_rank_send_settlement::save_history(rpc::context& ctx,
                                                                      logic_rank_handle_variant& /*rank_handle*/) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_history> table{ctx};

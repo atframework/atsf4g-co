@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic_rank_algorithm.h"
 
 #include <gsl/select-gsl.h>
@@ -118,8 +120,8 @@ RANK_LOGIC_SDK_API std::pair<time_t, time_t> logic_rank_get_final_settlement_cus
 
   if (incfg.content().valid_time().end_time().seconds() > 0) {
     time_t end_time = incfg.content().valid_time().end_time().seconds();
-    time_t expired_time =
-        end_time + incfg.content().custom_settlement().interval_days() * atfw::util::time::time_utility::DAY_SECONDS;
+    time_t expired_time = end_time + (static_cast<time_t>(incfg.content().custom_settlement().interval_days()) *
+                                      atfw::util::time::time_utility::DAY_SECONDS);
     if (ret.first == 0 || ret.first > end_time) {
       ret.first = end_time;
     }
@@ -161,10 +163,10 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_peri
     // 每日榜开放时间段
     if (cfg.content().lock_time().begin_time().seconds() < cfg.content().lock_time().end_time().seconds()) {
       // 非跨天
-      time_t lock_begin = ret.begin_time + cfg.content().lock_time().begin_time().seconds() %
-                                               atfw::util::time::time_utility::DAY_SECONDS;
-      time_t lock_end =
-          ret.begin_time + cfg.content().lock_time().end_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS;
+      time_t lock_begin = ret.begin_time + (cfg.content().lock_time().begin_time().seconds() %
+                                            atfw::util::time::time_utility::DAY_SECONDS);
+      time_t lock_end = ret.begin_time +
+                        (cfg.content().lock_time().end_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS);
       if (now < lock_begin) {
         ret.writable_begin_time = ret.begin_time;
         ret.writable_end_time = lock_begin;
@@ -174,10 +176,10 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_daily_valid_peri
       }
     } else {
       // 跨天
-      ret.writable_begin_time =
-          ret.begin_time + cfg.content().lock_time().end_time().seconds() % atfw::util::time::time_utility::DAY_SECONDS;
-      ret.writable_end_time = ret.begin_time + cfg.content().lock_time().begin_time().seconds() %
-                                                   atfw::util::time::time_utility::DAY_SECONDS;
+      ret.writable_begin_time = ret.begin_time + (cfg.content().lock_time().end_time().seconds() %
+                                                  atfw::util::time::time_utility::DAY_SECONDS);
+      ret.writable_end_time = ret.begin_time + (cfg.content().lock_time().begin_time().seconds() %
+                                                atfw::util::time::time_utility::DAY_SECONDS);
     }
   } while (false);
 
@@ -203,11 +205,11 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_custom_valid_per
       now = cfg.content().valid_time().begin_time().seconds();
     }
 
-    time_t period_range =
-        cfg.content().custom_settlement().interval_days() * atfw::util::time::time_utility::DAY_SECONDS;
+    time_t period_range = static_cast<time_t>(cfg.content().custom_settlement().interval_days()) *
+                          atfw::util::time::time_utility::DAY_SECONDS;
 
     time_t period_no = (now - cfg.content().valid_time().begin_time().seconds()) / period_range;
-    time_t period_start_time = cfg.content().valid_time().begin_time().seconds() + period_no * period_range;
+    time_t period_start_time = cfg.content().valid_time().begin_time().seconds() + (period_no * period_range);
     ret.begin_time = period_start_time;
     ret.end_time = period_start_time + period_range;
   }
@@ -250,16 +252,17 @@ RANK_LOGIC_SDK_API logic_rank_open_period_t logic_rank_get_rank_custom_valid_per
 
   // 判定可写时间区间
   if (cfg.content().custom_settlement().lock_first_days() > 0 && ret.begin_time > 0) {
-    time_t writable_begin_time = ret.begin_time + cfg.content().custom_settlement().lock_first_days() *
-                                                      atfw::util::time::time_utility::DAY_SECONDS;
+    time_t writable_begin_time =
+        ret.begin_time + (static_cast<time_t>(cfg.content().custom_settlement().lock_first_days()) *
+                          atfw::util::time::time_utility::DAY_SECONDS);
     if (writable_begin_time > ret.writable_begin_time) {
       ret.writable_begin_time = writable_begin_time;
     }
   }
 
   if (cfg.content().custom_settlement().lock_last_days() > 0 && ret.end_time > 0) {
-    time_t writable_end_time =
-        ret.end_time - cfg.content().custom_settlement().lock_last_days() * atfw::util::time::time_utility::DAY_SECONDS;
+    time_t writable_end_time = ret.end_time - (static_cast<time_t>(cfg.content().custom_settlement().lock_last_days()) *
+                                               atfw::util::time::time_utility::DAY_SECONDS);
     if (ret.writable_end_time > writable_end_time) {
       ret.writable_end_time = writable_end_time;
     }
@@ -329,7 +332,8 @@ RANK_LOGIC_SDK_API bool logic_rank_is_rank_valid_now(const logic_rank_rule_cfg_t
   if (cfg.content().daily_settlement().rank_reward_pool_id() > 0) {
     logic_rank_open_period_t valid_period = logic_rank_get_rank_daily_valid_period(cfg, now);
     return now >= valid_period.begin_time && (0 == valid_period.end_time || now < valid_period.end_time);
-  } else if (cfg.content().custom_settlement().rank_reward_pool_id() > 0) {
+  }
+  if (cfg.content().custom_settlement().rank_reward_pool_id() > 0) {
     logic_rank_open_period_t valid_period = logic_rank_get_rank_custom_valid_period(cfg, now);
     return now >= valid_period.begin_time && (0 == valid_period.end_time || now < valid_period.end_time);
   }
@@ -348,7 +352,8 @@ RANK_LOGIC_SDK_API bool logic_rank_is_rank_writable_now(const logic_rank_rule_cf
     logic_rank_open_period_t valid_period = logic_rank_get_rank_daily_valid_period(cfg, now);
     return now >= valid_period.writable_begin_time &&
            (0 == valid_period.writable_end_time || now < valid_period.writable_end_time);
-  } else if (cfg.content().custom_settlement().rank_reward_pool_id() > 0) {
+  }
+  if (cfg.content().custom_settlement().rank_reward_pool_id() > 0) {
     logic_rank_open_period_t valid_period = logic_rank_get_rank_custom_valid_period(cfg, now);
     return now >= valid_period.writable_begin_time &&
            (0 == valid_period.writable_end_time || now < valid_period.writable_end_time);
@@ -401,8 +406,10 @@ RANK_LOGIC_SDK_API time_t logic_rank_get_record_expire_time(const logic_rank_rul
   return expire_time;
 }
 
-namespace detials {
+namespace {
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization, cppcoreguidelines-avoid-non-const-global-variables)
 static std::unordered_map<uint32_t, std::vector<uint64_t>> g_elo_rating_point_cache;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static atfw::util::lock::spin_lock g_elo_rating_point_cache_lock;
 
 static uint64_t cache_power_10(uint32_t denominator, uint32_t numerator) {
@@ -419,25 +426,25 @@ static uint64_t cache_power_10(uint32_t denominator, uint32_t numerator) {
     return ret;
   }
 
-  std::vector<uint64_t>* select_set;
+  std::vector<uint64_t>* select_set = nullptr;
   atfw::util::lock::lock_holder<atfw::util::lock::spin_lock> holder(g_elo_rating_point_cache_lock);
 
   auto iter = g_elo_rating_point_cache.find(denominator);
   if (iter == g_elo_rating_point_cache.end()) {
-    select_set = &g_elo_rating_point_cache[denominator];
+    select_set = &g_elo_rating_point_cache.try_emplace(denominator).first->second;
     select_set->resize(denominator, 0);
   } else {
     select_set = &iter->second;
   }
 
-  uint64_t ret = (*select_set)[numerator];
+  uint64_t ret = select_set->at(numerator);
   if (0 == ret) {
     ret = static_cast<uint64_t>(std::pow(10.0, static_cast<double>(numerator) / denominator) *
                                 kEloAlgorithmPrecisionAmplify);
     if (ret <= 0) {
       ret = 1;
     }
-    (*select_set)[numerator] = ret;
+    select_set->at(numerator) = ret;
   }
 
   return ret;
@@ -468,7 +475,7 @@ static uint64_t get_elo_rating_point(uint32_t base, uint32_t offset) {
 
   return binary_power(10, offset / base) * cache_power_10(base, mod);
 }
-}  // namespace detials
+}  // namespace
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_ea(uint32_t ra, uint32_t rb, uint32_t k, uint32_t rating_point) {
   if (rating_point <= 0) {
@@ -480,22 +487,20 @@ RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_ea(uint32_t ra, uint32_t rb, uint
   }
 
   if (ra >= rb) {
-    uint64_t denominator = detials::get_elo_rating_point(rating_point, ra - rb);
+    uint64_t denominator = get_elo_rating_point(rating_point, ra - rb);
     if (denominator == 0) {
       return 1;
-    } else {
-      return static_cast<uint32_t>(k * kEloAlgorithmPrecisionAmplify / (kEloAlgorithmPrecisionAmplify + denominator));
     }
-  } else {
-    uint64_t denominator = detials::get_elo_rating_point(rating_point, rb - ra);
-    if (denominator == 0) {
-      return k;
-    } else {
-      return static_cast<uint32_t>(k * kEloAlgorithmPrecisionAmplify /
-                                   (kEloAlgorithmPrecisionAmplify +
-                                    (kEloAlgorithmPrecisionAmplify * kEloAlgorithmPrecisionAmplify) / denominator));
-    }
+    return static_cast<uint32_t>(k * kEloAlgorithmPrecisionAmplify / (kEloAlgorithmPrecisionAmplify + denominator));
   }
+
+  uint64_t denominator = get_elo_rating_point(rating_point, rb - ra);
+  if (denominator == 0) {
+    return k;
+  }
+  return static_cast<uint32_t>(k * kEloAlgorithmPrecisionAmplify /
+                               (kEloAlgorithmPrecisionAmplify +
+                                ((kEloAlgorithmPrecisionAmplify * kEloAlgorithmPrecisionAmplify) / denominator)));
 }
 
 RANK_LOGIC_SDK_API uint32_t logic_rank_elo_get_winner_score(uint32_t winner_score, uint32_t loser_socre, uint32_t k,

@@ -21,10 +21,11 @@
 #  define RANK_SERVICE_API UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_rank_make_new_mirror
-    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorReq, PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorRsp> {
+class task_action_rank_make_new_mirror : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorReq,
+                                                                        PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorReq, PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorRsp>;
+  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorReq,
+                                            PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -35,7 +36,7 @@ class task_action_rank_make_new_mirror
 
  public:
   RANK_SERVICE_API explicit task_action_rank_make_new_mirror(dispatcher_start_data_type&& param);
-  RANK_SERVICE_API ~task_action_rank_make_new_mirror();
+  RANK_SERVICE_API ~task_action_rank_make_new_mirror() override;
 
   RANK_SERVICE_API const char* name() const override;
 

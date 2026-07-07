@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <design_pattern/singleton.h>
@@ -44,7 +46,8 @@ class rank : public atfw::util::memory::enable_shared_rc_from_this<rank> {
   using compare_fn_t = bool (*)(const PROJECT_NAMESPACE_ID::rank_sort_data& l,
                                 const PROJECT_NAMESPACE_ID::rank_sort_data& r);
 
-  rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_id, uint32_t capacity, compare_fn_t compare_fn, int64_t data_version);
+  rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t capacity, compare_fn_t compare_fn,
+       int64_t data_version);
   ~rank();
 
   int tick();

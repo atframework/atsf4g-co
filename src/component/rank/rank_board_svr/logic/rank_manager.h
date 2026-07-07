@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <design_pattern/singleton.h>
@@ -116,12 +118,12 @@ class rank_manager : public atfw::util::design_pattern::singleton<rank_manager> 
  private:
   rank::compare_fn_t get_compare_fn(PROJECT_NAMESPACE_ID::EnRankSortType);
 
-  std::vector<uint64_t> get_slave_nodes(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank,
-                                        uint64_t main_node);
+  static std::vector<uint64_t> get_slave_nodes(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank,
+                                               uint64_t main_node);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type upgrade_rank_to_main(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, int32_t db_router_version);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_slave_and_highest_data_version_slave(
+  ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type check_slave_and_highest_data_version_slave(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
       const PROJECT_NAMESPACE_ID::table_rank_router& new_db_router, std::pair<uint64_t, int64_t>& highest_slave_node);
 

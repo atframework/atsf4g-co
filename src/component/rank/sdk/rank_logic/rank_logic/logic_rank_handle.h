@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <config/compile_optimize.h>
@@ -33,7 +35,7 @@ struct rank_ret_t {
 
   rank_ret_t() noexcept : api_result(0) {}
   explicit rank_ret_t(int32_t api) noexcept : api_result(api) {}
-  explicit rank_ret_t(task_type_trait::task_status status) noexcept : api_result(0) {}
+  explicit rank_ret_t(task_type_trait::task_status) noexcept : api_result(0) {}
 };
 
 struct rank_callback_private_data {
@@ -60,7 +62,7 @@ struct logic_rank_user_extend_span {
   // 额外扩展字段，最大不超过3项
   gsl::span<const uint64_t> ext_fields;
 
-  inline logic_rank_user_extend_span() : sort_fields({}), ext_fields({}) {}
+  logic_rank_user_extend_span() = default;
 };
 
 RANK_LOGIC_SDK_API std::string rank_user_key_to_openid(uint32_t user_zone_id, uint64_t user_id, int32_t instance_type,
@@ -84,10 +86,7 @@ struct UTIL_SYMBOL_VISIBLE logic_rank_handle_data {
   logic_rank_user_extend_data extend_data;
 
   inline logic_rank_handle_data()
-      : user_id(0), zone_id(0), instance_type(0), instance_id(0), rank_no(0), score(0), timestamp(0) {
-    /* Ensure default initialization without relying on trivial traits. */
-    extend_data = logic_rank_user_extend_data{};
-  }
+      : user_id(0), zone_id(0), instance_type(0), instance_id(0), rank_no(0), score(0), timestamp(0), extend_data{} {}
 };
 
 class logic_rank_handle_key {
@@ -143,13 +142,12 @@ struct logic_rank_handle_key_hash {
 };
 
 class logic_rank_handle_decl {
- private:
+ public:
   logic_rank_handle_decl(const logic_rank_handle_decl&) = delete;
   logic_rank_handle_decl(logic_rank_handle_decl&&) = delete;
   logic_rank_handle_decl& operator=(const logic_rank_handle_decl&) = delete;
   logic_rank_handle_decl& operator=(logic_rank_handle_decl&&) = delete;
 
- public:
   RANK_LOGIC_SDK_API logic_rank_handle_decl();
   RANK_LOGIC_SDK_API virtual ~logic_rank_handle_decl();
 
@@ -190,8 +188,8 @@ class logic_rank_handle_decl {
 
   RANK_LOGIC_SDK_API gsl::span<const logic_rank_handle_data> get_current_span() const noexcept;
 
-  void fetch_current_rank_key(gsl::string_view& openid, uint32_t zone_id,
-                              PROJECT_NAMESPACE_ID::DRankUserKey& rank_user_key) const;
+  static void fetch_current_rank_key(gsl::string_view& openid, uint32_t zone_id,
+                                     PROJECT_NAMESPACE_ID::DRankUserKey& rank_user_key);
 
   virtual bool is_service_available() const noexcept = 0;
 
@@ -237,15 +235,18 @@ class logic_rank_handle_decl {
   void reinit_last_cache(uint32_t total_count);
 
  protected:
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   logic_rank_handle_data* last_rank_cache_cursor_;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   uint32_t last_rank_cache_total_count_;
+  // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
   std::vector<logic_rank_handle_data> last_rank_cache_;
 };
 
 class logic_rank_handle_self_impl : public logic_rank_handle_decl {
  public:
   RANK_LOGIC_SDK_API logic_rank_handle_self_impl(uint32_t world_id, uint32_t zone_id);
-  RANK_LOGIC_SDK_API virtual ~logic_rank_handle_self_impl();
+  RANK_LOGIC_SDK_API ~logic_rank_handle_self_impl() override;
 
   RANK_LOGIC_SDK_API uint32_t get_world_id() const noexcept override;
   RANK_LOGIC_SDK_API uint32_t get_zone_id() const noexcept override;
@@ -298,6 +299,7 @@ class logic_rank_handle_self_impl : public logic_rank_handle_decl {
 
 class logic_rank_handle_variant {
  public:
+  // NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
   enum variant_type { KSelfRank = 0 };
 
  public:
@@ -307,7 +309,9 @@ class logic_rank_handle_variant {
   RANK_LOGIC_SDK_API logic_rank_handle_variant(const logic_rank_handle_variant& other);
   RANK_LOGIC_SDK_API logic_rank_handle_variant& operator=(const logic_rank_handle_variant& other);
 
+  // NOLINTNEXTLINE(cppcoreguidelines-noexcept-move-operations, performance-noexcept-move-constructor)
   RANK_LOGIC_SDK_API logic_rank_handle_variant(logic_rank_handle_variant&& other);
+  // NOLINTNEXTLINE(cppcoreguidelines-noexcept-move-operations, performance-noexcept-move-constructor)
   RANK_LOGIC_SDK_API logic_rank_handle_variant& operator=(logic_rank_handle_variant&& other);
 
   RANK_LOGIC_SDK_API virtual ~logic_rank_handle_variant();
@@ -438,6 +442,7 @@ class logic_rank_handle_variant {
  private:
   variant_type variant_type_;
   bool enable_image_;
+  // NOLINTNEXTLINE(clang-diagnostic-unused-private-field)
   int32_t sort_type_;
   gsl::not_null<logic_rank_handle_decl*> delegate_;
   unsigned char object_data_[max_storage_size_helper<logic_rank_handle_self_impl>::value == 0

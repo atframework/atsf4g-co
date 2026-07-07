@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic/rank_settlement_manager.h"
 
 #include <log/log_wrapper.h>

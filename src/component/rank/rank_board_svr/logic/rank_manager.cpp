@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic/rank_manager.h"
 #include "logic/rank_mirror_global.h"
 
@@ -12,6 +14,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/config/rank_board_config.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 
@@ -38,7 +41,10 @@
 #include <utility/random_engine.h>
 #include <utility/rank_util.h>
 #include <cstdint>
+#include <ranges>
 #include <utility>
+
+namespace {
 
 struct rank_compare_function {
  public:
@@ -52,8 +58,10 @@ struct rank_compare_function {
   }
 };
 
+}  // namespace
+
 size_t rank_sort_type_hash_type::operator()(const PROJECT_NAMESPACE_ID::EnRankSortType& sort_type) const {
-  // TODO jijunliang 找个素数作magic number
+  // TODO(jijunliang): 找个素数作magic number
   return static_cast<size_t>(sort_type);
 }
 
@@ -62,7 +70,7 @@ bool rank_sort_type_equal_type::operator()(const PROJECT_NAMESPACE_ID::EnRankSor
   return lhs == rhs;
 }
 
-rank_manager::rank_manager() : init_(false), closing_(false) {}
+rank_manager::rank_manager() : init_(false), closing_(false), last_refresh_second_(0) {}
 
 void rank_manager::tick() {
   rpc::context ctx{rpc::context::create_without_task()};
@@ -74,6 +82,7 @@ void rank_manager::tick() {
   }
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 int rank_manager::init() { return 0; }
 
 void rank_manager::stop() {
@@ -94,7 +103,7 @@ void rank_manager::stop() {
 bool rank_manager::is_closed() { return is_closing() && rank_mirror_global::me()->is_empty(); }
 
 void rank_manager::refresh_limit_second(rpc::context& ctx, time_t now_tm) {
-  // TODO 这里直接循环遍历去执行了，有一定的风险
+  // TODO(jijunliang): 这里直接循环遍历去执行了，有一定的风险
   for (auto& rank : rank_map_) {
     if (!rank.second) {
       continue;
@@ -194,7 +203,7 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
     if (now_tm - rank_router_rsp->router_save_timepoint() > timeout) {
       // 抢占成功
       std::pair<uint64_t, int64_t> highest_data_version_slave_node = std::make_pair(0, 0);
-      RPC_AWAIT_IGNORE_RESULT(rank_manager::me()->check_slave_and_highest_data_version_slave(
+      RPC_AWAIT_IGNORE_RESULT(rank_manager::check_slave_and_highest_data_version_slave(
           ctx, rank_key, *rank_router_rsp, highest_data_version_slave_node));
       FWLOGDEBUG("get highest slave node rank({}:{}:{}:{}) node:{} version:{}", rank_key.rank_type(),
                  rank_key.rank_instance_id(), rank_key.sub_rank_type(), rank_key.sub_rank_instance_id(),
@@ -329,8 +338,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_top(
 std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
                                                     uint64_t main_node) {
   std::vector<uint64_t> slave_nodes;
-  auto mod = logic_server_last_common_module();
-  if (!mod) {
+  auto* mod = logic_server_last_common_module();
+  if (mod == nullptr) {
     FWLOGERROR("select_teamsvr_match tsf4g_migrate_get_tbupp_handle nullptr");
     return slave_nodes;
   }
@@ -350,13 +359,13 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
     return slave_nodes;
   }
   {
-    auto it =
-        std::find_if(sorted_nodes.begin(), sorted_nodes.end(), [&](atapp::etcd_discovery_node::ptr_t ptr) -> bool {
-          if (!ptr || ptr->get_discovery_info().id() != main_node) {
-            return false;
-          }
-          return true;
-        });
+    auto it = std::find_if(sorted_nodes.begin(), sorted_nodes.end(),
+                           [&](const atapp::etcd_discovery_node::ptr_t& ptr) -> bool {
+                             if (!ptr || ptr->get_discovery_info().id() != main_node) {
+                               return false;
+                             }
+                             return true;
+                           });
     if (it != sorted_nodes.end()) {
       sorted_nodes.erase(it);
     }
@@ -376,7 +385,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
   while (slave_nodes.size() < slave_node_cfg_num && !sorted_nodes.empty()) {
     size_t node_num = sorted_nodes.size();
     size_t idx = atfw::component::random_engine::fast_random_between<size_t>(0, node_num);
-    auto discovery_node_ptr = sorted_nodes[idx];
+    auto discovery_node_ptr = sorted_nodes.at(idx);
     if (!discovery_node_ptr || discovery_node_ptr->get_discovery_info().id() == 0) {
       sorted_nodes.erase(sorted_nodes.begin() + static_cast<int>(idx));
       continue;
@@ -402,7 +411,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to
   new_db_router.set_zone_id(logic_config::me()->get_local_zone_id());
   new_db_router.set_router_save_timepoint(atfw::util::time::time_utility::get_now());
   new_db_router.set_router_main_node_id(main_server_node);
-  auto slave_nodes = rank_manager::me()->get_slave_nodes(ctx, rank_key, main_server_node);
+  auto slave_nodes = rank_manager::get_slave_nodes(ctx, rank_key, main_server_node);
   if (slave_nodes.empty()) {
     FWLOGWARNING("save rank router failed, no slave node rank({}:{}:{}:{})", rank_key.rank_type(),
                  rank_key.rank_instance_id(), rank_key.sub_rank_type(), rank_key.sub_rank_instance_id());
@@ -443,9 +452,11 @@ rpc::result_code_type rank_manager::check_slave_and_highest_data_version_slave(
   std::vector<task_type_trait::task_type> pending_tasks;
 
   std::map<int64_t, std::vector<uint64_t>> output_slave_data_version;
-  for (auto& slave_node : new_db_router.blob_data().slave_nodes()) {
+  for (const auto& slave_node : new_db_router.blob_data().slave_nodes()) {
     auto invoke_task = rpc::async_invoke(
-        ctx, "rank_manager.check_slave_and_get_data_version", [&](rpc::context& child_ctx) -> rpc::result_code_type {
+        ctx, "rank_manager.check_slave_and_get_data_version",
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+        [&](rpc::context& child_ctx) -> rpc::result_code_type {
           PROJECT_NAMESPACE_ID::SSRankCheckSlaveReq req_body;
           protobuf_copy_message(*req_body.mutable_rank_key(), rank_key);
 
@@ -475,12 +486,12 @@ rpc::result_code_type rank_manager::check_slave_and_highest_data_version_slave(
   if (ret != 0) {
     RPC_RETURN_CODE(ret);
   }
-  for (auto it = output_slave_data_version.rbegin(); it != output_slave_data_version.rend(); it++) {
-    if (it->second.empty()) {
+  for (auto& it : std::views::reverse(output_slave_data_version)) {
+    if (it.second.empty()) {
       continue;
     }
-    auto idx = atfw::component::random_engine::fast_random_between<size_t>(0, it->second.size());
-    highest_slave_node = std::make_pair(it->second[idx], it->first);
+    auto idx = atfw::component::random_engine::fast_random_between<size_t>(0, it.second.size());
+    highest_slave_node = std::make_pair(it.second.at(idx), it.first);
     break;
   }
 

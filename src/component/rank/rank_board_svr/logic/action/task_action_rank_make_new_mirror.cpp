@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "task_action_rank_make_new_mirror.h"
 
 #include <curl/curl.h>

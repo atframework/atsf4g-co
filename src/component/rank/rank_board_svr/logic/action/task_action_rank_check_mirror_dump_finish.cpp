@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "task_action_rank_check_mirror_dump_finish.h"
 
 #include <log/log_wrapper.h>

@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 // clang-format off
@@ -29,12 +31,12 @@ PROJECT_NAMESPACE_BEGIN
 namespace rank_api {
 
 template <class T>
-static void copy_buffer_into(char* start, size_t offset, T value) {
+ATFW_UTIL_FORCEINLINE static void copy_buffer_into(char* start, size_t offset, T value) {
   memcpy(start + offset, &value, sizeof(value));
 }
 
 struct RANK_BOARD_SDK_API rank_key_hash_type {
-  size_t operator()(const ::PROJECT_NAMESPACE_ID::DRankKey& rank_key) const {
+  ATFW_UTIL_FORCEINLINE size_t operator()(const ::PROJECT_NAMESPACE_ID::DRankKey& rank_key) const {
     char hash_buffer[sizeof(int32_t) * 4];
     copy_buffer_into(hash_buffer, 0, rank_key.rank_type());
     copy_buffer_into(hash_buffer, sizeof(int32_t), rank_key.rank_instance_id());
@@ -44,10 +46,12 @@ struct RANK_BOARD_SDK_API rank_key_hash_type {
     return static_cast<size_t>(XXH64(hash_buffer, sizeof(hash_buffer), static_cast<XXH64_hash_t>(920431627)));
   }
 };
+
 struct RANK_BOARD_SDK_API rank_key_equal_type {
-  bool operator()(const ::PROJECT_NAMESPACE_ID::DRankKey& lhs, const ::PROJECT_NAMESPACE_ID::DRankKey& rhs) const {
-    return lhs.rank_type() == rhs.rank_type() && lhs.rank_instance_id() == rhs.rank_instance_id()
-           && lhs.sub_rank_type() == rhs.sub_rank_type() && lhs.sub_rank_instance_id() == rhs.sub_rank_instance_id();
+  ATFW_UTIL_FORCEINLINE bool operator()(const ::PROJECT_NAMESPACE_ID::DRankKey& lhs,
+                                        const ::PROJECT_NAMESPACE_ID::DRankKey& rhs) const {
+    return lhs.rank_type() == rhs.rank_type() && lhs.rank_instance_id() == rhs.rank_instance_id() &&
+           lhs.sub_rank_type() == rhs.sub_rank_type() && lhs.sub_rank_instance_id() == rhs.sub_rank_instance_id();
   }
 };
 }  // namespace rank_api

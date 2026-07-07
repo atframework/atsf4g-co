@@ -1,3 +1,4 @@
+// Copyright 2026 atframework
 
 #include "rank.h"
 
@@ -108,7 +109,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_sco
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreReq> request_body{ctx};
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreRsp> response_body{ctx};
-  auto req_data = request_body->mutable_data();
+  auto* req_data = request_body->mutable_data();
 
   protobuf_copy_message(*req_data->mutable_user_key(), user);
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
@@ -130,7 +131,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_sco
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreReq> request_body{ctx};
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreRsp> response_body{ctx};
-  auto req_data = request_body->mutable_data();
+  auto* req_data = request_body->mutable_data();
 
   protobuf_copy_message(*req_data->mutable_user_key(), user);
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
@@ -209,8 +210,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top_fr
   std::vector<rpc::db::rank_mirror::table_key_t> keys;
   std::vector<rpc::db::rank_mirror::batch_get_result_t> out;
   for (int32_t slice_index = start_slice_index; slice_index <= end_slice_index; ++slice_index) {
-    keys.push_back(rpc::db::rank_mirror::table_key_t(rank.rank_type(), rank.rank_instance_id(), rank.sub_rank_type(),
-                                                     rank.sub_rank_instance_id(), zone_id, mirror_id, slice_index));
+    keys.emplace_back(rank.rank_type(), rank.rank_instance_id(), rank.sub_rank_type(), rank.sub_rank_instance_id(),
+                      zone_id, mirror_id, slice_index);
   }
 
   ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror::batch_get_all(ctx, keys, out));
@@ -228,8 +229,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top_fr
     }
     for (const auto& unit : table.message->get()->blob_data().data()) {
       if (unit.rank_no() >= start_no && unit.rank_no() <= end_no) {
-        auto ptr = output.mutable_rank_records()->Add();
-        if (ptr) {
+        auto* ptr = output.mutable_rank_records()->Add();
+        if (ptr != nullptr) {
           rank_util::dump_rank_basic_board_from_rank_data(unit.data(), *ptr);
           ptr->set_rank_no(unit.rank_no());
         }

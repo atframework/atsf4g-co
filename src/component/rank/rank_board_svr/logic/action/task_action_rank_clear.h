@@ -21,7 +21,8 @@
 #  define RANK_SERVICE_API UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_rank_clear : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankClearReq, PROJECT_NAMESPACE_ID::SSRankClearRsp> {
+class task_action_rank_clear
+    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankClearReq, PROJECT_NAMESPACE_ID::SSRankClearRsp> {
  public:
   using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankClearReq, PROJECT_NAMESPACE_ID::SSRankClearRsp>;
   using message_type = base_type::message_type;
@@ -34,7 +35,7 @@ class task_action_rank_clear : public task_action_ss_rpc_base<PROJECT_NAMESPACE_
 
  public:
   RANK_SERVICE_API explicit task_action_rank_clear(dispatcher_start_data_type&& param);
-  RANK_SERVICE_API ~task_action_rank_clear();
+  RANK_SERVICE_API ~task_action_rank_clear() override;
 
   RANK_SERVICE_API const char* name() const override;
 

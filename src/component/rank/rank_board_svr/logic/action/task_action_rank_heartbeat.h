@@ -21,9 +21,11 @@
 #  define RANK_SERVICE_API UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_rank_heartbeat : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankHeartbeatReq, PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp> {
+class task_action_rank_heartbeat : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankHeartbeatReq,
+                                                                  PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankHeartbeatReq, PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp>;
+  using base_type =
+      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankHeartbeatReq, PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -34,7 +36,7 @@ class task_action_rank_heartbeat : public task_action_ss_rpc_base<PROJECT_NAMESP
 
  public:
   RANK_SERVICE_API explicit task_action_rank_heartbeat(dispatcher_start_data_type&& param);
-  RANK_SERVICE_API ~task_action_rank_heartbeat();
+  RANK_SERVICE_API ~task_action_rank_heartbeat() override;
 
   RANK_SERVICE_API const char* name() const override;
 

@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "sharding.h"
 
 #include <config/extern_service_types.h>
@@ -5,7 +7,6 @@
 #include <utility/random_engine.h>
 #include <xxhash.h>
 #include "common.h"
-#include "config/extern_service_types.h"
 #include "config/server_frame_build_feature.h"
 #include "log/log_wrapper.h"
 #include "rpc/rank_board/rankboardservice.atfw.gen.h"
@@ -24,6 +25,7 @@ PROJECT_NAMESPACE_BEGIN
 namespace rank_api {
 namespace inner {
 
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 struct router_rank_info {
   bool is_io_task_running() {
     if (!task_type_trait::empty(io_task)) {
@@ -41,10 +43,11 @@ struct router_rank_info {
   task_type_trait::task_type io_task;
 };
 
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 class router_rank_manager : public atfw::util::design_pattern::singleton<router_rank_manager> {
  public:
-  uint64_t get_rank_main_server_id(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
-                                   const PROJECT_NAMESPACE_ID::DRankKey& rank_key) {
+  static uint64_t get_rank_main_server_id(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
+                                          const PROJECT_NAMESPACE_ID::DRankKey& rank_key) {
     return get_ranksvr_server_id_by_consistent_hash(
         static_cast<uint32_t>(::PROJECT_NAMESPACE_ID::rank_api::rank_key_hash_type()(rank_key)));
   }
@@ -80,20 +83,20 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_SLAVE_SERVER_EMPTY);
     }
     size_t idx = atfw::component::random_engine::fast_random_between<size_t>(0, slave_server_ids.size());
-    slave_server_id = slave_server_ids[idx];
+    slave_server_id = slave_server_ids.at(idx);
     RPC_RETURN_CODE(0);
   }
 
  private:
-  uint64_t get_ranksvr_server_id_by_consistent_hash(uint32_t rank_id) {
-    if (auto common_mod = logic_server_last_common_module()) {
+  static uint64_t get_ranksvr_server_id_by_consistent_hash(uint32_t rank_id) {
+    if (auto* common_mod = logic_server_last_common_module()) {
       auto type_index = common_mod->get_discovery_index_by_type(
           static_cast<uint64_t>(atframework::component::logic_service_type::kRankBoardSvr));
       const atfw::atapp::protocol::atapp_metadata* selector =
           logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kRanksvrFieldNumber,
                                      logic_hpa_discovery_select_mode::kReady);
       if (type_index) {
-        auto node = type_index->get_node_by_consistent_hash(int64_t(rank_id), selector);
+        auto node = type_index->get_node_by_consistent_hash(static_cast<int64_t>(rank_id), selector);
         if (node) {
           return node->get_discovery_info().id();
         }
@@ -109,13 +112,13 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
     }
 
     size_t hash_key = ::PROJECT_NAMESPACE_ID::rank_api::rank_key_hash_type()(rank_key);
-    auto& router_info = router_rank_data[hash_key];
+    auto& router_info = router_rank_data.try_emplace(hash_key).first->second;
     if (router_info.is_io_task_running()) {
       auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, router_info.io_task));
       if (ret != 0) {
         RPC_RETURN_CODE(ret);
       }
-      *output_router_info = &router_rank_data[hash_key];
+      *output_router_info = &router_info;
       RPC_RETURN_CODE(0);
     }
     if (router_info.router_version > 0) {
@@ -132,7 +135,9 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
     }
 
     auto invoke_task = rpc::async_invoke(
-        ctx, "rank load main task", [server_id, hash_key, rank_key](rpc::context& child_ctx) -> rpc::result_code_type {
+        ctx, "rank load main task",
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+        [server_id, hash_key, rank_key](rpc::context& child_ctx) -> rpc::result_code_type {
           PROJECT_NAMESPACE_ID::SSRankLoadMainReq request_body;
           PROJECT_NAMESPACE_ID::SSRankLoadMainRsp response_body;
           request_body.mutable_rank_key()->set_rank_type(rank_key.rank_type());
@@ -148,7 +153,7 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
           auto& tmp_router_info = router_rank_manager::me()->router_rank_data[hash_key];
           tmp_router_info.main_node_server_id = response_body.router_data().main_server_id();
           tmp_router_info.router_version = response_body.router_data().router_version();
-          for (auto& slave_server_id : response_body.router_data().slave_server_ids()) {
+          for (const auto& slave_server_id : response_body.router_data().slave_server_ids()) {
             tmp_router_info.router_slave_node_server_ids.push_back(slave_server_id);
           }
           RPC_RETURN_CODE(0);
@@ -176,7 +181,7 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
 }  // namespace inner
 
 RANK_BOARD_SDK_API uint64_t get_rank_main_server_id(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key) {
-  return inner::router_rank_manager::me()->get_rank_main_server_id(ctx, rank_key);
+  return inner::router_rank_manager::get_rank_main_server_id(ctx, rank_key);
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_rank_slave_server_ids(

@@ -1,21 +1,20 @@
+// Copyright 2026 atframework
+
 #include "rank.h"
 
 #include <log/log_wrapper.h>
 #include <random/random_generator.h>
 #include <time/time_utility.h>
 
-// clang-format off
 #include <config/compiler/protobuf_prefix.h>
-// clang-format on
 
+#include <protocol/config/rank_board_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.rank.pb.h>
 #include <protocol/pbdesc/rank_board_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
-// clang-format off
 #include <config/compiler/protobuf_suffix.h>
-// clang-format on
 
 #include <config/excel_config_rank_index.h>
 #include <config/logic_config.h>
@@ -47,30 +46,30 @@
 rank::rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t capacity, compare_fn_t compare_fn,
            int64_t data_version)
     : capacity_(capacity),
+      btree_(atfw::memory::stl::make_strong_rc<rank_tree>(
+          static_cast<size_t>(logic_config::me()
+                                  ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                  .rank_btree_degree()),
+          logic_config::me()
+              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+              .rank_history_version_max_count(),
+          compare_fn)),
       data_version_(data_version),
-
       next_daily_settlement_id_(0),
       next_custom_settlement_id_(0),
       next_settlement_timepoint_(0),
-      is_saving_mirror_(false) {
-  btree_ = atfw::memory::stl::make_strong_rc<rank_tree>(
-      static_cast<size_t>(logic_config::me()
-                              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                              .rank_btree_degree()),
-      logic_config::me()
-          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-          .rank_history_version_max_count(),
-      compare_fn);
+      is_saving_mirror_(false),
+      mirror_manager_(atfw::memory::stl::make_strong_rc<rank_mirror_manager>(this)),
+      last_save_time_(atfw::util::time::time_utility::get_now()) {
   key_.set_rank_type(rank_key.rank_type());
   key_.set_rank_instance_id(rank_key.rank_instance_id());
   key_.set_sub_rank_type(rank_key.sub_rank_type());
   key_.set_sub_rank_instance_id(rank_key.sub_rank_instance_id());
-  mirror_manager_ = atfw::memory::stl::make_strong_rc<rank_mirror_manager>(this);
-  last_save_time_ = atfw::util::time::time_utility::get_now();
 }
 
 rank::~rank() {}
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 int rank::tick() {
   int ret = 0;
   return ret;
@@ -238,6 +237,7 @@ int32_t rank::query_one_user_by_key(const PROJECT_NAMESPACE_ID::DRankUserKey& ke
   return 0;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 int32_t rank::query_one_user_by_score(ATFW_EXPLICIT_UNUSED_ATTR const PROJECT_NAMESPACE_ID::rank_sort_score& key,
                                       ATFW_EXPLICIT_UNUSED_ATTR PROJECT_NAMESPACE_ID::rank_data& output) {
   return 0;
@@ -259,8 +259,8 @@ int32_t rank::query_rank_top(uint32_t from, uint32_t count, PROJECT_NAMESPACE_ID
 
   for (auto& unit : result) {
     if (mp_.find(unit->key()) != mp_.end()) {
-      auto data = output.mutable_rank_records()->Add();
-      if (data) {
+      auto* data = output.mutable_rank_records()->Add();
+      if (data != nullptr) {
         rank_util::dump_rank_basic_board_from_rank_data(mp_[unit->key()], *data);
         data->set_rank_no(from);
       }
@@ -297,7 +297,7 @@ int32_t rank::query_rank_user_front_back(const PROJECT_NAMESPACE_ID::DRankUserKe
   }
   uint32_t rank_no = static_cast<uint32_t>(btree_->index(iter->second.sort_data()));
   auto start_no = rank_no > count ? rank_no - count : 1;
-  auto real_count = start_no == 1 ? (count + rank_no) : (2 * count + 1);
+  auto real_count = start_no == 1 ? (count + rank_no) : ((2 * count) + 1);
   FWRLOGDEBUG(*this, "query_rank_user_front_back user:{} rank_no:{} start_no:{} count {} real_count:{}", key.user_id(),
               rank_no, start_no, count, real_count);
   return query_rank_top(start_no, real_count, output);
@@ -309,23 +309,24 @@ void rank::fetch_rank_data(google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_
   uint32_t rank_no = 0;
   for (const auto& unit : result) {
     rank_no++;
-    if (mp_.find(unit->key()) != mp_.end()) {
-      auto ptr = output.Add();
-      if (ptr) {
+    auto data_iter = mp_.find(unit->key());
+    if (data_iter != mp_.end()) {
+      auto* ptr = output.Add();
+      if (ptr != nullptr) {
         ptr->set_rank_no(rank_no);
-        protobuf_copy_message(*ptr->mutable_data(), mp_[unit->key()]);
+        protobuf_copy_message(*ptr->mutable_data(), data_iter->second);
       }
     }
   }
-  return;
 }
 
 void rank::async_save_rank_data(rpc::context& ctx) {
   auto rank_ptr = shared_from_this();
-  auto invoke_task =
-      rpc::async_invoke(ctx, "rank.async_save_rank_data", [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rank_ptr->save_rank_data(child_ctx)));
-      });
+  auto invoke_task = rpc::async_invoke(ctx, "rank.async_save_rank_data",
+                                       // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+                                       [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+                                         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rank_ptr->save_rank_data(child_ctx)));
+                                       });
   if (invoke_task.is_error()) {
     // FWRLOGERROR(*this, "async_save_rank_data failed, invoke_task is error");
   }
@@ -352,13 +353,15 @@ rpc::result_code_type rank::init_rank_from_db(rpc::context& ctx) {
   }
 
   auto rank_ptr = shared_from_this();
-  auto invoke_task =
-      rpc::async_invoke(ctx, "rank.init_rank_from_db", [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+  auto invoke_task = rpc::async_invoke(
+      ctx, "rank.init_rank_from_db",
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+      [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
         auto ret = RPC_AWAIT_CODE_RESULT(rank_ptr->mirror_manager_->init_from_db(child_ctx));
         if (ret != 0) {
           RPC_RETURN_CODE(ret);
         }
-        auto& mirror_meta_data = rank_ptr->mirror_manager_->get_rank_mirror_meta_data();
+        const auto& mirror_meta_data = rank_ptr->mirror_manager_->get_rank_mirror_meta_data();
         if (mirror_meta_data.last_save_mirror().mirror_id() > 0) {
           std::vector<atfw::util::memory::strong_rc_ptr<rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_mirror>>>
               db_data;
@@ -376,7 +379,7 @@ rpc::result_code_type rank::init_rank_from_db(rpc::context& ctx) {
             }
           }
           if (!db_data.empty()) {
-            rank_ptr->data_version_ = db_data[0]->get()->data_version();
+            rank_ptr->data_version_ = db_data.front()->get()->data_version();
           }
         }
 
@@ -449,12 +452,13 @@ rpc::result_code_type rank::notify_switch_to_slave(rpc::context& ctx) {
 
   std::vector<task_type_trait::task_type> pending_tasks;
   const auto& router_data = get_router_data();
-  auto& rank_key = get_key();
+  const auto& rank_key = get_key();
   auto data_version = data_version_;
   auto self_ptr = this->shared_from_this();
-  for (auto& slave_node : router_data_.slave_server_ids()) {
+  for (const auto& slave_node : router_data_.slave_server_ids()) {
     auto invoke_task = rpc::async_invoke(
         ctx, "rank.switch_to_slave",
+        // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
         [self_ptr, data_version, rank_key, router_data, slave_node](rpc::context& child_ctx) -> rpc::result_code_type {
           PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveReq req;
           PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveRsp rsp;
@@ -501,7 +505,9 @@ void rank::async_heartbeat(rpc::context& ctx) {
   is_heartbeat_running_ = true;
   auto rank_ptr = this->shared_from_this();
   auto invoke_task = rpc::async_invoke(
-      ctx, "rank.heartbeat", [main_server_id, rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+      ctx, "rank.heartbeat",
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+      [main_server_id, rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
         PROJECT_NAMESPACE_ID::SSRankHeartbeatReq req;
         PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp rsp;
         req.set_data_version(rank_ptr->get_data_version());
@@ -523,10 +529,12 @@ void rank::async_heartbeat(rpc::context& ctx) {
 
 void rank::async_router_lock(rpc::context& ctx) {
   auto rank_ptr = this->shared_from_this();
-  auto invoke_task =
-      rpc::async_invoke(ctx, "rank.router_lock", [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+  auto invoke_task = rpc::async_invoke(
+      ctx, "rank.router_lock",
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
+      [rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
         auto now_tm = atfw::util::time::time_utility::get_now();
-        auto& router_data = rank_ptr->get_router_data();
+        const auto& router_data = rank_ptr->get_router_data();
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> new_db_router(child_ctx);
         new_db_router->set_rank_type(rank_ptr->get_key().rank_type());
         new_db_router->set_rank_instance_id(rank_ptr->get_key().rank_instance_id());
@@ -535,7 +543,7 @@ void rank::async_router_lock(rpc::context& ctx) {
         new_db_router->set_zone_id(logic_config::me()->get_local_zone_id());
         new_db_router->set_router_save_timepoint(now_tm);
         new_db_router->set_router_main_node_id(router_data.main_server_id());
-        for (auto& slave_id : router_data.slave_server_ids()) {
+        for (const auto& slave_id : router_data.slave_server_ids()) {
           new_db_router->mutable_blob_data()->add_slave_nodes(slave_id);
         }
         int ret = 0;

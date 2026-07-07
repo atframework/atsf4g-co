@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 // clang-format off
@@ -64,7 +66,7 @@ struct rank_log_action_equal_t {
 
 struct rank_wal_publisher_log_operator
     : public atfw::util::distributed_system::wal_log_operator<
-          int64_t, PROJECT_NAMESPACE_ID::DRankEventLog, rank_wal_publisher_log_action_getter, std::less<int64_t>,
+          int64_t, PROJECT_NAMESPACE_ID::DRankEventLog, rank_wal_publisher_log_action_getter, std::less<>,
           rank_log_action_hash_t, rank_log_action_equal_t,
           atfw::memory::stl::allocator<PROJECT_NAMESPACE_ID::DRankEventLog>> {};
 
@@ -73,6 +75,6 @@ struct rank_wal_subscriber_type
 
 using rank_wal_publisher_type =
     atfw::util::distributed_system::wal_publisher<rank_storage_type, rank_wal_publisher_log_operator,
-                                            rank_wal_publisher_context, rank*, rank_wal_subscriber_type>;
+                                                  rank_wal_publisher_context, rank*, rank_wal_subscriber_type>;
 
 rank_wal_publisher_log_operator::strong_ptr<rank_wal_publisher_type> create_rank_publisher(rank&);

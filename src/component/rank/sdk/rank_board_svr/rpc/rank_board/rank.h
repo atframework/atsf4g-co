@@ -1,3 +1,4 @@
+// Copyright 2026 atframework
 
 #pragma once
 
@@ -20,8 +21,6 @@
 #include <vector>
 
 #include <config/compile_optimize.h>
-
-#include <std/explicit_declare.h>
 
 PROJECT_NAMESPACE_BEGIN
 

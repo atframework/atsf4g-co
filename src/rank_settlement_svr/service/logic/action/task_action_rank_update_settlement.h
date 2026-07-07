@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <config/server_frame_build_feature.h>
@@ -15,6 +17,7 @@
 #include "config/excel_type_trait_setting.h"
 
 PROJECT_NAMESPACE_BEGIN
+class table_rank_settlement;
 namespace config {
 class ExcelRankRule;
 }
@@ -43,15 +46,15 @@ class task_action_rank_update_settlement : public task_action_no_req_base {
 
  public:
   explicit task_action_rank_update_settlement(ctor_param_t&& param);
-  ~task_action_rank_update_settlement();
+  ~task_action_rank_update_settlement() override;
 
   result_type operator()() override;
 
   int on_complete() override;
 
  private:
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_all(rpc::context& ctx,
-                                                               const std::vector<task_type_trait::task_type>& tasks);
+  ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type await_all(
+      rpc::context& ctx, const std::vector<task_type_trait::task_type>& tasks);
 
   void check_trigger_exit(rpc::context& ctx, bool& allow_continue, task_type_trait::task_status current_status);
 
