@@ -22,21 +22,21 @@ option (CONST_SETTINGS) = {
 // limits
 enum EnConstLimits {
   EN_CL_UNKNOWN = 0;
-  EN_CL_MAX_PROTOCOL_LENGTH = 262144; // message length limit: 256K
-  EN_CL_MAX_OPEN_ID_LENGTH = 64; // openid length limit
-  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128; // token length limit
+  EN_CL_MAX_PROTOCOL_LENGTH = 262144;  // message length limit: 256K
+  EN_CL_MAX_OPEN_ID_LENGTH = 64;       // openid length limit
+  EN_CL_MAX_AUTH_TOKEN_LENGHT = 128;   // token length limit
 }
 
 // account type
 enum EnAccountTypeID {
-  EN_ATI_ACCOUNT_INTERNAL = 0;  // internal: username/password
-  EN_ATI_ACCOUNT_IOS_GUEST = 1; // ios guest
+  EN_ATI_ACCOUNT_INTERNAL = 0;   // internal: username/password
+  EN_ATI_ACCOUNT_IOS_GUEST = 1;  // ios guest
 }
 
 // channel id
 enum EnPlatformChannelID {
-  EN_PCI_NONE = 0; // NONE
-  EN_PCI_APPLE_GAMECENTER = 1; // 苹果GAMECENTER渠道
+  EN_PCI_NONE = 0;              // NONE
+  EN_PCI_APPLE_GAMECENTER = 1;  // 苹果GAMECENTER渠道
 }
 
 // system type
@@ -65,55 +65,55 @@ enum EnArchitecture {
 
 // 模拟器ID
 enum EnWellKnownSimulatorID {
-  EN_WKS_ID_NONE = 0; // 未使用模拟器
-  EN_WKS_ID_TX_GAME_ASSISTANT = 1; // 腾讯手游助手
+  EN_WKS_ID_NONE = 0;               // 未使用模拟器
+  EN_WKS_ID_TX_GAME_ASSISTANT = 1;  // 腾讯手游助手
 }
 
 // update type
 enum EnUpdateType {
-  EN_UPDATE_NONE = 0; // no upgrade
-  EN_UPDATE_INVALID = -1; // error parameters
-  EN_UPDATE_DEFAULT_RECOM = 1; // recommand resource upgrade
-  EN_UPDATE_PACKAGE_RECOM = 2; // recommand package upgrade
-  EN_UPDATE_FORCE_START = 1024; // force upgrade bound
-  EN_UPDATE_DEFAULT_FORCE = 1025; // force resource upgrade
-  EN_UPDATE_PACKAGE_FORCE = 1026; // force package upgrade
+  EN_UPDATE_NONE = 0;              // no upgrade
+  EN_UPDATE_INVALID = -1;          // error parameters
+  EN_UPDATE_DEFAULT_RECOM = 1;     // recommand resource upgrade
+  EN_UPDATE_PACKAGE_RECOM = 2;     // recommand package upgrade
+  EN_UPDATE_FORCE_START = 1024;    // force upgrade bound
+  EN_UPDATE_DEFAULT_FORCE = 1025;  // force resource upgrade
+  EN_UPDATE_PACKAGE_FORCE = 1026;  // force package upgrade
 }
 
 // user type
 enum EnVersionType {
-  EN_VERSION_DEFAULT = 0; // default
-  EN_VERSION_GRAY = 1; // gray
-  EN_VERSION_REVIEW = 2; // review
+  EN_VERSION_DEFAULT = 0;  // default
+  EN_VERSION_GRAY = 1;     // gray
+  EN_VERSION_REVIEW = 2;   // review
 
-  EN_VERSION_INNER = 10000; // inner
-  EN_VERSION_GM = 10001; // gm
+  EN_VERSION_INNER = 10000;  // inner
+  EN_VERSION_GM = 10001;     // gm
 }
 
 // chat channel type
 enum EnChatChannelType {
-  EN_CCT_INVALID = 0; // invalid
-  EN_CCT_ALL_DEFAULT = 1001; // all zones
-  EN_CCT_ALL_BOUND = 2000; // all zones bound
-  EN_CCT_ZONE_DEFAULT = 2001; // one zone
-  EN_CCT_ZONE_BOUND = 3000; // one zone bound
-  EN_CCT_PERSONAL_DEFAULT = 3001; // personal
-  EN_CCT_PERSONAL_BOUND = 4000; // personal bound
+  EN_CCT_INVALID = 0;              // invalid
+  EN_CCT_ALL_DEFAULT = 1001;       // all zones
+  EN_CCT_ALL_BOUND = 2000;         // all zones bound
+  EN_CCT_ZONE_DEFAULT = 2001;      // one zone
+  EN_CCT_ZONE_BOUND = 3000;        // one zone bound
+  EN_CCT_PERSONAL_DEFAULT = 3001;  // personal
+  EN_CCT_PERSONAL_BOUND = 4000;    // personal bound
 
-  EN_CCT_SUB_GUILD = 8001; // subcribe-guild
+  EN_CCT_SUB_GUILD = 8001;  // subcribe-guild
 }
 
 // item change type
 enum EnItemChgMainType {
-  EN_ICMT_UNKNOWN = 0; // unknown
-  EN_ICMT_USE = 1; // use
-  EN_ICMT_SALE = 2; // sale
-  EN_ICMT_BUY = 3; // 使用资源
+  EN_ICMT_UNKNOWN = 0;  // unknown
+  EN_ICMT_USE = 1;      // use
+  EN_ICMT_SALE = 2;     // sale
+  EN_ICMT_BUY = 3;      // 使用资源
 }
 
 // item change sub type
 enum EnItemChgSubType {
-  EN_ICST_DEFAULT = 0; // default
+  EN_ICST_DEFAULT = 0;  // default
 }
 
 // @see atframework/service/atgateway/protocol/libatgw_protocol_api.h
@@ -125,12 +125,12 @@ enum EnCloseReasonType {
 
   // 0x20000 == 131072
   // 0x20000 - 0x30000 是自定义网络层不可重连，逻辑层可重连关闭原因
-  EN_CRT_SESSION_NOT_FOUND = 131073; // session不存在
-  EN_CRT_SPEED_WARNING = 131074; // 游戏速度异常
+  EN_CRT_SESSION_NOT_FOUND = 131073;  // session不存在
+  EN_CRT_SPEED_WARNING = 131074;      // 游戏速度异常
 
   // 0x30000 == 196608
   // 0x30000 - 0x40000 是自定义网络层不可重连，逻辑层不可重连关闭原因
-  EN_CRT_LOGIN_BAN = 196609; // 封号
+  EN_CRT_LOGIN_BAN = 196609;  // 封号
 }
 
 // error code
@@ -169,7 +169,7 @@ enum EnErrorCode {
   EN_ERR_SYSTEM_BAD_PACKAGE = -115
                               [(error_code.description) = "包结构错误"];
   EN_ERR_OPERATE_DB_FAILED = -116
-                              [(error_code.description) = "操作数据库失败"];
+                             [(error_code.description) = "操作数据库失败"];
   EN_ERR_LOGIN_PROTECT = -117
                          [(error_code.description) = "登录保护"];
   EN_ERR_CS_PROTOCOL_FREQUENCY_LIMIT = -118
@@ -235,48 +235,48 @@ enum EnErrorCode {
   EN_ERR_ITEM_NOT_FOUND = -502
                           [(error_code.description) = "道具未找到"];
   EN_ERR_ITEM_POSITION_OCCUPIED = -503
-                                 [(error_code.description) = "道具位置已被占用"];
+                                  [(error_code.description) = "道具位置已被占用"];
   EN_ERR_ITEM_POSITION_OUT_OF_RANGE = -504
-                                     [(error_code.description) = "道具位置超出背包范围"];
+                                      [(error_code.description) = "道具位置超出背包范围"];
   EN_ERR_ITEM_NO_EMPTY_POSITION = -505
-                                 [(error_code.description) = "背包没有空位"];
+                                  [(error_code.description) = "背包没有空位"];
   EN_ERR_ITEM_DUPLICATE_GUID = -506
                                [(error_code.description) = "道具GUID重复"];
   EN_ERR_ITEM_MOVE_TARGET_OCCUPIED = -507
-                                    [(error_code.description) = "移动目标位置已被占用"];
+                                     [(error_code.description) = "移动目标位置已被占用"];
   EN_ERR_ITEM_STORAGE_FULL = -508
                              [(error_code.description) = "背包已满"];
   EN_ERR_ITEM_STACK_OVERFLOW = -509
-                              [(error_code.description) = "堆叠数量超过上限"];
+                               [(error_code.description) = "堆叠数量超过上限"];
   // 排行榜[601-700]
   EN_ERR_RANK_USER_NOT_FOUND = -601
-                                                        [(error_code.description) = "排行榜玩家不在榜单上"];
+                               [(error_code.description) = "排行榜玩家不在榜单上"];
   EN_ERR_RANK_NO_NOT_FOUND = -602
-                                                        [(error_code.description) = "排行榜排名不存在"];
+                             [(error_code.description) = "排行榜排名不存在"];
   EN_ERR_RANK_NO_HAS_BUT_NO_FOUND_DETAIL_DATA = -603
-                                                        [(error_code.description) = "排行榜排名存在但没有详细数据"];
+                                                [(error_code.description) = "排行榜排名存在但没有详细数据"];
   EN_ERR_RANK_DATA_VERSION_INCONSISTENCY = -604
-                                                        [(error_code.description) = "排行榜数据版本不一致"];
+                                           [(error_code.description) = "排行榜数据版本不一致"];
   EN_ERR_RANK_NOT_EXIST = -605
-                                                        [(error_code.description) = "排行榜数据不存在"];
+                          [(error_code.description) = "排行榜数据不存在"];
   EN_ERR_RANK_SERVICE_NOT_AVAILABLE = -606
-                                                        [(error_code.description) = "没有可用的排行榜服务"];
+                                      [(error_code.description) = "没有可用的排行榜服务"];
   EN_ERR_RANK_SERVICE_SYSTEM_BUSY = -607
-                                                        [(error_code.description) = "排行榜服务繁忙"];
+                                    [(error_code.description) = "排行榜服务繁忙"];
   EN_ERR_RANK_SCORE_INVALID = -608
-                                                        [(error_code.description) = "排行榜成绩非法, 不能小于0"];
+                              [(error_code.description) = "排行榜成绩非法, 不能小于0"];
   EN_ERR_RANK_CONFIG_NOT_FOUND = -609
-                                                        [(error_code.description) = "排行榜配置没有找到"];
+                                 [(error_code.description) = "排行榜配置没有找到"];
   EN_ERR_RANK_IS_NOT_SLAVE = -710
-                                                        [(error_code.description) = "不是从节点"];
+                             [(error_code.description) = "不是从节点"];
   EN_ERR_RANK_IS_NOT_MAIN = -711
-                                                        [(error_code.description) = "不是主节点"];
+                            [(error_code.description) = "不是主节点"];
   EN_ERR_RANK_SLAVE_SERVER_EMPTY = -712
-                                                        [(error_code.description) = "没有可用的从节点"];
+                                   [(error_code.description) = "没有可用的从节点"];
   EN_ERR_RANK_MIRROR_ALLOC_FAILED = -713
-                                                        [(error_code.description) = "排行榜镜像分配失败"];
+                                    [(error_code.description) = "排行榜镜像分配失败"];
   EN_ERR_RANK_MIRROR_NOT_FOUND = -714
-                                                        [(error_code.description) = "排行榜镜像不存在"];
+                                 [(error_code.description) = "排行榜镜像不存在"];
   EN_ERR_RANK_INVALID_TYPE = -715
                              [(error_code.description) = "排行榜类型错误"];
   EN_ERR_RANK_USER_NOT_EXISTS = -716
@@ -286,7 +286,7 @@ enum EnErrorCode {
   EN_ERR_RANK_TYPE_OPERATE_INVALID = -718
                                      [(error_code.description) = "排行榜类型不支持此操作"];
   EN_ERR_RANK_SERVERTIME_UNAVAILABLE = -719
-                                     [(error_code.description) = "排行榜服务不可用"];
+                                       [(error_code.description) = "排行榜服务不可用"];
   EN_ERR_RANK_INSTANCE_KEY_INVALID = -720
                                      [(error_code.description) = "排行榜实例键无效"];
   EN_ERR_RANK_DEFINE_CFG_NOT_FOUND = -721
@@ -295,7 +295,14 @@ enum EnErrorCode {
   // 消息队列通用[701-800]
   EN_ERR_DTMQ_INVALID_CHANNEL = -701
                                 [(error_code.description) = "无效的频道"];
-  EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE = -702 [(error_code.description) = "消息队列服务不可用"];
+  EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE = -702
+                                      [(error_code.description) = "消息队列服务不可用"];
+  EN_ERR_DTMQ_WAL_CLIENT_NOT_INIT = -703
+                                    [(error_code.description) = "消息队列服务副本节点未初始化"];
+  EN_ERR_DTMQ_CHANNEL_NOT_FOUND = -704
+                                  [(error_code.description) = "消息队列频道未找到"];
+  EN_ERR_DTMQ_MAIN_REPLICATE_SWITCH = -705
+                                      [(error_code.description) = "消息队列服务主备切换中"];
 
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

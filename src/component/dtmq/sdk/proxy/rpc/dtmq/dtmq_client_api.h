@@ -34,6 +34,7 @@ namespace dtmq {
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
+ * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
 DTMQ_PROXY_SDK_API uint64_t
 get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status, size_t replicate_index = 0,
@@ -47,6 +48,7 @@ get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_typ
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
+ * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(
     const std::string& channel_id, replicate_type status, size_t replicate_index = 0,
@@ -61,6 +63,7 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
+ * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(
     uint64_t zone_id, const std::string& channel_id, replicate_type status, size_t replicate_index = 0,
@@ -75,6 +78,7 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
+ * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_broadcast(
     uint32_t type_id, uint64_t zone_id, replicate_type status, size_t replicate_index = 0,
@@ -89,6 +93,7 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_broadcast(
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
+ * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_broadcast(
     uint32_t type_id, uint64_t world_id, replicate_type status, size_t replicate_index = 0,
@@ -104,6 +109,7 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_broadcast(
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
+ * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_unicast(
     uint32_t type_id, uint64_t zone_id, uint64_t instance_id, replicate_type status, size_t replicate_index = 0,

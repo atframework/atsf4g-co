@@ -1783,15 +1783,16 @@ int libatgw_protocol_sdk::dispatch_handshake_client_common(
     }
   }
 
-  // Handshake complete on client side
-  close_handshake(0);
-
   // send confirm to server
   ret = send_confirm();
   if (ret < 0) {
     ATFRAME_GATEWAY_ON_ERROR(ret, "client: send confirm failed");
+    close_handshake(ret);
     return ret;
   }
+
+  // Handshake complete on client side
+  close_handshake(0);
   return ret;
 }
 

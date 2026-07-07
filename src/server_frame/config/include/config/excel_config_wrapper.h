@@ -23,8 +23,6 @@ struct excel_config_block_report_t {
 
 EXCEL_CONFIG_LOADER_API int excel_config_wrapper_reload_all(bool is_init);
 
-EXCEL_CONFIG_LOADER_API int excel_config_wrapper_reload_all(bool is_init);
-
 /**
  * @brief 设置配置组加载完后的回调，请在init流程中excel_config_wrapper_reload_all(true)前调用
  */

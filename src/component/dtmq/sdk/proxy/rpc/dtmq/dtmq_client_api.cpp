@@ -2,6 +2,8 @@
 
 #include "rpc/dtmq/dtmq_client_api.h"
 
+#include <algorithm/murmur_hash.h>
+
 #include <atframe/etcdcli/etcd_discovery.h>
 
 // clang-format off
@@ -27,13 +29,26 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <gsl/span_ext>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+#include "config/compile_optimize.h"
 
 namespace rpc {
 namespace dtmq {
+
+namespace {
+constexpr const uint32_t kDtmqProxysvrReplicationHashCode = 0x5f3759df;
+struct ATFW_UTIL_SYMBOL_LOCAL dtmq_proxysvr_replication_hash_combine {
+  uint64_t replicate_index;
+  uint64_t channel_key_hash[2];
+};
+static_assert(sizeof(dtmq_proxysvr_replication_hash_combine) == sizeof(uint64_t) * 3,
+              "dtmq_proxysvr_replication_hash_combine size mismatch");
+}  // namespace
+
 DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status,
                                                  size_t replicate_index, logic_hpa_discovery_select_mode mode) {
   uint64_t target_server_id = 0;
@@ -104,32 +119,26 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(const s
     return 0;
   }
 
+  dtmq_proxysvr_replication_hash_combine combine_hash{};
+  if (status == rpc::dtmq::replicate_type::kWritable) {
+    combine_hash.replicate_index = 0;
+  } else {
+    combine_hash.replicate_index = static_cast<uint64_t>(replicate_index);
+  }
+
+  atfw::util::hash::murmur_hash3_x64_128(channel_id.data(), static_cast<int>(channel_id.size()),
+                                         kDtmqProxysvrReplicationHashCode, combine_hash.channel_key_hash);
+
   atapp::etcd_discovery_set::node_hash_type node_hash;
   node_hash = discovery_set->get_node_hash_by_consistent_hash(
-      channel_id, logic_hpa_discovery_select(
-                      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber, mode));
+      gsl::make_span(reinterpret_cast<const unsigned char*>(&combine_hash), sizeof(combine_hash)),
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
+                                 mode));
   if (!node_hash.node) {
     return 0;
   }
 
-  if (status == rpc::dtmq::replicate_type::kWritable || replicate_index == 0) {
-    return node_hash.node->get_discovery_info().id();
-  }
-
-  std::vector<atapp::etcd_discovery_set::node_hash_type> node_vector;
-  node_vector.resize(replicate_index + 1);
-  auto span = gsl::make_span(node_vector);
-
-  size_t node_size = discovery_set->lower_bound_node_hash_by_consistent_hash(
-      span, node_hash,
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
-                                 mode),
-      atapp::etcd_discovery_set::node_hash_type::search_mode::kCompact);
-  if (node_size != 0) {
-    return span[replicate_index % node_size].node->get_discovery_info().id();
-  }
-
-  return 0;
+  return node_hash.node->get_discovery_info().id();
 }
 
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(uint64_t zone_id, const std::string& channel_id,
@@ -156,30 +165,25 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(uint64_t
     return 0;
   }
 
+  dtmq_proxysvr_replication_hash_combine combine_hash{};
+  if (status == rpc::dtmq::replicate_type::kWritable) {
+    combine_hash.replicate_index = 0;
+  } else {
+    combine_hash.replicate_index = static_cast<uint64_t>(replicate_index);
+  }
+
+  atfw::util::hash::murmur_hash3_x64_128(channel_id.data(), static_cast<int>(channel_id.size()),
+                                         kDtmqProxysvrReplicationHashCode, combine_hash.channel_key_hash);
+
   atapp::etcd_discovery_set::node_hash_type node_hash = discovery_set->get_node_hash_by_consistent_hash(
-      channel_id, logic_hpa_discovery_select(
-                      PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber, mode));
+      gsl::make_span(reinterpret_cast<const unsigned char*>(&combine_hash), sizeof(combine_hash)),
+      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
+                                 mode));
   if (!node_hash.node) {
     return 0;
   }
 
-  if (status == rpc::dtmq::replicate_type::kWritable || replicate_index == 0) {
-    return node_hash.node->get_discovery_info().id();
-  }
-
-  std::vector<atapp::etcd_discovery_set::node_hash_type> node_vector;
-  node_vector.resize(replicate_index + 1);
-  auto span = gsl::make_span(node_vector);
-
-  size_t node_size = discovery_set->lower_bound_node_hash_by_consistent_hash(
-      span, node_hash,
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
-                                 mode));
-  if (node_size != 0) {
-    return span[replicate_index % node_size].node->get_discovery_info().id();
-  }
-
-  return 0;
+  return node_hash.node->get_discovery_info().id();
 }
 
 DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_broadcast(uint32_t type_id, uint64_t zone_id,

@@ -328,7 +328,10 @@ message table_dtmq_channel_record {
   string channel_id = 1;
   uint64 channel_zone_id = 2;
 
-  repeated atframework.dtmq.DChannelMessage msg_records = 6;
+  message message_record_set {
+    repeated atframework.dtmq.DChannelMessage record = 1;
+  }
+  message_record_set record_set = 6;
   atframework.dtmq.DChannelMetadata channel_metadata = 7;
 
   // 私有数据仅能通过拉取接口获取，订阅和快照不下发

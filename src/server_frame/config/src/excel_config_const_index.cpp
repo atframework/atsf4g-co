@@ -25,29 +25,20 @@
 
 #include <cli/cmd_option.h>
 
-#include <algorithm>
-#include <mutex>
-#include <sstream>
-#include <string>
-#include <unordered_set>
-#include <vector>
-
 #include "config/excel/config_manager.h"
 
 namespace excel {
 
 SERVER_FRAME_CONFIG_API void setup_const_config(config_group_t& group) {
-	auto& all_key = group.ExcelConstConfig.get_all_of_fake_key();
-	if (all_key.size() != 1)
-	{
-		FWLOGERROR("[EXCEL] setup_const_config key not 1");
-		return;
-	}
+  const auto& all_key = group.ExcelConstConfig.get_all_of_fake_key();
+  if (all_key.size() != 1) {
+    FWLOGERROR("[EXCEL] setup_const_config key not 1");
+    return;
+  }
 
-	for (auto& key : all_key)
-	{
-		group.const_settings = *key.second;
-	}
+  for (const auto& key : all_key) {
+    group.const_settings = *key.second;
+  }
 }
 
 SERVER_FRAME_CONFIG_API const ::PROJECT_NAMESPACE_ID::config::ExcelConstConfig& get_const_config() {

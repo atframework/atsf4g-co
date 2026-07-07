@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/duration.proto";
+
+import "protocol/extension/xrescode_extensions_v3.proto";
+import "protocol/extension/v3/xresloader.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
+
+package hello.config;
+
+// 聊天频道配置
+message ExcelDtmqChannelType {
+  option (xrescode.loader) = {
+    file_path: "dtmq_channel_type.bytes"
+    indexes: { fields: "channel_type" index_type: EN_INDEX_KV }
+
+    tags: "client"
+    tags: "server"
+  };
+
+  uint32 channel_type = 1 [(org.xresloader.field_unique_tag) = "channel_type"];
+  uint32 max_log_count = 2;
+  uint32 gc_log_count = 3;
+  google.protobuf.Duration gc_expire_duration = 4;
+  bool memory_only = 5;
+  int32 word_count_limit = 8;  // 字数限制
+
+  // 世界广播的服务类型ID
+  repeated uint64 broadcast_world_service_type_id = 101;
+
+  // 小区广播的服务类型ID
+  repeated uint64 broadcast_zone_service_type_id = 102;
+}

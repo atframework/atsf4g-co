@@ -101,6 +101,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline int64_t get_private_data_sequence() const noexcept { return private_data_sequence_; }
   void set_private_data(const google::protobuf::Any& private_data) noexcept;
   void clear_private_data() noexcept;
+
   inline const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept { return lock_; }
   inline int64_t get_compact_stateful_sequence() const noexcept { return compact_stateful_sequence_; }
 
@@ -133,8 +134,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   inline atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> get_wal_client() { return wal_client_; }
 
-  static bool should_be_writable(const atfw::dtmq::DChannelIdKey& channel_key,
-                                 mq_channel* mq_channel = nullptr) noexcept;
+  static bool should_be_writable(const atfw::dtmq::DChannelIdKey& channel_key, mq_channel* channel = nullptr) noexcept;
   bool should_be_writable() noexcept;
   bool should_be_readonly() noexcept;
 
@@ -143,19 +143,24 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   uint64_t need_transfer() noexcept;
   bool need_save_db() const noexcept;
+
   bool is_io_task_running() const noexcept;
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx);
 
   void async_start_transfer(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_transfer(rpc::context& ctx);
+
   void async_save(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx);
+
+  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint =
+                                            std::chrono::system_clock::from_time_t(0));
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy(
       rpc::context& ctx,
       std::chrono::system_clock::time_point writable_remove_timepoint = std::chrono::system_clock::from_time_t(0));
+
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx);
-  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint =
-                                            std::chrono::system_clock::from_time_t(0));
+
   void async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx);
@@ -203,7 +208,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   void send_notify_to_readonly(rpc::context& ctx);
 
-  static size_t get_first_readonly_replicate_index(const atfw::dtmq::DChannelIdKey& channel_key) noexcept;
+  static size_t get_suggest_readonly_replicate_index(const atfw::dtmq::DChannelIdKey& channel_key) noexcept;
 
  private:
   int32_t broadcast_subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
@@ -235,7 +240,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   std::chrono::system_clock::time_point last_writable_notify_readonly_timepoint_;
   std::chrono::system_clock::time_point next_init_subscribe_timepoint_;
   rpc::result_code_type::value_type last_result_code_;
-  std::unordered_set<uint64_t> readonly_svr_id_;
+  std::unordered_set<uint64_t> readonly_dtmq_proxysvr_ids_;
 
   atfw::dtmq::DChannelConfigure configure_;
   atfw::dtmq::DChannelOptimisticLock lock_;

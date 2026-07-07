@@ -85,6 +85,7 @@ Checks:
   - "-readability-uppercase-literal-suffix"
   # 以下是框架设计模式，不需要告警
   - "-cppcoreguidelines-avoid-reference-coroutine-parameters"
+  - "-cppcoreguidelines-avoid-capturing-lambda-coroutines"
 WarningsAsErrors: ""
 HeaderFileExtensions:
   - ""

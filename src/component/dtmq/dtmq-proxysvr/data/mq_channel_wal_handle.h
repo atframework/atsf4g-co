@@ -96,4 +96,4 @@ atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> create_mq_chann
     mq_channel&, const atfw::dtmq::DChannelConfigure& configure);
 
 atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> create_mq_channel_client(
-    mq_channel&, const atfw::dtmq::DChannelConfigure& configure);
+    mq_channel& channel, const atfw::dtmq::DChannelConfigure& configure);

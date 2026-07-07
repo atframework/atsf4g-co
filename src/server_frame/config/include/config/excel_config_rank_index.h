@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <config/server_frame_build_feature.h>
@@ -5,9 +7,7 @@
 #include <gsl/select-gsl.h>
 
 #include <ctime>
-#include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "config/excel_type_trait_setting.h"

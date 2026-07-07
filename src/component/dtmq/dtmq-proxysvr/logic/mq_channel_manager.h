@@ -54,7 +54,8 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   bool is_can_stopped() const noexcept;
   bool is_self_stateful_active() const noexcept;
 
-  void update_timer(mq_channel& mq_channel, mq_channel_timer_type::timer_wptr_t& output_handle, time_t timeout);
+  void update_timer(mq_channel& mq_channel, mq_channel_timer_type::timer_wptr_t& output_handle,
+                    std::chrono::system_clock::duration timeout);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_channel(rpc::context& ctx, mq_channel_ptr_type& mq_channel,
                                                                     const atfw::dtmq::DChannelIdKey& mq_channel_key,
@@ -96,15 +97,16 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
 
   mq_channel_ptr_type get_channel(const std::string& mq_channel_id) const noexcept;
 
-  void set_more_transfer();
+  void set_more_transfer() noexcept;
 
   void send_broadcast_snapshot_to_server(const std::unordered_set<uint64_t>& target_server_ids);
 
   inline int64_t get_dtmq_proxysvr_etcd_revision() { return dtmq_proxysvr_distribute_etcd_revision_; }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type find_msg(rpc::context& ctx, const mq_channel_ptr_type& mq_channel,
-                                                              int64_t sequence, atfw::dtmq::DChannelMessage& msg);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type page_query_msg(
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type find_message(rpc::context& ctx,
+                                                                  const mq_channel_ptr_type& mq_channel,
+                                                                  int64_t sequence, atfw::dtmq::DChannelMessage& msg);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type page_query_message(
       rpc::context& ctx, const mq_channel_ptr_type& mq_channel, atfw::dtmq::channel_page_info& page_info,
       google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
 
@@ -119,7 +121,7 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   void report_mq_channel_qty_oss();
 
  private:
-  std::chrono::system_clock::time_point resolve_mq_channel_distribution_timepoint_;
+  std::chrono::system_clock::time_point resolve_channel_distribution_timepoint_;
   std::unordered_set<uint64_t> need_send_broadcast_snapshot_;
   std::chrono::system_clock::time_point last_tick_timepoint_;
   int64_t dtmq_proxysvr_distribute_etcd_revision_;
