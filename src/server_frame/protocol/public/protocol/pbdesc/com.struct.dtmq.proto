@@ -43,14 +43,6 @@ message DChannelConfigure {
 message DChannelIdKey {
   string channel_id = 1;
   uint32 channel_type = 2;  // EnChannelType
-  uint64 channel_zone_id = 3;
-
-  oneof cast_type {
-    bool broadcast_world = 4;                 // 系统通知使用
-    bool broadcast_zone = 5;                  // 分区不分服，broadcast_zone 暂不处理
-    uint64 unicast_instance_id = 6;           // 私聊频道需要填目标role_guid
-    uint64 broadcast_world_partition_id = 7;  // 世界频道的分片
-  }
 }
 
 message DChannelMetadata {

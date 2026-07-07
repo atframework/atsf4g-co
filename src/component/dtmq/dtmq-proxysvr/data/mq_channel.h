@@ -120,10 +120,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   bool is_init() const noexcept;
 
-  inline bool is_broadcast_channel() const noexcept {
-    return channel_key_.broadcast_world() || channel_key_.broadcast_zone();
-  }
-
   inline atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type>>
   get_shared_wal_object() {
     return shared_wal_object_;
@@ -190,8 +186,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   void set_dirty() noexcept;
 
-  void append_pending_broadcast(const mq_channel_wal_publisher_type::log_pointer& log);
-
   void set_lock(rpc::context& ctx, const atfw::dtmq::DChannelOptimisticLock& lock, bool append_log = true);
   void clear_lock();
   bool compare_and_maybe_reset_lock(rpc::context& ctx, atfw::dtmq::channel_lock_checker& checker,
@@ -211,10 +205,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   static size_t get_suggest_readonly_replicate_index(const atfw::dtmq::DChannelIdKey& channel_key) noexcept;
 
  private:
-  int32_t broadcast_subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
-                              int64_t last_received_sequence);
-  void tick_broadcast(rpc::context& ctx);
-
   void update_timer(rpc::context& ctx, bool force = false);
   void remove_timer();
 
@@ -257,7 +247,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> wal_publisher_;
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> wal_client_;
 
-  mq_channel_wal_publisher_type::log_container_type pending_broadcast_;
   mutable task_type_trait::task_type io_task_;
 
   std::chrono::system_clock::time_point next_send_oss_time_;

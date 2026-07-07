@@ -42,9 +42,8 @@
 #include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
 
-/* TODO(owent): enable it when we have set_ttl API
 namespace {
-static atfw::util::distributed_system::wal_duration get_mq_channel_ttl_ms() {
+static atfw::util::distributed_system::wal_duration get_mq_channel_ttl() {
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
   auto timeout =
@@ -56,7 +55,6 @@ static atfw::util::distributed_system::wal_duration get_mq_channel_ttl_ms() {
   return timeout;
 }
 }  // namespace
-*/
 
 void mq_channel::mq_channel_accessor::update_timer(mq_channel& mq_channel, rpc::context& ctx, bool force) {
   mq_channel.update_timer(ctx, force);
@@ -228,7 +226,6 @@ void mq_channel::dump(atfw::dtmq::DChannelRuntime& runtime, bool with_private_da
 
 void mq_channel::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_dtmq_channel_record& record) const {
   record.set_channel_id(get_channel_id());
-  record.set_channel_zone_id(get_channel_key().channel_zone_id());
 
   dump(*record.mutable_channel_metadata(), false, true);
   dump(*record.mutable_runtime_data(), true);
@@ -424,7 +421,7 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx) {
   }
 
   // 冷静窗口
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
   if (next_init_subscribe_timepoint_ > now) {
     FWLOGWARNING("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
                  next_init_subscribe_timepoint_);
@@ -474,14 +471,25 @@ void mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
 
   FWLOGINFO("mq channel {} load snapshot", get_channel_id());
 
-  last_save_timepoint_ = util::time::time_utility::now();
+  last_save_timepoint_ = atfw::util::time::time_utility::now();
   // 如果当前节点是从节点，client也要处理快照
   maybe_create_wal_client();
 
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
 
-  // wal_client_ 和 wal_publisher_ 共享WAL层，其中一个加载即可
+  // 加载全量数据会导致广播边界被重置。如果有订阅者也需要重新恢复广播边界以便触发广播。
+  auto subscriber_range = wal_publisher_->get_subscribe_manager().all_range();
+  bool restore_broadcast_boundary = subscriber_range.first != subscriber_range.second;
+  mq_channel_wal_object_type::log_key_type restore_broadcast_key{};
+  if (restore_broadcast_boundary && wal_publisher_->get_broadcast_key_bound() != nullptr) {
+    restore_broadcast_key = *wal_publisher_->get_broadcast_key_bound();
+  } else if (wal_publisher_->get_log_manager().get_all_logs().empty()) {
+    restore_broadcast_key = 0;
+  } else {
+    restore_broadcast_key = (*wal_publisher_->get_log_manager().get_all_logs().begin())->sequence() - 1;
+  }
+  // wal_client_ 和 wal_publisher_ 共享WAL层，其中一个加载即可。
   if (wal_client_) {
     wal_client_->receive_snapshot(snapshot.channel_data(), params);
   } else {
@@ -518,14 +526,15 @@ void mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   }
   is_dirty_ = false;
 
+  // 恢复广播边界,以便如果加载snapshot后有订阅者，能够触发增量广播
+  if (restore_broadcast_boundary) {
+    wal_publisher_->set_broadcast_key_bound(restore_broadcast_key);
+  }
+
   if (readonly) {
     upgrade_to_readonly();
   } else {
     upgrade_to_writable();
-  }
-
-  if (is_broadcast_channel() && shared_wal_object_) {
-    pending_broadcast_ = shared_wal_object_->get_all_logs();
   }
 }
 
@@ -536,7 +545,7 @@ void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& 
   if (wal_publisher_) {
     wal_publisher_->dump(*output.mutable_channel_data(), params);
 
-    auto now = util::time::time_utility::now();
+    auto now = atfw::util::time::time_utility::now();
     const auto& dtmq_proxysvr_cfg =
         logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
@@ -791,12 +800,16 @@ void mq_channel::async_save(rpc::context& ctx) {
 
         // 如果已移除，则重置删除TTL
         if (self_ptr->remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
-          // TODO(owent): 改成set_ttl(get_mq_channel_ttl_ms())
-          // RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::set_ttl(child_ctx, self_ptr->get_channel_id(),
-          //                                                               self_ptr->get_channel_key().channel_zone_id(),
-          //                                                               get_mq_channel_ttl_ms(), false));
-          RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::remove_all(
-              child_ctx, self_ptr->get_channel_id(), self_ptr->get_channel_key().channel_zone_id()));
+          auto ttl_seconds =
+              std::chrono::duration_cast<std::chrono::seconds>(self_ptr->remove_timepoint_ + get_mq_channel_ttl() -
+                                                               atfw::util::time::time_utility::now())
+                  .count();
+          if (ttl_seconds > 0) {
+            RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::set_ttl(child_ctx, self_ptr->get_channel_id(),
+                                                                          static_cast<uint64_t>(ttl_seconds)));
+          } else {
+            RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::remove_all(child_ctx, self_ptr->get_channel_id()));
+          }
         }
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
@@ -876,7 +889,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   if (writable_remove_timepoint > time_zero && !is_writable()) {
     remove_timepoint_ = writable_remove_timepoint;
   } else {
-    remove_timepoint_ = util::time::time_utility::now();
+    remove_timepoint_ = atfw::util::time::time_utility::now();
   }
 
   if (!is_writable()) {
@@ -894,12 +907,16 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
         // 离线数据删除，使用TTL
         FWLOGINFO("destroy mq channel {}", self_ptr->get_channel_id());
 
-        // TODO(owent): 改成set_ttl(get_mq_channel_ttl_ms())
-        // RPC_AWAIT_IGNORE_RESULT(rpc::db::TABLE_CHAT_RECORD::set_ttl(child_ctx, self_ptr->get_channel_id(),
-        //                                                             self_ptr->get_channel_key().channel_zone_id(),
-        //                                                             get_mq_channel_ttl_ms(), false));
-        RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::remove_all(
-            child_ctx, self_ptr->get_channel_id(), self_ptr->get_channel_key().channel_zone_id()));
+        auto ttl_seconds =
+            std::chrono::duration_cast<std::chrono::seconds>(self_ptr->remove_timepoint_ + get_mq_channel_ttl() -
+                                                             atfw::util::time::time_utility::now())
+                .count();
+        if (ttl_seconds > 0) {
+          RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::set_ttl(child_ctx, self_ptr->get_channel_id(),
+                                                                        static_cast<uint64_t>(ttl_seconds)));
+        } else {
+          RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::remove_all(child_ctx, self_ptr->get_channel_id()));
+        }
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
@@ -932,24 +949,22 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
 
 rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
-  int32_t ret = RPC_AWAIT_CODE_RESULT(
-      rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), get_channel_key().channel_zone_id(), record));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), record));
   if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-    FWLOGINFO("rpc::db::dtmq_channel_record::get_all mq channel:{}, zone_id:{} record not found", get_channel_id(),
-              get_channel_key().channel_zone_id());
+    FWLOGINFO("rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
     ret = 0;
   }
 
   if (ret == 0) {
     if (should_be_writable()) {
-      FWLOGDEBUG("rpc::db::dtmq_channel_record::get_all mq channel: {}, zone_id: {} record_size: {}", get_channel_id(),
-                 get_channel_key().channel_zone_id(), record->record_set().record().size());
+      FWLOGDEBUG("rpc::db::dtmq_channel_record::get_all mq channel: {}, record_size: {}", get_channel_id(),
+                 record->record_set().record().size());
       load(ctx, *record);
       send_oss(ctx, "create_init", ret);
     }
   } else {
-    FWLOGERROR("rpc::db::dtmq_channel_record::get failed mq channel: {}, zone_id: {}, result: {}({})", get_channel_id(),
-               get_channel_key().channel_zone_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("rpc::db::dtmq_channel_record::get failed mq channel: {}, result: {}({})", get_channel_id(), ret,
+               protobuf_mini_dumper_get_error_msg(ret));
   }
   RPC_RETURN_CODE(ret);
 }
@@ -984,7 +999,7 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
   if (!should_be_readonly()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
   }
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
   if (next_init_subscribe_timepoint_ > now) {
     FWLOGWARNING("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
                  next_init_subscribe_timepoint_);
@@ -1050,12 +1065,13 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
     auto& hash_mismatch_data = wal_client->get_private_data().hash_mismatch_data;
     if (hash_mismatch_data.log_key == (*last_iter)->sequence() &&
         hash_mismatch_data.times >= dtmq_proxysvr_cfg.channel_wal_hash_mismatch_need_snapshot_times() &&
-        hash_mismatch_data.next_need_snapshot_timestamp <= util::time::time_utility::now()) {
+        hash_mismatch_data.next_need_snapshot_timestamp <= atfw::util::time::time_utility::now()) {
       channel_data->set_last_sequence(0);
       channel_data->set_last_hash_code(0);
       hash_mismatch_data.next_need_snapshot_timestamp =
-          util::time::time_utility::now() + protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-                                                dtmq_proxysvr_cfg.channel_wal_hash_mismatch_need_snapshot_interval());
+          atfw::util::time::time_utility::now() +
+          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+              dtmq_proxysvr_cfg.channel_wal_hash_mismatch_need_snapshot_interval());
       FWLOGERROR("hash mismatch, channel_id: {}, log key: {}", get_channel_id(), hash_mismatch_data.log_key);
     }
   }
@@ -1075,8 +1091,15 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
     }
   }
   if (not_found) {
-    if (!should_be_writable()) {
-      RPC_AWAIT_IGNORE_RESULT(destroy(ctx));
+    if (!should_be_writable() && !is_writable()) {
+      // 确保IO task之后任然不是writable节点，说明频道已经被writable端删除，直接销毁频道
+      if (is_io_task_running()) {
+        RPC_AWAIT_IGNORE_RESULT(rpc::wait_task(ctx, io_task_));
+        task_type_trait::reset_task(io_task_);
+      }
+      if (!is_writable()) {
+        RPC_AWAIT_IGNORE_RESULT(destroy(ctx));
+      }
     }
 
   } else {
@@ -1098,11 +1121,11 @@ void mq_channel::set_destroy_message(rpc::context& ctx) {
   }
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
-  auto message = wal_publisher_->allocate_log(util::time::time_utility::now(),
+  auto message = wal_publisher_->allocate_log(atfw::util::time::time_utility::now(),
                                               atfw::dtmq::DChannelMessageDetail::kDestroy, params);
   if (message) {
     *message->mutable_detail()->mutable_destroy()->mutable_removed_timepoint() =
-        protobuf_from_system_clock(util::time::time_utility::now());
+        protobuf_from_system_clock(atfw::util::time::time_utility::now());
     if (wal_client_) {
       wal_client_->receive_hole_log(params, std::move(message));
     } else {
@@ -1122,15 +1145,10 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
 
-  // 对于广播频道，仅仅同步缺失的日志，不增加订阅者
-  if (is_broadcast_channel()) {
-    return broadcast_subscribe(ctx, subscriber_info, last_received_sequence);
-  }
-
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
   auto subscriber_timeout_conf =
       protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(dtmq_proxysvr_cfg.subscriber_timeout());
   if (subscriber_timeout_conf < std::chrono::seconds{1}) {
@@ -1156,32 +1174,32 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
         if (0 == last_received_hash_code) {
           wal_publisher_->receive_subscribe_request(subscriber_key,
                                                     subscriber->get_private_data().last_heartbeat_sequence(),
-                                                    util::time::time_utility::now(), params);
+                                                    atfw::util::time::time_utility::now(), params);
         } else {
-          wal_publisher_->receive_subscribe_request(subscriber_key,
-                                                    subscriber->get_private_data().last_heartbeat_sequence(),
-                                                    last_received_hash_code, util::time::time_utility::now(), params);
+          wal_publisher_->receive_subscribe_request(
+              subscriber_key, subscriber->get_private_data().last_heartbeat_sequence(), last_received_hash_code,
+              atfw::util::time::time_utility::now(), params);
         }
       } else {
         if (0 == last_received_hash_code) {
           wal_publisher_->receive_subscribe_request(subscriber_key, last_received_sequence,
-                                                    util::time::time_utility::now(), params);
+                                                    atfw::util::time::time_utility::now(), params);
         } else {
           wal_publisher_->receive_subscribe_request(subscriber_key, last_received_sequence, last_received_hash_code,
-                                                    util::time::time_utility::now(), params);
+                                                    atfw::util::time::time_utility::now(), params);
         }
         subscriber->get_private_data().set_last_heartbeat_sequence(last_received_sequence);
         subscriber->get_private_data().set_last_heartbeat_hash_code(last_received_hash_code);
       }
     } else {
       *subscriber->get_private_data().mutable_last_heartbeat_timepoint() =
-          protobuf_from_system_clock(util::time::time_utility::now());
+          protobuf_from_system_clock(atfw::util::time::time_utility::now());
       if (0 == last_received_hash_code) {
         wal_publisher_->receive_subscribe_request(subscriber_key, last_received_sequence,
-                                                  util::time::time_utility::now(), params);
+                                                  atfw::util::time::time_utility::now(), params);
       } else {
         wal_publisher_->receive_subscribe_request(subscriber_key, last_received_sequence, last_received_hash_code,
-                                                  util::time::time_utility::now(), params);
+                                                  atfw::util::time::time_utility::now(), params);
       }
       subscriber->get_private_data().set_last_heartbeat_sequence(last_received_sequence);
       subscriber->get_private_data().set_last_heartbeat_hash_code(last_received_hash_code);
@@ -1192,10 +1210,10 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
     }
 
     if (0 == last_received_hash_code) {
-      subscriber = wal_publisher_->create_subscriber(subscriber_key, util::time::time_utility::now(),
+      subscriber = wal_publisher_->create_subscriber(subscriber_key, atfw::util::time::time_utility::now(),
                                                      last_received_sequence, params, subscriber_info);
     } else {
-      subscriber = wal_publisher_->create_subscriber(subscriber_key, util::time::time_utility::now(),
+      subscriber = wal_publisher_->create_subscriber(subscriber_key, atfw::util::time::time_utility::now(),
                                                      std::make_pair(last_received_sequence, last_received_hash_code),
                                                      params, subscriber_info);
     }
@@ -1305,10 +1323,6 @@ int mq_channel::tick(rpc::context& ctx) {
     send_notify_to_readonly(ctx);
   }
 
-  if (!pending_broadcast_.empty()) {
-    tick_broadcast(ctx);
-  }
-
   return 0;
 }
 
@@ -1331,18 +1345,6 @@ void mq_channel::set_dirty() noexcept {
   }
 
   is_dirty_ = true;
-}
-
-void mq_channel::append_pending_broadcast(const mq_channel_wal_publisher_type::log_pointer& log) {
-  if (!log) {
-    return;
-  }
-
-  if (!is_broadcast_channel()) {
-    return;
-  }
-
-  pending_broadcast_.push_back(log);
 }
 
 void mq_channel::set_lock(rpc::context& ctx, const atfw::dtmq::DChannelOptimisticLock& lock, bool append_log) {
@@ -1430,7 +1432,7 @@ void mq_channel::compact_sequence(int64_t sequence) {
   }
 
   if (remove_count > 0) {
-    shared_wal_object_->remove_before(util::time::time_utility::now(), remove_count);
+    shared_wal_object_->remove_before(atfw::util::time::time_utility::now(), remove_count);
   }
 }
 
@@ -1458,14 +1460,14 @@ void mq_channel::hash_mismatch_increase() {
   auto last_iter = wal_client_->get_log_manager().get_all_logs().rbegin();
   auto& hash_mismatch_data = wal_client_->get_private_data().hash_mismatch_data;
   if (*last_iter && hash_mismatch_data.log_key == (*last_iter)->sequence()) {
-    if (util::time::time_utility::now() > hash_mismatch_data.next_need_snapshot_timestamp) {
-      hash_mismatch_data.next_need_snapshot_timestamp = util::time::time_utility::now();
+    if (atfw::util::time::time_utility::now() > hash_mismatch_data.next_need_snapshot_timestamp) {
+      hash_mismatch_data.next_need_snapshot_timestamp = atfw::util::time::time_utility::now();
     }
     hash_mismatch_data.times++;
     return;
   }
   hash_mismatch_data = rpc::dtmq::hash_mismatch_subscribe<int64_t>(channel_key_.channel_id(), (*last_iter)->sequence(),
-                                                                   util::time::time_utility::now());
+                                                                   atfw::util::time::time_utility::now());
 }
 
 void mq_channel::send_notify_to_readonly(rpc::context& ctx) {
@@ -1477,8 +1479,8 @@ void mq_channel::send_notify_to_readonly(rpc::context& ctx) {
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
   next_notify_readonly_subscribe_timepoint_ =
-      util::time::time_utility::now() + protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
-                                            dtmq_proxysvr_cfg.channel_notify_readonly_subscribe_interval());
+      atfw::util::time::time_utility::now() + protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+                                                  dtmq_proxysvr_cfg.channel_notify_readonly_subscribe_interval());
   auto self_ptr = shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "mq_channel.send_notify_to_readonly", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
@@ -1553,144 +1555,10 @@ size_t mq_channel::get_suggest_readonly_replicate_index(const atfw::dtmq::DChann
   return 0;
 }
 
-int32_t mq_channel::broadcast_subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
-                                        int64_t last_received_sequence) {
-  if (last_received_sequence >= get_last_message_sequence()) {
-    return 0;
-  }
-
-  auto send_log_begin = wal_publisher_->get_log_manager().log_upper_bound(last_received_sequence);
-  auto send_log_end = wal_publisher_->get_log_manager().log_end();
-
-  int64_t first_log_sequence = 0;
-  for (auto iter = send_log_begin; 0 == first_log_sequence && iter != send_log_end; ++iter) {
-    if (!(*iter)) {
-      continue;
-    }
-
-    first_log_sequence = (*iter)->sequence();
-  }
-
-  rpc::context::message_holder<atfw::dtmq::SSChannelEventSync> notify_msg(ctx);
-  dump(*notify_msg->mutable_channel_metadata(), false, get_custom_data_sequence() >= first_log_sequence);
-  dump(*notify_msg->mutable_channel_runtime(), get_private_data_sequence() >= first_log_sequence);
-
-  if (!subscriber_info.subscriber_key().empty()) {
-    notify_msg->add_subscriber_keys(subscriber_info.subscriber_key());
-  }
-
-  // Pack log sync message
-  for (; send_log_begin != send_log_end; ++send_log_begin) {
-    if (!(*send_log_begin)) {
-      continue;
-    }
-    protobuf_copy_message(*notify_msg->add_channel_message(), **send_log_begin);
-  }
-
-  int32_t res = rpc::dtmq::channel_event_sync(ctx, subscriber_info.subscriber_server_id(), *notify_msg);
-  if (0 != res) {
-    FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})", get_channel_id(),
-               subscriber_info.subscriber_server_id(), res, protobuf_mini_dumper_get_error_msg(res));
-  }
-
-  return res;
-}
-
-void mq_channel::tick_broadcast(rpc::context& ctx) {
-  auto channel_ptr = shared_from_this();
-  auto broadcast_task =
-      rpc::async_invoke(ctx, "mq_channel.broadcast", [channel_ptr](rpc::context& task_ctx) -> rpc::result_code_type {
-        rpc::context::message_holder<atfw::dtmq::SSChannelEventSync> notify_msg(task_ctx);
-        int64_t first_log_sequence = 0;
-        for (auto& log : channel_ptr->pending_broadcast_) {
-          if (!log) {
-            continue;
-          }
-
-          first_log_sequence = log->sequence();
-          break;
-        }
-
-        channel_ptr->dump(*notify_msg->mutable_channel_metadata(), false,
-                          channel_ptr->get_custom_data_sequence() >= first_log_sequence);
-        channel_ptr->dump(*notify_msg->mutable_channel_runtime(),
-                          channel_ptr->get_private_data_sequence() >= first_log_sequence);
-
-        for (const auto& log : channel_ptr->pending_broadcast_) {
-          if (log) {
-            protobuf_copy_message(*notify_msg->add_channel_message(), *log);
-          }
-        }
-
-        channel_ptr->pending_broadcast_.clear();
-        uint64_t zone_id = channel_ptr->get_channel_key().channel_zone_id();
-
-        auto* mod = logic_server_last_common_module();
-        if (mod == nullptr) {
-          FWLOGERROR("logic_server_common_module unavailable now.");
-          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_INIT);
-        }
-
-        auto channel_conf =
-            excel::get_ExcelDtmqChannelType_by_channel_type(channel_ptr->get_channel_key().channel_type());
-
-        int ret = 0;
-        // World广播数据
-        if (channel_ptr->channel_key_.broadcast_world() && channel_conf &&
-            channel_conf->broadcast_world_service_type_id_size() > 0) {
-          for (const auto& broadcast_type_id : channel_conf->broadcast_world_service_type_id()) {
-            auto discovery_set = mod->get_discovery_index_by_type(broadcast_type_id);
-            if (!discovery_set) {
-              continue;
-            }
-
-            for (const auto& target_server : discovery_set->get_sorted_nodes()) {
-              auto res = RPC_AWAIT_CODE_RESULT(
-                  rpc::dtmq::channel_event_sync(task_ctx, target_server->get_discovery_info().id(), *notify_msg));
-              if (0 != res) {
-                FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
-                           channel_ptr->get_channel_id(), target_server->get_discovery_info().id(), res,
-                           protobuf_mini_dumper_get_error_msg(res));
-                ret = res;
-              }
-            }
-          }
-        }
-
-        // Zone广播数据
-        if (channel_ptr->channel_key_.broadcast_zone()) {
-          for (const auto& broadcast_type_id : channel_conf->broadcast_world_service_type_id()) {
-            auto discovery_set = mod->get_discovery_index_by_type_zone(broadcast_type_id, zone_id);
-            if (!discovery_set) {
-              continue;
-            }
-
-            for (const auto& target_server : discovery_set->get_sorted_nodes()) {
-              auto res = RPC_AWAIT_CODE_RESULT(
-                  rpc::dtmq::channel_event_sync(task_ctx, target_server->get_discovery_info().id(), *notify_msg));
-              if (0 != res) {
-                FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
-                           channel_ptr->get_channel_id(), target_server->get_discovery_info().id(), res,
-                           protobuf_mini_dumper_get_error_msg(res));
-                ret = res;
-              }
-            }
-          }
-        }
-
-        RPC_RETURN_CODE(ret);
-      });
-
-  if (broadcast_task.is_error()) {
-    FWLOGERROR("async_invoke to broadcast failed, res: {}({})", *broadcast_task.get_error(),
-               protobuf_mini_dumper_get_error_msg(*broadcast_task.get_error()));
-  }
-}
-
 void mq_channel::update_timer(rpc::context& ctx, bool force) {
   FWLOGDEBUG("channel({}) update_timer", get_channel_id());
 
-  auto now = util::time::time_utility::now();
+  auto now = atfw::util::time::time_utility::now();
 
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();

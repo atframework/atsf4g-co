@@ -320,13 +320,11 @@ message table_dtmq_channel_record {
       name: "dtmq_channel_record"
       type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       key_fields: "channel_id"
-      key_fields: "channel_zone_id"
     }
   };
   // clang-format on
 
   string channel_id = 1;
-  uint64 channel_zone_id = 2;
 
   message message_record_set {
     repeated atframework.dtmq.DChannelMessage record = 1;

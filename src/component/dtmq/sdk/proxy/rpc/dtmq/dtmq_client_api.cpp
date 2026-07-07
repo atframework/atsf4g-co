@@ -4,6 +4,8 @@
 
 #include <algorithm/murmur_hash.h>
 
+#include <gsl/select-gsl.h>
+
 #include <atframe/etcdcli/etcd_discovery.h>
 
 // clang-format off
@@ -29,12 +31,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <gsl/span_ext>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 #include "config/compile_optimize.h"
+#include "protocol/pbdesc/com.const.pb.h"
 
 namespace rpc {
 namespace dtmq {
@@ -51,60 +53,7 @@ static_assert(sizeof(dtmq_proxysvr_replication_hash_combine) == sizeof(uint64_t)
 
 DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status,
                                                  size_t replicate_index, logic_hpa_discovery_select_mode mode) {
-  uint64_t target_server_id = 0;
-  switch (channel_key.cast_type_case()) {
-    case atfw::dtmq::DChannelIdKey::kBroadcastWorldPartitionId: {
-      if (channel_key.channel_id().empty()) {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_world_channel(calculate_channel_id(channel_key),
-                                                                                   status, replicate_index, mode);
-      } else {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_world_channel(channel_key.channel_id(), status,
-                                                                                   replicate_index, mode);
-      }
-      break;
-    }
-    case atfw::dtmq::DChannelIdKey::kBroadcastWorld: {
-      if (channel_key.channel_id().empty()) {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_world_broadcast(
-            channel_key.channel_type(), logic_config::me()->get_local_world_id(), status, replicate_index, mode);
-      } else {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_world_channel(channel_key.channel_id(), status,
-                                                                                   replicate_index, mode);
-      }
-      break;
-    }
-    case atfw::dtmq::DChannelIdKey::kBroadcastZone: {
-      if (channel_key.channel_id().empty()) {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_zone_broadcast(
-            channel_key.channel_type(), channel_key.channel_zone_id(), status, replicate_index, mode);
-      } else {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_zone_channel(
-            channel_key.channel_zone_id(), channel_key.channel_id(), status, replicate_index, mode);
-      }
-      break;
-    }
-    case atfw::dtmq::DChannelIdKey::kUnicastInstanceId: {
-      if (channel_key.channel_id().empty()) {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_unicast(
-            channel_key.channel_type(), channel_key.channel_zone_id(), channel_key.unicast_instance_id(), status,
-            replicate_index, mode);
-      } else {
-        target_server_id = rpc::dtmq::get_dtmq_proxysvr_server_id_of_zone_channel(
-            channel_key.channel_zone_id(), channel_key.channel_id(), status, replicate_index, mode);
-      }
-      break;
-    }
-    default:
-      break;
-  }
-
-  return target_server_id;
-}
-
-DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(const std::string& channel_id,
-                                                                         replicate_type status, size_t replicate_index,
-                                                                         logic_hpa_discovery_select_mode mode) {
-  if (channel_id.empty()) {
+  if (channel_key.channel_id().empty()) {
     return 0;
   }
 
@@ -126,7 +75,8 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(const s
     combine_hash.replicate_index = static_cast<uint64_t>(replicate_index);
   }
 
-  atfw::util::hash::murmur_hash3_x64_128(channel_id.data(), static_cast<int>(channel_id.size()),
+  atfw::util::hash::murmur_hash3_x64_128(channel_key.channel_id().data(),
+                                         static_cast<int>(channel_key.channel_id().size()),
                                          kDtmqProxysvrReplicationHashCode, combine_hash.channel_key_hash);
 
   atapp::etcd_discovery_set::node_hash_type node_hash;
@@ -139,74 +89,6 @@ DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_channel(const s
   }
 
   return node_hash.node->get_discovery_info().id();
-}
-
-DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_channel(uint64_t zone_id, const std::string& channel_id,
-                                                                        replicate_type status, size_t replicate_index,
-                                                                        logic_hpa_discovery_select_mode mode) {
-  if (channel_id.empty()) {
-    return 0;
-  }
-
-  auto* mod = logic_server_last_common_module();
-  if (mod == nullptr) {
-    return 0;
-  }
-
-  atfw::atapp::etcd_discovery_set::ptr_t discovery_set;
-  if (0 == zone_id) {
-    discovery_set =
-        mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr));
-  } else {
-    discovery_set = mod->get_discovery_index_by_type_zone(
-        static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr), zone_id);
-  }
-  if (!discovery_set) {
-    return 0;
-  }
-
-  dtmq_proxysvr_replication_hash_combine combine_hash{};
-  if (status == rpc::dtmq::replicate_type::kWritable) {
-    combine_hash.replicate_index = 0;
-  } else {
-    combine_hash.replicate_index = static_cast<uint64_t>(replicate_index);
-  }
-
-  atfw::util::hash::murmur_hash3_x64_128(channel_id.data(), static_cast<int>(channel_id.size()),
-                                         kDtmqProxysvrReplicationHashCode, combine_hash.channel_key_hash);
-
-  atapp::etcd_discovery_set::node_hash_type node_hash = discovery_set->get_node_hash_by_consistent_hash(
-      gsl::make_span(reinterpret_cast<const unsigned char*>(&combine_hash), sizeof(combine_hash)),
-      logic_hpa_discovery_select(PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::kDtmqProxysvrFieldNumber,
-                                 mode));
-  if (!node_hash.node) {
-    return 0;
-  }
-
-  return node_hash.node->get_discovery_info().id();
-}
-
-DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_zone_broadcast(uint32_t type_id, uint64_t zone_id,
-                                                                          replicate_type status, size_t replicate_index,
-                                                                          logic_hpa_discovery_select_mode mode) {
-  std::string channel_id = make_zone_broadcast_channel_id(type_id, zone_id);
-  return get_dtmq_proxysvr_server_id_of_zone_channel(zone_id, channel_id, status, replicate_index, mode);
-}
-
-DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_world_broadcast(uint32_t type_id, uint64_t world_id,
-                                                                           replicate_type status,
-                                                                           size_t replicate_index,
-                                                                           logic_hpa_discovery_select_mode mode) {
-  std::string channel_id = make_world_broadcast_channel_id(type_id, world_id);
-  return get_dtmq_proxysvr_server_id_of_world_channel(channel_id, status, replicate_index, mode);
-}
-
-DTMQ_PROXY_SDK_API uint64_t get_dtmq_proxysvr_server_id_of_unicast(uint32_t type_id, uint64_t zone_id,
-                                                                   uint64_t instance_id, replicate_type status,
-                                                                   size_t replicate_index,
-                                                                   logic_hpa_discovery_select_mode mode) {
-  std::string channel_id = make_unicast_channel_id(type_id, zone_id, instance_id);
-  return get_dtmq_proxysvr_server_id_of_zone_channel(zone_id, channel_id, status, replicate_index, mode);
 }
 
 DTMQ_PROXY_SDK_API bool has_dtmq_proxysvr() {
@@ -234,10 +116,10 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
     std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr, bool auto_create_channel,
     bool no_wait) {
-  int32_t res = generate_channel_id(channel_key);
-  if (res != 0) {
-    RPC_RETURN_CODE(res);
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
+
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
     FWLOGDEBUG("get_target_server_id target_server_id is zero. channel_id:({})", channel_key.channel_id());
@@ -276,9 +158,8 @@ DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, atfw::d
   rpc::context::message_holder<atfw::dtmq::SSChannelFindMessageReq> rpc_req_body{ctx};
   rpc::context::message_holder<atfw::dtmq::SSChannelFindMessageRsp> rpc_rsp_body{ctx};
 
-  int32_t res = generate_channel_id(channel_key);
-  if (res != 0) {
-    RPC_RETURN_CODE(res);
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
@@ -300,9 +181,8 @@ DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
   rpc::context::message_holder<atfw::dtmq::SSChannelQueryMessageReq> rpc_req_body{ctx};
   rpc::context::message_holder<atfw::dtmq::SSChannelQueryMessageRsp> rpc_rsp_body{ctx};
 
-  int32_t res = generate_channel_id(channel_key);
-  if (res != 0) {
-    RPC_RETURN_CODE(res);
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);

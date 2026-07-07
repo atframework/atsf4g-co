@@ -31,10 +31,4 @@ message ExcelDtmqChannelType {
   google.protobuf.Duration gc_expire_duration = 4;
   bool memory_only = 5;
   int32 word_count_limit = 8;  // 字数限制
-
-  // 世界广播的服务类型ID
-  repeated uint64 broadcast_world_service_type_id = 101;
-
-  // 小区广播的服务类型ID
-  repeated uint64 broadcast_zone_service_type_id = 102;
 }

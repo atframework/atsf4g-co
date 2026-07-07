@@ -124,7 +124,7 @@ UTIL_SYMBOL_VISIBLE inline void setup_common_vtable(typename WalObjectType::vtab
 }
 
 /**
- * @brief 创建单播频道ID
+ * @brief 创建单播频道ID的标准算法
  *
  * @param type_id 类型ID
  * @param zone_id 区域ID
@@ -134,7 +134,7 @@ UTIL_SYMBOL_VISIBLE inline void setup_common_vtable(typename WalObjectType::vtab
 DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id, uint64_t instance_id);
 
 /**
- * @brief 创建区域广播频道ID
+ * @brief 创建区域广播频道ID的标准算法
  *
  * @param type_id 类型ID
  * @param zone_id 区域ID
@@ -143,7 +143,7 @@ DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64
 DTMQ_COMMON_SDK_API std::string make_zone_broadcast_channel_id(uint32_t type_id, uint64_t zone_id);
 
 /**
- * @brief 创建世界广播频道ID
+ * @brief 创建世界广播频道ID的标准算法
  *
  * @param type_id 类型ID
  * @param world_id 世界ID
@@ -152,7 +152,7 @@ DTMQ_COMMON_SDK_API std::string make_zone_broadcast_channel_id(uint32_t type_id,
 DTMQ_COMMON_SDK_API std::string make_world_broadcast_channel_id(uint32_t type_id, uint64_t world_id);
 
 /**
- * @brief 创建世界分区频道ID
+ * @brief 创建世界分区频道ID的标准算法
  *
  * @param type_id 类型ID
  * @param world_id 世界ID
@@ -161,31 +161,5 @@ DTMQ_COMMON_SDK_API std::string make_world_broadcast_channel_id(uint32_t type_id
  */
 DTMQ_COMMON_SDK_API std::string make_world_partition_channel_id(uint32_t type_id, uint64_t world_id,
                                                                 uint64_t partition_id);
-
-/**
- * @brief 检查是否为全局频道
- *
- * @param channel_key 频道键
- * @return true 是全局频道
- * @return false 不是全局频道
- */
-DTMQ_COMMON_SDK_API bool is_global_channel(const atfw::dtmq::DChannelIdKey& channel_key) noexcept;
-
-/**
- * @brief 计算频道ID
- *
- * @param channel_key 频道键
- * @return std::string 频道ID
- */
-DTMQ_COMMON_SDK_API std::string calculate_channel_id(const atfw::dtmq::DChannelIdKey& channel_key);
-
-/**
- * @brief 生成频道ID
- *
- * @param channel_key 频道键
- * @return int32_t 生成结果
- */
-DTMQ_COMMON_SDK_API int32_t generate_channel_id(atfw::dtmq::DChannelIdKey& channel_key);
-
 }  // namespace dtmq
 }  // namespace rpc

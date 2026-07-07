@@ -216,7 +216,6 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
     }
 
     channel->set_dirty();
-    channel->append_pending_broadcast(log);
     return wal_result_code::kOk;
   };
 

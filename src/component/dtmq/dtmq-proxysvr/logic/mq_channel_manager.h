@@ -27,7 +27,6 @@
 #include <list>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 
 #include "data/mq_channel.h"
 
@@ -99,8 +98,6 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
 
   void set_more_transfer() noexcept;
 
-  void send_broadcast_snapshot_to_server(const std::unordered_set<uint64_t>& target_server_ids);
-
   inline int64_t get_dtmq_proxysvr_etcd_revision() { return dtmq_proxysvr_distribute_etcd_revision_; }
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type find_message(rpc::context& ctx,
@@ -122,13 +119,10 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
 
  private:
   std::chrono::system_clock::time_point resolve_channel_distribution_timepoint_;
-  std::unordered_set<uint64_t> need_send_broadcast_snapshot_;
   std::chrono::system_clock::time_point last_tick_timepoint_;
   int64_t dtmq_proxysvr_distribute_etcd_revision_;
   mq_channel_timer_type timers_;
   std::unordered_map<std::string, mq_channel_ptr_type> channels_;
-  std::unordered_map<std::string, mq_channel_ptr_type> world_mq_channel_index_;
-  std::unordered_map<std::string, mq_channel_ptr_type> zone_mq_channel_index_;
   std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> mq_channel_configure_;
   std::list<mq_channel_ptr_type> pending_io_channels_;
   std::list<mq_channel_ptr_type> pending_save_channels_;
@@ -136,8 +130,6 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   bool is_stoping_;
   bool is_pre_stoping_;
   bool is_self_stateful_active_;
-
-  task_type_trait::task_type broadcast_snapshot_task_;
 
   int64_t report_mq_channel_qty_time_;
 };
