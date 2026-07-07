@@ -124,11 +124,7 @@ maybe_populate_submodule(ROBOT_DEPENDENCY_ROBOT_GO "src/robot/atframework/robot-
 # 1. Custom target: run task all
 # ============================================================================
 
-add_custom_target(
-  robot ALL
+execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env "INSTALL_PATH=${ROBOT_INSTALL_PATH}" "${TASK_EXECUTABLE}" all
   WORKING_DIRECTORY "${ROBOT_SOURCE_DIR}"
-  COMMENT "Building robot: task all (INSTALL_PATH=${ROBOT_INSTALL_PATH})"
-  USES_TERMINAL)
-
-set_property(TARGET robot PROPERTY FOLDER "${PROJECT_NAME}/tools/robot")
+)

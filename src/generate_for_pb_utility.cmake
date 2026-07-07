@@ -255,6 +255,10 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
   set(_generate_for_pb_overwrite_rule_file) # 打印使用
   set(_generate_for_pb_non_overwrite_rule_file) # 打印使用
   set(_generate_for_pb_target_name "${GENERATE_FOR_PB_TARGET}-${FLOW_NAME}")
+  set(_generate_for_pb_stamp_file "${GENERATE_FOR_PB_CONF_DIR}/${GENERATE_FOR_PB_TARGET}-${FLOW_NAME}.stamp")
+
+  # CMake 时强制触发Target
+  file(REMOVE "${_generate_for_pb_stamp_file}")
 
   # 处理依赖的协议生成目标的PBFILE
   unset(__CONF_PB_FILES)
@@ -291,10 +295,6 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
     )
     # 打印输出文件
     generate_for_pb_print_output_files("${_generate_for_pb_overwrite_rule_file}" _generate_for_pb_overwrite_outputs)
-    # 设为 GENERATED
-    foreach(_generate_for_pb_overwrite_output IN LISTS _generate_for_pb_overwrite_outputs)
-      set_source_files_properties(${_generate_for_pb_overwrite_output} PROPERTIES GENERATED TRUE)
-    endforeach()
     list(APPEND _generate_for_pb_output_files ${_generate_for_pb_overwrite_outputs})
   endif()
 
@@ -308,9 +308,15 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
     # 打印输出文件
     generate_for_pb_print_output_files("${_generate_for_pb_non_overwrite_rule_file}"
                                        _generate_for_pb_non_overwrite_outputs)
-    list(APPEND _generate_for_pb_output_files ${_generate_for_pb_non_overwrite_outputs})
+    # 不添加 output 内，为了其不被删除
+    # list(APPEND _generate_for_pb_output_files ${_generate_for_pb_non_overwrite_outputs})
+    # 手动设为 GENERATED
+    foreach(_generate_for_pb_overwrite_output IN LISTS _generate_for_pb_overwrite_outputs)
+      set_source_files_properties(${_generate_for_pb_overwrite_output} PROPERTIES GENERATED TRUE)
+    endforeach()
   endif()
   list(REMOVE_DUPLICATES _generate_for_pb_output_files)
+  list(APPEND _generate_for_pb_output_files "${_generate_for_pb_stamp_file}")
 
   # Target 注册
   set(__generate_for_pb_command_options
@@ -323,6 +329,7 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
 
   add_custom_command(
     OUTPUT ${_generate_for_pb_output_files}
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
     COMMAND ${__generate_for_pb_command_options}
     WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
     DEPENDS "${GENERATE_FOR_PB_CLEANUP_SERVER_TARGET}" "${_generate_for_pb_rule_file}" "${GENERATE_FOR_PB_MAKO_PY}"
