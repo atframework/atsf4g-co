@@ -46,7 +46,7 @@
       "command": "redis.ps1",
       "args": ["start"],
       "options": {
-        "cwd": "${workspaceFolder}/project/tools"
+        "cwd": "${workspaceFolder}/install/tools/script/redis"
       },
       "windows": {
         "command": "./redis.ps1"
