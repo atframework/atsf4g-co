@@ -5,6 +5,9 @@
 
 #include <opentelemetry/common/key_value_iterable_view.h>
 
+#include <limits>
+#include <string>
+#include <unordered_map>
 #include <utility>
 
 #include "logic/hpa/logic_hpa_data_type.h"
@@ -20,7 +23,7 @@ class ATFW_UTIL_SYMBOL_LOCAL logic_hpa_policy_observer_key_value_view final
       : shared_{&shared}, privated_{&priv}, temporary_{temporary_attributes} {
     cached_size_ = privated_->size();
 
-    for (auto& kv : *shared_) {
+    for (const auto& kv : *shared_) {
       if (privated_->end() == privated_->find(kv.first)) {
         ++cached_size_;
       }
@@ -33,13 +36,13 @@ class ATFW_UTIL_SYMBOL_LOCAL logic_hpa_policy_observer_key_value_view final
   bool ForEachKeyValue(
       opentelemetry::nostd::function_ref<bool(opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue)>
           callback) const noexcept override {
-    for (auto& kv : *privated_) {
+    for (const auto& kv : *privated_) {
       if (!callback(kv.first, kv.second)) {
         return false;
       }
     }
 
-    for (auto& kv : *shared_) {
+    for (const auto& kv : *shared_) {
       if (privated_->end() == privated_->find(kv.first)) {
         if (!callback(kv.first, kv.second)) {
           return false;

@@ -15,6 +15,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory>
+
 #include "logic/hpa/pull/prometheus/logic_hpa_puller_prometheus.h"
 
 SERVER_FRAME_API logic_hpa_puller::logic_hpa_puller(logic_hpa_policy& owner) : owner_(&owner) {}

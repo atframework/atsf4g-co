@@ -5,9 +5,9 @@
 
 #include <atframe/atapp_config.h>
 
-#include <cstdint>
-
 #include <config/server_frame_build_feature.h>
+
+#include <cstdint>
 
 namespace atframework {
 namespace atapp {

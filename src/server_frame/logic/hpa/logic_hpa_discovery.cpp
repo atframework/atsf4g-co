@@ -16,7 +16,11 @@
 #include <memory/object_allocator.h>
 
 #include <chrono>
+#include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 
 #include "logic/hpa/logic_hpa_controller.h"
 #include "logic/hpa/logic_hpa_policy.h"
@@ -68,7 +72,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_discovery::policy_data {
 };
 
 struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_discovery::custom_provider_guard {
-  custom_provider_guard(const logic_hpa_discovery& owner) : owner_(nullptr) {
+  explicit custom_provider_guard(const logic_hpa_discovery& owner) : owner_(nullptr) {
     if (owner.custom_provider_guard_ == nullptr) {
       owner.custom_provider_guard_ = this;
       owner_ = &owner;
@@ -84,7 +88,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_discovery::custom_provider_guard {
       owner_->custom_provider_[provider_ptr.first] = provider_ptr.second;
     }
 
-    for (auto& provider_ptr : remove_provider) {
+    for (const auto& provider_ptr : remove_provider) {
       owner_->custom_provider_.erase(provider_ptr);
     }
 
@@ -102,7 +106,7 @@ SERVER_FRAME_API std::string logic_hpa_discovery::make_path(gsl::string_view key
     domain = logic_hpa_discovery_semantic_conventions::kLogicHpaDiscoveryDomainDefault;
   }
 
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
 
   std::string etcd_path;
   // 预留空间，粗略即可
@@ -117,6 +121,7 @@ SERVER_FRAME_API std::string logic_hpa_discovery::make_path(gsl::string_view key
   if (!deployment_environment.empty()) {
     // 如果Target里已经包含了环境信息，则忽略追加环境隔离
     if (key.size() <= deployment_environment.size() ||
+        // NOLINTNEXTLINE(bugprone-suspicious-stringview-data-usage)
         gsl::string_view(key.data(), deployment_environment.size()) != deployment_environment ||
         key[deployment_environment.size()] != '/') {
       if ('/' != *etcd_path.rbegin()) {
@@ -156,11 +161,10 @@ SERVER_FRAME_API logic_hpa_discovery::logic_hpa_discovery(logic_hpa_controller& 
       pull_policy_update_timepoint_(std::chrono::system_clock::now()),
       pull_policy_waiting_counter_(0),
       private_data_(nullptr),
-      last_tick_(0),
+      last_tick_(util::time::time_utility::get_sys_now()),
       etcd_watch_mode_(logic_hpa_discovery_watch_mode::kExactly),
       custom_provider_guard_(nullptr) {
   etcd_path_ = make_path(key, domain);
-  last_tick_ = util::time::time_utility::get_sys_now();
 }
 
 SERVER_FRAME_API logic_hpa_discovery::~logic_hpa_discovery() {
@@ -228,6 +232,7 @@ SERVER_FRAME_API bool logic_hpa_discovery::is_stopped() const noexcept {
   return true;
 }
 
+// NOLINTNEXTLINE(performance-unnecessary-value-param)
 SERVER_FRAME_API void logic_hpa_discovery::add_pull_policy(std::shared_ptr<logic_hpa_policy> policy,
                                                            logic_hpa_discovery_setup_policy_accessor&) {
   if (!policy) {
@@ -276,7 +281,7 @@ SERVER_FRAME_API void logic_hpa_discovery::add_pull_policy(std::shared_ptr<logic
 
         std::chrono::system_clock::time_point select_tp = std::chrono::system_clock::from_time_t(0);
         int64_t select_value = 0;
-        for (auto& record : records) {
+        for (const auto& record : records) {
           if (!record) {
             continue;
           }
@@ -432,11 +437,11 @@ SERVER_FRAME_API bool logic_hpa_discovery::watch(logic_hpa_discovery_watch_mode 
   // setup callback
   etcd_watcher_->set_evt_handle(
       [this](const atfw::atapp::etcd_response_header&, const atfw::atapp::etcd_watcher::response_t& evt_data) {
-        for (auto& evt_item : evt_data.events) {
+        for (const auto& evt_item : evt_data.events) {
           data_header evt_header;
 
           gsl::string_view path;
-          const std::string* value_ptr;
+          const std::string* value_ptr = nullptr;
           if (!evt_item.kv.key.empty()) {
             path = evt_item.kv.key;
             evt_header.create_revision = evt_item.kv.create_revision;
@@ -514,59 +519,59 @@ SERVER_FRAME_API bool logic_hpa_discovery::set_value(std::string&& value, gsl::s
   if (!etcd_set_value_) {
     FWLOGERROR("[HPA]: Discovery {} can not set value(subkey={}) because create request failed", etcd_path_, subkey);
     return false;
-  } else {
-    etcd_set_value_->set_priv_data(this);
-    etcd_set_value_->set_on_complete([](util::network::http_request& request) -> int {
-      logic_hpa_discovery* self = reinterpret_cast<logic_hpa_discovery*>(request.get_priv_data());
-      if (self == nullptr) {
-        return 0;
-      }
+  }
 
-      if (self->etcd_set_value_.get() == &request) {
-        self->clear_etcd_set_value_rpc();
-      }
-
-      // 服务器错误则忽略
-      if (0 != request.get_error_code() ||
-          util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
-              util::network::http_request::get_status_code_group(request.get_response_code())) {
-        FWLOGERROR("[HPA]: Discovery {} set value request({}) failed(error code={}, http code={}): {}",
-                   self->etcd_path_, reinterpret_cast<const void*>(&request), request.get_error_code(),
-                   request.get_response_code(), request.get_response_stream().str());
-      } else {
-        FWLOGINFO("[HPA]: Discovery {} set value request({}) success", self->etcd_path_,
-                  reinterpret_cast<const void*>(&request));
-      }
-
+  etcd_set_value_->set_priv_data(this);
+  etcd_set_value_->set_on_complete([](util::network::http_request& request) -> int {
+    logic_hpa_discovery* self = reinterpret_cast<logic_hpa_discovery*>(request.get_priv_data());
+    if (self == nullptr) {
       return 0;
-    });
-    etcd_set_value_->set_on_error([](util::network::http_request& request) -> int {
-      logic_hpa_discovery* self = reinterpret_cast<logic_hpa_discovery*>(request.get_priv_data());
-      if (self == nullptr) {
-        FWLOGERROR("[HPA]: Discovery {} set value request({}) with error: {}", "[UNKNOWN]",
-                   reinterpret_cast<const void*>(&request), request.get_error_msg());
-        return 0;
-      }
-
-      FWLOGERROR("[HPA]: Discovery {} set value request({}) with error: {}", self->etcd_path_,
-                 reinterpret_cast<const void*>(&request), request.get_error_msg());
-      return 0;
-    });
-
-    int res = etcd_set_value_->start(util::network::http_request::method_t::EN_MT_POST, false);
-    if (res != 0) {
-      FWLOGERROR("[HPA]: Discovery {} can not set value(subkey={}) because start request failed, code: {}", etcd_path_,
-                 subkey, res);
-
-      clear_etcd_set_value_rpc();
-      return false;
     }
 
-    FWLOGINFO("[HPA]: Discovery {} set value(subkey={}) request({}) start", etcd_path_, subkey,
-              reinterpret_cast<const void*>(etcd_set_value_.get()));
+    if (self->etcd_set_value_.get() == &request) {
+      self->clear_etcd_set_value_rpc();
+    }
 
-    return true;
+    // 服务器错误则忽略
+    if (0 != request.get_error_code() ||
+        util::network::http_request::status_code_t::EN_ECG_SUCCESS !=
+            util::network::http_request::get_status_code_group(request.get_response_code())) {
+      FWLOGERROR("[HPA]: Discovery {} set value request({}) failed(error code={}, http code={}): {}", self->etcd_path_,
+                 reinterpret_cast<const void*>(&request), request.get_error_code(), request.get_response_code(),
+                 request.get_response_stream().str());
+    } else {
+      FWLOGINFO("[HPA]: Discovery {} set value request({}) success", self->etcd_path_,
+                reinterpret_cast<const void*>(&request));
+    }
+
+    return 0;
+  });
+  etcd_set_value_->set_on_error([](util::network::http_request& request) -> int {
+    logic_hpa_discovery* self = reinterpret_cast<logic_hpa_discovery*>(request.get_priv_data());
+    if (self == nullptr) {
+      FWLOGERROR("[HPA]: Discovery {} set value request({}) with error: {}", "[UNKNOWN]",
+                 reinterpret_cast<const void*>(&request), request.get_error_msg());
+      return 0;
+    }
+
+    FWLOGERROR("[HPA]: Discovery {} set value request({}) with error: {}", self->etcd_path_,
+               reinterpret_cast<const void*>(&request), request.get_error_msg());
+    return 0;
+  });
+
+  int res = etcd_set_value_->start(util::network::http_request::method_t::EN_MT_POST, false);
+  if (res != 0) {
+    FWLOGERROR("[HPA]: Discovery {} can not set value(subkey={}) because start request failed, code: {}", etcd_path_,
+               subkey, res);
+
+    clear_etcd_set_value_rpc();
+    return false;
   }
+
+  FWLOGINFO("[HPA]: Discovery {} set value(subkey={}) request({}) start", etcd_path_, subkey,
+            reinterpret_cast<const void*>(etcd_set_value_.get()));
+
+  return true;
 }
 
 SERVER_FRAME_API bool logic_hpa_discovery::is_setting_value() const noexcept {
@@ -714,7 +719,7 @@ SERVER_FRAME_API int32_t logic_hpa_discovery::get_non_native_cloud_replicas(int3
 SERVER_FRAME_API int32_t logic_hpa_discovery::get_scaling_up_expect_replicas() const {
   int32_t result = 0;
   // 指标策略的扩容计算
-  for (auto& policy_item : policy_data_) {
+  for (const auto& policy_item : policy_data_) {
     if (!policy_item.second) {
       continue;
     }
@@ -753,7 +758,7 @@ SERVER_FRAME_API int32_t logic_hpa_discovery::get_scaling_up_expect_replicas() c
 SERVER_FRAME_API int32_t logic_hpa_discovery::get_scaling_down_expect_replicas() const {
   int32_t result = 0;
   // 指标策略的缩容计算
-  for (auto& policy_item : policy_data_) {
+  for (const auto& policy_item : policy_data_) {
     if (!policy_item.second) {
       continue;
     }
@@ -928,7 +933,6 @@ void logic_hpa_discovery::do_changed_put(data_header& header, const std::string&
         iter->second.header.mod_revision == header.mod_revision && iter->second.header.version == header.version) {
       return;
     }
-
   } while (false);
 
   data_cache& cache = etcd_last_values_[key];

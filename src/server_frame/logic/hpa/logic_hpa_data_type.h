@@ -18,6 +18,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 
 #ifdef min
 #  undef min

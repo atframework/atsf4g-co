@@ -62,10 +62,15 @@
 #include <rpc/telemetry/rpc_global_service.h>
 #include <rpc/telemetry/semantic_conventions.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "logic/hpa/logic_hpa_discovery.h"
 #include "logic/hpa/logic_hpa_policy.h"
@@ -100,17 +105,17 @@ static constexpr const int64_t kIgnoreInaccuracyBoundMicroseconds = 1000000;
 
 // 资源型指标的记录缓存, 用于计算增量和解决多puller多次拉取时的数据刷新问题
 struct ATFW_UTIL_SYMBOL_LOCAL cpu_permillage_metrics_timeval_record {
-  uv_timeval_t ru_utime; /* user CPU time used */
-  uv_timeval_t ru_stime; /* system CPU time used */
-  int64_t last_report_value;
+  uv_timeval_t ru_utime = {}; /* user CPU time used */
+  uv_timeval_t ru_stime = {}; /* system CPU time used */
+  int64_t last_report_value = 0;
 
   std::chrono::system_clock::time_point previous_report_time = std::chrono::system_clock::from_time_t(0);
 };
 
 // CPU hrtime记录缓存, 用于计算增量和解决多puller多次拉取时的数据刷新问题
 struct ATFW_UTIL_SYMBOL_LOCAL cpu_permillage_metrics_hrtime_record {
-  uint64_t idle_time;
-  int64_t last_report_value;
+  uint64_t idle_time = 0;
+  int64_t last_report_value = 0;
 
   uint64_t previous_report_time = 0;
 };
@@ -135,10 +140,10 @@ static bool append_default_aggregation_by(
     const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& source,
     std::initializer_list<std::initializer_list<std::string>> append_labels) {
   bool ret = false;
-  for (auto& label_set : append_labels) {
+  for (const auto& label_set : append_labels) {
     const std::string* key = nullptr;
 
-    for (auto& label : label_set) {
+    for (const auto& label : label_set) {
       if (label.empty()) {
         continue;
       }
@@ -170,21 +175,29 @@ static logic_hpa_ssl_version ssl_version_from_name(const std::string& ssl_versio
   if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.3", 7) ||
       0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv13", 6)) {
     return logic_hpa_ssl_version::kTlsV13;
-  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.2", 7) ||
-             0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv12", 6)) {
-    return logic_hpa_ssl_version::kTlsV12;
-  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.1", 7) ||
-             0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv11", 6)) {
-    return logic_hpa_ssl_version::kTlsV11;
-  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1", 5) ||
-             0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.0", 7) ||
-             0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv10", 6)) {
-    return logic_hpa_ssl_version::kTlsV10;
-  } else if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "SSLv3", 5)) {
-    return logic_hpa_ssl_version::kSsl3;
-  } else {
-    return logic_hpa_ssl_version::kNone;
   }
+
+  if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.2", 7) ||
+      0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv12", 6)) {
+    return logic_hpa_ssl_version::kTlsV12;
+  }
+
+  if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.1", 7) ||
+      0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv11", 6)) {
+    return logic_hpa_ssl_version::kTlsV11;
+  }
+
+  if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1", 5) ||
+      0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv1.0", 7) ||
+      0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "TLSv10", 6)) {
+    return logic_hpa_ssl_version::kTlsV10;
+  }
+
+  if (0 == UTIL_STRFUNC_STRNCASE_CMP(ssl_version.c_str(), "SSLv3", 5)) {
+    return logic_hpa_ssl_version::kSsl3;
+  }
+
+  return logic_hpa_ssl_version::kNone;
 }
 
 enum class main_controller_flag : int8_t {
@@ -360,6 +373,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_show_hpa_controller_configure(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (hpa_discovery_data_ptr->with_type_id != 0) {
       ::atfw::atapp::app::add_custom_command_rsp(
@@ -372,7 +386,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
           util::log::format("HPA Controller Discovery with type name: {}", hpa_discovery_data_ptr->with_type_name));
     }
 
-    auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+    const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
     ::atfw::atapp::app::add_custom_command_rsp(
         params,
         util::log::format("HPA metrics configure:\n{}", protobuf_mini_dumper_get_readable(hpa_configure.metrics())));
@@ -388,6 +402,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_show_hpa_controller_status(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller stateful index: {}",
@@ -416,7 +431,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
                                     expect_scaling_timepoint, local_time_str));
     }
 
-    const char* is_main;
+    const char* is_main = nullptr;
     if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kYes) {
       is_main = "yes";
     } else if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kNo) {
@@ -487,6 +502,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
               time_t last_update_unix_timestamp = std::chrono::system_clock::to_time_t(last_update_time);
               char local_policy_time_str[32] = {0};
               if (last_update_unix_timestamp <= 0) {
+                // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
                 memcpy(local_policy_time_str, "Not pulled yet", 14);
               } else {
                 std::tm policy_c_tm;
@@ -514,7 +530,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
         params, util::log::format("HPA Controller current setting:\n{}",
                                   protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->current_setting)));
 
-    if (is_main) {
+    if (hpa_discovery_data_ptr->main_controller_flag_cache == main_controller_flag::kYes) {
       ::atfw::atapp::app::add_custom_command_rsp(
           params, util::log::format("HPA Controller expect setting:\n{}",
                                     protobuf_mini_dumper_get_readable(hpa_discovery_data_ptr->expect_setting)));
@@ -523,17 +539,18 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_show_hpa_controller_discovery(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (!hpa_discovery_data_ptr->discovery_set) {
       return;
     }
 
-    auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+    const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
     ::atfw::atapp::app::add_custom_command_rsp(
         params, util::log::format("HPA Controller Discovery configure: {}",
                                   protobuf_mini_dumper_get_readable(hpa_configure.discovery())));
 
-    for (auto& node : hpa_discovery_data_ptr->discovery_set->get_sorted_nodes()) {
+    for (const auto& node : hpa_discovery_data_ptr->discovery_set->get_sorted_nodes()) {
       if (!node) {
         continue;
       }
@@ -546,6 +563,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_schedule_hpa_node_shutdown(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (!hpa_discovery_data_ptr->discovery_set) {
       return;
@@ -577,6 +595,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_schedule_hpa_expect_scaling(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (!hpa_discovery_data_ptr->discovery_set) {
       return;
@@ -636,6 +655,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_debug_hpa_set_expect_replicas(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (!hpa_discovery_data_ptr->discovery_set) {
       return;
@@ -657,6 +677,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data_accessor 
 
   static void command_debug_hpa_fake_cpu_permillage(
       util::cli::callback_param params,
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
       std::shared_ptr<logic_hpa_controller::hpa_discovery_data> hpa_discovery_data_ptr) {
     if (!hpa_discovery_data_ptr->discovery_set) {
       return;
@@ -787,8 +808,8 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
   // 因为HPA模块依赖telemetry模块的篇日志初始化，我们延迟实际的reload行为到下一次tick
   need_configure_ = true;
 
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
-  auto& hpa_target = hpa_configure.controller().target();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_target = hpa_configure.controller().target();
 
   time_t sys_now = util::time::time_utility::get_sys_now();
 
@@ -864,14 +885,17 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
   protobuf_copy_message(target_rules, ready_rules);
 
   do {
-    auto rule_desc = ready_rules.GetDescriptor();
-    auto rule_reflection = ready_rules.GetReflection();
+    // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+    const auto* rule_desc = ready_rules.GetDescriptor();
+    // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+    const auto* rule_reflection = ready_rules.GetReflection();
     if (nullptr == rule_desc || nullptr == rule_reflection) {
       break;
     }
 
     for (int i = 0; i < rule_desc->field_count(); ++i) {
-      auto fds = ready_rules.GetDescriptor()->field(i);
+      // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+      const auto* fds = ready_rules.GetDescriptor()->field(i);
       if (fds == nullptr || fds->message_type() != atfw::atapp::protocol::atapp_metadata::descriptor()) {
         continue;
       }
@@ -889,14 +913,17 @@ SERVER_FRAME_API void logic_hpa_controller::reload() {
   } while (false);
 
   do {
-    auto rule_desc = target_rules.GetDescriptor();
-    auto rule_reflection = target_rules.GetReflection();
+    // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+    const auto* rule_desc = target_rules.GetDescriptor();
+    // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+    const auto* rule_reflection = target_rules.GetReflection();
     if (nullptr == rule_desc || nullptr == rule_reflection) {
       break;
     }
 
     for (int i = 0; i < rule_desc->field_count(); ++i) {
-      auto fds = target_rules.GetDescriptor()->field(i);
+      // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+      const auto* fds = target_rules.GetDescriptor()->field(i);
       if (fds == nullptr || fds->message_type() != atfw::atapp::protocol::atapp_metadata::descriptor()) {
         continue;
       }
@@ -983,7 +1010,7 @@ SERVER_FRAME_API int logic_hpa_controller::stop(bool prestop, time_t target_labe
 
     // 启用HPA controller时（适用于需要状态转移），prestop 使用target和ready保护延迟
     // 不启用HPA controller时，仅仅使用服务发现和策略路由，两个标签都要提前缩短
-    auto& controller_cfg = logic_config::me()->get_logic_cfg().hpa().controller();
+    const auto& controller_cfg = logic_config::me()->get_logic_cfg().hpa().controller();
     if (prestop && controller_cfg.enable()) {
       time_t expect_hpa_label_target_timepoint =
           sys_now + target_label_offset >= 0 ? target_label_offset
@@ -1310,7 +1337,7 @@ SERVER_FRAME_API void logic_hpa_controller::remove_on_cleanup_custom_policy(cons
 }
 
 SERVER_FRAME_API void logic_hpa_controller::set_on_ready_checking(on_stateful_checking_callback fn) {
-  hpa_ready_checking_callback_ = fn;
+  hpa_ready_checking_callback_ = std::move(fn);
 }
 
 SERVER_FRAME_API void logic_hpa_controller::remove_on_ready_checking() {
@@ -1318,7 +1345,7 @@ SERVER_FRAME_API void logic_hpa_controller::remove_on_ready_checking() {
 }
 
 SERVER_FRAME_API void logic_hpa_controller::set_on_stateful_checking(on_stateful_checking_callback fn) {
-  hpa_stateful_checking_callback_ = fn;
+  hpa_stateful_checking_callback_ = std::move(fn);
 }
 
 SERVER_FRAME_API void logic_hpa_controller::remove_on_stateful_checking() {
@@ -1336,18 +1363,18 @@ SERVER_FRAME_API util::network::http_request::ptr_t logic_hpa_controller::create
     return ret;
   }
 
-  auto& hpa_metrics_cfg = logic_config::me()->get_logic_cfg().hpa().metrics();
-  auto& pull_request_cfg = hpa_metrics_cfg.pull_request();
-  auto& pull_ssl_cfg = hpa_metrics_cfg.pull_ssl();
+  const auto& hpa_metrics_cfg = logic_config::me()->get_logic_cfg().hpa().metrics();
+  const auto& pull_request_cfg = hpa_metrics_cfg.pull_request();
+  const auto& pull_ssl_cfg = hpa_metrics_cfg.pull_ssl();
 
   // Settings from configure
   if (pull_request_cfg.has_dns_cache_timeout() && pull_request_cfg.dns_cache_timeout().seconds() > 0) {
-    ret->set_opt_long(CURLOPT_DNS_CACHE_TIMEOUT, pull_request_cfg.dns_cache_timeout().seconds() * 1000 +
-                                                     pull_request_cfg.dns_cache_timeout().nanos() / 1000000);
+    ret->set_opt_long(CURLOPT_DNS_CACHE_TIMEOUT, (pull_request_cfg.dns_cache_timeout().seconds() * 1000) +
+                                                     (pull_request_cfg.dns_cache_timeout().nanos() / 1000000));
   }
   if (pull_request_cfg.has_connect_timeout() && pull_request_cfg.connect_timeout().seconds() > 0) {
-    ret->set_opt_connect_timeout(pull_request_cfg.connect_timeout().seconds() * 1000 +
-                                 pull_request_cfg.connect_timeout().nanos() / 1000000);
+    ret->set_opt_connect_timeout((pull_request_cfg.connect_timeout().seconds() * 1000) +
+                                 (pull_request_cfg.connect_timeout().nanos() / 1000000));
   } else {
     ret->set_opt_connect_timeout(10000);
   }
@@ -1356,7 +1383,8 @@ SERVER_FRAME_API util::network::http_request::ptr_t logic_hpa_controller::create
   ret->set_opt_accept_encoding("");
   ret->set_opt_http_content_decoding(true);
   if (pull_request_cfg.has_timeout() && pull_request_cfg.timeout().seconds() > 0) {
-    ret->set_opt_timeout(pull_request_cfg.timeout().seconds() * 1000 + pull_request_cfg.timeout().nanos() / 1000000);
+    ret->set_opt_timeout((pull_request_cfg.timeout().seconds() * 1000) +
+                         (pull_request_cfg.timeout().nanos() / 1000000));
   } else {
     ret->set_opt_timeout(10000);
   }
@@ -1593,9 +1621,9 @@ SERVER_FRAME_API std::string logic_hpa_controller::make_custom_discovery_path(gs
       return util::string::format("{}/{}", hpa_discovery_data_->configure_key, name);
     }
     return util::string::format("{}{}", hpa_discovery_data_->configure_key, name);
-  } else {
-    return std::string{name};
   }
+
+  return std::string{name};
 }
 
 SERVER_FRAME_API std::shared_ptr<logic_hpa_discovery> logic_hpa_controller::create_custom_discovery(
@@ -1624,7 +1652,7 @@ SERVER_FRAME_API std::shared_ptr<logic_hpa_discovery> logic_hpa_controller::crea
   }
 
   logic_hpa_discovery_setup_policy_accessor accessor;
-  auto& storage_data = hpa_discovery_data_->custom_hpa_discovery[ret->get_etcd_path()];
+  auto& storage_data = hpa_discovery_data_->custom_hpa_discovery[etcd_path];
   storage_data = logic_hpa_discovery_with_event{ret, std::move(setup_callback)};
   // reload状态后续会setup，不需要立即setup
   if (storage_data.setup_callback && !need_configure_) {
@@ -1714,7 +1742,7 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
     hpa_discovery_data_->discovery_filter.set_service_subset(owner_app_->get_metadata().service_subset());
   }
 
-  auto& labels = owner_app_->get_metadata().labels();
+  const auto& labels = owner_app_->get_metadata().labels();
   for (auto& label_key : auto_labels) {
     auto iter_label = owner_app_->get_metadata().labels().find(label_key);
     if (iter_label == labels.end()) {
@@ -1725,7 +1753,7 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
   }
 
   // HPA控制器的额外标签
-  for (auto& label_kv : logic_config::me()->get_logic_cfg().hpa().controller().discovery_labels()) {
+  for (const auto& label_kv : logic_config::me()->get_logic_cfg().hpa().controller().discovery_labels()) {
     (*hpa_discovery_data_->discovery_filter.mutable_labels())[label_kv.first] = label_kv.second;
 
     owner_app_->set_metadata_label(label_kv.first, label_kv.second);
@@ -1735,7 +1763,7 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
 void logic_hpa_controller::do_reload_hpa_metrics() {
   auto hpa_telemetry_group =
       rpc::telemetry::global_service::get_group(rpc::telemetry::semantic_conventions::kGroupNameHpa);
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
   common_attributes_reference_.clear();
   common_attributes_lifetime_.clear();
   common_selectors_.clear();
@@ -1786,7 +1814,7 @@ void logic_hpa_controller::do_reload_hpa_metrics() {
   // 忽略标签，某些自定义策略中，可以用来忽略自动生成的target相关的标签以便垮服务类型访问
   std::unordered_set<std::string> common_ignore_selectors;
   common_ignore_selectors.reserve(static_cast<size_t>(hpa_configure.metrics().without_auto_selectors_size()));
-  for (auto& ignore_selector : hpa_configure.metrics().without_auto_selectors()) {
+  for (const auto& ignore_selector : hpa_configure.metrics().without_auto_selectors()) {
     common_ignore_selectors.insert(
         rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(ignore_selector, true));
   }
@@ -1797,7 +1825,7 @@ void logic_hpa_controller::do_reload_hpa_metrics() {
                                  rpc::telemetry::global_service::get_metrics_labels(hpa_telemetry_group).size();
   common_attributes_lifetime_.reserve(common_attributes_cap);
   common_attributes_reference_.reserve(common_attributes_cap);
-  for (auto& kv : rpc::telemetry::global_service::get_metrics_labels(hpa_telemetry_group)) {
+  for (const auto& kv : rpc::telemetry::global_service::get_metrics_labels(hpa_telemetry_group)) {
     auto& attribute_with_lifetime = common_attributes_lifetime_[kv.first];
     attribute_with_lifetime = rpc::telemetry::opentelemetry_utility::convert_attribute_value_to_string(kv.second);
     common_attributes_reference_[kv.first] = attribute_with_lifetime;
@@ -1820,7 +1848,7 @@ void logic_hpa_controller::do_reload_hpa_metrics() {
   setup_controller_status_policy(hpa_configure, hpa_configure.rule().controller_status());
 
   cleanup_custom_policies();
-  for (auto& custom_policy : hpa_configure.rule().custom()) {
+  for (const auto& custom_policy : hpa_configure.rule().custom()) {
     setup_custom_policy(hpa_configure, custom_policy);
   }
 }
@@ -1943,7 +1971,7 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_resource(
 
 void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_hpa_labels(
     std::unordered_set<std::string>& common_ignore_selectors) {
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
 
   // 自动注入的target相关标签
   if (!hpa_configure.controller().target().kind().empty()) {
@@ -1974,17 +2002,17 @@ void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_hpa_labels(
 
 void logic_hpa_controller::do_reload_hpa_metrics_auto_inject_common_attributes(
     std::unordered_set<std::string>& common_ignore_selectors) {
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
 
   // HPA控制器的额外上报标签
-  for (auto& kv : hpa_configure.metrics().labels()) {
+  for (const auto& kv : hpa_configure.metrics().labels()) {
     auto& label_value = common_attributes_lifetime_[kv.first];
     label_value = kv.second;
     common_attributes_reference_[kv.first] = label_value;
   }
 
   // HPA控制器的额外聚合拉取标签
-  for (auto& kv : hpa_configure.metrics().selectors()) {
+  for (const auto& kv : hpa_configure.metrics().selectors()) {
     std::string sanitize_key =
         rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(kv.first, true);
     if (common_ignore_selectors.end() != common_ignore_selectors.find(sanitize_key)) {
@@ -2012,7 +2040,7 @@ util::nostd::nonnull<std::shared_ptr<logic_hpa_policy>> logic_hpa_controller::in
   if (policy_cfg.aggregation() == PROJECT_NAMESPACE_ID::config::EN_HPA_POLICY_AGGREGATION_NONE) {
     PROJECT_NAMESPACE_ID::config::logic_hpa_policy patch_policy_cfg = policy_cfg;
     if (push_interval_seconds > 0 && patch_policy_cfg.simple_function_size() == 0) {
-      auto simple_function = patch_policy_cfg.add_simple_function();
+      auto* simple_function = patch_policy_cfg.add_simple_function();
       simple_function->mutable_last_over_time()->set_seconds(pull_default_time_range);
     }
     if (append_default_aggregation_by(
@@ -2033,7 +2061,7 @@ util::nostd::nonnull<std::shared_ptr<logic_hpa_policy>> logic_hpa_controller::in
   } else {
     if (push_interval_seconds > 0 && policy_cfg.simple_function_size() == 0) {
       PROJECT_NAMESPACE_ID::config::logic_hpa_policy patch_policy_cfg = policy_cfg;
-      auto simple_function = patch_policy_cfg.add_simple_function();
+      auto* simple_function = patch_policy_cfg.add_simple_function();
       simple_function->mutable_last_over_time()->set_seconds(pull_default_time_range);
 
       policy_instance = atfw::memory::stl::make_shared<logic_hpa_policy>(
@@ -2108,7 +2136,9 @@ void logic_hpa_controller::setup_cpu_permillage_policy(
     if (now - shared_record->previous_report_time + std::chrono::microseconds{kIgnoreInaccuracyBoundMicroseconds} <
         update_interval) {
       return shared_record->last_report_value;
-    } else if (base <= kIgnoreInaccuracyBoundMicroseconds) {
+    }
+
+    if (base <= kIgnoreInaccuracyBoundMicroseconds) {
       return shared_record->last_report_value;
     }
 
@@ -2119,7 +2149,7 @@ void logic_hpa_controller::setup_cpu_permillage_policy(
     offset_us *= 1000000;
     offset_us += update_rusage.ru_stime.tv_usec + update_rusage.ru_utime.tv_usec - shared_record->ru_stime.tv_usec -
                  shared_record->ru_utime.tv_usec;
-    shared_record->last_report_value = static_cast<int64_t>(offset_us) * 1000 / base;
+    shared_record->last_report_value = (offset_us * 1000) / base;
     shared_record->ru_stime = update_rusage.ru_stime;
     shared_record->ru_utime = update_rusage.ru_utime;
     shared_record->previous_report_time = now;
@@ -2165,7 +2195,7 @@ void logic_hpa_controller::setup_cpu_permillage_policy(
         } else {
           FWLOGDEBUG("[HPA]: Policy {} got {} records", policy.get_metrics_name(), records.size());
           int32_t index = 0;
-          for (auto& record : records) {
+          for (const auto& record : records) {
             ++index;
             FWLOGDEBUG("\tRecord {}/{}: timepoint: {}, {}", index, records.size(),
                        std::chrono::system_clock::to_time_t(record->get_time_point()), record->get_value_as_int64());
@@ -2234,8 +2264,8 @@ void logic_hpa_controller::setup_main_thread_cpu_permillage_policy(
 
     uint64_t now_hr = uv_hrtime();
     // 短期多源抓取，直接返回缓存
-    if (std::chrono::nanoseconds{static_cast<std::chrono::nanoseconds::rep>(now_hr) -
-                                 static_cast<std::chrono::nanoseconds::rep>(shared_record->previous_report_time)} +
+    if (std::chrono::nanoseconds(static_cast<std::chrono::nanoseconds::rep>(now_hr) -
+                                 static_cast<std::chrono::nanoseconds::rep>(shared_record->previous_report_time)) +
             std::chrono::nanoseconds{kIgnoreInaccuracyBoundHrTime} <
         update_interval) {
       return shared_record->last_report_value;
@@ -2307,7 +2337,7 @@ void logic_hpa_controller::setup_main_thread_cpu_permillage_policy(
         } else {
           FWLOGDEBUG("[HPA]: Policy {} got {} records", policy.get_metrics_name(), records.size());
           int32_t index = 0;
-          for (auto& record : records) {
+          for (const auto& record : records) {
             ++index;
             FWLOGDEBUG("\tRecord {}/{}: timepoint: {}, {}", index, records.size(),
                        std::chrono::system_clock::to_time_t(record->get_time_point()), record->get_value_as_int64());
@@ -2364,10 +2394,12 @@ void logic_hpa_controller::setup_memory_policy(const PROJECT_NAMESPACE_ID::confi
     if (now - shared_record->previous_report_time + std::chrono::microseconds{kIgnoreInaccuracyBoundMicroseconds} <
         update_interval) {
       return shared_record->last_report_value;
-    } else if (now - shared_record->previous_report_time <
-               std::chrono::microseconds{kIgnoreInaccuracyBoundMicroseconds}) {
+    }
+
+    if (now - shared_record->previous_report_time < std::chrono::microseconds{kIgnoreInaccuracyBoundMicroseconds}) {
       return shared_record->last_report_value;
     }
+
     shared_record->previous_report_time = now;
 
     size_t memory_rss = 0;
@@ -2393,7 +2425,7 @@ void logic_hpa_controller::setup_memory_policy(const PROJECT_NAMESPACE_ID::confi
         } else {
           FWLOGDEBUG("[HPA]: Policy {} got {} records", policy.get_metrics_name(), records.size());
           int32_t index = 0;
-          for (auto& record : records) {
+          for (const auto& record : records) {
             ++index;
             FWLOGDEBUG("\tRecord {}/{}: timepoint: {}, {}", index, records.size(),
                        std::chrono::system_clock::to_time_t(record->get_time_point()), record->get_value_as_int64());
@@ -2469,7 +2501,7 @@ void logic_hpa_controller::setup_recent_max_task_count_policy(
         } else {
           FWLOGDEBUG("[HPA]: Policy {} got {} records", policy.get_metrics_name(), records.size());
           int32_t index = 0;
-          for (auto& record : records) {
+          for (const auto& record : records) {
             ++index;
             FWLOGDEBUG("\tRecord {}/{}: timepoint: {}, {}", index, records.size(),
                        std::chrono::system_clock::to_time_t(record->get_time_point()), record->get_value_as_int64());
@@ -2551,7 +2583,7 @@ void logic_hpa_controller::setup_controller_status_policy(
         } else {
           FWLOGDEBUG("[HPA]: Policy {} got {} records", policy.get_metrics_name(), records.size());
           int32_t index = 0;
-          for (auto& record : records) {
+          for (const auto& record : records) {
             ++index;
             FWLOGDEBUG("\tRecord {}/{}: timepoint: {}, {}", index, records.size(),
                        std::chrono::system_clock::to_time_t(record->get_time_point()), record->get_value_as_int64());
@@ -2898,8 +2930,8 @@ void logic_hpa_controller::cleanup_default_hpa_discovery() {
 }
 
 void logic_hpa_controller::do_reload_hpa_configure() {
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
-  auto& hpa_target = hpa_configure.controller().target();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_target = hpa_configure.controller().target();
   std::string hpa_configure_key;
 
   // 默认的key生成规则，包含target信息
@@ -2941,7 +2973,7 @@ void logic_hpa_controller::do_reload_hpa_configure() {
 }
 
 void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
 
   if (nullptr == owner_app_) {
     return;
@@ -2952,12 +2984,12 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
   }
 
   time_t sys_now = util::time::time_utility::get_sys_now();
-  time_t controller_tick_timepoint;
+  time_t controller_tick_timepoint = 0;
   // Stop阶段提升频率以减少等待延迟
   if (hpa_discovery_data_->stoping) {
-    controller_tick_timepoint = sys_now * 10 + util::time::time_utility::get_now_usec() / 250000;
+    controller_tick_timepoint = (sys_now * 10) + (util::time::time_utility::get_now_usec() / 250000);
   } else {
-    controller_tick_timepoint = sys_now * 10 + util::time::time_utility::get_now_usec() / 100000;
+    controller_tick_timepoint = (sys_now * 10) + (util::time::time_utility::get_now_usec() / 100000);
   }
   if (controller_tick_timepoint == hpa_discovery_data_->last_controller_tick_timepoint) {
     return;
@@ -3089,7 +3121,7 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
     policy_cfg.set_metrics_name(hpa_configure.metrics().metrics_name_stateful_index());
     policy_cfg.set_metrics_unit("count");
 
-    for (auto& label_kv : logic_config::me()->get_logic_cfg().hpa().controller().discovery_labels()) {
+    for (const auto& label_kv : logic_config::me()->get_logic_cfg().hpa().controller().discovery_labels()) {
       (*policy_cfg.mutable_labels())[rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
           label_kv.first, true)] = label_kv.second;
     }
@@ -3122,7 +3154,7 @@ void logic_hpa_controller::do_reload_hpa_controller_tick(bool need_reload) {
     policy_cfg.set_metrics_name(hpa_configure.metrics().metrics_name_expect_replicas());
     policy_cfg.set_metrics_unit("count");
 
-    for (auto& label_kv : logic_config::me()->get_logic_cfg().hpa().controller().discovery_labels()) {
+    for (const auto& label_kv : logic_config::me()->get_logic_cfg().hpa().controller().discovery_labels()) {
       (*policy_cfg.mutable_labels())[rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(
           label_kv.first, true)] = label_kv.second;
     }
@@ -3144,7 +3176,7 @@ void logic_hpa_controller::do_report_default_hpa_discovery() {
     return;
   }
 
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
   time_t pull_interval_sec = hpa_configure.metrics().pull_interval().seconds();
   if (pull_interval_sec <= 0) {
     pull_interval_sec = 60;
@@ -3529,7 +3561,7 @@ void logic_hpa_controller::setup_hpa_controller() {
     return;
   }
 
-  auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
+  const auto& hpa_configure = logic_config::me()->get_logic_cfg().hpa();
   hpa_discovery_data_->with_type_id = hpa_configure.controller().type_id();
   hpa_discovery_data_->with_type_name = hpa_configure.controller().type_name();
 
@@ -3539,7 +3571,7 @@ void logic_hpa_controller::setup_hpa_controller() {
   }
 
   // 用已有的服务发现初始化节点分布
-  for (auto& node : owner_app_->get_global_discovery().get_sorted_nodes()) {
+  for (const auto& node : owner_app_->get_global_discovery().get_sorted_nodes()) {
     if (!node) {
       continue;
     }
@@ -3640,7 +3672,9 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
   // 如果已有缓存则跳过
   if (hpa_discovery_data_->main_controller_flag_cache == main_controller_flag::kNo) {
     return false;
-  } else if (hpa_discovery_data_->main_controller_flag_cache == main_controller_flag::kYes) {
+  }
+
+  if (hpa_discovery_data_->main_controller_flag_cache == main_controller_flag::kYes) {
     return true;
   }
 
@@ -3649,7 +3683,7 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
     return false;
   }
 
-  auto& hpa_target_set = hpa_discovery_data_->discovery_set->get_sorted_nodes();
+  const auto& hpa_target_set = hpa_discovery_data_->discovery_set->get_sorted_nodes();
   if (hpa_target_set.empty()) {
     return false;
   }
@@ -3659,19 +3693,19 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
     std::pair<atfw::atapp::app_id_t, const std::string&> self_info{owner_app_->get_app_id(),
                                                                    owner_app_->get_app_name()};
 
-    auto iter = std::lower_bound(hpa_target_set.begin(), hpa_target_set.end(), self_info,
-                                 [](const atfw::atapp::etcd_discovery_node::ptr_t& data,
-                                    const std::pair<atfw::atapp::app_id_t, const std::string&>& info) {
-                                   if (!data) {
-                                     return false;
-                                   }
+    const auto iter = std::lower_bound(hpa_target_set.begin(), hpa_target_set.end(), self_info,
+                                       [](const atfw::atapp::etcd_discovery_node::ptr_t& data,
+                                          const std::pair<atfw::atapp::app_id_t, const std::string&>& info) {
+                                         if (!data) {
+                                           return false;
+                                         }
 
-                                   if (data->get_discovery_info().id() != info.first) {
-                                     return data->get_discovery_info().id() < info.first;
-                                   }
+                                         if (data->get_discovery_info().id() != info.first) {
+                                           return data->get_discovery_info().id() < info.first;
+                                         }
 
-                                   return data->get_discovery_info().name() < info.second;
-                                 });
+                                         return data->get_discovery_info().name() < info.second;
+                                       });
     if (iter == hpa_target_set.end()) {
       hpa_discovery_data_->controller_stateful_index.store(static_cast<int32_t>(hpa_target_set.size() + 1),
                                                            std::memory_order_release);
@@ -3690,7 +3724,7 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
     }
 
     // Check pod index flag
-    auto& labels = (*iter)->get_discovery_info().metadata().labels();
+    const auto& labels = (*iter)->get_discovery_info().metadata().labels();
     auto label_iter = labels.find(kLogicHpaDiscoveryLabelWithPodIndex);
     if (label_iter == labels.end()) {
       // 云下采用最后一个节点
@@ -3706,12 +3740,12 @@ bool logic_hpa_controller::is_main_hpa_controller() const noexcept {
       select_mode = "Cloud Native";
       select_controller_mode = main_controller_mode::kCloudNative;
       break;
-    } else {
-      // 云下采用最后一个节点
-      select_node = *iter;
-      select_mode = "Non-Native Cloud";
-      select_controller_mode = main_controller_mode::kNonNativeCloud;
     }
+
+    // 云下采用最后一个节点
+    select_node = *iter;
+    select_mode = "Non-Native Cloud";
+    select_controller_mode = main_controller_mode::kNonNativeCloud;
   }
 
   if (!select_node) {

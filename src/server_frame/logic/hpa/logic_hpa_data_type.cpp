@@ -12,10 +12,10 @@
 
 #include <memory/object_allocator.h>
 
-#include <algorithm>
-#include <cmath>
 #include <limits>
-#include <sstream>
+#include <memory>
+#include <string>
+#include <utility>
 
 #if !((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
 constexpr const int64_t logic_hpa_observable_value::kInt64NaN;
@@ -26,21 +26,25 @@ namespace {
 static int64_t pull_value_to_int64(const logic_hpa_pull_value& input) {
   if (absl::holds_alternative<int64_t>(input.value)) {
     return absl::get<int64_t>(input.value);
-  } else if (absl::holds_alternative<double>(input.value)) {
-    return static_cast<int64_t>(absl::get<double>(input.value) + std::numeric_limits<float>::epsilon());
-  } else {
-    return 0;
   }
+
+  if (absl::holds_alternative<double>(input.value)) {
+    return static_cast<int64_t>(absl::get<double>(input.value) + std::numeric_limits<float>::epsilon());
+  }
+
+  return 0;
 }
 
 static double pull_value_to_double(const logic_hpa_pull_value& input) {
   if (absl::holds_alternative<int64_t>(input.value)) {
     return static_cast<double>(absl::get<int64_t>(input.value));
-  } else if (absl::holds_alternative<double>(input.value)) {
-    return absl::get<double>(input.value);
-  } else {
-    return 0.0;
   }
+
+  if (absl::holds_alternative<double>(input.value)) {
+    return absl::get<double>(input.value);
+  }
+
+  return 0.0;
 }
 
 }  // namespace

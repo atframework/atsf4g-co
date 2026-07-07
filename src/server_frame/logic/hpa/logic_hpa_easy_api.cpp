@@ -34,12 +34,12 @@
 namespace {
 static void rebuild_enabled_services_cache(
     std::unordered_map<int32_t, const google::protobuf::FieldDescriptor*>& enabled_services) {
-  auto descriptor = PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::descriptor();
+  const auto* descriptor = PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg::descriptor();
   enabled_services.clear();
   enabled_services.reserve(static_cast<std::size_t>(descriptor->field_count()));
 
   for (int i = 0; i < descriptor->field_count(); ++i) {
-    auto fds = descriptor->field(i);
+    const auto* fds = descriptor->field(i);
     if (fds == nullptr) {
       continue;
     }
@@ -71,7 +71,8 @@ const atfw::atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t
   const PROJECT_NAMESPACE_ID::config::logic_discovery_selector_cfg& origin_cfg =
       logic_config::me()->get_logic_cfg().discovery_selector();
 
-  auto fds = origin_cfg.GetDescriptor()->FindFieldByNumber(type_id);
+  // NOLINTNEXTLINE(readability-static-accessed-through-instance)
+  const auto* fds = origin_cfg.GetDescriptor()->FindFieldByNumber(type_id);
   if (nullptr == fds) {
     return nullptr;
   }
@@ -84,11 +85,13 @@ const atfw::atapp::protocol::atapp_metadata* find_enabled_services_cache(int32_t
     return nullptr;
   }
 
+  // NOLINTNEXTLINE(readability-static-accessed-through-instance)
   if (!origin_cfg.GetReflection()->HasField(origin_cfg, fds)) {
     return nullptr;
   }
 
   return static_cast<const atfw::atapp::protocol::atapp_metadata*>(
+      // NOLINTNEXTLINE(readability-static-accessed-through-instance)
       &origin_cfg.GetReflection()->GetMessage(origin_cfg, fds));
 }
 }  // namespace
@@ -98,7 +101,7 @@ SERVER_FRAME_API const atfw::atapp::protocol::atapp_metadata* logic_hpa_discover
   static std::unordered_map<int32_t, const google::protobuf::FieldDescriptor*> enabled_services;
   static int64_t configure_version[2] = {0, 0};
 
-  auto& reload_time = logic_config::me()->get_logic_cfg().server().reload_timepoint();
+  const auto& reload_time = logic_config::me()->get_logic_cfg().server().reload_timepoint();
   if (reload_time.seconds() != configure_version[0] || reload_time.nanos() != configure_version[1]) {
     configure_version[0] = reload_time.seconds();
     configure_version[1] = reload_time.nanos();
@@ -129,16 +132,18 @@ SERVER_FRAME_API const atfw::atapp::protocol::atapp_metadata* logic_hpa_discover
       break;
   }
 
+  // NOLINTNEXTLINE(readability-static-accessed-through-instance)
   if (!use_cfg->GetReflection()->HasField(*use_cfg, fds_iter->second)) {
     return nullptr;
   }
 
+  // NOLINTNEXTLINE(readability-static-accessed-through-instance)
   return static_cast<const atfw::atapp::protocol::atapp_metadata*>(
       &use_cfg->GetReflection()->GetMessage(*use_cfg, fds_iter->second));
 }
 
 SERVER_FRAME_API bool logic_hpa_current_node_is_ready() noexcept {
-  auto mod = logic_server_last_common_module();
+  auto* mod = logic_server_last_common_module();
   if (nullptr == mod) {
     return false;
   }
@@ -151,7 +156,7 @@ SERVER_FRAME_API bool logic_hpa_current_node_is_ready() noexcept {
 }
 
 SERVER_FRAME_API bool logic_hpa_current_node_is_in_target() noexcept {
-  auto mod = logic_server_last_common_module();
+  auto* mod = logic_server_last_common_module();
   if (nullptr == mod) {
     return false;
   }

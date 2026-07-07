@@ -42,9 +42,14 @@
 
 #include <cstring>
 #include <limits>
+#include <list>
+#include <memory>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "logic/hpa/logic_hpa_controller.h"
 #include "logic/hpa/logic_hpa_observer.h"
@@ -65,7 +70,7 @@ class ATFW_UTIL_SYMBOL_LOCAL logic_hpa_policy_local_key_value_view final
       : shared_{&shared}, privated_{&priv} {
     cached_size_ = privated_->size();
 
-    for (auto& kv : *shared_) {
+    for (const auto& kv : *shared_) {
       if (privated_->end() == privated_->find(kv.first)) {
         ++cached_size_;
       }
@@ -76,13 +81,13 @@ class ATFW_UTIL_SYMBOL_LOCAL logic_hpa_policy_local_key_value_view final
   bool ForEachKeyValue(
       opentelemetry::nostd::function_ref<bool(opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue)>
           callback) const noexcept override {
-    for (auto& kv : *privated_) {
+    for (const auto& kv : *privated_) {
       if (!callback(kv.first, kv.second)) {
         return false;
       }
     }
 
-    for (auto& kv : *shared_) {
+    for (const auto& kv : *shared_) {
       if (privated_->end() == privated_->find(kv.first)) {
         if (!callback(kv.first, kv.second)) {
           return false;
@@ -133,11 +138,13 @@ static std::string convert_to_prometheus_duration_value(const google::protobuf::
   }
   if (duration_sec % 3600 == 0) {
     return util::log::format("{}h", duration_sec / 3600);
-  } else if (duration_sec % 60 == 0) {
-    return util::log::format("{}m", duration_sec / 60);
-  } else {
-    return util::log::format("{}s", duration_sec);
   }
+
+  if (duration_sec % 60 == 0) {
+    return util::log::format("{}m", duration_sec / 60);
+  }
+
+  return util::log::format("{}s", duration_sec);
 }
 
 static std::string build_attribute_hint(
@@ -193,6 +200,7 @@ struct logic_hpa_policy::observable_callback_custom_data {
   observable_callback_custom_data() {}
 };
 
+// NOLINTBEGIN(cppcoreguidelines-prefer-member-initializer)
 SERVER_FRAME_API logic_hpa_policy::logic_hpa_policy(
     logic_hpa_controller& controller, const std::shared_ptr<rpc::telemetry::group_type>& telemetry_group,
     const PROJECT_NAMESPACE_ID::config::logic_hpa_cfg& hpa_cfg,
@@ -244,12 +252,12 @@ SERVER_FRAME_API logic_hpa_policy::logic_hpa_policy(
   // 生成labels
   attributes_lifetime_.reserve(common_attributes_reference.size() + static_cast<size_t>(policy_cfg.labels().size()));
   attributes_reference_.reserve(common_attributes_reference.size() + static_cast<size_t>(policy_cfg.labels().size()));
-  for (auto& kv : common_attributes_reference) {
+  for (const auto& kv : common_attributes_reference) {
     auto& attribute_with_lifetime = attributes_lifetime_[kv.first];
     attribute_with_lifetime = rpc::telemetry::opentelemetry_utility::convert_attribute_value_to_string(kv.second);
     attributes_reference_[kv.first] = attribute_with_lifetime;
   }
-  for (auto& kv : policy_cfg.labels()) {
+  for (const auto& kv : policy_cfg.labels()) {
     std::string sanitize_key =
         rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(kv.first, true);
     attributes_lifetime_[sanitize_key] = kv.second;
@@ -259,20 +267,20 @@ SERVER_FRAME_API logic_hpa_policy::logic_hpa_policy(
   // 生成selectors
   std::unordered_set<std::string> ignore_selectors;
   ignore_selectors.reserve(static_cast<size_t>(policy_cfg.without_auto_selectors_size()));
-  for (auto& ignore_selector : policy_cfg.without_auto_selectors()) {
+  for (const auto& ignore_selector : policy_cfg.without_auto_selectors()) {
     ignore_selectors.insert(
         rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(ignore_selector, true));
   }
   size_t selectors_size = static_cast<size_t>(policy_cfg.selectors_size());
   selectors_.reserve(common_selectors.size() + selectors_size);
-  for (auto& kv : common_selectors) {
+  for (const auto& kv : common_selectors) {
     if (ignore_selectors.end() != ignore_selectors.find(kv.first)) {
       continue;
     }
 
     selectors_[kv.first] = convert_to_prometheus_label_value(kv.second);
   }
-  for (auto& kv : policy_cfg.selectors()) {
+  for (const auto& kv : policy_cfg.selectors()) {
     std::string sanitize_key =
         rpc::telemetry::exporter::metrics::PrometheusUtility::SanitizePrometheusName(kv.first, true);
     // 如果没有显式设置且要忽略则跳过
@@ -295,6 +303,7 @@ SERVER_FRAME_API logic_hpa_policy::logic_hpa_policy(
   // 创建 puller
   puller_ = logic_hpa_puller_factory::make_new_instance(*this, telemetry_group, hpa_cfg, policy_cfg);
 }
+// NOLINTEND(cppcoreguidelines-prefer-member-initializer)
 
 SERVER_FRAME_API logic_hpa_policy::~logic_hpa_policy() {
   puller_.reset();
@@ -528,7 +537,7 @@ void logic_hpa_policy::make_query_simple_function(std::list<gsl::string_view>& q
                                                   const PROJECT_NAMESPACE_ID::config::logic_hpa_policy& policy_cfg) {
   // 封装一些常用的简单数据操作函数
   // @see https://prometheus.io/docs/prometheus/latest/querying/functions/
-  for (auto& func : policy_cfg.simple_function()) {
+  for (const auto& func : policy_cfg.simple_function()) {
     switch (func.function_type_case()) {
       case PROJECT_NAMESPACE_ID::config::logic_hpa_policy_simple_function::kRate: {
         if (func.rate().seconds() <= 0) {
@@ -686,7 +695,7 @@ void logic_hpa_policy::make_query_aggregation_operator(
     const char* begin = "";
     if (policy_cfg.aggregation_parameter().has_by()) {
       begin = " by (";
-      for (auto& label : policy_cfg.aggregation_parameter().by().labels()) {
+      for (const auto& label : policy_cfg.aggregation_parameter().by().labels()) {
         if (label.empty()) {
           continue;
         }
@@ -695,7 +704,7 @@ void logic_hpa_policy::make_query_aggregation_operator(
       }
     } else if (policy_cfg.aggregation_parameter().has_without()) {
       begin = " without (";
-      for (auto& label : policy_cfg.aggregation_parameter().without().labels()) {
+      for (const auto& label : policy_cfg.aggregation_parameter().without().labels()) {
         if (label.empty()) {
           continue;
         }
@@ -1223,13 +1232,13 @@ SERVER_FRAME_API bool logic_hpa_policy::is_pulling_available() const noexcept {
   }
 
   // 任意回调是激活状态，则需要拉取数据触发拉取回调
-  for (auto& callback : event_on_pull_range_callback_list_.callbacks) {
+  for (const auto& callback : event_on_pull_range_callback_list_.callbacks) {
     if (callback.active == logic_hpa_event_active_type::kActive) {
       return true;
     }
   }
 
-  for (auto& callback : event_on_pull_instant_callback_list_.callbacks) {
+  for (const auto& callback : event_on_pull_instant_callback_list_.callbacks) {
     if (callback.active == logic_hpa_event_active_type::kActive) {
       return true;
     }
@@ -1398,6 +1407,7 @@ SERVER_FRAME_API logic_hpa_policy::event_callback_on_ready_handle logic_hpa_poli
 
   return {
       event_on_ready_callback_.callbacks.emplace(event_on_ready_callback_.callbacks.end(),
+                                                 // NOLINTNEXTLINE(modernize-use-emplace)
                                                  event_callback_data<event_callback_on_ready>{std::move(fn), active}),
       event_on_ready_callback_.version};
 }
@@ -1507,7 +1517,7 @@ SERVER_FRAME_API void logic_hpa_policy::trigger_event_on_pull_result(logic_hpa_p
       gsl::span<const std::unique_ptr<logic_hpa_pull_range_record>> param = result.get_range_records();
       std::vector<std::unique_ptr<logic_hpa_pull_instant_record>> reduce_instant_record;
       reduce_instant_record.reserve(param.size());
-      for (auto& record : param) {
+      for (const auto& record : param) {
         if (!record) {
           continue;
         }
