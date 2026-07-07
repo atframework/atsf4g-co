@@ -27,12 +27,16 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <utility/protobuf_mini_dumper.h>
+
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 
 #include "app/handle_ss_rpc_dtmqproxysvrservice.atfw.gen.h"
+#include "logic/mq_channel_manager.h"
 
 namespace {
 class main_service_module : public atfw::atapp::module_impl {
@@ -44,17 +48,70 @@ class main_service_module : public atfw::atapp::module_impl {
 
     // register handles
     INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrservice);
+    INIT_CALL(mq_channel_manager);
+
+    // 设置依赖，阻止数据库和ss通信模块在chat_channel_manager前退出
+    auto suspend_stop_callback = []() -> bool {
+      if (mq_channel_manager::is_instance_destroyed()) {
+        return false;
+      }
+
+      if (!mq_channel_manager::me()->is_can_stopped()) {
+        return true;
+      }
+
+      return false;
+    };
+    auto suspend_timeout = protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+        get_app()->get_origin_configure().timer().stop_timeout());
+
+    auto *common_mod = logic_server_last_common_module();
+    if (nullptr != common_mod) {
+      common_mod->suspend_stop(suspend_timeout, suspend_stop_callback);
+
+      // TODO(owent): 等接入 prestop 流程后增加这个,prestop流程应该由 schedule-hpa-node-shutdown 指令联动触发
+      // common_mod->add_prestop_callback(
+      //     []() -> int32_t {
+      //       atapp::app *current_app = atapp::app::get_last_instance();
+      //       if (current_app != nullptr) {
+      //         mq_channel_manager::me()->pre_stoping();
+      //         return 0;
+      //       }
+      //       FWLOGERROR("can not find logic_server_common_module when pre_stop");
+      //       return -1;
+      //     },
+      //     "stop_all_channel");
+    }
+
     return 0;
   };
 
   const char *name() const override { return "main_service_module"; }
 
-  int tick() override {
-    int ret = 0;
-    return ret;
+  int tick() override { return mq_channel_manager::me()->tick(); }
+
+  int stop() override {
+    if (!mq_channel_manager::me()->is_self_stateful_active()) {
+      return 0;
+    }
+    return -1;
   }
 
-  int stop() override { return 0; }
+  void ready() override {}
+
+  int reload() override {
+    int ret = 0;
+    if (!is_actived()) {
+      // app::init时会调用这个接口,此时某些模块没有加载表是不能reload的,挡住init时的调用
+      return ret;
+    }
+
+    // 只有在通过CMD RELOAD时才会调用到此处
+    FWLOGINFO("MAIN SERVER MODULE RELOAD");
+
+    RELOAD_CALL(ret, mq_channel_manager);
+    return ret;
+  }
 };
 }  // namespace
 

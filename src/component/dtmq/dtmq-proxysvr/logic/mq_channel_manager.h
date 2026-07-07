@@ -48,7 +48,7 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   int reload();
   int tick();
 
-  void pre_stoping();
+  void pre_stoping() noexcept;
   int stop();
   bool is_stoping() const noexcept;
   bool is_can_stopped() const noexcept;

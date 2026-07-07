@@ -17,7 +17,23 @@ mq_channel_manager::mq_channel_manager()
 
 mq_channel_manager::~mq_channel_manager() {}
 
+int mq_channel_manager::init() { return 0; }
+
+int mq_channel_manager::reload() { return 0; }
+
+int mq_channel_manager::tick() { return 0; }
+
+void mq_channel_manager::pre_stoping() noexcept { is_pre_stoping_ = true; }
+
+int mq_channel_manager::stop() { return 0; }
+
 bool mq_channel_manager::is_stoping() const noexcept { return is_stoping_; }
+
+bool mq_channel_manager::is_can_stopped() const noexcept {
+  return is_stoping_ && pending_io_channels_.empty() && pending_save_channels_.empty();
+}
+
+bool mq_channel_manager::is_self_stateful_active() const noexcept { return is_self_stateful_active_; }
 
 void mq_channel_manager::update_timer(mq_channel& /*mq_channel*/,
                                       mq_channel_timer_type::timer_wptr_t& /*output_handle*/,
