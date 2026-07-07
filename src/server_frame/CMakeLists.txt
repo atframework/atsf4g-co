@@ -106,7 +106,7 @@ generate_for_pb_add_custom_configure(
   "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako"
 )
 
-set(PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES
+list(APPEND PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES
     "${PROJECT_NAMESPACE}.RouterService"
     "${PROJECT_NAMESPACE}.LogicCommonService"
     "db_code_generate_local"

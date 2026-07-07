@@ -5,11 +5,13 @@ file(GLOB PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_EXTENSION
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/extension/*.proto"
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/extension/*.proto")
 project_server_frame_create_protocol_sandbox(
+  "PROTOCOL_SANDBOX_TARGET_extension"
   "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}/protocol/extension"
   PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_EXTENSION ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_EXTENSION}
   "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_REPO_DIR}/pb_extension/xrescode_extensions_v3.proto")
 
 project_server_frame_create_protocol_sandbox(
+  "PROTOCOL_SANDBOX_TARGET_extensionV3"
   "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EXTENSION_DIR}/protocol/extension/v3"
   PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_EXTENSION
   "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/extensions/v3/xresloader.proto"
@@ -31,6 +33,7 @@ file(GLOB PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_COMMON
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/common/*.proto"
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/common/*.proto")
 project_server_frame_create_protocol_sandbox(
+  "PROTOCOL_SANDBOX_TARGET_common"
   "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_COMMON_DIR}/protocol/common" PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_COMMON
   ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_COMMON})
 
@@ -57,6 +60,7 @@ file(GLOB PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_CONFIG
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/config/*.proto"
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/config/*.proto")
 project_server_frame_create_protocol_sandbox(
+  "PROTOCOL_SANDBOX_TARGET_config"
   "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}/protocol/config" PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG
   ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_CONFIG} "${PROJECT_THIRD_PARTY_XRESLOADER_PROTO_DIR}/pb_header_v3.proto")
 list(REMOVE_DUPLICATES PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_CONFIG)
@@ -215,6 +219,7 @@ file(GLOB PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_PBDESC
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/pbdesc/*.proto"
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/protocol/pbdesc/*.proto")
 project_server_frame_create_protocol_sandbox(
+  "PROTOCOL_SANDBOX_TARGET_pbdesc"
   "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}/protocol/pbdesc" PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_PBDESC
   ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_PBDESC})
 
@@ -240,6 +245,7 @@ project_server_frame_create_protocol_target(
 file(GLOB PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_LOG
      "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/private/protocol/log/*.proto")
 project_server_frame_create_protocol_sandbox(
+  "PROTOCOL_SANDBOX_TARGET_log"
   "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_LOG_DIR}/protocol/log" PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_LOG
   ${PROJECT_SERVER_FRAME_PROTO_ORIGIN_LIST_LOG})
 list(REMOVE_DUPLICATES PROJECT_SERVER_FRAME_PROTO_SANDBOX_LIST_LOG)
@@ -338,6 +344,8 @@ add_custom_target(protocol)
 foreach(PROJECT_SERVER_FRAME_PROTO_SUB_TARGET protocol-extension protocol-common protocol-config protocol-net protocol-log)
   add_dependencies(protocol ${PROJECT_SERVER_FRAME_PROTO_SUB_TARGET})
 endforeach()
+add_dependencies(protocol PROTOCOL_SANDBOX_TARGET_extension PROTOCOL_SANDBOX_TARGET_extensionV3 PROTOCOL_SANDBOX_TARGET_common
+             PROTOCOL_SANDBOX_TARGET_config PROTOCOL_SANDBOX_TARGET_pbdesc PROTOCOL_SANDBOX_TARGET_log)
 set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
 
 add_library(${PROJECT_SERVER_FRAME_LIB_LINK}-protocol INTERFACE)

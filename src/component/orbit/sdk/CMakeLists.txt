@@ -8,11 +8,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-agent-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.ControllerToServerService"
-  HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.atfw.gen.h"
-  SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/agent/rpc/controllertoagentservice/controllertoagentservice.atfw.gen.cpp")
+  "orbit.ControllerToAgentService")
 
 project_component_declare_sdk(
   "orbit-agent-controller-sdk"
@@ -24,11 +20,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-controller-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.AgentToControllerService"
-  HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.h"
-  SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.cpp")
+  "orbit.AgentToControllerService")
 
 project_component_declare_sdk(
   "orbit-agent-client-sdk"
@@ -40,11 +32,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-client-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.AgentToClientService"
-  HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.atfw.gen.h"
-  SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/client/rpc/agenttoclientservice/agenttoclientservice.atfw.gen.cpp")
+  "orbit.AgentToClientService")
 
 project_component_declare_sdk(
   "orbit-server-controller-sdk"
@@ -56,15 +44,11 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-server-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.ServerToControllerService"
-  HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.h"
-  SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/controller/rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.cpp")
+  "orbit.ServerToControllerService")
 
 project_component_declare_sdk(
   "orbit-controller-server-sdk"
-  "${CMAKE_CURRENT_LIST_DIR}/server"
+  "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice"
   INCLUDE_DIR
   "${CMAKE_CURRENT_LIST_DIR}/server"
   DLLEXPORT_DECL
@@ -72,11 +56,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-server-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.ControllerToServerService"
-  HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.atfw.gen.h"
-  SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/server/rpc/controllertoserverservice/controllertoserverservice.atfw.gen.cpp")
+  "orbit.ControllerToServerService")
 
 project_component_declare_sdk(
   "orbit-server-sdk"
@@ -94,7 +74,6 @@ project_component_declare_sdk(
   GENERATED_FLOW_NAMES
   "orbit.ControllerToServerService"
   HEADERS
-  "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.atfw.gen.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_server_manager.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/task_action_orbit_req_base.h"
@@ -103,7 +82,6 @@ project_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_start_notify.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/action/task_action_client_agent_heartbeat.h"
   SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/server/handle/handle_ss_rpc_controllertoserverservice.atfw.gen.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_server_manager.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/task_action_orbit_req_base.cpp"

@@ -491,7 +491,7 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
       GENERATED_FLOW_NAMES)
   cmake_parse_arguments(project_component_declare_service "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  generate_for_pb_collect_output_from_flows("${project_component_declare_sdk_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
+  generate_for_pb_collect_output_from_flows("${project_component_declare_service_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
   generate_for_pb_collect_filtered_output_files(
     "${SERVICE_ROOT_DIR}"
     "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}"

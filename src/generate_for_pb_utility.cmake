@@ -359,20 +359,19 @@ function(generate_for_pb_collect_filtered_output_files ROOT_DIR OUTPUT_FILES SOU
     if(IS_ABSOLUTE "${_generate_for_pb_output_file}")
       set(_generate_for_pb_output_file_abs "${_generate_for_pb_output_file}")
     else()
-      get_filename_component(_generate_for_pb_output_file_abs "${_generate_for_pb_output_file}" ABSOLUTE BASE_DIR
-                             "${_generate_for_pb_root_dir}")
+      get_filename_component(_generate_for_pb_output_file_abs "${_generate_for_pb_output_file}" ABSOLUTE BASE_DIR "${_generate_for_pb_root_dir}")
     endif()
 
-    file(RELATIVE_PATH _generate_for_pb_relative_path "${_generate_for_pb_root_dir}"
-         "${_generate_for_pb_output_file_abs}")
+    file(RELATIVE_PATH _generate_for_pb_relative_path "${_generate_for_pb_root_dir}" "${_generate_for_pb_output_file_abs}")
+    
     if(_generate_for_pb_relative_path MATCHES "^\\.\\.([/\\\\]|$)")
       continue()
     endif()
 
-    if(_generate_for_pb_output_file MATCHES "\\.(c|cc|cpp|cxx)$")
-      list(APPEND _generate_for_pb_filtered_source_files "${_generate_for_pb_output_file}")
-    elseif(_generate_for_pb_output_file MATCHES "\\.(h|hh|hpp|hxx)$")
-      list(APPEND _generate_for_pb_filtered_header_files "${_generate_for_pb_output_file}")
+    if(_generate_for_pb_output_file_abs MATCHES "\\.(c|cc|cpp|cxx)$")
+      list(APPEND _generate_for_pb_filtered_source_files "${_generate_for_pb_output_file_abs}")
+    elseif(_generate_for_pb_output_file_abs MATCHES "\\.(h|hh|hpp|hxx)$")
+      list(APPEND _generate_for_pb_filtered_header_files "${_generate_for_pb_output_file_abs}")
     endif()
   endforeach()
 
@@ -383,12 +382,8 @@ function(generate_for_pb_collect_filtered_output_files ROOT_DIR OUTPUT_FILES SOU
     list(REMOVE_DUPLICATES _generate_for_pb_filtered_header_files)
   endif()
 
-  set(${SOURCE_OUTPUT_VAR}
-      "${_generate_for_pb_filtered_source_files}"
-      PARENT_SCOPE)
-  set(${HEADER_OUTPUT_VAR}
-      "${_generate_for_pb_filtered_header_files}"
-      PARENT_SCOPE)
+  set(${SOURCE_OUTPUT_VAR} "${_generate_for_pb_filtered_source_files}" PARENT_SCOPE)
+  set(${HEADER_OUTPUT_VAR} "${_generate_for_pb_filtered_header_files}" PARENT_SCOPE)
 endfunction()
 
 function(generate_for_pb_collect_output_from_flows FLOW_NAMES OUTPUT_VAR)
@@ -400,6 +395,10 @@ function(generate_for_pb_collect_output_from_flows FLOW_NAMES OUTPUT_VAR)
     get_target_property(_generate_for_pb_flow_outputs "${_generate_for_pb_flow_target_name}" "OUTPUT_FILE")
     list(APPEND _generate_for_pb_all_outputs ${_generate_for_pb_flow_outputs})
   endforeach()
+  if(_generate_for_pb_all_outputs)
+    list(REMOVE_DUPLICATES _generate_for_pb_all_outputs)
+    set(${OUTPUT_VAR} "${_generate_for_pb_all_outputs}" PARENT_SCOPE)
+  endif()
 endfunction()
 
 function(generate_for_pb_add_dependencies TARGET_NAME FLOW_NAMES)
