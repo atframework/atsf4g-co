@@ -163,10 +163,11 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
       # Protocol buffer files
       ${project_server_frame_create_protocol_target_PROTOCOLS} ${ADDITIONAL_CMAKE_COMMANDS}
     COMMAND "${CMAKE_COMMAND}" -E remove -f ${TEMPORARY_CODE_FILES}
+    COMMAND "${CMAKE_COMMAND}" -E touch ${HEADERS} ${SOURCES}
     WORKING_DIRECTORY "${SANDBOX_PATH}"
     DEPENDS ${project_server_frame_create_protocol_target_PROTOCOLS}
             ${project_server_frame_create_protocol_target_DEPENDS}
-    COMMENT "Generate [@${SANDBOX_PATH}] ${project_server_frame_create_protocol_target_PROTOCOLS}")
+    COMMENT "Generate [@${SANDBOX_PATH}] [${project_server_frame_create_protocol_target_PROTOCOLS}] [${project_server_frame_create_protocol_target_DEPENDS}]")
 
   add_custom_target(
     ${TARGET_NAME}
@@ -283,6 +284,7 @@ function(project_server_frame_create_protocol_sandbox TARGET_NAME OUTPUT_DIR OUT
           OUTPUT "${OUTPUT_FILE}"
           DEPENDS "${PROTO_FILE}"
           COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROTO_FILE}" "${OUTPUT_FILE}"
+          COMMAND "${CMAKE_COMMAND}" -E touch "${OUTPUT_FILE}"
           COMMENT "Copying updated proto: ${PROTO_NAME}"
           VERBATIM
       )
