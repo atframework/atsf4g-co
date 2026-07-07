@@ -38,7 +38,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "config/excel/config_easy_api.h"
 #include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
 
@@ -1694,7 +1693,7 @@ bool mq_channel::downgrade_to_readable() noexcept {
 void mq_channel::send_oss(rpc::context& /*ctx*/, const std::string& /*action*/, int32_t /*ret*/,
                           uint64_t /*transfer_to*/) {
   // FIXME: 这里需要发送OSS日志，暂时注释掉
-  // telemetry_oss_player_information user;
+  // telemetry_oss_user_information user;
   // user.zone_id = logic_config::me()->get_local_zone_id();
   //
   // rpc::context::message_holder<PROJECT_NAMESPACE_ID::oss::DtmqChannel> oss_log{ctx};

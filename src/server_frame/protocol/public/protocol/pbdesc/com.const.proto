@@ -303,6 +303,8 @@ enum EnErrorCode {
                                   [(error_code.description) = "消息队列频道未找到"];
   EN_ERR_DTMQ_MAIN_REPLICATE_SWITCH = -705
                                       [(error_code.description) = "消息队列服务主备切换中"];
+  EN_ERR_DTMQ_MESSAGE_NOT_FOUND = -706
+                                  [(error_code.description) = "消息未找到"];
 
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

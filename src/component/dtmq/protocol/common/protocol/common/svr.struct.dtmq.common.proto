@@ -27,11 +27,9 @@ message channel_subscriber {
 
 message channel_page_info {
   // 页码
-  int32 page_number = 1;
+  int32 page_start_sequence = 1;
   // 每页数量
   int32 page_size = 2;
-  // 页数
-  int32 page_count = 3;
-  // 总数量
-  int32 total_count = 4;
+  // 是否有更多数据
+  bool page_more = 3;
 }

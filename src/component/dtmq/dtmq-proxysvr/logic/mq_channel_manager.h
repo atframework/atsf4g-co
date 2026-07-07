@@ -56,13 +56,13 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   void update_timer(mq_channel& mq_channel, mq_channel_timer_type::timer_wptr_t& output_handle,
                     std::chrono::system_clock::duration timeout);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_channel(rpc::context& ctx, mq_channel_ptr_type& mq_channel,
-                                                                    const atfw::dtmq::DChannelIdKey& mq_channel_key,
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_channel(rpc::context& ctx, mq_channel_ptr_type& channel,
+                                                                    const atfw::dtmq::DChannelIdKey& channel_key,
                                                                     const atfw::dtmq::DChannelConfigure& configure);
 
-  void add_channel(rpc::context& ctx, const mq_channel_ptr_type& mq_channel);
+  void add_channel(rpc::context& ctx, const mq_channel_ptr_type& channel);
 
-  void remove_channel(const std::string& mq_channel_id, const mq_channel* except);
+  void remove_channel(const std::string& channel_id, const mq_channel* except);
 
   /**
    * @brief 获取可写的channel，如果不存在或不可写则走提升写流程
@@ -74,9 +74,11 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
    * @param auto_create 不存在是否允许自动创建
    * @return 0或RPC错误码
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_writable_channel(
-      rpc::context& ctx, mq_channel_ptr_type& mq_channel_ptr, uint64_t& forward_server_id,
-      const atfw::dtmq::DChannelIdKey& mq_channel_key, bool auto_create);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_writable_channel(rpc::context& ctx,
+                                                                           mq_channel_ptr_type& channel_ptr,
+                                                                           uint64_t& forward_server_id,
+                                                                           const atfw::dtmq::DChannelIdKey& channel_key,
+                                                                           bool auto_create);
 
   /**
    * @brief 获取可读的channel，如果不存在或不可写则走提升读流程
@@ -90,32 +92,35 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
    * @param auto_create 不存在是否允许自动创建
    * @return 0或RPC错误码
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_readable_channel(
-      rpc::context& ctx, mq_channel_ptr_type& mq_channel_ptr, uint64_t& forward_server_id,
-      const atfw::dtmq::DChannelIdKey& mq_channel_key, size_t replicate_index, bool auto_create);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_readable_channel(rpc::context& ctx,
+                                                                           mq_channel_ptr_type& channel_ptr,
+                                                                           uint64_t& forward_server_id,
+                                                                           const atfw::dtmq::DChannelIdKey& channel_key,
+                                                                           size_t replicate_index, bool auto_create);
 
-  mq_channel_ptr_type get_channel(const std::string& mq_channel_id) const noexcept;
+  mq_channel_ptr_type get_channel(const std::string& channel_id) const noexcept;
 
   void set_more_transfer() noexcept;
 
   inline int64_t get_dtmq_proxysvr_etcd_revision() { return dtmq_proxysvr_distribute_etcd_revision_; }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type find_message(rpc::context& ctx,
-                                                                  const mq_channel_ptr_type& mq_channel,
-                                                                  int64_t sequence, atfw::dtmq::DChannelMessage& msg);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type page_query_message(
-      rpc::context& ctx, const mq_channel_ptr_type& mq_channel, atfw::dtmq::channel_page_info& page_info,
+  ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type find_message(rpc::context& ctx,
+                                                                         const mq_channel_ptr_type& channel,
+                                                                         int64_t sequence,
+                                                                         atfw::dtmq::DChannelMessage& msg);
+  ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type page_query_message(
+      rpc::context& ctx, const mq_channel_ptr_type& channel, atfw::dtmq::channel_page_info& page_info,
       google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
 
  private:
   // 持久化dirty_channel
   void aysnc_save_dirty_channel();
   // 重新balance聊天频道分布
-  void resolve_mq_channel_distribution();
+  void resolve_channel_distribution();
   // 更新当前节点不可用
   void update_self_stateful_inactive();
 
-  void report_mq_channel_qty_oss();
+  void report_channel_qty_oss();
 
  private:
   std::chrono::system_clock::time_point resolve_channel_distribution_timepoint_;
@@ -123,7 +128,7 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   int64_t dtmq_proxysvr_distribute_etcd_revision_;
   mq_channel_timer_type timers_;
   std::unordered_map<std::string, mq_channel_ptr_type> channels_;
-  std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> mq_channel_configure_;
+  std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> channel_configure_;
   std::list<mq_channel_ptr_type> pending_io_channels_;
   std::list<mq_channel_ptr_type> pending_save_channels_;
   bool more_transfer_now_;
@@ -131,5 +136,5 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   bool is_pre_stoping_;
   bool is_self_stateful_active_;
 
-  int64_t report_mq_channel_qty_time_;
+  std::chrono::system_clock::time_point report_channel_qty_time_;
 };

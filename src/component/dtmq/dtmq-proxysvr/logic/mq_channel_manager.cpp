@@ -5,12 +5,31 @@
 
 #include <atframe/modules/service_discovery_module.h>
 
+#include <config/excel_config_dtmq_index.h>
 #include <config/extern_service_types.h>
 
 #include <logic/logic_server_setup.h>
 
+#include <rpc/rpc_context.h>
+
+#include <chrono>
 #include <memory>
 #include <string>
+#include <unordered_set>
+
+#include "data/mq_channel.h"
+#include "protocol/pbdesc/com.const.pb.h"
+
+namespace {
+template <class Rep, class Period>
+static time_t chrono_to_timer_tick(std::chrono::duration<Rep, Period> d) {
+  return static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(d).count() / 100);
+}
+
+static time_t chrono_to_timer_tick(std::chrono::system_clock::time_point tp) {
+  return chrono_to_timer_tick(tp.time_since_epoch());
+}
+}  // namespace
 
 mq_channel_manager::mq_channel_manager()
     : resolve_channel_distribution_timepoint_(std::chrono::system_clock::from_time_t(0)),
@@ -20,13 +39,13 @@ mq_channel_manager::mq_channel_manager()
       is_stoping_(false),
       is_pre_stoping_(false),
       is_self_stateful_active_(false),
-      report_mq_channel_qty_time_(0) {}
+      report_channel_qty_time_(std::chrono::system_clock::from_time_t(0)) {}
 
 mq_channel_manager::~mq_channel_manager() {}
 
 int mq_channel_manager::init() {
-  time_t now = util::time::time_utility::get_now();
-  timers_.init(now);
+  auto now = atfw::util::time::time_utility::now();
+  timers_.init(chrono_to_timer_tick(now));
 
   logic_server_common_module* common_mod = logic_server_last_common_module();
   if (nullptr == common_mod) {
@@ -80,13 +99,98 @@ int mq_channel_manager::init() {
   return 0;
 }
 
-int mq_channel_manager::reload() { return 0; }
+int mq_channel_manager::reload() {
+  for (const auto& channel : channels_) {
+    auto channel_configure = excel::get_dtmq_channel_configure(channel.second->get_channel_key().channel_type());
+    if (!channel_configure) {
+      FWLOGWARNING("reload channel {} configure of type {} not found.", channel.second->get_channel_key().channel_id(),
+                   channel.second->get_channel_key().channel_type());
+      continue;
+    }
+    channel.second->reload_configure(*channel_configure);
+  }
+  FWLOGINFO("reload channel configure done.");
+  return 0;
+}
 
-int mq_channel_manager::tick() { return 0; }
+int mq_channel_manager::tick() {
+  auto now = util::time::time_utility::now();
+  int ret = 0;
+
+  auto last_tick = chrono_to_timer_tick(last_tick_timepoint_);
+  auto now_tick = chrono_to_timer_tick(now);
+  if (last_tick == now_tick) {
+    if (more_transfer_now_) {
+      resolve_channel_distribution();
+    }
+    return ret;
+  }
+
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
+  if (now > report_channel_qty_time_) {
+    report_channel_qty_time_ = now + protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+                                         dtmq_proxysvr_cfg.report_channel_qty_tick());
+    report_channel_qty_oss();
+  }
+
+  if (last_tick / (10 * util::time::time_utility::MINITE_SECONDS) !=
+      now_tick / (10 * util::time::time_utility::MINITE_SECONDS)) {
+    FWLOGINFO("[STATICS]: mq channel count: {}, timer count: {}", channels_.size(), timers_.size());
+  }
+  last_tick_timepoint_ = now;
+  int res = timers_.tick(now_tick);
+  if (res < 0) {
+    FWLOGERROR("jiffies_timer tick error, res: {}", res);
+  } else {
+    ret += res;
+  }
+
+  // 处理节点预下线的逻辑
+  if (is_pre_stoping_ && !is_stoping_) {
+    logic_server_common_module* common_mod = logic_server_last_common_module();
+    if (nullptr == common_mod) {
+      FWLOGERROR("can not find logic_server_common_module after pre_stop in tick");
+      return -1;
+    }
+    if (!common_mod->is_runtime_active()) {
+      // 节点已下线
+      FWLOGDEBUG("[channel_stop] self runtime activity is false, begin to stop");
+      stop();
+    }
+  }
+
+  {
+    resolve_channel_distribution();
+    aysnc_save_dirty_channel();
+
+    update_self_stateful_inactive();
+  }
+  return ret;
+}
 
 void mq_channel_manager::pre_stoping() noexcept { is_pre_stoping_ = true; }
 
-int mq_channel_manager::stop() { return 0; }
+int mq_channel_manager::stop() {
+  if (!is_stoping_) {
+    is_stoping_ = true;
+    pending_save_channels_.clear();
+
+    for (const auto& channel : channels_) {
+      if (!channel.second->is_readonly() && channel.second->need_transfer()) {
+        pending_io_channels_.push_back(channel.second);
+        FWLOGDEBUG("[channel_stop] pending_io_channels_ add channel({})", channel.second->get_channel_id());
+      } else if (!channel.second->is_readonly() && channel.second->need_save_db()) {
+        // is_dirty_ && transfer_target == 0 ==》需要对channel进行持久化
+        pending_save_channels_.push_back(channel.second);
+        FWLOGDEBUG("[channel_stop] pending_save_channels_ add channel({})", channel.second->get_channel_id());
+      }
+    }
+  }
+
+  return (pending_io_channels_.empty() && pending_save_channels_.empty()) ? 0 : 1;
+}
 
 bool mq_channel_manager::is_stoping() const noexcept { return is_stoping_; }
 
@@ -96,18 +200,397 @@ bool mq_channel_manager::is_can_stopped() const noexcept {
 
 bool mq_channel_manager::is_self_stateful_active() const noexcept { return is_self_stateful_active_; }
 
-void mq_channel_manager::update_timer(mq_channel& /*mq_channel*/,
-                                      mq_channel_timer_type::timer_wptr_t& /*output_handle*/,
-                                      std::chrono::system_clock::duration /*timeout*/) {
-  // TODO(owent):
+void mq_channel_manager::update_timer(mq_channel& channel, mq_channel_timer_type::timer_wptr_t& output_handle,
+                                      std::chrono::system_clock::duration timeout) {
+  FWLOGDEBUG("channel({}) update_timer({})", channel.get_channel_id(), timeout);
+
+  atfw::util::memory::weak_rc_ptr<mq_channel> watcher = channel.shared_from_this();
+  timers_.add_timer(
+      chrono_to_timer_tick(timeout),
+      [watcher](time_t /*tick*/, const mq_channel_timer_type::timer_t&) {
+        auto channel_ptr = watcher.lock();
+        if (channel_ptr) {
+          rpc::context ctx{rpc::context::create_without_task()};
+          mq_channel::mq_channel_accessor::update_timer(*channel_ptr, ctx);
+        }
+      },
+      &output_handle);
 }
 
-void mq_channel_manager::add_channel(rpc::context& /*ctx*/, const mq_channel_ptr_type& /*mq_channel*/) {
-  // TODO(owent):
+rpc::result_code_type mq_channel_manager::create_channel(rpc::context& ctx, mq_channel_ptr_type& channel,
+                                                         const atfw::dtmq::DChannelIdKey& channel_key,
+                                                         const atfw::dtmq::DChannelConfigure& configure) {
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+  }
+
+  channel = get_channel(channel_key.channel_id());
+  if (!channel) {
+    channel = atfw::memory::stl::make_strong_rc<mq_channel>(*this, channel_key, configure);
+    if (!channel) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    }
+    add_channel(ctx, channel);
+  }
+
+  // 拉取数据托管给, writable_init/readonly_init
+  RPC_RETURN_CODE(0);
 }
 
-void mq_channel_manager::remove_channel(const std::string& /*mq_channel_id*/, const mq_channel* /*except*/) {
-  // TODO(owent):
+void mq_channel_manager::add_channel(rpc::context& ctx, const mq_channel_ptr_type& channel) {
+  if (!channel) {
+    return;
+  }
+
+  // 停服阶段，直接transfer
+  if (is_stoping()) {
+    set_more_transfer();
+    pending_io_channels_.push_back(channel);
+    return;
+  }
+
+  auto iter = channels_.find(channel->get_channel_id());
+  if (iter != channels_.end()) {
+    if (iter->second == channel) {
+      return;
+    }
+
+    // 替换
+    remove_channel(channel->get_channel_id(), iter->second.get());
+  }
+
+  // 特殊索引世界广播频道和大区
+  channels_[channel->get_channel_id()] = channel;
+
+  // 刷新定时器
+  mq_channel::mq_channel_accessor::update_timer(*channel, ctx);
+}
+
+void mq_channel_manager::remove_channel(const std::string& channel_id, const mq_channel* except) {
+  auto iter = channels_.find(channel_id);
+  if (iter == channels_.end()) {
+    return;
+  }
+
+  // 检查可能 RPC 后发生实例替换
+  if (nullptr != except && iter->second.get() != except) {
+    return;
+  }
+
+  mq_channel_ptr_type channel = iter->second;
+
+  // 移除定时器
+  mq_channel::mq_channel_accessor::remove_timer(*channel);
+
+  // 移除索引
+  channels_.erase(iter);
+}
+
+rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ctx, mq_channel_ptr_type& channel_ptr,
+                                                                uint64_t& forward_server_id,
+                                                                const atfw::dtmq::DChannelIdKey& channel_key,
+                                                                bool auto_create) {
+  channel_ptr = get_channel(channel_key.channel_id());
+  forward_server_id = 0;
+
+  // 如果已存在 writable，判定transfer
+  while (channel_ptr && channel_ptr->is_writable()) {
+    uint64_t transfer_target = channel_ptr->need_transfer();
+    // 不需要转移频道，可以直接处理请求
+    if (0 == transfer_target) {
+      RPC_RETURN_CODE(0);
+    }
+    if (channel_ptr->is_io_task_running()) {
+      auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->await_io_task(ctx));
+      if (result < 0) {
+        FWLOGERROR("await for channel {} transfer failed, res: {}({})", channel_ptr->get_channel_id(), result,
+                   protobuf_mini_dumper_get_error_msg(result));
+        RPC_RETURN_CODE(result);
+      }
+
+      // RPC后可能发生实例替换
+      channel_ptr = get_channel(channel_key.channel_id());
+    } else {
+      // 还没开始转移数据，可以直接处理请求
+      RPC_RETURN_CODE(0);
+    }
+  }
+
+  // 不存在或不是writable则判定是否直接transfer请求
+  if (!channel_ptr || !channel_ptr->is_writable()) {
+    uint64_t transfer_target = channel_ptr
+                                   ? channel_ptr->need_transfer()
+                                   : rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable,
+                                                                     0, logic_hpa_discovery_select_mode::kTarget);
+    // 不需要创建频道，可以直接transfer请求
+    if (0 != transfer_target) {
+      forward_server_id = transfer_target;
+      RPC_RETURN_CODE(0);
+    }
+  }
+
+  // 如果已经查找到老的channel，但是不是writable，说明是readonly，需要提升为writable
+  if (!channel_ptr && auto_create) {
+    auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
+    if (!channel_configure) {
+      FWLOGWARNING("channel {} configure of type {} not found.", channel_key.channel_id(), channel_key.channel_type());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+
+    auto result = RPC_AWAIT_CODE_RESULT(create_channel(ctx, channel_ptr, channel_key, *channel_configure));
+    if (result < 0 || !channel_ptr) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+  }
+
+  // 如果有到channel，但是不是writable，需要提升为writable
+  if (channel_ptr && !channel_ptr->is_writable()) {
+    auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx));
+    if (result < 0 || !channel_ptr) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+    if (!channel_ptr->is_writable()) {
+      channel_ptr.reset();
+    }
+  }
+
+  if (!channel_ptr) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+  }
+
+  RPC_RETURN_CODE(0);
+}
+
+rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ctx, mq_channel_ptr_type& channel_ptr,
+                                                                uint64_t& forward_server_id,
+                                                                const atfw::dtmq::DChannelIdKey& channel_key,
+                                                                size_t replicate_index, bool auto_create) {
+  channel_ptr = get_channel(channel_key.channel_id());
+  forward_server_id = 0;
+
+  // 已有数据
+  if (channel_ptr && (channel_ptr->is_readonly() || channel_ptr->is_writable())) {
+    RPC_RETURN_CODE(0);
+  }
+
+  // 如果本地无缓存或不是writable，且本节点可以提升writable，则走提升为writable流程
+  if (mq_channel::should_be_writable(channel_key)) {
+    RPC_RETURN_CODE(
+        RPC_AWAIT_CODE_RESULT(make_writable_channel(ctx, channel_ptr, forward_server_id, channel_key, auto_create)));
+  }
+
+  // 不存在现判定是否需要transfer
+  uint64_t transfer_target = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kReadonly,
+                                                             replicate_index, logic_hpa_discovery_select_mode::kTarget);
+  if (0 != transfer_target && transfer_target != logic_config::me()->get_local_server_id()) {
+    forward_server_id = transfer_target;
+    RPC_RETURN_CODE(0);
+  }
+
+  // 创建频道
+  if (!channel_ptr && auto_create) {
+    auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
+    if (!channel_configure) {
+      FWLOGWARNING("channel {} configure of type {} not found.", channel_key.channel_id(), channel_key.channel_type());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+
+    auto result = RPC_AWAIT_CODE_RESULT(create_channel(ctx, channel_ptr, channel_key, *channel_configure));
+    if (result < 0 || !channel_ptr) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+  }
+
+  // 已拉取完数据，直接返回
+  if (channel_ptr) {
+    if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
+      RPC_RETURN_CODE(0);
+    }
+
+    // 尝试提升为可读
+    auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx));
+    if (result < 0 || !channel_ptr) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+
+    if (!channel_ptr->is_readonly() && !channel_ptr->is_writable()) {
+      channel_ptr.reset();
+    }
+  }
+
+  if (!channel_ptr) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+  }
+
+  RPC_RETURN_CODE(0);
+}
+
+mq_channel_manager::mq_channel_ptr_type mq_channel_manager::get_channel(const std::string& channel_id) const noexcept {
+  auto iter = channels_.find(channel_id);
+  if (iter == channels_.end()) {
+    return nullptr;
+  }
+
+  return iter->second;
 }
 
 void mq_channel_manager::set_more_transfer() noexcept { more_transfer_now_ = true; }
+
+rpc::result_code_type mq_channel_manager::find_message(rpc::context& /*ctx*/, const mq_channel_ptr_type& channel,
+                                                       int64_t sequence, atfw::dtmq::DChannelMessage& msg) {
+  if (!channel) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+  }
+
+  auto log_ptr = channel->get_shared_wal_object()->find_log(sequence);
+  if (!log_ptr) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_MESSAGE_NOT_FOUND);
+  }
+
+  protobuf_copy_message(msg, *log_ptr);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_MESSAGE_NOT_FOUND);
+}
+
+rpc::result_code_type mq_channel_manager::page_query_message(
+    rpc::context& /*ctx*/, const mq_channel_ptr_type& channel, atfw::dtmq::channel_page_info& page_info,
+    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
+  if (!channel) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+  }
+
+  if (page_info.page_size() == 0) {
+    page_info.set_page_size(10);
+  }
+
+  auto& log_mgr = channel->get_wal_publisher().get_log_manager();
+  auto iter = log_mgr.log_lower_bound(page_info.page_start_sequence());
+  while (iter != log_mgr.log_end() && msgs.size() < page_info.page_size()) {
+    if (*iter) {
+      protobuf_copy_message(*msgs.Add(), **iter);
+    }
+    ++iter;
+  }
+
+  if (iter != log_mgr.log_end()) {
+    page_info.set_page_more(true);
+  } else {
+    page_info.set_page_more(false);
+  }
+
+  RPC_RETURN_CODE(0);
+}
+
+void mq_channel_manager::aysnc_save_dirty_channel() {
+  if (!pending_save_channels_.empty()) {
+    rpc::context ctx{rpc::context::create_without_task()};
+    auto iter = pending_save_channels_.begin();
+    while (iter != pending_save_channels_.end()) {
+      if ((*iter)->is_dirty()) {
+        FWLOGINFO("channel({}) is_dirty, wait to async_saved.", (*iter)->get_channel_id());
+        (*iter)->async_save(ctx);
+        ++iter;
+        continue;
+      }
+      // 移除已经保存成功的channel
+      iter = pending_save_channels_.erase(iter);
+    }
+  }
+}
+
+void mq_channel_manager::resolve_channel_distribution() {
+  // 检查所有的channel，转移数据
+  if (!is_stoping_ && resolve_channel_distribution_timepoint_ != std::chrono::system_clock::from_time_t(0) &&
+      util::time::time_utility::sys_now() >= resolve_channel_distribution_timepoint_) {
+    resolve_channel_distribution_timepoint_ = std::chrono::system_clock::from_time_t(0);
+    std::unordered_set<mq_channel*> pending_io_channel_cache;
+    for (const auto& channel : pending_io_channels_) {
+      pending_io_channel_cache.insert(channel.get());
+    }
+
+    for (auto& channel : channels_) {
+      if (channel.second->is_readonly()) {
+        continue;
+      }
+
+      if (0 == channel.second->need_transfer()) {
+        continue;
+      }
+
+      if (pending_io_channel_cache.end() != pending_io_channel_cache.find(channel.second.get())) {
+        continue;
+      }
+
+      pending_io_channels_.push_back(channel.second);
+    }
+  }
+
+  if (pending_io_channels_.empty()) {
+    return;
+  }
+
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
+  // IO频率控制，不需要很精确，只要不要太密集即可
+  size_t running_io_tasks = 0;
+  size_t max_io_tasks = dtmq_proxysvr_cfg.concurrency_io_task_count();
+  if (max_io_tasks <= 0) {
+    max_io_tasks = 2048;
+  }
+  auto iter = pending_io_channels_.begin();
+
+  rpc::context ctx{rpc::context::create_without_task()};
+
+  while (iter != pending_io_channels_.end() && running_io_tasks < max_io_tasks) {
+    if ((*iter)->is_io_task_running()) {
+      ++running_io_tasks;
+      ++iter;
+      continue;
+    }
+
+    if (!(*iter)->is_writable()) {
+      iter = pending_io_channels_.erase(iter);
+      continue;
+    }
+
+    if (is_stoping_ && (*iter)->is_writable()) {
+      FWLOGDEBUG("channel({}) async_save when is_stoping_", (*iter)->get_channel_id());
+      (*iter)->async_save(ctx);
+    } else {
+      FWLOGDEBUG("channel({}) async_start_transfer, is_stoping: {}", (*iter)->get_channel_id(), is_stoping_);
+      (*iter)->async_start_transfer(ctx);
+    }
+
+    if ((*iter)->is_io_task_running()) {
+      ++running_io_tasks;
+      ++iter;
+    } else if (!(*iter)->is_writable()) {
+      iter = pending_io_channels_.erase(iter);
+    } else {
+      break;
+    }
+  }
+
+  // more_transfer_now_ 表示要立即处理剩下的pending中的频道
+  // 这里设置成false，下一帧会继续处理
+  more_transfer_now_ = false;
+}
+
+void mq_channel_manager::update_self_stateful_inactive() {
+  if (is_can_stopped() && is_self_stateful_active()) {
+    is_self_stateful_active_ = false;
+    FWLOGINFO("[process can stoped] update_self_stateful_inactive to false succeed.");
+  }
+}
+
+void mq_channel_manager::report_channel_qty_oss() {
+  // FIXME: 这里需要发送OSS日志，暂时注释掉
+  // telemetry_oss_user_information user;
+  // user.zone_id = logic_config::me()->get_local_zone_id();
+  // rpc::context ctx{rpc::context::create_without_task()};
+  // rpc::context::message_holder<PROJECT_NAMESPACE_ID::oss::DtmqChannelQty> oss_log{ctx};
+  // oss_log->set_total_qty(static_cast<int32_t>(channels_.size()));
+  // oss_log->set_penddind_io_qty(static_cast<int32_t>(pending_io_channels_.size()));
+  // oss_log->set_penddind_save_qty(static_cast<int32_t>(pending_save_channels_.size()));
+  // telemetry::oss::send_dtmq_channel_qty(ctx, user, std::move(*oss_log));
+}
