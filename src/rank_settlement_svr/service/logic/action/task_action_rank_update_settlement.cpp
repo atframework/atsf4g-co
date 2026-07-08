@@ -357,31 +357,34 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
     if (task_type_trait::empty(task_inst)) {
       FWLOGERROR("create task_action_rank_send_settlement failed");
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-    } else {
-      task_type_trait::task_type subtask = task_inst;
-
-      dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
-
-      ret = task_manager::me()->start_task(task_inst, start_data);
-      if (ret < 0) {
-        FWLOGERROR(
-            "start task_action_rank_send_settlement failed, "
-            "ret: {}({})",
-            ret, protobuf_mini_dumper_get_error_msg(ret));
-      } else {
-        // 刷新下一次结算排名,前面排过序，所以这里一定是递减的
-        next_settlement_rank = current_no > 0 ? current_no - 1 : 0;
-
-        if (!task_type_trait::empty(subtask)) {
-          await_tasks.push_back(subtask);
-        }
-      }
+      break;
     }
+
+    task_type_trait::task_type subtask = task_inst;
+    dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
+
+    ret = task_manager::me()->start_task(task_inst, start_data);
+    if (ret < 0) {
+      FWLOGERROR(
+          "start task_action_rank_send_settlement failed, "
+          "ret: {}({})",
+          ret, protobuf_mini_dumper_get_error_msg(ret));
+    break;
+    }
+
+    // 刷新下一次结算排名,前面排过序，所以这里一定是递减的
+    next_settlement_rank = current_no > 0 ? current_no - 1 : 0;
+
+    if (!task_type_trait::empty(subtask)) {
+      await_tasks.push_back(subtask);
+    }
+    
+    
   }
 
   FWLOGINFO(
       "Await for rank {},{}-{},{},{},{} settlement for {}, "
-      "latest_settlement_rank: {}, await_tasks size {} ",
+      "latest_settlement_rank: {}, await_tasks size {} "
       "ret = {}", rank_handle.get_world_id(), rank_handle.get_zone_id(), cfg.rank_type(), cfg.rank_instance_id(),
       cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), next_settlement_rank,
       rank_settlement_dbdata->blob_data().latest_settlement_rank(), await_tasks.size(), ret);
