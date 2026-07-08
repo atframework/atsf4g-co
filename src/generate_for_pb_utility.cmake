@@ -286,8 +286,7 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
   )
 
   unset(_generate_for_pb_output_files)
-  if(DEFINED GENERATE_FOR_PB_CODEGEN_FLOW_OVERWRITE_RULE_BODY
-     AND NOT "${GENERATE_FOR_PB_CODEGEN_FLOW_OVERWRITE_RULE_BODY}" STREQUAL "")
+  if(GENERATE_FOR_PB_CODEGEN_FLOW_OVERWRITE_RULE_BODY)
     set(_generate_for_pb_overwrite_rule_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_NAME}.overwrite.rule.yaml")
     file(
       WRITE "${_generate_for_pb_overwrite_rule_file}"
@@ -298,8 +297,7 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
     list(APPEND _generate_for_pb_output_files ${_generate_for_pb_overwrite_outputs})
   endif()
 
-  if(DEFINED GENERATE_FOR_PB_CODEGEN_FLOW_NON_OVERWRITE_RULE_BODY
-     AND NOT "${GENERATE_FOR_PB_CODEGEN_FLOW_NON_OVERWRITE_RULE_BODY}" STREQUAL "")
+  if(GENERATE_FOR_PB_CODEGEN_FLOW_NON_OVERWRITE_RULE_BODY)
     set(_generate_for_pb_non_overwrite_rule_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_NAME}.non-overwrite.rule.yaml")
     file(
       WRITE "${_generate_for_pb_non_overwrite_rule_file}"
@@ -308,8 +306,20 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
     # 打印输出文件
     generate_for_pb_print_output_files("${_generate_for_pb_non_overwrite_rule_file}"
                                        _generate_for_pb_non_overwrite_outputs)
-    # 不添加 output 内，为了其不被删除
-    # list(APPEND _generate_for_pb_output_files ${_generate_for_pb_non_overwrite_outputs})
+    # 不添加 output 内，为了其不被删除 list(APPEND _generate_for_pb_output_files ${_generate_for_pb_non_overwrite_outputs})
+    # 不存在的文件先Touch，避免configure报错
+    unset(_last_gen_dir)
+    foreach(_GEN_FILE IN LISTS _generate_for_pb_non_overwrite_outputs)
+      if(NOT EXISTS "${_GEN_FILE}")
+        get_filename_component(_GEN_FILE_DIR "${_GEN_FILE}" DIRECTORY)
+        if(NOT _last_gen_dir STREQUAL "${_GEN_FILE_DIR}")
+          file(MAKE_DIRECTORY "${_GEN_FILE_DIR}")
+          set(_last_gen_dir "${_GEN_FILE_DIR}")
+        endif()
+        file(TOUCH "${_GEN_FILE}")
+      endif()
+    endforeach()
+    unset(_last_gen_dir)
     # 手动设为 GENERATED
     foreach(_generate_for_pb_overwrite_output IN LISTS _generate_for_pb_overwrite_outputs)
       set_source_files_properties(${_generate_for_pb_overwrite_output} PROPERTIES GENERATED TRUE)

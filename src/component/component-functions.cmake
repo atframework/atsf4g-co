@@ -14,10 +14,11 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(multiValueArgs HEADERS SOURCES USE_COMPONENTS GENERATED_FLOW_NAMES)
   cmake_parse_arguments(project_component_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  generate_for_pb_collect_output_from_flows("${project_component_declare_sdk_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
+  generate_for_pb_collect_output_from_flows("${project_component_declare_sdk_GENERATED_FLOW_NAMES}"
+                                            _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
   generate_for_pb_collect_filtered_output_files(
-    "${SDK_ROOT_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}"
-    _PROJECT_COMPONENT_GENERATED_SOURCE_FILES _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+    "${SDK_ROOT_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}" _PROJECT_COMPONENT_GENERATED_SOURCE_FILES
+    _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
   if(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
     list(APPEND project_component_declare_sdk_SOURCES ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES})
     list(REMOVE_DUPLICATES project_component_declare_sdk_SOURCES)
@@ -322,12 +323,10 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   endif()
   execute_process(
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} -o
-                  "${__GENERATED_PB_FILE_NAME}"
-                  ${project_component_declare_protocol_PROTOCOLS}
+            "${__GENERATED_PB_FILE_NAME}" ${project_component_declare_protocol_PROTOCOLS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   add_custom_command(
-    OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
-           "${__GENERATED_PB_FILE_NAME}"
+    OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES} "${__GENERATED_PB_FILE_NAME}"
     COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} --cpp_out
       "dllexport_decl=${project_component_declare_protocol_DLLEXPORT_DECL}:${CMAKE_CURRENT_BINARY_DIR}" -o
@@ -339,7 +338,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     DEPENDS ${project_component_declare_protocol_PROTOCOLS}
             "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}"
-        COMMENT "Generate components::${TARGET_NAME}")
+    COMMENT "Generate components::${TARGET_NAME}")
 
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "pc-${TARGET_NAME}")
@@ -349,8 +348,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   set(TARGET_CODEGEN_NAME "${TARGET_FULL_NAME}-protoc-codegen")
   add_custom_target(
     ${TARGET_CODEGEN_NAME}
-    DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES}
-            "${__GENERATED_PB_FILE_NAME}"
+    DEPENDS ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES} "${__GENERATED_PB_FILE_NAME}"
     SOURCES ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
   set_property(TARGET ${TARGET_CODEGEN_NAME} PROPERTY FOLDER "${PROJECT_NAME}/component/protocol")
   source_group(TREE ${project_component_declare_protocol_OUTPUT_DIR} FILES ${__FINAL_GENERATED_SOURCE_FILES}
@@ -410,8 +408,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   add_custom_command(
     TARGET ${TARGET_FULL_NAME}
     POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${__GENERATED_PB_FILE_NAME}"
-            "${PROJECT_INSTALL_RES_PBD_DIR}")
+    COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${__GENERATED_PB_FILE_NAME}" "${PROJECT_INSTALL_RES_PBD_DIR}")
 
   set(TARGET_INSTALL_RPATH
       "${PROJECT_RPATH_ORIGIN}"
@@ -491,11 +488,10 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
       GENERATED_FLOW_NAMES)
   cmake_parse_arguments(project_component_declare_service "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  generate_for_pb_collect_output_from_flows("${project_component_declare_service_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
+  generate_for_pb_collect_output_from_flows("${project_component_declare_service_GENERATED_FLOW_NAMES}"
+                                            _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
   generate_for_pb_collect_filtered_output_files(
-    "${SERVICE_ROOT_DIR}"
-    "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}"
-    _PROJECT_COMPONENT_GENERATED_SOURCE_FILES
+    "${SERVICE_ROOT_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}" _PROJECT_COMPONENT_GENERATED_SOURCE_FILES
     _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
   if(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
     list(APPEND project_component_declare_service_SOURCES ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES})

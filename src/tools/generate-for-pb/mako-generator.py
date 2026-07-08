@@ -20,6 +20,7 @@ import concurrent.futures
 import generator_ipc
 from subprocess import PIPE, Popen, TimeoutExpired
 
+_TRY_ENCODINGS = ["utf-8", "utf-8-sig", "GB18030"]
 
 def _normalize_path_for_compare(path):
     if path is None:
@@ -1370,6 +1371,37 @@ def write_code_if_different(project_dir, output_file, encoding, content,
     )
     LOCAL_WOKER_FUTURES[future] = {"output_file": output_file}
 
+def __open_with_encoding(file_path, mode, encoding):
+    if sys.version_info[0] > 3 or (sys.version_info[0] == 3 and sys.version_info[1] >= 14):
+        return open(file_path, mode, encoding=encoding)
+    else:
+        import codecs
+        return codecs.open(file_path, mode, encoding=encoding)
+
+def __check_exist_and_not_empty(file_path):
+    global _TRY_ENCODINGS
+    if not os.path.exists(file_path):
+        return False
+
+    # Maybe BOM+\r\n
+    if os.path.getsize(file_path) > 6:
+        return True
+
+    for encoding in _TRY_ENCODINGS:
+        try:
+            with __open_with_encoding(file_path, "r", encoding=encoding) as f:
+                data = f.read()
+                if not data:
+                    return False
+                if data.startswith("\ufeff"):
+                    data = data[1:]
+                if not data.strip():
+                    return False
+            return True
+        except Exception:
+            pass
+
+    return True
 
 def generate_group(options, group):
     # type: (argparse.Namespace, PbGroupGenerator) -> None
@@ -1503,7 +1535,7 @@ def generate_group(options, group):
                 if options.print_output_files:
                     print(output_file)
                 else:
-                    if os.path.exists(output_file):
+                    if __check_exist_and_not_empty(output_file):
                         force_overwrite = rewrite_overwrite
                         if force_overwrite is None:
                             force_overwrite = group.overwrite
@@ -1604,7 +1636,7 @@ def generate_group(options, group):
                     if options.print_output_files:
                         print(output_file)
                     else:
-                        if os.path.exists(output_file):
+                        if __check_exist_and_not_empty(output_file):
                             force_overwrite = rewrite_overwrite
                             if force_overwrite is None:
                                 force_overwrite = group.overwrite
@@ -1771,7 +1803,7 @@ def generate_global(options, global_generator):
             if options.print_output_files:
                 print(output_file)
             else:
-                if os.path.exists(output_file):
+                if __check_exist_and_not_empty(output_file):
                     force_overwrite = rewrite_overwrite
                     if force_overwrite is None:
                         force_overwrite = not options.no_overwrite
@@ -2290,6 +2322,7 @@ def main(argv=None, display_argv=None, allow_ipc=True):
     # lizard forgives
     global LOCAL_WOKER_POOL
     global LOCAL_WOKER_FUTURES
+    global _TRY_ENCODINGS
 
     if argv is None:
         argv = sys.argv[1:]
@@ -2836,7 +2869,7 @@ def main(argv=None, display_argv=None, allow_ipc=True):
     if options.console_encoding:
         console_encoding = options.console_encoding
     else:
-        console_encoding = ["utf-8", "utf-8-sig", "GB18030"]
+        console_encoding = _TRY_ENCODINGS
 
     def print_buffer_to_fd(fd, buffer):
         if not buffer:

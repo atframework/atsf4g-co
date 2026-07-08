@@ -33,13 +33,18 @@ generate_for_pb_add_ss_service(
 generate_for_pb_add_ss_service(
   "atframework.dtmq.DtmqProxysvrNotifyService"
   "${CMAKE_CURRENT_LIST_DIR}/dtmq-proxysvr"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
   PROJECT_NAMESPACE
   "${PROJECT_NAMESPACE}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/proxy"
+  SERVICE_DLLEXPORT_DECL
+  DTMQ_PROXY_SERVICE_API
   RPC_DLLEXPORT_DECL
   DTMQ_PROXY_SDK_API
-  NO_SERVICE_TASK
   EXTERNAL_COMPONENT_PROTOCOLS
   "dtmq-protocol-proxy-pbdesc"
   INCLUDE_HEADERS
