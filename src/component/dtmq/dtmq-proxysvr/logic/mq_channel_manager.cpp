@@ -452,7 +452,7 @@ rpc::result_code_type mq_channel_manager::find_message(rpc::context& /*ctx*/, co
   }
 
   protobuf_copy_message(msg, *log_ptr);
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_MESSAGE_NOT_FOUND);
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
 }
 
 rpc::result_code_type mq_channel_manager::page_query_message(
