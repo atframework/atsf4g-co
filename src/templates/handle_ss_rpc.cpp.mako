@@ -4,10 +4,15 @@ import time
 import os
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
+
+output_render_dir = os.path.dirname(output_render_path)
+cpp_include_base_dir = ''
+if output_render_dir and not os.path.isabs(output_render_dir):
+    cpp_include_base_dir = output_render_dir + '/'
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
-#include "handle_ss_rpc_${service.get_name_lower_rule()}.atfw.gen.h"
+#include "${cpp_include_base_dir}handle_ss_rpc_${service.get_name_lower_rule()}.atfw.gen.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

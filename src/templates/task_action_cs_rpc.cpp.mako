@@ -6,10 +6,14 @@ import re
 %><%
 task_class_name = os.path.splitext(os.path.basename(output_render_path))[0]
 rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
+output_render_dir = os.path.dirname(output_render_path)
+cpp_include_base_dir = ''
+if output_render_dir and not os.path.isabs(output_render_dir):
+    cpp_include_base_dir = output_render_dir + '/'
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${local_vcs_user_name} with ${generator} at ${time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) }
 
-#include "${task_class_name}.h"
+#include "${cpp_include_base_dir}${task_class_name}.h"
 
 #include <std/explicit_declare.h>
 #include <log/log_wrapper.h>
@@ -36,6 +40,8 @@ rpc_is_stream_mode = rpc.is_request_stream() or rpc.is_response_stream()
 #include <utility/protobuf_mini_dumper.h>
 
 #include <data/player.h>
+
+#include <utility>
 
 ${service_dllexport_decl} ${task_class_name}::${task_class_name}(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 

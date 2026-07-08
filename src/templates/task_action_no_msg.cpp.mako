@@ -1,10 +1,15 @@
 ## -*- coding: utf-8 -*-
 <%!
 import time
+%><%
+output_render_dir = os.path.dirname(output_render_path)
+cpp_include_base_dir = ''
+if output_render_dir and not os.path.isabs(output_render_dir):
+    cpp_include_base_dir = output_render_dir + '/'
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${local_vcs_user_name} on ${time.strftime("%Y-%m-%d %H:%M:%S")}
 
-#include "${task_class_name}.h"
+#include "${cpp_include_base_dir}${task_class_name}.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -32,8 +37,8 @@ const char *${task_class_name}::name() const {
 }
 
 ${task_class_name}::result_type ${task_class_name}::operator()() {
-  // Maybe need to call 
-  // set_user_key(param_.user_id, param_.zone_id); 
+  // Maybe need to call
+  // set_user_key(param_.user_id, param_.zone_id);
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

@@ -6,10 +6,15 @@ import re
 %><%
 module_name = service.get_extension_field("service_options", lambda x: x.module_name, service.get_name_lower_rule())
 result_clazz_name = service.get_name_lower_rule() + '_result_t'
+
+output_render_dir = os.path.dirname(output_render_path)
+cpp_include_base_dir = ''
+if output_render_dir and not os.path.isabs(output_render_dir):
+    cpp_include_base_dir = output_render_dir + '/'
 %>// Copyright ${time.strftime("%Y", time.localtime()) } atframework
 // @brief Created by ${generator} for ${service.get_full_name()}, please don't edit it
 
-#include "${service.get_name_lower_rule()}.atfw.gen.h"
+#include "${cpp_include_base_dir}${service.get_name_lower_rule()}.atfw.gen.h"
 
 #include <nostd/string_view.h>
 #include <nostd/utility_data_size.h>

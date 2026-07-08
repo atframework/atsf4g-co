@@ -11,9 +11,14 @@ file = database.get_file(generate_proto_file)
 index_type_enum = database.get_enum("atframework.database_index_type")
 if index_type_enum is None:
     return
+
+output_render_dir = os.path.dirname(output_render_path)
+cpp_include_base_dir = ''
+if output_render_dir and not os.path.isabs(output_render_dir):
+    cpp_include_base_dir = output_render_dir + '/'
 %>
 
-#include "${include_cpp}"
+#include "${cpp_include_base_dir}${include_cpp}"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
