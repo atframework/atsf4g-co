@@ -290,7 +290,9 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
                                                                 uint64_t& forward_server_id,
                                                                 const atfw::dtmq::DChannelIdKey& channel_key,
                                                                 bool auto_create) {
-  channel_ptr = get_channel(channel_key.channel_id());
+  if (!(channel_ptr && channel_ptr->get_channel_id() == channel_key.channel_id())) {
+    channel_ptr = get_channel(channel_key.channel_id());
+  }
   forward_server_id = 0;
 
   // 如果已存在 writable，判定transfer
@@ -365,7 +367,9 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
                                                                 uint64_t& forward_server_id,
                                                                 const atfw::dtmq::DChannelIdKey& channel_key,
                                                                 size_t replicate_index, bool auto_create) {
-  channel_ptr = get_channel(channel_key.channel_id());
+  if (!(channel_ptr && channel_ptr->get_channel_id() == channel_key.channel_id())) {
+    channel_ptr = get_channel(channel_key.channel_id());
+  }
   forward_server_id = 0;
 
   // 已有数据
@@ -508,6 +512,7 @@ void mq_channel_manager::resolve_channel_distribution() {
     }
 
     for (auto& channel : channels_) {
+      // TODO(owent): 只读副本如果要淘汰，需要删除
       if (channel.second->is_readonly()) {
         continue;
       }
