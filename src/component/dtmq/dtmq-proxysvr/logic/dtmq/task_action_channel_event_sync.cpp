@@ -92,7 +92,7 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
       break;
     }
 
-    if (util::distributed_system::wal_result_code::kOk == receive_result) {
+    if (receive_result < util::distributed_system::wal_result_code::kOk) {
       break;
     }
 

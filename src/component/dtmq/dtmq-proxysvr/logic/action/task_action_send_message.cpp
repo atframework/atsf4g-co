@@ -94,6 +94,7 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
   auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
                                                            req_body.message_content().detail().command_case(), param,
                                                            req_body.message_content());
+  result_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (message) {
     FWLOGDEBUG("channel {} receive message {}.", req_body.channel_key().channel_id(), message->sequence());
     rsp_body.set_message_sequence(message->sequence());
@@ -101,6 +102,7 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
     channel->tick(get_shared_context());
   } else {
     FWLOGERROR("malloc wal log for chat channel {} failed", req_body.channel_key().channel_id());
+    ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   // Allow to update subscriber
@@ -112,7 +114,7 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
   rsp_body.set_client_result(result);
   rsp_body.set_last_sequence(channel->get_last_message_sequence());
   rsp_body.set_last_hash_code(channel->get_last_hash_code());
-  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  TASK_ACTION_RETURN_CODE(ret);
 }
 
 DTMQ_PROXY_SERVICE_API int task_action_send_message::on_success() { return get_result(); }

@@ -105,6 +105,10 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
           continue;
         }
 
+        if (log_end >= 0 && (*iter)->sequence() > log_end) {
+          break;
+        }
+
         if ((*iter)->sequence() <= compact_stateful_sequence) {
           continue;
         }

@@ -56,7 +56,7 @@ DTMQ_PROXY_SERVICE_API task_action_notify_readonly::result_type task_action_noti
         get_shared_context(), channel, forward_server_id, sync.channel_key(),
         mq_channel::get_suggest_readonly_replicate_index(sync.channel_key()), false));
     if (res < 0) {
-      FWLOGWARNING("make_readable_channel failed, res: {}(())", res, protobuf_mini_dumper_get_error_msg(res));
+      FWLOGWARNING("make_readable_channel failed, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
     }
 
     // 有变化会重新通知，不需要转发
