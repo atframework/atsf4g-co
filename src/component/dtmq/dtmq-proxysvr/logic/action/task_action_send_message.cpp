@@ -26,6 +26,7 @@
 
 #include <utility>
 
+#include "protocol/pbdesc/com.const.pb.h"
 #include "rpc/dtmq/dtmq_client_api.h"
 
 #include "data/mq_channel.h"
@@ -103,6 +104,7 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
   } else {
     FWLOGERROR("malloc wal log for chat channel {} failed", req_body.channel_key().channel_id());
     ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+    result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
   }
 
   // Allow to update subscriber
