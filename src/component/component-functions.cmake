@@ -324,6 +324,7 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   execute_process(
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} -o
             "${__GENERATED_PB_FILE_NAME}" ${project_component_declare_protocol_PROTOCOLS}
+    COMMAND "${CMAKE_COMMAND}" -E touch ${project_component_declare_protocol_PROTOCOLS}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   add_custom_command(
     OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES} "${__GENERATED_PB_FILE_NAME}"

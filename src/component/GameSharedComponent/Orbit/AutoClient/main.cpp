@@ -86,8 +86,9 @@ const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClie
 }
 }  // namespace
 
-ORBIT_RPC_HANDLE(echo, hello.OrbitServerRpcService, hello::OrbitServerEchoReq, hello::OrbitServerEchoRsp)
-ORBIT_TASK_ACTION(echo, hello::OrbitClientEchoReq, hello::OrbitClientEchoRsp)
+ORBIT_RPC_HANDLE(echo, PROJECT_NAMESPACE_ID.OrbitServerRpcService, PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
+                 PROJECT_NAMESPACE_ID::OrbitServerEchoRsp)
+ORBIT_TASK_ACTION(echo, PROJECT_NAMESPACE_ID::OrbitClientEchoReq, PROJECT_NAMESPACE_ID::OrbitClientEchoRsp)
 
 int task_action_echo::hook_run(const rpc_request_type& req_body, rpc_response_type& rsp_body) {
   rsp_body.set_text(req_body.text());
@@ -114,7 +115,8 @@ int main(int argc, char* argv[]) {
   };
 
   {
-    ORBIT_REGISTER_ACTION_CODE(echo, hello::OrbitClientRpcService, hello.OrbitClientRpcService.echo);
+    ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService,
+                               PROJECT_NAMESPACE_ID.OrbitClientRpcService.echo);
   }
 
   if (log_file.is_open()) {
@@ -160,7 +162,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (ready_sent && !ping_sent && now - ready_timepoint >= kPingDelay) {
-      hello::OrbitServerEchoReq req;
+      PROJECT_NAMESPACE_ID::OrbitServerEchoReq req;
       req.set_text("client echo message");
       int32_t echo_result = echo(req, nullptr, 1);
       if (echo_result < 0) {
