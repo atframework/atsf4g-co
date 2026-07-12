@@ -56,20 +56,8 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
 
   // 请求转发
   if (0 != forward_server_id) {
-    const auto& dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-    if (req_body.forward_ttl() > dtmq_proxysvr_cfg.forward_request_max_ttl()) {
-      FWLOGERROR("forward channel {} update message to {} failed, transfer ttl exceeded.",
-                 req_body.channel_key().channel_id(), forward_server_id);
-      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT);
-      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT);
-    }
-
-    FWLOGDEBUG("forward channel {} update message to {}.", req_body.channel_key().channel_id(), forward_server_id);
-    req_body.set_forward_ttl(req_body.forward_ttl() + 1);
-    res = RPC_AWAIT_CODE_RESULT(rpc::dtmq::update(get_shared_context(), forward_server_id, req_body, rsp_body));
-    TASK_ACTION_RETURN_CODE(res);
+    bool forward_ok = false;
+    TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(forward_rpc(forward_server_id, true, forward_ok)));
   }
 
   if (!channel) {

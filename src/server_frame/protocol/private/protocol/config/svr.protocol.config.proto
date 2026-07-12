@@ -153,7 +153,7 @@ message logic_router_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2000" min_value: "1" }];
   uint64 closing_action_batch_count = 112
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "500" min_value: "1" }];
-  uint32 transfer_max_ttl = 113 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "128" min_value: "1" }];
+  uint32 transfer_max_ttl = 113 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "16" min_value: "1" }];
 }
 
 message logic_dns_cfg {

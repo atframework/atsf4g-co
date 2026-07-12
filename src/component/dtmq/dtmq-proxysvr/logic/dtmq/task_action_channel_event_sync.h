@@ -43,4 +43,7 @@ class task_action_channel_event_sync
 
   DTMQ_PROXY_SERVICE_API int on_success() override;
   DTMQ_PROXY_SERVICE_API int on_failed() override;
+
+ private:
+  rpc::result_code_type unsubscribe();
 };

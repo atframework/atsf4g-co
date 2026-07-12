@@ -52,14 +52,11 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
   // Prepare maybe need forward, 按目标server_id分组
   std::unordered_map<uint64_t, std::list<const atfw::dtmq::DChannelSyncPoint*>> forward_by_server_id;
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
   for (const auto& heartbeat : req_body.heartbeat()) {
     mq_channel_manager::mq_channel_ptr_type channel;
     uint64_t forward_server_id = 0;
-    auto res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel(
-        get_shared_context(), channel, forward_server_id, heartbeat.channel_key(), heartbeat.readonly_index(),
+    auto res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel_with_replicate_index(
+        get_shared_context(), channel, forward_server_id, heartbeat.readonly_index(), heartbeat.channel_key(),
         heartbeat.auto_create_channel()));
     if (res < 0) {
       set_response_code(res);
@@ -68,7 +65,7 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
 
     // 请求转发
     if (0 != forward_server_id) {
-      if (req_body.forward_ttl() > dtmq_proxysvr_cfg.forward_request_max_ttl()) {
+      if (req_body.forward_ttl() > logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
         rsp_body.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
         continue;
       }

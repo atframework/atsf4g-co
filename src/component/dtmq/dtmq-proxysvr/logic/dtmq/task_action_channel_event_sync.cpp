@@ -25,9 +25,12 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_common_types.h>
 #include <rpc/rpc_context.h>
 
 #include <utility>
+
+#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 #include "data/mq_channel.h"
 
@@ -46,26 +49,31 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  if (mq_channel::should_be_writable(req_body.channel_metadata().channel_key())) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_MAIN_REPLICATE_SWITCH);
+  auto channel = mq_channel_manager::me()->get_channel(req_body.channel_metadata().channel_key().channel_id());
+  uint64_t writable_server_id = 0;
+  if (channel) {
+    if (channel->is_writable()) {
+      RPC_AWAIT_IGNORE_RESULT(unsubscribe());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+  } else if (mq_channel::should_be_writable_or_get_server_id(req_body.channel_metadata().channel_key(),
+                                                             writable_server_id)) {
+    RPC_AWAIT_IGNORE_RESULT(unsubscribe());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   int32_t result = 0;
   mq_channel_wal_object_context client_param{get_shared_context(), result};
-  auto channel = mq_channel_manager::me()->get_channel(req_body.channel_metadata().channel_key().channel_id());
   if (!channel) {
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-  if (channel->should_be_writable()) {
-    FWLOGWARNING("writable channel {} received sync message and will be ignored",
-                 req_body.channel_metadata().channel_key().channel_id());
+    RPC_AWAIT_IGNORE_RESULT(unsubscribe());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   channel->maybe_create_wal_client();
 
-  if (!channel->get_wal_client()) {
-    FWLOGERROR("wal_client is not init! channel id: {}", channel->get_channel_key().channel_id());
+  if (!channel->get_wal_client() || !channel->is_readonly()) {
+    FWLOGINFO("wal_client is not init or not readonly! channel id: {}", channel->get_channel_key().channel_id());
+    RPC_AWAIT_IGNORE_RESULT(unsubscribe());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -74,7 +82,7 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   if (req_body.has_channel_snapshot()) {
     rpc::context::message_holder<atfw::dtmq::channel_snapshot> channel_snapshot{get_shared_context()};
     protobuf_move_message(*channel_snapshot->mutable_channel_data(), std::move(*req_body.mutable_channel_snapshot()));
-    channel->load_snapshot(get_shared_context(), std::move(*channel_snapshot), true);
+    channel->load_snapshot(get_shared_context(), std::move(*channel_snapshot));
 
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -115,3 +123,14 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
 DTMQ_PROXY_SERVICE_API int task_action_channel_event_sync::on_success() { return get_result(); }
 
 DTMQ_PROXY_SERVICE_API int task_action_channel_event_sync::on_failed() { return get_result(); }
+
+rpc::result_code_type task_action_channel_event_sync::unsubscribe() {
+  rpc::context::message_holder<atfw::dtmq::SSChannelUnsubscribeReq> request_body{get_shared_context()};
+
+  request_body->add_channel_id(get_request_body().channel_metadata().channel_key().channel_id());
+  request_body->mutable_subscriber()->set_subscriber_server_id(logic_config::me()->get_local_server_id());
+
+  google::protobuf::Empty response_body;
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      rpc::dtmq::unsubscribe(get_shared_context(), get_request_node_id(), *request_body, response_body, true)));
+}

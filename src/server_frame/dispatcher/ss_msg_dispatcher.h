@@ -163,7 +163,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
                                      ::atfw::atapp::protocol::atapp_metadata *metadata = nullptr);
 
  private:
-  void setup_metrics();
+  static void setup_metrics();
 
   static void dns_lookup_callback(uv_getaddrinfo_t *req, int status, struct addrinfo *res) noexcept;
 

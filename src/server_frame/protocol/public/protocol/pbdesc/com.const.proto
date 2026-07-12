@@ -305,9 +305,7 @@ enum EnErrorCode {
                                       [(error_code.description) = "消息队列服务主备切换中"];
   EN_ERR_DTMQ_MESSAGE_NOT_FOUND = -706
                                   [(error_code.description) = "消息未找到"];
-  EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT = -707
-                                         [(error_code.description) = "转发TTL超限"];
-  EN_ERR_DTMQ_CHANNEL_LOCK_FAILED = -708
+  EN_ERR_DTMQ_CHANNEL_LOCK_FAILED = -707
                                          [(error_code.description) = "频道加锁失败"];
 
 

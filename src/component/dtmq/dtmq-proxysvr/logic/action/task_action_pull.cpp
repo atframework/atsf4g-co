@@ -48,8 +48,7 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
   mq_channel_manager::mq_channel_ptr_type channel;
   uint64_t forward_server_id = 0;
   auto res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel(
-      get_shared_context(), channel, forward_server_id, req_body.channel_key(),
-      mq_channel::get_suggest_readonly_replicate_index(req_body.channel_key()), false));
+      get_shared_context(), channel, forward_server_id, req_body.channel_key(), false));
   if (res < 0) {
     set_response_code(res);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -57,20 +56,8 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
 
   // 请求转发
   if (0 != forward_server_id) {
-    const auto& dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-    if (req_body.forward_ttl() > dtmq_proxysvr_cfg.forward_request_max_ttl()) {
-      FWLOGDEBUG("forward pull mq channel {} to {} failed, transfer ttl exceeded", req_body.channel_key().channel_id(),
-                 forward_server_id);
-      rsp_body.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT);
-      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT);
-    }
-
-    FWLOGDEBUG("forward pull mq channel {} to {}", req_body.channel_key().channel_id(), forward_server_id);
-    req_body.set_forward_ttl(req_body.forward_ttl() + 1);
-    TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-        rpc::dtmq::pull(get_shared_context(), forward_server_id, req_body, rsp_body, is_stream_rpc())));
+    bool forward_ok = false;
+    TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(forward_rpc(forward_server_id, true, forward_ok)));
   }
 
   if (!channel) {

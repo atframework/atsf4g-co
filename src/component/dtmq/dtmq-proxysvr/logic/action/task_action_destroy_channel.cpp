@@ -58,26 +58,8 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
 
   // 请求转发
   if (0 != forward_server_id) {
-    const auto& dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-    if (req_body.forward_ttl() > dtmq_proxysvr_cfg.forward_request_max_ttl()) {
-      forward_server_id = 0;
-      FWLOGERROR("forward destroy mq channel {} failed, transfer ttl exceeded", channel_key.channel_id());
-      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT);
-      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_FORWARD_TTL_EXCEEDED_LIMIT);
-    }
-
-    FWLOGDEBUG("forward destroy mq channel {} to {}", channel_key.channel_id(), forward_server_id);
-    req_body.set_forward_ttl(req_body.forward_ttl() + 1);
-
-    res = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(get_shared_context(), forward_server_id, req_body,
-                                                           get_response_body(), is_stream_rpc()));
-    if (res < 0) {
-      FWLOGERROR("forward destroy mq channel {} to dtmq {:#x} failed, res: {}({})", channel_key.channel_id(),
-                 forward_server_id, res, protobuf_mini_dumper_get_error_msg(res));
-    }
-    TASK_ACTION_RETURN_CODE(res);
+    bool forward_ok = false;
+    TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(forward_rpc(forward_server_id, true, forward_ok)));
   }
 
   if (!channel) {

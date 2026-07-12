@@ -438,7 +438,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
   if (index.type_id == 0 && index.zone_id == 0 && index.type_name.empty()) {
     discovery_set = &owner->get_global_discovery();
   } else {
-    auto common_mod = logic_server_last_common_module();
+    const auto *common_mod = logic_server_last_common_module();
     if (nullptr == common_mod) {
       FWLOGERROR("common module is required to broadcast");
       return PROJECT_NAMESPACE_ID::err::EN_SYS_INIT;
@@ -467,7 +467,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  auto &server_nodes = discovery_set->get_sorted_nodes(metadata);
+  const auto &server_nodes = discovery_set->get_sorted_nodes(metadata);
   if (server_nodes.empty()) {
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
@@ -491,7 +491,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
   int ret = 0;
-  for (auto &server_node : server_nodes) {
+  for (const auto &server_node : server_nodes) {
     if (!server_node) {
       continue;
     }
@@ -551,7 +551,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::mes
       break;
     }
 
-    auto &rpc_response = ss_msg->head().rpc_response();
+    const auto &rpc_response = ss_msg->head().rpc_response();
     if (!rpc_response.has_caller_timestamp()) {
       break;
     }
@@ -562,8 +562,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::mes
 
     atfw::util::time::time_utility::update();
     auto delay = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::seconds{util::time::time_utility::get_sys_now() - rpc_response.caller_timestamp().seconds()} +
-        std::chrono::nanoseconds{util::time::time_utility::get_now_nanos() - rpc_response.caller_timestamp().nanos()});
+        atfw::util::time::time_utility::sys_now() - protobuf_to_system_clock(rpc_response.caller_timestamp()));
 
     // Unexcepted duration is ignored
     if (delay < std::chrono::microseconds::zero()) {
@@ -708,7 +707,7 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
   head->set_timestamp(util::time::time_utility::get_now());
 
   do {
-    auto rpc_response = head->mutable_rpc_response();
+    auto *rpc_response = head->mutable_rpc_response();
     if (nullptr == rpc_response) {
       break;
     }
@@ -928,9 +927,7 @@ void ss_msg_dispatcher::dns_lookup_callback(uv_getaddrinfo_t *req, int /*status*
     uv_freeaddrinfo(result);
   }
 
-  if (nullptr != lifetime_ptr) {
-    delete lifetime_ptr;
-  }
+  delete lifetime_ptr;
 }
 
 SERVER_FRAME_API void *ss_msg_dispatcher::get_dns_lookup_rpc_type() noexcept {

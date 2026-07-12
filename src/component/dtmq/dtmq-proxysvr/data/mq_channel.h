@@ -38,7 +38,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <unordered_set>
+#include <unordered_map>
 
 #include "data/mq_channel_wal_handle.h"
 
@@ -106,9 +106,13 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline int64_t get_compact_stateful_sequence() const noexcept { return compact_stateful_sequence_; }
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type readonly_init(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type readonly_init(rpc::context& ctx, uint64_t readonly_server_index);
 
-  void load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&, bool readonly);
+  void merge_subscriber(
+      rpc::context& ctx,
+      const ::google::protobuf::RepeatedPtrField<::atframework::dtmq::channel_subscriber>& subscribers);
+
+  void load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&);
 
   void dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&);
 
@@ -117,8 +121,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline bool is_readonly() const noexcept { return status_ == channel_status::kReadonly; }
 
   inline bool is_writable() const noexcept { return status_ == channel_status::kWritable; }
-
-  bool is_init() const noexcept;
 
   inline atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type>>
   get_shared_wal_object() {
@@ -130,21 +132,51 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   inline atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> get_wal_client() { return wal_client_; }
 
-  static bool should_be_writable(const atfw::dtmq::DChannelIdKey& channel_key, mq_channel* channel = nullptr) noexcept;
+  static bool should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                  uint64_t& writable_server_id, mq_channel* channel = nullptr) noexcept;
   bool should_be_writable() noexcept;
-  bool should_be_readonly() noexcept;
 
-  static uint64_t get_transfer_target(const atfw::dtmq::DChannelIdKey& channel_key) noexcept;
-  uint64_t get_transfer_target() const noexcept;
+  static bool should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                  uint64_t& readonly_server_id, uint64_t readonly_replicate_index,
+                                                  mq_channel* channel = nullptr) noexcept;
 
-  uint64_t need_transfer() noexcept;
+  static bool should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                     uint64_t& readonly_replicate_index, uint64_t& readonly_server_id,
+                                                     mq_channel* channel = nullptr) noexcept;
+
+  bool should_be_readonly(uint64_t& readonly_replicate_index) noexcept;
+
+  /**
+   * @brief Get the target distribution server id
+   *
+   * @param replicate_index 0表示writable，>0表示readonly副本序号
+   * @return uint64_t server_id
+   */
+  uint64_t get_target_distribution_server_id(uint64_t replicate_index) const noexcept;
+
+  /**
+   * @brief Get the target distribution replicate index
+   *
+   * @param server_id 服务器ID
+   * @return uint64_t replicate_index, 0表示writable，>0表示readonly副本序号，UINT64_MAX表示未找到
+   */
+  uint64_t get_target_distribution_replicate_index(uint64_t server_id) const noexcept;
+
+  static uint64_t calculate_transfer_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                      uint64_t replicate_index) noexcept;
+
+  uint64_t get_transfer_target_server_id() const noexcept;
+
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_transfer(rpc::context& ctx, uint64_t& transfer_to_server_id);
+
+  void force_refresh_distribution();
+
   bool need_save_db() const noexcept;
 
   bool is_io_task_running() const noexcept;
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx);
 
-  void async_start_transfer(rpc::context& ctx);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_transfer(rpc::context& ctx);
+  void async_start_transfer(rpc::context& ctx, uint64_t target_server_id);
 
   void async_save(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx);
@@ -157,7 +189,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx);
 
-  void async_send_subscribe_to_writable(rpc::context& ctx);
+  int32_t async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx);
   void set_destroy_message(rpc::context& ctx);
@@ -174,7 +206,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   uint64_t get_client_last_hash_code() const noexcept;
 
-  uint64_t get_main_ready_dtmq_proxysvr_id();
+  uint64_t get_main_ready_writable_server_id();
 
   int tick(rpc::context& ctx);
 
@@ -200,17 +232,14 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   void hash_mismatch_increase();
 
-  void send_notify_to_readonly(rpc::context& ctx);
-
-  static size_t get_suggest_readonly_replicate_index(const atfw::dtmq::DChannelIdKey& channel_key) noexcept;
-
  private:
   void update_timer(rpc::context& ctx, bool force = false);
   void remove_timer();
 
-  bool upgrade_to_readonly() noexcept;
+  bool upgrade_to_readonly(uint64_t readonly_server_index) noexcept;
   bool upgrade_to_writable() noexcept;
-  bool downgrade_to_readable() noexcept;
+  bool downgrade_to_readable(uint64_t readonly_server_index) noexcept;
+  bool downgrade_to_none() noexcept;
 
   void send_oss(rpc::context& ctx, const std::string& action, int32_t ret = 0, uint64_t transfer_to = 0);
 
@@ -223,6 +252,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int64_t compact_stateful_sequence_;
   mq_channel_timer_type::timer_wptr_t timer_handle_;
   channel_status status_;
+  uint64_t readonly_replicate_index_;
+  int64_t readonly_replicate_configure_count_;
   std::chrono::system_clock::time_point remove_timepoint_;
   std::chrono::system_clock::time_point last_save_timepoint_;
   std::chrono::system_clock::time_point lost_last_subscriber_timepoint_;
@@ -230,7 +261,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   std::chrono::system_clock::time_point last_writable_notify_readonly_timepoint_;
   std::chrono::system_clock::time_point next_init_subscribe_timepoint_;
   rpc::result_code_type::value_type last_result_code_;
-  std::unordered_set<uint64_t> readonly_dtmq_proxysvr_ids_;
 
   atfw::dtmq::DChannelConfigure configure_;
   atfw::dtmq::DChannelOptimisticLock lock_;
@@ -250,6 +280,15 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   mutable task_type_trait::task_type io_task_;
 
   std::chrono::system_clock::time_point next_send_oss_time_;
-  int64_t dtmq_proxysvr_etcd_revision_;
-  uint64_t writable_dtmq_proxysvr_id_;
+  int64_t resolved_transfer_etcd_revision_;
+  int64_t server_distribution_etcd_revision_;
+  struct replicate_distribution_info {
+    uint64_t writable_server_id = 0;
+    uint64_t current_readonly_server_index = 0;
+
+    // 只读服务索引: 服务ID -> 只读副本index
+    std::unordered_map<uint64_t, uint64_t> readonly_server_ids;
+  };
+  replicate_distribution_info ready_distribution_;
+  replicate_distribution_info target_distribution_;
 };

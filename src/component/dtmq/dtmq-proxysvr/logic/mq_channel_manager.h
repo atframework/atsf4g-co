@@ -68,9 +68,9 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
    * @brief 获取可写的channel，如果不存在或不可写则走提升写流程
    *
    * @param ctx RPC上下文
-   * @param mq_channel_ptr 输出有效的channel智能指针
+   * @param channel_ptr 输出有效的channel智能指针
    * @param forward_server_id 如果此消息应该被转发，则输出转发的server_id
-   * @param mq_channel_key mq_channel_key
+   * @param channel_key mq_channel_key
    * @param auto_create 不存在是否允许自动创建
    * @return 0或RPC错误码
    */
@@ -85,10 +85,9 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
    * @note readonly 和 writable 都视为读
    *
    * @param ctx RPC上下文
-   * @param mq_channel_ptr 输出有效的channel智能指针
+   * @param channel_ptr 输出有效的channel智能指针
    * @param forward_server_id 如果此消息应该被转发，则输出转发的server_id
-   * @param mq_channel_key mq_channel_key
-   * @param replicate_index 副本索引
+   * @param channel_key mq_channel_key
    * @param auto_create 不存在是否允许自动创建
    * @return 0或RPC错误码
    */
@@ -96,13 +95,35 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
                                                                            mq_channel_ptr_type& channel_ptr,
                                                                            uint64_t& forward_server_id,
                                                                            const atfw::dtmq::DChannelIdKey& channel_key,
-                                                                           size_t replicate_index, bool auto_create);
+                                                                           bool auto_create);
+
+  /**
+   * @brief 指定副本序号获取可读的channel，如果不存在或不可写则走提升读流程
+   * @note readonly 和 writable 都视为读
+   *
+   * @param ctx RPC上下文
+   * @param channel_ptr 输出有效的channel智能指针
+   * @param forward_server_id 如果此消息应该被转发，则输出转发的server_id
+   * @param replicate_index 指定的副本序号
+   * @param channel_key mq_channel_key
+   * @param auto_create 不存在是否允许自动创建
+   * @return 0或RPC错误码
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_readable_channel_with_replicate_index(
+      rpc::context& ctx, mq_channel_ptr_type& channel_ptr, uint64_t& forward_server_id, uint64_t replicate_index,
+      const atfw::dtmq::DChannelIdKey& channel_key, bool auto_create);
 
   mq_channel_ptr_type get_channel(const std::string& channel_id) const noexcept;
 
   void set_more_transfer() noexcept;
 
-  inline int64_t get_dtmq_proxysvr_etcd_revision() { return dtmq_proxysvr_distribute_etcd_revision_; }
+  inline int64_t get_latest_server_etcd_revision() const noexcept { return dtmq_server_distribute_etcd_revision_; }
+
+  inline int64_t get_transfer_server_etcd_revision() const noexcept { return pending_transfer_.resolved_etcd_revision; }
+
+  inline bool is_waiting_transfer() const noexcept {
+    return pending_transfer_.start_time > std::chrono::system_clock::from_time_t(0);
+  }
 
   ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type find_message(rpc::context& ctx,
                                                                          const mq_channel_ptr_type& channel,
@@ -123,9 +144,13 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   void report_channel_qty_oss();
 
  private:
-  std::chrono::system_clock::time_point resolve_channel_distribution_timepoint_;
+  struct pending_transfer_info {
+    int64_t resolved_etcd_revision = 0;
+    std::chrono::system_clock::time_point start_time = std::chrono::system_clock::from_time_t(0);
+  };
+  pending_transfer_info pending_transfer_;
   std::chrono::system_clock::time_point last_tick_timepoint_;
-  int64_t dtmq_proxysvr_distribute_etcd_revision_;
+  int64_t dtmq_server_distribute_etcd_revision_;
   mq_channel_timer_type timers_;
   std::unordered_map<std::string, mq_channel_ptr_type> channels_;
   std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> channel_configure_;

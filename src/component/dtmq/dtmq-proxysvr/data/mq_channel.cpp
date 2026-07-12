@@ -3,6 +3,8 @@
 
 #include "data/mq_channel.h"
 
+#include <utility/random_engine.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -34,12 +36,18 @@
 #include <rpc/dtmq/dtmq_algorithm.h>
 
 #include <chrono>
+#include <cstdint>
+#include <limits>
 #include <string>
-#include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
+
+#ifdef max
+#  undef max
+#endif
 
 namespace {
 static atfw::util::distributed_system::wal_duration get_mq_channel_ttl() {
@@ -67,6 +75,8 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
       sequence_allocator_(0),
       compact_stateful_sequence_(0),
       status_(channel_status::kNone),
+      readonly_replicate_index_(0),
+      readonly_replicate_configure_count_(0),
       remove_timepoint_{std::chrono::system_clock::from_time_t(0)},
       last_save_timepoint_{std::chrono::system_clock::from_time_t(0)},
       lost_last_subscriber_timepoint_{std::chrono::system_clock::from_time_t(0)},
@@ -78,8 +88,8 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
       private_data_sequence_(0),
       is_loading_snapshot_(false),
       is_dirty_(false),
-      dtmq_proxysvr_etcd_revision_(0),
-      writable_dtmq_proxysvr_id_(0) {
+      resolved_transfer_etcd_revision_(0),
+      server_distribution_etcd_revision_(0) {
   protobuf_copy_message(channel_key_, channel_key);
   protobuf_copy_message(configure_, configure);
 
@@ -87,17 +97,21 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
   wal_publisher_ = create_mq_channel_publisher(*this, configure);
 
   next_send_oss_time_ = atfw::util::time::time_utility::now();
+
+  FWLOGINFO("channel {}({}) constructed.", get_channel_id(), reinterpret_cast<const void*>(this));
 }
 
 mq_channel::~mq_channel() {
   // Remove timer
   remove_timer();
+
+  FWLOGINFO("channel {}({}) destructed.", get_channel_id(), reinterpret_cast<const void*>(this));
 }
 
 void mq_channel::load(const atfw::dtmq::DChannelMetadata& metadata, const atfw::dtmq::DChannelRuntime& runtime) {
   remove_timepoint_ = protobuf_to_system_clock(metadata.destroy_timepoint());
   if (remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
-    downgrade_to_readable();
+    downgrade_to_readable(readonly_replicate_index_);
   }
 
   // 后面所有数据走合并逻辑，以防调用到老的load导致meta和runtime回退
@@ -177,8 +191,8 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
   // 有可能await后，负载发生变化。本节点被迁出 writable
   if (should_be_writable()) {
     upgrade_to_writable();
-  } else {
-    upgrade_to_readonly();
+  } else if (!is_readonly()) {
+    upgrade_to_readonly(target_distribution_.current_readonly_server_index);
   }
 }
 
@@ -314,6 +328,27 @@ void mq_channel::dump(atfw::dtmq::DChannelSnapshot& snapshot, bool with_configur
 
 void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
   protobuf_copy_message(configure_, config);
+
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
+  if (readonly_replicate_index_ > 0) {
+    if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+      readonly_replicate_index_ = 0;
+    } else if (readonly_replicate_index_ > static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) {
+      readonly_replicate_index_ =
+          (readonly_replicate_index_ % static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) + 1;
+    }
+  }
+
+  if (readonly_replicate_configure_count_ != dtmq_proxysvr_cfg.readonly_replicate_count()) {
+    readonly_replicate_configure_count_ = dtmq_proxysvr_cfg.readonly_replicate_count();
+
+    // 重算分布
+    server_distribution_etcd_revision_ = 0;
+
+    // 重算分布后可以自动触发迁移逻辑,新增的只读副本会按需初始化加载，不需要主动通知
+  }
 }
 
 void mq_channel::set_custom_data(const google::protobuf::Any& custom_data) noexcept {
@@ -404,7 +439,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
   RPC_RETURN_CODE(task_type_trait::get_result(*invoke_result.get_success()));
 }
 
-rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx) {
+rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t readonly_server_index) {
   if (shared_wal_object_) {
     shared_wal_object_->set_last_removed_key(alloc_message_sequence());
   }
@@ -415,7 +450,13 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx) {
     }
   }
 
-  if (is_readonly() || is_writable()) {
+  if (is_writable()) {
+    readonly_replicate_index_ = 0;
+    RPC_RETURN_CODE(0);
+  }
+
+  readonly_replicate_index_ = readonly_server_index;
+  if (is_readonly()) {
     RPC_RETURN_CODE(0);
   }
 
@@ -438,6 +479,11 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx) {
         auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->send_subscribe_to_writable(child_ctx));
 
         self_ptr->last_result_code_ = ret;
+
+        if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
+          task_type_trait::reset_task(self_ptr->io_task_);
+        }
+
         RPC_RETURN_CODE(ret);
       });
 
@@ -460,13 +506,45 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx) {
   RPC_RETURN_CODE(task_type_trait::get_result(*invoke_result.get_success()));
 }
 
-void mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&& snapshot, bool readonly) {
+void mq_channel::merge_subscriber(
+    rpc::context& ctx,
+    const ::google::protobuf::RepeatedPtrField<::atframework::dtmq::channel_subscriber>& subscribers) {
+  // 合并订阅者信息, 只读副本时，每个节点分别维护自己的订阅者。不需要继承可写节点的订阅者。
+  for (const auto& subscriber : subscribers) {
+    auto sub_inst = wal_publisher_->get_subscribe_manager().find(subscriber.subscriber_key());
+    if (sub_inst && sub_inst->get_private_data().last_heartbeat_sequence() >= subscriber.last_heartbeat_sequence()) {
+      continue;
+    }
+    subscribe(ctx, subscriber, subscriber.last_heartbeat_sequence(), 0, true);
+  }
+}
+
+void mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&& snapshot) {
   if (is_loading_snapshot_) {
     FWLOGERROR("mq channel {} recursive load snapshot is not allowed", get_channel_id());
     return;
   }
   is_loading_snapshot_ = true;
   auto loading_guard = gsl::finally([this]() { this->is_loading_snapshot_ = false; });
+
+  if (is_writable() && snapshot.replicate_index() > 0) {
+    FWLOGINFO("mq channel {} ignore load snapshot, channel is writable but received a readonly snapshot",
+              get_channel_id());
+
+    // 订阅者总是要合并的
+    merge_subscriber(ctx, snapshot.subscriber());
+    return;
+  }
+
+  if (is_readonly() && snapshot.replicate_index() > 0 &&
+      get_last_message_sequence() >= snapshot.channel_data().channel_metadata().last_sequence()) {
+    FWLOGINFO("mq channel {} ignore load snapshot, channel is readonly and received an older readonly snapshot",
+              get_channel_id());
+
+    // 订阅者总是要合并的
+    merge_subscriber(ctx, snapshot.subscriber());
+    return;
+  }
 
   FWLOGINFO("mq channel {} load snapshot", get_channel_id());
 
@@ -506,14 +584,9 @@ void mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     clear_lock();
   }
 
-  if (!readonly) {
+  if (0 == snapshot.replicate_index()) {
     // 如果时transfer过来的数据，需要以来源的配置为准
     protobuf_copy_message(configure_, snapshot.channel_data().channel_metadata().channel_configure());
-
-    // 合并订阅者信息, 只读副本时，每个节点分别维护自己的订阅者。不需要继承可写节点的订阅者。
-    for (const auto& subscriber : snapshot.subscriber()) {
-      subscribe(ctx, subscriber, subscriber.last_heartbeat_sequence(), 0, true);
-    }
   }
 
   if (shared_wal_object_) {
@@ -530,16 +603,27 @@ void mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     wal_publisher_->set_broadcast_key_bound(restore_broadcast_key);
   }
 
-  if (readonly) {
-    upgrade_to_readonly();
+  if (snapshot.replicate_index() > 0) {
+    upgrade_to_readonly(snapshot.replicate_index());
   } else {
     upgrade_to_writable();
   }
+
+  // 订阅者要在数据加载后再合并，否则会触发广播，导致订阅者收到不完整数据
+  merge_subscriber(ctx, snapshot.subscriber());
+
+  FWLOGINFO("channel {}({}) load_snapshot finished.", get_channel_id(), reinterpret_cast<const void*>(this));
 }
 
 void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& output) {
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
+
+  if (is_writable()) {
+    output.set_replicate_index(0);
+  } else {
+    output.set_replicate_index(readonly_replicate_index_);
+  }
 
   if (wal_publisher_) {
     wal_publisher_->dump(*output.mutable_channel_data(), params);
@@ -584,63 +668,360 @@ void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& 
   }
 }
 
-bool mq_channel::is_init() const noexcept { return is_readonly() || is_writable(); }
+bool mq_channel::should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                     uint64_t& writable_server_id, mq_channel* channel) noexcept {
+  bool can_be_writable = true;
+  do {
+    if (mq_channel_manager::is_instance_destroyed()) {
+      can_be_writable = false;
+      break;
+    }
 
-bool mq_channel::should_be_writable(const atfw::dtmq::DChannelIdKey& channel_key, mq_channel* channel) noexcept {
-  if (mq_channel_manager::is_instance_destroyed()) {
-    return false;
-  }
+    if (mq_channel_manager::me()->is_stoping()) {
+      can_be_writable = false;
+      break;
+    }
 
-  if (mq_channel_manager::me()->is_stoping()) {
-    return false;
-  }
-  if (channel == nullptr) {
-    return logic_config::me()->get_local_server_id() ==
-           rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable, 0,
-                                           logic_hpa_discovery_select_mode::kReady);
-  }
-  if (channel->dtmq_proxysvr_etcd_revision_ < mq_channel_manager::me()->get_dtmq_proxysvr_etcd_revision()) {
-    channel->recalculate_etcd_cache();
-  }
-  return channel->writable_dtmq_proxysvr_id_ == logic_config::me()->get_local_server_id();
+    if (channel == nullptr) {
+      break;
+    }
+
+    // 先调用 should_be_writable, 会触发分布计算，避免后续重复计算
+    bool ret = channel->should_be_writable();
+    writable_server_id = channel->target_distribution_.writable_server_id;
+    return ret;
+  } while (false);
+
+  writable_server_id = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable, 0,
+                                                       logic_hpa_discovery_select_mode::kTarget);
+  return can_be_writable && logic_config::me()->get_local_server_id() == writable_server_id;
 }
 
-bool mq_channel::should_be_writable() noexcept { return should_be_writable(get_channel_key(), this); }
-
-bool mq_channel::should_be_readonly() noexcept {
-  if (dtmq_proxysvr_etcd_revision_ < mq_channel_manager::me()->get_dtmq_proxysvr_etcd_revision()) {
+bool mq_channel::should_be_writable() noexcept {
+  if (server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
     recalculate_etcd_cache();
   }
-  if (readonly_dtmq_proxysvr_ids_.find(logic_config::me()->get_local_server_id()) ==
-      readonly_dtmq_proxysvr_ids_.end()) {
+
+  return target_distribution_.writable_server_id == logic_config::me()->get_local_server_id();
+}
+
+bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                     uint64_t& readonly_server_id, uint64_t readonly_replicate_index,
+                                                     mq_channel* channel) noexcept {
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+  if (0 == readonly_replicate_index || dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+    return should_be_writable_or_get_server_id(channel_key, readonly_server_id, channel);
+  }
+
+  if (readonly_replicate_index > static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) {
+    readonly_replicate_index =
+        (readonly_replicate_index % static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) + 1;
+  }
+
+  bool can_be_readonly = true;
+  do {
+    if (mq_channel_manager::is_instance_destroyed()) {
+      can_be_readonly = false;
+      break;
+    }
+
+    if (mq_channel_manager::me()->is_stoping()) {
+      can_be_readonly = false;
+      break;
+    }
+
+    if (channel == nullptr) {
+      break;
+    }
+
+    // 先调用 should_be_writable, 会触发分布计算，避免后续重复计算
+    uint64_t local_readonly_replicate_index = 0;
+    bool ret = channel->should_be_readonly(local_readonly_replicate_index);
+
+    ret = ret && (local_readonly_replicate_index == readonly_replicate_index);
+    if (!ret) {
+      readonly_server_id = channel->get_target_distribution_server_id(readonly_replicate_index);
+      if (0 != readonly_server_id) {
+        return false;
+      }
+      break;
+    }
+
+    readonly_server_id = logic_config::me()->get_local_server_id();
+    return ret;
+  } while (false);
+
+  readonly_server_id =
+      rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kReadonly, readonly_replicate_index,
+                                      logic_hpa_discovery_select_mode::kTarget);
+  return can_be_readonly && readonly_server_id == logic_config::me()->get_local_server_id();
+}
+
+bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                        uint64_t& readonly_replicate_index,
+                                                        uint64_t& readonly_server_id, mq_channel* channel) noexcept {
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
+  if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+    readonly_replicate_index = 0;
+    should_be_writable_or_get_server_id(channel_key, readonly_server_id, channel);
     return false;
   }
+
+  bool can_be_readonly = true;
+  uint64_t local_server_id = logic_config::me()->get_local_server_id();
+  do {
+    if (mq_channel_manager::is_instance_destroyed()) {
+      can_be_readonly = false;
+      break;
+    }
+
+    if (mq_channel_manager::me()->is_stoping()) {
+      can_be_readonly = false;
+      break;
+    }
+
+    if (channel == nullptr) {
+      break;
+    }
+
+    if (channel->server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
+      channel->recalculate_etcd_cache();
+    }
+
+    auto iter = channel->target_distribution_.readonly_server_ids.find(local_server_id);
+    if (channel->target_distribution_.readonly_server_ids.end() == iter) {
+      // 如果本机无法成为只读副本，则随机选取一个只读节点用于后续转发RPC
+      std::vector<std::pair<uint64_t, uint64_t>> readonly_servers;
+      readonly_servers.reserve(static_cast<size_t>(channel->target_distribution_.readonly_server_ids.size() + 1));
+      if (channel->target_distribution_.writable_server_id != local_server_id) {
+        readonly_servers.emplace_back(channel->target_distribution_.writable_server_id, 0);
+      }
+
+      for (const auto& readonly_server : channel->target_distribution_.readonly_server_ids) {
+        readonly_servers.emplace_back(readonly_server.first, readonly_server.second);
+      }
+
+      // 实在没有则返回本机
+      if (readonly_servers.empty()) {
+        readonly_replicate_index = 0;
+        readonly_server_id = local_server_id;
+      } else if (readonly_servers.size() == 1) {
+        readonly_replicate_index = readonly_servers[0].second;
+        readonly_server_id = readonly_servers[0].first;
+      } else {
+        size_t idx = atfw::component::random_engine::random_between<size_t>(0, readonly_servers.size());
+        readonly_replicate_index = readonly_servers[idx].second;
+        readonly_server_id = readonly_servers[idx].first;
+      }
+      return false;
+    }
+
+    readonly_replicate_index = iter->second;
+    readonly_server_id = local_server_id;
+    return true;
+  } while (false);
+
+  std::vector<std::pair<uint64_t, uint64_t>> readonly_servers;
+  readonly_servers.reserve(static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count() + 1));
+  uint64_t writable_server_id = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable, 0,
+                                                                logic_hpa_discovery_select_mode::kTarget);
+  if (writable_server_id != local_server_id) {
+    readonly_servers.emplace_back(writable_server_id, 0);
+  }
+
+  for (size_t i = 1; i <= static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()); i++) {
+    readonly_server_id = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kReadonly, i,
+                                                         logic_hpa_discovery_select_mode::kTarget);
+    // 本机可以成为只读副本的情况
+    if (local_server_id == readonly_server_id && can_be_readonly) {
+      readonly_replicate_index = static_cast<uint64_t>(i);
+      readonly_server_id = local_server_id;
+      return true;
+    }
+    readonly_servers.emplace_back(readonly_server_id, static_cast<uint64_t>(i));
+  }
+
+  // 实在没有则返回本机
+  if (readonly_servers.empty()) {
+    readonly_replicate_index = 0;
+    readonly_server_id = local_server_id;
+  } else if (readonly_servers.size() == 1) {
+    readonly_replicate_index = readonly_servers[0].second;
+    readonly_server_id = readonly_servers[0].first;
+  } else {
+    size_t idx = atfw::component::random_engine::random_between<size_t>(0, readonly_servers.size());
+    readonly_replicate_index = readonly_servers[idx].second;
+    readonly_server_id = readonly_servers[idx].first;
+  }
+  return false;
+}
+
+bool mq_channel::should_be_readonly(uint64_t& readonly_replicate_index) noexcept {
+  if (server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
+    recalculate_etcd_cache();
+  }
+
+  // 可写节点重合，以可写节点为准
+  if (should_be_writable()) {
+    readonly_replicate_index = 0;
+    return false;
+  }
+
+  auto iter = target_distribution_.readonly_server_ids.find(logic_config::me()->get_local_server_id());
+  if (target_distribution_.readonly_server_ids.end() == iter) {
+    readonly_replicate_index = 0;
+    return false;
+  }
+
+  readonly_replicate_index = iter->second;
   return true;
 }
 
-uint64_t mq_channel::get_transfer_target(const atfw::dtmq::DChannelIdKey& channel_key) noexcept {
+uint64_t mq_channel::get_target_distribution_server_id(uint64_t replicate_index) const noexcept {
+  if (replicate_index == 0) {
+    return target_distribution_.writable_server_id;
+  }
+
+  // 只有短暂缓存不一致时才会使用这个函数，而且副本数通常不会很多，所以下面的遍历流程开销可以忽略
+  for (const auto& kv : target_distribution_.readonly_server_ids) {
+    if (kv.second == replicate_index) {
+      return kv.first;
+    }
+  }
+
+  return 0;
+}
+
+uint64_t mq_channel::get_target_distribution_replicate_index(uint64_t server_id) const noexcept {
+  if (target_distribution_.writable_server_id == server_id) {
+    return 0;
+  }
+
+  auto iter = target_distribution_.readonly_server_ids.find(server_id);
+  if (iter != target_distribution_.readonly_server_ids.end()) {
+    return iter->second;
+  }
+
+  return std::numeric_limits<uint64_t>::max();
+}
+
+uint64_t mq_channel::calculate_transfer_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
+                                                         uint64_t replicate_index) noexcept {
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
+  if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+    replicate_index = 0;
+  } else if (replicate_index > static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) {
+    replicate_index = (replicate_index % static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) + 1;
+  }
+
+  rpc::dtmq::replicate_type rt =
+      replicate_index > 0 ? rpc::dtmq::replicate_type::kReadonly : rpc::dtmq::replicate_type::kWritable;
   // 检查分布，确认是否需要启动转移流程
   auto local_server_id = logic_config::me()->get_local_server_id();
-  uint64_t target_server_id = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable, 0,
+  uint64_t target_server_id = rpc::dtmq::get_target_server_id(channel_key, rt, static_cast<size_t>(replicate_index),
                                                               logic_hpa_discovery_select_mode::kTarget);
 
   if (local_server_id == target_server_id) {
     return 0;
   }
 
-  FWLOGDEBUG("transfer target for channel_key({}) local_server_id({}), target_server_id({})",
-             protobuf_mini_dumper_get_readable(channel_key), local_server_id, target_server_id);
   return target_server_id;
 }
 
-uint64_t mq_channel::get_transfer_target() const noexcept { return get_transfer_target(channel_key_); }
+uint64_t mq_channel::get_transfer_target_server_id() const noexcept {
+  auto local_server_id = logic_config::me()->get_local_server_id();
+  if (is_writable()) {
+    if (target_distribution_.writable_server_id == local_server_id) {
+      return 0;
+    }
 
-uint64_t mq_channel::need_transfer() noexcept {
-  if (!is_writable() || !should_be_writable()) {
-    return 0;
+    // 如果连续多次节点负载变化和冷静窗口等待，如果已处理数据迁移的版本号小于等于最后一次的等待边界。
+    // 说明当前频道上一次的负载变化尚未触发转移，就不需要再等待。
+    // 可写节点在停机时如果有冷静窗口可以保存数据到DB，后续目标节点从DB拉取数据即可。
+    if (mq_channel_manager::me()->is_waiting_transfer() &&
+        resolved_transfer_etcd_revision_ >= mq_channel_manager::me()->get_transfer_server_etcd_revision()) {
+      return 0;
+    }
+
+    return target_distribution_.writable_server_id;
   }
 
-  return get_transfer_target();
+  if (is_readonly()) {
+    if (target_distribution_.writable_server_id == local_server_id) {
+      return 0;
+    }
+
+    if (target_distribution_.readonly_server_ids.end() !=
+        target_distribution_.readonly_server_ids.find(local_server_id)) {
+      return 0;
+    }
+
+    // 如果连续多次节点负载变化和冷静窗口等待，如果已处理数据迁移的版本号小于等于最后一次的等待边界。
+    // 说明当前频道上一次的负载变化尚未触发转移，就不需要再等待。
+    // 只读节点在停机时应该立即转移，否则会丢失订阅信息
+    if (mq_channel_manager::me()->is_waiting_transfer() && !mq_channel_manager::me()->is_stoping() &&
+        resolved_transfer_etcd_revision_ >= mq_channel_manager::me()->get_transfer_server_etcd_revision()) {
+      return 0;
+    }
+
+    // 没有只读副本则全部按可写副本计算
+    if (readonly_replicate_index_ == 0) {
+      return target_distribution_.writable_server_id;
+    }
+
+    return rpc::dtmq::get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kReadonly,
+                                           static_cast<size_t>(readonly_replicate_index_),
+                                           logic_hpa_discovery_select_mode::kTarget);
+  }
+
+  return 0;
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mq_channel::await_transfer(rpc::context& ctx,
+                                                                              uint64_t& transfer_to_server_id) {
+  transfer_to_server_id = 0;
+  if (is_io_task_running()) {
+    rpc::result_code_type::value_type result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
+    if (result < 0) {
+      RPC_RETURN_CODE(result);
+    }
+  }
+
+  if (!is_writable() && !is_readonly()) {
+    RPC_RETURN_CODE(0);
+  }
+
+  // 刷新分布计算
+  if (server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
+    recalculate_etcd_cache();
+  }
+
+  transfer_to_server_id = get_transfer_target_server_id();
+  if (transfer_to_server_id == 0) {
+    // 如果不在等待，可以标记已处理的转移版本号为当前最新的分布版本号，确保下一次从负载变化才能让冷静窗口等待生效。
+    if (resolved_transfer_etcd_revision_ != server_distribution_etcd_revision_ &&
+        !mq_channel_manager::me()->is_waiting_transfer()) {
+      resolved_transfer_etcd_revision_ = server_distribution_etcd_revision_;
+    }
+    RPC_RETURN_CODE(0);
+  }
+
+  async_start_transfer(ctx, transfer_to_server_id);
+
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
+  RPC_RETURN_CODE(ret);
+}
+
+void mq_channel::force_refresh_distribution() {
+  // 刷新分布计算
+  if (server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
+    recalculate_etcd_cache();
+  }
 }
 
 bool mq_channel::need_save_db() const noexcept {
@@ -648,7 +1029,7 @@ bool mq_channel::need_save_db() const noexcept {
     return false;
   }
 
-  return is_dirty_ && get_transfer_target() == 0;
+  return is_dirty_ && get_transfer_target_server_id() == 0;
 }
 
 bool mq_channel::is_io_task_running() const noexcept {
@@ -683,12 +1064,11 @@ rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx) {
   RPC_RETURN_CODE(ret);
 }
 
-void mq_channel::async_start_transfer(rpc::context& ctx) {
+void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_id) {
   if (is_io_task_running()) {
     return;
   }
 
-  uint64_t target_server_id = need_transfer();
   if (0 == target_server_id) {
     return;
   }
@@ -716,10 +1096,17 @@ void mq_channel::async_start_transfer(rpc::context& ctx) {
         // 转移数据
         result = RPC_AWAIT_CODE_RESULT(rpc::dtmq::transfer_channel(child_ctx, target_server_id, *req_body, *rsp_body));
 
-        if (result >= 0) {
-          self_ptr->downgrade_to_readable();
-        }
         self_ptr->send_oss(child_ctx, "transfer", result, target_server_id);
+
+        if (result >= 0) {
+          // 如果IO后又要迁回可写节点，当前无需操作，后续会触发upgrade
+          uint64_t readonly_replicate_index = 0;
+          if (self_ptr->should_be_readonly(readonly_replicate_index)) {
+            self_ptr->downgrade_to_readable(readonly_replicate_index);
+          } else if (!self_ptr->should_be_writable()) {
+            self_ptr->downgrade_to_none();
+          }
+        }
 
         if (!mq_channel_manager::is_instance_destroyed()) {
           mq_channel_manager::me()->set_more_transfer();
@@ -742,25 +1129,6 @@ void mq_channel::async_start_transfer(rpc::context& ctx) {
   }
 }
 
-rpc::result_code_type mq_channel::start_transfer(rpc::context& ctx) {
-  // 已经转移中或转移完毕则忽略
-  if (is_io_task_running()) {
-    RPC_AWAIT_IGNORE_RESULT(rpc::wait_task(ctx, io_task_));
-    task_type_trait::reset_task(io_task_);
-  }
-
-  async_start_transfer(ctx);
-
-  if (is_io_task_running()) {
-    auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
-    if (result < 0) {
-      RPC_RETURN_CODE(result);
-    }
-  }
-
-  RPC_RETURN_CODE(0);
-}
-
 void mq_channel::async_save(rpc::context& ctx) {
   if (is_io_task_running()) {
     return;
@@ -772,8 +1140,9 @@ void mq_channel::async_save(rpc::context& ctx) {
   }
 
   if (configure_.memory_only()) {
-    if (!should_be_writable()) {
-      downgrade_to_readable();
+    uint64_t readonly_replicate_index = 0;
+    if (should_be_readonly(readonly_replicate_index)) {
+      downgrade_to_readable(readonly_replicate_index);
     }
 
     is_dirty_ = false;
@@ -811,15 +1180,17 @@ void mq_channel::async_save(rpc::context& ctx) {
           }
         }
 
-        if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
-          task_type_trait::reset_task(self_ptr->io_task_);
-        }
-
-        if (!self_ptr->should_be_writable()) {
-          self_ptr->downgrade_to_readable();
+        uint64_t readonly_replicate_index = 0;
+        if (self_ptr->should_be_readonly(readonly_replicate_index)) {
+          self_ptr->downgrade_to_readable(readonly_replicate_index);
+        } else if (!self_ptr->should_be_writable()) {
+          self_ptr->downgrade_to_none();
         }
         self_ptr->is_dirty_ = false;
 
+        if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
+          task_type_trait::reset_task(self_ptr->io_task_);
+        }
         RPC_RETURN_CODE(0);
       });
 
@@ -862,6 +1233,7 @@ void mq_channel::async_destroy(rpc::context& ctx, std::chrono::system_clock::tim
                         [self_ptr, writable_remove_timepoint](rpc::context& child_ctx) -> rpc::result_code_type {
                           // 离线数据删除，使用TTL
                           auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->destroy(child_ctx, writable_remove_timepoint));
+
                           RPC_RETURN_CODE(ret);
                         });
 
@@ -896,7 +1268,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   }
 
   if (get_configure().memory_only()) {
-    downgrade_to_readable();
+    downgrade_to_none();
     RPC_RETURN_CODE(0);
   }
 
@@ -917,12 +1289,12 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
           RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::remove_all(child_ctx, self_ptr->get_channel_id()));
         }
 
+        self_ptr->downgrade_to_none();
+        self_ptr->send_oss(child_ctx, "destroy");
+
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
         }
-
-        self_ptr->downgrade_to_readable();
-        self_ptr->send_oss(child_ctx, "destroy");
         RPC_RETURN_CODE(0);
       });
 
@@ -960,6 +1332,11 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
                  record->record_set().record().size());
       load(ctx, *record);
       send_oss(ctx, "create_init", ret);
+
+      FWLOGINFO("channel {}({}) load_from_db success.", get_channel_id(), reinterpret_cast<const void*>(this));
+    } else {
+      FWLOGINFO("channel {}({}) load_from_db ignored, maybe transfer to another server node.", get_channel_id(),
+                reinterpret_cast<const void*>(this));
     }
   } else {
     FWLOGERROR("rpc::db::dtmq_channel_record::get failed mq channel: {}, result: {}({})", get_channel_id(), ret,
@@ -968,34 +1345,45 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   RPC_RETURN_CODE(ret);
 }
 
-void mq_channel::async_send_subscribe_to_writable(rpc::context& ctx) {
-  if (should_be_writable()) {
+int32_t mq_channel::async_send_subscribe_to_writable(rpc::context& ctx) {
+  uint64_t readonly_replicate_index = 0;
+  if (!should_be_readonly(readonly_replicate_index)) {
     wal_client_.reset();
-    return;
+    return 0;
   }
   maybe_create_wal_client();
   auto self_ptr = shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "mq_channel.async_send_subscribe_to_writable", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self_ptr->send_subscribe_to_writable(child_ctx)));
+        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->send_subscribe_to_writable(child_ctx));
+
+        RPC_RETURN_CODE(ret);
       });
 
   if (invoke_result.is_error()) {
     FWLOGERROR("send_subscribe_to_writable {} : create task failed.res: {}({})", channel_key_.channel_id(),
                *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-    return;
+    return *invoke_result.get_error();
   }
+
+  if ((task_type_trait::empty(io_task_) || task_type_trait::is_exiting(io_task_)) &&
+      !task_type_trait::is_exiting(io_task_)) {
+    io_task_ = *invoke_result.get_success();
+  }
+
+  return 0;
 }
 
 rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context& ctx) {
   if (is_io_task_running()) {
-    RPC_AWAIT_IGNORE_RESULT(await_io_task(ctx));
+    auto result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
+    if (result < 0) {
+      RPC_RETURN_CODE(result);
+    }
   }
-  if (should_be_writable()) {
-    wal_client_.reset();
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_MAIN_REPLICATE_SWITCH);
-  }
-  if (!should_be_readonly()) {
+
+  uint64_t readonly_replicate_index = 0;
+  if (!should_be_readonly(readonly_replicate_index)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
   }
   auto now = atfw::util::time::time_utility::now();
@@ -1008,22 +1396,12 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
   next_init_subscribe_timepoint_ = now + protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
                                              dtmq_proxysvr_cfg.channel_initialize_subscribe_timepoint());
-  maybe_create_wal_client();
 
-  auto self_ptr = shared_from_this();
-  auto invoke_result = rpc::async_invoke(
-      ctx, "mq_channel.await_send_subscribe_to_writable", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->send_subscribe_to_writable(child_ctx));
-        RPC_RETURN_CODE(ret);
-      });
-
-  if (invoke_result.is_error()) {
-    FWLOGERROR("mq channel {} transfer: create task failed.res: {}({})", get_channel_id(), *invoke_result.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-    RPC_RETURN_CODE(*invoke_result.get_error());
-  }
-  if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
-    io_task_ = *invoke_result.get_success();
+  int res = async_send_subscribe_to_writable(ctx);
+  if (res < 0) {
+    FWLOGERROR("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
+               next_init_subscribe_timepoint_);
+    RPC_RETURN_CODE(res);
   }
 
   if (is_io_task_running()) {
@@ -1032,11 +1410,11 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
       RPC_RETURN_CODE(result);
     }
   }
-  RPC_RETURN_CODE(task_type_trait::get_result(*invoke_result.get_success()));
+  RPC_RETURN_CODE(task_type_trait::get_result(io_task_));
 }
 
 rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) {
-  uint64_t dtmq_proxysvr_id = get_main_ready_dtmq_proxysvr_id();
+  uint64_t dtmq_proxysvr_id = get_main_ready_writable_server_id();
   if (dtmq_proxysvr_id == 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
@@ -1288,11 +1666,7 @@ uint64_t mq_channel::get_client_last_hash_code() const noexcept {
   return 0;
 }
 
-uint64_t mq_channel::get_main_ready_dtmq_proxysvr_id() {
-  should_be_writable();
-
-  return writable_dtmq_proxysvr_id_;
-}
+uint64_t mq_channel::get_main_ready_writable_server_id() { return ready_distribution_.writable_server_id; }
 
 int mq_channel::tick(rpc::context& ctx) {
   auto now = atfw::util::time::time_utility::now();
@@ -1317,10 +1691,6 @@ int mq_channel::tick(rpc::context& ctx) {
 
   // 单播数据下发
   wal_publisher_->broadcast(params);
-
-  if (should_be_writable() && now > next_notify_readonly_subscribe_timepoint_) {
-    send_notify_to_readonly(ctx);
-  }
 
   return 0;
 }
@@ -1436,15 +1806,14 @@ void mq_channel::compact_sequence(int64_t sequence) {
 }
 
 void mq_channel::maybe_create_wal_client() {
-  if (!should_be_writable()) {
+  uint64_t readonly_replicate_index = 0;
+  if (should_be_readonly(readonly_replicate_index)) {
     if (!wal_client_) {
       auto configure = excel::get_dtmq_channel_configure(get_channel_key().channel_type());
       if (configure) {
         wal_client_ = create_mq_channel_client(*this, *configure);
       }
     }
-  } else {
-    wal_client_ = nullptr;
   }
 }
 
@@ -1469,93 +1838,13 @@ void mq_channel::hash_mismatch_increase() {
                                                                    atfw::util::time::time_utility::now());
 }
 
-void mq_channel::send_notify_to_readonly(rpc::context& ctx) {
-  if (!should_be_writable()) {
-    return;
-  }
-
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-  next_notify_readonly_subscribe_timepoint_ =
-      atfw::util::time::time_utility::now() + protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
-                                                  dtmq_proxysvr_cfg.channel_notify_readonly_subscribe_interval());
-  auto self_ptr = shared_from_this();
-  auto invoke_result = rpc::async_invoke(
-      ctx, "mq_channel.send_notify_to_readonly", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        int32_t result = 0;
-        rpc::context::message_holder<atfw::dtmq::SSChannelNotifySlaveSubscribeReq> req_body{child_ctx};
-        rpc::context::message_holder<atfw::dtmq::SSChannelNotifySlaveSubscribeRsp> rsp_body{child_ctx};
-        // 这里通知每一个从节点来订阅主节点
-        std::unordered_set<uint64_t> readonly_server_ids;
-        mq_channel_wal_object_context params{child_ctx, result};
-        atfw::dtmq::channel_subscriber subscriber_info;
-        const auto& inner_dtmq_proxysvr_cfg =
-            logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-        for (size_t i = 1; i <= static_cast<size_t>(inner_dtmq_proxysvr_cfg.dtmq_proxysvr_readonly_count()); i++) {
-          uint64_t readonly_server_id =
-              rpc::dtmq::get_target_server_id(self_ptr->get_channel_key(), rpc::dtmq::replicate_type::kReadonly, i,
-                                              logic_hpa_discovery_select_mode::kReady);
-
-          // 如果从节点已经订阅了该主节点，不需要再通知订阅
-          subscriber_info.set_subscriber_server_id(readonly_server_id);
-          std::string subscriber_key = make_subscriber_key(subscriber_info);
-          auto subscribe = self_ptr->get_wal_publisher().find_subscriber(subscriber_key, params);
-          if (subscribe) {
-            continue;
-          }
-
-          if (readonly_server_id != logic_config::me()->get_local_server_id() &&
-              readonly_server_ids.find(readonly_server_id) == readonly_server_ids.end()) {
-            readonly_server_ids.insert(readonly_server_id);
-            req_body->clear_sync_data();
-            auto* channel_data = req_body->mutable_sync_data()->Add();
-            protobuf_copy_message(*channel_data->mutable_channel_key(), self_ptr->get_channel_key());
-            channel_data->set_readonly_index(i);
-            auto ret =
-                RPC_AWAIT_CODE_RESULT(rpc::dtmq::notify_readonly(child_ctx, readonly_server_id, *req_body, *rsp_body));
-            if (ret != 0) {
-              FWLOGERROR("send notify to readonly {} failed, chanenl id :{}", readonly_server_id,
-                         self_ptr->get_channel_key().channel_id())
-            }
-          }
-        }
-        RPC_RETURN_CODE(0);
-      });
-
-  if (invoke_result.is_error()) {
-    FWLOGERROR("send_notify_to_readonly {} : create task failed.res: {}({})", channel_key_.channel_id(),
-               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-    return;
-  }
-}
-
-size_t mq_channel::get_suggest_readonly_replicate_index(const atfw::dtmq::DChannelIdKey& channel_key) noexcept {
-  // TODO(owent): 是否应该区分请求来源？其他服务请求允许访问只读副本，自己类型的服务则访问可写端。
-  //              (client->readonly->writeable)。
-
-  uint64_t target_server_id = logic_config::me()->get_local_server_id();
-  if (target_server_id == rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable, 0,
-                                                          logic_hpa_discovery_select_mode::kReady)) {
-    return 0;
-  }
-
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-  for (size_t i = 1; i <= static_cast<size_t>(dtmq_proxysvr_cfg.dtmq_proxysvr_readonly_count()); i++) {
-    if (target_server_id == rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kReadonly, i,
-                                                            logic_hpa_discovery_select_mode::kReady)) {
-      return i;
-    }
-  }
-
-  return 0;
-}
-
 void mq_channel::update_timer(rpc::context& ctx, bool force) {
   FWLOGDEBUG("channel({}) update_timer", get_channel_id());
+
+  if (!is_writable() && !is_readonly()) {
+    mq_channel_manager::me()->remove_channel(get_channel_id(), this);
+    return;
+  }
 
   auto now = atfw::util::time::time_utility::now();
 
@@ -1571,15 +1860,7 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
     if (!is_io_task_running()) {
       last_save_timepoint_ = now;
       auto channel_ptr = shared_from_this();
-      auto save_task = rpc::async_invoke(ctx, "mq_channel.update_timer",
-                                         [channel_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-                                           auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->save(child_ctx));
-                                           RPC_RETURN_CODE(result);
-                                         });
-      if (save_task.is_error()) {
-        FWLOGERROR("Save mq channel {} failed, res: {}({})", get_channel_id(), *save_task.get_error(),
-                   protobuf_mini_dumper_get_error_msg(*save_task.get_error()));
-      }
+      channel_ptr->async_save(ctx);
     }
   }
 
@@ -1663,9 +1944,10 @@ void mq_channel::remove_timer() {
   timer_handle_.reset();
 }
 
-bool mq_channel::upgrade_to_readonly() noexcept {
+bool mq_channel::upgrade_to_readonly(uint64_t readonly_server_index) noexcept {
   if (status_ != channel_status::kWritable && status_ != channel_status::kReadonly) {
     status_ = channel_status::kReadonly;
+    readonly_replicate_index_ = readonly_server_index;
     return true;
   }
 
@@ -1678,12 +1960,25 @@ bool mq_channel::upgrade_to_writable() noexcept {
   }
 
   status_ = channel_status::kWritable;
+  wal_client_.reset();
+
   return true;
 }
 
-bool mq_channel::downgrade_to_readable() noexcept {
+bool mq_channel::downgrade_to_readable(uint64_t readonly_server_index) noexcept {
   if (status_ == channel_status::kWritable) {
     status_ = channel_status::kReadonly;
+    readonly_replicate_index_ = readonly_server_index;
+    return true;
+  }
+
+  return false;
+}
+
+bool mq_channel::downgrade_to_none() noexcept {
+  if (status_ != channel_status::kNone) {
+    status_ = channel_status::kNone;
+    wal_client_.reset();
     return true;
   }
 
@@ -1708,18 +2003,40 @@ void mq_channel::send_oss(rpc::context& /*ctx*/, const std::string& /*action*/, 
 }
 
 void mq_channel::recalculate_etcd_cache() {
-  dtmq_proxysvr_etcd_revision_ = mq_channel_manager::me()->get_dtmq_proxysvr_etcd_revision();
-  writable_dtmq_proxysvr_id_ = rpc::dtmq::get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable,
-                                                               0, logic_hpa_discovery_select_mode::kReady);
-  // etcd版本号更新，可能导致从节点分布变化，重置时间立刻通知更新一次
-  next_notify_readonly_subscribe_timepoint_ = std::chrono::system_clock::from_time_t(0);
-  readonly_dtmq_proxysvr_ids_.clear();
+  int64_t latest_server_etcd_revision = mq_channel_manager::me()->get_latest_server_etcd_revision();
+  if (server_distribution_etcd_revision_ == latest_server_etcd_revision) {
+    return;
+  }
 
+  server_distribution_etcd_revision_ = latest_server_etcd_revision;
+  std::pair<logic_hpa_discovery_select_mode, replicate_distribution_info*> calc_set[] = {
+      {logic_hpa_discovery_select_mode::kReady, &ready_distribution_},
+      {logic_hpa_discovery_select_mode::kTarget, &target_distribution_},
+  };
+
+  uint64_t local_server_id = logic_config::me()->get_local_server_id();
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
-  for (size_t i = 1; i <= static_cast<size_t>(dtmq_proxysvr_cfg.dtmq_proxysvr_readonly_count()); i++) {
-    readonly_dtmq_proxysvr_ids_.insert(rpc::dtmq::get_target_server_id(
-        get_channel_key(), rpc::dtmq::replicate_type::kReadonly, i, logic_hpa_discovery_select_mode::kReady));
+  for (auto& calc_data : calc_set) {
+    calc_data.second->writable_server_id =
+        rpc::dtmq::get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable, 0, calc_data.first);
+
+    calc_data.second->current_readonly_server_index = 0;
+    calc_data.second->readonly_server_ids.clear();
+    if (dtmq_proxysvr_cfg.readonly_replicate_count() > 0) {
+      calc_data.second->readonly_server_ids.reserve(static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()));
+      for (size_t i = 1; i <= static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()); i++) {
+        uint64_t readonly_server_id = rpc::dtmq::get_target_server_id(
+            get_channel_key(), rpc::dtmq::replicate_type::kReadonly, i, calc_data.first);
+        calc_data.second->readonly_server_ids[readonly_server_id] = static_cast<uint64_t>(i);
+        if (readonly_server_id == local_server_id && readonly_server_id != calc_data.second->writable_server_id) {
+          calc_data.second->current_readonly_server_index = i;
+        }
+      }
+    }
+
+    // etcd版本号更新，可能导致从节点分布变化，重置时间立刻通知更新一次
+    next_notify_readonly_subscribe_timepoint_ = std::chrono::system_clock::from_time_t(0);
   }
 }

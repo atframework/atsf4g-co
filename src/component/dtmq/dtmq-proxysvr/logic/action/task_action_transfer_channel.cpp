@@ -34,6 +34,7 @@
 
 #include "data/mq_channel.h"
 #include "logic/mq_channel_manager.h"
+#include "rpc/rpc_common_types.h"
 
 DTMQ_PROXY_SERVICE_API task_action_transfer_channel::task_action_transfer_channel(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -51,16 +52,20 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
   // Prepare maybe need forward
   std::unordered_map<uint64_t, std::list<atfw::dtmq::channel_snapshot*>> forward_by_server_id;
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
   for (auto& channel_snapshot : *req_body.mutable_snapshot()) {
-    // TODO(owent): 检查channel_id是否允许可写
+    // make_readable_channel或make_readable_channel_with_replicate_index会检查是否允许可写或者读权限
     mq_channel_manager::mq_channel_ptr_type channel;
     uint64_t forward_server_id = 0;
-    auto res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
-        get_shared_context(), channel, forward_server_id,
-        channel_snapshot.channel_data().channel_metadata().channel_key(), true));
+    rpc::result_code_type::value_type res = 0;
+    if (channel_snapshot.replicate_index() > 0) {
+      res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel_with_replicate_index(
+          get_shared_context(), channel, forward_server_id, channel_snapshot.replicate_index(),
+          channel_snapshot.channel_data().channel_metadata().channel_key(), true));
+    } else {
+      res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
+          get_shared_context(), channel, forward_server_id,
+          channel_snapshot.channel_data().channel_metadata().channel_key(), true));
+    }
     if (res < 0) {
       set_response_code(res);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -68,7 +73,7 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
 
     // 请求转发
     if (0 != forward_server_id) {
-      if (req_body.forward_ttl() > dtmq_proxysvr_cfg.forward_request_max_ttl()) {
+      if (req_body.forward_ttl() > logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
         FWLOGERROR("chat channel {} forward ttl exceeded limit",
                    channel_snapshot.channel_data().channel_metadata().channel_key().channel_id());
         continue;
@@ -77,7 +82,7 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
       continue;
     }
 
-    channel->load_snapshot(get_shared_context(), std::move(channel_snapshot), false);
+    channel->load_snapshot(get_shared_context(), std::move(channel_snapshot));
   }
 
   for (auto& forward_group : forward_by_server_id) {

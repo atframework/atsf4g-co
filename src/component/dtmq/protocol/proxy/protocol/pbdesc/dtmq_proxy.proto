@@ -24,11 +24,12 @@ message channel_subscriber_cache {
 message channel_snapshot {
   DChannelSnapshot channel_data = 1;
   repeated channel_subscriber subscriber = 2;
+  uint64 replicate_index = 3;
 }
 
 message channel_lock_checker {
-  bool ignore_expect_value = 1;          // 是否忽略检查
-  bool allow_empty_real_value = 2;       // 是否允许实际锁持有者未空
+  bool ignore_expect_value = 1;             // 是否忽略检查
+  bool allow_empty_real_value = 2;          // 是否允许实际锁持有者未空
   DChannelOptimisticLock expect_value = 3;  // 期望的锁持有信息
   DChannelOptimisticLock real_value = 4;    // 实际的锁持有信息，如果检查失败会回带
 
@@ -55,13 +56,11 @@ message SSChannelSubscribeRsp {
 
 message SSChannelUnsubscribeReq {
   channel_subscriber subscriber = 1;
-  uint32 forward_ttl = 2;
 
   repeated bytes channel_id = 11;
 }
 
 message SSChannelSendMessageReq {
-  uint32 forward_ttl = 2;
   bool auto_create_channel = 3;
   channel_lock_checker compare_and_maybe_reset_lock = 4;
 
@@ -72,13 +71,6 @@ message SSChannelSendMessageReq {
   int64 subscriber_last_sequence = 22;
   uint64 subscriber_last_hash_code = 23;
 }
-
-message SSChannelNotifySlaveSubscribeReq {
-  repeated DChannelSyncPoint sync_data = 1;
-  uint32 forward_ttl = 2;
-}
-
-message SSChannelNotifySlaveSubscribeRsp {}
 
 message SSChannelSendMessageRsp {
   int32 client_result = 1;
@@ -97,7 +89,6 @@ message SSChannelTransferChannelReq {
 message SSChannelTransferChannelRsp {}
 
 message SSChannelDestroyChannelReq {
-  uint32 forward_ttl = 2;
   channel_lock_checker compare_and_maybe_reset_lock = 3;
 
   DChannelIdKey channel_key = 11;
@@ -105,7 +96,6 @@ message SSChannelDestroyChannelReq {
 
 message SSChannelUpdateReq {
   channel_subscriber subscriber = 1;
-  uint32 forward_ttl = 2;
   bool auto_create_channel = 3;
   channel_lock_checker compare_and_maybe_reset_lock = 4;
 
@@ -147,7 +137,6 @@ message SSChannelUpdateRsp {
 }
 
 message SSChannelResetLockReq {
-  uint32 forward_ttl = 2;
   bool auto_create_channel = 3;
   channel_lock_checker compare_and_maybe_reset_lock = 4;
 
@@ -170,8 +159,6 @@ message SSChannelFindMessageRsp {
   DChannelMessage channel_message = 11;
 }
 
-
-
 message SSChannelQueryMessageReq {
   DChannelIdKey channel_key = 1;
   channel_page_info page_info = 2;
@@ -186,7 +173,6 @@ message SSChannelQueryMessageRsp {
 }
 
 message SSChannelPullReq {
-  uint32 forward_ttl = 1;
   DChannelIdKey channel_key = 2;
 
   bool need_snapshot = 11;
@@ -230,13 +216,6 @@ service DtmqProxysvrService {
   rpc send_message(SSChannelSendMessageReq) returns (SSChannelSendMessageRsp) {
     option (atframework.rpc_options) = {
       api_name: "发送消息"
-      allow_no_wait: true
-    };
-  };
-
-  rpc notify_readonly(SSChannelNotifySlaveSubscribeReq) returns (SSChannelNotifySlaveSubscribeRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "主节点通知从节点订阅"
       allow_no_wait: true
     };
   };
