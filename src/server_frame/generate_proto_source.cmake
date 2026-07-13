@@ -110,7 +110,6 @@ add_custom_command(
   OUTPUT "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
   COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/config.pb"
           "${PROJECT_INSTALL_RES_PBD_DIR}"
-  COMMAND "${CMAKE_COMMAND}" "-E" "touch" "${PROJECT_INSTALL_RES_PBD_DIR}/config.pb"
   WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}"
   DEPENDS "${PROJECT_GENERATED_PBD_DIR}/config.pb"
   COMMENT "Generate [@${PROJECT_SERVER_FRAME_PROTO_SANDBOX_CONFIG_DIR}] ${PROJECT_INSTALL_RES_PBD_DIR}/config.pb")
@@ -137,13 +136,10 @@ add_custom_command(
          "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
-  COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.xml"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/xresconv.xml"
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
-  COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.data.xml"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/validator.yaml"
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
-  COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
   DEPENDS "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/validator.yaml"
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
   COMMENT "Generate xresconv.xml,xresconv.data.xml,validator.yaml into ${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
@@ -343,7 +339,6 @@ add_custom_command(
   OUTPUT "${PROJECT_INSTALL_RES_PBD_DIR}/serverframe_all.pb"
   COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
           "${PROJECT_INSTALL_RES_PBD_DIR}"
-  COMMAND "${CMAKE_COMMAND}" "-E" "touch" "${PROJECT_INSTALL_RES_PBD_DIR}/serverframe_all.pb"
   WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
   DEPENDS "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
   COMMENT
