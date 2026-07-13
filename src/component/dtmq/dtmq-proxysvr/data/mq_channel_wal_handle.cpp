@@ -134,7 +134,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
         break;
       }
 
-      if (log_ptr->sequence() <= channel->get_compact_stateful_sequence() || log_ptr->sequence() <= last_removed_key) {
+      if (msg.sequence() <= channel->get_compact_stateful_sequence() || msg.sequence() <= last_removed_key) {
         continue;
       }
 

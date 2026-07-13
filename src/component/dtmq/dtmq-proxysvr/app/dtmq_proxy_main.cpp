@@ -90,12 +90,7 @@ class main_service_module : public atfw::atapp::module_impl {
 
   int tick() override { return mq_channel_manager::me()->tick(); }
 
-  int stop() override {
-    if (!mq_channel_manager::me()->is_self_stateful_active()) {
-      return 0;
-    }
-    return -1;
-  }
+  int stop() override { return mq_channel_manager::me()->stop(); }
 
   void ready() override {}
 

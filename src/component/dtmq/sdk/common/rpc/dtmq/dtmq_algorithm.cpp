@@ -32,8 +32,16 @@ DTMQ_COMMON_SDK_API void set_hash_code(atfw::dtmq::DChannelMessage& channel_log,
 
 DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
                                                  const atfw::dtmq::DChannelMessage& channel_log) noexcept {
-  uint64_t buffer[1] = {static_cast<uint64_t>(channel_log.sequence())};
+  uint64_t content_hash = static_cast<uint64_t>(channel_log.detail().command_case());
+  if (!channel_log.detail().text().empty()) {
+    content_hash = XXH64(channel_log.detail().text().data(), channel_log.detail().text().size(),
+                         static_cast<XXH64_hash_t>(previous));
+  } else if (!channel_log.detail().event().type_url().empty()) {
+    content_hash = XXH64(channel_log.detail().event().value().data(), channel_log.detail().event().value().size(),
+                         static_cast<XXH64_hash_t>(previous));
+  }
 
+  uint64_t buffer[2] = {static_cast<uint64_t>(channel_log.sequence()), content_hash};
   return static_cast<uint64_t>(XXH64(buffer, sizeof(buffer), static_cast<XXH64_hash_t>(previous)));
 }
 

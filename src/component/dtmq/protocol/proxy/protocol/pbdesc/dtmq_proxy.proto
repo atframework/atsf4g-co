@@ -86,7 +86,9 @@ message SSChannelTransferChannelReq {
   uint32 forward_ttl = 2;
 }
 
-message SSChannelTransferChannelRsp {}
+message SSChannelTransferChannelRsp {
+  repeated DChannelIdKey failed_channel_key = 1;
+}
 
 message SSChannelDestroyChannelReq {
   channel_lock_checker compare_and_maybe_reset_lock = 3;

@@ -38,7 +38,6 @@ mq_channel_manager::mq_channel_manager()
       more_transfer_now_(false),
       is_stoping_(false),
       is_pre_stoping_(false),
-      is_self_stateful_active_(false),
       report_channel_qty_time_(std::chrono::system_clock::from_time_t(0)) {}
 
 mq_channel_manager::~mq_channel_manager() {}
@@ -148,23 +147,18 @@ int mq_channel_manager::tick() {
 
   // 处理节点预下线的逻辑
   if (is_pre_stoping_ && !is_stoping_) {
-    logic_server_common_module* common_mod = logic_server_last_common_module();
-    if (nullptr == common_mod) {
-      FWLOGERROR("can not find logic_server_common_module after pre_stop in tick");
-      return -1;
-    }
-    if (!common_mod->is_runtime_active()) {
-      // 节点已下线
-      FWLOGDEBUG("[channel_stop] self runtime activity is false, begin to stop");
-      stop();
-    }
+    stop();
   }
 
   {
     resolve_channel_distribution();
     aysnc_save_dirty_channel();
+  }
 
-    update_self_stateful_inactive();
+  // 如果Hpa模块不处于target集群，则需要触发pre_stoping逻辑，确保在节点下线前数据迁移到其他节点或触发保存
+  // 用 !channels_.empty() 确保如果收到老数据，节点未就绪前不会触发pre_stoping逻辑。channel未空时也不需要转移或保存数据
+  if (!channels_.empty() && !logic_hpa_current_node_is_in_target()) {
+    pre_stoping();
   }
   return ret;
 }
@@ -173,6 +167,9 @@ void mq_channel_manager::pre_stoping() noexcept { is_pre_stoping_ = true; }
 
 int mq_channel_manager::stop() {
   if (!is_stoping_) {
+    // 节点已下线
+    FWLOGINFO("[channel_stop] mq_channel_manager begin to stop");
+
     is_stoping_ = true;
     pending_save_channels_.clear();
 
@@ -191,7 +188,7 @@ int mq_channel_manager::stop() {
     }
   }
 
-  return (pending_io_channels_.empty() && pending_save_channels_.empty()) ? 0 : 1;
+  return is_can_stopped() ? 0 : 1;
 }
 
 bool mq_channel_manager::is_stoping() const noexcept { return is_stoping_; }
@@ -199,8 +196,6 @@ bool mq_channel_manager::is_stoping() const noexcept { return is_stoping_; }
 bool mq_channel_manager::is_can_stopped() const noexcept {
   return is_stoping_ && pending_io_channels_.empty() && pending_save_channels_.empty();
 }
-
-bool mq_channel_manager::is_self_stateful_active() const noexcept { return is_self_stateful_active_; }
 
 void mq_channel_manager::update_timer(mq_channel& channel, mq_channel_timer_type::timer_wptr_t& output_handle,
                                       std::chrono::system_clock::duration timeout) {
@@ -512,6 +507,7 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     }
 
     // 如果writable节点和replicate_index指向的节点一致，则channel会是writable，判定replicate_index匹配即可
+    // 这里的作用是获取replicate_index对应的可以用于只读数据的节点，writable节点也可以作为只读节点的
     forward_server_id = channel_ptr->get_target_distribution_server_id(replicate_index);
     if ((channel_ptr->is_readonly() || channel_ptr->is_writable()) && local_server_id == forward_server_id) {
       FWLOGDEBUG("channel {} select existed readonly channel with replicate_index {}", channel_key.channel_id(),
@@ -730,13 +726,6 @@ void mq_channel_manager::resolve_channel_distribution() {
   // more_transfer_now_ 表示要立即处理剩下的pending中的频道
   // 这里设置成false，下一帧会继续处理
   more_transfer_now_ = false;
-}
-
-void mq_channel_manager::update_self_stateful_inactive() {
-  if (is_can_stopped() && is_self_stateful_active()) {
-    is_self_stateful_active_ = false;
-    FWLOGINFO("[process can stoped] update_self_stateful_inactive to false succeed.");
-  }
 }
 
 void mq_channel_manager::report_channel_qty_oss() {

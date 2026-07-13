@@ -83,25 +83,22 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
     // Message
     int64_t compact_stateful_sequence = channel->get_compact_stateful_sequence();
     int64_t log_end = req_body.need_message_sequence_end();
-    if (log_end >= 0) {
-      auto iter =
-          channel->get_wal_publisher().get_log_manager().log_lower_bound(req_body.need_message_sequence_begin());
+    auto iter = channel->get_wal_publisher().get_log_manager().log_lower_bound(req_body.need_message_sequence_begin());
 
-      for (; iter != channel->get_wal_publisher().get_log_manager().log_end(); ++iter) {
-        if (!*iter) {
-          continue;
-        }
-
-        if (log_end >= 0 && (*iter)->sequence() > log_end) {
-          break;
-        }
-
-        if ((*iter)->sequence() <= compact_stateful_sequence) {
-          continue;
-        }
-
-        protobuf_copy_message(*rsp_body.mutable_channel_data()->add_messages(), **iter);
+    for (; iter != channel->get_wal_publisher().get_log_manager().log_end(); ++iter) {
+      if (!*iter) {
+        continue;
       }
+
+      if (log_end >= 0 && (*iter)->sequence() > log_end) {
+        break;
+      }
+
+      if ((*iter)->sequence() <= compact_stateful_sequence) {
+        continue;
+      }
+
+      protobuf_copy_message(*rsp_body.mutable_channel_data()->add_messages(), **iter);
     }
 
     if (req_body.need_lock()) {

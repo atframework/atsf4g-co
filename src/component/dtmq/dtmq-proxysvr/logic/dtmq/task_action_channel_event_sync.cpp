@@ -82,6 +82,9 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   if (req_body.has_channel_snapshot()) {
     rpc::context::message_holder<atfw::dtmq::channel_snapshot> channel_snapshot{get_shared_context()};
     protobuf_move_message(*channel_snapshot->mutable_channel_data(), std::move(*req_body.mutable_channel_snapshot()));
+    // 保持当前节点的replicate_index不变，避免writable/readonly角色变化。
+    // 这里是从其他writable节点同步只读数据过来，这时候本地总是视为readonly节点。
+    channel_snapshot->set_replicate_index(channel->get_current_replicate_index());
     channel->load_snapshot(get_shared_context(), std::move(*channel_snapshot));
 
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

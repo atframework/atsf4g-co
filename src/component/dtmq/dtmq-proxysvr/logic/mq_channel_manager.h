@@ -51,7 +51,6 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   int stop();
   bool is_stoping() const noexcept;
   bool is_can_stopped() const noexcept;
-  bool is_self_stateful_active() const noexcept;
 
   void update_timer(mq_channel& mq_channel, mq_channel_timer_type::timer_wptr_t& output_handle,
                     std::chrono::system_clock::duration timeout);
@@ -138,8 +137,6 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   void aysnc_save_dirty_channel();
   // 重新balance聊天频道分布
   void resolve_channel_distribution();
-  // 更新当前节点不可用
-  void update_self_stateful_inactive();
 
   void report_channel_qty_oss();
 
@@ -159,7 +156,6 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   bool more_transfer_now_;
   bool is_stoping_;
   bool is_pre_stoping_;
-  bool is_self_stateful_active_;
 
   std::chrono::system_clock::time_point report_channel_qty_time_;
 };

@@ -172,6 +172,10 @@ DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, atfw::d
   auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::find_message(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body));
   protobuf_copy_message(msg, rpc_rsp_body->channel_message());
 
+  if (rpc_rsp_body->client_result() < 0) {
+    RPC_RETURN_CODE(rpc_rsp_body->client_result());
+  }
+
   RPC_RETURN_CODE(ret);
 }
 
@@ -197,6 +201,9 @@ DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
   protobuf_copy_message(page_info, rpc_rsp_body->page_info());
   protobuf_copy_message(msgs, rpc_rsp_body->channel_message());
 
+  if (rpc_rsp_body->client_result() < 0) {
+    RPC_RETURN_CODE(rpc_rsp_body->client_result());
+  }
   RPC_RETURN_CODE(ret);
 }
 

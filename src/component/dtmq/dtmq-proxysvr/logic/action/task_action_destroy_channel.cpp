@@ -64,7 +64,7 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
 
   if (!channel) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   channel->tick(get_shared_context());
@@ -74,6 +74,7 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
                                              true)) {
     FWLOGDEBUG("channel {} ignore destroy because lock failed:\n{}", req_body.channel_key().channel_id(),
                req_body.compare_and_maybe_reset_lock().DebugString());
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 

@@ -113,6 +113,9 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
                                                              param, std::move(*update_message));
     if (message) {
       channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+
+      // 重置一下custom_data_sequence，确保如果只有这一条log，custom_data也能下发
+      channel->reset_custom_data_sequence();
     } else {
       FWLOGERROR("malloc wal log for chat channel {} failed", req_body.channel_key().channel_id());
     }

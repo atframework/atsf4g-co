@@ -103,6 +103,9 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   void set_custom_data(const google::protobuf::Any& custom_data) noexcept;
   void clear_custom_data() noexcept;
 
+  // 重置custom data的sequence，会触发下发下发log到订阅者时附带custom data
+  void reset_custom_data_sequence() noexcept;
+
   inline const google::protobuf::Any& get_private_data() const noexcept { return private_data_; }
   inline int64_t get_private_data_sequence() const noexcept { return private_data_sequence_; }
   void set_private_data(const google::protobuf::Any& private_data) noexcept;
@@ -122,11 +125,19 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   void dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&);
 
-  inline bool is_dirty() const noexcept { return is_dirty_; }
+  inline bool is_dirty() const noexcept { return saved_version_ >= dirty_version_; }
 
   inline bool is_readonly() const noexcept { return status_ == channel_status::kReadonly; }
 
   inline bool is_writable() const noexcept { return status_ == channel_status::kWritable; }
+
+  inline uint64_t get_current_replicate_index() const noexcept {
+    if (is_writable()) {
+      return 0;
+    }
+
+    return readonly_replicate_index_;
+  }
 
   inline atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type>>
   get_shared_wal_object() {
@@ -139,18 +150,18 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> get_wal_client() { return wal_client_; }
 
   static bool should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
-                                                  uint64_t& writable_server_id, mq_channel* channel = nullptr) noexcept;
-  bool should_be_writable() noexcept;
+                                                  uint64_t& writable_server_id, mq_channel* channel = nullptr);
+  bool should_be_writable();
 
   static bool should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                   uint64_t& readonly_server_id, uint64_t readonly_replicate_index,
-                                                  mq_channel* channel = nullptr) noexcept;
+                                                  mq_channel* channel = nullptr);
 
   static bool should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                      uint64_t& readonly_replicate_index, uint64_t& readonly_server_id,
-                                                     mq_channel* channel = nullptr) noexcept;
+                                                     mq_channel* channel = nullptr);
 
-  bool should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_NULLABLE & readonly_replicate_index_set) noexcept;
+  bool should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_NULLABLE & readonly_replicate_index_set);
 
   /**
    * @brief Get the target distribution server id
@@ -199,7 +210,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int32_t async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx);
-  void set_destroy_message(rpc::context& ctx);
+  void set_destroy_message(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint);
 
   int32_t subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
                     int64_t last_received_sequence, size_t last_received_hash_code, bool merge_mode);
@@ -278,13 +289,15 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   google::protobuf::Any private_data_;
 
   bool is_loading_snapshot_;
-  bool is_dirty_;
+  uint64_t dirty_version_;
+  uint64_t saved_version_;
 
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type> shared_wal_object_;
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> wal_publisher_;
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> wal_client_;
 
   mutable task_type_trait::task_type io_task_;
+  mutable task_type_trait::task_type subscribe_task_;
 
   std::chrono::system_clock::time_point next_send_oss_time_;
   int64_t resolved_transfer_etcd_revision_;

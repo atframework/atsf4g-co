@@ -45,6 +45,7 @@ DTMQ_PROXY_SERVICE_API const char* task_action_transfer_channel::name() const { 
 
 DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_transfer_channel::operator()() {
   rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
   }
@@ -100,6 +101,14 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
     if (res < 0) {
       FWLOGERROR("forward transfer {} chat channel(s) to chatsvr {:#x} failed, res: {}({})",
                  forward_group.second.size(), forward_group.first, res, protobuf_mini_dumper_get_error_msg(res));
+
+      for (const auto& snapshot : forward_group.second) {
+        *rsp_body.add_failed_channel_key() = snapshot->channel_data().channel_metadata().channel_key();
+      }
+    } else {
+      for (const auto& failed_channel_key : rpc_rsp_body->failed_channel_key()) {
+        *rsp_body.add_failed_channel_key() = failed_channel_key;
+      }
     }
   }
 
