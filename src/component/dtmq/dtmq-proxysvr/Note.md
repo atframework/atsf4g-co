@@ -1,17 +1,18 @@
 # 分布式消息队列服务 Review
 
 - [ ] 需要设计抽象client端进程内共享channel的组件
-- [ ] Reload后只读副本数量如果减少，要transfer多余的只读副本的订阅者到其他节点
-  - [ ] 订阅者需要注意如果收到非当前订阅来源的消息，需要忽略并发送反订阅
+- [x] Reload后只读副本数量如果减少，要transfer多余的只读副本的订阅者到其他节点
+  - [x] 订阅者需要注意如果收到非当前订阅来源的消息，需要忽略并发送反订阅
 - [ ] 负载转移窗口期，client端应该只发送消息到 kReady 节点，但本地 channel 需要检测实际channel位置
-  - [ ] 如果本地不存在 -> 发送到 kTarget 节点。kTarget 节点要能接受从DB拉取数据。
-  - [ ] 如果本地存在，正在转移，要等IO任务结束。
-    - [ ] 未转移 -> 当前节点处理
-    - [ ] 已转移 -> 发送到 kTarget 节点
-  - [ ] 负载转移时，readonly节点需要合并订阅者信息。合并数据。
-    - [ ] 判断本地数据如果领先于传过来的数据，直接忽略数据。
-    - [ ] 如果发生缩容，会合并其他副本的订阅信息。如果由client端触发了重新负载均衡，由客户端反订阅来移除冗余订阅。
-- [ ] readonly和writable可能指向相同的节点。此时以writable节点为准，不允许同步日志
+  - [x] 如果本地不存在 -> 发送到 kTarget 节点。kTarget 节点要能接受从DB拉取数据。
+  - [x] 如果本地存在，正在转移，要等IO任务结束。
+    - [x] 未转移 -> 当前节点处理
+    - [x] 已转移 -> 发送到 kTarget 节点
+  - [x] 负载转移时，readonly节点需要合并订阅者信息。合并数据。
+    - [x] 判断本地数据如果领先于传过来的数据，直接忽略数据。
+    - [x] 如果发生缩容，会合并其他副本的订阅信息。如果由client端触发了重新负载均衡，由客户端反订阅来移除冗余订阅。
+- [x] readonly和writable可能指向相同的节点。此时以writable节点为准，不允许同步日志
+  - [x] 除了 `mq_channel_manager::make_readable_channel_with_replicate_index` 和 `mq_channel_manager::should_be_readonly_or_get_server_id` 这两个接口的返回和传出参数必须和 `replicate_index` 对应 ，不许允许用writable替代。（client端订阅从节点和收到transfer消息时，如果发送数据到了writable节点，任然应该转移到对应的readonly节点，不应该由writable节点接管从而扩大writable的长期负载）
 
 ## 测试清单
 

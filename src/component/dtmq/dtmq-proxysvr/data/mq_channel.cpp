@@ -791,16 +791,17 @@ bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChann
       channel->recalculate_etcd_cache();
     }
 
-    auto iter = channel->target_distribution_.readonly_server_ids.find(local_server_id);
-    if (channel->target_distribution_.readonly_server_ids.end() == iter) {
+    auto iter = channel->target_distribution_.readonly_server_id_to_replicate_index.find(local_server_id);
+    if (channel->target_distribution_.readonly_server_id_to_replicate_index.end() == iter) {
       // 如果本机无法成为只读副本，则随机选取一个只读节点用于后续转发RPC
       std::vector<std::pair<uint64_t, uint64_t>> readonly_servers;
-      readonly_servers.reserve(static_cast<size_t>(channel->target_distribution_.readonly_server_ids.size() + 1));
+      readonly_servers.reserve(
+          static_cast<size_t>(channel->target_distribution_.readonly_server_id_to_replicate_index.size() + 1));
       if (channel->target_distribution_.writable_server_id != local_server_id) {
         readonly_servers.emplace_back(channel->target_distribution_.writable_server_id, 0);
       }
 
-      for (const auto& readonly_server : channel->target_distribution_.readonly_server_ids) {
+      for (const auto& readonly_server : channel->target_distribution_.readonly_server_id_to_replicate_index) {
         readonly_servers.emplace_back(readonly_server.first, readonly_server.second);
       }
 
@@ -870,8 +871,9 @@ bool mq_channel::should_be_readonly(uint64_t& readonly_replicate_index) noexcept
     return false;
   }
 
-  auto iter = target_distribution_.readonly_server_ids.find(logic_config::me()->get_local_server_id());
-  if (target_distribution_.readonly_server_ids.end() == iter) {
+  auto iter =
+      target_distribution_.readonly_server_id_to_replicate_index.find(logic_config::me()->get_local_server_id());
+  if (target_distribution_.readonly_server_id_to_replicate_index.end() == iter) {
     readonly_replicate_index = 0;
     return false;
   }
@@ -885,11 +887,9 @@ uint64_t mq_channel::get_target_distribution_server_id(uint64_t replicate_index)
     return target_distribution_.writable_server_id;
   }
 
-  // 只有短暂缓存不一致时才会使用这个函数，而且副本数通常不会很多，所以下面的遍历流程开销可以忽略
-  for (const auto& kv : target_distribution_.readonly_server_ids) {
-    if (kv.second == replicate_index) {
-      return kv.first;
-    }
+  auto iter = target_distribution_.readonly_replicate_index_to_server_id.find(replicate_index);
+  if (iter != target_distribution_.readonly_replicate_index_to_server_id.end()) {
+    return iter->second;
   }
 
   return 0;
@@ -900,8 +900,8 @@ uint64_t mq_channel::get_target_distribution_replicate_index(uint64_t server_id)
     return 0;
   }
 
-  auto iter = target_distribution_.readonly_server_ids.find(server_id);
-  if (iter != target_distribution_.readonly_server_ids.end()) {
+  auto iter = target_distribution_.readonly_server_id_to_replicate_index.find(server_id);
+  if (iter != target_distribution_.readonly_server_id_to_replicate_index.end()) {
     return iter->second;
   }
 
@@ -956,8 +956,8 @@ uint64_t mq_channel::get_transfer_target_server_id() const noexcept {
       return 0;
     }
 
-    if (target_distribution_.readonly_server_ids.end() !=
-        target_distribution_.readonly_server_ids.find(local_server_id)) {
+    if (target_distribution_.readonly_server_id_to_replicate_index.end() !=
+        target_distribution_.readonly_server_id_to_replicate_index.find(local_server_id)) {
       return 0;
     }
 
@@ -2023,13 +2023,18 @@ void mq_channel::recalculate_etcd_cache() {
         rpc::dtmq::get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable, 0, calc_data.first);
 
     calc_data.second->current_readonly_server_index = 0;
-    calc_data.second->readonly_server_ids.clear();
+    calc_data.second->readonly_server_id_to_replicate_index.clear();
+    calc_data.second->readonly_replicate_index_to_server_id.clear();
     if (dtmq_proxysvr_cfg.readonly_replicate_count() > 0) {
-      calc_data.second->readonly_server_ids.reserve(static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()));
+      calc_data.second->readonly_server_id_to_replicate_index.reserve(
+          static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()));
+      calc_data.second->readonly_replicate_index_to_server_id.reserve(
+          static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()));
       for (size_t i = 1; i <= static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()); i++) {
         uint64_t readonly_server_id = rpc::dtmq::get_target_server_id(
             get_channel_key(), rpc::dtmq::replicate_type::kReadonly, i, calc_data.first);
-        calc_data.second->readonly_server_ids[readonly_server_id] = static_cast<uint64_t>(i);
+        calc_data.second->readonly_server_id_to_replicate_index[readonly_server_id] = static_cast<uint64_t>(i);
+        calc_data.second->readonly_replicate_index_to_server_id[static_cast<uint64_t>(i)] = readonly_server_id;
         if (readonly_server_id == local_server_id && readonly_server_id != calc_data.second->writable_server_id) {
           calc_data.second->current_readonly_server_index = i;
         }

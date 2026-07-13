@@ -287,7 +287,9 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
     uint64_t current_readonly_server_index = 0;
 
     // 只读服务索引: 服务ID -> 只读副本index
-    std::unordered_map<uint64_t, uint64_t> readonly_server_ids;
+    std::unordered_map<uint64_t, uint64_t> readonly_server_id_to_replicate_index;
+    // 只读服务索引: 只读副本index -> 服务ID
+    std::unordered_map<uint64_t, uint64_t> readonly_replicate_index_to_server_id;
   };
   replicate_distribution_info ready_distribution_;
   replicate_distribution_info target_distribution_;

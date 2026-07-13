@@ -306,7 +306,7 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
       RPC_RETURN_CODE(result);
     }
 
-    if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
+    if (channel_ptr->is_writable()) {
       FWLOGDEBUG("channel {} select existed writable channel", channel_key.channel_id());
       forward_server_id = 0;
       RPC_RETURN_CODE(0);
@@ -511,15 +511,15 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
       RPC_RETURN_CODE(result);
     }
 
-    if (channel_ptr->is_readonly() &&
-        replicate_index == channel_ptr->get_target_distribution_replicate_index(local_server_id)) {
+    // 如果writable节点和replicate_index指向的节点一致，则channel会是writable，判定replicate_index匹配即可
+    forward_server_id = channel_ptr->get_target_distribution_server_id(replicate_index);
+    if ((channel_ptr->is_readonly() || channel_ptr->is_writable()) && local_server_id == forward_server_id) {
       FWLOGDEBUG("channel {} select existed readonly channel with replicate_index {}", channel_key.channel_id(),
                  replicate_index);
       forward_server_id = 0;
       RPC_RETURN_CODE(0);
     }
 
-    forward_server_id = channel_ptr->get_target_distribution_server_id(replicate_index);
     channel_ptr.reset();
     if (forward_server_id == local_server_id || forward_server_id == 0) {
       FWLOGWARNING("channel {} server {:#x} is under maintenance, and no more available node now.",
@@ -706,11 +706,6 @@ void mq_channel_manager::resolve_channel_distribution() {
     if ((*iter)->is_io_task_running()) {
       ++running_io_tasks;
       ++iter;
-      continue;
-    }
-
-    if (!(*iter)->is_writable()) {
-      iter = pending_io_channels_.erase(iter);
       continue;
     }
 
