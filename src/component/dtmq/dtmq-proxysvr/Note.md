@@ -12,7 +12,7 @@
     - [x] 判断本地数据如果领先于传过来的数据，直接忽略数据。
     - [x] 如果发生缩容，会合并其他副本的订阅信息。如果由client端触发了重新负载均衡，由客户端反订阅来移除冗余订阅。
 - [x] readonly和writable可能指向相同的节点。此时以writable节点为准，不允许同步日志
-  - [x] 除了 `mq_channel_manager::make_readable_channel_with_replicate_index` 和 `mq_channel_manager::should_be_readonly_or_get_server_id` 这两个接口的返回和传出参数必须和 `replicate_index` 对应 ，不许允许用writable替代。（client端订阅从节点和收到transfer消息时，如果发送数据到了writable节点，任然应该转移到对应的readonly节点，不应该由writable节点接管从而扩大writable的长期负载）
+  - [x] 除了 `mq_channel::should_be_readonly_or_get_server_id` 接口的返回和传出参数必须和 `replicate_index` 对应 ，在 `replicate_index > 0` 时不允许用writable替代。（client端订阅从节点和收到transfer消息时，如果发送数据到了writable节点，任然应该转移到对应的readonly节点，不应该由writable节点接管从而扩大writable的长期负载）
 
 ## 测试清单
 

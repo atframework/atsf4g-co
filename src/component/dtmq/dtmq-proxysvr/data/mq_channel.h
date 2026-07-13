@@ -74,7 +74,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   struct replicate_index_set {
     uint64_t prefer_replicate_index = 0;
-    std::unordered_set<uint64_t> replicate_index_set;
+    std::unordered_set<uint64_t> index_set;
   };
 
   ATFW_UTIL_DESIGN_PATTERN_NOCOPYABLE(mq_channel)
@@ -164,7 +164,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
    * @brief Get the target distribution replicate index
    *
    * @param server_id 服务器ID
-   * @return uint64_t replicate_index, 0表示writable，>0表示readonly副本序号，UINT64_MAX表示未找到
+   * @return replicate_index_set writable或未找到返回nullptr，否则返回改服务节点ID对应的副本索引集合
    */
   const replicate_index_set* ATFW_UTIL_MACRO_NULLABLE
   get_target_distribution_replicate_index(uint64_t server_id) const noexcept;

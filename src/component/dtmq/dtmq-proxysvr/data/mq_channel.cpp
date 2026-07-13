@@ -193,13 +193,23 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
 
   if (should_be_writable()) {
     upgrade_to_writable();
-  } else if (!is_readonly()) {
-    const replicate_index_set* replicate_index_set =
-        get_target_distribution_replicate_index(logic_config::me()->get_local_server_id());
-    if (replicate_index_set != nullptr && replicate_index_set->prefer_replicate_index > 0) {
+
+    return;
+  }
+
+  const replicate_index_set* replicate_index_set = nullptr;
+  if (should_be_readonly(replicate_index_set) && replicate_index_set != nullptr &&
+      replicate_index_set->prefer_replicate_index > 0) {
+    if (is_writable()) {
+      downgrade_to_readable(replicate_index_set->prefer_replicate_index);
+    } else {
       upgrade_to_readonly(replicate_index_set->prefer_replicate_index);
     }
+
+    return;
   }
+
+  downgrade_to_none();
 }
 
 void mq_channel::dump(atfw::dtmq::DChannelMetadata& metadata, bool with_configure, bool with_custom_data) const {
@@ -746,7 +756,7 @@ bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelI
     bool ret = channel->should_be_readonly(local_readonly_replicate_index_set);
 
     ret = ret && nullptr != local_readonly_replicate_index_set &&
-          local_readonly_replicate_index_set->replicate_index_set.count(readonly_replicate_index) > 0;
+          local_readonly_replicate_index_set->index_set.count(readonly_replicate_index) > 0;
     if (!ret) {
       readonly_server_id = channel->get_target_distribution_server_id(readonly_replicate_index);
       if (0 != readonly_server_id) {
@@ -914,7 +924,7 @@ mq_channel::get_target_distribution_replicate_index(uint64_t server_id) const no
     return nullptr;
   }
 
-  if (iter->second.replicate_index_set.empty()) {
+  if (iter->second.index_set.empty()) {
     return nullptr;
   }
 
@@ -2050,7 +2060,7 @@ void mq_channel::recalculate_etcd_cache() {
             get_channel_key(), rpc::dtmq::replicate_type::kReadonly, i, calc_data.first);
 
         auto& replicate_index_set = calc_data.second->readonly_server_id_to_replicate_index[readonly_server_id];
-        replicate_index_set.replicate_index_set.insert(static_cast<uint64_t>(i));
+        replicate_index_set.index_set.insert(static_cast<uint64_t>(i));
         // 优先使用最小的索引作为当前readonly节点索引，避免多个readonly节点分布在同一台服务器上时，导致readonly节点索引不稳定
         if (readonly_server_id != calc_data.second->writable_server_id &&
             (replicate_index_set.prefer_replicate_index == 0 ||
