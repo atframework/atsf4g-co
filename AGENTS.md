@@ -35,6 +35,10 @@ high-performance game server architectures.
 - Before planning or editing, run the appropriate source-of-truth pass for the task: inspect relevant code, configs,
   docs, generated sources, and current official docs when external tool or product behavior may have changed. State a
   short plan and verification path after that pass, mark assumptions explicitly, and do not invent behavior from memory.
+- Never unconditionally `touch` or same-content overwrite code/resources consumed by `add_custom_command`,
+  `add_custom_target`, `add_executable`, `add_library`, `target_sources`, or another dependency edge, whether generated,
+  copied, or non-handwritten. Use content-stable writes and accurate `OUTPUT`/`BYPRODUCTS`/`DEPENDS`/`DEPFILE`; only
+  dedicated non-consumed stamp files may be touched.
 - Resolve `<BUILD_DIR>` before creating build trees or temporary files: read `.vscode/settings.json` for
   `cmake.buildDirectory`; if it is absent, infer from `clangd.arguments` `--compile-commands-dir=...` or an existing
   configured build tree; if no user setting is readable, use `build`.

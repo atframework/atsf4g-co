@@ -16,6 +16,9 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
   header inline/API ABI rules, and helper usage in the same pass.
 - Prefer existing helper APIs, project error codes, and local patterns over ad hoc alternatives.
 - Keep comments useful and current; remove placeholder `TODO` text when implementing the placeholder.
+- Treat unconditional touch or same-content overwrite of target-consumed code/resources as a blocking build-performance
+  defect, including generated and copied files. Require content-stable publication plus accurate
+  `OUTPUT`/`BYPRODUCTS`/`DEPENDS`/`DEPFILE`; allow touch only on a dedicated non-consumed stamp.
 - For C/C++ review findings, parse the current nearest `.clang-tidy` and `CPPLINT.cfg` instead of relying on memory.
   Cite issues only when they are active in config or supported by local project convention.
 - Copyright headers are a required review item when `CPPLINT.cfg` does not filter `legal/copyright`; new or modified
@@ -49,6 +52,8 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 
 - Run `cmake-format` on modified `.cmake`, `.cmake.in`, and `CMakeLists.txt` files.
 - Run `cmake-lint` when available. Expected result: no warnings.
+- For changed generation rules, trace each output to its consuming target and confirm a no-op rerun cannot change the
+  timestamp of compiled or packaged code/resources.
 
 ## Markdown and prompt validation
 

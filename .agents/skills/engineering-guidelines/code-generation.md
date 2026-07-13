@@ -19,6 +19,10 @@ generation targets.
 ## Rules
 
 - Generation is driven by CMake targets; do not hand-edit generated files.
+- Generated code and resources must retain their timestamps when content is unchanged. Do not touch real outputs; if a
+  generator rewrites identical content, generate to a temporary path and publish with `cmake -E copy_if_different`.
+- Declare generated files as `OUTPUT` or `BYPRODUCTS` and list real inputs and generator targets in `DEPENDS`; use a
+  supported `DEPFILE` for discovered imports instead of forcing regeneration through timestamps.
 - If `.proto` import paths change, update the corresponding helper arguments per
   [`service-functions-cmake.md`](service-functions-cmake.md).
 - When templates or generated task/RPC code create temporary protobuf messages, apply the Arena-backed pattern from

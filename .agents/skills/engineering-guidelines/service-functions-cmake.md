@@ -181,6 +181,8 @@ fall back to `OUTPUT_TARGET_NAME` + `target_link_libraries` only for custom prop
   components.
 - Normal service executables have no `sdk::`/`protocol::` alias. Depend on their protocols/SDKs, not on the executable
   target, unless explicitly required.
+- Do not repair generation order by touching protocols, generated sources, descriptors, or copied resources. Declare
+  the real outputs and dependencies, and preserve the destination timestamp when content is unchanged.
 - Avoid broad `file(GLOB_RECURSE ...)` rewrites unless matching local style. Many existing service/component
   executables use it for `SERVICE_SOURCES`/`SERVICE_HEADERS`.
 
@@ -190,6 +192,8 @@ fall back to `OUTPUT_TARGET_NAME` + `target_link_libraries` only for custom prop
 - Every dependency name must resolve to an alias declared earlier in configure order.
 - Protocol changes: `PROTOCOL_DIR` is the import root, `PROTOCOLS` paths live under it.
 - SDK/service changes: `INCLUDE_DIR`, `SERVICE_ROOT_DIR`, `SDK_ROOT_DIR` match include paths used by sources.
+- Generation changes: reject unconditional touch or same-content overwrite of any code/resource consumed by a target;
+  only a dedicated non-consumed stamp may change on every successful run.
 - For documentation-only edits, run markdown/frontmatter diagnostics and a whitespace check.
 - For CMake behavior changes, configure/build via `../build/SKILL.md` and run relevant tests via
   `../testing/SKILL.md`.

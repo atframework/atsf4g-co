@@ -90,6 +90,14 @@ python3 gen_conf.py
 
 ## Developer
 
+### Incremental build hygiene
+
+Code and resources consumed by CMake targets must keep their timestamps when their content is unchanged. Do not
+unconditionally touch them or overwrite identical content, whether they are generated, copied, or non-handwritten.
+Describe generation with accurate `OUTPUT`, `BYPRODUCTS`, `DEPENDS`, and `DEPFILE` relationships; use
+`configure_file`, `file(CONFIGURE)`, `file(GENERATE)`, or temporary output plus `cmake -E copy_if_different` for
+content-stable publication. A dedicated stamp file may be touched only when it is not a compiled or packaged input.
+
 ### Tools
 
 1. [cmake](https://cmake.org) 3.16 and above 
