@@ -2033,7 +2033,13 @@ void mq_channel::recalculate_etcd_cache() {
       for (size_t i = 1; i <= static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()); i++) {
         uint64_t readonly_server_id = rpc::dtmq::get_target_server_id(
             get_channel_key(), rpc::dtmq::replicate_type::kReadonly, i, calc_data.first);
-        calc_data.second->readonly_server_id_to_replicate_index[readonly_server_id] = static_cast<uint64_t>(i);
+
+        // 如果多个readonly节点分布在同一台服务器上，索引最小的一个。这样如果配置缩容readonly数量，可以尽可能保证readonly节点数据不需要迁移
+        auto iter = calc_data.second->readonly_server_id_to_replicate_index.find(readonly_server_id);
+        if (iter == calc_data.second->readonly_server_id_to_replicate_index.end()) {
+          calc_data.second->readonly_server_id_to_replicate_index[readonly_server_id] = static_cast<uint64_t>(i);
+        }
+        // replicate_index 到 server_id 的索引必须全保留。
         calc_data.second->readonly_replicate_index_to_server_id[static_cast<uint64_t>(i)] = readonly_server_id;
         if (readonly_server_id == local_server_id && readonly_server_id != calc_data.second->writable_server_id) {
           calc_data.second->current_readonly_server_index = i;
