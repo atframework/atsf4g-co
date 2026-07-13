@@ -39,6 +39,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "data/mq_channel_wal_handle.h"
 
@@ -69,6 +70,11 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
     kNone = 0,
     kReadonly = 1,
     kWritable = 2,
+  };
+
+  struct replicate_index_set {
+    uint64_t prefer_replicate_index = 0;
+    std::unordered_set<uint64_t> replicate_index_set;
   };
 
   ATFW_UTIL_DESIGN_PATTERN_NOCOPYABLE(mq_channel)
@@ -144,7 +150,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
                                                      uint64_t& readonly_replicate_index, uint64_t& readonly_server_id,
                                                      mq_channel* channel = nullptr) noexcept;
 
-  bool should_be_readonly(uint64_t& readonly_replicate_index) noexcept;
+  bool should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_NULLABLE & readonly_replicate_index_set) noexcept;
 
   /**
    * @brief Get the target distribution server id
@@ -160,7 +166,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
    * @param server_id 服务器ID
    * @return uint64_t replicate_index, 0表示writable，>0表示readonly副本序号，UINT64_MAX表示未找到
    */
-  uint64_t get_target_distribution_replicate_index(uint64_t server_id) const noexcept;
+  const replicate_index_set* ATFW_UTIL_MACRO_NULLABLE
+  get_target_distribution_replicate_index(uint64_t server_id) const noexcept;
 
   static uint64_t calculate_transfer_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                       uint64_t replicate_index) noexcept;
@@ -284,10 +291,9 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int64_t server_distribution_etcd_revision_;
   struct replicate_distribution_info {
     uint64_t writable_server_id = 0;
-    uint64_t current_readonly_server_index = 0;
 
-    // 只读服务索引: 服务ID -> 只读副本index
-    std::unordered_map<uint64_t, uint64_t> readonly_server_id_to_replicate_index;
+    // 只读服务索引: 服务ID -> 只读副本index集合
+    std::unordered_map<uint64_t, replicate_index_set> readonly_server_id_to_replicate_index;
     // 只读服务索引: 只读副本index -> 服务ID
     std::unordered_map<uint64_t, uint64_t> readonly_replicate_index_to_server_id;
   };
