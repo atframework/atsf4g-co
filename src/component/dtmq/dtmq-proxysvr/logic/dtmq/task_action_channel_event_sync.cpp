@@ -95,9 +95,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     mq_channel_wal_object_type::log_pointer log_ptr =
         atfw::util::memory::make_strong_rc<atfw::dtmq::DChannelMessage>(std::move(event_data));
 
-    auto receive_result =
-        channel->get_wal_client()->receive_hole_log(client_param, mq_channel_wal_object_type::log_pointer{log_ptr});
-    if (util::distributed_system::wal_result_code::kHashCodeMismatch == receive_result) {
+    auto receive_result = channel->get_wal_client()->receive_hole_log(client_param, log_ptr);
+    if (atfw::util::distributed_system::wal_result_code::kHashCodeMismatch == receive_result) {
       rpc::dtmq::collect_invalid_event(channel->get_channel_key().channel_id(), *channel->get_wal_client());
       sync_now = true;
       break;
@@ -116,10 +115,11 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     channel->hash_mismatch_increase();
     channel->async_send_subscribe_to_writable(get_shared_context());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  } else {
+    // Merge data, merge 的过程会触发GC
+    channel->load(req_body.channel_metadata(), req_body.channel_runtime());
   }
 
-  // Merge data, merge 的过程会触发GC
-  channel->load(req_body.channel_metadata(), req_body.channel_runtime());
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

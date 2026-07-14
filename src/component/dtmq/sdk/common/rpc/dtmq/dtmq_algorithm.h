@@ -1,4 +1,5 @@
 // Copyright 2026 atframework
+// @brief Created by owent
 
 #pragma once
 
@@ -8,6 +9,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <sstream>
 #include <string>
 #include <utility>
 

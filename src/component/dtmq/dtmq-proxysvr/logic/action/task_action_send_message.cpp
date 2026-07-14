@@ -12,6 +12,7 @@
 // clang-format on
 
 #include <protocol/config/dtmq_proxy.config.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -26,7 +27,6 @@
 
 #include <utility>
 
-#include "protocol/pbdesc/com.const.pb.h"
 #include "rpc/dtmq/dtmq_client_api.h"
 
 #include "data/mq_channel.h"
@@ -74,6 +74,8 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
 
     protobuf_copy_message(*rsp_body.mutable_compare_and_maybe_reset_lock(), req_body.compare_and_maybe_reset_lock());
     rsp_body.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
+    rsp_body.set_last_sequence(channel->get_last_message_sequence());
+    rsp_body.set_last_hash_code(channel->get_last_hash_code());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -90,7 +92,7 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
     channel->get_wal_publisher().emplace_back_log(std::move(message), param);
     channel->tick(get_shared_context());
   } else {
-    FWLOGERROR("malloc wal log for chat channel {} failed", req_body.channel_key().channel_id());
+    FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
     ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
   }

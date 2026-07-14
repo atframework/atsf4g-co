@@ -1,4 +1,5 @@
 // Copyright 2026 atframework
+// @brief Created by owent
 
 #include "rpc/dtmq/dtmq_algorithm.h"
 
@@ -33,12 +34,18 @@ DTMQ_COMMON_SDK_API void set_hash_code(atfw::dtmq::DChannelMessage& channel_log,
 DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
                                                  const atfw::dtmq::DChannelMessage& channel_log) noexcept {
   uint64_t content_hash = static_cast<uint64_t>(channel_log.detail().command_case());
-  if (!channel_log.detail().text().empty()) {
-    content_hash = XXH64(channel_log.detail().text().data(), channel_log.detail().text().size(),
-                         static_cast<XXH64_hash_t>(previous));
-  } else if (!channel_log.detail().event().type_url().empty()) {
-    content_hash = XXH64(channel_log.detail().event().value().data(), channel_log.detail().event().value().size(),
-                         static_cast<XXH64_hash_t>(previous));
+  switch (channel_log.detail().command_case()) {
+    case atfw::dtmq::DChannelMessageDetail::kText:
+      content_hash = XXH64(channel_log.detail().text().data(), channel_log.detail().text().size(),
+                           static_cast<XXH64_hash_t>(previous));
+      break;
+    case atfw::dtmq::DChannelMessageDetail::kEvent:
+      content_hash = XXH64(channel_log.detail().event().value().data(), channel_log.detail().event().value().size(),
+                           static_cast<XXH64_hash_t>(previous));
+      break;
+    default:
+      // 只关注文本和事件内容即可，其他都是内部事件，sequence+类型正确即可
+      break;
   }
 
   uint64_t buffer[2] = {static_cast<uint64_t>(channel_log.sequence()), content_hash};

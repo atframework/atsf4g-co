@@ -1,18 +1,26 @@
-// Copyright atframework
+// Copyright 2026 atframework
 // Created by owent on 2016/10/5.
 //
 
 #pragma once
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <google/protobuf/message.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <libcopp/future/poller.h>
 
+#include <nostd/function_ref.h>
 #include <std/explicit_declare.h>
 
-#include <inttypes.h>
-#include <stdint.h>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -107,13 +115,13 @@ ATFW_UTIL_SYMBOL_VISIBLE void* align_alloc(void*& buf_addr, size_t& buf_len) {
   }
 
   buf_len -= padding_offset;
-  buf_addr = (void*)(in_addr);
+  buf_addr = reinterpret_cast<void*>(in_addr);  // NOLINT(performance-no-int-to-ptr)
   return buf_addr;
 }
 
 class redis_args {
  public:
-  redis_args(size_t argc);
+  redis_args(size_t argc);  // NOLINT: runtime/explicit
   ~redis_args();
 
   char* alloc(size_t sz);
@@ -157,13 +165,13 @@ std::string get_list_value_field(uint64_t index);
 
 int unpack_list_message(
     rpc::context* ctx, const redisReply* reply, std::vector<db_key_list_message_result_t>& results,
-    std::function<
+    atfw::util::nostd::function_ref<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
         msg_factory);
 
 int unpack_list_message_with_index(
     rpc::context* ctx, const redisReply* reply, std::vector<db_key_list_message_result_t>& results,
-    std::function<
+    atfw::util::nostd::function_ref<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context*)>
         msg_factory);
 /**

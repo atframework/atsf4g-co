@@ -20,6 +20,10 @@ message channel_subscriber {
   // - Role: "R:{zone_id}:{user_id}:{role_id}"
   string subscriber_key = 2;
 
+  // 默认情况下，正常的订阅请求不会返回私有数据，而是仅通过pull获取。
+  // 但是在主从同步和某些特殊场景下，订阅者需要实时同步私有数据，这时候可以通过这个标记来获取。
+  bool with_private_data = 6;
+
   google.protobuf.Timestamp last_heartbeat_timepoint = 10;
   int64 last_heartbeat_sequence = 11;
   uint64 last_heartbeat_hash_code = 12;

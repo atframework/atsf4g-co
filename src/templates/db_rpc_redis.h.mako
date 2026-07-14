@@ -53,5 +53,12 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set_ttl(rpc::context &
 %     endfor
                                                              ,uint64_t ttl_second
 );
+
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::context &ctx
+%     for key_field in key_fields:
+                                                             ,${key_field["cpp_type"]} ${key_field["raw_name"]}
+%     endfor
+);
+
 } // namespace ${index.name}
 % endfor

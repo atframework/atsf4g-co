@@ -80,25 +80,24 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
   }
 
   // 更新custom data
-  bool append_update_custom_data = false;
+  bool has_changed_custom_data = false;
   if (req_body.clear_custom_data_action()) {
-    channel->clear_custom_data();
-    append_update_custom_data = true;
+    has_changed_custom_data = channel->clear_custom_data();
   } else if (req_body.has_custom_data()) {
-    channel->set_custom_data(req_body.custom_data());
-    append_update_custom_data = true;
+    has_changed_custom_data = channel->set_custom_data(req_body.custom_data());
   }
 
   // 更新private data
+  bool has_changed_private_data = false;
   if (req_body.clear_private_data_action()) {
-    channel->clear_private_data();
+    has_changed_private_data = channel->clear_private_data();
   } else if (req_body.has_private_data()) {
-    channel->set_private_data(req_body.private_data());
+    has_changed_private_data = channel->set_private_data(req_body.private_data());
   }
 
   int32_t result = 0;
 
-  if (append_update_custom_data && !req_body.custom_data_skip_notify()) {
+  if (has_changed_custom_data && !req_body.custom_data_skip_notify()) {
     mq_channel_wal_object_context param{get_shared_context(), result};
 
     rpc::context::message_holder<atfw::dtmq::DChannelMessage> update_message{get_shared_context()};
@@ -111,14 +110,37 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
     auto message = channel->get_wal_publisher().allocate_log(util::time::time_utility::now(),
                                                              atfw::dtmq::DChannelMessageDetail::kUpdateCustomData,
                                                              param, std::move(*update_message));
+    // 这只是个通知消息，分配失败仅仅导致数据没有及时更新，不影响最终结果。update操作已经正确完成，所以这时候不需要返回错误码。
     if (message) {
       channel->get_wal_publisher().emplace_back_log(std::move(message), param);
-
       // 重置一下custom_data_sequence，确保如果只有这一条log，custom_data也能下发
       channel->reset_custom_data_sequence();
     } else {
-      FWLOGERROR("malloc wal log for chat channel {} failed", req_body.channel_key().channel_id());
+      FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
     }
+  } else if (has_changed_private_data) {
+    mq_channel_wal_object_context param{get_shared_context(), result};
+
+    rpc::context::message_holder<atfw::dtmq::DChannelMessage> noop_message{get_shared_context()};
+    noop_message->mutable_detail()->set_noop(true);
+
+    if (req_body.has_subscriber()) {
+      noop_message->set_sender_key(req_body.subscriber().subscriber_key());
+    }
+
+    auto message = channel->get_wal_publisher().allocate_log(
+        util::time::time_utility::now(), atfw::dtmq::DChannelMessageDetail::kNoop, param, std::move(*noop_message));
+    // 这只是个通知消息，分配失败仅仅导致数据没有及时更新，不影响最终结果。update操作已经正确完成，所以这时候不需要返回错误码。
+    if (message) {
+      channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+    } else {
+      FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
+    }
+  }
+
+  if (has_changed_private_data) {
+    // 重置一下private_data_sequence，确保如果只有这一条log，private_data也能下发
+    channel->reset_private_data_sequence();
   }
 
   channel->compact_stateful_sequence(req_body.stateful_sequence());
@@ -150,6 +172,7 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
+    // 任务启动失败下次也会重试，不用视为失败
     channel->async_save(get_shared_context());
     result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context()));
   }

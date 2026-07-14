@@ -23,6 +23,11 @@
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
 
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "rpc/db/db_utils.h"
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_common_types.h"
@@ -31,11 +36,11 @@
 namespace rpc {
 namespace db {
 namespace hash_table {
-namespace detail {
+namespace {
 static int32_t unpack_nothing(rpc::context *, db_message_t &, const redisReply *) {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
-}  // namespace detail
+}  // namespace
 
 namespace key_value {
 SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
@@ -411,7 +416,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   uint64_t rpc_sequence = 0;
   res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   // args unavailable now
@@ -472,7 +477,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   std::stringstream segs_debug_info;
 
   std::vector<const ::google::protobuf::FieldDescriptor *> fds;
-  const auto *fd = message->GetDescriptor()->FindFieldByName(inc_field.data());
+  const auto *fd = message->GetDescriptor()->FindFieldByName({inc_field.data(), inc_field.size()});
   if (nullptr == fd) {
     FWLOGERROR("field {} not found in message {}", inc_field, message->GetDescriptor()->full_name());
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
@@ -702,7 +707,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
     args.dealloc();
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, __trace_attributes}));
   }
-  memcpy(data_allocated, "&", 1);
+  *data_allocated = '&';
   data_allocated += 1;
   // 再dump 字段内容
   store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
@@ -711,7 +716,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -770,7 +775,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
     args.dealloc();
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, __trace_attributes}));
   }
-  memcpy(data_allocated, "&", 1);
+  *data_allocated = '&';
   data_allocated += 1;
   // 再dump 字段内容
   store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
@@ -780,7 +785,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -843,7 +848,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -905,7 +910,7 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   if (res < 0) {
@@ -957,7 +962,7 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   uint64_t rpc_sequence = 0;
   result_type::value_type res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   // args unavailable now
@@ -1009,7 +1014,7 @@ SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel, gsl::s
   uint64_t rpc_sequence = 0;
   result_type::value_type res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
-      logic_config::me()->get_local_server_id(), &detail::unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
       args.get_args_values(), args.get_args_lengths());
 
   // args unavailable now
@@ -1031,6 +1036,62 @@ SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel, gsl::s
   }
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] ttl_second set to {}", key, ttl_second);
+
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::context &ctx, uint32_t channel,
+                                                                     gsl::string_view key) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/remove_ttl"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer = __child_ctx.make_tracer("rpc.db.hash_table/remove_ttl", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  redis_args args(3);
+
+  args.push("PERSIST");
+  args.push(key.data(), key.size());
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] start to remove ttl", key);
+
+  uint64_t rpc_sequence = 0;
+  result_type::value_type res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  // args unavailable now
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  // 协程操作
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] remove ttl done", key);
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }

@@ -4,16 +4,19 @@
 
 #pragma once
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/server_frame_build_feature.h>
 
-#include <stdint.h>
-#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -86,6 +89,9 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_all(rpc::contex
                                                                      gsl::string_view key);
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel,
                                                                   gsl::string_view key, uint64_t ttl_second);
+
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::context &ctx, uint32_t channel,
+                                                                     gsl::string_view key);
 
 }  // namespace hash_table
 }  // namespace db

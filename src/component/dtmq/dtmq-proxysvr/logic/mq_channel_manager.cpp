@@ -22,6 +22,9 @@
 #include "protocol/pbdesc/com.const.pb.h"
 
 namespace {
+
+constexpr const int32_t kPageQueryDefaultSize = 10;
+
 template <class Rep, class Period>
 static time_t chrono_to_timer_tick(std::chrono::duration<Rep, Period> d) {
   return static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(d).count() / 100);
@@ -304,6 +307,8 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
     if (channel_ptr->is_writable()) {
       FWLOGDEBUG("channel {} select existed writable channel", channel_key.channel_id());
       forward_server_id = 0;
+
+      channel_ptr->ensure_recreate_after_destroyed(ctx);
       RPC_RETURN_CODE(0);
     }
 
@@ -364,7 +369,14 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
     }
   }
 
+  if (!channel_ptr->is_writable() || channel_ptr != get_channel(channel_key.channel_id())) {
+    FWLOGERROR("channel {} writable init failed with unknown reason. maybe concurrency conflict",
+               channel_key.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+  }
+
   FWLOGDEBUG("channel {} is created and writable inited successfully", channel_key.channel_id());
+  channel_ptr->ensure_recreate_after_destroyed(ctx);
   RPC_RETURN_CODE(0);
 }
 
@@ -475,6 +487,13 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
     RPC_RETURN_CODE(result);
   }
 
+  // 只读频道数据短暂不一致也没关系，顶多稍微落后一点，订阅后续也会自动恢复
+  if (!channel_ptr->is_writable() && !channel_ptr->is_readonly()) {
+    FWLOGERROR("channel {} readonly init failed with unknown reason. maybe concurrency conflict",
+               channel_key.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+  }
+
   FWLOGDEBUG("channel {} is created and readonly inited successfully", channel_key.channel_id());
   RPC_RETURN_CODE(0);
 }
@@ -580,6 +599,13 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     RPC_RETURN_CODE(result);
   }
 
+  // 只读频道数据短暂不一致也没关系，顶多稍微落后一点，订阅后续也会自动恢复
+  if (!channel_ptr->is_writable() && !channel_ptr->is_readonly()) {
+    FWLOGERROR("channel {} readonly init failed with unknown reason. maybe concurrency conflict",
+               channel_key.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+  }
+
   FWLOGDEBUG("channel {} is created and readonly inited successfully", channel_key.channel_id());
   RPC_RETURN_CODE(0);
 }
@@ -617,8 +643,15 @@ rpc::result_code_type mq_channel_manager::page_query_message(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
   if (page_info.page_size() == 0) {
-    page_info.set_page_size(10);
+    page_info.set_page_size(kPageQueryDefaultSize);
+  }
+
+  if (page_info.page_size() > dtmq_proxysvr_cfg.page_query_max_size()) {
+    page_info.set_page_size(dtmq_proxysvr_cfg.page_query_max_size());
   }
 
   auto& log_mgr = channel->get_wal_publisher().get_log_manager();
@@ -710,6 +743,8 @@ void mq_channel_manager::resolve_channel_distribution() {
       (*iter)->async_save(ctx);
     } else {
       FWLOGDEBUG("channel({}) async_start_transfer, is_stoping: {}", (*iter)->get_channel_id(), is_stoping_);
+      // 只读频道也需要转移数据，不过失败也没关系。下次拉取会从writable节点恢复数据，
+      // 最多订阅者通知要等下次心跳恢复。即故障时不影响数据正确，只是会造成延迟。
       (*iter)->async_start_transfer(ctx, (*iter)->get_transfer_target_server_id());
     }
 

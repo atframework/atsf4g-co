@@ -89,6 +89,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   void load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_channel_record& record);
   void dump(atfw::dtmq::DChannelMetadata& metadata, bool with_configure, bool with_custom_data) const;
   void dump(atfw::dtmq::DChannelRuntime& runtime, bool with_private_data) const;
+  void dump_private_data(atfw::dtmq::DChannelRuntime& runtime) const;
   void dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_dtmq_channel_record& record) const;
   void dump(atfw::dtmq::DChannelSnapshot& snapshot, bool with_configure, bool with_custom_data,
             bool with_private_data) const;
@@ -100,16 +101,19 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   inline const google::protobuf::Any& get_custom_data() const noexcept { return custom_data_; }
   inline int64_t get_custom_data_sequence() const noexcept { return custom_data_sequence_; }
-  void set_custom_data(const google::protobuf::Any& custom_data) noexcept;
-  void clear_custom_data() noexcept;
+  bool set_custom_data(const google::protobuf::Any& custom_data) noexcept;
+  bool clear_custom_data() noexcept;
 
   // 重置custom data的sequence，会触发下发下发log到订阅者时附带custom data
   void reset_custom_data_sequence() noexcept;
 
   inline const google::protobuf::Any& get_private_data() const noexcept { return private_data_; }
   inline int64_t get_private_data_sequence() const noexcept { return private_data_sequence_; }
-  void set_private_data(const google::protobuf::Any& private_data) noexcept;
-  void clear_private_data() noexcept;
+  bool set_private_data(const google::protobuf::Any& private_data) noexcept;
+  bool clear_private_data() noexcept;
+
+  // 重置private data的sequence，会触发下发下发log到开启了私有数据同步的订阅者时附带private data
+  void reset_private_data_sequence() noexcept;
 
   inline const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept { return lock_; }
   inline int64_t get_compact_stateful_sequence() const noexcept { return compact_stateful_sequence_; }
@@ -121,11 +125,11 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
       rpc::context& ctx,
       const ::google::protobuf::RepeatedPtrField<::atframework::dtmq::channel_subscriber>& subscribers);
 
-  void load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&);
+  bool load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&);
 
   void dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&);
 
-  inline bool is_dirty() const noexcept { return saved_version_ >= dirty_version_; }
+  inline bool is_dirty() const noexcept { return dirty_version_ > saved_version_; }
 
   inline bool is_readonly() const noexcept { return status_ == channel_status::kReadonly; }
 
@@ -139,8 +143,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
     return readonly_replicate_index_;
   }
 
-  inline atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type>>
-  get_shared_wal_object() {
+  inline const atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type>>&
+  get_shared_wal_object() const noexcept {
     return shared_wal_object_;
   }
 
@@ -180,9 +184,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   const replicate_index_set* ATFW_UTIL_MACRO_NULLABLE
   get_target_distribution_replicate_index(uint64_t server_id) const noexcept;
 
-  static uint64_t calculate_transfer_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
-                                                      uint64_t replicate_index) noexcept;
-
   uint64_t get_transfer_target_server_id() const noexcept;
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_transfer(rpc::context& ctx, uint64_t& transfer_to_server_id);
@@ -204,6 +205,13 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy(
       rpc::context& ctx,
       std::chrono::system_clock::time_point writable_remove_timepoint = std::chrono::system_clock::from_time_t(0));
+
+  /**
+   * @brief 确保评到销毁后重新创建时，历史消息已经被清理。移除标记被恢复
+   *
+   * @param ctx
+   */
+  void ensure_recreate_after_destroyed(rpc::context& ctx);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx);
 
@@ -274,8 +282,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int64_t readonly_replicate_configure_count_;
   std::chrono::system_clock::time_point remove_timepoint_;
   std::chrono::system_clock::time_point last_save_timepoint_;
+  std::chrono::system_clock::time_point last_status_change_timepoint_;
   std::chrono::system_clock::time_point lost_last_subscriber_timepoint_;
-  std::chrono::system_clock::time_point next_notify_readonly_subscribe_timepoint_;
   std::chrono::system_clock::time_point last_writable_notify_readonly_timepoint_;
   std::chrono::system_clock::time_point next_init_subscribe_timepoint_;
   rpc::result_code_type::value_type last_result_code_;
@@ -288,6 +296,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   google::protobuf::Any custom_data_;
   google::protobuf::Any private_data_;
 
+  bool need_remove_ttl_;
   bool is_loading_snapshot_;
   uint64_t dirty_version_;
   uint64_t saved_version_;

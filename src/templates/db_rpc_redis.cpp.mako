@@ -93,9 +93,9 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx
 
 SERVER_FRAME_API result_type set_ttl(rpc::context &ctx
 %   for key_field in key_fields:
-                                                                                                                         ,${key_field["cpp_type"]} ${key_field["raw_name"]}
+                                     , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 %   endfor
-                                                                                                                         ,uint64_t ttl_second
+                                     , uint64_t ttl_second
 ) {
     char db_key[256];
     size_t keylen = sizeof(db_key);
@@ -104,7 +104,26 @@ SERVER_FRAME_API result_type set_ttl(rpc::context &ctx
         keylen = static_cast<size_t>(result.size);
     }
     auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set_ttl(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
-                                                                                                                                 gsl::string_view{db_key, keylen}, ttl_second));
+                                                                  gsl::string_view{db_key, keylen}, ttl_second));
+    if (res < 0) {
+        RPC_DB_RETURN_CODE(res);
+    }
+    RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+SERVER_FRAME_API result_type remove_ttl(rpc::context &ctx
+%   for key_field in key_fields:
+                                        , ${key_field["cpp_type"]} ${key_field["raw_name"]}
+%   endfor
+) {
+    char db_key[256];
+    size_t keylen = sizeof(db_key);
+    auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
+    if (result.size < static_cast<int64_t>(keylen)) {
+        keylen = static_cast<size_t>(result.size);
+    }
+    auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::remove_ttl(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+                                                                     gsl::string_view{db_key, keylen}));
     if (res < 0) {
         RPC_DB_RETURN_CODE(res);
     }

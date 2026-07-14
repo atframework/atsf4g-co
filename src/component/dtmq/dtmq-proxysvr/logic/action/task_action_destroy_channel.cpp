@@ -12,6 +12,7 @@
 // clang-format on
 
 #include <protocol/config/dtmq_proxy.config.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -25,8 +26,6 @@
 #include <config/extern_service_types.h>
 
 #include <utility>
-
-#include "rpc/dtmq/dtmq_client_api.h"
 
 #include "data/mq_channel.h"
 #include "logic/mq_channel_manager.h"
@@ -80,7 +79,7 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
 
   res = RPC_AWAIT_CODE_RESULT(channel->destroy(get_shared_context()));
   if (res < 0) {
-    FWLOGERROR("destroy chat channel {} failed, res: {}({})", channel_key.channel_id(), res,
+    FWLOGERROR("destroy mq channel {} failed, res: {}({})", channel_key.channel_id(), res,
                protobuf_mini_dumper_get_error_msg(res));
   }
   set_response_code(res);

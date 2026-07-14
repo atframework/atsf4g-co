@@ -30,6 +30,7 @@
 #include <utility>
 
 #include "data/mq_channel.h"
+#include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
 
 DTMQ_PROXY_SERVICE_API task_action_unsubscribe::task_action_unsubscribe(dispatcher_start_data_type&& param)

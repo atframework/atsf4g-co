@@ -33,6 +33,7 @@
 #include "rpc/dtmq/dtmq_client_api.h"
 
 #include "data/mq_channel.h"
+#include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
 
 DTMQ_PROXY_SERVICE_API task_action_subscribe::task_action_subscribe(dispatcher_start_data_type&& param)
@@ -71,6 +72,7 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
       }
 
       forward_by_server_id[forward_server_id].push_back(&heartbeat);
+      continue;
     }
 
     if (!channel) {
@@ -105,7 +107,7 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
     auto res = RPC_AWAIT_CODE_RESULT(
         rpc::dtmq::subscribe(get_shared_context(), forward_group.first, *rpc_req_body, *rpc_rsp_body, is_stream_rpc()));
     if (res < 0) {
-      FWLOGERROR("forward subscriber {} to chatsvr {:#x} failed, res: {}({})",
+      FWLOGERROR("forward subscriber {} to server {:#x} failed, res: {}({})",
                  make_subscriber_key(req_body.subscriber()), forward_group.first, res,
                  protobuf_mini_dumper_get_error_msg(res));
     }
@@ -113,7 +115,16 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
     for (const auto& channel_id : rpc_rsp_body->not_found_channel_ids()) {
       rsp_body.add_not_found_channel_ids(channel_id);
     }
-    protobuf_move_message(*rsp_body.mutable_subscribe_node(), std::move(*rpc_rsp_body->mutable_subscribe_node()));
+
+    for (auto& subscribe_node : *rpc_rsp_body->mutable_subscribe_node()) {
+      auto* add_subscribe_node = rsp_body.mutable_subscribe_node()->Add();
+      if (nullptr == add_subscribe_node) {
+        FWLOGERROR("forward subscriber {} to server {:#x} failed, malloc subscribe_node failed",
+                   make_subscriber_key(req_body.subscriber()), forward_group.first);
+        continue;
+      }
+      protobuf_move_message(*add_subscribe_node, std::move(subscribe_node));
+    }
   }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

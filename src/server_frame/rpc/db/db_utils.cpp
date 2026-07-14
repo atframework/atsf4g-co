@@ -13,11 +13,15 @@
 
 #include "rpc/db/db_utils.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/server_frame_build_feature.h>
 
@@ -28,10 +32,11 @@
 
 #include <hiredis_happ.h>
 
-#include <assert.h>
+#include <cassert>
 #include <string>
-
-#include "rpc/rpc_utils.h"
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #if defined(GetMessage)
 #  undef GetMessage
@@ -53,7 +58,7 @@
 #  include <pthread.h>
 namespace rpc {
 namespace db {
-namespace detail {
+namespace {
 static pthread_once_t gt_get_pack_tls_once = PTHREAD_ONCE_INIT;
 static pthread_key_t gt_get_pack_tls_key;
 
@@ -75,18 +80,18 @@ char *get_pack_tls_buffer() {
   }
   return buffer_block;
 }
-}  // namespace detail
+}  // namespace
 }  // namespace db
 }  // namespace rpc
 #else
 namespace rpc {
 namespace db {
-namespace detail {
+namespace {
 char *get_pack_tls_buffer() {
   static THREAD_TLS char ret[PROJECT_RPC_DB_BUFFER_LENGTH];
   return ret;
 }
-}  // namespace detail
+}  // namespace
 }  // namespace db
 }  // namespace rpc
 #endif
@@ -174,7 +179,7 @@ bool result_type::is_error() const noexcept {
 }
 #endif
 
-redis_args::redis_args(size_t argc) : used_(0), free_buffer_(rpc::db::detail::get_pack_tls_buffer()) {
+redis_args::redis_args(size_t argc) : used_(0), free_buffer_(rpc::db::get_pack_tls_buffer()) {
   segment_value_.resize(argc);
   segment_length_.resize(argc);
 }
@@ -188,7 +193,7 @@ char *redis_args::alloc(size_t sz) {
     return nullptr;
   }
 
-  size_t used_buf_len = static_cast<size_t>(free_buffer_ - rpc::db::detail::get_pack_tls_buffer());
+  size_t used_buf_len = static_cast<size_t>(free_buffer_ - rpc::db::get_pack_tls_buffer());
   if (used_buf_len + sz > PROJECT_RPC_DB_BUFFER_LENGTH) {
     FWLOGERROR("{}", "buffer length extended before padding");
     assert(false);
@@ -378,6 +383,7 @@ bool redis_args::push(int64_t v) {
   return true;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, uint64_t &version, bool &record_existed) {
   if (nullptr == reply) {
     FWLOGDEBUG("unpack message {} failed, data mot found.", msg.GetDescriptor()->full_name());
@@ -558,6 +564,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, ui
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply *reply, std::string_view *fields,
                               int32_t length, uint64_t &version, bool &record_existed) {
   if (nullptr == reply) {
@@ -588,7 +595,9 @@ int unpack_message_with_field(::google::protobuf::Message &msg, const redisReply
     const redisReply *value = reply->element[i];
     std::string_view key = fields[i];
 
-    if (!version_found && 0 == UTIL_STRFUNC_STRNCMP(RPC_DB_VERSION_NAME, key.data(), RPC_DB_VERSION_LENGTH)) {
+    if (!version_found && key.size() >= RPC_DB_VERSION_LENGTH &&
+        // NOLINTNEXTLINE(bugprone-suspicious-stringview-data-usage)
+        0 == UTIL_STRFUNC_STRNCMP(RPC_DB_VERSION_NAME, key.data(), RPC_DB_VERSION_LENGTH)) {
       if (REDIS_REPLY_INTEGER == value->type) {
         char intval[24] = {0};
         UTIL_STRFUNC_SNPRINTF(intval, sizeof(intval), "%lld", value->integer);
@@ -747,6 +756,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
       FWLOGERROR("pack message {} failed, alloc version key failed", msg.GetDescriptor()->full_name());
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
+    // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
     memcpy(d, RPC_DB_VERSION_NAME, RPC_DB_VERSION_LENGTH);
 
     //
@@ -797,7 +807,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
     switch (fds[i]->cpp_type()) {
       // 字符串直接保存
       case google::protobuf::FieldDescriptor::CPPTYPE_STRING: {
-        const std::string *seg_val;
+        const std::string *seg_val = nullptr;
         std::string empty;
         if (reflect->HasField(msg, fds[i])) {
           seg_val = &reflect->GetStringReference(msg, fds[i], nullptr);
@@ -813,8 +823,9 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
           args.dealloc();
           return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
-        memcpy(data_allocated, "&", 1);
+        *data_allocated = '&';
         data_allocated += 1;
+        // NOLINTNEXTLINE(bugprone-not-null-terminated-result)
         memcpy(data_allocated, seg_val->data(), seg_val->size());
 
         stat_sum_len += seg_val->size();
@@ -836,7 +847,7 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
           args.dealloc();
           return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
         }
-        memcpy(data_allocated, "&", 1);
+        *data_allocated = '&';
         data_allocated += 1;
         // 再dump 字段内容
         seg_val.SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
@@ -850,10 +861,12 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
 
         // 整数类型
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_INT32, int, "%d", GetInt32)
-        CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_INT64, long long, "%lld", GetInt64)
+        CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_INT64, long long,  // NOLINT: runtime/int
+                                  "%lld", GetInt64)
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_UINT32, unsigned int, "%u", GetUInt32)
-        CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_UINT64, unsigned long long, "%llu",
-                                  GetUInt64)
+        CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_UINT64,
+                                  unsigned long long,  // NOLINT: runtime/int
+                                  "%llu", GetUInt64)
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_ENUM, int, "%d", GetEnumValue)
         CASE_PB_INT_TO_REDIS_DATA(google::protobuf::FieldDescriptor::CPPTYPE_BOOL, int, "%d", GetBool)
 
@@ -875,13 +888,13 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-constexpr const char *REDIS_LIST_INDEX_FIELD = "index_number";
+constexpr const char *REDIS_LIST_INDEX_FIELD = "__index_number";
 
 std::string get_list_value_field(uint64_t index) { return std::to_string(index); }
 
 int32_t unpack_list_message(
     rpc::context *ctx, const redisReply *reply, std::vector<db_key_list_message_result_t> &results,
-    std::function<
+    atfw::util::nostd::function_ref<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context *)>
         msg_factory) {
   if (nullptr == ctx || nullptr == reply) {
@@ -918,11 +931,11 @@ int32_t unpack_list_message(
 
     uint64_t index = 0;
 
-    if (std::strcmp(key_str.data(), REDIS_LIST_INDEX_FIELD) == 0) {
+    if (key_str == REDIS_LIST_INDEX_FIELD) {
       continue;
     }
 
-    atfw::util::string::str2int(index, key_str.data());
+    atfw::util::string::str2int(index, key_str.data(), key_str.size());
     items[index] = value_reply;
   }
 
@@ -939,24 +952,24 @@ int32_t unpack_list_message(
           "type={}).",
           value->type);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-    } else {
-      if (value->len <= 1) {
-        modify_result.message = ptr;
-        continue;
-      }
-      if (value->str[0] != '&') {
-        FWLOGERROR(
-            "unpack failed, type in pb is a message, but the redis reply type is not start with '&'(reply "
-            "type={}).",
-            value->type);
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
-      if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
-        FWLOGERROR("message unpack error failed");
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
-      modify_result.message = ptr;
     }
+
+    if (value->len <= 1) {
+      modify_result.message = ptr;
+      continue;
+    }
+    if (value->str[0] != '&') {
+      FWLOGERROR(
+          "unpack failed, type in pb is a message, but the redis reply type is not start with '&'(reply "
+          "type={}).",
+          value->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+    if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
+      FWLOGERROR("message unpack error failed");
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+    modify_result.message = ptr;
   }
 
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -964,7 +977,7 @@ int32_t unpack_list_message(
 
 int32_t unpack_list_message_with_index(
     rpc::context *ctx, const redisReply *reply, std::vector<db_key_list_message_result_t> &results,
-    std::function<
+    atfw::util::nostd::function_ref<
         atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>>(rpc::context *)>
         msg_factory) {
   if (nullptr == ctx || nullptr == reply) {
@@ -992,24 +1005,24 @@ int32_t unpack_list_message_with_index(
           "type={}).",
           value->type);
       return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-    } else {
-      if (value->len <= 1) {
-        modify_result.message = ptr;
-        continue;
-      }
-      if (value->str[0] != '&') {
-        FWLOGERROR(
-            "unpack failed, type in pb is a message, but the redis reply type is not start with '&'(reply "
-            "type={}).",
-            value->type);
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
-      if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
-        FWLOGERROR("message unpack error failed");
-        return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
-      }
-      modify_result.message = ptr;
     }
+
+    if (value->len <= 1) {
+      modify_result.message = ptr;
+      continue;
+    }
+    if (value->str[0] != '&') {
+      FWLOGERROR(
+          "unpack failed, type in pb is a message, but the redis reply type is not start with '&'(reply "
+          "type={}).",
+          value->type);
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+    if (false == (*ptr)->ParseFromArray(value->str + 1, static_cast<int>(value->len) - 1)) {
+      FWLOGERROR("message unpack error failed");
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+    }
+    modify_result.message = ptr;
   }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }

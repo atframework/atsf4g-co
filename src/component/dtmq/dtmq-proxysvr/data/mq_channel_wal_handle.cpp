@@ -42,10 +42,11 @@
 
 namespace {
 
+using wal_result_code = atfw::util::distributed_system::wal_result_code;
+
 struct mq_wal_delegate_helper {
   using wal_object_type = mq_channel_wal_object_type;
   using wal_publisher_type = mq_channel_wal_publisher_type;
-  using wal_result_code = atfw::util::distributed_system::wal_result_code;
   using log_const_iterator = wal_object_type::log_const_iterator;
   using log_iterator = wal_object_type::log_iterator;
   using log_key_type = wal_object_type::log_key_type;
@@ -98,7 +99,6 @@ struct mq_wal_delegate_helper {
 
 static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_object_vtable() {
   using wal_object_type = mq_channel_wal_object_type;
-  using wal_result_code = atfw::util::distributed_system::wal_result_code;
 
   static wal_object_type::vtable_pointer ret;
   if (ret) {
@@ -165,7 +165,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
       return wal_result_code::kOk;
     }
 
-    channel->dump(to, true, true, true);
+    channel->dump(to, true, true, false);
     return wal_result_code::kOk;
   };
 
@@ -273,7 +273,6 @@ static mq_channel_wal_object_type::configure_pointer create_mq_channel_shared_ob
 static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtable() {
   // using wal_object_type = mq_channel_wal_client_type::object_type;
   using wal_client_type = mq_channel_wal_client_type;
-  using wal_result_code = atfw::util::distributed_system::wal_result_code;
   using snapshot_type = mq_channel_storage_type;
 
   static wal_client_type::vtable_pointer ret;
@@ -342,10 +341,236 @@ static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtabl
   return ret;
 }
 
+static wal_result_code publisher_send_snapshot(
+    mq_channel_wal_publisher_type& publisher, mq_channel_wal_publisher_type::subscriber_iterator begin,
+    mq_channel_wal_publisher_type::subscriber_iterator end,  // NOLINT(performance-unnecessary-value-param)
+    mq_channel_wal_publisher_type::callback_param_type param) {
+  mq_channel* channel = publisher.get_private_data().channel;
+  if (nullptr == channel) {
+    return wal_result_code::kOk;
+  }
+
+  if (channel->is_loading_snapshot()) {
+    return wal_result_code::kOk;
+  }
+
+  if (begin == end) {
+    return wal_result_code::kOk;
+  }
+
+  auto notify_msg = rpc::make_shared_message<atfw::dtmq::SSChannelEventSync>(param.context);
+  protobuf_copy_message(*notify_msg->mutable_channel_metadata()->mutable_channel_key(), channel->get_channel_key());
+  auto* snapshot_data = notify_msg->mutable_channel_snapshot();
+  if (nullptr == snapshot_data) {
+    FWLOGERROR("malloc {} failed", "channel_snapshot");
+    return wal_result_code::kCallbackError;
+  }
+  channel->dump(*snapshot_data, true, true, false);
+
+  // Collect subscribers by server id
+  std::unordered_map<uint64_t, std::list<mq_channel_wal_publisher_type::subscriber_pointer>> svrs_without_private_data;
+  std::unordered_map<uint64_t, std::list<mq_channel_wal_publisher_type::subscriber_pointer>> svrs_with_private_data;
+  for (; begin != end; ++begin) {
+    if (!begin->second) {
+      continue;
+    }
+
+    if (begin->second->is_offline(util::time::time_utility::now())) {
+      continue;
+    }
+
+    uint64_t svr_id = begin->second->get_private_data().subscriber_server_id();
+    if (0 != svr_id) {
+      if (begin->second->get_private_data().with_private_data()) {
+        svrs_with_private_data[svr_id].push_back(begin->second);
+      } else {
+        svrs_without_private_data[svr_id].push_back(begin->second);
+      }
+    }
+  }
+
+  if (svrs_without_private_data.empty() && svrs_with_private_data.empty()) {
+    FWLOGDEBUG("channel_snapshot, svrs is empty. channel:({})",
+               protobuf_mini_dumper_get_readable(channel->get_channel_key()));
+    return wal_result_code::kOk;
+  }
+
+  // Send without private data
+  for (auto& target : svrs_without_private_data) {
+    notify_msg->clear_subscriber_keys();
+    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
+    for (auto& key : target.second) {
+      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
+    }
+
+    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
+        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+    if (0 != res) {
+      if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
+          PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
+        // 服务器节点离线，可能是短暂不可用
+        FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                     channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+      } else {
+        FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                   channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+        param.result_code.get() = res;
+      }
+    }
+  }
+
+  if (svrs_with_private_data.empty()) {
+    return wal_result_code::kOk;
+  }
+  channel->dump_private_data(*snapshot_data->mutable_channel_runtime());
+
+  // Send with private data
+  for (auto& target : svrs_with_private_data) {
+    notify_msg->clear_subscriber_keys();
+    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
+    for (auto& key : target.second) {
+      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
+    }
+
+    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
+        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+    if (0 != res) {
+      if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
+          PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
+        // 服务器节点离线，可能是短暂不可用
+        FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                     channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+      } else {
+        FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                   channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+        param.result_code.get() = res;
+      }
+    }
+  }
+
+  return wal_result_code::kOk;
+}
+
+static wal_result_code publisher_send_logs(
+    mq_channel_wal_publisher_type& publisher, mq_channel_wal_publisher_type::log_const_iterator log_begin,
+    mq_channel_wal_publisher_type::log_const_iterator log_end,  // NOLINT(performance-unnecessary-value-param)
+    mq_channel_wal_publisher_type::subscriber_iterator subscriber_begin,
+    mq_channel_wal_publisher_type::subscriber_iterator subscriber_end,  // NOLINT(performance-unnecessary-value-param)
+    mq_channel_wal_publisher_type::callback_param_type param) {
+  mq_channel* channel = publisher.get_private_data().channel;
+  if (nullptr == channel) {
+    return wal_result_code::kOk;
+  }
+
+  if (channel->is_loading_snapshot()) {
+    return wal_result_code::kOk;
+  }
+
+  if (log_begin == log_end || subscriber_begin == subscriber_end) {
+    return wal_result_code::kOk;
+  }
+
+  int64_t first_log_sequence = 0;
+  for (auto iter = log_begin; 0 == first_log_sequence && iter != log_end; ++iter) {
+    if (!(*iter)) {
+      continue;
+    }
+
+    first_log_sequence = (*iter)->sequence();
+  }
+
+  auto notify_msg = rpc::make_shared_message<atfw::dtmq::SSChannelEventSync>(param.context);
+  channel->dump(*notify_msg->mutable_channel_metadata(), false,
+                channel->get_custom_data_sequence() >= first_log_sequence);
+  bool has_private_data = channel->get_private_data_sequence() >= first_log_sequence;
+  channel->dump(*notify_msg->mutable_channel_runtime(), false);
+
+  // Pack log sync message
+  for (; log_begin != log_end; ++log_begin) {
+    if (!(*log_begin)) {
+      continue;
+    }
+
+    protobuf_copy_message(*notify_msg->add_channel_message(), **log_begin);
+  }
+
+  if (0 == notify_msg->channel_message_size()) {
+    return wal_result_code::kOk;
+  }
+
+  // Collect subscribers by server id
+  std::unordered_map<uint64_t, std::list<mq_channel_wal_publisher_type::subscriber_pointer>> svrs_without_private_data;
+  std::unordered_map<uint64_t, std::list<mq_channel_wal_publisher_type::subscriber_pointer>> svrs_with_private_data;
+  for (; subscriber_begin != subscriber_end; ++subscriber_begin) {
+    if (!subscriber_begin->second) {
+      continue;
+    }
+
+    if (subscriber_begin->second->is_offline(util::time::time_utility::now())) {
+      continue;
+    }
+
+    uint64_t svr_id = subscriber_begin->second->get_private_data().subscriber_server_id();
+    if (0 != svr_id) {
+      // 如果不需要下发private data，还是可以合并下发数据
+      if (has_private_data && subscriber_begin->second->get_private_data().with_private_data()) {
+        svrs_with_private_data[svr_id].push_back(subscriber_begin->second);
+      } else {
+        svrs_without_private_data[svr_id].push_back(subscriber_begin->second);
+      }
+    }
+  }
+
+  if (svrs_without_private_data.empty() && svrs_with_private_data.empty()) {
+    FWLOGDEBUG("send_logs, svrs is empty. channel:({})", protobuf_mini_dumper_get_readable(channel->get_channel_key()));
+    return wal_result_code::kOk;
+  }
+
+  // Send without private data
+  for (auto& target : svrs_without_private_data) {
+    notify_msg->clear_subscriber_keys();
+    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
+    for (auto& key : target.second) {
+      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
+    }
+
+    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
+        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+    if (0 != res) {
+      FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                 channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+      param.result_code.get() = res;
+    }
+  }
+
+  if (svrs_with_private_data.empty()) {
+    return wal_result_code::kOk;
+  }
+  channel->dump_private_data(*notify_msg->mutable_channel_runtime());
+
+  // Send without private data
+  for (auto& target : svrs_with_private_data) {
+    notify_msg->clear_subscriber_keys();
+    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
+    for (auto& key : target.second) {
+      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
+    }
+
+    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
+        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+    if (0 != res) {
+      FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                 channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+      param.result_code.get() = res;
+    }
+  }
+
+  return wal_result_code::kOk;
+}
+
 static mq_channel_wal_publisher_type::vtable_pointer create_mq_channel_publisher_vtable() {
   // using wal_object_type = mq_channel_wal_publisher_type::object_type;
   using wal_publisher_type = mq_channel_wal_publisher_type;
-  using wal_result_code = atfw::util::distributed_system::wal_result_code;
 
   static wal_publisher_type::vtable_pointer ret;
   if (ret) {
@@ -358,173 +583,8 @@ static mq_channel_wal_publisher_type::vtable_pointer create_mq_channel_publisher
   }
 
   // ============ callbacks for wal_publisher ============
-  ret->send_snapshot = [](wal_publisher_type& publisher, wal_publisher_type::subscriber_iterator begin,
-                          wal_publisher_type::subscriber_iterator end,  // NOLINT(performance-unnecessary-value-param)
-                          wal_publisher_type::callback_param_type param) -> wal_result_code {
-    mq_channel* channel = publisher.get_private_data().channel;
-    if (nullptr == channel) {
-      return wal_result_code::kOk;
-    }
-
-    if (channel->is_loading_snapshot()) {
-      return wal_result_code::kOk;
-    }
-
-    if (begin == end) {
-      return wal_result_code::kOk;
-    }
-
-    auto notify_msg = rpc::make_shared_message<atfw::dtmq::SSChannelEventSync>(param.context);
-    protobuf_copy_message(*notify_msg->mutable_channel_metadata()->mutable_channel_key(), channel->get_channel_key());
-    auto* snapshot_data = notify_msg->mutable_channel_snapshot();
-    if (nullptr == snapshot_data) {
-      FWLOGERROR("malloc {} failed", "channel_snapshot");
-      return wal_result_code::kCallbackError;
-    }
-    channel->dump(*snapshot_data, true, true, true);
-
-    // 世界频道和大区频道没有订阅者
-
-    // Collect subscribers by server id
-    std::unordered_map<uint64_t, std::list<wal_publisher_type::subscriber_pointer>> svrs;
-    for (; begin != end; ++begin) {
-      if (!begin->second) {
-        continue;
-      }
-
-      if (begin->second->is_offline(util::time::time_utility::now())) {
-        continue;
-      }
-
-      uint64_t svr_id = begin->second->get_private_data().subscriber_server_id();
-      if (0 != svr_id) {
-        svrs[svr_id].push_back(begin->second);
-      }
-    }
-
-    if (svrs.empty()) {
-      FWLOGDEBUG("channel_snapshot, svrs is empty. channel:({})",
-                 protobuf_mini_dumper_get_readable(channel->get_channel_key()));
-      return wal_result_code::kOk;
-    }
-
-    // Send
-    for (auto& target : svrs) {
-      notify_msg->clear_subscriber_keys();
-      notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
-      for (auto& key : target.second) {
-        notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
-      }
-
-      rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-          rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
-      if (0 != res) {
-        if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
-            PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
-          // 服务器节点离线，可能是短暂不可用
-          FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                       channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-        } else {
-          FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                     channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-          param.result_code.get() = res;
-        }
-      }
-    }
-
-    return wal_result_code::kOk;
-  };
-
-  ret->send_logs =
-      [](wal_publisher_type& publisher, wal_publisher_type::log_const_iterator log_begin,
-         wal_publisher_type::log_const_iterator log_end,  // NOLINT(performance-unnecessary-value-param)
-         wal_publisher_type::subscriber_iterator subscriber_begin,
-         wal_publisher_type::subscriber_iterator subscriber_end,  // NOLINT(performance-unnecessary-value-param)
-         wal_publisher_type::callback_param_type param) -> wal_result_code {
-    mq_channel* channel = publisher.get_private_data().channel;
-    if (nullptr == channel) {
-      return wal_result_code::kOk;
-    }
-
-    if (channel->is_loading_snapshot()) {
-      return wal_result_code::kOk;
-    }
-
-    if (log_begin == log_end || subscriber_begin == subscriber_end) {
-      return wal_result_code::kOk;
-    }
-
-    int64_t first_log_sequence = 0;
-    for (auto iter = log_begin; 0 == first_log_sequence && iter != log_end; ++iter) {
-      if (!(*iter)) {
-        continue;
-      }
-
-      first_log_sequence = (*iter)->sequence();
-    }
-
-    auto notify_msg = rpc::make_shared_message<atfw::dtmq::SSChannelEventSync>(param.context);
-    channel->dump(*notify_msg->mutable_channel_metadata(), false,
-                  channel->get_custom_data_sequence() >= first_log_sequence);
-    channel->dump(*notify_msg->mutable_channel_runtime(), channel->get_private_data_sequence() >= first_log_sequence);
-
-    // Pack log sync message
-    for (; log_begin != log_end; ++log_begin) {
-      if (!(*log_begin)) {
-        continue;
-      }
-
-      protobuf_copy_message(*notify_msg->add_channel_message(), **log_begin);
-    }
-
-    if (0 == notify_msg->channel_message_size()) {
-      return wal_result_code::kOk;
-    }
-
-    // 世界频道和大区频道没有订阅者
-
-    // Collect subscribers by server id
-    std::unordered_map<uint64_t, std::list<wal_publisher_type::subscriber_pointer>> svrs;
-    for (; subscriber_begin != subscriber_end; ++subscriber_begin) {
-      if (!subscriber_begin->second) {
-        continue;
-      }
-
-      if (subscriber_begin->second->is_offline(util::time::time_utility::now())) {
-        continue;
-      }
-
-      uint64_t svr_id = subscriber_begin->second->get_private_data().subscriber_server_id();
-      if (0 != svr_id) {
-        svrs[svr_id].push_back(subscriber_begin->second);
-      }
-    }
-
-    if (svrs.empty()) {
-      FWLOGDEBUG("send_logs, svrs is empty. channel:({})",
-                 protobuf_mini_dumper_get_readable(channel->get_channel_key()));
-      return wal_result_code::kOk;
-    }
-
-    // Send
-    for (auto& target : svrs) {
-      notify_msg->clear_subscriber_keys();
-      notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
-      for (auto& key : target.second) {
-        notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
-      }
-
-      rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-          rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
-      if (0 != res) {
-        FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                   channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-        param.result_code.get() = res;
-      }
-    }
-
-    return wal_result_code::kOk;
-  };
+  ret->send_snapshot = publisher_send_snapshot;
+  ret->send_logs = publisher_send_logs;
 
   ret->check_subscriber = [](wal_publisher_type&, const wal_publisher_type::subscriber_pointer& subscriber,
                              wal_publisher_type::callback_param_type) -> bool {

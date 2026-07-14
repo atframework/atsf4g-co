@@ -16,14 +16,13 @@
 #include <std/explicit_declare.h>
 
 #if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-#  include <assert.h>
+#  include <cassert>
 #endif
-#include <stdint.h>
-#include <cstddef>
+#include <cstdint>
 #include <type_traits>
 #include <utility>
 
-#include "rpc/rpc_macros.h"
+#include "rpc/rpc_macros.h"  // IWYU pragma: keep
 
 // #define PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 
@@ -47,6 +46,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready<void> {
 #endif
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
   bool await_ready() const noexcept { return true; }
   void await_suspend(LIBCOPP_MACRO_STD_COROUTINE_NAMESPACE coroutine_handle<>) const noexcept {}
   void await_resume() const noexcept {}
@@ -114,7 +114,8 @@ SERVER_FRAME_API int32_t rpc_get_not_ready_code();
 namespace details {
 template <class TVALUE>
 struct ATFW_UTIL_SYMBOL_VISIBLE _rpc_result_guard_enum_padding_underlying_type {
-  using type = typename std::conditional<sizeof(TVALUE) <= sizeof(int32_t), int32_t, TVALUE>::type;
+  using type = typename std::conditional<sizeof(TVALUE) <= sizeof(int32_t),  // NOLINT: whitespace/operators
+                                         int32_t, TVALUE>::type;
 };
 
 template <class TVALUE, bool IS_INTEGER, bool IS_ENUM>

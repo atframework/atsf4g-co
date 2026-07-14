@@ -96,11 +96,18 @@ message DChannelDestroy {
 
 message DChannelMessageDetail {
   oneof command {
-    bool update_custom_data = 1;
-    string text = 2;
-    google.protobuf.Any event = 3;
-    DChannelOptimisticLock reset_lock = 4;
-    DChannelDestroy destroy = 5;
+    // 无操作，用于触发一些特殊流程
+    bool noop = 1;
+    // 通知custom data更新了
+    bool update_custom_data = 2;
+    // 文本数据
+    string text = 3;
+    // 任意事件数据
+    google.protobuf.Any event = 4;
+    // 重置乐观锁
+    DChannelOptimisticLock reset_lock = 5;
+    // 频道销毁
+    DChannelDestroy destroy = 6;
   }
 }
 

@@ -39,4 +39,5 @@ message dtmq_proxysvr_cfg {
       [(atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "5s" }];
   google.protobuf.Duration channel_transfer_stabilization_window = 16
       [(atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  int32 page_query_max_size = 21 [(atapp.protocol.CONFIGURE) = { default_value: "10" min_value: "1" }];
 }
