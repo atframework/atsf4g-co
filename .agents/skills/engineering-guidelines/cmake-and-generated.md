@@ -26,7 +26,7 @@ Detail companion to `SKILL.md`. Load when editing CMake files, protobuf, templat
 
 - Load [`service-functions-cmake.md`](service-functions-cmake.md) before changing service, component, protocol, SDK,
   instance, alias, or helper declarations.
-- Keep helper API spelling and aliases exact: source list keyword `HRADERS` is intentional; helper dependency arguments
+- Keep helper API spelling and aliases exact: source list keyword is `HEADERS`; helper dependency arguments
   use bare names such as `USE_SERVICE_SDK "lobbysvr-sdk"`, not aliased target names.
 - Respect declaration order: dependencies must be declared before referenced aliases.
 

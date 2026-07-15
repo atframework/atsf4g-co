@@ -21,13 +21,15 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
 
 ## Header and ABI boundaries
 
-- Any function, method, friend, or operator body written in a header must be marked `ATFW_UTIL_FORCEINLINE`; avoid plain
-  `inline` for project code unless matching generated or third-party code.
-- Do not implement interfaces declared with `*_API`/`XXX_API` export macros in headers. Keep exported function, method,
-  constructor, destructor, and static-data implementations in `.cpp` files so ABI stays stable across compilers and
-  build options.
-- Header-only helpers should be non-exported and `ATFW_UTIL_FORCEINLINE`. If surrounding code already uses a dedicated
-  header-only visibility marker, keep that marker but still use `ATFW_UTIL_FORCEINLINE` for the function body.
+- Classify every interface by its publication boundary before choosing an inline/export marker.
+- Every externally consumable API of a library must use one of the project's two publication models: cover the
+  declaration or enclosing type with that library's `*_API`/`XXX_API` symbol-export macro, or mark the header definition
+  `ATFW_UTIL_FORCEINLINE`. Plain `inline`, implicit inline, or `constexpr` alone does not satisfy this public-API rule.
+- For the exported-symbol model, keep non-template function, method, constructor, destructor, and static-data
+  implementations in `.cpp` files by default so the ABI stays stable across compilers and build options.
+- Library-internal helpers, executable-only code, and other interfaces that are not exported may use implicit inline,
+  `constexpr`, or explicit `inline` when they satisfy the C++ ODR and match the local design. In this internal-only
+  scope, use `ATFW_UTIL_FORCEINLINE` only when local convention or a concrete performance requirement calls for it.
 
 ## Includes and protobuf wrappers
 

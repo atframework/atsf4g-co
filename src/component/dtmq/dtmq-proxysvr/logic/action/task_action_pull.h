@@ -35,7 +35,7 @@ class task_action_pull
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_pull(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_pull();
+  DTMQ_PROXY_SERVICE_API ~task_action_pull() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

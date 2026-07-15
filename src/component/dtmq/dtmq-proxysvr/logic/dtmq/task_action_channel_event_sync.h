@@ -35,7 +35,7 @@ class task_action_channel_event_sync
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_channel_event_sync(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_channel_event_sync();
+  DTMQ_PROXY_SERVICE_API ~task_action_channel_event_sync() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

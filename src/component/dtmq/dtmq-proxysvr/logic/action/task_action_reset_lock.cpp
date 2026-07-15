@@ -76,6 +76,7 @@ DTMQ_PROXY_SERVICE_API task_action_reset_lock::result_type task_action_reset_loc
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  channel->tick(get_shared_context());
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

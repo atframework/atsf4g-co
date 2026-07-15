@@ -51,7 +51,10 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
       get_shared_context(), channel, forward_server_id, channel_key, false));
 
   if (res < 0) {
-    set_response_code(res);
+    if (res != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND &&
+        res != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL) {
+      set_response_code(res);
+    }
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 

@@ -114,7 +114,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
 
   // callbacks for wal_object
   ret->load = [](wal_object_type& wal, const wal_object_type::storage_type& from,
-                 wal_object_type::callback_param_type /*param*/) -> wal_result_code {
+                 wal_object_type::callback_param_type param) -> wal_result_code {
     mq_channel* channel = wal.get_private_data().channel;
     if (nullptr == channel) {
       return wal_result_code::kInitlization;
@@ -129,13 +129,15 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
     std::vector<wal_object_type::log_pointer> storage;
     storage.reserve(static_cast<size_t>(from.messages_size()));
     for (const auto& msg : from.messages()) {
-      auto log_ptr = atfw::memory::stl::make_strong_rc<wal_object_type::log_type>();
-      if (!log_ptr) {
-        break;
+      if (wal.get_log_key_compare()(msg.sequence(), channel->get_compact_stateful_sequence()) ||
+          wal.get_log_key_compare()(msg.sequence(), last_removed_key)) {
+        continue;
       }
 
-      if (msg.sequence() <= channel->get_compact_stateful_sequence() || msg.sequence() <= last_removed_key) {
-        continue;
+      auto log_ptr = atfw::memory::stl::make_strong_rc<wal_object_type::log_type>();
+      if (!log_ptr) {
+        param.result_code.get() = static_cast<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+        return wal_result_code::kCallbackError;
       }
 
       protobuf_copy_message(*log_ptr, msg);

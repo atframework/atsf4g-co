@@ -153,6 +153,7 @@ message SSChannelResetLockRsp {
 message SSChannelFindMessageReq {
   DChannelIdKey channel_key = 1;
   int64 sequence = 2;
+  bool auto_create_channel = 3;
 }
 
 message SSChannelFindMessageRsp {
@@ -164,6 +165,7 @@ message SSChannelFindMessageRsp {
 message SSChannelQueryMessageReq {
   DChannelIdKey channel_key = 1;
   channel_page_info page_info = 2;
+  bool auto_create_channel = 3;
 }
 
 message SSChannelQueryMessageRsp {
@@ -176,6 +178,7 @@ message SSChannelQueryMessageRsp {
 
 message SSChannelPullReq {
   DChannelIdKey channel_key = 2;
+  bool auto_create_channel = 3;
 
   bool need_snapshot = 11;
   bool need_configure = 12;

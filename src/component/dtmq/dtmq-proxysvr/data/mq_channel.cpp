@@ -191,7 +191,10 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
   }
 
   if (get_shared_wal_object()->get_all_logs().empty()) {
-    get_shared_wal_object()->set_last_removed_key(alloc_message_sequence());
+    if (nullptr == get_shared_wal_object()->get_last_removed_key() ||
+        *get_shared_wal_object()->get_last_removed_key() <= 0) {
+      get_shared_wal_object()->set_last_removed_key(get_last_message_sequence());
+    }
   } else {
     get_shared_wal_object()->set_last_removed_key((*get_shared_wal_object()->get_all_logs().begin())->sequence());
   }
@@ -212,6 +215,11 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
     if (is_writable()) {
       downgrade_to_readable(replicate_index_set->prefer_replicate_index);
     } else {
+      // 已经加载全量数据，不需要再获取快照了
+      maybe_create_wal_client();
+      if (wal_client_) {
+        wal_client_->set_received_snapshot(true);
+      }
       upgrade_to_readonly(replicate_index_set->prefer_replicate_index);
     }
 
@@ -428,7 +436,7 @@ bool mq_channel::clear_private_data() noexcept {
 
 void mq_channel::reset_private_data_sequence() noexcept { private_data_sequence_ = get_last_message_sequence(); }
 
-rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
+rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_create) {
   if (is_io_task_running()) {
     auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
     if (ret != 0) {
@@ -447,11 +455,11 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
 
   // Writable节点从DB拉取
   auto self_ptr = shared_from_this();
-  auto invoke_result =
-      rpc::async_invoke(ctx, "mq_channel.writable_init", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+  auto invoke_result = rpc::async_invoke(
+      ctx, "mq_channel.writable_init", [self_ptr, auto_create](rpc::context& child_ctx) -> rpc::result_code_type {
         FWLOGINFO("create_init mq channel {}", self_ptr->get_channel_id());
 
-        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx));
+        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx, auto_create));
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
@@ -536,8 +544,8 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
     subscribe_task_ = *invoke_result.get_success();
   }
 
-  if (is_io_task_running()) {
-    auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
+  if (!task_type_trait::empty(subscribe_task_) && !task_type_trait::is_exiting(subscribe_task_)) {
+    auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, subscribe_task_));
     if (result < 0) {
       RPC_RETURN_CODE(result);
     }
@@ -613,8 +621,12 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   FWLOGINFO("mq channel {} load snapshot", get_channel_id());
 
   last_save_timepoint_ = atfw::util::time::time_utility::now();
-  // 如果当前节点是从节点，client也要处理快照
-  maybe_create_wal_client();
+
+  // 仅仅非可写节点才需要创建wal_client_，可写节点只需要wal_publisher_即可
+  if (!is_writable() && !should_be_writable()) {
+    // snapshot就是全量数据，不需要client再做snapshot检查
+    maybe_create_wal_client();
+  }
 
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
@@ -632,6 +644,7 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   }
   // wal_client_ 和 wal_publisher_ 共享WAL层，其中一个加载即可。
   if (wal_client_) {
+    wal_client_->set_received_snapshot(true);
     wal_client_->receive_snapshot(snapshot.channel_data(), params);
   } else {
     wal_publisher_->load(snapshot.channel_data(), params);
@@ -655,7 +668,10 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   }
 
   if (get_shared_wal_object()->get_all_logs().empty()) {
-    get_shared_wal_object()->set_last_removed_key(alloc_message_sequence());
+    if (nullptr == get_shared_wal_object()->get_last_removed_key() ||
+        *get_shared_wal_object()->get_last_removed_key() <= 0) {
+      get_shared_wal_object()->set_last_removed_key(get_last_message_sequence());
+    }
   } else {
     get_shared_wal_object()->set_last_removed_key((*get_shared_wal_object()->get_all_logs().begin())->sequence());
   }
@@ -665,14 +681,13 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     wal_publisher_->set_broadcast_key_bound(restore_broadcast_key);
   }
 
+  ++dirty_version_;
   if (snapshot.replicate_index() > 0) {
     upgrade_to_readonly(snapshot.replicate_index());
-    ++dirty_version_;
-    saved_version_ = dirty_version_;
-  } else {
-    upgrade_to_writable();
 
-    ++dirty_version_;
+    saved_version_ = dirty_version_;
+  } else if (!is_writable() && should_be_writable()) {
+    upgrade_to_writable();
     // 加载快照时，原数据可能未落地保存。所以不能赋值 saved_version_ ，下一次定时器到期要正常保存
   }
 
@@ -1406,8 +1421,8 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   if (is_io_task_running()) {
     auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
     if (result < 0) {
-      FWLOGERROR("mq channel {} destroy: create task failed.res: {}({})", get_channel_id(), *invoke_result.get_error(),
-                 protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+      FWLOGERROR("mq channel {} destroy: create task failed.res: {}({})", get_channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
       RPC_RETURN_CODE(0);
     }
   }
@@ -1443,12 +1458,18 @@ void mq_channel::ensure_recreate_after_destroyed(rpc::context& /*ctx*/) {
   }
 }
 
-rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
+rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx, bool auto_create) {
   auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), record));
   if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FWLOGINFO("rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
     ret = 0;
+
+    if (!auto_create) {
+      FWLOGINFO("channel {}({}) load_from_db failed, not found", get_channel_id(),
+                record->record_set().record().size());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
   }
 
   // 读取到请清除的频道数据，直接清空
@@ -1456,6 +1477,10 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
       atfw::util::time::time_utility::now() >=
           protobuf_to_system_clock(record->channel_metadata().destroy_timepoint())) {
     record->Clear();
+    if (!auto_create) {
+      FWLOGINFO("channel {}({}) load_from_db failed, removed", get_channel_id(), record->record_set().record().size());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
   }
 
   if (ret == 0) {
@@ -1483,10 +1508,11 @@ int32_t mq_channel::async_send_subscribe_to_writable(rpc::context& ctx) {
   }
 
   const replicate_index_set* readonly_replicate_index_set = nullptr;
-  if (!should_be_readonly(readonly_replicate_index_set)) {
+  if (is_writable() || !should_be_readonly(readonly_replicate_index_set)) {
     wal_client_.reset();
     return 0;
   }
+
   maybe_create_wal_client();
   auto self_ptr = shared_from_this();
   auto invoke_result = rpc::async_invoke(
@@ -1560,7 +1586,7 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
 }
 
 rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) {
-  uint64_t dtmq_proxysvr_id = get_main_ready_writable_server_id();
+  uint64_t dtmq_proxysvr_id = get_ready_distribution_writable_server_id();
   if (dtmq_proxysvr_id == 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
@@ -1568,6 +1594,10 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   rpc::context::message_holder<atfw::dtmq::SSChannelSubscribeRsp> rsp_body{ctx};
   auto* channel_data = req_body->mutable_heartbeat()->Add();
   protobuf_copy_message(*channel_data->mutable_channel_key(), channel_key_);
+
+  if (is_writable()) {
+    RPC_RETURN_CODE(0);
+  }
 
   maybe_create_wal_client();
   auto wal_client = get_wal_client();
@@ -1627,7 +1657,6 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
         set_destroy_message(ctx, atfw::util::time::time_utility::now());
       }
     }
-
   } else {
     update_last_writable_notify_time();
   }
@@ -1670,7 +1699,7 @@ void mq_channel::set_destroy_message(rpc::context& ctx, std::chrono::system_cloc
 }
 
 int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
-                              int64_t last_received_sequence, size_t last_received_hash_code, bool merge_mode) {
+                              int64_t last_received_sequence, uint64_t last_received_hash_code, bool merge_mode) {
   if (subscriber_info.subscriber_server_id() == 0) {
     return 0;
   }
@@ -1792,7 +1821,7 @@ int64_t mq_channel::alloc_message_sequence() noexcept {
     }
   }
 
-  if (0 == sequence_allocator_) {
+  if (sequence_allocator_ <= 1) {
     sequence_allocator_ =
         (atfw::util::time::time_utility::get_sys_now() * 1000000) + util::time::time_utility::get_now_usec();
   }
@@ -1809,7 +1838,8 @@ int64_t mq_channel::get_last_message_sequence() const noexcept {
     return (*get_shared_wal_object()->get_all_logs().rbegin())->sequence();
   }
 
-  return const_cast<mq_channel*>(this)->alloc_message_sequence();  // 设计如此，仅初始化有效无需告警
+  // 初始默认是1，这样没订阅过的client第一条消息带0上来可以触发快照下发
+  return 1;
 }
 
 uint64_t mq_channel::get_last_hash_code() const noexcept {
@@ -1828,7 +1858,9 @@ uint64_t mq_channel::get_client_last_hash_code() const noexcept {
   return 0;
 }
 
-uint64_t mq_channel::get_main_ready_writable_server_id() { return ready_distribution_.writable_server_id; }
+uint64_t mq_channel::get_ready_distribution_writable_server_id() { return ready_distribution_.writable_server_id; }
+
+uint64_t mq_channel::get_target_distribution_writable_server_id() { return target_distribution_.writable_server_id; }
 
 int mq_channel::tick(rpc::context& ctx) {
   auto now = atfw::util::time::time_utility::now();
@@ -1878,6 +1910,11 @@ void mq_channel::reset_lost_last_subscriber() noexcept {
 void mq_channel::set_dirty() noexcept {
   // 仅仅writable需要保存
   if (!is_writable()) {
+    return;
+  }
+
+  // IO任务不在运行，且已经标脏了，则不需要重复标记
+  if (!is_io_task_running() && dirty_version_ != saved_version_) {
     return;
   }
 
@@ -1942,15 +1979,28 @@ bool mq_channel::compare_and_maybe_reset_lock(rpc::context& ctx, atfw::dtmq::cha
 }
 
 void mq_channel::compact_stateful_sequence(int64_t sequence) {
+  if (sequence > get_last_message_sequence()) {
+    sequence = get_last_message_sequence();
+  }
+
   if (sequence > compact_stateful_sequence_) {
     compact_stateful_sequence_ = sequence;
+
+    set_dirty();
   }
 }
 
 void mq_channel::compact_sequence(int64_t sequence) {
+  if (sequence > get_last_message_sequence()) {
+    sequence = get_last_message_sequence();
+  }
+
+  bool need_make_dirty = false;
   if (nullptr == get_shared_wal_object()->get_last_removed_key() ||
       sequence > *get_shared_wal_object()->get_last_removed_key()) {
     get_shared_wal_object()->set_last_removed_key(sequence);
+
+    need_make_dirty = true;
   }
 
   size_t remove_count = 0;
@@ -1967,6 +2017,11 @@ void mq_channel::compact_sequence(int64_t sequence) {
 
   if (remove_count > 0) {
     get_shared_wal_object()->remove_before(atfw::util::time::time_utility::now(), remove_count);
+    need_make_dirty = true;
+  }
+
+  if (need_make_dirty) {
+    set_dirty();
   }
 }
 
@@ -2015,13 +2070,21 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
   if (!is_writable() && !is_readonly()) {
-    bool allow_gc = now > last_status_change_timepoint_ +
-                              protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
-                                  dtmq_proxysvr_cfg.cache_expire_timeout()) +
-                              std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(1));
+    std::chrono::system_clock::duration cache_expire_interval =
+        protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.cache_expire_timeout());
+    cache_expire_interval += std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(1));
+
+    bool allow_gc = now > last_status_change_timepoint_ + cache_expire_interval;
     if (allow_gc) {
+      FWLOGDEBUG("remove_channel ({}) in gc. not readonly or writable replicate", get_channel_id());
       mq_channel_manager::me()->remove_channel(get_channel_id(), this);
+    } else {
+      // 保护性移除或插入新定时器
+      remove_timer();
+
+      mq_channel_manager::me()->update_timer(*this, timer_handle_, cache_expire_interval);
     }
+
     return;
   }
 
@@ -2146,6 +2209,13 @@ bool mq_channel::downgrade_to_readable(uint64_t readonly_server_index) noexcept 
     last_status_change_timepoint_ = atfw::util::time::time_utility::now();
     status_ = channel_status::kReadonly;
     readonly_replicate_index_ = readonly_server_index;
+
+    // 降级的时候直接复用 wal_client_ 不需要再获取一次快照了
+    if (wal_client_) {
+      FWLOGERROR("downgrade channel {} from writable should not have wal_client", get_channel_id());
+      wal_client_.reset();
+    }
+    maybe_create_wal_client();
     return true;
   }
 

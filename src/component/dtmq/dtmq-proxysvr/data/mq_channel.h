@@ -35,7 +35,6 @@
 #include <dispatcher/task_type_traits.h>
 
 #include <chrono>
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -118,7 +117,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept { return lock_; }
   inline int64_t get_compact_stateful_sequence() const noexcept { return compact_stateful_sequence_; }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx, bool auto_create);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type readonly_init(rpc::context& ctx, uint64_t readonly_server_index);
 
   void merge_subscriber(
@@ -213,7 +212,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
    */
   void ensure_recreate_after_destroyed(rpc::context& ctx);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx, bool auto_create);
 
   int32_t async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
@@ -221,7 +220,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   void set_destroy_message(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint);
 
   int32_t subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
-                    int64_t last_received_sequence, size_t last_received_hash_code, bool merge_mode);
+                    int64_t last_received_sequence, uint64_t last_received_hash_code, bool merge_mode);
   int32_t unsubscribe(rpc::context& ctx, const std::string& subscriber_key);
 
   int64_t alloc_message_sequence() noexcept;
@@ -232,7 +231,9 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   uint64_t get_client_last_hash_code() const noexcept;
 
-  uint64_t get_main_ready_writable_server_id();
+  uint64_t get_ready_distribution_writable_server_id();
+
+  uint64_t get_target_distribution_writable_server_id();
 
   int tick(rpc::context& ctx);
 

@@ -80,6 +80,12 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
       continue;
     }
 
+    // 频道已被删除
+    if (!channel->is_readonly() && !channel->is_writable()) {
+      rsp_body.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+      continue;
+    }
+
     // Update subscriber
     if (req_body.has_subscriber() && req_body.subscriber().subscriber_server_id() != 0) {
       channel->subscribe(get_shared_context(), req_body.subscriber(), heartbeat.last_sequence(),

@@ -36,7 +36,7 @@ class task_action_page_query_message : public task_action_ss_rpc_base<atframewor
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_page_query_message(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_page_query_message();
+  DTMQ_PROXY_SERVICE_API ~task_action_page_query_message() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

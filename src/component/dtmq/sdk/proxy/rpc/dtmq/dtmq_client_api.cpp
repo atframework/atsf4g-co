@@ -74,10 +74,14 @@ DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey
 
   // 只读副本使用lower_bound来选择，这如果writable节点故障，按照一致性hash的原理能够尽可能转移到只读副本，尽可能保留数据。
   std::vector<atapp::etcd_discovery_set::node_hash_type> output;
-  output.resize(static_cast<size_t>(replicate_index));
+  output.resize(static_cast<size_t>(replicate_index + 1));
   discovery_set->lower_bound_node_hash_by_consistent_hash(gsl::make_span(output), node_hash);
 
-  return node_hash.node->get_discovery_info().id();
+  if ((*output.rbegin()).node) {
+    return (*output.rbegin()).node->get_discovery_info().id();
+  }
+
+  return 0;
 }
 
 DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
@@ -101,6 +105,7 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
   }
 
   server_ids.reserve(static_cast<size_t>(replicate_index_count + 1));
+  server_ids.clear();
 
   atapp::etcd_discovery_set::node_hash_type node_hash;
   node_hash = discovery_set->get_node_hash_by_consistent_hash(
@@ -119,7 +124,7 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
 
   // 只读副本使用lower_bound来选择，这如果writable节点故障，按照一致性hash的原理能够尽可能转移到只读副本，尽可能保留数据。
   std::vector<atapp::etcd_discovery_set::node_hash_type> output;
-  output.resize(static_cast<size_t>(replicate_index_count));
+  output.resize(static_cast<size_t>(replicate_index_count + 1));
   discovery_set->lower_bound_node_hash_by_consistent_hash(gsl::make_span(output), node_hash);
 
   for (size_t i = 1; i < output.size(); ++i) {
@@ -185,12 +190,12 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
   auto ret =
       RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
 
-  if (rpc_rsp_body->client_result() != 0) {
-    RPC_RETURN_CODE(rpc_rsp_body->client_result());
+  if (compare_and_maybe_reset_lock_rsp_ptr && rpc_rsp_body->has_compare_and_maybe_reset_lock()) {
+    protobuf_copy_message(*compare_and_maybe_reset_lock_rsp_ptr, rpc_rsp_body->compare_and_maybe_reset_lock());
   }
 
-  if (compare_and_maybe_reset_lock_rsp_ptr) {
-    protobuf_copy_message(*compare_and_maybe_reset_lock_rsp_ptr, rpc_rsp_body->compare_and_maybe_reset_lock());
+  if (rpc_rsp_body->client_result() != 0) {
+    RPC_RETURN_CODE(rpc_rsp_body->client_result());
   }
 
   RPC_RETURN_CODE(ret);

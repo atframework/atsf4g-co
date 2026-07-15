@@ -62,40 +62,41 @@ int mq_channel_manager::init() {
   }
   dtmq_server_distribute_etcd_revision_ = service_discovery_mod->get_last_etcd_event_discovery_header().revision;
 
-  service_discovery_mod->add_on_node_discovery_event([](atfw::atapp::etcd_discovery_action_t /*action*/,
-                                                        const atfw::atapp::etcd_discovery_node::ptr_t& discovery) {
-    if (!discovery) {
-      return;
-    }
+  service_discovery_mod->add_on_node_discovery_event(
+      [](atfw::atapp::etcd_discovery_action_t /*action*/, const atfw::atapp::etcd_discovery_node::ptr_t& discovery) {
+        if (!discovery) {
+          return;
+        }
 
-    if (discovery->get_discovery_info().type_id() !=
-        static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr)) {
-      return;
-    }
+        if (discovery->get_discovery_info().type_id() !=
+            static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr)) {
+          return;
+        }
 
-    if (mq_channel_manager::is_instance_destroyed()) {
-      return;
-    }
+        if (mq_channel_manager::is_instance_destroyed()) {
+          return;
+        }
 
-    const auto& inner_dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+        const auto& inner_dtmq_proxysvr_cfg =
+            logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
-    FWLOGDEBUG("dtmq_proxysvr discovery_info has update, begin to channel_distribution");
-    int64_t discovery_version = discovery->get_version().modify_revision;
-    if (discovery_version > mq_channel_manager::me()->dtmq_server_distribute_etcd_revision_) {
-      mq_channel_manager::me()->dtmq_server_distribute_etcd_revision_ = discovery_version;
-      FWLOGINFO("dtmq_proxysvr distribute changed, dtmq_server_distribute_etcd_revision_  {}", discovery_version);
-    }
+        FWLOGDEBUG("dtmq_proxysvr discovery_info has update, begin to channel_distribution");
+        int64_t discovery_version = discovery->get_version().modify_revision;
+        if (discovery_version > mq_channel_manager::me()->dtmq_server_distribute_etcd_revision_) {
+          mq_channel_manager::me()->dtmq_server_distribute_etcd_revision_ = discovery_version;
+          FWLOGINFO("dtmq_proxysvr distribute changed, dtmq_server_distribute_etcd_revision_  {}", discovery_version);
+        }
 
-    // 设置冷静窗口，应该要小于HPA模块的replicate_period配置
-    if (mq_channel_manager::me()->pending_transfer_.start_time == std::chrono::system_clock::from_time_t(0)) {
-      mq_channel_manager::me()->pending_transfer_.start_time =
-          util::time::time_utility::sys_now() + protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
-                                                    inner_dtmq_proxysvr_cfg.channel_transfer_stabilization_window());
-    }
+        // 设置冷静窗口，应该要小于HPA模块的replicate_period配置
+        if (mq_channel_manager::me()->pending_transfer_.start_time == std::chrono::system_clock::from_time_t(0)) {
+          mq_channel_manager::me()->pending_transfer_.start_time =
+              atfw::util::time::time_utility::sys_now() +
+              protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+                  inner_dtmq_proxysvr_cfg.channel_transfer_stabilization_window());
+        }
 
-    mq_channel_manager::me()->tick();
-  });
+        mq_channel_manager::me()->tick();
+      });
 
   return 0;
 }
@@ -172,6 +173,9 @@ int mq_channel_manager::stop() {
   if (!is_stoping_) {
     // 节点已下线
     FWLOGINFO("[channel_stop] mq_channel_manager begin to stop");
+
+    // 重置冷静窗口，立即执行迁移
+    pending_transfer_.start_time = atfw::util::time::time_utility::sys_now();
 
     is_stoping_ = true;
     pending_save_channels_.clear();
@@ -337,11 +341,6 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
     RPC_RETURN_CODE(0);
   }
 
-  if (!auto_create) {
-    FWLOGDEBUG("channel {} not exists and not allowed to be auto created", channel_key.channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-  }
-
   auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_configure) {
     FWLOGWARNING("channel {} configure of type {} not found.", channel_key.channel_id(), channel_key.channel_type());
@@ -361,7 +360,7 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
 
   // 如果有到channel，但是不是writable，需要提升为writable
   if (!channel_ptr->is_writable()) {
-    result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx));
+    result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx, auto_create));
     if (result < 0) {
       FWLOGERROR("channel {} writable init failed with result {}({}).", channel_key.channel_id(), result,
                  protobuf_mini_dumper_get_error_msg(result));
@@ -646,7 +645,7 @@ rpc::result_code_type mq_channel_manager::page_query_message(
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
-  if (page_info.page_size() == 0) {
+  if (page_info.page_size() <= 0) {
     page_info.set_page_size(kPageQueryDefaultSize);
   }
 

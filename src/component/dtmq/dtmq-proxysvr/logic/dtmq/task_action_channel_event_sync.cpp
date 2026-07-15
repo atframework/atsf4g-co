@@ -53,13 +53,40 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   uint64_t writable_server_id = 0;
   if (channel) {
     if (channel->is_writable()) {
+      FWLOGINFO("channel {} is writable, will ignore event sync", channel->get_channel_key().channel_id());
       RPC_AWAIT_IGNORE_RESULT(unsubscribe());
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
-  } else if (mq_channel::should_be_writable_or_get_server_id(req_body.channel_metadata().channel_key(),
-                                                             writable_server_id)) {
-    RPC_AWAIT_IGNORE_RESULT(unsubscribe());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+
+    //
+    if (channel->get_ready_distribution_writable_server_id() != get_request_node_id() &&
+        channel->get_target_distribution_writable_server_id() != get_request_node_id()) {
+      FWLOGINFO(
+          "channel {} receive a event sync from non-main writable server {:#x}, will ignore, except ready writable "
+          "server {:#x} and target writable server {:#x}",
+          channel->get_channel_id(), get_request_node_id(), channel->get_ready_distribution_writable_server_id(),
+          channel->get_target_distribution_writable_server_id());
+      RPC_AWAIT_IGNORE_RESULT(unsubscribe());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+  } else {
+    bool should_be_writable =
+        mq_channel::should_be_writable_or_get_server_id(req_body.channel_metadata().channel_key(), writable_server_id);
+    if (should_be_writable) {
+      FWLOGINFO("channel {} should be writable, will ignore event sync",
+                req_body.channel_metadata().channel_key().channel_id());
+      RPC_AWAIT_IGNORE_RESULT(unsubscribe());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+
+    if (writable_server_id != get_request_node_id()) {
+      FWLOGINFO(
+          "channel {} receive a event sync from non-main writable server {:#x}, will ignore, except writable server "
+          "{:#x}",
+          req_body.channel_metadata().channel_key().channel_id(), get_request_node_id(), writable_server_id);
+      RPC_AWAIT_IGNORE_RESULT(unsubscribe());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
   }
 
   int32_t result = 0;
@@ -71,8 +98,14 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
 
   channel->maybe_create_wal_client();
 
-  if (!channel->get_wal_client() || !channel->is_readonly()) {
+  const mq_channel::replicate_index_set* readonly_replicate_index_set = nullptr;
+  if (!channel->get_wal_client() ||
+      (!channel->is_readonly() &&  // 只读频道直接接受主从同步消息
+                                   // 如果不应该提升到只读频道或者无快照都无法初始化创建，都无法继续
+       !(channel->should_be_readonly(readonly_replicate_index_set) && req_body.has_channel_snapshot()))) {
     FWLOGINFO("wal_client is not init or not readonly! channel id: {}", channel->get_channel_key().channel_id());
+
+    // 如果should_be_readonly返回true，下一次拉取只读副本的时候会重新订阅，所以这里反订阅也没关系
     RPC_AWAIT_IGNORE_RESULT(unsubscribe());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -118,6 +151,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   } else {
     // Merge data, merge 的过程会触发GC
     channel->load(req_body.channel_metadata(), req_body.channel_runtime());
+
+    channel->tick(get_shared_context());
   }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

@@ -36,7 +36,7 @@ class task_action_subscribe : public task_action_ss_rpc_base<atframework::dtmq::
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_subscribe(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_subscribe();
+  DTMQ_PROXY_SERVICE_API ~task_action_subscribe() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

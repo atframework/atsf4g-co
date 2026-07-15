@@ -36,7 +36,7 @@ class task_action_update
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_update(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_update();
+  DTMQ_PROXY_SERVICE_API ~task_action_update() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

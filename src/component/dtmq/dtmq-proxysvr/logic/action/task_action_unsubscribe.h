@@ -35,7 +35,7 @@ class task_action_unsubscribe
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_unsubscribe(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_unsubscribe();
+  DTMQ_PROXY_SERVICE_API ~task_action_unsubscribe() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

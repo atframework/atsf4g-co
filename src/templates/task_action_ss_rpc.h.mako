@@ -44,7 +44,7 @@ class ${task_class_name} : public task_action_ss_rpc_base<${rpc.get_request().ge
 
  public:
   ${service_dllexport_decl} explicit ${task_class_name}(dispatcher_start_data_type&& param);
-  ${service_dllexport_decl} ~${task_class_name}();
+  ${service_dllexport_decl} ~${task_class_name}() override;
 
   ${service_dllexport_decl} const char *name() const override;
 

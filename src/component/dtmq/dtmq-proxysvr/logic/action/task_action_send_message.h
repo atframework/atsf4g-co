@@ -36,7 +36,7 @@ class task_action_send_message : public task_action_ss_rpc_base<atframework::dtm
 
  public:
   DTMQ_PROXY_SERVICE_API explicit task_action_send_message(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_send_message();
+  DTMQ_PROXY_SERVICE_API ~task_action_send_message() override;
 
   DTMQ_PROXY_SERVICE_API const char* name() const override;
 

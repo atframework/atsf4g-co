@@ -49,7 +49,7 @@ DTMQ_PROXY_SERVICE_API task_action_page_query_message::result_type task_action_p
   mq_channel_manager::mq_channel_ptr_type channel;
   uint64_t forward_server_id = 0;
   auto res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel(
-      get_shared_context(), channel, forward_server_id, req_body.channel_key(), false));
+      get_shared_context(), channel, forward_server_id, req_body.channel_key(), req_body.auto_create_channel()));
   if (res < 0) {
     set_response_code(res);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -65,6 +65,8 @@ DTMQ_PROXY_SERVICE_API task_action_page_query_message::result_type task_action_p
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
   }
+
+  channel->tick(get_shared_context());
 
   // 分页查询
   protobuf_copy_message(*rsp_body.mutable_page_info(), req_body.page_info());

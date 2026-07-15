@@ -18,7 +18,7 @@ class ${task_class_name} : public task_action_no_req_base {
 
  public:
   explicit ${task_class_name}(ctor_param_t&& param);
-  ~${task_class_name}();
+  ~${task_class_name}() override;
 
   const char *name() const override;
 

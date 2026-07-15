@@ -13,7 +13,7 @@ Core helper files:
 
 - Inspect the closest existing `CMakeLists.txt` in the same service/component family and mirror its pattern.
 - Check declaration order. Dependencies must be declared before they are referenced by alias.
-- Use the current helper API spelling exactly: the list argument is `HRADERS`, not `HEADERS`.
+- Use the current helper API spelling exactly: the list argument is `HEADERS`.
 - Prefer helper arguments (`USE_COMPONENTS`, `USE_SERVICE_PROTOCOL`, `USE_SERVICE_SDK`) over manual
   `target_link_libraries` when the relationship is expressible by the helper.
 - Use `OUTPUT_TARGET_NAME` only when extra target customization is needed after declaration.
@@ -59,7 +59,7 @@ Implications:
 - Use for service RPC/client SDK libraries.
 - Common options: `STATIC`, `SHARED`, `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `DLLEXPORT_DECL`,
   `SHARED_LIBRARY_DECL`, `NATIVE_CODE_DECL`.
-- Source lists: `HRADERS <headers...>` and `SOURCES <sources...>`.
+- Source lists: `HEADERS <headers...>` and `SOURCES <sources...>`.
 - Dependency options:
   - `USE_COMPONENTS <names...>` -> `components::<name>`.
   - `USE_SERVICE_PROTOCOL <names...>` -> `protocol::<name>`.
@@ -71,7 +71,7 @@ Implications:
 
 - Use for normal service executables.
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
-- Source/resource lists: `HRADERS`, `SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
+- Source/resource lists: `HEADERS`, `SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
 - Dependency options:
   - `USE_COMPONENTS <names...>` -> `components::<name>`.
   - `USE_SERVICE_SDK <names...>` -> `sdk::<name>`.
@@ -95,7 +95,7 @@ Implications:
 - Use for reusable component SDK libraries.
 - Common options: `STATIC`, `SHARED`, `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `DLLEXPORT_DECL`,
   `SHARED_LIBRARY_DECL`, `NATIVE_CODE_DECL`.
-- Source lists: `HRADERS <headers...>` and `SOURCES <sources...>`.
+- Source lists: `HEADERS <headers...>` and `SOURCES <sources...>`.
 - Dependency option: `USE_COMPONENTS <names...>` -> `components::<name>`.
 - Empty `SOURCES` -> `INTERFACE` library; otherwise static/shared per project options.
 - Exports alias: `components::<TARGET_NAME>`.
@@ -104,7 +104,7 @@ Implications:
 
 - Use for component-owned service executables (e.g., rank board, distributed transaction coordinator).
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
-- Source/resource lists: `HRADERS`, `SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
+- Source/resource lists: `HEADERS`, `SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
 - Dependency option: `USE_COMPONENTS <names...>` -> `components::<name>`.
 - Exports executable alias: `components::<TARGET_NAME>`.
 - Default runtime output is `component/<TARGET_NAME>/bin` when not specified.
@@ -161,7 +161,7 @@ fall back to `OUTPUT_TARGET_NAME` + `target_link_libraries` only for custom prop
 
 ### Header-only component SDK
 
-`src/component/test/api/CMakeLists.txt` declares `test-api` with `HRADERS` and no `SOURCES`; the helper exposes
+`src/component/test/api/CMakeLists.txt` declares `test-api` with `HEADERS` and no `SOURCES`; the helper exposes
 `components::test-api` as `INTERFACE`.
 
 ### Component service executable
@@ -171,7 +171,7 @@ fall back to `OUTPUT_TARGET_NAME` + `target_link_libraries` only for custom prop
 
 ## Common pitfalls
 
-- `HRADERS` is intentional. `HEADERS` is silently ignored unless the helper is changed.
+- `HEADERS` is parsed by all four SDK/service helpers; misspellings such as `HRADERS` are silently ignored.
 - `OUTPUT_TARGET_NAME` stores the real target in parent scope; alias names are still preferred for dependencies.
 - For protobuf import resolution, declare protocol dependencies via `USE_COMPONENTS` or `USE_SERVICE_PROTOCOL` so the
   helper can extend protoc search paths.
