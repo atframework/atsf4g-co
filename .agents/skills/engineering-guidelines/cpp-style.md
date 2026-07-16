@@ -22,9 +22,12 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
 ## Header and ABI boundaries
 
 - Classify every interface by its publication boundary before choosing an inline/export marker.
-- Every externally consumable API of a library must use one of the project's two publication models: cover the
-  declaration or enclosing type with that library's `*_API`/`XXX_API` symbol-export macro, or mark the header definition
-  `ATFW_UTIL_FORCEINLINE`. Plain `inline`, implicit inline, or `constexpr` alone does not satisfy this public-API rule.
+- Every externally consumable non-template API of a library must use one of the project's two publication models:
+  cover the declaration or enclosing type with that library's `*_API`/`XXX_API` symbol-export macro, or mark the header
+  definition `ATFW_UTIL_FORCEINLINE`. Plain `inline`, implicit inline, or `constexpr` alone does not satisfy this rule.
+- A public template function defined in a header may instead use `ATFW_UTIL_SYMBOL_VISIBLE`: a non-inlined instantiation
+  can share one visible copy across linked targets, while an inlined call embeds a per-target copy. Keep the definition
+  ODR-identical for every consumer so those copies have identical behavior.
 - For the exported-symbol model, keep non-template function, method, constructor, destructor, and static-data
   implementations in `.cpp` files by default so the ABI stays stable across compilers and build options.
 - Library-internal helpers, executable-only code, and other interfaces that are not exported may use implicit inline,

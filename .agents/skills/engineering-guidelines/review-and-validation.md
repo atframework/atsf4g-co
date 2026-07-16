@@ -44,10 +44,12 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 - When tools are too expensive to run during review, still read `.clang-tidy` and `CPPLINT.cfg` and apply their active
   checks manually to common issues such as copyright headers, include hygiene, unsafe casts/conversions, lifetime,
   readability, portability, and performance regressions.
-- For touched headers, classify interfaces as library public API or non-exported internal code. Every library public API
-  must be covered by its `*_API`/`XXX_API` macro on the declaration or enclosing type, or use
+- For touched headers, classify interfaces as library public API or non-exported internal code. Every non-template
+  library public API must be covered by its `*_API`/`XXX_API` macro on the declaration or enclosing type, or use
   `ATFW_UTIL_FORCEINLINE` for its header definition; plain/implicit `inline` and `constexpr` alone are not sufficient.
-  For library-internal helpers and executable-only code, accept ODR-correct implicit inline, `constexpr`, and intentional
+  A public template function defined in a header may instead use `ATFW_UTIL_SYMBOL_VISIBLE`; verify that non-inlined
+  instantiations can share one visible copy and that every consumer sees the same ODR-identical definition. For
+  library-internal helpers and executable-only code, accept ODR-correct implicit inline, `constexpr`, and intentional
   plain `inline`; require forced inlining there only when local convention or concrete performance evidence supports it.
 - Expected result: no warnings and no required formatting changes.
 

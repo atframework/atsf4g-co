@@ -30,11 +30,15 @@ high-performance game server architectures.
 ## Always-On Rules
 
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
-- Apply Karpathy-style coding-agent discipline: surface assumptions/tradeoffs, prefer the simplest sufficient fix, make
-  surgical request-traceable edits, and define verification/success criteria before looping.
-- Before planning or editing, run the appropriate source-of-truth pass for the task: inspect relevant code, configs,
-  docs, generated sources, and current official docs when external tool or product behavior may have changed. State a
-  short plan and verification path after that pass, mark assumptions explicitly, and do not invent behavior from memory.
+- Start with the current task, nearest instructions, Skill index, and capabilities actually exposed by the active agent
+  harness. Load full Skill bodies or tool-specific directories only when the task routes there; do not assume or install
+  absent workflows, tools, modes, or extensions.
+- Before a nontrivial plan or edit, inspect the relevant code, configs, docs, generated sources, tests, and current
+  official docs for mutable external behavior. Separate verified facts from assumptions, then state the smallest plan
+  and verification path; do not invent behavior from memory.
+- Match process to risk: use the shortest verified path for small changes; for cross-module behavior, public APIs, data
+  models, security, or deployment changes, establish reviewable scope, acceptance criteria, rollback, and validation in
+  the repository's existing authoritative artifact before implementation. Do not initialize a methodology for ceremony.
 - Never unconditionally `touch` or same-content overwrite code/resources consumed by `add_custom_command`,
   `add_custom_target`, `add_executable`, `add_library`, `target_sources`, or another dependency edge, whether generated,
   copied, or non-handwritten. Use content-stable writes and accurate `OUTPUT`/`BYPRODUCTS`/`DEPENDS`/`DEPFILE`; only
@@ -52,7 +56,7 @@ high-performance game server architectures.
 - For code analysis or edits under `install/**/*.tpl`, read `deployment-config` first; analyze both Go-template actions
   and the rendered target language, and validate target syntax only after rendering representative output.
 - For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, configured
-  `.clang-tidy`/`CPPLINT.cfg` review checks, header/ABI boundaries, and project engineering conventions.
+  `.clang-tidy`/`CPPLINT.cfg` review checks, header/template visibility and API ABI boundaries, and project conventions.
 
 ## Skill Routing
 
@@ -60,7 +64,7 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 
 | Skill                     | Use when                                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------- |
-| `engineering-guidelines`  | Writing/reviewing C++/CMake/Markdown, header inline/API ABI rules, RPC/Arena, generated code |
+| `engineering-guidelines`  | Writing/reviewing C++/CMake/Markdown, header inline/template visibility/API ABI rules, RPC/Arena |
 | `build`                   | Configuring or building with CMake                                                      |
 | `testing`                 | Running or writing unit tests                                                           |
 | `deployment-config`       | Generating/editing deployment configs, Go `.tpl` chart templates, or Helm values        |

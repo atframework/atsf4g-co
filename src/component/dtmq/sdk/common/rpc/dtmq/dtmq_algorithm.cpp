@@ -48,9 +48,8 @@ DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
       break;
   }
 
-  uint64_t buffer[2] = {static_cast<uint64_t>(channel_log.sequence()) |
-                            (static_cast<uint64_t>(channel_log.detail().command_case()) << 24),
-                        content_hash};
+  uint64_t buffer[3] = {static_cast<uint64_t>(channel_log.sequence()),
+                        static_cast<uint64_t>(channel_log.detail().command_case()), content_hash};
   return static_cast<uint64_t>(XXH64(buffer, sizeof(buffer), static_cast<XXH64_hash_t>(previous)));
 }
 

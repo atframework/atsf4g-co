@@ -154,10 +154,7 @@ int mq_channel_manager::tick() {
     stop();
   }
 
-  {
-    resolve_channel_distribution();
-    aysnc_save_dirty_channel();
-  }
+  resolve_channel_distribution();
 
   // 如果Hpa模块不处于target集群，则需要触发pre_stoping逻辑，确保在节点下线前数据迁移到其他节点或触发保存
   // 用 !channels_.empty() 确保如果收到老数据，节点未就绪前不会触发pre_stoping逻辑。channel未空时也不需要转移或保存数据
@@ -178,19 +175,23 @@ int mq_channel_manager::stop() {
     pending_transfer_.start_time = atfw::util::time::time_utility::sys_now();
 
     is_stoping_ = true;
-    pending_save_channels_.clear();
+
+    std::unordered_set<mq_channel*> pending_io_channel_cache;
+    for (const auto& channel : pending_io_channels_) {
+      pending_io_channel_cache.insert(channel.get());
+    }
 
     for (const auto& channel : channels_) {
       // 直接刷新分布计算，避免在停机阶段数据转移到滞后的节点从而重复转移数据
       channel.second->force_refresh_distribution();
 
-      if (0 != channel.second->get_transfer_target_server_id()) {
+      if (pending_io_channel_cache.end() != pending_io_channel_cache.find(channel.second.get())) {
+        continue;
+      }
+
+      if (0 != channel.second->get_transfer_target_server_id() || channel.second->need_save_db()) {
         pending_io_channels_.push_back(channel.second);
         FWLOGDEBUG("[channel_stop] pending_io_channels_ add channel({})", channel.second->get_channel_id());
-      } else if (channel.second->need_save_db()) {
-        // is_dirty_ && transfer_target == 0 ==》需要对channel进行持久化
-        pending_save_channels_.push_back(channel.second);
-        FWLOGDEBUG("[channel_stop] pending_save_channels_ add channel({})", channel.second->get_channel_id());
       }
     }
   }
@@ -200,9 +201,7 @@ int mq_channel_manager::stop() {
 
 bool mq_channel_manager::is_stoping() const noexcept { return is_stoping_; }
 
-bool mq_channel_manager::is_can_stopped() const noexcept {
-  return is_stoping_ && pending_io_channels_.empty() && pending_save_channels_.empty();
-}
+bool mq_channel_manager::is_can_stopped() const noexcept { return is_stoping_ && pending_io_channels_.empty(); }
 
 void mq_channel_manager::update_timer(mq_channel& channel, mq_channel_timer_type::timer_wptr_t& output_handle,
                                       std::chrono::system_clock::duration timeout) {
@@ -449,11 +448,6 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
     RPC_RETURN_CODE(0);
   }
 
-  if (!auto_create) {
-    FWLOGDEBUG("channel {} not exists and not allowed to be auto created", channel_key.channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-  }
-
   // 创建频道
   auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_configure) {
@@ -561,11 +555,6 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     RPC_RETURN_CODE(0);
   }
 
-  if (!auto_create) {
-    FWLOGDEBUG("channel {} not exists and not allowed to be auto created", channel_key.channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-  }
-
   // 创建频道
   auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_configure) {
@@ -671,21 +660,20 @@ rpc::result_code_type mq_channel_manager::page_query_message(
   RPC_RETURN_CODE(0);
 }
 
-void mq_channel_manager::aysnc_save_dirty_channel() {
-  if (!pending_save_channels_.empty()) {
-    rpc::context ctx{rpc::context::create_without_task()};
-    auto iter = pending_save_channels_.begin();
-    while (iter != pending_save_channels_.end()) {
-      if ((*iter)->is_dirty()) {
-        FWLOGINFO("channel({}) is_dirty, wait to async_saved.", (*iter)->get_channel_id());
-        (*iter)->async_save(ctx);
-        ++iter;
-        continue;
-      }
-      // 移除已经保存成功的channel
-      iter = pending_save_channels_.erase(iter);
-    }
+void mq_channel_manager::insert_running_io_channel(const mq_channel* channel) noexcept {
+  if (nullptr == channel) {
+    return;
   }
+
+  running_io_channels_.insert(channel);
+}
+
+void mq_channel_manager::remove_running_io_channel(const mq_channel* channel) noexcept {
+  if (nullptr == channel) {
+    return;
+  }
+
+  running_io_channels_.erase(channel);
 }
 
 void mq_channel_manager::resolve_channel_distribution() {
@@ -721,7 +709,6 @@ void mq_channel_manager::resolve_channel_distribution() {
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
   // IO频率控制，不需要很精确，只要不要太密集即可
-  size_t running_io_tasks = 0;
   size_t max_io_tasks = dtmq_proxysvr_cfg.concurrency_io_task_count();
   if (max_io_tasks <= 0) {
     max_io_tasks = 2048;
@@ -730,14 +717,14 @@ void mq_channel_manager::resolve_channel_distribution() {
 
   rpc::context ctx{rpc::context::create_without_task()};
 
-  while (iter != pending_io_channels_.end() && running_io_tasks < max_io_tasks) {
+  while (iter != pending_io_channels_.end() && running_io_channels_.size() < max_io_tasks) {
     if ((*iter)->is_io_task_running()) {
-      ++running_io_tasks;
       ++iter;
       continue;
     }
 
-    if (is_stoping_ && (*iter)->is_writable()) {
+    // 正在退出时，优先保存数据到DB，避免数据丢失。其他情况仅仅定时保存，这里transfer即可。
+    if (is_stoping_ && (*iter)->need_save_db() && !(*iter)->get_configure().memory_only()) {
       FWLOGDEBUG("channel({}) async_save when is_stoping_", (*iter)->get_channel_id());
       (*iter)->async_save(ctx);
     } else {
@@ -748,7 +735,6 @@ void mq_channel_manager::resolve_channel_distribution() {
     }
 
     if ((*iter)->is_io_task_running()) {
-      ++running_io_tasks;
       ++iter;
     } else if (!(*iter)->is_writable()) {
       iter = pending_io_channels_.erase(iter);

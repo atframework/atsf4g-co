@@ -85,10 +85,10 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
       continue;
     }
 
+    atfw::dtmq::DChannelIdKey channel_key = channel_snapshot.channel_data().channel_metadata().channel_key();
     if (!channel || !channel->load_snapshot(get_shared_context(), std::move(channel_snapshot))) {
-      FWLOGERROR("mq channel {} load snapshot failed",
-                 channel_snapshot.channel_data().channel_metadata().channel_key().channel_id());
-      *rsp_body.add_failed_channel_key() = channel_snapshot.channel_data().channel_metadata().channel_key();
+      FWLOGERROR("mq channel {} load snapshot failed", channel_key.channel_id());
+      *rsp_body.add_failed_channel_key() = channel_key;
     } else {
       // 触发数据下发
       channel->tick(get_shared_context());

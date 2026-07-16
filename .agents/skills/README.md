@@ -7,7 +7,7 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 
 | Skill                     | Description                                                                               |
 | ------------------------- | ----------------------------------------------------------------------------------------- |
-| `engineering-guidelines/` | Code style, configured cpplint/clang-tidy review, RPC/Arena, generated code, CMake        |
+| `engineering-guidelines/` | Code style, template visibility/API ABI, configured lint review, RPC/Arena, generated code |
 | `build/`                  | Configure and build the project (Windows / Unix)                                          |
 | `testing/`                | Run unit tests (including Windows DLL/PATH notes)                                         |
 | `deployment-config/`      | Generate deployment configs/scripts and analyze `install/**/*.tpl` Go templates           |
@@ -19,6 +19,8 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 
 - Folder name and frontmatter `name` must match.
 - `description` is the discovery surface: start with `Use when:` and include concrete trigger words.
+- For a new or materially changed trigger description, check representative should-trigger and near-miss
+  should-not-trigger requests; narrow false positives instead of adding keyword lists.
 - Keep each `SKILL.md` focused and procedural. Use progressive disclosure: put only core steps, gotchas, and validation
   in `SKILL.md`, and move bulky examples or reference material into sibling files with clear load conditions.
 - Keep compact behavioral guardrails in `AGENTS.md`; do not duplicate the full generic guideline body in every skill.

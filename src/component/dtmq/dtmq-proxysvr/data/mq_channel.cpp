@@ -109,6 +109,8 @@ mq_channel::~mq_channel() {
   // Remove timer
   remove_timer();
 
+  mq_channel_manager::me()->remove_running_io_channel(this);
+
   FWLOGINFO("channel {}({}) destructed.", get_channel_id(), reinterpret_cast<const void*>(this));
 }
 
@@ -476,6 +478,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
+    mq_channel_manager::me()->insert_running_io_channel(this);
   }
 
   if (is_io_task_running()) {
@@ -525,6 +528,7 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
+          mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
         }
 
         if (task_type_trait::get_task_id(self_ptr->subscribe_task_) == child_ctx.get_task_context().task_id) {
@@ -542,6 +546,7 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
     subscribe_task_ = *invoke_result.get_success();
+    mq_channel_manager::me()->insert_running_io_channel(this);
   }
 
   if (!task_type_trait::empty(subscribe_task_) && !task_type_trait::is_exiting(subscribe_task_)) {
@@ -644,7 +649,6 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   }
   // wal_client_ 和 wal_publisher_ 共享WAL层，其中一个加载即可。
   if (wal_client_) {
-    wal_client_->set_received_snapshot(true);
     wal_client_->receive_snapshot(snapshot.channel_data(), params);
   } else {
     wal_publisher_->load(snapshot.channel_data(), params);
@@ -1095,7 +1099,7 @@ bool mq_channel::need_save_db() const noexcept {
     return false;
   }
 
-  return is_dirty() && get_transfer_target_server_id() == 0;
+  return is_dirty();
 }
 
 bool mq_channel::is_io_task_running() const noexcept {
@@ -1109,23 +1113,44 @@ bool mq_channel::is_io_task_running() const noexcept {
   }
 
   task_type_trait::reset_task(io_task_);
+  mq_channel_manager::me()->remove_running_io_channel(this);
+
   return false;
 }
 
-rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx) {
+rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx, int32_t* task_result) {
   // 正在转移或读取
   if (!task_type_trait::empty(io_task_)) {
     if (task_type_trait::is_exiting(io_task_)) {
+      if (task_result != nullptr) {
+        *task_result = task_type_trait::get_result(io_task_);
+      }
+
       task_type_trait::reset_task(io_task_);
+      mq_channel_manager::me()->remove_running_io_channel(this);
+
       RPC_RETURN_CODE(0);
     }
   } else {
+    if (task_result != nullptr) {
+      *task_result = 0;
+    }
+
     RPC_RETURN_CODE(0);
   }
 
-  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
-  if (!task_type_trait::empty(io_task_) && task_type_trait::is_exiting(io_task_)) {
+  auto io_task = io_task_;
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task));
+
+  if (task_result != nullptr) {
+    *task_result = task_type_trait::get_result(io_task);
+  }
+
+  // 保底清理，有可能在其他位置被清理又被重新拉起
+  if (!task_type_trait::empty(io_task_) && task_type_trait::equal(io_task_, io_task) &&
+      task_type_trait::is_exiting(io_task_)) {
     task_type_trait::reset_task(io_task_);
+    mq_channel_manager::me()->remove_running_io_channel(this);
   }
   RPC_RETURN_CODE(ret);
 }
@@ -1135,7 +1160,7 @@ void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_
     return;
   }
 
-  if (0 == target_server_id) {
+  if (0 == target_server_id || target_server_id == logic_config::me()->get_local_server_id()) {
     return;
   }
 
@@ -1188,6 +1213,7 @@ void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
+          mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
         }
 
         RPC_RETURN_CODE(result);
@@ -1200,6 +1226,7 @@ void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
+    mq_channel_manager::me()->insert_running_io_channel(this);
   }
 }
 
@@ -1269,27 +1296,33 @@ void mq_channel::async_save(rpc::context& ctx) {
         }
 
         // 数据transfer
+        bool downgrade_after_transfer = false;
         if (self_ptr->is_writable() && !self_ptr->should_be_writable()) {
           if (self_ptr->target_distribution_.writable_server_id != 0 &&
               self_ptr->target_distribution_.writable_server_id != logic_config::me()->get_local_server_id()) {
             // 先重置io_task_，否则async_start_transfer会被忽略
             if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
               task_type_trait::reset_task(self_ptr->io_task_);
+              mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
             }
 
             self_ptr->async_start_transfer(child_ctx, self_ptr->target_distribution_.writable_server_id);
+            downgrade_after_transfer = self_ptr->is_io_task_running();
           }
         }
 
-        const replicate_index_set* readonly_replicate_index_set = nullptr;
-        if (self_ptr->should_be_readonly(readonly_replicate_index_set) && readonly_replicate_index_set != nullptr) {
-          self_ptr->downgrade_to_readable(readonly_replicate_index_set->prefer_replicate_index);
-        } else if (!self_ptr->should_be_writable()) {
-          self_ptr->downgrade_to_none();
-        }
+        if (!downgrade_after_transfer) {
+          const replicate_index_set* readonly_replicate_index_set = nullptr;
+          if (self_ptr->should_be_readonly(readonly_replicate_index_set) && readonly_replicate_index_set != nullptr) {
+            self_ptr->downgrade_to_readable(readonly_replicate_index_set->prefer_replicate_index);
+          } else if (!self_ptr->should_be_writable()) {
+            self_ptr->downgrade_to_none();
+          }
 
-        if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
-          task_type_trait::reset_task(self_ptr->io_task_);
+          if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
+            task_type_trait::reset_task(self_ptr->io_task_);
+            mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
+          }
         }
         RPC_RETURN_CODE(0);
       });
@@ -1301,6 +1334,7 @@ void mq_channel::async_save(rpc::context& ctx) {
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
+    mq_channel_manager::me()->insert_running_io_channel(this);
   }
 }
 
@@ -1403,6 +1437,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
+          mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
         }
         RPC_RETURN_CODE(0);
       });
@@ -1414,6 +1449,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
+    mq_channel_manager::me()->insert_running_io_channel(this);
   }
 
   // 只要保存成功了，总是视为频道已销毁，下次加载时会重新执行 set_ttl/remove_all
@@ -1513,7 +1549,6 @@ int32_t mq_channel::async_send_subscribe_to_writable(rpc::context& ctx) {
     return 0;
   }
 
-  maybe_create_wal_client();
   auto self_ptr = shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "mq_channel.async_send_subscribe_to_writable", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
@@ -2209,13 +2244,6 @@ bool mq_channel::downgrade_to_readable(uint64_t readonly_server_index) noexcept 
     last_status_change_timepoint_ = atfw::util::time::time_utility::now();
     status_ = channel_status::kReadonly;
     readonly_replicate_index_ = readonly_server_index;
-
-    // 降级的时候直接复用 wal_client_ 不需要再获取一次快照了
-    if (wal_client_) {
-      FWLOGERROR("downgrade channel {} from writable should not have wal_client", get_channel_id());
-      wal_client_.reset();
-    }
-    maybe_create_wal_client();
     return true;
   }
 

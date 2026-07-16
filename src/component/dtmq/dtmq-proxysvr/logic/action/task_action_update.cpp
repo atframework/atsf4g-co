@@ -118,7 +118,7 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
     } else {
       FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
     }
-  } else if (has_changed_private_data) {
+  } else if (has_changed_private_data || has_changed_custom_data) {
     mq_channel_wal_object_context param{get_shared_context(), result};
 
     rpc::context::message_holder<atfw::dtmq::DChannelMessage> noop_message{get_shared_context()};
@@ -169,12 +169,19 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
     result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context()));
     if (result < 0) {
       rsp_body.set_client_result(result);
+      rsp_body.set_last_sequence(channel->get_last_message_sequence());
+      rsp_body.set_last_hash_code(channel->get_last_hash_code());
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     // 任务启动失败下次也会重试，不用视为失败
     channel->async_save(get_shared_context());
-    result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context()));
+
+    int32_t save_io_result = 0;
+    result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context(), &save_io_result));
+    if (result >= 0 && save_io_result < 0) {
+      result = save_io_result;
+    }
   }
 
   rsp_body.set_client_result(result);

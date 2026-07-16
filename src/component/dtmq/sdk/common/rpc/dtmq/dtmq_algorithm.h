@@ -34,12 +34,12 @@ enum class replicate_type : uint32_t {
  * @tparam LogKeyT 日志键类型
  */
 template <class LogKeyT>
-struct UTIL_SYMBOL_VISIBLE hash_mismatch_subscribe {
-  explicit hash_mismatch_subscribe(std::string in_channel_id, LogKeyT in_log_key,
-                                   std::chrono::system_clock::time_point time)
+struct ATFW_UTIL_SYMBOL_VISIBLE hash_mismatch_subscribe {
+  ATFW_UTIL_FORCEINLINE explicit hash_mismatch_subscribe(std::string in_channel_id, LogKeyT in_log_key,
+                                                         std::chrono::system_clock::time_point time)
       : channel_id(std::move(in_channel_id)), times(1), log_key(in_log_key), next_need_snapshot_timestamp(time) {}
 
-  explicit hash_mismatch_subscribe()
+  ATFW_UTIL_FORCEINLINE explicit hash_mismatch_subscribe()
       : times(1), log_key{}, next_need_snapshot_timestamp(std::chrono::system_clock::now()) {}
 
   std::string channel_id;
@@ -55,7 +55,7 @@ struct UTIL_SYMBOL_VISIBLE hash_mismatch_subscribe {
  * @param channel 频道对象
  */
 template <class Channel>
-UTIL_SYMBOL_VISIBLE void collect_invalid_event(gsl::string_view channel_id, Channel& channel) {
+ATFW_UTIL_SYMBOL_VISIBLE void collect_invalid_event(gsl::string_view channel_id, Channel& channel) {
   if (channel.get_log_manager().get_all_logs().empty()) {
     FWLOGERROR("channel {} log is empty!", channel_id);
     return;
@@ -108,7 +108,7 @@ DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
  * @param target 目标虚表
  */
 template <class WalObjectType>
-UTIL_SYMBOL_VISIBLE inline void setup_common_vtable(typename WalObjectType::vtable_type& target) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void setup_common_vtable(typename WalObjectType::vtable_type& target) {
   using wal_object = WalObjectType;
   using log_type = typename wal_object::log_type;
   using hash_code_type = typename wal_object::hash_code_type;

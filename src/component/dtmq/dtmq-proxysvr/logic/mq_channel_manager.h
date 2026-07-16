@@ -27,6 +27,7 @@
 #include <list>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "data/mq_channel.h"
 
@@ -132,6 +133,10 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
       rpc::context& ctx, const mq_channel_ptr_type& channel, atfw::dtmq::channel_page_info& page_info,
       google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
 
+  void insert_running_io_channel(const mq_channel* channel) noexcept;
+
+  void remove_running_io_channel(const mq_channel* channel) noexcept;
+
  private:
   // 持久化dirty_channel
   void aysnc_save_dirty_channel();
@@ -152,7 +157,7 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   std::unordered_map<std::string, mq_channel_ptr_type> channels_;
   std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> channel_configure_;
   std::list<mq_channel_ptr_type> pending_io_channels_;
-  std::list<mq_channel_ptr_type> pending_save_channels_;
+  std::unordered_set<const mq_channel*> running_io_channels_;
   bool more_transfer_now_;
   bool is_stoping_;
   bool is_pre_stoping_;

@@ -192,7 +192,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   bool need_save_db() const noexcept;
 
   bool is_io_task_running() const noexcept;
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx, int32_t* task_result = nullptr);
 
   void async_start_transfer(rpc::context& ctx, uint64_t target_server_id);
 

@@ -42,9 +42,18 @@
 namespace rpc {
 namespace dtmq {
 
+namespace {
+// 单个频道副本数量硬限制
+constexpr const uint64_t kDtmqProxySvrMaxReplicateiIndex = 65536;
+}  // namespace
+
 DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status,
                                                  uint64_t replicate_index, logic_hpa_discovery_select_mode mode) {
   if (channel_key.channel_id().empty()) {
+    return 0;
+  }
+
+  if (replicate_index > kDtmqProxySvrMaxReplicateiIndex) {
     return 0;
   }
 
@@ -87,9 +96,13 @@ DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey
 DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
                                               const atfw::dtmq::DChannelIdKey& channel_key,
                                               uint64_t replicate_index_count, logic_hpa_discovery_select_mode mode) {
+  server_ids.clear();
   if (channel_key.channel_id().empty()) {
-    server_ids.clear();
     return;
+  }
+
+  if (replicate_index_count > kDtmqProxySvrMaxReplicateiIndex) {
+    replicate_index_count = kDtmqProxySvrMaxReplicateiIndex;
   }
 
   auto* mod = logic_server_last_common_module();
@@ -100,12 +113,10 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
   auto discovery_set =
       mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kDtMqProxySvr));
   if (!discovery_set) {
-    server_ids.clear();
     return;
   }
 
   server_ids.reserve(static_cast<size_t>(replicate_index_count + 1));
-  server_ids.clear();
 
   atapp::etcd_discovery_set::node_hash_type node_hash;
   node_hash = discovery_set->get_node_hash_by_consistent_hash(

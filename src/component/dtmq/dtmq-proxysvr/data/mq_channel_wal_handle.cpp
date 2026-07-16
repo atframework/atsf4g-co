@@ -397,29 +397,34 @@ static wal_result_code publisher_send_snapshot(
     return wal_result_code::kOk;
   }
 
-  // Send without private data
-  for (auto& target : svrs_without_private_data) {
-    notify_msg->clear_subscriber_keys();
-    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
-    for (auto& key : target.second) {
-      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
-    }
+  auto send_fn =
+      [&](const std::unordered_map<uint64_t, std::list<mq_channel_wal_publisher_type::subscriber_pointer>>& svrs) {
+        for (const auto& target : svrs) {
+          notify_msg->clear_subscriber_keys();
+          notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
+          for (const auto& key : target.second) {
+            notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
+          }
 
-    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
-    if (0 != res) {
-      if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
-          PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
-        // 服务器节点离线，可能是短暂不可用
-        FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                     channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-      } else {
-        FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                   channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-        param.result_code.get() = res;
-      }
-    }
-  }
+          rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
+              rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+          if (0 != res) {
+            if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
+                PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
+              // 服务器节点离线，可能是短暂不可用
+              FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                           channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+            } else {
+              FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                         channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+              param.result_code.get() = res;
+            }
+          }
+        }
+      };
+
+  // Send without private data
+  send_fn(svrs_without_private_data);
 
   if (svrs_with_private_data.empty()) {
     return wal_result_code::kOk;
@@ -427,28 +432,7 @@ static wal_result_code publisher_send_snapshot(
   channel->dump_private_data(*snapshot_data->mutable_channel_runtime());
 
   // Send with private data
-  for (auto& target : svrs_with_private_data) {
-    notify_msg->clear_subscriber_keys();
-    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
-    for (auto& key : target.second) {
-      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
-    }
-
-    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
-    if (0 != res) {
-      if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
-          PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
-        // 服务器节点离线，可能是短暂不可用
-        FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                     channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-      } else {
-        FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                   channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-        param.result_code.get() = res;
-      }
-    }
-  }
+  send_fn(svrs_with_private_data);
 
   return wal_result_code::kOk;
 }
@@ -528,44 +512,35 @@ static wal_result_code publisher_send_logs(
     return wal_result_code::kOk;
   }
 
-  // Send without private data
-  for (auto& target : svrs_without_private_data) {
-    notify_msg->clear_subscriber_keys();
-    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
-    for (auto& key : target.second) {
-      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
-    }
+  auto send_fn =
+      [&](const std::unordered_map<uint64_t, std::list<mq_channel_wal_publisher_type::subscriber_pointer>>& svrs) {
+        for (const auto& target : svrs) {
+          notify_msg->clear_subscriber_keys();
+          notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
+          for (const auto& key : target.second) {
+            notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
+          }
 
-    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
-    if (0 != res) {
-      FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                 channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-      param.result_code.get() = res;
-    }
-  }
+          rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
+              rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+          if (0 != res) {
+            FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+                       channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+            param.result_code.get() = res;
+          }
+        }
+      };
+
+  // Send without private data
+  send_fn(svrs_without_private_data);
 
   if (svrs_with_private_data.empty()) {
     return wal_result_code::kOk;
   }
   channel->dump_private_data(*notify_msg->mutable_channel_runtime());
 
-  // Send without private data
-  for (auto& target : svrs_with_private_data) {
-    notify_msg->clear_subscriber_keys();
-    notify_msg->mutable_subscriber_keys()->Reserve(static_cast<int>(target.second.size()));
-    for (auto& key : target.second) {
-      notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
-    }
-
-    rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-        rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
-    if (0 != res) {
-      FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                 channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-      param.result_code.get() = res;
-    }
-  }
+  // Send with private data
+  send_fn(svrs_with_private_data);
 
   return wal_result_code::kOk;
 }
