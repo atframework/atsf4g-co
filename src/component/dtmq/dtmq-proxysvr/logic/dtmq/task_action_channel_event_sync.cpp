@@ -144,7 +144,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     // 其他错误忽略即可，后面会再同步修复数据
     if (receive_result < util::distributed_system::wal_result_code::kOk) {
       all_logs_received = false;
-      FWLOGERROR("channel {} receive_hole_log failed with result {}({}).", channel->get_channel_key().channel_id(),
+      FWLOGERROR("channel {} receive_hole_log failed with receive_result {}, result_code {}({}).",
+                 channel->get_channel_key().channel_id(), static_cast<int32_t>(receive_result),
                  client_param.result_code.get(), protobuf_mini_dumper_get_error_msg(client_param.result_code.get()));
       break;
     }

@@ -1254,14 +1254,14 @@ void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_
   }
 }
 
-void mq_channel::async_save(rpc::context& ctx) {
+int32_t mq_channel::async_save(rpc::context& ctx) {
   if (is_io_task_running()) {
-    return;
+    return 0;
   }
 
   if (!is_writable()) {
     saved_version_ = dirty_version_;
-    return;
+    return 0;
   }
 
   if (configure_.memory_only()) {
@@ -1271,7 +1271,7 @@ void mq_channel::async_save(rpc::context& ctx) {
     }
 
     saved_version_ = dirty_version_;
-    return;
+    return 0;
   }
 
   auto self_ptr = shared_from_this();
@@ -1354,12 +1354,14 @@ void mq_channel::async_save(rpc::context& ctx) {
   if (invoke_result.is_error()) {
     FWLOGERROR("mq channel {} transfer: create task failed.res: {}({})", get_channel_id(), *invoke_result.get_error(),
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-    return;
+    return *invoke_result.get_error();
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
     mq_channel_manager::insert_running_io_channel(this);
   }
+
+  return 0;
 }
 
 rpc::result_code_type mq_channel::save(rpc::context& ctx) {
@@ -1370,7 +1372,7 @@ rpc::result_code_type mq_channel::save(rpc::context& ctx) {
     }
   }
 
-  async_save(ctx);
+  int32_t ret = async_save(ctx);
 
   if (is_io_task_running()) {
     auto io_task = io_task_;
@@ -1382,7 +1384,7 @@ rpc::result_code_type mq_channel::save(rpc::context& ctx) {
     RPC_RETURN_CODE(task_type_trait::get_result(io_task));
   }
 
-  RPC_RETURN_CODE(0);
+  RPC_RETURN_CODE(ret);
 }
 
 void mq_channel::async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint) {
@@ -2072,8 +2074,10 @@ void mq_channel::compact_sequence(int64_t sequence) {
       continue;
     }
 
-    if ((*iter)->sequence() <= sequence) {
+    if (get_shared_wal_object()->get_log_key_compare()((*iter)->sequence(), sequence)) {
       ++remove_count;
+    } else {
+      break;
     }
   }
 

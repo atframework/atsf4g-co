@@ -196,7 +196,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   void async_start_transfer(rpc::context& ctx, uint64_t target_server_id);
 
-  void async_save(rpc::context& ctx);
+  int32_t async_save(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx);
 
   void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint =

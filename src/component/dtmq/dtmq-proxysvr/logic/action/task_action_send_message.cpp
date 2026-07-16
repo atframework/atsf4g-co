@@ -82,6 +82,9 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
   int32_t result = 0;
   mq_channel_wal_object_context param{get_shared_context(), result};
 
+  // 正常发送接口只允许追加，不允许插入消息
+  req_body.mutable_message_content()->set_sequence(0);
+
   auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
                                                            req_body.message_content().detail().command_case(), param,
                                                            req_body.message_content());

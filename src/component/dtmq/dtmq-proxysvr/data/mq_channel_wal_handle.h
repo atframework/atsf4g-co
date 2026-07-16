@@ -68,6 +68,7 @@ struct mq_channel_log_action_equal_t {
 
 struct mq_channel_wal_publisher_log_operator
     : public atfw::util::distributed_system::wal_log_operator<
+          // NOLINTNEXTLINE(modernize-use-transparent-functors)
           int64_t, atfw::dtmq::DChannelMessage, mq_channel_wal_publisher_log_action_getter, std::less<int64_t>,
           mq_channel_log_action_hash_t, mq_channel_log_action_equal_t,
           atfw::memory::stl::allocator<atfw::dtmq::DChannelMessage>,
