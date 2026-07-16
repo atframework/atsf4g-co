@@ -386,9 +386,9 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     }
 
     if (configure_.gc_log_count() <= 0) {
-      wal_obj_conf.max_log_size = 30;
+      wal_obj_conf.gc_log_size = 30;
     } else {
-      wal_obj_conf.max_log_size = configure_.gc_log_count();
+      wal_obj_conf.gc_log_size = configure_.gc_log_count();
     }
 
     if (configure_.max_log_count() <= 0) {
@@ -1470,6 +1470,9 @@ rpc::result_code_type mq_channel::save(rpc::context& ctx) {
   }
 
   int32_t ret = async_save(ctx);
+  if (ret < 0) {
+    RPC_RETURN_CODE(ret);
+  }
 
   if (is_io_task_running()) {
     auto io_task = io_task_;
