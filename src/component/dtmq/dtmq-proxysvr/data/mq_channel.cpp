@@ -403,7 +403,7 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     auto& publisher_conf = get_wal_publisher().get_configure();
 
     publisher_conf.gc_expire_duration = wal_obj_conf.gc_expire_duration;
-    publisher_conf.max_log_size = wal_obj_conf.max_log_size;
+    publisher_conf.gc_log_size = wal_obj_conf.gc_log_size;
     publisher_conf.max_log_size = wal_obj_conf.max_log_size;
 
     publisher_conf.subscriber_timeout = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
@@ -419,7 +419,7 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     auto& client_conf = wal_client_->get_configure();
 
     client_conf.gc_expire_duration = wal_obj_conf.gc_expire_duration;
-    client_conf.max_log_size = wal_obj_conf.max_log_size;
+    client_conf.gc_log_size = wal_obj_conf.gc_log_size;
     client_conf.max_log_size = wal_obj_conf.max_log_size;
 
     client_conf.subscriber_heartbeat_interval =
