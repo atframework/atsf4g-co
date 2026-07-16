@@ -373,6 +373,80 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
+  // wal_object 配置不可变更，设计如此
+  {
+    auto& wal_obj_conf = get_shared_wal_object()->get_configure();
+
+    if (configure_.gc_expire_duration().seconds() <= 0) {
+      wal_obj_conf.gc_expire_duration =
+          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
+    } else {
+      wal_obj_conf.gc_expire_duration =
+          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.gc_expire_duration());
+    }
+
+    if (configure_.gc_log_count() <= 0) {
+      wal_obj_conf.max_log_size = 30;
+    } else {
+      wal_obj_conf.max_log_size = configure_.gc_log_count();
+    }
+
+    if (configure_.max_log_count() <= 0) {
+      wal_obj_conf.max_log_size = 300;
+    } else {
+      wal_obj_conf.max_log_size = configure_.max_log_count();
+    }
+  }
+
+  {
+    auto& wal_obj_conf = get_shared_wal_object()->get_configure();
+    auto& publisher_conf = get_wal_publisher().get_configure();
+
+    publisher_conf.gc_expire_duration = wal_obj_conf.gc_expire_duration;
+    publisher_conf.max_log_size = wal_obj_conf.max_log_size;
+    publisher_conf.max_log_size = wal_obj_conf.max_log_size;
+
+    publisher_conf.subscriber_timeout = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+        dtmq_proxysvr_cfg.subscriber_timeout());
+    if (publisher_conf.subscriber_timeout < std::chrono::seconds{1}) {
+      publisher_conf.subscriber_timeout =
+          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
+    }
+  }
+
+  if (wal_client_) {
+    auto& wal_obj_conf = get_shared_wal_object()->get_configure();
+    auto& client_conf = wal_client_->get_configure();
+
+    client_conf.gc_expire_duration = wal_obj_conf.gc_expire_duration;
+    client_conf.max_log_size = wal_obj_conf.max_log_size;
+    client_conf.max_log_size = wal_obj_conf.max_log_size;
+
+    client_conf.subscriber_heartbeat_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+            dtmq_proxysvr_cfg.channel_heartbeat_interval());
+    if (client_conf.subscriber_heartbeat_interval < std::chrono::seconds{1}) {
+      client_conf.subscriber_heartbeat_interval =
+          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
+    }
+    client_conf.subscriber_heartbeat_retry_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+            dtmq_proxysvr_cfg.channel_heartbeat_retry_interval());
+    if (client_conf.subscriber_heartbeat_retry_interval < std::chrono::seconds{1}) {
+      client_conf.subscriber_heartbeat_retry_interval =
+          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
+    }
+    if (configure_.heartbeat_interval().seconds() > 0) {
+      client_conf.subscriber_heartbeat_interval =
+          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.heartbeat_interval());
+    }
+    if (configure_.heartbeat_retry_interval().seconds() > 0) {
+      client_conf.subscriber_heartbeat_retry_interval =
+          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+              configure_.heartbeat_retry_interval());
+    }
+  }
+
   if (readonly_replicate_index_ > 0) {
     if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
       readonly_replicate_index_ = 0;
@@ -479,16 +553,25 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     RPC_RETURN_CODE(*invoke_result.get_error());
   }
-  if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
-    io_task_ = *invoke_result.get_success();
-    mq_channel_manager::insert_running_io_channel(this);
+
+  rpc::result_code_type::value_type ret = 0;
+  if (invoke_result.is_success()) {
+    if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+      io_task_ = *invoke_result.get_success();
+      mq_channel_manager::insert_running_io_channel(this);
+    } else {
+      ret = task_type_trait::get_result(*invoke_result.get_success());
+    }
   }
 
   if (is_io_task_running()) {
     RPC_AWAIT_IGNORE_RESULT(rpc::wait_task(ctx, io_task_));
   }
 
-  RPC_RETURN_CODE(task_type_trait::get_result(*invoke_result.get_success()));
+  if (invoke_result.is_success()) {
+    ret = task_type_trait::get_result(*invoke_result.get_success());
+  }
+  RPC_RETURN_CODE(ret);
 }
 
 rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t readonly_server_index) {
@@ -546,10 +629,16 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     RPC_RETURN_CODE(*invoke_result.get_error());
   }
-  if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
-    io_task_ = *invoke_result.get_success();
-    subscribe_task_ = *invoke_result.get_success();
-    mq_channel_manager::insert_running_io_channel(this);
+
+  rpc::result_code_type::value_type ret = 0;
+  if (invoke_result.is_success()) {
+    if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+      io_task_ = *invoke_result.get_success();
+      subscribe_task_ = *invoke_result.get_success();
+      mq_channel_manager::insert_running_io_channel(this);
+    } else {
+      ret = task_type_trait::get_result(*invoke_result.get_success());
+    }
   }
 
   if (!task_type_trait::empty(subscribe_task_) && !task_type_trait::is_exiting(subscribe_task_)) {
@@ -559,7 +648,10 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
     }
   }
 
-  RPC_RETURN_CODE(task_type_trait::get_result(*invoke_result.get_success()));
+  if (invoke_result.is_success()) {
+    ret = task_type_trait::get_result(*invoke_result.get_success());
+  }
+  RPC_RETURN_CODE(ret);
 }
 
 void mq_channel::merge_subscriber(
@@ -1356,9 +1448,14 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     return *invoke_result.get_error();
   }
-  if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
-    io_task_ = *invoke_result.get_success();
-    mq_channel_manager::insert_running_io_channel(this);
+  if (invoke_result.is_success()) {
+    if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
+      io_task_ = *invoke_result.get_success();
+      mq_channel_manager::insert_running_io_channel(this);
+    } else {
+      // 直接结束了就返回任务的结果
+      return task_type_trait::get_result(*invoke_result.get_success());
+    }
   }
 
   return 0;
@@ -1436,11 +1533,20 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   }
 
   // 保存一次，下载如果再加载，要重新恢复删除流程
-  async_save(ctx);
+  int32_t res = async_save(ctx);
+  if (res < 0) {
+    RPC_RETURN_CODE(res);
+  }
+
   while (is_io_task_running()) {
-    rpc::result_code_type::value_type result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
+    int32_t task_result = 0;
+    rpc::result_code_type::value_type result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, &task_result));
     if (result < 0) {
       RPC_RETURN_CODE(result);
+    }
+
+    if (task_result < 0) {
+      RPC_RETURN_CODE(task_result);
     }
   }
 
@@ -1476,12 +1582,12 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     RPC_RETURN_CODE(*invoke_result.get_error());
   }
+
+  // 只要保存成功了，总是视为频道已销毁，下次加载时会重新执行 set_ttl/remove_all
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
     mq_channel_manager::insert_running_io_channel(this);
   }
-
-  // 只要保存成功了，总是视为频道已销毁，下次加载时会重新执行 set_ttl/remove_all
 
   if (is_io_task_running()) {
     auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
