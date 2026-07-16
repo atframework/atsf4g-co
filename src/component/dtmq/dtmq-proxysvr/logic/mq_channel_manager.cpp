@@ -201,7 +201,9 @@ int mq_channel_manager::stop() {
 
 bool mq_channel_manager::is_stoping() const noexcept { return is_stoping_; }
 
-bool mq_channel_manager::is_can_stopped() const noexcept { return is_stoping_ && pending_io_channels_.empty(); }
+bool mq_channel_manager::is_can_stopped() const noexcept {
+  return is_stoping_ && pending_io_channels_.empty() && running_io_channels_.empty();
+}
 
 void mq_channel_manager::update_timer(mq_channel& channel, mq_channel_timer_type::timer_wptr_t& output_handle,
                                       std::chrono::system_clock::duration timeout) {
@@ -660,20 +662,20 @@ rpc::result_code_type mq_channel_manager::page_query_message(
   RPC_RETURN_CODE(0);
 }
 
-void mq_channel_manager::insert_running_io_channel(const mq_channel* channel) noexcept {
-  if (nullptr == channel) {
+void mq_channel_manager::insert_running_io_channel(const mq_channel* channel) {
+  if (nullptr == channel || mq_channel_manager::is_instance_destroyed()) {
     return;
   }
 
-  running_io_channels_.insert(channel);
+  mq_channel_manager::me()->running_io_channels_.insert(channel);
 }
 
 void mq_channel_manager::remove_running_io_channel(const mq_channel* channel) noexcept {
-  if (nullptr == channel) {
+  if (nullptr == channel || mq_channel_manager::is_instance_destroyed()) {
     return;
   }
 
-  running_io_channels_.erase(channel);
+  mq_channel_manager::me()->running_io_channels_.erase(channel);
 }
 
 void mq_channel_manager::resolve_channel_distribution() {

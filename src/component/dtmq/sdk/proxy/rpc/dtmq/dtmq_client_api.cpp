@@ -44,7 +44,7 @@ namespace dtmq {
 
 namespace {
 // 单个频道副本数量硬限制
-constexpr const uint64_t kDtmqProxySvrMaxReplicateiIndex = 65536;
+constexpr const uint64_t kDtmqProxySvrMaxReplicateIndex = 65536;
 }  // namespace
 
 DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status,
@@ -53,7 +53,7 @@ DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey
     return 0;
   }
 
-  if (replicate_index > kDtmqProxySvrMaxReplicateiIndex) {
+  if (replicate_index > kDtmqProxySvrMaxReplicateIndex) {
     return 0;
   }
 
@@ -101,8 +101,8 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
     return;
   }
 
-  if (replicate_index_count > kDtmqProxySvrMaxReplicateiIndex) {
-    replicate_index_count = kDtmqProxySvrMaxReplicateiIndex;
+  if (replicate_index_count > kDtmqProxySvrMaxReplicateIndex) {
+    replicate_index_count = kDtmqProxySvrMaxReplicateIndex;
   }
 
   auto* mod = logic_server_last_common_module();

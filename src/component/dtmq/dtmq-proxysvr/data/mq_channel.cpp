@@ -109,7 +109,9 @@ mq_channel::~mq_channel() {
   // Remove timer
   remove_timer();
 
-  mq_channel_manager::me()->remove_running_io_channel(this);
+  if (!mq_channel_manager::is_instance_destroyed()) {
+    mq_channel_manager::remove_running_io_channel(this);
+  }
 
   FWLOGINFO("channel {}({}) destructed.", get_channel_id(), reinterpret_cast<const void*>(this));
 }
@@ -465,6 +467,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
+          mq_channel_manager::remove_running_io_channel(self_ptr.get());
         }
 
         self_ptr->last_result_code_ = ret;
@@ -478,7 +481,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
-    mq_channel_manager::me()->insert_running_io_channel(this);
+    mq_channel_manager::insert_running_io_channel(this);
   }
 
   if (is_io_task_running()) {
@@ -528,7 +531,7 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
-          mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
+          mq_channel_manager::remove_running_io_channel(self_ptr.get());
         }
 
         if (task_type_trait::get_task_id(self_ptr->subscribe_task_) == child_ctx.get_task_context().task_id) {
@@ -546,7 +549,7 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
     subscribe_task_ = *invoke_result.get_success();
-    mq_channel_manager::me()->insert_running_io_channel(this);
+    mq_channel_manager::insert_running_io_channel(this);
   }
 
   if (!task_type_trait::empty(subscribe_task_) && !task_type_trait::is_exiting(subscribe_task_)) {
@@ -581,6 +584,20 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   is_loading_snapshot_ = true;
   auto loading_guard = gsl::finally([this]() { this->is_loading_snapshot_ = false; });
 
+  auto compact_fn = [&]() {
+    // 合并日志压缩
+    const auto& snapshot_runtime = snapshot.channel_data().channel_runtime();
+    if (compact_stateful_sequence_ < snapshot_runtime.compact_stateful_sequence()) {
+      compact_stateful_sequence(snapshot_runtime.compact_stateful_sequence());
+    }
+    if (snapshot_runtime.last_removed_sequence() > 0) {
+      if (nullptr == get_shared_wal_object()->get_last_removed_key() ||
+          *get_shared_wal_object()->get_last_removed_key() < snapshot_runtime.last_removed_sequence()) {
+        compact_sequence(snapshot_runtime.last_removed_sequence());
+      }
+    }
+  };
+
   if (is_writable()) {
     if (snapshot.replicate_index() > 0) {
       FWLOGINFO("mq channel {} ignore load snapshot, channel is writable but received a readonly snapshot",
@@ -599,6 +616,9 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
 
       // 订阅者总是要合并的
       merge_subscriber(ctx, snapshot.subscriber());
+
+      // 合并日志压缩选项
+      compact_fn();
       return true;
     }
   }
@@ -671,6 +691,10 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     protobuf_copy_message(configure_, snapshot.channel_data().channel_metadata().channel_configure());
   }
 
+  // 合并日志压缩选项
+  compact_fn();
+
+  // 保底设置last_removed_key，这样之前的订阅者如果又滞后的数据能够触发快照下发
   if (get_shared_wal_object()->get_all_logs().empty()) {
     if (nullptr == get_shared_wal_object()->get_last_removed_key() ||
         *get_shared_wal_object()->get_last_removed_key() <= 0) {
@@ -1113,7 +1137,7 @@ bool mq_channel::is_io_task_running() const noexcept {
   }
 
   task_type_trait::reset_task(io_task_);
-  mq_channel_manager::me()->remove_running_io_channel(this);
+  mq_channel_manager::remove_running_io_channel(this);
 
   return false;
 }
@@ -1127,7 +1151,7 @@ rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx, int32_t* task
       }
 
       task_type_trait::reset_task(io_task_);
-      mq_channel_manager::me()->remove_running_io_channel(this);
+      mq_channel_manager::remove_running_io_channel(this);
 
       RPC_RETURN_CODE(0);
     }
@@ -1150,7 +1174,7 @@ rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx, int32_t* task
   if (!task_type_trait::empty(io_task_) && task_type_trait::equal(io_task_, io_task) &&
       task_type_trait::is_exiting(io_task_)) {
     task_type_trait::reset_task(io_task_);
-    mq_channel_manager::me()->remove_running_io_channel(this);
+    mq_channel_manager::remove_running_io_channel(this);
   }
   RPC_RETURN_CODE(ret);
 }
@@ -1213,7 +1237,7 @@ void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
-          mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
+          mq_channel_manager::remove_running_io_channel(self_ptr.get());
         }
 
         RPC_RETURN_CODE(result);
@@ -1226,7 +1250,7 @@ void mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
-    mq_channel_manager::me()->insert_running_io_channel(this);
+    mq_channel_manager::insert_running_io_channel(this);
   }
 }
 
@@ -1303,7 +1327,7 @@ void mq_channel::async_save(rpc::context& ctx) {
             // 先重置io_task_，否则async_start_transfer会被忽略
             if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
               task_type_trait::reset_task(self_ptr->io_task_);
-              mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
+              mq_channel_manager::remove_running_io_channel(self_ptr.get());
             }
 
             self_ptr->async_start_transfer(child_ctx, self_ptr->target_distribution_.writable_server_id);
@@ -1321,7 +1345,7 @@ void mq_channel::async_save(rpc::context& ctx) {
 
           if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
             task_type_trait::reset_task(self_ptr->io_task_);
-            mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
+            mq_channel_manager::remove_running_io_channel(self_ptr.get());
           }
         }
         RPC_RETURN_CODE(0);
@@ -1334,7 +1358,7 @@ void mq_channel::async_save(rpc::context& ctx) {
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
-    mq_channel_manager::me()->insert_running_io_channel(this);
+    mq_channel_manager::insert_running_io_channel(this);
   }
 }
 
@@ -1349,10 +1373,13 @@ rpc::result_code_type mq_channel::save(rpc::context& ctx) {
   async_save(ctx);
 
   if (is_io_task_running()) {
-    auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
+    auto io_task = io_task_;
+    auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task));
     if (result < 0) {
       RPC_RETURN_CODE(result);
     }
+
+    RPC_RETURN_CODE(task_type_trait::get_result(io_task));
   }
 
   RPC_RETURN_CODE(0);
@@ -1437,7 +1464,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
-          mq_channel_manager::me()->remove_running_io_channel(self_ptr.get());
+          mq_channel_manager::remove_running_io_channel(self_ptr.get());
         }
         RPC_RETURN_CODE(0);
       });
@@ -1449,7 +1476,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   }
   if (invoke_result.is_success() && !task_type_trait::is_exiting(*invoke_result.get_success())) {
     io_task_ = *invoke_result.get_success();
-    mq_channel_manager::me()->insert_running_io_channel(this);
+    mq_channel_manager::insert_running_io_channel(this);
   }
 
   // 只要保存成功了，总是视为频道已销毁，下次加载时会重新执行 set_ttl/remove_all

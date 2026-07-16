@@ -133,9 +133,9 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
       rpc::context& ctx, const mq_channel_ptr_type& channel, atfw::dtmq::channel_page_info& page_info,
       google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
 
-  void insert_running_io_channel(const mq_channel* channel) noexcept;
+  static void insert_running_io_channel(const mq_channel* channel);
 
-  void remove_running_io_channel(const mq_channel* channel) noexcept;
+  static void remove_running_io_channel(const mq_channel* channel) noexcept;
 
  private:
   // 持久化dirty_channel

@@ -118,12 +118,18 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     // 保持当前节点的replicate_index不变，避免writable/readonly角色变化。
     // 这里是从其他writable节点同步只读数据过来，这时候本地总是视为readonly节点。
     channel_snapshot->set_replicate_index(channel->get_current_replicate_index());
-    channel->load_snapshot(get_shared_context(), std::move(*channel_snapshot));
 
+    if (!channel->load_snapshot(get_shared_context(), std::move(*channel_snapshot))) {
+      FWLOGERROR("channel {} load_snapshot failed, maybe concurrency conflict",
+                 channel->get_channel_key().channel_id());
+    }
+
+    // 正常加载快照是不应该失败的，如果真的失败说明又系统错误或者时序错误，直接忽略即可，后面会重试
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 增量消息
+  bool all_logs_received = true;
   for (const auto& event_data : req_body.channel_message()) {
     mq_channel_wal_object_type::log_pointer log_ptr =
         atfw::util::memory::make_strong_rc<atfw::dtmq::DChannelMessage>(event_data);
@@ -135,7 +141,11 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
       break;
     }
 
+    // 其他错误忽略即可，后面会再同步修复数据
     if (receive_result < util::distributed_system::wal_result_code::kOk) {
+      all_logs_received = false;
+      FWLOGERROR("channel {} receive_hole_log failed with result {}({}).", channel->get_channel_key().channel_id(),
+                 client_param.result_code.get(), protobuf_mini_dumper_get_error_msg(client_param.result_code.get()));
       break;
     }
 
@@ -148,7 +158,7 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     channel->hash_mismatch_increase();
     channel->async_send_subscribe_to_writable(get_shared_context());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  } else {
+  } else if (all_logs_received) {
     // Merge data, merge 的过程会触发GC
     channel->load(req_body.channel_metadata(), req_body.channel_runtime());
 
