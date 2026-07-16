@@ -29,6 +29,8 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 
 - Separate stable repository facts from mutable external behavior. Verify the former in current code/config/tests and the
   latter in current official documentation before writing compatibility or security claims.
+- Treat OpenSpec and Superpowers as optional, mutable integrations. Verify repository adoption and the active harness's
+  current capabilities before referencing their artifacts or commands; never install or initialize them implicitly.
 - State assumptions, the smallest sufficient plan, rollback, and validation after the source pass.
 - Use the shortest verified path for small, low-risk edits. Require reviewable scope and acceptance criteria before
   cross-module behavior, public API, data model, security, or deployment changes; reuse existing project artifacts rather
@@ -79,3 +81,5 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 
 - Read [compatibility sources](references/compatibility-sources.md) only when changing Skill formats, discovery paths,
   bridge behavior, client-specific configuration, MCP guidance, or cross-tool compatibility claims.
+- Read [upstream change-workflow methods](../change-workflow/references/upstream-methods.md) only when changing risk
+  routing or OpenSpec/Superpowers integration policy.

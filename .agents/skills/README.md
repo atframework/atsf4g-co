@@ -8,6 +8,7 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 | Skill                     | Description                                                                               |
 | ------------------------- | ----------------------------------------------------------------------------------------- |
 | `engineering-guidelines/` | Code style, template visibility/API ABI, configured lint review, RPC/Arena, generated code |
+| `change-workflow/`        | Risk-scaled design, change contracts, debugging, TDD, review, and completion evidence      |
 | `build/`                  | Configure and build the project (Windows / Unix)                                          |
 | `testing/`                | Run unit tests (including Windows DLL/PATH notes)                                         |
 | `deployment-config/`      | Generate deployment configs/scripts and analyze `install/**/*.tpl` Go templates           |

@@ -36,9 +36,9 @@ high-performance game server architectures.
 - Before a nontrivial plan or edit, inspect the relevant code, configs, docs, generated sources, tests, and current
   official docs for mutable external behavior. Separate verified facts from assumptions, then state the smallest plan
   and verification path; do not invent behavior from memory.
-- Match process to risk: use the shortest verified path for small changes; for cross-module behavior, public APIs, data
-  models, security, or deployment changes, establish reviewable scope, acceptance criteria, rollback, and validation in
-  the repository's existing authoritative artifact before implementation. Do not initialize a methodology for ceremony.
+- Match process to risk: use the shortest verified path for small changes; read `change-workflow` for defects and for
+  cross-module behavior, public API/ABI, data model/migration, security, or deployment changes. Keep their scope and
+  acceptance in one existing authoritative artifact or active task plan; do not initialize a methodology for ceremony.
 - Never unconditionally `touch` or same-content overwrite code/resources consumed by `add_custom_command`,
   `add_custom_target`, `add_executable`, `add_library`, `target_sources`, or another dependency edge, whether generated,
   copied, or non-handwritten. Use content-stable writes and accurate `OUTPUT`/`BYPRODUCTS`/`DEPENDS`/`DEPFILE`; only
@@ -65,6 +65,7 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 | Skill                     | Use when                                                                                |
 | ------------------------- | --------------------------------------------------------------------------------------- |
 | `engineering-guidelines`  | Writing/reviewing C++/CMake/Markdown, header inline/template visibility/API ABI rules, RPC/Arena |
+| `change-workflow`         | Diagnosing defects or delivering nontrivial/high-risk changes with a reviewable contract       |
 | `build`                   | Configuring or building with CMake                                                      |
 | `testing`                 | Running or writing unit tests                                                           |
 | `deployment-config`       | Generating/editing deployment configs, Go `.tpl` chart templates, or Helm values        |
