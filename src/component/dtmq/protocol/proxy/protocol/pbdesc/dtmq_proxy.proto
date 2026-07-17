@@ -29,11 +29,11 @@ message channel_snapshot {
 
 message channel_lock_checker {
   bool ignore_expect_value = 1;             // 是否忽略检查
-  bool allow_empty_real_value = 2;          // 是否允许实际锁持有者未空
+  bool allow_empty_real_value = 2;          // 是否允许实际锁持有者空值
   DChannelOptimisticLock expect_value = 3;  // 期望的锁持有信息
   DChannelOptimisticLock real_value = 4;    // 实际的锁持有信息，如果检查失败会回带
 
-  DChannelOptimisticLock reset_value = 9;  // 如果需要更新锁信息，这个复制新值
+  DChannelOptimisticLock reset_value = 9;  // 如果需要更新锁信息，这个赋值新值
 }
 
 message channel_lock_failed_data {
@@ -113,8 +113,6 @@ message SSChannelUpdateReq {
   // 更新其他订阅者信息，走Merge策略
   repeated channel_subscriber update_others = 8;
 
-  uint64 stateful_hash_code = 9;
-
   DChannelIdKey channel_key = 11;
 
   oneof custom_data_operation {
@@ -189,7 +187,7 @@ message SSChannelPullReq {
   // 拉取message，不需要snapshot时可以通过这个指定要拉取的message范围
   int64 need_message_sequence_begin = 21;
   // 拉取message，不需要snapshot时可以通过这个指定要拉取的message范围
-  // 0表示不拉取message，-1表示拉到最后一个
+  // 0表示不拉取message，-1表示拉到最后一个。这里负值有特殊含义所以类型要是 sint64
   sint64 need_message_sequence_end = 22;
 }
 

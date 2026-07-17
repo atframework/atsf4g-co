@@ -55,8 +55,12 @@ message DChannelMetadata {
   int64 custom_data_sequence = 6;
   uint64 last_hash_code = 7;
 
-  // 销毁时间（Unix timestamp）
-  google.protobuf.Timestamp destroy_timepoint = 12;
+  // 创建时间/sequence
+  google.protobuf.Timestamp create_timepoint = 21;
+  int64 create_sequence = 22;
+  // 销毁时间/sequence
+  google.protobuf.Timestamp destroy_timepoint = 23;
+  int64 destroy_sequence = 24;
 }
 
 message DChannelRuntime {
@@ -94,6 +98,10 @@ message DChannelDestroy {
   google.protobuf.Timestamp removed_timepoint = 1;  // 频道销毁时间，主从同步通知用
 }
 
+message DChannelCreate {
+  google.protobuf.Timestamp create_timepoint = 1;  // 频道创建时间，主从同步通知用
+}
+
 message DChannelMessageDetail {
   oneof command {
     // 无操作，用于触发一些特殊流程
@@ -108,6 +116,8 @@ message DChannelMessageDetail {
     DChannelOptimisticLock reset_lock = 5;
     // 频道销毁
     DChannelDestroy destroy = 6;
+    // 频道创建
+    DChannelCreate create = 7;
   }
 }
 

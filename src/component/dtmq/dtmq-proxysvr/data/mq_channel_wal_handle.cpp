@@ -70,7 +70,24 @@ struct mq_wal_delegate_helper {
     }
 
     auto tp = protobuf_to_system_clock(log.detail().destroy().removed_timepoint());
-    channel->async_destroy(param.context, tp, false);
+    channel->merge_destroy_timepoint_and_sequence(param.context, tp, log.sequence());
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code create_channel(wal_object_type& wal, const wal_object_type::log_type& log,
+                                        wal_object_type::callback_param_type param) {
+    mq_channel* channel = wal.get_private_data().channel;
+    if (nullptr == channel) {
+      return wal_result_code::kOk;
+    }
+
+    // Writable频道由 async_destroy/destroy 接口处理,仅副本通过log同步状态
+    if (channel->is_writable()) {
+      return wal_result_code::kOk;
+    }
+
+    auto tp = protobuf_to_system_clock(log.detail().create().create_timepoint());
+    channel->merge_created_timepoint_and_sequence(param.context, tp, log.sequence());
     return wal_result_code::kOk;
   }
 
@@ -93,6 +110,7 @@ struct mq_wal_delegate_helper {
   static void setup_delegate_actions(mq_channel_wal_object_type::callback_log_group_map_t& actions) {
     // 走default_delegate即可
     actions[atfw::dtmq::DChannelMessageDetail::kDestroy].action = mq_wal_delegate_helper::destroy_channel;
+    actions[atfw::dtmq::DChannelMessageDetail::kCreate].action = mq_wal_delegate_helper::create_channel;
     actions[atfw::dtmq::DChannelMessageDetail::kResetLock].action = mq_wal_delegate_helper::reset_lock;
   }
 };
@@ -290,37 +308,6 @@ static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtabl
   // ============ callbacks for wal_client ============
   ret->on_receive_snapshot = [](wal_client_type& wal, const snapshot_type& snapshot_data,
                                 wal_client_type::callback_param_type param) -> wal_result_code {
-    mq_channel* channel = wal.get_private_data().channel;
-    if (nullptr == channel) {
-      return wal_result_code::kOk;
-    }
-
-    if (snapshot_data.channel_metadata().channel_configure().gc_log_count() > 0) {
-      wal.get_configure().gc_log_size = snapshot_data.channel_metadata().channel_configure().gc_log_count();
-    }
-
-    if (snapshot_data.channel_metadata().channel_configure().max_log_count() > 0) {
-      wal.get_configure().max_log_size = snapshot_data.channel_metadata().channel_configure().max_log_count();
-    }
-
-    if (snapshot_data.channel_metadata().channel_configure().gc_expire_duration().seconds() > 0) {
-      wal.get_configure().gc_expire_duration =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-              snapshot_data.channel_metadata().channel_configure().gc_expire_duration());
-    }
-
-    if (snapshot_data.channel_metadata().channel_configure().heartbeat_interval().seconds() > 0) {
-      wal.get_configure().subscriber_heartbeat_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-              snapshot_data.channel_metadata().channel_configure().heartbeat_interval());
-    }
-
-    if (snapshot_data.channel_metadata().channel_configure().heartbeat_retry_interval().seconds() > 0) {
-      wal.get_configure().subscriber_heartbeat_retry_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-              snapshot_data.channel_metadata().channel_configure().heartbeat_retry_interval());
-    }
-
     return wal.load(snapshot_data, param);
   };
 

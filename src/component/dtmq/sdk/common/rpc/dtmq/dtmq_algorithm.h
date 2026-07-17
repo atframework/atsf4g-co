@@ -37,9 +37,13 @@ enum class replicate_type : uint32_t {
  */
 template <class LogKeyT>
 struct ATFW_UTIL_SYMBOL_VISIBLE hash_mismatch_subscribe {
-  ATFW_UTIL_FORCEINLINE explicit hash_mismatch_subscribe(std::string in_channel_id, LogKeyT in_log_key,
+  template <class InputLogKeyT>
+  ATFW_UTIL_FORCEINLINE explicit hash_mismatch_subscribe(std::string in_channel_id, InputLogKeyT&& in_log_key,
                                                          std::chrono::system_clock::time_point time)
-      : channel_id(std::move(in_channel_id)), times(1), log_key(in_log_key), next_need_snapshot_timestamp(time) {}
+      : channel_id(std::move(in_channel_id)),
+        times(1),
+        log_key(std::forward<InputLogKeyT>(in_log_key)),
+        next_need_snapshot_timestamp(time) {}
 
   ATFW_UTIL_FORCEINLINE explicit hash_mismatch_subscribe()
       : times(1), log_key{}, next_need_snapshot_timestamp(std::chrono::system_clock::now()) {}

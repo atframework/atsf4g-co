@@ -173,7 +173,7 @@ int mq_channel_manager::tick() {
     pre_stoping();
   }
 
-  // libstdc++ 在 C++ 11 ABI下，std::list的size()复杂度为O(n)，在迭代过程中调用size()会导致性能问题。
+  // libstdc++ 在非 C++ 11 ABI下，std::list的size()复杂度为O(n)，在 add_pending_io_channel 中调用size()会导致性能问题。
   // 这里走fallack逻辑，仅在tick时低频率检查清理。
 #if !(defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__) || !defined(_GLIBCXX_USE_CXX11_ABI) || \
       _GLIBCXX_USE_CXX11_ABI == 0)
@@ -382,10 +382,12 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
 
   // 如果有到channel，但是不是writable，需要提升为writable
   if (!channel_ptr->is_writable()) {
-    result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx, auto_create));
+    result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx));
     if (result < 0) {
-      FWLOGERROR("channel {} writable init failed with result {}({}).", channel_key.channel_id(), result,
-                 protobuf_mini_dumper_get_error_msg(result));
+      if (auto_create || result != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND) {
+        FWLOGERROR("channel {} writable init failed with result {}({}).", channel_key.channel_id(), result,
+                   protobuf_mini_dumper_get_error_msg(result));
+      }
       RPC_RETURN_CODE(result);
     }
   }
@@ -397,7 +399,9 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
   }
 
   FWLOGDEBUG("channel {} is created and writable inited successfully", channel_key.channel_id());
-  channel_ptr->ensure_recreate_after_destroyed(ctx);
+  if (auto_create) {
+    channel_ptr->ensure_recreate_after_destroyed(ctx);
+  }
   RPC_RETURN_CODE(0);
 }
 
@@ -717,8 +721,8 @@ void mq_channel_manager::add_pending_io_channel(const mq_channel_ptr_type& chann
 
   pending_io_channels_.push_back(channel);
 
-  // libstdc++ 在 C++ 11 ABI下，std::list的size()复杂度为O(n)，在迭代过程中调用size()会导致性能问题。
-  // 这里做一个优化，避免每次都调用size()，而转到tick时执行压缩。
+  // libstdc++ 在非 C++ 11 ABI下，std::list的size()复杂度为O(n)，在 add_pending_io_channel 中调用size()会导致性能问题。
+  // 这种情况下避免每次都调用size()，而转到tick时执行压缩。
 #if defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__) || !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
   // 迭代过程中不能做清理操作
   if (!iterating_pending_io_channels_ && pending_io_channels_.size() >= channels_.size() * 4) {
@@ -814,6 +818,6 @@ void mq_channel_manager::report_channel_qty_oss() {
   // rpc::context::message_holder<PROJECT_NAMESPACE_ID::oss::DtmqChannelQty> oss_log{ctx};
   // oss_log->set_total_qty(static_cast<int32_t>(channels_.size()));
   // oss_log->set_penddind_io_qty(static_cast<int32_t>(pending_io_channels_.size()));
-  // oss_log->set_penddind_save_qty(static_cast<int32_t>(pending_save_channels_.size()));
+  // oss_log->set_running_io_qty(static_cast<int32_t>(running_io_channels_.size()));
   // telemetry::oss::send_dtmq_channel_qty(ctx, user, std::move(*oss_log));
 }

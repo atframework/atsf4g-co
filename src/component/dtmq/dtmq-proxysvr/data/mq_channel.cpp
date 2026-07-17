@@ -73,13 +73,15 @@ void mq_channel::mq_channel_accessor::remove_timer(mq_channel& mq_channel) { mq_
 
 mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChannelIdKey& channel_key,
                        const atfw::dtmq::DChannelConfigure& configure)
-    :  // owner_(&manager),
-      sequence_allocator_(0),
+    : sequence_allocator_(0),
       compact_stateful_sequence_(0),
       status_(channel_status::kNone),
       readonly_replicate_index_(0),
       readonly_replicate_configure_count_(0),
-      remove_timepoint_{std::chrono::system_clock::from_time_t(0)},
+      destroy_timepoint_{std::chrono::system_clock::from_time_t(0)},
+      destroy_sequence_(0),
+      create_timepoint_{std::chrono::system_clock::from_time_t(0)},
+      create_sequence_(0),
       last_save_timepoint_{std::chrono::system_clock::from_time_t(0)},
       last_status_change_timepoint_{atfw::util::time::time_utility::now()},
       lost_last_subscriber_timepoint_{std::chrono::system_clock::from_time_t(0)},
@@ -88,11 +90,11 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
       last_result_code_(PROJECT_NAMESPACE_ID::err::EN_SUCCESS),
       custom_data_sequence_(0),
       private_data_sequence_(0),
-      destroyed_message_saved_(false),
       need_remove_ttl_(false),
       is_loading_snapshot_(false),
       dirty_version_(0),
       saved_version_(0),
+      saved_sequence_(0),
       resolved_transfer_etcd_revision_(0),
       server_distribution_etcd_revision_(0) {
   protobuf_copy_message(channel_key_, channel_key);
@@ -118,9 +120,15 @@ mq_channel::~mq_channel() {
 }
 
 void mq_channel::load(const atfw::dtmq::DChannelMetadata& metadata, const atfw::dtmq::DChannelRuntime& runtime) {
-  if (metadata.destroy_timepoint().seconds() > 0) {
-    remove_timepoint_ = protobuf_to_system_clock(metadata.destroy_timepoint());
+  if (metadata.destroy_timepoint().seconds() > 0 || metadata.destroy_sequence() > metadata.create_sequence()) {
+    destroy_timepoint_ = protobuf_to_system_clock(metadata.destroy_timepoint());
+    destroy_sequence_ = metadata.destroy_sequence();
+  } else {
+    destroy_timepoint_ = std::chrono::system_clock::from_time_t(0);
+    destroy_sequence_ = 0;
   }
+  create_timepoint_ = protobuf_to_system_clock(metadata.create_timepoint());
+  create_sequence_ = metadata.create_sequence();
 
   // 后面所有数据走合并逻辑，以防调用到老的load导致meta和runtime回退
   if (sequence_allocator_ < metadata.last_sequence()) {
@@ -163,7 +171,7 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
       continue;
     }
 
-    auto log_ptr = atfw::memory::stl::make_strong_rc<mq_channel_wal_publisher_type::log_type>();
+    auto log_ptr = atfw::memory::stl::make_strong_rc<mq_channel_wal_publisher_type::log_type>(log);
     if (!log_ptr) {
       FCTXLOGERROR(ctx, "channel {} load log failed, malloc failed.", get_channel_id());
       continue;
@@ -212,6 +220,7 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
 
   ++dirty_version_;
   saved_version_ = dirty_version_;
+  saved_sequence_ = get_last_message_sequence();
 
   // 有可能await后，负载发生变化。本节点被迁出 writable
 
@@ -242,11 +251,16 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
 void mq_channel::dump(atfw::dtmq::DChannelMetadata& metadata, bool with_configure, bool with_custom_data) const {
   protobuf_copy_message(*metadata.mutable_channel_key(), get_channel_key());
 
-  if (remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
-    *metadata.mutable_destroy_timepoint() = protobuf_from_system_clock(remove_timepoint_);
+  if (is_destroyed()) {
+    *metadata.mutable_destroy_timepoint() = protobuf_from_system_clock(destroy_timepoint_);
+    metadata.set_destroy_sequence(destroy_sequence_);
   } else {
     metadata.clear_destroy_timepoint();
+    metadata.set_destroy_sequence(0);
   }
+  *metadata.mutable_create_timepoint() = protobuf_from_system_clock(create_timepoint_);
+  metadata.set_create_sequence(create_sequence_);
+
   metadata.set_last_sequence(get_last_message_sequence());
   metadata.set_last_hash_code(get_last_hash_code());
 
@@ -382,23 +396,17 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
   {
     auto& wal_obj_conf = get_shared_wal_object()->get_configure();
 
-    if (configure_.gc_expire_duration().seconds() <= 0) {
-      wal_obj_conf.gc_expire_duration =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
-    } else {
+    // 未配置则用默认值
+    if (configure_.gc_expire_duration().seconds() > 0) {
       wal_obj_conf.gc_expire_duration =
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.gc_expire_duration());
     }
 
-    if (configure_.gc_log_count() <= 0) {
-      wal_obj_conf.gc_log_size = 30;
-    } else {
+    if (configure_.gc_log_count() > 0) {
       wal_obj_conf.gc_log_size = configure_.gc_log_count();
     }
 
-    if (configure_.max_log_count() <= 0) {
-      wal_obj_conf.max_log_size = 300;
-    } else {
+    if (configure_.max_log_count() > 0) {
       wal_obj_conf.max_log_size = configure_.max_log_count();
     }
   }
@@ -519,7 +527,7 @@ bool mq_channel::clear_private_data() noexcept {
 
 void mq_channel::reset_private_data_sequence() noexcept { private_data_sequence_ = get_last_message_sequence(); }
 
-rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_create) {
+rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
   if (is_io_task_running()) {
     auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
     if (ret != 0) {
@@ -538,11 +546,11 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
 
   // Writable节点从DB拉取
   auto self_ptr = shared_from_this();
-  auto invoke_result = rpc::async_invoke(
-      ctx, "mq_channel.writable_init", [self_ptr, auto_create](rpc::context& child_ctx) -> rpc::result_code_type {
+  auto invoke_result =
+      rpc::async_invoke(ctx, "mq_channel.writable_init", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
         FWLOGINFO("create_init mq channel {}", self_ptr->get_channel_id());
 
-        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx, auto_create));
+        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx));
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
@@ -576,6 +584,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
   if (invoke_result.is_success()) {
     ret = task_type_trait::get_result(*invoke_result.get_success());
   }
+
   RPC_RETURN_CODE(ret);
 }
 
@@ -811,6 +820,7 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     upgrade_to_readonly(snapshot.replicate_index());
 
     saved_version_ = dirty_version_;
+    saved_sequence_ = get_last_message_sequence();
   } else if (!is_writable() && should_be_writable()) {
     upgrade_to_writable();
     // 加载快照时，原数据可能未落地保存。所以不能赋值 saved_version_ ，下一次定时器到期要正常保存
@@ -1220,7 +1230,7 @@ bool mq_channel::need_save_db() const noexcept {
     return false;
   }
 
-  return is_dirty();
+  return is_dirty() && is_available();
 }
 
 bool mq_channel::is_io_task_running() const noexcept {
@@ -1358,6 +1368,7 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
 
   if (!is_writable()) {
     saved_version_ = dirty_version_;
+    saved_sequence_ = get_last_message_sequence();
     return 0;
   }
 
@@ -1368,6 +1379,7 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
     }
 
     saved_version_ = dirty_version_;
+    saved_sequence_ = get_last_message_sequence();
     return 0;
   }
 
@@ -1392,7 +1404,7 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
 
         // rpc::db::
         uint64_t saved_version = self_ptr->dirty_version_;
-        bool is_destroyed = self_ptr->remove_timepoint_ > std::chrono::system_clock::from_time_t(0);
+        int64_t saved_sequence = self_ptr->get_last_message_sequence();
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::replace(child_ctx, std::move(data)));
         if (ret < 0) {
           FWLOGERROR("rpc::db::dtmq_channel_record::replace faild, channel_id:{}, ret:{}({})",
@@ -1401,17 +1413,15 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
         }
 
         self_ptr->saved_version_ = saved_version;
-        if (is_destroyed && self_ptr->remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
-          self_ptr->destroyed_message_saved_ = true;
-        }
+        self_ptr->saved_sequence_ = saved_sequence;
 
         FWLOGDEBUG("rpc::db::dtmq_channel_record::replace channel:{}, ret:{}({})", self_ptr->get_channel_id(), ret,
                    protobuf_mini_dumper_get_error_msg(ret));
 
         // 如果已移除，则重置删除TTL
-        if (self_ptr->remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
+        if (self_ptr->is_destroyed()) {
           auto ttl_seconds =
-              std::chrono::duration_cast<std::chrono::seconds>(self_ptr->remove_timepoint_ + get_mq_channel_ttl() -
+              std::chrono::duration_cast<std::chrono::seconds>(self_ptr->destroy_timepoint_ + get_mq_channel_ttl() -
                                                                atfw::util::time::time_utility::now())
                   .count();
           if (ttl_seconds > 0) {
@@ -1498,20 +1508,20 @@ rpc::result_code_type mq_channel::save(rpc::context& ctx) {
   RPC_RETURN_CODE(ret);
 }
 
-void mq_channel::async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint,
-                               bool alloc_destroy_message) {
-  // 频道已经销毁，无需重复执行
-  if (remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
+void mq_channel::async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
+                               int64_t destroy_sequence) {
+  // 频道已经销毁，无需重复执行, 但要合并销毁信息
+  if (is_destroyed()) {
+    merge_destroy_timepoint_and_sequence(ctx, destroy_timepoint, destroy_sequence);
     return;
   }
 
   auto self_ptr = shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "mq_channel.async_destroy",
-      [self_ptr, writable_remove_timepoint, alloc_destroy_message](rpc::context& child_ctx) -> rpc::result_code_type {
+      [self_ptr, destroy_timepoint, destroy_sequence](rpc::context& child_ctx) -> rpc::result_code_type {
         // 离线数据删除，使用TTL
-        auto ret =
-            RPC_AWAIT_CODE_RESULT(self_ptr->destroy(child_ctx, writable_remove_timepoint, alloc_destroy_message));
+        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->destroy(child_ctx, destroy_timepoint, destroy_sequence));
 
         RPC_RETURN_CODE(ret);
       });
@@ -1522,12 +1532,11 @@ void mq_channel::async_destroy(rpc::context& ctx, std::chrono::system_clock::tim
   }
 }
 
-rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
-                                          std::chrono::system_clock::time_point writable_remove_timepoint,
-                                          bool alloc_destroy_message) {
-  // 频道已经销毁，无需重复执行
-  const auto time_zero = std::chrono::system_clock::from_time_t(0);
-  if (remove_timepoint_ > time_zero) {
+rpc::result_code_type mq_channel::destroy(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
+                                          int64_t destroy_sequence) {
+  // 频道已经销毁，无需重复执行, 但要合并销毁信息
+  if (is_destroyed()) {
+    merge_destroy_timepoint_and_sequence(ctx, destroy_timepoint, destroy_sequence);
     RPC_RETURN_CODE(0);
   }
 
@@ -1538,8 +1547,12 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
     }
   }
 
+  if (is_destroyed()) {
+    RPC_RETURN_CODE(0);
+  }
+
   // 主节点通知从节点频道销毁
-  set_destroyed(ctx, writable_remove_timepoint, alloc_destroy_message);
+  set_destroyed(ctx, destroy_timepoint, destroy_sequence);
 
   if (!is_writable()) {
     RPC_RETURN_CODE(0);
@@ -1551,7 +1564,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   }
 
   // 如果销毁信息已保存，则无需再等待保存结果，直接返回成功
-  if (destroyed_message_saved_) {
+  if (saved_sequence_ >= destroy_sequence_) {
     RPC_RETURN_CODE(0);
   }
 
@@ -1573,14 +1586,23 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
     }
   }
 
+  // IO操作后如果重新创建了频道，则无需再执行销毁操作
+  if (!is_destroyed()) {
+    RPC_RETURN_CODE(0);
+  }
+
   auto self_ptr = shared_from_this();
   auto invoke_result =
       rpc::async_invoke(ctx, "mq_channel.destroy", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+        // 异步任务启动后如果重新创建了频道，则无需再执行销毁操作
+        if (!self_ptr->is_destroyed()) {
+          RPC_RETURN_CODE(0);
+        }
         // 离线数据删除，使用TTL
         FWLOGINFO("destroy mq channel {}", self_ptr->get_channel_id());
 
         auto ttl_seconds =
-            std::chrono::duration_cast<std::chrono::seconds>(self_ptr->remove_timepoint_ + get_mq_channel_ttl() -
+            std::chrono::duration_cast<std::chrono::seconds>(self_ptr->destroy_timepoint_ + get_mq_channel_ttl() -
                                                              atfw::util::time::time_utility::now())
                 .count();
         if (ttl_seconds > 0) {
@@ -1615,7 +1637,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   if (is_io_task_running()) {
     auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
     if (result < 0) {
-      FWLOGERROR("mq channel {} destroy: create task failed.res: {}({})", get_channel_id(), result,
+      FWLOGERROR("mq channel {} destroy: wait task failed.res: {}({})", get_channel_id(), result,
                  protobuf_mini_dumper_get_error_msg(result));
       RPC_RETURN_CODE(0);
     }
@@ -1624,47 +1646,31 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx,
   RPC_RETURN_CODE(0);
 }
 
-void mq_channel::ensure_recreate_after_destroyed(rpc::context& /*ctx*/) {
+void mq_channel::ensure_recreate_after_destroyed(rpc::context& ctx) {
   if (!is_writable()) {
     return;
   }
 
-  if (remove_timepoint_ <= std::chrono::system_clock::from_time_t(0)) {
+  if (is_available()) {
     return;
   }
 
-  remove_timepoint_ = std::chrono::system_clock::from_time_t(0);
-  need_remove_ttl_ = true;
-  destroyed_message_saved_ = false;
+  need_remove_ttl_ = is_destroyed();
 
-  {
-    size_t remove_count = 0;
-    size_t current_count = 0;
-    for (auto iter = get_shared_wal_object()->log_begin(); iter != get_shared_wal_object()->log_end(); ++iter) {
-      ++current_count;
-      if ((*iter) && (*iter)->detail().command_case() == atfw::dtmq::DChannelMessageDetail::kDestroy) {
-        remove_count = current_count;
-      }
-    }
+  size_t old_log_count = get_shared_wal_object()->get_all_logs().size();
+  set_created(ctx, atfw::util::time::time_utility::now(), alloc_message_sequence());
 
-    if (remove_count > 0) {
-      get_shared_wal_object()->remove_before(atfw::util::time::time_utility::now(), remove_count);
-    }
+  if (old_log_count > 0) {
+    get_shared_wal_object()->remove_before(atfw::util::time::time_utility::now(), old_log_count);
   }
 }
 
-rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx, bool auto_create) {
+rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), record));
   if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FWLOGINFO("rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
     ret = 0;
-
-    if (!auto_create) {
-      FWLOGINFO("channel {}({}) load_from_db failed, not found", get_channel_id(),
-                record->record_set().record().size());
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-    }
   }
 
   // 读取到请清除的频道数据，直接清空
@@ -1672,10 +1678,6 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx, bool auto_crea
       atfw::util::time::time_utility::now() >=
           protobuf_to_system_clock(record->channel_metadata().destroy_timepoint())) {
     record->Clear();
-    if (!auto_create) {
-      FWLOGINFO("channel {}({}) load_from_db failed, removed", get_channel_id(), record->record_set().record().size());
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-    }
   }
 
   if (ret == 0) {
@@ -1786,6 +1788,12 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   rpc::context::message_holder<atfw::dtmq::SSChannelSubscribeReq> req_body{ctx};
   rpc::context::message_holder<atfw::dtmq::SSChannelSubscribeRsp> rsp_body{ctx};
   auto* channel_data = req_body->mutable_heartbeat()->Add();
+
+  if (channel_data == nullptr) {
+    FWLOGERROR("send_subscribe_to_writable {} : malloc channel_data failed", channel_key_.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+  }
+
   protobuf_copy_message(*channel_data->mutable_channel_key(), channel_key_);
 
   if (is_writable()) {
@@ -1833,44 +1841,24 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
       protobuf_from_system_clock(last_writable_notify_readonly_timepoint_);
 
   auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::subscribe(ctx, dtmq_proxysvr_id, *req_body, *rsp_body));
-
-  bool not_found = false;
-  for (const auto& not_found_channel : rsp_body->not_found_channel_ids()) {
-    if (not_found_channel == channel_key_.channel_id()) {
-      not_found = true;
-      break;
-    }
-  }
-  if (not_found) {
-    if (!should_be_writable() && !is_writable()) {
-      // 可能频道已经被删除，本地模拟一个删除log，确保订阅者可以获取到被销毁
-      if (remove_timepoint_ == std::chrono::system_clock::from_time_t(0)) {
-        FWLOGINFO("channel {} not found in writable server, set destroy message", get_channel_id());
-        set_destroyed(ctx, atfw::util::time::time_utility::now(), true);
-      }
-    }
-  } else if (ret >= 0) {
+  // 不需要再模拟删除了，删除频道的消息和其他消息并无不同会正常下发
+  if (ret >= 0) {
     update_last_writable_notify_time();
   }
   RPC_RETURN_CODE(ret);
 }
 
-void mq_channel::set_destroyed(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint,
-                               bool alloc_destroy_message) {
-  // 频道无法被destroy多次
-  if (remove_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
-    FWLOGERROR("channel {} set_destroyed but remove_timepoint is {}", get_channel_id(), remove_timepoint_);
+void mq_channel::set_destroyed(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
+                               int64_t destroy_sequence) {
+  // 频道不需要被destroy多次,但是需要Merge销毁信息
+  if (is_destroyed()) {
+    merge_destroy_timepoint_and_sequence(ctx, destroy_timepoint, destroy_sequence);
     return;
   }
 
-  // channel销毁时间先以主节点为准
-  if (remove_timepoint > std::chrono::system_clock::from_time_t(0) && !is_writable()) {
-    remove_timepoint_ = remove_timepoint;
-  } else {
-    remove_timepoint_ = atfw::util::time::time_utility::now();
-  }
-
-  if (!alloc_destroy_message) {
+  // writable主节自己创建和分配 destroy_timepoint 和 destroy_sequence
+  if (!is_writable()) {
+    merge_destroy_timepoint_and_sequence(ctx, destroy_timepoint, destroy_sequence);
     return;
   }
 
@@ -1892,6 +1880,67 @@ void mq_channel::set_destroyed(rpc::context& ctx, std::chrono::system_clock::tim
     }
   } else {
     FWLOGERROR("malloc wal log for mq channel {} to destroy failed", get_channel_id());
+  }
+}
+
+void mq_channel::merge_destroy_timepoint_and_sequence(rpc::context& /*ctx*/,
+                                                      std::chrono::system_clock::time_point destroy_timepoint,
+                                                      int64_t destroy_sequence) noexcept {
+  if (destroy_timepoint > destroy_timepoint_) {
+    destroy_timepoint_ = destroy_timepoint;
+  }
+  if (destroy_sequence > destroy_sequence_) {
+    destroy_sequence_ = destroy_sequence;
+  }
+}
+
+void mq_channel::set_created(rpc::context& ctx, std::chrono::system_clock::time_point create_timepoint,
+                             int64_t create_sequence) {
+  // 不需要再创建了，已经创建过了,但是需要Merge创建信息
+  if (is_available()) {
+    merge_created_timepoint_and_sequence(ctx, create_timepoint, create_sequence);
+    return;
+  }
+
+  // writable主节自己创建和分配 create_timepoint 和 create_sequence
+  if (!is_writable()) {
+    merge_created_timepoint_and_sequence(ctx, create_timepoint, create_sequence);
+    return;
+  }
+
+  if (!wal_publisher_) {
+    FWLOGERROR("channel {} set_created but wal_publisher_ is null", get_channel_id());
+    return;
+  }
+  int32_t result = 0;
+  mq_channel_wal_object_context params{ctx, result};
+  auto message = wal_publisher_->allocate_log(atfw::util::time::time_utility::now(),
+                                              atfw::dtmq::DChannelMessageDetail::kCreate, params);
+  if (message) {
+    *message->mutable_detail()->mutable_create()->mutable_create_timepoint() =
+        protobuf_from_system_clock(atfw::util::time::time_utility::now());
+    if (wal_client_) {
+      wal_client_->receive_hole_log(params, std::move(message));
+    } else {
+      wal_publisher_->emplace_back_log(std::move(message), params);
+    }
+    FWLOGINFO("mq channel {} set_created, create_timepoint: {}, create_sequence: {}", get_channel_id(),
+              std::chrono::duration_cast<std::chrono::seconds>(create_timepoint.time_since_epoch()).count(),
+              create_sequence);
+  } else {
+    FWLOGERROR("malloc wal log for mq channel {} to create failed", get_channel_id());
+  }
+}
+
+void mq_channel::merge_created_timepoint_and_sequence(rpc::context& /*ctx*/,
+                                                      std::chrono::system_clock::time_point create_timepoint,
+                                                      int64_t create_sequence) noexcept {
+  if (create_timepoint > create_timepoint_) {
+    create_timepoint_ = create_timepoint;
+  }
+
+  if (create_sequence > create_sequence_) {
+    create_sequence_ = create_sequence;
   }
 }
 
@@ -2274,7 +2323,8 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
-  if (!is_writable() && !is_readonly()) {
+  // 降级或由 !auto_create 创建的临时频道，都要在过期时间到后清理掉
+  if ((!is_writable() && !is_readonly()) || !is_available()) {
     std::chrono::system_clock::duration cache_expire_interval =
         protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.cache_expire_timeout());
     cache_expire_interval += std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(1));
@@ -2298,6 +2348,7 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
       protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.save_interval());
   if (configure_.memory_only() || is_readonly()) {
     saved_version_ = dirty_version_;
+    saved_sequence_ = get_last_message_sequence();
   } else if (now > last_save_timepoint_ + save_interval || force) {
     if (!is_io_task_running()) {
       last_save_timepoint_ = now;

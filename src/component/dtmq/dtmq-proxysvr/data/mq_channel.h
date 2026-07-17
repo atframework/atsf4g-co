@@ -117,7 +117,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept { return lock_; }
   inline int64_t get_compact_stateful_sequence() const noexcept { return compact_stateful_sequence_; }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx, bool auto_create);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type readonly_init(rpc::context& ctx, uint64_t readonly_server_index);
 
   void merge_subscriber(
@@ -199,11 +199,12 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int32_t async_save(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx);
 
-  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint,
-                     bool alloc_destroy_message);
+  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
+                     int64_t destroy_sequence);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy(
-      rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint, bool alloc_destroy_message);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy(rpc::context& ctx,
+                                                             std::chrono::system_clock::time_point destroy_timepoint,
+                                                             int64_t destroy_sequence);
 
   /**
    * @brief 确保评到销毁后重新创建时，历史消息已经被清理。移除标记被恢复
@@ -212,13 +213,30 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
    */
   void ensure_recreate_after_destroyed(rpc::context& ctx);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx, bool auto_create);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx);
 
   int32_t async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx);
-  void set_destroyed(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint,
-                     bool alloc_destroy_message);
+  void set_destroyed(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
+                     int64_t destroy_sequence);
+
+  void merge_destroy_timepoint_and_sequence(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
+                                            int64_t destroy_sequence) noexcept;
+
+  void set_created(rpc::context& ctx, std::chrono::system_clock::time_point create_timepoint, int64_t create_sequence);
+
+  void merge_created_timepoint_and_sequence(rpc::context& ctx, std::chrono::system_clock::time_point create_timepoint,
+                                            int64_t create_sequence) noexcept;
+
+  inline bool is_destroyed() const noexcept {
+    return destroy_sequence_ > create_sequence_ && destroy_timepoint_ > std::chrono::system_clock::from_time_t(0);
+  }
+
+  inline bool is_available() const noexcept {
+    // 初始化占位和销毁后不满足 create_sequence_ > destroy_sequence_ ，依此判定不可用。
+    return (is_readonly() || is_writable()) && create_sequence_ > destroy_sequence_;
+  }
 
   int32_t subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
                     int64_t last_received_sequence, uint64_t last_received_hash_code, bool merge_mode);
@@ -274,7 +292,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   void recalculate_etcd_cache();
 
  private:
-  // channel_manager* owner_;
   atfw::dtmq::DChannelIdKey channel_key_;
   int64_t sequence_allocator_;
   int64_t compact_stateful_sequence_;
@@ -282,7 +299,12 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   channel_status status_;
   uint64_t readonly_replicate_index_;
   int64_t readonly_replicate_configure_count_;
-  std::chrono::system_clock::time_point remove_timepoint_;
+
+  std::chrono::system_clock::time_point destroy_timepoint_;
+  int64_t destroy_sequence_;
+  std::chrono::system_clock::time_point create_timepoint_;
+  int64_t create_sequence_;
+
   std::chrono::system_clock::time_point last_save_timepoint_;
   std::chrono::system_clock::time_point last_status_change_timepoint_;
   std::chrono::system_clock::time_point lost_last_subscriber_timepoint_;
@@ -298,11 +320,11 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   google::protobuf::Any custom_data_;
   google::protobuf::Any private_data_;
 
-  bool destroyed_message_saved_;
   bool need_remove_ttl_;
   bool is_loading_snapshot_;
   uint64_t dirty_version_;
   uint64_t saved_version_;
+  int64_t saved_sequence_;
 
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type> shared_wal_object_;
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> wal_publisher_;

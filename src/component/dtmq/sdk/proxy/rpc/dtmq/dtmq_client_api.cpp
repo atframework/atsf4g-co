@@ -204,6 +204,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     protobuf_copy_message(*compare_and_maybe_reset_lock_rsp_ptr, rpc_rsp_body->compare_and_maybe_reset_lock());
   }
 
+  // 这里如果是大于零时，表示有状态码；小于零时错误码，都要下发。
   if (rpc_rsp_body->client_result() != 0) {
     RPC_RETURN_CODE(rpc_rsp_body->client_result());
   }

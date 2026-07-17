@@ -59,9 +59,10 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
     TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(forward_rpc(forward_server_id, true, forward_ok)));
   }
 
-  if (!channel) {
+  // 未初始化则当前的缓存用于短期只读副本和client再次拉取数据时的缓存
+  if (!channel || !channel->is_available()) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (req_body.has_compare_and_maybe_reset_lock() &&

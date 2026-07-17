@@ -85,6 +85,8 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
       continue;
     }
 
+    // Transfer不能忽略 is_available 状态，destroy和create信息也要转移
+
     atfw::dtmq::DChannelIdKey channel_key = channel_snapshot.channel_data().channel_metadata().channel_key();
     if (!channel || !channel->load_snapshot(get_shared_context(), std::move(channel_snapshot))) {
       FWLOGERROR("mq channel {} load snapshot failed", channel_key.channel_id());

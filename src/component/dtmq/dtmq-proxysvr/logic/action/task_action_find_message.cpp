@@ -58,9 +58,9 @@ DTMQ_PROXY_SERVICE_API task_action_find_message::result_type task_action_find_me
     TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(forward_rpc(forward_server_id, true, forward_ok)));
   }
 
-  if (!channel) {
+  if (!channel || !channel->is_available()) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   channel->tick(get_shared_context());

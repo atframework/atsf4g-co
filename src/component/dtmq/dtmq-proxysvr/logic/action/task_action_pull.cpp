@@ -25,8 +25,6 @@
 
 #include <utility>
 
-#include "rpc/dtmq/dtmq_client_api.h"
-
 #include "data/mq_channel.h"
 #include "logic/mq_channel_manager.h"
 
@@ -59,15 +57,16 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
     TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(forward_rpc(forward_server_id, true, forward_ok)));
   }
 
-  if (!channel) {
+  if (!channel || !channel->is_available()) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   channel->tick(get_shared_context());
 
   if (req_body.need_snapshot()) {
-    channel->dump(*rsp_body.mutable_channel_data(), true, true, true);
+    channel->dump(*rsp_body.mutable_channel_data(), req_body.need_configure(), req_body.need_custom_data(),
+                  req_body.need_private_data());
   } else {
     auto* metadata = rsp_body.mutable_channel_data()->mutable_channel_metadata();
     if (nullptr != metadata) {
@@ -95,7 +94,7 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
         break;
       }
 
-      if ((*iter)->sequence() <= compact_stateful_sequence) {
+      if (channel->get_shared_wal_object()->get_log_key_compare()(compact_stateful_sequence, (*iter)->sequence())) {
         continue;
       }
 

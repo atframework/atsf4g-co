@@ -52,7 +52,7 @@ class main_service_module : public atfw::atapp::module_impl {
     INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrnotifyservice);
     INIT_CALL(mq_channel_manager);
 
-    // 设置依赖，阻止数据库和ss通信模块在chat_channel_manager前退出
+    // 设置依赖，阻止数据库和ss通信模块在 mq_channel_manager 前退出
     auto suspend_stop_callback = []() -> bool {
       if (mq_channel_manager::is_instance_destroyed()) {
         return false;

@@ -34,3 +34,5 @@
   - [ ] 合并订阅者
 - [ ] Readonly 和 Writable 迁出一段时间后都要正确被清理
 - [ ] Writable 往 Readonly 副本发出Log同步事件时，如果Readonly 副本所在节点没有channel，则自动反订阅。后续不再发送这个副本的事件同步
+- [ ] Destroy后重新创建后， Writable 可以正常使用， Readonly 收到创建通知后恢复可用状态
+- [ ] 通过非 auto_create 创建的频道，只要一直没有创建，要能够被正常销毁。
