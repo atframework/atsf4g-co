@@ -161,7 +161,7 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   } else if (all_logs_received) {
     // Merge data, merge 的过程会触发GC
-    channel->load(req_body.channel_metadata(), req_body.channel_runtime());
+    channel->load(get_shared_context(), req_body.channel_metadata(), req_body.channel_runtime());
 
     channel->tick(get_shared_context());
   }

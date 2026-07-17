@@ -94,7 +94,7 @@ DTMQ_PROXY_SERVICE_API task_action_pull::result_type task_action_pull::operator(
         break;
       }
 
-      if (channel->get_shared_wal_object()->get_log_key_compare()(compact_stateful_sequence, (*iter)->sequence())) {
+      if (channel->get_shared_wal_object()->get_log_key_compare()((*iter)->sequence(), compact_stateful_sequence)) {
         continue;
       }
 

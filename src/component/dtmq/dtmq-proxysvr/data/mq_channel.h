@@ -84,7 +84,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
                       const atfw::dtmq::DChannelConfigure& configure);
   ~mq_channel();
 
-  void load(const atfw::dtmq::DChannelMetadata& metadata, const atfw::dtmq::DChannelRuntime& runtime);
+  void load(rpc::context& ctx, const atfw::dtmq::DChannelMetadata& metadata,
+            const atfw::dtmq::DChannelRuntime& runtime);
   void load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_channel_record& record);
   void dump(atfw::dtmq::DChannelMetadata& metadata, bool with_configure, bool with_custom_data) const;
   void dump(atfw::dtmq::DChannelRuntime& runtime, bool with_private_data) const;
@@ -198,9 +199,6 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   int32_t async_save(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx);
-
-  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
-                     int64_t destroy_sequence);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy(rpc::context& ctx,
                                                              std::chrono::system_clock::time_point destroy_timepoint,

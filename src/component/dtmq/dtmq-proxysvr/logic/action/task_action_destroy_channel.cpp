@@ -80,7 +80,13 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  res = RPC_AWAIT_CODE_RESULT(channel->destroy(get_shared_context(), std::chrono::system_clock::from_time_t(0), true));
+  if (channel->is_destroyed()) {
+    FWLOGDEBUG("channel {} ignore destroy because it is already destroyed", req_body.channel_key().channel_id());
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  res = RPC_AWAIT_CODE_RESULT(
+      channel->destroy(get_shared_context(), atfw::util::time::time_utility::now(), channel->alloc_message_sequence()));
   if (res < 0) {
     FWLOGERROR("destroy mq channel {} failed, res: {}({})", channel_key.channel_id(), res,
                protobuf_mini_dumper_get_error_msg(res));

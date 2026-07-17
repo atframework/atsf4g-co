@@ -64,11 +64,6 @@ struct mq_wal_delegate_helper {
       return wal_result_code::kOk;
     }
 
-    // Writable频道由 async_destroy/destroy 接口处理,仅副本通过log同步状态
-    if (channel->is_writable()) {
-      return wal_result_code::kOk;
-    }
-
     auto tp = protobuf_to_system_clock(log.detail().destroy().removed_timepoint());
     channel->merge_destroy_timepoint_and_sequence(param.context, tp, log.sequence());
     return wal_result_code::kOk;
@@ -78,11 +73,6 @@ struct mq_wal_delegate_helper {
                                         wal_object_type::callback_param_type param) {
     mq_channel* channel = wal.get_private_data().channel;
     if (nullptr == channel) {
-      return wal_result_code::kOk;
-    }
-
-    // Writable频道由 async_destroy/destroy 接口处理,仅副本通过log同步状态
-    if (channel->is_writable()) {
       return wal_result_code::kOk;
     }
 
@@ -174,7 +164,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
       wal.get_private_data().channel->get_wal_publisher().set_broadcast_key_bound((*storage.rbegin())->sequence());
     }
 
-    wal.get_private_data().channel->load(from.channel_metadata(), from.channel_runtime());
+    wal.get_private_data().channel->load(param.context, from.channel_metadata(), from.channel_runtime());
     return wal_result_code::kOk;
   };
 

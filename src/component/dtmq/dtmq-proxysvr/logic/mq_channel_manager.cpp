@@ -334,7 +334,9 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
       FWLOGDEBUG("channel {} select existed writable channel", channel_key.channel_id());
       forward_server_id = 0;
 
-      channel_ptr->ensure_recreate_after_destroyed(ctx);
+      if (auto_create) {
+        channel_ptr->ensure_recreate_after_destroyed(ctx);
+      }
       RPC_RETURN_CODE(0);
     }
 
@@ -787,9 +789,10 @@ void mq_channel_manager::resolve_channel_distribution() {
     }
 
     // 正在退出时，优先保存数据到DB，避免数据丢失。其他情况仅仅定时保存，这里transfer即可。
+    bool need_retry = false;
     if (is_stoping_ && (*iter)->need_save_db() && !(*iter)->get_configure().memory_only()) {
       FWLOGDEBUG("channel({}) async_save when is_stoping_", (*iter)->get_channel_id());
-      (*iter)->async_save(ctx);
+      need_retry = (*iter)->async_save(ctx) < 0;
     } else {
       FWLOGDEBUG("channel({}) async_start_transfer, is_stoping: {}", (*iter)->get_channel_id(), is_stoping_);
       // 只读频道也需要转移数据，不过失败也没关系。下次拉取会从writable节点恢复数据，
@@ -797,7 +800,7 @@ void mq_channel_manager::resolve_channel_distribution() {
       (*iter)->async_start_transfer(ctx, (*iter)->get_transfer_target_server_id());
     }
 
-    if ((*iter)->is_io_task_running()) {
+    if ((*iter)->is_io_task_running() || need_retry) {
       ++iter;
     } else {
       iter = pending_io_channels_.erase(iter);
