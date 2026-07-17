@@ -111,7 +111,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
 
  public:
   SERVER_FRAME_API explicit logic_server_common_module(const logic_server_common_module_configure& static_conf);
-  SERVER_FRAME_API ~logic_server_common_module();
+  SERVER_FRAME_API ~logic_server_common_module() override;
 
   SERVER_FRAME_API int init() override;
 

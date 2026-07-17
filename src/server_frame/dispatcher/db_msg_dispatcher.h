@@ -112,7 +112,7 @@ class db_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API db_msg_dispatcher();
 
  public:
-  SERVER_FRAME_API virtual ~db_msg_dispatcher();
+  SERVER_FRAME_API ~db_msg_dispatcher() override;
 
   SERVER_FRAME_API int32_t init() override;
 

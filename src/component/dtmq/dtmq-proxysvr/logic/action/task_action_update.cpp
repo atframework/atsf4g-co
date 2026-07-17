@@ -165,24 +165,35 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
   }
 
   // 触发保存
-  if (req_body.save()) {
-    result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context()));
-    if (result < 0) {
-      rsp_body.set_client_result(result);
-      rsp_body.set_last_sequence(channel->get_last_message_sequence());
-      rsp_body.set_last_hash_code(channel->get_last_hash_code());
-      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  do {
+    if (!req_body.save()) {
+      break;
     }
 
-    // 任务启动失败下次也会重试，不用视为失败
-    channel->async_save(get_shared_context());
+    result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context()));
+    if (result < 0) {
+      break;
+    }
 
-    int32_t save_io_result = 0;
+    int32_t save_io_result = channel->async_save(get_shared_context());
+    if (save_io_result < 0) {
+      FWLOGERROR("channel {} save failed with result {}({}), will retry", req_body.channel_key().channel_id(),
+                 save_io_result, protobuf_mini_dumper_get_error_msg(save_io_result));
+      result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
+      break;
+    }
+
     result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(get_shared_context(), &save_io_result));
     if (result >= 0 && save_io_result < 0) {
       result = save_io_result;
     }
-  }
+
+    if (result < 0) {
+      FWLOGERROR("channel {} save failed with result {}({}), will retry", req_body.channel_key().channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
+      result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
+    }
+  } while (false);
 
   rsp_body.set_client_result(result);
   rsp_body.set_last_sequence(channel->get_last_message_sequence());

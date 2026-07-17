@@ -90,7 +90,7 @@ DTMQ_PROXY_SDK_API bool has_dtmq_proxysvr();
  * @param no_wait 是否不等待
  * @return rpc::result_code_type 发送结果
  */
-EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
     atfw::dtmq::DChannelMessageDetail&& detail,
     std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
@@ -106,7 +106,7 @@ EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
  * @param msg 消息对象
  * @return rpc::result_code_type 查找结果
  */
-EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_message(
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_message(
     rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, int64_t sequence,
     atfw::dtmq::DChannelMessage& msg);
 
@@ -119,7 +119,7 @@ EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_message(
  * @param msgs 消息列表
  * @return rpc::result_code_type 查询结果
  */
-EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
     rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, atfw::dtmq::channel_page_info& page_info,
     google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
 

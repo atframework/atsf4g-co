@@ -78,7 +78,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API ss_msg_dispatcher();
 
  public:
-  SERVER_FRAME_API virtual ~ss_msg_dispatcher();
+  SERVER_FRAME_API ~ss_msg_dispatcher() override;
 
   SERVER_FRAME_API int32_t init() override;
 
@@ -88,7 +88,7 @@ class ss_msg_dispatcher : public dispatcher_implement {
 
   SERVER_FRAME_API int tick() override;
 
-  SERVER_FRAME_API void ready() override final;
+  SERVER_FRAME_API void ready() override;
 
   /**
    * @brief 获取任务信息

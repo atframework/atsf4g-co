@@ -13,6 +13,7 @@
 #include <rpc/rpc_context.h>
 
 #include <chrono>
+#include <list>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -38,10 +39,12 @@ static time_t chrono_to_timer_tick(std::chrono::system_clock::time_point tp) {
 mq_channel_manager::mq_channel_manager()
     : last_tick_timepoint_(std::chrono::system_clock::from_time_t(0)),
       dtmq_server_distribute_etcd_revision_(0),
+      iterating_pending_io_channels_(false),
       more_transfer_now_(false),
       is_stoping_(false),
       is_pre_stoping_(false),
-      report_channel_qty_time_(std::chrono::system_clock::from_time_t(0)) {}
+      report_channel_qty_time_(std::chrono::system_clock::from_time_t(0)),
+      configure_concurrency_io_task_count_(0) {}
 
 mq_channel_manager::~mq_channel_manager() {}
 
@@ -102,6 +105,14 @@ int mq_channel_manager::init() {
 }
 
 int mq_channel_manager::reload() {
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+
+  configure_concurrency_io_task_count_ = dtmq_proxysvr_cfg.concurrency_io_task_count();
+  if (configure_concurrency_io_task_count_ <= 0) {
+    configure_concurrency_io_task_count_ = 4096;
+  }
+
   for (const auto& channel : channels_) {
     auto channel_configure = excel::get_dtmq_channel_configure(channel.second->get_channel_key().channel_type());
     if (!channel_configure) {
@@ -161,6 +172,16 @@ int mq_channel_manager::tick() {
   if (!channels_.empty() && !logic_hpa_current_node_is_in_target()) {
     pre_stoping();
   }
+
+  // libstdc++ 在 C++ 11 ABI下，std::list的size()复杂度为O(n)，在迭代过程中调用size()会导致性能问题。
+  // 这里走fallack逻辑，仅在tick时低频率检查清理。
+#if !(defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__) || !defined(_GLIBCXX_USE_CXX11_ABI) || \
+      _GLIBCXX_USE_CXX11_ABI == 0)
+  // 迭代过程中不能做清理操作
+  if (!iterating_pending_io_channels_ && pending_io_channels_.size() >= channels_.size() * 4) {
+    compact_pending_io_channels();
+  }
+#endif
   return ret;
 }
 
@@ -675,7 +696,48 @@ void mq_channel_manager::remove_running_io_channel(const mq_channel* channel) no
     return;
   }
 
-  mq_channel_manager::me()->running_io_channels_.erase(channel);
+  auto inst = mq_channel_manager::me();
+  inst->running_io_channels_.erase(channel);
+
+  if (inst->configure_concurrency_io_task_count_ > 0 && !inst->pending_io_channels_.empty() &&
+      inst->running_io_channels_.size() < inst->configure_concurrency_io_task_count_) {
+    inst->set_more_transfer();
+  }
+}
+
+bool mq_channel_manager::is_running_io_busy() const noexcept {
+  return configure_concurrency_io_task_count_ > 0 &&
+         running_io_channels_.size() >= configure_concurrency_io_task_count_;
+}
+
+void mq_channel_manager::add_pending_io_channel(const mq_channel_ptr_type& channel) {
+  if (!channel || mq_channel_manager::is_instance_destroyed()) {
+    return;
+  }
+
+  pending_io_channels_.push_back(channel);
+
+  // libstdc++ 在 C++ 11 ABI下，std::list的size()复杂度为O(n)，在迭代过程中调用size()会导致性能问题。
+  // 这里做一个优化，避免每次都调用size()，而转到tick时执行压缩。
+#if defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__) || !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
+  // 迭代过程中不能做清理操作
+  if (!iterating_pending_io_channels_ && pending_io_channels_.size() >= channels_.size() * 4) {
+    compact_pending_io_channels();
+  }
+#endif
+}
+
+void mq_channel_manager::compact_pending_io_channels() {
+  // 压缩pending_io_channels_中的重复记录
+  std::unordered_set<mq_channel*> pending_io_channel_cache;
+  pending_io_channel_cache.reserve(channels_.size());
+  std::list<mq_channel_ptr_type> new_pending_io_channels;
+  for (const auto& channel : pending_io_channels_) {
+    if (pending_io_channel_cache.insert(channel.get()).second) {
+      new_pending_io_channels.push_back(channel);
+    }
+  }
+  pending_io_channels_.swap(new_pending_io_channels);
 }
 
 void mq_channel_manager::resolve_channel_distribution() {
@@ -707,19 +769,13 @@ void mq_channel_manager::resolve_channel_distribution() {
     return;
   }
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-  // IO频率控制，不需要很精确，只要不要太密集即可
-  size_t max_io_tasks = dtmq_proxysvr_cfg.concurrency_io_task_count();
-  if (max_io_tasks <= 0) {
-    max_io_tasks = 2048;
-  }
   auto iter = pending_io_channels_.begin();
 
   rpc::context ctx{rpc::context::create_without_task()};
 
-  while (iter != pending_io_channels_.end() && running_io_channels_.size() < max_io_tasks) {
+  // IO频率控制，不需要很精确，只要不要太密集即可
+  iterating_pending_io_channels_ = true;
+  while (iter != pending_io_channels_.end() && running_io_channels_.size() < configure_concurrency_io_task_count_) {
     if ((*iter)->is_io_task_running()) {
       ++iter;
       continue;
@@ -738,12 +794,11 @@ void mq_channel_manager::resolve_channel_distribution() {
 
     if ((*iter)->is_io_task_running()) {
       ++iter;
-    } else if (!(*iter)->is_writable()) {
-      iter = pending_io_channels_.erase(iter);
     } else {
-      break;
+      iter = pending_io_channels_.erase(iter);
     }
   }
+  iterating_pending_io_channels_ = false;
 
   // more_transfer_now_ 表示要立即处理剩下的pending中的频道
   // 这里设置成false，下一帧会继续处理

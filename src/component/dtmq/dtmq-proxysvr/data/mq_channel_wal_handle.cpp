@@ -297,10 +297,18 @@ static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtabl
 
     if (snapshot_data.channel_metadata().channel_configure().gc_log_count() > 0) {
       wal.get_configure().gc_log_size = snapshot_data.channel_metadata().channel_configure().gc_log_count();
+
+      if (wal.get_configure().gc_log_size <= 0) {
+        wal.get_configure().gc_log_size = 30;
+      }
     }
 
     if (snapshot_data.channel_metadata().channel_configure().max_log_count() > 0) {
       wal.get_configure().max_log_size = snapshot_data.channel_metadata().channel_configure().max_log_count();
+
+      if (wal.get_configure().max_log_size <= 0) {
+        wal.get_configure().max_log_size = 300;
+      }
     }
 
     if (snapshot_data.channel_metadata().channel_configure().gc_expire_duration().seconds() > 0 ||
@@ -308,6 +316,11 @@ static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtabl
       wal.get_configure().gc_expire_duration =
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
               snapshot_data.channel_metadata().channel_configure().gc_expire_duration());
+
+      if (wal.get_configure().gc_expire_duration < std::chrono::seconds{1}) {
+        wal.get_configure().gc_expire_duration =
+            std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
+      }
     }
 
     if (snapshot_data.channel_metadata().channel_configure().heartbeat_interval().seconds() > 0 ||
@@ -315,9 +328,18 @@ static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtabl
       wal.get_configure().subscriber_heartbeat_interval =
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
               snapshot_data.channel_metadata().channel_configure().heartbeat_interval());
+      if (wal.get_configure().subscriber_heartbeat_interval < std::chrono::seconds{1}) {
+        wal.get_configure().subscriber_heartbeat_interval =
+            std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
+      }
+
       wal.get_configure().subscriber_heartbeat_retry_interval =
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
               snapshot_data.channel_metadata().channel_configure().heartbeat_retry_interval());
+      if (wal.get_configure().subscriber_heartbeat_retry_interval < std::chrono::seconds{1}) {
+        wal.get_configure().subscriber_heartbeat_retry_interval =
+            std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
+      }
     }
 
     return wal.load(snapshot_data, param);

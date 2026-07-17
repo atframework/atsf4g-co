@@ -137,7 +137,13 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
 
   static void remove_running_io_channel(const mq_channel* channel) noexcept;
 
+  bool is_running_io_busy() const noexcept;
+
+  void add_pending_io_channel(const mq_channel_ptr_type& channel);
+
  private:
+  void compact_pending_io_channels();
+
   // 持久化dirty_channel
   void aysnc_save_dirty_channel();
   // 重新balance聊天频道分布
@@ -158,9 +164,13 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> channel_configure_;
   std::list<mq_channel_ptr_type> pending_io_channels_;
   std::unordered_set<const mq_channel*> running_io_channels_;
+
+  bool iterating_pending_io_channels_;
   bool more_transfer_now_;
   bool is_stoping_;
   bool is_pre_stoping_;
 
   std::chrono::system_clock::time_point report_channel_qty_time_;
+
+  size_t configure_concurrency_io_task_count_;
 };

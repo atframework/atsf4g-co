@@ -1728,8 +1728,8 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
   }
   auto now = atfw::util::time::time_utility::now();
   if (next_init_subscribe_timepoint_ > now) {
-    FWLOGWARNING("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
-                 next_init_subscribe_timepoint_);
+    FWLOGDEBUG("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
+               next_init_subscribe_timepoint_);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
   }
   const auto& dtmq_proxysvr_cfg =
@@ -1739,8 +1739,7 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
 
   int res = async_send_subscribe_to_writable(ctx);
   if (res < 0) {
-    FWLOGERROR("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
-               next_init_subscribe_timepoint_);
+    FWLOGERROR("async_send_subscribe_to_writable failed, result: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
     RPC_RETURN_CODE(res);
   }
 
@@ -1781,7 +1780,9 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   // 必须以最后一条log为准
   if (!wal_client->get_log_manager().get_all_logs().empty()) {
     auto last_iter = wal_client->get_log_manager().get_all_logs().rbegin();
-    if (*last_iter) {
+    int64_t last_sequence = 0;
+    if (last_iter != wal_client->get_log_manager().get_all_logs().rend() && *last_iter) {
+      last_sequence = (*last_iter)->sequence();
       channel_data->set_last_sequence((*last_iter)->sequence());
       channel_data->set_last_hash_code((*last_iter)->hash_code());
     }
@@ -1790,7 +1791,7 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
         logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
     auto& hash_mismatch_data = wal_client->get_private_data().hash_mismatch_data;
-    if (hash_mismatch_data.log_key == (*last_iter)->sequence() &&
+    if (hash_mismatch_data.log_key == last_sequence &&
         hash_mismatch_data.times >= dtmq_proxysvr_cfg.channel_wal_hash_mismatch_need_snapshot_times() &&
         hash_mismatch_data.next_need_snapshot_timestamp <= atfw::util::time::time_utility::now()) {
       channel_data->set_last_sequence(0);
@@ -1811,9 +1812,6 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
       protobuf_from_system_clock(last_writable_notify_readonly_timepoint_);
 
   auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::subscribe(ctx, dtmq_proxysvr_id, *req_body, *rsp_body));
-  if (ret != 0) {
-    RPC_RETURN_CODE(ret);
-  }
 
   bool not_found = false;
   for (const auto& not_found_channel : rsp_body->not_found_channel_ids()) {
@@ -1830,10 +1828,10 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
         set_destroy_message(ctx, atfw::util::time::time_utility::now());
       }
     }
-  } else {
+  } else if (ret >= 0) {
     update_last_writable_notify_time();
   }
-  RPC_RETURN_CODE(0);
+  RPC_RETURN_CODE(ret);
 }
 
 void mq_channel::set_destroy_message(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint) {
@@ -2272,7 +2270,11 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
     if (!is_io_task_running()) {
       last_save_timepoint_ = now;
       auto channel_ptr = shared_from_this();
-      channel_ptr->async_save(ctx);
+      if (mq_channel_manager::me()->is_running_io_busy()) {
+        mq_channel_manager::me()->add_pending_io_channel(channel_ptr);
+      } else {
+        channel_ptr->async_save(ctx);
+      }
     }
   }
 

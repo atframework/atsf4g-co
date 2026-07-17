@@ -67,7 +67,9 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
     // 请求转发
     if (0 != forward_server_id) {
       if (req_body.forward_ttl() > logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
-        rsp_body.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+        FWLOGERROR("forward subscriber {} to server {:#x} failed, forward_ttl {} exceed max_ttl {}",
+                   make_subscriber_key(req_body.subscriber()), forward_server_id, req_body.forward_ttl(),
+                   logic_config::me()->get_logic_cfg().router().transfer_max_ttl());
         continue;
       }
 

@@ -306,8 +306,9 @@ enum EnErrorCode {
   EN_ERR_DTMQ_MESSAGE_NOT_FOUND = -706
                                   [(error_code.description) = "消息未找到"];
   EN_ERR_DTMQ_CHANNEL_LOCK_FAILED = -707
-                                         [(error_code.description) = "频道加锁失败"];
-
+                                    [(error_code.description) = "频道加锁失败"];
+  EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED = -708
+                                                [(error_code.description) = "频道更新成功但保存失败"];
 
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }
