@@ -5,6 +5,7 @@
 
 #include <xxhash.h>
 
+#include <gsl/select-gsl.h>
 #include <string/string_format.h>
 
 // clang-format off

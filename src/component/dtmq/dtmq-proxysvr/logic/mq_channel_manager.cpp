@@ -775,7 +775,8 @@ void mq_channel_manager::resolve_channel_distribution() {
 
   // IO频率控制，不需要很精确，只要不要太密集即可
   iterating_pending_io_channels_ = true;
-  while (iter != pending_io_channels_.end() && running_io_channels_.size() < configure_concurrency_io_task_count_) {
+  while (iter != pending_io_channels_.end() && (configure_concurrency_io_task_count_ <= 0 ||
+                                                running_io_channels_.size() < configure_concurrency_io_task_count_)) {
     if ((*iter)->is_io_task_running()) {
       ++iter;
       continue;

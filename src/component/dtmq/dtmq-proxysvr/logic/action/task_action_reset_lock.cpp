@@ -11,7 +11,6 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/config/dtmq_proxy.config.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 

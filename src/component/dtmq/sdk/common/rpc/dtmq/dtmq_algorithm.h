@@ -5,6 +5,8 @@
 
 #include <config/compile_optimize.h>
 
+#include <gsl/select-gsl.h>
+
 #include <log/log_wrapper.h>
 
 #include <chrono>

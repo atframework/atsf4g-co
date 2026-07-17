@@ -3,7 +3,6 @@
 
 #include "rpc/dtmq/dtmq_client_api.h"
 
-#include <algorithm/murmur_hash.h>
 #include <config/compile_optimize.h>
 
 #include <gsl/select-gsl.h>
@@ -178,7 +177,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
 
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
-    FWLOGDEBUG("get_target_server_id target_server_id is zero. channel_id:({})", channel_key.channel_id());
+    FWLOGDEBUG("No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
 
@@ -214,16 +213,17 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
 
 DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key,
                                                       int64_t sequence, atfw::dtmq::DChannelMessage& msg) {
-  rpc::context::message_holder<atfw::dtmq::SSChannelFindMessageReq> rpc_req_body{ctx};
-  rpc::context::message_holder<atfw::dtmq::SSChannelFindMessageRsp> rpc_rsp_body{ctx};
-
   if (channel_key.channel_id().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
+    FWLOGDEBUG("No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
+
+  rpc::context::message_holder<atfw::dtmq::SSChannelFindMessageReq> rpc_req_body{ctx};
+  rpc::context::message_holder<atfw::dtmq::SSChannelFindMessageRsp> rpc_rsp_body{ctx};
 
   protobuf_copy_message(*rpc_req_body->mutable_channel_key(), channel_key);
   rpc_req_body->set_sequence(sequence);
@@ -243,17 +243,18 @@ DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, const a
 DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
     rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, atfw::dtmq::channel_page_info& page_info,
     google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
-  rpc::context::message_holder<atfw::dtmq::SSChannelQueryMessageReq> rpc_req_body{ctx};
-  rpc::context::message_holder<atfw::dtmq::SSChannelQueryMessageRsp> rpc_rsp_body{ctx};
-
   if (channel_key.channel_id().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
+    FWLOGDEBUG("No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
+
+  rpc::context::message_holder<atfw::dtmq::SSChannelQueryMessageReq> rpc_req_body{ctx};
+  rpc::context::message_holder<atfw::dtmq::SSChannelQueryMessageRsp> rpc_rsp_body{ctx};
 
   protobuf_copy_message(*rpc_req_body->mutable_channel_key(), channel_key);
   protobuf_copy_message(*rpc_req_body->mutable_page_info(), page_info);

@@ -11,7 +11,6 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/config/dtmq_proxy.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -80,7 +79,7 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  res = RPC_AWAIT_CODE_RESULT(channel->destroy(get_shared_context()));
+  res = RPC_AWAIT_CODE_RESULT(channel->destroy(get_shared_context(), std::chrono::system_clock::from_time_t(0), true));
   if (res < 0) {
     FWLOGERROR("destroy mq channel {} failed, res: {}({})", channel_key.channel_id(), res,
                protobuf_mini_dumper_get_error_msg(res));

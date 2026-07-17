@@ -199,11 +199,11 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int32_t async_save(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx);
 
-  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint =
-                                            std::chrono::system_clock::from_time_t(0));
+  void async_destroy(rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint,
+                     bool alloc_destroy_message);
+
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy(
-      rpc::context& ctx,
-      std::chrono::system_clock::time_point writable_remove_timepoint = std::chrono::system_clock::from_time_t(0));
+      rpc::context& ctx, std::chrono::system_clock::time_point writable_remove_timepoint, bool alloc_destroy_message);
 
   /**
    * @brief 确保评到销毁后重新创建时，历史消息已经被清理。移除标记被恢复
@@ -217,7 +217,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   int32_t async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx);
-  void set_destroy_message(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint);
+  void set_destroyed(rpc::context& ctx, std::chrono::system_clock::time_point remove_timepoint,
+                     bool alloc_destroy_message);
 
   int32_t subscribe(rpc::context& ctx, const atfw::dtmq::channel_subscriber& subscriber_info,
                     int64_t last_received_sequence, uint64_t last_received_hash_code, bool merge_mode);
@@ -297,6 +298,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   google::protobuf::Any custom_data_;
   google::protobuf::Any private_data_;
 
+  bool destroyed_message_saved_;
   bool need_remove_ttl_;
   bool is_loading_snapshot_;
   uint64_t dirty_version_;

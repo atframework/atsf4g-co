@@ -35,6 +35,7 @@
 #include <cstring>
 #include <string>
 
+#include "app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.h"
 #include "app/handle_ss_rpc_dtmqproxysvrservice.atfw.gen.h"
 #include "logic/mq_channel_manager.h"
 
@@ -48,6 +49,7 @@ class main_service_module : public atfw::atapp::module_impl {
 
     // register handles
     INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrservice);
+    INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrnotifyservice);
     INIT_CALL(mq_channel_manager);
 
     // 设置依赖，阻止数据库和ss通信模块在chat_channel_manager前退出
