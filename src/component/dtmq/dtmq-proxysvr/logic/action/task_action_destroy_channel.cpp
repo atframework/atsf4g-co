@@ -24,6 +24,7 @@
 
 #include <config/extern_service_types.h>
 
+#include <chrono>
 #include <utility>
 
 #include "data/mq_channel.h"
@@ -51,8 +52,7 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
 
   if (res < 0) {
     // destroy channel时，如果channel不存在视为成功
-    if (res != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND &&
-        res != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL) {
+    if (res != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND) {
       set_response_code(res);
     }
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -85,8 +85,7 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  res = RPC_AWAIT_CODE_RESULT(
-      channel->destroy(get_shared_context(), atfw::util::time::time_utility::now(), channel->alloc_message_sequence()));
+  res = RPC_AWAIT_CODE_RESULT(channel->destroy(get_shared_context(), std::chrono::system_clock::from_time_t(0), 0));
   if (res < 0) {
     FWLOGERROR("destroy mq channel {} failed, res: {}({})", channel_key.channel_id(), res,
                protobuf_mini_dumper_get_error_msg(res));

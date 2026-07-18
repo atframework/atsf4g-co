@@ -217,7 +217,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
   ret->on_log_added = [](wal_object_type& wal, const wal_object_type::log_pointer& log) {
     mq_channel* channel = wal.get_private_data().channel;
     if (nullptr == channel) {
-      return wal_result_code::kOk;
+      return;
     }
 
     // 刷新最后收到的sequence
@@ -226,7 +226,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
     }
 
     channel->set_dirty();
-    return wal_result_code::kOk;
+    return;
   };
 
   ret->on_log_removed = [](wal_object_type& wal, const wal_object_type::log_pointer&) {
@@ -390,10 +390,10 @@ static wal_result_code publisher_send_snapshot(
             if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
                 PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
               // 服务器节点离线，可能是短暂不可用
-              FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+              FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
                            channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
             } else {
-              FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
+              FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
                          channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
               param.result_code.get() = res;
             }
@@ -502,9 +502,16 @@ static wal_result_code publisher_send_logs(
           rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
               rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
           if (0 != res) {
-            FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, res: {}({})",
-                       channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
-            param.result_code.get() = res;
+            if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
+                PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
+              // 服务器节点离线，可能是短暂不可用
+              FWLOGWARNING("mq channel {} send send_logs to server {:#x} failed, result: {}({})",
+                           channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+            } else {
+              FWLOGERROR("mq channel {} send send_logs to server {:#x} failed, result: {}({})",
+                         channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+              param.result_code.get() = res;
+            }
           }
         }
       };
@@ -709,9 +716,7 @@ atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type> create_mq_channel_
 atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> create_mq_channel_publisher(
     mq_channel& channel, const atfw::dtmq::DChannelConfigure& configure) {
   mq_wal_object_private_data_type private_data;
-  private_data.channel = &channel;
-  private_data.hash_mismatch_data =
-      rpc::dtmq::hash_mismatch_subscribe<int64_t>(channel.get_channel_id(), -1, atfw::util::time::time_utility::now());
+  // private_data 不用初始化，会使用 channel.get_shared_wal_object() 里的版本
   return mq_channel_wal_publisher_type::create(channel.get_shared_wal_object(), create_mq_channel_publisher_vtable(),
                                                create_mq_channel_publisher_configure(configure),
                                                std::move(private_data));
@@ -720,9 +725,7 @@ atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> create_mq_chann
 atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> create_mq_channel_client(
     mq_channel& channel, const atfw::dtmq::DChannelConfigure& configure) {
   mq_wal_object_private_data_type private_data;
-  private_data.channel = &channel;
-  private_data.hash_mismatch_data =
-      rpc::dtmq::hash_mismatch_subscribe<int64_t>(channel.get_channel_id(), -1, atfw::util::time::time_utility::now());
+  // private_data 不用初始化，会使用 channel.get_shared_wal_object() 里的版本
   return mq_channel_wal_client_type::create(atfw::util::time::time_utility::now(), channel.get_shared_wal_object(),
                                             create_mq_channel_client_vtable(),
                                             create_mq_channel_client_configure(configure), std::move(private_data));

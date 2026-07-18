@@ -22,6 +22,22 @@
 #include "log/log_wrapper.h"
 #include "protocol/pbdesc/com.const.pb.h"
 
+#if defined(_LIBCPP_VERSION)
+#  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
+#elif !defined(__GLIBCXX__)
+#  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
+#elif defined(__cpluscplus) && (__cplusplus < 201103L)
+#  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 1
+#elif !defined(_GLIBCXX_USE_CXX11_ABI)
+#  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
+#elif defined(_GLIBCXX_USE_CXX11_ABI) && (_GLIBCXX_USE_CXX11_ABI == 0)
+#  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 1
+#endif
+
+#ifndef ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI
+#  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
+#endif
+
 namespace {
 
 constexpr const int32_t kPageQueryDefaultSize = 10;
@@ -175,8 +191,7 @@ int mq_channel_manager::tick() {
 
   // libstdc++ 在非 C++ 11 ABI下，std::list的size()复杂度为O(n)，在 add_pending_io_channel 中调用size()会导致性能问题。
   // 这里走fallack逻辑，仅在tick时低频率检查清理。
-#if !(defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__) || !defined(_GLIBCXX_USE_CXX11_ABI) || \
-      _GLIBCXX_USE_CXX11_ABI == 0)
+#if ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI != 0
   // 迭代过程中不能做清理操作
   if (!iterating_pending_io_channels_ && pending_io_channels_.size() >= channels_.size() * 4) {
     compact_pending_io_channels();
@@ -211,6 +226,7 @@ int mq_channel_manager::stop() {
       }
 
       if (0 != channel.second->get_transfer_target_server_id() || channel.second->need_save_db()) {
+        reactive_io_channels_.erase(channel.second.get());
         pending_io_channels_.push_back(channel.second);
         FWLOGDEBUG("[channel_stop] pending_io_channels_ add channel({})", channel.second->get_channel_id());
       }
@@ -271,6 +287,8 @@ void mq_channel_manager::add_channel(rpc::context& ctx, const mq_channel_ptr_typ
   // 停服阶段，直接transfer
   if (is_stoping()) {
     set_more_transfer();
+
+    reactive_io_channels_.erase(channel.get());
     pending_io_channels_.push_back(channel);
     return;
   }
@@ -558,16 +576,11 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     }
 
     channel_ptr.reset();
-    if (forward_server_id == local_server_id || forward_server_id == 0) {
-      FWLOGWARNING("channel {} server {:#x} is under maintenance, and no more available node now.",
-                   channel_key.channel_id(), forward_server_id);
-      forward_server_id = 0;
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAINTENANCE);
+    if (forward_server_id != local_server_id && forward_server_id != 0) {
+      FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
+                 forward_server_id);
+      RPC_RETURN_CODE(0);
     }
-
-    FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
-               forward_server_id);
-    RPC_RETURN_CODE(0);
   } while (false);
 
   if (!mq_channel::should_be_readonly_or_get_server_id(channel_key, forward_server_id, replicate_index)) {
@@ -705,6 +718,21 @@ void mq_channel_manager::remove_running_io_channel(const mq_channel* channel) no
   auto inst = mq_channel_manager::me();
   inst->running_io_channels_.erase(channel);
 
+  auto reactive_iter = inst->reactive_io_channels_.find(channel);
+  if (reactive_iter != inst->reactive_io_channels_.end()) {
+    auto channel_ptr = inst->get_channel(channel->get_channel_id());
+
+    // 重新激活IO
+    if (channel_ptr && channel_ptr.get() == channel) {
+      // 仅仅保存操作或正在进程退出需要立刻执行，其他的延后执行也没关系
+      if (channel_ptr->is_writable() && (channel_ptr->need_save_db() || inst->is_stoping_)) {
+        inst->pending_io_channels_.push_back(channel_ptr);
+      }
+    }
+
+    inst->reactive_io_channels_.erase(reactive_iter);
+  }
+
   if (inst->configure_concurrency_io_task_count_ > 0 && !inst->pending_io_channels_.empty() &&
       inst->running_io_channels_.size() < inst->configure_concurrency_io_task_count_) {
     inst->set_more_transfer();
@@ -725,7 +753,7 @@ void mq_channel_manager::add_pending_io_channel(const mq_channel_ptr_type& chann
 
   // libstdc++ 在非 C++ 11 ABI下，std::list的size()复杂度为O(n)，在 add_pending_io_channel 中调用size()会导致性能问题。
   // 这种情况下避免每次都调用size()，而转到tick时执行压缩。
-#if defined(_LIBCPP_VERSION) || !defined(__GLIBCXX__) || !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
+#if ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI == 0
   // 迭代过程中不能做清理操作
   if (!iterating_pending_io_channels_ && pending_io_channels_.size() >= channels_.size() * 4) {
     compact_pending_io_channels();
@@ -784,7 +812,12 @@ void mq_channel_manager::resolve_channel_distribution() {
   while (iter != pending_io_channels_.end() && (configure_concurrency_io_task_count_ <= 0 ||
                                                 running_io_channels_.size() < configure_concurrency_io_task_count_)) {
     if ((*iter)->is_io_task_running()) {
-      ++iter;
+      if (running_io_channels_.count((*iter).get()) > 0) {
+        reactive_io_channels_.insert((*iter).get());
+        iter = pending_io_channels_.erase(iter);
+      } else {
+        ++iter;
+      }
       continue;
     }
 
@@ -797,10 +830,19 @@ void mq_channel_manager::resolve_channel_distribution() {
       FWLOGDEBUG("channel({}) async_start_transfer, is_stoping: {}", (*iter)->get_channel_id(), is_stoping_);
       // 只读频道也需要转移数据，不过失败也没关系。下次拉取会从writable节点恢复数据，
       // 最多订阅者通知要等下次心跳恢复。即故障时不影响数据正确，只是会造成延迟。
-      (*iter)->async_start_transfer(ctx, (*iter)->get_transfer_target_server_id());
+      bool transfer_failed = (*iter)->async_start_transfer(ctx, (*iter)->get_transfer_target_server_id()) < 0;
+      // 停服时要尽快重试，其他情况下次定时器触发重试即可
+      if (transfer_failed && is_stoping_) {
+        need_retry = true;
+      }
     }
 
-    if ((*iter)->is_io_task_running() || need_retry) {
+    if ((*iter)->is_io_task_running()) {
+      iter = pending_io_channels_.erase(iter);
+      continue;
+    }
+
+    if (need_retry) {
       ++iter;
     } else {
       iter = pending_io_channels_.erase(iter);

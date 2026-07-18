@@ -164,6 +164,7 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   std::unordered_map<uint32_t, atfw::dtmq::DChannelConfigure> channel_configure_;
   std::list<mq_channel_ptr_type> pending_io_channels_;
   std::unordered_set<const mq_channel*> running_io_channels_;
+  std::unordered_set<const mq_channel*> reactive_io_channels_;
 
   bool iterating_pending_io_channels_;
   bool more_transfer_now_;
