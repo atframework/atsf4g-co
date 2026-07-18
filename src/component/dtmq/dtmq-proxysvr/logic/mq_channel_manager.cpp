@@ -150,7 +150,7 @@ int mq_channel_manager::tick() {
   auto now_tick = chrono_to_timer_tick(now);
   if (last_tick == now_tick) {
     if (more_transfer_now_) {
-      resolve_channel_distribution();
+      resolve_channel_io();
     }
     return ret;
   }
@@ -181,7 +181,7 @@ int mq_channel_manager::tick() {
     stop();
   }
 
-  resolve_channel_distribution();
+  resolve_channel_io();
 
   // 如果Hpa模块不处于target集群，则需要触发pre_stoping逻辑，确保在节点下线前数据迁移到其他节点或触发保存
   // 用 !channels_.empty() 确保如果收到老数据，节点未就绪前不会触发pre_stoping逻辑。channel未空时也不需要转移或保存数据
@@ -273,6 +273,11 @@ rpc::result_code_type mq_channel_manager::create_channel(rpc::context& ctx, mq_c
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }
     add_channel(ctx, channel);
+  }
+
+  // 刷新分布计算
+  if (channel) {
+    channel->force_refresh_distribution();
   }
 
   // 拉取数据托管给, writable_init/readonly_init
@@ -776,7 +781,7 @@ void mq_channel_manager::compact_pending_io_channels() {
   pending_io_channels_.swap(new_pending_io_channels);
 }
 
-void mq_channel_manager::resolve_channel_distribution() {
+void mq_channel_manager::resolve_channel_io() {
   // 检查所有的channel，转移数据
   if (!is_stoping_ && pending_transfer_.start_time != std::chrono::system_clock::from_time_t(0) &&
       util::time::time_utility::sys_now() >= pending_transfer_.start_time) {
@@ -811,6 +816,7 @@ void mq_channel_manager::resolve_channel_distribution() {
 
   // IO频率控制，不需要很精确，只要不要太密集即可
   iterating_pending_io_channels_ = true;
+  uint64_t local_server_id = logic_config::me()->get_local_server_id();
   while (iter != pending_io_channels_.end() && (configure_concurrency_io_task_count_ <= 0 ||
                                                 running_io_channels_.size() < configure_concurrency_io_task_count_)) {
     if ((*iter)->is_io_task_running()) {
@@ -840,8 +846,11 @@ void mq_channel_manager::resolve_channel_distribution() {
     }
 
     if ((*iter)->is_io_task_running()) {
-      // 停服时要尽快再检查一次，这样失败了能够重试。失败太多次则强制中断，防止雪崩。
-      if (is_stoping_ && !(*iter)->is_io_task_too_many_continue_failed()) {
+      uint64_t target_server_id = (*iter)->get_transfer_target_server_id();
+      bool need_transfer = target_server_id != 0 && target_server_id != local_server_id;
+      // 停服时和需要转移时可以尽快再检查一次，这样失败了能够重试。
+      // 失败太多次则强制中断，防止雪崩。
+      if ((is_stoping_ || need_transfer) && !(*iter)->is_io_task_too_many_continue_failed()) {
         reactive_io_channels_.insert((*iter).get());
       }
       iter = pending_io_channels_.erase(iter);

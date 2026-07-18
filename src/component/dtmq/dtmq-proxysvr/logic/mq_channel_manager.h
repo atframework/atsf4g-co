@@ -147,7 +147,7 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
   // 持久化dirty_channel
   void aysnc_save_dirty_channel();
   // 重新balance聊天频道分布
-  void resolve_channel_distribution();
+  void resolve_channel_io();
 
   void report_channel_qty_oss();
 

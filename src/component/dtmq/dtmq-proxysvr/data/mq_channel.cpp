@@ -1247,7 +1247,11 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mq_channel::await_transfer(rp
 
   async_start_transfer(ctx, transfer_to_server_id);
 
-  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
+  int32_t task_result = 0;
+  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, &task_result));
+  if (ret >= 0 && task_result < 0) {
+    ret = task_result;
+  }
   RPC_RETURN_CODE(ret);
 }
 
@@ -1732,6 +1736,8 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   if (record->channel_metadata().destroy_timepoint().seconds() > 0 &&
       atfw::util::time::time_utility::now() >=
           protobuf_to_system_clock(record->channel_metadata().destroy_timepoint())) {
+    // 失效重新创建的话需要清除掉TTL，不然会导致被删除
+    need_remove_ttl_ = true;
     record->Clear();
   }
 
