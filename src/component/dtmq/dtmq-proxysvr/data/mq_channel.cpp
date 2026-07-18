@@ -1245,9 +1245,11 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mq_channel::await_transfer(rp
     RPC_RETURN_CODE(0);
   }
 
-  async_start_transfer(ctx, transfer_to_server_id);
+  int32_t task_result = async_start_transfer(ctx, transfer_to_server_id);
+  if (task_result < 0) {
+    RPC_RETURN_CODE(task_result);
+  }
 
-  int32_t task_result = 0;
   rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, &task_result));
   if (ret >= 0 && task_result < 0) {
     ret = task_result;
@@ -1378,6 +1380,10 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
           } else if (!self_ptr->should_be_writable()) {
             self_ptr->downgrade_to_none();
           }
+        }
+
+        if (result >= 0 && !is_transfer_success) {
+          result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_TRANSFER_FAILED;
         }
 
         if (!mq_channel_manager::is_instance_destroyed()) {
