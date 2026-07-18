@@ -195,6 +195,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   bool is_io_task_running() const noexcept;
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx, int32_t* task_result = nullptr);
 
+  bool is_io_task_too_many_continue_failed() const noexcept;
+
   int32_t async_start_transfer(rpc::context& ctx, uint64_t target_server_id);
 
   int32_t async_save(rpc::context& ctx);
@@ -328,6 +330,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_publisher_type> wal_publisher_;
   atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> wal_client_;
 
+  uint64_t io_task_continue_failed_;
   mutable task_type_trait::task_type io_task_;
   mutable task_type_trait::task_type subscribe_task_;
 

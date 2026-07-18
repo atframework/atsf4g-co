@@ -26,7 +26,7 @@
 #  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
 #elif !defined(__GLIBCXX__)
 #  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
-#elif defined(__cpluscplus) && (__cplusplus < 201103L)
+#elif defined(__cplusplus) && (__cplusplus < 201103L)
 #  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 1
 #elif !defined(_GLIBCXX_USE_CXX11_ABI)
 #  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
@@ -724,8 +724,10 @@ void mq_channel_manager::remove_running_io_channel(const mq_channel* channel) no
 
     // 重新激活IO
     if (channel_ptr && channel_ptr.get() == channel) {
-      // 仅仅保存操作或正在进程退出需要立刻执行，其他的延后执行也没关系
-      if (channel_ptr->is_writable() && (channel_ptr->need_save_db() || inst->is_stoping_)) {
+      // 仅仅保存操作或正在进程退出需要立刻执行，其他的延后执行也没关系。
+      // 失败太多次则强制中断，防止雪崩。
+      if (channel_ptr->is_writable() && (channel_ptr->need_save_db() || inst->is_stoping_) &&
+          !channel_ptr->is_io_task_too_many_continue_failed()) {
         inst->pending_io_channels_.push_back(channel_ptr);
       }
     }
@@ -838,6 +840,10 @@ void mq_channel_manager::resolve_channel_distribution() {
     }
 
     if ((*iter)->is_io_task_running()) {
+      // 停服时要尽快再检查一次，这样失败了能够重试。失败太多次则强制中断，防止雪崩。
+      if (is_stoping_ && !(*iter)->is_io_task_too_many_continue_failed()) {
+        reactive_io_channels_.insert((*iter).get());
+      }
       iter = pending_io_channels_.erase(iter);
       continue;
     }

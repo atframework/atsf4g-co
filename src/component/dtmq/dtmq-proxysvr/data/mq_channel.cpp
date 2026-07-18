@@ -52,6 +52,8 @@
 #endif
 
 namespace {
+constexpr const int32_t kMaxIoTaskContinueFailed = 5;
+
 static atfw::util::distributed_system::wal_duration get_mq_channel_ttl() {
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
@@ -113,6 +115,7 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
       dirty_version_(0),
       saved_version_(0),
       saved_sequence_(0),
+      io_task_continue_failed_(0),
       resolved_transfer_etcd_revision_(0),
       server_distribution_etcd_revision_(0) {
   protobuf_copy_message(channel_key_, channel_key);
@@ -579,6 +582,11 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
         }
 
         self_ptr->last_result_code_ = ret;
+        if (ret >= 0) {
+          self_ptr->io_task_continue_failed_ = 0;
+        } else {
+          ++self_ptr->io_task_continue_failed_;
+        }
         RPC_RETURN_CODE(ret);
       });
 
@@ -656,6 +664,11 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
           task_type_trait::reset_task(self_ptr->subscribe_task_);
         }
 
+        if (ret >= 0) {
+          self_ptr->io_task_continue_failed_ = 0;
+        } else {
+          ++self_ptr->io_task_continue_failed_;
+        }
         RPC_RETURN_CODE(ret);
       });
 
@@ -1307,6 +1320,10 @@ rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx, int32_t* task
   RPC_RETURN_CODE(ret);
 }
 
+bool mq_channel::is_io_task_too_many_continue_failed() const noexcept {
+  return io_task_continue_failed_ >= kMaxIoTaskContinueFailed;
+}
+
 int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_server_id) {
   if (is_io_task_running()) {
     return 0;
@@ -1368,12 +1385,19 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
           mq_channel_manager::remove_running_io_channel(self_ptr.get());
         }
 
+        if (result >= 0) {
+          self_ptr->io_task_continue_failed_ = 0;
+        } else {
+          ++self_ptr->io_task_continue_failed_;
+        }
+
         RPC_RETURN_CODE(result);
       });
 
   if (invoke_result.is_error()) {
     FWLOGERROR("mq channel {} transfer: create task failed.res: {}({})", get_channel_id(), *invoke_result.get_error(),
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    ++io_task_continue_failed_;
     return *invoke_result.get_error();
   }
 
@@ -1383,7 +1407,11 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
       mq_channel_manager::insert_running_io_channel(this);
     } else {
       // 直接结束了就返回任务的结果
-      return task_type_trait::get_result(*invoke_result.get_success());
+      int32_t result = task_type_trait::get_result(*invoke_result.get_success());
+      if (result < 0) {
+        ++io_task_continue_failed_;
+      }
+      return result;
     }
   }
 
@@ -1421,6 +1449,7 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
           if (ret < 0) {
             FWLOGERROR("rpc::db::dtmq_channel_record::remove_ttl faild, channel_id:{}, ret:{}({})",
                        self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
+            ++self_ptr->io_task_continue_failed_;
             RPC_RETURN_CODE(ret);
           }
           self_ptr->need_remove_ttl_ = false;
@@ -1438,11 +1467,13 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
         if (ret < 0) {
           FWLOGERROR("rpc::db::dtmq_channel_record::replace faild, channel_id:{}, ret:{}({})",
                      self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
+          ++self_ptr->io_task_continue_failed_;
           RPC_RETURN_CODE(ret);
         }
 
         self_ptr->saved_version_ = saved_version;
         self_ptr->saved_sequence_ = saved_sequence;
+        self_ptr->io_task_continue_failed_ = 0;
 
         FWLOGDEBUG("rpc::db::dtmq_channel_record::replace channel:{}, ret:{}({})", self_ptr->get_channel_id(), ret,
                    protobuf_mini_dumper_get_error_msg(ret));
@@ -1496,15 +1527,21 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
   if (invoke_result.is_error()) {
     FWLOGERROR("mq channel {} save: create task failed.result: {}({})", get_channel_id(), *invoke_result.get_error(),
                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    ++io_task_continue_failed_;
     return *invoke_result.get_error();
   }
+
   if (invoke_result.is_success()) {
     if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
       io_task_ = *invoke_result.get_success();
       mq_channel_manager::insert_running_io_channel(this);
     } else {
       // 直接结束了就返回任务的结果
-      return task_type_trait::get_result(*invoke_result.get_success());
+      int32_t result = task_type_trait::get_result(*invoke_result.get_success());
+      if (result < 0) {
+        ++io_task_continue_failed_;
+      }
+      return result;
     }
   }
 
@@ -1610,11 +1647,17 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx, std::chrono::system
             std::chrono::duration_cast<std::chrono::seconds>(self_ptr->destroy_timepoint_ + get_mq_channel_ttl() -
                                                              atfw::util::time::time_utility::now())
                 .count();
+
+        int32_t result = 0;
         if (ttl_seconds > 0) {
-          RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::set_ttl(child_ctx, self_ptr->get_channel_id(),
-                                                                        static_cast<uint64_t>(ttl_seconds)));
+          result = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::set_ttl(child_ctx, self_ptr->get_channel_id(),
+                                                                               static_cast<uint64_t>(ttl_seconds)));
         } else {
-          RPC_AWAIT_IGNORE_RESULT(rpc::db::dtmq_channel_record::remove_all(child_ctx, self_ptr->get_channel_id()));
+          result =
+              RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::remove_all(child_ctx, self_ptr->get_channel_id()));
+        }
+        if (result == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+          result = 0;
         }
 
         // 销毁频道不能降级，要让后续的查询能够正确返回销毁信息
@@ -1623,6 +1666,12 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx, std::chrono::system
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
           mq_channel_manager::remove_running_io_channel(self_ptr.get());
+        }
+
+        if (result >= 0) {
+          self_ptr->io_task_continue_failed_ = 0;
+        } else {
+          ++self_ptr->io_task_continue_failed_;
         }
         RPC_RETURN_CODE(0);
       });
@@ -1884,10 +1933,8 @@ void mq_channel::set_destroyed(rpc::context& ctx, std::chrono::system_clock::tim
         protobuf_from_system_clock(atfw::util::time::time_utility::now());
     wal_publisher_->emplace_back_log(std::move(message), params);
     FWLOGINFO("mq channel {} set_destroyed, destroy_timepoint: {}, destroy_sequence: {}", get_channel_id(),
-              std::chrono::duration_cast<std::chrono::seconds>(
-                  protobuf_to_system_clock(message->detail().destroy().removed_timepoint()).time_since_epoch())
-                  .count(),
-              destroy_sequence);
+              std::chrono::duration_cast<std::chrono::seconds>(destroy_timepoint_.time_since_epoch()).count(),
+              destroy_sequence_);
 
     set_dirty();
   } else {
@@ -1944,10 +1991,8 @@ void mq_channel::set_created(rpc::context& ctx, std::chrono::system_clock::time_
         protobuf_from_system_clock(atfw::util::time::time_utility::now());
     wal_publisher_->emplace_back_log(std::move(message), params);
     FWLOGINFO("mq channel {} set_created, create_timepoint: {}, create_sequence: {}", get_channel_id(),
-              std::chrono::duration_cast<std::chrono::seconds>(
-                  protobuf_to_system_clock(message->detail().create().create_timepoint()).time_since_epoch())
-                  .count(),
-              create_sequence);
+              std::chrono::duration_cast<std::chrono::seconds>(create_timepoint_.time_since_epoch()).count(),
+              create_sequence_);
 
     set_dirty();
   } else {
