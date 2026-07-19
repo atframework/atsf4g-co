@@ -348,13 +348,13 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
   if (channel_ptr) {
     auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->await_transfer(ctx, forward_server_id));
     if (result < 0) {
-      FWLOGERROR("channel {} await transfer failed. result: {}({})", channel_key.channel_id(), result,
-                 protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGERROR(ctx, "channel {} await transfer failed. result: {}({})", channel_key.channel_id(), result,
+                   protobuf_mini_dumper_get_error_msg(result));
       RPC_RETURN_CODE(result);
     }
 
     if (channel_ptr->is_writable()) {
-      FWLOGDEBUG("channel {} select existed writable channel", channel_key.channel_id());
+      FCTXLOGDEBUG(ctx, "channel {} select existed writable channel", channel_key.channel_id());
       forward_server_id = 0;
 
       if (auto_create) {
@@ -365,8 +365,8 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
 
     channel_ptr.reset();
     if (0 != forward_server_id) {
-      FWLOGDEBUG("channel {} should transfer writable message to server {:#x}", channel_key.channel_id(),
-                 forward_server_id);
+      FCTXLOGDEBUG(ctx, "channel {} should transfer writable message to server {:#x}", channel_key.channel_id(),
+                   forward_server_id);
       RPC_RETURN_CODE(0);
     }
   }
@@ -377,31 +377,32 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
   if (!mq_channel::should_be_writable_or_get_server_id(channel_key, forward_server_id)) {
     // 判定writable副本为本机，但本机又不能成为writable副本。说明本机正在被关闭
     if (forward_server_id == local_server_id || forward_server_id == 0) {
-      FWLOGWARNING("channel {} server {:#x} is under maintenance, and no more available node now.",
-                   channel_key.channel_id(), forward_server_id);
+      FCTXLOGWARNING(ctx, "channel {} server {:#x} is under maintenance, and no more available node now.",
+                     channel_key.channel_id(), forward_server_id);
       forward_server_id = 0;
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAINTENANCE);
     }
 
-    FWLOGDEBUG("channel {} should transfer writable message to server {:#x}", channel_key.channel_id(),
-               forward_server_id);
+    FCTXLOGDEBUG(ctx, "channel {} should transfer writable message to server {:#x}", channel_key.channel_id(),
+                 forward_server_id);
     RPC_RETURN_CODE(0);
   }
 
   auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_configure) {
-    FWLOGWARNING("channel {} configure of type {} not found.", channel_key.channel_id(), channel_key.channel_type());
+    FCTXLOGWARNING(ctx, "channel {} configure of type {} not found.", channel_key.channel_id(),
+                   channel_key.channel_type());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
   auto result = RPC_AWAIT_CODE_RESULT(create_channel(ctx, channel_ptr, channel_key, *channel_configure));
   if (result < 0) {
-    FWLOGERROR("channel {} create failed with result {}({}).", channel_key.channel_id(), result,
-               protobuf_mini_dumper_get_error_msg(result));
+    FCTXLOGERROR(ctx, "channel {} create failed with result {}({}).", channel_key.channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (!channel_ptr) {
-    FWLOGERROR("channel {} create failed with unknown reason.", channel_key.channel_id());
+    FCTXLOGERROR(ctx, "channel {} create failed with unknown reason.", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
@@ -410,20 +411,20 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
     result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx));
     if (result < 0) {
       if (auto_create || result != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND) {
-        FWLOGERROR("channel {} writable init failed with result {}({}).", channel_key.channel_id(), result,
-                   protobuf_mini_dumper_get_error_msg(result));
+        FCTXLOGERROR(ctx, "channel {} writable init failed with result {}({}).", channel_key.channel_id(), result,
+                     protobuf_mini_dumper_get_error_msg(result));
       }
       RPC_RETURN_CODE(result);
     }
   }
 
   if (!channel_ptr->is_writable() || channel_ptr != get_channel(channel_key.channel_id())) {
-    FWLOGERROR("channel {} writable init failed with unknown reason. maybe concurrency conflict",
-               channel_key.channel_id());
+    FCTXLOGERROR(ctx, "channel {} writable init failed with unknown reason. maybe concurrency conflict",
+                 channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
-  FWLOGDEBUG("channel {} is created and writable inited successfully", channel_key.channel_id());
+  FCTXLOGDEBUG(ctx, "channel {} is created and writable inited successfully", channel_key.channel_id());
   if (auto_create) {
     channel_ptr->ensure_recreate_after_destroyed(ctx);
   }
@@ -443,21 +444,21 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
   if (channel_ptr) {
     auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->await_transfer(ctx, forward_server_id));
     if (result < 0) {
-      FWLOGERROR("channel {} await transfer failed. result: {}({})", channel_key.channel_id(), result,
-                 protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGERROR(ctx, "channel {} await transfer failed. result: {}({})", channel_key.channel_id(), result,
+                   protobuf_mini_dumper_get_error_msg(result));
       RPC_RETURN_CODE(result);
     }
 
     if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
-      FWLOGDEBUG("channel {} select existed readonly/writable channel", channel_key.channel_id());
+      FCTXLOGDEBUG(ctx, "channel {} select existed readonly/writable channel", channel_key.channel_id());
       forward_server_id = 0;
       RPC_RETURN_CODE(0);
     }
 
     channel_ptr.reset();
     if (0 != forward_server_id) {
-      FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
-                 forward_server_id);
+      FCTXLOGDEBUG(ctx, "channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
+                   forward_server_id);
       RPC_RETURN_CODE(0);
     }
   }
@@ -474,14 +475,14 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
   if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
     // 判定无只读副本，可写副本为本机，但本机又不能成为可写副本。说明本机正在被关闭
     if (forward_server_id == local_server_id || forward_server_id == 0) {
-      FWLOGWARNING("channel {} server {:#x} is under maintenance, and no more available node now.",
-                   channel_key.channel_id(), forward_server_id);
+      FCTXLOGWARNING(ctx, "channel {} server {:#x} is under maintenance, and no more available node now.",
+                     channel_key.channel_id(), forward_server_id);
       forward_server_id = 0;
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAINTENANCE);
     }
 
-    FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
-               forward_server_id);
+    FCTXLOGDEBUG(ctx, "channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
+                 forward_server_id);
     RPC_RETURN_CODE(0);
   }
 
@@ -489,57 +490,58 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
   if (!mq_channel::should_be_readonly_or_random_server_id(channel_key, readonly_replicate_index, forward_server_id)) {
     // 判定只读副本为本机，但本机又不能成为只读副本。说明本机正在被关闭
     if (forward_server_id == local_server_id || forward_server_id == 0) {
-      FWLOGWARNING("channel {} server {:#x} is under maintenance, and no more available node now.",
-                   channel_key.channel_id(), forward_server_id);
+      FCTXLOGWARNING(ctx, "channel {} server {:#x} is under maintenance, and no more available node now.",
+                     channel_key.channel_id(), forward_server_id);
       forward_server_id = 0;
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAINTENANCE);
     }
 
-    FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
-               forward_server_id);
+    FCTXLOGDEBUG(ctx, "channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
+                 forward_server_id);
     RPC_RETURN_CODE(0);
   }
 
   // 创建频道
   auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_configure) {
-    FWLOGERROR("channel {} configure of type {} not found.", channel_key.channel_id(), channel_key.channel_type());
+    FCTXLOGERROR(ctx, "channel {} configure of type {} not found.", channel_key.channel_id(),
+                 channel_key.channel_type());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
   auto result = RPC_AWAIT_CODE_RESULT(create_channel(ctx, channel_ptr, channel_key, *channel_configure));
   if (result < 0) {
-    FWLOGERROR("channel {} create failed with result {}({}).", channel_key.channel_id(), result,
-               protobuf_mini_dumper_get_error_msg(result));
+    FCTXLOGERROR(ctx, "channel {} create failed with result {}({}).", channel_key.channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (!channel_ptr) {
-    FWLOGERROR("channel {} create failed with unknown reason.", channel_key.channel_id());
+    FCTXLOGERROR(ctx, "channel {} create failed with unknown reason.", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
   // 已拉取完数据，直接返回
   if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
-    FWLOGDEBUG("channel {} is created and inited successfully", channel_key.channel_id());
+    FCTXLOGDEBUG(ctx, "channel {} is created and inited successfully", channel_key.channel_id());
     RPC_RETURN_CODE(0);
   }
 
   // 尝试提升为可读
   result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx, readonly_replicate_index));
   if (result < 0) {
-    FWLOGERROR("channel {} readonly init failed with result {}({}).", channel_key.channel_id(), result,
-               protobuf_mini_dumper_get_error_msg(result));
+    FCTXLOGERROR(ctx, "channel {} readonly init failed with result {}({}).", channel_key.channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
 
   // 只读频道数据短暂不一致也没关系，顶多稍微落后一点，订阅后续也会自动恢复
   if (!channel_ptr->is_writable() && !channel_ptr->is_readonly()) {
-    FWLOGERROR("channel {} readonly init failed with unknown reason. maybe concurrency conflict",
-               channel_key.channel_id());
+    FCTXLOGERROR(ctx, "channel {} readonly init failed with unknown reason. maybe concurrency conflict",
+                 channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
-  FWLOGDEBUG("channel {} is created and readonly inited successfully", channel_key.channel_id());
+  FCTXLOGDEBUG(ctx, "channel {} is created and readonly inited successfully", channel_key.channel_id());
   RPC_RETURN_CODE(0);
 }
 
@@ -565,8 +567,8 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
 
     auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->await_transfer(ctx, forward_server_id));
     if (result < 0) {
-      FWLOGERROR("channel {} await transfer failed. result: {}({})", channel_key.channel_id(), result,
-                 protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGERROR(ctx, "channel {} await transfer failed. result: {}({})", channel_key.channel_id(), result,
+                   protobuf_mini_dumper_get_error_msg(result));
       RPC_RETURN_CODE(result);
     }
 
@@ -574,16 +576,16 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     // 这里的作用是获取replicate_index对应的可以用于只读数据的节点，writable节点也可以作为只读节点的
     forward_server_id = channel_ptr->get_target_distribution_server_id(replicate_index);
     if ((channel_ptr->is_readonly() || channel_ptr->is_writable()) && local_server_id == forward_server_id) {
-      FWLOGDEBUG("channel {} select existed readonly channel with replicate_index {}", channel_key.channel_id(),
-                 replicate_index);
+      FCTXLOGDEBUG(ctx, "channel {} select existed readonly channel with replicate_index {}", channel_key.channel_id(),
+                   replicate_index);
       forward_server_id = 0;
       RPC_RETURN_CODE(0);
     }
 
     channel_ptr.reset();
     if (forward_server_id != local_server_id && forward_server_id != 0) {
-      FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
-                 forward_server_id);
+      FCTXLOGDEBUG(ctx, "channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
+                   forward_server_id);
       RPC_RETURN_CODE(0);
     }
   } while (false);
@@ -592,56 +594,57 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     // 判定只读副本为本机，但本机又不能成为只读副本。说明本机正在被关闭
     if (forward_server_id == local_server_id || forward_server_id == 0) {
       forward_server_id = 0;
-      FWLOGWARNING("channel {} server {:#x} is under maintenance, and no more available node now.",
-                   channel_key.channel_id(), forward_server_id);
+      FCTXLOGWARNING(ctx, "channel {} server {:#x} is under maintenance, and no more available node now.",
+                     channel_key.channel_id(), forward_server_id);
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_MAINTENANCE);
     }
 
-    FWLOGDEBUG("channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
-               forward_server_id);
+    FCTXLOGDEBUG(ctx, "channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
+                 forward_server_id);
     RPC_RETURN_CODE(0);
   }
 
   // 创建频道
   auto channel_configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_configure) {
-    FWLOGERROR("channel {} configure of type {} not found.", channel_key.channel_id(), channel_key.channel_type());
+    FCTXLOGERROR(ctx, "channel {} configure of type {} not found.", channel_key.channel_id(),
+                 channel_key.channel_type());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
   auto result = RPC_AWAIT_CODE_RESULT(create_channel(ctx, channel_ptr, channel_key, *channel_configure));
   if (result < 0) {
-    FWLOGERROR("channel {} create failed with result {}({}).", channel_key.channel_id(), result,
-               protobuf_mini_dumper_get_error_msg(result));
+    FCTXLOGERROR(ctx, "channel {} create failed with result {}({}).", channel_key.channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (!channel_ptr) {
-    FWLOGERROR("channel {} create failed with unknown reason.", channel_key.channel_id());
+    FCTXLOGERROR(ctx, "channel {} create failed with unknown reason.", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
   // 已拉取完数据，直接返回
   if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
-    FWLOGDEBUG("channel {} is created and inited successfully", channel_key.channel_id());
+    FCTXLOGDEBUG(ctx, "channel {} is created and inited successfully", channel_key.channel_id());
     RPC_RETURN_CODE(0);
   }
 
   // 尝试提升为可读
   result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx, replicate_index));
   if (result < 0) {
-    FWLOGERROR("channel {} readonly init failed with result {}({}).", channel_key.channel_id(), result,
-               protobuf_mini_dumper_get_error_msg(result));
+    FCTXLOGERROR(ctx, "channel {} readonly init failed with result {}({}).", channel_key.channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
 
   // 只读频道数据短暂不一致也没关系，顶多稍微落后一点，订阅后续也会自动恢复
   if (!channel_ptr->is_writable() && !channel_ptr->is_readonly()) {
-    FWLOGERROR("channel {} readonly init failed with unknown reason. maybe concurrency conflict",
-               channel_key.channel_id());
+    FCTXLOGERROR(ctx, "channel {} readonly init failed with unknown reason. maybe concurrency conflict",
+                 channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
-  FWLOGDEBUG("channel {} is created and readonly inited successfully", channel_key.channel_id());
+  FCTXLOGDEBUG(ctx, "channel {} is created and readonly inited successfully", channel_key.channel_id());
   RPC_RETURN_CODE(0);
 }
 
@@ -698,11 +701,12 @@ rpc::result_code_type mq_channel_manager::page_query_message(
     ++iter;
   }
 
-  if (iter != log_mgr.log_end()) {
-    page_info.set_page_more(true);
-  } else {
-    page_info.set_page_more(false);
+  // 跳过末尾的空洞(已被移除的日志)，避免在无更多真实消息时误报 page_more
+  while (iter != log_mgr.log_end() && !*iter) {
+    ++iter;
   }
+
+  page_info.set_page_more(iter != log_mgr.log_end());
 
   RPC_RETURN_CODE(0);
 }
@@ -832,10 +836,10 @@ void mq_channel_manager::resolve_channel_io() {
     // 正在退出时，优先保存数据到DB，避免数据丢失。其他情况仅仅定时保存，这里transfer即可。
     bool need_retry = false;
     if (is_stoping_ && (*iter)->need_save_db() && !(*iter)->get_configure().memory_only()) {
-      FWLOGDEBUG("channel({}) async_save when is_stoping_", (*iter)->get_channel_id());
+      FCTXLOGDEBUG(ctx, "channel({}) async_save when is_stoping_", (*iter)->get_channel_id());
       need_retry = (*iter)->async_save(ctx) < 0;
     } else {
-      FWLOGDEBUG("channel({}) async_start_transfer, is_stoping: {}", (*iter)->get_channel_id(), is_stoping_);
+      FCTXLOGDEBUG(ctx, "channel({}) async_start_transfer, is_stoping: {}", (*iter)->get_channel_id(), is_stoping_);
       // 只读频道也需要转移数据，不过失败也没关系。下次拉取会从writable节点恢复数据，
       // 最多订阅者通知要等下次心跳恢复。即故障时不影响数据正确，只是会造成延迟。
       bool transfer_failed = (*iter)->async_start_transfer(ctx, (*iter)->get_transfer_target_server_id()) < 0;

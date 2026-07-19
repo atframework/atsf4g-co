@@ -68,8 +68,8 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
   if (req_body.has_compare_and_maybe_reset_lock() &&
       !channel->compare_and_maybe_reset_lock(get_shared_context(), *req_body.mutable_compare_and_maybe_reset_lock(),
                                              true)) {
-    FWLOGDEBUG("channel {} ignore update custom data because lock failed:\n{}", req_body.channel_key().channel_id(),
-               req_body.compare_and_maybe_reset_lock().DebugString());
+    FCTXLOGDEBUG(get_shared_context(), "channel {} ignore update custom data because lock failed:\n{}",
+                 req_body.channel_key().channel_id(), req_body.compare_and_maybe_reset_lock().DebugString());
 
     protobuf_copy_message(*rsp_body.mutable_compare_and_maybe_reset_lock(), req_body.compare_and_maybe_reset_lock());
 
@@ -116,7 +116,8 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
       // 重置一下custom_data_sequence，确保如果只有这一条log，custom_data也能下发
       channel->reset_custom_data_sequence();
     } else {
-      FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
+      FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed",
+                   req_body.channel_key().channel_id());
     }
   } else if (has_changed_private_data || has_changed_custom_data) {
     mq_channel_wal_object_context param{get_shared_context(), result};
@@ -134,7 +135,8 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
     if (message) {
       channel->get_wal_publisher().emplace_back_log(std::move(message), param);
     } else {
-      FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
+      FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed",
+                   req_body.channel_key().channel_id());
     }
   }
 
@@ -177,8 +179,9 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
 
     int32_t save_io_result = channel->async_save(get_shared_context());
     if (save_io_result < 0) {
-      FWLOGERROR("channel {} save failed with result {}({}), will retry", req_body.channel_key().channel_id(),
-                 save_io_result, protobuf_mini_dumper_get_error_msg(save_io_result));
+      FCTXLOGERROR(get_shared_context(), "channel {} save failed with result {}({}), will retry",
+                   req_body.channel_key().channel_id(), save_io_result,
+                   protobuf_mini_dumper_get_error_msg(save_io_result));
       result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
       break;
     }
@@ -189,8 +192,8 @@ DTMQ_PROXY_SERVICE_API task_action_update::result_type task_action_update::opera
     }
 
     if (result < 0) {
-      FWLOGERROR("channel {} save failed with result {}({}), will retry", req_body.channel_key().channel_id(), result,
-                 protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGERROR(get_shared_context(), "channel {} save failed with result {}({}), will retry",
+                   req_body.channel_key().channel_id(), result, protobuf_mini_dumper_get_error_msg(result));
       result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
     }
   } while (false);

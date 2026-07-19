@@ -75,8 +75,8 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
     // 请求转发
     if (0 != forward_server_id) {
       if (req_body.forward_ttl() > logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
-        FWLOGERROR("mq channel {} forward ttl exceeded limit",
-                   channel_snapshot.channel_data().channel_metadata().channel_key().channel_id());
+        FCTXLOGERROR(get_shared_context(), "mq channel {} forward ttl exceeded limit",
+                     channel_snapshot.channel_data().channel_metadata().channel_key().channel_id());
 
         *rsp_body.add_failed_channel_key() = channel_snapshot.channel_data().channel_metadata().channel_key();
         continue;
@@ -89,7 +89,7 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
 
     atfw::dtmq::DChannelIdKey channel_key = channel_snapshot.channel_data().channel_metadata().channel_key();
     if (!channel || !channel->load_snapshot(get_shared_context(), std::move(channel_snapshot))) {
-      FWLOGERROR("mq channel {} load snapshot failed", channel_key.channel_id());
+      FCTXLOGERROR(get_shared_context(), "mq channel {} load snapshot failed", channel_key.channel_id());
       *rsp_body.add_failed_channel_key() = channel_key;
     } else {
       // 触发数据下发
@@ -110,8 +110,8 @@ DTMQ_PROXY_SERVICE_API task_action_transfer_channel::result_type task_action_tra
     auto res = RPC_AWAIT_CODE_RESULT(rpc::dtmq::transfer_channel(get_shared_context(), forward_group.first,
                                                                  *rpc_req_body, *rpc_rsp_body, is_stream_rpc()));
     if (res < 0) {
-      FWLOGERROR("forward transfer {} mq channel(s) to server {:#x} failed, res: {}({})", forward_group.second.size(),
-                 forward_group.first, res, protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(get_shared_context(), "forward transfer {} mq channel(s) to server {:#x} failed, res: {}({})",
+                   forward_group.second.size(), forward_group.first, res, protobuf_mini_dumper_get_error_msg(res));
 
       for (int i = 0; i < rpc_req_body->snapshot_size(); ++i) {
         const auto& snapshot = rpc_req_body->snapshot(i);

@@ -25,6 +25,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_context.h>
+
 #include <utility>
 
 #include "rpc/dtmq/dtmq_client_api.h"
@@ -70,8 +72,8 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
   if (req_body.has_compare_and_maybe_reset_lock() &&
       !channel->compare_and_maybe_reset_lock(get_shared_context(), *req_body.mutable_compare_and_maybe_reset_lock(),
                                              true)) {
-    FWLOGDEBUG("channel {} ignore message because lock failed:\n{}", req_body.channel_key().channel_id(),
-               req_body.compare_and_maybe_reset_lock().DebugString());
+    FCTXLOGDEBUG(get_shared_context(), "channel {} ignore message because lock failed:\n{}",
+                 req_body.channel_key().channel_id(), req_body.compare_and_maybe_reset_lock().DebugString());
 
     protobuf_copy_message(*rsp_body.mutable_compare_and_maybe_reset_lock(), req_body.compare_and_maybe_reset_lock());
     rsp_body.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
@@ -91,12 +93,13 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
                                                            req_body.message_content());
   result_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (message) {
-    FWLOGDEBUG("channel {} receive message {}.", req_body.channel_key().channel_id(), message->sequence());
+    FCTXLOGDEBUG(get_shared_context(), "channel {} receive message {}.", req_body.channel_key().channel_id(),
+                 message->sequence());
     rsp_body.set_message_sequence(message->sequence());
     channel->get_wal_publisher().emplace_back_log(std::move(message), param);
     channel->tick(get_shared_context());
   } else {
-    FWLOGERROR("malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
+    FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
     ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
   }

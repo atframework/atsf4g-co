@@ -66,9 +66,10 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
     // 请求转发
     if (0 != forward_server_id) {
       if (req_body.forward_ttl() > logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
-        FWLOGERROR("forward subscriber {} to server {:#x} failed, forward_ttl {} exceed max_ttl {}",
-                   make_subscriber_key(req_body.subscriber()), forward_server_id, req_body.forward_ttl(),
-                   logic_config::me()->get_logic_cfg().router().transfer_max_ttl());
+        FCTXLOGERROR(get_shared_context(),
+                     "forward subscriber {} to server {:#x} failed, forward_ttl {} exceed max_ttl {}",
+                     make_subscriber_key(req_body.subscriber()), forward_server_id, req_body.forward_ttl(),
+                     logic_config::me()->get_logic_cfg().router().transfer_max_ttl());
         continue;
       }
 
@@ -114,9 +115,9 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
     auto res = RPC_AWAIT_CODE_RESULT(
         rpc::dtmq::subscribe(get_shared_context(), forward_group.first, *rpc_req_body, *rpc_rsp_body, is_stream_rpc()));
     if (res < 0) {
-      FWLOGERROR("forward subscriber {} to server {:#x} failed, res: {}({})",
-                 make_subscriber_key(req_body.subscriber()), forward_group.first, res,
-                 protobuf_mini_dumper_get_error_msg(res));
+      FCTXLOGERROR(get_shared_context(), "forward subscriber {} to server {:#x} failed, res: {}({})",
+                   make_subscriber_key(req_body.subscriber()), forward_group.first, res,
+                   protobuf_mini_dumper_get_error_msg(res));
     }
 
     for (const auto& channel_id : rpc_rsp_body->not_found_channel_ids()) {
@@ -126,8 +127,8 @@ DTMQ_PROXY_SERVICE_API task_action_subscribe::result_type task_action_subscribe:
     for (auto& subscribe_node : *rpc_rsp_body->mutable_subscribe_node()) {
       auto* add_subscribe_node = rsp_body.mutable_subscribe_node()->Add();
       if (nullptr == add_subscribe_node) {
-        FWLOGERROR("forward subscriber {} to server {:#x} failed, malloc subscribe_node failed",
-                   make_subscriber_key(req_body.subscriber()), forward_group.first);
+        FCTXLOGERROR(get_shared_context(), "forward subscriber {} to server {:#x} failed, malloc subscribe_node failed",
+                     make_subscriber_key(req_body.subscriber()), forward_group.first);
         continue;
       }
       protobuf_move_message(*add_subscribe_node, std::move(subscribe_node));

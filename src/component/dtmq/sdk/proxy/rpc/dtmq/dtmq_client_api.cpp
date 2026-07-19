@@ -177,7 +177,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
 
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
-    FWLOGDEBUG("No server available for channel_id:({})", channel_key.channel_id());
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
 
@@ -219,7 +219,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, const a
   }
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
-    FWLOGDEBUG("No server available for channel_id:({})", channel_key.channel_id());
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
 
@@ -250,7 +250,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
 
   uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
   if (0 == target_server_id) {
-    FWLOGDEBUG("No server available for channel_id:({})", channel_key.channel_id());
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
 

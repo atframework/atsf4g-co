@@ -53,7 +53,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   uint64_t writable_server_id = 0;
   if (channel) {
     if (channel->is_writable()) {
-      FWLOGINFO("channel {} is writable, will ignore event sync", channel->get_channel_key().channel_id());
+      FCTXLOGINFO(get_shared_context(), "channel {} is writable, will ignore event sync",
+                  channel->get_channel_key().channel_id());
       RPC_AWAIT_IGNORE_RESULT(unsubscribe());
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -61,7 +62,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     //
     if (channel->get_ready_distribution_writable_server_id() != get_request_node_id() &&
         channel->get_target_distribution_writable_server_id() != get_request_node_id()) {
-      FWLOGINFO(
+      FCTXLOGINFO(
+          get_shared_context(),
           "channel {} receive a event sync from non-main writable server {:#x}, will ignore, except ready writable "
           "server {:#x} and target writable server {:#x}",
           channel->get_channel_id(), get_request_node_id(), channel->get_ready_distribution_writable_server_id(),
@@ -73,14 +75,15 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     bool should_be_writable =
         mq_channel::should_be_writable_or_get_server_id(req_body.channel_metadata().channel_key(), writable_server_id);
     if (should_be_writable) {
-      FWLOGINFO("channel {} should be writable, will ignore event sync",
-                req_body.channel_metadata().channel_key().channel_id());
+      FCTXLOGINFO(get_shared_context(), "channel {} should be writable, will ignore event sync",
+                  req_body.channel_metadata().channel_key().channel_id());
       RPC_AWAIT_IGNORE_RESULT(unsubscribe());
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
 
     if (writable_server_id != get_request_node_id()) {
-      FWLOGINFO(
+      FCTXLOGINFO(
+          get_shared_context(),
           "channel {} receive a event sync from non-main writable server {:#x}, will ignore, except writable server "
           "{:#x}",
           req_body.channel_metadata().channel_key().channel_id(), get_request_node_id(), writable_server_id);
@@ -103,7 +106,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
       (!channel->is_readonly() &&  // 只读频道直接接受主从同步消息
                                    // 如果不应该提升到只读频道或者无快照都无法初始化创建，都无法继续
        !(channel->should_be_readonly(readonly_replicate_index_set) && req_body.has_channel_snapshot()))) {
-    FWLOGINFO("wal_client is not init or not readonly! channel id: {}", channel->get_channel_key().channel_id());
+    FCTXLOGINFO(get_shared_context(), "wal_client is not init or not readonly! channel id: {}",
+                channel->get_channel_key().channel_id());
 
     // 如果should_be_readonly返回true，下一次拉取只读副本的时候会重新订阅，所以这里反订阅也没关系
     RPC_AWAIT_IGNORE_RESULT(unsubscribe());
@@ -120,8 +124,8 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     channel_snapshot->set_replicate_index(channel->get_current_replicate_index());
 
     if (!channel->load_snapshot(get_shared_context(), std::move(*channel_snapshot))) {
-      FWLOGERROR("channel {} load_snapshot failed, maybe concurrency conflict",
-                 channel->get_channel_key().channel_id());
+      FCTXLOGERROR(get_shared_context(), "channel {} load_snapshot failed, maybe concurrency conflict",
+                   channel->get_channel_key().channel_id());
     }
 
     // 正常加载快照是不应该失败的，如果真的失败说明又系统错误或者时序错误，直接忽略即可，后面会重试
@@ -144,9 +148,10 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
     // 其他错误忽略即可，后面会再同步修复数据
     if (receive_result < util::distributed_system::wal_result_code::kOk) {
       all_logs_received = false;
-      FWLOGERROR("channel {} receive_hole_log failed with receive_result {}, result_code {}({}).",
-                 channel->get_channel_key().channel_id(), static_cast<int32_t>(receive_result),
-                 client_param.result_code.get(), protobuf_mini_dumper_get_error_msg(client_param.result_code.get()));
+      FCTXLOGERROR(get_shared_context(),
+                   "channel {} receive_hole_log failed with receive_result {}, result_code {}({}).",
+                   channel->get_channel_key().channel_id(), static_cast<int32_t>(receive_result),
+                   client_param.result_code.get(), protobuf_mini_dumper_get_error_msg(client_param.result_code.get()));
       break;
     }
 

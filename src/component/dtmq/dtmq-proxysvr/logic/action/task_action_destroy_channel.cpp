@@ -24,6 +24,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_context.h>
+
 #include <chrono>
 #include <utility>
 
@@ -74,21 +76,22 @@ DTMQ_PROXY_SERVICE_API task_action_destroy_channel::result_type task_action_dest
   if (req_body.has_compare_and_maybe_reset_lock() &&
       !channel->compare_and_maybe_reset_lock(get_shared_context(), *req_body.mutable_compare_and_maybe_reset_lock(),
                                              true)) {
-    FWLOGDEBUG("channel {} ignore destroy because lock failed:\n{}", req_body.channel_key().channel_id(),
-               req_body.compare_and_maybe_reset_lock().DebugString());
+    FCTXLOGDEBUG(get_shared_context(), "channel {} ignore destroy because lock failed:\n{}",
+                 req_body.channel_key().channel_id(), req_body.compare_and_maybe_reset_lock().DebugString());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (channel->is_destroyed()) {
-    FWLOGDEBUG("channel {} ignore destroy because it is already destroyed", req_body.channel_key().channel_id());
+    FCTXLOGDEBUG(get_shared_context(), "channel {} ignore destroy because it is already destroyed",
+                 req_body.channel_key().channel_id());
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   res = RPC_AWAIT_CODE_RESULT(channel->destroy(get_shared_context(), std::chrono::system_clock::from_time_t(0), 0));
   if (res < 0) {
-    FWLOGERROR("destroy mq channel {} failed, res: {}({})", channel_key.channel_id(), res,
-               protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(get_shared_context(), "destroy mq channel {} failed, res: {}({})", channel_key.channel_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
   }
   set_response_code(res);
 

@@ -25,6 +25,7 @@
 
 #include <rpc/dtmq/dtmq_algorithm.h>
 #include <rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.h>
+#include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -342,7 +343,7 @@ static wal_result_code publisher_send_snapshot(
   protobuf_copy_message(*notify_msg->mutable_channel_metadata()->mutable_channel_key(), channel->get_channel_key());
   auto* snapshot_data = notify_msg->mutable_channel_snapshot();
   if (nullptr == snapshot_data) {
-    FWLOGERROR("malloc {} failed", "channel_snapshot");
+    FCTXLOGERROR(param.context.get(), "malloc {} failed", "channel_snapshot");
     return wal_result_code::kCallbackError;
   }
   channel->dump(*snapshot_data, true, true, false);
@@ -370,8 +371,8 @@ static wal_result_code publisher_send_snapshot(
   }
 
   if (svrs_without_private_data.empty() && svrs_with_private_data.empty()) {
-    FWLOGDEBUG("channel_snapshot, svrs is empty. channel:({})",
-               protobuf_mini_dumper_get_readable(channel->get_channel_key()));
+    FCTXLOGDEBUG(param.context.get(), "channel_snapshot, svrs is empty. channel:({})",
+                 protobuf_mini_dumper_get_readable(channel->get_channel_key()));
     return wal_result_code::kOk;
   }
 
@@ -390,11 +391,13 @@ static wal_result_code publisher_send_snapshot(
             if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
                 PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
               // 服务器节点离线，可能是短暂不可用
-              FWLOGWARNING("mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
-                           channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+              FCTXLOGWARNING(param.context.get(),
+                             "mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
+                             channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
             } else {
-              FWLOGERROR("mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
-                         channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+              FCTXLOGERROR(param.context.get(),
+                           "mq channel {} send broadcast_event_logs to server {:#x} failed, result: {}({})",
+                           channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
               param.result_code.get() = res;
             }
           }
@@ -486,7 +489,8 @@ static wal_result_code publisher_send_logs(
   }
 
   if (svrs_without_private_data.empty() && svrs_with_private_data.empty()) {
-    FWLOGDEBUG("send_logs, svrs is empty. channel:({})", protobuf_mini_dumper_get_readable(channel->get_channel_key()));
+    FCTXLOGDEBUG(param.context.get(), "send_logs, svrs is empty. channel:({})",
+                 protobuf_mini_dumper_get_readable(channel->get_channel_key()));
     return wal_result_code::kOk;
   }
 
@@ -505,11 +509,11 @@ static wal_result_code publisher_send_logs(
             if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
                 PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
               // 服务器节点离线，可能是短暂不可用
-              FWLOGWARNING("mq channel {} send send_logs to server {:#x} failed, result: {}({})",
-                           channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+              FCTXLOGWARNING(param.context.get(), "mq channel {} send send_logs to server {:#x} failed, result: {}({})",
+                             channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
             } else {
-              FWLOGERROR("mq channel {} send send_logs to server {:#x} failed, result: {}({})",
-                         channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
+              FCTXLOGERROR(param.context.get(), "mq channel {} send send_logs to server {:#x} failed, result: {}({})",
+                           channel->get_channel_id(), target.first, res, protobuf_mini_dumper_get_error_msg(res));
               param.result_code.get() = res;
             }
           }
@@ -559,7 +563,7 @@ static mq_channel_wal_publisher_type::vtable_pointer create_mq_channel_publisher
 
   ret->on_subscriber_removed =
       [](wal_publisher_type& publisher, const wal_publisher_type::subscriber_pointer& subscriber,
-         util::distributed_system::wal_unsubscribe_reason, wal_publisher_type::callback_param_type) {
+         util::distributed_system::wal_unsubscribe_reason, wal_publisher_type::callback_param_type param) {
         mq_channel* channel = publisher.get_private_data().channel;
         if (nullptr == channel) {
           return;
@@ -570,12 +574,13 @@ static mq_channel_wal_publisher_type::vtable_pointer create_mq_channel_publisher
         }
 
         if (subscriber) {
-          FWLOGDEBUG("mq channel {} remove subscriber {}", channel->get_channel_id(), subscriber->get_key());
+          FCTXLOGDEBUG(param.context.get(), "mq channel {} remove subscriber {}", channel->get_channel_id(),
+                       subscriber->get_key());
         }
       };
 
   ret->on_subscriber_added = [](wal_publisher_type& publisher, const wal_publisher_type::subscriber_pointer& subscriber,
-                                wal_publisher_type::callback_param_type) {
+                                wal_publisher_type::callback_param_type param) {
     mq_channel* channel = publisher.get_private_data().channel;
     if (nullptr == channel) {
       return;
@@ -584,7 +589,8 @@ static mq_channel_wal_publisher_type::vtable_pointer create_mq_channel_publisher
     channel->reset_lost_last_subscriber();
 
     if (subscriber) {
-      FWLOGDEBUG("mq channel {} add subscriber {}", channel->get_channel_id(), subscriber->get_key());
+      FCTXLOGDEBUG(param.context.get(), "mq channel {} add subscriber {}", channel->get_channel_id(),
+                   subscriber->get_key());
     }
   };
 
@@ -673,15 +679,7 @@ static mq_channel_wal_publisher_type::configure_pointer create_mq_channel_publis
 
   ret->enable_hole_log = true;
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-  ret->subscriber_timeout =
-      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(dtmq_proxysvr_cfg.subscriber_timeout());
-  if (ret->subscriber_timeout < std::chrono::seconds{1}) {
-    ret->subscriber_timeout =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
-  }
+  ret->subscriber_timeout = get_mq_channel_subscriber_timeout();
 
   return ret;
 }
@@ -700,6 +698,19 @@ std::string make_subscriber_key(const mq_channel_wal_subscriber_private_data& su
   }
 
   return atfw::util::string::format("server:{}", subscriber_data.subscriber_server_id());
+}
+
+atfw::util::distributed_system::wal_duration get_mq_channel_subscriber_timeout() {
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+  auto subscriber_timeout =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(dtmq_proxysvr_cfg.subscriber_timeout());
+  if (subscriber_timeout < std::chrono::seconds{1}) {
+    // 与 dtmq_proxy.config.proto 中 subscriber_timeout 的默认值保持一致
+    subscriber_timeout =
+        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{900});
+  }
+  return subscriber_timeout;
 }
 
 atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type> create_mq_channel_object(

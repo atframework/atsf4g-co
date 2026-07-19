@@ -23,6 +23,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_context.h>
+
 #include <utility>
 
 #include "rpc/dtmq/dtmq_client_api.h"
@@ -68,8 +70,8 @@ DTMQ_PROXY_SERVICE_API task_action_reset_lock::result_type task_action_reset_loc
   if (req_body.has_compare_and_maybe_reset_lock() &&
       !channel->compare_and_maybe_reset_lock(get_shared_context(), *req_body.mutable_compare_and_maybe_reset_lock(),
                                              true)) {
-    FWLOGDEBUG("channel {} ignore reset lock because lock failed:\n{}", req_body.channel_key().channel_id(),
-               req_body.compare_and_maybe_reset_lock().DebugString());
+    FCTXLOGDEBUG(get_shared_context(), "channel {} ignore reset lock because lock failed:\n{}",
+                 req_body.channel_key().channel_id(), req_body.compare_and_maybe_reset_lock().DebugString());
 
     protobuf_copy_message(*rsp_body.mutable_compare_and_maybe_reset_lock(), req_body.compare_and_maybe_reset_lock());
     rsp_body.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);

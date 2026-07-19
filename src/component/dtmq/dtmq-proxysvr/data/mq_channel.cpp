@@ -182,7 +182,7 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
   do {
     // 如果并发处理时，数据库拉到的数据已经晚于本地transfer过来的快照，以本地位置为准，避免覆盖本地数据
     if ((is_readonly() || is_writable()) && record.channel_metadata().last_sequence() < get_last_message_sequence()) {
-      FWLOGINFO("channel {} ignore to load table because local snapshot is newer", get_channel_id());
+      FCTXLOGINFO(ctx, "channel {} ignore to load table because local snapshot is newer", get_channel_id());
       break;
     }
 
@@ -212,15 +212,8 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
     protobuf_copy_message(lock_, record.lock());
 
     // load订阅者缓存(转移时恢复订阅)
-    const auto& dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
     auto now = atfw::util::time::time_utility::now();
-    auto subscriber_timeout_conf = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-        dtmq_proxysvr_cfg.subscriber_timeout());
-    if (subscriber_timeout_conf < std::chrono::seconds{1}) {
-      subscriber_timeout_conf =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
-    }
+    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
 
     auto subscriber_cache = rpc::make_shared_message<atfw::dtmq::channel_subscriber_cache>(ctx);
     if (false == record.subscriber_cache().UnpackTo(&(*subscriber_cache))) {
@@ -346,15 +339,8 @@ void mq_channel::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_dtmq_channe
     }
 
     // dump订阅者缓存(转移时恢复订阅)
-    const auto& dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
     auto now = atfw::util::time::time_utility::now();
-    auto subscriber_timeout_conf = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-        dtmq_proxysvr_cfg.subscriber_timeout());
-    if (subscriber_timeout_conf < std::chrono::seconds{1}) {
-      subscriber_timeout_conf =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
-    }
+    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
 
     auto subscriber_cache = rpc::make_shared_message<atfw::dtmq::channel_subscriber_cache>(ctx);
 
@@ -448,12 +434,7 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     publisher_conf.gc_log_size = wal_obj_conf.gc_log_size;
     publisher_conf.max_log_size = wal_obj_conf.max_log_size;
 
-    publisher_conf.subscriber_timeout = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-        dtmq_proxysvr_cfg.subscriber_timeout());
-    if (publisher_conf.subscriber_timeout < std::chrono::seconds{1}) {
-      publisher_conf.subscriber_timeout =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
-    }
+    publisher_conf.subscriber_timeout = get_mq_channel_subscriber_timeout();
   }
 
   if (wal_client_) {
@@ -572,7 +553,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
   auto self_ptr = shared_from_this();
   auto invoke_result =
       rpc::async_invoke(ctx, "mq_channel.writable_init", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        FWLOGINFO("create_init mq channel {}", self_ptr->get_channel_id());
+        FCTXLOGINFO(child_ctx, "create_init mq channel {}", self_ptr->get_channel_id());
 
         auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx));
 
@@ -591,8 +572,8 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
       });
 
   if (invoke_result.is_error()) {
-    FWLOGERROR("mq channel {} writable_init: create task failed. result: {}({})", get_channel_id(),
-               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FCTXLOGERROR(ctx, "mq channel {} writable_init: create task failed. result: {}({})", get_channel_id(),
+                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     RPC_RETURN_CODE(*invoke_result.get_error());
   }
 
@@ -638,8 +619,8 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
   // 冷静窗口
   auto now = atfw::util::time::time_utility::now();
   if (next_init_subscribe_timepoint_ > now) {
-    FWLOGWARNING("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
-                 next_init_subscribe_timepoint_);
+    FCTXLOGWARNING(ctx, "await_send_subscribe_to_writable too frequent, now {} next time {}", now,
+                   next_init_subscribe_timepoint_);
     RPC_RETURN_CODE(last_result_code_);
   }
   const auto& dtmq_proxysvr_cfg =
@@ -673,8 +654,8 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
       });
 
   if (invoke_result.is_error()) {
-    FWLOGERROR("mq channel {} readonly_init: create task failed. result: {}({})", get_channel_id(),
-               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FCTXLOGERROR(ctx, "mq channel {} readonly_init: create task failed. result: {}({})", get_channel_id(),
+                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     RPC_RETURN_CODE(*invoke_result.get_error());
   }
 
@@ -718,7 +699,7 @@ void mq_channel::merge_subscriber(
 bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&& snapshot) {
   // 错误的调用导致递归调用，以最上层为准
   if (is_loading_snapshot_) {
-    FWLOGERROR("mq channel {} recursive load snapshot is not allowed", get_channel_id());
+    FCTXLOGERROR(ctx, "mq channel {} recursive load snapshot is not allowed", get_channel_id());
     return false;
   }
   is_loading_snapshot_ = true;
@@ -740,8 +721,8 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
 
   if (is_writable()) {
     if (snapshot.replicate_index() > 0) {
-      FWLOGINFO("mq channel {} ignore load snapshot, channel is writable but received a readonly snapshot",
-                get_channel_id());
+      FCTXLOGINFO(ctx, "mq channel {} ignore load snapshot, channel is writable but received a readonly snapshot",
+                  get_channel_id());
 
       // 订阅者总是要合并的
       merge_subscriber(ctx, snapshot.subscriber());
@@ -751,8 +732,8 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     if (get_last_message_sequence() > snapshot.channel_data().channel_metadata().last_sequence() ||
         (get_last_message_sequence() == snapshot.channel_data().channel_metadata().last_sequence() &&
          get_last_hash_code() == snapshot.channel_data().channel_metadata().last_hash_code())) {
-      FWLOGINFO("mq channel {} ignore load snapshot, channel is writable but received a older writable snapshot",
-                get_channel_id());
+      FCTXLOGINFO(ctx, "mq channel {} ignore load snapshot, channel is writable but received a older writable snapshot",
+                  get_channel_id());
 
       // 订阅者总是要合并的
       merge_subscriber(ctx, snapshot.subscriber());
@@ -768,8 +749,9 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     if (get_last_message_sequence() > snapshot.channel_data().channel_metadata().last_sequence() ||
         (get_last_message_sequence() == snapshot.channel_data().channel_metadata().last_sequence() &&
          get_last_hash_code() == snapshot.channel_data().channel_metadata().last_hash_code())) {
-      FWLOGINFO("mq channel {} ignore load snapshot, channel is readonly and received an older readonly snapshot",
-                get_channel_id());
+      FCTXLOGINFO(ctx,
+                  "mq channel {} ignore load snapshot, channel is readonly and received an older readonly snapshot",
+                  get_channel_id());
 
       // 订阅者总是要合并的
       merge_subscriber(ctx, snapshot.subscriber());
@@ -783,7 +765,7 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   //   Case 3:
   //   channel是writable，收到的snapshot是writable的快照，说明数据分布出现短暂不一致，或者先从数据库加载，后收到其他节点迁移过来的最新数据，需要加载快照
 
-  FWLOGINFO("mq channel {} load snapshot", get_channel_id());
+  FCTXLOGINFO(ctx, "mq channel {} load snapshot", get_channel_id());
 
   last_save_timepoint_ = atfw::util::time::time_utility::now();
 
@@ -814,8 +796,8 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     wal_publisher_->load(snapshot.channel_data(), params);
   }
   if (result < 0) {
-    FWLOGERROR("mq channel {} load snapshot failed, res: {}({})", get_channel_id(), result,
-               protobuf_mini_dumper_get_error_msg(result));
+    FCTXLOGERROR(ctx, "mq channel {} load snapshot failed, res: {}({})", get_channel_id(), result,
+                 protobuf_mini_dumper_get_error_msg(result));
     return false;
   }
 
@@ -863,7 +845,7 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   // 订阅者要在数据加载后再合并，否则会触发广播，导致订阅者收到不完整数据
   merge_subscriber(ctx, snapshot.subscriber());
 
-  FWLOGINFO("channel {}({}) load_snapshot finished.", get_channel_id(), reinterpret_cast<const void*>(this));
+  FCTXLOGINFO(ctx, "channel {}({}) load_snapshot finished.", get_channel_id(), reinterpret_cast<const void*>(this));
   return true;
 }
 
@@ -883,15 +865,7 @@ void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& 
     dump_private_data(*output.mutable_channel_data()->mutable_channel_runtime());
 
     auto now = atfw::util::time::time_utility::now();
-    const auto& dtmq_proxysvr_cfg =
-        logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-    auto subscriber_timeout_conf = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-        dtmq_proxysvr_cfg.subscriber_timeout());
-    if (subscriber_timeout_conf < std::chrono::seconds{1}) {
-      subscriber_timeout_conf =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
-    }
+    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
 
     auto all_subscribers = wal_publisher_->get_subscribe_manager().all_range();
     int subscriber_count = 0;
@@ -1352,12 +1326,12 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
 
         auto* snapshot_data = req_body->add_snapshot();
         if (nullptr == snapshot_data) {
-          FWLOGERROR("mq channel {} transfer: malloc snapshot data failed.", self_ptr->get_channel_id());
+          FCTXLOGERROR(child_ctx, "mq channel {} transfer: malloc snapshot data failed.", self_ptr->get_channel_id());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
 
         self_ptr->dump_snapshot(child_ctx, *snapshot_data);
-        FWLOGINFO("start transfer mq channel {} to {:#x}", self_ptr->get_channel_id(), target_server_id);
+        FCTXLOGINFO(child_ctx, "start transfer mq channel {} to {:#x}", self_ptr->get_channel_id(), target_server_id);
 
         // 转移数据
         result = RPC_AWAIT_CODE_RESULT(rpc::dtmq::transfer_channel(child_ctx, target_server_id, *req_body, *rsp_body));
@@ -1368,8 +1342,8 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
         for (const auto& transfer_failed : rsp_body->failed_channel_key()) {
           if (transfer_failed.channel_id() == self_ptr->get_channel_id()) {
             is_transfer_success = false;
-            FWLOGERROR("mq channel {} transfer: transfer to server {:#x} failed", self_ptr->get_channel_id(),
-                       target_server_id);
+            FCTXLOGERROR(child_ctx, "mq channel {} transfer: transfer to server {:#x} failed",
+                         self_ptr->get_channel_id(), target_server_id);
           }
         }
         if (result >= 0 && is_transfer_success) {
@@ -1405,8 +1379,8 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
       });
 
   if (invoke_result.is_error()) {
-    FWLOGERROR("mq channel {} transfer: create task failed.res: {}({})", get_channel_id(), *invoke_result.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FCTXLOGERROR(ctx, "mq channel {} transfer: create task failed.res: {}({})", get_channel_id(),
+                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     ++io_task_continue_failed_;
     return *invoke_result.get_error();
   }
@@ -1457,8 +1431,8 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
           auto ret =
               RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::remove_ttl(child_ctx, self_ptr->get_channel_id()));
           if (ret < 0) {
-            FWLOGERROR("rpc::db::dtmq_channel_record::remove_ttl faild, channel_id:{}, ret:{}({})",
-                       self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
+            FCTXLOGERROR(child_ctx, "rpc::db::dtmq_channel_record::remove_ttl faild, channel_id:{}, ret:{}({})",
+                         self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
             ++self_ptr->io_task_continue_failed_;
             RPC_RETURN_CODE(ret);
           }
@@ -1475,8 +1449,8 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
         int64_t saved_sequence = self_ptr->get_last_message_sequence();
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::replace(child_ctx, std::move(data)));
         if (ret < 0) {
-          FWLOGERROR("rpc::db::dtmq_channel_record::replace faild, channel_id:{}, ret:{}({})",
-                     self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
+          FCTXLOGERROR(child_ctx, "rpc::db::dtmq_channel_record::replace faild, channel_id:{}, ret:{}({})",
+                       self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
           ++self_ptr->io_task_continue_failed_;
           RPC_RETURN_CODE(ret);
         }
@@ -1485,8 +1459,8 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
         self_ptr->saved_sequence_ = saved_sequence;
         self_ptr->io_task_continue_failed_ = 0;
 
-        FWLOGDEBUG("rpc::db::dtmq_channel_record::replace channel:{}, ret:{}({})", self_ptr->get_channel_id(), ret,
-                   protobuf_mini_dumper_get_error_msg(ret));
+        FCTXLOGDEBUG(child_ctx, "rpc::db::dtmq_channel_record::replace channel:{}, ret:{}({})",
+                     self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));
 
         // 如果已移除，则重置删除TTL
         if (self_ptr->is_destroyed()) {
@@ -1535,8 +1509,8 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
       });
 
   if (invoke_result.is_error()) {
-    FWLOGERROR("mq channel {} save: create task failed.result: {}({})", get_channel_id(), *invoke_result.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FCTXLOGERROR(ctx, "mq channel {} save: create task failed.result: {}({})", get_channel_id(),
+                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     ++io_task_continue_failed_;
     return *invoke_result.get_error();
   }
@@ -1651,7 +1625,7 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx, std::chrono::system
           RPC_RETURN_CODE(0);
         }
         // 离线数据删除，使用TTL
-        FWLOGINFO("destroy mq channel {}", self_ptr->get_channel_id());
+        FCTXLOGINFO(child_ctx, "destroy mq channel {}", self_ptr->get_channel_id());
 
         auto ttl_seconds =
             std::chrono::duration_cast<std::chrono::seconds>(self_ptr->destroy_timepoint_ + get_mq_channel_ttl() -
@@ -1687,8 +1661,8 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx, std::chrono::system
       });
 
   if (invoke_result.is_error()) {
-    FWLOGERROR("mq channel {} destroy: create task failed.res: {}({})", get_channel_id(), *invoke_result.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FCTXLOGERROR(ctx, "mq channel {} destroy: create task failed.res: {}({})", get_channel_id(),
+                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     RPC_RETURN_CODE(*invoke_result.get_error());
   }
 
@@ -1701,8 +1675,8 @@ rpc::result_code_type mq_channel::destroy(rpc::context& ctx, std::chrono::system
   if (is_io_task_running()) {
     auto result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
     if (result < 0) {
-      FWLOGERROR("mq channel {} destroy: wait task failed.res: {}({})", get_channel_id(), result,
-                 protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGERROR(ctx, "mq channel {} destroy: wait task failed.res: {}({})", get_channel_id(), result,
+                   protobuf_mini_dumper_get_error_msg(result));
       RPC_RETURN_CODE(0);
     }
   }
@@ -1734,7 +1708,7 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), record));
   if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-    FWLOGINFO("rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
+    FCTXLOGINFO(ctx, "rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
     ret = 0;
   }
 
@@ -1749,19 +1723,19 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
 
   if (ret == 0) {
     if (should_be_writable()) {
-      FWLOGDEBUG("rpc::db::dtmq_channel_record::get_all mq channel: {}, record_size: {}", get_channel_id(),
-                 record->record_set().record().size());
+      FCTXLOGDEBUG(ctx, "rpc::db::dtmq_channel_record::get_all mq channel: {}, record_size: {}", get_channel_id(),
+                   record->record_set().record().size());
       load(ctx, *record);
       send_oss(ctx, "create_init", ret);
 
-      FWLOGINFO("channel {}({}) load_from_db success.", get_channel_id(), reinterpret_cast<const void*>(this));
+      FCTXLOGINFO(ctx, "channel {}({}) load_from_db success.", get_channel_id(), reinterpret_cast<const void*>(this));
     } else {
-      FWLOGINFO("channel {}({}) load_from_db ignored, maybe transfer to another server node.", get_channel_id(),
-                reinterpret_cast<const void*>(this));
+      FCTXLOGINFO(ctx, "channel {}({}) load_from_db ignored, maybe transfer to another server node.", get_channel_id(),
+                  reinterpret_cast<const void*>(this));
     }
   } else {
-    FWLOGERROR("rpc::db::dtmq_channel_record::get failed mq channel: {}, result: {}({})", get_channel_id(), ret,
-               protobuf_mini_dumper_get_error_msg(ret));
+    FCTXLOGERROR(ctx, "rpc::db::dtmq_channel_record::get failed mq channel: {}, result: {}({})", get_channel_id(), ret,
+                 protobuf_mini_dumper_get_error_msg(ret));
   }
   RPC_RETURN_CODE(ret);
 }
@@ -1790,8 +1764,8 @@ int32_t mq_channel::async_send_subscribe_to_writable(rpc::context& ctx) {
       });
 
   if (invoke_result.is_error()) {
-    FWLOGERROR("send_subscribe_to_writable {} : create task failed.res: {}({})", channel_key_.channel_id(),
-               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FCTXLOGERROR(ctx, "send_subscribe_to_writable {} : create task failed.res: {}({})", channel_key_.channel_id(),
+                 *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
     return *invoke_result.get_error();
   }
 
@@ -1818,8 +1792,8 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
   }
   auto now = atfw::util::time::time_utility::now();
   if (next_init_subscribe_timepoint_ > now) {
-    FWLOGDEBUG("await_send_subscribe_to_writable too frequent, now {} next time {}", now,
-               next_init_subscribe_timepoint_);
+    FCTXLOGDEBUG(ctx, "await_send_subscribe_to_writable too frequent, now {} next time {}", now,
+                 next_init_subscribe_timepoint_);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
   }
   const auto& dtmq_proxysvr_cfg =
@@ -1829,7 +1803,8 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
 
   int res = async_send_subscribe_to_writable(ctx);
   if (res < 0) {
-    FWLOGERROR("async_send_subscribe_to_writable failed, result: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
+    FCTXLOGERROR(ctx, "async_send_subscribe_to_writable failed, result: {}({})", res,
+                 protobuf_mini_dumper_get_error_msg(res));
     RPC_RETURN_CODE(res);
   }
 
@@ -1857,7 +1832,7 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   auto* channel_data = req_body->mutable_heartbeat()->Add();
 
   if (channel_data == nullptr) {
-    FWLOGERROR("send_subscribe_to_writable {} : malloc channel_data failed", channel_key_.channel_id());
+    FCTXLOGERROR(ctx, "send_subscribe_to_writable {} : malloc channel_data failed", channel_key_.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }
 
@@ -1870,7 +1845,7 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   maybe_create_wal_client();
   auto wal_client = get_wal_client();
   if (!wal_client) {
-    FWLOGERROR("wal_client is not init! channel id: {}", channel_key_.channel_id());
+    FCTXLOGERROR(ctx, "wal_client is not init! channel id: {}", channel_key_.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_WAL_CLIENT_NOT_INIT);
   }
   // 必须以最后一条log为准
@@ -1896,7 +1871,7 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
           atfw::util::time::time_utility::now() +
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
               dtmq_proxysvr_cfg.channel_wal_hash_mismatch_need_snapshot_interval());
-      FWLOGERROR("hash mismatch, channel_id: {}, log key: {}", get_channel_id(), hash_mismatch_data.log_key);
+      FCTXLOGERROR(ctx, "hash mismatch, channel_id: {}, log key: {}", get_channel_id(), hash_mismatch_data.log_key);
     }
   }
 
@@ -1933,7 +1908,7 @@ void mq_channel::set_destroyed(rpc::context& ctx, std::chrono::system_clock::tim
   last_status_change_timepoint_ = atfw::util::time::time_utility::now();
 
   if (!wal_publisher_) {
-    FWLOGERROR("channel {} set_destroyed but wal_publisher_ is null", get_channel_id());
+    FCTXLOGERROR(ctx, "channel {} set_destroyed but wal_publisher_ is null", get_channel_id());
     return;
   }
   int32_t result = 0;
@@ -1944,13 +1919,13 @@ void mq_channel::set_destroyed(rpc::context& ctx, std::chrono::system_clock::tim
     *message->mutable_detail()->mutable_destroy()->mutable_removed_timepoint() =
         protobuf_from_system_clock(atfw::util::time::time_utility::now());
     wal_publisher_->emplace_back_log(std::move(message), params);
-    FWLOGINFO("mq channel {} set_destroyed, destroy_timepoint: {}, destroy_sequence: {}", get_channel_id(),
-              std::chrono::duration_cast<std::chrono::seconds>(destroy_timepoint_.time_since_epoch()).count(),
-              destroy_sequence_);
+    FCTXLOGINFO(ctx, "mq channel {} set_destroyed, destroy_timepoint: {}, destroy_sequence: {}", get_channel_id(),
+                std::chrono::duration_cast<std::chrono::seconds>(destroy_timepoint_.time_since_epoch()).count(),
+                destroy_sequence_);
 
     set_dirty();
   } else {
-    FWLOGERROR("malloc wal log for mq channel {} to destroy failed", get_channel_id());
+    FCTXLOGERROR(ctx, "malloc wal log for mq channel {} to destroy failed", get_channel_id());
   }
 }
 
@@ -1989,7 +1964,7 @@ void mq_channel::set_created(rpc::context& ctx, std::chrono::system_clock::time_
   }
 
   if (!wal_publisher_) {
-    FWLOGERROR("channel {} set_created but wal_publisher_ is null", get_channel_id());
+    FCTXLOGERROR(ctx, "channel {} set_created but wal_publisher_ is null", get_channel_id());
     return;
   }
   last_status_change_timepoint_ = atfw::util::time::time_utility::now();
@@ -2002,13 +1977,13 @@ void mq_channel::set_created(rpc::context& ctx, std::chrono::system_clock::time_
     *message->mutable_detail()->mutable_create()->mutable_create_timepoint() =
         protobuf_from_system_clock(atfw::util::time::time_utility::now());
     wal_publisher_->emplace_back_log(std::move(message), params);
-    FWLOGINFO("mq channel {} set_created, create_timepoint: {}, create_sequence: {}", get_channel_id(),
-              std::chrono::duration_cast<std::chrono::seconds>(create_timepoint_.time_since_epoch()).count(),
-              create_sequence_);
+    FCTXLOGINFO(ctx, "mq channel {} set_created, create_timepoint: {}, create_sequence: {}", get_channel_id(),
+                std::chrono::duration_cast<std::chrono::seconds>(create_timepoint_.time_since_epoch()).count(),
+                create_sequence_);
 
     set_dirty();
   } else {
-    FWLOGERROR("malloc wal log for mq channel {} to create failed", get_channel_id());
+    FCTXLOGERROR(ctx, "malloc wal log for mq channel {} to create failed", get_channel_id());
   }
 }
 
@@ -2041,16 +2016,8 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
   auto now = atfw::util::time::time_utility::now();
-  auto subscriber_timeout_conf =
-      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(dtmq_proxysvr_cfg.subscriber_timeout());
-  if (subscriber_timeout_conf < std::chrono::seconds{1}) {
-    subscriber_timeout_conf =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{1800});
-  }
+  auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
 
   std::string subscriber_key = make_subscriber_key(subscriber_info);
   auto subscriber = wal_publisher_->find_subscriber(subscriber_key, params);
@@ -2128,12 +2095,12 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
   }
 
   if (subscriber) {
-    FWLOGDEBUG("add subscriber_info success. subscriber_info:({}), subscriber.private_data:({})",
-               protobuf_mini_dumper_get_readable(subscriber_info),
-               protobuf_mini_dumper_get_readable(subscriber->get_private_data()));
+    FCTXLOGDEBUG(ctx, "add subscriber_info success. subscriber_info:({}), subscriber.private_data:({})",
+                 protobuf_mini_dumper_get_readable(subscriber_info),
+                 protobuf_mini_dumper_get_readable(subscriber->get_private_data()));
   } else {
-    FWLOGDEBUG("add subscriber_info failed. subscriber_info:({}), reson: {}",
-               protobuf_mini_dumper_get_readable(subscriber_info), "create_subscriber failed");
+    FCTXLOGDEBUG(ctx, "add subscriber_info failed. subscriber_info:({}), reson: {}",
+                 protobuf_mini_dumper_get_readable(subscriber_info), "create_subscriber failed");
   }
   return 0;
 }
@@ -2267,7 +2234,7 @@ void mq_channel::set_lock(rpc::context& ctx, const atfw::dtmq::DChannelOptimisti
   protobuf_copy_message(lock_, lock);
   set_dirty();
 
-  FWLOGDEBUG("channel {} lock updated.", get_channel_id());
+  FCTXLOGDEBUG(ctx, "channel {} lock updated.", get_channel_id());
   if (!append_log || !shared_wal_object_) {
     return;
   }
@@ -2288,7 +2255,7 @@ void mq_channel::set_lock(rpc::context& ctx, const atfw::dtmq::DChannelOptimisti
       wal_publisher_->emplace_back_log(std::move(message), params);
     }
   } else {
-    FWLOGERROR("malloc wal log for mq channel {} to reset lock failed", get_channel_id());
+    FCTXLOGERROR(ctx, "malloc wal log for mq channel {} to reset lock failed", get_channel_id());
   }
 }
 
@@ -2406,7 +2373,7 @@ void mq_channel::hash_mismatch_increase() {
 }
 
 void mq_channel::update_timer(rpc::context& ctx, bool force) {
-  FWLOGDEBUG("channel({}) update_timer", get_channel_id());
+  FCTXLOGDEBUG(ctx, "channel({}) update_timer", get_channel_id());
 
   auto now = atfw::util::time::time_utility::now();
   const auto& dtmq_proxysvr_cfg =
@@ -2422,7 +2389,7 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
 
     bool allow_gc = now > last_status_change_timepoint_ + cache_expire_interval;
     if (allow_gc && !is_io_task_running()) {
-      FWLOGDEBUG("remove_channel ({}) in gc. not readonly or writable replicate", get_channel_id());
+      FCTXLOGDEBUG(ctx, "remove_channel ({}) in gc. not readonly or writable replicate", get_channel_id());
       mq_channel_manager::me()->remove_channel(get_channel_id(), this);
     } else {
       // 保护性移除或插入新定时器
@@ -2494,7 +2461,7 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
             std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(1));
 
     if (allow_gc) {
-      FWLOGDEBUG("remove_channel ({}) in gc. no subscribes", get_channel_id());
+      FCTXLOGDEBUG(ctx, "remove_channel ({}) in gc. no subscribes", get_channel_id());
       mq_channel_manager::me()->remove_channel(get_channel_id(), this);
       return;
     }
@@ -2505,11 +2472,7 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
     timer_interval =
         protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.cache_expire_timeout());
   } else {
-    timer_interval =
-        protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.subscriber_timeout());
-    if (timer_interval < std::chrono::seconds{1}) {
-      timer_interval = std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds{900});
-    }
+    timer_interval = get_mq_channel_subscriber_timeout();
 
     if (!configure_.memory_only() && save_interval > std::chrono::seconds(0) && save_interval < timer_interval) {
       timer_interval = save_interval;
