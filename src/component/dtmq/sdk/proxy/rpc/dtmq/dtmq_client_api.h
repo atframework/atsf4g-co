@@ -9,16 +9,6 @@
 
 #include <rpc/rpc_common_types.h>
 
-// clang-format off
-#include <config/compiler/protobuf_prefix.h>
-// clang-format on
-
-#include <protocol/pbdesc/com.struct.dtmq.pb.h>
-
-// clang-format off
-#include <config/compiler/protobuf_suffix.h>
-// clang-format on
-
 #include <cstdint>
 #include <memory>
 #include <vector>

@@ -1,10 +1,11 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-set(DTMQ_PROXY_SERVICE_SOURCES rpc/dtmq/dtmqproxysvrservice.atfw.gen.cpp
-                               rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.cpp rpc/dtmq/dtmq_client_api.cpp)
+set(DTMQ_PROXY_SERVICE_SOURCES
+    rpc/dtmq/dtmqproxysvrservice.atfw.gen.cpp rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.cpp
+    rpc/dtmq/dtmq_client_api.cpp rpc/dtmq/dtmq_client_subscriber.cpp)
 set(DTMQ_PROXY_SERVICE_HEADERS rpc/dtmq/dtmqproxysvrservice.atfw.gen.h rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.h
-                               rpc/dtmq/dtmq_client_api.h)
+                               rpc/dtmq/dtmq_client_api.h rpc/dtmq/dtmq_client_subscriber.h)
 
 project_component_declare_sdk(
   "dtmq-proxy-sdk"
