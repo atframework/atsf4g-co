@@ -671,7 +671,10 @@ ORBIT_CLIENT_SDK_API std::string OrbitClientRuntime::protobuf_mini_dumper_get_re
   printer.SetTruncateStringFieldLongerThan(4096);
   printer.SetPrintMessageFieldsInIndexOrder(false);
 
-  printer.PrintToString(msg, &debug_string);
+  if (!printer.PrintToString(msg, &debug_string)) {
+    // Handle the error, e.g., log it or append an error message
+    debug_string += "... PrintToString failed";
+  }
 
   // Old implementation will use COW and the new compiler will use NRVO here.
   return debug_string;

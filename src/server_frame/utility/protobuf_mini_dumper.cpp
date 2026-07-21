@@ -24,28 +24,12 @@
 #include <config/server_frame_build_feature.h>
 
 #include <sstream>
+#include <string>
+#include <unordered_map>
 
 #define MSG_DISPATCHER_DEBUG_PRINT_BOUND 4096
 
-SERVER_FRAME_API std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg) {
-  std::string debug_string;
-  // 16K is in bin of tcache in jemalloc, and MEDIUM_PAGE in mimalloc
-  debug_string.reserve(16 * 1024);
-
-  ::google::protobuf::TextFormat::Printer printer;
-  printer.SetUseUtf8StringEscaping(true);
-  // printer.SetExpandAny(true);
-  printer.SetUseShortRepeatedPrimitives(true);
-  printer.SetSingleLineMode(false);
-  printer.SetTruncateStringFieldLongerThan(MSG_DISPATCHER_DEBUG_PRINT_BOUND);
-  printer.SetPrintMessageFieldsInIndexOrder(false);
-
-  printer.PrintToString(msg, &debug_string);
-
-  // Old implementation will use COW and the new compiler will use NRVO here.
-  return debug_string;
-}
-
+namespace {
 static std::string build_error_code_msg(const ::google::protobuf::EnumValueDescriptor &desc) {
   bool has_descritpion = false;
   std::stringstream ss;
@@ -66,6 +50,29 @@ static std::string build_error_code_msg(const ::google::protobuf::EnumValueDescr
   ss << "(" << desc.number() << ")";
 
   return ss.str();
+}
+}  // namespace
+
+SERVER_FRAME_API std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message &msg) {
+  std::string debug_string;
+  // 16K is in bin of tcache in jemalloc, and MEDIUM_PAGE in mimalloc
+  debug_string.reserve(16 * 1024);
+
+  ::google::protobuf::TextFormat::Printer printer;
+  printer.SetUseUtf8StringEscaping(true);
+  // printer.SetExpandAny(true);
+  printer.SetUseShortRepeatedPrimitives(true);
+  printer.SetSingleLineMode(false);
+  printer.SetTruncateStringFieldLongerThan(MSG_DISPATCHER_DEBUG_PRINT_BOUND);
+  printer.SetPrintMessageFieldsInIndexOrder(false);
+
+  if (!printer.PrintToString(msg, &debug_string)) {
+    FWLOGERROR("protobuf_mini_dumper_get_readable failed, message: {}", msg.GetTypeName());
+    debug_string += "... PrintToString failed";
+  }
+
+  // Old implementation will use COW and the new compiler will use NRVO here.
+  return debug_string;
 }
 
 SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_code) {

@@ -75,7 +75,7 @@ static uint64_t internal_normalize_replicate_index(uint64_t replicate_index,
     readonly_replicate_count = kDtmqProxySvrMaxReplicateIndex;
   }
 
-  return internal_normalize_replicate_index(replicate_index, channel_cfg->readonly_replicate_count());
+  return internal_normalize_replicate_index(replicate_index, readonly_replicate_count);
 }
 
 }  // namespace

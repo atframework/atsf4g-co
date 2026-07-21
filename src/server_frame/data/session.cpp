@@ -32,6 +32,8 @@
 #include <rpc/rpc_context.h>
 #include <rpc/telemetry/semantic_conventions.h>
 
+#include <memory>
+#include <string>
 #include <utility>
 
 #include "data/player_cache.h"
@@ -134,7 +136,7 @@ SERVER_FRAME_API void session::flag_guard_t::setup(session &owner, flag_t::type 
 }
 
 SERVER_FRAME_API void session::flag_guard_t::reset() noexcept {
-  if (owner_ && flag_t::EN_SESSION_FLAG_NONE != flag_) {
+  if (owner_ != nullptr && flag_t::EN_SESSION_FLAG_NONE != flag_) {
     owner_->set_flag(flag_, false);
   }
 
@@ -143,7 +145,13 @@ SERVER_FRAME_API void session::flag_guard_t::reset() noexcept {
 }
 
 SERVER_FRAME_API session::session() noexcept
-    : flags_(0), login_task_id_(0), session_sequence_(0), cached_zone_id_(0), cached_user_id_(0) {
+    : flags_(0),
+      login_task_id_(0),
+      session_sequence_(0),
+      cached_zone_id_(0),
+      cached_user_id_(0),
+      login_task_head_timestamp_(0),
+      login_server_time_(0) {
   id_.node_id = 0;
   id_.session_id = 0;
 }
@@ -179,7 +187,7 @@ SERVER_FRAME_API bool session::is_valid() const noexcept {
                          flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED));
 }
 
-SERVER_FRAME_API void session::set_player(std::shared_ptr<player_cache> u) noexcept {
+SERVER_FRAME_API void session::set_player(const std::shared_ptr<player_cache> &u) noexcept {
   player_ = u;
 
   if (u) {
@@ -222,7 +230,13 @@ SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframew
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffuer.data());
-  msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send to client [{:#x}, {}] failed: serialize size mismatch, expect {}, actual {}", id_.node_id,
+               id_.session_id, msg_buf_len, next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
   FWLOGDEBUG(
       "send msg to client:[{:#x}, {}] {} bytes.(session sequence: {}, client sequence: {}, server sequence: {})\n{}",
       id_.node_id, id_.session_id, msg_buf_len, msg.head().session_sequence(), msg.head().client_sequence(),
@@ -249,7 +263,13 @@ SERVER_FRAME_API int32_t session::broadcast_msg_to_client(uint64_t node_id, cons
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffuer.data());
-  msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("broadcast to gateway [{:#x}] failed: serialize size mismatch, expect {}, actual {}", node_id,
+               msg_buf_len, next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
   FWLOGDEBUG("broadcast msg to gateway [{:#x}] {} bytes\n{}", node_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(msg));
 
@@ -271,13 +291,15 @@ SERVER_FRAME_API size_t session::compare_callback::operator()(const key_t &hash_
     return static_cast<size_t>(
         _session_hash_combine(XXH64(&hash_obj.node_id, sizeof(hash_obj.node_id), kSessionKeyHashMagicNumber),
                               XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber)));
-  } else if (!hash_obj.node_name.empty()) {
+  }
+
+  if (!hash_obj.node_name.empty()) {
     return static_cast<size_t>(
         _session_hash_combine(XXH64(hash_obj.node_name.c_str(), hash_obj.node_name.size(), kSessionKeyHashMagicNumber),
                               XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber)));
-  } else {
-    return static_cast<size_t>(XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber));
   }
+
+  return static_cast<size_t>(XXH64(&hash_obj.session_id, sizeof(hash_obj.session_id), kSessionKeyHashMagicNumber));
 }
 
 SERVER_FRAME_API int32_t session::send_kickoff(int32_t reason, atfw::util::nostd::string_view message) {

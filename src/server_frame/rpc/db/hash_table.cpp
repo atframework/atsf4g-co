@@ -710,7 +710,13 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   *data_allocated = '&';
   data_allocated += 1;
   // 再dump 字段内容
-  store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+  auto *next_buffer =
+      store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+  if (next_buffer - reinterpret_cast<::google::protobuf::uint8 *>(data_allocated) != static_cast<ptrdiff_t>(dump_len)) {
+    FWLOGERROR("pack message {} failed, serialize value failed", store->GetDescriptor()->full_name());
+    args.dealloc();
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
+  }
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to update data by index {}", key, list_index);
   uint64_t rpc_sequence = 0;
@@ -778,7 +784,13 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
   *data_allocated = '&';
   data_allocated += 1;
   // 再dump 字段内容
-  store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+  auto *next_buffer =
+      store->SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+  if (next_buffer - reinterpret_cast<::google::protobuf::uint8 *>(data_allocated) != static_cast<ptrdiff_t>(dump_len)) {
+    FWLOGERROR("pack message {} failed, serialize value failed", store->GetDescriptor()->full_name());
+    args.dealloc();
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
+  }
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to add index, max_list_length: {}", key,
              max_list_length);

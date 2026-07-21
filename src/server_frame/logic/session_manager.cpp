@@ -235,7 +235,13 @@ SERVER_FRAME_API int32_t session_manager::broadcast_msg_to_client(const atframew
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
-  msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("broadcast to all gateway failed: serialize size mismatch, expect {}, actual {}", msg_buf_len,
+               next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
   FWLOGDEBUG("broadcast msg to all gateway {} bytes\n{}", msg_buf_len, protobuf_mini_dumper_get_readable(msg));
 
   int32_t ret = 0;

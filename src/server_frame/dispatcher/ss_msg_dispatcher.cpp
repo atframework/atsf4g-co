@@ -284,7 +284,14 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atfra
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
-  ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send to proc [{:#x}: {}] failed: serialize size mismatch, expect {}, actual {}", node_id,
+               get_app()->convert_app_id_to_string(node_id), msg_buf_len,
+               next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
   FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", node_id, get_app()->convert_app_id_to_string(node_id),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
@@ -360,7 +367,14 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
-  ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send to proc {} failed: serialize size mismatch, expect {}, actual {}",
+               node.get_discovery_info().name(), msg_buf_len,
+               next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
   FWLOGDEBUG("send msg to proc {} {} bytes\n{}", node.get_discovery_info().name(), msg_buf_len,
              protobuf_mini_dumper_get_readable(ss_msg));
 
@@ -486,7 +500,13 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
-  ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = ss_msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("broadcast message {} failed: serialize size mismatch, expect {}, actual {}", pick_rpc_name(ss_msg),
+               msg_buf_len, next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+
   FWLOGDEBUG("broadcast message {} to {} nodes with {} bytes\n{}", pick_rpc_name(ss_msg), server_nodes.size(),
              msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 

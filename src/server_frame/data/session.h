@@ -129,7 +129,7 @@ class session {
    * @brief 监视关联的player
    * @param 关联的player
    */
-  SERVER_FRAME_API void set_player(std::shared_ptr<player_cache> u) noexcept;
+  SERVER_FRAME_API void set_player(const std::shared_ptr<player_cache> &u) noexcept;
 
   /**
    * @brief 获取关联的session

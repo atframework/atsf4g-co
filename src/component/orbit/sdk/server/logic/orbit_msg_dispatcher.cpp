@@ -18,6 +18,10 @@
 #include <utility/protobuf_mini_dumper.h>
 #include <utility/tls_buffers.h>
 
+#include <memory>
+#include <string>
+#include <utility>
+
 namespace {
 rpc::result_code_type on_receive_orbit_message(rpc::context &ctx, std::string client_id, const std::string &data) {
   // 解包
@@ -230,7 +234,12 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_client_no_wait(rp
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast<::google::protobuf::uint8 *>(tls_buffer.data());
-  orbit_msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = orbit_msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast<uint8_t *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send orbit msg to proc [{}] failed: serialize size mismatch, expect {}, actual {}", client_id,
+               msg_buf_len, next_buffer - reinterpret_cast<uint8_t *>(buf_start));
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
   FWLOGDEBUG("send orbit msg to proc [{}] {} bytes\n{}", client_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(orbit_msg));
 
@@ -271,7 +280,13 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_msg_dispatcher::send_to_cli
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast<::google::protobuf::uint8 *>(tls_buffer.data());
-  orbit_msg.SerializeWithCachedSizesToArray(buf_start);
+  auto *next_buffer = orbit_msg.SerializeWithCachedSizesToArray(buf_start);
+  if (next_buffer - reinterpret_cast<uint8_t *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send orbit msg to proc [{}] failed: serialize size mismatch, expect {}, actual {}", client_id,
+               msg_buf_len, next_buffer - reinterpret_cast<uint8_t *>(buf_start));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
+  }
+
   FWLOGDEBUG("send orbit msg to proc [{}] {} bytes\n{}", client_id, msg_buf_len,
              protobuf_mini_dumper_get_readable(orbit_msg));
 

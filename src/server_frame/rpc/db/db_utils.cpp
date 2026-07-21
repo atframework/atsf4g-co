@@ -850,7 +850,15 @@ int pack_message(const ::google::protobuf::Message &msg, redis_args &args,
         *data_allocated = '&';
         data_allocated += 1;
         // 再dump 字段内容
-        seg_val.SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+        auto *next_buffer =
+            seg_val.SerializeWithCachedSizesToArray(reinterpret_cast<::google::protobuf::uint8 *>(data_allocated));
+        if (next_buffer - reinterpret_cast<::google::protobuf::uint8 *>(data_allocated) !=
+            static_cast<ptrdiff_t>(dump_len)) {
+          FWLOGERROR("pack message {} failed, serialize {} value failed", msg.GetDescriptor()->full_name(),
+                     fds[i]->name());
+          args.dealloc();
+          return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+        }
 
         stat_sum_len += dump_len;
         if (nullptr != debug_message) {
