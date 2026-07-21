@@ -30,5 +30,6 @@ message ExcelDtmqChannelType {
   uint32 gc_log_count = 3;
   google.protobuf.Duration gc_expire_duration = 4;
   bool memory_only = 5;
-  int32 word_count_limit = 8;  // 字数限制
+  uint32 readonly_replicate_count = 6;  // 只读副本数量
+  int32 word_count_limit = 8;           // 字数限制
 }

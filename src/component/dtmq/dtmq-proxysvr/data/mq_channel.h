@@ -298,7 +298,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   mq_channel_timer_type::timer_wptr_t timer_handle_;
   channel_status status_;
   uint64_t readonly_replicate_index_;
-  int64_t readonly_replicate_configure_count_;
+  uint32_t readonly_replicate_configure_count_;
 
   std::chrono::system_clock::time_point destroy_timepoint_;
   int64_t destroy_sequence_;

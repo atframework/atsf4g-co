@@ -5,6 +5,18 @@
 
 #include <atframe/modules/service_discovery_module.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/com.struct.dtmq.config.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <config/excel/config_easy_api.h>
 #include <config/excel_config_dtmq_index.h>
 #include <config/extern_service_types.h>
 
@@ -20,7 +32,6 @@
 
 #include "data/mq_channel.h"
 #include "log/log_wrapper.h"
-#include "protocol/pbdesc/com.const.pb.h"
 
 #if defined(_LIBCPP_VERSION)
 #  define ATFW_DTMQ_STD_LIBSTDCXX_LEGACY_LIST_ABI 0
@@ -470,9 +481,8 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
   }
 
   uint64_t local_server_id = logic_config::me()->get_local_server_id();
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-  if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+  auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
+  if (!channel_cfg || channel_cfg->readonly_replicate_count() <= 0) {
     // 判定无只读副本，可写副本为本机，但本机又不能成为可写副本。说明本机正在被关闭
     if (forward_server_id == local_server_id || forward_server_id == 0) {
       FCTXLOGWARNING(ctx, "channel {} server {:#x} is under maintenance, and no more available node now.",

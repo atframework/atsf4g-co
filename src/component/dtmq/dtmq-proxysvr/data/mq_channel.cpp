@@ -10,6 +10,7 @@
 // clang-format on
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
+#include <protocol/config/com.struct.dtmq.config.pb.h>
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -19,6 +20,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/excel/config_easy_api.h>
 #include <config/excel_config_dtmq_index.h>
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
@@ -64,24 +66,6 @@ static atfw::util::distributed_system::wal_duration get_mq_channel_ttl() {
   }
 
   return timeout;
-}
-
-inline static uint64_t normalize_replicate_index(uint64_t replicate_index) {
-  if (replicate_index == 0) {
-    return 0;
-  }
-
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-  if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
-    return 0;
-  }
-
-  if (replicate_index <= static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) {
-    return replicate_index;
-  }
-
-  return ((replicate_index - 1) % static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count())) + 1;
 }
 }  // namespace
 
@@ -408,6 +392,8 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
   const auto& dtmq_proxysvr_cfg =
       logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
 
+  auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(get_channel_key().channel_type());
+
   {
     auto& wal_obj_conf = get_shared_wal_object()->get_configure();
 
@@ -470,17 +456,18 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     }
   }
 
-  if (readonly_replicate_index_ > 0) {
-    readonly_replicate_index_ = normalize_replicate_index(readonly_replicate_index_);
-  }
-
-  if (readonly_replicate_configure_count_ != dtmq_proxysvr_cfg.readonly_replicate_count()) {
-    readonly_replicate_configure_count_ = dtmq_proxysvr_cfg.readonly_replicate_count();
+  if (channel_cfg && readonly_replicate_configure_count_ != channel_cfg->readonly_replicate_count()) {
+    readonly_replicate_configure_count_ = channel_cfg->readonly_replicate_count();
 
     // 重算分布
     server_distribution_etcd_revision_ = 0;
 
     // 重算分布后可以自动触发迁移逻辑,新增的只读副本会按需初始化加载，不需要主动通知
+  }
+
+  if (readonly_replicate_index_ > 0) {
+    readonly_replicate_index_ =
+        rpc::dtmq::normalize_replicate_index(readonly_replicate_index_, readonly_replicate_configure_count_);
   }
 }
 
@@ -936,13 +923,10 @@ bool mq_channel::should_be_writable() {
 bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                      uint64_t& readonly_server_id, uint64_t readonly_replicate_index,
                                                      mq_channel* channel) {
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-  if (0 == readonly_replicate_index || dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+  readonly_replicate_index = rpc::dtmq::normalize_replicate_index(readonly_replicate_index, channel_key);
+  if (readonly_replicate_index <= 0) {
     return should_be_writable_or_get_server_id(channel_key, readonly_server_id, channel);
   }
-
-  readonly_replicate_index = normalize_replicate_index(readonly_replicate_index);
 
   bool can_be_readonly = true;
   do {
@@ -987,10 +971,8 @@ bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelI
 bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                         uint64_t& readonly_replicate_index,
                                                         uint64_t& readonly_server_id, mq_channel* channel) {
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
-  if (dtmq_proxysvr_cfg.readonly_replicate_count() <= 0) {
+  auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
+  if (!channel_cfg || channel_cfg->readonly_replicate_count() <= 0) {
     readonly_replicate_index = 0;
     should_be_writable_or_get_server_id(channel_key, readonly_server_id, channel);
     return false;
@@ -1052,14 +1034,14 @@ bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChann
   } while (false);
 
   std::vector<std::pair<uint64_t, uint64_t>> readonly_servers;
-  readonly_servers.reserve(static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count() + 1));
+  readonly_servers.reserve(channel_cfg->readonly_replicate_count() + 1);
   uint64_t writable_server_id = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable, 0,
                                                                 logic_hpa_discovery_select_mode::kTarget);
   if (writable_server_id != local_server_id) {
     readonly_servers.emplace_back(writable_server_id, 0);
   }
 
-  for (uint64_t i = 1; i <= static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count()); i++) {
+  for (uint64_t i = 1; i <= channel_cfg->readonly_replicate_count(); i++) {
     readonly_server_id = rpc::dtmq::get_target_server_id(channel_key, rpc::dtmq::replicate_type::kReadonly, i,
                                                          logic_hpa_discovery_select_mode::kTarget);
     // 本机可以成为只读副本的情况
@@ -1110,7 +1092,7 @@ bool mq_channel::should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_
 }
 
 uint64_t mq_channel::get_target_distribution_server_id(uint64_t replicate_index) const noexcept {
-  replicate_index = normalize_replicate_index(replicate_index);
+  replicate_index = rpc::dtmq::normalize_replicate_index(replicate_index, readonly_replicate_configure_count_);
 
   if (replicate_index == 0) {
     return target_distribution_.writable_server_id;
@@ -2574,14 +2556,10 @@ void mq_channel::recalculate_etcd_cache() {
       {logic_hpa_discovery_select_mode::kTarget, &target_distribution_},
   };
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
   std::vector<uint64_t> server_id_set;
   for (auto& calc_data : calc_set) {
     server_id_set.clear();
-    rpc::dtmq::get_target_server_ids(server_id_set, get_channel_key(),
-                                     static_cast<uint64_t>(dtmq_proxysvr_cfg.readonly_replicate_count()),
+    rpc::dtmq::get_target_server_ids(server_id_set, get_channel_key(), readonly_replicate_configure_count_,
                                      calc_data.first);
     if (!server_id_set.empty()) {
       calc_data.second->writable_server_id = server_id_set[0];
@@ -2591,11 +2569,9 @@ void mq_channel::recalculate_etcd_cache() {
 
     calc_data.second->readonly_server_id_to_replicate_index.clear();
     calc_data.second->readonly_replicate_index_to_server_id.clear();
-    if (dtmq_proxysvr_cfg.readonly_replicate_count() > 0) {
-      calc_data.second->readonly_server_id_to_replicate_index.reserve(
-          static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()));
-      calc_data.second->readonly_replicate_index_to_server_id.reserve(
-          static_cast<size_t>(dtmq_proxysvr_cfg.readonly_replicate_count()));
+    if (readonly_replicate_configure_count_ > 0) {
+      calc_data.second->readonly_server_id_to_replicate_index.reserve(readonly_replicate_configure_count_);
+      calc_data.second->readonly_replicate_index_to_server_id.reserve(readonly_replicate_configure_count_);
       for (size_t i = 1; i < server_id_set.size(); i++) {
         uint64_t readonly_server_id = server_id_set[i];
 

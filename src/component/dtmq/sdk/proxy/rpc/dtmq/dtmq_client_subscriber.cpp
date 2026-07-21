@@ -7,6 +7,9 @@
 
 #include <gsl/select-gsl.h>
 
+#include <log/log_wrapper.h>
+#include <memory/rc_ptr.h>
+
 #include <atframe/etcdcli/etcd_discovery.h>
 
 // clang-format off
@@ -21,6 +24,8 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <utility/random_engine.h>
 
 #include <rpc/dtmq/dtmqproxysvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
@@ -40,9 +45,6 @@
 #include <unordered_set>
 #include <utility>
 
-#include "log/log_wrapper.h"
-#include "memory/rc_ptr.h"
-
 namespace rpc {
 namespace dtmq {
 
@@ -57,13 +59,15 @@ class shared_subscriber {
 
   // NOLINTNEXTLINE(modernize-pass-by-value)
   shared_subscriber(const atfw::dtmq::DChannelIdKey& channel_key, const client_subscriber::subscriber_options& options)
-      : channel_key_(channel_key) {
+      : channel_key_(channel_key), readonly_replicate_index_(atfw::component::random_engine::random()) {
     subscriber_info_.set_subscriber_server_id(logic_config::me()->get_local_server_id());
     subscriber_info_.set_subscriber_key(options.subscriber_key);
   }
 
   inline const atfw::dtmq::DChannelIdKey& get_channel_key() const { return channel_key_; }
   inline const atfw::dtmq::channel_subscriber& get_subscriber_info() const { return subscriber_info_; }
+
+  uint64_t get_readonly_replicate_index() const noexcept { return readonly_replicate_index_; }
 
   void register_client_subscriber(client_subscriber* client) { registered_client_.insert(client); }
   void unregister_client_subscriber(client_subscriber* client) { registered_client_.erase(client); }
@@ -78,6 +82,7 @@ class shared_subscriber {
  private:
   atfw::dtmq::DChannelIdKey channel_key_;
   atfw::dtmq::channel_subscriber subscriber_info_;
+  uint64_t readonly_replicate_index_;
 
   std::unordered_set<client_subscriber*> registered_client_;
 };
@@ -142,14 +147,16 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::find_message(rpc::context& ctx, int64_t sequence,
                                                                          atfw::dtmq::DChannelMessage& msg) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      rpc::dtmq::find_message(ctx, internal_data_->shared_subscriber->get_channel_key(), sequence, msg)));
+      rpc::dtmq::find_message(ctx, internal_data_->shared_subscriber->get_channel_key(),
+                              internal_data_->shared_subscriber->get_readonly_replicate_index(), sequence, msg)));
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::page_query_message(
     rpc::context& ctx, atfw::dtmq::channel_page_info& page_info,
     google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      rpc::dtmq::page_query_message(ctx, internal_data_->shared_subscriber->get_channel_key(), page_info, msgs)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::page_query_message(
+      ctx, internal_data_->shared_subscriber->get_channel_key(),
+      internal_data_->shared_subscriber->get_readonly_replicate_index(), page_info, msgs)));
 }
 
 namespace {

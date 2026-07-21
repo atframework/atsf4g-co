@@ -14,6 +14,7 @@
 // clang-format on
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
+#include <protocol/config/com.struct.dtmq.config.pb.h>
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
@@ -25,6 +26,7 @@
 #include <rpc/dtmq/dtmqproxysvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
 
+#include <config/excel/config_easy_api.h>
 #include <config/extern_service_types.h>
 #include <config/server_frame_build_feature.h>
 
@@ -43,19 +45,57 @@ namespace dtmq {
 
 namespace {
 // 单个频道副本数量硬限制
-constexpr const uint64_t kDtmqProxySvrMaxReplicateIndex = 65536;
+constexpr const uint32_t kDtmqProxySvrMaxReplicateIndex = 65536;
+
+static uint64_t internal_normalize_replicate_index(uint64_t replicate_index, uint32_t readonly_replicate_count) {
+  if (readonly_replicate_count <= 0) {
+    return 0;
+  }
+
+  if (readonly_replicate_count > kDtmqProxySvrMaxReplicateIndex) {
+    readonly_replicate_count = kDtmqProxySvrMaxReplicateIndex;
+  }
+
+  if (replicate_index <= readonly_replicate_count) {
+    return replicate_index;
+  }
+
+  return ((replicate_index - 1) % readonly_replicate_count) + 1;
+}
+
+static uint64_t internal_normalize_replicate_index(uint64_t replicate_index,
+                                                   const atfw::dtmq::DChannelIdKey& channel_key) {
+  auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
+  if (!channel_cfg) {
+    return 0;
+  }
+
+  uint32_t readonly_replicate_count = channel_cfg->readonly_replicate_count();
+  if (readonly_replicate_count > kDtmqProxySvrMaxReplicateIndex) {
+    readonly_replicate_count = kDtmqProxySvrMaxReplicateIndex;
+  }
+
+  return internal_normalize_replicate_index(replicate_index, channel_cfg->readonly_replicate_count());
+}
+
 }  // namespace
 
-DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status,
+DTMQ_PROXY_SDK_API uint64_t normalize_replicate_index(uint64_t replicate_index, uint32_t readonly_replicate_count) {
+  return internal_normalize_replicate_index(replicate_index, readonly_replicate_count);
+}
+
+DTMQ_PROXY_SDK_API uint64_t normalize_replicate_index(uint64_t replicate_index,
+                                                      const atfw::dtmq::DChannelIdKey& channel_key) {
+  return internal_normalize_replicate_index(replicate_index, channel_key);
+}
+
+DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type rep_type,
                                                  uint64_t replicate_index, logic_hpa_discovery_select_mode mode) {
   if (channel_key.channel_id().empty()) {
     return 0;
   }
 
-  if (replicate_index > kDtmqProxySvrMaxReplicateIndex) {
-    return 0;
-  }
-
+  replicate_index = internal_normalize_replicate_index(replicate_index, channel_key);
   auto* mod = logic_server_last_common_module();
   if (mod == nullptr) {
     return 0;
@@ -76,7 +116,7 @@ DTMQ_PROXY_SDK_API uint64_t get_target_server_id(const atfw::dtmq::DChannelIdKey
     return 0;
   }
 
-  if (status == rpc::dtmq::replicate_type::kWritable || 0 == replicate_index) {
+  if (rep_type == rpc::dtmq::replicate_type::kWritable || 0 == replicate_index) {
     return node_hash.node->get_discovery_info().id();
   }
 
@@ -100,8 +140,15 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
     return;
   }
 
-  if (replicate_index_count > kDtmqProxySvrMaxReplicateIndex) {
-    replicate_index_count = kDtmqProxySvrMaxReplicateIndex;
+  auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
+  if (!channel_cfg) {
+    replicate_index_count = 0;
+  } else {
+    if (replicate_index_count > kDtmqProxySvrMaxReplicateIndex) {
+      replicate_index_count = kDtmqProxySvrMaxReplicateIndex;
+    }
+    replicate_index_count =
+        internal_normalize_replicate_index(replicate_index_count, channel_cfg->readonly_replicate_count());
   }
 
   auto* mod = logic_server_last_common_module();
@@ -213,11 +260,15 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key,
-                                                      int64_t sequence, atfw::dtmq::DChannelMessage& msg) {
+                                                      uint64_t replicate_index, int64_t sequence,
+                                                      atfw::dtmq::DChannelMessage& msg) {
   if (channel_key.channel_id().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
-  uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
+
+  rpc::dtmq::replicate_type rep_type =
+      replicate_index <= 0 ? rpc::dtmq::replicate_type::kWritable : rpc::dtmq::replicate_type::kReadonly;
+  uint64_t target_server_id = get_target_server_id(channel_key, rep_type, replicate_index);
   if (0 == target_server_id) {
     FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
@@ -242,13 +293,15 @@ DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx, const a
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
-    rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, atfw::dtmq::channel_page_info& page_info,
-    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
+    rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, uint64_t replicate_index,
+    atfw::dtmq::channel_page_info& page_info, google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
   if (channel_key.channel_id().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
-  uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
+  rpc::dtmq::replicate_type rep_type =
+      replicate_index <= 0 ? rpc::dtmq::replicate_type::kWritable : rpc::dtmq::replicate_type::kReadonly;
+  uint64_t target_server_id = get_target_server_id(channel_key, rep_type, replicate_index);
   if (0 == target_server_id) {
     FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);

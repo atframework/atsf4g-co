@@ -30,7 +30,6 @@ message dtmq_proxysvr_cfg {
       [(atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
   google.protobuf.Duration channel_notify_readonly_subscribe_interval = 11
       [(atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "30s" }];
-  int32 readonly_replicate_count = 12 [(atapp.protocol.CONFIGURE) = { default_value: "2" min_value: "0" }];
   int32 channel_wal_hash_mismatch_need_snapshot_times = 13
       [(atapp.protocol.CONFIGURE) = { default_value: "5" min_value: "3" }];
   google.protobuf.Duration channel_wal_hash_mismatch_need_snapshot_interval = 14

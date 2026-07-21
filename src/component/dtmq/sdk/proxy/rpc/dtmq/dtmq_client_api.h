@@ -31,19 +31,24 @@ class context;
 
 namespace dtmq {
 
+DTMQ_PROXY_SDK_API uint64_t normalize_replicate_index(uint64_t replicate_index, uint32_t readonly_replicate_count);
+
+DTMQ_PROXY_SDK_API uint64_t normalize_replicate_index(uint64_t replicate_index,
+                                                      const atfw::dtmq::DChannelIdKey& channel_key);
+
 /**
  * @brief 获取目标服务器ID
  *
  * @param channel_key 频道Key
- * @param status 状态模式
+ * @param rep_type 副本类型
  * @param replicate_index 副本下标
  * @param mode 选择模式
  * @return uint64_t 服务器ID
  * @note 返回的Readonly副本服务ID可能和Writable副本服务ID相同，此时应该以Writable副本服务ID为准。
  */
-DTMQ_PROXY_SDK_API uint64_t
-get_target_server_id(const atfw::dtmq::DChannelIdKey& channel_key, replicate_type status, uint64_t replicate_index = 0,
-                     logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
+DTMQ_PROXY_SDK_API uint64_t get_target_server_id(
+    const atfw::dtmq::DChannelIdKey& channel_key, replicate_type rep_type, uint64_t replicate_index = 0,
+    logic_hpa_discovery_select_mode mode = logic_hpa_discovery_select_mode::kReady);
 
 /**
  * @brief 获取目标服务器ID
@@ -97,7 +102,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_messa
  * @return rpc::result_code_type 查找结果
  */
 ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_message(
-    rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, int64_t sequence,
+    rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, uint64_t replicate_index, int64_t sequence,
     atfw::dtmq::DChannelMessage& msg);
 
 /**
@@ -110,8 +115,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_messa
  * @return rpc::result_code_type 查询结果
  */
 ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
-    rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, atfw::dtmq::channel_page_info& page_info,
-    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
+    rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key, uint64_t replicate_index,
+    atfw::dtmq::channel_page_info& page_info, google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
 
 }  // namespace dtmq
 }  // namespace rpc
