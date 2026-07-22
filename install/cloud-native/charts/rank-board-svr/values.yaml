@@ -43,7 +43,7 @@ ranksvr_ranking:
   rank_tree_degree: 20
   rank_save_interval: 600
   rank_btree_degree: 20
-  pushlisher_congihure:
+  publisher_configure:
     gc_expire_duration: 3600
     gc_log_size: 30
     max_log_size: 300

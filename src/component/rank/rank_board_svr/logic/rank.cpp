@@ -48,10 +48,10 @@ rank::rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t capacity, co
     : capacity_(capacity),
       btree_(atfw::memory::stl::make_strong_rc<rank_tree>(
           static_cast<size_t>(logic_config::me()
-                                  ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                  ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                                   .rank_btree_degree()),
           logic_config::me()
-              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+              ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
               .rank_history_version_max_count(),
           compare_fn)),
       data_version_(data_version),
@@ -94,14 +94,14 @@ void rank::insert_data_from_btree(const PROJECT_NAMESPACE_ID::rank_sort_data& sc
 void rank::refresh_limit_second(rpc::context& ctx, time_t now_tm) {
   if (is_slave_node() &&
       now_tm - last_heartbeat_time_ > logic_config::me()
-                                          ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                          ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                                           .rank_refresh_limit_second_interval()
                                           .seconds()) {
     async_heartbeat(ctx);
   }
 
   auto router_lock_timeout = logic_config::me()
-                                 ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                 ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                                  .rank_server_router_lock_timeout()
                                  .seconds();
   if (get_router_data().main_server_id() == logic_config::me()->get_local_server_id() &&
@@ -111,7 +111,7 @@ void rank::refresh_limit_second(rpc::context& ctx, time_t now_tm) {
 
   if (is_main_node()) {
     auto save_interval = logic_config::me()
-                             ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                             ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                              .rank_save_interval();
     if (now_tm - last_save_time_ > save_interval) {
       async_save_rank_data(ctx);
@@ -402,7 +402,7 @@ rpc::result_code_type rank::init_rank_from_db(rpc::context& ctx) {
 bool rank::is_main_node() const {
   auto now_tm = atfw::util::time::time_utility::get_now();
   auto timeout = logic_config::me()
-                     ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                     ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                      .rank_server_router_lock_timeout()
                      .seconds();
 

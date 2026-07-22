@@ -91,7 +91,7 @@ int main(int argc, char *argv[]) {
 
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to_) {
-        auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>();
+        auto config_ptr = atfw::util::memory::make_strong_rc<atframework::rank::config::ranksvr_cfg>();
         app_.parse_configures_into(*config_ptr, "ranksvr-ranking");
         to_ = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
       });

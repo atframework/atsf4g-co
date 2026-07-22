@@ -42,7 +42,7 @@ void rank_mirror_global::add_failed_task(const dump_mirror_task_ptr& task) {
 void rank_mirror_global::add_dump_task(const dump_mirror_task_ptr& task) {
   size_t max_dunmp_task_num =
       static_cast<size_t>(logic_config::me()
-                              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                              ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                               .rank_dunmp_task_max_num());
   if (task_list_.size() >= max_dunmp_task_num + 1) {
     FWLOGWARNING("rank_mirror_global.add_dump_task failed, task_list_ size:{} reach max num", task_list_.size());
@@ -87,7 +87,7 @@ rpc::result_code_type rank_mirror_global::tick_dump(rpc::context& ctx) {
 
   int32_t tick_io_max = 5;
   auto rank_per_slice_max_count = logic_config::me()
-                                      ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                                      ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                                       .rank_slice_max_count();
   if (rank_per_slice_max_count <= 0) {
     rank_per_slice_max_count = 1;

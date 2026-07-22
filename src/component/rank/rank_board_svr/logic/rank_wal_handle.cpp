@@ -205,16 +205,16 @@ static rank_wal_publisher_type::configure_pointer create_rank_publisher_congigur
   ret->enable_last_broadcast_for_removed_subscriber = false;
   ret->gc_expire_duration =
       std::chrono::seconds{logic_config::me()
-                               ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                               .pushlisher_congihure()
+                               ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
+                               .publisher_configure()
                                .gc_expire_duration()};
   ret->gc_log_size = static_cast<size_t>(logic_config::me()
-                                             ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                                             .pushlisher_congihure()
+                                             ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
+                                             .publisher_configure()
                                              .gc_log_size());
   ret->max_log_size = static_cast<size_t>(logic_config::me()
-                                              ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
-                                              .pushlisher_congihure()
+                                              ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
+                                              .publisher_configure()
                                               .max_log_size());
 
   // ret->subscriber_timeout = std::chrono::seconds{10};

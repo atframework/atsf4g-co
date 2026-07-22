@@ -179,7 +179,7 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
   out_rank = rank_ptr;
 
   auto timeout = logic_config::me()
-                     ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>()
+                     ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                      .rank_server_router_lock_timeout()
                      .seconds();
   auto now_tm = atfw::util::time::time_utility::get_now();
@@ -371,7 +371,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
     }
   }
   auto slave_node_cfg_num =
-      logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_cfg>().rank_slave_num();
+      logic_config::me()->get_server_instance_config<atframework::rank::config::ranksvr_cfg>().rank_slave_num();
   if (slave_node_cfg_num <= 0) {
     slave_node_cfg_num = 1;
   }
