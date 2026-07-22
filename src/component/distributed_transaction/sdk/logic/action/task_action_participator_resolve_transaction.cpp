@@ -32,7 +32,7 @@ task_action_participator_resolve_transaction::task_action_participator_resolve_t
     : task_action_no_req_base(param), param_(param) {}
 
 DISTRIBUTED_TRANSACTION_SDK_API
-    task_action_participator_resolve_transaction::~task_action_participator_resolve_transaction() {}
+task_action_participator_resolve_transaction::~task_action_participator_resolve_transaction() {}
 
 DISTRIBUTED_TRANSACTION_SDK_API const char* task_action_participator_resolve_transaction::name() const {
   return "task_action_participator_resolve_transaction";
@@ -58,12 +58,11 @@ task_action_participator_resolve_transaction::operator()() {
     for (auto& trans_data : param_.submmit_transactions) {
       int32_t res = 0;
       const char* operation_name = "[NO RPC]";
-      if (atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING ==
-          trans_data->metadata().status()) {
+      if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING == trans_data->metadata().status()) {
         res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_participator(
             get_shared_context(), param_.participantor->get_participator_key(), *trans_data->mutable_metadata()));
         operation_name = "commit";
-      } else if (atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
+      } else if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
                  trans_data->metadata().status()) {
         res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_participator(
             get_shared_context(), param_.participantor->get_participator_key(), *trans_data->mutable_metadata()));

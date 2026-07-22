@@ -12,6 +12,8 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
 import "protocol/extension/svr.database.extension.proto";
+
+import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/svr.struct.proto";
 import "protocol/pbdesc/svr.struct.rank.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";

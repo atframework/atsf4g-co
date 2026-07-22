@@ -31,7 +31,7 @@
 #define TRANSACTION_RETRY_MAX_TIMES 5
 
 namespace {
-static uint32_t get_transaction_zone_id(const atframework::distributed_system::transaction_metadata& metadata) {
+static uint32_t get_transaction_zone_id(const atfw::distributed_system::transaction_metadata& metadata) {
   if (metadata.replicate_read_count() > 0 &&
       static_cast<uint32_t>(metadata.replicate_node_server_id_size()) >= metadata.replicate_read_count()) {
     return logic_config::me()->get_local_zone_id();
@@ -56,11 +56,11 @@ int transaction_manager::tick() {
   }
 
   time_t timeout_duration = logic_config::me()
-                                ->get_server_instance_config<atframework::distributed_system::config::dtcoordsvr_cfg>()
+                                ->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>()
                                 .lru_expired_duration()
                                 .seconds();
   size_t max_count = logic_config::me()
-                         ->get_server_instance_config<atframework::distributed_system::config::dtcoordsvr_cfg>()
+                         ->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>()
                          .lru_max_cache_count();
   while (!lru_caches_.empty()) {
     if (!lru_caches_.front().second) {
@@ -87,7 +87,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(lru_caches_.await_save(
       ctx, data,
-      [](rpc::context& subctx, const atframework::distributed_system::transaction_blob_storage& in,
+      [](rpc::context& subctx, const atfw::distributed_system::transaction_blob_storage& in,
          int64_t* out_version) -> rpc::result_code_type {
         uint64_t data_version = 0;
         if (nullptr != out_version) {
@@ -111,7 +111,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
 }
 
 rpc::result_code_type transaction_manager::create_transaction(
-    rpc::context& ctx, atframework::distributed_system::transaction_blob_storage&& storage) {
+    rpc::context& ctx, atfw::distributed_system::transaction_blob_storage&& storage) {
   if (storage.metadata().transaction_uuid().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -123,7 +123,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   if (storage.metadata().expire_timepoint().seconds() <= now) {
     const auto& cfg_value = logic_config::me()
-                                ->get_server_instance_config<atframework::distributed_system::config::dtcoordsvr_cfg>()
+                                ->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>()
                                 .transaction_default_timeout();
     if (now_nanos + cfg_value.nanos() > 1000000000) {
       storage.mutable_metadata()->mutable_expire_timepoint()->set_seconds(now + cfg_value.seconds() + 1);
@@ -170,8 +170,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 }
 
 rpc::result_code_type transaction_manager::mutable_transaction(
-    rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata,
-    transaction_ptr_type& out) {
+    rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata, transaction_ptr_type& out) {
   // 停服时返回nullptr
   if (is_exiting_) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
@@ -183,7 +182,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
     ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_fetch(
         ctx, metadata.transaction_uuid(), out,
         [zone_id](rpc::context& subctx, const std::string& key,
-                  atframework::distributed_system::transaction_blob_storage& output,
+                  atfw::distributed_system::transaction_blob_storage& output,
                   int64_t* out_version) -> rpc::result_code_type {
           uint64_t data_version = 0;
           rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
@@ -219,11 +218,11 @@ rpc::result_code_type transaction_manager::mutable_transaction(
   }
 
   // 超时且未提交的视为事务失败
-  if (out && out->data_object.metadata().status() <=
-                 atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (out &&
+      out->data_object.metadata().status() <= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     if (util::time::time_utility::get_now() > out->data_object.metadata().expire_timepoint().seconds() + 5) {
       out->data_object.mutable_metadata()->set_status(
-          atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+          atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
     }
   }
 
@@ -243,15 +242,15 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_PARTICIPATOR_NOT_FOUND);
   }
 
-  atframework::distributed_system::transaction_participator* selected_participator = nullptr;
+  atfw::distributed_system::transaction_participator* selected_participator = nullptr;
   bool all_resolved = true;
   bool has_changed = false;
   for (auto& participator : *all_participators) {
-    atframework::distributed_system::transaction_participator* check_participator = &participator.second;
+    atfw::distributed_system::transaction_participator* check_participator = &participator.second;
     if (participator_key == check_participator->participator_key()) {
       selected_participator = check_participator;
     } else if (check_participator->participator_status() <
-               atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+               atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
       all_resolved = false;
     }
   }
@@ -263,9 +262,9 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
   }
 
   if (selected_participator->participator_status() <=
-      atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+      atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     selected_participator->set_participator_status(
-        atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
     has_changed = true;
   }
 
@@ -322,15 +321,15 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_PARTICIPATOR_NOT_FOUND);
   }
 
-  atframework::distributed_system::transaction_participator* selected_participator = nullptr;
+  atfw::distributed_system::transaction_participator* selected_participator = nullptr;
   bool all_resolved = true;
   bool has_changed = false;
   for (auto& participator : *all_participators) {
-    atframework::distributed_system::transaction_participator* check_participator = &participator.second;
+    atfw::distributed_system::transaction_participator* check_participator = &participator.second;
     if (participator_key == check_participator->participator_key()) {
       selected_participator = check_participator;
     } else if (check_participator->participator_status() <
-               atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+               atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
       all_resolved = false;
     }
   }
@@ -342,9 +341,9 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
   }
 
   if (selected_participator->participator_status() <=
-      atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+      atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     selected_participator->set_participator_status(
-        atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
     has_changed = true;
   }
 
@@ -393,14 +392,14 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  atframework::distributed_system::transaction_metadata* metadata = trans->data_object.mutable_metadata();
+  atfw::distributed_system::transaction_metadata* metadata = trans->data_object.mutable_metadata();
 
-  if (metadata->status() > atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (metadata->status() > atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     FWLOGERROR("Transaction {} already has status: {}, can not commit", metadata->transaction_uuid(),
                static_cast<int>(metadata->status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
-  metadata->set_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+  metadata->set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
   metadata->mutable_finish_timepoint()->set_seconds(util::time::time_utility::get_now());
   metadata->mutable_finish_timepoint()->set_nanos(
       static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
@@ -429,14 +428,14 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  atframework::distributed_system::transaction_metadata* metadata = trans->data_object.mutable_metadata();
+  atfw::distributed_system::transaction_metadata* metadata = trans->data_object.mutable_metadata();
 
-  if (metadata->status() > atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (metadata->status() > atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     FWLOGERROR("Transaction {} already has status: {}, can not reject", metadata->transaction_uuid(),
                static_cast<int>(metadata->status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
-  metadata->set_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+  metadata->set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
   metadata->mutable_finish_timepoint()->set_seconds(util::time::time_utility::get_now());
   metadata->mutable_finish_timepoint()->set_nanos(
       static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
@@ -460,8 +459,8 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type transaction_manager::try_remove(
-    rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata) {
+rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
+                                                      const atfw::distributed_system::transaction_metadata& metadata) {
   if (metadata.transaction_uuid().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }

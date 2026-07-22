@@ -15,12 +15,11 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_remove
-    : public task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionRemoveReq,
-                                     atframework::distributed_system::SSDistributeTransactionRemoveRsp> {
+class task_action_remove : public task_action_ss_rpc_base<atfw::distributed_system::SSDistributeTransactionRemoveReq,
+                                                          atfw::distributed_system::SSDistributeTransactionRemoveRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionRemoveReq,
-                                            atframework::distributed_system::SSDistributeTransactionRemoveRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::distributed_system::SSDistributeTransactionRemoveReq,
+                                            atfw::distributed_system::SSDistributeTransactionRemoveRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

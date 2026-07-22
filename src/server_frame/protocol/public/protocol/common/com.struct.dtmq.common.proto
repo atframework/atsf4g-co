@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package atframework.dtmq;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
+
+message DChannelOptimisticLock {
+  bytes lock_holder = 1;
+
+  // 设为空或者0表示永不超时
+  google.protobuf.Timestamp timeout = 2;
+}
+
+message DChannelConfigure {
+  uint32 channel_type = 1;  // EnChannelType
+  uint32 max_log_count = 2;
+  uint32 gc_log_count = 3;
+
+  // 移除消息保留一段时间，以保障数据同步
+  google.protobuf.Duration gc_expire_duration = 5;
+  bool memory_only = 6;
+
+  uint32 word_count_limit = 8;                             // 字数限制
+  google.protobuf.Duration heartbeat_interval = 9;         // 心跳间隔
+  google.protobuf.Duration heartbeat_retry_interval = 10;  // 心跳重试间隔
+  google.protobuf.Duration subscriber_timeout = 11;        // 订阅者超时时间，通常应该大于2倍的心跳间隔
+}
+
+message DChannelIdKey {
+  string channel_id = 1;
+  uint32 channel_type = 2;  // EnChannelType
+}

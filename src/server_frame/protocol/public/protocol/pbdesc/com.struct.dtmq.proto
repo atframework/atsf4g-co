@@ -12,38 +12,10 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 
+import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
-
-message DChannelOptimisticLock {
-  bytes lock_holder = 1;
-
-  // 设为空或者0表示永不超时
-  google.protobuf.Timestamp timeout = 2;
-}
-
-message DChannelConfigure {
-  uint32 channel_type = 1;  // EnChannelType
-  uint32 max_log_count = 2;
-  uint32 gc_log_count = 3;
-
-  // 设为空或者0表示永不超时
-  google.protobuf.Duration message_timeout = 4;
-
-  // 移除消息保留一段时间，以保障数据同步
-  google.protobuf.Duration gc_expire_duration = 5;
-  bool memory_only = 6;
-
-  int32 word_count_limit = 8;                              // 字数限制
-  google.protobuf.Duration heartbeat_interval = 9;         // 心跳间隔
-  google.protobuf.Duration heartbeat_retry_interval = 10;  // 心跳重试间隔
-}
-
-message DChannelIdKey {
-  string channel_id = 1;
-  uint32 channel_type = 2;  // EnChannelType
-}
 
 message DChannelMetadata {
   DChannelIdKey channel_key = 1;

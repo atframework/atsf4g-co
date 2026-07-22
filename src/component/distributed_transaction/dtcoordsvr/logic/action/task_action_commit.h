@@ -15,12 +15,11 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_commit
-    : public task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionCommitReq,
-                                     atframework::distributed_system::SSDistributeTransactionCommitRsp> {
+class task_action_commit : public task_action_ss_rpc_base<atfw::distributed_system::SSDistributeTransactionCommitReq,
+                                                          atfw::distributed_system::SSDistributeTransactionCommitRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionCommitReq,
-                                            atframework::distributed_system::SSDistributeTransactionCommitRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::distributed_system::SSDistributeTransactionCommitReq,
+                                            atfw::distributed_system::SSDistributeTransactionCommitRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

@@ -11,6 +11,8 @@ import "google/protobuf/duration.proto";
 import "protocol/extension/xrescode_extensions_v3.proto";
 import "protocol/extension/v3/xresloader.proto";
 
+import "protocol/common/com.struct.dtmq.common.proto";
+
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
 
 package hello.config;
@@ -26,10 +28,8 @@ message ExcelDtmqChannelType {
   };
 
   uint32 channel_type = 1 [(org.xresloader.field_unique_tag) = "channel_type"];
-  uint32 max_log_count = 2;
-  uint32 gc_log_count = 3;
-  google.protobuf.Duration gc_expire_duration = 4;
-  bool memory_only = 5;
+
+  atframework.dtmq.DChannelConfigure channel_configure = 2;
+  uint32 show_max_log_count = 5;        // 客户端展示消息条数
   uint32 readonly_replicate_count = 6;  // 只读副本数量
-  int32 word_count_limit = 8;           // 字数限制
 }

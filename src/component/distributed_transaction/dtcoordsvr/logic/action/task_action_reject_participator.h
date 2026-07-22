@@ -16,12 +16,11 @@
 #include <dispatcher/task_action_ss_req_base.h>
 
 class task_action_reject_participator
-    : public task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionRejectParticipatorReq,
-                                     atframework::distributed_system::SSDistributeTransactionRejectParticipatorRsp> {
+    : public task_action_ss_rpc_base<atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq,
+                                     atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp> {
  public:
-  using base_type =
-      task_action_ss_rpc_base<atframework::distributed_system::SSDistributeTransactionRejectParticipatorReq,
-                              atframework::distributed_system::SSDistributeTransactionRejectParticipatorRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq,
+                                            atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

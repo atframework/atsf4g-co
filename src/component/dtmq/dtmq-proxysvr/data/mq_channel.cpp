@@ -197,7 +197,7 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
 
     // load订阅者缓存(转移时恢复订阅)
     auto now = atfw::util::time::time_utility::now();
-    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
+    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout(configure_);
 
     auto subscriber_cache = rpc::make_shared_message<atfw::dtmq::channel_subscriber_cache>(ctx);
     if (false == record.subscriber_cache().UnpackTo(&(*subscriber_cache))) {
@@ -324,7 +324,7 @@ void mq_channel::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_dtmq_channe
 
     // dump订阅者缓存(转移时恢复订阅)
     auto now = atfw::util::time::time_utility::now();
-    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
+    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout(configure_);
 
     auto subscriber_cache = rpc::make_shared_message<atfw::dtmq::channel_subscriber_cache>(ctx);
 
@@ -389,9 +389,6 @@ void mq_channel::dump(atfw::dtmq::DChannelSnapshot& snapshot, bool with_configur
 void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
   protobuf_copy_message(configure_, config);
 
-  const auto& dtmq_proxysvr_cfg =
-      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
-
   auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(get_channel_key().channel_type());
 
   {
@@ -420,7 +417,7 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     publisher_conf.gc_log_size = wal_obj_conf.gc_log_size;
     publisher_conf.max_log_size = wal_obj_conf.max_log_size;
 
-    publisher_conf.subscriber_timeout = get_mq_channel_subscriber_timeout();
+    publisher_conf.subscriber_timeout = get_mq_channel_subscriber_timeout(configure_);
   }
 
   if (wal_client_) {
@@ -431,28 +428,20 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     client_conf.gc_log_size = wal_obj_conf.gc_log_size;
     client_conf.max_log_size = wal_obj_conf.max_log_size;
 
-    client_conf.subscriber_heartbeat_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-            dtmq_proxysvr_cfg.channel_heartbeat_interval());
-    if (client_conf.subscriber_heartbeat_interval < std::chrono::seconds{1}) {
-      client_conf.subscriber_heartbeat_interval =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-    }
-    client_conf.subscriber_heartbeat_retry_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-            dtmq_proxysvr_cfg.channel_heartbeat_retry_interval());
-    if (client_conf.subscriber_heartbeat_retry_interval < std::chrono::seconds{1}) {
-      client_conf.subscriber_heartbeat_retry_interval =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-    }
     if (configure_.heartbeat_interval().seconds() > 0) {
       client_conf.subscriber_heartbeat_interval =
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.heartbeat_interval());
+    } else {
+      client_conf.subscriber_heartbeat_interval =
+          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
     }
     if (configure_.heartbeat_retry_interval().seconds() > 0) {
       client_conf.subscriber_heartbeat_retry_interval =
           protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
               configure_.heartbeat_retry_interval());
+    } else {
+      client_conf.subscriber_heartbeat_retry_interval =
+          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
     }
   }
 
@@ -852,7 +841,7 @@ void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& 
     dump_private_data(*output.mutable_channel_data()->mutable_channel_runtime());
 
     auto now = atfw::util::time::time_utility::now();
-    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
+    auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout(configure_);
 
     auto all_subscribers = wal_publisher_->get_subscribe_manager().all_range();
     int subscriber_count = 0;
@@ -1999,7 +1988,7 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
   mq_channel_wal_object_context params{ctx, result};
 
   auto now = atfw::util::time::time_utility::now();
-  auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout();
+  auto subscriber_timeout_conf = get_mq_channel_subscriber_timeout(configure_);
 
   std::string subscriber_key = make_subscriber_key(subscriber_info);
   auto subscriber = wal_publisher_->find_subscriber(subscriber_key, params);
@@ -2435,12 +2424,12 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
       break;
     }
 
-    bool allow_gc =
-        now >
-        lost_last_subscriber_timepoint_ +
-            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.cache_expire_timeout()) +
-            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.subscriber_timeout()) +
-            std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(1));
+    bool allow_gc = now > lost_last_subscriber_timepoint_ +
+                              protobuf_to_chrono_duration<std::chrono::system_clock::duration>(
+                                  dtmq_proxysvr_cfg.cache_expire_timeout()) +
+                              std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                                  wal_publisher_->get_configure().subscriber_timeout) +
+                              std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds(1));
 
     if (allow_gc) {
       FCTXLOGDEBUG(ctx, "remove_channel ({}) in gc. no subscribes", get_channel_id());
@@ -2454,7 +2443,7 @@ void mq_channel::update_timer(rpc::context& ctx, bool force) {
     timer_interval =
         protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.cache_expire_timeout());
   } else {
-    timer_interval = get_mq_channel_subscriber_timeout();
+    timer_interval = get_mq_channel_subscriber_timeout(configure_);
 
     if (!configure_.memory_only() && save_interval > std::chrono::seconds(0) && save_interval < timer_interval) {
       timer_interval = save_interval;

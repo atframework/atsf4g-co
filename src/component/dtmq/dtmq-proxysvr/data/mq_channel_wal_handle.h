@@ -90,8 +90,9 @@ using mq_channel_wal_object_type = mq_channel_wal_client_type::object_type;
 
 std::string make_subscriber_key(const mq_channel_wal_subscriber_private_data& subscriber_data);
 
-// 读取配置的订阅者超时时间；当配置值非法(小于 1s)时回退到与 dtmq_proxy.config.proto 一致的默认值。
-atfw::util::distributed_system::wal_duration get_mq_channel_subscriber_timeout();
+// 读取配置的订阅者超时时间。
+atfw::util::distributed_system::wal_duration get_mq_channel_subscriber_timeout(
+    const atfw::dtmq::DChannelConfigure& configure);
 
 atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type> create_mq_channel_object(
     mq_channel& mq_channel, const atfw::dtmq::DChannelConfigure& configure);

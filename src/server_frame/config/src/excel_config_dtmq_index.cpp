@@ -26,15 +26,9 @@ EXCEL_CONFIG_LOADER_API void setup_dtmq_config(config_group_t& group) {
     }
 
     auto& logic_config = group.dtmq_channel_type_configure[channel_type.second->channel_type()];
-    logic_config = ::excel::excel_config_type_traits::make_shared<atfw::dtmq::DChannelConfigure>();
+    logic_config = ::excel::excel_config_type_traits::make_shared<atfw::dtmq::DChannelConfigure>(
+        channel_type.second->channel_configure());
     logic_config->set_channel_type(channel_type.second->channel_type());
-    logic_config->set_max_log_count(channel_type.second->max_log_count());
-    logic_config->set_gc_log_count(channel_type.second->gc_log_count());
-    *logic_config->mutable_gc_expire_duration() = channel_type.second->gc_expire_duration();
-    logic_config->set_memory_only(channel_type.second->memory_only());
-
-    logic_config->set_memory_only(channel_type.second->memory_only());
-    logic_config->set_word_count_limit(channel_type.second->word_count_limit());
   }
 }
 

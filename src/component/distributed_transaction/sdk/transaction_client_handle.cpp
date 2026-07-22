@@ -104,7 +104,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   }
 
   auto old_status = input->metadata().status();
-  if (old_status > atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (old_status > atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN);
   }
 
@@ -122,7 +122,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
   child_ctx.setup_tracer(child_tracer, "transaction_client_handle.submit_transaction", std::move(child_trace_option));
 
-  input->mutable_metadata()->set_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+  input->mutable_metadata()->set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   // 创建事务,强制自动提交的事务不需要创建协调者事务对象
@@ -280,7 +280,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::set_transacti
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (input->metadata().status() >= atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (input->metadata().status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     return PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN;
   }
 
@@ -302,7 +302,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (input->metadata().status() >= atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (input->metadata().status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     return PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN;
   }
 
@@ -331,7 +331,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
 
   auto& participator = (*input->mutable_participators())[participator_key];
   participator.set_participator_key(participator_key);
-  participator.set_participator_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+  participator.set_participator_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
   if (false == participator.mutable_participator_data()->PackFrom(data)) {
     FWLOGERROR("Pack transaction participator data from {} failed, message: {}",
                protobuf_mini_dumper_get_readable(data), participator.participator_data().InitializationErrorString());

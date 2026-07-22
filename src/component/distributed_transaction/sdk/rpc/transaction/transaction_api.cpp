@@ -48,7 +48,7 @@
 namespace rpc {
 namespace transaction_api {
 namespace {
-static uint64_t calculate_server_id(const atframework::distributed_system::transaction_metadata& metadata) {
+static uint64_t calculate_server_id(const atfw::distributed_system::transaction_metadata& metadata) {
   logic_server_common_module* common_mod = logic_server_last_common_module();
   if (nullptr == common_mod) {
     return 0;
@@ -83,7 +83,7 @@ static uint64_t calculate_server_id(const atframework::distributed_system::trans
   return node->get_discovery_info().id();
 }
 
-static void initialize_replication_server_ids(atframework::distributed_system::transaction_metadata& metadata,
+static void initialize_replication_server_ids(atfw::distributed_system::transaction_metadata& metadata,
                                               uint32_t& replication_read_count, uint32_t& replication_total_count) {
   if (replication_read_count <= 0 || replication_total_count < replication_read_count) {
     return;
@@ -131,13 +131,13 @@ static void initialize_replication_server_ids(atframework::distributed_system::t
   }
 }
 
-static bool is_replication_mode(const atframework::distributed_system::transaction_metadata& metadata) {
+static bool is_replication_mode(const atfw::distributed_system::transaction_metadata& metadata) {
   return metadata.replicate_read_count() > 0 &&
          static_cast<uint32_t>(metadata.replicate_node_server_id_size()) >= metadata.replicate_read_count();
 }
 
-static void merge_transaction_metadata(atframework::distributed_system::transaction_metadata& output,
-                                       const atframework::distributed_system::transaction_metadata& input) {
+static void merge_transaction_metadata(atfw::distributed_system::transaction_metadata& output,
+                                       const atfw::distributed_system::transaction_metadata& input) {
   // Merge metadata
   if (output.transaction_uuid().empty() && !input.transaction_uuid().empty()) {
     output.set_transaction_uuid(input.transaction_uuid());
@@ -168,8 +168,8 @@ static void merge_transaction_metadata(atframework::distributed_system::transact
   }
 }
 
-static void merge_transaction_configure(atframework::distributed_system::transaction_configure& output,
-                                        const atframework::distributed_system::transaction_configure& input) {
+static void merge_transaction_configure(atfw::distributed_system::transaction_configure& output,
+                                        const atfw::distributed_system::transaction_configure& input) {
   if (output.resolve_max_times() == 0) {
     output.set_resolve_max_times(input.resolve_max_times());
   }
@@ -190,9 +190,8 @@ static void merge_transaction_configure(atframework::distributed_system::transac
   }
 }
 
-static inline void merge_transaction_participator(
-    ::atframework::distributed_system::transaction_participator& output,
-    const ::atframework::distributed_system::transaction_participator& input) {
+static inline void merge_transaction_participator(::atfw::distributed_system::transaction_participator& output,
+                                                  const ::atfw::distributed_system::transaction_participator& input) {
   if (output.participator_status() < input.participator_status()) {
     output.set_participator_status(input.participator_status());
   }
@@ -203,8 +202,8 @@ static inline void merge_transaction_participator(
 }
 
 static void merge_transaction_participators(
-    google::protobuf::Map<std::string, ::atframework::distributed_system::transaction_participator>& output,
-    const google::protobuf::Map<std::string, ::atframework::distributed_system::transaction_participator>& input) {
+    google::protobuf::Map<std::string, ::atfw::distributed_system::transaction_participator>& output,
+    const google::protobuf::Map<std::string, ::atfw::distributed_system::transaction_participator>& input) {
   for (const auto& participator : input) {
     auto output_iter = output.find(participator.first);
     if (output_iter == output.end()) {
@@ -215,8 +214,8 @@ static void merge_transaction_participators(
   }
 }
 
-static void merge_transaction_storage(atframework::distributed_system::transaction_blob_storage& output,
-                                      const atframework::distributed_system::transaction_blob_storage& input) {
+static void merge_transaction_storage(atfw::distributed_system::transaction_blob_storage& output,
+                                      const atfw::distributed_system::transaction_blob_storage& input) {
   // Merge metadata
   if (!output.has_metadata() && input.has_metadata()) {
     protobuf_copy_message(*output.mutable_metadata(), input.metadata());
@@ -242,8 +241,8 @@ static void merge_transaction_storage(atframework::distributed_system::transacti
 }
 
 static void merge_transaction_storage(const std::string& participator_key,
-                                      atframework::distributed_system::transaction_participator_storage& output,
-                                      const atframework::distributed_system::transaction_blob_storage& input) {
+                                      atfw::distributed_system::transaction_participator_storage& output,
+                                      const atfw::distributed_system::transaction_blob_storage& input) {
   auto iter = input.participators().find(participator_key);
   if (input.participators().end() == iter) {
     return;
@@ -278,7 +277,7 @@ static void merge_transaction_storage(const std::string& participator_key,
 
 template <class TRequest, class TResponse, class TRpcFn>
 static rpc::result_code_type invoke_replication_rpc_call(
-    rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata,
+    rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata,
     rpc::context::message_holder<TRequest>& req_body, rpc::context::message_holder<TResponse>& rsp_body,
     gsl::string_view action_name, TRpcFn&& rpc_fn,
     std::function<void(uint64_t, const atframework::SSMsg&)> on_receive_message_fn, bool no_wait = false) {
@@ -355,9 +354,8 @@ static rpc::result_code_type invoke_replication_rpc_call(
 }  // namespace
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction(
-    rpc::context&, atframework::distributed_system::transaction_blob_storage& inout,
-    const google::protobuf::Duration& timeout, uint32_t replication_read_count, uint32_t replication_total_count,
-    bool memory_only, bool force_commit) {
+    rpc::context&, atfw::distributed_system::transaction_blob_storage& inout, const google::protobuf::Duration& timeout,
+    uint32_t replication_read_count, uint32_t replication_total_count, bool memory_only, bool force_commit) {
   std::string trans_uuid;
   atfw::util::base64_encode(trans_uuid, rpc::db::uuid::generate_standard_uuid_binary(),
                             atfw::util::base64_mode_t::EN_BMT_UTF7);
@@ -365,8 +363,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }
 
-  atframework::distributed_system::transaction_metadata& metadata = *inout.mutable_metadata();
-  atframework::distributed_system::transaction_configure& configure = *inout.mutable_configure();
+  atfw::distributed_system::transaction_metadata& metadata = *inout.mutable_metadata();
+  atfw::distributed_system::transaction_configure& configure = *inout.mutable_configure();
   metadata.set_transaction_uuid(trans_uuid);
   metadata.mutable_prepare_timepoint()->set_seconds(util::time::time_utility::get_now());
   metadata.mutable_prepare_timepoint()->set_nanos(
@@ -388,7 +386,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
     metadata.mutable_expire_timepoint()->set_nanos(metadata.prepare_timepoint().nanos() + timeout_nanos);
   }
 
-  metadata.set_status(atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED);
+  metadata.set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED);
   initialize_replication_server_ids(metadata, replication_read_count, replication_total_count);
   metadata.set_memory_only(memory_only);
 
@@ -425,13 +423,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
-    rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata,
-    atframework::distributed_system::transaction_blob_storage& out) {
+    rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata,
+    atfw::distributed_system::transaction_blob_storage& out) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
                                        metadata.transaction_uuid());
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionQueryReq> req_body(ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionQueryRsp> rsp_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionQueryReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionQueryRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), metadata);
 
@@ -464,17 +462,17 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
-    rpc::context& ctx, atframework::distributed_system::transaction_blob_storage& inout) {
+    rpc::context& ctx, atfw::distributed_system::transaction_blob_storage& inout) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
                                        inout.metadata().transaction_uuid());
 
   if (inout.configure().resolve_max_times() == 0 ||
-      inout.metadata().status() != atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+      inout.metadata().status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCreateReq> req_body(ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCreateRsp> rsp_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionCreateReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionCreateRsp> rsp_body(ctx);
 
   if (req_body->GetArena() == inout.GetArena()) {
     if (nullptr == req_body->GetArena()) {
@@ -514,12 +512,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_transaction(
-    rpc::context& ctx, atframework::distributed_system::transaction_metadata& inout) {
+    rpc::context& ctx, atfw::distributed_system::transaction_metadata& inout) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
                                        inout.transaction_uuid());
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitReq> req_body(ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitRsp> rsp_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionCommitReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionCommitRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), inout);
 
@@ -561,12 +559,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_transaction(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_transaction(
-    rpc::context& ctx, atframework::distributed_system::transaction_metadata& inout) {
+    rpc::context& ctx, atfw::distributed_system::transaction_metadata& inout) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
                                        inout.transaction_uuid());
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectReq> req_body(ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectRsp> rsp_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRejectReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRejectRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), inout);
 
@@ -609,13 +607,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_transaction(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction_no_wait(
-    rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata) {
+    rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata) {
   if (metadata.transaction_uuid().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRemoveReq> req_body(ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRemoveRsp> rsp_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRemoveReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRemoveRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), metadata);
 
@@ -635,12 +633,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction_no_wait
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction(
-    rpc::context& ctx, const atframework::distributed_system::transaction_metadata& metadata) {
+    rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={})",
                                        metadata.transaction_uuid());
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRemoveReq> req_body(ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRemoveRsp> rsp_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRemoveReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRemoveRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), metadata);
 
@@ -679,15 +677,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_participator(
-    rpc::context& ctx, const std::string& participator_key,
-    atframework::distributed_system::transaction_metadata& inout) {
+    rpc::context& ctx, const std::string& participator_key, atfw::distributed_system::transaction_metadata& inout) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={}, participator={})",
                                        inout.transaction_uuid(), participator_key);
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitParticipatorReq> req_body(
-      ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionCommitParticipatorRsp> rsp_body(
-      ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), inout);
   req_body->set_participator_key(participator_key);
@@ -731,15 +726,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_participator(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
-    rpc::context& ctx, const std::string& participator_key,
-    atframework::distributed_system::transaction_metadata& inout) {
+    rpc::context& ctx, const std::string& participator_key, atfw::distributed_system::transaction_metadata& inout) {
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("this function must be called in a task(transaction_uuid={}, participator={})",
                                        inout.transaction_uuid(), participator_key);
 
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectParticipatorReq> req_body(
-      ctx);
-  rpc::context::message_holder<atframework::distributed_system::SSDistributeTransactionRejectParticipatorRsp> rsp_body(
-      ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq> req_body(ctx);
+  rpc::context::message_holder<atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp> rsp_body(ctx);
 
   protobuf_copy_message(*req_body->mutable_metadata(), inout);
   req_body->set_participator_key(participator_key);
@@ -782,22 +774,21 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
   }
 }
 
-DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(
-    atframework::distributed_system::transaction_blob_storage& output,
-    const atframework::distributed_system::transaction_blob_storage& input) {
+DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(atfw::distributed_system::transaction_blob_storage& output,
+                                                   const atfw::distributed_system::transaction_blob_storage& input) {
   merge_transaction_storage(output, input);
 }
 
-DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(
-    const std::string& participator_key, atframework::distributed_system::transaction_participator_storage& output,
-    const atframework::distributed_system::transaction_blob_storage& input) {
+DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(const std::string& participator_key,
+                                                   atfw::distributed_system::transaction_participator_storage& output,
+                                                   const atfw::distributed_system::transaction_blob_storage& input) {
   merge_transaction_storage(participator_key, output, input);
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
-    atframework::distributed_system::SSParticipatorTransactionPrepareReq& output,
-    const atframework::distributed_system::transaction_blob_storage& input_transaction,
-    const atframework::distributed_system::transaction_participator& input_participator) {
+    atfw::distributed_system::SSParticipatorTransactionPrepareReq& output,
+    const atfw::distributed_system::transaction_blob_storage& input_transaction,
+    const atfw::distributed_system::transaction_participator& input_participator) {
   protobuf_copy_message(*output.mutable_storage()->mutable_metadata(), input_transaction.metadata());
   protobuf_copy_message(*output.mutable_storage()->mutable_configure(), input_transaction.configure());
   protobuf_copy_message(*output.mutable_storage()->mutable_transaction_data(), input_transaction.transaction_data());
@@ -806,16 +797,16 @@ DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
-    atframework::distributed_system::SSParticipatorTransactionCommitReq& output,
-    const atframework::distributed_system::transaction_blob_storage& input_transaction,
-    const atframework::distributed_system::transaction_participator&) {
+    atfw::distributed_system::SSParticipatorTransactionCommitReq& output,
+    const atfw::distributed_system::transaction_blob_storage& input_transaction,
+    const atfw::distributed_system::transaction_participator&) {
   output.set_transaction_uuid(input_transaction.metadata().transaction_uuid());
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
-    atframework::distributed_system::SSParticipatorTransactionRejectReq& output,
-    const atframework::distributed_system::transaction_blob_storage& input_transaction,
-    const atframework::distributed_system::transaction_participator& input_participator) {
+    atfw::distributed_system::SSParticipatorTransactionRejectReq& output,
+    const atfw::distributed_system::transaction_blob_storage& input_transaction,
+    const atfw::distributed_system::transaction_participator& input_participator) {
   output.set_transaction_uuid(input_transaction.metadata().transaction_uuid());
 
   if (input_transaction.configure().force_commit()) {

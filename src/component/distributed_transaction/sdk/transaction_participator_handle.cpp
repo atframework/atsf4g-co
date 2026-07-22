@@ -315,7 +315,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_pa
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  if (metadata.status() >= atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+  if (metadata.status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
     return PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED;
   }
 
@@ -332,7 +332,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_pa
 
       // 已完成的事务可以忽略锁
       if (old_holder->second->metadata().status() >=
-          atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+          atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
         break;
       }
 
@@ -367,8 +367,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  if (transaction_ptr->metadata().status() >=
-      atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+  if (transaction_ptr->metadata().status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
   }
 
@@ -479,8 +478,7 @@ transaction_participator_handle::get_locker(const std::string& resource) const n
     return nullptr;
   }
 
-  if (iter->second->metadata().status() >=
-      atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+  if (iter->second->metadata().status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
     return nullptr;
   }
 
@@ -578,7 +576,7 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.remove_running_transaction",
                          std::move(child_trace_option));
 
-  if (target_status < atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+  if (target_status < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
     RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, {}}));
   }
 
@@ -606,16 +604,15 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     unlock(transaction_ptr);
 
     // change status
-    if (transaction_ptr->metadata().status() <
-        atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+    if (transaction_ptr->metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
       transaction_ptr->mutable_metadata()->set_status(target_status);
     } else if (transaction_ptr->metadata().status() ==
-                   atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING &&
-               target_status == atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
+                   atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING &&
+               target_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
       transaction_ptr->mutable_metadata()->set_status(target_status);
     } else if (transaction_ptr->metadata().status() ==
-                   atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
-               target_status == atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED) {
+                   atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
+               target_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED) {
       transaction_ptr->mutable_metadata()->set_status(target_status);
     }
 
@@ -773,17 +770,17 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
-  rpc::context::message_holder<atframework::distributed_system::transaction_blob_storage> trans_data(child_ctx);
+  rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> trans_data(child_ctx);
   rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(
       rpc::transaction_api::query_transaction(child_ctx, transaction_ptr->metadata(), *trans_data));
   if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND || res == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_NOT_FOUND) {
     FWLOGWARNING("participator {} resolve transaction {} but not found, just remove it", get_participator_key(),
                  transaction_uuid);
-    RPC_RETURN_CODE(child_tracer.finish(
-        {RPC_AWAIT_CODE_RESULT(remove_running_transaction(
-             child_ctx, atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING, transaction_uuid,
-             &transaction_ptr)),
-         {}}));
+    RPC_RETURN_CODE(
+        child_tracer.finish({RPC_AWAIT_CODE_RESULT(remove_running_transaction(
+                                 child_ctx, atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                                 transaction_uuid, &transaction_ptr)),
+                             {}}));
   }
 
   if (res != 0) {
@@ -794,14 +791,12 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
 
   rpc::transaction_api::merge_storage(get_participator_key(), *transaction_ptr, *trans_data);
 
-  if (atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED ==
-          transaction_ptr->metadata().status() ||
-      atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING ==
-          transaction_ptr->metadata().status()) {
+  if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED == transaction_ptr->metadata().status() ||
+      atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING == transaction_ptr->metadata().status()) {
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid)), {}}));
-  } else if (atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
+  } else if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
                  transaction_ptr->metadata().status() ||
-             atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
+             atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
                  transaction_ptr->metadata().status()) {
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
@@ -848,9 +843,9 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     }
   }
 
-  res = RPC_AWAIT_CODE_RESULT(remove_running_transaction(
-      child_ctx, atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING, transaction_uuid,
-      &transaction_ptr));
+  res = RPC_AWAIT_CODE_RESULT(
+      remove_running_transaction(child_ctx, atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                                 transaction_uuid, &transaction_ptr));
   if (res < 0) {
     FWLOGERROR("participator {} call remove running transaction for transaction {} failed, error code: {}({})",
                get_participator_key(), transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));
@@ -909,9 +904,9 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 
   rpc::result_code_type::value_type res{};
   FWLOGINFO("participator {} reject transaction {}", get_participator_key(), transaction_uuid);
-  res = RPC_AWAIT_CODE_RESULT(remove_running_transaction(
-      child_ctx, atframework::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING, transaction_uuid,
-      &transaction_ptr));
+  res = RPC_AWAIT_CODE_RESULT(
+      remove_running_transaction(child_ctx, atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                                 transaction_uuid, &transaction_ptr));
   if (res < 0) {
     FWLOGERROR("participator {} call remove running transaction for transaction {} failed, error code: {}({})",
                get_participator_key(), transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));

@@ -43,10 +43,10 @@ class task_action_participator_resolve_transaction;
 class transaction_participator_handle
     : public atfw::util::memory::enable_shared_rc_from_this<transaction_participator_handle> {
  public:
-  using storage_type = atframework::distributed_system::transaction_participator_storage;
-  using metadata_type = atframework::distributed_system::transaction_metadata;
-  using configure_type = atframework::distributed_system::transaction_configure;
-  using snapshot_type = atframework::distributed_system::transaction_participator_snapshot;
+  using storage_type = atfw::distributed_system::transaction_participator_storage;
+  using metadata_type = atfw::distributed_system::transaction_metadata;
+  using configure_type = atfw::distributed_system::transaction_configure;
+  using snapshot_type = atfw::distributed_system::transaction_participator_snapshot;
   using storage_ptr_type = atfw::util::memory::strong_rc_ptr<storage_type>;
   using storage_const_ptr_type = atfw::util::memory::strong_rc_ptr<const storage_type>;
 
