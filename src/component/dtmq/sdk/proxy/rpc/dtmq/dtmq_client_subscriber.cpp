@@ -10,6 +10,8 @@
 #include <log/log_wrapper.h>
 #include <memory/rc_ptr.h>
 
+#include <distributed_system/wal_client.h>
+
 #include <atframe/etcdcli/etcd_discovery.h>
 
 // clang-format off
@@ -49,7 +51,46 @@ namespace rpc {
 namespace dtmq {
 
 namespace {
-class shared_subscriber {
+
+class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber;
+
+using mq_client_subscriber_storage_type = atfw::dtmq::DChannelSnapshot;
+
+struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_wal_object_context {
+  std::reference_wrapper<rpc::context> context;
+  std::reference_wrapper<int32_t> result_code;
+
+  explicit mq_client_subscriber_wal_object_context(rpc::context& ctx, int32_t& output_result)
+      : context(ctx), result_code(output_result) {}
+};
+
+struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_wal_object_private_data_type {
+  shared_subscriber* subscriber = nullptr;
+};
+
+struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_wal_log_action_getter {
+  atfw::dtmq::DChannelMessageDetail::CommandCase operator()(const atfw::dtmq::DChannelMessage&) noexcept;
+};
+
+struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_log_action_hash_t {
+  size_t operator()(const atfw::dtmq::DChannelMessageDetail::CommandCase& key) const noexcept {
+    return std::hash<int>()(key);
+  }
+};
+
+struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_log_action_equal_t {
+  bool operator()(const atfw::dtmq::DChannelMessageDetail::CommandCase& l,
+                  const atfw::dtmq::DChannelMessageDetail::CommandCase& r) const noexcept {
+    return l == r;
+  }
+};
+
+using mq_client_subscriber_wal_client_type = atfw::util::distributed_system::wal_client<
+    mq_client_subscriber_storage_type, mq_client_subscriber_wal_log_action_getter,
+    mq_client_subscriber_wal_object_context, mq_client_subscriber_wal_object_private_data_type,
+    mq_client_subscriber_storage_type>;
+
+class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
  public:
   using ptr_t = std::shared_ptr<shared_subscriber>;
 
@@ -64,8 +105,13 @@ class shared_subscriber {
     subscriber_info_.set_subscriber_key(options.subscriber_key);
   }
 
-  inline const atfw::dtmq::DChannelIdKey& get_channel_key() const { return channel_key_; }
-  inline const atfw::dtmq::channel_subscriber& get_subscriber_info() const { return subscriber_info_; }
+  inline const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept { return channel_key_; }
+
+  inline const atfw::dtmq::channel_subscriber& get_subscriber_info() const noexcept { return subscriber_info_; }
+
+  inline const atfw::dtmq::DChannelConfigure& get_configure() const noexcept { return configure_; }
+
+  inline const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept { return lock_; }
 
   uint64_t get_readonly_replicate_index() const noexcept { return readonly_replicate_index_; }
 
@@ -84,9 +130,36 @@ class shared_subscriber {
   atfw::dtmq::channel_subscriber subscriber_info_;
   uint64_t readonly_replicate_index_;
 
+  atfw::dtmq::DChannelConfigure configure_;
+  atfw::dtmq::DChannelOptimisticLock lock_;
+
+  int64_t custom_data_sequence_;
+  int64_t private_data_sequence_;
+  google::protobuf::Any custom_data_;
+  google::protobuf::Any private_data_;
+
+  atfw::util::memory::strong_rc_ptr<mq_client_subscriber_wal_client_type> wal_client_;
+
   std::unordered_set<client_subscriber*> registered_client_;
 };
+
+struct ATFW_UTIL_SYMBOL_LOCAL subscriber_event_handler_set {
+  client_subscriber::event_callback_on_ready_t on_ready;
+  client_subscriber::event_callback_on_destroy_t on_destroy;
+  client_subscriber::event_callback_on_update_custom_data_t on_update_custom_data;
+  client_subscriber::event_callback_on_update_private_data_t on_update_private_data;
+  client_subscriber::event_callback_on_compact_t on_compact;
+  client_subscriber::event_callback_on_receive_text_t on_receive_text;
+  client_subscriber::event_callback_on_receive_event_t on_receive_event;
+  client_subscriber::event_callback_on_receive_snapshot_t on_receive_snapshot;
+};
+
 }  // namespace
+
+DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::subscriber_options(std::string input_subscriber_key)
+    : subscriber_key(input_subscriber_key) {}
+
+DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::~subscriber_options() {}
 
 struct client_subscriber::ctor_guard {
   shared_subscriber::ptr_t shared_subscriber;
@@ -97,6 +170,8 @@ struct client_subscriber::ctor_guard {
 
 struct client_subscriber::subscriber_internal_data {
   atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_subscriber;
+
+  subscriber_event_handler_set event_handler;
 
   explicit subscriber_internal_data(shared_subscriber::ptr_t&& input_shared_subscriber)
       : shared_subscriber(std::move(input_shared_subscriber)) {}
@@ -129,6 +204,98 @@ DTMQ_PROXY_SDK_API void client_subscriber::global_receive_channel_event(
 DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& /*ctx*/) {
   // TODO(owent): implement the logic for periodic tick handling
   return 0;  // Return 0 to indicate no timer events triggered
+}
+
+DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelIdKey& client_subscriber::get_channel_key() const noexcept {
+  return internal_data_->shared_subscriber->get_channel_key();
+}
+
+DTMQ_PROXY_SDK_API const atfw::dtmq::channel_subscriber& client_subscriber::get_subscriber_info() const noexcept {
+  return internal_data_->shared_subscriber->get_subscriber_info();
+}
+
+DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelConfigure& client_subscriber::get_configure() const noexcept {
+  return internal_data_->shared_subscriber->get_configure();
+}
+
+DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& client_subscriber::get_lock() const noexcept {
+  return internal_data_->shared_subscriber->get_lock();
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(event_callback_on_ready_t&& on_ready) {
+  internal_data_->event_handler.on_ready = std::move(on_ready);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(const event_callback_on_ready_t& on_ready) {
+  internal_data_->event_handler.on_ready = on_ready;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_destroy(event_callback_on_destroy_t&& on_destroy) {
+  internal_data_->event_handler.on_destroy = std::move(on_destroy);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_destroy(
+    const event_callback_on_destroy_t& on_destroy) {
+  internal_data_->event_handler.on_destroy = on_destroy;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_custom_data(
+    event_callback_on_update_custom_data_t&& on_update_custom_data) {
+  internal_data_->event_handler.on_update_custom_data = std::move(on_update_custom_data);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_custom_data(
+    const event_callback_on_update_custom_data_t& on_update_custom_data) {
+  internal_data_->event_handler.on_update_custom_data = on_update_custom_data;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_private_data(
+    event_callback_on_update_private_data_t&& on_update_private_data) {
+  internal_data_->event_handler.on_update_private_data = std::move(on_update_private_data);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_private_data(
+    const event_callback_on_update_private_data_t& on_update_private_data) {
+  internal_data_->event_handler.on_update_private_data = on_update_private_data;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_compact(event_callback_on_compact_t&& on_compact) {
+  internal_data_->event_handler.on_compact = std::move(on_compact);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_compact(
+    const event_callback_on_compact_t& on_compact) {
+  internal_data_->event_handler.on_compact = on_compact;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_text(
+    event_callback_on_receive_text_t&& on_receive_text) {
+  internal_data_->event_handler.on_receive_text = std::move(on_receive_text);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_text(
+    const event_callback_on_receive_text_t& on_receive_text) {
+  internal_data_->event_handler.on_receive_text = on_receive_text;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
+    event_callback_on_receive_event_t&& on_receive_event) {
+  internal_data_->event_handler.on_receive_event = std::move(on_receive_event);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
+    const event_callback_on_receive_event_t& on_receive_event) {
+  internal_data_->event_handler.on_receive_event = on_receive_event;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot(
+    event_callback_on_receive_snapshot_t&& on_receive_snapshot) {
+  internal_data_->event_handler.on_receive_snapshot = std::move(on_receive_snapshot);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot(
+    const event_callback_on_receive_snapshot_t& on_receive_snapshot) {
+  internal_data_->event_handler.on_receive_snapshot = on_receive_snapshot;
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
