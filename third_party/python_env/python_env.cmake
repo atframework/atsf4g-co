@@ -22,7 +22,7 @@ if(NOT Python3_Interpreter_FOUND)
   message(FATAL_ERROR "Python is required but not found")
 endif()
 
-# ===== Try to use a python virtualenv if the `virtualenv` module is available =====
+# ===== Try to use a python virtualenv/venv if the `virtualenv/venv` module is available =====
 # When available, all subsequent python invocations and dependency installations go through the venv at:
 # ${PROJECT_THIRD_PARTY_HOST_INSTALL_DIR}/python.venv/<MAJOR>.<MINOR> Environment variables (VIRTUAL_ENV, PATH,
 # PYTHONHOME) are also injected so that any tool spawned from this CMake configure step picks up the same env.
@@ -42,22 +42,34 @@ set(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE FALSE)
 if(EXISTS "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}")
   set(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE TRUE)
 else()
+  set(PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME "virtualenv")
   execute_process(
-    COMMAND "${Python3_EXECUTABLE}" "-m" "virtualenv" "--version"
+    COMMAND "${Python3_EXECUTABLE}" "-m" "${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME}" "--version"
     RESULT_VARIABLE PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CHECK_RESULT
     OUTPUT_QUIET ERROR_QUIET)
+  if(NOT PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CHECK_RESULT EQUAL 0)
+    set(PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME "venv")
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" "-m" "${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME}" "--help"
+      RESULT_VARIABLE PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CHECK_RESULT
+      OUTPUT_QUIET ERROR_QUIET)
+  endif()
   if(PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CHECK_RESULT EQUAL 0)
     if(NOT EXISTS "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}")
       file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}")
     endif()
     message(
-      STATUS "Creating python virtualenv at ${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR} (host python: ${Python3_EXECUTABLE})"
+      STATUS
+        "Creating python ${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME} at ${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR} (host python: ${Python3_EXECUTABLE})"
     )
-    execute_process(COMMAND "${Python3_EXECUTABLE}" "-m" "virtualenv" "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}"
-                    RESULT_VARIABLE PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CREATE_RESULT COMMAND_ECHO STDOUT)
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" "-m" "${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME}"
+              "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}"
+      RESULT_VARIABLE PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CREATE_RESULT COMMAND_ECHO STDOUT)
     if(NOT PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CREATE_RESULT EQUAL 0)
       message(
-        WARNING "Failed to create python virtualenv at ${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}, fall back to host python"
+        WARNING
+          "Failed to create python ${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME} at ${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}, fall back to host python"
       )
     endif()
     if(EXISTS "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}")
@@ -65,7 +77,9 @@ else()
     endif()
     unset(PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CREATE_RESULT)
   else()
-    message(STATUS "Python `virtualenv` module not available on ${Python3_EXECUTABLE}, fall back to user-site install")
+    message(
+      FATAL_ERROR
+        "Python `virtualenv/venv` module not available on ${Python3_EXECUTABLE}, fall back to user-site install")
   endif()
   unset(PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CHECK_RESULT)
 endif()
@@ -73,9 +87,12 @@ endif()
 if(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE)
   # Switch the cached Python3_EXECUTABLE to the venv's interpreter so that any subsequent find_package(Python3) /
   # Python3_EXECUTABLE consumers use it too.
-  set(Python3_EXECUTABLE
-      "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}"
-      CACHE FILEPATH "Path to a python3 executable (atsf4g-co virtualenv)" FORCE)
+  if(NOT Python3_EXECUTABLE STREQUAL PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE)
+    set(Python3_EXECUTABLE
+        "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}"
+        CACHE FILEPATH "Path to a python3 executable (atsf4g-co ${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME})"
+              FORCE)
+  endif()
 
   # Inject environment variables so that tools spawned from this configure step (and any execute_process below) behave
   # as if the venv were activated.
@@ -88,8 +105,8 @@ if(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE)
   endif()
 
   # PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR is consumed downstream as the "package prefix" passed via --add-package-prefix
-  # to extend sys.path. The virtualenv root has the standard prefix layout (bin|Scripts and lib/pythonX.Y/site-packages
-  # or Lib/site-packages) so it works as a prefix.
+  # to extend sys.path. The virtualenv/venv root has the standard prefix layout (bin|Scripts and
+  # lib/pythonX.Y/site-packages or Lib/site-packages) so it works as a prefix.
   set(PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}")
 else()
   file(TO_CMAKE_PATH
