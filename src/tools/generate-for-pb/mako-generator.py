@@ -203,6 +203,14 @@ class MakoModuleTempDir:
             shutil.rmtree(self.directory_path, ignore_errors=True)
             self.directory_path = None
 
+def PbMsgPbFieldIsRepeated(field):
+    import google.protobuf
+    version = google.protobuf.__version__
+    if version >= '7.0.0':
+        return field.is_repeated
+
+    pb2 = _get_pb2_module()
+    return field.label == pb2.FieldDescriptorProto.LABEL_REPEATED
 
 def split_segments_for_protobuf_field_name(input_name):
     """Split field name rule"""
@@ -556,8 +564,7 @@ class PbField(PbObjectBase):
         return self.descriptor.type
 
     def is_db_vaild_type(self):
-        pb2 = _get_pb2_module()
-        if self.descriptor.label == pb2.FieldDescriptorProto.LABEL_REPEATED:
+        if PbMsgPbFieldIsRepeated(self.descriptor):
             return False
         pb_msg_go_db_vaild_type_map = _get_pb_msg_go_db_vaild_type_map()
         if self.descriptor.type in pb_msg_go_db_vaild_type_map:
