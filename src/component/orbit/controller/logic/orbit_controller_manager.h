@@ -84,7 +84,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
  private:
   orbit::DAgentIdentity select_agent_for_launch(double expected_cpu, double expected_memory_mb,
-                                                const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept;
+                                                const std::string& match_tag) noexcept;
   void on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                            const orbit::DAgentEtcdLoadRecord& record);
   void update_agent_load(const orbit::DAgentEtcdLoadRecord& record);

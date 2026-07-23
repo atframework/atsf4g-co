@@ -15,7 +15,7 @@ import "atframe/atapp_conf.proto";
 
 message orbit_agent_cfg {
   string region = 1;
-  repeated string tags = 2;
+  string tag = 2;
   string configured_client_command_line = 3;
   double cpu_capacity = 4;
   double memory_capacity_mb = 5;

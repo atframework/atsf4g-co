@@ -157,7 +157,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 启动配置
   std::string region_;
   std::string agent_endpoint_;
-  google::protobuf::RepeatedPtrField<std::string> tags_;
+  std::string tag_;
   std::vector<std::string> configured_client_command_line_;
 
   double cpu_capacity_ = 0.0;

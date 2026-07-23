@@ -204,9 +204,8 @@ void orbit_controller_manager::tick() {
 
 // ===================== private helpers =====================
 
-orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
-    double expected_cpu, double expected_memory_mb,
-    const google::protobuf::RepeatedPtrField<std::string>& tags) noexcept {
+orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(double expected_cpu, double expected_memory_mb,
+                                                                        const std::string& match_tag) noexcept {
   // 收集候选 agent 及其权重
   struct candidate_t {
     uint64_t agent_server_id;
@@ -217,16 +216,8 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
 
   for (const auto& kv : agents_) {
     // 检查Tags标签
-    if (!tags.empty()) {
-      bool not_found = false;
-      for (const auto& tag : tags) {
-        if (std::find(kv.second.load_record.tags().begin(), kv.second.load_record.tags().end(), tag) ==
-            kv.second.load_record.tags().end()) {
-          not_found = true;
-          break;
-        }
-      }
-      if (not_found) {
+    if (!match_tag.empty()) {
+      if (kv.second.load_record.tag() != match_tag) {
         continue;
       }
     }
@@ -324,9 +315,9 @@ void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadReco
   info.preallocated_client_count = 0;
 
   FWLOGINFO(
-      "orbit controller agent {:#x}:{}:tags_size:{} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
+      "orbit controller agent {:#x}:{}:tag:{} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
       "clients={}, inflight={}",
-      agent_server_id, info.load_record.region(), info.load_record.tags_size(), info.load_record.agent().cpu_used(),
+      agent_server_id, info.load_record.region(), info.load_record.tag(), info.load_record.agent().cpu_used(),
       info.load_record.agent().cpu_capacity(), info.load_record.agent().memory_used_mb(),
       info.load_record.agent().memory_capacity_mb(), info.load_record.agent().client_count(),
       info.load_record.agent().inflight_count());
@@ -509,7 +500,7 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
   const double expected_memory_mb = request.args().expected_memory_mb();
   int32_t retry_count = 3;
   while (retry_count > 0) {
-    auto agent = select_agent_for_launch(expected_cpu, expected_memory_mb, request.match_tags());
+    auto agent = select_agent_for_launch(expected_cpu, expected_memory_mb, request.match_tag());
     if (agent.agent_server_id() == 0) {
       FWLOGWARNING("orbit controller launch_client: no available agent for cpu={}, mem={}", expected_cpu,
                    expected_memory_mb);

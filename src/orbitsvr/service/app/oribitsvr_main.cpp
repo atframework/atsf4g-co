@@ -109,23 +109,22 @@ class main_service_module : public atfw::atapp::module_impl {
 
   static int cmd_start_client(atfw::util::cli::callback_param params) {
     if (params.get_params_number() < 2) {
-      add_command_response(params, "usage: orbit-start-client <region> <client-id> [match-tag ...]");
+      add_command_response(params, "usage: orbit-start-client <region> <client-id> [match-tag]");
       return 0;
     }
 
     std::string region = params[0]->to_cpp_string();
     std::string client_id = params[1]->to_cpp_string();
-    std::vector<std::string> match_tags;
-    match_tags.reserve(params.get_params_number() > 2 ? params.get_params_number() - 2 : 0);
-    for (size_t index = 2; index < params.get_params_number(); ++index) {
-      match_tags.emplace_back(params[index]->to_cpp_string());
+    std::string match_tag;
+    if (params.get_params_number() > 2) {
+      match_tag = params[2]->to_cpp_string();
     }
 
     rpc::context ctx{rpc::context::create_without_task()};
     auto invoke_result =
         rpc::async_invoke(ctx, "lobbysvr.orbit_start_client",
                           [region = std::move(region), client_id = std::move(client_id),
-                           match_tags = std::move(match_tags)](rpc::context &child_ctx) -> rpc::result_code_type {
+                           match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
                             orbit::DAgentClientStartArgs request;
                             request.mutable_client_start_args()->mutable_client_id()->set_client_id(client_id);
                             request.set_expected_cpu(kOrbitClientExpectedCpu);
@@ -133,13 +132,8 @@ class main_service_module : public atfw::atapp::module_impl {
                             request.set_startup_timeout_sec(kOrbitClientStartupTimeoutSec);
                             request.set_heartbeat_timeout_sec(kOrbitClientHeartbeatTimeoutSec);
 
-                            ::google::protobuf::RepeatedPtrField<std::string> protobuf_match_tags;
-                            for (const std::string &match_tag : match_tags) {
-                              protobuf_match_tags.Add(std::string{match_tag});
-                            }
-
                             RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(
-                                child_ctx, region, request, protobuf_match_tags)));
+                                child_ctx, region, request, match_tag)));
                           });
 
     if (invoke_result.is_error()) {

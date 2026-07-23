@@ -98,13 +98,13 @@ message DAgentLoadSnapshot {
 message DAgentEtcdLoadRecord {
   uint64 server_id = 1;
   string region = 2;
-  repeated string tags = 3;
+  string tag = 3;
   DAgentLoadSnapshot agent = 4;
 }
 
 message DOrbitGroupInfo {
   string region = 1;
-  repeated string tags = 2;
+  string tag = 2;
 }
 
 /////////////// RPC 接入层 ///////////////

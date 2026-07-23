@@ -267,7 +267,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
   const auto& config = logic_config::me()->get_server_instance_config<orbit::config::orbit_agent_cfg>();
   region_ = config.region();
-  tags_ = config.tags();
+  tag_ = config.tag();
 
   (*controller_policy_selector_.mutable_labels())["orbit.region"] = region_;
 
@@ -352,9 +352,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
   // 初始化Record
   load_record_.set_region(region_);
-  for (const auto& tag : tags_) {
-    load_record_.add_tags(tag);
-  }
+  load_record_.set_tag(tag_);
   load_record_.set_server_id(local_server_id);
   load_record_.mutable_agent()->set_cpu_capacity(cpu_capacity_);
   load_record_.mutable_agent()->set_memory_capacity_mb(memory_capacity_mb_);
