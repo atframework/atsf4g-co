@@ -1,4 +1,4 @@
-protobuf>=4.21.0,<6
+protobuf>=7.34
 six>=1.16.0
 Mako>=1.1.6
 PyYAML>=5.3.1

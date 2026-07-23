@@ -27,22 +27,26 @@ else()
 endif()
 
 # --- Python ---
-find_program(
-  PYTHON_EXECUTABLE
-  NAMES python3 python python3.exe python.exe
-  DOC "Python interpreter")
-if(NOT PYTHON_EXECUTABLE)
-  message(FATAL_ERROR "Python not found. Please install Python 3.x")
+if(NOT DEFINED Python3_EXECUTABLE)
+  find_package(Python3 COMPONENTS Interpreter)
+
+  # Patch for python3 binary
+  if(NOT Python3_Interpreter_FOUND AND UNIX)
+    find_program(Python3_EXECUTABLE NAMES python3)
+  endif()
+  if(NOT Python3_EXECUTABLE)
+    message(FATAL_ERROR "Python not found. Please install Python 3.x")
+  endif()
 endif()
 execute_process(
-  COMMAND "${PYTHON_EXECUTABLE}" --version
+  COMMAND "${Python3_EXECUTABLE}" --version
   OUTPUT_VARIABLE _PYTHON_VERSION_OUTPUT
   OUTPUT_STRIP_TRAILING_WHITESPACE
   RESULT_VARIABLE _PYTHON_VERSION_RESULT)
 if(_PYTHON_VERSION_RESULT EQUAL 0)
-  message(STATUS "Found Python: ${PYTHON_EXECUTABLE} (${_PYTHON_VERSION_OUTPUT})")
+  message(STATUS "Found Python: ${Python3_EXECUTABLE} (${_PYTHON_VERSION_OUTPUT})")
 else()
-  message(FATAL_ERROR "Python found at ${PYTHON_EXECUTABLE} but failed to get version")
+  message(FATAL_ERROR "Python found at ${Python3_EXECUTABLE} but failed to get version")
 endif()
 
 # --- Java / JDK ---
