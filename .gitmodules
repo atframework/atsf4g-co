@@ -20,3 +20,6 @@
 [submodule "src/robot/atframework/robot-go"]
 	path = src/robot/atframework/robot-go
 	url = https://github.com/atframework/robot-go.git
+[submodule "src/tools/generate-for-pb"]
+	path = src/tools/generate-for-pb
+	url = https://github.com/atframework/generate-for-pb.git
