@@ -976,8 +976,6 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   sess_timer_data.timeout +=
       atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
           mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
-  atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
-      mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
   FWLOGINFO("accept a pipe socket({}:{}), create sesson {} and to wait for handshake now, expired time is {}(+{})",
             sess->get_peer_host(), sess->get_peer_port(), reinterpret_cast<const void *>(sess.get()),
             std::chrono::system_clock::to_time_t(sess_timer_data.timeout),
