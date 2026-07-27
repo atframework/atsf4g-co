@@ -55,10 +55,15 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
                                 const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API void tick();
-
+  // 是否种子进程
+  ORBIT_CLIENT_SDK_API bool is_seed_process() const;
+  // 种子进程准备成功
+  ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready();
   // 进程已准备成功 可以通知Agent了
   ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr,
                                                     const std::string& custom_data = std::string{});
+  // 这个接口会返回额外启动参数
+  ORBIT_CLIENT_SDK_API const std::vector<std::string>& get_custom_launch_arguments() const;
   // 发送消息给Server
   ORBIT_CLIENT_SDK_API int32_t
   send_to_server(const std::string& payload, OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback = nullptr,
@@ -71,6 +76,7 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
 
   using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
+
  private:
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options) const;
   void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output) const;
@@ -93,6 +99,9 @@ class OrbitClientRuntime {
   bool connect();
   int32_t send_heartbeat(const OrbitClientLoadSnapshot& snapshot);
   void on_received_message(const std::string& message);
+
+  int32_t on_received_fork_request(const orbit::ATDForkSeedClientReq& request);
+  int32_t process_fork_request();
 
  private:
   struct pending_client_request_t {
@@ -163,6 +172,7 @@ class OrbitClientRuntime {
   time_t last_heartbeat_timepoint_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
+  std::list<orbit::ATDForkSeedClientReq> pending_fork_requests_;
 
   uv_rusage_t last_self_rusage_;
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;

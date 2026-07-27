@@ -1091,8 +1091,10 @@ rpc::result_code_type orbit_agent_manager::spawn_seed_client_process(rpc::contex
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
 
+  uint64_t app_id = ++sequence_allocator_;
   auto req = rpc::make_shared_message<orbit::ATDForkSeedClientReq>(ctx);
   auto rsp = rpc::make_shared_message<orbit::DTAForkSeedClientRsp>(ctx);
+  req->set_app_id(app_id);
   req->mutable_start_args()->mutable_client_id()->set_client_id(record->client_id);
   *req->mutable_start_args()->mutable_custom_args() = record->custom_args;
 

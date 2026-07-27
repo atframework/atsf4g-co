@@ -36,7 +36,8 @@ message DTAForwardToClientRsp {
 }
 
 message ATDForkSeedClientReq {
-  DClientStartArgs start_args = 1;
+  uint64 app_id = 1;
+  DClientStartArgs start_args = 2;
 }
 message DTAForkSeedClientRsp {
   int32 error_code = 1;
