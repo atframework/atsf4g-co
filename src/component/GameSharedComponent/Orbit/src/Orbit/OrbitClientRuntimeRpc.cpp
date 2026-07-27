@@ -646,16 +646,17 @@ int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::S
 
 int32_t OrbitClientRuntime::rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
                                                          const orbit::ATDForkSeedClientReq& request) {
-  (void)request;
-  log(OrbitClientLogLevel::kInfo, "fork_seed_client ignored in current SDK stage");
-
   const google::protobuf::MethodDescriptor* method = get_agent_to_client_method(kMethodForkSeedClient);
   if (nullptr == method) {
     log(OrbitClientLogLevel::kError, "fork_seed_client method descriptor not found");
     return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
+
+  int32_t ret = on_received_fork_request(request);
   orbit::DTAForkSeedClientRsp rsp;
+  rsp.set_error_code(ret);
   send_response_message(req_head, rsp, *method);
+
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 

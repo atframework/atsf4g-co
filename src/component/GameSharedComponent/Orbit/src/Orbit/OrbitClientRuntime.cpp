@@ -19,6 +19,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#  if defined(__linux__) || defined(__unix__)
+#include <unistd.h>
+#  endif
 #include <string_view>
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
@@ -33,6 +36,7 @@ constexpr const char* kOrbitArgsAppId = "-id";
 constexpr const char* kOrbitArgsClientIdArgument = "--orbit-client-id";
 constexpr const char* kOrbitArgsAgentEndpointArgument = "--orbit-agent-endpoint";
 constexpr const char* kOrbitArgsConfigEnvArgument = "--config_env";
+constexpr const char* kOrbitArgsSeedMode = "--seed_mode";
 
 int64_t get_total_process_cpu_time_us(const uv_rusage_t& usage) {
   int64_t total_us = static_cast<int64_t>(usage.ru_stime.tv_sec) + static_cast<int64_t>(usage.ru_utime.tv_sec);
@@ -65,6 +69,17 @@ bool try_consume_argument_value(int argc, char* argv[], int& index, const char* 
     if (index + 1 < argc && nullptr != argv[index + 1]) {
       output.assign(argv[++index]);
     }
+    return true;
+  }
+  return false;
+}
+
+bool try_consume_argument_mode(int argc, char* argv[], int& index, const char* option_name) {
+  if (nullptr == argv || index < 0 || index >= argc || nullptr == argv[index]) {
+    return false;
+  }
+
+  if (0 == std::strcmp(argv[index], option_name)) {
     return true;
   }
   return false;
@@ -201,6 +216,15 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
   bool app_id_value_invalid = false;
 
   for (int index = 1; index < argc; ++index) {
+    if (try_consume_argument_mode(argc, argv, index, kOrbitArgsSeedMode)) {
+#if defined(__linux__) || defined(__unix__)
+      options.seed_mode = true;
+#else
+      options.seed_mode = false;
+#endif
+      continue;
+    }
+
     std::string parsed_value;
     if (try_consume_argument_value(argc, argv, index, kOrbitArgsAppId, parsed_value)) {
       if (!try_parse_uint64_argument(parsed_value, app_id)) {
@@ -229,6 +253,9 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
       }
       continue;
     }
+
+    // 非预留都写入custom_launch_arguments
+    options.custom_launch_arguments.push_back(argv[index]);
   }
 
   if (app_id_value_invalid) {
@@ -252,6 +279,7 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
 
 ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
                                                   const OrbitClientCallbacks& callbacks) {
+  callbacks_ = callbacks;
   if (state_ == OrbitClientRuntimeState::kConnecting || state_ == OrbitClientRuntimeState::kRunning ||
       state_ == OrbitClientRuntimeState::kStopping) {
     log(OrbitClientLogLevel::kWarning, "init rejected: runtime is busy");
@@ -275,7 +303,6 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
 
   restore_app_callbacks();
 
-  callbacks_ = callbacks;
   options_ = options;
   configured_ = false;
   agent_bus_id_ = 0;
@@ -384,6 +411,112 @@ bool OrbitClientRuntime::connect() {
 
   log(OrbitClientLogLevel::kInfo, "agent connect requested");
   return true;
+}
+
+ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::is_seed_process() const { return options_.seed_mode; }
+
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_seed_process_ready() {
+  if (!is_seed_process()) {
+    log(OrbitClientLogLevel::kWarning, "notify_seed_process_ready rejected: not a seed process");
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+  }
+
+  if (state_ != OrbitClientRuntimeState::kConnected) {
+    log(OrbitClientLogLevel::kWarning, "notify_seed_process_ready rejected: runtime is not connected");
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+  }
+
+  orbit::DTAClientStartReq request;
+  fill_client_id(*request.mutable_client_id(), options_.client_id);
+  OrbitClientRequestOptions request_options;
+  request_options.reliable = true;
+  request_options.retry_times = 3;
+  int32_t send_result = rpc_send_client_start(request, nullptr, request_options);
+  if (send_result < 0) {
+    log(OrbitClientLogLevel::kError,
+        std::string{"failed to send client_start request, code="} + std::to_string(send_result));
+    return send_result;
+  }
+  last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
+  set_state(OrbitClientRuntimeState::kRunning);
+  log(OrbitClientLogLevel::kInfo, "seed_start sent");
+
+  while (true) {
+    if (state_ == OrbitClientRuntimeState::kStopping) {
+      break;
+    }
+
+    tick();
+    if (callbacks_.on_seed_waiting_tick) {
+      callbacks_.on_seed_waiting_tick();
+    }
+    int32_t res = process_fork_request();
+    if (res < 0) {
+      log(OrbitClientLogLevel::kError, std::string{"process_fork_request failed, code="} + std::to_string(res));
+      return res;
+    }
+    if (!is_seed_process()) {
+      // 变成了Child进程 退出循环
+      break;
+    }
+  }
+
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::on_received_fork_request(const orbit::ATDForkSeedClientReq& request) {
+  if (!is_seed_process()) {
+    log(OrbitClientLogLevel::kWarning, "on_received_fork_request rejected: not a seed process");
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+  }
+  pending_fork_requests_.push_back(request);
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::process_fork_request() {
+  if (!is_seed_process()) {
+    log(OrbitClientLogLevel::kWarning, "process_fork_request rejected: not a seed process");
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+  }
+
+  if (pending_fork_requests_.empty()) {
+    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+
+  orbit::ATDForkSeedClientReq request = pending_fork_requests_.front();
+  pending_fork_requests_.pop_front();
+
+#if defined(__linux__) || defined(__unix__)
+  // Fork
+  // TODO atapp 需要在fork前和后处理 现在先略过了
+  pid_t child_pid = fork();
+  if (child_pid < 0) {
+    log(OrbitClientLogLevel::kError, std::string{"process_fork_request rejected: fork failed, errno="} +
+                                        std::to_string(static_cast<int>(errno)));
+    return orbit::EN_ORBIT_ERROR_CODE_SYS_ERROR;
+  }
+
+  if (child_pid != 0) {
+    // Seed返回
+    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+#else
+  log(OrbitClientLogLevel::kError, "process_fork_request rejected: not linux or unix platform, cannot fork");
+  return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+#endif
+
+  // Child进程 需要重新初始化自己
+  state_ = OrbitClientRuntimeState::kIdle;
+  options_.seed_mode = false;
+  pending_fork_requests_.clear();
+  options_.client_id = request.start_args().client_id().client_id();
+  options_.custom_launch_arguments =
+      std::vector<std::string>(request.start_args().custom_args().begin(), request.start_args().custom_args().end());
+  return init(request.app_id(), options_, callbacks_);  // TODO Init内部应该还有问题 但是传入参数是正确的
+}
+
+ORBIT_CLIENT_SDK_API const std::vector<std::string>& OrbitClientRuntime::get_custom_launch_arguments() const {
+  return options_.custom_launch_arguments;
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std::string& client_addr,

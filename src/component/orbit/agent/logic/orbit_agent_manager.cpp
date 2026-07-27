@@ -278,7 +278,11 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   server_identity_timeout_sec_ = static_cast<time_t>(config.server_identity_timeout_sec());
   server_identity_check_interval_sec_ = static_cast<time_t>(config.server_identity_check_interval_sec());
   max_batch_startup_count_ = config.max_batch_startup_count();
+#if defined(__linux__) || defined(__unix__)
   seed_mode_enabled_ = config.enable_seed_mode();
+#else
+  seed_mode_enabled_ = false;
+#endif
   seed_startup_timeout_sec_ = config.seed_startup_timeout_sec();
   seed_heartbeat_timeout_sec_ = config.seed_heartbeat_timeout_sec();
 
@@ -1091,8 +1095,10 @@ rpc::result_code_type orbit_agent_manager::spawn_seed_client_process(rpc::contex
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
   }
 
+  uint64_t app_id = ++sequence_allocator_;
   auto req = rpc::make_shared_message<orbit::ATDForkSeedClientReq>(ctx);
   auto rsp = rpc::make_shared_message<orbit::DTAForkSeedClientRsp>(ctx);
+  req->set_app_id(app_id);
   req->mutable_start_args()->mutable_client_id()->set_client_id(record->client_id);
   *req->mutable_start_args()->mutable_custom_args() = record->custom_args;
 

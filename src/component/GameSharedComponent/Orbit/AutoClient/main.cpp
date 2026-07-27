@@ -31,15 +31,11 @@
 // clang-format on
 namespace {
 
-constexpr const char* kOrbitArgsAppId = "-id";
-constexpr const char* kOrbitArgsClientId = "--orbit-client-id";
-constexpr const char* kOrbitArgsAgentEndpoint = "--orbit-agent-endpoint";
-constexpr const char* kOrbitArgsConfigEnv = "--config_env";
-
 constexpr auto kTickInterval = std::chrono::milliseconds{500};
 constexpr auto kReadyDelay = std::chrono::seconds{10};
 constexpr auto kPingDelay = std::chrono::seconds{1};
 constexpr auto kExitDelay = std::chrono::seconds{30};
+constexpr auto kSeedReadyDelay = std::chrono::seconds{15};
 
 int get_process_id() {
 #if defined(_WIN32)
@@ -95,6 +91,14 @@ int task_action_echo::hook_run(const rpc_request_type& req_body, rpc_response_ty
   return 0;
 }
 
+void waiting_and_tick(std::chrono::seconds duration) {
+  auto start_time = std::chrono::steady_clock::now();
+  while (std::chrono::steady_clock::now() - start_time < duration) {
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->tick();
+    std::this_thread::sleep_for(kTickInterval);
+  }
+}
+
 int main(int argc, char* argv[]) {
   using runtime_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime;
   using callbacks_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientCallbacks;
@@ -134,6 +138,7 @@ int main(int argc, char* argv[]) {
       };
   bool stopped = false;
   callbacks.on_request_stop = [&stopped]() { stopped = true; };
+  callbacks.on_seed_waiting_tick = [&write_log_line]() { write_log_line(std::string{"waiting for fork"}); };
 
   int init_result = runtime_t::me()->init(argc, argv, callbacks);
   if (init_result != 0) {
@@ -143,6 +148,24 @@ int main(int argc, char* argv[]) {
 
   bool ready_sent = false;
   bool ping_sent = false;
+
+  if (runtime_t::me()->is_seed_process()) {
+    write_log_line(std::string{"seed process, waiting for "} + std::to_string(kSeedReadyDelay.count()) + " seconds");
+    waiting_and_tick(kSeedReadyDelay);
+    // Seed进程准备成功
+    int32_t seed_ready_result = runtime_t::me()->notify_seed_process_ready();
+    if (seed_ready_result != 0) {
+      write_log_line(std::string{"seed process notify_seed_process_ready failed, code="} +
+                     std::to_string(seed_ready_result));
+      return seed_ready_result;
+    }
+
+    if (runtime_t::me()->is_seed_process()) {
+      // Seed结束 退出
+      return 0;
+    }
+  }
+
   auto begin_timepoint = std::chrono::steady_clock::now();
   auto ready_timepoint = begin_timepoint;
 
