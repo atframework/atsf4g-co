@@ -2,7 +2,7 @@
 // Created by owent on 2016/9/29.
 //
 
-#include "session.h"
+#include "session.h"  // NOLINT: build/include_subdir
 
 #include <uv.h>
 
@@ -12,12 +12,14 @@
 
 #include <config/compiler_features.h>
 
+#include <memory>
+#include <string>
 #include <type_traits>
 
 #include "config/atframe_service_types.h"
 #include "core/timestamp_id_allocator.h"
 
-#include "session_manager.h"
+#include "session_manager.h"  // NOLINT: build/include_subdir
 
 namespace atframework {
 namespace gateway {
@@ -26,11 +28,11 @@ namespace gateway {
       (defined(__cplusplus) && __cplusplus >= 201402L &&                        \
        !(!defined(__clang__) && defined(__GNUC__) && defined(__GNUC_MINOR__) && \
          __GNUC__ * 100 + __GNUC_MINOR__ <= 409))
-UTIL_CONFIG_STATIC_ASSERT(std::is_trivially_copyable<session::limit_t>::value);
+static_assert(std::is_trivially_copyable<session::limit_t>::value, "session::limit_t must be trivially copyable");
 #  elif (defined(__cplusplus) && __cplusplus >= 201103L) || ((defined(_MSVC_LANG) && _MSVC_LANG >= 201103L))
-UTIL_CONFIG_STATIC_ASSERT(std::is_trivial<session::limit_t>::value);
+static_assert(std::is_trivial<session::limit_t>::value, "session::limit_t must be trivial");
 #  else
-UTIL_CONFIG_STATIC_ASSERT(std::is_pod<session::limit_t>::value);
+static_assert(std::is_pod<session::limit_t>::value, "session::limit_t must be POD");
 #  endif
 #endif
 
@@ -364,7 +366,6 @@ int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::
   if (check_flag(flag_t::kHasFd)) {
     // shutdown and close uv_stream_t
     // manager can not be used any more
-    owner_ = nullptr;
     if (shutdown_req_.data == nullptr) {
       shutdown_req_.data = new ptr_t(shared_from_this());
     }
@@ -372,6 +373,8 @@ int session::shutdown_fd(int32_t reason, int32_t sub_reason, atfw::util::nostd::
     if (owner_ != nullptr) {
       owner_->update_force_closed_session(shared_from_this());
     }
+    owner_ = nullptr;
+
     // if writing, wait all data written an then shutdown it
     set_flag(flag_t::kShouldShutdownFd, true);
     if (!proto_ || proto_->check_flag(atframework::gateway::libatgw_protocol_api::flag_t::kClosed)) {

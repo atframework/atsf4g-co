@@ -8,16 +8,20 @@
 
 #include <common/string_oprs.h>
 #include <log/log_wrapper.h>
+#include <string/string_format.h>
 #include <time/time_utility.h>
 
 #include <atframe/atapp_conf.h>
 
+#include <gsl/select-gsl.h>
+
 #include <chrono>
-#include <gsl/util>
+#include <list>
+#include <memory>
 #include <new>
+#include <string>
 
 #include "config/atframe_service_types.h"
-#include "string/string_format.h"
 
 namespace atframework {
 namespace gateway {
@@ -969,8 +973,9 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   auto &sess_timer_data = mgr->first_idle_[sess->get_id()];
   sess_timer_data.sess = sess;
   sess_timer_data.timeout = atfw::util::time::time_utility::now();
-  atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
-      mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
+  sess_timer_data.timeout +=
+      atfw::atapp::protobuf_to_chrono_convert_duration_with_default<std::chrono::system_clock::duration>(
+          mgr->conf_.origin_conf.client().first_idle_timeout(), std::chrono::seconds(10));
   FWLOGINFO("accept a pipe socket({}:{}), create sesson {} and to wait for handshake now, expired time is {}(+{})",
             sess->get_peer_host(), sess->get_peer_port(), reinterpret_cast<const void *>(sess.get()),
             std::chrono::system_clock::to_time_t(sess_timer_data.timeout),
