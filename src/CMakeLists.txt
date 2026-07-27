@@ -6,7 +6,7 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/server_frame/server_frame.cmake")
 
-include("${CMAKE_CURRENT_LIST_DIR}/generate_for_pb_utility.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/tools/generate_for_pb_utility.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/component/orbit/sdk/server/generate_for_pb_utility.cmake")
 
 configure_file("${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh.in" "${CMAKE_CURRENT_LIST_DIR}/generate-nomsg-task.sh"
