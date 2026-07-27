@@ -139,6 +139,29 @@ while(EXISTS \"${GENERATE_FOR_PB_SERVER_PID_FILE}\" AND _generate_for_pb_shutdow
 endwhile()
 
 if(EXISTS \"${GENERATE_FOR_PB_SERVER_PID_FILE}\")
+  # The pid file may outlive the server process: the server could have died before removing it, or the
+  # removal may have failed transiently. Run the shutdown request once more: when the pid in the file is
+  # dead, the client removes the stale pid/port files itself; when the server is still alive but slow to
+  # exit, this gives it another shutdown request and more time.
+  execute_process(
+    COMMAND
+      \"${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}\" \"${GENERATE_FOR_PB_MAKO_PY}\"
+      \"--server-pid-file\" \"${GENERATE_FOR_PB_SERVER_PID_FILE}\"
+      \"--server-port-file\" \"${GENERATE_FOR_PB_SERVER_PORT_FILE}\"
+      \"--server-timeout\" \"1\" \"--no-server-auto-start\" \"--server-shutdown\" \"--add-package-prefix\"
+      \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\"
+    RESULT_VARIABLE _generate_for_pb_shutdown_result
+    WORKING_DIRECTORY \"${GENERATE_FOR_PB_WORK_DIR}\"
+    OUTPUT_VARIABLE _generate_for_pb_shutdown_stdout
+    ERROR_VARIABLE _generate_for_pb_shutdown_stderr ${_generate_for_pb_cleanup_encoding_arg})
+  set(_generate_for_pb_shutdown_wait_count 0)
+  while(EXISTS \"${GENERATE_FOR_PB_SERVER_PID_FILE}\" AND _generate_for_pb_shutdown_wait_count LESS 5)
+    math(EXPR _generate_for_pb_shutdown_wait_count \"\${_generate_for_pb_shutdown_wait_count} + 1\")
+    execute_process(COMMAND \"${CMAKE_COMMAND}\" -E sleep 1)
+  endwhile()
+endif()
+
+if(EXISTS \"${GENERATE_FOR_PB_SERVER_PID_FILE}\")
   file(READ \"${GENERATE_FOR_PB_SERVER_PID_FILE}\" _generate_for_pb_shutdown_pid)
   string(STRIP \"\${_generate_for_pb_shutdown_pid}\" _generate_for_pb_shutdown_pid)
   message(
