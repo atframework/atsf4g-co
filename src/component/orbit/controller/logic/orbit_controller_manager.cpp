@@ -204,8 +204,8 @@ void orbit_controller_manager::tick() {
 
 // ===================== private helpers =====================
 
-orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(double expected_cpu, double expected_memory_mb,
-                                                                        const std::string& match_tag) noexcept {
+orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
+    const orbit::DAgentClientStartArgsResource& resource, const std::string& match_tag) noexcept {
   // 收集候选 agent 及其权重
   struct candidate_t {
     uint64_t agent_server_id;
@@ -215,25 +215,42 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(double e
   double total_weight = 0.0;
 
   for (const auto& kv : agents_) {
+    const auto& load = kv.second.load_record;
+    // 检查是否上线
+    if (!load.agent_online()) {
+      continue;
+    }
+
     // 检查Tags标签
-    if (!match_tag.empty()) {
-      if (kv.second.load_record.tag() != match_tag) {
+    if (!match_tag.empty() && !load.tag().empty()) {
+      if (load.tag() != match_tag) {
         continue;
       }
     }
 
-    const auto& load = kv.second.load_record.agent();
-
     // 将预分配量计入已用资源
-    double effective_cpu_used = load.cpu_used() + kv.second.preallocated_cpu;
-    double effective_memory_used = load.memory_used_mb() + kv.second.preallocated_memory_mb;
+    double effective_cpu_used = load.agent().cpu_used() + kv.second.preallocated_cpu;
+    double effective_memory_used = load.agent().memory_used_mb() + kv.second.preallocated_memory_mb;
 
+    if (kv.second.seed_mode) {
+      effective_cpu_used += resource.seed_cpu();
+      effective_memory_used += resource.seed_memory_mb();
+    } else {
+      effective_cpu_used += resource.normal_cpu();
+      effective_memory_used += resource.normal_memory_mb();
+    }
     // 检查 CPU 余量
-    if (load.cpu_capacity() > 0.0 && effective_cpu_used + expected_cpu > load.cpu_capacity()) {
+    if (load.cpu_capacity() > 0.0 && effective_cpu_used > load.cpu_capacity()) {
       continue;
     }
     // 检查内存余量
-    if (load.memory_capacity_mb() > 0.0 && effective_memory_used + expected_memory_mb > load.memory_capacity_mb()) {
+    if (load.memory_capacity_mb() > 0.0 && effective_memory_used > load.memory_capacity_mb()) {
+      continue;
+    }
+    // 检查并发
+    if (load.max_batch_startup_count() > 0 &&
+        kv.second.preallocated_client_count + load.agent().starting_client_count() >=
+            static_cast<uint32_t>(load.max_batch_startup_count())) {
       continue;
     }
 
@@ -270,8 +287,8 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(double e
   // 更新预分配数据
   auto it = agents_.find(selected_id);
   if (it != agents_.end()) {
-    it->second.preallocated_cpu += expected_cpu;
-    it->second.preallocated_memory_mb += expected_memory_mb;
+    it->second.preallocated_cpu += it->second.seed_mode ? resource.seed_cpu() : resource.normal_cpu();
+    it->second.preallocated_memory_mb += it->second.seed_mode ? resource.seed_memory_mb() : resource.normal_memory_mb();
     ++it->second.preallocated_client_count;
   }
 
@@ -308,6 +325,7 @@ void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadReco
 
   auto& info = agents_[agent_server_id];
 
+  info.seed_mode = record.seed_mode();
   info.load_record = record;
   // 负载快照已更新，清除预分配数据（agent 上报的负载已包含之前预分配的 client）
   info.preallocated_cpu = 0.0;
@@ -315,12 +333,12 @@ void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadReco
   info.preallocated_client_count = 0;
 
   FWLOGINFO(
-      "orbit controller agent {:#x}:{}:tag:{} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
-      "clients={}, inflight={}",
-      agent_server_id, info.load_record.region(), info.load_record.tag(), info.load_record.agent().cpu_used(),
-      info.load_record.agent().cpu_capacity(), info.load_record.agent().memory_used_mb(),
-      info.load_record.agent().memory_capacity_mb(), info.load_record.agent().client_count(),
-      info.load_record.agent().inflight_count());
+      "orbit controller agent {:#x}:{}:tag:{} seed:{} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
+      "starting={}, running={}",
+      agent_server_id, info.load_record.region(), info.load_record.tag(), info.seed_mode,
+      info.load_record.agent().cpu_used(), info.load_record.cpu_capacity(), info.load_record.agent().memory_used_mb(),
+      info.load_record.memory_capacity_mb(), info.load_record.agent().starting_client_count(),
+      info.load_record.agent().running_client_count());
 }
 
 // ===================== Agent 侧 handlers =====================
@@ -496,14 +514,21 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  const double expected_cpu = request.args().expected_cpu();
-  const double expected_memory_mb = request.args().expected_memory_mb();
+  if (request.args().resource().normal_cpu() <= std::numeric_limits<float>::epsilon() ||
+      request.args().resource().normal_memory_mb() <= std::numeric_limits<float>::epsilon() ||
+      request.args().resource().seed_cpu() <= std::numeric_limits<float>::epsilon() ||
+      request.args().resource().seed_memory_mb() <= std::numeric_limits<float>::epsilon()) {
+    FWLOGERROR("orbit controller launch_client rejected: invalid resource requirements for client_id={}",
+               client_id_str);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
   int32_t retry_count = 3;
   while (retry_count > 0) {
-    auto agent = select_agent_for_launch(expected_cpu, expected_memory_mb, request.match_tag());
+    auto agent = select_agent_for_launch(request.args().resource(), request.match_tag());
     if (agent.agent_server_id() == 0) {
-      FWLOGWARNING("orbit controller launch_client: no available agent for cpu={}, mem={}", expected_cpu,
-                   expected_memory_mb);
+      FWLOGWARNING("orbit controller launch_client: no available agent");
       RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds(1000)));
       --retry_count;
       continue;
@@ -514,8 +539,8 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     *start_req->mutable_args() = request.args();
     *start_req->mutable_server_identity() = request.server_identity();
 
-    FWLOGINFO("orbit controller dispatching launch_client to agent {:#x}: client_id={}, cpu={}, mem={}",
-              agent.agent_server_id(), client_id_str, expected_cpu, expected_memory_mb);
+    FWLOGINFO("orbit controller dispatching launch_client to agent {:#x}: client_id={}", agent.agent_server_id(),
+              client_id_str);
 
     int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
         rpc::controllertoagentservice::start_client(ctx, agent.agent_server_id(), *start_req, *start_rsp));

@@ -41,7 +41,8 @@ class context;
 }  // namespace rpc
 
 struct orbit_agent_client_record {
-  std::string client_id;  // 唯一ID 由Server传入
+  std::string client_id;      // 唯一ID 由Server传入
+  bool seed_process = false;  // 是否为种子进程
 
   // Client 启动参数
   ::google::protobuf::RepeatedPtrField<::std::string> custom_args;  // Server 传入的自定义参数
@@ -116,14 +117,20 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   uint64_t select_controller_server_id(const std::string& client_id) const;
 
  private:
+  int startup_seed_client();
+
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
   const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
+  void set_client_state(orbit_agent_client_record_ptr record, orbit::EnClientState state);
 
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
                                         std::vector<std::string>& output) const;
   int prepare_start_client_record(const orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
-  int spawn_client_process(orbit_agent_client_record_ptr record);
-  void build_client_launch_arguments(orbit_agent_client_record_ptr record, std::vector<std::string>& output);
+  int spawn_client_process(orbit_agent_client_record_ptr record, const std::vector<std::string>& command_line);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(
+      rpc::context& ctx, orbit_agent_client_record_ptr record);
+  void build_client_launch_arguments(orbit_agent_client_record_ptr record, const std::vector<std::string>& command_line,
+                                     std::vector<std::string>& output);
 
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
 
@@ -143,6 +150,12 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   void delete_client(orbit_agent_client_record_ptr client_record);
 
+  // Agent无法再提供服务
+  void agent_fatal_error();
+
+  void on_client_start_success();
+  void on_client_start_failure();
+
  private:
   bool stoped_ = false;
   atfw::atapp::app* owner_app_ = nullptr;
@@ -150,6 +163,10 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 启动的Client数据
   std::unordered_map<std::string, orbit_agent_client_record_ptr> clients_;
   std::unordered_map<uint64_t, std::set<std::string>> server_unique_id_to_client_ids_;
+  orbit_agent_client_record_ptr seed_client_record_;  // 种子进程记录
+  int32_t batch_startup_count_ = 0;                   // 当前批次启动的Client数量
+  bool agent_online_ = false;                         // Agent是否可以开始分配
+  int32_t repeated_startup_failures_ = 0;             // Client 连续启动失败
 
   // Server唯一ID到ServerIdentity的映射 用于心跳和转发消息时更新路由信息
   std::unordered_map<uint64_t, orbit_agent_server_info> server_unique_id_to_identity_;
@@ -159,11 +176,16 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   std::string agent_endpoint_;
   std::string tag_;
   std::vector<std::string> configured_client_command_line_;
-
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
   time_t server_identity_timeout_sec_ = 0;
   time_t server_identity_check_interval_sec_ = 0;
+  int32_t max_batch_startup_count_ = 0;
+  bool seed_mode_enabled_ = false;
+  uint32_t seed_startup_timeout_sec_ = 0;
+  uint32_t seed_heartbeat_timeout_sec_ = 0;
+  std::vector<std::string> seed_client_command_line_;
+
   orbit::DAgentIdentity agent_identity_;
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;
 

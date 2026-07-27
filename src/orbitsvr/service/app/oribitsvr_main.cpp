@@ -43,8 +43,10 @@
 namespace {
 
 constexpr uint64_t kOrbitServerHeartbeatIntervalSec = 5;
-constexpr double kOrbitClientExpectedCpu = 0.1;
-constexpr double kOrbitClientExpectedMemoryMb = 64.0;
+constexpr double kOrbitClientExpectedNormalCpu = 0.1;
+constexpr double kOrbitClientExpectedNormalMemoryMb = 64.0;
+constexpr double kOrbitClientExpectedSeedCpu = 0.05;
+constexpr double kOrbitClientExpectedSeedMemoryMb = 32.0;
 constexpr uint32_t kOrbitClientStartupTimeoutSec = 30;
 constexpr uint32_t kOrbitClientHeartbeatTimeoutSec = 15;
 constexpr const char *kOrbitWelcomePayload = "orbit:welcome";
@@ -56,7 +58,6 @@ uint64_t make_orbit_server_unique_id() {
          static_cast<uint64_t>(atfw::util::time::time_utility::get_now_usec() << 3) +
          static_cast<uint64_t>(logic_config::me()->get_local_server_id());
 }
-
 
 void add_command_response(atfw::util::cli::callback_param params, const std::string &message) {
   ::atframework::atapp::app::add_custom_command_rsp(params, message);
@@ -121,20 +122,22 @@ class main_service_module : public atfw::atapp::module_impl {
     }
 
     rpc::context ctx{rpc::context::create_without_task()};
-    auto invoke_result =
-        rpc::async_invoke(ctx, "lobbysvr.orbit_start_client",
-                          [region = std::move(region), client_id = std::move(client_id),
-                           match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
-                            orbit::DAgentClientStartArgs request;
-                            request.mutable_client_start_args()->mutable_client_id()->set_client_id(client_id);
-                            request.set_expected_cpu(kOrbitClientExpectedCpu);
-                            request.set_expected_memory_mb(kOrbitClientExpectedMemoryMb);
-                            request.set_startup_timeout_sec(kOrbitClientStartupTimeoutSec);
-                            request.set_heartbeat_timeout_sec(kOrbitClientHeartbeatTimeoutSec);
+    auto invoke_result = rpc::async_invoke(
+        ctx, "lobbysvr.orbit_start_client",
+        [region = std::move(region), client_id = std::move(client_id),
+         match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
+          orbit::DAgentClientStartArgs request;
+          request.mutable_client_start_args()->mutable_client_id()->set_client_id(client_id);
+          request.mutable_resource()->set_normal_cpu(kOrbitClientExpectedNormalCpu);
+          request.mutable_resource()->set_normal_memory_mb(kOrbitClientExpectedNormalMemoryMb);
+          request.mutable_resource()->set_seed_cpu(kOrbitClientExpectedSeedCpu);
+          request.mutable_resource()->set_seed_memory_mb(kOrbitClientExpectedSeedMemoryMb);
+          request.set_startup_timeout_sec(kOrbitClientStartupTimeoutSec);
+          request.set_heartbeat_timeout_sec(kOrbitClientHeartbeatTimeoutSec);
 
-                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(
-                                child_ctx, region, request, match_tag)));
-                          });
+          RPC_RETURN_CODE(
+              RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, request, match_tag)));
+        });
 
     if (invoke_result.is_error()) {
       add_command_response(params, "orbit-start-client failed to schedule async task");

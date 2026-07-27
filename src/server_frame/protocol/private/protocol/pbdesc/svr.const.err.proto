@@ -206,6 +206,8 @@ enum EnSysErrorType {
                              [(error_code.description) = "找不到Client"];
   EN_ORBIT_AGENT_SERVER_NOT_FOUND = -2100007
                              [(error_code.description) = "找不到服务器"];
+  EN_ORBIT_AGENT_NOT_ONLINE = -2100008
+                             [(error_code.description) = "Agent未上线"];
 
   EN_ORBIT_CONTROLLER_SERVER_DUP_UNIQUE_ID = -2200001
                                              [(error_code.description) = "控制器服务器唯一ID重复"];

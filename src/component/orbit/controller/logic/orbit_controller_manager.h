@@ -38,6 +38,7 @@ class context;
 }  // namespace rpc
 
 struct orbit_controller_agent_info {
+  bool seed_mode = false;
   orbit::DAgentEtcdLoadRecord load_record;
   double preallocated_cpu = 0.0;
   double preallocated_memory_mb = 0.0;
@@ -83,7 +84,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
       rpc::context& ctx, const orbit::STCServerHeartbeatNotify& request);
 
  private:
-  orbit::DAgentIdentity select_agent_for_launch(double expected_cpu, double expected_memory_mb,
+  orbit::DAgentIdentity select_agent_for_launch(const orbit::DAgentClientStartArgsResource& resource,
                                                 const std::string& match_tag) noexcept;
   void on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                            const orbit::DAgentEtcdLoadRecord& record);

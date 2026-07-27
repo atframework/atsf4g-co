@@ -78,28 +78,38 @@ message DClientStartArgs {
   repeated string custom_args = 2;
 }
 
+message DAgentClientStartArgsResource {
+  double normal_cpu = 1;
+  double normal_memory_mb = 2;
+  double seed_cpu = 3;
+  double seed_memory_mb = 4;
+}
+
 message DAgentClientStartArgs {
   DClientStartArgs client_start_args = 1;
-  double expected_cpu = 2;
-  double expected_memory_mb = 3;
-  uint32 startup_timeout_sec = 4;
-  uint32 heartbeat_timeout_sec = 5;
+  uint32 startup_timeout_sec = 2;
+  uint32 heartbeat_timeout_sec = 3;
+  DAgentClientStartArgsResource resource = 4;
 }
 
 message DAgentLoadSnapshot {
-  double cpu_capacity = 1;
-  double cpu_used = 2;
-  double memory_capacity_mb = 3;
-  double memory_used_mb = 4;
-  uint32 client_count = 5;
-  uint32 inflight_count = 6;
+  double cpu_used = 1;
+  double memory_used_mb = 2;
+  uint32 running_client_count = 3;
+  uint32 starting_client_count = 4;
 }
 
 message DAgentEtcdLoadRecord {
   uint64 server_id = 1;
   string region = 2;
   string tag = 3;
-  DAgentLoadSnapshot agent = 4;
+  double cpu_capacity = 4;
+  double memory_capacity_mb = 5;
+  int32 max_batch_startup_count = 6;
+  bool seed_mode = 7;
+  bool agent_online = 8;
+
+  DAgentLoadSnapshot agent = 11;
 }
 
 message DOrbitGroupInfo {
