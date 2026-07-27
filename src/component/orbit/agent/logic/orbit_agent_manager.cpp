@@ -278,7 +278,11 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   server_identity_timeout_sec_ = static_cast<time_t>(config.server_identity_timeout_sec());
   server_identity_check_interval_sec_ = static_cast<time_t>(config.server_identity_check_interval_sec());
   max_batch_startup_count_ = config.max_batch_startup_count();
+#if defined(__linux__) || defined(__unix__)
   seed_mode_enabled_ = config.enable_seed_mode();
+#else
+  seed_mode_enabled_ = false;
+#endif
   seed_startup_timeout_sec_ = config.seed_startup_timeout_sec();
   seed_heartbeat_timeout_sec_ = config.seed_heartbeat_timeout_sec();
 

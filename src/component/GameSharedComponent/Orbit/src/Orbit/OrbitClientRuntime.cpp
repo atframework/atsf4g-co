@@ -19,6 +19,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#  if defined(__linux__) || defined(__unix__)
+#include <unistd.h>
+#  endif
 #include <string_view>
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
@@ -214,7 +217,11 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
 
   for (int index = 1; index < argc; ++index) {
     if (try_consume_argument_mode(argc, argv, index, kOrbitArgsSeedMode)) {
+#if defined(__linux__) || defined(__unix__)
       options.seed_mode = true;
+#else
+      options.seed_mode = false;
+#endif
       continue;
     }
 
@@ -272,6 +279,7 @@ int OrbitClientRuntime::extract_launch_options(int argc, char* argv[], uint64_t&
 
 ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitClientOptions& options,
                                                   const OrbitClientCallbacks& callbacks) {
+  callbacks_ = callbacks;
   if (state_ == OrbitClientRuntimeState::kConnecting || state_ == OrbitClientRuntimeState::kRunning ||
       state_ == OrbitClientRuntimeState::kStopping) {
     log(OrbitClientLogLevel::kWarning, "init rejected: runtime is busy");
@@ -295,7 +303,6 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
 
   restore_app_callbacks();
 
-  callbacks_ = callbacks;
   options_ = options;
   configured_ = false;
   agent_bus_id_ = 0;
@@ -478,16 +485,30 @@ int32_t OrbitClientRuntime::process_fork_request() {
 
   orbit::ATDForkSeedClientReq request = pending_fork_requests_.front();
   pending_fork_requests_.pop_front();
-  bool is_child_process = false;
 
-  // TODO Fork 修改is_child_process
-
-  if (!is_child_process) {
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+#if defined(__linux__) || defined(__unix__)
+  // Fork
+  // TODO atapp 需要在fork前和后处理 现在先略过了
+  pid_t child_pid = fork();
+  if (child_pid < 0) {
+    log(OrbitClientLogLevel::kError, std::string{"process_fork_request rejected: fork failed, errno="} +
+                                        std::to_string(static_cast<int>(errno)));
+    return orbit::EN_ORBIT_ERROR_CODE_SYS_ERROR;
   }
 
+  if (child_pid != 0) {
+    // Seed返回
+    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+#else
+  log(OrbitClientLogLevel::kError, "process_fork_request rejected: not linux or unix platform, cannot fork");
+  return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+#endif
+
   // Child进程 需要重新初始化自己
+  state_ = OrbitClientRuntimeState::kIdle;
   options_.seed_mode = false;
+  pending_fork_requests_.clear();
   options_.client_id = request.start_args().client_id().client_id();
   options_.custom_launch_arguments =
       std::vector<std::string>(request.start_args().custom_args().begin(), request.start_args().custom_args().end());
