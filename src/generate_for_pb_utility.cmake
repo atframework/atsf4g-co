@@ -31,6 +31,51 @@ if(NOT Python3_EXECUTABLE)
   endif()
 endif()
 
+# On Windows, python.exe is a console-subsystem executable: every time CMake (configure or build) spawns it
+# from a GUI process (IDE/cmake-gui/MSBuild), Windows allocates a new console window which flashes on screen.
+# Prefer pythonw.exe (GUI subsystem, no console) for client-side invocations when it exists next to the
+# selected interpreter, and retry with Python3_EXECUTABLE when pythonw.exe fails without producing any
+# captured output so that diagnostics remain visible.
+set(GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE "${Python3_EXECUTABLE}")
+if(CMAKE_HOST_WIN32)
+  get_filename_component(GENERATE_FOR_PB_PYTHON_CLIENT_BIN_DIR "${Python3_EXECUTABLE}" DIRECTORY)
+  if(EXISTS "${GENERATE_FOR_PB_PYTHON_CLIENT_BIN_DIR}/pythonw.exe")
+    set(GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE "${GENERATE_FOR_PB_PYTHON_CLIENT_BIN_DIR}/pythonw.exe")
+  endif()
+  unset(GENERATE_FOR_PB_PYTHON_CLIENT_BIN_DIR)
+endif()
+message(STATUS "generate-for-pb client interpreter: ${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}")
+
+# Run a generate-for-pb client command. When the no-window interpreter fails without any captured output
+# (e.g. the interpreter itself failed to start), retry once with the console interpreter to surface the error.
+function(generate_for_pb_execute_client RESULT_VAR STDOUT_VAR STDERR_VAR)
+  execute_process(
+    COMMAND "${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}" ${ARGN}
+    RESULT_VARIABLE _generate_for_pb_client_result
+    OUTPUT_VARIABLE _generate_for_pb_client_stdout
+    ERROR_VARIABLE _generate_for_pb_client_stderr
+    WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}" ${GENERATE_FOR_PB_PY_ENCODING})
+  if(NOT _generate_for_pb_client_result EQUAL 0
+     AND NOT "${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}" STREQUAL "${Python3_EXECUTABLE}"
+     AND "x${_generate_for_pb_client_stdout}${_generate_for_pb_client_stderr}" STREQUAL "x")
+    execute_process(
+      COMMAND "${Python3_EXECUTABLE}" ${ARGN}
+      RESULT_VARIABLE _generate_for_pb_client_result
+      OUTPUT_VARIABLE _generate_for_pb_client_stdout
+      ERROR_VARIABLE _generate_for_pb_client_stderr
+      WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}" ${GENERATE_FOR_PB_PY_ENCODING})
+  endif()
+  set(${RESULT_VAR}
+      "${_generate_for_pb_client_result}"
+      PARENT_SCOPE)
+  set(${STDOUT_VAR}
+      "${_generate_for_pb_client_stdout}"
+      PARENT_SCOPE)
+  set(${STDERR_VAR}
+      "${_generate_for_pb_client_stderr}"
+      PARENT_SCOPE)
+endfunction()
+
 set(GENERATE_FOR_PB_CLEANUP_SERVER_TARGET "generate-for-pb-cleanup-server")
 set(GENERATE_FOR_PB_CLEANUP_SERVER_SCRIPT "${CMAKE_BINARY_DIR}/generate-for-pb-cleanup-server.cmake")
 
@@ -56,7 +101,7 @@ function(generate_for_pb_setup_cleanup_server_target)
 # Shutdown any stale generate-for-pb server so each build starts from a clean server.
 execute_process(
   COMMAND
-    \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_MAKO_PY}\"
+    \"${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}\" \"${GENERATE_FOR_PB_MAKO_PY}\"
     \"--server-pid-file\" \"${GENERATE_FOR_PB_SERVER_PID_FILE}\"
     \"--server-port-file\" \"${GENERATE_FOR_PB_SERVER_PORT_FILE}\"
     \"--server-timeout\" \"1\" \"--no-server-auto-start\" \"--server-shutdown\" \"--add-package-prefix\"
@@ -65,6 +110,22 @@ execute_process(
   WORKING_DIRECTORY \"${GENERATE_FOR_PB_WORK_DIR}\"
   OUTPUT_VARIABLE _generate_for_pb_shutdown_stdout
   ERROR_VARIABLE _generate_for_pb_shutdown_stderr ${_generate_for_pb_cleanup_encoding_arg})
+if(NOT _generate_for_pb_shutdown_result EQUAL 0
+   AND NOT \"${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}\" STREQUAL \"${Python3_EXECUTABLE}\"
+   AND \"x\${_generate_for_pb_shutdown_stdout}\${_generate_for_pb_shutdown_stderr}\" STREQUAL \"x\")
+  # Retry with the console interpreter to surface diagnostics.
+  execute_process(
+    COMMAND
+      \"${Python3_EXECUTABLE}\" \"${GENERATE_FOR_PB_MAKO_PY}\"
+      \"--server-pid-file\" \"${GENERATE_FOR_PB_SERVER_PID_FILE}\"
+      \"--server-port-file\" \"${GENERATE_FOR_PB_SERVER_PORT_FILE}\"
+      \"--server-timeout\" \"1\" \"--no-server-auto-start\" \"--server-shutdown\" \"--add-package-prefix\"
+      \"${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}\"
+    RESULT_VARIABLE _generate_for_pb_shutdown_result
+    WORKING_DIRECTORY \"${GENERATE_FOR_PB_WORK_DIR}\"
+    OUTPUT_VARIABLE _generate_for_pb_shutdown_stdout
+    ERROR_VARIABLE _generate_for_pb_shutdown_stderr ${_generate_for_pb_cleanup_encoding_arg})
+endif()
 if(NOT _generate_for_pb_shutdown_result EQUAL 0)
   message(
     FATAL_ERROR
@@ -199,7 +260,6 @@ endfunction()
 
 function(generate_for_pb_print_output_files RULE_FILE OUTPUT_VAR)
   set(_generate_for_pb_run_print_output_files_options
-      "${Python3_EXECUTABLE}"
       "${GENERATE_FOR_PB_MAKO_PY}"
       "--server-pid-file"
       "${GENERATE_FOR_PB_SERVER_PID_FILE}"
@@ -216,12 +276,9 @@ function(generate_for_pb_print_output_files RULE_FILE OUTPUT_VAR)
   if(PROJECT_TOOL_CLANG_FORMAT)
     list(APPEND _generate_for_pb_run_print_output_files_options "--clang-format-path" "${PROJECT_TOOL_CLANG_FORMAT}")
   endif()
-  execute_process(
-    COMMAND ${_generate_for_pb_run_print_output_files_options}
-    RESULT_VARIABLE _generate_for_pb_print_result
-    WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
-    OUTPUT_VARIABLE _generate_for_pb_print_stdout
-    ERROR_VARIABLE _generate_for_pb_print_stderr ${GENERATE_FOR_PB_PY_ENCODING})
+  generate_for_pb_execute_client(
+    _generate_for_pb_print_result _generate_for_pb_print_stdout _generate_for_pb_print_stderr
+    ${_generate_for_pb_run_print_output_files_options})
   if(NOT _generate_for_pb_print_result EQUAL 0)
     message(
       FATAL_ERROR
@@ -325,21 +382,69 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
   list(APPEND _generate_for_pb_output_files "${_generate_for_pb_stamp_file}")
 
   # Target 注册
-  set(__generate_for_pb_command_options
-      "${Python3_EXECUTABLE}" "${GENERATE_FOR_PB_MAKO_PY}" "--server-pid-file" "${GENERATE_FOR_PB_SERVER_PID_FILE}"
+  set(__generate_for_pb_script_options
+      "${GENERATE_FOR_PB_MAKO_PY}" "--server-pid-file" "${GENERATE_FOR_PB_SERVER_PID_FILE}"
       "--server-port-file" "${GENERATE_FOR_PB_SERVER_PORT_FILE}" "--server-auto-start" "--client-mode"
       "--add-package-prefix" "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" "-c" "${_generate_for_pb_rule_file}")
   if(PROJECT_TOOL_CLANG_FORMAT)
-    list(APPEND __generate_for_pb_command_options "--clang-format-path" "${PROJECT_TOOL_CLANG_FORMAT}")
+    list(APPEND __generate_for_pb_script_options "--clang-format-path" "${PROJECT_TOOL_CLANG_FORMAT}")
   endif()
+
+  # Bake the generation command into a wrapper script so the build step runs with the no-window interpreter
+  # and retries with the console interpreter when it fails without producing any output.
+  set(_generate_for_pb_run_script "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_NAME}.run.cmake")
+  set(_generate_for_pb_run_tail_quoted "")
+  foreach(_generate_for_pb_run_opt IN LISTS __generate_for_pb_script_options)
+    string(APPEND _generate_for_pb_run_tail_quoted " \"${_generate_for_pb_run_opt}\"")
+  endforeach()
+  unset(_generate_for_pb_run_opt)
+  set(_generate_for_pb_run_encoding_arg "")
+  if(GENERATE_FOR_PB_PY_ENCODING)
+    list(GET GENERATE_FOR_PB_PY_ENCODING 1 _generate_for_pb_run_encoding_value)
+    set(_generate_for_pb_run_encoding_arg "ENCODING \"${_generate_for_pb_run_encoding_value}\"")
+    unset(_generate_for_pb_run_encoding_value)
+  endif()
+  file(
+    WRITE "${_generate_for_pb_run_script}"
+    "# Auto-generated by generate_for_pb_utility.cmake. Do not edit.
+execute_process(
+  COMMAND \"${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}\"${_generate_for_pb_run_tail_quoted}
+  RESULT_VARIABLE _generate_for_pb_run_result
+  WORKING_DIRECTORY \"${GENERATE_FOR_PB_WORK_DIR}\"
+  OUTPUT_VARIABLE _generate_for_pb_run_stdout
+  ERROR_VARIABLE _generate_for_pb_run_stderr ${_generate_for_pb_run_encoding_arg})
+if(NOT _generate_for_pb_run_result EQUAL 0
+   AND NOT \"${GENERATE_FOR_PB_PYTHON_CLIENT_EXECUTABLE}\" STREQUAL \"${Python3_EXECUTABLE}\"
+   AND \"x\${_generate_for_pb_run_stdout}\${_generate_for_pb_run_stderr}\" STREQUAL \"x\")
+  # Retry with the console interpreter to surface diagnostics.
+  execute_process(
+    COMMAND \"${Python3_EXECUTABLE}\"${_generate_for_pb_run_tail_quoted}
+    RESULT_VARIABLE _generate_for_pb_run_result
+    WORKING_DIRECTORY \"${GENERATE_FOR_PB_WORK_DIR}\"
+    OUTPUT_VARIABLE _generate_for_pb_run_stdout
+    ERROR_VARIABLE _generate_for_pb_run_stderr ${_generate_for_pb_run_encoding_arg})
+endif()
+if(NOT \"x\${_generate_for_pb_run_stdout}\" STREQUAL \"x\")
+  message(STATUS \"\${_generate_for_pb_run_stdout}\")
+endif()
+if(NOT \"x\${_generate_for_pb_run_stderr}\" STREQUAL \"x\")
+  message(\"\${_generate_for_pb_run_stderr}\")
+endif()
+if(NOT _generate_for_pb_run_result EQUAL 0)
+  message(FATAL_ERROR \"Generate ${FLOW_NAME} failed with exit code \${_generate_for_pb_run_result}\")
+endif()
+")
+  unset(_generate_for_pb_run_encoding_arg)
+  unset(_generate_for_pb_run_tail_quoted)
 
   add_custom_command(
     OUTPUT ${_generate_for_pb_output_files}
     COMMAND "${CMAKE_COMMAND}" -E touch "${_generate_for_pb_stamp_file}"
-    COMMAND ${__generate_for_pb_command_options}
+    COMMAND "${CMAKE_COMMAND}" -P "${_generate_for_pb_run_script}"
     WORKING_DIRECTORY "${GENERATE_FOR_PB_WORK_DIR}"
     DEPENDS "${GENERATE_FOR_PB_CLEANUP_SERVER_TARGET}" "${_generate_for_pb_rule_file}" "${GENERATE_FOR_PB_MAKO_PY}"
-            "${GENERATE_FOR_PB_IPC_PY}" ${GENERATE_FOR_PB_CODEGEN_FLOW_TEMPLATE_DEPENDS} ${__CONF_PB_FILES}
+            "${GENERATE_FOR_PB_IPC_PY}" "${_generate_for_pb_run_script}"
+            ${GENERATE_FOR_PB_CODEGEN_FLOW_TEMPLATE_DEPENDS} ${__CONF_PB_FILES}
     COMMENT "Generate [@${GENERATE_FOR_PB_WORK_DIR}] ${FLOW_NAME}")
   add_custom_target(
     ${_generate_for_pb_target_name}

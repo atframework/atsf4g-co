@@ -55,6 +55,7 @@ __pycache__
 /atframework/service/atgateway/protocols/libatgw_server_config.pb.cc
 
 # editors
+.codex/*
 .vscode/*
 !.vscode/tasks.json
 .idea

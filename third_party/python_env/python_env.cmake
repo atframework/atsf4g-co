@@ -7,6 +7,57 @@ if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.15")
   cmake_policy(SET CMP0094 NEW)
 endif()
 
+# 如果 Python3_EXECUTABLE 有缓存且在venv中，要检查当前venv是否有效
+if(Python3_EXECUTABLE AND NOT EXISTS "${Python3_EXECUTABLE}")
+  message(STATUS "Cached Python3_EXECUTABLE ${Python3_EXECUTABLE} not found, clearing cache")
+  unset(Python3_EXECUTABLE CACHE)
+  unset(Python3_EXECUTABLE)
+endif()
+if(Python3_EXECUTABLE)
+  file(TO_CMAKE_PATH "${PROJECT_THIRD_PARTY_HOST_INSTALL_DIR}/python.venv" __normalize_python_venv_path)
+  file(TO_CMAKE_PATH "${Python3_EXECUTABLE}" __normalize_python_exec_path)
+  string(FIND "${__normalize_python_exec_path}" "${__normalize_python_venv_path}" __python_index)
+  if(__python_index EQUAL 0)
+    get_filename_component(__python_venv_home "${__normalize_python_exec_path}" DIRECTORY)
+    get_filename_component(__python_venv_home "${__python_venv_home}" DIRECTORY)
+    file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_base_exec
+         REGEX "^executable[ \t]*=[ \t]*([^\\r\\n]*)")
+    string(REGEX REPLACE "^executable[ \t]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_base_exec
+                         "${__python_venv_base_exec}")
+    file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_version REGEX "^version[ \t]*=[ \t]*([^\\r\\n]*)")
+    string(REGEX REPLACE "^version[ \t]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_version "${__python_venv_version}")
+
+    if(__python_venv_base_exec)
+      execute_process(
+        COMMAND "${__python_venv_base_exec}" "--version"
+        OUTPUT_VARIABLE __python_venv_base_version
+        ERROR_QUIET)
+      if(__python_venv_base_version MATCHES "[\\.0-9]+")
+        set(__python_venv_base_version "${CMAKE_MATCH_0}")
+      endif()
+    else()
+      set(__python_venv_base_version "unknown")
+    endif()
+    if(__python_venv_version STREQUAL __python_venv_base_version)
+      message(STATUS "Using cached Python3_EXECUTABLE ${Python3_EXECUTABLE} (venv: ${__python_venv_home})")
+    else()
+      message(
+        STATUS
+          "Cached Python3_EXECUTABLE ${Python3_EXECUTABLE} (venv: ${__python_venv_home}, version: ${__python_venv_version}) "
+          "does not match base python version ${__python_venv_base_version}, clearing cache")
+      unset(Python3_EXECUTABLE CACHE)
+      unset(Python3_EXECUTABLE)
+    endif()
+    unset(__python_venv_home)
+    unset(__python_venv_version)
+    unset(__python_venv_base_exec)
+    unset(__python_venv_base_version)
+  endif()
+  unset(__normalize_python_venv_path)
+  unset(__normalize_python_exec_path)
+  unset(__python_index)
+endif()
+
 find_package(Python3 COMPONENTS Interpreter)
 
 # Patch for python3 binary
@@ -39,9 +90,10 @@ else()
 endif()
 
 set(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE FALSE)
-if(EXISTS "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}")
+if(EXISTS PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE)
   set(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE TRUE)
-else()
+endif()
+if(NOT PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE)
   set(PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME "virtualenv")
   execute_process(
     COMMAND "${Python3_EXECUTABLE}" "-m" "${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME}" "--version"
@@ -88,6 +140,9 @@ if(PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE)
   # Switch the cached Python3_EXECUTABLE to the venv's interpreter so that any subsequent find_package(Python3) /
   # Python3_EXECUTABLE consumers use it too.
   if(NOT Python3_EXECUTABLE STREQUAL PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE)
+    # Update the normal variable as well, otherwise it shadows the forced cache value in the current scope and all
+    # subsequent execute_process/pip/codegen steps would still use the host interpreter.
+    set(Python3_EXECUTABLE "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}")
     set(Python3_EXECUTABLE
         "${PROJECT_THIRD_PARTY_PYTHON_VENV_EXECUTABLE}"
         CACHE FILEPATH "Path to a python3 executable (atsf4g-co ${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME})"
