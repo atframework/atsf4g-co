@@ -150,6 +150,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   void delete_client(orbit_agent_client_record_ptr client_record);
 
+  double get_load_value();
+
   // Agent无法再提供服务
   void agent_fatal_error();
 

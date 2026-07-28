@@ -14,7 +14,7 @@
 
 class logic_hpa_observer {
  public:
-  logic_hpa_observer(opentelemetry::metrics::ObserverResult& result,
+  SERVER_FRAME_API logic_hpa_observer(opentelemetry::metrics::ObserverResult& result,
                      const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& shared,
                      const std::unordered_map<std::string, std::string>& priv);
 
@@ -28,7 +28,7 @@ class logic_hpa_observer {
    *       The label key must use only uppercase or lowercase letters, digits, and underscores([a-zA-Z_][a-zA-Z0-9_]*)
    * @see https://prometheus.io/docs/concepts/data_model/
    */
-  void observe(int64_t value,
+  SERVER_FRAME_API void observe(int64_t value,
                gsl::span<std::pair<gsl::string_view, opentelemetry::common::AttributeValue>> attributes = {});
 
   /**
@@ -41,10 +41,10 @@ class logic_hpa_observer {
    *       The label key must use only uppercase or lowercase letters, digits, and underscores([a-zA-Z_][a-zA-Z0-9_]*)
    * @see https://prometheus.io/docs/concepts/data_model/
    */
-  void observe(double value,
+  SERVER_FRAME_API void observe(double value,
                gsl::span<std::pair<gsl::string_view, opentelemetry::common::AttributeValue>> attributes = {});
 
-  inline bool has_record() const noexcept { return has_data_; }
+  ATFW_UTIL_FORCEINLINE bool has_record() const noexcept { return has_data_; }
 
  private:
   bool has_data_;

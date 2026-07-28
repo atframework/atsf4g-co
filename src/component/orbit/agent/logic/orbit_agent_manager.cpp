@@ -23,6 +23,10 @@
 #include <time/time_utility.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <logic/hpa/logic_hpa_controller.h>
+#include <logic/hpa/logic_hpa_observer.h>
+#include <logic/hpa/logic_hpa_policy.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -437,6 +441,29 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     if (!etcd_mod_.check_keepalive_actor_start_success(gsl::make_span(keepalive_actors))) {
       FWLOGERROR("orbit agent etcd keepalive actor start failed for path {}", keepalive_path);
       return -11;
+    }
+  }
+
+  {
+    logic_server_common_module* common_mod = logic_server_last_common_module();
+    if (nullptr != common_mod) {
+      auto hpa_controller = common_mod->get_hpa_controller();
+      if (!hpa_controller) {
+        return -1;
+      }
+      hpa_controller->set_on_setup_custom_policy(
+          "orbit_agent_load",
+          [local_server_id](logic_hpa_controller&, std::shared_ptr<logic_hpa_policy> custom_policy) {
+            custom_policy->add_observer_custom(
+                logic_hpa_policy::custom_observer_register_type::kDouble,
+                [local_server_id](logic_hpa_policy&, logic_hpa_observer& observer) {
+                  std::pair<gsl::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+                      {"region", orbit_agent_manager::me()->region_},
+                      {"tag", orbit_agent_manager::me()->tag_},
+                      {"agent_id", local_server_id}};
+                  observer.observe(orbit_agent_manager::me()->get_load_value(), attributes);
+                });
+          });
     }
   }
   return 0;
@@ -1427,6 +1454,11 @@ void orbit_agent_manager::delete_client(orbit_agent_client_record_ptr client_rec
   if (client_ids.empty()) {
     server_unique_id_to_client_ids_.erase(client_record->server_unique_id);
   }
+}
+
+double orbit_agent_manager::get_load_value() {
+  // TODO 计算负载系数
+  return 1.0f;
 }
 
 void orbit_agent_manager::agent_fatal_error() {

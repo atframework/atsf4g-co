@@ -72,7 +72,7 @@ using otel_observer_result_int64 = opentelemetry::metrics::ObserverResultT<int64
 using otel_observer_result_double = opentelemetry::metrics::ObserverResultT<double>;
 }  // namespace
 
-logic_hpa_observer::logic_hpa_observer(
+SERVER_FRAME_API logic_hpa_observer::logic_hpa_observer(
     opentelemetry::metrics::ObserverResult& result,
     const std::unordered_map<std::string, opentelemetry::common::AttributeValue>& shared,
     const std::unordered_map<std::string, std::string>& priv)
@@ -81,7 +81,7 @@ logic_hpa_observer::logic_hpa_observer(
       ref_shared_attributes_{std::ref(shared)},
       ref_priv_attributes_{std::ref(priv)} {}
 
-void logic_hpa_observer::observe(
+SERVER_FRAME_API void logic_hpa_observer::observe(
     int64_t value, gsl::span<std::pair<gsl::string_view, opentelemetry::common::AttributeValue>> attributes) {
   if (logic_hpa_observable_value::is_nan(value)) {
     return;
@@ -109,7 +109,7 @@ void logic_hpa_observer::observe(
   }
 }
 
-void logic_hpa_observer::observe(
+SERVER_FRAME_API void logic_hpa_observer::observe(
     double value, gsl::span<std::pair<gsl::string_view, opentelemetry::common::AttributeValue>> attributes) {
   if (logic_hpa_observable_value::is_nan(value)) {
     return;
