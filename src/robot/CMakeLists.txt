@@ -131,4 +131,9 @@ maybe_populate_submodule(ROBOT_DEPENDENCY_ROBOT_GO "src/robot/atframework/robot-
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env "INSTALL_PATH=${ROBOT_INSTALL_PATH}" "${TASK_EXECUTABLE}" all
   WORKING_DIRECTORY "${ROBOT_SOURCE_DIR}"
+  RESULT_VARIABLE TASK_RESULT
 )
+
+if(NOT TASK_RESULT EQUAL 0)
+    message(FATAL_ERROR "Go-Task failed with exit code: ${TASK_RESULT}")
+endif()

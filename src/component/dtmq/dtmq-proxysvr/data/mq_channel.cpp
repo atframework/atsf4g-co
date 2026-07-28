@@ -30,7 +30,7 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <dispatcher/task_type_traits.h>
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>

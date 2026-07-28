@@ -34,7 +34,7 @@
 #include "logic/rank_wal_handle.h"
 #include "memory/rc_ptr.h"
 
-#include "rpc/db/local_db_interface.h"
+#include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/rank_board/rankboardservice.atfw.gen.h"
 #include "rpc/rpc_async_invoke.h"
 

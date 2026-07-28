@@ -8,7 +8,7 @@
 #include <dispatcher/task_action_ss_req_base.h>
 #include <dispatcher/task_manager.h>
 #include <rpc/db/db_utils.h>
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_common_types.h>
 #include <rpc/rpc_utils.h>
 #include <utility/protobuf_mini_dumper.h>

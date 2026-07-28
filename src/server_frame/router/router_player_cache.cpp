@@ -13,7 +13,7 @@
 #include <atgateway/protocol/libatgw_protocol_api.h>
 
 #include <logic/session_manager.h>
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 
 #include <string>
 #include <utility>

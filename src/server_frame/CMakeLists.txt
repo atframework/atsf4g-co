@@ -60,17 +60,17 @@ generate_for_pb_add_custom_configure(
       output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
       custom_variables:
         generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
-        include_cpp: 'local_db_interface.h'
+        include_cpp: 'local_db_interface.atfw.gen.h'
 "
   OVERWRITE_RULE
   "
       file_template:
         - overwrite: true
           input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
-          output: 'local_db_interface.cpp'
+          output: 'local_db_interface.atfw.gen.cpp'
         - overwrite: true
           input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
-          output: 'local_db_interface.h'
+          output: 'local_db_interface.atfw.gen.h'
 "
   PROTOCOL_TARGET
   "${SERVER_FRAME_BASE_PROTOCOLS}"
@@ -87,17 +87,17 @@ generate_for_pb_add_custom_configure(
       output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
       custom_variables:
         generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
-        include_cpp: 'global_db_interface.h'
+        include_cpp: 'global_db_interface.atfw.gen.h'
 "
   OVERWRITE_RULE
   "
       file_template:
         - overwrite: true
           input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
-          output: 'global_db_interface.cpp'
+          output: 'global_db_interface.atfw.gen.cpp'
         - overwrite: true
           input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
-          output: 'global_db_interface.h'
+          output: 'global_db_interface.atfw.gen.h'
 "
   PROTOCOL_TARGET
   "${SERVER_FRAME_BASE_PROTOCOLS}"

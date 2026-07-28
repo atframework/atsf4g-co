@@ -31,7 +31,7 @@
 
 #include <logic/logic_server_setup.h>
 
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_shared_message.h>
 #include <rpc/user/user_basic.h>

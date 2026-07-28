@@ -301,7 +301,7 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_msg_dispatcher::send_to_cli
 }
 
 ORBIT_SERVER_SERVICE_API void *orbit_msg_dispatcher::make_private_data(const std::string &client_id) noexcept {
-  return reinterpret_cast<void *>(const_cast<char *>(client_id.c_str()));
+  return reinterpret_cast<void *>(const_cast<std::string *>(&client_id));
 }
 
 ORBIT_SERVER_SERVICE_API const std::string &orbit_msg_dispatcher::get_source_client_id(

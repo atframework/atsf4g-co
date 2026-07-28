@@ -24,7 +24,7 @@
 #include <logic/session_manager.h>
 
 #include <config/logic_config.h>
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 
 #include <router/router_player_manager.h>

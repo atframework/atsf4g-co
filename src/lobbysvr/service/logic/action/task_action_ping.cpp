@@ -1,4 +1,4 @@
-﻿// Copyright 2021 atframework
+// Copyright 2021 atframework
 // @brief Created by owent with generate-for-pb.py at 2021-11-14 20:57:03
 
 #include "task_action_ping.h"
@@ -17,7 +17,7 @@
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 
 #include <data/player.h>
 #include <data/session.h>

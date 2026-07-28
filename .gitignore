@@ -78,7 +78,3 @@ __pycache__
 /src/server_frame/config/src/server_frame_build_feature.cpp
 /src/server_frame/config/include/config/excel/*
 /src/server_frame/config/src/excel/*
-/src/server_frame/rpc/db/global_db_interface.cpp
-/src/server_frame/rpc/db/global_db_interface.h
-/src/server_frame/rpc/db/local_db_interface.cpp
-/src/server_frame/rpc/db/local_db_interface.h
