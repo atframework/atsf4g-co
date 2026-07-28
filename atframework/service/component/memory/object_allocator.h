@@ -11,8 +11,6 @@
 
 #include <config/atframe_service_component_config.h>
 
-#include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <utility>
 

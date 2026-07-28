@@ -301,10 +301,14 @@ class object_allocator_manager {
     // So we always use rebind<U>::other to support allocator rebinding
     template <class U>
     struct rebind {
-      using __rebind_backend_type_other =
-          typename ::std::allocator_traits<background_allocator_type>::template rebind_alloc<U>;
+      using __rebind_backend_type_other = typename ::std::allocator_traits<
+          background_allocator_type>::template rebind_alloc<atfw::util::nostd::remove_cv_t<U>>;
       using other = allocator<U, __rebind_backend_type_other>;
     };
+
+    static_assert(
+        std::is_same<typename rebind<value_type>::other, allocator<value_type, background_allocator_type>>::value,
+        "allocator_traits<A>::rebind_alloc<A::value_type> must be A");
 
     inline pointer address(reference x) const noexcept { return &x; }
 

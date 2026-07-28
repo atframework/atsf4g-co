@@ -2,15 +2,15 @@
 
 #pragma once
 
-#include <utility>
+#include <utility>  // IWYU pragma: keep
 
-#include "memory/rc_ptr.h"
+#include "memory/rc_ptr.h"  // IWYU pragma: keep
 
-#include "memory/object_allocator.h"
+#include "memory/object_allocator.h"  // IWYU pragma: keep
 
 #include "config/server_frame_build_feature.h"
 
-#include "config/excel/config_traits.h"
+#include "config/excel/config_traits.h"  // IWYU pragma: keep
 
 namespace excel {
 
