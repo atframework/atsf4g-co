@@ -167,7 +167,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     DEPENDS ${project_server_frame_create_protocol_target_PROTOCOLS}
             ${project_server_frame_create_protocol_target_DEPENDS}
     COMMENT
-      "Generate [@${SANDBOX_PATH}] [${project_server_frame_create_protocol_target_PROTOCOLS}] [${project_server_frame_create_protocol_target_DEPENDS}]"
+      "Generate [@${SANDBOX_PATH}] Protoc"
   )
 
   add_custom_target(

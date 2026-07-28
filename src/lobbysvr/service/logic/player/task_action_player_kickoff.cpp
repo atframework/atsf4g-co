@@ -20,7 +20,7 @@
 
 #include <atgateway/protocol/libatgw_protocol_api.h>
 
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 
 #include <data/player.h>
 #include <data/session.h>

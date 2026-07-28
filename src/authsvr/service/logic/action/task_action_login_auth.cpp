@@ -1,4 +1,4 @@
-﻿// Copyright 2026 atframework
+// Copyright 2026 atframework
 
 #include "task_action_login_auth.h"
 
@@ -17,7 +17,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/db/uuid.h>
 
 #include <config/logic_config.h>

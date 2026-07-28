@@ -23,7 +23,7 @@
 // clang-format on
 
 #include <rpc/async_jobs/async_jobs.h>
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 
 #include <rank_logic/logic_rank_algorithm.h>
 #include <rank_logic/logic_rank_handle.h>

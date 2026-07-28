@@ -36,7 +36,7 @@
 #include <utility>
 
 #include "config/compile_optimize.h"
-#include "rpc/db/global_db_interface.h"
+#include "rpc/db/global_db_interface.atfw.gen.h"
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_utils.h"
 

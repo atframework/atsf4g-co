@@ -32,7 +32,7 @@
 #include <rank_logic/logic_rank_algorithm.h>
 #include <rank_logic/logic_rank_handle.h>
 
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rank_board/rank.h>
 
 #include <algorithm>

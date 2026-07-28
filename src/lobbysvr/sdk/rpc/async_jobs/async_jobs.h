@@ -22,7 +22,7 @@
 #include <vector>
 
 #include "rpc/db/db_utils.h"
-#include "rpc/db/local_db_interface.h"
+#include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/rpc_shared_message.h"
 
 namespace rpc {

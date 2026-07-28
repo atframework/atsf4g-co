@@ -12,7 +12,7 @@
 // clang-format on
 
 #include <config/logic_config.h>
-#include <rpc/db/local_db_interface.h>
+#include <rpc/db/local_db_interface.atfw.gen.h>
 #include "log/log_wrapper.h"
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_common_types.h"
