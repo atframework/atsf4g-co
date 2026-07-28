@@ -18,6 +18,8 @@ class random_engine {
   static ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API atfw::util::random::xoshiro256_starstar &_get_fast_generator();
 
  public:
+  static ATFRAMEWORK_SERVICE_COMPONENT_MACRO_API void reset_all_seeds();
+
   /**
    * 使用指定种子初始化随机数生成器
    * @param [out] rnd 要初始化的生成器

@@ -39,6 +39,7 @@
 #include <logic/logic_server_setup.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -94,13 +95,22 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
  public:
   using ptr_t = std::shared_ptr<shared_subscriber>;
 
+  enum class subscriber_flag : uint32_t {
+    kUninitialized = 0,
+    kReady = 1,
+    kMax,
+  };
+
  public:
   static ptr_t make_shared(const atfw::dtmq::DChannelIdKey& channel_key,
                            const client_subscriber::subscriber_options& options);
 
   // NOLINTNEXTLINE(modernize-pass-by-value)
   shared_subscriber(const atfw::dtmq::DChannelIdKey& channel_key, const client_subscriber::subscriber_options& options)
-      : channel_key_(channel_key), readonly_replicate_index_(atfw::component::random_engine::random()) {
+      : channel_key_(channel_key),
+        readonly_replicate_index_(atfw::component::random_engine::random()),
+        custom_data_sequence_(0),
+        private_data_sequence_(0) {
     subscriber_info_.set_subscriber_server_id(logic_config::me()->get_local_server_id());
     subscriber_info_.set_subscriber_key(options.subscriber_key);
   }
@@ -126,6 +136,7 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
   static void add_cached_shared_subscriber(const shared_subscriber::ptr_t& subscriber);
 
  private:
+  std::bitset<static_cast<size_t>(subscriber_flag::kMax)> flags_;
   atfw::dtmq::DChannelIdKey channel_key_;
   atfw::dtmq::channel_subscriber subscriber_info_;
   uint64_t readonly_replicate_index_;

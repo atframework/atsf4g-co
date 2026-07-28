@@ -158,6 +158,8 @@ Diagnostics:
 
 ```jsonc
 {
+  // Visual Studio * 的Generator不会生成 compile_commands.json, 所以需要切到 Ninja 生成
+  "cmake.generator": "Ninja",
   "clangd.arguments": [
     // 使用环境变量（推荐，VS 开发者命令行会注入 VCToolsInstallDir）
     "--query-driver=${env:VCToolsInstallDir}bin/Hostx64/x64/cl.exe",

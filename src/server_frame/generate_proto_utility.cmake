@@ -292,6 +292,7 @@ function(project_server_frame_create_protocol_sandbox TARGET_NAME OUTPUT_DIR OUT
     list(APPEND OUTPUT_FILES "${OUTPUT_FILE}")
   endforeach()
   add_custom_target(${TARGET_NAME} ALL DEPENDS ${OUTPUT_FILES})
+  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/protocol/sandbox")
   set(${OUTPUT_VAR}
       ${${OUTPUT_VAR}} ${OUTPUT_FILES}
       PARENT_SCOPE)
