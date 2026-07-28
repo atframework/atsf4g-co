@@ -22,6 +22,7 @@ tasks:
     cmds:
       - |
         echo -e "\033[34;1m Generate code protocol... \033[0m"
+        export PATH="$(go env GOPATH)/bin:$PATH"
         "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/public  ../../../server_frame/protocol/public/protocol/common/*.proto
         "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/public ../../../server_frame/protocol/public/protocol/extension/*.proto
         "{{.PROTOC_EXEC_BIN}}" --go_out=./ --mutable_out=./ --go_opt=paths=source_relative --mutable_opt=paths=source_relative --proto_path='{{.XRES_PROTOCOL_PATH}}/core' --proto_path='{{.XRES_PROTOCOL_PATH}}/code' --proto_path=../../../server_frame/protocol/public ../../../server_frame/protocol/public/protocol/config/*.proto
