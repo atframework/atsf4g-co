@@ -493,7 +493,7 @@ int32_t OrbitClientRuntime::process_fork_request() {
   if (child_pid < 0) {
     log(OrbitClientLogLevel::kError, std::string{"process_fork_request rejected: fork failed, errno="} +
                                         std::to_string(static_cast<int>(errno)));
-    return orbit::EN_ORBIT_ERROR_CODE_SYS_ERROR;
+    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (child_pid != 0) {
