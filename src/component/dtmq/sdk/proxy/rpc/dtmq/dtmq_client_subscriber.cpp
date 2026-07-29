@@ -173,34 +173,34 @@ DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::subscriber_options(std
 DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::~subscriber_options() {}
 
 struct client_subscriber::ctor_guard {
-  shared_subscriber::ptr_t shared_subscriber;
+  shared_subscriber::ptr_t shared_subscriber_;
 
   ctor_guard(const atfw::dtmq::DChannelIdKey& input_channel_key, const subscriber_options& input_options)
-      : shared_subscriber(shared_subscriber::make_shared(input_channel_key, input_options)) {}
+      : shared_subscriber_(shared_subscriber::make_shared(input_channel_key, input_options)) {}
 };
 
 struct client_subscriber::subscriber_internal_data {
-  atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_subscriber;
+  atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_subscriber_;
 
   subscriber_event_handler_set event_handler;
 
   explicit subscriber_internal_data(shared_subscriber::ptr_t&& input_shared_subscriber)
-      : shared_subscriber(std::move(input_shared_subscriber)) {}
+      : shared_subscriber_(std::move(input_shared_subscriber)) {}
 };
 
 client_subscriber::client_subscriber(ctor_guard& guard)
-    : internal_data_(atfw::util::memory::make_strong_rc<subscriber_internal_data>(std::move(guard.shared_subscriber))) {
-  internal_data_->shared_subscriber->register_client_subscriber(this);
+    : internal_data_(atfw::util::memory::make_strong_rc<subscriber_internal_data>(std::move(guard.shared_subscriber_))) {
+  internal_data_->shared_subscriber_->register_client_subscriber(this);
 }
 
 DTMQ_PROXY_SDK_API client_subscriber::~client_subscriber() {
-  internal_data_->shared_subscriber->unregister_client_subscriber(this);
+  internal_data_->shared_subscriber_->unregister_client_subscriber(this);
 }
 
 DTMQ_PROXY_SDK_API atfw::util::nostd::nullable<client_subscriber::ptr_t> client_subscriber::create(
     const atfw::dtmq::DChannelIdKey& channel_key, const subscriber_options& options) {
   ctor_guard cg(channel_key, options);
-  if (!cg.shared_subscriber) {
+  if (!cg.shared_subscriber_) {
     return nullptr;
   }
 
@@ -218,19 +218,19 @@ DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& /*ctx*/)
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelIdKey& client_subscriber::get_channel_key() const noexcept {
-  return internal_data_->shared_subscriber->get_channel_key();
+  return internal_data_->shared_subscriber_->get_channel_key();
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::channel_subscriber& client_subscriber::get_subscriber_info() const noexcept {
-  return internal_data_->shared_subscriber->get_subscriber_info();
+  return internal_data_->shared_subscriber_->get_subscriber_info();
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelConfigure& client_subscriber::get_configure() const noexcept {
-  return internal_data_->shared_subscriber->get_configure();
+  return internal_data_->shared_subscriber_->get_configure();
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& client_subscriber::get_lock() const noexcept {
-  return internal_data_->shared_subscriber->get_lock();
+  return internal_data_->shared_subscriber_->get_lock();
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(event_callback_on_ready_t&& on_ready) {
@@ -315,26 +315,26 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
     std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr, bool auto_create_channel,
     bool no_wait) {
   rpc::context::message_holder<atfw::dtmq::channel_subscriber> subscriber_info_holder{ctx};
-  protobuf_copy_message(*subscriber_info_holder, internal_data_->shared_subscriber->get_subscriber_info());
+  protobuf_copy_message(*subscriber_info_holder, internal_data_->shared_subscriber_->get_subscriber_info());
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(
-      ctx, std::move(*subscriber_info_holder), internal_data_->shared_subscriber->get_channel_key(), std::move(detail),
+      ctx, std::move(*subscriber_info_holder), internal_data_->shared_subscriber_->get_channel_key(), std::move(detail),
       compare_and_maybe_reset_lock_ptr, compare_and_maybe_reset_lock_rsp_ptr, auto_create_channel, no_wait)));
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::find_message(rpc::context& ctx, int64_t sequence,
                                                                          atfw::dtmq::DChannelMessage& msg) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      rpc::dtmq::find_message(ctx, internal_data_->shared_subscriber->get_channel_key(),
-                              internal_data_->shared_subscriber->get_readonly_replicate_index(), sequence, msg)));
+      rpc::dtmq::find_message(ctx, internal_data_->shared_subscriber_->get_channel_key(),
+                              internal_data_->shared_subscriber_->get_readonly_replicate_index(), sequence, msg)));
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::page_query_message(
     rpc::context& ctx, atfw::dtmq::channel_page_info& page_info,
     google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::page_query_message(
-      ctx, internal_data_->shared_subscriber->get_channel_key(),
-      internal_data_->shared_subscriber->get_readonly_replicate_index(), page_info, msgs)));
+      ctx, internal_data_->shared_subscriber_->get_channel_key(),
+      internal_data_->shared_subscriber_->get_readonly_replicate_index(), page_info, msgs)));
 }
 
 namespace {

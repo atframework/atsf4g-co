@@ -21,7 +21,7 @@ message orbit_agent_cfg {
   double memory_capacity_mb = 5;
   uint32 server_identity_timeout_sec = 6;
   uint32 server_identity_check_interval_sec = 7;
-  uint32 max_batch_startup_count = 8;
+  int32 max_batch_startup_count = 8;
 
   bool enable_seed_mode = 21;
   uint32 seed_startup_timeout_sec = 22;
