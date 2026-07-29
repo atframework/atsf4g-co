@@ -68,12 +68,12 @@ ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(const 
 ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::dispatch(const std::string& message) {
   orbit::OrbitRpcMessage orbit_msg;
   if (!orbit_msg.ParseFromString(message)) {
-    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError,
+    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] parse message failed.\n{}", message));
     return orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
   }
   if (!orbit_msg.has_head()) {
-    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError,
+    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] message head not found.\n{}", message));
     return orbit::EN_ORBIT_ERROR_CODE_MESSAGE_HEAD_NOT_FOUND;
   }
@@ -83,7 +83,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::dispatch(const std::string& mes
     return on_rpc_rsp_message(orbit_msg);
   } else {
     OrbitClientRuntime::me()->log(
-        OrbitClientLogLevel::kError,
+        OrbitClientLogLevel::kError, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] unknown message.\n{}",
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
     return orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
@@ -94,7 +94,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::Orbit
   int32_t ret = 0;
   do {
     OrbitClientRuntime::me()->log(
-        OrbitClientLogLevel::kInfo,
+        OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] recv req msg {} bytes\n{}", orbit_msg.ByteSizeLong(),
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
     const std::string& rpc_name = pick_rpc_name(orbit_msg);
@@ -118,7 +118,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::Orbit
 
 ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::OrbitRpcMessage& orbit_msg) {
   OrbitClientRuntime::me()->log(
-      OrbitClientLogLevel::kInfo,
+      OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] recv rsp msg.\n{}",
                                OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
   uint64_t sequence = orbit_msg.head().destination_task_id();
@@ -145,7 +145,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRp
   }
   size_t msg_buf_len = orbit_msg.ByteSizeLong();
   OrbitClientRuntime::me()->log(
-      OrbitClientLogLevel::kInfo,
+      OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] send rsp msg to {} bytes\n{}", msg_buf_len,
                                OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
   OrbitClientRequestOptions request_options;
@@ -163,14 +163,15 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRp
 
   size_t msg_buf_len = orbit_msg.ByteSizeLong();
   OrbitClientRuntime::me()->log(
-      OrbitClientLogLevel::kInfo,
+      OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] send req msg to {} bytes\n{}", msg_buf_len,
                                OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
   sequence = orbit_msg.head().sequence();
   return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
-ORBIT_CLIENT_SDK_API int OrbitRPCDispatcher::_register_action(const std::string& rpc_full_name, task_action_creator_t action) {
+ORBIT_CLIENT_SDK_API int OrbitRPCDispatcher::_register_action(const std::string& rpc_full_name,
+                                                              task_action_creator_t action) {
   rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
   if (task_action_map_by_name_.end() != iter) {
     return orbit::EN_ORBIT_ERROR_CODE_ALREADY_REGISTER_ACTION;

@@ -146,6 +146,11 @@ int main(int argc, char* argv[]) {
     return init_result;
   }
 
+  if (!runtime_t::me()->enabled()) {
+    write_log_line("orbit runtime is not enabled, exiting");
+    return 0;
+  }
+
   bool ready_sent = false;
   bool ping_sent = false;
 

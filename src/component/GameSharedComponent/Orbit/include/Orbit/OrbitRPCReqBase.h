@@ -13,7 +13,6 @@
 #include <Orbit/OrbitClientRuntime.h>
 #include <Orbit/OrbitConfig.h>
 
-
 #include <list>
 #include <memory>
 #include <string>
@@ -100,14 +99,14 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
     if (get_request().head().has_rpc_request()) {
       if (get_request_type_url() != get_request().head().rpc_request().type_url()) {
         OrbitClientRuntime::me()->log(
-            OrbitClientLogLevel::kError,
+            OrbitClientLogLevel::kError, __FILE__, __LINE__,
             LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] expect message {}, real got {}", get_request_type_url(),
                                      get_request().head().rpc_request().type_url()));
       }
     } else if (get_request().head().has_rpc_stream()) {
       if (get_request_type_url() != get_request().head().rpc_stream().type_url()) {
         OrbitClientRuntime::me()->log(
-            OrbitClientLogLevel::kError,
+            OrbitClientLogLevel::kError, __FILE__, __LINE__,
             LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] expect message {}, real got {}", get_request_type_url(),
                                      get_request().head().rpc_stream().type_url()));
       }
@@ -115,12 +114,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
 
     if (false == request_body_.ParseFromString(get_request().body_bin())) {
       OrbitClientRuntime::me()->log(
-          OrbitClientLogLevel::kError,
+          OrbitClientLogLevel::kError, __FILE__, __LINE__,
           LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} ParseFromString Failed {}", get_request_type_url(),
                                    request_body_.InitializationErrorString()));
     } else {
       OrbitClientRuntime::me()->log(
-          OrbitClientLogLevel::kInfo,
+          OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
           LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} parse rpc request message success:\n{}", get_response_type_url(),
                                    OrbitClientRuntime::protobuf_mini_dumper_get_readable(request_body_)));
     }
@@ -148,12 +147,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
       OrbitClientRuntime::me()->log(
-          OrbitClientLogLevel::kError,
+          OrbitClientLogLevel::kError, __FILE__, __LINE__,
           LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} SerializeToString Failed {}", get_request_type_url(),
                                    get_response_body().InitializationErrorString()));
     } else {
       OrbitClientRuntime::me()->log(
-          OrbitClientLogLevel::kInfo,
+          OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
           LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} serialize rpc response message success:\n{}",
                                    get_response_type_url(),
                                    OrbitClientRuntime::protobuf_mini_dumper_get_readable(get_response_body())));

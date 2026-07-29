@@ -54,7 +54,7 @@ void task_action_orbit_req_base::send_response() {
     std::ostringstream stream;
     stream << "send response to server failed, rsp head: "
            << OrbitClientRuntime::protobuf_mini_dumper_get_readable(response_messages_.head()) << ", ret: " << ret;
-    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, stream.str());
+    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__, stream.str());
   }
 }
 

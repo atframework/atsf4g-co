@@ -25,13 +25,13 @@ static inline int __pack_rpc_body(const TBodyType& input, std::string* output, c
                                   gsl::string_view type_full_name) {
   if (false == input.SerializeToString(output)) {
     OrbitClientRuntime::me()->log(
-        OrbitClientLogLevel::kError,
+        OrbitClientLogLevel::kError, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} serialization rpc request message failed:\n{}", rpc_full_name,
                                  input.InitializationErrorString()));
     return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
   } else {
     OrbitClientRuntime::me()->log(
-        OrbitClientLogLevel::kDebug,
+        OrbitClientLogLevel::kDebug, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} serialization rpc request message success:\n{}", rpc_full_name,
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(input)));
     return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
@@ -42,13 +42,13 @@ template <class TBodyType>
 static inline int __unpack_rpc_body(TBodyType&& output, const std::string& input, const std::string& rpc_full_name,
                                     gsl::string_view type_full_name) {
   if (false == output.ParseFromString(input)) {
-    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError,
+    OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} parse rpc request message failed:\n{}",
                                                            rpc_full_name, output.InitializationErrorString()));
     return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
   } else {
     OrbitClientRuntime::me()->log(
-        OrbitClientLogLevel::kDebug,
+        OrbitClientLogLevel::kDebug, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} parse rpc request message success:\n{}", rpc_full_name,
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(output)));
     return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
@@ -166,7 +166,7 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
                     orbit_service_name::descriptor(), ORBIT_STRINGIFY_HELPER(rpc_name));                            \
   if (ret != 0) {                                                                                                   \
     ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                                 \
-        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError,                               \
+        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError, __FILE__, __LINE__,           \
         LOG_WRAPPER_FWAPI_FORMAT("register_orbit_rpc_action register action {} failed, ret: [{}]", #orbit_rpc_name, \
                                  ret));                                                                             \
   }

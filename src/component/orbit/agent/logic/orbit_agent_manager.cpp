@@ -46,6 +46,7 @@ constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
 constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
+constexpr const char* kOrbitEnabledArg = "--enable_orbit";
 
 static bool is_timeout_exit_reason(orbit::EnClientExitReason reason) {
   return orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT == reason ||
@@ -308,6 +309,8 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     return -3;
   }
 
+  configured_client_command_line_.push_back(kOrbitEnabledArg);
+
   // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
   for (const auto& arg : configured_client_command_line_) {
     FWLOGINFO("orbit agent launch command argument: {}", arg);
@@ -325,6 +328,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
       return -5;
     }
 
+    seed_client_command_line_.push_back(kOrbitEnabledArg);
     seed_client_command_line_.push_back("--seed_mode");
 
     // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
@@ -1396,6 +1400,13 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
       memory_used_mb += record->expected_memory_mb;
     }
   }
+
+  FWLOGDEBUG(
+      "orbit agent load snapshot: agent_cpu_used={}, agent_memory_used_mb={}, total_cpu_used={}, "
+      "total_memory_used_mb={}, running_client_count={}, "
+      "starting_client_count={}, agent_online={}",
+      self_cpu_used, self_memory_used_mb, cpu_used, memory_used_mb, running_client_count, starting_client_count,
+      agent_online_);
 
   double esp = 1e-9;
 

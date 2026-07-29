@@ -58,6 +58,8 @@ struct OrbitClientRequestOptions {
 
 struct OrbitClientLogRecord {
   OrbitClientLogLevel level = OrbitClientLogLevel::kInfo;
+  const char* file_name = nullptr;
+  int line_number = 0;
   std::string category;
   std::string message;
 };

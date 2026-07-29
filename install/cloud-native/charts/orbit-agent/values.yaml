@@ -26,8 +26,8 @@ orbit_agent:
   region: default
   tag: ""
   configured_client_command_line: ..\..\orbit-auto-client\bin\orbit-auto-client.exe
-  cpu_capacity: 1
-  memory_capacity_mb: 1024
+  cpu_capacity: 4
+  memory_capacity_mb: 4096
   server_identity_timeout_sec: 30
   server_identity_check_interval_sec: 5
   max_batch_startup_count: 3
