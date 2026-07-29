@@ -27,8 +27,10 @@ vars:
   # Python 虚拟环境相关变量
   PYTHON_VENV:
     sh: |
-      if [ -n "$PYTHON_VENV_PATH" ]; then
+      if [ -n "$PYTHON_VENV_PATH" ] && [ -e "$PYTHON_VENV_PATH" ]; then
         echo "$PYTHON_VENV_PATH"
+      elif [ -n "$VIRTUAL_ENV" ] && [ -e "$VIRTUAL_ENV" ]; then
+        echo "$VIRTUAL_ENV"
       elif [ "{{OS}}" = "windows" ]; then
         echo "./build/robot_venv"
       else
@@ -160,45 +162,45 @@ tasks:
     cmds:
       - task: _generate-protocol
         vars:
-          PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
+          PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
       - task: _generate-config
         vars:
-          PYTHON_BIN_PATH: '{{.PYTHON_BIN_PATH}}'
+          PYTHON_BIN_PATH: "{{.PYTHON_BIN_PATH}}"
 
   _generate-protocol:
     desc: "Generate Protocol"
     cmds:
       - task: public_protocol:generate-protocol-pb
         vars:
-          OUTPUT_DIR: '{{.ROOT_DIR}}/build/pb'
-          PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
-          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+          OUTPUT_DIR: "{{.ROOT_DIR}}/build/pb"
+          PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
+          XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
 
       - task: public_protocol:generate-protocol-code
         vars:
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
-          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+          XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
 
       - task: private_protocol:generate-protocol-pb
         vars:
-          OUTPUT_DIR: '{{.ROOT_DIR}}/build/pb'
-          PROTOC_EXEC_BIN: '{{.PROTOC_EXEC_BIN}}'
-          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+          OUTPUT_DIR: "{{.ROOT_DIR}}/build/pb"
+          PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
+          XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
 
       - task: private_protocol:generate-protocol-code
         vars:
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
-          XRES_PROTOCOL_PATH: '{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols'
+          XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
 
   _generate-config:
     desc: "Generate Config"
     cmds:
       - task: robot:generate-code
         vars:
-          PYTHON_BIN_PATH: '{{.PYTHON_BIN_PATH}}'
-          OUTPUT_DIR: '{{.ROOT_DIR}}/config'
+          PYTHON_BIN_PATH: "{{.PYTHON_BIN_PATH}}"
+          OUTPUT_DIR: "{{.ROOT_DIR}}/config"
           CONFIG_PROTOCOL_IMPORT_PATH: "github.com/atframework/atsf4g-co/component/public/protocol/config"
-          RES_CONFIG_PB: '{{.ROOT_DIR}}/build/pb/ALL.pb'
+          RES_CONFIG_PB: "{{.ROOT_DIR}}/build/pb/ALL.pb"
 
     dir: "{{.TASKFILE_DIR}}"
 

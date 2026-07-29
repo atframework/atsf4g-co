@@ -45,7 +45,7 @@ function(project_server_frame_add_config_target)
 
   execute_process(
     COMMAND
-      ${Python3_EXECUTABLE} ${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY} --add-package-prefix
+      "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}" --add-package-prefix
       "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
       "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config"
       -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
@@ -60,6 +60,21 @@ function(project_server_frame_add_config_target)
     ERROR_VARIABLE PROJECT_SERVER_FRAME_CONFIG_SET_ERR)
 
   if(NOT ${PROJECT_SERVER_FRAME_CONFIG_SET_RES} EQUAL 0)
+    set(_run_command
+        "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}" --add-package-prefix
+        "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
+        "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o
+        "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config" -g
+        "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
+        "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako:src/excel/config_manager.cpp" -l
+        "H:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako:include/config/excel/\${loader.get_cpp_header_path()}" -l
+        "S:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako:src/excel/\${loader.get_cpp_source_path()}" -g
+        "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.h.mako:include/config/excel/config_easy_api.h" -g
+        "${PROJECT_SOURCE_TEMPLATE_DIR}/config_easy_api.cpp.mako:src/excel/config_easy_api.cpp" --pb-include-prefix
+        "protocol/config/" --print-output-file)
+    string(REPLACE ";" "\" \"" _run_command_str "${_run_command}")
+    message(STATUS "\"${_run_command_str}\"")
+    message(STATUS "${PROJECT_SERVER_FRAME_CONFIG_SET_SRC_LIST_STR}")
     message(FATAL_ERROR "${PROJECT_SERVER_FRAME_CONFIG_SET_ERR}")
   endif()
   unset(PROJECT_SERVER_FRAME_CONFIG_SET_RES)

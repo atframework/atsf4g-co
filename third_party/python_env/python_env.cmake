@@ -25,7 +25,7 @@ if(Python3_EXECUTABLE)
     string(REGEX REPLACE "^executable[ \t]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_base_exec
                          "${__python_venv_base_exec}")
     file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_version REGEX "^version[ \t]*=[ \t]*([^\\r\\n]*)")
-    string(REGEX REPLACE "^version[ \t]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_version "${__python_venv_version}")
+    string(REGEX REPLACE "^version[^=]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_version "${__python_venv_version}")
 
     if(__python_venv_base_exec)
       execute_process(
@@ -116,7 +116,7 @@ if(NOT PROJECT_THIRD_PARTY_PYTHON_VENV_AVAILABLE)
     )
     execute_process(
       COMMAND "${Python3_EXECUTABLE}" "-m" "${PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_MODULE_NAME}"
-              "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}"
+              "--system-site-packages" "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}"
       RESULT_VARIABLE PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CREATE_RESULT COMMAND_ECHO STDOUT)
     if(NOT PROJECT_THIRD_PARTY_PYTHON_VIRTUALENV_CREATE_RESULT EQUAL 0)
       message(
@@ -168,6 +168,20 @@ else()
        "${PROJECT_THIRD_PARTY_HOST_INSTALL_DIR}/python.modules/${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}"
        PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR)
 endif()
+
+foreach(__python3_rebind_target_location Python3::Interpreter Python3::InterpreterDebug Python::Interpreter
+                                         Python::InterpreterDebug)
+  if(TARGET ${__python3_rebind_target_location})
+    set_target_properties(
+      ${__python3_rebind_target_location}
+      PROPERTIES IMPORTED_LOCATION "${Python3_EXECUTABLE}"
+                 IMPORTED_LOCATION_RELEASE "${Python3_EXECUTABLE}"
+                 IMPORTED_LOCATION_DEBUG "${Python3_EXECUTABLE}"
+                 IMPORTED_LOCATION_RELWITHDEBINFO "${Python3_EXECUTABLE}"
+                 IMPORTED_LOCATION_MINSIZEREL "${Python3_EXECUTABLE}")
+  endif()
+endforeach()
+unset(__python3_rebind_target_location)
 
 if(NOT EXISTS "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}")
   file(MAKE_DIRECTORY "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}")

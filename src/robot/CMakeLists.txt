@@ -128,12 +128,16 @@ maybe_populate_submodule(ROBOT_DEPENDENCY_ROBOT_GO "src/robot/atframework/robot-
 # 1. Custom target: run task all
 # ============================================================================
 
+# Inject for robot
+if(PROJECT_THIRD_PARTY_PYTHON_VENV_DIR)
+  set(ENV{PYTHON_VENV_PATH} "${PROJECT_THIRD_PARTY_PYTHON_VENV_DIR}")
+endif()
+
 execute_process(
   COMMAND "${CMAKE_COMMAND}" -E env "INSTALL_PATH=${ROBOT_INSTALL_PATH}" "${TASK_EXECUTABLE}" all
   WORKING_DIRECTORY "${ROBOT_SOURCE_DIR}"
-  RESULT_VARIABLE TASK_RESULT
-)
+  RESULT_VARIABLE TASK_RESULT)
 
 if(NOT TASK_RESULT EQUAL 0)
-    message(FATAL_ERROR "Go-Task failed with exit code: ${TASK_RESULT}")
+  message(FATAL_ERROR "Go-Task failed with exit code: ${TASK_RESULT}")
 endif()
