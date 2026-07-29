@@ -22,7 +22,13 @@ struct EXCEL_CONFIG_SYMBOL_VISIBLE config_traits<type_guard> : public type_guard
 
   template <class Y, class... Args>
   inline static atfw::util::memory::strong_rc_ptr<Y> make_shared(Args&&... args) {
+    // Some versions of STL have bug and will cause warnings by mistake, which may trigger -Werror/-WX to fail the
+    // build. Use include guard to ignore them.
+    // NOLINTNEXTLINE(build/include,readability-duplicate-include)
+#include "config/compiler/internal/stl_compact_prefix.h.inc"  // IWYU pragma: keep
     return atfw::memory::stl::make_strong_rc<Y>(std::forward<Args>(args)...);
+    // NOLINTNEXTLINE(build/include,readability-duplicate-include)
+#include "config/compiler/internal/stl_compact_suffix.h.inc"  // IWYU pragma: keep
   }
 
   template <class Y, class... Args>
