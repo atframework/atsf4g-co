@@ -109,11 +109,11 @@ int main(int argc, char* argv[]) {
     std::lock_guard<std::mutex> lock{log_mutex};
     if (log_file.is_open()) {
       log_file << "[" << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) << "] " << message
-               << std::endl;
+               << '\n';
       return;
     }
     std::cerr << "[" << std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()) << "] " << message
-              << std::endl;
+              << '\n';
   };
 
   {
@@ -124,7 +124,7 @@ int main(int argc, char* argv[]) {
   if (log_file.is_open()) {
     write_log_line(std::string{"log file: "} + log_file_path.string());
   } else {
-    std::cerr << "open log file failed: " << log_file_path.string() << std::endl;
+    std::cerr << "open log file failed: " << log_file_path.string() << '\n';
   }
 
   callbacks_t callbacks;
@@ -138,7 +138,7 @@ int main(int argc, char* argv[]) {
   callbacks.on_request_stop = [&stopped]() { stopped = true; };
   callbacks.on_seed_waiting_tick = [&write_log_line]() { write_log_line(std::string{"waiting for fork"}); };
 
-  int init_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::init(argc, argv, callbacks);
+  int init_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::init(argc, argv, true, callbacks);
   if (init_result != 0) {
     write_log_line(std::string{"orbit runtime init failed, code="} + std::to_string(init_result));
     return init_result;
