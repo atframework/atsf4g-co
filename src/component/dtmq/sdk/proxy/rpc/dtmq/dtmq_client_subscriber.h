@@ -7,6 +7,8 @@
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 
+#include <memory/rc_ptr.h>
+
 #include <logic/hpa/logic_hpa_easy_api.h>
 
 #include <rpc/rpc_common_types.h>
@@ -32,7 +34,6 @@
 #include <string>
 
 #include "config/compile_optimize.h"
-#include "memory/rc_ptr.h"
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_api.h"
 
@@ -40,12 +41,13 @@ namespace rpc {
 class context;
 
 namespace dtmq {
-class client_subscriber {
+class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<client_subscriber> {
  public:
-  using ptr_t = std::shared_ptr<client_subscriber>;
+  using ptr_t = atfw::util::memory::strong_rc_ptr<client_subscriber>;
 
   struct ATFW_UTIL_SYMBOL_VISIBLE subscriber_options {
-    DTMQ_PROXY_SDK_API subscriber_options(std::string input_subscriber_key);
+    DTMQ_PROXY_SDK_API subscriber_options(std::string&& input_subscriber_key);
+    DTMQ_PROXY_SDK_API subscriber_options(const std::string& input_subscriber_key);
     DTMQ_PROXY_SDK_API ~subscriber_options();
 
     DTMQ_PROXY_SDK_API subscriber_options(const subscriber_options& other) = default;
@@ -56,27 +58,29 @@ class client_subscriber {
     std::string subscriber_key;
   };
 
-  using event_callback_on_ready_t = std::function<void(const ptr_t& subscriber, int64_t compact_log_sequence)>;
+  using event_callback_on_ready_t = std::function<void(rpc::context& ctx, const ptr_t& subscriber)>;
 
-  using event_callback_on_destroy_t = std::function<void(const ptr_t& subscriber, int64_t log_sequence,
-                                                         std::chrono::system_clock::time_point destroy_time)>;
+  using event_callback_on_destroy_t =
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence,
+                         std::chrono::system_clock::time_point destroy_time)>;
 
-  using event_callback_on_update_custom_data_t =
-      std::function<void(const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+  using event_callback_on_update_custom_data_t = std::function<void(
+      rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
-  using event_callback_on_update_private_data_t =
-      std::function<void(const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+  using event_callback_on_update_private_data_t = std::function<void(
+      rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
-  using event_callback_on_compact_t = std::function<void(const ptr_t& subscriber, int64_t compact_log_sequence)>;
+  using event_callback_on_compact_t =
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t compact_log_sequence)>;
 
   using event_callback_on_receive_text_t =
-      std::function<void(const ptr_t& subscriber, int64_t log_sequence, gsl::string_view text)>;
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, gsl::string_view text)>;
 
-  using event_callback_on_receive_event_t =
-      std::function<void(const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+  using event_callback_on_receive_event_t = std::function<void(
+      rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
-  using event_callback_on_receive_snapshot_t =
-      std::function<void(const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+  using event_callback_on_receive_snapshot_t = std::function<void(
+      rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
  private:
   struct ctor_guard;
@@ -108,7 +112,7 @@ class client_subscriber {
    * @param event_sync 收到的实践同步消息
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API static void global_receive_channel_event(
-      rpc::context& ctx, const atfw::dtmq::SSChannelEventSync event_sync);
+      rpc::context& ctx, const atfw::dtmq::SSChannelEventSync& event_sync);
 
   /**
    * @brief 使用订阅者的服务必须接入定时器Tick调用
@@ -126,46 +130,71 @@ class client_subscriber {
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept;
 
   /**
-   * @brief Get the subscriber info object
-   *
-   * @return subscriber information
+   * @brief Get the subscriber key
+
+   * @return subscriber key
    */
-  DTMQ_PROXY_SDK_API const atfw::dtmq::channel_subscriber& get_subscriber_info() const noexcept;
+  DTMQ_PROXY_SDK_API const std::string& get_subscriber_key() const noexcept;
+
+  /**
+   * @brief Get the last heartbeat timepoint
+
+   * @return last heartbeat timepoint
+   */
+  DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_last_heartbeat_timepoint() const noexcept;
+
+  /**
+   * @brief Get the last heartbeat sequence
+
+   * @return last heartbeat sequence
+   */
+  DTMQ_PROXY_SDK_API int64_t get_last_heartbeat_sequence() const noexcept;
 
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelConfigure& get_configure() const noexcept;
 
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept;
 
-  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_on_ready_t&& on_ready);
-  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(const event_callback_on_ready_t& on_ready);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, event_callback_on_ready_t&& on_ready);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, const event_callback_on_ready_t& on_ready);
+  DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready() const noexcept;
 
-  DTMQ_PROXY_SDK_API void set_event_callback_on_destroy(event_callback_on_destroy_t&& on_destroy);
-  DTMQ_PROXY_SDK_API void set_event_callback_on_destroy(const event_callback_on_destroy_t& on_destroy);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(event_callback_on_destroy_t&& on_destroy);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(const event_callback_on_destroy_t& on_destroy);
+  DTMQ_PROXY_SDK_API const event_callback_on_destroy_t& get_event_callback_on_destroyed() const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
       event_callback_on_update_custom_data_t&& on_update_custom_data);
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
       const event_callback_on_update_custom_data_t& on_update_custom_data);
+  DTMQ_PROXY_SDK_API const event_callback_on_update_custom_data_t& get_event_callback_on_update_custom_data()
+      const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
       event_callback_on_update_private_data_t&& on_update_private_data);
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
       const event_callback_on_update_private_data_t& on_update_private_data);
+  DTMQ_PROXY_SDK_API const event_callback_on_update_private_data_t& get_event_callback_on_update_private_data()
+      const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(event_callback_on_compact_t&& on_compact);
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(const event_callback_on_compact_t& on_compact);
+  DTMQ_PROXY_SDK_API const event_callback_on_compact_t& get_event_callback_on_compact() const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(event_callback_on_receive_text_t&& on_receive_text);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(const event_callback_on_receive_text_t& on_receive_text);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_text_t& get_event_callback_on_receive_text() const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(event_callback_on_receive_event_t&& on_receive_event);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(
       const event_callback_on_receive_event_t& on_receive_event);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event() const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot(
       event_callback_on_receive_snapshot_t&& on_receive_snapshot);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot(
       const event_callback_on_receive_snapshot_t& on_receive_snapshot);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot()
+      const noexcept;
 
   /**
    * @brief 发送消息

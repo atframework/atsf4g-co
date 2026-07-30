@@ -36,9 +36,11 @@
 
 #include "config/logic_config.h"
 #include "gsl/select-gsl.h"
+#include "rpc/rpc_context.h"
 #include "rpc/telemetry/opentelemetry_utility.h"
 #include "rpc/telemetry/rpc_global_service.h"
 #include "rpc/telemetry/semantic_conventions.h"
+#include "time/time_utility.h"
 
 namespace rpc {
 
@@ -110,7 +112,7 @@ static std::shared_ptr<trace_additional_metric_span> mutable_trace_additional_me
   ret->span_name = span_name;
   ret->kind = static_cast<std::string>(kind);
   ret->attribute.reserve(additional_attributes.size());
-  for (auto &attribute_pair : additional_attributes) {
+  for (const auto &attribute_pair : additional_attributes) {
     if (attribute_pair.first.size() == 7 && (attribute_pair.first == "user_id" || attribute_pair.first == "zone_id")) {
       continue;
     }
@@ -631,7 +633,7 @@ SERVER_FRAME_API tracer::~tracer() {
   }
 }
 
-SERVER_FRAME_API tracer::tracer(tracer &&other)
+SERVER_FRAME_API tracer::tracer(tracer &&other) noexcept
     : start_system_timepoint_(other.start_system_timepoint_),
       start_steady_timepoint_(other.start_steady_timepoint_),
       trace_span_(std::move(other.trace_span_)),
@@ -666,7 +668,7 @@ SERVER_FRAME_API bool tracer::start(string_view name, trace_start_option &&optio
     if (!options.parent_memory_span->IsRecording()) {
       return false;
     }
-  } else if (options.parent_network_span) {
+  } else if (options.parent_network_span != nullptr) {
     if (options.parent_network_span->dynamic_ignore()) {
       return false;
     }
@@ -774,9 +776,21 @@ SERVER_FRAME_API int32_t tracer::finish(trace_finish_option &&options) {
   // trace_span_->End will destroy recording status, so get it before End()
   bool is_span_recording = trace_span_->IsRecording();
 
+#ifndef NDEBUG
+  auto otel_track_start = std::chrono::system_clock::now();
+#endif
+
   trace_span_->End(end_options);
 
-  auto &trace_configure = logic_config::me()->get_logic_cfg().telemetry().opentelemetry().trace();
+#ifndef NDEBUG
+  auto otel_track_end = std::chrono::system_clock::now();
+  if (otel_track_end - otel_track_start > std::chrono::milliseconds(100)) {
+    FWLOGWARNING("otel track span end cost too much time: {}ms",
+                 std::chrono::duration_cast<std::chrono::milliseconds>(otel_track_end - otel_track_start).count());
+  }
+#endif
+
+  const auto &trace_configure = logic_config::me()->get_logic_cfg().telemetry().opentelemetry().trace();
   const std::string &additional_metrics_name = trace_configure.additional_metrics_name();
   if (is_span_recording && !additional_metrics_name.empty() && !trace_span_name_.empty() &&
       trace_configure.enable_additional_metrics()) {
