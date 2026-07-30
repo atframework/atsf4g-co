@@ -37,6 +37,13 @@
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_api.h"
 
+namespace atframework {
+namespace dtmq {
+class DChannelSnapshot;
+class DChannelOptimisticLock;
+}  // namespace dtmq
+}  // namespace atframework
+
 namespace rpc {
 class context;
 
@@ -70,6 +77,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   using event_callback_on_update_private_data_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
+  using event_callback_on_update_optimistic_lock_t =
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelOptimisticLock& from,
+                         const ::atfw::dtmq::DChannelOptimisticLock& to)>;
+
   using event_callback_on_compact_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t compact_log_sequence)>;
 
@@ -79,8 +90,8 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   using event_callback_on_receive_event_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
-  using event_callback_on_receive_snapshot_t = std::function<void(
-      rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+  using event_callback_on_receive_snapshot_t =
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelSnapshot& data)>;
 
  private:
   struct ctor_guard;
@@ -154,6 +165,8 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept;
 
+  DTMQ_PROXY_SDK_API bool is_ready() const noexcept;
+
   DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, event_callback_on_ready_t&& on_ready);
   DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, const event_callback_on_ready_t& on_ready);
   DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready() const noexcept;
@@ -174,6 +187,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
       const event_callback_on_update_private_data_t& on_update_private_data);
   DTMQ_PROXY_SDK_API const event_callback_on_update_private_data_t& get_event_callback_on_update_private_data()
+      const noexcept;
+
+  DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
+      event_callback_on_update_optimistic_lock_t&& on_update_optimistic_lock);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
+      const event_callback_on_update_optimistic_lock_t& on_update_optimistic_lock);
+  DTMQ_PROXY_SDK_API const event_callback_on_update_optimistic_lock_t& get_event_callback_on_update_optimistic_lock()
       const noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(event_callback_on_compact_t&& on_compact);
