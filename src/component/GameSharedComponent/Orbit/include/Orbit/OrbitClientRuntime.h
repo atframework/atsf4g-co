@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Orbit/OrbitClientSdkTypes.h>
+#include <tbb/concurrent_queue.h>
 
 #define UI UI_ST
 #include <atframe/atapp.h>
@@ -10,11 +11,13 @@
 
 #include <design_pattern/singleton.h>
 
+#include <atomic>
 #include <chrono>
 #include <map>
 #include <memory>
 #include <unordered_map>
 #include <vector>
+#include <thread>
 
 namespace google {
 namespace protobuf {
@@ -51,16 +54,23 @@ class OrbitClientRuntime {
  public:
   ORBIT_CLIENT_SDK_API virtual ~OrbitClientRuntime();
 
-  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const OrbitClientCallbacks& callbacks);
+  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], bool io_thread, const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
                                 const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API void tick();
 
   ORBIT_CLIENT_SDK_API bool enabled() const;
+  ORBIT_CLIENT_SDK_API bool enabled_io_thread() const;
+  ORBIT_CLIENT_SDK_API void post_to_io_thread(std::function<void()> task);
+  ORBIT_CLIENT_SDK_API void post_to_caller_thread(std::function<void()> task);
+
   // 是否种子进程
   ORBIT_CLIENT_SDK_API bool is_seed_process() const;
   // 种子进程准备成功
   ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready();
+  // 种子进程等待Fork通知
+  ORBIT_CLIENT_SDK_API int32_t blocking_seed_process();
+
   // 进程已准备成功 可以通知Agent了
   ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr,
                                                     const std::string& custom_data = std::string{});
@@ -83,6 +93,12 @@ class OrbitClientRuntime {
   using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
 
  private:
+  void io_tick();
+
+  int32_t notify_seed_process_ready_inner();
+  int32_t notify_process_ready_inner(const std::string& client_addr, const std::string& custom_data);
+  int32_t request_end_inner(orbit::EnClientExitReason reason, int32_t exit_code, const std::string& custom_data);
+
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options);
   void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output) const;
   void install_app_callbacks();
@@ -161,16 +177,15 @@ class OrbitClientRuntime {
                                OrbitClientRpcCallback<orbit::ATDClientExitRsp> callback,
                                const OrbitClientRequestOptions& request_options);
   int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
-                                        const orbit::ATDForwardToClientReq& request);
-  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
-                                       const orbit::ATDForkSeedClientReq& request);
+                                        orbit::ATDForwardToClientReq& request);
+  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head, orbit::ATDForkSeedClientReq& request);
 
  private:
   std::unique_ptr<::atframework::atapp::app> app_;
   bool enabled_;
   OrbitClientCallbacks callbacks_;
   OrbitClientOptions options_;
-  OrbitClientRuntimeState state_;
+  std::atomic<OrbitClientRuntimeState> state_;
   bool configured_;
   bool app_callbacks_installed_;
   uint64_t agent_bus_id_;
@@ -178,7 +193,13 @@ class OrbitClientRuntime {
   time_t last_heartbeat_timepoint_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
-  std::list<orbit::ATDForkSeedClientReq> pending_fork_requests_;
+
+  std::atomic<bool> io_thread_running_;
+  std::thread io_thread_;
+
+  tbb::concurrent_queue<orbit::ATDForkSeedClientReq> pending_fork_requests_;
+  tbb::concurrent_queue<std::function<void()>> io_task_;
+  tbb::concurrent_queue<std::function<void()>> caller_task_;
 
   uv_rusage_t last_self_rusage_;
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;

@@ -92,6 +92,9 @@ class OrbitRPCDispatcher {
     if (nullptr == service_desc) {
       return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
     }
+    if (sequence_allocator_ != 0) {
+      return orbit::EN_ORBIT_ERROR_CODE_CALL_AFTER_INIT;
+    }
     std::string::size_type final_segment = rpc_name.find_last_of('.');
     std::string rpc_short_name;
     if (std::string::npos == final_segment) {
@@ -125,7 +128,7 @@ class OrbitRPCDispatcher {
   void on_create_task_failed(orbit::OrbitRpcMessage &orbit_msg, int32_t ret_code);
   void rsp_callback_execute();
 
-  uint64_t sequence_allocator_;
+  uint64_t sequence_allocator_ = 0;
   rpc_task_action_set_t task_action_map_by_name_;
 
   std::map<uint64_t, std::shared_ptr<rsp_callback_t>> sequence_callback_map_;

@@ -14,6 +14,7 @@ project_game_shared_component_declare_sdk(
   USE_COMPONENTS
   "orbit-client-protocol"
   HEADERS
+  "${CMAKE_CURRENT_LIST_DIR}/include/Orbit/OrbitEasyApi.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/Orbit/OrbitConfig.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/Orbit/OrbitClientSdkTypes.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/Orbit/OrbitClientRuntime.h"
@@ -21,10 +22,13 @@ project_game_shared_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/include/Orbit/OrbitRPCHandle.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/Orbit/OrbitRPCReqBase.h"
   SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitEasyApi.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitClientRuntime.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitClientRuntimeRpc.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitRPCDispatcher.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/Orbit/OrbitRPCReqBase.cpp")
 
 set(ORBIT_CLIENT_SDK_TARGET "${TARGET_FULL_NAME}")
+target_link_libraries(${ORBIT_CLIENT_SDK_TARGET} PRIVATE tbb)
+
 add_subdirectory(AutoClient)

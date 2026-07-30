@@ -629,7 +629,7 @@ int32_t OrbitClientRuntime::rpc_send_client_exit(const orbit::DTAClientExitReq &
 }
 
 int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::SSMsgHead &req_head,
-                                                          const orbit::ATDForwardToClientReq &request) {
+                                                          orbit::ATDForwardToClientReq &request) {
   // 立刻回包
   const google::protobuf::MethodDescriptor *method = get_agent_to_client_method(kMethodForwardToClient);
   if (nullptr == method) {
@@ -641,14 +641,20 @@ int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::S
 
   ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->dispatch(request.payload());
   if (callbacks_.on_forward_to_client) {
-    callbacks_.on_forward_to_client(request.payload());
+    if (enabled_io_thread()) {
+      post_to_caller_thread([request_ = std::move(request)] {
+        OrbitClientRuntime::me()->callbacks_.on_forward_to_client(request_.payload());
+      });
+    } else {
+      callbacks_.on_forward_to_client(request.payload());
+    }
   }
 
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 int32_t OrbitClientRuntime::rpc_receive_fork_seed_client(const ::atframework::SSMsgHead &req_head,
-                                                         const orbit::ATDForkSeedClientReq &request) {
+                                                         orbit::ATDForkSeedClientReq &request) {
   const google::protobuf::MethodDescriptor *method = get_agent_to_client_method(kMethodForkSeedClient);
   if (nullptr == method) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "fork_seed_client method descriptor not found");

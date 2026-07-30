@@ -48,6 +48,8 @@ struct OrbitClientOptions {
   std::vector<std::string> config_env;
   std::vector<std::string> custom_launch_arguments;
   bool seed_mode = false;
+  // 所有请求会被转入IO线程 所有回调会在主动Tick时调用
+  bool io_thread = false;
 };
 
 struct OrbitClientRequestOptions {
@@ -73,7 +75,7 @@ template <class TResponse>
 using OrbitClientRpcCallback = std::function<void(int32_t, const TResponse& response)>;
 
 struct OrbitClientCallbacks {
-  // 日志接口
+  // 日志接口 io_thread True 时 on_log !!需要线程安全!!
   OrbitClientLogCallback on_log = nullptr;
   // 主动Stop调用接口 需要调用方准备退出自身
   OrbitClientStopCallback on_request_stop = nullptr;

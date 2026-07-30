@@ -320,10 +320,31 @@ atapp:
               auto_flush: info
               flush_interval: 1s # 1s (unit: s,m,h,d)
     {{- end }}
-  {{- if .Values.external_discovery }}
   external_discovery:
+  {{- if .Values.external_discovery }}
   {{- range .Values.external_discovery }}
     - {{ include "atapp.etcd.instance.settings.yaml" (dict "root" $ "etcd" .) | trim | nindent 6 | trim }}
   {{- end }}
+  {{- end }}
+  {{- if eq .Values.type_name "atproxy" }}
+  {{- $main_cluster := .Values.etcd.cluster_name | default .Values.etcd.etcd_default_cluster }}
+  {{- range $cluster_name, $_ := .Values.etcd.etcd_clusters }}
+  {{- if ne $cluster_name $main_cluster }}
+  {{- $skip := dict "value" false }}
+  {{- range $.Values.external_discovery }}
+  {{- $ext_name := .cluster_name | default $.Values.etcd.etcd_default_cluster }}
+  {{- if eq $cluster_name $ext_name }}
+  {{- $_ := set $skip "value" true }}
+  {{- end }}
+  {{- end }}
+  {{- if not (get $skip "value") }}
+  {{- $cfg := dict "cluster_name" $cluster_name "keepalive" (dict "enabled" false) }}
+    - {{ include "atapp.etcd.instance.settings.yaml" (dict "root" $ "etcd" $cfg) | trim | nindent 6 | trim }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  {{- else }}
+  {{- $etcd_cfg := dict "cluster_name" .Values.etcd.etcd_default_proxy_cluster "keepalive" (dict "enabled" false) }}
+    - {{ include "atapp.etcd.instance.settings.yaml" (dict "root" . "etcd" $etcd_cfg) | trim | nindent 6 | trim }}
   {{- end }}
 {{- end }}

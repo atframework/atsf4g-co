@@ -5,6 +5,9 @@
 enabled: true
 
 etcd_clusters:
+  atsf4g-co-proxy:
+    client_urls:
+      - http://127.0.0.1:12379
   atsf4g-co:
     client_urls:
       - http://127.0.0.1:12379

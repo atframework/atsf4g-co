@@ -1,7 +1,6 @@
 // Copyright 2026 atframework
 
-#include <Orbit/OrbitClientRuntime.h>
-#include <Orbit/OrbitRPCHandle.h>
+#include <Orbit/OrbitEasyApi.h>
 
 #include <chrono>
 #include <cstdlib>
@@ -94,13 +93,12 @@ int task_action_echo::hook_run(const rpc_request_type& req_body, rpc_response_ty
 void waiting_and_tick(std::chrono::seconds duration) {
   auto start_time = std::chrono::steady_clock::now();
   while (std::chrono::steady_clock::now() - start_time < duration) {
-    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->tick();
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::tick();
     std::this_thread::sleep_for(kTickInterval);
   }
 }
 
 int main(int argc, char* argv[]) {
-  using runtime_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime;
   using callbacks_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientCallbacks;
   using options_t = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientOptions;
 
@@ -140,13 +138,13 @@ int main(int argc, char* argv[]) {
   callbacks.on_request_stop = [&stopped]() { stopped = true; };
   callbacks.on_seed_waiting_tick = [&write_log_line]() { write_log_line(std::string{"waiting for fork"}); };
 
-  int init_result = runtime_t::me()->init(argc, argv, callbacks);
+  int init_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::init(argc, argv, callbacks);
   if (init_result != 0) {
     write_log_line(std::string{"orbit runtime init failed, code="} + std::to_string(init_result));
     return init_result;
   }
 
-  if (!runtime_t::me()->enabled()) {
+  if (!ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::enabled()) {
     write_log_line("orbit runtime is not enabled, exiting");
     return 0;
   }
@@ -154,18 +152,24 @@ int main(int argc, char* argv[]) {
   bool ready_sent = false;
   bool ping_sent = false;
 
-  if (runtime_t::me()->is_seed_process()) {
+  if (ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::is_seed_process()) {
     write_log_line(std::string{"seed process, waiting for "} + std::to_string(kSeedReadyDelay.count()) + " seconds");
     waiting_and_tick(kSeedReadyDelay);
     // Seed进程准备成功
-    int32_t seed_ready_result = runtime_t::me()->notify_seed_process_ready();
+    int32_t seed_ready_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::notify_seed_process_ready();
     if (seed_ready_result != 0) {
       write_log_line(std::string{"seed process notify_seed_process_ready failed, code="} +
                      std::to_string(seed_ready_result));
       return seed_ready_result;
     }
 
-    if (runtime_t::me()->is_seed_process()) {
+    int32_t blocking_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::blocking_seed_process();
+    if (blocking_result != 0) {
+      write_log_line(std::string{"seed process blocking_seed_process failed, code="} + std::to_string(blocking_result));
+      return blocking_result;
+    }
+
+    if (ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::is_seed_process()) {
       // Seed结束 退出
       return 0;
     }
@@ -176,14 +180,15 @@ int main(int argc, char* argv[]) {
 
   while (!stopped) {
     write_log_line("Tick");
-    runtime_t::me()->tick();
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::tick();
 
     const auto now = std::chrono::steady_clock::now();
     if (!ready_sent && now - begin_timepoint >= kReadyDelay) {
-      int32_t ready_result = runtime_t::me()->notify_process_ready("localhost:12345", "orbit-auto-client ready");
+      int32_t ready_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::notify_process_ready(
+          "localhost:12345", "orbit-auto-client ready");
       if (ready_result != 0) {
-        runtime_t::me()->request_end(orbit::EN_CLIENT_EXIT_STARTUP_FAILED, ready_result,
-                                     "orbit-auto-client ready failed");
+        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
+            orbit::EN_CLIENT_EXIT_STARTUP_FAILED, ready_result, "orbit-auto-client ready failed");
       }
       ready_sent = true;
       ready_timepoint = now;
@@ -194,16 +199,16 @@ int main(int argc, char* argv[]) {
       req.set_text("client echo message");
       int32_t echo_result = echo(req, nullptr, 1);
       if (echo_result < 0) {
-        runtime_t::me()->request_end(orbit::EN_CLIENT_EXIT_STARTUP_FAILED, echo_result,
-                                     "orbit-auto-client echo failed");
+        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
+            orbit::EN_CLIENT_EXIT_STARTUP_FAILED, echo_result, "orbit-auto-client echo failed");
         return echo_result;
       }
       ping_sent = true;
     }
 
     if (ready_sent && now - ready_timepoint >= kExitDelay) {
-      int32_t shutdown_result =
-          runtime_t::me()->request_end(orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "orbit-auto-client done");
+      int32_t shutdown_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
+          orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "orbit-auto-client done");
       if (shutdown_result < 0) {
         write_log_line(std::string{"orbit runtime shutdown failed, code="} + std::to_string(shutdown_result));
       }

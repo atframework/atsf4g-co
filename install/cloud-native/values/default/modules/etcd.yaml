@@ -9,6 +9,25 @@ log:
   level: info
 
 etcd_clusters:
+  atsf4g-co-proxy:
+    path: /atapp/services/atsf4g-co-proxy
+    client_urls:
+      - https://etcd-project-x.m-oa.com:2379
+    init:
+      timeout: "15s"
+      tick_interval: "64ms"
+    keepalive:
+      timeout: "16s"
+      ttl: "5s"
+      retry_interval: "3s"
+    request:
+      timeout: "5s"
+      initialization_timeout: "3s"
+    watcher:
+      retry_interval: "3s"
+      request_timeout: "3600s"
+      get_request_timeout: "180s"
+
   atsf4g-co:
     path: /atapp/services/atsf4g-co
     client_urls:
@@ -68,3 +87,4 @@ etcd_clusters:
 
 # default cluster for services that don't specify cluster_name
 etcd_default_cluster: atsf4g-co
+etcd_default_proxy_cluster: atsf4g-co-proxy

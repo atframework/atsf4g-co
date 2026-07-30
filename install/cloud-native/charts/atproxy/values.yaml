@@ -48,8 +48,9 @@ atproxy:
     retry_interval_min: 8s
     retry_interval_max: 300s
 
-service:
-  type: ClusterIP
-  port: 7101
-  targetPort: 7101
-  protocol: TCP
+etcd:
+  cluster_name: atsf4g-co-proxy
+  watcher:
+    enabled: true
+  keepalive:
+    enabled: true

@@ -132,7 +132,11 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::Orbit
   rsp_callback_t callback = *(iter->second);
   sequence_callback_map_.erase(iter);
   if (callback != nullptr) {
-    callback(orbit_msg);
+    if (OrbitClientRuntime::me()->enabled_io_thread()) {
+      OrbitClientRuntime::me()->post_to_caller_thread([callback, orbit_msg]() { callback(orbit_msg); });
+    } else {
+      callback(orbit_msg);
+    }
   }
   return 0;
 }
@@ -232,9 +236,17 @@ void OrbitRPCDispatcher::rsp_callback_execute() {
       sequence_callback_map_.erase(iter->second.first);
       if (callback != nullptr) {
         // CALL TIMEOUT
-        orbit::OrbitRpcMessage orbit_msg;
-        orbit_msg.mutable_head()->set_error_code(orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
-        callback(orbit_msg);
+        if (OrbitClientRuntime::me()->enabled_io_thread()) {
+          OrbitClientRuntime::me()->post_to_caller_thread([callback]() {
+            orbit::OrbitRpcMessage orbit_msg;
+            orbit_msg.mutable_head()->set_error_code(orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
+            callback(orbit_msg);
+          });
+        } else {
+          orbit::OrbitRpcMessage orbit_msg;
+          orbit_msg.mutable_head()->set_error_code(orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
+          callback(orbit_msg);
+        }
       }
     }
     timeout_callback_map_.erase(iter);
