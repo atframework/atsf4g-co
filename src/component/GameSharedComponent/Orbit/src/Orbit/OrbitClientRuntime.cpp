@@ -193,7 +193,6 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
 }
 
 ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() {
-  restore_app_callbacks();
   reset();
 }
 
@@ -637,6 +636,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std:
 }
 
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::reset() {
+  restore_app_callbacks();
   if (app_) {
     app_.reset();
   }
@@ -796,7 +796,6 @@ void OrbitClientRuntime::finalize_shutdown() {
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "finalize shutdown");
   io_thread_running_.store(false);
   app_->stop();
-  restore_app_callbacks();
   pending_client_request_map_.clear();
   pending_client_request_timeout_map_.clear();
   agent_bus_id_ = 0;
