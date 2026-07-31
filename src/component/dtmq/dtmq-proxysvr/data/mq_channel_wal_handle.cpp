@@ -192,14 +192,14 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
     log.set_sequence(meta.log_key);
   };
 
+  ret->get_log_key = [](const wal_object_type&, const wal_object_type::log_type& log) -> wal_object_type::log_key_type {
+    return log.sequence();
+  };
+
   ret->merge_log = [](const wal_object_type&, wal_object_type::callback_param_type, wal_object_type::log_type& to,
                       const wal_object_type::log_type& from) {
     // client端更新就好，下发交给server端做
     protobuf_copy_message(to, from);
-  };
-
-  ret->get_log_key = [](const wal_object_type&, const wal_object_type::log_type& log) -> wal_object_type::log_key_type {
-    return log.sequence();
   };
 
   ret->allocate_log_key = [](wal_object_type& wal, const wal_object_type::log_type& log,

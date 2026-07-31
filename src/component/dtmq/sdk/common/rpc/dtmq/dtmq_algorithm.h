@@ -7,6 +7,7 @@
 
 #include <gsl/select-gsl.h>
 
+#include <distributed_system/wal_common_defs.h>
 #include <log/log_wrapper.h>
 
 #include <chrono>

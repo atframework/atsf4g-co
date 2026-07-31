@@ -209,11 +209,18 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_receive_event_t& on_receive_event);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event() const noexcept;
 
-  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot(
-      event_callback_on_receive_snapshot_t&& on_receive_snapshot);
-  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot(
-      const event_callback_on_receive_snapshot_t& on_receive_snapshot);
-  DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot()
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
+      event_callback_on_receive_snapshot_t&& on_receive_snapshot_start);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
+      const event_callback_on_receive_snapshot_t& on_receive_snapshot_start);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_start()
+      const noexcept;
+
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
+      event_callback_on_receive_snapshot_t&& on_receive_snapshot_finished);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
+      const event_callback_on_receive_snapshot_t& on_receive_snapshot_finished);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_finished()
       const noexcept;
 
   /**
