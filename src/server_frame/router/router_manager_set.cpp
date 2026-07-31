@@ -17,6 +17,7 @@
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
+#include <config/extern_log_categorize.h>
 
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_base.h>
@@ -111,7 +112,7 @@ SERVER_FRAME_API int router_manager_set::tick() {
     metrics_data_.fast_timer_count.store(static_cast<int64_t>(timers_.fast_timer_list.size()),
                                          std::memory_order_release);
 
-    FWLOGWARNING("{}", ss.str());
+    FWCLOGWARNING(log_categorize_t::PROTO_STAT,"{}", ss.str());
   }
   last_proc_time_ = atfw::util::time::time_utility::get_sys_now();
 

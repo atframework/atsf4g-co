@@ -28,6 +28,7 @@
 #include <atframe/atapp.h>
 
 #include <config/logic_config.h>
+#include <config/extern_log_categorize.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -514,7 +515,7 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
       get_task_manager_metrics_data().task_count = native_mgr_->get_task_size();
       get_task_manager_metrics_data().tick_checkpoint_count = native_mgr_->get_tick_checkpoint_size();
 
-      FWLOGWARNING(
+      FWCLOGWARNING(log_categorize_t::PROTO_STAT,
           "[STATISTICS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
           "{}\n\tRuntime - Next Checkpoint: "
           "{}",
