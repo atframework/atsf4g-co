@@ -192,7 +192,10 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
   state_.store(OrbitClientRuntimeState::kIdle);
 }
 
-ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() { restore_app_callbacks(); }
+ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() {
+  restore_app_callbacks();
+  reset();
+}
 
 ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char *argv[], bool io_thread, const OrbitClientCallbacks &callbacks) {
   OrbitClientOptions options;
@@ -633,6 +636,12 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std:
   return notify_process_ready_inner(client_addr, custom_data);
 }
 
+ORBIT_CLIENT_SDK_API void OrbitClientRuntime::reset() {
+  if (app_) {
+    app_.reset();
+  }
+}
+
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
   if (!enabled_io_thread()) {
     io_tick();
@@ -684,6 +693,7 @@ void OrbitClientRuntime::io_tick() {
   if (state_.load() == OrbitClientRuntimeState::kStopping && app_->is_closed()) {
     ORBIT_LOG(OrbitClientLogLevel::kInfo, "stopping finalized");
     set_state(OrbitClientRuntimeState::kStopped);
+    reset();
     if (callbacks_.on_request_stop) {
       if (enabled_io_thread()) {
         post_to_caller_thread([] { OrbitClientRuntime::me()->callbacks_.on_request_stop(); });
@@ -780,8 +790,8 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(orbit::EnClientExit
 
 void OrbitClientRuntime::finalize_shutdown() {
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "finalize shutdown");
-  app_->stop();
   io_thread_running_.store(false);
+  app_->stop();
   restore_app_callbacks();
   pending_client_request_map_.clear();
   pending_client_request_timeout_map_.clear();

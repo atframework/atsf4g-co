@@ -58,6 +58,7 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
                                 const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API void tick();
+  ORBIT_CLIENT_SDK_API void reset();
 
   ORBIT_CLIENT_SDK_API bool enabled() const;
   ORBIT_CLIENT_SDK_API bool enabled_io_thread() const;
