@@ -4,9 +4,9 @@
 
 enabled: true
 cluster_mode: false
-record_prefix:
+record_prefix: ""
 random_prefix: true
 addrs: [
   127.0.0.1:6379,
 ]
-password:
+password: ""

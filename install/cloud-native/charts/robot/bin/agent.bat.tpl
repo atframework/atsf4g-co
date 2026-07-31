@@ -3,4 +3,4 @@
 
 cd %cd%
 
-.\robot.exe -mode agent -config ../cfg/robot_{{ $bus_addr }}.yaml %*
+.\robot.exe -mode agent -config ../cfg/robot.yaml %*

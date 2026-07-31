@@ -49,14 +49,10 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 
 {{- define "libapp.hpa_target_name" -}}
-  {{- if not .Values.tcm_mode }}
-    {{- include "libapp.fullname" . -}}
+  {{- if not (empty .Values.atapp.deployment.deployment_environment) -}}
+    {{ .Values.atapp.deployment.deployment_environment }}-{{- include "libapp.name" . -}}
   {{- else }}
-    {{- if not (empty .Values.atapp.deployment.deployment_environment) -}}
-      {{ .Values.atapp.deployment.deployment_environment }}-{{- include "libapp.name" . -}}
-    {{- else }}
-      {{- include "libapp.name" . -}}
-    {{- end }}
+    {{- include "libapp.name" . -}}
   {{- end }}
 {{- end }}
 

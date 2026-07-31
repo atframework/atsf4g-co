@@ -1,0 +1,205 @@
+# telemetry.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: true
+
+opentelemetry:
+  trace:
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 256
+        send_batch_max_size: 32768
+  logs:
+    processors:
+      batch:
+        timeout: 10s
+        send_batch_size: 256
+        send_batch_max_size: 32768
+agent:
+  receivers:
+    trace:
+      otlp/default:
+        protocols:
+          grpc:
+            endpoint: "127.0.0.1:4317"
+    metrics:
+      otlp/default:
+        protocols:
+          grpc:
+            endpoint: "127.0.0.1:4317"
+    logs:
+      otlp/default:
+        protocols:
+          grpc:
+            endpoint: "127.0.0.1:4317"
+  enable_trace: true
+  trace_exporters:
+    otlp:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+      file:
+        enable: false
+    trace_blackhole: false
+    spanmetrics:
+      default:
+        enable: false
+      prometheus:
+        enable: false
+  enable_metrics: true
+  metrics_exporters:
+    otlp:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+      file:
+        enable: false
+  enable_logs: true
+  logs_exporters:
+    otlp:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+      file:
+        enable: false
+  shared_options:
+    exporters:
+      otlp:
+        # https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/otlpexporter/README.md
+        grpc:
+          balancer_name: "round_robin"
+          sending_queue:
+            enabled: true
+            num_consumers: 16
+          compression: gzip # gzip/snappy/zstd , gzip is the only required compression algorithm required for OTLP servers
+        # https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/otlphttpexporter/README.md
+        http:
+          compression: gzip # gzip/snappy/zstd , gzip is the only required compression algorithm required for OTLP servers
+      prometheus:
+        # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/prometheusexporter/README.md
+        pull:
+          resource_to_telemetry_conversion:
+            enabled: true
+        # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusremotewriteexporter
+        push:
+          remote_write_queue:
+            enabled: true
+          resource_to_telemetry_conversion:
+            enabled: true
+          tls:
+            insecure: true
+          target_info:
+            # 只能有一个exporter开启，否则会报时间回退冲突
+            enabled: false
+      file_dir: ../log
+      file:
+        rotation:
+          max_megabytes: 10
+          max_days: 3
+          max_backups: 10
+          localtime: true
+        format: json
+        # compression: zstd
+    processors:
+      batch:
+        default:
+          timeout: 10s
+        trace:
+          send_batch_size: 256
+          send_batch_max_size: 16384
+        metrics:
+          send_batch_size: 256
+          send_batch_max_size: 4096
+        logs:
+          send_batch_size: 256
+          send_batch_max_size: 8192
+        spanmetrics:
+          send_batch_size: 32
+          send_batch_max_size: 256
+    connectors:
+      spanmetrics:
+        default:
+          metrics_flush_interval: 45s
+          histogram:
+            explicit:
+              buckets: [2ms, 8ms, 16ms, 64ms, 256ms, 1s, 8s]
+          exclude_dimensions:
+            ["service.identity", "process.pid", "bk.data.token"]
+          dimensions_cache_size: 4096
+          resource_metrics_cache_size: 4096
+          exemplars:
+            enabled: true
+          dimensions:
+            - name: deployment.environment.name
+              default: UNSET
+            - name: host.name
+              default: localhost
+            - name: rpc.atrpc.result_code
+              default: "0"
+            - name: rpc.atrpc.response_code
+              default: "0"
+            - name: rpc.atrpc.response_code_type
+              default: "0"
+            - name: rpc.method
+              default: UNKNOWN
+            - name: rpc.service
+              default: NONE
+            - name: rpc.system
+              default: NONE
+            - name: service.area.zone_id
+              default: "0"
+            - name: service.instance.name
+              default: UNKNOWN
+            - name: service.instance.id
+              default: UNKNOWN
+            # - name: rpc.atrpc.kind
+            # - name: span.name
+            # - name: service.name
+          aggregation_temporality: "AGGREGATION_TEMPORALITY_DELTA"
+        prometheus:
+          aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+
+group:
+  cs_actor:
+    agent:
+      shared_options:
+        processors:
+          batch:
+            logs:
+              send_batch_size: 16
+              send_batch_max_size: 8192
+              timeout: 30s
+      receivers:
+        logs:
+          otlp/cs_actor:
+            protocols:
+              grpc:
+                endpoint: "127.0.0.1:4327"
+      enable_logs: true
+      logs_exporters:
+        otlp:
+          grpc:
+            endpoint: "127.0.0.1:4327"
+          file:
+            enable: false
+  notification:
+    agent:
+      shared_options:
+        processors:
+          batch:
+            logs:
+              send_batch_size: 16
+              send_batch_max_size: 8192
+              timeout: 30s
+      receivers:
+        logs:
+          otlp/notification:
+            protocols:
+              grpc:
+                endpoint: "127.0.0.1:4337"
+      enable_logs: true
+      logs_exporters:
+        otlp:
+          grpc:
+            endpoint: "127.0.0.1:4337"
+          file:
+            enable: true

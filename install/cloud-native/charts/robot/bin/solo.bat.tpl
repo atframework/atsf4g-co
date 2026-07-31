@@ -3,4 +3,4 @@
 
 cd %cd%
 
-.\robot.exe -mode solo -config ../cfg/robot_{{ $bus_addr }}.yaml -case_file %*
+.\robot.exe -mode solo -config ../cfg/robot.yaml -case_file %*

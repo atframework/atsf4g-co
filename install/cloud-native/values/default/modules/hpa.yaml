@@ -1,0 +1,95 @@
+# hpa.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: true
+controller:
+  enable: true
+  min_replicas: 2
+  # replicate_start_delay: 60s
+  # replicate_period: 60s
+  # scaling_delay: 60s
+cloudnative:
+  autoscaling:
+    enable: false
+metrics:
+  enable: true
+  pull_interval: "20s"
+  pull_retry_interval: "5s"
+  # 拉取默认的时间范围倍率(千分率,考虑service->本地agent->远程agent->PodMonitor/ServiceMonitor链路中，每层都有可能有间隔延迟)
+  pull_default_time_range_multiplying_factor: 5000
+  pull_request:
+    debug_mode: false
+    timeout: "10s"
+    keepalive_timeout: "600s"
+    # connect_timeout: "6s"
+    dns_cache_timeout: "900s"
+    # dns_servers: "8.8.8.8,1.1.1.1" # host[:port][,host[:port]]...
+    # user_agent: ""
+    # proxy: ""
+    # no_proxy: ""
+    # proxy_user_name: ""
+    # proxy_password: ""
+  pull_ssl:
+    enable_alpn: true
+    verify_peer: false
+    ssl_min_version: "TLSv1.1" # TLSv1.0,TLSv1.1,TLSv1.3
+    # ssl_client_cert: ""
+    # ssl_client_cert_type: "PEM"
+    # ssl_client_key: ""
+    # ssl_client_key_type: "PEM"
+    # ssl_client_key_passwd: ""
+    # ssl_ca_cert: ""
+    # ssl_client_tlsauth_username: ""
+    # ssl_client_tlsauth_password: ""
+    # ssl_proxy_cert: ""
+    # ssl_proxy_cert_type: "PEM"
+    # ssl_proxy_key: ""
+    # ssl_proxy_key_type: "PEM"
+    # ssl_proxy_key_passwd: ""
+    # ssl_proxy_ca_cert: ""
+    # ssl_proxy_tlsauth_username: ""
+    # ssl_proxy_tlsauth_password: ""
+    # ssl_cipher_list: "" # @see https://curl.se/libcurl/c/CURLOPT_SSL_CIPHER_LIST.html
+    # ssl_cipher_list_tls13: "" # @see https://curl.se/libcurl/c/CURLOPT_TLS13_CIPHERS.html
+  # labels:
+  #   "key": "value"
+  metrics_name_expect_replicas: "hpa_expect_replicas"
+  metrics_name_stateful_index: "hpa_stateful_index"
+rule:
+  scaling_up_configure:
+    stabilization_window: "60s"
+  scaling_down_configure:
+    stabilization_window: "60s"
+  cpu_permillage:
+    metrics_name: "hpa_rule_cpu"
+    metrics_unit: "permillage"
+    # aggregation: sum
+    scaling_up_value: 600
+    scaling_down_value: 500
+  main_thread_cpu_permillage:
+    metrics_name: "hpa_rule_main_thread_cpu"
+    metrics_unit: "permillage"
+    # aggregation: sum
+    scaling_up_value: 600
+    scaling_down_value: 500
+  memory:
+    metrics_name: "hpa_rule_memory"
+    metrics_unit: "bytes"
+    scaling_up_value: "2576980377"
+    scaling_down_value: "1932735283"
+  recent_max_task_count:
+    metrics_name: "hpa_rule_recent_max_task_count"
+    metrics_unit: ""
+    # scaling_up_value:
+    # scaling_down_value:
+  controller_status:
+    metrics_name: "hpa_rule_controller_status"
+    metrics_unit: ""
+    # scaling_up_value:
+    # scaling_down_value:
+  # custom:
+  #   - metrics_name: "hpa_rule_memory"
+  #     aggregation: EN_HPA_POLICY_AGGREGATION_SUM
+  #     # scaling_up_value:
+  #     # scaling_down_value:
