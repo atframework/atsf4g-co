@@ -78,6 +78,26 @@
         "command": "./stop_all.bat"
       },
       "group": "none"
+    },
+    {
+      "label": "Cleanup Publish Logs",
+      "type": "shell",
+      "command": "find . -mindepth 2 -maxdepth 2 -type d -name log -exec rm -rf {} +",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish"
+      },
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "Get-ChildItem -Directory | ForEach-Object { $logPath = Join-Path -Path $_.FullName -ChildPath 'log'; if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Recurse -Force -ErrorAction SilentlyContinue } }"
+        ]
+      },
+      "group": "none"
     }
   ]
 }
