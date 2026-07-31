@@ -403,7 +403,7 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   if (enabled_io_thread()) {
     io_thread_running_.store(true);
     io_thread_ = std::thread([this] {
-      while (io_thread_running_.load()) {
+      while (io_thread_running_.load() && app_) {
         io_tick();
         std::this_thread::sleep_for(std::chrono::milliseconds(25));
       }
@@ -659,6 +659,10 @@ ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
 }
 
 void OrbitClientRuntime::io_tick() {
+  if (!app_) {
+    return;
+  }
+
   // 处理 io_task
   {
     std::function<void()> task;
