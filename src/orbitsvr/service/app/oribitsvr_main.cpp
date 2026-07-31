@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
 
   app.get_command_manager()
       ->bind_cmd("orbit-start-client", &main_service_module::cmd_start_client)
-      ->set_help_msg("orbit-start-client <region> <client-id> <match-tag>    launch an Orbit client");
+      ->set_help_msg("orbit-start-client <region> <client-id> [match-tag]    launch an Orbit client");
 
   // run
   return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);

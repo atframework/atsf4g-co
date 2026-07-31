@@ -34,8 +34,8 @@ trace:
   processors:
       {{- toYaml .opentelemetry.trace.processors | trim | nindent 4 }}
     {{- end }}
-    {{- if (dig "samplers" false .opentelemetry.trace) }}
   samplers:
+    {{- if (dig "samplers" false .opentelemetry.trace) }}
       {{- toYaml .opentelemetry.trace.samplers | nindent 4 }}
     {{- else }}
     always_on: true
