@@ -10,6 +10,7 @@
 
 #include <log/log_wrapper.h>
 #include <memory/rc_ptr.h>
+#include <time/jiffies_timer.h>
 #include <time/time_utility.h>
 
 #include <distributed_system/wal_client.h>
@@ -32,7 +33,9 @@
 
 #include <utility/random_engine.h>
 
+#include <dispatcher/task_type_traits.h>
 #include <rpc/dtmq/dtmqproxysvrservice.atfw.gen.h>
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 
 #include <config/excel/config_easy_api.h>
@@ -42,14 +45,20 @@
 #include <logic/logic_server_setup.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <algorithm>
 #include <bitset>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
+#include "rpc/dtmq/dtmq_client_api.h"
+#include "rpc/rpc_common_types.h"
 
 namespace rpc {
 namespace dtmq {
@@ -57,6 +66,8 @@ namespace dtmq {
 namespace {
 
 class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber;
+
+using mq_client_subscriber_timer_type = atfw::util::time::jiffies_timer<>;
 
 using mq_client_subscriber_storage_type = atfw::dtmq::DChannelSnapshot;
 
@@ -101,7 +112,19 @@ using mq_client_subscriber_wal_client_type = atfw::util::distributed_system::wal
     mq_client_subscriber_storage_type, mq_client_subscriber_log_operator, mq_client_subscriber_wal_object_context,
     mq_client_subscriber_private_data_type, mq_client_subscriber_storage_type>;
 
-class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
+struct ATFW_UTIL_SYMBOL_LOCAL internal_subscriber_manager;
+
+template <class Rep, class Period>
+static time_t chrono_to_timer_tick(std::chrono::duration<Rep, Period> d) {
+  // 统一的精度转换，对于消息队列服务来说 64ms 定时器精度足够了
+  return static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(d).count() / 64);
+}
+
+static time_t chrono_to_timer_tick(std::chrono::system_clock::time_point tp) {
+  return chrono_to_timer_tick(tp.time_since_epoch());
+}
+
+class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber : public std::enable_shared_from_this<shared_subscriber> {
  public:
   using ptr_t = std::shared_ptr<shared_subscriber>;
 
@@ -110,7 +133,15 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
     kUninitialized = 0,
     kReady = 1,
     kLockRegisteredClient = 2,
+    kDestroying = 3,
     kMax,
+  };
+
+  enum class timer_action_type : uint8_t {
+    kNone = 0,
+    kSendHeartbeat,
+    kRetryHeartbeat,
+    kGc,
   };
 
  public:
@@ -123,8 +154,10 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
   static mq_client_subscriber_wal_client_type::vtable_pointer create_client_vtable();
 
   // NOLINTNEXTLINE(modernize-pass-by-value)
-  shared_subscriber(const atfw::dtmq::DChannelIdKey& channel_key)
-      : channel_key_(channel_key),
+  explicit shared_subscriber(const atfw::dtmq::DChannelIdKey& channel_key)
+      : timer_action_(timer_action_type::kNone),
+        timer_timeout_tick_(0),
+        channel_key_(channel_key),
         readonly_replicate_index_(atfw::component::random_engine::random()),
         destroy_timepoint_(std::chrono::system_clock::from_time_t(0)),
         destroy_sequence_(0),
@@ -132,7 +165,9 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
         create_sequence_(0),
         custom_data_sequence_(0),
         private_data_sequence_(0),
-        snapshot_sequence_(0) {
+        snapshot_sequence_(0),
+        last_message_hash_code_(0),
+        last_message_sequence_(0) {
     subscriber_info_.set_subscriber_server_id(logic_config::me()->get_local_server_id());
 
     // 这里是共享 subscriber key
@@ -147,7 +182,25 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
     // 随机订阅副本的index即可，实际的发送接口会标准化成合理值
     // 通过固定这个值，可以防止数据抖动
     readonly_replicate_index_ = atfw::component::random_engine::random();
+
+    FWLOGINFO(
+        "atframework.dtmq.shared_subscriber created, channel_key={}, subscriber_key={}, readonly_replicate_index={}",
+        channel_key_.ShortDebugString(), subscriber_info_.subscriber_key(), readonly_replicate_index_);
   }
+
+  ~shared_subscriber() {
+    set_flag(subscriber_flag::kDestroying, true);
+
+    remove_timer();
+
+    FWLOGINFO(
+        "atframework.dtmq.shared_subscriber destroyed, channel_key={}, subscriber_key={}, readonly_replicate_index={}",
+        channel_key_.ShortDebugString(), subscriber_info_.subscriber_key(), readonly_replicate_index_);
+  }
+
+  void setup_timer(timer_action_type action);
+
+  void remove_timer();
 
   void load_metadata(rpc::context& ctx, const atfw::dtmq::DChannelMetadata& metadata);
   void load_runtime(rpc::context& ctx, const atfw::dtmq::DChannelRuntime& runtime);
@@ -169,11 +222,26 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
 
   inline uint64_t get_readonly_replicate_index() const noexcept { return readonly_replicate_index_; }
 
-  void register_client_subscriber(client_subscriber* client);
+  inline bool has_registered_client() const noexcept {
+    return !registered_client_auto_create_channel_.empty() || !registered_client_no_create_channel_.empty() ||
+           !lock_registered_client_pending_add_.empty();
+  }
+
+  inline bool should_auto_create_channel() const noexcept { return !registered_client_auto_create_channel_.empty(); }
+
+  inline bool can_be_removed() const noexcept {
+    return registered_client_auto_create_channel_.empty() && registered_client_no_create_channel_.empty() &&
+           lock_registered_client_pending_add_.empty();
+  }
+
+  void register_client_subscriber(client_subscriber* client, bool auto_create_channel);
   void unregister_client_subscriber(client_subscriber* client);
   void foreach_registered_client_subscriber(atfw::util::nostd::function_ref<void(client_subscriber&)> callback);
 
   int64_t get_compact_sequence() const noexcept;
+
+  uint64_t get_last_message_hash_code() const noexcept;
+  int64_t get_last_message_sequence() const noexcept;
 
   int32_t tick(rpc::context& ctx);
 
@@ -195,17 +263,20 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
 
   void compact(rpc::context& ctx, int64_t compact_sequence);
 
-  void send_heartbeat(rpc::context& ctx);
+  void schedule_send_heartbeat(rpc::context& ctx);
 
-  static std::unordered_map<std::string, shared_subscriber::ptr_t>& get_cached_shared_subscriber() {
-    static std::unordered_map<std::string, shared_subscriber::ptr_t> ret;
-    return ret;
-  }
+  void schedule_retry_heartbeat(rpc::context& ctx);
 
   static void add_cached_shared_subscriber(const shared_subscriber::ptr_t& subscriber);
 
+  static void remove_cached_shared_subscriber(const shared_subscriber* subscriber);
+
  private:
   std::bitset<static_cast<size_t>(subscriber_flag::kMax)> flags_;
+  mq_client_subscriber_timer_type::timer_wptr_t timer_watcher_;
+  timer_action_type timer_action_;
+  time_t timer_timeout_tick_;
+
   atfw::dtmq::DChannelIdKey channel_key_;
   atfw::dtmq::channel_subscriber subscriber_info_;
   uint64_t readonly_replicate_index_;
@@ -226,7 +297,11 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
   atfw::util::memory::strong_rc_ptr<mq_client_subscriber_wal_client_type> wal_client_;
   int64_t snapshot_sequence_;
 
-  std::unordered_set<client_subscriber*> registered_client_;
+  uint64_t last_message_hash_code_;
+  int64_t last_message_sequence_;
+
+  std::unordered_set<client_subscriber*> registered_client_auto_create_channel_;
+  std::unordered_set<client_subscriber*> registered_client_no_create_channel_;
 
   struct lock_registered_client_guard {
     shared_subscriber* subscriber_;
@@ -250,15 +325,20 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
         subscriber_->set_flag(subscriber_flag::kLockRegisteredClient, false);
 
         for (const auto& client : subscriber_->lock_registered_client_pending_add_) {
-          if (client != nullptr) {
-            subscriber_->registered_client_.insert(client);
+          if (client.first != nullptr) {
+            if (client.second) {
+              subscriber_->registered_client_auto_create_channel_.insert(client.first);
+            } else {
+              subscriber_->registered_client_no_create_channel_.insert(client.first);
+            }
           }
         }
         subscriber_->lock_registered_client_pending_add_.clear();
 
         for (const auto& client : subscriber_->lock_registered_client_pending_remove_) {
           if (client != nullptr) {
-            subscriber_->registered_client_.erase(client);
+            subscriber_->registered_client_auto_create_channel_.erase(client);
+            subscriber_->registered_client_no_create_channel_.erase(client);
           }
         }
         subscriber_->lock_registered_client_pending_remove_.clear();
@@ -266,11 +346,41 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber {
     }
   };
 
-  std::unordered_set<client_subscriber*> lock_registered_client_pending_add_;
+  std::unordered_map<client_subscriber*, bool> lock_registered_client_pending_add_;
   std::unordered_set<client_subscriber*> lock_registered_client_pending_remove_;
 };
 
-struct ATFW_UTIL_SYMBOL_LOCAL subscriber_event_handler_set {
+static bool& is_internal_subscriber_manager_destroyed() {
+  static bool internal_subscriber_manager_destroyed = false;
+  return internal_subscriber_manager_destroyed;
+}
+
+struct ATFW_UTIL_SYMBOL_LOCAL internal_subscriber_manager {
+  bool timer_running = false;
+  bool destroyed = false;
+  mq_client_subscriber_timer_type timer_set;
+
+  std::unordered_map<std::string, shared_subscriber::ptr_t> cached_subscriber_smart_ptr;
+  std::unordered_set<shared_subscriber*> cached_subscriber_raw_pointer;
+
+  std::unordered_set<shared_subscriber*> pending_heartbeat_subscriber;
+  std::unordered_set<shared_subscriber*> retry_heartbeat_subscriber;
+  task_type_trait::task_type running_heartbeat_task;
+
+  ~internal_subscriber_manager() { is_internal_subscriber_manager_destroyed() = true; }
+};
+
+static internal_subscriber_manager& get_internal_subscriber_manager() {
+  static internal_subscriber_manager ret;
+  return ret;
+}
+
+static void internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx);
+static void internal_subscriber_manager_do_retry_heartbeat(rpc::context& ctx);
+
+}  // namespace
+
+struct client_subscriber::event_callback_set_t {
   client_subscriber::event_callback_on_ready_t on_ready;
   client_subscriber::event_callback_on_destroy_t on_destroy;
   client_subscriber::event_callback_on_update_custom_data_t on_update_custom_data;
@@ -283,50 +393,62 @@ struct ATFW_UTIL_SYMBOL_LOCAL subscriber_event_handler_set {
   client_subscriber::event_callback_on_receive_snapshot_t on_receive_snapshot_finished;
 };
 
-}  // namespace
-
 DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::subscriber_options(std::string&& input_subscriber_key)
-    : subscriber_key(std::move(input_subscriber_key)) {}
+    : subscriber_key(std::move(input_subscriber_key)), auto_create_channel(true) {}
 
 DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::subscriber_options(const std::string& input_subscriber_key)
-    : subscriber_key(input_subscriber_key) {}
+    : subscriber_key(input_subscriber_key), auto_create_channel(true) {}
 
 DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::~subscriber_options() {}
 
 struct client_subscriber::ctor_guard {
-  std::string subscriber_key_;
-  shared_subscriber::ptr_t shared_subscriber_;
+  std::string subscriber_key;
+  shared_subscriber::ptr_t shared_subscriber;
+  client_subscriber::event_callback_set_ptr_t event_handler;
+  bool auto_create_channel;
 
   ctor_guard(const atfw::dtmq::DChannelIdKey& input_channel_key, const subscriber_options& input_options)
-      : subscriber_key_(input_options.subscriber_key),
-        shared_subscriber_(shared_subscriber::make_shared(input_channel_key)) {}
+      : subscriber_key(input_options.subscriber_key),
+        shared_subscriber(shared_subscriber::make_shared(input_channel_key)),
+        event_handler(input_options.event_callback_set),
+        auto_create_channel(input_options.auto_create_channel) {
+    if (!event_handler) {
+      event_handler = client_subscriber::create_event_callback_set();
+    }
+  }
 };
 
 struct client_subscriber::subscriber_internal_data {
   std::string subscriber_key_;
   atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_subscriber_;
-
-  subscriber_event_handler_set event_handler;
+  atfw::util::nostd::nonnull<event_callback_set_ptr_t> event_handler;
 
   explicit subscriber_internal_data(std::string&& input_subscriber_key,
-                                    shared_subscriber::ptr_t&& input_shared_subscriber)
-      : subscriber_key_(std::move(input_subscriber_key)), shared_subscriber_(std::move(input_shared_subscriber)) {}
+                                    shared_subscriber::ptr_t&& input_shared_subscriber,
+                                    event_callback_set_ptr_t&& input_event_handler)
+      : subscriber_key_(std::move(input_subscriber_key)),
+        shared_subscriber_(std::move(input_shared_subscriber)),
+        event_handler(std::move(input_event_handler)) {}
 };
 
 client_subscriber::client_subscriber(ctor_guard& guard)
     : internal_data_(atfw::util::memory::make_strong_rc<subscriber_internal_data>(
-          std::move(guard.subscriber_key_), std::move(guard.shared_subscriber_))) {
-  internal_data_->shared_subscriber_->register_client_subscriber(this);
+          std::move(guard.subscriber_key), std::move(guard.shared_subscriber), std::move(guard.event_handler))) {
+  internal_data_->shared_subscriber_->register_client_subscriber(this, guard.auto_create_channel);
 }
 
 DTMQ_PROXY_SDK_API client_subscriber::~client_subscriber() {
   internal_data_->shared_subscriber_->unregister_client_subscriber(this);
 }
 
+DTMQ_PROXY_SDK_API client_subscriber::event_callback_set_ptr_t client_subscriber::create_event_callback_set() {
+  return std::make_shared<event_callback_set_t>();
+}
+
 DTMQ_PROXY_SDK_API atfw::util::nostd::nullable<client_subscriber::ptr_t> client_subscriber::create(
     const atfw::dtmq::DChannelIdKey& channel_key, const subscriber_options& options) {
   ctor_guard cg(channel_key, options);
-  if (!cg.shared_subscriber_) {
+  if (!cg.shared_subscriber) {
     return nullptr;
   }
 
@@ -334,13 +456,86 @@ DTMQ_PROXY_SDK_API atfw::util::nostd::nullable<client_subscriber::ptr_t> client_
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::global_receive_channel_event(
-    rpc::context& /*ctx*/, const atfw::dtmq::SSChannelEventSync& /*event_sync*/) {
-  // TODO(owent): implement the logic to handle received channel events
+    rpc::context& ctx, const atfw::dtmq::SSChannelEventSync& event_sync) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
+  // 先处理定时器事件，保证时序
+  global_tick(ctx);
+
+  auto& mgr = get_internal_subscriber_manager();
+  const atfw::dtmq::DChannelIdKey* channel_key = nullptr;
+  if (event_sync.has_channel_snapshot()) {
+    channel_key = &event_sync.channel_snapshot().channel_metadata().channel_key();
+  } else {
+    channel_key = &event_sync.channel_metadata().channel_key();
+  }
+  auto iter = mgr.cached_subscriber_smart_ptr.find(channel_key->channel_id());
+  if (iter == mgr.cached_subscriber_smart_ptr.end() || !iter->second) {
+    FCTXLOGINFO(ctx, "channel {} receive event sync, but may be destroyed, ignore this {} sync",
+                channel_key->channel_id(), (event_sync.has_channel_snapshot() ? "snapshot" : "incremental"));
+    return;
+  }
+
+  iter->second->receive_event_sync(ctx, event_sync);
 }
 
-DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& /*ctx*/) {
-  // TODO(owent): implement the logic for periodic tick handling
-  return 0;  // Return 0 to indicate no timer events triggered
+DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& ctx) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return 0;
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+  if (!mgr.timer_running) {
+    mgr.timer_set.init(chrono_to_timer_tick(atfw::util::time::time_utility::now()));
+    mgr.timer_running = true;
+  }
+
+  mgr.timer_set.set_private_data(reinterpret_cast<void*>(&ctx));
+  int ret = mgr.timer_set.tick(chrono_to_timer_tick(atfw::util::time::time_utility::now()));
+  mgr.timer_set.set_private_data(nullptr);
+  if (ret < 0) {
+    FWLOGERROR("client_subscriber::global_tick with error, timer error code: {}", ret);
+  }
+
+  // 统一批处理执行心跳发送
+  internal_subscriber_manager_do_send_heartbeat(ctx);
+
+  // 处理心跳重试，重设定时器
+  internal_subscriber_manager_do_retry_heartbeat(ctx);
+
+  return 0;
+}
+
+DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::global_await_pending_heartbeat(rpc::context& ctx) {
+  if (!global_is_sending_heartbeat()) {
+    RPC_RETURN_CODE(0);
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, mgr.running_heartbeat_task));
+  RPC_RETURN_CODE(ret);
+}
+
+DTMQ_PROXY_SDK_API bool client_subscriber::global_has_pending_heartbeat() noexcept {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return false;
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+  return !mgr.pending_heartbeat_subscriber.empty() || !mgr.retry_heartbeat_subscriber.empty();
+}
+
+DTMQ_PROXY_SDK_API bool client_subscriber::global_is_sending_heartbeat() noexcept {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return false;
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+  return !task_type_trait::empty(mgr.running_heartbeat_task) &&
+         !task_type_trait::is_exiting(mgr.running_heartbeat_task);
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelIdKey& client_subscriber::get_channel_key() const noexcept {
@@ -374,158 +569,313 @@ DTMQ_PROXY_SDK_API bool client_subscriber::is_ready() const noexcept {
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(rpc::context& ctx,
                                                                        event_callback_on_ready_t&& on_ready) {
-  internal_data_->event_handler.on_ready = std::move(on_ready);
+  internal_data_->event_handler->on_ready = std::move(on_ready);
 
-  if (internal_data_->event_handler.on_ready && internal_data_->shared_subscriber_->is_ready()) {
-    internal_data_->event_handler.on_ready(ctx, shared_from_this());
+  if (internal_data_->event_handler->on_ready && internal_data_->shared_subscriber_->is_ready()) {
+    internal_data_->event_handler->on_ready(ctx, shared_from_this());
   }
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(rpc::context& ctx,
                                                                        const event_callback_on_ready_t& on_ready) {
-  internal_data_->event_handler.on_ready = on_ready;
+  internal_data_->event_handler->on_ready = on_ready;
 
-  if (internal_data_->event_handler.on_ready && internal_data_->shared_subscriber_->is_ready()) {
-    internal_data_->event_handler.on_ready(ctx, shared_from_this());
+  if (internal_data_->event_handler->on_ready && internal_data_->shared_subscriber_->is_ready()) {
+    internal_data_->event_handler->on_ready(ctx, shared_from_this());
   }
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_ready_t& client_subscriber::get_event_callback_on_ready()
     const noexcept {
-  return internal_data_->event_handler.on_ready;
+  return internal_data_->event_handler->on_ready;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(event_callback_set_t& event_callback_set,
+                                                                       event_callback_on_ready_t&& on_ready) {
+  event_callback_set.on_ready = std::move(on_ready);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_ready(event_callback_set_t& event_callback_set,
+                                                                       const event_callback_on_ready_t& on_ready) {
+  event_callback_set.on_ready = on_ready;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_ready_t& client_subscriber::get_event_callback_on_ready(
+    const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_ready;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_destroyed(event_callback_on_destroy_t&& on_destroy) {
-  internal_data_->event_handler.on_destroy = std::move(on_destroy);
+  internal_data_->event_handler->on_destroy = std::move(on_destroy);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_destroyed(
     const event_callback_on_destroy_t& on_destroy) {
-  internal_data_->event_handler.on_destroy = on_destroy;
+  internal_data_->event_handler->on_destroy = on_destroy;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_destroy_t&
 client_subscriber::get_event_callback_on_destroyed() const noexcept {
-  return internal_data_->event_handler.on_destroy;
+  return internal_data_->event_handler->on_destroy;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_destroyed(event_callback_set_t& event_callback_set,
+                                                                           event_callback_on_destroy_t&& on_destroy) {
+  event_callback_set.on_destroy = std::move(on_destroy);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_destroyed(
+    event_callback_set_t& event_callback_set, const event_callback_on_destroy_t& on_destroy) {
+  event_callback_set.on_destroy = on_destroy;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_destroy_t&
+client_subscriber::get_event_callback_on_destroyed(const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_destroy;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_custom_data(
     event_callback_on_update_custom_data_t&& on_update_custom_data) {
-  internal_data_->event_handler.on_update_custom_data = std::move(on_update_custom_data);
+  internal_data_->event_handler->on_update_custom_data = std::move(on_update_custom_data);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_custom_data(
     const event_callback_on_update_custom_data_t& on_update_custom_data) {
-  internal_data_->event_handler.on_update_custom_data = on_update_custom_data;
+  internal_data_->event_handler->on_update_custom_data = on_update_custom_data;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_update_custom_data_t&
 client_subscriber::get_event_callback_on_update_custom_data() const noexcept {
-  return internal_data_->event_handler.on_update_custom_data;
+  return internal_data_->event_handler->on_update_custom_data;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_custom_data(
+    event_callback_set_t& event_callback_set, event_callback_on_update_custom_data_t&& on_update_custom_data) {
+  event_callback_set.on_update_custom_data = std::move(on_update_custom_data);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_custom_data(
+    event_callback_set_t& event_callback_set, const event_callback_on_update_custom_data_t& on_update_custom_data) {
+  event_callback_set.on_update_custom_data = on_update_custom_data;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_update_custom_data_t&
+client_subscriber::get_event_callback_on_update_custom_data(const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_update_custom_data;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_private_data(
     event_callback_on_update_private_data_t&& on_update_private_data) {
-  internal_data_->event_handler.on_update_private_data = std::move(on_update_private_data);
+  internal_data_->event_handler->on_update_private_data = std::move(on_update_private_data);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_private_data(
     const event_callback_on_update_private_data_t& on_update_private_data) {
-  internal_data_->event_handler.on_update_private_data = on_update_private_data;
+  internal_data_->event_handler->on_update_private_data = on_update_private_data;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_update_private_data_t&
 client_subscriber::get_event_callback_on_update_private_data() const noexcept {
-  return internal_data_->event_handler.on_update_private_data;
+  return internal_data_->event_handler->on_update_private_data;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_private_data(
+    event_callback_set_t& event_callback_set, event_callback_on_update_private_data_t&& on_update_private_data) {
+  event_callback_set.on_update_private_data = std::move(on_update_private_data);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_private_data(
+    event_callback_set_t& event_callback_set, const event_callback_on_update_private_data_t& on_update_private_data) {
+  event_callback_set.on_update_private_data = on_update_private_data;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_update_private_data_t&
+client_subscriber::get_event_callback_on_update_private_data(const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_update_private_data;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_optimistic_lock(
     event_callback_on_update_optimistic_lock_t&& on_update_optimistic_lock) {
-  internal_data_->event_handler.on_update_optimistic_lock = std::move(on_update_optimistic_lock);
+  internal_data_->event_handler->on_update_optimistic_lock = std::move(on_update_optimistic_lock);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_optimistic_lock(
     const event_callback_on_update_optimistic_lock_t& on_update_optimistic_lock) {
-  internal_data_->event_handler.on_update_optimistic_lock = on_update_optimistic_lock;
+  internal_data_->event_handler->on_update_optimistic_lock = on_update_optimistic_lock;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_update_optimistic_lock_t&
 client_subscriber::get_event_callback_on_update_optimistic_lock() const noexcept {
-  return internal_data_->event_handler.on_update_optimistic_lock;
+  return internal_data_->event_handler->on_update_optimistic_lock;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_optimistic_lock(
+    event_callback_set_t& event_callback_set, event_callback_on_update_optimistic_lock_t&& on_update_optimistic_lock) {
+  event_callback_set.on_update_optimistic_lock = std::move(on_update_optimistic_lock);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_update_optimistic_lock(
+    event_callback_set_t& event_callback_set,
+    const event_callback_on_update_optimistic_lock_t& on_update_optimistic_lock) {
+  event_callback_set.on_update_optimistic_lock = on_update_optimistic_lock;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_update_optimistic_lock_t&
+client_subscriber::get_event_callback_on_update_optimistic_lock(
+    const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_update_optimistic_lock;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_compact(event_callback_on_compact_t&& on_compact) {
-  internal_data_->event_handler.on_compact = std::move(on_compact);
+  internal_data_->event_handler->on_compact = std::move(on_compact);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_compact(
     const event_callback_on_compact_t& on_compact) {
-  internal_data_->event_handler.on_compact = on_compact;
+  internal_data_->event_handler->on_compact = on_compact;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_compact_t&
 client_subscriber::get_event_callback_on_compact() const noexcept {
-  return internal_data_->event_handler.on_compact;
+  return internal_data_->event_handler->on_compact;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_compact(event_callback_set_t& event_callback_set,
+                                                                         event_callback_on_compact_t&& on_compact) {
+  event_callback_set.on_compact = std::move(on_compact);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_compact(
+    event_callback_set_t& event_callback_set, const event_callback_on_compact_t& on_compact) {
+  event_callback_set.on_compact = on_compact;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_compact_t&
+client_subscriber::get_event_callback_on_compact(const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_compact;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_text(
     event_callback_on_receive_text_t&& on_receive_text) {
-  internal_data_->event_handler.on_receive_text = std::move(on_receive_text);
+  internal_data_->event_handler->on_receive_text = std::move(on_receive_text);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_text(
     const event_callback_on_receive_text_t& on_receive_text) {
-  internal_data_->event_handler.on_receive_text = on_receive_text;
+  internal_data_->event_handler->on_receive_text = on_receive_text;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_text_t&
 client_subscriber::get_event_callback_on_receive_text() const noexcept {
-  return internal_data_->event_handler.on_receive_text;
+  return internal_data_->event_handler->on_receive_text;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_text(
+    event_callback_set_t& event_callback_set, event_callback_on_receive_text_t&& on_receive_text) {
+  event_callback_set.on_receive_text = std::move(on_receive_text);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_text(
+    event_callback_set_t& event_callback_set, const event_callback_on_receive_text_t& on_receive_text) {
+  event_callback_set.on_receive_text = on_receive_text;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_text_t&
+client_subscriber::get_event_callback_on_receive_text(const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_receive_text;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
     event_callback_on_receive_event_t&& on_receive_event) {
-  internal_data_->event_handler.on_receive_event = std::move(on_receive_event);
+  internal_data_->event_handler->on_receive_event = std::move(on_receive_event);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
     const event_callback_on_receive_event_t& on_receive_event) {
-  internal_data_->event_handler.on_receive_event = on_receive_event;
+  internal_data_->event_handler->on_receive_event = on_receive_event;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_event_t&
 client_subscriber::get_event_callback_on_receive_event() const noexcept {
-  return internal_data_->event_handler.on_receive_event;
+  return internal_data_->event_handler->on_receive_event;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
+    event_callback_set_t& event_callback_set, event_callback_on_receive_event_t&& on_receive_event) {
+  event_callback_set.on_receive_event = std::move(on_receive_event);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
+    event_callback_set_t& event_callback_set, const event_callback_on_receive_event_t& on_receive_event) {
+  event_callback_set.on_receive_event = on_receive_event;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_event_t&
+client_subscriber::get_event_callback_on_receive_event(const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_receive_event;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_start(
     event_callback_on_receive_snapshot_t&& on_receive_snapshot_start) {
-  internal_data_->event_handler.on_receive_snapshot_start = std::move(on_receive_snapshot_start);
+  internal_data_->event_handler->on_receive_snapshot_start = std::move(on_receive_snapshot_start);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_start(
     const event_callback_on_receive_snapshot_t& on_receive_snapshot_start) {
-  internal_data_->event_handler.on_receive_snapshot_start = on_receive_snapshot_start;
+  internal_data_->event_handler->on_receive_snapshot_start = on_receive_snapshot_start;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_snapshot_t&
 client_subscriber::get_event_callback_on_receive_snapshot_start() const noexcept {
-  return internal_data_->event_handler.on_receive_snapshot_start;
+  return internal_data_->event_handler->on_receive_snapshot_start;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_start(
+    event_callback_set_t& event_callback_set, event_callback_on_receive_snapshot_t&& on_receive_snapshot_start) {
+  event_callback_set.on_receive_snapshot_start = std::move(on_receive_snapshot_start);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_start(
+    event_callback_set_t& event_callback_set, const event_callback_on_receive_snapshot_t& on_receive_snapshot_start) {
+  event_callback_set.on_receive_snapshot_start = on_receive_snapshot_start;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_snapshot_t&
+client_subscriber::get_event_callback_on_receive_snapshot_start(
+    const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_receive_snapshot_start;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_finished(
     event_callback_on_receive_snapshot_t&& on_receive_snapshot_finished) {
-  internal_data_->event_handler.on_receive_snapshot_finished = std::move(on_receive_snapshot_finished);
+  internal_data_->event_handler->on_receive_snapshot_finished = std::move(on_receive_snapshot_finished);
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_finished(
     const event_callback_on_receive_snapshot_t& on_receive_snapshot_finished) {
-  internal_data_->event_handler.on_receive_snapshot_finished = on_receive_snapshot_finished;
+  internal_data_->event_handler->on_receive_snapshot_finished = on_receive_snapshot_finished;
 }
 
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_snapshot_t&
 client_subscriber::get_event_callback_on_receive_snapshot_finished() const noexcept {
-  return internal_data_->event_handler.on_receive_snapshot_finished;
+  return internal_data_->event_handler->on_receive_snapshot_finished;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_finished(
+    event_callback_set_t& event_callback_set, event_callback_on_receive_snapshot_t&& on_receive_snapshot_finished) {
+  event_callback_set.on_receive_snapshot_finished = std::move(on_receive_snapshot_finished);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_snapshot_finished(
+    event_callback_set_t& event_callback_set,
+    const event_callback_on_receive_snapshot_t& on_receive_snapshot_finished) {
+  event_callback_set.on_receive_snapshot_finished = on_receive_snapshot_finished;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_snapshot_t&
+client_subscriber::get_event_callback_on_receive_snapshot_finished(
+    const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_receive_snapshot_finished;
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
@@ -557,13 +907,145 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::page_query_message(
 }
 
 namespace {
+
+static void internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) {
+  auto& mgr = get_internal_subscriber_manager();
+
+  if (mgr.pending_heartbeat_subscriber.empty()) {
+    return;
+  }
+
+  // 已经在执行，等待下一轮
+  if (!task_type_trait::empty(mgr.running_heartbeat_task) && !task_type_trait::is_exiting(mgr.running_heartbeat_task)) {
+    return;
+  }
+
+  // 尽量在一个task里处理星跳发送，这样不用占用浪费task池占用
+  auto invoke_result = rpc::async_invoke(
+      ctx, "atframework.dtmq.internal_subscriber_manager.send_heartbeat",
+      [](rpc::context& child_ctx) -> rpc::result_code_type {
+        if (is_internal_subscriber_manager_destroyed()) {
+          RPC_RETURN_CODE(0);
+        }
+
+        auto& inner_mgr = get_internal_subscriber_manager();
+        int32_t ret = 0;
+        do {
+          if (inner_mgr.pending_heartbeat_subscriber.empty()) {
+            break;
+          }
+          std::unordered_set<shared_subscriber*> pending_subscriber;
+          pending_subscriber.swap(inner_mgr.pending_heartbeat_subscriber);
+
+          std::unordered_set<dispatcher_await_options> waiter_options_set;
+          std::unordered_map<uint64_t, atframework::SSMsg*> waiter_messages;
+          waiter_options_set.reserve(pending_subscriber.size());
+          waiter_messages.reserve(pending_subscriber.size());
+
+          for (auto* subscriber : pending_subscriber) {
+            if (subscriber == nullptr) {
+              continue;
+            }
+
+            if (!subscriber->has_registered_client()) {
+              continue;
+            }
+
+            auto target_server_id =
+                rpc::dtmq::get_target_server_id(subscriber->get_channel_key(), rpc::dtmq::replicate_type::kReadonly,
+                                                subscriber->get_readonly_replicate_index());
+            if (0 == target_server_id) {
+              FCTXLOGWARNING(
+                  child_ctx,
+                  "Failed to get target server id for subscriber: {}, channel: {} and ignore to send heartbeat",
+                  subscriber->get_subscriber_info().subscriber_key(), subscriber->get_channel_key().channel_id());
+              continue;
+            }
+
+            atfw::dtmq::SSChannelSubscribeReq* req_body = child_ctx.create<atfw::dtmq::SSChannelSubscribeReq>();
+            atfw::dtmq::SSChannelSubscribeRsp* rsp_body = child_ctx.create<atfw::dtmq::SSChannelSubscribeRsp>();
+            if (req_body == nullptr || rsp_body == nullptr) {
+              FCTXLOGERROR(child_ctx, "Failed to create request or response body for subscriber: {}, channel: {}",
+                           subscriber->get_subscriber_info().subscriber_key(),
+                           subscriber->get_channel_key().channel_id());
+              continue;
+            }
+
+            auto* heartbeat = req_body->add_heartbeat();
+            if (heartbeat == nullptr) {
+              FCTXLOGERROR(child_ctx, "Failed to add heartbeat to request body for subscriber: {}, channel: {}",
+                           subscriber->get_subscriber_info().subscriber_key(),
+                           subscriber->get_channel_key().channel_id());
+              continue;
+            }
+            protobuf_copy_message(*req_body->mutable_subscriber(), subscriber->get_subscriber_info());
+            protobuf_copy_message(*heartbeat->mutable_channel_key(), subscriber->get_channel_key());
+            // 订阅者参数填充
+            heartbeat->set_last_sequence(subscriber->get_last_message_sequence());
+            heartbeat->set_last_hash_code(subscriber->get_last_message_hash_code());
+            heartbeat->set_auto_create_channel(subscriber->should_auto_create_channel());
+            heartbeat->set_readonly_index(subscriber->get_readonly_replicate_index());
+
+            dispatcher_await_options one_waiter_options = dispatcher_make_default<dispatcher_await_options>();
+            rpc::result_code_type::value_type send_result = RPC_AWAIT_CODE_RESULT(
+                rpc::dtmq::subscribe(child_ctx, target_server_id, *req_body, *rsp_body, false, &one_waiter_options));
+
+            if (send_result >= 0 && one_waiter_options.sequence > 0) {
+              waiter_messages[one_waiter_options.sequence] = child_ctx.create<atframework::SSMsg>();
+              waiter_options_set.insert(one_waiter_options);
+            } else {
+              FWLOGERROR("try to call rpc::dtmq::subscribe to {:#x} failed, res: {}({})", target_server_id, send_result,
+                         protobuf_mini_dumper_get_error_msg(send_result));
+
+              // 失败了要计划重试
+              subscriber->schedule_retry_heartbeat(child_ctx);
+            }
+          }
+        } while (false);
+
+        if (task_type_trait::get_task_id(inner_mgr.running_heartbeat_task) == child_ctx.get_task_context().task_id) {
+          task_type_trait::reset_task(inner_mgr.running_heartbeat_task);
+        }
+        RPC_RETURN_CODE(ret);
+      });
+  if (invoke_result.is_error()) {
+    FCTXLOGERROR(ctx, "Failed to invoke async task for sending heartbeat, result: {}({})", *invoke_result.get_error(),
+                 protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  } else {
+    mgr.running_heartbeat_task = std::move(*invoke_result.get_success());
+    FCTXLOGDEBUG(ctx, "Successfully invoked async task for sending heartbeat, subscriber count: {}",
+                 mgr.pending_heartbeat_subscriber.size());
+  }
+}
+
+static void internal_subscriber_manager_do_retry_heartbeat(rpc::context& /*ctx*/) {
+  auto& mgr = get_internal_subscriber_manager();
+
+  if (mgr.retry_heartbeat_subscriber.empty()) {
+    return;
+  }
+
+  for (auto* subscriber : mgr.retry_heartbeat_subscriber) {
+    if (subscriber == nullptr) {
+      continue;
+    }
+
+    subscriber->setup_timer(shared_subscriber::timer_action_type::kRetryHeartbeat);
+  }
+}
+
 shared_subscriber::ptr_t shared_subscriber::make_shared(const atfw::dtmq::DChannelIdKey& channel_key) {
   if (channel_key.channel_id().empty()) {
     return nullptr;
   }
 
-  auto iter = get_cached_shared_subscriber().find(channel_key.channel_id());
-  if (iter != get_cached_shared_subscriber().end() && iter->second) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return nullptr;
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+  auto iter = mgr.cached_subscriber_smart_ptr.find(channel_key.channel_id());
+  if (iter != mgr.cached_subscriber_smart_ptr.end() && iter->second) {
     return iter->second;
   }
 
@@ -746,7 +1228,7 @@ mq_client_subscriber_wal_client_type::vtable_pointer shared_subscriber::create_c
     }
 
     // Client向 readonly或writable节点发送心跳
-    subscriber->send_heartbeat(param.context);
+    subscriber->schedule_send_heartbeat(param.context);
     return wal_result_code::kOk;
   };
 
@@ -758,6 +1240,128 @@ mq_client_subscriber_wal_client_type::vtable_pointer shared_subscriber::create_c
   // ret->default_delegate.action = &mq_wal_delegate_helper::do_nothing;
 
   return ret;
+}
+
+void shared_subscriber::setup_timer(timer_action_type action) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
+  // 如果定时器类型不变，那么就不需要重新设置定时器了
+  if (timer_action_ == action || check_flag(subscriber_flag::kDestroying)) {
+    return;
+  }
+
+  atfw::util::time::time_utility::raw_time_t timeout_tp = std::chrono::system_clock::from_time_t(0);
+  switch (action) {
+    case timer_action_type::kSendHeartbeat:
+      if (wal_client_) {
+        timeout_tp = wal_client_->get_next_heartbeat_timepoint();
+      } else {
+        timeout_tp = atfw::util::time::time_utility::now() +
+                     protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_interval());
+      }
+      break;
+    case timer_action_type::kRetryHeartbeat:
+      if (wal_client_) {
+        timeout_tp = wal_client_->get_next_heartbeat_timepoint();
+      } else {
+        timeout_tp =
+            atfw::util::time::time_utility::now() +
+            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_retry_interval());
+      }
+      break;
+    case timer_action_type::kGc:
+      timeout_tp += protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.gc_expire_duration());
+      break;
+    default:
+      return;
+  }
+
+  wal_client_->get_next_heartbeat_timepoint();
+
+  // 多加一个tick触发以确保定时器事件一定被触发
+  time_t timeout_tick = chrono_to_timer_tick(timeout_tp) + 1;
+  if ((timer_action_ == timer_action_type::kNone || timer_timeout_tick_ <= 0) || timeout_tick < timer_timeout_tick_) {
+    remove_timer();
+
+    auto& mgr = get_internal_subscriber_manager();
+    if (timeout_tick <= mgr.timer_set.get_last_tick()) {
+      timeout_tick = mgr.timer_set.get_last_tick() + 1;
+    }
+
+    std::weak_ptr<shared_subscriber> self_weak = shared_from_this();
+    auto fn = [self_weak](time_t /*tick_time*/, const mq_client_subscriber_timer_type::timer_t& /*timer*/) {
+      if (self_weak.expired()) {
+        return;
+      }
+
+      auto self = self_weak.lock();
+      if (!self) {
+        return;
+      }
+
+      auto current_action = self->timer_action_;
+      self->timer_action_ = timer_action_type::kNone;
+      self->timer_timeout_tick_ = 0;
+
+      if (is_internal_subscriber_manager_destroyed()) {
+        return;
+      }
+
+      auto& inner_mgr = get_internal_subscriber_manager();
+
+      // Tick触发心跳和日志压缩
+      if (inner_mgr.timer_set.get_private_data() != nullptr) {
+        self->tick(*reinterpret_cast<rpc::context*>(inner_mgr.timer_set.get_private_data()));
+      } else {
+        rpc::context child_ctx = rpc::context::create_without_task();
+        self->tick(child_ctx);
+      }
+
+      if (current_action == timer_action_type::kGc && self->can_be_removed()) {
+        remove_cached_shared_subscriber(self.get());
+        return;
+      }
+
+      // 设置下一个定时器
+      if (self->can_be_removed()) {
+        self->setup_timer(timer_action_type::kGc);
+      } else if (self->timer_action_ != timer_action_type::kRetryHeartbeat) {
+        self->setup_timer(timer_action_type::kSendHeartbeat);
+      }
+    };
+    int timer_result =
+        mgr.timer_set.add_timer(timeout_tick - mgr.timer_set.get_last_tick(), std::move(fn), nullptr, &timer_watcher_);
+
+    if (timer_result < 0) {
+      FWLOGERROR("Failed to add timer for subscriber: {}, channel: {}, action: {}, result: {}",
+                 get_subscriber_info().subscriber_key(), get_channel_key().channel_id(), static_cast<int>(action),
+                 timer_result);
+
+      timer_watcher_.reset();
+      return;
+    }
+  }
+
+  timer_action_ = action;
+}
+
+void shared_subscriber::remove_timer() {
+  timer_action_ = timer_action_type::kNone;
+  timer_timeout_tick_ = 0;
+
+  if (timer_watcher_.expired()) {
+    return;
+  }
+
+  auto timer_ptr = timer_watcher_.lock();
+  timer_watcher_.reset();
+  if (!timer_ptr) {
+    return;
+  }
+
+  mq_client_subscriber_timer_type::remove_timer(*timer_ptr);
 }
 
 void shared_subscriber::load_metadata(rpc::context& ctx, const atfw::dtmq::DChannelMetadata& metadata) {
@@ -810,18 +1414,35 @@ void shared_subscriber::load_lock(rpc::context& ctx, const atfw::dtmq::DChannelO
 }
 }  // namespace
 
-void shared_subscriber::register_client_subscriber(client_subscriber* client) {
+void shared_subscriber::register_client_subscriber(client_subscriber* client, bool auto_create_channel) {
   if (client == nullptr) {
     return;
   }
 
   if (check_flag(subscriber_flag::kLockRegisteredClient)) {
-    lock_registered_client_pending_add_.insert(client);
+    lock_registered_client_pending_add_[client] = auto_create_channel;
     lock_registered_client_pending_remove_.erase(client);
     return;
   }
 
-  registered_client_.insert(client);
+  if (auto_create_channel) {
+    registered_client_auto_create_channel_.insert(client);
+  } else {
+    registered_client_no_create_channel_.insert(client);
+  }
+
+  // 最初的订阅client注册，要改定时器为心跳定时器，并且立即发送一次心跳
+  if (timer_action_ == timer_action_type::kGc || timer_action_ == timer_action_type::kNone) {
+    setup_timer(timer_action_type::kSendHeartbeat);
+
+    size_t total_registered_clients =
+        registered_client_auto_create_channel_.size() + registered_client_no_create_channel_.size();
+
+    if (total_registered_clients == 1) {
+      auto& mgr = get_internal_subscriber_manager();
+      mgr.pending_heartbeat_subscriber.insert(this);
+    }
+  }
 }
 
 void shared_subscriber::unregister_client_subscriber(client_subscriber* client) {
@@ -835,28 +1456,43 @@ void shared_subscriber::unregister_client_subscriber(client_subscriber* client) 
     return;
   }
 
-  registered_client_.erase(client);
+  bool has_remove_client = false;
+  if (registered_client_auto_create_channel_.erase(client) > 0) {
+    has_remove_client = true;
+  }
+  if (registered_client_no_create_channel_.erase(client) > 0) {
+    has_remove_client = true;
+  }
+
+  // 最后一个订阅client退出，要把心跳定时器改成缓存清理定时器
+  if (has_remove_client && can_be_removed()) {
+    setup_timer(timer_action_type::kGc);
+  }
 }
 
 void shared_subscriber::foreach_registered_client_subscriber(
     atfw::util::nostd::function_ref<void(client_subscriber&)> callback) {
-  if (registered_client_.empty()) {
+  if (registered_client_auto_create_channel_.empty() && registered_client_no_create_channel_.empty()) {
     return;
   }
 
   lock_registered_client_guard guard(*this);
-  for (const auto& client : registered_client_) {
-    if (client == nullptr) {
-      continue;
-    }
+  std::unordered_set<client_subscriber*>* subscriber_container[] = {&registered_client_auto_create_channel_,
+                                                                    &registered_client_no_create_channel_};
+  for (auto* container : subscriber_container) {
+    for (const auto& client : *container) {
+      if (client == nullptr) {
+        continue;
+      }
 
-    // 回调中删除了，跳过迭代
-    if (lock_registered_client_pending_remove_.find(client) != lock_registered_client_pending_remove_.end()) {
-      continue;
-    }
+      // 回调中删除了，跳过迭代
+      if (lock_registered_client_pending_remove_.find(client) != lock_registered_client_pending_remove_.end()) {
+        continue;
+      }
 
-    if (client != nullptr) {
-      callback(*client);
+      if (client != nullptr) {
+        callback(*client);
+      }
     }
   }
 }
@@ -873,6 +1509,10 @@ int64_t shared_subscriber::get_compact_sequence() const noexcept {
 
   return *last_removed_key;
 }
+
+uint64_t shared_subscriber::get_last_message_hash_code() const noexcept { return last_message_hash_code_; }
+
+int64_t shared_subscriber::get_last_message_sequence() const noexcept { return last_message_sequence_; }
 
 int32_t shared_subscriber::tick(rpc::context& ctx) {
   if (!wal_client_) {
@@ -957,6 +1597,11 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
         } else if (result_code < 0) {
           FCTXLOGERROR(ctx, "Failed to emplace log for sequence: {}, result: {}({})", log_msg.sequence(), result_code,
                        protobuf_mini_dumper_get_error_msg(result_code));
+        } else {
+          if (last_message_sequence_ < log_msg.sequence()) {
+            last_message_sequence_ = log_msg.sequence();
+            last_message_hash_code_ = log_msg.hash_code();
+          }
         }
       } else {
         FCTXLOGERROR(ctx, "Failed to allocate log for sequence: {}", log_msg.sequence());
@@ -1037,6 +1682,8 @@ void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChan
   }
 
   snapshot_sequence_ = snapshot.channel_metadata().last_sequence();
+  last_message_hash_code_ = snapshot.channel_metadata().last_hash_code();
+  last_message_sequence_ = snapshot.channel_metadata().last_sequence();
   foreach_registered_client_subscriber([&ctx, &snapshot](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_receive_snapshot_finished();
     if (fn) {
@@ -1212,19 +1859,88 @@ void shared_subscriber::compact(rpc::context& /*ctx*/, int64_t compact_sequence)
   wal_client_->get_log_manager().remove_before(remove_timepoint, remove_count);
 }
 
-void shared_subscriber::send_heartbeat(rpc::context& /*ctx*/) {
-  // TODO(owent): 发心跳包
+void shared_subscriber::schedule_send_heartbeat(rpc::context& /*ctx*/) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
+  // 计划发心跳包
+
+  auto& mgr = get_internal_subscriber_manager();
+
+  // 不受管理的对象要跳过
+  if (mgr.cached_subscriber_raw_pointer.end() == mgr.cached_subscriber_raw_pointer.find(this)) {
+    return;
+  }
+
+  mgr.pending_heartbeat_subscriber.insert(this);
+}
+
+void shared_subscriber::schedule_retry_heartbeat(rpc::context& /*ctx*/) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
+  // 计划发心跳包
+
+  auto& mgr = get_internal_subscriber_manager();
+
+  // 不受管理的对象要跳过
+  if (mgr.cached_subscriber_raw_pointer.end() == mgr.cached_subscriber_raw_pointer.find(this)) {
+    return;
+  }
+
+  mgr.retry_heartbeat_subscriber.insert(this);
 }
 
 void shared_subscriber::add_cached_shared_subscriber(const shared_subscriber::ptr_t& subscriber) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
   if (!subscriber) {
     return;
   }
 
-  auto& cache = get_cached_shared_subscriber();
-  cache[subscriber->get_channel_key().channel_id()] = subscriber;
+  auto& mgr = get_internal_subscriber_manager();
+  mgr.cached_subscriber_smart_ptr[subscriber->get_channel_key().channel_id()] = subscriber;
+  mgr.cached_subscriber_raw_pointer.insert(subscriber.get());
 
-  // TODO(owent): 注册定时器执行订阅和垃圾回收
+  // 注册定时器执行订阅和垃圾回收
+  subscriber->setup_timer(timer_action_type::kGc);
+}
+
+void shared_subscriber::remove_cached_shared_subscriber(const shared_subscriber* subscriber) {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
+  if (subscriber == nullptr) {
+    return;
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+
+  auto iter = mgr.cached_subscriber_smart_ptr.find(subscriber->get_channel_key().channel_id());
+  if (iter == mgr.cached_subscriber_smart_ptr.end()) {
+    return;
+  }
+
+  if (iter->second.get() != subscriber) {
+    return;
+  }
+
+  auto hold_lifetime = std::move(iter->second);
+
+  mgr.cached_subscriber_smart_ptr.erase(subscriber->get_channel_key().channel_id());
+  mgr.cached_subscriber_raw_pointer.erase(hold_lifetime.get());
+
+  // 移除待执行任务
+  mgr.pending_heartbeat_subscriber.erase(hold_lifetime.get());
+  mgr.retry_heartbeat_subscriber.erase(hold_lifetime.get());
+
+  // 移除定时器
+  hold_lifetime->remove_timer();
 }
 
 }  // namespace dtmq

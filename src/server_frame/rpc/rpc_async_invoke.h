@@ -14,11 +14,9 @@
 #include <dispatcher/dispatcher_type_defines.h>
 #include <dispatcher/task_type_traits.h>
 
-#include <stdint.h>
 #include <chrono>
-#include <cstddef>
 #include <functional>
-#include <memory>
+#include <type_traits>
 #include <utility>
 
 #include "rpc/rpc_common_types.h"
@@ -62,25 +60,31 @@ ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE inline async_invoke_result
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
 
-ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx,
-                                                                     gsl::span<const task_type_trait::task_type> tasks);
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type
+wait_tasks(context &ctx, gsl::span<const task_type_trait::task_type> tasks);
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_tasks(context &ctx,
-                                                                     gsl::span<task_type_trait::task_type> tasks);
+                                                                          gsl::span<task_type_trait::task_type> tasks);
 
 template <class ContainerType>
 ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE inline result_code_type wait_tasks(context &ctx,
-                                                                                    ContainerType &&tasks) {
+                                                                                         ContainerType &&tasks) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(wait_tasks(ctx, gsl::make_span(std::forward<ContainerType>(tasks)))));
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type wait_task(context &ctx,
-                                                                    const task_type_trait::task_type &other_task);
+                                                                         const task_type_trait::task_type &other_task);
 
 SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
                                             task_type_trait::id_type task_id);
 SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
                                             task_type_trait::task_type then_task);
+
+template <class TCALLABLE>
+ATFW_UTIL_SYMBOL_VISIBLE auto __async_then_copy_or_move_callable(TCALLABLE &&callable) {
+  using return_type = typename std::remove_reference<TCALLABLE>::type;
+  return return_type(std::forward<TCALLABLE>(callable));
+}
 
 template <class TCALLABLE, class... TARGS>
 ATFW_UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
@@ -91,7 +95,10 @@ ATFW_UTIL_SYMBOL_VISIBLE void async_then(context &ctx, gsl::string_view name, ta
   }
 
   async_invoke_result result = async_invoke(
-      ctx, name, [waiting = std::move(waiting), callable, args...](rpc::context &child_ctx) -> rpc::result_code_type {
+      ctx, name,
+      // callable 必须复制或移动进lambda，以防wait_task后生命周期无效
+      [waiting = std::move(waiting), callable = __async_then_copy_or_move_callable(std::forward<TCALLABLE>(callable)),
+       args...](rpc::context &child_ctx) -> rpc::result_code_type {
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
         callable(std::forward<TARGS>(args)...);
         RPC_RETURN_CODE(ret);
@@ -116,7 +123,10 @@ ATFW_UTIL_SYMBOL_VISIBLE void async_then_with_context(context &ctx, gsl::string_
   }
 
   async_invoke_result result = async_invoke(
-      ctx, name, [waiting = std::move(waiting), callable, args...](rpc::context &child_ctx) -> rpc::result_code_type {
+      ctx, name,
+      // callable 必须复制或移动进lambda，以防wait_task后生命周期无效
+      [waiting = std::move(waiting), callable = __async_then_copy_or_move_callable(std::forward<TCALLABLE>(callable)),
+       args...](rpc::context &child_ctx) -> rpc::result_code_type {
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::wait_task(child_ctx, waiting));
         callable(child_ctx, std::forward<TARGS>(args)...);
         RPC_RETURN_CODE(ret);

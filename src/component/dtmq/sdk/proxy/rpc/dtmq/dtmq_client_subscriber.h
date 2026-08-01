@@ -52,6 +52,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
  public:
   using ptr_t = atfw::util::memory::strong_rc_ptr<client_subscriber>;
 
+  struct event_callback_set_t;
+  using event_callback_set_ptr_t = std::shared_ptr<event_callback_set_t>;
+
   struct ATFW_UTIL_SYMBOL_VISIBLE subscriber_options {
     DTMQ_PROXY_SDK_API subscriber_options(std::string&& input_subscriber_key);
     DTMQ_PROXY_SDK_API subscriber_options(const std::string& input_subscriber_key);
@@ -63,6 +66,12 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
     DTMQ_PROXY_SDK_API subscriber_options& operator=(subscriber_options&& other) = default;
 
     std::string subscriber_key;
+
+    // 频道不存在时自动创建，默认为 true
+    bool auto_create_channel;
+
+    // 可以设置 event_callback_set 来让多个 client_subscriber 共享同一组事件回调函数，避免浪费
+    event_callback_set_ptr_t event_callback_set;
   };
 
   using event_callback_on_ready_t = std::function<void(rpc::context& ctx, const ptr_t& subscriber)>;
@@ -107,6 +116,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API ~client_subscriber();
 
   /**
+   * @brief 创建一组空的事件回调函数集合，供多个 client_subscriber 共享使用，避免重复创建
+   *
+   * @return 事件回调函数集合
+   */
+  static DTMQ_PROXY_SDK_API event_callback_set_ptr_t create_event_callback_set();
+
+  /**
    * @brief 创建频道订阅者，如果参数错误返回空指针
    *
    * @param channel_key 频道Key
@@ -132,6 +148,28 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @return 0表示无任何定时器事件触发，< 0表示错误码，> 0表示触发的定时器事件数量
    */
   DTMQ_PROXY_SDK_API static int32_t global_tick(rpc::context& ctx);
+
+  /**
+   * @brief 等待一轮心跳发送完成，主要用于刚创建完订阅者，如果需要等待第一次心跳事件完成以便获取完第一轮数据的场景
+   *
+   * @param ctx RPC上下文
+   * @return 0或错误码
+   */
+  DTMQ_PROXY_SDK_API static rpc::result_code_type global_await_pending_heartbeat(rpc::context& ctx);
+
+  /**
+   * @brief 是否有等待的心跳发送
+   *
+   * @return 是否有等待的心跳发送
+   */
+  DTMQ_PROXY_SDK_API static bool global_has_pending_heartbeat() noexcept;
+
+  /**
+   * @brief 是否正在发送心跳
+   *
+   * @return 是否正在发送心跳
+   */
+  DTMQ_PROXY_SDK_API static bool global_is_sending_heartbeat() noexcept;
 
   /**
    * @brief Get the channel key object
@@ -170,10 +208,22 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, event_callback_on_ready_t&& on_ready);
   DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, const event_callback_on_ready_t& on_ready);
   DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready() const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_set_t& event_callback_set,
+                                                             event_callback_on_ready_t&& on_ready);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_set_t& event_callback_set,
+                                                             const event_callback_on_ready_t& on_ready);
+  static DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(event_callback_on_destroy_t&& on_destroy);
   DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(const event_callback_on_destroy_t& on_destroy);
   DTMQ_PROXY_SDK_API const event_callback_on_destroy_t& get_event_callback_on_destroyed() const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(event_callback_set_t& event_callback_set,
+                                                                 event_callback_on_destroy_t&& on_destroy);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(event_callback_set_t& event_callback_set,
+                                                                 const event_callback_on_destroy_t& on_destroy);
+  static DTMQ_PROXY_SDK_API const event_callback_on_destroy_t& get_event_callback_on_destroyed(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
       event_callback_on_update_custom_data_t&& on_update_custom_data);
@@ -181,6 +231,12 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_update_custom_data_t& on_update_custom_data);
   DTMQ_PROXY_SDK_API const event_callback_on_update_custom_data_t& get_event_callback_on_update_custom_data()
       const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
+      event_callback_set_t& event_callback_set, event_callback_on_update_custom_data_t&& on_update_custom_data);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
+      event_callback_set_t& event_callback_set, const event_callback_on_update_custom_data_t& on_update_custom_data);
+  static DTMQ_PROXY_SDK_API const event_callback_on_update_custom_data_t& get_event_callback_on_update_custom_data(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
       event_callback_on_update_private_data_t&& on_update_private_data);
@@ -188,6 +244,12 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_update_private_data_t& on_update_private_data);
   DTMQ_PROXY_SDK_API const event_callback_on_update_private_data_t& get_event_callback_on_update_private_data()
       const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
+      event_callback_set_t& event_callback_set, event_callback_on_update_private_data_t&& on_update_private_data);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
+      event_callback_set_t& event_callback_set, const event_callback_on_update_private_data_t& on_update_private_data);
+  static DTMQ_PROXY_SDK_API const event_callback_on_update_private_data_t& get_event_callback_on_update_private_data(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
       event_callback_on_update_optimistic_lock_t&& on_update_optimistic_lock);
@@ -195,19 +257,44 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_update_optimistic_lock_t& on_update_optimistic_lock);
   DTMQ_PROXY_SDK_API const event_callback_on_update_optimistic_lock_t& get_event_callback_on_update_optimistic_lock()
       const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
+      event_callback_set_t& event_callback_set, event_callback_on_update_optimistic_lock_t&& on_update_optimistic_lock);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
+      event_callback_set_t& event_callback_set,
+      const event_callback_on_update_optimistic_lock_t& on_update_optimistic_lock);
+  static DTMQ_PROXY_SDK_API const event_callback_on_update_optimistic_lock_t&
+  get_event_callback_on_update_optimistic_lock(const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(event_callback_on_compact_t&& on_compact);
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(const event_callback_on_compact_t& on_compact);
   DTMQ_PROXY_SDK_API const event_callback_on_compact_t& get_event_callback_on_compact() const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_compact(event_callback_set_t& event_callback_set,
+                                                               event_callback_on_compact_t&& on_compact);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_compact(event_callback_set_t& event_callback_set,
+                                                               const event_callback_on_compact_t& on_compact);
+  static DTMQ_PROXY_SDK_API const event_callback_on_compact_t& get_event_callback_on_compact(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(event_callback_on_receive_text_t&& on_receive_text);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(const event_callback_on_receive_text_t& on_receive_text);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_text_t& get_event_callback_on_receive_text() const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(event_callback_set_t& event_callback_set,
+                                                                    event_callback_on_receive_text_t&& on_receive_text);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(
+      event_callback_set_t& event_callback_set, const event_callback_on_receive_text_t& on_receive_text);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_text_t& get_event_callback_on_receive_text(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(event_callback_on_receive_event_t&& on_receive_event);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(
       const event_callback_on_receive_event_t& on_receive_event);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event() const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(
+      event_callback_set_t& event_callback_set, event_callback_on_receive_event_t&& on_receive_event);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(
+      event_callback_set_t& event_callback_set, const event_callback_on_receive_event_t& on_receive_event);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
       event_callback_on_receive_snapshot_t&& on_receive_snapshot_start);
@@ -215,6 +302,12 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_receive_snapshot_t& on_receive_snapshot_start);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_start()
       const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
+      event_callback_set_t& event_callback_set, event_callback_on_receive_snapshot_t&& on_receive_snapshot_start);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
+      event_callback_set_t& event_callback_set, const event_callback_on_receive_snapshot_t& on_receive_snapshot_start);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_start(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
       event_callback_on_receive_snapshot_t&& on_receive_snapshot_finished);
@@ -222,6 +315,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_receive_snapshot_t& on_receive_snapshot_finished);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_finished()
       const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
+      event_callback_set_t& event_callback_set, event_callback_on_receive_snapshot_t&& on_receive_snapshot_finished);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
+      event_callback_set_t& event_callback_set,
+      const event_callback_on_receive_snapshot_t& on_receive_snapshot_finished);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_finished(
+      const event_callback_set_t& event_callback_set) noexcept;
 
   /**
    * @brief 发送消息
