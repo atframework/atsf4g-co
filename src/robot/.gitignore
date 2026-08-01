@@ -2,3 +2,5 @@
 *.pb.go
 /config
 /rpc_handle
+# mako generator server 日志（server 在 client cwd 下生成）
+/generate-for-pb-run-server.log

@@ -1,6 +1,6 @@
 ---
 name: robot-build-and-case
-description: "Use when: building the Robot binary, running the connection test case, checking where robot logs are written, asking to run task all from the repository root, or asking how to start the built robot from build/install/bin."
+description: "Use when: building the Robot binary through the CMake robot-build target or the src/robot Taskfile, running a Robot connection case, locating Robot outputs or logs, or starting a built robot executable."
 ---
 
 # Robot Build And Case
@@ -9,26 +9,36 @@ description: "Use when: building the Robot binary, running the connection test c
 
 统一说明本仓库里 Robot 的构建方式，以及构建完成后如何直接运行连接测试 Case。
 
-## Build Robot
+## Build through CMake
 
-在仓库根目录执行：
+先按根 `AGENTS.md` 解析 `<BUILD_DIR>`，再从仓库根目录显式选择非 `ALL` 的目标：
 
 ```powershell
+cmake --build <BUILD_DIR> --target robot-build -- -j 12
+```
+
+主要产物位于 `<BUILD_DIR>/publish/robot/bin/robot.exe`。默认 `all` 不构建 Robot；不要把
+`robot-build` 加入默认依赖图。
+
+## Build standalone
+
+仅验证 Robot 自身流程时，从 Robot 源码目录运行 Taskfile：
+
+```powershell
+Set-Location src/robot
 task all
 ```
 
-构建完成后，主要产物位于：
-
-- `build/install/bin/robot.exe`
-- `build/install/bin/config.yaml`
-- `build/install/case/`
+默认产物是 `src/robot/build/install/bin/robot.exe`。需要隔离产物时，显式注入
+`ROBOT_BUILD_DIR`、`INSTALL_PATH`、`ENV_BUILD_TARGET_DIR` 和 `ENV_BUILD_TOOLS_DOWNLOAD_DIR`，
+并把这些路径放在 `<BUILD_DIR>/_agent_tmp/...` 下。
 
 ## Run Connection Test Case
 
-构建完成后，进入输出目录直接运行：
+进入相应的 `bin` 目录运行；程序默认从当前目录读取 `config.yaml`，因此先准备实际测试配置：
 
 ```powershell
-Set-Location build/install/bin
+Set-Location <BUILD_DIR>/publish/robot/bin
 .\robot.exe
 ```
 
@@ -36,14 +46,14 @@ Set-Location build/install/bin
 
 运行日志可在以下目录查看：
 
-- `build/install/log/user/`
+- `<BUILD_DIR>/publish/robot/log/user/`
 
 如果需要查看登录或连接阶段的公共日志，也可以同时检查：
 
-- `build/install/log/`
+- `<BUILD_DIR>/publish/robot/log/`
 
 ## Notes
 
-- `task all` 会自动完成子模块更新、工具准备、代码生成、编译和测试配置复制。
-- 连接测试所需的配置会被复制到 `build/install/bin/` 和 `build/install/case/`，因此运行时应优先使用构建产物目录。
-- 在 Windows 环境下直接执行 `.\robot.exe` 即可启动 Robot。
+- `task all` 会完成按需子模块初始化、工具准备、代码生成和 Go 编译。
+- 当前构建只发布 Robot 可执行文件，不会复制 `config.yaml` 或 case 目录；不要从旧产物推断它们已生成。
+- CMake 集成和独立 Taskfile 使用不同的默认构建/安装目录，报告结果时写明实际路径。

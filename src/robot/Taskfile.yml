@@ -17,59 +17,37 @@ vars:
   # 可执行文件扩展名
   INSTALL_PATH: '{{.INSTALL_PATH | default "./build/install"}}'
 
-  EXE_EXT:
-    sh: |
-      if [ "{{OS}}" = "windows" ]; then
-        echo ".exe"
-      else
-        echo ""
-      fi
+  # robot 构建目录（绝对路径）。CMake 集成时由父工程注入 <CMAKE_BINARY_DIR>/robot
+  ROBOT_BUILD_DIR: '{{.ROBOT_BUILD_DIR | default (print .ROOT_DIR "/build")}}'
+
+  # 下游 atframe-utils 任务把这两个变量与 PROJECT_ROOT 拼接，必须保持相对 ROOT_DIR。
+  # CMake 注入同名的相对路径环境变量；直接运行回退到历史默认。
+  ENV_BUILD_TARGET_DIR: '{{.ENV_BUILD_TARGET_DIR | default "build"}}'
+  ENV_BUILD_TOOLS_DOWNLOAD_DIR: '{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR | default "build/tools"}}'
+
+  EXE_EXT: '{{if eq OS "windows"}}.exe{{end}}'
+
   # Python 虚拟环境相关变量
-  PYTHON_VENV:
-    sh: |
-      if [ -n "$PYTHON_VENV_PATH" ] && [ -e "$PYTHON_VENV_PATH" ]; then
-        echo "$PYTHON_VENV_PATH"
-      elif [ -n "$VIRTUAL_ENV" ] && [ -e "$VIRTUAL_ENV" ]; then
-        echo "$VIRTUAL_ENV"
-      elif [ "{{OS}}" = "windows" ]; then
-        echo "./build/robot_venv"
-      else
-        echo "${HOME}/robot_venv"
-      fi
-  PYTHON_CMD:
-    sh: |
-      if [ "{{OS}}" = "windows" ]; then
-        echo "python"
-      else
-        echo "python3"
-      fi
-  PIP_BIN:
-    sh: |
-      if [ "{{OS}}" = "windows" ]; then
-        echo "{{.PYTHON_VENV}}/Scripts/pip.exe"
-      else
-        echo "{{.PYTHON_VENV}}/bin/pip"
-      fi
-  SET_VENV_CMD:
-    sh: |
-      if [ "{{OS}}" = "windows" ]; then
-        echo ""
-      else
-        echo "export PATH={{.PYTHON_VENV}}/bin:\$PATH"
-      fi
-  PYTHON_VENV_CMD:
-    sh: |
-      if [ "{{OS}}" = "windows" ]; then
-        echo "Scripts/python.exe"
-      else
-        echo "bin/python3"
-      fi
+  PYTHON_VENV: '{{.PYTHON_VENV_PATH | default (.VIRTUAL_ENV | default (print .ROBOT_BUILD_DIR "/venv"))}}'
+  PYTHON_CMD: '{{if eq OS "windows"}}python{{else}}python3{{end}}'
+  PYTHON_VENV_CMD: '{{if eq OS "windows"}}Scripts/python.exe{{else}}bin/python3{{end}}'
+
+  # mako 模板引擎（生成器）。CMake 集成时注入父工程 src/tools/generate-for-pb 的版本，
+  # 此时 robot-go 的 third_party/mako-generator 子模块无需初始化。
+  MAKO_GENERATOR_PY: '{{.MAKO_GENERATOR_PY | default (print .ROOT_DIR "/atframework/robot-go/third_party/mako-generator/mako-generator.py")}}'
+  # server-client 模式：pid/port 文件。CMake 注入父级文件以复用父级 server；直接运行使用 robot 本地文件，
+  # 使连续运行之间可复用缓存。--server-auto-start/--client-mode 在 rpc_handle 中无条件传入。
+  MAKO_GENERATOR_SERVER_PID_FILE: '{{.MAKO_GENERATOR_SERVER_PID_FILE | default (print .ROBOT_BUILD_DIR "/mako-generator.server.pid")}}'
+  MAKO_GENERATOR_SERVER_PORT_FILE: '{{.MAKO_GENERATOR_SERVER_PORT_FILE | default (print .ROBOT_BUILD_DIR "/mako-generator.server.port")}}'
 
 tasks:
   all:
     desc: "Generate Protocol, Config and Robot Code"
     cmds:
-      - mkdir -p build
+      - cmd: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force '{{.ROBOT_BUILD_DIR}}' | Out-Null"
+        platforms: [windows]
+      - cmd: mkdir -p "{{.ROBOT_BUILD_DIR}}"
+        platforms: [linux, darwin]
       - task: submodule_update
       - task: build-tools-prepare
       - task: generate
@@ -102,15 +80,10 @@ tasks:
   _prepare-python-deps:
     desc: "Setup Python virtual environment"
     cmds:
-      - |
-        if [ ! -d "{{.PYTHON_VENV}}" ]; then
-          echo "Creating Python venv at {{.PYTHON_VENV}}..."
-          {{.PYTHON_CMD}} -m venv "{{.PYTHON_VENV}}"
-          echo "venv created successfully"
-        else
-          echo "Python venv already exists at {{.PYTHON_VENV}}"
-        fi
-        {{.PYTHON_VENV}}/{{.PYTHON_VENV_CMD}} -m pip install -r third_party/python_env/requirements.txt
+      - cmd: pwsh -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/script/prepare-python-venv.ps1" -PythonCmd "{{.PYTHON_CMD}}" -PythonVenv "{{.PYTHON_VENV}}" -RequirementsFile "{{.ROOT_DIR}}/third_party/python_env/requirements.txt"
+        platforms: [windows]
+      - cmd: sh "{{.ROOT_DIR}}/script/prepare-python-venv.sh" "{{.PYTHON_CMD}}" "{{.PYTHON_VENV}}" "{{.ROOT_DIR}}/third_party/python_env/requirements.txt"
+        platforms: [linux, darwin]
     silent: true
 
   _prepare-python:
@@ -118,39 +91,18 @@ tasks:
     deps:
       - _prepare-python-deps
     cmds:
-      - |
-        cd "{{.ROOT_DIR}}"
-        {{.SET_VENV_CMD}}
-        REQUIREMENTS_FILE="{{.ROOT_DIR}}/atframework/robot-go/third_party/xres-code-generator/requirements.txt"
-        if [ -f "$REQUIREMENTS_FILE" ]; then
-          echo "Installing Python dependencies..."
-          "{{.PIP_BIN}}" install -r "$REQUIREMENTS_FILE"
-          echo "Dependencies installed"
-        else
-          echo "requirements.txt not found at $REQUIREMENTS_FILE"
-        fi
-
-        if [ "{{OS}}" = "windows" ]; then
-          PYTHON_BIN="$(cd "{{.PYTHON_VENV}}" && pwd)/Scripts/python.exe"
-          PYTHON_VERSION=$(powershell -NoProfile -Command "&{
-            \$output = & \"$PYTHON_BIN\" --version 2>&1
-            \$version = \$output -replace '^Python ', '' -replace '[^0-9.]', ''
-            Write-Host \$version
-          }")
-        else
-          PYTHON_BIN="{{.PYTHON_VENV}}/bin/python"
-          PYTHON_VERSION=$("$PYTHON_BIN" --version 2>&1 | awk '{print $2}')
-        fi
-
-        "{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" set python -path "$PYTHON_BIN" -version "$PYTHON_VERSION" -settings-file "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json"
-        echo "Python Version: $PYTHON_VERSION environment OK!"
+      - cmd: pwsh -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/script/prepare-python.ps1" -PythonVenv "{{.PYTHON_VENV}}" -BuildSettingBin "{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" -SettingsFile "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json" -RequirementsFile "{{.ROOT_DIR}}/atframework/robot-go/third_party/xres-code-generator/requirements.txt"
+        platforms: [windows]
+      - cmd: sh "{{.ROOT_DIR}}/script/prepare-python.sh" "{{.PYTHON_VENV}}" "{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json" "{{.ROOT_DIR}}/atframework/robot-go/third_party/xres-code-generator/requirements.txt"
+        platforms: [linux, darwin]
     silent: true
 
   submodule_update:
     desc: "Update Submodule"
     cmds:
-      - git submodule update --init --recursive atframework/atframe-utils-go
-      - git submodule update --init --recursive atframework/robot-go
+      - git submodule update --init atframework/atframe-utils-go
+      - git submodule update --init atframework/robot-go
+      - task: robot:submodule_update
 
   generate:
     desc: "Generate Protocol and Config"
@@ -172,7 +124,7 @@ tasks:
     cmds:
       - task: public_protocol:generate-protocol-pb
         vars:
-          OUTPUT_DIR: "{{.ROOT_DIR}}/build/pb"
+          OUTPUT_DIR: "{{.ROBOT_BUILD_DIR}}/pb"
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
           XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
 
@@ -180,10 +132,11 @@ tasks:
         vars:
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
           XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
+          STAGING_DIR: "{{.ROBOT_BUILD_DIR}}/_staging/protocol-public"
 
       - task: private_protocol:generate-protocol-pb
         vars:
-          OUTPUT_DIR: "{{.ROOT_DIR}}/build/pb"
+          OUTPUT_DIR: "{{.ROBOT_BUILD_DIR}}/pb"
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
           XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
 
@@ -191,6 +144,7 @@ tasks:
         vars:
           PROTOC_EXEC_BIN: "{{.PROTOC_EXEC_BIN}}"
           XRES_PROTOCOL_PATH: "{{.ROOT_DIR}}/atframework/robot-go/third_party/protocols"
+          STAGING_DIR: "{{.ROBOT_BUILD_DIR}}/_staging/protocol-private"
 
   _generate-config:
     desc: "Generate Config"
@@ -199,22 +153,43 @@ tasks:
         vars:
           PYTHON_BIN_PATH: "{{.PYTHON_BIN_PATH}}"
           OUTPUT_DIR: "{{.ROOT_DIR}}/config"
+          STAGING_DIR: "{{.ROBOT_BUILD_DIR}}/_staging/config"
           CONFIG_PROTOCOL_IMPORT_PATH: "github.com/atframework/atsf4g-co/component/public/protocol/config"
-          RES_CONFIG_PB: "{{.ROOT_DIR}}/build/pb/ALL.pb"
+          RES_CONFIG_PB: "{{.ROBOT_BUILD_DIR}}/pb/ALL.pb"
 
     dir: "{{.TASKFILE_DIR}}"
 
   rpc_handle:
     desc: "Generate RPC Handle Code"
     vars:
+      # 仅依据环境变量是否注入（先于下面的默认值解析）决定是否启用基座解释器 shim。
+      # 渲染结果不允许出现 $（会被 mvdan/sh 展开），故用 true/false 字符串。
+      MAKO_BASE_SHIM: '{{if .MAKO_GENERATOR_PYTHON_BIN}}false{{else}}true{{end}}'
       PYTHON_BIN_PATH:
         sh: '"{{.ENV_BUILD_TOOLS_DOWNLOAD_DIR}}/build_setting{{.EXE_EXT}}" get python -settings-file "{{.ENV_BUILD_TARGET_DIR}}/build-settings.json"'
+      # CMake 集成时注入父级解释器，保证 client 与父级 server 进程镜像一致（复用前提）；
+      # 直接运行回退到 robot venv python（独立 server 复用自洽）。
+      MAKO_GENERATOR_PYTHON_BIN: '{{.MAKO_GENERATOR_PYTHON_BIN | default .PYTHON_BIN_PATH}}'
+    # preconditions 不支持 platforms 过滤（go-task 会全部执行）；test -f 在 mvdan/sh
+    # 内置实现下 Windows/Linux 均可用，单一检查即可跨平台。
+    preconditions:
+      - sh: test -f "{{.MAKO_GENERATOR_PY}}" && test -f "{{.ROBOT_BUILD_DIR}}/pb/ALL.pb"
+        msg: "mako-generator script or pb input missing. MAKO_GENERATOR_PY={{.MAKO_GENERATOR_PY}} ; pb={{.ROBOT_BUILD_DIR}}/pb/ALL.pb"
     cmds:
-      - mkdir -p rpc_handle
-      - |
-        "{{.PYTHON_BIN_PATH}}" '{{.ROOT_DIR}}/atframework/robot-go/third_party/mako-generator/mako-generator.py' --project-dir "{{.ROOT_DIR}}/build" -c "{{.ROOT_DIR}}/generate-for-pb.yaml"
+      - cmd: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force 'rpc_handle', '{{.ROBOT_BUILD_DIR}}' | Out-Null"
+        platforms: [windows]
+      - cmd: mkdir -p rpc_handle "{{.ROBOT_BUILD_DIR}}"
+        platforms: [linux, darwin]
+      - cmd: pwsh -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/script/rpc-handle.ps1" -PythonBin "{{.MAKO_GENERATOR_PYTHON_BIN}}" -MakoGeneratorPy "{{.MAKO_GENERATOR_PY}}" -ServerPidFile "{{.MAKO_GENERATOR_SERVER_PID_FILE}}" -ServerPortFile "{{.MAKO_GENERATOR_SERVER_PORT_FILE}}" -PackagePrefix "{{.MAKO_GENERATOR_PACKAGE_PREFIX}}" -ProjectDir "{{.ROOT_DIR}}" -PbFile "{{.ROBOT_BUILD_DIR}}/pb/ALL.pb" -RuleFile "{{.ROOT_DIR}}/generate-for-pb.yaml" -UseBaseInterpreter {{.MAKO_BASE_SHIM}}
+        platforms: [windows]
+      - cmd: sh "{{.ROOT_DIR}}/script/rpc-handle.sh" "{{.MAKO_GENERATOR_PYTHON_BIN}}" "{{.MAKO_GENERATOR_PY}}" "{{.MAKO_GENERATOR_SERVER_PID_FILE}}" "{{.MAKO_GENERATOR_SERVER_PORT_FILE}}" "{{.MAKO_GENERATOR_PACKAGE_PREFIX}}" "{{.ROOT_DIR}}" "{{.ROBOT_BUILD_DIR}}/pb/ALL.pb" "{{.ROOT_DIR}}/generate-for-pb.yaml"
+        platforms: [linux, darwin]
 
   build:
     desc: "Build Robot Code"
     cmds:
+      - cmd: pwsh -NoProfile -Command "New-Item -ItemType Directory -Force '{{.INSTALL_PATH}}/bin' | Out-Null"
+        platforms: [windows]
+      - cmd: mkdir -p "{{.INSTALL_PATH}}/bin"
+        platforms: [linux, darwin]
       - go build -o '{{.INSTALL_PATH}}/bin/robot{{.EXE_EXT}}' ./main.go

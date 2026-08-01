@@ -1,10 +1,8 @@
 configure:
   encoding: "UTF-8"
-  output_directory: "build"
   overwrite: false
   paths: []
   package_prefix: []
-  protocol_input_pb_file: "build/pb/ALL.pb"
 
 rules:
   - service:
