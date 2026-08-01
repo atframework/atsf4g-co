@@ -14,4 +14,6 @@ project_service_declare_sdk(
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_algorithm.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cache_api.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.atfw.gen.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/cache/cachesvrservice.atfw.gen.cpp"
+  GENERATED_FLOW_NAMES
+  "${PROJECT_NAMESPACE}.CachesvrService")

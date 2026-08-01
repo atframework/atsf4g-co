@@ -7,9 +7,11 @@ endfunction()
 function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
-  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS USE_SERVICE_SDK USE_SERVICE_PROTOCOL)
+  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS USE_SERVICE_SDK USE_SERVICE_PROTOCOL GENERATED_FLOW_NAMES)
   cmake_parse_arguments(project_service_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+  generate_for_pb_collect_output_from_flows("${project_service_declare_sdk_GENERATED_FLOW_NAMES}"
+                                            _PROJECT_SERVICE_GENERATED_OUTPUT_FILES)
   if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
     set(TARGET_FULL_NAME "ps-${TARGET_NAME}")
   else()
@@ -54,6 +56,9 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
       project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
     endif()
+
+    generate_for_pb_add_dependencies(${TARGET_FULL_NAME} "${project_service_declare_sdk_GENERATED_FLOW_NAMES}")
+
     if(project_service_declare_sdk_NATIVE_CODE_DECL)
       target_compile_definitions(${TARGET_FULL_NAME} PRIVATE "${project_service_declare_sdk_NATIVE_CODE_DECL}=1")
     endif()

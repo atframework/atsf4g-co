@@ -12,4 +12,6 @@ project_service_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/rpc/lobby/lobbysvrservice.atfw.gen.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/async_jobs/async_jobs.cpp"
+  GENERATED_FLOW_NAMES
+  "${PROJECT_NAMESPACE}.LobbysvrService")
