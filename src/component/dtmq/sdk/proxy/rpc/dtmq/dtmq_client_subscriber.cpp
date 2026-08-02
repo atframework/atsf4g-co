@@ -997,8 +997,12 @@ static void internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) {
               FWLOGERROR("try to call rpc::dtmq::subscribe to {:#x} failed, res: {}({})", target_server_id, send_result,
                          protobuf_mini_dumper_get_error_msg(send_result));
 
-              // 失败了要计划重试
-              subscriber->schedule_retry_heartbeat(child_ctx);
+              // 失败了要计划重试,await之后要重新检查有效性
+              if (!is_internal_subscriber_manager_destroyed() &&
+                  inner_mgr.cached_subscriber_raw_pointer.end() !=
+                      inner_mgr.cached_subscriber_raw_pointer.find(subscriber)) {
+                subscriber->schedule_retry_heartbeat(child_ctx);
+              }
             }
           }
         } while (false);
@@ -1277,8 +1281,6 @@ void shared_subscriber::setup_timer(timer_action_type action) {
     default:
       return;
   }
-
-  wal_client_->get_next_heartbeat_timepoint();
 
   // 多加一个tick触发以确保定时器事件一定被触发
   time_t timeout_tick = chrono_to_timer_tick(timeout_tp) + 1;
