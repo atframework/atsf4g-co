@@ -47,43 +47,9 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/rpc_utils.h>
+#include <rpc/internal/rpc_template_cs_message.h>
 
 namespace rpc {
-<%
-rpc_common_codes_enable_stream_header = False
-rpc_common_codes_enable_common = len(rpcs.values()) > 0
-
-for rpc in rpcs.values():
-    if not rpc.is_response_stream():
-      continue
-
-    if rpc.is_response_stream():
-      rpc_common_codes_enable_stream_header = True
-
-%>namespace {
-% if rpc_common_codes_enable_common or rpc_common_codes_enable_stream_header:
-template<class StringViewLikeT>
-inline static atfw::util::nostd::string_view __to_string_view(const StringViewLikeT &input) {
-  return {atfw::util::nostd::data(input), atfw::util::nostd::size(input)};
-}
-% endif
-% if rpc_common_codes_enable_common:
-template<class TBodyType>
-inline static int __pack_body(TBodyType &body, std::string *output, atfw::util::nostd::string_view rpc_full_name,
-                                  atfw::util::nostd::string_view type_full_name) {
-  if (false == body.SerializeToString(output)) {
-    FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
-               body.InitializationErrorString());
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
-  } else {
-    FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
-               protobuf_mini_dumper_get_readable(body));
-    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-  }
-}
-% endif
-}
-
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
@@ -105,23 +71,11 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
-  int res = rpc::setup_rpc_stream_header(
-    *msg_ptr->mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
-
+  int res = internal::pack_cs_stream_message(
+    *msg_ptr, __body, "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+    internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
-  }
-
-  res = __pack_body(
-    __body, msg_ptr->mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
-  if (res < 0) {
-    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
-  }
-
-  if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
-    msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
   __session.write_actor_log_body(__ctx, __body, *msg_ptr->mutable_head(), false);
   res = __session.send_msg_to_client(__ctx, *msg_ptr);
@@ -145,23 +99,11 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
-  int res = rpc::setup_rpc_stream_header(
-    *msg_ptr->mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
-
+  int res = internal::pack_cs_stream_message(
+    *msg_ptr, __body, "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+    internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
-  }
-
-  res = __pack_body(
-    __body, msg_ptr->mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
-  if (res < 0) {
-    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
-  }
-
-  if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
-    msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
   __session.write_actor_log_body(__ctx, __body, *msg_ptr->mutable_head(), false);
   res = __session.send_msg_to_client(__ctx, *msg_ptr, server_sequence);
@@ -185,23 +127,11 @@ ${service_dllexport_decl} rpc::always_ready_code_type broadcast_${rpc.get_name()
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
-  int res = rpc::setup_rpc_stream_header(
-    *msg_ptr->mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
-
+  int res = internal::pack_cs_stream_message(
+    *msg_ptr, __body, "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+    internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
-  }
-
-  res = __pack_body(
-    __body, msg_ptr->mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
-  if (res < 0) {
-    return {static_cast<rpc::always_ready_code_type::value_type>(res)};
-  }
-
-  if (!msg_ptr->has_head() || msg_ptr->head().timestamp() == 0) {
-    msg_ptr->mutable_head()->set_timestamp(::util::time::time_utility::get_now());
   }
   res = session::broadcast_msg_to_client(service_id, *msg_ptr);
   if (res < 0) {

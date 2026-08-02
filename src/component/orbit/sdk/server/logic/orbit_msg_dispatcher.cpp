@@ -1,5 +1,7 @@
 #include "logic/orbit_msg_dispatcher.h"
 
+#include "logic/orbit_server_manager.h"
+
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 

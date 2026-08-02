@@ -1,8 +1,5 @@
-function(project_service_target_precompile_headers TARGET_NAME)
-  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${TARGET_NAME} ${ARGN})
-  endif()
-endfunction()
+set(PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE 16)
+set(PROJECT_SERVICE_UNITY_BUILD_MIN_FILE_COUNT 1)
 
 function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
@@ -117,13 +114,21 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     endforeach()
 
     if(project_service_declare_sdk_SOURCES)
-      project_service_target_precompile_headers(
-        ${TARGET_FULL_NAME} PUBLIC
-        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+      list(LENGTH project_service_declare_sdk_SOURCES __project_service_declare_sdk_SOURCES_LENGTH)
+      if(__project_service_declare_sdk_SOURCES_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
+        set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
+                                                                            ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
+      endif()
+      if(__project_service_declare_sdk_SOURCES_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
+        target_precompile_headers(${TARGET_FULL_NAME} PUBLIC
+                                  "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+      else()
+        target_precompile_headers(${TARGET_FULL_NAME} INTERFACE
+                                  "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+      endif()
     else()
-      project_service_target_precompile_headers(
-        ${TARGET_FULL_NAME} INTERFACE
-        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+      target_precompile_headers(${TARGET_FULL_NAME} INTERFACE
+                                "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
     endif()
   endif()
 
@@ -421,15 +426,25 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     # project_service_force_optimize_sources(${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES})
   endif()
 
-  project_service_target_precompile_headers(
-    ${TARGET_FULL_NAME}
-    PUBLIC
-    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>"
-    PRIVATE
-    "<limits>"
-    "<string>"
-    "<type_traits>"
-    "<utility>")
+  list(LENGTH project_service_declare_protocol_PROTOCOLS __project_service_declare_protocol_PROTOCOLS_LENGTH)
+  if(__project_service_declare_protocol_PROTOCOLS_LENGTH GREATER PROJECT_SERVICE_UNITY_BUILD_MIN_FILE_COUNT)
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
+                                                                        ${PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE})
+  endif()
+  if(__project_service_declare_protocol_PROTOCOLS_LENGTH GREATER PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE)
+    target_precompile_headers(
+      ${TARGET_FULL_NAME}
+      PUBLIC
+      "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>"
+      PRIVATE
+      "<limits>"
+      "<string>"
+      "<type_traits>"
+      "<utility>")
+  else()
+    target_precompile_headers(${TARGET_FULL_NAME} INTERFACE
+                              "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+  endif()
 
   add_custom_command(
     TARGET ${TARGET_FULL_NAME}
@@ -659,7 +674,7 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       endif()
     endforeach()
   else()
-    foreach(PRECOMPILE_HEADER ${project_component_declare_service_HEADERS})
+    foreach(PRECOMPILE_HEADER ${project_service_declare_instance_HEADERS})
       if(IS_ABSOLUTE "${PRECOMPILE_HEADER}")
         file(RELATIVE_PATH RELATIVE_HEADER_FILE "${SERVICE_ROOT_DIR}" "${PRECOMPILE_HEADER}")
       else()
@@ -677,8 +692,8 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
     endforeach()
   endif()
   if(project_service_declare_instance_PCH_FILES)
-    project_service_target_precompile_headers(
-      ${TARGET_NAME} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${project_service_declare_instance_PCH_FILES}>")
+    target_precompile_headers(${TARGET_NAME} PRIVATE
+                              "$<$<COMPILE_LANGUAGE:CXX>:${project_service_declare_instance_PCH_FILES}>")
   endif()
 
   # Links

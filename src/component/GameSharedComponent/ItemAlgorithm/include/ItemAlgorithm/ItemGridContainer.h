@@ -16,6 +16,11 @@ struct config_group_t;
 
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4251)
+#endif
+
 namespace item_algorithm {
 
 /// @brief Container 层 Add 的 checked 请求
@@ -197,5 +202,9 @@ class ITEM_ALGORITHM_API ItemGridContainer {
 };
 
 }  // namespace item_algorithm
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
 
 ITEM_ALGORITHM_NAMESPACE_END

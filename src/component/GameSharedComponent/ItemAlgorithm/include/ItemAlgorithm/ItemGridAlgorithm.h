@@ -17,6 +17,11 @@ struct config_group_t;
 
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4251)
+#endif
+
 namespace item_algorithm {
 
 /// @brief 背包格子算法虚基类
@@ -295,5 +300,9 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm {
 };
 
 }  // namespace item_algorithm
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
 
 ITEM_ALGORITHM_NAMESPACE_END

@@ -225,6 +225,16 @@ else()
     COMMENT "Cleanup old dlls...")
 endif()
 
+# 清理预编译头(precompile headers)产物的工具目标, 按需手动执行:
+#   cmake --build <build dir> --target cleanup-precompile-headers
+add_custom_target(
+  "cleanup-precompile-headers"
+  COMMAND "${CMAKE_COMMAND}" "-DPROJECT_PCH_CLEANUP_DIR=${PROJECT_BINARY_DIR}" "-P"
+          "${CMAKE_CURRENT_LIST_DIR}/project/cmake/CleanupPrecompileHeaders.cmake"
+  COMMENT "Cleanup precompiled header artifacts (cmake_pch.*) under ${PROJECT_BINARY_DIR}"
+  VERBATIM)
+set_property(TARGET "cleanup-precompile-headers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+
 # 安装目录
 install(
   DIRECTORY "${PROJECT_INSTALL_BAS_DIR}"

@@ -27,6 +27,11 @@ struct config_group_t;
 
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
+#ifdef _MSC_VER
+#  pragma warning(push)
+#  pragma warning(disable : 4251)
+#endif
+
 // ============================================================
 // 操作原因枚举
 // ============================================================
@@ -158,5 +163,9 @@ struct ITEM_ALGORITHM_API ItemGridMoveCheckedRequest {
       const ItemGridMoveRequest& in_request)
       : config_group(in_config_group), request(in_request), error_code(PROJECT_NAMESPACE_ID::EN_SUCCESS) {}
 };
+
+#ifdef _MSC_VER
+#  pragma warning(pop)
+#endif
 
 ITEM_ALGORITHM_NAMESPACE_END
