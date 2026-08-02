@@ -5,6 +5,12 @@ set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
 set(PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE 16)
 set(PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT 1)
 
+function(project_component_target_precompile_headers TARGET_NAME)
+  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    target_precompile_headers(${TARGET_NAME} ${ARGN})
+  endif()
+endfunction()
+
 function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
@@ -129,21 +135,25 @@ function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
 
     if(project_component_declare_sdk_SOURCES)
       list(LENGTH project_component_declare_sdk_SOURCES __project_component_declare_sdk_SOURCES_LENGTH)
-      if(__project_component_declare_sdk_SOURCES_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
+      if(PROJECT_ENABLE_UNITY_BUILD AND __project_component_declare_sdk_SOURCES_LENGTH GREATER
+                                        PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
         set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
                                                                             ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
       endif()
-      if(__project_component_declare_sdk_SOURCES_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
-
-        target_precompile_headers(${TARGET_FULL_NAME} PUBLIC
-                                  "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+      if(NOT PROJECT_ENABLE_UNITY_BUILD OR __project_component_declare_sdk_SOURCES_LENGTH GREATER
+                                           PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
+        project_component_target_precompile_headers(
+          ${TARGET_FULL_NAME} PUBLIC
+          "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
       else()
-        target_precompile_headers(${TARGET_FULL_NAME} INTERFACE
-                                  "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+        project_component_target_precompile_headers(
+          ${TARGET_FULL_NAME} INTERFACE
+          "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
       endif()
     else()
-      target_precompile_headers(${TARGET_FULL_NAME} INTERFACE
-                                "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+      project_component_target_precompile_headers(
+        ${TARGET_FULL_NAME} INTERFACE
+        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
     endif()
   endif()
 
@@ -402,12 +412,14 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
   endif()
 
   list(LENGTH project_component_declare_protocol_PROTOCOLS __project_component_declare_protocol_PROTOCOLS_LENGTH)
-  if(__project_component_declare_protocol_PROTOCOLS_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
+  if(PROJECT_ENABLE_UNITY_BUILD AND __project_component_declare_protocol_PROTOCOLS_LENGTH GREATER
+                                    PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
                                                                         ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
   endif()
-  if(__project_component_declare_protocol_PROTOCOLS_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
-    target_precompile_headers(
+  if(NOT PROJECT_ENABLE_UNITY_BUILD OR __project_component_declare_protocol_PROTOCOLS_LENGTH GREATER
+                                       PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
+    project_component_target_precompile_headers(
       ${TARGET_FULL_NAME}
       PUBLIC
       "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>"
@@ -417,8 +429,9 @@ function(project_component_declare_protocol TARGET_NAME PROTOCOL_DIR)
       "<type_traits>"
       "<utility>")
   else()
-    target_precompile_headers(${TARGET_FULL_NAME} INTERFACE
-                              "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+    project_component_target_precompile_headers(
+      ${TARGET_FULL_NAME} INTERFACE
+      "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
   endif()
 
   add_custom_command(
@@ -674,8 +687,8 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
     endforeach()
   endif()
   if(project_component_declare_service_PCH_FILES)
-    target_precompile_headers(${TARGET_FULL_NAME} PRIVATE
-                              "$<$<COMPILE_LANGUAGE:CXX>:${project_component_declare_service_PCH_FILES}>")
+    project_component_target_precompile_headers(
+      ${TARGET_FULL_NAME} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${project_component_declare_service_PCH_FILES}>")
   endif()
 
   # Links

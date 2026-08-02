@@ -1,4 +1,4 @@
-﻿include(CMakeDependentOption)
+include(CMakeDependentOption)
 
 # 默认配置选项
 # ######################################################################################################################
@@ -14,6 +14,9 @@ endif()
 option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 option(PROJECT_ENABLE_UNITTEST "Enable build unit test." OFF)
 option(PROJECT_ENABLE_PRECOMPILE_HEADERS "Enable precompile headers." ON)
+# Unity build(jumbo build) merges sources into unity_*.cxx, which removes per-file compile_commands.json entries and
+# breaks clangd/IDE per-file indexing. Keep it OFF for local/clangd builds; enable it (e.g. in CI) for faster builds.
+option(PROJECT_ENABLE_UNITY_BUILD "Enable unity build for component/service targets." OFF)
 # 默认使用动态库，防止遗漏符号导出
 if(NOT DEFINED ATFRAMEWORK_USE_DYNAMIC_LIBRARY AND NOT DEFINED BUILD_SHARED_LIBS)
   set(ATFRAMEWORK_USE_DYNAMIC_LIBRARY ON)
@@ -196,7 +199,9 @@ endif()
 function(project_set_output_directory_per_config OUTPUT_DIRECTORY_VAR)
   foreach(PROJECT_OUTPUT_CONFIG IN LISTS PROJECT_MULTI_CONFIG_OUTPUT_TYPES)
     string(TOUPPER "${PROJECT_OUTPUT_CONFIG}" PROJECT_OUTPUT_CONFIG_UPPER)
-    set("${OUTPUT_DIRECTORY_VAR}_${PROJECT_OUTPUT_CONFIG_UPPER}" "${${OUTPUT_DIRECTORY_VAR}}" PARENT_SCOPE)
+    set("${OUTPUT_DIRECTORY_VAR}_${PROJECT_OUTPUT_CONFIG_UPPER}"
+        "${${OUTPUT_DIRECTORY_VAR}}"
+        PARENT_SCOPE)
   endforeach()
 endfunction()
 
