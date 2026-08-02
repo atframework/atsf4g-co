@@ -700,23 +700,23 @@ atfw::util::distributed_system::wal_duration get_mq_channel_subscriber_timeout(
     const atfw::dtmq::DChannelConfigure& configure) {
   if (configure.subscriber_timeout().seconds() > 0) {
     return protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.subscriber_timeout());
-  } else {
-    atfw::util::distributed_system::wal_duration subscriber_heartbeat_interval =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-    if (configure.heartbeat_interval().seconds() > 0) {
-      subscriber_heartbeat_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
-    }
-
-    atfw::util::distributed_system::wal_duration subscriber_heartbeat_retry_interval =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-    if (configure.heartbeat_retry_interval().seconds() > 0) {
-      subscriber_heartbeat_retry_interval = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-          configure.heartbeat_retry_interval());
-    }
-
-    return subscriber_heartbeat_interval + subscriber_heartbeat_interval + subscriber_heartbeat_retry_interval;
   }
+
+  atfw::util::distributed_system::wal_duration subscriber_heartbeat_interval =
+      std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
+  if (configure.heartbeat_interval().seconds() > 0) {
+    subscriber_heartbeat_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
+  }
+
+  atfw::util::distributed_system::wal_duration subscriber_heartbeat_retry_interval =
+      std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
+  if (configure.heartbeat_retry_interval().seconds() > 0) {
+    subscriber_heartbeat_retry_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
+  }
+
+  return subscriber_heartbeat_interval + subscriber_heartbeat_interval + subscriber_heartbeat_retry_interval;
 }
 
 atfw::util::memory::strong_rc_ptr<mq_channel_wal_object_type> create_mq_channel_object(

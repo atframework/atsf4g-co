@@ -207,10 +207,8 @@ ATFW_UTIL_SYMBOL_VISIBLE void foreach_received_message(
     context &ctx, const std::unordered_map<uint64_t, atframework::SSMsg *> &received, gsl::string_view rpc_name,
     atfw::util::nostd::function_ref<void(const atfw::SSMsgHead &head, const TResponseMessage &msg)> callback) {
   // 类型转换
-  atfw::util::nostd::function_ref<void(const atfw::SSMsgHead &head, TResponseMessage &msg)> fn =
-      [callback](const atfw::SSMsgHead &head, TResponseMessage &msg) { callback(head, msg); };
-
-  foreach_received_message<TResponseMessage>(ctx, received, rpc_name, fn);
+  foreach_received_message<TResponseMessage>(
+      ctx, received, rpc_name, [callback](const atfw::SSMsgHead &head, TResponseMessage &msg) { callback(head, msg); });
 }
 
 /**

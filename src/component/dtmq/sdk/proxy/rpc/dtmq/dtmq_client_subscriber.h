@@ -50,12 +50,17 @@ namespace rpc {
 class context;
 
 namespace dtmq {
+
+/**
+ * @brief 分布式消息队列客户端订阅者接口包装类
+ * @note 注意：由于底层有共享层IO优化，所以被类型的所有接口都只允许在统一线程下执行，非线程安全
+ */
 class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<client_subscriber> {
  public:
   using ptr_t = atfw::util::memory::strong_rc_ptr<client_subscriber>;
 
   struct event_callback_set_t;
-  using event_callback_set_ptr_t = std::shared_ptr<event_callback_set_t>;
+  using event_callback_set_ptr_t = atfw::util::memory::strong_rc_ptr<event_callback_set_t>;
 
   struct ATFW_UTIL_SYMBOL_VISIBLE subscriber_options {
     DTMQ_PROXY_SDK_API subscriber_options(std::string&& input_subscriber_key);
@@ -134,7 +139,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    *
    * @param channel_key 频道Key
    * @param options 订阅者信息
-   * @return DTMQ_PROXY_SDK_API
+   * @note 请注意，由于底层有共享层IO优化，创建成功后要通过 is_ready() 接口判定是否已经就绪，如果已经就绪则不会再触发
+   *       on_ready 事件
+   * @return 成功则返回订阅对象智能指针
    */
   static DTMQ_PROXY_SDK_API atfw::util::nostd::nullable<ptr_t> create(const atfw::dtmq::DChannelIdKey& channel_key,
                                                                       const subscriber_options& options);
@@ -143,10 +150,11 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @brief 使用订阅者的服务必须接入处理接收到的频道事件
    *
    * @param ctx RPC上下文
+   * @param from_server_id 来源服务ID
    * @param event_sync 收到的实践同步消息
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API static void global_receive_channel_event(
-      rpc::context& ctx, const atfw::dtmq::SSChannelEventSync& event_sync);
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API static rpc::result_code_type global_receive_channel_event(
+      rpc::context& ctx, uint64_t from_server_id, const atfw::dtmq::SSChannelEventSync& event_sync);
 
   /**
    * @brief 使用订阅者的服务必须接入定时器Tick调用
@@ -212,11 +220,43 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   DTMQ_PROXY_SDK_API bool is_ready() const noexcept;
 
+  /**
+   * @brief Set the event callback on ready object
+   *
+   * @param on_ready callback
+   * @note 请注意，由于底层有共享层IO优化，创建成功后要通过 is_ready() 接口判定是否已经就绪，如果已经就绪则不会再触发
+   *       on_ready 事件
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_on_ready_t&& on_ready);
+
+  /**
+   * @brief Set the event callback on ready object
+   *
+   * @param on_ready callback
+   * @note 请注意，由于底层有共享层IO优化，创建成功后要通过 is_ready() 接口判定是否已经就绪，如果已经就绪则不会再触发
+   *       on_ready 事件
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_ready(const event_callback_on_ready_t& on_ready);
+
   DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready() const noexcept;
+
+  /**
+   * @brief Set the event callback on ready object
+   *
+   * @param on_ready callback
+   * @note 请注意，由于底层有共享层IO优化，创建成功后要通过 is_ready() 接口判定是否已经就绪，如果已经就绪则不会再触发
+   *       on_ready 事件
+   */
   static DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_set_t& event_callback_set,
                                                              event_callback_on_ready_t&& on_ready);
+
+  /**
+   * @brief Set the event callback on ready object
+   *
+   * @param on_ready callback
+   * @note 请注意，由于底层有共享层IO优化，创建成功后要通过 is_ready() 接口判定是否已经就绪，如果已经就绪则不会再触发
+   *       on_ready 事件
+   */
   static DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_set_t& event_callback_set,
                                                              const event_callback_on_ready_t& on_ready);
   static DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready(

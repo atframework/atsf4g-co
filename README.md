@@ -147,7 +147,7 @@ Diagnostics:
     "--clang-tidy",
     "--completion-style=detailed",
     "--header-insertion=iwyu",
-    "-j=4"
+    "-j=8"
   ]
 }
 ```
