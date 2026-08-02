@@ -67,6 +67,8 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
     DTMQ_PROXY_SDK_API subscriber_options& operator=(const subscriber_options& other) = default;
     DTMQ_PROXY_SDK_API subscriber_options& operator=(subscriber_options&& other) = default;
 
+    // 底层有优化层多个订阅者订阅同一频道时合并底层订阅，所以这个仅用于标识当前client_subscriber
+    // 不影响底层实际发送订阅的 subscriber_key
     std::string subscriber_key;
 
     // 频道不存在时自动创建，默认为 true
@@ -210,8 +212,8 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   DTMQ_PROXY_SDK_API bool is_ready() const noexcept;
 
-  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, event_callback_on_ready_t&& on_ready);
-  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(rpc::context& ctx, const event_callback_on_ready_t& on_ready);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_on_ready_t&& on_ready);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_ready(const event_callback_on_ready_t& on_ready);
   DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready() const noexcept;
   static DTMQ_PROXY_SDK_API void set_event_callback_on_ready(event_callback_set_t& event_callback_set,
                                                              event_callback_on_ready_t&& on_ready);

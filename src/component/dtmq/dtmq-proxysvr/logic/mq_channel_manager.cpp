@@ -55,8 +55,8 @@ constexpr const int32_t kPageQueryDefaultSize = 10;
 
 template <class Rep, class Period>
 static time_t chrono_to_timer_tick(std::chrono::duration<Rep, Period> d) {
-  // 统一的精度转换，对于消息队列服务来说 64ms 定时器精度足够了
-  return static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(d).count() / 64);
+  // 统一的精度转换，对于消息队列服务来说 128ms 定时器精度足够了
+  return static_cast<time_t>(std::chrono::duration_cast<std::chrono::milliseconds>(d).count() / 128);
 }
 
 static time_t chrono_to_timer_tick(std::chrono::system_clock::time_point tp) {
