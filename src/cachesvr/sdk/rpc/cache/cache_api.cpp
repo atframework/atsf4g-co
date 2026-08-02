@@ -214,59 +214,27 @@ CACHE_RPC_API rpc::result_code_type batch_get_cache(
   }
 
   // 回包合并
-  for (auto &waiter : waiter_messages) {
-    if (nullptr == waiter.second) {
-      continue;
-    }
+  rpc::foreach_received_message<PROJECT_NAMESPACE_ID::SSCachePullCacheRsp>(
+      ctx, waiter_messages, "rpc::cache::pull_caches",
+      [&](const atfw::SSMsgHead & /*head*/, PROJECT_NAMESPACE_ID::SSCachePullCacheRsp &rsp_body) {
+        FCTXLOGDEBUG(ctx, "{} parse message {} success:\n{}", "rpc::cache::pull_caches",
+                     PROJECT_NAMESPACE_ID::SSCachePullCacheRsp::descriptor()->full_name(),
+                     protobuf_mini_dumper_get_readable(rsp_body));
 
-    if (!waiter.second->has_head()) {
-      continue;
-    }
+        for (int i = 0; i < rsp_body.content_size(); ++i) {
+          PROJECT_NAMESPACE_ID::object_cache_content *output_content = cache_contents.Add();
+          if (nullptr == output_content) {
+            FCTXLOGERROR(ctx, "{} malloc object_cache_content failed", "rpc::cache::pull_caches");
+            continue;
+          }
+          PROJECT_NAMESPACE_ID::object_cache_content *input_content = rsp_body.mutable_content(i);
+          if (nullptr == input_content) {
+            continue;
+          }
 
-    if (waiter.second->head().rpc_response().type_url() !=
-        PROJECT_NAMESPACE_ID::SSCachePullCacheRsp::descriptor()->full_name()) {
-      FWLOGERROR("rpc {}.{} expect response message {}, but got {}", PROJECT_NAMESPACE, "CachesvrService.pull_caches",
-                 PROJECT_NAMESPACE_ID::SSCachePullCacheRsp::descriptor()->full_name(),
-                 waiter.second->head().rpc_response().type_url());
-      continue;
-    }
-
-    if (waiter.second->body_bin().empty()) {
-      continue;
-    }
-
-    PROJECT_NAMESPACE_ID::SSCachePullCacheRsp *rsp_body = ctx.create<PROJECT_NAMESPACE_ID::SSCachePullCacheRsp>();
-    if (nullptr == rsp_body) {
-      FWLOGERROR("malloc SSCachePullCacheRsp failed");
-      continue;
-    }
-
-    if (false == rsp_body->ParseFromString(waiter.second->body_bin())) {
-      FWLOGERROR("rpc {}.{} parse message {} for failed, msg: {}", PROJECT_NAMESPACE, "CachesvrService.pull_caches",
-                 PROJECT_NAMESPACE_ID::SSCachePullCacheRsp::descriptor()->full_name(),
-                 rsp_body->InitializationErrorString());
-
-      continue;
-    }
-
-    FWLOGDEBUG("rpc {}.{} parse message {} success:\n{}", PROJECT_NAMESPACE, "CachesvrService.pull_caches",
-               PROJECT_NAMESPACE_ID::SSCachePullCacheRsp::descriptor()->full_name(),
-               protobuf_mini_dumper_get_readable(*rsp_body));
-
-    for (int i = 0; i < rsp_body->content_size(); ++i) {
-      PROJECT_NAMESPACE_ID::object_cache_content *output_content = cache_contents.Add();
-      if (nullptr == output_content) {
-        FWLOGERROR("malloc object_cache_content failed");
-        continue;
-      }
-      PROJECT_NAMESPACE_ID::object_cache_content *input_content = rsp_body->mutable_content(i);
-      if (nullptr == input_content) {
-        continue;
-      }
-
-      protobuf_move_message(*output_content, std::move(*input_content));
-    }
-  }
+          protobuf_move_message(*output_content, std::move(*input_content));
+        }
+      });
 
   RPC_RETURN_CODE(ret);
 }

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
 #include <gsl/select-gsl.h>
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
@@ -13,34 +15,34 @@
 
 #include <rpc/rpc_common_types.h>
 
-// clang-format off
-#include <config/compiler/protobuf_prefix.h>
-// clang-format on
-
-#include <google/protobuf/any.pb.h>
-
-#include <protocol/common/svr.struct.dtmq.common.pb.h>
-#include <protocol/pbdesc/com.struct.dtmq.pb.h>
-#include <protocol/pbdesc/dtmq_proxy.pb.h>
-
-// clang-format off
-#include <config/compiler/protobuf_suffix.h>
-// clang-format on
-
 #include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
 
-#include "config/compile_optimize.h"
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_api.h"
 
+namespace google {
+namespace protobuf {
+class Any;
+}  // namespace protobuf
+}  // namespace google
+
 namespace atframework {
 namespace dtmq {
+class channel_page_info;
+class channel_lock_checker;
+
+class DChannelIdKey;
+class DChannelMessage;
+class DChannelMessageDetail;
 class DChannelSnapshot;
 class DChannelOptimisticLock;
+class DChannelConfigure;
+
+class SSChannelEventSync;
 }  // namespace dtmq
 }  // namespace atframework
 
@@ -98,6 +100,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   using event_callback_on_receive_event_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+
+  using event_callback_on_receive_raw_message_t =
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
   using event_callback_on_receive_snapshot_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelSnapshot& data)>;
@@ -294,6 +299,19 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(
       event_callback_set_t& event_callback_set, const event_callback_on_receive_event_t& on_receive_event);
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event(
+      const event_callback_set_t& event_callback_set) noexcept;
+
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
+      event_callback_on_receive_raw_message_t&& on_receive_raw_message);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
+      const event_callback_on_receive_raw_message_t& on_receive_raw_message);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_raw_message_t& get_event_callback_on_receive_raw_message()
+      const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
+      event_callback_set_t& event_callback_set, event_callback_on_receive_raw_message_t&& on_receive_raw_message);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
+      event_callback_set_t& event_callback_set, const event_callback_on_receive_raw_message_t& on_receive_raw_message);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_raw_message_t& get_event_callback_on_receive_raw_message(
       const event_callback_set_t& event_callback_set) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(

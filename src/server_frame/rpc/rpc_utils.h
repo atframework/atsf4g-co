@@ -4,6 +4,11 @@
 
 #pragma once
 
+#include <config/compile_optimize.h>
+
+#include <nostd/function_ref.h>
+#include <nostd/type_traits.h>
+
 #include <design_pattern/noncopyable.h>
 #include <gsl/select-gsl.h>
 #include <time/time_utility.h>
@@ -30,11 +35,9 @@
 
 #include <memory/object_stl_unordered_map.h>
 
-#include <stdint.h>
 #include <chrono>
 #include <cstddef>
-#include <memory>
-#include <string>
+#include <cstdint>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -47,10 +50,6 @@
 PROJECT_NAMESPACE_BEGIN
 class table_all_message;
 PROJECT_NAMESPACE_END
-
-namespace atframework {
-class SSMsg;
-}  // namespace atframework
 
 struct db_message_t;
 
@@ -132,6 +131,89 @@ SERVER_FRAME_API result_code_type wait(context &ctx, const std::unordered_set<di
                                        size_t wakeup_count = 0);
 
 /**
+ * @brief foreach received multiple messages
+ *
+ * @param ctx context
+ * @param received received messages
+ * @param rpc_name name of the RPC call
+ * @param callback callback to process each message
+ * @return future of 0 or error code
+ */
+
+template <class TResponseMessage, class = atfw::util::nostd::enable_if_t<
+                                      std::is_base_of<google::protobuf::MessageLite, TResponseMessage>::value>>
+ATFW_UTIL_SYMBOL_VISIBLE void foreach_received_message(
+    context &ctx, const std::unordered_map<uint64_t, atframework::SSMsg *> &received, gsl::string_view rpc_name,
+    atfw::util::nostd::function_ref<void(const atfw::SSMsgHead &head, TResponseMessage &msg)> callback) {
+  // 回包合并
+  TResponseMessage *shared_empty_message = nullptr;
+  for (const auto &waiter : received) {
+    if (nullptr == waiter.second) {
+      continue;
+    }
+
+    if (!waiter.second->has_head()) {
+      continue;
+    }
+
+    if (waiter.second->head().rpc_response().type_url() != TResponseMessage::descriptor()->full_name()) {
+      FCTXLOGERROR(ctx, "{} expect response message {}, but got {}", rpc_name,
+                   TResponseMessage::descriptor()->full_name(), waiter.second->head().rpc_response().type_url());
+      continue;
+    }
+
+    if (waiter.second->body_bin().empty()) {
+      if (shared_empty_message == nullptr) {
+        shared_empty_message = ctx.create<TResponseMessage>();
+        if (nullptr == shared_empty_message) {
+          FCTXLOGERROR(ctx, "{} malloc {} failed", rpc_name, waiter.second->head().rpc_response().type_url());
+          continue;
+        }
+      }
+
+      callback(waiter.second->head(), *shared_empty_message);
+      continue;
+    }
+
+    TResponseMessage *rsp_body = ctx.create<TResponseMessage>();
+    if (nullptr == rsp_body) {
+      FCTXLOGERROR(ctx, "{} malloc {} failed", rpc_name, waiter.second->head().rpc_response().type_url());
+      continue;
+    }
+
+    if (false == rsp_body->ParseFromString(waiter.second->body_bin())) {
+      FCTXLOGERROR(ctx, "{} parse message {} failed, msg: {}", rpc_name, TResponseMessage::descriptor()->full_name(),
+                   rsp_body->InitializationErrorString());
+      continue;
+    }
+
+    callback(waiter.second->head(), *rsp_body);
+  }
+}
+
+/**
+ * @brief foreach received multiple messages
+ *
+ * @param ctx context
+ * @param received received messages
+ * @param rpc_name name of the RPC call
+ * @param callback callback to process each message
+ * @return future of 0 or error code
+ */
+
+template <class TResponseMessage, class = atfw::util::nostd::enable_if_t<
+                                      std::is_base_of<google::protobuf::MessageLite, TResponseMessage>::value>>
+ATFW_UTIL_SYMBOL_VISIBLE void foreach_received_message(
+    context &ctx, const std::unordered_map<uint64_t, atframework::SSMsg *> &received, gsl::string_view rpc_name,
+    atfw::util::nostd::function_ref<void(const atfw::SSMsgHead &head, const TResponseMessage &msg)> callback) {
+  // 类型转换
+  atfw::util::nostd::function_ref<void(const atfw::SSMsgHead &head, TResponseMessage &msg)> fn =
+      [callback](const atfw::SSMsgHead &head, TResponseMessage &msg) { callback(head, msg); };
+
+  foreach_received_message<TResponseMessage>(ctx, received, rpc_name, fn);
+}
+
+/**
  * @brief Custom wait for a message or resume
  *
  * @param type_address type object address, user should keep it unique for each message type
@@ -146,13 +228,14 @@ SERVER_FRAME_API result_code_type custom_wait(context &ctx, const void *type_add
                                               void *receive_callback_private_data = nullptr);
 
 template <class TPTR>
-ATFW_UTIL_FORCEINLINE const void *custom_wait_convert_ptr(TPTR &&input) {
+ATFW_UTIL_FORCEINLINE const void *custom_wait_convert_ptr(
+    TPTR &&input) {  // NOLINT(cppcoreguidelines-missing-std-forward)
   return reinterpret_cast<void *>(input);
 }
 
 ATFW_UTIL_FORCEINLINE const void *custom_wait_convert_ptr(const void *input) { return input; }
 
-ATFW_UTIL_FORCEINLINE const void *custom_wait_convert_ptr(void *input) { return const_cast<void *>(input); }
+ATFW_UTIL_FORCEINLINE const void *custom_wait_convert_ptr(void *input) { return input; }
 
 /**
  * @brief Custom wait for a message or resume
@@ -165,10 +248,11 @@ ATFW_UTIL_FORCEINLINE const void *custom_wait_convert_ptr(void *input) { return 
  */
 template <class TPRIVATE_DATA, class TCALLBACK, class TPTR,
           class = typename std::enable_if<std::is_pointer<typename std::remove_reference<TPTR>::type>::value>::type>
-ATFW_UTIL_SYMBOL_VISIBLE result_code_type custom_wait(context &ctx, TPTR &&type_address,
-                                                      const dispatcher_await_options &options,
-                                                      TCALLBACK &&real_callback, TPRIVATE_DATA &&real_private_data) {
-  auto callback_data = std::make_pair(real_callback, &real_private_data);
+ATFW_UTIL_SYMBOL_VISIBLE result_code_type
+custom_wait(context &ctx, TPTR &&type_address, const dispatcher_await_options &options, TCALLBACK &&real_callback,
+            TPRIVATE_DATA &&real_private_data  // NOLINT(cppcoreguidelines-missing-std-forward)
+) {
+  auto callback_data = std::make_pair(std::forward<TCALLBACK>(real_callback), &real_private_data);
   using callback_date_type = decltype(callback_data);
 
   dispatcher_receive_resume_data_callback receive_callback = [](const dispatcher_resume_data_type *resume_data,
@@ -179,8 +263,9 @@ ATFW_UTIL_SYMBOL_VISIBLE result_code_type custom_wait(context &ctx, TPTR &&type_
     }
   };
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(custom_wait(ctx, custom_wait_convert_ptr(type_address), options,
-                                                    receive_callback, reinterpret_cast<void *>(&callback_data))));
+  RPC_RETURN_CODE(
+      RPC_AWAIT_CODE_RESULT(custom_wait(ctx, custom_wait_convert_ptr(std::forward<TPTR>(type_address)), options,
+                                        receive_callback, reinterpret_cast<void *>(&callback_data))));
 }
 
 /**
@@ -207,8 +292,8 @@ SERVER_FRAME_API rpc::telemetry::tracer::span_ptr_type setup_rpc_tracer(
     atfw::util::nostd::string_view rpc_full_name, rpc::telemetry::trace_attributes_type attributes);
 
 SERVER_FRAME_API int setup_rpc_stream_header(atframework::RpcStreamMeta &stream_meta,
-                                              atfw::util::nostd::string_view service_name,
-                                              atfw::util::nostd::string_view rpc_full_name,
-                                              atfw::util::nostd::string_view type_full_name);
+                                             atfw::util::nostd::string_view service_name,
+                                             atfw::util::nostd::string_view rpc_full_name,
+                                             atfw::util::nostd::string_view type_full_name);
 
 }  // namespace rpc

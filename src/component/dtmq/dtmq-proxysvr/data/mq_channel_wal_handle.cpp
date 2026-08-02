@@ -67,6 +67,11 @@ struct mq_wal_delegate_helper {
 
     auto tp = protobuf_to_system_clock(log.detail().destroy().removed_timepoint());
     channel->merge_destroy_timepoint_and_sequence(param.context, tp, log.sequence());
+
+    // 频道销毁后也要清空乐观锁
+    if (channel->is_destroyed()) {
+      channel->clear_lock();
+    }
     return wal_result_code::kOk;
   }
 
