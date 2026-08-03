@@ -109,6 +109,10 @@ const config = {
   themeConfig:
     /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
     ({
+      colorMode: {
+        // Follow the browser/OS preference (prefers-color-scheme) until the user toggles manually.
+        respectPrefersColorScheme: true,
+      },
       navbar: {
         title: 'atsf4g-co',
         logo: {

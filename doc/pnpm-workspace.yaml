@@ -1,2 +1,4 @@
+# pnpm 11 settings (read from pnpm-workspace.yaml; the package.json "pnpm" field was removed in v11).
+# core-js's postinstall is only a funding banner (`node -e "try{...}catch(e){}"`), safe to disallow.
 allowBuilds:
-  core-js: set this to true or false
+  core-js: false

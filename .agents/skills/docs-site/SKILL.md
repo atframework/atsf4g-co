@@ -24,19 +24,31 @@ README/Note files. Regenerate docs from code, not from memory, when interfaces c
 
 ## Commands (Windows PowerShell)
 
-PowerShell blocks `npm.ps1` on this machine; always call `npm.cmd`:
+PowerShell blocks `npm.ps1`/`pnpm.ps1` on this machine; always call `npm.cmd` / `pnpm.cmd`:
 
 ```powershell
 cd doc
-npm.cmd install        # first time only
-npm.cmd start          # dev server (default locale), hot reload
-npm.cmd start -- --locale en   # dev server for the English locale
-npm.cmd build          # production build for ALL locales -> doc/build/
-npm.cmd serve          # preview the production build
+pnpm.cmd install       # first time only (npm.cmd install also works; both lockfiles are kept)
+pnpm.cmd start         # dev server (default locale), hot reload
+pnpm.cmd start --locale en   # dev server for the English locale
+pnpm.cmd build         # production build for ALL locales -> doc/build/
+pnpm.cmd serve         # preview the production build
 ```
 
-`npm.cmd run build` must pass before a docs change is done; it validates broken links and i18n parity. Missing
-translations intentionally fall back to the default locale, but keep both locales in sync for all shipped pages.
+Notes:
+
+- pnpm does NOT strip a `--` separator like npm does; pass script args directly (`pnpm.cmd start --locale en`,
+  not `-- --locale en`).
+- `start`/`serve` pin `--host 127.0.0.1` in package.json: this machine's IPv6 loopback is broken (ping ::1 fails),
+  so the default `--host localhost` binds ::1 only and the page is unreachable. Remove the flag if LAN access or
+  IPv6 is needed on a healthy machine.
+- pnpm 11 reads settings from `doc/pnpm-workspace.yaml` (the package.json `pnpm` field was removed in v11).
+  Dependency build scripts are disallowed by default (`strictDepBuilds`); review new postinstall scripts and
+  record decisions in the `allowBuilds` map there (core-js's funding banner is disallowed on purpose).
+
+`pnpm.cmd build` (or `npm.cmd run build`) must pass before a docs change is done; it validates broken links and
+i18n parity. Missing translations intentionally fall back to the default locale, but keep both locales in sync for
+all shipped pages.
 
 ## i18n rules
 
