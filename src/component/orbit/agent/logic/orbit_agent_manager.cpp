@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -66,6 +67,39 @@ static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expe
 
     return current_record.server_id() == expected_server_id;
   };
+}
+
+static std::string render_string_template(const std::string& input,
+                                          const std::unordered_map<std::string, std::string>& render_values) {
+  // 将 input 中的 ${field} 占位符替换为 render_values[field] 的实际值；
+  // 字段缺失或占位符未闭合时保留原样。
+  std::string output;
+  output.reserve(input.size());
+  size_t pos = 0;
+  while (pos < input.size()) {
+    const size_t begin = input.find("${", pos);
+    if (std::string::npos == begin) {
+      output.append(input, pos, std::string::npos);
+      break;
+    }
+
+    output.append(input, pos, begin - pos);
+    const size_t end = input.find('}', begin + 2);
+    if (std::string::npos == end) {
+      output.append(input, begin, std::string::npos);
+      break;
+    }
+
+    const std::string field = input.substr(begin + 2, end - begin - 2);
+    const auto iter = render_values.find(field);
+    if (render_values.end() != iter) {
+      output.append(iter->second);
+    } else {
+      output.append(input, begin, end - begin + 1);
+    }
+    pos = end + 1;
+  }
+  return output;
 }
 
 static void append_config_env_line(std::vector<std::string>& output, const char* key, const std::string& value) {
@@ -1045,18 +1079,19 @@ void orbit_agent_manager::fill_client_identity(orbit::DClientIdentity& output,
   output.mutable_client_id()->set_client_id(client->client_id);
 }
 
-void orbit_agent_manager::build_client_launch_arguments(orbit_agent_client_record_ptr record,
-                                                        const std::vector<std::string>& command_line,
-                                                        std::vector<std::string>& output) {
+void orbit_agent_manager::build_client_launch_arguments(
+    orbit_agent_client_record_ptr record, const std::unordered_map<std::string, std::string>& render_values,
+    const std::vector<std::string>& command_line, std::vector<std::string>& output) {
   uint64_t app_id = ++sequence_allocator_;
   output.clear();
   output.reserve(command_line.size() + static_cast<size_t>(record->custom_args.size()) + 6);
 
+  // 渲染启动参数中的 ${field} 占位符，用 render_values 中的实际值替换
   for (const std::string& arg : command_line) {
-    output.emplace_back(arg);
+    output.emplace_back(render_string_template(arg, render_values));
   }
   for (const std::string& custom_arg : record->custom_args) {
-    output.emplace_back(custom_arg);
+    output.emplace_back(render_string_template(custom_arg, render_values));
   }
 
   fill_normal_client_start_command(*record, app_id, output);
@@ -1065,7 +1100,12 @@ void orbit_agent_manager::build_client_launch_arguments(orbit_agent_client_recor
 int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr record,
                                               const std::vector<std::string>& command_line) {
   std::vector<std::string> launch_arguments;
-  build_client_launch_arguments(record, command_line, launch_arguments);
+
+  // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
+  std::unordered_map<std::string, std::string> render_values;
+  render_values.emplace("client_id", record->client_id);
+
+  build_client_launch_arguments(record, render_values, command_line, launch_arguments);
 
   std::vector<char*> launch_argv;
   launch_argv.reserve(launch_arguments.size() + 1);

@@ -129,8 +129,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   int spawn_client_process(orbit_agent_client_record_ptr record, const std::vector<std::string>& command_line);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(
       rpc::context& ctx, orbit_agent_client_record_ptr record);
-  void build_client_launch_arguments(orbit_agent_client_record_ptr record, const std::vector<std::string>& command_line,
-                                     std::vector<std::string>& output);
+  void build_client_launch_arguments(orbit_agent_client_record_ptr record,
+                                     const std::unordered_map<std::string, std::string>& render_values,
+                                     const std::vector<std::string>& command_line, std::vector<std::string>& output);
 
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
 
