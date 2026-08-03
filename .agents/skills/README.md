@@ -14,6 +14,7 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 | `deployment-config/`      | Generate deployment configs/scripts and analyze `install/**/*.tpl` Go templates           |
 | `configure-expression/`   | Environment-variable expression expansion in configuration fields                         |
 | `atgateway-protocol/`     | atgateway v2 protocol SDK — ECDH handshake, encryption, testing                           |
+| `docs-site/`              | Docusaurus documentation site under `doc/` — build, i18n (zh-CN/en), fonts, sidebars      |
 | `ai-agent-maintenance/`   | Audit and optimize AI agent prompts, bridge files, and skills                             |
 
 ## Maintenance rules

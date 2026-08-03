@@ -1,0 +1,68 @@
+/* Font stacks.
+ * English faces are loaded from CDN (jsDelivr Fontsource, see headTags in docusaurus.config.js);
+ * only the highest-priority English face of each stack is imported.
+ * Chinese faces use locally installed fonts in fallback order. Both the Chinese and English family
+ * names are listed for the same face (e.g. "等距更纱黑体 SC" == "Sarasa Mono SC").
+ */
+:root {
+  /* Body: CDN Noto Sans first, then the Chinese chain, then generic sans. */
+  --docs-font-sans:
+    "Noto Sans",
+    "更纱黑体 SC", "Sarasa Gothic SC",
+    "Noto Sans CJK SC",
+    "等距更纱黑体 SC", "Sarasa Mono SC",
+    "Maple Mono Normal NF CN", "Maple Mono NF CN", "Maple Mono Normal CN", "Maple Mono CN",
+    "Sarasa Mono CL",
+    "Noto Sans Mono CJK SC",
+    "Noto Sans Mono SC",
+    "Noto Mono",
+    "Source Code Pro", Consolas,
+    sans-serif;
+
+  /* Code: CDN Noto Sans Mono first, then Maple Mono variants, then the Chinese chain. */
+  --docs-font-mono:
+    "Noto Sans Mono",
+    "Maple Mono Normal NF CN", "Maple Mono NF CN", "Maple Mono Normal CN", "Maple Mono CN",
+    "等距更纱黑体 SC", "Sarasa Mono SC",
+    "更纱黑体 SC", "Sarasa Gothic SC",
+    "Sarasa Mono CL",
+    "Noto Sans Mono CJK SC", "Noto Sans CJK SC",
+    "Noto Sans Mono SC",
+    "Noto Mono",
+    "Source Code Pro", Consolas,
+    monospace;
+
+  --ifm-font-family-base: var(--docs-font-sans);
+  --ifm-font-family-monospace: var(--docs-font-mono);
+  --ifm-code-font-size: 92%;
+
+  --ifm-color-primary: #2e7d5b;
+  --ifm-color-primary-dark: #297052;
+  --ifm-color-primary-darker: #276a4d;
+  --ifm-color-primary-darkest: #205740;
+  --ifm-color-primary-light: #348a66;
+  --ifm-color-primary-lighter: #37906b;
+  --ifm-color-primary-lightest: #3ea377;
+}
+
+[data-theme="dark"] {
+  --ifm-color-primary: #4fbf8f;
+  --ifm-color-primary-dark: #3fb383;
+  --ifm-color-primary-darker: #35a97a;
+  --ifm-color-primary-darkest: #2c8c65;
+  --ifm-color-primary-light: #63c79b;
+  --ifm-color-primary-lighter: #6fcba2;
+  --ifm-color-primary-lightest: #8ad6b4;
+}
+
+pre,
+code,
+kbd,
+samp {
+  font-family: var(--docs-font-mono);
+}
+
+/* Mermaid diagrams should use the same font stacks. */
+.mermaid {
+  font-family: var(--docs-font-sans);
+}
