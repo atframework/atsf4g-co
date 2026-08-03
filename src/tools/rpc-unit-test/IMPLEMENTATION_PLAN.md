@@ -1,6 +1,6 @@
 # RPC 与资源 Hook 单元测试工具执行计划
 
-> 状态：已复核，待实施  
+> 状态：已源码复核（含 telemetry/HPA/router/DNS/CS/DB/UUID/Orbit 逐条验证），待实施  
 > 最后复核：2026-08-03  
 > 计划目录：`src/tools/rpc-unit-test`  
 > 本文件只描述实施方案；当前阶段不新增或修改任何 C++、Mako、CMake 实现。
@@ -18,7 +18,8 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
 - SS、DNS、CS、DB RPC 都在真实 task 上下文中调用；调用方不需要区分 C++20 协程和传统协程。
 - 默认使用内存 DB 和确定性 UUID；二者均可整体替换或按操作覆盖。
 - 支持内存资源提供者并通过真实配置 manager 的 reload/index 流程加载资源。
-- 网络类 mock 默认严格匹配，未配置调用立即失败并输出诊断，避免测试静默等待到超时。
+- 网络类 mock 分两类默认行为：单向通知类 RPC 未配置时记录并正常返回（丢弃结果），需要 response 的 RPC 未配置
+  时立即返回错误码并输出诊断，避免测试静默等待到超时（见 3.4）。
 - 单个测试进程不访问真实 Redis、DNS、atbus 或外部服务，除非测试显式选择 passthrough。
 
 第一版不把以下内容伪装成已覆盖：
@@ -26,9 +27,9 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
 - 组件私有的非 SS 传输不冒充基础 SS 覆盖；首版为当前唯一的生产直连实例
   `GameSharedComponent/Orbit` 客户端 SDK 提供独立 Orbit adapter target。示例 `echosvr` 的 atbus demo 不纳入 RPC
   工具范围。
-- HTTP/libcurl 等外部请求（HPA controller、etcd 工具、telemetry OTLP/Prometheus push exporter 均使用
-  `util::network::http_request`/opentelemetry HTTP exporter）；它们不是本工程内置消息 RPC，由组件自行注册
-  资源/网络适配器。
+- HTTP/libcurl 等外部请求（HPA controller、etcd 工具、telemetry OTLP/Prometheus push exporter 分别使用
+  `util::network::http_request`（存量老名，等价于 `atfw::util::network::http_request`）、libatapp etcd HTTP API
+  和 opentelemetry/prometheus-cpp 内置 client）；它们不是本工程内置消息 RPC，由组件自行注册资源/网络适配器。
 - 多个 fixture 在同一进程并发运行。现有 app、dispatcher、task manager 和配置 manager 含进程级单例，首版采用
   “一个测试可执行文件内一次只运行一个 runtime”的约束；CTest 进程间仍可并行。
 
@@ -129,9 +130,11 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
 - `rpc::wait`（`rpc_utils.h`）、`rpc::wait_task(s)`（`rpc_async_invoke.h`）与 `RPC_AWAIT_*`/`RPC_RETURN_*` 宏
   （`rpc/rpc_common_types.h`，按协程模式分两套定义）已经封装两种协程模式，测试业务代码不应再分叉。
 - 初始化后的 app 可通过 `run_noblock(max_event_count = 20000)` 推进模块 tick、dispatcher 和 task；返回 0 表示无
-  更多事件、1 表示仍有 pending、负数表示错误，泵循环可据此决定 yield。注意 `tick()` 只推进逻辑计时器、不做
-  共享 `uv_default_loop` 的 IO 投递（libatapp 部分单测刻意只用 `tick()`）。
-- libatapp 单测的驱动范式同时包含 `util::time::time_utility::update()` 刷新缓存时钟；task 超时、TTL 等
+  更多事件、1 表示仍有 pending、负数表示错误，泵循环可据此决定 yield。注意 `app::tick()` 实际会跑
+  `mod->tick()`、`bus_node_->proc()` 和内部/自定义定时器，但**不调用 `uv_run`**，因而不驱动共享
+  `uv_default_loop` 上的 socket IO 轮询（所以 libatapp 部分单测只用 `tick()`）；真正的 IO 投递需
+  `run_noblock`/`run_once`（内部 `run_inner` 调 `uv_run`）。
+- libatapp 单测的驱动范式同时包含 `atfw::util::time::time_utility::update()` 刷新缓存时钟；task 超时、TTL 等
   依赖缓存时钟，本工具的事件泵必须包含这一步。
 - `task_manager` 仅公开 `kill_all`，`task_type_trait` 只提供状态查询/复位，没有安全的单 task kill。因此 hard
   timeout 后不能声称只回收目标 task；必须把当前 runtime 标记为 poisoned，终止其全部 task 并进入 teardown。
@@ -153,9 +156,9 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
   RPC 只在寻址层绕过 dispatcher 的 node 查找，物理传输与回包等待链和普通 SS 完全一致**，mock connector 同样能
   捕获其出站字节。真正的前置条件是 fixture 内必须存在可用的 router manager：
   `router_manager_set::register_manager/unregister_manager` 是公开 API，且 `router_manager_base` 构造/析构会
-  自动注册/注销。但 manager 的 `mutable_cache` 必须返回一个可用的 `router_object_base`；后者还有
-  `pull_object`/`save_object`/`save` 等纯虚接口，所以必须同时实现 `router_test_manager` 和
-  `router_test_object`，不能只实例化 manager。
+  自动注册/注销。但 manager 的带 `io_task_guard&` 的 `mutable_cache` 必须返回一个可用的 `router_object_base`；
+  后者还有 `name`/`pull_object`/`save_object`/`save(带 io_task_guard&)` 等纯虚接口，所以必须同时实现
+  `router_test_manager` 和 `router_test_object`，不能只实例化 manager（完整纯虚清单见 8.2）。
 - 当前 `svr.protocol.proto` 的 `hello.RouterService/router_transfer` 是普通 unary SS 方法，没有
   `router_rpc: true`；当前仓库没有启用中的 `router_rpc: true` 协议实例，只有注释示例。它可用于内置 unary
   smoke，但不能证明 Mako 的 router 分支。测试专用 proto 因而是必需输入，用于稳定实例化 router/user/no-wait/
@@ -170,20 +173,24 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
   `ss_msg_dispatcher::send_dns_lookup(domain, sequence, task_id)`，再用 `rpc::custom_wait` +
   `get_dns_lookup_rpc_type()`（即 `&running_dns_lookup_`）等待，默认超时取
   `logic_cfg().dns().lookup_timeout()`。
-- `send_dns_lookup` 直接调用 libuv `uv_getaddrinfo`（loop 取 `get_bus_node()->get_evloop()`，无 bus node 时
-  `uv_default_loop()`），完成路径 `dns_lookup_callback` 构造 `dispatcher_resume_data_type`（message type 为
-  `get_dns_lookup_rpc_type()`，msg_addr 指向 `std::vector<address_record>`），携带原 sequence 调用
-  `rpc::custom_resume`。
-- 因而 DNS 最小 hook 点应位于发起 `uv_getaddrinfo` 之前（`send_dns_lookup` 内部）；完成仍复用现有
-  custom-resume 路径，测试 hook 不直接设置 task 结果。
+- `send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id)` 直接调用 libuv `uv_getaddrinfo`
+  （loop 取 `get_app()->get_bus_node()->get_evloop()`，无 app/bus node 时 `uv_default_loop()`），完成路径
+  `dns_lookup_callback` 构造 `dispatcher_resume_data_type`（message type 为 `get_dns_lookup_rpc_type()`，msg_addr
+  指向 `std::vector<address_record>`，即 `rpc::dns::details::callback_data_type`），携带原 sequence 调用
+  `rpc::custom_resume`。调用方 `rpc::dns::lookup` 默认超时取 `logic_config::me()->get_logic_cfg().dns().lookup_timeout()`
+  （缺省值 5 秒）。
+- 因而 DNS 最小 hook 点应位于发起 `uv_getaddrinfo` 之前（`send_dns_lookup` 内部），最贴近“拦截真实网络调
+  用”；另外 `dns_lookup_callback` 内构造 `records` + `custom_resume` 处是对称的“完成侧” seam（两处皆可注入伪
+  造结果）。完成仍复用现有 custom-resume 路径，测试 hook 不直接设置 task 结果。
 
 ### 2.6 CS RPC
 
 - 上行消息可直接调用 `cs_msg_dispatcher::dispatch(source, msg)` 注入（无需经 atbus），但 `msg` 必须满足真实线
-  格式：`msg.type == service_type::kAtGateway`，body 为 `atfw::gateway::server_message`，按 `cmd_case()` 分发
-  `kPost` / `kAddSession` / `kRemoveSession` / `kSetRouterRsp`（`cs_msg_dispatcher.cpp`）。`kAddSession` 经
-  `session_manager::me()->create` 创建 session；`kPost` unpack `CSMsg` 后启动真实 action task；`kRemoveSession`
-  启动登出 task。mock client 注入上行时必须按此封装。
+  格式：`msg.type == 静态转型自 ::atfw::component::service_type::kAtGateway`，body 为 `atfw::gateway::server_message`，
+  分发基于 `req_msg.body().cmd_case()`（枚举作用域是 `server_message_body::`）：`kPost` / `kAddSession` /
+  `kRemoveSession` / `kSetRouterRsp`（`cs_msg_dispatcher.cpp`）。`kAddSession` 经 `session_manager::me()->create`
+  创建 session；`kPost` unpack `CSMsg` 后经基类 `on_receive_message` 触发真实 action task（非直接 `create_task`）；
+  `kRemoveSession` 启动登出 task。mock client 注入上行时必须按此封装。
 - `src/templates/session_downstream_api_for_cs.cpp.mako` 生成的下行调用最终进入
   `session::send_msg_to_client` → `cs_msg_dispatcher::send_data`，广播进入 `broadcast_msg_to_client` →
   `cs_msg_dispatcher::broadcast_data`。
@@ -198,8 +205,8 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
 - 生成 DB API（`db_interface`/`db_rpc_redis*` 模板产物）负责构造规范 key 和 protobuf 类型，最后统一进入
   `src/server_frame/rpc/db/hash_table.*`。
 - `hash_table` 公共操作清单（已核实）：KV：`get_all`、`partly_get`、`batch_get_all`、`batch_partly_get`、`set`
-  （带/不带 CAS）、`inc_field`；KL：`get_all`、`get_by_indexs`、`update_by_index`、`add_index`、
-  `remove_by_index`（两个重载）；通用：`remove_all`、`set_ttl`、`remove_ttl`。其中 `batch_get_all` /
+  （单一函数，CAS 经可选 `uint64_t *version` 参数，无独立 CAS 函数）、`inc_field`；KL：`get_all`、`get_by_indexs`、
+  `update_by_index`、`add_index`、`remove_by_index`（两个重载）；通用：`remove_all`、`set_ttl`、`remove_ttl`。其中 `batch_get_all` /
   `batch_partly_get` 内部用 `rpc::async_invoke` + `rpc::wait_tasks` 并发调用 `get_all`/`partly_get`，因此
   只要 hook 单条原语，batch 自然被覆盖。
 - 当前 `src/` 中所有直接 `db_msg_dispatcher::send_msg` 调用都位于 `hash_table.cpp`，没有第二条绕过该层的 DB
@@ -258,8 +265,31 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
 | telemetry | `src/server_frame/rpc/telemetry/` | 非消息 RPC；OTLP HTTP / Prometheus push/file exporter | 只观测，不 mock |
 | orbit server/controller/agent | `src/component/orbit/sdk/**` | 生成 RPC 最终走 `ss_msg_dispatcher`；server-to-client 也由 `orbit_server_manager` 封装为 SS | SS mock + 代表性契约测试 |
 | Orbit client SDK | `src/component/GameSharedComponent/Orbit` | `OrbitClientRuntime::send_message` 最终直接 `get_bus_node()->send_data`；含 callback/retry pending map | 独立 `mock_orbit` adapter（见 8.8） |
-| HTTP/curl | HPA controller、etcd 工具、telemetry exporter | `util::network::http_request` / OTLP HTTP | 组件扩展，非内置 RPC |
+| HTTP/curl | HPA controller、etcd 工具、telemetry exporter | `util::network::http_request`（存量老名）/ OTLP HTTP | 组件扩展；HPA pull 专用默认 hook 见 8.10 |
 | echosvr 等示例 | `src/echosvr/app/echosvr_main.cpp` | atbus 直连 demo | 不作为内置 RPC 覆盖目标 |
+
+### 2.10 外部组件依赖与离线性（已核实）
+
+`atapp::app::init` 的顺序为：reload（仅本地 YAML/环境变量）→ 模块 setup → `setup_log` → `setup_atbus` →
+`setup_curl_multi`（仅创建共享句柄，无连接）→ 模块 reload/init/ready。在此基准上，各外部依赖的触发条件与
+fixture 处置：
+
+| 依赖 | 触发条件 | init/运行行为 | fixture 处置 |
+| --- | --- | --- | --- |
+| etcd | `atapp.etcd.enable` + `atapp.etcd.hosts` 非空 | 启用时 `service_discovery_module::init` 经 `check_keepalive_actor_start_success` **阻塞 `uv_run`** 发真实 HTTP（member/list → lease/grant → keepalive）；未启用时全链路惰性、零网络 | fixture 一律不配 etcd；服务发现用 global discovery 注入替代。orbit agent 强依赖 etcd（未启用时 init 直接失败），v1 不支持其 fixture |
+| atbus listen | `atapp.bus.listen` | 为空时零 socket；含**主机名**（非数字 IP）时 listen/connect 会在 libatbus io_stream 触发 `uv_getaddrinfo` | 默认空 listen（见 2.2）；需要时用数字 IP loopback 或 `shm`/`unix` |
+| atbus upstream | `atapp.bus.proxy` | init 阶段**阻塞连接 atproxy** 直到 `initialize_timeout` | fixture 禁止配置 |
+| Redis | `db_msg_dispatcher::init` 按 `logic.db.cluster/raw` | dispatcher init 即发起连接；hosts 为空不连 | fixture 不 init 该 dispatcher（见 2.7/8.5） |
+| telemetry exporter | 各 exporter 按类型不同（endpoint / file_pattern / ostream 非空 / push 需 host+port+jobname / pull 需 url） | 无 exporter 时 provider 回退 Noop，零网络；OTLP gRPC 为 lazy connect；`prometheus_pull` 会开**入站**监听端口 | 默认留空（noop）或仅 file 类导出（见 8.9） |
+| HPA | `logic.hpa.controller.enable` + `logic.hpa.metrics.enable`（默认均 false） | 关闭时不建任何 policy/puller/discovery，零网络；controller 对象与 curl share/multi 句柄无条件创建但无 IO；禁用时 reload 仍会写本地 app metadata 标签 | 默认关闭；测试启用时由默认安装的 pull hook 接管（见 8.10） |
+| DNS | 运行时 `rpc::dns::lookup`；atbus 主机名 listen/connect | 见 2.5 与上两行 | DNS hook 接管；listen 避免主机名 |
+| 日志 | `atapp.log` sink 配置 | 内建 sink 仅 file/stdout/stderr/syslog（本地接口），server_frame/component 无远程 sink | 无需处理 |
+| 时间源 | 无 | 本地系统时钟（`atfw::util::time::time_utility`），无 NTP/远程同步 | 无需处理 |
+| 组件 SDK init | dtmq/rank/distributed_transaction/orbit server SDK | init 均不触网（discovery 查询与 SS RPC 运行时按需）；Orbit client SDK init 主动 atbus 连接但属 client 侧 | 无需特殊处理 |
+
+结论：最小 fixture 默认配置（无 etcd、空 bus.listen、无 bus.proxy、无 telemetry exporter、HPA 关闭、不含 db
+dispatcher、DNS 已 hook）下，app init + ready + 空转 tick 全程不触网。上表所有触网开关必须在 fixture 配置
+中保持关闭或已被 hook 接管，README 需完整列出该清单。
 
 ## 3. 核心设计决策
 
@@ -322,7 +352,7 @@ hook ABI 与状态所有权必须同时满足：
 用户的 `CASE_TEST` 保持普通同步函数。`runtime::run_task` 内部调用 `rpc::async_invoke`，返回统一的
 `task_handle`；`runtime::wait` 循环执行以下工作：
 
-1. `util::time::time_utility::update()` 刷新缓存时钟（task 超时与 TTL 依赖它）；
+1. `atfw::util::time::time_utility::update()` 刷新缓存时钟（task 超时与 TTL 依赖它）；
 2. `app.run_noblock()` 推进公共模块和 task manager，并收集本代产生的 outbound；
 3. 只投递**上一代及更早**已经到期的 connector、DNS、CS 事件，零延迟响应也至少跨一次 pump generation；
 4. 再执行一次有界 `app.run_noblock()`，让 dispatcher 恢复 task；
@@ -333,13 +363,41 @@ task 自身 timeout 和 `wait` hard timeout 必须同时存在。前者验证业
 导致 CTest 挂死。hard timeout 时调用 `task_manager::kill_all`，把 runtime 标记为 poisoned 并立即进入受限时的
 stop/drain；该 runtime 不得复用。事件泵使用有界批次和 thread yield，不长时间 sleep，也不忙等占满 CPU。
 
-### 3.4 默认严格度
+### 3.4 默认行为：单向通知成功丢弃，需响应立即报错
 
-- SS/DNS/CS：未匹配调用默认立即返回明确测试错误，同时记录 RPC 名、目标、sequence、metadata 和可用规则。
+- 通用规则（两类 RPC 的默认行为不同）：
+  - **单向通知类 RPC**（SS stream/no-wait/broadcast、CS 下行 data/kickoff/set-router/broadcast 等不需要
+    response 的调用）：用户未注册 mock 时默认**记录调用并直接正常返回**，结果丢弃；
+  - **需要 response 的 RPC**（SS unary 及 wait 变体、DNS lookup、HPA metrics pull 等）：用户未注册 mock 时
+    默认**立即返回明确错误码**并输出诊断（RPC 名、目标、sequence、metadata 和可用规则），提示必须补充 mock
+    才能完成完整测试，不允许静默等待到超时。
 - DB：默认是空的内存数据库，未命中读取返回项目既有的 record-not-found；所有已支持操作都有真实内存语义。
 - UUID：默认确定性且每个 fixture 重置。
 - Resource：未提供路径按真实 loader 的 missing/error 语义失败。
-- 每类 mock 可显式选择 `fail`、`record-only/drop`、`timeout` 或 `passthrough`；passthrough 默认关闭。
+- 每类 mock 可显式覆盖默认值，选择 `fail`、`record-only/drop`、`timeout` 或 `passthrough`；passthrough 默认
+  关闭。
+
+### 3.5 mock 代码分布与 `mock` 子命名空间约定
+
+- `src/tools/rpc-unit-test` 只放公共基础设施：runtime/事件泵、mock connector、通用规则引擎与内存 backend
+  （SS/DNS/CS/DB/UUID/resource 的 registry、匹配、历史和诊断）。
+- 面向具体 service/功能的 mock 接口不放进工具目录，而是放在**各自模板生成的代码或各自的实现代码**中，并
+  统一放入被 mock API 同级的 `mock` 子命名空间，便于管理和 IDE 代码提示：
+  - 生成代码：`rpc_call_api_for_ss.*.mako` 生成 `<service>::mock` 的 typed 注册辅助（见 8.2）；
+    `db_interface` / `db_rpc_redis_kv/kl` 生成 `<db 命名空间>::mock` 的 typed 数据检查接口（见 8.5）；
+  - 手写实现：HPA pull mock 放在 server_frame HPA 实现目录的 `mock` 子命名空间（见 8.10）；UUID provider
+    注册接口放在 `rpc::db::mock`（见 8.6）。
+- 这些 mock 接口全部用 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`（Orbit SDK 用其派生宏）整体门控，
+  hooks-off 生产构建中不存在对应符号；它们只是 server_frame seam/注册表之上的 typed 适配层，不改变
+  “策略与数据在工具库”的边界（见 3.2）。
+- 生成代码中的 mock 接口属于生成物的一部分：只改 Mako 模板并经现有生成流程重建，不手改 `.atfw.gen.*`。
+- 命名以 `atfw::util` 为准（如 `atfw::util::network::http_request`、`atfw::util::time::time_utility`）：本工具库、
+  新增 mock 接口与文档一律使用 `atfw::util::` 前缀，不引用无 `atfw::` 前缀的老别名。注意存量 server_frame
+  代码（如 HPA 的 `create_http_request` 返回 `util::network::http_request::ptr_t`、`ss_msg_dispatcher`/
+  `cs_msg_dispatcher` 部分仍用 `util::time::time_utility`）大量依赖 legacy alias
+  （`namespace util { using namespace atframework::util; }`，受 `ATFRAMEWORK_UTILS_ENABLE_LEGACY_ALIAS` 控制）；老名与
+  `atfw::util::` 是**同一类型**，接线时无需转换即可互操作。本计划不顺带重排这些存量老前缀（尊重脏工作区、
+  避免无关改动），只要求新代码统一 `atfw::util::`。
 
 ## 4. 目标架构
 
@@ -358,6 +416,8 @@ CASE_TEST
       +-- DB  --> generated DB API ----> hash_table hook -> in-memory backend
       +-- UUID -> public allocator ----> UUID hook -------> deterministic allocator
       +-- XLSX -> excel wrapper -------> resource hook ---> in-memory bytes/version --> real manager
+      +-- Telemetry -> fixture 配置即 noop/本地文件（无需 hook，见 8.9）
+      +-- HPA --> policy/puller -----> 默认 pull hook ---> 预置指标（见 8.10）
 ```
 
 runtime 的最小模块集默认只包含 `logic_server_common_module`，并开启 task manager。`runtime_options.features`
@@ -370,7 +430,9 @@ runtime 的最小模块集默认只包含 `logic_server_common_module`，并开�
 - Router RPC：配对的 `router_test_manager` + `router_test_object`（manager 构造即自动注册进
   `router_manager_set`，object 预置 mock router server id）；
 - DB：只安装 hash-table hook，不初始化 `db_msg_dispatcher`；
-- DNS：使用现有 SS dispatcher 的 DNS 类型信息和独立 DNS hook，不访问 libuv resolver。
+- DNS：使用现有 SS dispatcher 的 DNS 类型信息和独立 DNS hook，不访问 libuv resolver；
+- Telemetry：fixture 配置默认无 exporter（noop），可选 file-only 导出（见 8.9）；
+- HPA：默认关闭；`runtime_options` 启用 HPA feature 时自动安装默认 pull hook（见 8.10）。
 
 runtime 提供 setup callback，让组件添加自己的 main module、dispatcher 或 router manager，而不复制服务进程的
 main。
@@ -431,6 +493,9 @@ src/tools/rpc-unit-test/
 实例化 router RPC，并补齐 user、no-wait/wait-later 等缺失组合；生成输出不手工提交或修改，生成命令必须使用稳定
 `OUTPUT`/`BYPRODUCTS`/`DEPENDS`，内容不变时不更新时间戳。
 
+工具目录只包含公共代码（见 3.5）；各 service/功能的 typed mock 接口随各自实现或模板生成代码落地（SS/DB
+模板、server_frame HPA/UUID 实现目录），不在上表列出。
+
 ### 5.1 预计修改的工程文件
 
 除新增工具目录外，实施阶段允许且预计只在下列源文件增加窄 seam/装配；编码前仍需以符号检索确认最终文件名：
@@ -444,13 +509,17 @@ src/tools/rpc-unit-test/
 | CS | `src/server_frame/dispatcher/cs_msg_dispatcher.*` | 收敛 gateway-send 并增加可选 seam |
 | DB | `src/server_frame/rpc/db/hash_table.*` | 在本地校验后、Redis 参数构造/发送前增加同步 seam |
 | DB 测试身份 | `src/server_frame/dispatcher/db_msg_dispatcher.*` | hooks-on 时只设置既有 prefix/channel 字段，不 init timer/连接 |
-| UUID | `src/server_frame/rpc/db/uuid.*` | 五个公共入口增加 provider seam |
+| UUID | `src/server_frame/rpc/db/uuid.*` | 五个公共入口增加 provider seam；安装/覆盖 API 放入 `rpc::db::mock` |
+| HPA | `src/server_frame/logic/hpa/pull/prometheus/logic_hpa_puller_prometheus.*`、同目录新增 mock 接口文件 | `do_pull` 入口 seam + `mock` 子命名空间的指标注入 API（宏门控） |
+| SS mock 接口 | `src/templates/rpc_call_api_for_ss.*.mako` | 增量生成 `<service>::mock` typed 注册辅助（宏门控纯新增，不改热路径） |
+| DB mock 接口 | `src/templates/db_interface.*.mako`、`src/templates/db_rpc_redis_kv.*.mako`、`src/templates/db_rpc_redis_kl.*.mako` | 增量生成 `<db 命名空间>::mock` typed 数据检查接口（宏门控纯新增） |
 | 资源 | `src/server_frame/config/include/config/excel_config_wrapper.h`、`src/server_frame/config/src/excel_config_wrapper.cpp` | provider registry 归属 `server_frame-config` DLL，回调内优先 scoped provider |
 | 生成覆盖 | `src/tools/rpc-unit-test/test/protocol/rpc_unit_test.proto` + 现有生成 helper | 只生成到构建树，覆盖当前未实例化分支 |
 | Orbit adapter | `src/component/GameSharedComponent/Orbit/include/Orbit/OrbitClientRuntime.h`、`src/component/GameSharedComponent/Orbit/src/Orbit/OrbitClientRuntimeRpc.cpp` | SDK target 自有 registry；由全局 option 派生公开 compile definition，不依赖 server-frame config |
 
 普通 SS 与 router 传输无需新增 dispatcher/template hook；`rpc_call_api_for_ss.*.mako` 和
-`session_downstream_api_for_cs.*.mako` 先做覆盖审计，仅在证明确有分支绕过统一 seam 时才修改并统一重新生成。
+`session_downstream_api_for_cs.*.mako` 的传输路径先做覆盖审计，仅在证明确有分支绕过统一 seam 时才修改并统一
+重新生成。模板另按 3.5 约定增量生成宏门控的 `mock` 子命名空间接口（纯新增声明，不改既有调用路径）。
 
 ## 6. CMake 接入设计
 
@@ -634,6 +703,10 @@ Arena 中的对象。
 - `allow_no_wait` 与 `wait_later`；
 - broadcast 每个目标独立记录/响应策略。
 
+默认行为遵循 3.4：stream/no-wait/broadcast/wait-later 属于单向通知类，未匹配时默认记录并成功（结果丢弃）；
+unary 及 wait 变体需要 response，未匹配时默认立即失败并输出诊断。两类默认值都可用 per-rule/per-engine 选项
+覆盖（例如把某个 stream 显式设为 `fail` 做负向断言）。
+
 dispatcher 回注必须走 app 的真实 forward event 和 `ss_msg_dispatcher`，不能直接完成 task promise。具体分两条
 独立通道：
 
@@ -648,18 +721,25 @@ dispatcher 回注必须走 app 的真实 forward event 和 `ss_msg_dispatcher`�
 
 router RPC（基于 2.4 的核实结论，生产模板路径本身**不需要修改 Mako**）：
 
-1. 实现 `router_test_object`（`router_object_base` 子类），补齐 `name`、`pull_object`、`save_object`、`save` 等纯
-   虚接口，并预置 `set_router_server_id(mock_node_id)`；所有持久化动作只返回项目成功码，不做 I/O。
-2. 实现 `router_test_manager`（`router_manager_base` 子类）：构造/析构自动注册/注销，补齐
-   `mutable_cache`/`mutable_object`/`remove_cache`/`remove_object` 等纯虚接口，并把测试 key 同步解析到上述 owned
-   object，不能返回空 cache，也不触发真实 cache 拉取。
+1. 实现 `router_test_object`（`router_object_base` 子类），补齐其**完整纯虚接口**：`name()`、
+   `pull_object(ctx, priv_data)`、`save_object(ctx, priv_data)`、`save(ctx, priv_data, io_task_guard&)`（注意
+   `pull_cache` 与不带 io_guard 的 `save(ctx, priv_data)` 是**非纯虚**便捷重载，无需实现），并预置
+   `set_router_server_id(mock_node_id)`；所有持久化动作只返回项目成功码，不做 I/O。
+2. 实现 `router_test_manager`（`router_manager_base` 子类）：构造/析构自动注册/注销，补齐其**完整纯虚
+   接口**：`name()`、`get_base_cache(key) const`，以及**带 `io_task_guard&` 的**
+   `mutable_cache`/`mutable_object`/`remove_cache`/`remove_object`（不带 io_guard 的同名版本是非虚便捷封装，
+   会自建 io_guard 后转调纯虚版，不能误当作需实现的 seam），并把测试 key 同步解析到上述 owned object，不能
+   返回空 cache，也不触发真实 cache 拉取。
 3. 之后出站字节经 `ss_msg_dispatcher::send_to_proc` 被 mock connector 正常捕获，回包走与 unary SS 完全相同的
    注入通道，复用 SS rule engine 做匹配与响应。
 4. 用 test-only proto 的 router/unary、router/stream 和 manager-not-found（未安装 test manager 时）fallback
    回归测试证明生产语义未漂移。
 
-普通 SS、broadcast、user RPC 和 router RPC 均不在 Mako 中增加 mock 分支；test-only proto 只用于生成覆盖，避免在
-生成代码热路径重复 hook。
+普通 SS、broadcast、user RPC 和 router RPC 的**传输路径**不在 Mako 中增加 mock 分支，避免在生成代码热路径
+重复 hook；test-only proto 只用于生成覆盖。但按 3.5 约定，`rpc_call_api_for_ss.*.mako` 会增量生成
+`<service>::mock` 的 typed 注册辅助——宏门控的纯新增声明，内联转发到 SS rule engine，等价于
+`test.ss().mock<Req, Rsp>(name, handler)` 的服务级快捷方式，并按 proto 的 rpc_options 自动套用 3.4 默认行为；
+模板变更经现有生成流程重建并做双模式编译验证。
 
 ### 8.3 DNS RPC
 
@@ -697,6 +777,10 @@ generation 失效，则丢弃并记录 late response。生产 fallback 继续使
 - 从统一 gateway-send hook 捕获并解析 downstream `CSMsg`、kickoff、router 指令和 broadcast；
 - 可注入发送错误、断开和多个客户端。
 
+下行默认行为遵循 3.4：data/kickoff/set-router/broadcast 均属单向通知类，未注册捕获规则时默认捕获即成功
+（丢弃）；上行注入始终由测试显式驱动。若覆盖审计要求 per-service typed 捕获辅助，则按 3.5 在
+`session_downstream_api_for_cs.*.mako` 增量生成 `mock` 子命名空间接口。
+
 `session_downstream_api_for_cs.*.mako` 的当前路径已经汇聚到 session/dispatcher，第一版不改模板。只有覆盖盘点
 发现某个生成分支绕过统一边界时，才修改 Mako 并重新生成；该检查是实施阶段的强制 gate。
 
@@ -712,10 +796,12 @@ Redis 专用参数构造/首次发送之前。这样：
 - tracing 可在现有 span 内完成并保留真实错误码；允许 `db_msg_dispatcher::me()` 因 trace 属性被构造，但默认
   fixture 绝不调用其 `init()`，因而不连接 Redis、不启动其网络 timer。
 
-生成 DB API 在进入 `hash_table` 前会读取 dispatcher 的 record prefix/channel；构造函数默认值分别为空串和
-`channel_t::MAX`。默认 runtime 因而需在 hooks-on 下通过窄测试 API 把**既有字段**设置为确定性的
-`unit-test`/`RAW_DEFAULT`，但仍不调用 `init()`；若检测到 dispatcher 已是非 `MAX`（说明外部已初始化），应拒绝
-覆盖，除非用户显式选择 passthrough。teardown 恢复原值，此 API 不新增 class 数据成员。
+生成 DB API 在进入 `hash_table` 前会读取 dispatcher 的 record prefix/channel（经 `get_record_prefix()` 与
+`get_db_channel_type()`）；未 `init()` 时构造函数默认值分别为空串和 `channel_t::MAX`（注：`init()` 会把
+`record_prefix_` 置为配置值/`get_stable_host_id(...)`/`"default"`，故不能依赖 init 后的“空串”）。默认 runtime
+因而需在 hooks-on 下通过窄测试 API 把**既有字段**设置为确定性的 `unit-test`/`RAW_DEFAULT`（`RAW_DEFAULT` 是
+`channel_t::type` 合法枚举），但仍不调用 `init()`；若检测到 dispatcher 已是非 `MAX`（说明外部已初始化），
+应拒绝覆盖，除非用户显式选择 passthrough。teardown 恢复原值，此 API 不新增 class 数据成员。
 
 为避免把 C++20 coroutine return type 暴露到 hook ABI，server-frame seam 使用同步的“handled + result code”
 接口，直接填充现有 output/result 对象；`hash_table` 再用当前 `RPC_DB_RETURN_CODE` 返回。
@@ -751,6 +837,12 @@ presence-aware merge，并维护 CAS version、TTL，KL 另存单调索引与每
 passthrough；默认不允许真实 Redis passthrough。只有 fixture 显式初始化 DB dispatcher 且提供真实配置时才允许
 passthrough，否则立即返回“passthrough unavailable”，不得进入可能永不完成的发送路径。
 
+typed 数据检查接口（测试断言存储内容用，遵循 3.5）：`db_interface`/`db_rpc_redis_kv/kl` 模板增量生成
+`<db 命名空间>::mock` 的数据检查 API（宏门控纯新增），底层调用工具库暴露的通用 raw entry 访问
+（channel + 规范 key → descriptor、owned bytes、CAS version、TTL、KL 索引），生成层按表 descriptor 解码为
+typed message。至少提供：读取整条记录（含版本/TTL）、读取 KL 全量索引与指定索引项、常用断言 helper（记录不
+存在/版本相等/字段相等）。这些接口只读 backend，不经过 RPC，也不要求处于 task 上下文。
+
 ### 8.6 UUID
 
 在五类公共 UUID API 最前端增加统一 provider hook，默认 provider 每 fixture 重置：
@@ -760,12 +852,15 @@ passthrough，否则立即返回“passthrough unavailable”，不得进入可�
 - global unique id 正数、单调，且因为入口被整体接管而不会触发生产静态号段缓存 `g_unique_id_pools`；
 - 用户可替换整个 provider，或覆盖单个 UUID family。
 
-provider ABI 不暴露协程返回类型：三个字符串入口使用同步 `try_generate_*`；global increase/unique 两个原本返回
-`rpc::result<int64_t>` 的入口由 provider 返回同步的 `handled + result code + int64 output`，现有函数再用项目的
-`RPC_RETURN_*` 包装，从而同时适配两种协程实现。
+provider ABI 不暴露协程返回类型：三个字符串入口（返回 `std::string`）使用同步 `try_generate_*`；global
+increase/unique 两个原本返回 `rpc_result<int64_t>` 的入口由 provider 返回同步的 `handled + result code +
+int64 output`，现有函数再用项目的 `RPC_RETURN_*` 包装，从而同时适配两种协程实现。
 
 teardown 要清除测试 provider、恢复未安装 hook 时的生产路径并清理测试状态；测试需证明连续两个 fixture 从相同
 seed 开始且不会被 production 静态缓存污染。
+
+provider 的安装/覆盖 API 按 3.5 约定放在 `rpc::db::mock`（与 uuid 实现同级的 `mock` 子命名空间，宏门控）；
+工具库只提供确定性默认 provider 并在 fixture start 时注册。
 
 ### 8.7 资源 hook
 
@@ -796,18 +891,88 @@ per-case listener。若确需测试 listener，须在 wrapper adapter 新增 hoo
 
 - rank、dtmq、distributed_transaction、user/auth 等使用 SS/DB 的组合 API：由对应基础 mock 覆盖，并各选一个
   消费者做契约测试。
-- telemetry：只做观测，不作为 RPC transport mock（OTLP/Prometheus exporter 属 HTTP/文件传输，见 HTTP 条目）。
+- telemetry：只做观测，不作为 RPC transport mock；单元测试环境按 8.9 以纯配置保持 noop 或 file-only 导出。
 - `src/component/orbit/sdk/**` 的 server/controller/agent 生成 RPC 及 server-to-client 封装已确认走
   `ss_msg_dispatcher`，由 SS mock 覆盖并选代表性消费者做契约测试。
 - `GameSharedComponent/Orbit` 客户端 SDK 是当前唯一生产直连 atbus 例外。首版新增可选
-  `atf4g-co-rpc-unit-test-orbit` target：在 `OrbitClientRuntime::send_message` 的 endpoint 检查和
+  `atf4g-co-rpc-unit-test-orbit` target：在 `OrbitClientRuntime::send_message(const std::string& packed_message,
+  const google::protobuf::MethodDescriptor& method, bool reliable = false, uint64_t task_id = 0)` 的 endpoint 检查和
   `get_bus_node()->send_data` 前放 component-owned hooks-on seam，捕获 owned packed message/method/reliable/task-id，
-  后续 pump 通过原 `on_received_message`/dispatcher 完成 pending callback、retry、error 或 timeout；未处理时保持原
-  atbus fallback。adapter 不让 Orbit component 依赖测试库，registry 同样使用 generation/导出边界。
+  后续 pump 通过原 `on_received_message`/dispatcher（legacy `OrbitRPCDispatcher`）完成 pending callback、retry、error
+  或 timeout；未处理时保持原 atbus fallback。adapter 不让 Orbit component 依赖测试库，registry 同样使用
+  generation/导出边界。
 - Orbit 客户端原生 API 是 callback/retry 模型，不是 server-frame coroutine result；其契约 case 仍从
   `rpc::async_invoke` 外层 task 发起，并用工具提供的 callback waiter/custom-resume bridge 带超时等待，不能只在
   `CASE_TEST` 栈上同步伪造 callback。
-- HTTP/curl（HPA、etcd 工具、telemetry exporter）：列为组件扩展，不属于内置 RPC 核心。
+- HTTP/curl（HPA、etcd 工具、telemetry exporter）：列为组件扩展，不属于内置 RPC 核心；HPA prometheus pull
+  有专用默认 hook（见 8.10）。
+
+### 8.9 telemetry：纯配置离线，不引入 hook
+
+已核实（`src/server_frame/rpc/telemetry/rpc_global_service.cpp`、`svr.telemetry.config.proto`，配置根
+`logic.telemetry`）：
+
+- exporter 启用条件因类型而异（不是统一的 `has_xxx() && 非空 endpoint`）：`otlp_grpc`/`otlp_http` 判
+  `has_xxx() && !endpoint().empty()`，`otlp_file`/`prometheus_file` 判 `!file_pattern().empty()`，`ostream`
+  是 proto `string` 字段（**无 `has_ostream()`**，仅判 `!ostream().empty()`），`prometheus_push` 需
+  `has_prometheus_push() && host/port/jobname 三者非空`，`prometheus_pull` 判 `has_prometheus_pull() &&
+  !url().empty()`。不配置任何 exporter 时 trace/metrics/logs 分别回退到进程默认 Noop provider，零网络。
+- tracer 生命周期细节：仅在**从未调用 `set_current_service`（无 group）或进程关闭中**时 `tracer::start` 才
+  返回 false；一旦 `set_current_service` 跑过（哪怕零 exporter），`default_tracer` 是合法的 Noop tracer，
+  `start` 会成功并产出 noop span。两种情况 `rpc::context` 都用共享 noop span，均不崩溃。
+- 纯本地导出已存在：`ostream`（stdout/stderr/文件）、`otlp_file`（含 `@stdout`/`@stderr` 特判）、
+  `prometheus_file`。**trace provider 的真实条件是 `trace().has_exporters() && trace().has_processors()`**
+  （不是"必须 simple"）：`_opentelemetry_create_trace_processor` 在 `has_simple() && !has_batch()` 时用
+  Simple，否则默认 Batch，故 `processors.simple`、`processors.batch` 或空 `processors {}` 均可建 provider；
+  只配 `exporters` 不配 `processors` 会回退 Noop。metrics 只需 `has_exporters()`，无 processors 要求。
+- 初始化链 `logic_server_common_module::reload` → `rpc::context::set_current_service` →
+  `global_service::set_current_service` 在 fixture 中走真实路径。
+
+fixture 策略（回答“telemetry 是否可以仅本地文件输出绕过外部依赖”——可以，且纯配置可达，无需代码改动）：
+
+1. 默认 fixture 配置不写 `logic.telemetry` exporter → 全 noop、零网络；
+2. 需要验证 trace/metrics/logs 内容时，只配置 `otlp_file`/`prometheus_file`/`ostream`（trace 必须同时配
+   `trace.exporters` 与 `trace.processors`，simple 或 batch 均可），输出目录指向 `<BUILD_DIR>` 下的 case
+   工作目录；
+3. 测试中禁止配置 `otlp_grpc`/`otlp_http`/`prometheus_push`（出站连接）和 `prometheus_pull`（入站监听
+   端口）；runtime 对这几项做配置校验，发现即 fail-fast；
+4. “noop 不崩溃”和“file-only 导出”都进自测矩阵；
+5. 若未来需要断言 span 内容，可在 group 上挂内存 processor/exporter，属可选增强，不在 v1。
+
+### 8.10 HPA：默认关闭零网络；启用时默认安装 prometheus pull hook
+
+已核实（`logic_hpa_controller.*`、`logic_hpa_policy.*`、`logic_hpa_puller_prometheus.*`、
+`svr.hpa.config.proto`，配置根 `logic.hpa`）：
+
+- HPA 对象由 `logic_server_common_module` 无条件创建并在 init 时建 curl share/multi 句柄，但**不发请求**；
+  只有 `hpa.controller.enable && hpa.metrics.enable` 同时为真（默认均 false）才创建 policy/puller/discovery。
+  因此默认 fixture 不需要任何 HPA mock 即零网络。
+- pull 链路：`module::tick` → `logic_hpa_controller::tick` → `logic_hpa_policy::tick` →
+  `logic_hpa_puller_prometheus::do_pull`（唯一经 `logic_hpa_controller::create_http_request` 发 HTTP 的点）
+  → 响应 `logic_hpa_pull_result_prometheus::parse` → `logic_hpa_policy::trigger_event_on_pull_result`
+  （公开 API）→ instant/range 回调与 ready。puller 的创建门槛是
+  `metrics.exporters.has_prometheus_http_api()`（消息存在即创建，见 `logic_hpa_puller_factory::make_new_instance`），
+  **不是 url 非空**；若配 `prometheus_http_api {}`（空 url）仍会创建一个惰性 puller，其 `pull_url_` 为空时
+  `do_pull`/`can_pulling_available` 直接返回 false。要彻底不创建 puller，须完全不设 `prometheus_http_api`。
+
+mock 设计（回答“是否可通过默认安装的 pull hook 让逻辑正常运行”——可以）：
+
+1. seam：在 `logic_hpa_puller_prometheus::do_pull` 入口增加 hooks-on 分支（server_frame 实现代码内，宏
+   门控）：已安装 hook 时记录 query（url、policy、时间窗）并**不创建** `http_request`，等待注入；
+2. 注入 API 放在 HPA 实现同级的 `mock` 子命名空间（见 3.5）：测试提供预置 JSON，mock 构造
+   `logic_hpa_pull_result_prometheus`（`parse(gsl::string_view) noexcept` 接受 Prometheus HTTP API 的 JSON
+   响应体）后经公开的 `logic_hpa_policy::trigger_event_on_pull_result(logic_hpa_pull_result&)`（注意形参是
+   **基类** `logic_hpa_pull_result&`，非 prometheus 专用类型）喂回，完整走通下游回调与 ready 状态，不绕过任何
+   policy 内部逻辑；`do_pull()` 无参返回 bool，`create_http_request(gsl::string_view)` 返回
+   `util::network::http_request::ptr_t`（存量老名，与 `atfw::util::network::http_request` 同类型）；
+3. 默认行为遵循 3.4：`runtime_options` 启用 HPA feature 时 runtime **默认安装** pull hook；pull 属于“需要
+   响应”的调用，未配置答案的 metrics 默认喂回错误结果并输出诊断。注意此处存在用户诉求 #2 与 #8 的交叉：默认
+   hook 保证“逻辑正常运行”指的是**不触发真实 HTTP、pull 路径走完整 parse/trigger 回调链**；但由于
+   `do_ready()` 仅在 `!result.is_error()` 时触发，只有测试显式提供**成功**指标答案后 policy 才会进入 `ready_`
+   状态，默认错误结果不会置 ready（这正是提示补 mock 的信号）；
+4. `logic_hpa_discovery` 的 etcd 写依赖真实 etcd 集群，v1 不提供 mock；需要 HPA 的测试保持
+   `controller.configure_key` 为空（policy 的 `available_` 不依赖 configure_key，仅默认 discovery 不启用）；
+5. 该 hook 属功能私有 mock，registry 归属 server_frame DLL，遵守 3.2 的 ownership 规则。
 
 ## 9. 生命周期与隔离
 
@@ -821,7 +986,7 @@ runtime 状态机：`constructed -> starting -> running -> stopping -> stopped`�
    `logic.server.shared_component`；resource feature 另打开 `excel().enable()`。先用 smoke gate 验证空 listen 配置，
    只有真实 feature 要求监听时才分配唯一的本地临时资源，禁止固定端口或伪造 `mem://` 地址；
 3. 注册 `mock://` connector；
-4. 安装 DB、UUID、DNS、CS、resource 等 scoped hook；
+4. 安装 DB、UUID、DNS、CS、resource 等 scoped hook（HPA feature 启用时一并安装默认 pull hook）；
 5. 添加公共模块和按 feature 请求的 dispatcher；
 6. 执行用户 setup callback；
 7. init app/modules（参照 libatapp 单测范式：`init(nullptr, argc, args, nullptr)` + 预热 `run_noblock`）；
@@ -867,7 +1032,10 @@ fixture，验证 app/global module/task/resource provider 均未泄漏；hard-ti
 package `hello`）：
 
 - `hello.LogicCommonService/set_server_time`：**存在**，请求侧 stream + `allow_no_wait: true` +
-  `enable_broadcast: true`，适合验证 SS 发送链与 broadcast 计数，但不能验证响应唤醒；
+  `enable_broadcast: true`，适合验证 SS 发送链与 broadcast 计数，但不能验证响应唤醒。**注意**：生成器在
+  stream 模式下强制 `rpc_allow_no_wait = False`（`rpc_call_api_for_ss.cpp.mako` 的 `if not rpc_is_stream_mode:`
+  分支），所以 `set_server_time` 只能证明 stream/broadcast 分支，**不能**证明非-stream 的 `allow_no_wait`/
+  `wait_later` 分支；后者需靠 test-only proto 的显式非-stream 方法覆盖；
 - `hello.RouterService/router_transfer`：**已确认是普通 unary**（`SSRouterTransferReq` →
   `SSRouterTransferRsp`），没有 `router_rpc: true`，用于内置 unary 响应唤醒证明；
 - `hello.RankBoardService/rank_get_top` 等 unary SS RPC 存在于 `src/component/rank` 的协议中，但不在
@@ -882,16 +1050,18 @@ package `hello`）：
 | --- | --- |
 | Runtime | start/stop、空 listen、重复 fixture、并发 runtime 拒绝、task 成功/fault/cancel/task-timeout、hard-timeout poison/kill-all、teardown deadline、泄漏清理 |
 | Discovery/transport | id、name、discovery-node、type/zone、metadata、add/update/delete、consistent-hash/random/round-robin、broadcast、多节点、payload ownership、send-ack |
-| SS | unary、stream、no-wait/wait-later、user、broadcast、RPC/transport error、malformed、delay、timeout、未匹配 |
+| SS | unary、stream、no-wait/wait-later、user、broadcast、RPC/transport error、malformed、delay、timeout、两类默认行为（单向成功丢弃/需响应报错）及覆盖 |
 | Router | test-only router/unary、router/stream（经 test manager + object）、manager-not-found fallback、type-id 冲突/lifetime |
-| DNS | A、AAAA、多记录、空结果、error、乱序、delay、timeout、未匹配、cancel 后 late response |
+| DNS | A、AAAA、多记录、空结果、error、乱序、delay、timeout、未匹配报错、cancel 后 late response |
 | CS | add/post/remove/set-router-rsp、typed request、downstream data、kickoff、set-router、broadcast、send error、多客户端 |
 | DB KV | empty、presence-aware set/get/partial/batch、CAS 成功/冲突（含版本回写）、inc、remove、TTL |
 | DB KL | add/index 单调、max-length 裁剪、ordered missing slots、get/update/upsert/remove、空列表、TTL |
 | UUID | 五类入口、格式、单调性、seed/reset、全局/per-family override |
 | Resource | 首次 init、reload/version、missing/error、索引可见、provider generation 清除、连续 fixture 不泄漏 |
 | Orbit adapter | 两套 client SDK 请求入口、stream、callback response、send error、retry、timeout、late response、fallback；由外层 task 等待 |
-| Hooks OFF | server frame 无测试 registry/分支，生产 fallback 可构建 |
+| Telemetry | 空配置 noop 零网络、file-only 导出可断言、未初始化 tracer 安全、禁止项 fail-fast |
+| HPA | 默认零网络、启用时默认安装 pull hook、预置指标经 parse+回调完整注入、未配置答案报错、configure_key 为空时 discovery 不启用 |
+| Hooks OFF | server frame 无测试 registry/分支/`mock` 符号，生产 fallback 可构建 |
 
 ### 10.3 双协程构建
 
@@ -914,6 +1084,12 @@ package `hello`）：
 - atapp raw transport 的 id/name/discovery/hash/random/round-robin 规则与历史断言示例；
 - C++20 与传统协程共用写法；
 - 默认严格策略、DB/UUID 默认行为和用户覆盖优先级；
+- 单向通知/需响应 RPC 的两类默认行为规则（3.4）与 per-rule 覆盖方式；
+- `mock` 子命名空间与代码分布约定（3.5）：工具库公共 API、SS/DB 生成 mock 接口、HPA/UUID 功能私有 mock 的
+  各自位置；
+- 外部依赖离线配置矩阵（2.10）与禁止配置项（etcd、bus.proxy、主机名 listen、OTLP/push/pull exporter、固定
+  端口）；
+- telemetry 的 noop/file-only 用法（8.9）与 HPA pull 指标注入（8.10）；
 - timeout 四层关系：RPC timeout、task timeout、runtime hard timeout、CTest timeout；hard timeout 会 poison 当前
   runtime 并 kill-all，不能继续复用；
 - fixture 生命周期、单进程串行限制和 teardown 要求；
@@ -965,8 +1141,12 @@ package `hello`）：
 - [ ] 必须生成 test-only proto，覆盖当前仓库未实例化的 `router_rpc: true` 和其他缺失 Mako 组合；生成物只在
   build tree。
 - [ ] 完成内置 SS stream smoke（`hello.LogicCommonService/set_server_time`）。
+- [ ] 落实 3.4 两类默认行为：单向通知类默认记录并成功，需响应类默认快速失败，且 per-rule 可覆盖。
+- [ ] 在 `rpc_call_api_for_ss.*.mako` 增量生成 `<service>::mock` typed 注册辅助（宏门控纯新增），经现有流程
+  重新生成并双模式编译；test-only proto 同步获得生成 mock 接口。
 
-完成条件：普通 unary 在 task 中 suspend/resume；router 和 broadcast 有独立契约测试；未匹配调用快速失败。
+完成条件：普通 unary 在 task 中 suspend/resume；router 和 broadcast 有独立契约测试；未匹配调用按 3.4 默认行为
+处理（需响应类快速失败，单向通知类记录并成功）。
 
 ### 阶段 3：DNS
 
@@ -989,6 +1169,8 @@ package `hello`）：
   `g_unique_id_pools`）。
 - [ ] 自测明确调用 `rpc::db::login_auth::replace/get_all` 与 `hello::table_login_auth`，不使用仅测试 backend 的
   私有捷径。
+- [ ] 在 `db_interface`/`db_rpc_redis_kv/kl` 模板增量生成 `<db 命名空间>::mock` typed 数据检查接口（记录、
+  版本、TTL、KL 索引），接入工具库 raw entry 访问，并用 smoke case 断言数据内容。
 
 完成条件：完整 DB 操作矩阵通过，CAS/列表与当前 Lua 一致，用户能覆盖单操作或整个 backend/provider。
 
@@ -1017,6 +1199,9 @@ package `hello`）：
 - [ ] 实现独立 Orbit client adapter target、component-owned seam 和 callback waiter；覆盖两套请求入口、
   callback/retry/error/timeout/fallback，且从真实 `rpc::async_invoke` task 发起。
 - [ ] 实现必需的 DB + DNS + SS 组合 smoke case。
+- [ ] 实现 HPA `do_pull` seam 与 `mock` 子命名空间注入 API；runtime 启用 HPA feature 时默认安装 hook，验证无
+  etcd 配置下 policy 回调链路完整、未配置答案报错。
+- [ ] 验证 telemetry 空配置 noop 零网络、file-only 导出与禁止项 fail-fast。
 - [ ] 编写 README，并让示例参与编译。
 - [ ] 在 Debug hooks-on、Release hooks-on、production hooks-off、两种协程、Windows/Linux 可用环境执行矩阵；
   公开接口示例另以 C++17 编译约束验证。
@@ -1081,9 +1266,13 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 - [ ] `src/component/orbit/sdk/**` 的 RPC 由 SS mock 契约证明；`GameSharedComponent/Orbit` 直连 atbus 由独立可选
   adapter 覆盖 callback/retry/timeout，外层调用仍在真实 task 中。
 - [ ] 必需的 DB + DNS + 基础内置 SS 组合 case 在一个 task 中完成并由外层等待后退出。
-- [ ] 网络 mock 未匹配时快速失败并输出调用与规则诊断；timeout case 有 RPC、task、runtime hard、CTest 四层
-  保护。
-- [ ] hooks-off 的生产构建没有测试状态、热路径分支或测试库依赖。
+- [ ] 网络 mock 未匹配时快速失败并输出调用与规则诊断（单向通知类除外：默认记录并成功，见 3.4）；timeout case
+  有 RPC、task、runtime hard、CTest 四层保护。
+- [ ] 工具目录只含公共代码；service/功能 mock 接口位于各自实现/生成代码的 `mock` 子命名空间并被宏整体门控。
+- [ ] DB 生成 `<db 命名空间>::mock` typed 数据检查接口，可在测试中断言记录内容、版本、TTL 与 KL 索引。
+- [ ] telemetry 在 fixture 默认配置下零网络（noop），file-only 导出可选，禁止项 fail-fast。
+- [ ] HPA 默认零网络；测试启用时默认安装 pull hook，预置指标经公开回调完整注入，未配置答案报错。
+- [ ] hooks-off 的生产构建没有测试状态、热路径分支、`mock` 符号或测试库依赖。
 - [ ] test-only proto 通过现有 helper 生成到 build tree，覆盖当前未实例化的生成分支；不手改生成输出。若 CS 审计
   确需 Mako 变更，必须经过统一重新生成和双模式编译验证。
 
@@ -1100,6 +1289,8 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 | 默认 DB 身份不触发 I/O | hooks-on 仅设置既有 prefix/channel，断言 timer/连接未初始化且 teardown 恢复；已初始化实例默认拒绝覆盖 | 禁止为获得有效 channel 调用 `db_msg_dispatcher::init()` |
 | resource provider 隔离 | 连续两个 fixture 做 init/reload/teardown，检查 active provider generation 已清除；production loader/group wrapper 保持进程生命周期 | 禁止保存 fixture 裸指针、注册不可移除的 per-case callback 或承诺恢复 manager loader |
 | Orbit client seam 覆盖两套入口 | 枚举 `OrbitClientRuntime` method-descriptor API 与 `OrbitRPCDispatcher` legacy API，验证它们在 pending 注册后汇聚 send seam，并由原 receive/timeout/retry 路径完成 | 禁止用 SS mock 冒充 direct-atbus 覆盖或同步直接调用 callback |
+| HPA pull hook 不改生产路径 | hooks-off 编译；hook 未安装时 `do_pull` 走真实 `create_http_request` 的契约审查；注入必须经 `parse` + `trigger_event_on_pull_result` | 禁止在 hook 内直接篡改 policy 结果或绕过 parse/回调 |
+| 生成 mock 接口纯增量且宏门控 | 模板 diff 审查；hooks-off 双模式编译产物无 `mock` 符号；hooks-on 与工具库链接通过 | 禁止手改生成物或在既有调用热路径加分支 |
 | private test framework 不切 GTest | 在存在 GTest target 的配置中检查 link line 和运行输出 | 禁止复用会自动选框架的 helper |
 | hook 生产零开销 | hooks-off 编译、符号/依赖检查，审查预处理后的热路径 | 禁止仅依赖 `NDEBUG` |
 | DLL 边界每个 seam 只有一份状态 | Windows shared 构建分别跨 server-frame、server-frame-config、Orbit SDK 与 test DLL 安装/读取同一 generation，检查导出符号、依赖方向和 OFF 布局 | 禁止 header-local static/inline registry、跨 DLL 复制或 production target 依赖测试库 |
@@ -1140,7 +1331,7 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 | 投递 ack | `app::trigger_event_on_forward_response(sender, msg, error_code)` / `on_receive_forward_response(direct_source_id, handle, type, msg_sequence, error_code, data, metadata)` | 与回包不同通道 |
 | 消息结构 | `app::message_t` / `app::message_sender_t`（`atapp.h`） | `type/message_sequence/data/metadata`；`direct_source_id/id/name/remote` |
 | server frame 入站处理 | `logic_server_setup.cpp` `set_evt_on_forward_request(app_default_handle_on_receive_request)` | 回包由此进入 `ss_msg_dispatcher` |
-| 事件泵 | `app::run_noblock(max_event_count = 20000)`（`atapp.cpp`） | 返回 0 无事件 / 1 有 pending / 负数错误；`tick()` 只推进计时器不做 IO；泵内需 `time_utility::update()` + generation barrier |
+| 事件泵 | `app::run_noblock(max_event_count = 20000)`（`atapp.cpp`） | 返回 0 无事件 / 1 有 pending / 负数错误；`tick()` 跑 `mod->tick()`+`bus_node_->proc()`+timers 但不调 `uv_run`，无 socket IO；泵内需 `atfw::util::time::time_utility::update()` + generation barrier |
 | task 强制清理 | `task_manager::kill_all`、`logic_server_common_module::cleanup` | 无公开 per-task kill；hard timeout 必须 poison runtime 并 kill-all |
 
 ### 16.3 SS / Router / DNS / CS / DB / UUID / 资源 / Orbit
@@ -1149,13 +1340,13 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 | --- | --- | --- |
 | SS 发送出口 | `ss_msg_dispatcher.cpp` `owner->send_message(node_id, kInServerMessage, …)` | 关联 `destination_task_id`/`source_task_id` + sequence |
 | SS 生成模板 | `src/templates/rpc_call_api_for_ss.cpp.mako` | unary/stream/no-wait/broadcast/user/router |
-| router 真实路径 | `router_manager_base::send_msg` → `send_msg_raw` → `ss_msg_dispatcher::send_to_proc` | 传输不绕过 dispatcher；manager 自动注册，但其 `mutable_cache` 必须返回补齐纯虚接口的 `router_object_base` |
+| router 真实路径 | `router_manager_base::send_msg` → `send_msg_raw` → `ss_msg_dispatcher::send_to_proc` | 传输不绕过 dispatcher；manager 自动注册；子类须实现完整纯虚集：manager 的 `name()`/`get_base_cache()`/带 `io_task_guard&` 的 `mutable_cache`/`mutable_object`/`remove_cache`/`remove_object`，object 的 `name()`/`pull_object`/`save_object`/`save(带 io_task_guard&)`（`pull_cache`、不带 guard 的 save 非纯虚） |
 | DNS 入口/seam | `src/server_frame/rpc/dns/lookup.*` → `ss_msg_dispatcher::send_dns_lookup` → `uv_getaddrinfo` | 完成走 `dns_lookup_callback` → `rpc::custom_resume`；rpc type 为 `get_dns_lookup_rpc_type()` |
 | CS 入站 | `cs_msg_dispatcher::dispatch(source, msg)` | 要求 `msg.type == service_type::kAtGateway`，body 为 `atfw::gateway::server_message`；`kAddSession/kPost/kRemoveSession/kSetRouterRsp` |
 | CS 下行 4 调用点 | `cs_msg_dispatcher.cpp` `send_kickoff`/`send_set_router`/`send_data`/多会话版 `broadcast_data` 各调 `owner->get_bus_node()->send_data()` | 需收敛为单一内部 gateway-send 再 hook；多会话版 `session_ids` 参数当前未生效 |
 | DB 逻辑 seam | `src/server_frame/rpc/db/hash_table.*`（全部本地校验后、Redis 参数构造/发送前） | 同步 `handled + result code`，`RPC_DB_RETURN_CODE`（= `RPC_RETURN_TYPE`）包装；batch 由 get_all/partly_get 组合；v1 无 artificial latency |
 | DB wire 出口盘点 | `src/` 内 `db_msg_dispatcher::send_msg` 的直接调用 | 当前只出现在 `hash_table.cpp`，没有第二条生成 DB API 出口 |
-| DB 测试身份 | `db_msg_dispatcher` 构造/getter | 未 init 时 prefix 为空、channel 为 `MAX`；hooks-on 测试 API 只设置既有字段，不启动 I/O |
+| DB 测试身份 | `db_msg_dispatcher` 构造/getter（`get_record_prefix()`/`get_db_channel_type()`） | 未 init 时 prefix 为空、channel 为 `MAX`（init 会把 prefix 置为 host-id 派生值）；hooks-on 测试 API 只设置既有字段，不启动 I/O |
 | DB 内嵌 Lua | `db_msg_dispatcher.cpp` `kCompareAndSetHashTable`、`kAddListIndexHashTable` | CAS 与 KL 裁剪的 golden 语义；`CAS_FAILED→EN_DB_OLD_VERSION` 映射在 dispatcher，内存 backend 须等价复现 |
 | DB init（须跳过） | `db_msg_dispatcher::init` → `cluster_init`/`raw_init`；`SCRIPT LOAD` 在连接建立回调 | 默认内存 DB 不 init 即无 Redis I/O 与 timer |
 | UUID 入口 | `src/server_frame/rpc/db/uuid.*` `generate_standard_uuid`/`_binary`/`generate_short_uuid`/`generate_global_increase_id`/`generate_global_unique_id` | 前三类无 DB；`g_unique_id_pools` 静态号段（含协程排队） |
@@ -1166,3 +1357,17 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 | DB smoke API | `src/server_frame/rpc/db/local_db_interface.atfw.gen.*`、`svr.local.table.proto` | `rpc::db::login_auth::replace/get_all` 操作启用 CAS 的 `hello::table_login_auth` |
 | Orbit server RPC | `src/component/orbit/sdk/**`、`orbit_server_manager` | 生成调用和 server-to-client 封装最终进入 `ss_msg_dispatcher` |
 | Orbit client 直连 | `GameSharedComponent/Orbit` 的 `OrbitClientRuntime::send_message`、`OrbitRPCDispatcher` | 唯一生产 direct-atbus 例外；pending map 在 send 前注册，response/retry/timeout 有原生完成路径 |
+| telemetry 配置 | `src/server_frame/rpc/telemetry/rpc_global_service.cpp`、`svr.telemetry.config.proto`（`logic.telemetry`） | exporter 启用条件因类型而异（`ostream` 非空字串；`prometheus_push` 需 host+port+jobname；`prometheus_pull` 判 url；其余判 endpoint/file_pattern）；无 exporter 回退 Noop；trace provider 需 `has_exporters() && has_processors()`（simple/batch 均可）；file-only 纯配置可达 |
+| HPA 启用条件 | `svr.hpa.config.proto`（`logic.hpa`）；`logic_server_setup.cpp` `setup_hpa_controller` | `controller.enable && metrics.enable` 默认 false → 零网络；对象/curl 句柄无条件创建但无 IO |
+| HPA pull seam | `logic/hpa/pull/prometheus/logic_hpa_puller_prometheus.cpp` `do_pull()`（无参返回 bool）；`logic_hpa_policy::trigger_event_on_pull_result(logic_hpa_pull_result&)`（公开，形参是基类）；`logic_hpa_controller::create_http_request(gsl::string_view)`（唯一 HTTP 创建点，返回老名 `util::network::http_request::ptr_t`） | hook 短路 `do_pull`；注入经 `logic_hpa_pull_result_prometheus::parse(gsl::string_view)` + `trigger_event_on_pull_result`；puller 创建门槛是 `has_prometheus_http_api()` 而非 url 非空 |
+| HPA etcd 写 | `logic/hpa/logic_hpa_discovery.cpp` `set_value` → `get_raw_etcd_ctx().create_request_kv_set` | 依赖真实 etcd；v1 不 mock，测试保持 `controller.configure_key` 为空 |
+
+### 16.4 外部组件依赖离线性
+
+| 事项 | 位置 | 说明 |
+| --- | --- | --- |
+| etcd init 触网 | `service_discovery_module::init`、`etcd_module::check_keepalive_actor_start_success`（阻塞 `uv_run`） | 仅 `atapp.etcd.enable`+hosts 时发生；fixture 不配；orbit agent 强依赖 etcd（v1 不支持） |
+| atbus listen/proxy | `app::setup_atbus`；libatbus `channel_io_stream.cpp` | 空 listen 零 socket；主机名触发 `uv_getaddrinfo`；`bus.proxy` init 阻塞连 atproxy |
+| Redis 唯一入口 | `db_msg_dispatcher::init` → `cluster_init`/`raw_init` | fixture 不 init 即无连接 |
+| 日志/时间 | `atapp_log_sink_maker`（file/stdout/stderr/syslog）；`atfw::util::time::time_utility` | 无远程 sink；无 NTP |
+| 组件 SDK init | dtmq/rank/distributed_transaction/orbit server SDK | init 均不触网；Orbit client SDK 的主动连接属 client 侧 |
