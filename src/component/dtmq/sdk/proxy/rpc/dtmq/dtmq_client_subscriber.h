@@ -79,6 +79,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
     // 频道不存在时自动创建，默认为 true
     bool auto_create_channel;
 
+    // 是否附带私有数据通知，默认为 false
+    bool with_private_data;
+
     // 可以设置 event_callback_set 来让多个 client_subscriber 共享同一组事件回调函数，避免浪费
     event_callback_set_ptr_t event_callback_set;
   };
@@ -219,6 +222,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept;
 
   DTMQ_PROXY_SDK_API bool is_ready() const noexcept;
+
+  DTMQ_PROXY_SDK_API bool get_option_auto_create_channel() const noexcept;
+
+  DTMQ_PROXY_SDK_API bool get_option_with_private_data() const noexcept;
 
   /**
    * @brief Set the event callback on ready object
