@@ -50,7 +50,7 @@ metrics:
   resource:
       {{- toYaml .opentelemetry.metrics.resource | trim | nindent 4 }}
     {{- end }}
-  default_name: "{{ .opentelemetry.prefix_name }}default"
+  default_name: "{{ .opentelemetry.prefix_name }}{{ .libapp_name }}"
     {{- if .opentelemetry.metrics.reader }}
   reader:
       {{- toYaml .opentelemetry.metrics.reader | trim | nindent 4 }}

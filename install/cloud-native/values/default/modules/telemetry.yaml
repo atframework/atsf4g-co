@@ -7,70 +7,71 @@ enabled: true
 opentelemetry:
   trace:
     otlp:
-      grpc:
-        endpoint: "127.0.0.1:4317"
-        insecure: true
-        # user_agent: ""
-        max_concurrent_requests: 64
-        max_threads: 2
-        timeout: "10s"
+      # grpc:
+      #   endpoint: "127.0.0.1:4317"
+      #   insecure: true
+      #   # user_agent: ""
+      #   max_concurrent_requests: 64
+      #   max_threads: 2
+      #   timeout: "10s"
       file:
-        endpoint: true
+        enable: true
         flush_interval: "60s"
         file_size: 20MB
         rotate_size: 3
   metrics:
     otlp:
-      grpc:
-        endpoint: "127.0.0.1:4317"
-        insecure: true
-        # user_agent: ""
-        max_concurrent_requests: 64
-        max_threads: 2
-        timeout: "10s"
+      # grpc:
+      #   endpoint: "127.0.0.1:4318"
+      #   insecure: true
+      #   # user_agent: ""
+      #   max_concurrent_requests: 64
+      #   max_threads: 2
+      #   timeout: "10s"
       file:
-        endpoint: true
+        enable: true
         flush_interval: "60s"
         file_size: 20MB
         rotate_size: 3
   logs:
     otlp:
-      grpc:
-        endpoint: "127.0.0.1:4317"
-        insecure: true
-        # user_agent: ""
-        max_concurrent_requests: 64
-        max_threads: 2
-        timeout: "10s"
+      # grpc:
+      #   endpoint: "127.0.0.1:4319"
+      #   insecure: true
+      #   # user_agent: ""
+      #   max_concurrent_requests: 64
+      #   max_threads: 2
+      #   timeout: "10s"
       file:
-        endpoint: true
+        enable: true
         flush_interval: "60s"
         file_size: 20MB
         rotate_size: 3
+
 agent:
   receivers:
     trace:
-      otlp/default:
+      otlp/default_trace:
         protocols:
           grpc:
             endpoint: "127.0.0.1:4317"
     metrics:
-      otlp/default:
+      otlp/default_metrics:
         protocols:
           grpc:
-            endpoint: "127.0.0.1:4317"
+            endpoint: "127.0.0.1:4318"
     logs:
-      otlp/default:
+      otlp/default_logs:
         protocols:
           grpc:
-            endpoint: "127.0.0.1:4317"
+            endpoint: "127.0.0.1:4319"
   enable_trace: true
   trace_exporters:
     otlp:
       grpc:
         endpoint: "127.0.0.1:4317"
       file:
-        endpoint: true
+        enable: true
     trace_blackhole: false
     spanmetrics:
       default:
@@ -81,29 +82,21 @@ agent:
   metrics_exporters:
     otlp:
       grpc:
-        endpoint: "127.0.0.1:4317"
+        endpoint: "127.0.0.1:4318"
       file:
-        endpoint: true
+        enable: true
   enable_logs: true
   logs_exporters:
     otlp:
       grpc:
-        endpoint: "127.0.0.1:4317"
+        endpoint: "127.0.0.1:4319"
       file:
-        endpoint: true
+        enable: true
   shared_options:
     exporters:
       otlp:
-        # https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/otlpexporter/README.md
-        grpc:
-          balancer_name: "round_robin"
-          sending_queue:
-            enabled: true
-            num_consumers: 16
-          compression: gzip # gzip/snappy/zstd , gzip is the only required compression algorithm required for OTLP servers
-        # https://github.com/open-telemetry/opentelemetry-collector/blob/main/exporter/otlphttpexporter/README.md
-        http:
-          compression: gzip # gzip/snappy/zstd , gzip is the only required compression algorithm required for OTLP servers
+        file:
+          enable: true
       prometheus:
         # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/exporter/prometheusexporter/README.md
         pull:
@@ -123,7 +116,7 @@ agent:
       file_dir: ../log
       file:
         rotation:
-          max_megabytes: 20971520
+          max_megabytes: 10
           max_days: 3
           max_backups: 10
           localtime: true
@@ -209,7 +202,7 @@ group:
           grpc:
             endpoint: "127.0.0.1:4327"
           file:
-            endpoint: true
+             enable: true
   notification:
     agent:
       shared_options:
@@ -231,4 +224,4 @@ group:
           grpc:
             endpoint: "127.0.0.1:4337"
           file:
-            endpoint: true
+            enable: true

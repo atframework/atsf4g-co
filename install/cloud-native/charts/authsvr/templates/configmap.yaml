@@ -2,5 +2,4 @@
 {{- define "authsvr.configmap" -}}
 data:
   {{ include "authsvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/authsvr.yaml.tpl") . | quote }}
-  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
 {{- end -}}

@@ -280,23 +280,11 @@ function init_server_config() {
   #   return 1
   # fi
 
-  cp -f /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/vector.yaml ${WORKDIR}/../cfg/vector.yaml
-  RET=$?
-  if [[ ${RET} -ne 0 ]]; then
-    return ${RET}
-  fi
-
   envsubst < /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/${SERVER_TYPE_NAME}.yaml > ${WORKDIR}/../cfg/${SERVER_TYPE_NAME}.yaml
   RET=$?
   if [[ ${RET} -ne 0 ]]; then
     return ${RET}
   fi
-
-  # # init server config
-  # envsubst < /etc/atframework/publish/${SERVER_TYPE_NAME}/cfg/vector.yaml > ${WORKDIR}/../cfg/vector.yaml
-  # if [[ $? -ne 0 ]]; then
-  #   return $?
-  # fi
 
   return 0
 }

@@ -2,5 +2,4 @@
 {{- define "orbit-agent.configmap" -}}
 data:
   {{ include "orbit-agent.name" . }}.yaml: {{ tpl (.Files.Get "cfg/orbit-agent.yaml.tpl") . | quote }}
-  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
 {{- end -}}

@@ -302,7 +302,7 @@ service:
       {{- $group_pipeline_metrics_exporters = append $group_pipeline_metrics_exporters $group_pipeline_metrics_custom_exporter -}}
     {{- end }}
     {{- if and $group_pipeline_metrics_receivers $group_pipeline_metrics_exporters }}
-    metrics/basic_{{- $group_settings.name -}}:
+    metrics/{{- $group_settings.name -}}:
       {{- $group_pipeline_metrics_processor_name := printf "batch/%v_%v" "metrics" $group_settings.name -}}
       {{- toYaml (dict "receivers" $group_pipeline_metrics_receivers "processors" (list $group_pipeline_metrics_processor_name) "exporters" $group_pipeline_metrics_exporters ) | trim | nindent 6 }}
     {{- end }}
