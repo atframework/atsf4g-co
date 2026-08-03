@@ -827,10 +827,18 @@ DTMQ_PROXY_SDK_API const ::google::protobuf::Any& client_subscriber::get_custom_
 }
 
 DTMQ_PROXY_SDK_API int64_t client_subscriber::get_private_data_sequence() const noexcept {
+  if (!internal_data_->options.with_private_data) {
+    return 0;
+  }
+
   return internal_data_->shared_instance->get_private_data_sequence();
 }
 
 DTMQ_PROXY_SDK_API const ::google::protobuf::Any& client_subscriber::get_private_data_content() const noexcept {
+  if (!internal_data_->options.with_private_data) {
+    return ::google::protobuf::Any::default_instance();
+  }
+
   return internal_data_->shared_instance->get_private_data_content();
 }
 
@@ -1249,7 +1257,7 @@ static int32_t internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) 
     return 0;
   }
 
-  // 尽量在一个task里处理星跳发送，这样不用占用浪费task池占用
+  // 尽量在一个task里处理心跳发送，这样不用占用浪费task池占用
   auto invoke_result = rpc::async_invoke(
       ctx, "atframework.dtmq.internal_subscriber_manager.send_heartbeat",
       [](rpc::context& child_ctx) -> rpc::result_code_type {
@@ -1549,7 +1557,7 @@ mq_client_subscriber_wal_client_type::configure_pointer shared_subscriber::creat
 
   ret->require_snapshot = true;
 
-  // 以下不同类型的聊天频道配置不一样
+  // 以下不同类型的消息队列频道配置不一样
   if (configure.gc_expire_duration().seconds() <= 0) {
     ret->gc_expire_duration =
         std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
@@ -1993,7 +2001,7 @@ void shared_subscriber::foreach_registered_client_subscriber(
     return;
   }
 
-  // 保持生命周期，确保在回调中不会导致整个市里被销毁
+  // 保持生命周期，确保在回调中不会导致整个实例被销毁
   auto hold_lifetime = shared_from_this();
 
   lock_registered_client_guard guard(*this);
@@ -2156,7 +2164,13 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
       auto log_ptr = wal_client_->get_log_manager().allocate_log(protobuf_to_system_clock(log_msg.create_timepoint()),
                                                                  log_msg.detail().command_case(), param, log_msg);
       if (log_ptr) {
+        result_code = 0;
         auto log_result = wal_client_->receive_log(param, std::move(log_ptr));
+
+        if (log_result == atfw::util::distributed_system::wal_result_code::kIgnore) {
+          continue;
+        }
+
         if (log_result < atfw::util::distributed_system::wal_result_code::kOk) {
           if (log_result == atfw::util::distributed_system::wal_result_code::kClientRequireSnapshot) {
             FCTXLOGINFO(ctx, "Required snapshot first and failed to emplace log for sequence: {}, ignore rest logs",
@@ -2184,6 +2198,8 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
         }
       } else {
         FCTXLOGERROR(ctx, "Failed to allocate log for sequence: {}", log_msg.sequence());
+        failure_log_sequence = log_msg.sequence();
+        break;
       }
     }
 
