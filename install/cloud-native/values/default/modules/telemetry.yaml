@@ -4,6 +4,7 @@
 
 enabled: true
 
+# Agent 配置
 opentelemetry:
   trace:
     otlp:
@@ -49,7 +50,7 @@ opentelemetry:
         rotate_size: 3
 
 agent:
-  receivers:
+  receivers:  # 默认Agent Receiver 配置
     trace:
       otlp/default_trace:
         protocols:
@@ -66,7 +67,7 @@ agent:
           grpc:
             endpoint: "127.0.0.1:4319"
   enable_trace: true
-  trace_exporters:
+  trace_exporters: # 控制Server Exporter 配置 不控制 Agent
     otlp:
       grpc:
         endpoint: "127.0.0.1:4317"
@@ -190,19 +191,19 @@ group:
               send_batch_size: 16
               send_batch_max_size: 8192
               timeout: 30s
-      receivers:
+      receivers: # Agent Receiver 配置
         logs:
           otlp/cs_actor:
             protocols:
               grpc:
                 endpoint: "127.0.0.1:4327"
       enable_logs: true
-      logs_exporters:
+      logs_exporters: # Server Exporter 配置
         otlp:
           grpc:
             endpoint: "127.0.0.1:4327"
           file:
-             enable: true
+            enable: true
   notification:
     agent:
       shared_options:

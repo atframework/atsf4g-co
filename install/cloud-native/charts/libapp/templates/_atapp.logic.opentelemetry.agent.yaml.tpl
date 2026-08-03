@@ -16,8 +16,8 @@ trace_exporters:
     {{- if (dig "otlp" "file" "enable" false .agent.trace_exporters) }}
     file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
     alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.json"
-      {{- if (unset (unset (deepCopy .agent.trace_exporters.otlp.file) "enable") "enable") }}
-      {{- toYaml (unset (unset .agent.trace_exporters.otlp.file "enable") "enable") | trim | nindent 4 }}
+      {{- if (unset (deepCopy .agent.trace_exporters.otlp.file) "enable") }}
+      {{- toYaml (unset .agent.trace_exporters.otlp.file "enable") | trim | nindent 4 }}
       {{- end }}
     {{- else }}
     # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
@@ -41,8 +41,8 @@ metrics_exporters:
     {{- if (dig "otlp" "file" "enable" false .agent.metrics_exporters) }}
     file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
     alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.json"
-      {{- if (unset (unset (deepCopy .agent.metrics_exporters.otlp.file) "enable") "enable") }}
-      {{- toYaml (unset (unset .agent.metrics_exporters.otlp.file "enable") "enable") | trim | nindent 4 }}
+      {{- if (unset (deepCopy .agent.metrics_exporters.otlp.file) "enable") }}
+      {{- toYaml (unset .agent.metrics_exporters.otlp.file "enable") | trim | nindent 4 }}
       {{- end }}
     {{- else }}
     # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
@@ -83,8 +83,8 @@ logs_exporters:
     {{- else }}
     # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
     # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.json"
-      {{- if (unset (unset (deepCopy .agent.logs_exporters.otlp.file) "enable") "enable") }}
-      {{- toYaml (unset (unset .agent.logs_exporters.otlp.file "enable") "enable") | trim | nindent 4 }}
+      {{- if (unset (deepCopy .agent.logs_exporters.otlp.file) "enable") }}
+      {{- toYaml (unset .agent.logs_exporters.otlp.file "enable") | trim | nindent 4 }}
       {{- end }}
     {{- end }}
   {{- end }}

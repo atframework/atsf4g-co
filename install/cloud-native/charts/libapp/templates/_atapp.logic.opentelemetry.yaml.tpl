@@ -22,11 +22,11 @@ trace:
       {{- toYaml .opentelemetry.trace.otlp.http | trim | nindent 6 }}
     {{- end }}
     otlp_file:
-    {{- if (dig "otlp" "file" "endpoint" false .opentelemetry.trace) }}
+    {{- if (dig "otlp" "file" "enable" false .opentelemetry.trace) }}
       file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
       alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.json"
-      {{- if (unset (unset (deepCopy .opentelemetry.trace.otlp.file) "endpoint") "enable") }}
-      {{- toYaml (unset (unset .opentelemetry.trace.otlp.file "endpoint") "enable") | trim | nindent 6 }}
+      {{- if (unset (deepCopy .opentelemetry.trace.otlp.file) "enable") }}
+      {{- toYaml (unset .opentelemetry.trace.otlp.file "enable") | trim | nindent 6 }}
       {{- end }}
     {{- else }}
       # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
@@ -65,11 +65,11 @@ metrics:
       {{- toYaml .opentelemetry.metrics.otlp.http | trim | nindent 6 }}
     {{- end }}
     otlp_file:
-    {{- if (dig "otlp" "file" "endpoint" false .opentelemetry.metrics) }}
+    {{- if (dig "otlp" "file" "enable" false .opentelemetry.metrics) }}
       file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
       alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.json"
-      {{- if (unset (unset (deepCopy .opentelemetry.metrics.otlp.file) "endpoint") "enable") }}
-      {{- toYaml (unset (unset .opentelemetry.metrics.otlp.file "endpoint") "enable") | trim | nindent 6 }}
+      {{- if (unset (deepCopy .opentelemetry.metrics.otlp.file) "enable") }}
+      {{- toYaml (unset .opentelemetry.metrics.otlp.file "enable") | trim | nindent 6 }}
       {{- end }}
     {{- else }}
       # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
@@ -111,11 +111,11 @@ logs:
       {{- toYaml .opentelemetry.logs.otlp.http | trim | nindent 6 }}
     {{- end }}
     otlp_file:
-    {{- if (dig "otlp" "file" "endpoint" false .opentelemetry.logs) }}
+    {{- if (dig "otlp" "file" "enable" false .opentelemetry.logs) }}
       file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
       alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.json"
-      {{- if (unset (unset (deepCopy .opentelemetry.logs.otlp.file) "endpoint") "enable") }}
-      {{- toYaml (unset (unset .opentelemetry.logs.otlp.file "endpoint") "enable") | trim | nindent 6 }}
+      {{- if (unset (deepCopy .opentelemetry.logs.otlp.file) "enable") }}
+      {{- toYaml (unset .opentelemetry.logs.otlp.file "enable") | trim | nindent 6 }}
       {{- end }}
     {{- else }}
       # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
