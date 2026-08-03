@@ -74,8 +74,8 @@ logic:
           sink:
             - type: file
               level:
-                min: fatal
-                max: debug
+                min: debug
+                max: fatal
               rotate:
                 number: 3
                 size: 10485760 # 10MB
@@ -86,11 +86,11 @@ logic:
       {{- /*Merge k8s cluster name*/ -}}
       {{- $opentelemetry_current_setting := mergeOverwrite .Values.telemetry.opentelemetry (dict "metrics" (dict "resource" (dict "k8s.cluster.name" ( include "libapp.cluster" . )))) -}}
       {{- $opentelemetry_data := dict "opentelemetry" $opentelemetry_current_setting "libapp_name" ( include "libapp.name" . ) "bus_addr" ( include "libapp.busAddr" . ) "server_log_dir" .Values.server_log_dir -}}
-      {{- include "atapp.logic.opentelemetry.yaml" $opentelemetry_data | indent 6 }}
+      {{- include "atapp.logic.opentelemetry.yaml" $opentelemetry_data | trim | nindent 6 }}
 {{- if not (empty .Values.telemetry.agent) }}
     agent:
       {{- $opentelemetry_agent_data := dict "agent" .Values.telemetry.agent "libapp_name" ( include "libapp.name" . ) "bus_addr" ( include "libapp.busAddr" . ) "server_log_dir" .Values.server_log_dir -}}
-      {{- include "atapp.logic.opentelemetry.agent.yaml" $opentelemetry_agent_data | indent 6 }}
+      {{- include "atapp.logic.opentelemetry.agent.yaml" $opentelemetry_agent_data | trim | nindent 6 }}
 {{- end }}
 {{- if not (empty .Values.telemetry.group) }}
   {{- $opentelemetry_libapp_name := include "libapp.name" . }}
@@ -103,11 +103,11 @@ logic:
           {{- /*Merge k8s cluster name*/ -}}
           {{- $opentelemetry_current_setting := mergeOverwrite $telemetry_group_settings (dict "metrics" (dict "resource" (dict "k8s.cluster.name" ( include "libapp.cluster" $ )))) -}}
           {{- $opentelemetry_data := dict "opentelemetry" $opentelemetry_current_setting "libapp_name" $opentelemetry_libapp_name "bus_addr" $opentelemetry_libapp_busaddr "server_log_dir" $opentelemetry_server_log_dir -}}
-          {{- include "atapp.logic.opentelemetry.yaml" $opentelemetry_data  | indent 10 }}
+          {{- include "atapp.logic.opentelemetry.yaml" $opentelemetry_data  | trim | nindent 10 }}
     {{- if not (empty (get $opentelemetry_current_setting "agent")) }}
         agent:
           {{- $opentelemetry_agent_data := dict "agent" (get $opentelemetry_current_setting "agent") "libapp_name" $opentelemetry_libapp_name "bus_addr" $opentelemetry_libapp_busaddr "server_log_dir" $opentelemetry_server_log_dir -}}
-          {{- include "atapp.logic.opentelemetry.agent.yaml" $opentelemetry_agent_data | indent 10 }}
+          {{- include "atapp.logic.opentelemetry.agent.yaml" $opentelemetry_agent_data | trim | nindent 10 }}
     {{- end }}
   {{- end }}
 {{- end }}
@@ -119,5 +119,5 @@ logic:
   {{- /*Merge k8s cluster name*/ -}}
   {{- $hpa_current_setting := mergeOverwrite .Values.hpa (dict "metrics" (dict "labels" (dict "k8s.cluster.name" ( include "libapp.cluster" . )))) -}}
   {{- $hpa_data := dict "hpa" $hpa_current_setting  "autoscaling" (.Values.autoscaling | default dict) "libapp_name" ( include "libapp.name" . ) "libapp_type_id" .Values.type_id "libapp_hpa_target_name" ( include "libapp.hpa_target_name" . ) "chart" .Chart -}}
-  {{- include "atapp.logic.hpa.yaml" $hpa_data | indent 2 }}
+  {{- include "atapp.logic.hpa.yaml" $hpa_data | trim | nindent 2 }}
 {{- end }}

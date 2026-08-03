@@ -23,12 +23,14 @@ trace:
     {{- end }}
     otlp_file:
     {{- if (dig "otlp" "file" "endpoint" false .opentelemetry.trace) }}
-      file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.jsonl" # @stdout, @stderr or file pattern
-      alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.jsonl"
+      file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
+      alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.json"
+      {{- if (unset (unset (deepCopy .opentelemetry.trace.otlp.file) "endpoint") "enable") }}
       {{- toYaml (unset (unset .opentelemetry.trace.otlp.file "endpoint") "enable") | trim | nindent 6 }}
+      {{- end }}
     {{- else }}
-      # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.jsonl" # @stdout, @stderr or file pattern
-      # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.jsonl"
+      # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
+      # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.json"
     {{- end }}
     {{- if (dig "processors" false .opentelemetry.trace) }}
   processors:
@@ -64,12 +66,14 @@ metrics:
     {{- end }}
     otlp_file:
     {{- if (dig "otlp" "file" "endpoint" false .opentelemetry.metrics) }}
-      file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.jsonl" # @stdout, @stderr or file pattern
-      alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.jsonl"
+      file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
+      alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.json"
+      {{- if (unset (unset (deepCopy .opentelemetry.metrics.otlp.file) "endpoint") "enable") }}
       {{- toYaml (unset (unset .opentelemetry.metrics.otlp.file "endpoint") "enable") | trim | nindent 6 }}
+      {{- end }}
     {{- else }}
-      # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.jsonl" # @stdout, @stderr or file pattern
-      # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.jsonl"
+      # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
+      # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.json"
     {{- end }}
     {{- if (dig "prometheus" "pull" "url" false .opentelemetry.metrics) }}
     prometheus_pull:
@@ -108,12 +112,14 @@ logs:
     {{- end }}
     otlp_file:
     {{- if (dig "otlp" "file" "endpoint" false .opentelemetry.logs) }}
-      file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.jsonl" # @stdout, @stderr or file pattern
-      alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.jsonl"
+      file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
+      alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.json"
+      {{- if (unset (unset (deepCopy .opentelemetry.logs.otlp.file) "endpoint") "enable") }}
       {{- toYaml (unset (unset .opentelemetry.logs.otlp.file "endpoint") "enable") | trim | nindent 6 }}
+      {{- end }}
     {{- else }}
-      # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.jsonl" # @stdout, @stderr or file pattern
-      # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.jsonl"
+      # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
+      # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.json"
     {{- end }}
     {{- if (dig "processors" false .opentelemetry.logs) }}
   processors:

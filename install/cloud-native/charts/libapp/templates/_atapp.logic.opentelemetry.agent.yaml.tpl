@@ -14,12 +14,14 @@ trace_exporters:
     {{- end }}
   otlp_file:
     {{- if (dig "otlp" "file" "endpoint" false .agent.trace_exporters) }}
-    file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.jsonl" # @stdout, @stderr or file pattern
-    alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.jsonl"
+    file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
+    alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.json"
+      {{- if (unset (unset (deepCopy .agent.trace_exporters.otlp.file) "endpoint") "enable") }}
       {{- toYaml (unset (unset .agent.trace_exporters.otlp.file "endpoint") "enable") | trim | nindent 4 }}
+      {{- end }}
     {{- else }}
-    # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.jsonl" # @stdout, @stderr or file pattern
-    # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.jsonl"
+    # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.%N.json" # @stdout, @stderr or file pattern
+    # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.trace.json"
     {{- end }}
   {{- end }}
   {{- if .agent.enable_metrics }}
@@ -37,12 +39,14 @@ metrics_exporters:
     {{- end }}
   otlp_file:
     {{- if (dig "otlp" "file" "endpoint" false .agent.metrics_exporters) }}
-    file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.jsonl" # @stdout, @stderr or file pattern
-    alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.jsonl"
+    file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
+    alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.json"
+      {{- if (unset (unset (deepCopy .agent.metrics_exporters.otlp.file) "endpoint") "enable") }}
       {{- toYaml (unset (unset .agent.metrics_exporters.otlp.file "endpoint") "enable") | trim | nindent 4 }}
+      {{- end }}
     {{- else }}
-    # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.jsonl" # @stdout, @stderr or file pattern
-    # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.jsonl"
+    # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.%N.json" # @stdout, @stderr or file pattern
+    # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.metrics.json"
     {{- end }}
     {{- if (dig "prometheus" "pull" "url" false .agent.metrics_exporters) }}
   prometheus_pull:
@@ -74,12 +78,14 @@ logs_exporters:
     {{- end }}
   otlp_file:
     {{- if (dig "otlp" "file" "endpoint" false .agent.logs_exporters) }}
-    file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.jsonl" # @stdout, @stderr or file pattern
-    alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.jsonl"
+    file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
+    alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.json"
     {{- else }}
-    # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.jsonl" # @stdout, @stderr or file pattern
-    # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.jsonl"
+    # file_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.%N.json" # @stdout, @stderr or file pattern
+    # alias_pattern: "{{ .server_log_dir }}/{{ .libapp_name }}_{{ .bus_addr }}.logs.json"
+      {{- if (unset (unset (deepCopy .agent.logs_exporters.otlp.file) "endpoint") "enable") }}
       {{- toYaml (unset (unset .agent.logs_exporters.otlp.file "endpoint") "enable") | trim | nindent 4 }}
+      {{- end }}
     {{- end }}
   {{- end }}
 {{- end }}

@@ -6,17 +6,47 @@ enabled: true
 
 opentelemetry:
   trace:
-    processors:
-      batch:
-        timeout: 10s
-        send_batch_size: 256
-        send_batch_max_size: 32768
+    otlp:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+        insecure: true
+        # user_agent: ""
+        max_concurrent_requests: 64
+        max_threads: 2
+        timeout: "10s"
+      file:
+        endpoint: true
+        flush_interval: "60s"
+        file_size: 20MB
+        rotate_size: 3
+  metrics:
+    otlp:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+        insecure: true
+        # user_agent: ""
+        max_concurrent_requests: 64
+        max_threads: 2
+        timeout: "10s"
+      file:
+        endpoint: true
+        flush_interval: "60s"
+        file_size: 20MB
+        rotate_size: 3
   logs:
-    processors:
-      batch:
-        timeout: 10s
-        send_batch_size: 256
-        send_batch_max_size: 32768
+    otlp:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+        insecure: true
+        # user_agent: ""
+        max_concurrent_requests: 64
+        max_threads: 2
+        timeout: "10s"
+      file:
+        endpoint: true
+        flush_interval: "60s"
+        file_size: 20MB
+        rotate_size: 3
 agent:
   receivers:
     trace:
@@ -40,7 +70,7 @@ agent:
       grpc:
         endpoint: "127.0.0.1:4317"
       file:
-        enable: false
+        endpoint: true
     trace_blackhole: false
     spanmetrics:
       default:
@@ -53,14 +83,14 @@ agent:
       grpc:
         endpoint: "127.0.0.1:4317"
       file:
-        enable: false
+        endpoint: true
   enable_logs: true
   logs_exporters:
     otlp:
       grpc:
         endpoint: "127.0.0.1:4317"
       file:
-        enable: false
+        endpoint: true
   shared_options:
     exporters:
       otlp:
@@ -93,7 +123,7 @@ agent:
       file_dir: ../log
       file:
         rotation:
-          max_megabytes: 10
+          max_megabytes: 20971520
           max_days: 3
           max_backups: 10
           localtime: true
@@ -157,7 +187,6 @@ agent:
           aggregation_temporality: "AGGREGATION_TEMPORALITY_DELTA"
         prometheus:
           aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
-
 group:
   cs_actor:
     agent:
@@ -180,7 +209,7 @@ group:
           grpc:
             endpoint: "127.0.0.1:4327"
           file:
-            enable: false
+            endpoint: true
   notification:
     agent:
       shared_options:
@@ -202,4 +231,4 @@ group:
           grpc:
             endpoint: "127.0.0.1:4337"
           file:
-            enable: true
+            endpoint: true
