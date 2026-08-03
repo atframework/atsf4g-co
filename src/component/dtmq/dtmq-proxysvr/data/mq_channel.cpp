@@ -522,6 +522,10 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
 
   if (configure_.memory_only()) {
     upgrade_to_writable();
+
+    if (nullptr == get_shared_wal_object()->get_last_removed_key()) {
+      get_shared_wal_object()->set_last_removed_key(get_last_message_sequence());
+    }
     RPC_RETURN_CODE(0);
   }
 

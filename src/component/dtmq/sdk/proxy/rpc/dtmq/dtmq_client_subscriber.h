@@ -155,6 +155,7 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @param ctx RPC上下文
    * @param from_server_id 来源服务ID
    * @param event_sync 收到的事件同步消息
+   * @note 此接口都不可重入
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API static rpc::result_code_type global_receive_channel_event(
       rpc::context& ctx, uint64_t from_server_id, const atfw::dtmq::SSChannelEventSync& event_sync);
@@ -163,6 +164,7 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @brief 使用订阅者的服务必须接入定时器Tick调用
    *
    * @param ctx RPC上下文
+   * @note 此接口都不可重入
    * @return 0表示无任何定时器事件触发，< 0表示错误码，> 0表示触发的定时器事件数量
    */
   DTMQ_PROXY_SDK_API static int32_t global_tick(rpc::context& ctx);
@@ -217,11 +219,29 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    */
   DTMQ_PROXY_SDK_API int64_t get_last_heartbeat_sequence() const noexcept;
 
+  DTMQ_PROXY_SDK_API int64_t get_custom_data_sequence() const noexcept;
+
+  DTMQ_PROXY_SDK_API const ::google::protobuf::Any& get_custom_data_content() const noexcept;
+
+  DTMQ_PROXY_SDK_API int64_t get_private_data_sequence() const noexcept;
+
+  DTMQ_PROXY_SDK_API const ::google::protobuf::Any& get_private_data_content() const noexcept;
+
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelConfigure& get_configure() const noexcept;
 
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept;
 
   DTMQ_PROXY_SDK_API bool is_ready() const noexcept;
+
+  DTMQ_PROXY_SDK_API bool is_destroyed() const noexcept;
+
+  DTMQ_PROXY_SDK_API int64_t get_create_sequence() const noexcept;
+
+  DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_create_timepoint() const noexcept;
+
+  DTMQ_PROXY_SDK_API int64_t get_destroy_sequence() const noexcept;
+
+  DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_destroy_timepoint() const noexcept;
 
   DTMQ_PROXY_SDK_API bool get_option_auto_create_channel() const noexcept;
 
