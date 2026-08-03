@@ -53,6 +53,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <gsl/util>
 #include <list>
 #include <memory>
 #include <string>
@@ -88,7 +89,9 @@ struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_private_data_type {
 };
 
 struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_wal_log_action_getter {
-  atfw::dtmq::DChannelMessageDetail::CommandCase operator()(const atfw::dtmq::DChannelMessage&) noexcept;
+  atfw::dtmq::DChannelMessageDetail::CommandCase operator()(const atfw::dtmq::DChannelMessage& log) noexcept {
+    return log.detail().command_case();
+  }
 };
 
 struct ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_log_action_hash_t {
@@ -182,6 +185,8 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
     kLockRegisteredClient = 2,
     kDestroying = 3,
     kRecentlyHeartbeatFailure = 4,
+    kInCallbackReceiveEvent = 5,
+    kInCallbackLoadSnapshot = 6,
     kMax,
   };
 
@@ -309,7 +314,7 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
 
   void update_custom_data(rpc::context& ctx, int64_t sequence, const google::protobuf::Any& custom_data);
 
-  void update_private_data(rpc::context& ctx, int64_t sequence, const google::protobuf::Any& custom_data);
+  void update_private_data(rpc::context& ctx, int64_t sequence, const google::protobuf::Any& private_data);
 
   void update_optimistic_lock(rpc::context& ctx, const ::atfw::dtmq::DChannelOptimisticLock& to);
 
@@ -450,6 +455,8 @@ static bool& is_internal_subscriber_manager_destroyed() {
 struct ATFW_UTIL_SYMBOL_LOCAL internal_subscriber_manager {
   bool timer_running = false;
   bool destroyed = false;
+  bool is_in_callback_global_receive_channel_event = false;
+  bool is_in_callback_global_tick = false;
   mq_client_subscriber_timer_type timer_set;
 
   std::unordered_map<std::string, shared_subscriber::ptr_t> cached_subscriber_by_channel_id;
@@ -497,13 +504,13 @@ DTMQ_PROXY_SDK_API client_subscriber::subscriber_options::~subscriber_options() 
 
 struct client_subscriber::ctor_guard {
   std::string subscriber_key;
-  shared_subscriber::ptr_t shared_subscriber;
+  shared_subscriber::ptr_t shared_instance;
   client_subscriber::event_callback_set_ptr_t event_handler;
   client_subscriber_option options;
 
   ctor_guard(const atfw::dtmq::DChannelIdKey& input_channel_key, const subscriber_options& input_options)
       : subscriber_key(input_options.subscriber_key),
-        shared_subscriber(shared_subscriber::make_shared(input_channel_key)),
+        shared_instance(shared_subscriber::make_shared(input_channel_key)),
         event_handler(input_options.event_callback_set),
         options{input_options.auto_create_channel, input_options.with_private_data} {
     if (!event_handler) {
@@ -515,26 +522,26 @@ struct client_subscriber::ctor_guard {
 struct client_subscriber::subscriber_internal_data {
   std::string subscriber_key;
   client_subscriber_option options;
-  atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_subscriber;
+  atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_instance;
   atfw::util::nostd::nonnull<event_callback_set_ptr_t> event_handler;
 
-  subscriber_internal_data(std::string&& input_subscriber_key, shared_subscriber::ptr_t&& input_shared_subscriber,
+  subscriber_internal_data(std::string&& input_subscriber_key, shared_subscriber::ptr_t&& input_shared_instance,
                            event_callback_set_ptr_t&& input_event_handler, client_subscriber_option input_options)
       : subscriber_key(std::move(input_subscriber_key)),
         options(input_options),
-        shared_subscriber(std::move(input_shared_subscriber)),
+        shared_instance(std::move(input_shared_instance)),
         event_handler(std::move(input_event_handler)) {}
 };
 
 client_subscriber::client_subscriber(ctor_guard& guard)
     : internal_data_(atfw::component::memory::stl::make_strong_rc<subscriber_internal_data>(
-          std::move(guard.subscriber_key), std::move(guard.shared_subscriber), std::move(guard.event_handler),
+          std::move(guard.subscriber_key), std::move(guard.shared_instance), std::move(guard.event_handler),
           guard.options)) {
-  internal_data_->shared_subscriber->register_client_subscriber(this, guard.options);
+  internal_data_->shared_instance->register_client_subscriber(this, guard.options);
 }
 
 DTMQ_PROXY_SDK_API client_subscriber::~client_subscriber() {
-  internal_data_->shared_subscriber->unregister_client_subscriber(this);
+  internal_data_->shared_instance->unregister_client_subscriber(this);
 }
 
 DTMQ_PROXY_SDK_API client_subscriber::event_callback_set_ptr_t client_subscriber::create_event_callback_set() {
@@ -544,7 +551,7 @@ DTMQ_PROXY_SDK_API client_subscriber::event_callback_set_ptr_t client_subscriber
 DTMQ_PROXY_SDK_API atfw::util::nostd::nullable<client_subscriber::ptr_t> client_subscriber::create(
     const atfw::dtmq::DChannelIdKey& channel_key, const subscriber_options& options) {
   ctor_guard cg(channel_key, options);
-  if (!cg.shared_subscriber) {
+  if (!cg.shared_instance) {
     return nullptr;
   }
 
@@ -578,6 +585,17 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::global_receive_chann
   global_tick(ctx);
 
   auto& mgr = get_internal_subscriber_manager();
+  if (mgr.is_in_callback_global_receive_channel_event) {
+    RPC_RETURN_CODE(0);
+  }
+  mgr.is_in_callback_global_receive_channel_event = true;
+  auto in_callback_guard = gsl::finally([] {
+    if (is_internal_subscriber_manager_destroyed()) {
+      return;
+    }
+
+    get_internal_subscriber_manager().is_in_callback_global_receive_channel_event = false;
+  });
 
   auto iter = mgr.cached_subscriber_by_channel_id.find(channel_key->channel_id());
   if (iter == mgr.cached_subscriber_by_channel_id.end() || !iter->second) {
@@ -596,10 +614,20 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::global_receive_chann
     RPC_RETURN_CODE(0);
   }
 
-  iter->second->receive_event_sync(ctx, event_sync);
+  auto subscriber = iter->second;
+  bool has_notify_current_subscriber = false;
+  for (const auto& subscriber_key : event_sync.subscriber_keys()) {
+    if (subscriber_key == subscriber->get_subscriber_info().subscriber_key()) {
+      has_notify_current_subscriber = true;
+      break;
+    }
+  }
+  if (has_notify_current_subscriber) {
+    subscriber->receive_event_sync(ctx, event_sync);
+  }
 
   // 如果没有注册的客户端订阅者，也可以发送反订阅
-  if (!iter->second->has_registered_client()) {
+  if (!has_notify_current_subscriber || !subscriber->has_registered_client()) {
     FCTXLOGINFO(ctx, "channel {} receive event sync, but has no registered client subscriber, send unsubscribe",
                 channel_key->channel_id());
 
@@ -612,6 +640,11 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::global_receive_chann
       RPC_AWAIT_IGNORE_RESULT(rpc::dtmq::unsubscribe(ctx, from_server_id, *req_body, *rsp_body, true));
     }
   }
+
+  if (!subscriber->has_registered_client()) {
+    subscriber->setup_timer(shared_subscriber::timer_action_type::kGc);
+  }
+
   RPC_RETURN_CODE(0);
 }
 
@@ -621,6 +654,18 @@ DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& ctx) {
   }
 
   auto& mgr = get_internal_subscriber_manager();
+  if (mgr.is_in_callback_global_tick) {
+    return 0;
+  }
+  mgr.is_in_callback_global_tick = true;
+  auto in_callback_guard = gsl::finally([] {
+    if (is_internal_subscriber_manager_destroyed()) {
+      return;
+    }
+
+    get_internal_subscriber_manager().is_in_callback_global_tick = false;
+  });
+
   if (!mgr.timer_running) {
     mgr.timer_set.init(chrono_to_timer_tick(atfw::util::time::time_utility::now()));
     mgr.timer_running = true;
@@ -638,16 +683,22 @@ DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& ctx) {
 
   // 统一批处理执行心跳发送
   if (task_type_trait::empty(mgr.running_heartbeat_task) || task_type_trait::is_exiting(mgr.running_heartbeat_task)) {
-    ret += static_cast<int32_t>(mgr.pending_heartbeat_subscriber.size());
     internal_subscriber_manager_do_send_heartbeat(ctx);
+    if (!task_type_trait::empty(mgr.running_heartbeat_task) &&
+        !task_type_trait::is_exiting(mgr.running_heartbeat_task)) {
+      ++ret;
+    }
   }
 
   // 处理心跳重试，重设定时器
-  ret += static_cast<int32_t>(mgr.retry_heartbeat_subscriber.size());
+  if (!mgr.retry_heartbeat_subscriber.empty()) {
+    ++ret;
+  }
   internal_subscriber_manager_do_retry_heartbeat(ctx);
 
   // 重试定时器
   while (!mgr.retry_setup_timer_list.empty()) {
+    ++ret;
     auto& item = mgr.retry_setup_timer_list.front();
     if (item.first > atfw::util::time::time_utility::now()) {
       break;
@@ -728,7 +779,7 @@ DTMQ_PROXY_SDK_API bool client_subscriber::global_is_sending_heartbeat() noexcep
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelIdKey& client_subscriber::get_channel_key() const noexcept {
-  return internal_data_->shared_subscriber->get_channel_key();
+  return internal_data_->shared_instance->get_channel_key();
 }
 
 DTMQ_PROXY_SDK_API const std::string& client_subscriber::get_subscriber_key() const noexcept {
@@ -737,23 +788,23 @@ DTMQ_PROXY_SDK_API const std::string& client_subscriber::get_subscriber_key() co
 
 DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point client_subscriber::get_last_heartbeat_timepoint()
     const noexcept {
-  return protobuf_to_system_clock(internal_data_->shared_subscriber->get_subscriber_info().last_heartbeat_timepoint());
+  return protobuf_to_system_clock(internal_data_->shared_instance->get_subscriber_info().last_heartbeat_timepoint());
 }
 
 DTMQ_PROXY_SDK_API int64_t client_subscriber::get_last_heartbeat_sequence() const noexcept {
-  return internal_data_->shared_subscriber->get_subscriber_info().last_heartbeat_sequence();
+  return internal_data_->shared_instance->get_subscriber_info().last_heartbeat_sequence();
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelConfigure& client_subscriber::get_configure() const noexcept {
-  return internal_data_->shared_subscriber->get_configure();
+  return internal_data_->shared_instance->get_configure();
 }
 
 DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& client_subscriber::get_lock() const noexcept {
-  return internal_data_->shared_subscriber->get_lock();
+  return internal_data_->shared_instance->get_lock();
 }
 
 DTMQ_PROXY_SDK_API bool client_subscriber::is_ready() const noexcept {
-  return internal_data_->shared_subscriber->is_ready();
+  return internal_data_->shared_instance->is_ready();
 }
 
 DTMQ_PROXY_SDK_API bool client_subscriber::get_option_auto_create_channel() const noexcept {
@@ -1101,26 +1152,26 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
     std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr, bool auto_create_channel,
     bool no_wait) {
   rpc::context::message_holder<atfw::dtmq::channel_subscriber> subscriber_info_holder{ctx};
-  protobuf_copy_message(*subscriber_info_holder, internal_data_->shared_subscriber->get_subscriber_info());
+  protobuf_copy_message(*subscriber_info_holder, internal_data_->shared_instance->get_subscriber_info());
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(
-      ctx, std::move(*subscriber_info_holder), internal_data_->shared_subscriber->get_channel_key(), std::move(detail),
+      ctx, std::move(*subscriber_info_holder), internal_data_->shared_instance->get_channel_key(), std::move(detail),
       compare_and_maybe_reset_lock_ptr, compare_and_maybe_reset_lock_rsp_ptr, auto_create_channel, no_wait)));
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::find_message(rpc::context& ctx, int64_t sequence,
                                                                          atfw::dtmq::DChannelMessage& msg) {
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      rpc::dtmq::find_message(ctx, internal_data_->shared_subscriber->get_channel_key(),
-                              internal_data_->shared_subscriber->get_readonly_replicate_index(), sequence, msg)));
+      rpc::dtmq::find_message(ctx, internal_data_->shared_instance->get_channel_key(),
+                              internal_data_->shared_instance->get_readonly_replicate_index(), sequence, msg)));
 }
 
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::page_query_message(
     rpc::context& ctx, atfw::dtmq::channel_page_info& page_info,
     google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::page_query_message(
-      ctx, internal_data_->shared_subscriber->get_channel_key(),
-      internal_data_->shared_subscriber->get_readonly_replicate_index(), page_info, msgs)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      rpc::dtmq::page_query_message(ctx, internal_data_->shared_instance->get_channel_key(),
+                                    internal_data_->shared_instance->get_readonly_replicate_index(), page_info, msgs)));
 }
 
 namespace {
@@ -1459,12 +1510,15 @@ mq_client_subscriber_wal_client_type::vtable_pointer shared_subscriber::create_c
                  wal_object_type::callback_param_type param) -> wal_result_code {
     shared_subscriber* subscriber = wal.get_private_data().subscriber;
     if (nullptr == subscriber) {
+      param.result_code.get() = static_cast<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
       return wal_result_code::kInitlization;
     }
 
     int64_t last_removed_key = snapshot.channel_runtime().last_removed_sequence();
     if (nullptr != wal.get_last_removed_key()) {
-      last_removed_key = *wal.get_last_removed_key();
+      if (last_removed_key < *wal.get_last_removed_key()) {
+        last_removed_key = *wal.get_last_removed_key();
+      }
     }
 
     // Load logs
@@ -1495,6 +1549,11 @@ mq_client_subscriber_wal_client_type::vtable_pointer shared_subscriber::create_c
     subscriber->load_metadata(param.context, snapshot.channel_metadata());
     subscriber->load_runtime(param.context, snapshot.channel_runtime());
     subscriber->load_lock(param.context, snapshot.lock());
+
+    if (last_removed_key > 0) {
+      subscriber->compact(param.context, last_removed_key);
+    }
+
     return wal_result_code::kOk;
   };
 
@@ -1518,6 +1577,12 @@ mq_client_subscriber_wal_client_type::vtable_pointer shared_subscriber::create_c
 
   ret->get_log_key = [](const wal_object_type&, const wal_object_type::log_type& log) -> wal_object_type::log_key_type {
     return log.sequence();
+  };
+
+  ret->allocate_log_key = [](wal_object_type&, const wal_object_type::log_type& log,
+                             wal_object_type::callback_param_type) -> wal_object_type::log_key_result_type {
+    // 由Client端分配sequence
+    return wal_object_type::log_key_result_type::make_success(log.sequence());
   };
 
   ret->merge_log = [](const wal_object_type&, wal_object_type::callback_param_type, wal_object_type::log_type& to,
@@ -1756,36 +1821,15 @@ void shared_subscriber::load_metadata(rpc::context& ctx, const atfw::dtmq::DChan
     create_sequence_ = 0;
   }
 
-  // load阶段如果尚未ready，不需要触发custom data的变化通知
-  if (is_ready()) {
-    update_custom_data(ctx, metadata.custom_data_sequence(), metadata.custom_data());
-  } else {
-    if (metadata.custom_data_sequence() > custom_data_sequence_) {
-      custom_data_sequence_ = metadata.custom_data_sequence();
-      protobuf_copy_message(custom_data_, metadata.custom_data());
-    }
-  }
+  update_custom_data(ctx, metadata.custom_data_sequence(), metadata.custom_data());
 }
 
 void shared_subscriber::load_runtime(rpc::context& ctx, const atfw::dtmq::DChannelRuntime& runtime) {
-  // load阶段如果尚未ready，不需要触发private的变化通知
-  if (is_ready()) {
-    update_private_data(ctx, runtime.private_data_sequence(), runtime.private_data());
-  } else {
-    if (runtime.private_data_sequence() > private_data_sequence_) {
-      private_data_sequence_ = runtime.private_data_sequence();
-      protobuf_copy_message(private_data_, runtime.private_data());
-    }
-  }
+  update_private_data(ctx, runtime.private_data_sequence(), runtime.private_data());
 }
 
 void shared_subscriber::load_lock(rpc::context& ctx, const atfw::dtmq::DChannelOptimisticLock& lock) {
-  // load阶段如果尚未ready，不需要触发乐观锁的变化通知
-  if (is_ready()) {
-    update_optimistic_lock(ctx, lock);
-  } else {
-    protobuf_copy_message(lock_, lock);
-  }
+  update_optimistic_lock(ctx, lock);
 }
 }  // namespace
 
@@ -1805,6 +1849,8 @@ void shared_subscriber::register_client_subscriber(client_subscriber* client, co
   } else {
     registered_client_no_create_channel_.insert(client);
   }
+
+  bool no_private_data_before = registered_client_with_private_data_.empty();
   if (options.with_private_data) {
     registered_client_with_private_data_.insert(client);
   }
@@ -1812,15 +1858,17 @@ void shared_subscriber::register_client_subscriber(client_subscriber* client, co
   // 最初的订阅client注册，要改定时器为心跳定时器，并且立即发送一次心跳
   if (timer_action_ == timer_action_type::kGc || timer_action_ == timer_action_type::kNone) {
     setup_timer(timer_action_type::kSendHeartbeat);
+  }
 
-    size_t total_registered_clients =
-        registered_client_auto_create_channel_.size() + registered_client_no_create_channel_.size();
+  size_t total_registered_clients =
+      registered_client_auto_create_channel_.size() + registered_client_no_create_channel_.size();
 
-    // 第一次追加auto_create也要立即触发一次心跳来触发自动创建频道
-    if (registered_client_auto_create_channel_.size() == 1 || total_registered_clients == 1) {
-      auto& mgr = get_internal_subscriber_manager();
-      mgr.pending_heartbeat_subscriber.insert(this);
-    }
+  // 第一次追加auto_create_channel/with_private_data也要立即触发一次心跳来触发自动创建频道
+  if (total_registered_clients == 1 ||
+      (options.auto_create_channel && registered_client_auto_create_channel_.size() == 1) ||
+      (options.with_private_data && no_private_data_before)) {
+    auto& mgr = get_internal_subscriber_manager();
+    mgr.pending_heartbeat_subscriber.insert(this);
   }
 }
 
@@ -1855,6 +1903,9 @@ void shared_subscriber::foreach_registered_client_subscriber(
   if (registered_client_auto_create_channel_.empty() && registered_client_no_create_channel_.empty()) {
     return;
   }
+
+  // 保持生命周期，确保在回调中不会导致整个市里被销毁
+  auto hold_lifetime = shared_from_this();
 
   lock_registered_client_guard guard(*this);
   std::unordered_set<client_subscriber*>* subscriber_container[] = {&registered_client_auto_create_channel_,
@@ -1901,7 +1952,7 @@ int32_t shared_subscriber::tick(rpc::context& ctx) {
   }
 
   if (!wal_client_) {
-    return 0;
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   int32_t result_code = 0;
@@ -1918,7 +1969,7 @@ int32_t shared_subscriber::tick(rpc::context& ctx) {
   int64_t after_compact_sequence = get_compact_sequence();
 
   // Trigger event callbacks for compact sequence change
-  if (before_compact_sequence != after_compact_sequence) {
+  if (before_compact_sequence != after_compact_sequence && is_ready()) {
     foreach_registered_client_subscriber([&ctx, after_compact_sequence](client_subscriber& client) {
       const auto& fn = client.get_event_callback_on_compact();
       if (fn) {
@@ -1961,6 +2012,13 @@ void shared_subscriber::receive_heartbeat_response(rpc::context& ctx) {
 }
 
 void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::SSChannelEventSync& event_sync) {
+  // 禁止重入
+  if (check_flag(subscriber_flag::kInCallbackReceiveEvent)) {
+    return;
+  }
+  set_flag(subscriber_flag::kInCallbackReceiveEvent, true);
+  auto reset_flag_guard = gsl::finally([this]() { set_flag(subscriber_flag::kInCallbackReceiveEvent, false); });
+
   // Ignore events if the subscriber is not ready and the event is not a snapshot
   int64_t start_sequence = 0;
   if (!is_ready() && !event_sync.has_channel_snapshot()) {
@@ -1982,6 +2040,8 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
     load_snapshot(ctx, event_sync.channel_snapshot());
     return;
   }
+
+  maybe_mutable_wal_client();
 
   int64_t before_compact_sequence = get_compact_sequence();
 
@@ -2006,7 +2066,7 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
       auto log_ptr = wal_client_->get_log_manager().allocate_log(protobuf_to_system_clock(log_msg.create_timepoint()),
                                                                  log_msg.detail().command_case(), param, log_msg);
       if (log_ptr) {
-        auto log_result = wal_client_->get_log_manager().emplace_back(std::move(log_ptr), param);
+        auto log_result = wal_client_->receive_hole_log(param, std::move(log_ptr));
         if (log_result < atfw::util::distributed_system::wal_result_code::kOk) {
           FCTXLOGERROR(ctx, "Failed to emplace log for sequence: {}, result: {}, {}({})", log_msg.sequence(),
                        static_cast<int32_t>(log_result), result_code, protobuf_mini_dumper_get_error_msg(result_code));
@@ -2052,7 +2112,7 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
 
   // 压缩日志事件
   int64_t after_compact_sequence = get_compact_sequence();
-  if (after_compact_sequence != before_compact_sequence) {
+  if (after_compact_sequence != before_compact_sequence && is_ready()) {
     foreach_registered_client_subscriber([&ctx, after_compact_sequence](client_subscriber& client) {
       const auto& fn = client.get_event_callback_on_compact();
       if (fn) {
@@ -2063,11 +2123,14 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
 }
 
 void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChannelSnapshot& snapshot) {
-  // 忽略重复信息和滞后的快照
-  if (snapshot_sequence_ >= snapshot.channel_metadata().last_sequence()) {
+  // 禁止重入
+  if (check_flag(subscriber_flag::kInCallbackLoadSnapshot)) {
     return;
   }
+  set_flag(subscriber_flag::kInCallbackLoadSnapshot, true);
+  auto reset_flag_guard = gsl::finally([this]() { set_flag(subscriber_flag::kInCallbackLoadSnapshot, false); });
 
+  // 要考虑异常情况快照回退，保证最终一致性
   if (snapshot.channel_metadata().has_channel_configure()) {
     reload_configure(snapshot.channel_metadata().channel_configure());
   }
@@ -2077,42 +2140,53 @@ void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChan
   foreach_registered_client_subscriber([&ctx, &snapshot](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_receive_snapshot_start();
     if (fn) {
-      fn(ctx, client.shared_from_this(), snapshot);
+      fn(ctx, client.shared_from_this(), snapshot, 0);
     }
   });
 
   int32_t result_code = 0;
-  mq_client_subscriber_wal_object_context param{ctx, result_code};
-  if (wal_client_) {
-    auto log_result = wal_client_->receive_snapshot(snapshot, param);
-    if (log_result < atfw::util::distributed_system::wal_result_code::kOk) {
-      FCTXLOGERROR(ctx, "Failed to load snapshot, result: {}, {}({})", static_cast<int32_t>(log_result), result_code,
-                   protobuf_mini_dumper_get_error_msg(result_code));
-      return;
+  do {
+    mq_client_subscriber_wal_object_context param{ctx, result_code};
+    if (wal_client_) {
+      auto log_result = wal_client_->receive_snapshot(snapshot, param);
+      if (log_result < atfw::util::distributed_system::wal_result_code::kOk) {
+        FCTXLOGERROR(ctx, "Failed to load snapshot, result: {}, {}({})", static_cast<int32_t>(log_result), result_code,
+                     protobuf_mini_dumper_get_error_msg(result_code));
+        if (result_code >= 0) {
+          result_code = PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
+        }
+        break;
+      }
+
+      if (result_code < 0) {
+        FCTXLOGERROR(ctx, "Failed to load snapshot, result: {}({})", result_code,
+                     protobuf_mini_dumper_get_error_msg(result_code));
+        break;
+      }
     }
 
-    if (result_code < 0) {
-      FCTXLOGERROR(ctx, "Failed to load snapshot, result: {}({})", result_code,
-                   protobuf_mini_dumper_get_error_msg(result_code));
-      return;
-    }
-  }
+    snapshot_sequence_ = snapshot.channel_metadata().last_sequence();
+    last_message_hash_code_ = snapshot.channel_metadata().last_hash_code();
+    last_message_sequence_ = snapshot.channel_metadata().last_sequence();
 
-  snapshot_sequence_ = snapshot.channel_metadata().last_sequence();
-  last_message_hash_code_ = snapshot.channel_metadata().last_hash_code();
-  last_message_sequence_ = snapshot.channel_metadata().last_sequence();
-  foreach_registered_client_subscriber([&ctx, &snapshot](client_subscriber& client) {
+    // 如果是已销毁或者尚未创建的频道，保持订阅缓存。但不能ready
+    if (create_sequence_ > 0 && destroy_sequence_ < create_sequence_) {
+      set_ready(ctx);
+    } else if (destroy_sequence_ > 0 && destroy_sequence_ >= create_sequence_ && is_ready()) {
+      set_destroyed(ctx, destroy_sequence_, destroy_timepoint_);
+    }
+  } while (false);
+
+  foreach_registered_client_subscriber([&ctx, &snapshot, result_code](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_receive_snapshot_finished();
     if (fn) {
-      fn(ctx, client.shared_from_this(), snapshot);
+      fn(ctx, client.shared_from_this(), snapshot, result_code);
     }
   });
 
-  // 如果是已销毁或者尚未创建的频道，保持订阅缓存。但不能ready
-  if (create_sequence_ > 0 && destroy_sequence_ < create_sequence_) {
-    set_ready(ctx);
-  } else if (destroy_sequence_ > 0 && destroy_sequence_ >= create_sequence_ && is_ready()) {
-    set_destroyed(ctx, destroy_sequence_, destroy_timepoint_);
+  if (result_code >= 0 && is_ready()) {
+    // 刷新定时器,如果服务器下发的心跳间隔更短，则要缩短下一次心跳定时器间隔
+    setup_timer(timer_action_type::kSendHeartbeat);
   }
 }
 
@@ -2176,6 +2250,13 @@ void shared_subscriber::set_ready(rpc::context& ctx) {
 
 void shared_subscriber::set_destroyed(rpc::context& ctx, int64_t log_sequence,
                                       std::chrono::system_clock::time_point destroy_time) {
+  // 合并销毁事件，取最新的。传入的 log_sequence
+  // 有可能是本地占位生成的，如果后续收到同sequence的真实销毁事件，destroy_time 也要更新
+  if (log_sequence >= destroy_sequence_) {
+    destroy_sequence_ = log_sequence;
+    destroy_timepoint_ = destroy_time;
+  }
+
   if (!is_ready()) {
     return;
   }
@@ -2198,6 +2279,9 @@ void shared_subscriber::update_custom_data(rpc::context& ctx, int64_t sequence,
   custom_data_sequence_ = sequence;
   protobuf_copy_message(custom_data_, custom_data);
 
+  if (!is_ready()) {
+    return;
+  }
   foreach_registered_client_subscriber([&ctx, this](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_update_custom_data();
     if (fn) {
@@ -2207,15 +2291,22 @@ void shared_subscriber::update_custom_data(rpc::context& ctx, int64_t sequence,
 }
 
 void shared_subscriber::update_private_data(rpc::context& ctx, int64_t sequence,
-                                            const google::protobuf::Any& custom_data) {
+                                            const google::protobuf::Any& private_data) {
   if (private_data_sequence_ >= sequence) {
     return;
   }
 
   private_data_sequence_ = sequence;
-  protobuf_copy_message(private_data_, custom_data);
+  protobuf_copy_message(private_data_, private_data);
 
+  if (!is_ready()) {
+    return;
+  }
   foreach_registered_client_subscriber([&ctx, this](client_subscriber& client) {
+    if (!client.get_option_with_private_data()) {
+      return;
+    }
+
     const auto& fn = client.get_event_callback_on_update_private_data();
     if (fn) {
       fn(ctx, client.shared_from_this(), private_data_sequence_, private_data_);
@@ -2233,6 +2324,9 @@ void shared_subscriber::update_optimistic_lock(rpc::context& ctx, const ::atfw::
   lock_.Swap(&from);
   protobuf_copy_message(lock_, to);
 
+  if (!is_ready()) {
+    return;
+  }
   foreach_registered_client_subscriber([&ctx, &from, this](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_update_optimistic_lock();
     if (fn) {
@@ -2260,7 +2354,6 @@ void shared_subscriber::compact(rpc::context& /*ctx*/, int64_t compact_sequence)
   }
 
   // 同步GC边界
-  auto remove_timepoint = atfw::util::time::time_utility::now();
   size_t remove_count = 0;
   for (const auto& log : wal_client_->get_log_manager().get_all_logs()) {
     if (!log) {
@@ -2269,12 +2362,13 @@ void shared_subscriber::compact(rpc::context& /*ctx*/, int64_t compact_sequence)
 
     if (wal_client_->get_log_manager().get_log_key_compare()(log->sequence(), compact_sequence)) {
       ++remove_count;
-    } else {
-      remove_timepoint = protobuf_to_system_clock(log->create_timepoint());
       break;
     }
   }
-  wal_client_->get_log_manager().remove_before(remove_timepoint, remove_count);
+
+  if (remove_count > 0) {
+    wal_client_->get_log_manager().remove_before(atfw::util::time::time_utility::now(), remove_count);
+  }
 }
 
 void shared_subscriber::schedule_send_heartbeat(rpc::context& /*ctx*/) {
@@ -2381,12 +2475,9 @@ mq_client_subscriber_delegate_helper::wal_result_code mq_client_subscriber_deleg
 
   common_action(wal, raw_message, param);
 
-  if (raw_message.sequence() > subscriber->destroy_sequence_) {
-    subscriber->destroy_timepoint_ = protobuf_to_system_clock(raw_message.detail().destroy().removed_timepoint());
-    subscriber->destroy_sequence_ = raw_message.sequence();
-  }
   if (subscriber->is_ready() && raw_message.sequence() >= subscriber->create_sequence_) {
-    subscriber->set_destroyed(param.context, subscriber->destroy_sequence_, subscriber->destroy_timepoint_);
+    subscriber->set_destroyed(param.context, raw_message.sequence(),
+                              protobuf_to_system_clock(raw_message.detail().destroy().removed_timepoint()));
   }
 
   // 频道销毁也要销毁乐观锁

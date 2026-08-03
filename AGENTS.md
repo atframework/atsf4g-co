@@ -16,8 +16,13 @@ high-performance game server architectures.
 
 - `atframework/`: vendored framework libraries (`atframe_utils`, `libatbus`, `libatapp`, gateway/proxy components).
 - `src/server_frame/`: shared config, protocol, dispatcher, router, RPC, data, and utility code.
-- `src/*svr/` and `src/component/`: service implementations and shared service components.
+- `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `rank_settlement_svr`, `orbitsvr`).
+- `src/component/`: shared service components: `dtmq/` (distributed message queue: `dtmq-proxysvr` + client SDK + WAL
+  replication), `distributed_transaction/` (2PC coordinator `dtcoordsvr` + SDK), `rank/` (`rank_board_svr` + SDK),
+  `orbit/` (controller/agent/server SDK), `GameSharedComponent/` (pure algorithm libs).
+- `src/robot/`: Go stress-test robot client; `src/tools/`: code generator (`generate-for-pb`), etcd debug tools.
 - `src/templates/`: Mako templates for generated RPC/task code.
+- `doc/`: Docusaurus documentation site (architecture + development docs, zh-CN/en i18n).
 - `project/`, `third_party/`, `install/`, `resource/`: build tooling, dependency setup, deployment assets, resources.
 - `install/**/*.tpl`: Go `text/template` deployment templates. When a second suffix exists before `.tpl`, use it as
   the rendered target syntax (`.yaml.tpl` -> YAML, `.sh.tpl` -> shell, `.bat.tpl` -> Windows batch); bare `.tpl` files
@@ -71,6 +76,7 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 | `deployment-config`       | Generating/editing deployment configs, Go `.tpl` chart templates, or Helm values        |
 | `configure-expression`    | Editing env-expression-enabled config fields                                            |
 | `atgateway-protocol`      | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests           |
+| `docs-site`               | Building or editing the Docusaurus site under `doc/` (i18n zh-CN/en, fonts)              |
 | `ai-agent-maintenance`    | Auditing or optimizing AI agent prompts, bridge files, and skills                       |
 
 ## Agent File Compatibility

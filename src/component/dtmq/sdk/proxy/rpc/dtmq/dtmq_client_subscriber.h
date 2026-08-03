@@ -114,8 +114,8 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   using event_callback_on_receive_raw_message_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
-  using event_callback_on_receive_snapshot_t =
-      std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelSnapshot& data)>;
+  using event_callback_on_receive_snapshot_t = std::function<void(
+      rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelSnapshot& data, int32_t result_code)>;
 
  private:
   struct ctor_guard;
@@ -154,7 +154,7 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    *
    * @param ctx RPC上下文
    * @param from_server_id 来源服务ID
-   * @param event_sync 收到的实践同步消息
+   * @param event_sync 收到的事件同步消息
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API static rpc::result_code_type global_receive_channel_event(
       rpc::context& ctx, uint64_t from_server_id, const atfw::dtmq::SSChannelEventSync& event_sync);
