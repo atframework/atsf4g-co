@@ -20,30 +20,63 @@ if(Python3_EXECUTABLE)
   if(__python_index EQUAL 0)
     get_filename_component(__python_venv_home "${__normalize_python_exec_path}" DIRECTORY)
     get_filename_component(__python_venv_home "${__python_venv_home}" DIRECTORY)
-    file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_base_exec
-         REGEX "^executable[ \t]*=[ \t]*([^\\r\\n]*)")
-    string(REGEX REPLACE "^executable[ \t]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_base_exec
-                         "${__python_venv_base_exec}")
-    file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_version REGEX "^version[ \t]*=[ \t]*([^\\r\\n]*)")
-    string(REGEX REPLACE "^version[^=]*=[ \t]*([^\\r\\n]*)" "\\1" __python_venv_version "${__python_venv_version}")
 
-    if(__python_venv_base_exec)
+    # stdlib venv writes executable=/version=, virtualenv writes base-executable=/version_info=; support both.
+    set(__python_venv_base_exec "")
+    set(__python_venv_version "")
+    if(EXISTS "${__python_venv_home}/pyvenv.cfg")
+      file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_base_exec_lines
+           REGEX "^[ \t]*(base-)?executable[ \t]*=")
+      if(__python_venv_base_exec_lines)
+        list(GET __python_venv_base_exec_lines 0 __python_venv_base_exec)
+        string(REGEX REPLACE "^[ \t]*(base-)?executable[ \t]*=[ \t]*(.*)$" "\\2" __python_venv_base_exec
+                             "${__python_venv_base_exec}")
+        string(STRIP "${__python_venv_base_exec}" __python_venv_base_exec)
+      endif()
+      unset(__python_venv_base_exec_lines)
+
+      file(STRINGS "${__python_venv_home}/pyvenv.cfg" __python_venv_version_lines REGEX "^[ \t]*version(_info)?[ \t]*=")
+      if(__python_venv_version_lines)
+        list(GET __python_venv_version_lines 0 __python_venv_version)
+      endif()
+      unset(__python_venv_version_lines)
+    endif()
+
+    # Normalize the recorded version to MAJOR.MINOR.PATCH (virtualenv records e.g. 3.13.0.final.0).
+    if(__python_venv_version MATCHES "([0-9]+\\.[0-9]+\\.[0-9]+)")
+      set(__python_venv_version "${CMAKE_MATCH_1}")
+    elseif(__python_venv_version MATCHES "([0-9]+\\.[0-9]+)")
+      set(__python_venv_version "${CMAKE_MATCH_1}")
+    else()
+      set(__python_venv_version "")
+    endif()
+
+    if(__python_venv_base_exec AND EXISTS "${__python_venv_base_exec}")
       execute_process(
         COMMAND "${__python_venv_base_exec}" "--version"
         OUTPUT_VARIABLE __python_venv_base_version
-        ERROR_QUIET)
-      if(__python_venv_base_version MATCHES "[\\.0-9]+")
-        set(__python_venv_base_version "${CMAKE_MATCH_0}")
+        ERROR_VARIABLE __python_venv_base_version_stderr
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if(NOT __python_venv_base_version)
+        set(__python_venv_base_version "${__python_venv_base_version_stderr}")
+      endif()
+      unset(__python_venv_base_version_stderr)
+      if(__python_venv_base_version MATCHES "([0-9]+\\.[0-9]+\\.[0-9]+)")
+        set(__python_venv_base_version "${CMAKE_MATCH_1}")
+      elseif(__python_venv_base_version MATCHES "([0-9]+\\.[0-9]+)")
+        set(__python_venv_base_version "${CMAKE_MATCH_1}")
+      else()
+        set(__python_venv_base_version "unknown")
       endif()
     else()
       set(__python_venv_base_version "unknown")
     endif()
-    if(__python_venv_version STREQUAL __python_venv_base_version)
-      message(STATUS "Using cached Python3_EXECUTABLE ${Python3_EXECUTABLE} (venv: ${__python_venv_home})")
+    if(__python_venv_version AND __python_venv_version STREQUAL __python_venv_base_version)
+      message(STATUS "Using cached Python3_EXECUTABLE: ${Python3_EXECUTABLE} (venv: ${__python_venv_home})")
     else()
       message(
         STATUS
-          "Cached Python3_EXECUTABLE ${Python3_EXECUTABLE} (venv: ${__python_venv_home}, version: ${__python_venv_version}) "
+          "Cached Python3_EXECUTABLE: ${Python3_EXECUTABLE} (venv: ${__python_venv_home}, version: ${__python_venv_version}) "
           "does not match base python version ${__python_venv_base_version}, clearing cache")
       unset(Python3_EXECUTABLE CACHE)
       unset(Python3_EXECUTABLE)
