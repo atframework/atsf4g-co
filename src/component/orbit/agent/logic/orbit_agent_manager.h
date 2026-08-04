@@ -65,8 +65,8 @@ struct orbit_agent_client_record {
   uint64_t heartbeat_timeout_sec = 0;  ///< RUNNING 状态心跳最大间隔 (秒)
 
   time_t force_kill_timepoint = 0;
-  orbit::EnClientExitReason force_exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
-  int32_t force_exit_code = 0;
+  orbit::EnClientExitReason exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
+  int32_t exit_code = 0;
 
   // Server路由信息
   uint64_t server_unique_id = 0;
@@ -136,12 +136,12 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                      const std::vector<std::string>& command_line, std::vector<std::string>& output);
 
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
-  void stop_client_process(orbit_agent_client_record_ptr client_record);
+  void stop_client_process(orbit_agent_client_record_ptr client_record, orbit::EnClientExitReason exit_reason, int32_t exit_code);
   void check_client_timeouts(time_t now);
   void check_client_force_kill(time_t now);
   void check_server_identity_timeouts(time_t now);
   int kill_client_process(orbit_agent_client_record_ptr client_record, int signal_number,
-                          orbit::EnClientExitReason force_exit_reason, int32_t force_exit_code);
+                          orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   void server_heartbeat(const orbit::DServerIdentity& server_identity);
   rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
@@ -158,9 +158,6 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // Agent无法再提供服务
   void agent_fatal_error();
-
-  void on_client_start_success();
-  void on_client_start_failure();
 
  private:
   bool stoped_ = false;
