@@ -50,7 +50,7 @@ constexpr double kOrbitClientExpectedNormalCpu = 0.1;
 constexpr double kOrbitClientExpectedNormalMemoryMb = 64.0;
 constexpr double kOrbitClientExpectedSeedCpu = 0.05;
 constexpr double kOrbitClientExpectedSeedMemoryMb = 32.0;
-constexpr uint32_t kOrbitClientStartupTimeoutSec = 30;
+constexpr uint32_t kOrbitClientStartupTimeoutSec = 90;
 constexpr uint32_t kOrbitClientHeartbeatTimeoutSec = 15;
 constexpr const char *kOrbitWelcomePayload = "orbit:welcome";
 
@@ -81,7 +81,7 @@ class main_service_module : public atfw::atapp::module_impl {
       return orbit_init_result;
     }
 
-    orbit_server_manager::me()->set_on_client_start_notify([](rpc::context &ctx, const std::string &client_id,
+    orbit_server_manager::me()->set_on_client_start_notify([](rpc::context &, const std::string &client_id,
                                                               const std::string &client_addr,
                                                               const std::string &payload) -> rpc::result_code_type {
       FWLOGINFO("orbit client {} is ready from {}, startup payload size: {}", client_id, client_addr, payload.size());

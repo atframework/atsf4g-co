@@ -133,12 +133,12 @@ int32_t orbit_room_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
         const std::string& region = room->get_room_data().has_map_data() ? room->get_room_data().map_data().region()
                                                                         : std::string();
 
-        int32_t ret =
+        int32_t sub_ret =
             RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, args, ""));
-        if (ret != 0) {
-          FWLOGERROR("orbit_room {} start_client failed, ret: {}", room->get_client_id(), ret);
+        if (sub_ret != 0) {
+          FWLOGERROR("orbit_room {} start_client failed, ret: {}", room->get_client_id(), sub_ret);
           room->on_client_end(child_ctx);
-          RPC_RETURN_CODE(ret);
+          RPC_RETURN_CODE(sub_ret);
         }
         RPC_RETURN_CODE(0);
       });
