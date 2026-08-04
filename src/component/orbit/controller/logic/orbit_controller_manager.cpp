@@ -479,13 +479,13 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
 
   int32_t rpc_result =
       RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::forward_to_server(ctx, server_node_id, *notify, *rsp));
+  response.set_error_code(rsp->error_code());
   if (rpc_result < 0) {
     FWLOGERROR("orbit controller forward_to_server failed for {} to server {:#x}, res: {}", client_id_str,
                server_node_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
 
-  response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -583,12 +583,12 @@ rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::conte
 
   int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
       rpc::controllertoagentservice::forward_to_client(ctx, agent_server_id, *forward_req, *forward_rsp));
+  response.set_error_code(forward_rsp->error_code());
   if (rpc_result < 0) {
     FWLOGERROR("orbit controller CTAForwardToClientReq failed for {} to agent {:#x}, res: {}", client_id_str,
                agent_server_id, rpc_result);
     RPC_RETURN_CODE(rpc_result);
   }
-  response.set_error_code(rpc_result);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

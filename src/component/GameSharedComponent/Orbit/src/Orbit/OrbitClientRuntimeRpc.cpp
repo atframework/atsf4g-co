@@ -28,6 +28,7 @@ namespace {
 
 constexpr const char *kMethodForwardToClient = "forward_to_client";
 constexpr const char *kMethodForkSeedClient = "fork_seed_client";
+constexpr const char *kMethodStopClient = "stop_client";
 constexpr const char *kMethodClientHeartbeat = "client_heartbeat";
 constexpr const char *kMethodSendToServer = "send_to_server";
 constexpr const char *kMethodClientStart = "client_start";
@@ -39,6 +40,7 @@ enum class orbit_receive_rpc_type_t : uint8_t {
   kInvalid = 0,
   kForwardToClient = 1,
   kForkSeedClient = 2,
+  kStopClient = 3,
 };
 
 int64_t get_now_seconds() {
@@ -128,6 +130,7 @@ const std::unordered_map<std::string, orbit_receive_rpc_type_t> &get_receive_rpc
 
     ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodForwardToClient, kForwardToClient);
     ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodForkSeedClient, kForkSeedClient);
+    ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodStopClient, kStopClient);
 
     return result;
   }();
@@ -473,6 +476,15 @@ int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg &
       return rpc_receive_fork_seed_client(message.head(), request);
     }
 
+    case orbit_receive_rpc_type_t::kStopClient: {
+      orbit::ATDStopClientReq request;
+      if (!unpack_body_message(message, request)) {
+        ORBIT_LOG(OrbitClientLogLevel::kError, "failed to parse stop_client payload");
+        return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+      }
+
+      return rpc_receive_stop_client(message.head(), request);
+    }
     default:
       break;
   }
@@ -666,6 +678,18 @@ int32_t OrbitClientRuntime::rpc_receive_fork_seed_client(const ::atframework::SS
   rsp.set_error_code(ret);
   send_response_message(req_head, rsp, *method);
 
+  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::rpc_receive_stop_client(const ::atframework::SSMsgHead &,
+                                                    orbit::ATDStopClientReq &request) {
+  const google::protobuf::MethodDescriptor *method = get_agent_to_client_method(kMethodStopClient);
+  if (nullptr == method) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "stop_client method descriptor not found");
+    return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
+  }
+
+  on_received_stop_request(request);
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 

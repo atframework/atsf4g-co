@@ -26,6 +26,11 @@ service AgentToClientService {
       api_name: "Fork方式启动Client"
     };
   };
+  rpc stop_client(stream ATDStopClientReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "停止Client"
+    };
+  };
 }
 
 message ATDForwardToClientReq {
@@ -41,6 +46,11 @@ message ATDForkSeedClientReq {
 }
 message DTAForkSeedClientRsp {
   int32 error_code = 1;
+  int32 pid = 2;
+}
+
+message ATDStopClientReq {
+  EnClientExitReason reason = 1;
 }
 
 /////////////// Client -> Agent ///////////////

@@ -48,6 +48,7 @@ class main_service_module : public atapp::module_impl, public std::enable_shared
   }
 
   int stop() override { return orbit_agent_manager::me()->stop(); }
+  void cleanup() override { orbit_agent_manager::me()->cleanup(); }
 
   const char *name() const override { return "main_service_module"; }
 

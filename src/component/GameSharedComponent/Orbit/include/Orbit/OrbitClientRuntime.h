@@ -123,6 +123,7 @@ class OrbitClientRuntime {
   void on_received_message(const std::string& message);
 
   int32_t on_received_fork_request(const orbit::ATDForkSeedClientReq& request);
+  void on_received_stop_request(const orbit::ATDStopClientReq& request);
   int32_t process_fork_request();
 
  private:
@@ -180,6 +181,7 @@ class OrbitClientRuntime {
   int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
                                         orbit::ATDForwardToClientReq& request);
   int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head, orbit::ATDForkSeedClientReq& request);
+  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head, orbit::ATDStopClientReq& request);
 
  private:
   std::unique_ptr<::atframework::atapp::app> app_;

@@ -46,11 +46,10 @@ struct orbit_agent_client_record {
 
   // Client 启动参数
   ::google::protobuf::RepeatedPtrField<::std::string> custom_args;  // Server 传入的自定义参数
-  double expected_cpu;
-  double expected_memory_mb;
+  double expected_cpu = 0.0f;
+  double expected_memory_mb = 0.0f;
 
   // Client 状态
-  int64_t process_id = 0;
   orbit::EnClientState state = orbit::EN_CLIENT_STATE_UNSPECIFIED;
   orbit::DClientLoadSnapshot load_snapshot;
   time_t last_heartbeat_timepoint = 0;
@@ -58,17 +57,19 @@ struct orbit_agent_client_record {
   uint64_t client_server_id = 0;  // 初步用于发送消息给Client
 
   // 进程管理
+  int64_t process_id = 0;
   uv_process_t* process_handle = nullptr;  ///< 进程句柄，由 libuv 生命周期管理，spawn 后有效
-  time_t start_timepoint = 0;              ///< 启动时间点 (unix sec)
-  uint64_t startup_timeout_sec = 0;        ///< STARTING/SEED 状态最大等待时间 (秒)
-  uint64_t heartbeat_timeout_sec = 0;      ///< RUNNING 状态心跳最大间隔 (秒)
-  time_t force_cleanup_timepoint = 0;      ///< 超时后等待 Client 主动上报下线的宽限截止时间
+
+  time_t start_timepoint = 0;          ///< 启动时间点 (unix sec)
+  uint64_t startup_timeout_sec = 0;    ///< STARTING 状态最大等待时间 (秒)
+  uint64_t heartbeat_timeout_sec = 0;  ///< RUNNING 状态心跳最大间隔 (秒)
+
+  time_t force_kill_timepoint = 0;
   orbit::EnClientExitReason force_exit_reason = orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED;
   int32_t force_exit_code = 0;
 
   // Server路由信息
-  uint64_t server_unique_id;
-
+  uint64_t server_unique_id = 0;
   uint64_t get_controller_server_id();
 };
 
@@ -85,6 +86,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   int init(atfw::atapp::app* app);
   int stop();
+  void cleanup();
   void tick();
 
   // 来自Controller
@@ -127,18 +129,19 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                         std::vector<std::string>& output) const;
   int prepare_start_client_record(const orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
   int spawn_client_process(orbit_agent_client_record_ptr record, const std::vector<std::string>& command_line);
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(
-      rpc::context& ctx, orbit_agent_client_record_ptr record);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(rpc::context& ctx,
+                                                                          orbit_agent_client_record_ptr record);
   void build_client_launch_arguments(orbit_agent_client_record_ptr record,
                                      const std::unordered_map<std::string, std::string>& render_values,
                                      const std::vector<std::string>& command_line, std::vector<std::string>& output);
 
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
-
+  void stop_client_process(orbit_agent_client_record_ptr client_record);
   void check_client_timeouts(time_t now);
-  void check_client_force_cleanup(time_t now);
+  void check_client_force_kill(time_t now);
   void check_server_identity_timeouts(time_t now);
-  int kill_client_process(orbit_agent_client_record_ptr client_record, int signal_number);
+  int kill_client_process(orbit_agent_client_record_ptr client_record, int signal_number,
+                          orbit::EnClientExitReason force_exit_reason, int32_t force_exit_code);
 
   void server_heartbeat(const orbit::DServerIdentity& server_identity);
   rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
@@ -215,6 +218,5 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   bool has_self_usage_sample_ = false;
   uint64_t sequence_allocator_ = 0;
 
-  std::unordered_map<uint64_t, time_t> server_unique_id_to_expire_timepoint_;
   std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;
 };

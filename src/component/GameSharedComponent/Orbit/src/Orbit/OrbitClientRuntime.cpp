@@ -192,11 +192,10 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
   state_.store(OrbitClientRuntimeState::kIdle);
 }
 
-ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() {
-  reset();
-}
+ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() { reset(); }
 
-ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char *argv[], bool io_thread, const OrbitClientCallbacks &callbacks) {
+ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char *argv[], bool io_thread,
+                                                  const OrbitClientCallbacks &callbacks) {
   OrbitClientOptions options;
   uint64_t app_id = 0;
 
@@ -535,6 +534,10 @@ int32_t OrbitClientRuntime::on_received_fork_request(const orbit::ATDForkSeedCli
   }
   pending_fork_requests_.push(request);
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+void OrbitClientRuntime::on_received_stop_request(const orbit::ATDStopClientReq &request) {
+  request_end(request.reason(), 0);
 }
 
 int32_t OrbitClientRuntime::process_fork_request() {
