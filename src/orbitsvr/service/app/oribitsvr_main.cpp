@@ -39,6 +39,9 @@
 // clang-format on
 
 #include "app/handle_orbit_rpc_orbitserverrpcservice.atfw.gen.h"
+#include "app/handle_ss_rpc_orbitsvrservice.atfw.gen.h"
+
+#include <logic/room/orbit_room_manager.h>
 
 namespace {
 
@@ -70,7 +73,8 @@ class main_service_module : public atfw::atapp::module_impl {
   int init() override {
     // register handles
     INIT_CALL_FN(handle::orbit_server_rpc::register_handles_for_orbitserverrpcservice);
-
+    INIT_CALL_FN(handle::orbit::register_handles_for_orbitsvrservice);
+    INIT_CALL(orbit_room_manager);
     int orbit_init_result =
         orbit_server_manager::me()->init(make_orbit_server_unique_id(), kOrbitServerHeartbeatIntervalSec);
     if (orbit_init_result < 0) {
@@ -81,17 +85,15 @@ class main_service_module : public atfw::atapp::module_impl {
                                                               const std::string &client_addr,
                                                               const std::string &payload) -> rpc::result_code_type {
       FWLOGINFO("orbit client {} is ready from {}, startup payload size: {}", client_id, client_addr, payload.size());
-
-      PROJECT_NAMESPACE_ID::OrbitClientEchoReq req;
-      req.set_text("Lobby Test Start Payload:" + payload);
-      PROJECT_NAMESPACE_ID::OrbitClientEchoRsp rsp;
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::orbit_client_rpc::echo(ctx, client_id, req, rsp)));
+      orbit_room_manager::me()->on_client_start(client_id, client_addr, payload);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     });
     orbit_server_manager::me()->set_on_client_end_notify(
         [](rpc::context &, const std::string &client_id, orbit::EnClientExitReason exit_reason,
            const std::string &payload, int32_t exit_code) -> rpc::result_code_type {
           FWLOGINFO("orbit client {} exited, reason: {}, code: {}, payload size: {}", client_id,
                     static_cast<int>(exit_reason), exit_code, payload.size());
+          orbit_room_manager::me()->on_client_end(client_id, payload);
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
         });
 
@@ -99,11 +101,13 @@ class main_service_module : public atfw::atapp::module_impl {
   }
 
   int stop() override {
+    orbit_room_manager::me()->stop();
     orbit_server_manager::me()->stop();
     return 0;
   }
 
   int tick() override {
+    orbit_room_manager::me()->tick();
     orbit_server_manager::me()->tick();
     return 0;
   }

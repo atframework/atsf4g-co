@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
+
+package hello;
+
+message SSOrbitCreateRoomReq {
+  DOrbitRoomKey room_key = 1;
+  DOrbitRoomInitData room_data = 2;
+}
+
+message SSOrbitCreateRoomRsp {
+  int32 result_code = 1;
+}
+
+message SSOrbitUserJoinRoomReq {
+  repeated DOrbitUserInitData user_init_datas = 1;
+}
+
+message SSOrbitUserJoinRoomRsp {
+  int32 result_code = 1;
+}
+
+message SSOrbitGetPlayerInfoReq {
+  DOrbitRoomKey room_key = 1;
+  DUserIDKey user_key = 2;
+}
+
+message SSOrbitGetPlayerInfoRsp {
+  int32 result_code = 1;
+  DOrbitRoomKey room_key = 2;
+  repeated DOrbitUserInitData user_init_datas = 3;
+}
+
+message SSOrbitSubscribeRoomReq {
+  DOrbitRoomKey room_key = 1;
+  DUserIDKey user_key = 2;
+  int64 acknowledge_event_id = 3;  // 最后同步的事件ID
+}
+
+message SSOrbitSubscribeRoomRsp {
+  int32 result_code = 1;
+}
+
+// ====== 反订阅战斗房间请求 ======
+message SSOrbitUnsubscribeRoomReq {
+  DOrbitRoomKey room_key = 1;
+  DUserIDKey user_key = 2;
+}
+
+message SSOrbitUnsubscribeRoomRsp {
+  int32 result_code = 1;
+}
+
+// ====== 心跳 ======
+message SSOrbitHeartbeatReq {
+  int64 acknowledge_event_id = 1;  // 最后同步的事件ID
+  DOrbitRoomKey room_key = 2;
+  DUserIDKey user_key = 3;
+}
+
+message SSOrbitHeartbeatRsp {
+  int32 result_code = 1;
+}
+
+service OrbitsvrService {
+  option (atframework.service_options) = {
+    module_name: "orbit"
+  };
+
+  rpc create_room(SSOrbitCreateRoomReq) returns (SSOrbitCreateRoomRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "创建战斗房间"
+    };
+  };
+
+  rpc join_room(SSOrbitUserJoinRoomReq) returns (SSOrbitUserJoinRoomRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "加入战斗房间"
+    };
+  };
+
+  rpc subscribe(SSOrbitSubscribeRoomReq) returns (SSOrbitSubscribeRoomRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "订阅房间"
+    };
+  };
+
+  rpc unsubscribe(SSOrbitUnsubscribeRoomReq) returns (SSOrbitUnsubscribeRoomRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "反订阅房间"
+      allow_no_wait: true
+    };
+  };
+
+  rpc get_player_info(SSOrbitGetPlayerInfoReq) returns (SSOrbitGetPlayerInfoRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拉取用户信息"
+    };
+  };
+
+  rpc heartbeat(SSOrbitHeartbeatReq) returns (SSOrbitHeartbeatRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "心跳"
+      timeout: { seconds: 10 }
+    };
+  };
+}

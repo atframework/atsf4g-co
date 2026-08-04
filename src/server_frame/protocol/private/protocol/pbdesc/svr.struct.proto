@@ -10,6 +10,7 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
 
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
 import "protocol/common/com.struct.rank.common.proto";
 
 package hello;
@@ -57,6 +58,10 @@ message user_option_public_data {
 message user_async_job_debug_message {
   string content = 1;
   string title = 2;
+}
+
+message user_async_job_orbit_finish {
+  DOrbitUserFinishAsyncData data = 1;
 }
 
 message user_async_job_update_rank {
@@ -120,6 +125,7 @@ message user_async_jobs_blob_data {
     user_async_job_debug_message debug_message = 101;  // 调试消息
     user_async_job_update_rank update_rank = 201;      // 更新排行榜
     user_async_job_settle_rank settle_rank = 202;      // 结算排行榜
+    user_async_job_orbit_finish orbit_finish = 301;    // Orbit结束
   }
 }
 

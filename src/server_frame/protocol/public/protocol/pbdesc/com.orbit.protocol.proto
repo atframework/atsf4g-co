@@ -11,6 +11,8 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 
 import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
 
 package hello;
 
@@ -20,6 +22,7 @@ service OrbitServerRpcService {
   };
 
   rpc echo(OrbitServerEchoReq) returns (OrbitServerEchoRsp);
+  rpc user_finish(OrbitServerUserFinishReq) returns (OrbitServerUserFinishRsp);
 }
 
 message OrbitServerEchoReq {
@@ -36,6 +39,7 @@ service OrbitClientRpcService {
   };
 
   rpc echo(OrbitClientEchoReq) returns (OrbitClientEchoRsp);
+  rpc user_init(OrbitClientUserInitReq) returns (OrbitClientUserInitRsp);
 }
 
 message OrbitClientEchoReq {
@@ -45,3 +49,19 @@ message OrbitClientEchoReq {
 message OrbitClientEchoRsp {
   string text = 1;
 }
+
+message OrbitClientUserInitReq {
+  repeated DOrbitUserInitData user_data = 1;
+  bool init_finish = 2;
+}
+
+message OrbitClientUserInitRsp {
+  int32 ret_code = 1;
+  repeated DOrbitUserInitResult data = 2;
+}
+
+message OrbitServerUserFinishReq {
+  repeated DOrbitUserFinishResult results = 1;
+}
+
+message OrbitServerUserFinishRsp {}

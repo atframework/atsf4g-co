@@ -1,0 +1,143 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+import "google/protobuf/timestamp.proto";
+import "protocol/pbdesc/com.struct.proto";
+
+package hello;
+
+message DOrbitRoomKey {
+  string client_id = 1;
+}
+
+enum EnOrbitUserStatusType {
+  EN_ORBIT_USER_STATUS_TYPE_UNKNOW = 0;
+}
+
+message DOrbitPlayerInitDataDetail {
+  // 用户初始化数据
+}
+
+message DOrbitUserFinishResultDetail {
+  EnOrbitUserStatusType status = 1;
+  // 用户完成数据
+}
+
+message DOrbitUserFinishAsyncData {
+  DOrbitRoomKey room_key = 1;
+  int64 start_timepoint = 2;
+  int64 finish_timepoint = 3;
+  DOrbitRoomExitInfo exit_info = 4;
+  repeated DOrbitUserInitData user_init_datas = 11;          // 参与玩家
+  repeated DOrbitUserFinishResult user_finish_results = 12;  // 参与玩家完成结果
+}
+
+message DOrbitUserInitData {
+  DUserIDKey user_key = 1;
+  DOrbitPlayerInitDataDetail data = 2;
+}
+
+message DOrbitUserInitResult {
+  DUserIDKey user_key = 1;
+  string token = 2;
+}
+
+message DOrbitUserFinishResult {
+  DUserIDKey user_key = 1;
+  int32 index = 2;
+  DOrbitUserFinishResultDetail data = 3;
+}
+
+message DOrbitMapData {
+  int32 map_id = 1;
+  string region = 2;
+}
+
+message DOrbitRoomInitData {
+  DOrbitMapData map_data = 1;
+}
+
+enum EnOrbitRoomStatus {
+  EN_ORBIT_ROOM_STATUS_INVALID = 0;         // 无效值
+  EN_ORBIT_ROOM_STATUS_CLIENT_LOADING = 1;  // 加载中
+  EN_ORBIT_ROOM_STATUS_CLIENT_LOADED = 2;   // 加载完成
+  EN_ORBIT_ROOM_STATUS_USER_INITING = 3;    // 用户初始化中
+  EN_ORBIT_ROOM_STATUS_USER_RUNNING = 4;    // 用户运行中
+  EN_ORBIT_ROOM_STATUS_USER_FINISH = 5;     // 用户结束
+  EN_ORBIT_ROOM_STATUS_EXIT = 6;            // 退出
+}
+
+enum EnOrbitRoomExitReason {
+  EN_ORBIT_ROOM_EXIT_REASON_UNKNOWN = 0;
+  EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED = 1;       // 分配失败
+  EN_ORBIT_ROOM_EXIT_REASON_USER_INIT_FAILED = 2;  // 用户初始化失败
+  EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT = 3;           // 超时
+  EN_ORBIT_ROOM_EXIT_REASON_USER_FINISH = 4;       // 用户结束
+}
+
+// ====== WAL 事件体 ======
+
+message DOrbitRoomExitInfo {
+  EnOrbitRoomExitReason exit_reason = 1;
+}
+
+message DOrbitRoomRunningData {
+  int64 last_event_id = 1;
+  EnOrbitRoomStatus room_status = 2;
+  int64 status_end_timepoint = 3;
+
+  uint64 orbit_server_id = 4;   // 房间服务器ID
+  DOrbitRoomKey room_key = 5;   // 房间key
+  int64 create_timepoint = 6;   // 创建房间的时间
+  int64 expired_timepoint = 7;  // 房间最大过期时间
+  DOrbitRoomExitInfo exit_info = 8;
+
+  string client_address = 11;   // 客户端连接地址
+  DOrbitMapData map_data = 12;  // 地图信息
+  repeated DOrbitUserInitResult user_init = 13;
+  repeated DUserIDKey user_finish = 14;
+}
+
+message DOrbitClientStartLoading {}
+
+message DOrbitClientFinishLoading {
+  string client_address = 1;
+}
+
+message DOrbitUserInit {
+  DOrbitUserInitResult init_result = 1;
+}
+
+message DOrbitUserFinish {
+  DUserIDKey user_key = 1;
+}
+
+message DOrbitClientExit {
+  DOrbitRoomExitInfo exit_info = 1;
+}
+
+message DOrbitRoomEventLog {
+  int64 event_id = 1;                       // 事件ID
+  google.protobuf.Timestamp timepoint = 2;  // 插入时间
+  EnOrbitRoomStatus orbit_room_status = 3;  // 战斗房间状态
+  DOrbitRoomKey room_key = 4;               // 房间key
+
+  oneof event {
+    DOrbitClientStartLoading start_loading = 101;    // 开始加载Client
+    DOrbitClientFinishLoading finish_loading = 102;  // Client加载完成
+    DOrbitUserInit user_init_success = 103;          // 用户初始化成功
+    DOrbitUserFinish user_finish = 104;              // 用户结束
+    DOrbitClientExit client_exit = 111;              // Client退出
+  }
+}
+
+message DOrbitRoomSnapshotData {
+  DOrbitRoomRunningData running_data = 1;
+}
