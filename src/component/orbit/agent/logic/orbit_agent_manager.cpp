@@ -250,10 +250,8 @@ static int64_t get_total_process_cpu_time_us(const uv_rusage_t& usage) {
 static void async_notify_client_exit(const char* task_name, const std::string& client_id, uint64_t controller_server_id,
                                      orbit::DClientIdentity identity, orbit::DServerIdentity server_identity,
                                      orbit::EnClientExitReason reason, int32_t exit_code) {
-  rpc::context ctx{rpc::context::create_without_task()};
-
   auto invoke_result = rpc::async_invoke(
-      ctx, task_name,
+      logic_server_get_current_tick_context(), task_name,
       [controller_server_id, identity = std::move(identity), server_identity = std::move(server_identity), reason,
        exit_code](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
         auto notify_request = rpc::make_shared_message<orbit::ATCNotifyClientExitReq>(sub_ctx);
@@ -600,14 +598,14 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
       FWLOGWARNING(
           "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().cpu_used(), expected_cpu, cpu_capacity_);
-      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
     if (memory_capacity_mb_ > 0.0 && load_record_.agent().memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (mem overload): mem_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
-      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
   }
@@ -936,14 +934,14 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
     if (client_record->state != orbit::EN_CLIENT_STATE_EXITING) {
       // 存在句柄 等待超时 或者 exit
       client_record->force_kill_timepoint =
-          static_cast<time_t>(util::time::time_utility::get_sys_now()) + kDefaultClientForceCleanupDelaySec;
+          util::time::time_utility::get_sys_now() + kDefaultClientForceCleanupDelaySec;
       client_record->exit_reason = request.exit_reason();
       client_record->exit_code = request.exit_code();
       set_client_state(client_record, orbit::EN_CLIENT_STATE_EXITING);
     }
   }
 
-  auto identity = find_server_identity(client_record->server_unique_id);
+  auto* identity = find_server_identity(client_record->server_unique_id);
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
                client_id, client_record->server_unique_id);
@@ -1076,7 +1074,7 @@ int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClient
   set_client_state(record, orbit::EN_CLIENT_STATE_STARTING);
   record->client_addr.clear();
 
-  record->start_timepoint = static_cast<time_t>(util::time::time_utility::get_sys_now());
+  record->start_timepoint = util::time::time_utility::get_sys_now();
   server_unique_id_to_client_ids_[record->server_unique_id].insert(record->client_id);
 
   output = record;
@@ -1240,16 +1238,14 @@ void orbit_agent_manager::stop_client_process(orbit_agent_client_record_ptr clie
     return;
   }
   // 设置超时时间
-  client_record->force_kill_timepoint =
-      static_cast<time_t>(util::time::time_utility::get_sys_now()) + kDefaultClientForceCleanupDelaySec;
+  client_record->force_kill_timepoint = util::time::time_utility::get_sys_now() + kDefaultClientForceCleanupDelaySec;
   client_record->exit_reason = exit_reason;
   client_record->exit_code = exit_code;
   set_client_state(client_record, orbit::EN_CLIENT_STATE_EXITING);
   // 发送stop_client
-  rpc::context ctx{rpc::context::create_without_task()};
 
   auto invoke_result = rpc::async_invoke(
-      ctx, "async stop_client_process",
+      logic_server_get_current_tick_context(), "async stop_client_process",
       [client_server_id = client_record->client_server_id,
        exit_reason](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
         auto notify_request = rpc::make_shared_message<orbit::ATDStopClientReq>(sub_ctx);
@@ -1332,13 +1328,13 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
     if (orbit::EN_CLIENT_STATE_STARTING == record->state) {
       if (record->startup_timeout_sec > 0 && record->start_timepoint > 0 &&
           now >= static_cast<time_t>(record->start_timepoint) + static_cast<time_t>(record->startup_timeout_sec)) {
-        expired.push_back({kv.first, orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT});
+        expired.emplace_back(kv.first, orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT);
       }
     } else if (orbit::EN_CLIENT_STATE_RUNNING == record->state) {
       if (record->heartbeat_timeout_sec > 0 && record->last_heartbeat_timepoint > 0 &&
           now >= static_cast<time_t>(record->last_heartbeat_timepoint) +
                      static_cast<time_t>(record->heartbeat_timeout_sec)) {
-        expired.push_back({kv.first, orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT});
+        expired.emplace_back(kv.first, orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT);
       }
     }
   }

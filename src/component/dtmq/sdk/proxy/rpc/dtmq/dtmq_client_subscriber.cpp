@@ -1826,8 +1826,7 @@ void shared_subscriber::setup_timer(timer_action_type action, bool ignore_same_a
       if (inner_mgr.timer_set.get_private_data() != nullptr) {
         self->tick(*reinterpret_cast<rpc::context*>(inner_mgr.timer_set.get_private_data()));
       } else {
-        rpc::context child_ctx = rpc::context::create_without_task();
-        self->tick(child_ctx);
+        self->tick(logic_server_get_current_tick_context());
       }
 
       if (current_action == timer_action_type::kGc && self->can_be_removed() && self->timer_gc_tick_ != 0 &&

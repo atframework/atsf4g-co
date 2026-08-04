@@ -264,8 +264,7 @@ void mq_channel_manager::update_timer(mq_channel& channel, mq_channel_timer_type
       [watcher](time_t /*tick*/, const mq_channel_timer_type::timer_t&) {
         auto channel_ptr = watcher.lock();
         if (channel_ptr) {
-          rpc::context ctx{rpc::context::create_without_task()};
-          mq_channel::mq_channel_accessor::update_timer(*channel_ptr, ctx);
+          mq_channel::mq_channel_accessor::update_timer(*channel_ptr, logic_server_get_current_tick_context());
         }
       },
       &output_handle);
@@ -827,7 +826,7 @@ void mq_channel_manager::resolve_channel_io() {
 
   auto iter = pending_io_channels_.begin();
 
-  rpc::context ctx{rpc::context::create_without_task()};
+  rpc::context& ctx = logic_server_get_current_tick_context();
 
   // IO频率控制，不需要很精确，只要不要太密集即可
   iterating_pending_io_channels_ = true;
@@ -889,7 +888,7 @@ void mq_channel_manager::report_channel_qty_oss() {
   // FIXME: 这里需要发送OSS日志，暂时注释掉
   // telemetry_oss_user_information user;
   // user.zone_id = logic_config::me()->get_local_zone_id();
-  // rpc::context ctx{rpc::context::create_without_task()};
+  // rpc::context& ctx = logic_server_get_current_tick_context();
   // rpc::context::message_holder<PROJECT_NAMESPACE_ID::oss::DtmqChannelQty> oss_log{ctx};
   // oss_log->set_total_qty(static_cast<int32_t>(channels_.size()));
   // oss_log->set_penddind_io_qty(static_cast<int32_t>(pending_io_channels_.size()));

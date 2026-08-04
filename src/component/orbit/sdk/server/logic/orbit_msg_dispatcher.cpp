@@ -16,6 +16,8 @@
 
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
+#include <logic/logic_server_setup.h>
+
 #include <rpc/rpc_context.h>
 #include <utility/protobuf_mini_dumper.h>
 #include <utility/tls_buffers.h>
@@ -159,7 +161,7 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
     return;
   }
 
-  rpc::context fallback_ctx{rpc::context::create_without_task()};
+  rpc::context fallback_ctx{logic_server_get_current_tick_context()};
   rpc::context *response_ctx = &fallback_ctx;
   rpc::telemetry::tracer tracer;
   std::unique_ptr<rpc::context> child_context;

@@ -1,24 +1,25 @@
 // Copyright 2026 atframework
 
 #include "logic/rank_manager.h"
-#include "logic/rank_mirror_global.h"
 
+#include <config/server_frame_build_feature.h>
 #include <log/log_wrapper.h>
 #include <xxhash.h>
-#include "config/server_frame_build_feature.h"
-#include "logic/rank.h"
-#include "protocol/pbdesc/com.const.pb.h"
-#include "protocol/pbdesc/com.struct.rank.pb.h"
-#include "protocol/pbdesc/rank_board_service.pb.h"
-#include "rpc/rpc_common_types.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/config/rank_board_config.pb.h>
+#include <protocol/pbdesc/com.const.pb.h>
+#include <protocol/pbdesc/com.struct.rank.pb.h>
+#include <protocol/pbdesc/rank_board_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <config/excel/config_easy_api.h>
 #include <config/excel/config_set_ExcelRankRule.h>
@@ -30,10 +31,11 @@
 #include <rpc/db/local_db_interface.atfw.gen.h>
 #include <time/time_utility.h>
 
+#include <rpc/rank_board/rankboardservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_common_types.h>
 #include <rpc/rpc_context.h>
-#include "rpc/rank_board/rankboardservice.atfw.gen.h"
-#include "utility/protobuf_mini_dumper.h"
+#include <utility/protobuf_mini_dumper.h>
 
 #include <atframe/etcdcli/etcd_discovery.h>
 #include <logic/hpa/logic_hpa_easy_api.h>
@@ -43,6 +45,9 @@
 #include <cstdint>
 #include <ranges>
 #include <utility>
+
+#include "logic/rank.h"
+#include "logic/rank_mirror_global.h"
 
 namespace {
 
@@ -73,11 +78,10 @@ bool rank_sort_type_equal_type::operator()(const PROJECT_NAMESPACE_ID::EnRankSor
 rank_manager::rank_manager() : init_(false), closing_(false), last_refresh_second_(0) {}
 
 void rank_manager::tick() {
-  rpc::context ctx{rpc::context::create_without_task()};
   // 触发保存
   auto now_tm = atfw::util::time::time_utility::get_now();
   if (last_refresh_second_ != now_tm) {
-    refresh_limit_second(ctx, now_tm);
+    refresh_limit_second(logic_server_get_current_tick_context(), now_tm);
     last_refresh_second_ = now_tm;
   }
 }
@@ -91,12 +95,11 @@ void rank_manager::stop() {
   }
   closing_ = true;
 
-  rpc::context ctx{rpc::context::create_without_task()};
   for (auto& rank : rank_map_) {
     if (!rank.second) {
       continue;
     }
-    rank.second->async_save_rank_data(ctx);
+    rank.second->async_save_rank_data(logic_server_get_current_tick_context());
   }
 }
 

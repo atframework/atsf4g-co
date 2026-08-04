@@ -1,30 +1,32 @@
 // Copyright 2026 atframework
 
-#include <logic/rank_mirror_global.h>
+#include "logic/rank_mirror_global.h"
+
+#include <log/log_wrapper.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
-#include <protocol/pbdesc/svr.struct.pb.h>
 #include <protocol/config/rank_board_config.pb.h>
+#include <protocol/pbdesc/svr.struct.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <logic/logic_server_setup.h>
+
 #include <config/logic_config.h>
 #include <rpc/db/local_db_interface.atfw.gen.h>
-#include "log/log_wrapper.h"
-#include "rpc/rpc_async_invoke.h"
-#include "rpc/rpc_common_types.h"
+#include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_common_types.h>
 
 #include <logic/rank_manager.h>
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 int rank_mirror_global::init() { return 0; }
-void rank_mirror_global::tick() {
-  rpc::context ctx{rpc::context::create_without_task()};
-  async_tick_dump(ctx);
-}
+void rank_mirror_global::tick() { async_tick_dump(logic_server_get_current_tick_context()); }
 
 void rank_mirror_global::add_failed_task(const dump_mirror_task_ptr& task) {
   // 失败的任务重新放到尾部重新执行
@@ -86,9 +88,8 @@ rpc::result_code_type rank_mirror_global::tick_dump(rpc::context& ctx) {
   }
 
   int32_t tick_io_max = 5;
-  auto rank_per_slice_max_count = logic_config::me()
-                                      ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
-                                      .rank_slice_max_count();
+  auto rank_per_slice_max_count =
+      logic_config::me()->get_server_instance_config<atframework::rank::config::ranksvr_cfg>().rank_slice_max_count();
   if (rank_per_slice_max_count <= 0) {
     rank_per_slice_max_count = 1;
   }

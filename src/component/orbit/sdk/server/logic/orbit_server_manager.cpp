@@ -222,7 +222,6 @@ void orbit_server_manager::server_heartbeat() {
     }
   }
 
-  rpc::context ctx{rpc::context::create_without_task()};
   for (auto& iter : region_agent_map) {
     uint64_t controller_server_id = select_controller_server_id(iter.first);
     if (controller_server_id == 0) {
@@ -231,7 +230,7 @@ void orbit_server_manager::server_heartbeat() {
     }
 
     auto invoke_task = rpc::async_invoke(
-        ctx, "orbit_server_manager::server_heartbeat",
+        logic_server_get_current_tick_context(), "orbit_server_manager::server_heartbeat",
         [this, controller_server_id,
          agent_id_set = std::move(iter.second)](rpc::context& child_ctx) -> rpc::result_code_type {
           auto req = rpc::make_shared_message<orbit::STCServerHeartbeatNotify>(child_ctx);

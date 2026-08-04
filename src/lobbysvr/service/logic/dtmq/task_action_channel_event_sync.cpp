@@ -23,6 +23,9 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_common_types.h>
+
 GAME_SERVICE_API task_action_channel_event_sync::task_action_channel_event_sync(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
@@ -31,11 +34,16 @@ GAME_SERVICE_API task_action_channel_event_sync::~task_action_channel_event_sync
 GAME_SERVICE_API const char* task_action_channel_event_sync::name() const { return "task_action_channel_event_sync"; }
 
 GAME_SERVICE_API task_action_channel_event_sync::result_type task_action_channel_event_sync::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  // TODO ...
+  auto result = RPC_AWAIT_CODE_RESULT(rpc::dtmq::client_subscriber::global_receive_channel_event(
+      get_shared_context(), get_request_node_id(), req_body));
+  if (result < 0) {
+    FCTXLOGERROR(get_shared_context(), "global_receive_channel_event failed: {}({})", result,
+                 protobuf_mini_dumper_get_error_msg(result));
+  }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

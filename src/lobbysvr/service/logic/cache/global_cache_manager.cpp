@@ -9,6 +9,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/common/com.struct.cache.common.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -20,6 +21,8 @@
 #include <config/logic_config.h>
 #include <data/player.h>
 
+#include <logic/logic_server_setup.h>
+
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_ss_req_base.h>
 
@@ -27,7 +30,6 @@
 #include <rpc/cache/cachesvrservice.atfw.gen.h>
 
 #include <utility/protobuf_mini_dumper.h>
-#include "protocol/common/com.struct.cache.common.pb.h"
 
 std::string global_cache_manager::memory_leak_debug() {
   return util::log::format("global_cache_manager: ({}) \n", hot_data_map_.size());
@@ -171,7 +173,7 @@ void global_cache_manager::hot_data_watch() {
     return;
   }
 
-  rpc::context ctx{rpc::context::create_without_task()};
+  rpc::context ctx{logic_server_get_current_tick_context()};
   rpc::context::tracer tracer;
   rpc::context::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;

@@ -33,12 +33,17 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_common_types.h>
+
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
 #include "app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.h"
 #include "app/handle_ss_rpc_lobbysvrservice.atfw.gen.h"
 
 #include "data/player.h"
+#include "rpc/rpc_context.h"
 
+namespace {
 class main_service_module : public atfw::atapp::module_impl {
  private:
   static router_player_cache::object_ptr_t create_player_fn(uint64_t user_id, uint32_t zone_id,
@@ -117,8 +122,18 @@ class main_service_module : public atfw::atapp::module_impl {
     return 0;
   }
 
+  int tick() override {
+    // tick all router managers
+    int ret = 0;
+
+    ret += rpc::dtmq::client_subscriber::global_tick(logic_server_get_current_tick_context());
+
+    return ret;
+  }
+
   const char *name() const override { return "main_service_module"; }
 };
+}  // namespace
 
 int main(int argc, char *argv[]) {
   atfw::atapp::app app;

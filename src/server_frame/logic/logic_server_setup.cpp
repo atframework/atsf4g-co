@@ -109,7 +109,7 @@ static int send_notification(util::cli::callback_param params) {
     domain = rpc::telemetry::notification_domain::kWarning;
   }
 
-  rpc::context ctx{rpc::context::create_without_task()};
+  rpc::context ctx{logic_server_get_current_tick_context()};
   rpc::telemetry::opentelemetry_utility::send_notification_event(ctx, domain, params[1]->to_cpp_string(),
                                                                  params[2]->to_cpp_string(), {{"source", "command"}});
   ::atfw::atapp::app::add_custom_command_rsp(params, "success");
@@ -368,6 +368,24 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
 
 SERVER_FRAME_API logic_server_common_module *logic_server_last_common_module() { return detail::g_last_common_module; }
 
+namespace {
+std::unique_ptr<rpc::context> &logic_server_get_fallback_tick_context() {
+  static std::unique_ptr<rpc::context> fallback_context;
+  return fallback_context;
+}
+}  // namespace
+
+rpc::context &logic_server_get_current_tick_context() {
+  logic_server_common_module *module = logic_server_last_common_module();
+  if (module == nullptr) {
+    auto &fallback_context = logic_server_get_fallback_tick_context();
+    if (!fallback_context) {
+      fallback_context = gsl::make_unique<rpc::context>(rpc::context::create_without_task());
+    }
+  }
+  return module->get_current_tick_context();
+}
+
 SERVER_FRAME_API logic_server_common_module::logic_server_common_module(
     const logic_server_common_module_configure &static_conf)
     : static_conf_(static_conf),
@@ -398,6 +416,8 @@ SERVER_FRAME_API logic_server_common_module::~logic_server_common_module() {
 SERVER_FRAME_API int logic_server_common_module::init() {
   FWLOGINFO("============ Server initialize ============");
   FWLOGINFO("[Server startup]: {}\n{}", get_app()->get_app_version(), get_app()->get_build_version());
+
+  logic_server_get_fallback_tick_context().reset();
 
   INIT_CALL(logic_config, get_app()->get_id(), get_app()->get_app_name());
 
@@ -569,6 +589,10 @@ SERVER_FRAME_API void logic_server_common_module::cleanup() {
 SERVER_FRAME_API const char *logic_server_common_module::name() const { return "logic_server_common_module"; }
 
 SERVER_FRAME_API int logic_server_common_module::tick() {
+  if (tick_context_) {
+    tick_context_.reset();
+  }
+
   int ret = 0;
 
   ret += tick_update_remote_configures();
@@ -653,6 +677,15 @@ void logic_server_common_module::setup_hpa_controller() {
   if (!hpa_controller_) {
     hpa_controller_ = atfw::memory::stl::make_shared<logic_hpa_controller>(*get_app());
   }
+}
+
+rpc::context &logic_server_common_module::get_current_tick_context() {
+  if (!tick_context_) {
+    tick_context_ = gsl::make_unique<rpc::context>(rpc::context::create_without_task());
+  }
+
+  // tick context 会被跨模块使用，所以不设置trace
+  return *tick_context_;
 }
 
 SERVER_FRAME_API atfw::atapp::etcd_cluster *logic_server_common_module::get_etcd_cluster() {

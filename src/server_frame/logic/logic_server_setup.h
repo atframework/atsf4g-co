@@ -72,6 +72,13 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app& app, const logi
  */
 SERVER_FRAME_API logic_server_common_module* logic_server_last_common_module();
 
+/**
+ * @brief 获取公共的 tick 用上下文，避免每个模块创建一个上下文，减少开销
+ *
+ * @return SERVER_FRAME_API&
+ */
+SERVER_FRAME_API rpc::context& logic_server_get_current_tick_context();
+
 struct ATFW_UTIL_SYMBOL_VISIBLE logic_server_timer {
   std::chrono::system_clock::time_point timeout;
   uint64_t task_id{};
@@ -136,6 +143,8 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   SERVER_FRAME_API bool is_runtime_active() const noexcept;
 
   SERVER_FRAME_API void setup_hpa_controller();
+
+  rpc::context& get_current_tick_context();
 
   SERVER_FRAME_API atfw::atapp::etcd_cluster* get_etcd_cluster();
 
@@ -209,6 +218,8 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   void setup_metrics();
 
  private:
+  std::unique_ptr<rpc::context> tick_context_;
+
   logic_server_common_module_configure static_conf_;
   time_t stop_log_timepoint_;
   PROJECT_NAMESPACE_ID::config::logic_server_shared_component_cfg shared_component_;
