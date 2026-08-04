@@ -511,18 +511,26 @@ function(atframework_add_executable TARGET_NAME)
                CXX_VISIBILITY_PRESET "hidden"
                VERSION "${PROJECT_VERSION}"
                RUNTIME_OUTPUT_DIRECTORY "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
                BUILD_RPATH_USE_ORIGIN YES
                INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
 
-  # 在所有生成器上设置分配置输出目录，防止目录属性 CMAKE_RUNTIME_OUTPUT_DIRECTORY_<CONFIG>
-  # 优先于目标属性 RUNTIME_OUTPUT_DIRECTORY，导致 Linux(Ninja/Makefile) 等单配置生成器
-  # 忽略目标的输出目录而落到默认 bin 目录
+  # 在所有生成器上设置分配置输出目录，防止目录属性 CMAKE_RUNTIME_OUTPUT_DIRECTORY_<CONFIG> 优先于目标属性 RUNTIME_OUTPUT_DIRECTORY，导致
+  # Linux(Ninja/Makefile) 等单配置生成器 忽略目标的输出目录而落到默认 bin 目录
   set_target_properties(
     ${TARGET_NAME}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
                RUNTIME_OUTPUT_DIRECTORY_RELEASE "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
                RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-               RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}")
+               RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_DEBUG
+               "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_RELEASE
+               "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_RELWITHDEBINFO
+               "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_MINSIZEREL
+               "${PROJECT_INSTALL_BAS_DIR}/${project_service_declare_instance_RUNTIME_OUTPUT_DIRECTORY}")
 
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
