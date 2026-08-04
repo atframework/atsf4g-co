@@ -131,7 +131,7 @@ int32_t mock_client::add(gsl::string_view client_ip, uint32_t client_port) const
   msg.mutable_head()->set_session_id(session_id_);
   atfw::gateway::server_message_body_session *add_session = msg.mutable_body()->mutable_add_session();
   add_session->set_client_ip(client_ip.data(), client_ip.size());
-  add_session->set_client_port(client_port);
+  add_session->set_client_port(static_cast<int32_t>(client_port));
   return dispatch_message(msg);
 }
 
