@@ -49,11 +49,6 @@ constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
 constexpr const char* kOrbitEnabledArg = "--enable_orbit";
 
-static bool is_timeout_exit_reason(orbit::EnClientExitReason reason) {
-  return orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT == reason ||
-         orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT == reason;
-}
-
 static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
   return [expected_server_id](const std::string& checked) -> bool {
     if (checked.empty()) {
@@ -1218,8 +1213,6 @@ int orbit_agent_manager::kill_client_process(orbit_agent_client_record_ptr clien
   } else if (client_record->process_id > 0) {
     uv_result = uv_kill(static_cast<int>(client_record->process_id), signal_number);
   }
-  client_record->process_handle = nullptr;
-  client_record->process_id = 0;
   client_record->force_kill_timepoint = 0;
   client_record->exit_reason = exit_reason;
   client_record->exit_code = exit_code;
@@ -1257,8 +1250,10 @@ void orbit_agent_manager::stop_client_process(orbit_agent_client_record_ptr clie
 
   auto invoke_result = rpc::async_invoke(
       ctx, "async stop_client_process",
-      [client_server_id = client_record->client_server_id](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+      [client_server_id = client_record->client_server_id,
+       exit_reason](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
         auto notify_request = rpc::make_shared_message<orbit::ATDStopClientReq>(sub_ctx);
+        notify_request->set_reason(exit_reason);
         RPC_RETURN_CODE(
             RPC_AWAIT_CODE_RESULT(rpc::agenttoclientservice::stop_client(sub_ctx, client_server_id, *notify_request)));
       });
@@ -1276,20 +1271,10 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
     return;
   }
 
-  if (record->force_kill_timepoint > 0 && is_timeout_exit_reason(record->exit_reason)) {
-    // 由Kill发起的exit
-    FWLOGWARNING(
-        "orbit agent client {} exited after timeout kill: exit_status={}, term_signal={}, state={}, "
-        "wait_kill_until={}",
-        client_id, exit_status, term_signal, static_cast<int>(record->state), record->force_kill_timepoint);
-    delete_client(record);
-    return;
-  }
-
   if (record->state != orbit::EN_CLIENT_STATE_EXITING) {
     // Client 未通过 STAClientExitReq 告知退出，视为异常退出
-    FWLOGWARNING("orbit agent client {} exited unexpectedly: exit_status={}, term_signal={}, state={}", client_id,
-                 exit_status, term_signal, static_cast<int>(record->state));
+    FWLOGWARNING("orbit agent client {} exited unexpectedly: exit_status={}, term_signal={}, state={}",
+                 record->client_id, exit_status, term_signal, static_cast<int>(record->state));
   }
 
   bool already_exiting = (record->state == orbit::EN_CLIENT_STATE_EXITING);
@@ -1312,14 +1297,14 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
 
   auto controller_server_id = record->get_controller_server_id();
   if (0 == controller_server_id) {
-    FWLOGWARNING("orbit agent process crash for {} but no controller connected, skip notify", client_id);
+    FWLOGWARNING("orbit agent process crash for {} but no controller connected, skip notify", record->client_id);
     return;
   }
 
   auto server_identity_ptr = find_server_identity(record->server_unique_id);
   if (server_identity_ptr == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
-               client_id, record->server_unique_id);
+               record->client_id, record->server_unique_id);
     return;
   }
 
@@ -1328,7 +1313,7 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
   const orbit::EnClientExitReason reason = orbit::EN_CLIENT_EXIT_REASON_CRASH;
   const int32_t exit_code = static_cast<int32_t>(exit_status);
 
-  async_notify_client_exit("orbit_agent_manager.notify_crash_exit", client_id, controller_server_id,
+  async_notify_client_exit("orbit_agent_manager.notify_crash_exit", record->client_id, controller_server_id,
                            std::move(identity), *server_identity_ptr, reason, exit_code);
 }
 
@@ -1392,6 +1377,7 @@ void orbit_agent_manager::check_client_force_kill(time_t now) {
 
   for (const auto& client_id : expired) {
     auto record = find_client(client_id);
+    bool already_exiting = (record->state == orbit::EN_CLIENT_STATE_EXITING);
 
     const orbit::EnClientExitReason reason = record->exit_reason;
     const int32_t exit_code = record->exit_code;
@@ -1403,23 +1389,25 @@ void orbit_agent_manager::check_client_force_kill(time_t now) {
     // kill后直接删除
     delete_client(record);
 
-    auto controller_server_id = record->get_controller_server_id();
-    if (0 == controller_server_id) {
-      FWLOGWARNING("orbit agent process timeout for {} but no controller connected, skip notify", client_id);
-      continue;
-    }
+    if (!already_exiting) {
+      auto controller_server_id = record->get_controller_server_id();
+      if (0 == controller_server_id) {
+        FWLOGWARNING("orbit agent process timeout for {} but no controller connected, skip notify", client_id);
+        continue;
+      }
 
-    auto server_identity_ptr = find_server_identity(record->server_unique_id);
-    if (server_identity_ptr == nullptr) {
-      FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
-                 client_id, record->server_unique_id);
-      continue;
-    }
+      auto server_identity_ptr = find_server_identity(record->server_unique_id);
+      if (server_identity_ptr == nullptr) {
+        FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+                   client_id, record->server_unique_id);
+        continue;
+      }
 
-    orbit::DClientIdentity identity;
-    fill_client_identity(identity, record);
-    async_notify_client_exit("orbit_agent_manager.notify_timeout_exit", client_id, controller_server_id,
-                             std::move(identity), *server_identity_ptr, reason, exit_code);
+      orbit::DClientIdentity identity;
+      fill_client_identity(identity, record);
+      async_notify_client_exit("orbit_agent_manager.notify_timeout_exit", client_id, controller_server_id,
+                               std::move(identity), *server_identity_ptr, reason, exit_code);
+    }
   }
 }
 
