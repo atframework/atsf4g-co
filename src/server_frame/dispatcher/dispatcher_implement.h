@@ -233,6 +233,25 @@ class ATFW_UTIL_SYMBOL_VISIBLE dispatcher_implement : public ::atfw::atapp::modu
    */
   SERVER_FRAME_API bool is_closing() const noexcept;
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  /**
+   * @brief Reset registered task actions, services and methods.
+   * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is on. Used by the unit test
+   *       fixture teardown (src/tools/rpc-unit-test) so a consecutive fixture in the same process can
+   *       re-register handles into the process-lifetime dispatcher singletons. It must not be called
+   *       while tasks are running.
+   */
+  SERVER_FRAME_API void reset_registrations_for_unit_test();
+
+  /**
+   * @brief Re-enable this module so a consecutive fixture's app->init runs init() again.
+   * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is on. atapp disables
+   *       modules on stop, which would otherwise leak disabled state (and e.g. cs_msg_dispatcher's
+   *       is_closing_) into the next fixture reusing the process-lifetime dispatcher singletons.
+   */
+  SERVER_FRAME_API void reenable_for_unit_test();
+#endif
+
   /**
    * @brief Try to get registered service descriptor by full name
    * @param service_full_name service full name

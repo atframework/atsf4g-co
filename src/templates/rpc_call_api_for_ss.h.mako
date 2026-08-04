@@ -42,6 +42,16 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 #include "rpc/rpc_common_types.h"
 #include "dispatcher/dispatcher_type_defines.h"
 
+#include <config/server_frame_build_feature.h>
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// Typed mock registration helpers below forward into the rpc-unit-test SS rule engine. They only exist in
+// builds with PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS and are never referenced by production code.
+#  include <atframework/testing/mock_ss.h>
+
+#  include <functional>
+#  include <utility>
+#endif
+
 #ifndef ${rpc_dllexport_decl}
 #  define ${rpc_dllexport_decl} ATFW_UTIL_SYMBOL_VISIBLE
 #endif
@@ -150,7 +160,8 @@ namespace broadcast {
 %   endfor
  * @return 0 or error code
  */
-ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
+// Broadcast is fire and forget, so it always returns rpc::always_ready_code_type even for non-stream RPCs.
+ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} rpc::always_ready_code_type
   ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
     const ss_msg_logic_index& index, ::atfw::atapp::protocol::atapp_metadata *metadata = nullptr);
@@ -187,6 +198,27 @@ ATFW_EXPLICIT_NODISCARD_ATTR ${rpc_dllexport_decl} ${rpc_return_type}
   ${rpc.get_name()}(
     ${', '.join(rpc_unicast_params_decl_legacy)});
 % endfor
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace mock {
+% for rpc in rpcs.values():
+/**
+ * @brief Register a typed SS mock rule for ${service.get_full_name()}/${rpc.get_name()}.
+ * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is enabled. This is an inline
+ *       shortcut of atsf4g::testing::mock_ss::mock with the RPC name and message types prefilled.
+ */
+template <class Handler>
+ATFW_UTIL_FORCEINLINE atsf4g::testing::ss_rule_handle ${rpc.get_name()}(
+    atsf4g::testing::mock_ss &__engine, Handler &&__handler,
+    const atsf4g::testing::ss_rule_options &__options = atsf4g::testing::ss_rule_options{}) {
+  return __engine.mock<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}>(
+      "${service.get_full_name()}/${rpc.get_name()}",
+      std::function<int(const atsf4g::testing::ss_request<${rpc.get_request().get_cpp_class_name()}> &,
+                        ${rpc.get_response().get_cpp_class_name()} &)>{std::forward<Handler>(__handler)},
+      __options);
+}
+% endfor
+}  // namespace mock
+#endif
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}
 % endfor

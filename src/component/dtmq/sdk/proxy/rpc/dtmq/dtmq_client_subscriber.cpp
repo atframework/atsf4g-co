@@ -541,6 +541,7 @@ struct client_subscriber::subscriber_internal_data {
   client_subscriber_option options;
   atfw::util::nostd::nonnull<shared_subscriber::ptr_t> shared_instance;
   atfw::util::nostd::nonnull<event_callback_set_ptr_t> event_handler;
+  std::vector<uintptr_t> local_private_data;
 
   subscriber_internal_data(std::string&& input_subscriber_key, shared_subscriber::ptr_t&& input_shared_instance,
                            event_callback_set_ptr_t&& input_event_handler, client_subscriber_option input_options)
@@ -858,6 +859,18 @@ DTMQ_PROXY_SDK_API bool client_subscriber::is_destroyed() const noexcept {
   return internal_data_->shared_instance->get_destroy_sequence() > 0 &&
          internal_data_->shared_instance->get_destroy_sequence() >=
              internal_data_->shared_instance->get_create_sequence();
+}
+
+DTMQ_PROXY_SDK_API gsl::span<const uintptr_t> client_subscriber::get_local_private_data() const noexcept {
+  return {internal_data_->local_private_data.data(), internal_data_->local_private_data.size()};
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_local_private_data(gsl::span<uintptr_t> local_private_data) {
+  internal_data_->local_private_data.assign(local_private_data.begin(), local_private_data.end());
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::append_local_private_data(uintptr_t local_private_data) {
+  internal_data_->local_private_data.emplace_back(local_private_data);
 }
 
 DTMQ_PROXY_SDK_API int64_t client_subscriber::get_create_sequence() const noexcept {

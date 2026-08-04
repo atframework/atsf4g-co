@@ -42,6 +42,41 @@ static int32_t unpack_nothing(rpc::context *, db_message_t &, const redisReply *
 }
 }  // namespace
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace {
+unit_test_hook_t &mutable_hash_table_hook_for_unit_test() noexcept {
+  static unit_test_hook_t hook;
+  return hook;
+}
+}  // namespace
+
+SERVER_FRAME_API void set_hash_table_hook_for_unit_test(unit_test_hook_t hook) {
+  mutable_hash_table_hook_for_unit_test() = std::move(hook);
+}
+
+SERVER_FRAME_API const unit_test_hook_t &get_hash_table_hook_for_unit_test() noexcept {
+  return mutable_hash_table_hook_for_unit_test();
+}
+
+#  define RPC_DB_UNIT_TEST_HOOK_CALL(OP, ...)                                                   \
+    {                                                                                           \
+      if (const auto &__ut_hook = ::rpc::db::hash_table::get_hash_table_hook_for_unit_test()) { \
+        ::rpc::db::hash_table::unit_test_request __ut_req;                                      \
+        __ut_req.op = OP;                                                                       \
+        __ut_req.ctx = &ctx;                                                                    \
+        __ut_req.channel = channel;                                                             \
+        __ut_req.key = key;                                                                     \
+        __VA_ARGS__                                                                             \
+        int32_t __ut_result = 0;                                                                \
+        if (__ut_hook(__ut_req, __ut_result)) {                                                 \
+          RPC_DB_RETURN_CODE(__tracer.finish({__ut_result, __trace_attributes}));               \
+        }                                                                                       \
+      }                                                                                         \
+    }
+#else
+#  define RPC_DB_UNIT_TEST_HOOK_CALL(OP, ...)
+#endif
+
 namespace key_value {
 SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::string_view key,
                                      atfw::util::memory::strong_rc_ptr<db_key_value_message_result_t> output,
@@ -64,6 +99,8 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_get_all, { __ut_req.kv_output = output.get(); })
 
   redis_args args(2);
   args.push("HGETALL");
@@ -130,6 +167,12 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_partly_get, {
+    __ut_req.partly_get_fields = partly_get_fields;
+    __ut_req.partly_get_field_count = partly_get_field_count;
+    __ut_req.kv_output = output.get();
+  })
 
   size_t args_size = 2 + size_t(partly_get_field_count);
   redis_args args(args_size);
@@ -376,6 +419,11 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   }
   reflect->ListFields(*store, &fds);
 
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_set, {
+    __ut_req.store = store.get();
+    __ut_req.version = version;
+  })
+
   size_t args_size = fds.size() * 2;
   if (version != nullptr) {
     // EVALSHA
@@ -484,6 +532,11 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   }
   fds.push_back(fd);
 
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_inc_field, {
+    __ut_req.inc_field = inc_field;
+    __ut_req.inc_message = message.get();
+  })
+
   // 命名名 + Key 两个参数 + 需要操作的字段两个参数
   redis_args args(2 + 2);
 
@@ -549,6 +602,8 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_get_all, { __ut_req.kl_output = &output; })
 
   redis_args args(2);
   args.push("HGETALL");
@@ -620,6 +675,11 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
     FWLOGERROR("list_index is empty");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_get_by_indexs, {
+    __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()};
+    __ut_req.kl_output = &output;
+  })
 
   size_t args_size = 2 + list_index.size();
   redis_args args(args_size);
@@ -695,6 +755,12 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_update_by_index, {
+    const uint64_t __ut_index[] = {list_index};
+    __ut_req.list_index = gsl::span<const uint64_t>{__ut_index, 1};
+    __ut_req.store = store.get();
+  })
+
   redis_args args(4);
   args.push("HSET");
   args.push(key.data(), key.size());
@@ -766,6 +832,11 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_add_index, {
+    __ut_req.max_list_length = max_list_length;
+    __ut_req.store = store.get();
+  })
 
   redis_args args(6);
   args.push("EVALSHA");
@@ -847,6 +918,10 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
 
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_remove_by_index, {
+    __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()};
+  })
+
   size_t args_size = 2 + list_index.size();
   redis_args args(args_size);
   args.push("HDEL");
@@ -909,6 +984,10 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
 
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_remove_by_index, {
+    __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()};
+  })
+
   size_t args_size = 2 + list_index.size();
   redis_args args(args_size);
   args.push("HDEL");
@@ -964,6 +1043,8 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
 
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::remove_all, {})
+
   redis_args args(2);
 
   args.push("DEL");
@@ -1014,6 +1095,8 @@ SERVER_FRAME_API result_type set_ttl(rpc::context &ctx, uint32_t channel, gsl::s
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::set_ttl, { __ut_req.ttl_second = ttl_second; })
 
   redis_args args(3);
 
@@ -1071,6 +1154,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::contex
     FWLOGERROR("current not in a task");
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
   }
+
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::remove_ttl, {})
 
   redis_args args(3);
 

@@ -199,6 +199,16 @@ SERVER_FRAME_API bool dispatcher_implement::is_closing() const noexcept {
   return NULL == get_app() || get_app()->is_closing();
 }
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+SERVER_FRAME_API void dispatcher_implement::reset_registrations_for_unit_test() {
+  task_action_map_by_name_.clear();
+  registered_service_.clear();
+  registered_method_.clear();
+}
+
+SERVER_FRAME_API void dispatcher_implement::reenable_for_unit_test() { enable(); }
+#endif
+
 SERVER_FRAME_API dispatcher_implement::rpc_service_set_t::mapped_type dispatcher_implement::get_registered_service(
     const std::string &service_full_name) const noexcept {
   auto iter = registered_service_.find(service_full_name);

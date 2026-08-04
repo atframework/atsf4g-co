@@ -162,7 +162,8 @@ ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${
 }  // namespace packer
 % if rpc.get_extension_field('atframework.rpc_options', lambda x: x.enable_broadcast, False):
 namespace broadcast {
-${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
+// Broadcast is fire and forget, so it always returns rpc::always_ready_code_type even for non-stream RPCs.
+${rpc_dllexport_decl} rpc::always_ready_code_type ${rpc.get_name()}(
     ${', '.join(rpc_broadcast_params_decl)},
     const ss_msg_logic_index& index, ::atfw::atapp::protocol::atapp_metadata *metadata) {
   atframework::SSMsg* req_msg_ptr = __ctx.create<atframework::SSMsg>();
@@ -415,7 +416,12 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %   else:
   do {
     dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+%   if rpc_is_router_api:
+    // req_msg is moved into router_manager->send_msg() above, use the returned sequence instead
+    await_options.sequence = rpc_sequence;
+%   else:
     await_options.sequence = req_msg.head().sequence();
+%   endif
     {
       const google::protobuf::MethodDescriptor *method = ${service.get_cpp_class_name()}::descriptor()
         ->FindMethodByName("${rpc.get_name()}");

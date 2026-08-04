@@ -2,6 +2,7 @@
 // Created by owent on 2016/9/27.
 //
 
+#include "config/compile_optimize.h"
 #ifdef _MSC_VER
 #  pragma warning(push)
 #  pragma warning(disable : 4005)
@@ -26,12 +27,15 @@
 #include <config/extern_log_categorize.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
-#include <cstdlib>
-#include <cstring>
 
 #include <utility/random_engine.h>
 
 #include <config/logic_config.h>
+
+#include <cstdlib>
+#include <cstring>
+#include <type_traits>  // IWYU pragma: keep
+
 #include "db_msg_dispatcher.h"
 
 #include <config/compiler/protobuf_prefix.h>
@@ -42,24 +46,6 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <rpc/rpc_utils.h>
-
-struct db_async_data_t {
-  uint64_t task_id;
-  uint64_t node_id;
-  uint64_t sequence;
-
-  redisReply *response;
-  db_msg_dispatcher::unpack_fn_t unpack_fn;
-};
-
-static void _uv_close_and_free_callback(uv_handle_t *handle) { delete (uv_timer_t *)handle; }
-
-#if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
-#  include <type_traits>
-static_assert(std::is_trivial<db_async_data_t>::value,
-              "db_async_data_t must be a trivial, because it will stored in a "
-              "buffer and will not call dtor fn");
-#endif
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
@@ -72,6 +58,24 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(db_msg_dispatcher);
 #endif
 
 namespace {
+
+struct ATFW_UTIL_SYMBOL_LOCAL db_async_data_t {
+  uint64_t task_id;
+  uint64_t node_id;
+  uint64_t sequence;
+
+  redisReply *response;
+  db_msg_dispatcher::unpack_fn_t unpack_fn;
+};
+
+static void _uv_close_and_free_callback(uv_handle_t *handle) { delete (uv_timer_t *)handle; }
+
+#if defined(UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT) && UTIL_CONFIG_COMPILER_CXX_STATIC_ASSERT
+static_assert(std::is_trivial<db_async_data_t>::value,
+              "db_async_data_t must be a trivial, because it will stored in a "
+              "buffer and will not call dtor fn");
+#endif
+
 #define REDIS_DATA_VERSOIN 2
 std::string get_first_mac_address() {
   std::string mac;
@@ -803,3 +807,28 @@ int db_msg_dispatcher::raw_send_msg(hiredis::happ::raw &raw_conn, uint64_t task_
 SERVER_FRAME_API uint64_t db_msg_dispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
 SERVER_FRAME_API const std::string &db_msg_dispatcher::get_record_prefix() { return record_prefix_; }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+SERVER_FRAME_API bool db_msg_dispatcher::set_record_info_for_unit_test(const std::string &record_prefix,
+                                                                       channel_t::type channel_type) {
+  for (const auto &conn : db_cluster_conns_) {
+    if (conn) {
+      FWLOGERROR("db_msg_dispatcher already initialized with live cluster connection");
+      return false;
+    }
+  }
+  for (const auto &conn : db_raw_conns_) {
+    if (conn) {
+      FWLOGERROR("db_msg_dispatcher already initialized with live raw connection");
+      return false;
+    }
+  }
+  if (!record_prefix_.empty() && record_prefix_ != record_prefix) {
+    FWLOGERROR("db_msg_dispatcher already initialized with record prefix {}", record_prefix_);
+    return false;
+  }
+  record_prefix_ = record_prefix;
+  db_channel_type_ = channel_type;
+  return true;
+}
+#endif

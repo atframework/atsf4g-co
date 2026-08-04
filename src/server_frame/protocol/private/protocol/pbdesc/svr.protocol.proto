@@ -30,6 +30,8 @@ package hello;
 enum EnRouterObjectType {
   EN_ROT_INVALID = 0;
   EN_ROT_PLAYER = 1;
+  // Reserved for unit tests (src/tools/rpc-unit-test), never used by production services.
+  EN_ROT_UNIT_TEST = 2;
 }
 
 // 路由表更新通知

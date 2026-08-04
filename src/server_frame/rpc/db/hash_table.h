@@ -17,6 +17,7 @@
 #include <config/server_frame_build_feature.h>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,57 @@ class context;
 
 namespace db {
 namespace hash_table {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// Synchronous unit-test seam. When a hook is installed it is evaluated by every primitive operation
+// after all local validation and before any Redis request is constructed. When the hook reports the
+// operation handled, the public entry returns the supplied result code immediately and never touches
+// the DB dispatcher. Batch operations are composed from the primitives and therefore covered
+// automatically. Only available in builds with PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS.
+struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_request {
+  enum class op_type : int32_t {
+    kv_get_all = 0,
+    kv_partly_get,
+    kv_set,
+    kv_inc_field,
+    kl_get_all,
+    kl_get_by_indexs,
+    kl_update_by_index,
+    kl_add_index,
+    kl_remove_by_index,
+    remove_all,
+    set_ttl,
+    remove_ttl,
+  };
+
+  op_type op = op_type::kv_get_all;
+  rpc::context *ctx = nullptr;
+  uint32_t channel = 0;
+  gsl::string_view key;
+
+  // Optional inputs (empty/nullptr when unused by the op).
+  const gsl::string_view *partly_get_fields = nullptr;
+  int32_t partly_get_field_count = 0;
+  const google::protobuf::Message *store = nullptr;
+  gsl::string_view inc_field;
+  gsl::span<const uint64_t> list_index;
+  uint32_t max_list_length = 0;
+  uint64_t ttl_second = 0;
+
+  // Outputs (nullptr when unused by the op). The hook fills them exactly like the real wait/unpack
+  // path would: kv_output->message/version, kl_output entries, *version for CAS results, and the
+  // mutated inc_message field for kv_inc_field.
+  db_key_value_message_result_t *kv_output = nullptr;
+  std::vector<db_key_list_message_result_t> *kl_output = nullptr;
+  uint64_t *version = nullptr;
+  google::protobuf::Message *inc_message = nullptr;
+};
+
+// Returns true when the operation is handled; result_code then carries the function-level result.
+using unit_test_hook_t = std::function<bool(const unit_test_request &, int32_t &result_code)>;
+SERVER_FRAME_API void set_hash_table_hook_for_unit_test(unit_test_hook_t hook);
+SERVER_FRAME_API const unit_test_hook_t &get_hash_table_hook_for_unit_test() noexcept;
+#endif
+
 namespace key_value {
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(
     rpc::context &ctx, uint32_t channel, gsl::string_view key,

@@ -16,9 +16,13 @@
 #include <config/compiler_features.h>
 #include <design_pattern/singleton.h>
 
+#include <gsl/select-gsl.h>
+
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "dispatcher/dispatcher_implement.h"
 #include "dispatcher/dispatcher_type_defines.h"
@@ -137,6 +141,37 @@ class cs_msg_dispatcher : public dispatcher_implement {
    */
   SERVER_FRAME_API int32_t broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
                                           const void *buffer, size_t len);
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // Synchronous unit-test seam at the unified gateway-send boundary. All downstream operations
+  // (send_data, send_kickoff, send_set_router and both broadcast_data overloads) serialize their
+  // atfw::gateway::server_message and then pass through this hook before the bus node is touched.
+  // When the hook reports the send handled, no bus IO happens. Only available in builds with
+  // PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS.
+  struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_gateway_send_request {
+    uint64_t node_id = 0;
+    int32_t service_type = 0;
+    uint64_t session_id = 0;
+    // Multi-session broadcast only: the requested session id list for observability. The production
+    // fallback intentionally keeps ignoring it, matching the pre-seam behavior.
+    const std::vector<uint64_t> *session_ids = nullptr;
+    // Serialized atfw::gateway::server_message exactly as it would go onto the bus.
+    gsl::span<const unsigned char> data;
+  };
+
+  // Returns true when the send is handled; result_code then carries the function-level result.
+  using unit_test_gateway_send_hook_t =
+      std::function<bool(const unit_test_gateway_send_request &, int32_t &result_code)>;
+
+  SERVER_FRAME_API static void set_gateway_send_hook_for_unit_test(unit_test_gateway_send_hook_t hook);
+  SERVER_FRAME_API static const unit_test_gateway_send_hook_t &get_gateway_send_hook_for_unit_test() noexcept;
+#endif
+
+ private:
+  // Unified gateway-send boundary: every downstream operation serializes its server_message and
+  // funnels through this function, which evaluates the unit-test hook before touching the bus node.
+  int32_t send_serialized_to_gateway(uint64_t node_id, int32_t service_type, uint64_t session_id,
+                                     const std::vector<uint64_t> *session_ids, const std::string &packed_buffer);
 
  private:
   bool is_closing_;

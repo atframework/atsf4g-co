@@ -954,6 +954,17 @@ SERVER_FRAME_API void *ss_msg_dispatcher::get_dns_lookup_rpc_type() noexcept {
   return reinterpret_cast<void *>(&running_dns_lookup_);
 }
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+SERVER_FRAME_API void ss_msg_dispatcher::set_dns_lookup_hook_for_unit_test(dns_lookup_hook_t hook) {
+  dns_lookup_hook_for_unit_test_ = std::move(hook);
+}
+
+SERVER_FRAME_API const ss_msg_dispatcher::dns_lookup_hook_t &
+ss_msg_dispatcher::get_dns_lookup_hook_for_unit_test() const noexcept {
+  return dns_lookup_hook_for_unit_test_;
+}
+#endif
+
 SERVER_FRAME_API int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view domain, uint64_t sequence,
                                                             uint64_t task_id) {
   if (domain.empty() || 0 == task_id) {
@@ -963,6 +974,15 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_dns_lookup(gsl::string_view dom
   if (0 == sequence) {
     sequence = allocate_sequence();
   }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (dns_lookup_hook_for_unit_test_) {
+    dns_lookup_hook_request hook_request{domain, sequence, task_id};
+    if (dns_lookup_hook_for_unit_test_(hook_request)) {
+      return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    }
+  }
+#endif
 
   std::shared_ptr<dns_lookup_async_data> async_data = atfw::memory::stl::make_shared<dns_lookup_async_data>();
   if (!async_data) {

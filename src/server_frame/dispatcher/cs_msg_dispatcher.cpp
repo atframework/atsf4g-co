@@ -46,6 +46,24 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(cs_msg_dispatcher);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(cs_msg_dispatcher);
 #endif
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace {
+cs_msg_dispatcher::unit_test_gateway_send_hook_t &mutable_cs_gateway_send_hook_for_unit_test() noexcept {
+  static cs_msg_dispatcher::unit_test_gateway_send_hook_t hook;
+  return hook;
+}
+}  // namespace
+
+SERVER_FRAME_API void cs_msg_dispatcher::set_gateway_send_hook_for_unit_test(unit_test_gateway_send_hook_t hook) {
+  mutable_cs_gateway_send_hook_for_unit_test() = std::move(hook);
+}
+
+SERVER_FRAME_API const cs_msg_dispatcher::unit_test_gateway_send_hook_t &
+cs_msg_dispatcher::get_gateway_send_hook_for_unit_test() noexcept {
+  return mutable_cs_gateway_send_hook_for_unit_test();
+}
+#endif
+
 SERVER_FRAME_API cs_msg_dispatcher::cs_msg_dispatcher() : is_closing_(false) {}
 
 SERVER_FRAME_API cs_msg_dispatcher::~cs_msg_dispatcher() {}
@@ -409,6 +427,58 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
   return ret;
 }
 
+namespace {
+// Pack a downstream post payload into a serialized atfw::gateway::server_message. session_id 0 means
+// the message is a broadcast to the whole gateway node.
+bool pack_gateway_post_message(uint64_t session_id, const void *buffer, size_t len, std::string &packed_buffer) {
+  ::atfw::gateway::server_message msg;
+  msg.mutable_head()->set_session_id(session_id);
+  msg.mutable_body()->mutable_post()->set_content(buffer, len);
+  return msg.SerializeToString(&packed_buffer);
+}
+}  // namespace
+
+int32_t cs_msg_dispatcher::send_serialized_to_gateway(uint64_t node_id, int32_t service_type, uint64_t session_id,
+                                                      const std::vector<uint64_t> *session_ids,
+                                                      const std::string &packed_buffer) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (const auto &hook = get_gateway_send_hook_for_unit_test()) {
+    unit_test_gateway_send_request request;
+    request.node_id = node_id;
+    request.service_type = service_type;
+    request.session_id = session_id;
+    request.session_ids = session_ids;
+    request.data = gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
+                                                  packed_buffer.size()};
+    int32_t hook_result = 0;
+    if (hook(request, hook_result)) {
+      return hook_result;
+    }
+  }
+#else
+  (void)session_id;
+  (void)session_ids;
+#endif
+
+  int ret = get_app()->get_bus_node()->send_data(
+      node_id, service_type,
+      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
+                                     packed_buffer.size()});
+  // Keep the pre-convergence logging scope: only the data/broadcast paths logged bus failures,
+  // send_kickoff/send_set_router (service_type 0) returned the result silently.
+  if (ret < 0 && 0 != service_type) {
+    if (0 == session_id) {
+      FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, result_code: {}", node_id,
+                 get_app()->convert_app_id_to_string(node_id), ret);
+    } else {
+      FWLOGERROR("send data to session [{:#x}: {}, {}] failed, result_code: {}", node_id,
+                 get_app()->convert_app_id_to_string(node_id), session_id, ret);
+    }
+  }
+
+  return ret;
+}
+
 SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint64_t session_id, int32_t reason,
                                                          atfw::util::nostd::string_view message) {
   atfw::atapp::app *owner = get_app();
@@ -431,10 +501,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_kickoff(uint64_t node_id, uint6
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  return owner->get_bus_node()->send_data(
-      node_id, 0,
-      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
-                                     packed_buffer.size()});
+  return send_serialized_to_gateway(node_id, 0, session_id, nullptr, packed_buffer);
 }
 
 SERVER_FRAME_API int32_t cs_msg_dispatcher::send_set_router(uint64_t node_id, uint64_t session_id,
@@ -459,10 +526,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_set_router(uint64_t node_id, ui
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  return owner->get_bus_node()->send_data(
-      node_id, 0,
-      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
-                                     packed_buffer.size()});
+  return send_serialized_to_gateway(node_id, 0, session_id, nullptr, packed_buffer);
 }
 
 SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t session_id, const void *buffer,
@@ -477,54 +541,22 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::send_data(uint64_t node_id, uint64_t
     return 0;
   }
 
-  ::atfw::gateway::server_message msg;
-  msg.mutable_head()->set_session_id(session_id);
-
-  ::atfw::gateway::server_message_body_post *post = msg.mutable_body()->mutable_post();
-
-  if (nullptr == post) {
-    if (0 == session_id) {
-      FWLOGERROR("broadcast {} bytes data to atgateway {:#x}: {} failed when malloc post", len, node_id,
-                 get_app()->convert_app_id_to_string(node_id));
-    } else {
-      FWLOGERROR("send {} bytes data to session [{:#x}: {}, {}] failed when malloc post", len, node_id,
-                 get_app()->convert_app_id_to_string(node_id), session_id);
-    }
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-  }
-
-  post->set_content(buffer, len);
-
   std::string packed_buffer;
-  if (false == msg.SerializeToString(&packed_buffer)) {
-    FWLOGERROR("try to send {} bytes data to [{:#x}: {}] with serialize failed: {}", len, session_id,
-               get_app()->convert_app_id_to_string(session_id), msg.InitializationErrorString());
+  if (!pack_gateway_post_message(session_id, buffer, len, packed_buffer)) {
+    FWLOGERROR("try to send {} bytes data to [{:#x}: {}] with serialize failed", len, session_id,
+               get_app()->convert_app_id_to_string(session_id));
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  int ret = owner->get_bus_node()->send_data(
-      node_id, static_cast<int32_t>(::atfw::component::service_type::kAtGateway),
-      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
-                                     packed_buffer.size()});
-  if (ret < 0) {
-    if (0 == session_id) {
-      FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, result_code: {}", node_id,
-                 get_app()->convert_app_id_to_string(node_id), ret);
-    } else {
-      FWLOGERROR("send data to session [{:#x}: {}, {}] failed, result_code: {}", node_id,
-                 get_app()->convert_app_id_to_string(node_id), session_id, ret);
-    }
-  }
-
-  return ret;
+  return send_serialized_to_gateway(node_id, static_cast<int32_t>(::atfw::component::service_type::kAtGateway),
+                                    session_id, nullptr, packed_buffer);
 }
 
 SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, const void *buffer, size_t len) {
   return send_data(node_id, 0, buffer, len);
 }
 
-SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id,
-                                                           const std::vector<uint64_t> & /*session_ids*/,
+SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id, const std::vector<uint64_t> &session_ids,
                                                            const void *buffer, size_t len) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
@@ -536,33 +568,13 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::broadcast_data(uint64_t node_id,
     return 0;
   }
 
-  ::atfw::gateway::server_message msg;
-  msg.mutable_head()->set_session_id(0);
-
-  ::atfw::gateway::server_message_body_post *post = msg.mutable_body()->mutable_post();
-
-  if (nullptr == post) {
-    FWLOGERROR("broadcast {} bytes data to atgateway [{:#x}: {}] failed when malloc post", len, node_id,
-               get_app()->convert_app_id_to_string(node_id));
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-  }
-
-  post->set_content(buffer, len);
-
   std::string packed_buffer;
-  if (false == msg.SerializeToString(&packed_buffer)) {
-    FWLOGERROR("try to broadcast {} bytes data with serialize failed: {}", len, msg.InitializationErrorString());
+  if (!pack_gateway_post_message(0, buffer, len, packed_buffer)) {
+    FWLOGERROR("try to broadcast {} bytes data with serialize failed", len);
+    // Preserve the pre-convergence quirk: this overload reports success on serialize failure.
     return 0;
   }
 
-  int ret = owner->get_bus_node()->send_data(
-      node_id, static_cast<int32_t>(::atfw::component::service_type::kAtGateway),
-      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed_buffer.data()),
-                                     packed_buffer.size()});
-  if (ret < 0) {
-    FWLOGERROR("broadcast data to atgateway [{:#x}: {}] failed, result_code: {}", node_id,
-               get_app()->convert_app_id_to_string(node_id), ret);
-  }
-
-  return ret;
+  return send_serialized_to_gateway(node_id, static_cast<int32_t>(::atfw::component::service_type::kAtGateway), 0,
+                                    &session_ids, packed_buffer);
 }

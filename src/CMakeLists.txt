@@ -17,6 +17,19 @@ set(PROJECT_COMPONENT_PUBLIC_PROTO_PATH "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_EX
 # set(PROJECT_SERVICE_PUBLIC_PROTO_PATH)
 
 add_subdirectory(server_frame)
+
+# RPC unit test support library and CMake helper (project_add_rpc_unit_test). Must be parsed before `component` so
+# components can call the helper from their own CMakeLists.txt. CMake functions are not hoisted.
+if((BUILD_TESTING OR PROJECT_ENABLE_UNITTEST) AND PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
+  add_subdirectory(tools/rpc-unit-test)
+  # Generated <service>::mock helpers (gated by PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) reference the
+  # rpc-unit-test SS rule engine types. Propagate the tool's public headers through the server_frame link
+  # interface so every service target linking it inherits the include path.
+  target_include_directories(
+    ${PROJECT_SERVER_FRAME_LIB_LINK}
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/tools/rpc-unit-test/include>")
+endif()
+
 add_subdirectory(component)
 
 include("${CMAKE_CURRENT_LIST_DIR}/service-functions.cmake")

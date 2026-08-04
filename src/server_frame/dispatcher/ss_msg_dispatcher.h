@@ -19,6 +19,7 @@
 #include <gsl/select-gsl.h>
 #include <mem_pool/lru_map.h>
 
+#include <functional>
 #include <string>
 
 #include "dispatcher/dispatcher_implement.h"
@@ -171,6 +172,21 @@ class ss_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API void *get_dns_lookup_rpc_type() noexcept;
   SERVER_FRAME_API int32_t send_dns_lookup(gsl::string_view domain, uint64_t sequence, uint64_t task_id);
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // Unit test hook: when set and it returns true, send_dns_lookup skips the real uv_getaddrinfo call and
+  // lets the hook driver complete the lookup asynchronously. Only available in builds with
+  // PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS.
+  struct ATFW_UTIL_SYMBOL_VISIBLE dns_lookup_hook_request {
+    gsl::string_view domain;
+    uint64_t sequence;
+    uint64_t task_id;
+  };
+  using dns_lookup_hook_t = std::function<bool(const dns_lookup_hook_request &)>;
+
+  SERVER_FRAME_API void set_dns_lookup_hook_for_unit_test(dns_lookup_hook_t hook);
+  SERVER_FRAME_API const dns_lookup_hook_t &get_dns_lookup_hook_for_unit_test() const noexcept;
+#endif
+
  private:
   uint64_t sequence_allocator_;
 
@@ -185,6 +201,10 @@ class ss_msg_dispatcher : public dispatcher_implement {
   };
 
   atfw::util::mempool::lru_map<uint64_t, dns_lookup_async_data> running_dns_lookup_;
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  dns_lookup_hook_t dns_lookup_hook_for_unit_test_;
+#endif
 };
 
 #endif  // ATF4G_CO_SS_MSG_DISPATCHER_H

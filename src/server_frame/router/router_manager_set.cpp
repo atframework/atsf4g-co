@@ -14,16 +14,18 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/extern_log_categorize.h>
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
-#include <config/extern_log_categorize.h>
 
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_base.h>
 #include <dispatcher/task_manager.h>
+#include <rpc/rpc_context.h>
 
 #include <atomic>
+#include <cstddef>
 #include <list>
 #include <memory>
 #include <sstream>
@@ -38,7 +40,6 @@
 #include "router/router_object_base.h"
 
 #include "rpc/rpc_async_invoke.h"
-#include "rpc/rpc_utils.h"
 #include "rpc/telemetry/opentelemetry_utility.h"
 #include "rpc/telemetry/rpc_global_service.h"
 
@@ -52,8 +53,10 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_manager_set);
 ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_manager_set);
 #endif
 
+// NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
 SERVER_FRAME_API router_manager_set::router_manager_set()
     : last_proc_time_(0), is_closing_(false), is_closed_(false), is_pre_closing_(false), is_ready_(false) {
+  // NOLINTNEXTLINE(bugprone-multi-level-implicit-pointer-conversion)
   memset(mgrs_, 0, sizeof(mgrs_));
 }
 
@@ -87,23 +90,23 @@ SERVER_FRAME_API int router_manager_set::tick() {
   if (last_proc_time_ / atfw::util::time::time_utility::MINITE_SECONDS !=
       atfw::util::time::time_utility::get_sys_now() / atfw::util::time::time_utility::MINITE_SECONDS) {
     std::stringstream ss;
-    ss << "[STATISTICS] router manager set => now: " << atfw::util::time::time_utility::get_sys_now() << std::endl;
+    ss << "[STATISTICS] router manager set => now: " << atfw::util::time::time_utility::get_sys_now() << '\n';
     ss << "\tdefault timer count: " << timers_.default_timer_list.size() << ", next active timer: ";
     if (timers_.default_timer_list.empty()) {
-      ss << 0 << std::endl;
+      ss << 0 << '\n';
     } else {
-      ss << timers_.default_timer_list.front().timeout << std::endl;
+      ss << timers_.default_timer_list.front().timeout << '\n';
     }
     ss << "\tfast timer count: " << timers_.fast_timer_list.size() << ", next active timer: ";
     if (timers_.fast_timer_list.empty()) {
-      ss << 0 << std::endl;
+      ss << 0 << '\n';
     } else {
-      ss << timers_.fast_timer_list.front().timeout << std::endl;
+      ss << timers_.fast_timer_list.front().timeout << '\n';
     }
 
     for (int i = 0; i < PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE; ++i) {
-      if (mgrs_[i]) {
-        ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << " cache(s)" << std::endl;
+      if (mgrs_[i] != nullptr) {
+        ss << "\t" << mgrs_[i]->name() << " has " << mgrs_[i]->size() << " cache(s)" << '\n';
       }
     }
 
@@ -112,7 +115,7 @@ SERVER_FRAME_API int router_manager_set::tick() {
     metrics_data_.fast_timer_count.store(static_cast<int64_t>(timers_.fast_timer_list.size()),
                                          std::memory_order_release);
 
-    FWCLOGWARNING(log_categorize_t::PROTO_STAT,"{}", ss.str());
+    FWCLOGWARNING(log_categorize_t::PROTO_STAT, "{}", ss.str());
   }
   last_proc_time_ = atfw::util::time::time_utility::get_sys_now();
 
@@ -257,7 +260,7 @@ SERVER_FRAME_API bool router_manager_set::insert_timer(router_manager_base *mgr,
     FWLOGERROR("router_manager_set not actived");
   }
   assert(last_proc_time_ > 0);
-  if (!obj || !mgr) {
+  if (!obj || mgr == nullptr) {
     return false;
   }
 
@@ -272,7 +275,7 @@ SERVER_FRAME_API bool router_manager_set::insert_timer(router_manager_base *mgr,
     return false;
   }
 
-  std::list<timer_t> *tm_timer;
+  std::list<timer_t> *tm_timer = nullptr;
   if (!is_fast) {
     tm_timer = &timers_.default_timer_list;
   } else {
@@ -312,12 +315,14 @@ SERVER_FRAME_API int router_manager_set::register_manager(router_manager_base *b
 
   uint32_t type = b->get_type_id();
   if (type >= PROJECT_NAMESPACE_ID::EnRouterObjectType_ARRAYSIZE) {
-    FWLOGERROR("router {} has invalid type id {}", b->name(), type);
+    // Do not call the virtual name() here: register_manager is invoked from the base class
+    // constructor, where virtual dispatch has not reached the derived class yet.
+    FWLOGERROR("router manager has invalid type id {}", type);
     return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_INVALID;
   }
 
-  if (mgrs_[type]) {
-    FWLOGERROR("router {} has type conflicy with {}", mgrs_[type]->name(), b->name());
+  if (mgrs_[type] != nullptr) {
+    FWLOGERROR("router {} has type conflicy with type id {}", mgrs_[type]->name(), type);
     return PROJECT_NAMESPACE_ID::err::EN_ROUTER_TYPE_CONFLICT;
   }
 
@@ -379,7 +384,7 @@ SERVER_FRAME_API int router_manager_set::recycle_caches(int max_count) {
       break;
     }
 
-    std::list<timer_t> *selected_list;
+    std::list<timer_t> *selected_list = nullptr;
     std::list<timer_t>::iterator selected_iter;
     if (default_timer_iter == timers_.default_timer_list.end()) {
       selected_list = &timers_.fast_timer_list;
@@ -519,7 +524,7 @@ SERVER_FRAME_API bool router_manager_set::add_downgrade_schedule(const std::shar
 
 SERVER_FRAME_API bool router_manager_set::mark_fast_save(router_manager_base *mgr,
                                                          const std::shared_ptr<router_object_base> &obj) {
-  if (!obj || !mgr) {
+  if (!obj || mgr == nullptr) {
     return false;
   }
 
@@ -541,6 +546,7 @@ SERVER_FRAME_API bool router_manager_set::mark_fast_save(router_manager_base *mg
   return insert_timer(mgr, obj, true);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API void router_manager_set::add_io_schedule_order_task(const std::shared_ptr<router_object_base> &obj,
                                                                      task_type_trait::task_type &task) {
   if (task_type_trait::empty(task) || !obj) {
@@ -552,7 +558,7 @@ SERVER_FRAME_API void router_manager_set::add_io_schedule_order_task(const std::
   }
 
   auto task_id = task_type_trait::get_task_id(task);
-  auto task_private_data = task_type_trait::get_private_data(task);
+  auto *task_private_data = task_type_trait::get_private_data(task);
   if (0 == task_id || nullptr == task_private_data) {
     return;
   }
@@ -727,6 +733,7 @@ int router_manager_set::tick_timer(time_t cache_expire, time_t object_expire, ti
   return ret;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void router_manager_set::setup_metrics() {
   // 默认定时器数量
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(

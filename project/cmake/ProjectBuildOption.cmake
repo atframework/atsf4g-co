@@ -173,6 +173,14 @@ cmake_dependent_option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Corou
                        "COMPILER_OPTIONS_TEST_STD_COROUTINE" OFF)
 option(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT "Enable await checker for legacy coroutine" ON)
 
+# Unit test hook seams (see src/tools/rpc-unit-test). Default aligns with the CTest gate of this project:
+# ON when BUILD_TESTING or PROJECT_ENABLE_UNITTEST is enabled, otherwise forced OFF so production builds
+# carry no test registry, no hot-path branches and no mock symbols.
+cmake_dependent_option(
+  PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  "Enable unit test hook seams in server frame/config/orbit SDK (used by src/tools/rpc-unit-test)" ON
+  "BUILD_TESTING OR PROJECT_ENABLE_UNITTEST" OFF)
+
 if(NOT DEFINED PROJECT_SERVER_FRAME_ENABLE_RPC_MOCK)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     option(PROJECT_SERVER_FRAME_ENABLE_RPC_MOCK "Enable RPC mock APIs" ON)

@@ -22,10 +22,9 @@
 
 #include <list>
 #include <memory>
-#include <string>
 #include <vector>
 
-#include "rpc/rpc_common_types.h"
+#include "rpc/rpc_common_types.h"  // IWYU pragma: keep
 #include "rpc/telemetry/rpc_trace.h"
 
 LIBATAPP_MACRO_NAMESPACE_BEGIN
@@ -63,7 +62,7 @@ class context {
   template <class TMsg>
   struct ATFW_UTIL_SYMBOL_VISIBLE message_holder {
     explicit message_holder(context &ctx) : arena_message_ptr_(ctx.create<TMsg>()) {}
-    explicit message_holder(message_holder &&other) : arena_message_ptr_(nullptr) {
+    explicit message_holder(message_holder &&other) noexcept : arena_message_ptr_(nullptr) {
       using std::swap;
 
       if (other->GetArena() != nullptr) {
@@ -77,7 +76,7 @@ class context {
       local_message_.swap(other.local_message_);
     }
 
-    message_holder &operator=(message_holder &&other) {
+    message_holder &operator=(message_holder &&other) noexcept {
       using std::swap;
 
       swap(arena_message_ptr_, other.arena_message_ptr_);

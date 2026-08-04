@@ -1,0 +1,75 @@
+// Copyright 2026 atframework
+//
+// Test-only protocol for src/tools/rpc-unit-test. It instantiates generation branches that have no
+// enabled instance in the production protocols (router_rpc, user_rpc, allow_no_wait non-stream).
+// Generated outputs only land in the build tree and must not be edited by hand.
+
+syntax = "proto3";
+
+package rpc_unit_test;
+
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+message RpcUnitTestEchoReq {
+  string payload = 1;
+}
+
+message RpcUnitTestEchoRsp {
+  string echo = 1;
+}
+
+message RpcUnitTestRouterReq {
+  string payload = 1;
+}
+
+message RpcUnitTestRouterRsp {
+  string echo = 1;
+}
+
+// DB contract test record: optional name carries explicit presence for partly_get checks,
+// counter is the inc_field target.
+message RpcUnitTestTable {
+  optional string name = 1;
+  int64 counter = 2;
+  string note = 3;
+}
+
+message RpcUnitTestListEntry {
+  uint64 id = 1;
+  string payload = 2;
+}
+
+service RpcUnitTestService {
+  option (atframework.service_options) = {module_name: "unit_test"};
+
+  // Plain unary baseline.
+  rpc rpc_unit_test_unary(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {}
+
+  // Non-stream allow_no_wait: covers the no-wait/wait-later overloads.
+  rpc rpc_unit_test_no_wait(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
+    option (atframework.rpc_options) = {allow_no_wait: true};
+  }
+
+  // User RPC: attaches player identifiers into the SS head.
+  rpc rpc_unit_test_user(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
+    option (atframework.rpc_options) = {user_rpc: true};
+  }
+
+  // Router unary: covers the router_rpc branch resolved through router_manager_set.
+  rpc rpc_unit_test_router_unary(RpcUnitTestRouterReq) returns (RpcUnitTestRouterRsp) {
+    option (atframework.rpc_options) = {router_rpc: true};
+  }
+
+  // Broadcast: one message per selected node, each target gets an independent record/response policy.
+  rpc rpc_unit_test_broadcast(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
+    option (atframework.rpc_options) = {enable_broadcast: true};
+  }
+
+  // Router stream: router_rpc + stream mode (fire and forget through the router system).
+  rpc rpc_unit_test_router_stream(stream RpcUnitTestRouterReq) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {router_rpc: true};
+  }
+}

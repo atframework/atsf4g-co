@@ -195,6 +195,14 @@ class db_msg_dispatcher : public dispatcher_implement {
 
   SERVER_FRAME_API const std::string &get_record_prefix();
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  /**
+   * @brief unit test only: set record prefix and default channel without calling init()
+   * @return false if already initialized (record prefix already set or live connections exist)
+   */
+  SERVER_FRAME_API bool set_record_info_for_unit_test(const std::string &record_prefix, channel_t::type channel_type);
+#endif
+
   ATFW_UTIL_FORCEINLINE db_msg_dispatcher::channel_t::type get_db_channel_type() const { return db_channel_type_; }
 
  private:

@@ -384,7 +384,8 @@ stop/drain；该 runtime 不得复用。事件泵使用有界批次和 thread yi
 - 面向具体 service/功能的 mock 接口不放进工具目录，而是放在**各自模板生成的代码或各自的实现代码**中，并
   统一放入被 mock API 同级的 `mock` 子命名空间，便于管理和 IDE 代码提示：
   - 生成代码：`rpc_call_api_for_ss.*.mako` 生成 `<service>::mock` 的 typed 注册辅助（见 8.2）；
-    `db_interface` / `db_rpc_redis_kv/kl` 生成 `<db 命名空间>::mock` 的 typed 数据检查接口（见 8.5）；
+    `db_interface` / `db_rpc_redis_kv/kl` 生成 `<db 命名空间>::mock` 的 per-table typed 接口（数据准备、
+    检查与行为注入，见 8.5）；
   - 手写实现：HPA pull mock 放在 server_frame HPA 实现目录的 `mock` 子命名空间（见 8.10）；UUID provider
     注册接口放在 `rpc::db::mock`（见 8.6）。
 - 这些 mock 接口全部用 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`（Orbit SDK 用其派生宏）整体门控，
@@ -448,7 +449,7 @@ src/tools/rpc-unit-test/
   README.md
   cmake/
     ProjectRpcUnitTest.cmake
-  include/atsf4g/testing/
+  include/atframework/testing/
     runtime.h
     task_wait.h
     mock_discovery.h
@@ -512,7 +513,7 @@ src/tools/rpc-unit-test/
 | UUID | `src/server_frame/rpc/db/uuid.*` | 五个公共入口增加 provider seam；安装/覆盖 API 放入 `rpc::db::mock` |
 | HPA | `src/server_frame/logic/hpa/pull/prometheus/logic_hpa_puller_prometheus.*`、同目录新增 mock 接口文件 | `do_pull` 入口 seam + `mock` 子命名空间的指标注入 API（宏门控） |
 | SS mock 接口 | `src/templates/rpc_call_api_for_ss.*.mako` | 增量生成 `<service>::mock` typed 注册辅助（宏门控纯新增，不改热路径） |
-| DB mock 接口 | `src/templates/db_interface.*.mako`、`src/templates/db_rpc_redis_kv.*.mako`、`src/templates/db_rpc_redis_kl.*.mako` | 增量生成 `<db 命名空间>::mock` typed 数据检查接口（宏门控纯新增） |
+| DB mock 接口 | `src/templates/db_interface.*.mako`、`src/templates/db_rpc_redis_kv.*.mako`、`src/templates/db_rpc_redis_kl.*.mako` | 增量生成 `<db 命名空间>::mock` per-table typed 接口：数据准备、检查与行为注入（宏门控纯新增） |
 | 资源 | `src/server_frame/config/include/config/excel_config_wrapper.h`、`src/server_frame/config/src/excel_config_wrapper.cpp` | provider registry 归属 `server_frame-config` DLL，回调内优先 scoped provider |
 | 生成覆盖 | `src/tools/rpc-unit-test/test/protocol/rpc_unit_test.proto` + 现有生成 helper | 只生成到构建树，覆盖当前未实例化分支 |
 | Orbit adapter | `src/component/GameSharedComponent/Orbit/include/Orbit/OrbitClientRuntime.h`、`src/component/GameSharedComponent/Orbit/src/Orbit/OrbitClientRuntimeRpc.cpp` | SDK target 自有 registry；由全局 option 派生公开 compile definition，不依赖 server-frame config |
@@ -833,15 +834,42 @@ presence-aware merge，并维护 CAS version、TTL，KL 另存单调索引与每
 - `EXPIRE`/`PERSIST` 只修改已存在 key，但公共 API 仍按当前 `unpack_nothing` 的可观测语义返回成功，即使 Redis
   integer reply 为 0。
 
-覆盖顺序：per-operation user rule -> user backend -> 默认内存 backend。用户规则可选择 handled、继续默认或显式
-passthrough；默认不允许真实 Redis passthrough。只有 fixture 显式初始化 DB dispatcher 且提供真实配置时才允许
-passthrough，否则立即返回“passthrough unavailable”，不得进入可能永不完成的发送路径。
+覆盖顺序：per-operation user rule -> per-table rule -> user backend -> 默认内存 backend。用户规则可选择
+handled、继续默认或显式 passthrough；默认不允许真实 Redis passthrough。只有 fixture 显式初始化 DB
+dispatcher 且提供真实配置时才允许 passthrough，否则立即返回“passthrough unavailable”，不得进入可能永不
+完成的发送路径。
 
-typed 数据检查接口（测试断言存储内容用，遵循 3.5）：`db_interface`/`db_rpc_redis_kv/kl` 模板增量生成
-`<db 命名空间>::mock` 的数据检查 API（宏门控纯新增），底层调用工具库暴露的通用 raw entry 访问
-（channel + 规范 key → descriptor、owned bytes、CAS version、TTL、KL 索引），生成层按表 descriptor 解码为
-typed message。至少提供：读取整条记录（含版本/TTL）、读取 KL 全量索引与指定索引项、常用断言 helper（记录不
-存在/版本相等/字段相等）。这些接口只读 backend，不经过 RPC，也不要求处于 task 上下文。
+**per-table mock（每个表接口单独的 mock 接口）**。表身份无需扩展 hook ABI：生成 DB 层的 key 恒为
+`{record_prefix}-{table_name}.{key_fields...}`，`table_name` 是 proto 消息名字面量（不含 `.`，见
+`db_rpc_redis_kv/kl.cpp.mako` 的 `prefix_fmt_key` 与已生成代码），mock engine 在 handle 时剥离
+`db_msg_dispatcher::me()->get_record_prefix()` 前缀并取到首个 `.` 即得表名；解析失败（非规范 key）视为
+无表规则，回落默认后端。分两层：
+
+- **引擎层表规则（无代码生成）**：`mock_db::mock_table(table_name)` 返回 RAII `db_table_rule_handle`
+  （仿 `dns_rule_handle`，析构撤销；同表后注册规则优先）。规则选项：按 `op_type` 的错误注入
+  （`set_error(op, code)`，表内其余 op 不受影响）、canned KV 记录（bytes + version，仅作用于
+  get_all/partly_get/batch 组合）、强制 `EN_DB_RECORD_NOT_FOUND`、`set_passthrough(false)` 之外的
+  `fallthrough`（规则放行时继续内存后端）。检查侧提供表级过滤统计 `calls(table_name, op)` 与
+  `last_call(table_name)`，复用统一调用历史。
+- **模板层 typed 接口（生成）**：见下段 `<db 命名空间>::mock`，把表规则的字符串表名与 bytes 包装成
+  该表 descriptor 的 typed API。
+
+typed 数据检查与行为注入接口（遵循 3.5）：`db_interface`/`db_rpc_redis_kv/kl` 模板增量生成
+`<db 命名空间>::mock` 子命名空间（宏门控纯新增，与 `<service>::mock` 同约定），底层调用工具库暴露的
+通用 raw entry 访问（channel + 规范 key → descriptor、owned bytes、CAS version、TTL、KL 索引与条目），
+生成层持 `prefix_fmt_key`/`key_fields` 全信息，可按表 descriptor 精确重建 key 并编解码 typed message。
+每个表至少提供：
+
+- 数据准备（不写 backend 经 RPC，直接 raw 写入，不要求 task 上下文）：`set_record(key_fields..., const
+  table_xxx&, uint64_t version = 0)`、`set_ttl(key_fields..., seconds)`、KL `append_entry(const table_xxx&)`；
+- 只读检查：`get(key_fields...)`（含版本/TTL）、`has_record`、`version_equal`、KL `indexes()`/
+  `entry_at(index)`/`count`；
+- 行为注入：`set_error(op, code)`、`fail_next(op, code)`、`force_not_found(bool)`，内部即引擎层表规则的
+  typed 包装；
+- 断言 helper：记录不存在/版本相等/字段相等（输出诊断串）。
+
+引擎层与模板层共享同一份表规则存储；模板层只做类型适配，不复刻匹配逻辑。这些接口只读/直写 backend，
+不经过 RPC，也不要求处于 task 上下文。
 
 ### 8.6 UUID
 
@@ -1158,29 +1186,49 @@ package `hello`）：
 
 ### 阶段 4：DB 与 UUID
 
-- [ ] 在所有 `hash_table` 公共操作接入统一同步 hook，保持 task/descriptor/字段/空参数校验与 tracing。
-- [ ] 为 hooks-on 增加不启动 I/O 的 dispatcher test identity（既有 prefix/channel 字段），默认设为
+- [x] 在所有 `hash_table` 公共操作接入统一同步 hook，保持 task/descriptor/字段/空参数校验与 tracing。
+- [x] 为 hooks-on 增加不启动 I/O 的 dispatcher test identity（既有 prefix/channel 字段），默认设为
   `unit-test`/`RAW_DEFAULT`，检测已初始化 dispatcher 并在 teardown 恢复。
-- [ ] 实现 presence-aware KV/KL/TTL/CAS 内存 backend（含 field merge、ordered missing slots、TTL public
+  （实现为 `db_msg_dispatcher::set_record_info_for_unit_test`：存在活动连接或不同 prefix 时拒绝；
+  teardown 不恢复 prefix，同值重复设置幂等，避免跨 fixture 单进程冲突。）
+- [x] 实现 presence-aware KV/KL/TTL/CAS 内存 backend（含 field merge、ordered missing slots、TTL public
   semantics、`EN_DB_OLD_VERSION` + 版本回写）和可控时钟。
+  （`mock_db`：存序列化字节保 presence，partly_get 清理未请求字段，KL 单调索引/trim，TTL 惰性过期。）
 - [ ] 以当前 Redis 命令和两段内嵌 Lua 建 golden tests。
-- [ ] 在五类 UUID 公共入口接入 provider，完成确定性默认实现和覆盖 API。
-- [ ] 证明默认 fixture 不初始化 Redis dispatcher、不创建网络连接、无跨 case 静态状态泄漏（含
+- [x] 在五类 UUID 公共入口接入 provider，完成确定性默认实现和覆盖 API。
+  （偏离：`uuid_allocator::inc_field_auto_inc_id` 经由 `hash_table::key_value::inc_field`，已被 DB hook
+  覆盖，无需 uuid.cpp provider seam；`generate_global_unique_id` 由 mock_db 确定性服务。注意
+  `g_unique_id_pools` 静态号段缓存在单进程跨 case 不清零，号段基数会延续，测试不得断言绝对 id 值。）
+- [x] 证明默认 fixture 不初始化 Redis dispatcher、不创建网络连接、无跨 case 静态状态泄漏（含
   `g_unique_id_pools`）。
+- [ ] 引擎层 per-table 规则（见 8.5）：`mock_db::mock_table(table_name)` RAII 表规则（按 op 错误注入、
+  canned 记录、强制 NOT_FOUND、fallthrough）、表名从规范 key 提取（剥离 record prefix 取首个 `.` 前段），
+  表级 `calls(table, op)`/`last_call(table)` 统计；未匹配表回落内存后端。
+- [ ] raw entry 访问 API：`mock_db` 暴露 channel + 规范 key 直读写（descriptor/type 名、owned bytes、
+  CAS version、TTL、KL 索引与条目），供模板层 typed 适配与断言使用，不经过 RPC、不要求 task 上下文。
+- [ ] 模板层 `<db 命名空间>::mock` typed per-table 接口（`db_interface`/`db_rpc_redis_kv/kl` 宏门控增量
+  生成）：数据准备（`set_record`/`set_ttl`/KL `append_entry`）、只读检查（`get`/`has_record`/
+  `version_equal`/KL `indexes`/`entry_at`/`count`）、行为注入（`set_error`/`fail_next`/
+  `force_not_found`，即引擎层表规则的 typed 包装）、断言 helper；用 smoke case 断言数据内容与注入行为。
 - [ ] 自测明确调用 `rpc::db::login_auth::replace/get_all` 与 `hello::table_login_auth`，不使用仅测试 backend 的
-  私有捷径。
-- [ ] 在 `db_interface`/`db_rpc_redis_kv/kl` 模板增量生成 `<db 命名空间>::mock` typed 数据检查接口（记录、
-  版本、TTL、KL 索引），接入工具库 raw entry 访问，并用 smoke case 断言数据内容。
+  私有捷径；并用 `rpc::db::login_auth::mock` 覆盖单表错误注入与 typed 断言。
 
 完成条件：完整 DB 操作矩阵通过，CAS/列表与当前 Lua 一致，用户能覆盖单操作或整个 backend/provider。
 
 ### 阶段 5：CS
 
-- [ ] 收敛 CS dispatcher 的统一 gateway-send 边界并加入可选 hook；携带 `session_ids` 供观测，但生产 fallback
+- [x] 收敛 CS dispatcher 的统一 gateway-send 边界并加入可选 hook；携带 `session_ids` 供观测，但生产 fallback
   保持当前行为，不在本变更顺带修复语义。
-- [ ] 实现 mock client 的 add/post/remove/set-router-rsp 与 gateway 线格式 typed pack/unpack。
-- [ ] 覆盖 downstream、kickoff、set-router、broadcast、多客户端和错误。
-- [ ] 审计 CS Mako 所有分支均经过该边界；若需修改则统一重新生成。
+  （实现为私有 `send_serialized_to_gateway` + 类内 `unit_test_gateway_send_request`/static
+  `set/get_gateway_send_hook_for_unit_test`；四分支全部改经此边界。）
+- [x] 实现 mock client 的 add/post/remove/set-router-rsp 与 gateway 线格式 typed pack/unpack。
+  （`mock_cs`/`mock_client`：上游经真实 `dispatch` 注入，下游 hook 捕获解析为 typed record。）
+- [x] 覆盖 downstream、kickoff、set-router、broadcast、多客户端和错误。
+  （4 个 case：生命周期+未知 RPC 错误响应、下行捕获三操作、广播+多会话观测、错误注入+无会话 kickoff。
+  跨 fixture 修复：atapp stop 会 disable 单例 module，runtime 增加 `reenable_for_unit_test` 重新启用。）
+- [x] 审计 CS Mako 所有分支均经过该边界；若需修改则统一重新生成。
+  （审计结果：`session_downstream_api_for_cs`/`handle_cs_rpc` 经 session → cs_msg_dispatcher → 统一边界，
+  无绕过，模板未改。）
 
 完成条件：真实 CS action task 可由上行请求启动，下行消息无需 atbus 即可断言。
 
@@ -1269,7 +1317,8 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 - [ ] 网络 mock 未匹配时快速失败并输出调用与规则诊断（单向通知类除外：默认记录并成功，见 3.4）；timeout case
   有 RPC、task、runtime hard、CTest 四层保护。
 - [ ] 工具目录只含公共代码；service/功能 mock 接口位于各自实现/生成代码的 `mock` 子命名空间并被宏整体门控。
-- [ ] DB 生成 `<db 命名空间>::mock` typed 数据检查接口，可在测试中断言记录内容、版本、TTL 与 KL 索引。
+- [ ] DB 引擎层 per-table 规则与模板层 `<db 命名空间>::mock` typed 接口，可在测试中对单表注入错误/
+  canned 数据并断言记录内容、版本、TTL 与 KL 索引（见 8.5）。
 - [ ] telemetry 在 fixture 默认配置下零网络（noop），file-only 导出可选，禁止项 fail-fast。
 - [ ] HPA 默认零网络；测试启用时默认安装 pull hook，预置指标经公开回调完整注入，未配置答案报错。
 - [ ] hooks-off 的生产构建没有测试状态、热路径分支、`mock` 符号或测试库依赖。

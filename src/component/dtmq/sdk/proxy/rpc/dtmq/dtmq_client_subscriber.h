@@ -235,6 +235,12 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   DTMQ_PROXY_SDK_API bool is_destroyed() const noexcept;
 
+  DTMQ_PROXY_SDK_API gsl::span<const uintptr_t> get_local_private_data() const noexcept;
+
+  DTMQ_PROXY_SDK_API void set_local_private_data(gsl::span<uintptr_t> local_private_data);
+
+  DTMQ_PROXY_SDK_API void append_local_private_data(uintptr_t local_private_data);
+
   DTMQ_PROXY_SDK_API int64_t get_create_sequence() const noexcept;
 
   DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_create_timepoint() const noexcept;
