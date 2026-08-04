@@ -21,7 +21,7 @@ enum EnOrbitUserStatusType {
   EN_ORBIT_USER_STATUS_TYPE_UNKNOW = 0;
 }
 
-message DOrbitPlayerInitDataDetail {
+message DOrbitUserInitDataDetail {
   // 用户初始化数据
 }
 
@@ -41,7 +41,7 @@ message DOrbitUserFinishAsyncData {
 
 message DOrbitUserInitData {
   DUserIDKey user_key = 1;
-  DOrbitPlayerInitDataDetail data = 2;
+  DOrbitUserInitDataDetail data = 2;
 }
 
 message DOrbitUserInitResult {
