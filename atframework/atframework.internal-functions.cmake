@@ -518,14 +518,10 @@ function(atframework_add_executable TARGET_NAME)
                RUNTIME_OUTPUT_DIRECTORY_RELEASE "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
                RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
                RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-               PDB_OUTPUT_DIRECTORY_DEBUG
-               "${PROJECT_INSTALL_BAS_DIR}/${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-               PDB_OUTPUT_DIRECTORY_RELEASE
-               "${PROJECT_INSTALL_BAS_DIR}/${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-               PDB_OUTPUT_DIRECTORY_RELWITHDEBINFO
-               "${PROJECT_INSTALL_BAS_DIR}/${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
-               PDB_OUTPUT_DIRECTORY_MINSIZEREL
-               "${PROJECT_INSTALL_BAS_DIR}/${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}")
+               PDB_OUTPUT_DIRECTORY_DEBUG "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_RELEASE "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_RELWITHDEBINFO "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}"
+               PDB_OUTPUT_DIRECTORY_MINSIZEREL "${__atfw_add_library_args_RUNTIME_OUTPUT_DIRECTORY}")
 
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
