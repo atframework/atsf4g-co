@@ -1276,7 +1276,7 @@ void orbit_agent_manager::on_client_process_exit(const std::string& client_id, i
     return;
   }
 
-  if (record->force_kill_timepoint > 0 && is_timeout_exit_reason(record->force_exit_reason)) {
+  if (record->force_kill_timepoint > 0 && is_timeout_exit_reason(record->exit_reason)) {
     // 由Kill发起的exit
     FWLOGWARNING(
         "orbit agent client {} exited after timeout kill: exit_status={}, term_signal={}, state={}, "
