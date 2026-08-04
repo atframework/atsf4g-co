@@ -616,18 +616,12 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       ${PROJECT_EXTERNAL_RPATH})
   set_target_properties(
     ${TARGET_FULL_NAME}
-    PROPERTIES RUNTIME_OUTPUT_DIRECTORY
+    PROPERTIES INSTALL_RPATH "${TARGET_INSTALL_RPATH}"
+               RUNTIME_OUTPUT_DIRECTORY
                "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
                PDB_OUTPUT_DIRECTORY
                "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
-               INSTALL_RPATH "${TARGET_INSTALL_RPATH}")
-
-  # 在所有生成器上设置分配置输出目录，防止目录属性 CMAKE_RUNTIME_OUTPUT_DIRECTORY_<CONFIG>
-  # 优先于目标属性 RUNTIME_OUTPUT_DIRECTORY，导致 Linux(Ninja/Makefile) 等单配置生成器
-  # 忽略目标的输出目录而落到默认 bin 目录
-  set_target_properties(
-    ${TARGET_FULL_NAME}
-    PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
+               RUNTIME_OUTPUT_DIRECTORY_DEBUG
                "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
                RUNTIME_OUTPUT_DIRECTORY_RELEASE
                "${PROJECT_INSTALL_BAS_DIR}/${project_component_declare_service_RUNTIME_OUTPUT_DIRECTORY}"
