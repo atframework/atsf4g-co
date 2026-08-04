@@ -2769,6 +2769,13 @@ static void _opentelemetry_cleanup_global_provider(atfw::atapp::app & /*app*/) {
     cleanup_threads.front()->join();
     cleanup_threads.pop_front();
   }
+
+  // 要先析构，否则atexit析构可能会导致和gRPC内置变量析构顺序冲突
+  if (current_service_cache) {
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard{
+        current_service_cache->shared_grpc_client_lock};
+    current_service_cache->shared_grpc_client_cache.clear();
+  }
 }
 
 static void _opentelemetry_prepare_group(
