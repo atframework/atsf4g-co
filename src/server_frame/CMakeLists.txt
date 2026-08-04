@@ -52,52 +52,39 @@ generate_for_pb_add_ss_service(
   SERVER_FRAME_API)
 
 generate_for_pb_add_custom_configure(
-  "db_code_generate_local"
-  RULE_BODY_HEAD
+  "db_code_generate"
+  OVERWRITE_RULE
   "
-  - file:
-      overwrite: false
+  - global:
+      overwrite: true
+      input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+      output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+      custom_variables:
+        generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
+      output: 'local_db_interface.atfw.gen.h'
+  - global:
+      overwrite: true
+      input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
       output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
       custom_variables:
         generate_proto_file: 'protocol/pbdesc/svr.local.table.proto'
         include_cpp: 'local_db_interface.atfw.gen.h'
-"
-  OVERWRITE_RULE
-  "
-      file_template:
-        - overwrite: true
-          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
-          output: 'local_db_interface.atfw.gen.cpp'
-        - overwrite: true
-          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
-          output: 'local_db_interface.atfw.gen.h'
-"
-  PROTOCOL_TARGET
-  "${SERVER_FRAME_BASE_PROTOCOLS}"
-  TEMPLATE_DEPENDS
-  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako"
-  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako"
-)
-generate_for_pb_add_custom_configure(
-  "db_code_generate_global"
-  RULE_BODY_HEAD
-  "
-  - file:
-      overwrite: false
+      output: 'local_db_interface.atfw.gen.cpp'
+  - global:
+      overwrite: true
+      input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
+      output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
+      custom_variables:
+        generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
+      output: 'global_db_interface.atfw.gen.h'
+  - global:
+      overwrite: true
+      input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
       output_directory: '${GENERATE_FOR_PB_SOURCE_DIR}/server_frame/rpc/db/'
       custom_variables:
         generate_proto_file: 'protocol/pbdesc/svr.global.table.proto'
         include_cpp: 'global_db_interface.atfw.gen.h'
-"
-  OVERWRITE_RULE
-  "
-      file_template:
-        - overwrite: true
-          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako'
-          output: 'global_db_interface.atfw.gen.cpp'
-        - overwrite: true
-          input: '${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako'
-          output: 'global_db_interface.atfw.gen.h'
+      output: 'global_db_interface.atfw.gen.cpp'
 "
   PROTOCOL_TARGET
   "${SERVER_FRAME_BASE_PROTOCOLS}"
@@ -109,8 +96,7 @@ generate_for_pb_add_custom_configure(
 list(APPEND PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES
     "${PROJECT_NAMESPACE}.RouterService"
     "${PROJECT_NAMESPACE}.LogicCommonService"
-    "db_code_generate_local"
-    "db_code_generate_global")
+    "db_code_generate")
 generate_for_pb_collect_output_from_flows("${PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
 generate_for_pb_collect_filtered_output_files(
   "${CMAKE_CURRENT_LIST_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}"

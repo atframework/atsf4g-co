@@ -327,14 +327,10 @@ function(generate_for_pb_codegen_flow FLOW_NAME)
   set(multiValueArgs TEMPLATE_DEPENDS PROTOCOL_TARGET) # 依赖的Protocol 默认依赖
   cmake_parse_arguments(GENERATE_FOR_PB_CODEGEN_FLOW "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  if(NOT GENERATE_FOR_PB_CODEGEN_FLOW_RULE_BODY_HEAD)
-    message(FATAL_ERROR "Missing required argument RULE_BODY_HEAD for generate_for_pb_codegen_flow")
-    return()
-  endif()
-  if(NOT GENERATE_FOR_PB_CODEGEN_FLOW_OVERWRITE_RULE_BODY AND NOT GENERATE_FOR_PB_CODEGEN_FLOW_NON_OVERWRITE_RULE_BODY)
+  if(NOT GENERATE_FOR_PB_CODEGEN_FLOW_RULE_BODY_HEAD AND NOT GENERATE_FOR_PB_CODEGEN_FLOW_OVERWRITE_RULE_BODY AND NOT GENERATE_FOR_PB_CODEGEN_FLOW_NON_OVERWRITE_RULE_BODY)
     message(
       FATAL_ERROR
-        "Missing required argument OVERWRITE_RULE_BODY or NON_OVERWRITE_RULE_BODY for generate_for_pb_codegen_flow")
+        "Missing required argument RULE_BODY_HEAD or OVERWRITE_RULE_BODY or NON_OVERWRITE_RULE_BODY for generate_for_pb_codegen_flow")
   endif()
 
   set(_generate_for_pb_rule_file "${GENERATE_FOR_PB_CONF_DIR}/${FLOW_NAME}.rule.yaml") # 最终生成使用
