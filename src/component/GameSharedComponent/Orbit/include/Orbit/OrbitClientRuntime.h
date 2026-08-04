@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <Orbit/OrbitClientSdkTypes.h>
+#include "OrbitClientSdkTypes.h"
 #include <tbb/concurrent_queue.h>
 
 #define UI UI_ST

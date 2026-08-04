@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Orbit/OrbitClientSdkTypes.h>
+#include "OrbitClientSdkTypes.h"
 
 #include <design_pattern/singleton.h>
 
@@ -88,11 +88,11 @@ class OrbitRPCDispatcher {
 
   template <typename TAction>
   ATFW_UTIL_SYMBOL_VISIBLE int register_action(const ::google::protobuf::ServiceDescriptor *service_desc,
-                                               const std::string &rpc_name) {
+                                               const std::string &rpc_name, bool allow_after_init) {
     if (nullptr == service_desc) {
       return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
     }
-    if (sequence_allocator_ != 0) {
+    if (sequence_allocator_ != 0 && !allow_after_init) {
       return orbit::EN_ORBIT_ERROR_CODE_CALL_AFTER_INIT;
     }
     std::string::size_type final_segment = rpc_name.find_last_of('.');

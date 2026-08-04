@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include <Orbit/OrbitClientSdkTypes.h>
-#include <Orbit/OrbitRPCDispatcher.h>
-#include <Orbit/OrbitRPCHandle.h>
+#include "OrbitClientSdkTypes.h"
+#include "OrbitRPCDispatcher.h"
+#include "OrbitRPCHandle.h"
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
@@ -39,11 +39,10 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
         retry_time);                                                                                            \
   }
 
-// 需要在init前注册Action
 #define ORBIT_REGISTER_ACTION_CODE(orbit_rpc_name, orbit_service_name, rpc_name)                                    \
   int ret = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()                               \
                 ->register_action<ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)>(                               \
-                    orbit_service_name::descriptor(), ORBIT_STRINGIFY_HELPER(rpc_name));                            \
+                    orbit_service_name::descriptor(), ORBIT_STRINGIFY_HELPER(rpc_name), true);                      \
   if (ret != 0) {                                                                                                   \
     ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                                 \
         ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError, __FILE__, __LINE__,           \

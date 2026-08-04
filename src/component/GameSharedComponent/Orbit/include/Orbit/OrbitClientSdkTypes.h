@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <Orbit/OrbitConfig.h>
+#include "OrbitConfig.h"
 
 #include <chrono>
 #include <cstdint>
