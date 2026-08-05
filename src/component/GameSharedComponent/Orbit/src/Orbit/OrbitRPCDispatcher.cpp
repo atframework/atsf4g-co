@@ -108,7 +108,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::Orbit
     }
     rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_name);
     if (task_action_map_by_name_.end() != iter && iter->second) {
-      return (*iter->second)(std::move(orbit_msg));
+      return (*iter->second)(private_data_callback_ ? private_data_callback_() : nullptr, std::move(orbit_msg));
     }
     ret = orbit::EN_ORBIT_ERROR_CODE_TASK_ACTION_NOTFOUND;
   } while (false);
@@ -222,6 +222,10 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t 
   timeout_callback_map_.insert(
       std::pair(timeout_stamp, std::pair<uint64_t, std::weak_ptr<rsp_callback_t>>(sequence, ptr)));
   return 0;
+}
+
+ORBIT_CLIENT_SDK_API void OrbitRPCDispatcher::init_task_handler_private_data_callback(std::function<void*()> callback) {
+  private_data_callback_ = callback;
 }
 
 void OrbitRPCDispatcher::rsp_callback_execute() {

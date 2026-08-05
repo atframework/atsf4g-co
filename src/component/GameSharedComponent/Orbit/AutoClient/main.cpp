@@ -85,7 +85,7 @@ ORBIT_RPC_HANDLE(echo, PROJECT_NAMESPACE_ID.OrbitServerRpcService, PROJECT_NAMES
                  PROJECT_NAMESPACE_ID::OrbitServerEchoRsp)
 ORBIT_TASK_ACTION(echo, PROJECT_NAMESPACE_ID::OrbitClientEchoReq, PROJECT_NAMESPACE_ID::OrbitClientEchoRsp)
 
-int task_action_echo::hook_run(const rpc_request_type& req_body, rpc_response_type& rsp_body) {
+int task_action_echo::hook_run(void*, const rpc_request_type& req_body, rpc_response_type& rsp_body) {
   rsp_body.set_text(req_body.text());
   return 0;
 }

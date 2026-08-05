@@ -10,7 +10,8 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk_easy_api {
 
-ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], bool io_thread, const orbit_client_sdk::OrbitClientCallbacks& callbacks);
+ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], bool io_thread,
+                              const orbit_client_sdk::OrbitClientCallbacks& callbacks);
 ORBIT_CLIENT_SDK_API void tick();
 ORBIT_CLIENT_SDK_API bool enabled();
 ORBIT_CLIENT_SDK_API bool is_seed_process();
@@ -59,12 +60,15 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
                                                                                                   orbit_rpc_rsp_type>; \
                                                                                                                        \
    public:                                                                                                             \
-    explicit ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)(orbit::OrbitRpcMessage && ds_msg)                       \
-        : base_type(std::move(ds_msg)) {}                                                                              \
+    explicit ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)(void* private_data, orbit::OrbitRpcMessage&& ds_msg)    \
+        : base_type(std::move(ds_msg)), private_data_(private_data) {}                                                 \
     int operator()() {                                                                                                 \
-      set_rsp_code(hook_run(get_request_body(), get_response_body()));                                                 \
+      set_rsp_code(hook_run(private_data_, get_request_body(), get_response_body()));                                  \
       send_response();                                                                                                 \
       return 0;                                                                                                        \
     }                                                                                                                  \
-    int hook_run(const rpc_request_type& req_body, rpc_response_type& rsp_body);                                       \
+    int hook_run(void* private_data, const rpc_request_type& req_body, rpc_response_type& rsp_body);                   \
+                                                                                                                       \
+   private:                                                                                                            \
+    void* private_data_;                                                                                               \
   };
