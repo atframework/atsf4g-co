@@ -141,25 +141,25 @@ int64_t orbit_room_wal_handle::get_last_allocated_event_id() const noexcept {
 
 int32_t orbit_room_wal_handle::add_event_log(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                              PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log) {
-  // 搭框：TODO 写入事件并广播（后续走 publisher / DTMQ）
+  // TODO-USER（搭框）：写入事件并广播（后续走 publisher / DTMQ），见头文件 TODO-USER 说明
   FWLOGDEBUG("orbit_room_wal_handle::add_event_log TODO, event_id: {}", event_log.event_id());
   return 0;
 }
 
 void orbit_room_wal_handle::broadcast_events(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
-  // 搭框：TODO 向订阅者广播增量（经 LobbysvrService.orbit_room_event_sync 推送 gamesvr）
+  // TODO-USER（搭框）：向订阅者广播增量（经 LobbysvrService.orbit_room_event_sync 推送 gamesvr）
   FWLOGDEBUG("orbit_room_wal_handle::broadcast_events TODO");
 }
 
 void orbit_room_wal_handle::dump(ATFW_EXPLICIT_UNUSED_ATTR PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) {
-  // 搭框：TODO 生成房间快照
+  // TODO-USER（搭框）：生成房间快照
   FWLOGDEBUG("orbit_room_wal_handle::dump TODO");
 }
 
 int32_t orbit_room_wal_handle::subscribe(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                          const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                                          int64_t acknowledge_event_id) {
-  // 搭框：TODO 创建订阅者并下发快照 + 增量事件
+  // TODO-USER（搭框）：创建订阅者并下发快照 + 增量事件
   FWLOGDEBUG("orbit_room_wal_handle::subscribe TODO, user: {}:{} ack: {}", user_key.zone_id(), user_key.user_id(),
              acknowledge_event_id);
   return 0;
@@ -167,7 +167,7 @@ int32_t orbit_room_wal_handle::subscribe(ATFW_EXPLICIT_UNUSED_ATTR rpc::context&
 
 int32_t orbit_room_wal_handle::unsubscribe(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                            const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
-  // 搭框：TODO 移除订阅者
+  // TODO-USER（搭框）：移除订阅者
   FWLOGDEBUG("orbit_room_wal_handle::unsubscribe TODO, user: {}:{}", user_key.zone_id(), user_key.user_id());
   return 0;
 }
@@ -175,7 +175,7 @@ int32_t orbit_room_wal_handle::unsubscribe(ATFW_EXPLICIT_UNUSED_ATTR rpc::contex
 int32_t orbit_room_wal_handle::update_acknowledge(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
                                                   const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                                                   int64_t acknowledge_event_id) {
-  // 搭框：TODO 推进订阅者对账
+  // TODO-USER（搭框）：推进订阅者对账
   FWLOGDEBUG("orbit_room_wal_handle::update_acknowledge TODO, user: {}:{} ack: {}", user_key.zone_id(),
              user_key.user_id(), acknowledge_event_id);
   return 0;

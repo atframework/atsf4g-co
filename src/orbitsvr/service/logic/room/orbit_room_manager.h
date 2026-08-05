@@ -56,6 +56,17 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
   // 用户入房（gamesvr 调用）：收集用户 -> user_init
   int32_t join_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq& req,
                     PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomRsp& rsp);
+  // 订阅 / 反订阅房间（gamesvr 调用）：对接 WAL handle subscribe / unsubscribe
+  int32_t subscribe_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitSubscribeRoomReq& req,
+                         PROJECT_NAMESPACE_ID::SSOrbitSubscribeRoomRsp& rsp);
+  int32_t unsubscribe_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitUnsubscribeRoomReq& req,
+                           PROJECT_NAMESPACE_ID::SSOrbitUnsubscribeRoomRsp& rsp);
+  // 心跳对账（gamesvr 调用）：推进 WAL acknowledge_event_id
+  int32_t heartbeat(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitHeartbeatReq& req,
+                    PROJECT_NAMESPACE_ID::SSOrbitHeartbeatRsp& rsp);
+  // 拉取玩家初始化数据（gamesvr 调用）
+  int32_t get_player_info(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitGetPlayerInfoReq& req,
+                          PROJECT_NAMESPACE_ID::SSOrbitGetPlayerInfoRsp& rsp);
 
   // ---- Orbit Client 回调入口（由 orbitsvr main 的 orbit_server_manager 回调转发） ----
   // Client 进程启动成功：client_id 即 DOrbitRoomKey.client_id（房间标识）

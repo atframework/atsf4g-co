@@ -23,6 +23,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <logic/room/orbit_room_manager.h>
+
 #include <utility>
 
 GAME_SERVICE_API task_action_get_player_info::task_action_get_player_info(dispatcher_start_data_type&& param)
@@ -33,12 +35,12 @@ GAME_SERVICE_API task_action_get_player_info::~task_action_get_player_info() {}
 GAME_SERVICE_API const char* task_action_get_player_info::name() const { return "task_action_get_player_info"; }
 
 GAME_SERVICE_API task_action_get_player_info::result_type task_action_get_player_info::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
-  // TODO ...
-
-  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  // gamesvr 拉取玩家初始化数据（用户已入房后的数据）
+  int32_t result = orbit_room_manager::me()->get_player_info(get_shared_context(), req_body, rsp_body);
+  TASK_ACTION_RETURN_CODE(result);
 }
 
 GAME_SERVICE_API int task_action_get_player_info::on_success() { return get_result(); }

@@ -101,31 +101,42 @@ std::shared_ptr<orbit_room_wal_publisher_type> create_orbit_room_publisher(orbit
 
 // ====== 业务调用接口（搭框） ======
 // 房间逻辑（orbit_room / orbit_room_manager / task_action_*）统一通过这些接口调用 WAL。
-// 本版接口内部逻辑为空（TODO 占位），等待 DTMQ 以相同接口替换实现。
+// 本版接口内部逻辑为空（TODO 占位）。
+//
+// ===== 用户待办（TODO-USER）：WAL→DTMQ 替换（需求 #6） =====
+// 你需要提供 DTMQ 接入实现（接入流程另行提供），并保持本文件业务接口签名不变：
+//   - add_event_log：把事件写入 WAL 存储（DTMQ 生产者），事件 id 由 alloc_event_id 分配；
+//   - broadcast_events：向订阅者推送增量事件（经 LobbysvrService.orbit_room_event_sync 推送 gamesvr）；
+//   - dump：生成房间快照（DOrbitRoomSnapshotData，含 running_data）；
+//   - subscribe / unsubscribe：创建/移除订阅者（按 DUserIDKey），subscribe 需下发快照 + 增量；
+//   - update_acknowledge：按 acknowledge_event_id 对账推进；
+//   - alloc_event_id：改为真实事件 id 分配（当前为内存自增占位）。
+// 业务侧接线已全部完成（orbit_room / orbit_room_manager / task_action_* 均已调用本接口），
+// DTMQ 就绪后只需在本文件内实现内部逻辑，无需改动业务调用方。
 class orbit_room_wal_handle {
  public:
   explicit orbit_room_wal_handle(orbit_room& owner);
   ~orbit_room_wal_handle();
 
-  // 事件 id 分配（搭框：TODO）
+  // 事件 id 分配（TODO-USER：DTMQ 替换时改为真实事件 id 分配）
   int64_t alloc_event_id();
   int64_t get_last_allocated_event_id() const noexcept;
 
-  // 写入一条房间事件（搭框：TODO 不落库、不广播）
+  // 写入一条房间事件（TODO-USER：写入 WAL 存储并广播）
   int32_t add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log);
 
-  // 向订阅者广播增量事件（搭框：TODO 不发送，后续走 orbit_room_event_sync 推送 gamesvr）
+  // 向订阅者广播增量事件（TODO-USER：经 orbit_room_event_sync 推送 gamesvr）
   void broadcast_events(rpc::context& ctx);
 
-  // 生成房间快照（搭框：TODO）
+  // 生成房间快照（TODO-USER）
   void dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out);
 
-  // 订阅 / 反订阅（搭框：TODO 对接 SS subscribe / unsubscribe）
+  // 订阅 / 反订阅（TODO-USER：对接 SS subscribe / unsubscribe）
   int32_t subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                     int64_t acknowledge_event_id);
   int32_t unsubscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
 
-  // 心跳对账：推进 acknowledge_event_id（搭框：TODO）
+  // 心跳对账：推进 acknowledge_event_id（TODO-USER）
   int32_t update_acknowledge(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                              int64_t acknowledge_event_id);
 

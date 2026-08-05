@@ -32,7 +32,10 @@
 #include <config/extern_service_types.h>
 
 namespace {
-// 阶段超时（秒）：步骤 4 先使用常量占位，后续接入配置
+// ===== 用户待办（TODO-USER）：阶段超时接入配置 =====
+// 现状：CLIENT_LOADING / USER_INIT 阶段超时用常量占位（60s）。
+// 需要你决定是否接入配置系统（logic_config / excel）；若接入，告诉我配置字段名，
+// 我把 kOrbitRoomClientLoadingTimeoutSec / kOrbitRoomUserInitTimeoutSec 改为从配置读取。
 constexpr int64_t kOrbitRoomClientLoadingTimeoutSec = 60;
 constexpr int64_t kOrbitRoomUserInitTimeoutSec = 60;
 }  // namespace
@@ -112,7 +115,7 @@ int32_t orbit_room::join_users(
   }
 
   for (const auto& user : users) {
-    user_index_[user.user_key()] = user;
+    user_index_[user.user_key().user_key()] = user;
   }
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_USER_INITING);
 
@@ -138,7 +141,7 @@ int32_t orbit_room::join_users(
 
         // 逐个用户写 user_init_success 事件（回填 token）
         for (const auto& result : rsp.data()) {
-          room_ptr->user_init_result_index_[result.user_key()] = result;
+          room_ptr->user_init_result_index_[result.user_key().user_key()] = result;
 
           PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
           event_log.set_event_id(room_ptr->wal_handle_->alloc_event_id());
@@ -201,10 +204,13 @@ int32_t orbit_room::on_user_finish(
     *async_data.add_user_finish_results() = result;
   }
 
-  // 每个玩家各落一个 orbit_finish 异步任务（步骤 5 核心；结算消费方后续自主实现）
+  // ===== 用户待办（TODO-USER）：orbit_finish 异步任务消费方（结算，需求 #4） =====
+  // 本处每玩家写入 user_async_job_orbit_finish（含 DOrbitUserFinishAsyncData 全量上下文）。
+  // 需要你实现异步任务消费方：读取 user_async_jobs_blob_data{orbit_finish} 后做实际结算
+  // （发放奖励 / 写战报等）。本裁剪版只负责产出数据，不实现结算业务。
   auto room_ptr = shared_from_this();
   for (const auto& result : results) {
-    const PROJECT_NAMESPACE_ID::DUserIDKey user_key = result.user_key();
+    const PROJECT_NAMESPACE_ID::DUserIDKey user_key = result.user_key().user_key();
     auto invoke_result = rpc::async_invoke(
         ctx, "orbit_room.on_user_finish.add_job",
         [room_ptr, user_key, async_data](rpc::context& child_ctx) -> rpc::result_code_type {
@@ -264,8 +270,17 @@ void orbit_room::dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) const {
     *running->add_user_init() = pair.second;
   }
   for (const auto& result : user_finish_results_) {
-    *running->add_user_finish() = result.user_key();
+    *running->add_user_finish() = result.user_key().user_key();
   }
+}
+
+const PROJECT_NAMESPACE_ID::DOrbitUserInitData* orbit_room::get_user_init_data(
+    const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept {
+  auto iter = user_index_.find(user_key);
+  if (iter == user_index_.end()) {
+    return nullptr;
+  }
+  return &iter->second;
 }
 
 int32_t orbit_room::tick(rpc::context& ctx, int64_t now) {

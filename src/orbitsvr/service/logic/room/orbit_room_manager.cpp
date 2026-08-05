@@ -27,7 +27,10 @@
 #include <config/extern_service_types.h>
 
 namespace {
-// Orbit Client 启动资源期望（步骤 4 占位常量，后续接入配置）
+// ===== 用户待办（TODO-USER）：Orbit Client 启动资源/超时接入配置 =====
+// 现状：CPU/内存/启动超时/心跳超时用常量占位。
+// 需要你决定是否接入配置（logic_config / excel）；若接入，告诉我字段名，
+// 我把 kOrbitClientExpected* / kOrbitClient*TimeoutSec 改为从配置读取。
 constexpr double kOrbitClientExpectedNormalCpu = 0.1;
 constexpr double kOrbitClientExpectedNormalMemoryMb = 64.0;
 constexpr uint32_t kOrbitClientStartupTimeoutSec = 30;
@@ -155,9 +158,12 @@ int32_t orbit_room_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
 
 int32_t orbit_room_manager::join_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq& req,
                                       PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomRsp& rsp) {
-  // 步骤 4：join_room 请求不携带 room_key，先按「当前最近创建的待初始化房间」处理为占位实现；
-  // 后续协议如需要按房间定位，可在 SSOrbitUserJoinRoomReq 中补充 room_key。
-  // TODO: 后续按真实语义定位房间（如请求携带 room_key / client_id）
+  // ===== 用户待办（TODO-USER）：join_room 按房间定位 =====
+  // 现状：SSOrbitUserJoinRoomReq 未携带 room_key，本实现只能取「首个 CLIENT_LOADED 房间」占位。
+  // 需要你（协议所有者）决定：
+  //   1) 在 SSOrbitUserJoinRoomReq 中补充 room_key（推荐：DOrbitRoomKey room_key = 1;，字段后移 user_init_datas）；
+  //   2) 或明确 gamesvr 侧入房协议改为携带 client_id。
+  // 协议确定后告知我，我会把 join_room 改为按 room_key.client_id() 定位房间（与 subscribe/heartbeat 一致）。
   if (room_index_by_client_id_.empty()) {
     FWLOGERROR("orbit_room_manager join_room failed, no room exists");
     rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
@@ -181,6 +187,87 @@ int32_t orbit_room_manager::join_room(rpc::context& ctx, const PROJECT_NAMESPACE
   int32_t ret = target_room->join_users(ctx, req.user_init_datas());
   rsp.set_result_code(ret);
   return ret;
+}
+
+int32_t orbit_room_manager::subscribe_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitSubscribeRoomReq& req,
+                                           PROJECT_NAMESPACE_ID::SSOrbitSubscribeRoomRsp& rsp) {
+  if (!req.has_room_key() || req.room_key().client_id().empty()) {
+    FWLOGERROR("orbit_room_manager subscribe_room failed, room_key is empty");
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  std::shared_ptr<orbit_room> room = get_room(req.room_key().client_id());
+  if (!room) {
+    FWLOGWARNING("orbit_room_manager subscribe_room, room {} not found", req.room_key().client_id());
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  int32_t ret = room->get_wal_handle()->subscribe(ctx, req.user_key(), req.acknowledge_event_id());
+  rsp.set_result_code(ret);
+  return ret;
+}
+
+int32_t orbit_room_manager::unsubscribe_room(rpc::context& ctx,
+                                             const PROJECT_NAMESPACE_ID::SSOrbitUnsubscribeRoomReq& req,
+                                             PROJECT_NAMESPACE_ID::SSOrbitUnsubscribeRoomRsp& rsp) {
+  if (!req.has_room_key() || req.room_key().client_id().empty()) {
+    FWLOGERROR("orbit_room_manager unsubscribe_room failed, room_key is empty");
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  std::shared_ptr<orbit_room> room = get_room(req.room_key().client_id());
+  if (!room) {
+    FWLOGWARNING("orbit_room_manager unsubscribe_room, room {} not found", req.room_key().client_id());
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  int32_t ret = room->get_wal_handle()->unsubscribe(ctx, req.user_key());
+  rsp.set_result_code(ret);
+  return ret;
+}
+
+int32_t orbit_room_manager::heartbeat(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitHeartbeatReq& req,
+                                      PROJECT_NAMESPACE_ID::SSOrbitHeartbeatRsp& rsp) {
+  if (!req.has_room_key() || req.room_key().client_id().empty()) {
+    FWLOGERROR("orbit_room_manager heartbeat failed, room_key is empty");
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  std::shared_ptr<orbit_room> room = get_room(req.room_key().client_id());
+  if (!room) {
+    FWLOGWARNING("orbit_room_manager heartbeat, room {} not found", req.room_key().client_id());
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  int32_t ret = room->get_wal_handle()->update_acknowledge(ctx, req.user_key(), req.acknowledge_event_id());
+  rsp.set_result_code(ret);
+  return ret;
+}
+
+int32_t orbit_room_manager::get_player_info(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitGetPlayerInfoReq& req,
+                                            PROJECT_NAMESPACE_ID::SSOrbitGetPlayerInfoRsp& rsp) {
+  if (!req.has_room_key() || req.room_key().client_id().empty()) {
+    FWLOGERROR("orbit_room_manager get_player_info failed, room_key is empty");
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+  std::shared_ptr<orbit_room> room = get_room(req.room_key().client_id());
+  if (!room) {
+    FWLOGWARNING("orbit_room_manager get_player_info, room {} not found", req.room_key().client_id());
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  const PROJECT_NAMESPACE_ID::DOrbitUserInitData* user_data = room->get_user_init_data(req.user_key());
+  if (nullptr == user_data) {
+    FWLOGWARNING("orbit_room_manager get_player_info, user {},{} not in room {}", req.user_key().user_id(),
+                 req.user_key().zone_id(), req.room_key().client_id());
+    rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+  rsp.mutable_room_key()->CopyFrom(req.room_key());
+  *rsp.add_user_init_datas() = *user_data;
+  rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return 0;
 }
 
 void orbit_room_manager::on_client_start(const std::string& client_id, const std::string& client_addr,

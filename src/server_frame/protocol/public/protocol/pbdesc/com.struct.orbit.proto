@@ -17,6 +17,10 @@ message DOrbitRoomKey {
   string client_id = 1;
 }
 
+message DOrbitUserKey {
+  DUserIDKey user_key = 1;
+}
+
 enum EnOrbitUserStatusType {
   EN_ORBIT_USER_STATUS_TYPE_UNKNOW = 0;
 }
@@ -26,7 +30,6 @@ message DOrbitUserInitDataDetail {
 }
 
 message DOrbitUserFinishResultDetail {
-  EnOrbitUserStatusType status = 1;
   // 用户完成数据
 }
 
@@ -40,19 +43,20 @@ message DOrbitUserFinishAsyncData {
 }
 
 message DOrbitUserInitData {
-  DUserIDKey user_key = 1;
+  DOrbitUserKey user_key = 1;
   DOrbitUserInitDataDetail data = 2;
 }
 
 message DOrbitUserInitResult {
-  DUserIDKey user_key = 1;
+  DOrbitUserKey user_key = 1;
   string token = 2;
 }
 
 message DOrbitUserFinishResult {
-  DUserIDKey user_key = 1;
+  DOrbitUserKey user_key = 1;
   int32 index = 2;
-  DOrbitUserFinishResultDetail data = 3;
+  EnOrbitUserStatusType status = 3;
+  DOrbitUserFinishResultDetail data = 4;
 }
 
 message DOrbitMapData {

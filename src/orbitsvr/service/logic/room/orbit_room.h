@@ -65,6 +65,9 @@ class orbit_room : public std::enable_shared_from_this<orbit_room> {
 
   // 生成房间快照
   void dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) const;
+  // 查询玩家初始化数据（get_player_info 用）；未找到返回 nullptr
+  const PROJECT_NAMESPACE_ID::DOrbitUserInitData* get_user_init_data(
+      const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
   // 超时推进（tick 由 orbit_room_manager 驱动）
   int32_t tick(rpc::context& ctx, int64_t now);
 
