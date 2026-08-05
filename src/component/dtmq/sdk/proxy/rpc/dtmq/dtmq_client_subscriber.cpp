@@ -1771,7 +1771,13 @@ void shared_subscriber::setup_timer(timer_action_type action, bool ignore_same_a
       break;
     case timer_action_type::kGc:
       // 这里指删除频道的间隔，不是log的过期时间
-      if (configure_.subscriber_timeout().seconds() <= 0) {
+      if (configure_.shared_subscriber_gc_timeout().seconds() > 0 ||
+          configure_.shared_subscriber_gc_timeout().nanos() > 0) {
+        timeout_tp =
+            atfw::util::time::time_utility::now() +
+            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.shared_subscriber_gc_timeout());
+
+      } else if (configure_.subscriber_timeout().seconds() <= 0) {
         atfw::util::distributed_system::wal_duration subscriber_heartbeat_interval =
             std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
         if (configure_.heartbeat_interval().seconds() > 0) {

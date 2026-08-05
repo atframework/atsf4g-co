@@ -30,10 +30,11 @@ message DChannelConfigure {
   google.protobuf.Duration gc_expire_duration = 5;
   bool memory_only = 6;
 
-  uint32 word_count_limit = 8;                             // 字数限制
-  google.protobuf.Duration heartbeat_interval = 9;         // 心跳间隔
-  google.protobuf.Duration heartbeat_retry_interval = 10;  // 心跳重试间隔
-  google.protobuf.Duration subscriber_timeout = 11;        // 订阅者超时时间，通常应该大于2倍的心跳间隔
+  uint32 word_count_limit = 8;                                 // 字数限制
+  google.protobuf.Duration heartbeat_interval = 9;             // 心跳间隔
+  google.protobuf.Duration heartbeat_retry_interval = 10;      // 心跳重试间隔
+  google.protobuf.Duration subscriber_timeout = 11;            // 订阅者超时时间，通常应该大于2倍的心跳间隔
+  google.protobuf.Duration shared_subscriber_gc_timeout = 12;  // 共享订阅者层GC时间
 }
 
 message DChannelIdKey {
