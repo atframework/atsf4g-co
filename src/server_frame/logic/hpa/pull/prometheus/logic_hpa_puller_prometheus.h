@@ -53,6 +53,11 @@ class logic_hpa_puller_prometheus : public logic_hpa_puller {
 
   SERVER_FRAME_API bool can_pulling_available() const noexcept override;
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // Narrow unit-test seam: read-only pull URL access for the mock pull hook (see logic/hpa/mock/).
+  ATFW_UTIL_FORCEINLINE const std::string& get_pull_url_for_unit_test() const noexcept { return pull_url_; }
+#endif
+
  private:
   void make_query(std::shared_ptr<rpc::telemetry::group_type>& telemetry_group);
 

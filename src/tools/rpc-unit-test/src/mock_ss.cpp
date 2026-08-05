@@ -12,6 +12,9 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/message.h>
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
@@ -21,7 +24,9 @@
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
 
-namespace atsf4g {
+#include <rpc/unit_test/mock_engine_bridge.h>
+
+namespace atframework {
 namespace testing {
 
 ss_rule_handle::ss_rule_handle(std::shared_ptr<detail::ss_rule_state> rule) : rule_(std::move(rule)) {}
@@ -98,6 +103,54 @@ ss_rule_handle mock_ss::mock_untyped(gsl::string_view full_rpc_name,
   return mock_typed(full_rpc_name, "", "", std::move(invoker), options);
 }
 
+ss_rule_handle mock_ss::mock(gsl::string_view full_rpc_name, gsl::string_view request_type_name,
+                             gsl::string_view response_type_name,
+                             std::function<int(const ss_request_view &, google::protobuf::Message &)> handler,
+                             const ss_rule_options &options) {
+  if (!handler) {
+    diagnostic_ = "empty handler for rpc: " + std::string{full_rpc_name.data(), full_rpc_name.size()};
+    return ss_rule_handle{};
+  }
+  std::string request_name{request_type_name.data(), request_type_name.size()};
+  std::string response_name{response_type_name.data(), response_type_name.size()};
+  const auto *request_desc = google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(request_name);
+  if (nullptr == request_desc) {
+    diagnostic_ = "request type not found in generated pool: " + request_name;
+    return ss_rule_handle{};
+  }
+  const auto *response_desc = google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(response_name);
+  if (nullptr == response_desc) {
+    diagnostic_ = "response type not found in generated pool: " + response_name;
+    return ss_rule_handle{};
+  }
+
+  auto invoker = [handler = std::move(handler), request_desc,
+                  response_desc](const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg,
+                                 uint64_t target_node_id, gsl::string_view target_node_name) -> int {
+    const auto *request_proto = google::protobuf::MessageFactory::generated_factory()->GetPrototype(request_desc);
+    const auto *response_proto = google::protobuf::MessageFactory::generated_factory()->GetPrototype(response_desc);
+    if (nullptr == request_proto || nullptr == response_proto) {
+      return -1;
+    }
+    std::unique_ptr<google::protobuf::Message> request_body{request_proto->New()};
+    std::unique_ptr<google::protobuf::Message> response_body{response_proto->New()};
+    if (nullptr == request_body || nullptr == response_body) {
+      return -1;
+    }
+    if (!request_body->ParseFromString(request_msg.body_bin())) {
+      return -1;
+    }
+    ss_request_view request_view{*request_body, request_msg.head(), target_node_id,
+                                 std::string{target_node_name.data(), target_node_name.size()}};
+    int res = handler(request_view, *response_body);
+    if (0 == res) {
+      response_msg.set_body_bin(response_body->SerializeAsString());
+    }
+    return res;
+  };
+  return mock_typed(full_rpc_name, request_type_name, response_type_name, std::move(invoker), options);
+}
+
 ss_rule_handle mock_ss::mock_error(gsl::string_view full_rpc_name, int32_t error_code,
                                    const ss_rule_options &options) {
   ss_rule_handle ret = mock_typed(full_rpc_name, "", "", nullptr, options);
@@ -167,9 +220,42 @@ void mock_ss::bind(atfw::atapp::app *owner, raw_transport &transport) {
   transport_ = &transport;
   cursor_ = raw_transport::outbound_cursor{};
   diagnostic_.clear();
+
+  // Expose this engine to generated mock helpers through the server-frame bridge, so generated
+  // code never links the rpc-unit-test library.
+  rpc::unit_test::mock_engine_bridge_t slots;
+  slots.register_ss_rule = [this](gsl::string_view full_rpc_name, gsl::string_view request_type_name,
+                                  gsl::string_view response_type_name, rpc::unit_test::ss_mock_handler_t handler,
+                                  const rpc::unit_test::ss_mock_rule_options &options) -> std::shared_ptr<void> {
+    ss_rule_options engine_options;
+    engine_options.match_node_id = options.match_node_id;
+    engine_options.times = options.times;
+    engine_options.delay_generations = options.delay_generations;
+    engine_options.no_response = options.no_response;
+    engine_options.malformed_type_url = options.malformed_type_url;
+    engine_options.malformed_body = options.malformed_body;
+    ss_rule_handle rule =
+        mock(full_rpc_name, request_type_name, response_type_name,
+             [handler = std::move(handler)](const ss_request_view &view, google::protobuf::Message &response) -> int {
+               rpc::unit_test::ss_mock_request_view bridge_view{&view.body, &view.head, view.target_node_id,
+                                                                view.target_node_name};
+               return handler(bridge_view, response);
+             },
+             engine_options);
+    if (!rule.rule_) {
+      return nullptr;
+    }
+    // Detach the rule state before the local handle destroys it; deactivation is owned by the
+    // returned bridge token from now on.
+    std::shared_ptr<detail::ss_rule_state> state = rule.rule_;
+    rule.rule_.reset();
+    return std::shared_ptr<void>{state.get(), [state](void *) { state->active = false; }};
+  };
+  rpc::unit_test::merge_mock_engine_bridge_for_unit_test(std::move(slots));
 }
 
 void mock_ss::unbind() {
+  rpc::unit_test::clear_ss_mock_engine_bridge_slot();
   for (auto &rule : rules_) {
     if (rule) {
       rule->active = false;
@@ -263,7 +349,7 @@ void mock_ss::deliver_pending() {
           }
         }
         atframework::SSMsg response_msg;
-        inject_response(request_msg, response_msg, hello::err::EN_SYS_NOTFOUND, record->target_node_id,
+        inject_response(request_msg, response_msg, PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, record->target_node_id,
                         record->target_node_name, nullptr);
       }
       continue;
@@ -447,4 +533,4 @@ void mock_ss::inject_response(const atframework::SSMsg &request_msg, atframework
 }
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

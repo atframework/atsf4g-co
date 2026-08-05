@@ -43,22 +43,24 @@ namespace rpc {
 class context;
 }
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 class runtime;
 class mock_cs;
 class mock_db;
+class mock_resource;
 class mock_discovery;
 class mock_dns;
+class mock_hpa;
 class mock_router;
 class mock_ss;
 class raw_transport;
 
-// Wired now: ss, dns, cs, db, router. uuid flows through the db hook (uuid_allocator uses
-// hash_table inc_field) and needs no runtime wiring. resource/orbit/hpa/telemetry are declared for
-// the planned phases in IMPLEMENTATION_PLAN.md (phase 6 resource, phase 7 orbit; hpa/telemetry
-// remain config-only) and are consumed once those phases land.
+// Wired now: ss, dns, cs, db, router, resource, hpa. uuid flows through the db hook (uuid_allocator uses
+// hash_table inc_field) and needs no runtime wiring. orbit is declared for the planned phase in
+// IMPLEMENTATION_PLAN.md (phase 8). telemetry has no engine: it is handled by pure config materialization
+// (see the telemetry_* options below and IMPLEMENTATION_PLAN.md 8.9).
 enum class feature : int32_t {
   ss = 0,
   dns = 1,
@@ -87,6 +89,19 @@ struct ATFW_UTIL_SYMBOL_VISIBLE runtime_options {
   std::chrono::system_clock::duration teardown_deadline = std::chrono::seconds{10};
   // Optional callback to add component modules/dispatchers/router managers before app init.
   std::function<int(runtime &)> setup_callback;
+
+  // Telemetry (IMPLEMENTATION_PLAN.md 8.9): file-only exporters materialized into the generated YAML.
+  // otlp_file base pattern; ".trace.log"/".metrics.log"/".logs.log" suffixes are appended. The path must
+  // stay inside the build-tree working directory.
+  std::string telemetry_otlp_file_pattern;
+  // ostream debug exporter with the value "stderr" (trace/metrics/logs).
+  bool telemetry_ostream_stderr = false;
+  // Forbidden outbound/inbound exporters (otlp_grpc/otlp_http/prometheus_push/prometheus_pull). Setting any
+  // of them makes start() fail fast with a diagnostic instead of opening a network connection.
+  std::string telemetry_otlp_grpc_endpoint;
+  std::string telemetry_otlp_http_endpoint;
+  std::string telemetry_prometheus_push_host;
+  std::string telemetry_prometheus_pull_url;
 
   bool has_feature(feature input) const noexcept;
 };
@@ -172,6 +187,8 @@ class RPC_UNIT_TEST_API runtime {
   mock_discovery &discovery() noexcept;
   mock_dns &dns() noexcept;
   mock_db &db() noexcept;
+  mock_resource &resource() noexcept;
+  mock_hpa &hpa() noexcept;
   mock_cs &cs() noexcept;
   raw_transport &transport() noexcept;
   mock_ss &ss() noexcept;
@@ -183,4 +200,4 @@ class RPC_UNIT_TEST_API runtime {
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

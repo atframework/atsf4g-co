@@ -25,7 +25,7 @@
 #include "rpc/db/hash_table.h"
 #include "rpc/rpc_shared_message.h"
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 class mock_db;
@@ -34,9 +34,59 @@ class mock_db;
 struct ATFW_UTIL_SYMBOL_VISIBLE db_request_record {
   rpc::db::hash_table::unit_test_request::op_type op = rpc::db::hash_table::unit_test_request::op_type::kv_get_all;
   std::string key;
+  // Table name extracted from the key ("{record_prefix}-{table_name}.{fields}"); empty when the key
+  // does not follow the generated layout.
+  std::string table_name;
   int32_t result_code = 0;
 };
 
+class mock_db;
+
+// Behavior options of one per-table rule. Rules match by the table name embedded in the request key;
+// when several active rules match, the latest registered one wins.
+struct ATFW_UTIL_SYMBOL_VISIBLE db_table_rule_options {
+  // Injected error code per op (keyed by op_type value); ops absent from the map are not affected.
+  std::unordered_map<int32_t, int32_t> op_error_codes;
+  // Read ops (kv_get_all/kv_partly_get/kl_get_all/kl_get_by_indexs) return EN_DB_RECORD_NOT_FOUND.
+  bool force_not_found = false;
+  // kv_get_all/kv_partly_get serve this canned record instead of the stored one (partly_get still
+  // applies requested-field filtering to the canned message).
+  bool use_canned_kv = false;
+  std::string canned_kv_type_name;
+  std::string canned_kv_data;
+  uint64_t canned_kv_version = 0;
+  // The rule matches but defers to the in-memory backend (shadows an earlier rule).
+  bool fallthrough = false;
+};
+
+namespace detail {
+struct db_table_rule_state {
+  std::string table_name;
+  db_table_rule_options options;
+  bool active = true;
+};
+}  // namespace detail
+
+// RAII handle of one per-table rule. The rule is disabled when the handle is destroyed.
+class RPC_UNIT_TEST_API db_table_rule_handle {
+ public:
+  db_table_rule_handle() = default;
+  ~db_table_rule_handle();
+
+  db_table_rule_handle(const db_table_rule_handle &) = delete;
+  db_table_rule_handle &operator=(const db_table_rule_handle &) = delete;
+  db_table_rule_handle(db_table_rule_handle &&other) noexcept;
+  db_table_rule_handle &operator=(db_table_rule_handle &&other) noexcept;
+
+  void reset();
+  explicit operator bool() const noexcept { return !!rule_; }
+
+ private:
+  friend class mock_db;
+  explicit db_table_rule_handle(std::shared_ptr<detail::db_table_rule_state> rule);
+
+  std::shared_ptr<detail::db_table_rule_state> rule_;
+};
 // In-memory mock of the rpc::db::hash_table backend. Installed through the server_frame unit-test
 // hook so every primitive operation (and therefore batch operations and generated db helpers such
 // as rpc::db::uuid_allocator) is served synchronously without a real Redis or DB dispatcher init.
@@ -89,11 +139,42 @@ class RPC_UNIT_TEST_API mock_db {
   void erase_key(gsl::string_view key);
   void clear();
 
+  // Raw entry access for arrange/assert and for the generated typed <db namespace>::mock helpers.
+  // These read/write the backend directly: no RPC, no task context required. Getters apply lazy
+  // TTL expiry the same way as the operation handlers.
+  struct ATFW_UTIL_SYMBOL_VISIBLE kv_raw_entry {
+    std::string type_name;
+    std::string data;
+    uint64_t version = 0;
+    bool has_expire = false;
+    clock::time_point expire_at{};
+  };
+  struct ATFW_UTIL_SYMBOL_VISIBLE kl_raw_entry {
+    uint64_t index = 0;
+    std::string type_name;
+    std::string data;
+  };
+  bool get_raw_kv(gsl::string_view key, kv_raw_entry &output);
+  void set_raw_kv(gsl::string_view key, gsl::string_view type_name, gsl::string_view data, uint64_t version = 0);
+  bool get_raw_kl(gsl::string_view key, std::vector<kl_raw_entry> &output);
+  // Append one entry with the per-key monotonic index allocator; returns the allocated index.
+  uint64_t append_raw_kl(gsl::string_view key, gsl::string_view type_name, gsl::string_view data);
+  void set_raw_ttl(gsl::string_view key, clock::time_point expire_at);
+
   // History
   size_t call_count() const noexcept { return calls_.size(); }
   const db_request_record *call_at(size_t index) const;
   size_t calls(op_type op) const;
+  size_t calls(gsl::string_view table_name) const;
+  size_t calls(gsl::string_view table_name, op_type op) const;
+  const db_request_record *last_call(gsl::string_view table_name) const;
   void clear_history() noexcept { calls_.clear(); }
+
+  // Per-table rules. table_name is the generated db namespace name (e.g. "login_auth"); requests
+  // whose keys embed a different table fall through to the in-memory backend.
+  db_table_rule_handle mock_table(gsl::string_view table_name, const db_table_rule_options &options = {});
+  // Extract the table name from a generated-layout key; empty when not recognizable.
+  std::string extract_table_name(gsl::string_view key) const;
 
   std::string get_diagnostic() const { return diagnostic_; }
 
@@ -134,6 +215,15 @@ class RPC_UNIT_TEST_API mock_db {
   // Production unpackers never set db_key_list_message_result_t::version (it stays 0), so the mock
   // reports no KL version either.
   int32_t make_kl_output(const kl_entry &entry, rpc::context &ctx, db_key_list_message_result_t &output) const;
+  // Drop all fields not listed in req.partly_get_fields from req.kv_output (shared by the stored
+  // and canned-record paths).
+  int32_t filter_partly_fields(const rpc::db::hash_table::unit_test_request &req) const;
+  int32_t serve_canned_kv(const rpc::db::hash_table::unit_test_request &req,
+                          const db_table_rule_options &rule);
+  // Apply the latest matching active per-table rule. Returns true when the rule decided the
+  // outcome (result in result_code); false means fall through to the in-memory backend.
+  bool apply_table_rules(const rpc::db::hash_table::unit_test_request &req, gsl::string_view table_name,
+                         int32_t &result_code);
 
   int32_t on_kv_get_all(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_partly_get(const rpc::db::hash_table::unit_test_request &req);
@@ -155,8 +245,9 @@ class RPC_UNIT_TEST_API mock_db {
   std::unordered_map<std::string, kv_record> kv_records_;
   std::unordered_map<std::string, kl_record> kl_records_;
   std::unordered_map<std::string, message_factory_t> factories_;
+  std::vector<std::shared_ptr<detail::db_table_rule_state>> table_rules_;
   std::deque<db_request_record> calls_;
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

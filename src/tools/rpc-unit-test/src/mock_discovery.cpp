@@ -7,7 +7,7 @@
 
 #include <memory/rc_ptr.h>
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 mock_discovery::mock_discovery() = default;
@@ -126,4 +126,4 @@ void mock_discovery::unbind() {
 }
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

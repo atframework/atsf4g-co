@@ -56,7 +56,7 @@ namespace db {
     if extension is None:
         continue
 %>
-<%include file="db_rpc_redis.cpp.mako" args="message_name=message_name,extension=extension,message=message,index_type_enum=index_type_enum" />
+<%include file="db_rpc_redis.cpp.mako" args="message_name=message_name,extension=extension,message=message,index_type_enum=index_type_enum,message_full_name=full_name" />
 %   endfor
 
 }  // namespace db

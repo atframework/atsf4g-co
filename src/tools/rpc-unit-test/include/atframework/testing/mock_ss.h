@@ -10,8 +10,6 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <google/protobuf/descriptor.h>
-
 #include <protocol/extension/atframework.pb.h>
 
 // clang-format off
@@ -35,15 +33,21 @@ LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
 LIBATAPP_MACRO_NAMESPACE_END
 
-namespace atsf4g {
+namespace google {
+namespace protobuf {
+class Message;
+}  // namespace protobuf
+}  // namespace google
+
+namespace atframework {
 namespace testing {
 
 class mock_ss;
 
-// Typed view of one captured SS request, passed to mock handlers.
-template <class TRequest>
-struct ss_request {
-  const TRequest &body;
+// Untyped view of one captured SS request, passed to mock handlers. The concrete request type is
+// guaranteed by descriptor validation at registration time; downcast with static_cast.
+struct ATFW_UTIL_SYMBOL_VISIBLE ss_request_view {
+  const google::protobuf::Message &body;
   const atframework::SSMsgHead &head;
   uint64_t target_node_id = 0;
   std::string target_node_name;
@@ -152,35 +156,16 @@ class RPC_UNIT_TEST_API mock_ss {
 
   bool is_active() const noexcept;
 
-  // Register a typed unary handler. The full RPC name ("<ServiceFullName>/<MethodName>") and the
-  // request/response types are validated against the protobuf generated pool; invalid registrations
-  // fail immediately (check the returned handle and get_diagnostic()).
-  template <class TRequest, class TResponse>
-  ATFW_UTIL_SYMBOL_VISIBLE ss_rule_handle
-  mock(gsl::string_view full_rpc_name, std::function<int(const ss_request<TRequest> &, TResponse &)> handler,
-       const ss_rule_options &options = ss_rule_options{}) {
-    auto invoker = [handler = std::move(handler)](const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg,
-                                                  uint64_t target_node_id, gsl::string_view target_node_name) -> int {
-      TRequest request_body;
-      if (!request_body.ParseFromString(request_msg.body_bin())) {
-        return -1;
-      }
-      TResponse response_body;
-      ss_request<TRequest> request_view{request_body, request_msg.head(), target_node_id,
-                                        std::string{target_node_name.data(), target_node_name.size()}};
-      int res = handler(request_view, response_body);
-      if (0 == res) {
-        response_msg.set_body_bin(response_body.SerializeAsString());
-      }
-      return res;
-    };
-    return mock_typed(full_rpc_name,
-                      gsl::string_view{TRequest::descriptor()->full_name().data(),
-                                       TRequest::descriptor()->full_name().size()},
-                      gsl::string_view{TResponse::descriptor()->full_name().data(),
-                                       TResponse::descriptor()->full_name().size()},
-                      std::move(invoker), options);
-  }
+  // Register a unary handler. The full RPC name ("<ServiceFullName>/<MethodName>") and the
+  // request/response type names are validated against the protobuf generated pool; invalid
+  // registrations fail immediately (check the returned handle and get_diagnostic()). The handler
+  // receives the parsed request through ss_request_view and fills a fresh response instance of the
+  // registered response type; descriptor lookup, prototype creation and parse/serialize all happen
+  // inside the library (see 3.6 in IMPLEMENTATION_PLAN.md: no template API surface).
+  ss_rule_handle mock(gsl::string_view full_rpc_name, gsl::string_view request_type_name,
+                      gsl::string_view response_type_name,
+                      std::function<int(const ss_request_view &, google::protobuf::Message &)> handler,
+                      const ss_rule_options &options = ss_rule_options{});
 
   // Register an untyped handler working directly on SSMsg (advanced use, no descriptor validation of
   // the body types).
@@ -245,4 +230,4 @@ class RPC_UNIT_TEST_API mock_ss {
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

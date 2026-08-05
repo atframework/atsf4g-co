@@ -21,7 +21,7 @@
 
 #include "dispatcher/cs_msg_dispatcher.h"
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 class mock_cs;
@@ -125,4 +125,4 @@ class RPC_UNIT_TEST_API mock_cs {
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

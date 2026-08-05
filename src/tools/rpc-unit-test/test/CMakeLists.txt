@@ -38,7 +38,7 @@ else()
 endif()
 
 project_add_rpc_unit_test(
-  TARGET atf4g-co-rpc-unit-test-selftest
+  TARGET ${PROJECT_NAME}-rpc-unit-test-selftest
   COMPONENT rpc-unit-test
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_smoke.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_transport.cpp"
@@ -54,5 +54,5 @@ project_add_rpc_unit_test(
   LABELS fast
   TIMEOUT 120)
 
-add_dependencies(atf4g-co-rpc-unit-test-selftest "generate-for-pb-rpc_unit_test.RpcUnitTestService")
-target_include_directories(atf4g-co-rpc-unit-test-selftest PRIVATE "${PROJECT_RPC_UNIT_TEST_GENERATED_ROOT}")
+add_dependencies(${PROJECT_NAME}-rpc-unit-test-selftest "generate-for-pb-rpc_unit_test.RpcUnitTestService")
+target_include_directories(${PROJECT_NAME}-rpc-unit-test-selftest PRIVATE "${PROJECT_RPC_UNIT_TEST_GENERATED_ROOT}")

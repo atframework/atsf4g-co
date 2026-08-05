@@ -2,7 +2,7 @@
 <%!
 import time
 import sys
-%><%page args="message_name,extension,message,index_type_enum" />
+%><%page args="message_name,extension,message,index_type_enum,message_full_name" />
 % for field in message.fields:
 %     if not field.is_db_vaild_type():
 // ${message_name} filed: {${field.get_name()}} not db vaild type
@@ -129,6 +129,194 @@ SERVER_FRAME_API result_type remove_ttl(rpc::context &ctx
     }
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace mock {
+SERVER_FRAME_API std::string make_key(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%   endfor
+) {
+  char db_key[256];
+  size_t keylen = sizeof(db_key);
+  auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = static_cast<size_t>(result.size);
+  }
+  return std::string{db_key, keylen};
+}
+
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle set_error(
+    rpc::db::hash_table::unit_test_request::op_type __op, int32_t __error_code) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_set_error_rule) {
+    return rpc::unit_test::mock_rule_handle{};
+  }
+  return rpc::unit_test::mock_rule_handle{
+      __bridge.db_set_error_rule("${index.name}", static_cast<int32_t>(__op), __error_code)};
+}
+
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle force_not_found() {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_force_not_found_rule) {
+    return rpc::unit_test::mock_rule_handle{};
+  }
+  return rpc::unit_test::mock_rule_handle{__bridge.db_force_not_found_rule("${index.name}")};
+}
+
+SERVER_FRAME_API void set_ttl(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%   endfor
+    uint64_t __ttl_seconds) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_set_raw_ttl) {
+    return;
+  }
+  __bridge.db_set_raw_ttl(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), __ttl_seconds);
+}
+%   if index_type_kv:
+
+SERVER_FRAME_API bool set_record(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%   endfor
+    const PROJECT_NAMESPACE_ID::${message_name} &__record, uint64_t __version) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_set_raw_kv) {
+    return false;
+  }
+  __bridge.db_set_raw_kv(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}),
+                         "${message_full_name}", __record.SerializeAsString(), __version);
+  return true;
+}
+
+SERVER_FRAME_API bool get(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%   endfor
+    PROJECT_NAMESPACE_ID::${message_name} &__output, uint64_t *__version) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_get_raw_kv) {
+    return false;
+  }
+  std::string __data;
+  uint64_t __stored_version = 0;
+  if (!__bridge.db_get_raw_kv(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), nullptr,
+                              &__data, &__stored_version)) {
+    return false;
+  }
+  if (!__output.ParseFromString(__data)) {
+    return false;
+  }
+  if (nullptr != __version) {
+    *__version = __stored_version;
+  }
+  return true;
+}
+
+SERVER_FRAME_API bool has_record(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%   endfor
+) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_get_raw_kv) {
+    return false;
+  }
+  return __bridge.db_get_raw_kv(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), nullptr,
+                                nullptr, nullptr);
+}
+
+SERVER_FRAME_API bool version_equal(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%   endfor
+    uint64_t __expected_version) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_get_raw_kv) {
+    return false;
+  }
+  uint64_t __stored_version = 0;
+  return __bridge.db_get_raw_kv(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), nullptr,
+                                nullptr, &__stored_version) &&
+         __stored_version == __expected_version;
+}
+%   else:
+
+SERVER_FRAME_API uint64_t append_entry(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%   endfor
+    const PROJECT_NAMESPACE_ID::${message_name} &__entry) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_append_raw_kl) {
+    return 0;
+  }
+  return __bridge.db_append_raw_kl(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}),
+                                   "${message_full_name}", __entry.SerializeAsString());
+}
+
+SERVER_FRAME_API size_t count(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%   endfor
+) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_get_raw_kl) {
+    return 0;
+  }
+  std::vector<std::tuple<uint64_t, std::string, std::string>> __entries;
+  if (!__bridge.db_get_raw_kl(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), &__entries)) {
+    return 0;
+  }
+  return __entries.size();
+}
+
+SERVER_FRAME_API std::vector<uint64_t> indexes(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%   endfor
+) {
+  std::vector<uint64_t> __ret;
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_get_raw_kl) {
+    return __ret;
+  }
+  std::vector<std::tuple<uint64_t, std::string, std::string>> __entries;
+  if (!__bridge.db_get_raw_kl(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), &__entries)) {
+    return __ret;
+  }
+  __ret.reserve(__entries.size());
+  for (const auto &__entry : __entries) {
+    __ret.push_back(std::get<0>(__entry));
+  }
+  return __ret;
+}
+
+SERVER_FRAME_API bool entry_at(
+%   for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%   endfor
+    uint64_t __index, PROJECT_NAMESPACE_ID::${message_name} &__output) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_get_raw_kl) {
+    return false;
+  }
+  std::vector<std::tuple<uint64_t, std::string, std::string>> __entries;
+  if (!__bridge.db_get_raw_kl(make_key(${', '.join(key_field["raw_name"] for key_field in key_fields)}), &__entries)) {
+    return false;
+  }
+  for (const auto &__entry : __entries) {
+    if (std::get<0>(__entry) == __index) {
+      return __output.ParseFromString(std::get<2>(__entry));
+    }
+  }
+  return false;
+}
+%   endif
+}  // namespace mock
+#endif
 
 } // namespace ${index.name}
 % endfor

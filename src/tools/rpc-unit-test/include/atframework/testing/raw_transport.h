@@ -32,7 +32,7 @@ LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
 LIBATAPP_MACRO_NAMESPACE_END
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 class raw_transport;
@@ -182,4 +182,4 @@ class RPC_UNIT_TEST_API raw_transport {
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

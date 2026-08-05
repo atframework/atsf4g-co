@@ -6,6 +6,10 @@ Detail companion to `SKILL.md`. Load when editing CMake files, protobuf, templat
 
 - Format CMake with `.cmake-format.yaml`: 120 columns, two-space indentation, Unix line endings.
 - Prefer project helper functions over manual target wiring when a helper expresses the relationship.
+- Target names must never hardcode the project name prefix: write `${PROJECT_NAME}-<name>` (or the `atframework`
+  prefix where that is the established namespace of the component), never literal `atf4g-co-...`/`atf4g-co::...`.
+  This applies to `add_library`/`add_executable`/`add_custom_target`, ALIAS targets, `if(TARGET ...)` checks,
+  `add_dependencies`, `$<TARGET_OBJECTS:...>`, folder/label strings, and diagnostic messages.
 
 ## Incremental build stability
 

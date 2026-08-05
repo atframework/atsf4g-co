@@ -19,17 +19,17 @@ static gsl::span<const unsigned char> make_payload(const char *text) {
   return gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(text), std::strlen(text)};
 }
 
-static atsf4g::testing::mock_node make_remote_node(uint64_t id, const char *name) {
-  atsf4g::testing::mock_node node;
+static atframework::testing::mock_node make_remote_node(uint64_t id, const char *name) {
+  atframework::testing::mock_node node;
   node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(1);
   return node;
 }
 }  // namespace
 
 CASE_TEST(rpc_unit_test, transport_send_by_id_name_discovery) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -58,7 +58,7 @@ CASE_TEST(rpc_unit_test, transport_send_by_id_name_discovery) {
   CASE_EXPECT_EQ(3, static_cast<int>(test.transport().outbound_count_to(0x120001)));
   CASE_EXPECT_EQ(3, static_cast<int>(test.transport().outbound_count_to("unit-test-remote-a")));
 
-  const atsf4g::testing::outbound_message *first = test.transport().outbound_at(0);
+  const atframework::testing::outbound_message *first = test.transport().outbound_at(0);
   CASE_EXPECT_TRUE(nullptr != first);
   if (nullptr != first) {
     CASE_EXPECT_EQ(0x120001, static_cast<int64_t>(first->target_node_id));
@@ -68,7 +68,7 @@ CASE_TEST(rpc_unit_test, transport_send_by_id_name_discovery) {
     CASE_EXPECT_EQ("by-id", payload);
   }
 
-  const atsf4g::testing::outbound_message *third = test.transport().outbound_at(2);
+  const atframework::testing::outbound_message *third = test.transport().outbound_at(2);
   CASE_EXPECT_TRUE(nullptr != third);
   if (nullptr != third) {
     std::string payload{reinterpret_cast<const char *>(third->payload.data()), third->payload.size()};
@@ -83,9 +83,9 @@ CASE_TEST(rpc_unit_test, transport_send_by_id_name_discovery) {
 }
 
 CASE_TEST(rpc_unit_test, transport_send_with_metadata) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -105,7 +105,7 @@ CASE_TEST(rpc_unit_test, transport_send_with_metadata) {
   uint64_t sequence = 2001;
   CASE_EXPECT_EQ(0, test.get_app()->send_message(0x120011, 224, make_payload("with-meta"), &sequence, &metadata));
 
-  const atsf4g::testing::outbound_message *record = test.transport().outbound_at(0);
+  const atframework::testing::outbound_message *record = test.transport().outbound_at(0);
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     CASE_EXPECT_TRUE(record->has_metadata);
@@ -120,9 +120,9 @@ CASE_TEST(rpc_unit_test, transport_send_with_metadata) {
 }
 
 CASE_TEST(rpc_unit_test, transport_send_selection_modes) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -150,7 +150,7 @@ CASE_TEST(rpc_unit_test, transport_send_selection_modes) {
 
   CASE_EXPECT_EQ(3, static_cast<int>(test.transport().outbound_count()));
   for (size_t i = 0; i < 3; ++i) {
-    const atsf4g::testing::outbound_message *record = test.transport().outbound_at(i);
+    const atframework::testing::outbound_message *record = test.transport().outbound_at(i);
     CASE_EXPECT_TRUE(nullptr != record);
     if (nullptr != record) {
       bool is_known_target = record->target_node_id == 0x120021 || record->target_node_id == 0x120022;
@@ -162,9 +162,9 @@ CASE_TEST(rpc_unit_test, transport_send_selection_modes) {
 }
 
 CASE_TEST(rpc_unit_test, transport_immediate_error_rule) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -178,7 +178,7 @@ CASE_TEST(rpc_unit_test, transport_immediate_error_rule) {
     return;
   }
 
-  atsf4g::testing::transport_send_behavior behavior;
+  atframework::testing::transport_send_behavior behavior;
   behavior.immediate_error = -12345;
   auto rule = test.transport().add_rule(0x120031, -1, behavior);
 
@@ -187,7 +187,7 @@ CASE_TEST(rpc_unit_test, transport_immediate_error_rule) {
 
   // The failed send is still recorded with its immediate error.
   CASE_EXPECT_EQ(1, static_cast<int>(test.transport().outbound_count()));
-  const atsf4g::testing::outbound_message *record = test.transport().outbound_at(0);
+  const atframework::testing::outbound_message *record = test.transport().outbound_at(0);
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     CASE_EXPECT_EQ(-12345, record->immediate_error);
@@ -202,9 +202,9 @@ CASE_TEST(rpc_unit_test, transport_immediate_error_rule) {
 }
 
 CASE_TEST(rpc_unit_test, transport_ack_delivery_barrier) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -218,7 +218,7 @@ CASE_TEST(rpc_unit_test, transport_ack_delivery_barrier) {
     return;
   }
 
-  atsf4g::testing::transport_send_behavior behavior;
+  atframework::testing::transport_send_behavior behavior;
   behavior.deliver_ack = true;
   behavior.ack_error_code = 0;
   auto rule = test.transport().add_rule(0x120041, -1, behavior);
@@ -238,9 +238,9 @@ CASE_TEST(rpc_unit_test, transport_ack_delivery_barrier) {
 }
 
 CASE_TEST(rpc_unit_test, transport_inject_inbound) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -272,9 +272,9 @@ CASE_TEST(rpc_unit_test, transport_inject_inbound) {
 
 CASE_TEST(rpc_unit_test, transport_consecutive_fixture) {
   for (int round = 0; round < 2; ++round) {
-    atsf4g::testing::runtime test;
-    atsf4g::testing::runtime_options options;
-    options.features = {atsf4g::testing::feature::ss};
+    atframework::testing::runtime test;
+    atframework::testing::runtime_options options;
+    options.features = {atframework::testing::feature::ss};
 
     CASE_EXPECT_EQ(0, test.start(options));
     if (!test.is_running()) {

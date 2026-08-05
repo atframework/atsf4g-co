@@ -44,9 +44,10 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include <config/server_frame_build_feature.h>
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
-// Typed mock registration helpers below forward into the rpc-unit-test SS rule engine. They only exist in
-// builds with PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS and are never referenced by production code.
-#  include <atframework/testing/mock_ss.h>
+// Typed mock registration helpers below call through the server-frame mock engine bridge. They only
+// exist in builds with PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS, never link the rpc-unit-test
+// library, and are never referenced by production code.
+#  include "rpc/unit_test/mock_engine_bridge.h"
 
 #  include <functional>
 #  include <utility>
@@ -203,19 +204,17 @@ namespace mock {
 % for rpc in rpcs.values():
 /**
  * @brief Register a typed SS mock rule for ${service.get_full_name()}/${rpc.get_name()}.
- * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is enabled. This is an inline
- *       shortcut of atsf4g::testing::mock_ss::mock with the RPC name and message types prefilled.
+ * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is enabled. Non-template
+ *       exported function (see 3.6 in IMPLEMENTATION_PLAN.md) implemented in the generated .cpp;
+ *       calls through rpc::unit_test::get_mock_engine_bridge_for_unit_test() and returns an empty
+ *       handle when no mock engine is bound. The handler receives the concrete request/response
+ *       messages.
  */
-template <class Handler>
-ATFW_UTIL_FORCEINLINE atsf4g::testing::ss_rule_handle ${rpc.get_name()}(
-    atsf4g::testing::mock_ss &__engine, Handler &&__handler,
-    const atsf4g::testing::ss_rule_options &__options = atsf4g::testing::ss_rule_options{}) {
-  return __engine.mock<${rpc.get_request().get_cpp_class_name()}, ${rpc.get_response().get_cpp_class_name()}>(
-      "${service.get_full_name()}/${rpc.get_name()}",
-      std::function<int(const atsf4g::testing::ss_request<${rpc.get_request().get_cpp_class_name()}> &,
-                        ${rpc.get_response().get_cpp_class_name()} &)>{std::forward<Handler>(__handler)},
-      __options);
-}
+${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
+    std::function<int(const ${rpc.get_request().get_cpp_class_name()} &,
+                      ${rpc.get_response().get_cpp_class_name()} &)>
+        __handler,
+    const rpc::unit_test::ss_mock_rule_options &__options = rpc::unit_test::ss_mock_rule_options{});
 % endfor
 }  // namespace mock
 #endif

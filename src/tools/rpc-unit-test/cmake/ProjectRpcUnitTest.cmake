@@ -12,27 +12,30 @@ if(DEFINED PROJECT_RPC_UNIT_TEST_CMAKE_INCLUDED)
 endif()
 set(PROJECT_RPC_UNIT_TEST_CMAKE_INCLUDED TRUE)
 
-set(PROJECT_RPC_UNIT_TEST_FRAME_DIR "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/test")
+# Cache-internal so project_add_rpc_unit_test sees it when called from other directory scopes
+# (e.g. src/server_frame/test), not just from src/tools/rpc-unit-test itself.
+set(PROJECT_RPC_UNIT_TEST_FRAME_DIR "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/test" CACHE INTERNAL
+    "atframe_utils private test framework directory")
 
 # Centralized support targets: the private framework main and frame implementation are compiled once and reused by
 # every test executable via $<TARGET_OBJECTS:...>, so components do not repeatedly compile the same frame sources.
-if(NOT TARGET atf4g-co-rpc-unit-test-private-main)
-  add_library(atf4g-co-rpc-unit-test-private-main OBJECT
+if(NOT TARGET ${PROJECT_NAME}-rpc-unit-test-private-main)
+  add_library(${PROJECT_NAME}-rpc-unit-test-private-main OBJECT
               "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}/app/main.cpp")
-  target_include_directories(atf4g-co-rpc-unit-test-private-main PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
-  target_link_libraries(atf4g-co-rpc-unit-test-private-main PRIVATE ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
-  target_compile_options(atf4g-co-rpc-unit-test-private-main PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
-  set_property(TARGET atf4g-co-rpc-unit-test-private-main PROPERTY FOLDER "${PROJECT_NAME}/test")
+  target_include_directories(${PROJECT_NAME}-rpc-unit-test-private-main PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
+  target_link_libraries(${PROJECT_NAME}-rpc-unit-test-private-main PRIVATE ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
+  target_compile_options(${PROJECT_NAME}-rpc-unit-test-private-main PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  set_property(TARGET ${PROJECT_NAME}-rpc-unit-test-private-main PROPERTY FOLDER "${PROJECT_NAME}/test")
 endif()
 
-if(NOT TARGET atf4g-co-rpc-unit-test-private-frame)
+if(NOT TARGET ${PROJECT_NAME}-rpc-unit-test-private-frame)
   add_library(
-    atf4g-co-rpc-unit-test-private-frame OBJECT "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}/frame/test_case_base.cpp"
+    ${PROJECT_NAME}-rpc-unit-test-private-frame OBJECT "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}/frame/test_case_base.cpp"
                                                  "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}/frame/test_manager.cpp")
-  target_include_directories(atf4g-co-rpc-unit-test-private-frame PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
-  target_link_libraries(atf4g-co-rpc-unit-test-private-frame PRIVATE ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
-  target_compile_options(atf4g-co-rpc-unit-test-private-frame PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
-  set_property(TARGET atf4g-co-rpc-unit-test-private-frame PROPERTY FOLDER "${PROJECT_NAME}/test")
+  target_include_directories(${PROJECT_NAME}-rpc-unit-test-private-frame PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
+  target_link_libraries(${PROJECT_NAME}-rpc-unit-test-private-frame PRIVATE ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
+  target_compile_options(${PROJECT_NAME}-rpc-unit-test-private-frame PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  set_property(TARGET ${PROJECT_NAME}-rpc-unit-test-private-frame PROPERTY FOLDER "${PROJECT_NAME}/test")
 endif()
 
 # project_add_rpc_unit_test(
@@ -68,22 +71,22 @@ function(project_add_rpc_unit_test)
                           "${PROJECT_RPC_UNIT_TEST_KNOWN_FEATURES}")
     endif()
   endforeach()
-  if(PROJECT_RPC_UNIT_TEST_FEATURES MATCHES "(^|;)ORBIT(;|$)" AND NOT TARGET atf4g-co-rpc-unit-test-orbit)
-    message(FATAL_ERROR "project_add_rpc_unit_test: feature ORBIT requires target atf4g-co-rpc-unit-test-orbit, "
+  if(PROJECT_RPC_UNIT_TEST_FEATURES MATCHES "(^|;)ORBIT(;|$)" AND NOT TARGET ${PROJECT_NAME}-rpc-unit-test-orbit)
+    message(FATAL_ERROR "project_add_rpc_unit_test: feature ORBIT requires target ${PROJECT_NAME}-rpc-unit-test-orbit, "
                         "which is only available when the Orbit client SDK is built")
   endif()
 
   add_executable(
     ${PROJECT_RPC_UNIT_TEST_TARGET}
-    ${PROJECT_RPC_UNIT_TEST_SOURCES} $<TARGET_OBJECTS:atf4g-co-rpc-unit-test-private-main>
-    $<TARGET_OBJECTS:atf4g-co-rpc-unit-test-private-frame>)
+    ${PROJECT_RPC_UNIT_TEST_SOURCES} $<TARGET_OBJECTS:${PROJECT_NAME}-rpc-unit-test-private-main>
+    $<TARGET_OBJECTS:${PROJECT_NAME}-rpc-unit-test-private-frame>)
   target_include_directories(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
   target_link_libraries(
-    ${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE atf4g-co::rpc-unit-test ${PROJECT_SERVER_FRAME_LIB_LINK}
+    ${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_NAME}::rpc-unit-test ${PROJECT_SERVER_FRAME_LIB_LINK}
                                             ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}
                                             ${PROJECT_RPC_UNIT_TEST_LINK_LIBRARIES})
   if(PROJECT_RPC_UNIT_TEST_FEATURES MATCHES "(^|;)ORBIT(;|$)")
-    target_link_libraries(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE atf4g-co::rpc-unit-test-orbit)
+    target_link_libraries(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_NAME}::rpc-unit-test-orbit)
   endif()
   target_compile_options(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
@@ -113,7 +116,7 @@ function(project_add_rpc_unit_test)
 
   add_test(NAME ${PROJECT_RPC_UNIT_TEST_TARGET}.unit COMMAND $<TARGET_FILE:${PROJECT_RPC_UNIT_TEST_TARGET}>)
 
-  set(PROJECT_RPC_UNIT_TEST_LABELS atf4g-co unit rpc-unit-test "component:${PROJECT_RPC_UNIT_TEST_COMPONENT}")
+  set(PROJECT_RPC_UNIT_TEST_LABELS ${PROJECT_NAME} unit rpc-unit-test "component:${PROJECT_RPC_UNIT_TEST_COMPONENT}")
   foreach(PROJECT_RPC_UNIT_TEST_FEATURE IN LISTS PROJECT_RPC_UNIT_TEST_FEATURES)
     string(TOLOWER "${PROJECT_RPC_UNIT_TEST_FEATURE}" PROJECT_RPC_UNIT_TEST_FEATURE_LOWER)
     list(APPEND PROJECT_RPC_UNIT_TEST_LABELS "feature:${PROJECT_RPC_UNIT_TEST_FEATURE_LOWER}")

@@ -26,6 +26,17 @@ All build trees, AI scratch files, script output/logs, and temporary data must s
 `<BUILD_DIR>/_agent_tmp/...` for agent-generated notes, scripts, and logs. Do not create temporary files in the
 repository root.
 
+## Header-change incremental-build pitfall (Chinese/localized MSVC)
+
+In this checkout's Windows tree (`build_jobs_cmake_tools`) ninja records `#deps 0` for every object: the
+`msvc_deps_prefix` in `CMakeFiles/rules.ninja` does not match the localized cl.exe `/showIncludes` output, so
+**header changes never trigger recompilation**. Incremental builds after editing a header silently keep stale
+objects and can produce ABI-mismatched binaries that crash at runtime (observed: `runtime_options` layout change
+crashing at the first `options` copy with exit code 3). After editing any header, clean the affected targets
+before rebuilding, e.g. `ninja -t clean <target...>` (or the whole tree for shared/public headers), then rebuild.
+Source-file (`.cpp`) mtime changes are still tracked normally. Verify suspicion with
+`ninja -t deps <obj>` showing `#deps 0`.
+
 ## Windows (MSVC + vcpkg example)
 
 ```bash

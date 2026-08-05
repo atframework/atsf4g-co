@@ -12,7 +12,7 @@
 
 #include <atframework/testing/runtime.h>
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 class raw_transport;
@@ -47,4 +47,4 @@ class RPC_UNIT_TEST_API mock_connector : public atfw::atapp::atapp_connector_imp
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

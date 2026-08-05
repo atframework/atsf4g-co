@@ -44,7 +44,19 @@ static std::atomic<int64_t>& get_excel_reporter_blocker() {
   return ret;
 }
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+static excel_resource_provider_for_unit_test_t& get_excel_resource_provider_for_unit_test() {
+  static excel_resource_provider_for_unit_test_t ret;
+  return ret;
+}
+#endif
+
 static bool excel_config_callback_get_buffer(std::string& out, const char* path) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (get_excel_resource_provider_for_unit_test().get_buffer) {
+    return get_excel_resource_provider_for_unit_test().get_buffer(out, path);
+  }
+#endif
   char file_path[atfw::util::file_system::MAX_PATH_LEN + 1];
   int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
                                   logic_config::me()->get_logic_cfg().excel().bindir().c_str(),
@@ -63,6 +75,11 @@ static bool excel_config_callback_get_buffer(std::string& out, const char* path)
 }
 
 static bool excel_config_callback_get_version(std::string& out) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (get_excel_resource_provider_for_unit_test().get_version) {
+    return get_excel_resource_provider_for_unit_test().get_version(out);
+  }
+#endif
   char file_path[atfw::util::file_system::MAX_PATH_LEN + 1];
   int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
                                   logic_config::me()->get_logic_cfg().excel().bindir().c_str(),
@@ -201,3 +218,15 @@ SERVER_FRAME_CONFIG_API void excel_add_on_group_loaded_callback(std::function<vo
     get_excel_on_group_loaded_fns().push_back(fn);
   }
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// NOLINTNEXTLINE(performance-unnecessary-value-param)
+SERVER_FRAME_CONFIG_API void set_excel_resource_provider_for_unit_test(
+    excel_resource_provider_for_unit_test_t provider) {
+  get_excel_resource_provider_for_unit_test() = provider;
+}
+
+SERVER_FRAME_CONFIG_API void clear_excel_resource_provider_for_unit_test() {
+  get_excel_resource_provider_for_unit_test() = excel_resource_provider_for_unit_test_t{};
+}
+#endif

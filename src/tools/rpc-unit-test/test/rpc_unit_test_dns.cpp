@@ -10,9 +10,9 @@
 #include "rpc/dns/lookup.h"
 
 CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::dns};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -53,7 +53,7 @@ CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
   CASE_EXPECT_EQ(0, result.result_code);
 
   CASE_EXPECT_EQ(1, static_cast<int>(test.dns().calls("unit-test.local")));
-  const atsf4g::testing::dns_request_record *record = test.dns().call_at(0);
+  const atframework::testing::dns_request_record *record = test.dns().call_at(0);
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     CASE_EXPECT_TRUE(record->matched_rule);
@@ -64,9 +64,9 @@ CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
 }
 
 CASE_TEST(rpc_unit_test, dns_lookup_multiple_records_and_error) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::dns};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -121,9 +121,9 @@ CASE_TEST(rpc_unit_test, dns_lookup_multiple_records_and_error) {
 }
 
 CASE_TEST(rpc_unit_test, dns_unmatched_lookup_fast_fail) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::dns};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -155,16 +155,16 @@ CASE_TEST(rpc_unit_test, dns_unmatched_lookup_fast_fail) {
 }
 
 CASE_TEST(rpc_unit_test, dns_no_response_times_out_task) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::dns};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
   }
 
-  atsf4g::testing::dns_rule_options options_silent;
+  atframework::testing::dns_rule_options options_silent;
   options_silent.no_response = true;
   auto rule = test.dns().mock_a("silent.unit-test.local", "10.9.9.9", options_silent);
   CASE_EXPECT_TRUE(!!rule);

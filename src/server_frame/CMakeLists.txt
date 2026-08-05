@@ -119,6 +119,12 @@ foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
   endif()
+  # Unit test cases live in test/ but are built by their own target (src/server_frame/test/CMakeLists.txt),
+  # never into the server_frame library.
+  if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]test[/\\\\].*")
+    file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
+    continue()
+  endif()
 
   list(APPEND SRC_LIST ${SRC_FILE_REALPATH})
 endforeach()

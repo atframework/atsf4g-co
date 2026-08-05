@@ -10,16 +10,17 @@
 #include "frame/test_macros.h"
 #include "protocol/pbdesc/rpc_unit_test.pb.h"
 #include "rpc/db/hash_table.h"
+#include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/db/uuid.h"
 
 namespace {
 constexpr uint32_t kTestDbChannel = static_cast<uint32_t>(db_msg_dispatcher::channel_t::RAW_DEFAULT);
 
-using op_type = atsf4g::testing::mock_db::op_type;
+using op_type = atframework::testing::mock_db::op_type;
 
-bool start_db_runtime(atsf4g::testing::runtime &test) {
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::db};
+bool start_db_runtime(atframework::testing::runtime &test) {
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::db};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return false;
@@ -31,7 +32,7 @@ bool start_db_runtime(atsf4g::testing::runtime &test) {
 }  // namespace
 
 CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
-  atsf4g::testing::runtime test;
+  atframework::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -123,7 +124,7 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
 }
 
 CASE_TEST(rpc_unit_test, db_kv_get_missing_and_partly_get_presence) {
-  atsf4g::testing::runtime test;
+  atframework::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -199,7 +200,7 @@ CASE_TEST(rpc_unit_test, db_kv_get_missing_and_partly_get_presence) {
 }
 
 CASE_TEST(rpc_unit_test, db_kv_inc_field_and_uuid_allocator) {
-  atsf4g::testing::runtime test;
+  atframework::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -257,7 +258,7 @@ CASE_TEST(rpc_unit_test, db_kv_inc_field_and_uuid_allocator) {
 }
 
 CASE_TEST(rpc_unit_test, db_key_list_add_get_update_remove) {
-  atsf4g::testing::runtime test;
+  atframework::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -365,7 +366,7 @@ CASE_TEST(rpc_unit_test, db_key_list_add_get_update_remove) {
 }
 
 CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
-  atsf4g::testing::runtime test;
+  atframework::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -429,6 +430,106 @@ CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
   CASE_EXPECT_EQ(2, static_cast<int>(test.db().calls(op_type::set_ttl)));
   CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls(op_type::remove_ttl)));
   CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls(op_type::remove_all)));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// Smoke test of the generated per-table typed mock interface (rpc::db::login_auth::mock) on top of
+// the engine-level table rules and raw entry access.
+CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
+  atframework::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+  test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();
+
+  namespace login_mock = rpc::db::login_auth::mock;
+
+  // Typed data preparation and inspection without any RPC/task.
+  PROJECT_NAMESPACE_ID::table_login_auth record;
+  record.set_open_id("openid-smoke");
+  record.set_user_id(42);
+  CASE_EXPECT_TRUE(login_mock::set_record("openid-smoke", record, 3));
+  CASE_EXPECT_TRUE(login_mock::has_record("openid-smoke"));
+  CASE_EXPECT_TRUE(login_mock::version_equal("openid-smoke", 3));
+  {
+    PROJECT_NAMESPACE_ID::table_login_auth restored;
+    uint64_t stored_version = 0;
+    CASE_EXPECT_TRUE(login_mock::get("openid-smoke", restored, &stored_version));
+    CASE_EXPECT_EQ(42, static_cast<int>(restored.user_id()));
+    CASE_EXPECT_EQ(3, static_cast<int>(stored_version));
+  }
+
+  // The generated RPC API reads exactly what the typed mock wrote (same key layout).
+  auto task = test.run_task(
+      "db_login_auth_smoke", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(42, static_cast<int>(rsp->user_id()));
+        CASE_EXPECT_EQ(3, static_cast<int>(version));
+
+        // replace goes through the real generated CAS path and bumps the version.
+        rsp->set_user_id(43);
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(rsp), version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(4, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (task.empty()) {
+    test.stop();
+    return;
+  }
+  auto result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(login_mock::version_equal("openid-smoke", 4));
+
+  // Per-table error injection only affects login_auth ops, and ends with the RAII handle.
+  {
+    auto error_rule = login_mock::set_error(op_type::kv_get_all, -12345);
+    CASE_EXPECT_TRUE(!!error_rule);
+    auto error_task = test.run_task(
+        "db_login_auth_injected_error", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+          rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+          uint64_t version = 0;
+          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
+          CASE_EXPECT_EQ(-12345, res);
+          RPC_RETURN_CODE(0);
+        });
+    if (!error_task.empty()) {
+      auto error_result = test.wait(error_task, std::chrono::seconds{5});
+      CASE_EXPECT_TRUE(error_result.task_exited);
+      CASE_EXPECT_EQ(0, error_result.result_code);
+    }
+  }
+
+  // force_not_found shadows reads while the backend record stays intact.
+  {
+    auto not_found_rule = login_mock::force_not_found();
+    CASE_EXPECT_TRUE(!!not_found_rule);
+    auto nf_task = test.run_task(
+        "db_login_auth_forced_not_found", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+          rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+          uint64_t version = 0;
+          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
+          CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
+          RPC_RETURN_CODE(0);
+        });
+    if (!nf_task.empty()) {
+      auto nf_result = test.wait(nf_task, std::chrono::seconds{5});
+      CASE_EXPECT_TRUE(nf_result.task_exited);
+      CASE_EXPECT_EQ(0, nf_result.result_code);
+    }
+    CASE_EXPECT_TRUE(login_mock::has_record("openid-smoke"));
+  }
+
+  // Table-level statistics are derived from the recorded table name.
+  CASE_EXPECT_TRUE(test.db().calls("login_auth") >= 4);
+  CASE_EXPECT_TRUE(test.db().calls("login_auth", op_type::kv_get_all) >= 3);
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", op_type::kv_set)));
+  CASE_EXPECT_TRUE(nullptr != test.db().last_call("login_auth"));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

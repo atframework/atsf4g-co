@@ -9,7 +9,7 @@
 #include <config/atframe_service_types.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 mock_cs::mock_cs() = default;
@@ -166,4 +166,4 @@ int32_t mock_client::set_router_rsp(int32_t error_code, uint64_t target_service_
 }
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

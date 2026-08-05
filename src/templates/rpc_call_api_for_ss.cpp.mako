@@ -502,6 +502,36 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
 }
 
 % endfor
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace mock {
+% for rpc in rpcs.values():
+${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
+    std::function<int(const ${rpc.get_request().get_cpp_class_name()} &,
+                      ${rpc.get_response().get_cpp_class_name()} &)>
+        __handler,
+    const rpc::unit_test::ss_mock_rule_options &__options) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.register_ss_rule || !__handler) {
+    return rpc::unit_test::mock_rule_handle{};
+  }
+  return rpc::unit_test::mock_rule_handle{__bridge.register_ss_rule(
+      "${service.get_full_name()}/${rpc.get_name()}",
+      ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name(),
+      ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(),
+      [__handler = std::move(__handler)](const rpc::unit_test::ss_mock_request_view &__view,
+                                         google::protobuf::Message &__response) -> int {
+        if (nullptr == __view.body) {
+          return -1;
+        }
+        return __handler(
+            static_cast<const ${rpc.get_request().get_cpp_class_name()} &>(*__view.body),
+            static_cast<${rpc.get_response().get_cpp_class_name()} &>(__response));
+      },
+      __options)};
+}
+% endfor
+}  // namespace mock
+#endif
 % for ns in service.get_cpp_namespace_end(module_name, ''):
 ${ns}
 % endfor

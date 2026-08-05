@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 transport_rule_handle::transport_rule_handle(std::shared_ptr<detail::transport_rule_state> rule)
@@ -265,4 +265,4 @@ void raw_transport::capture_connect(uint64_t node_id) {
 void raw_transport::capture_disconnect(uint64_t) {}
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

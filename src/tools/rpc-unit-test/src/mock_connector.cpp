@@ -11,7 +11,7 @@
 
 #include <atframework/testing/raw_transport.h>
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 mock_connector::mock_connector(atfw::atapp::app &owner, raw_transport &transport)
@@ -21,7 +21,7 @@ mock_connector::mock_connector(atfw::atapp::app &owner, raw_transport &transport
 
 mock_connector::~mock_connector() { cleanup(); }
 
-gsl::string_view mock_connector::name() const noexcept { return "atsf4g::testing::mock_connector"; }
+gsl::string_view mock_connector::name() const noexcept { return "atframework::testing::mock_connector"; }
 
 uint32_t mock_connector::get_address_type(const atfw::atbus::channel::channel_address_t &) const noexcept {
   uint32_t ret = 0;
@@ -93,4 +93,4 @@ void mock_connector::on_discovery_event(atfw::atapp::etcd_discovery_action_t,
                                         const atfw::atapp::etcd_discovery_node::ptr_t &) {}
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

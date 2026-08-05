@@ -2,7 +2,7 @@
 <%!
 import time
 import sys
-%><%page args="message_name,extension,message,index_type_enum" />
+%><%page args="message_name,extension,message,index_type_enum,message_full_name" />
 % for field in message.fields:
 %     if not field.is_db_vaild_type():
 // ${message_name} filed: {${field.get_name()}} not db vaild type
@@ -56,9 +56,108 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type set_ttl(rpc::context &
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::context &ctx
 %     for key_field in key_fields:
-                                                             ,${key_field["cpp_type"]} ${key_field["raw_name"]}
+                                                              ,${key_field["cpp_type"]} ${key_field["raw_name"]}
 %     endfor
 );
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// Per-table typed mock interface for ${message_full_name} (index "${index.name}"). All functions are
+// non-template exported functions implemented in the generated .cpp (see 3.6 in
+// IMPLEMENTATION_PLAN.md) and call through rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+// data access goes directly through the bound mock backend, without RPC or task context. When no
+// mock engine is bound, rule helpers return empty handles and data helpers fail/no-op.
+namespace mock {
+/**
+ * @brief Build the storage key of this table ("{record_prefix}-${index.name}.{key fields}").
+ */
+SERVER_FRAME_API std::string make_key(
+%     for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%     endfor
+);
+
+/**
+ * @brief Inject an error code for one op of this table until the returned handle is destroyed.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle set_error(
+    rpc::db::hash_table::unit_test_request::op_type __op, int32_t __error_code);
+
+/**
+ * @brief Make all read ops of this table return EN_DB_RECORD_NOT_FOUND until the handle is destroyed.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle force_not_found();
+
+/**
+ * @brief Set a TTL on the mock backend entry (uses the mock engine clock).
+ */
+SERVER_FRAME_API void set_ttl(
+%     for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%     endfor
+    uint64_t __ttl_seconds);
+%     if index_type_kv:
+
+/**
+ * @brief Write one typed record directly into the mock backend (presence of set fields survives).
+ */
+SERVER_FRAME_API bool set_record(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%         endfor
+    const PROJECT_NAMESPACE_ID::${message_name} &__record, uint64_t __version = 0);
+
+/**
+ * @brief Read one typed record from the mock backend. Returns false when absent or undecodable.
+ */
+SERVER_FRAME_API bool get(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%         endfor
+    PROJECT_NAMESPACE_ID::${message_name} &__output, uint64_t *__version = nullptr);
+
+SERVER_FRAME_API bool has_record(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%         endfor
+);
+
+SERVER_FRAME_API bool version_equal(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%         endfor
+    uint64_t __expected_version);
+%     else:
+
+/**
+ * @brief Append one typed KL entry with the per-key monotonic index; returns the allocated index
+ *        (0 when no mock engine is bound).
+ */
+SERVER_FRAME_API uint64_t append_entry(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%         endfor
+    const PROJECT_NAMESPACE_ID::${message_name} &__entry);
+
+SERVER_FRAME_API size_t count(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%         endfor
+);
+
+SERVER_FRAME_API std::vector<uint64_t> indexes(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+%         endfor
+);
+
+SERVER_FRAME_API bool entry_at(
+%         for key_field in key_fields:
+    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+%         endfor
+    uint64_t __index, PROJECT_NAMESPACE_ID::${message_name} &__output);
+%     endif
+}  // namespace mock
+#endif
 
 } // namespace ${index.name}
 % endfor

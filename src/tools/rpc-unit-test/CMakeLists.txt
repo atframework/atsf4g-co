@@ -10,13 +10,15 @@ include("${PROJECT_SOURCE_DIR}/src/service-functions.cmake")
 set(PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include")
 
 add_library(
-  atf4g-co-rpc-unit-test STATIC
+  ${PROJECT_NAME}-rpc-unit-test STATIC
   "${CMAKE_CURRENT_LIST_DIR}/src/runtime.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_connector.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_cs.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_db.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_discovery.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_dns.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/mock_hpa.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/mock_resource.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_router.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/mock_ss.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/raw_transport.cpp"
@@ -29,22 +31,22 @@ add_library(
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_router.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_ss.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/raw_transport.h")
-add_library(atf4g-co::rpc-unit-test ALIAS atf4g-co-rpc-unit-test)
+add_library(${PROJECT_NAME}::rpc-unit-test ALIAS ${PROJECT_NAME}-rpc-unit-test)
 
-target_include_directories(atf4g-co-rpc-unit-test
+target_include_directories(${PROJECT_NAME}-rpc-unit-test
                            PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>")
-target_compile_definitions(atf4g-co-rpc-unit-test PRIVATE RPC_UNIT_TEST_NATIVE=1)
-target_compile_options(atf4g-co-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
-target_link_libraries(atf4g-co-rpc-unit-test PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}
+target_compile_definitions(${PROJECT_NAME}-rpc-unit-test PRIVATE RPC_UNIT_TEST_NATIVE=1)
+target_compile_options(${PROJECT_NAME}-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+target_link_libraries(${PROJECT_NAME}-rpc-unit-test PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}
                                                     ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
 
 set_target_properties(
-  atf4g-co-rpc-unit-test
+  ${PROJECT_NAME}-rpc-unit-test
   PROPERTIES C_VISIBILITY_PRESET "hidden"
              CXX_VISIBILITY_PRESET "hidden"
              INSTALL_RPATH_USE_LINK_PATH YES
              BUILD_WITH_INSTALL_RPATH NO
              BUILD_RPATH_USE_ORIGIN YES)
-set_property(TARGET atf4g-co-rpc-unit-test PROPERTY FOLDER "${PROJECT_NAME}/test")
+set_property(TARGET ${PROJECT_NAME}-rpc-unit-test PROPERTY FOLDER "${PROJECT_NAME}/test")
 
 add_subdirectory(test)

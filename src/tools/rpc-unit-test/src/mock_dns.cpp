@@ -8,7 +8,7 @@
 #include "dispatcher/task_manager.h"
 #include "rpc/rpc_utils.h"
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 dns_rule_handle::~dns_rule_handle() { reset(); }
@@ -198,4 +198,4 @@ void mock_dns::deliver_pending() {
 }
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

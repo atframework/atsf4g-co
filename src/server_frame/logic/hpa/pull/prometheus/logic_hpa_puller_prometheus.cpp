@@ -21,6 +21,10 @@
 #include "logic/hpa/logic_hpa_policy.h"
 #include "logic/hpa/pull/prometheus/logic_hpa_data_type_prometheus.h"
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include "logic/hpa/mock/logic_hpa_mock_prometheus.h"
+#endif
+
 SERVER_FRAME_API logic_hpa_puller_prometheus::logic_hpa_puller_prometheus(
     logic_hpa_policy& policy, std::shared_ptr<rpc::telemetry::group_type>& telemetry_group,
     const PROJECT_NAMESPACE_ID::config::logic_hpa_cfg& /*hpa_cfg*/,
@@ -64,6 +68,12 @@ SERVER_FRAME_API bool logic_hpa_puller_prometheus::do_pull() {
   if (stoping_) {
     return false;
   }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (logic_hpa::mock::details::pull_with_installed_hook_for_unit_test(*this)) {
+    return true;
+  }
+#endif
 
   pull_request_ = get_owner().get_controller().create_http_request(pull_url_);
   if (!pull_request_) {

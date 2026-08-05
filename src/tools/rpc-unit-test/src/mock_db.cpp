@@ -6,10 +6,14 @@
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+#include <dispatcher/db_msg_dispatcher.h>
+
+#include <rpc/unit_test/mock_engine_bridge.h>
+
 #include <algorithm>
 #include <utility>
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 namespace {
@@ -146,6 +150,61 @@ void mock_db::erase_key(gsl::string_view key) {
   kl_records_.erase(std::string{key});
 }
 
+bool mock_db::get_raw_kv(gsl::string_view key, kv_raw_entry &output) {
+  kv_record *record = find_live_kv(key);
+  if (nullptr == record) {
+    return false;
+  }
+  output.type_name = record->type_name;
+  output.data = record->data;
+  output.version = record->version;
+  output.has_expire = record->has_expire;
+  output.expire_at = record->expire_at;
+  return true;
+}
+
+void mock_db::set_raw_kv(gsl::string_view key, gsl::string_view type_name, gsl::string_view data, uint64_t version) {
+  auto &record = kv_records_[std::string{key}];
+  record.type_name = std::string{type_name.data(), type_name.size()};
+  record.data = std::string{data.data(), data.size()};
+  record.version = version;
+}
+
+bool mock_db::get_raw_kl(gsl::string_view key, std::vector<kl_raw_entry> &output) {
+  output.clear();
+  kl_record *record = find_live_kl(key);
+  if (nullptr == record) {
+    return false;
+  }
+  output.reserve(record->entries.size());
+  for (const auto &entry : record->entries) {
+    output.push_back(kl_raw_entry{entry.index, entry.type_name, entry.data});
+  }
+  return true;
+}
+
+uint64_t mock_db::append_raw_kl(gsl::string_view key, gsl::string_view type_name, gsl::string_view data) {
+  auto &record = kl_records_[std::string{key}];
+  uint64_t index = record.next_index++;
+  record.entries.push_back(
+      kl_entry{index, std::string{type_name.data(), type_name.size()}, std::string{data.data(), data.size()}});
+  return index;
+}
+
+void mock_db::set_raw_ttl(gsl::string_view key, clock::time_point expire_at) {
+  // TTL applies to whichever record kind exists for the key (mirrors EXPIRE semantics).
+  kv_record *kv = find_live_kv(key);
+  if (nullptr != kv) {
+    kv->has_expire = true;
+    kv->expire_at = expire_at;
+  }
+  kl_record *kl = find_live_kl(key);
+  if (nullptr != kl) {
+    kl->has_expire = true;
+    kl->expire_at = expire_at;
+  }
+}
+
 void mock_db::clear() {
   kv_records_.clear();
   kl_records_.clear();
@@ -170,6 +229,84 @@ size_t mock_db::calls(op_type op) const {
   return ret;
 }
 
+size_t mock_db::calls(gsl::string_view table_name) const {
+  size_t ret = 0;
+  for (const auto &call : calls_) {
+    if (call.table_name == table_name) {
+      ++ret;
+    }
+  }
+  return ret;
+}
+
+size_t mock_db::calls(gsl::string_view table_name, op_type op) const {
+  size_t ret = 0;
+  for (const auto &call : calls_) {
+    if (call.table_name == table_name && call.op == op) {
+      ++ret;
+    }
+  }
+  return ret;
+}
+
+const db_request_record *mock_db::last_call(gsl::string_view table_name) const {
+  for (auto iter = calls_.rbegin(); iter != calls_.rend(); ++iter) {
+    if (iter->table_name == table_name) {
+      return &(*iter);
+    }
+  }
+  return nullptr;
+}
+
+db_table_rule_handle mock_db::mock_table(gsl::string_view table_name, const db_table_rule_options &options) {
+  if (table_name.empty()) {
+    diagnostic_ = "mock_table: empty table name";
+    return db_table_rule_handle{};
+  }
+  auto rule = std::make_shared<detail::db_table_rule_state>();
+  rule->table_name = std::string{table_name.data(), table_name.size()};
+  rule->options = options;
+  table_rules_.push_back(rule);
+  return db_table_rule_handle{std::move(rule)};
+}
+
+std::string mock_db::extract_table_name(gsl::string_view key) const {
+  size_t offset = 0;
+  const std::string &prefix = db_msg_dispatcher::me()->get_record_prefix();
+  if (!prefix.empty()) {
+    if (key.size() <= prefix.size() + 1 || 0 != key.compare(0, prefix.size(), prefix.data()) ||
+        key[prefix.size()] != '-') {
+      return std::string{};
+    }
+    offset = prefix.size() + 1;
+  }
+  size_t dot = key.find('.', offset);
+  if (gsl::string_view::npos == dot || dot == offset) {
+    return std::string{};
+  }
+  return std::string{key.substr(offset, dot - offset)};
+}
+
+db_table_rule_handle::db_table_rule_handle(std::shared_ptr<detail::db_table_rule_state> rule)
+    : rule_(std::move(rule)) {}
+
+db_table_rule_handle::~db_table_rule_handle() { reset(); }
+
+db_table_rule_handle::db_table_rule_handle(db_table_rule_handle &&other) noexcept : rule_(std::move(other.rule_)) {}
+
+db_table_rule_handle &db_table_rule_handle::operator=(db_table_rule_handle &&other) noexcept {
+  reset();
+  rule_ = std::move(other.rule_);
+  return *this;
+}
+
+void db_table_rule_handle::reset() {
+  if (rule_) {
+    rule_->active = false;
+    rule_.reset();
+  }
+}
+
 void mock_db::bind() {
   if (bound_) {
     return;
@@ -179,6 +316,75 @@ void mock_db::bind() {
         return handle(req, result_code);
       });
   bound_ = true;
+
+  // Expose this engine to generated per-table mock helpers through the server-frame bridge, so
+  // generated code never links the rpc-unit-test library.
+  rpc::unit_test::mock_engine_bridge_t slots;
+  slots.db_set_error_rule = [this](gsl::string_view table_name, int32_t op, int32_t error_code)
+      -> std::shared_ptr<void> {
+    db_table_rule_options options;
+    options.op_error_codes[op] = error_code;
+    db_table_rule_handle rule = mock_table(table_name, options);
+    if (!rule.rule_) {
+      return nullptr;
+    }
+    // Detach the rule state before the local handle destroys it; deactivation is owned by the
+    // returned bridge token from now on.
+    std::shared_ptr<detail::db_table_rule_state> state = rule.rule_;
+    rule.rule_.reset();
+    return std::shared_ptr<void>{state.get(), [state](void *) { state->active = false; }};
+  };
+  slots.db_force_not_found_rule = [this](gsl::string_view table_name) -> std::shared_ptr<void> {
+    db_table_rule_options options;
+    options.force_not_found = true;
+    db_table_rule_handle rule = mock_table(table_name, options);
+    if (!rule.rule_) {
+      return nullptr;
+    }
+    std::shared_ptr<detail::db_table_rule_state> state = rule.rule_;
+    rule.rule_.reset();
+    return std::shared_ptr<void>{state.get(), [state](void *) { state->active = false; }};
+  };
+  slots.db_set_raw_kv = [this](gsl::string_view key, gsl::string_view type_name, gsl::string_view data,
+                               uint64_t version) { set_raw_kv(key, type_name, data, version); };
+  slots.db_get_raw_kv = [this](gsl::string_view key, std::string *type_name, std::string *data,
+                               uint64_t *version) -> bool {
+    kv_raw_entry entry;
+    if (!get_raw_kv(key, entry)) {
+      return false;
+    }
+    if (nullptr != type_name) {
+      *type_name = entry.type_name;
+    }
+    if (nullptr != data) {
+      *data = entry.data;
+    }
+    if (nullptr != version) {
+      *version = entry.version;
+    }
+    return true;
+  };
+  slots.db_append_raw_kl = [this](gsl::string_view key, gsl::string_view type_name,
+                                  gsl::string_view data) { return append_raw_kl(key, type_name, data); };
+  slots.db_get_raw_kl = [this](gsl::string_view key,
+                               std::vector<std::tuple<uint64_t, std::string, std::string>> *entries) -> bool {
+    std::vector<kl_raw_entry> stored;
+    if (!get_raw_kl(key, stored)) {
+      return false;
+    }
+    if (nullptr != entries) {
+      entries->clear();
+      entries->reserve(stored.size());
+      for (const auto &entry : stored) {
+        entries->emplace_back(entry.index, entry.type_name, entry.data);
+      }
+    }
+    return true;
+  };
+  slots.db_set_raw_ttl = [this](gsl::string_view key, uint64_t ttl_seconds) {
+    set_raw_ttl(key, now() + std::chrono::seconds{static_cast<int64_t>(ttl_seconds)});
+  };
+  rpc::unit_test::merge_mock_engine_bridge_for_unit_test(std::move(slots));
 }
 
 void mock_db::unbind() {
@@ -186,6 +392,7 @@ void mock_db::unbind() {
     return;
   }
   rpc::db::hash_table::set_hash_table_hook_for_unit_test(nullptr);
+  rpc::unit_test::clear_db_mock_engine_bridge_slots();
   bound_ = false;
   // Uniform engine lifecycle contract: unbind resets all state so a runtime restart starts clean
   // (same as mock_ss/mock_dns).
@@ -194,10 +401,19 @@ void mock_db::unbind() {
   calls_.clear();
   diagnostic_.clear();
   clock_overridden_ = false;
+  table_rules_.clear();
 }
 
 bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t &result_code) {
+  std::string table_name = extract_table_name(req.key);
+
   int32_t res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  if (!table_name.empty() && apply_table_rules(req, table_name, res)) {
+    calls_.push_back(db_request_record{req.op, std::string{req.key}, std::move(table_name), res});
+    result_code = res;
+    return true;
+  }
+
   switch (req.op) {
     case op_type::kv_get_all:
       res = on_kv_get_all(req);
@@ -240,9 +456,61 @@ bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t 
       break;
   }
 
-  calls_.push_back(db_request_record{req.op, std::string{req.key}, res});
+  calls_.push_back(db_request_record{req.op, std::string{req.key}, std::move(table_name), res});
   result_code = res;
   return true;
+}
+
+bool mock_db::apply_table_rules(const rpc::db::hash_table::unit_test_request &req, gsl::string_view table_name,
+                                int32_t &result_code) {
+  // Latest registered matching active rule wins.
+  for (auto iter = table_rules_.rbegin(); iter != table_rules_.rend(); ++iter) {
+    const auto &rule = *iter;
+    if (!rule->active || table_name != rule->table_name) {
+      continue;
+    }
+    if (rule->options.fallthrough) {
+      return false;
+    }
+    auto error_iter = rule->options.op_error_codes.find(static_cast<int32_t>(req.op));
+    if (error_iter != rule->options.op_error_codes.end()) {
+      result_code = error_iter->second;
+      return true;
+    }
+    bool is_read = op_type::kv_get_all == req.op || op_type::kv_partly_get == req.op ||
+                   op_type::kl_get_all == req.op || op_type::kl_get_by_indexs == req.op;
+    if (rule->options.force_not_found && is_read) {
+      result_code = PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
+      return true;
+    }
+    if (rule->options.use_canned_kv &&
+        (op_type::kv_get_all == req.op || op_type::kv_partly_get == req.op)) {
+      result_code = serve_canned_kv(req, rule->options);
+      return true;
+    }
+    // Rule matched but no option applies to this op: defer to the in-memory backend.
+    return false;
+  }
+  return false;
+}
+
+int32_t mock_db::serve_canned_kv(const rpc::db::hash_table::unit_test_request &req,
+                                 const db_table_rule_options &rule) {
+  if (nullptr == req.kv_output || nullptr == req.ctx) {
+    return PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
+  }
+  kv_record canned;
+  canned.type_name = rule.canned_kv_type_name;
+  canned.data = rule.canned_kv_data;
+  canned.version = rule.canned_kv_version;
+  int32_t res = make_kv_output(canned, *req.ctx, req.kv_output);
+  if (res < 0) {
+    return res;
+  }
+  if (op_type::kv_partly_get == req.op) {
+    return filter_partly_fields(req);
+  }
+  return res;
 }
 
 int32_t mock_db::make_kv_output(const kv_record &record, rpc::context &ctx,
@@ -295,10 +563,16 @@ int32_t mock_db::on_kv_partly_get(const rpc::db::hash_table::unit_test_request &
     return PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
   }
   int32_t res = make_kv_output(*record, *req.ctx, req.kv_output);
-  if (res < 0 || nullptr == req.partly_get_fields) {
+  if (res < 0) {
     return res;
   }
+  return filter_partly_fields(req);
+}
 
+int32_t mock_db::filter_partly_fields(const rpc::db::hash_table::unit_test_request &req) const {
+  if (nullptr == req.partly_get_fields || nullptr == req.kv_output || !req.kv_output->message) {
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+  }
   // Drop all fields that were not requested, keeping presence of the requested ones.
   google::protobuf::Message *message = req.kv_output->message->get();
   const google::protobuf::Descriptor *descriptor = message->GetDescriptor();
@@ -556,4 +830,4 @@ int32_t mock_db::on_remove_ttl(const rpc::db::hash_table::unit_test_request &req
 }
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

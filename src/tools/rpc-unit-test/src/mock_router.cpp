@@ -4,7 +4,7 @@
 
 #include "rpc/rpc_common_types.h"
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 router_test_object::router_test_object(const key_t &key) : router_object_base(key) {}
@@ -113,4 +113,4 @@ router_test_manager *mock_router::get_manager(uint32_t type_id) const {
 void mock_router::unbind() { managers_.clear(); }
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework

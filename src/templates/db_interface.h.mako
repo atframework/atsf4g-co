@@ -23,6 +23,13 @@ if index_type_enum is None:
 #include <config/compiler/protobuf_suffix.h>
 
 #include <config/server_frame_build_feature.h>
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// Per-table typed mock helpers below call through the server-frame mock engine bridge. They only
+// exist in builds with PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS, never link the rpc-unit-test
+// library, and are never referenced by production code.
+#  include "rpc/unit_test/mock_engine_bridge.h"
+#  include "rpc/db/hash_table.h"
+#endif
 
 #include <stdint.h>
 #include <cstddef>
@@ -52,7 +59,7 @@ using string_view = ATFRAMEWORK_UTILS_NAMESPACE_ID::nostd::string_view;
     if extension is None:
         continue
 %>
-<%include file="db_rpc_redis.h.mako" args="message_name=message_name,extension=extension,message=message,index_type_enum=index_type_enum" />
+<%include file="db_rpc_redis.h.mako" args="message_name=message_name,extension=extension,message=message,index_type_enum=index_type_enum,message_full_name=full_name" />
 %   endfor
 
 }  // namespace db

@@ -62,6 +62,9 @@ high-performance game server architectures.
   and the rendered target language, and validate target syntax only after rendering representative output.
 - For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, configured
   `.clang-tidy`/`CPPLINT.cfg` review checks, header/template visibility and API ABI boundaries, and project conventions.
+- CMake target names must not hardcode the project prefix: use `${PROJECT_NAME}-<name>` (or the established
+  `atframework` prefix where applicable), never literal `atf4g-co-...`/`atf4g-co::...`, in any target declaration,
+  alias, `if(TARGET ...)`, dependency, folder, or label.
 
 ## Skill Routing
 

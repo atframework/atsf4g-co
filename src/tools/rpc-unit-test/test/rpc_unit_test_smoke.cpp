@@ -8,10 +8,10 @@
 #include "rpc/rpc_utils.h"
 
 CASE_TEST(rpc_unit_test, runtime_start_stop) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss, atsf4g::testing::feature::dns,
-                      atsf4g::testing::feature::db};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::dns,
+                      atframework::testing::feature::db};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -22,9 +22,9 @@ CASE_TEST(rpc_unit_test, runtime_start_stop) {
 }
 
 CASE_TEST(rpc_unit_test, runtime_empty_task) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -52,9 +52,9 @@ CASE_TEST(rpc_unit_test, runtime_empty_task) {
 }
 
 CASE_TEST(rpc_unit_test, runtime_task_business_result_code) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -76,9 +76,9 @@ CASE_TEST(rpc_unit_test, runtime_task_business_result_code) {
 }
 
 CASE_TEST(rpc_unit_test, runtime_task_timeout) {
-  atsf4g::testing::runtime test;
-  atsf4g::testing::runtime_options options;
-  options.features = {atsf4g::testing::feature::ss};
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -114,9 +114,9 @@ CASE_TEST(rpc_unit_test, runtime_consecutive_fixture) {
   // A second runtime must start cleanly after the previous one stopped: no leaked app, task or
   // process-level state may block a consecutive fixture.
   for (int i = 0; i < 2; ++i) {
-    atsf4g::testing::runtime test;
-    atsf4g::testing::runtime_options options;
-    options.features = {atsf4g::testing::feature::ss};
+    atframework::testing::runtime test;
+    atframework::testing::runtime_options options;
+    options.features = {atframework::testing::feature::ss};
 
     CASE_EXPECT_EQ(0, test.start(options));
     if (!test.is_running()) {

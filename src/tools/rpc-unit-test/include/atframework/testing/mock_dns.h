@@ -21,7 +21,7 @@ LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
 LIBATAPP_MACRO_NAMESPACE_END
 
-namespace atsf4g {
+namespace atframework {
 namespace testing {
 
 class mock_dns;
@@ -140,4 +140,4 @@ class RPC_UNIT_TEST_API mock_dns {
 };
 
 }  // namespace testing
-}  // namespace atsf4g
+}  // namespace atframework
