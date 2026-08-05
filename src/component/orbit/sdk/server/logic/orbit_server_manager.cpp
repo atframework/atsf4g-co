@@ -73,7 +73,7 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
 
   client_info_ptr_ = atfw::util::memory::make_strong_rc<client_info>();
   client_info_ptr_->client_id = client_id;
-  client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_STARTING;
+  client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_START_CONFIRMING;
   client_info_ptr_->region = region;
   client_info_map_[client_id] = client_info_ptr_;
   client_region_map_[region].insert(client_id);
@@ -97,7 +97,8 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
     erase_client_info(client_id);
     RPC_RETURN_CODE(rpc_result);
   }
-
+  client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_STARTING;
+  client_info_ptr_->client_identity = rsp->client_identity();
   add_client_timeout(client_info_ptr_);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -215,7 +216,12 @@ void orbit_server_manager::server_heartbeat() {
       if (client_info_ptr_ == nullptr) {
         continue;
       }
-      if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_RUNNING) {
+      if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_RUNNING &&
+          client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_STARTING) {
+        continue;
+      }
+      if (client_info_ptr_->client_identity.agent_identity().agent_server_id() == 0) {
+        FWLOGERROR("client {} agent identity is not set", client_info_ptr_->client_id);
         continue;
       }
       region_agent_map[iter.first].insert(client_info_ptr_->client_identity.agent_identity().agent_server_id());

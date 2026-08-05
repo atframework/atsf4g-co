@@ -102,6 +102,7 @@ message STCLaunchClientReq {
 }
 message CTSLaunchClientRsp {
   int32 error_code = 1;
+  DClientIdentity client_identity = 2;
 }
 
 message STCSendToClientReq {

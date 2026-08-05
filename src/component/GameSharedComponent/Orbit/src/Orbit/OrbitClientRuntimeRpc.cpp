@@ -651,13 +651,16 @@ int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::S
   orbit::DTAForwardToClientRsp rsp;
   send_response_message(req_head, rsp, *method);
 
-  ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->dispatch(request.payload());
-  if (callbacks_.on_forward_to_client) {
-    if (enabled_io_thread()) {
-      post_to_caller_thread([request_ = std::move(request)] {
+  if (enabled_io_thread()) {
+    post_to_caller_thread([request_ = std::move(request)] {
+      ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->dispatch(request_.payload());
+      if (OrbitClientRuntime::me()->callbacks_.on_forward_to_client) {
         OrbitClientRuntime::me()->callbacks_.on_forward_to_client(request_.payload());
-      });
-    } else {
+      }
+    });
+  } else {
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()->dispatch(request.payload());
+    if (callbacks_.on_forward_to_client) {
       callbacks_.on_forward_to_client(request.payload());
     }
   }

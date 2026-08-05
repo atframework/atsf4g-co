@@ -547,6 +547,7 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     if (start_rsp->has_load_record()) {
       update_agent_load(start_rsp->load_record());
     }
+    *response.mutable_client_identity() = start_rsp->client_identity();
     if (rpc_result < 0) {
       if (rpc_result == PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD) {
         FWLOGWARNING("orbit controller launch_client: agent {:#x} overloaded, retrying with another agent",

@@ -598,14 +598,14 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
       FWLOGWARNING(
           "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().cpu_used(), expected_cpu, cpu_capacity_);
-      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
     if (memory_capacity_mb_ > 0.0 && load_record_.agent().memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (mem overload): mem_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
-      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
   }
@@ -617,6 +617,7 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     delete_client(client_record);
     RPC_RETURN_CODE(prepare_result);
   }
+  fill_client_identity(*response.mutable_client_identity(), client_record);
 
   if (seed_mode_enabled_) {
     // 种子模式
@@ -1126,34 +1127,36 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
   }
   launch_argv.emplace_back(nullptr);
 
-  auto* process_handle = new uv_process_t();
-  std::memset(process_handle, 0, sizeof(*process_handle));
+  {
+    auto* process_handle = new uv_process_t();
+    std::memset(process_handle, 0, sizeof(*process_handle));
 
-  auto* exit_data = new orbit_agent_process_exit_data();
-  exit_data->client_id = record->client_id;
-  process_handle->data = exit_data;
+    auto* exit_data = new orbit_agent_process_exit_data();
+    exit_data->client_id = record->client_id;
+    process_handle->data = exit_data;
 
-  uv_process_options_t options;
-  std::memset(&options, 0, sizeof(options));
-  options.file = launch_argv[0];
-  options.args = launch_argv.data();
-  options.exit_cb = on_uv_process_exit;
+    uv_process_options_t options;
+    std::memset(&options, 0, sizeof(options));
+    options.file = launch_argv[0];
+    options.args = launch_argv.data();
+    options.exit_cb = on_uv_process_exit;
 
-  int uv_result = uv_spawn(uv_default_loop(), process_handle, &options);
-  if (uv_result < 0) {
-    delete exit_data;
-    process_handle->data = nullptr;
-    uv_close(reinterpret_cast<uv_handle_t*>(process_handle),
-             [](uv_handle_t* handle) { delete reinterpret_cast<uv_process_t*>(handle); });
-    FWLOGERROR("orbit agent start_client failed for {}: {}", record->client_id, uv_strerror(uv_result));
-    return uv_result;
+    int uv_result = uv_spawn(uv_default_loop(), process_handle, &options);
+    if (uv_result < 0) {
+      delete exit_data;
+      process_handle->data = nullptr;
+      uv_close(reinterpret_cast<uv_handle_t*>(process_handle),
+               [](uv_handle_t* handle) { delete reinterpret_cast<uv_process_t*>(handle); });
+      FWLOGERROR("orbit agent start_client failed for {}: {}", record->client_id, uv_strerror(uv_result));
+      return uv_result;
+    }
+
+    record->process_id = static_cast<int64_t>(uv_process_get_pid(process_handle));
+    if (record->process_id <= 0) {
+      record->process_id = static_cast<int64_t>(process_handle->pid);
+    }
+    record->process_handle = process_handle;
   }
-
-  record->process_id = static_cast<int64_t>(uv_process_get_pid(process_handle));
-  if (record->process_id <= 0) {
-    record->process_id = static_cast<int64_t>(process_handle->pid);
-  }
-  record->process_handle = process_handle;
 
   std::string command_line_str;
   for (size_t index = 0; index < launch_arguments.size(); ++index) {

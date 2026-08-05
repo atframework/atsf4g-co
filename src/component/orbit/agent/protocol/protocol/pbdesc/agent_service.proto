@@ -40,6 +40,7 @@ message CTAStartClientReq {
 }
 message ATCStartClientRsp {
   DAgentEtcdLoadRecord load_record = 1;
+  DClientIdentity client_identity = 2;
 }
 
 message CTAForwardToClientReq {
