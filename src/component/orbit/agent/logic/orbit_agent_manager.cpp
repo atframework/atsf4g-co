@@ -498,6 +498,7 @@ int orbit_agent_manager::stop() {
   }
   while (!clients_.empty()) {
     delete_client(clients_.begin()->second);
+    async_notify_client_exit(clients_.begin()->second);
   }
   return ret;
 }
@@ -915,6 +916,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
     FWLOGWARNING("orbit agent client_exit ignored for {}: already exited", client_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     delete_client(client_record);  // 补充delete
+    response.set_error_code(RPC_AWAIT_CODE_RESULT(notify_client_exit(ctx, client_record, request.custom_data())));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -1172,6 +1174,7 @@ void orbit_agent_manager::process_spawn_completions() {
     record->process_handle = completion.process_handle;
     record->process_id = completion.process_id;
     delete_client(record);
+    async_notify_client_exit(record);
     return;
   }
   // 启动成功
