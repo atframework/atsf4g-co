@@ -12,6 +12,7 @@ namespace orbit_client_sdk_easy_api {
 
 ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], bool io_thread,
                               const orbit_client_sdk::OrbitClientCallbacks& callbacks);
+ORBIT_CLIENT_SDK_API void init_task_handler_private_data_callback(std::function<void*()> callback);
 ORBIT_CLIENT_SDK_API void tick();
 ORBIT_CLIENT_SDK_API bool enabled();
 ORBIT_CLIENT_SDK_API bool is_seed_process();
