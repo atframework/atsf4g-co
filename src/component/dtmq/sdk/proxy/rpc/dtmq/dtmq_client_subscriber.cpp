@@ -484,6 +484,9 @@ struct ATFW_UTIL_SYMBOL_LOCAL internal_subscriber_manager {
   std::unordered_set<shared_subscriber*> retry_heartbeat_subscriber;
   task_type_trait::task_type running_heartbeat_task;
 
+  std::unordered_map<std::string, shared_subscriber::ptr_t> pending_unsubscribe_subscriber;
+  task_type_trait::task_type running_unsubscribe_task;
+
   ~internal_subscriber_manager() { is_internal_subscriber_manager_destroyed() = true; }
 };
 
@@ -493,6 +496,7 @@ static internal_subscriber_manager& get_internal_subscriber_manager() {
 }
 
 static int32_t internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx);
+static int32_t internal_subscriber_manager_do_send_unsubscribe(rpc::context& ctx);
 static void internal_subscriber_manager_do_retry_heartbeat(rpc::context& ctx);
 
 }  // namespace
@@ -713,6 +717,16 @@ DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& ctx) {
     ++ret;
   }
   internal_subscriber_manager_do_retry_heartbeat(ctx);
+
+  // 统一处理反订阅
+  if (!task_type_trait::empty(mgr.running_unsubscribe_task) &&
+      !task_type_trait::is_exiting(mgr.running_unsubscribe_task)) {
+    internal_subscriber_manager_do_send_unsubscribe(ctx);
+    if (!task_type_trait::empty(mgr.running_unsubscribe_task) &&
+        !task_type_trait::is_exiting(mgr.running_unsubscribe_task)) {
+      ++ret;
+    }
+  }
 
   // 重试定时器
   while (!mgr.retry_setup_timer_list.empty()) {
@@ -1371,8 +1385,8 @@ static int32_t internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) 
               waiter_messages[one_waiter_options.sequence] = child_ctx.create<atframework::SSMsg>();
               waiter_options_set.insert(one_waiter_options);
             } else {
-              FWLOGERROR("try to call rpc::dtmq::subscribe to {:#x} failed, res: {}({})", kv.first.target_server_id,
-                         send_result, protobuf_mini_dumper_get_error_msg(send_result));
+              FCTXLOGERROR(child_ctx, "try to call rpc::dtmq::subscribe to {:#x} failed, res: {}({})",
+                           kv.first.target_server_id, send_result, protobuf_mini_dumper_get_error_msg(send_result));
 
               // 失败了要计划重试,await之后要重新检查有效性
               if (!is_internal_subscriber_manager_destroyed()) {
@@ -1482,9 +1496,128 @@ static int32_t internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) 
     return *invoke_result.get_error();
   }
 
-  mgr.running_heartbeat_task = std::move(*invoke_result.get_success());
+  if (!task_type_trait::empty(*invoke_result.get_success()) &&
+      !task_type_trait::is_exiting(*invoke_result.get_success())) {
+    mgr.running_heartbeat_task = std::move(*invoke_result.get_success());
+  }
   FCTXLOGDEBUG(ctx, "Successfully invoked async task for sending heartbeat, subscriber count: {}",
                mgr.pending_heartbeat_subscriber.size());
+  return 0;
+}
+
+static int32_t internal_subscriber_manager_do_send_unsubscribe(rpc::context& ctx) {
+  auto& mgr = get_internal_subscriber_manager();
+
+  if (mgr.pending_unsubscribe_subscriber.empty()) {
+    return 0;
+  }
+
+  // 已经在执行，等待下一轮
+  if (!task_type_trait::empty(mgr.running_unsubscribe_task) &&
+      !task_type_trait::is_exiting(mgr.running_unsubscribe_task)) {
+    return 0;
+  }
+
+  // 尽量在一个task里处理心跳发送，这样不用占用浪费task池占用
+  auto invoke_result = rpc::async_invoke(
+      ctx, "atframework.dtmq.internal_subscriber_manager.send_unsubscribe",
+      [](rpc::context& child_ctx) -> rpc::result_code_type {
+        if (is_internal_subscriber_manager_destroyed()) {
+          RPC_RETURN_CODE(0);
+        }
+
+        auto& inner_mgr = get_internal_subscriber_manager();
+        int32_t ret = 0;
+        do {
+          if (inner_mgr.pending_unsubscribe_subscriber.empty()) {
+            break;
+          }
+          std::unordered_map<std::string, shared_subscriber::ptr_t> pending_unsubscribe_subscriber;
+
+          std::unordered_map<send_subscribe_key_t, std::list<shared_subscriber::ptr_t>, send_subscribe_hash_t,
+                             send_subscribe_equal_t>
+              pending_unsubscribe_subscriber_by_target_server_id;  // 在这里续期生命周期，阻止ABA问题
+          pending_unsubscribe_subscriber.swap(inner_mgr.pending_unsubscribe_subscriber);
+
+          // subscriber_info_ 只和当前节点有关，所以可以合批发送
+          for (auto& kv : pending_unsubscribe_subscriber) {
+            if (!kv.second) {
+              continue;
+            }
+
+            auto target_server_id =
+                rpc::dtmq::get_target_server_id(kv.second->get_channel_key(), rpc::dtmq::replicate_type::kReadonly,
+                                                kv.second->get_readonly_replicate_index());
+            if (0 == target_server_id) {
+              FCTXLOGWARNING(
+                  child_ctx,
+                  "Failed to get target server id for subscriber: {}, channel: {} and ignore to send unsubscribe",
+                  kv.second->get_subscriber_info().subscriber_key(), kv.second->get_channel_key().channel_id());
+              continue;
+            }
+
+            // 反订阅不需要管 with_private_data，所以不需要分组
+            send_subscribe_key_t send_key{target_server_id, false};
+            pending_unsubscribe_subscriber_by_target_server_id[send_key].emplace_back(kv.second);
+          }
+
+          for (const auto& kv : pending_unsubscribe_subscriber_by_target_server_id) {
+            atfw::dtmq::SSChannelUnsubscribeReq* req_body = child_ctx.create<atfw::dtmq::SSChannelUnsubscribeReq>();
+            google::protobuf::Empty* rsp_body = child_ctx.create<google::protobuf::Empty>();
+            if (req_body == nullptr || rsp_body == nullptr) {
+              FCTXLOGERROR(child_ctx, "Failed to create request or response body for target server: {:#x}",
+                           kv.first.target_server_id);
+              continue;
+            }
+
+            for (const auto& subscriber : kv.second) {
+              if (is_internal_subscriber_manager_destroyed()) {
+                break;
+              }
+              // 如果await流程后又有新的subscriber注册了，则不需要再发送unsubscribe请求
+              if (inner_mgr.cached_subscriber_by_channel_id.end() !=
+                  inner_mgr.cached_subscriber_by_channel_id.find(subscriber->get_channel_key().channel_id())) {
+                continue;
+              }
+              if (!req_body->has_subscriber()) {
+                protobuf_copy_message(*req_body->mutable_subscriber(), subscriber->get_subscriber_info());
+                req_body->mutable_subscriber()->set_with_private_data(kv.first.with_private_data);
+              }
+              req_body->add_channel_id(subscriber->get_channel_key().channel_id());
+            }
+
+            rpc::result_code_type::value_type send_result = RPC_AWAIT_CODE_RESULT(
+                rpc::dtmq::unsubscribe(child_ctx, kv.first.target_server_id, *req_body, *rsp_body, true));
+
+            // 如果发送打日志即可，长期淘汰和容灾逻辑后面会自动反订阅
+            if (send_result < 0) {
+              FCTXLOGERROR(child_ctx, "try to call rpc::dtmq::unsubscribe to {:#x} failed, res: {}({})",
+                           kv.first.target_server_id, send_result, protobuf_mini_dumper_get_error_msg(send_result));
+            }
+          }
+        } while (false);
+
+        if (!is_internal_subscriber_manager_destroyed()) {
+          if (task_type_trait::get_task_id(inner_mgr.running_unsubscribe_task) ==
+              child_ctx.get_task_context().task_id) {
+            task_type_trait::reset_task(inner_mgr.running_unsubscribe_task);
+          }
+        }
+        RPC_RETURN_CODE(ret);
+      });
+  if (invoke_result.is_error()) {
+    FCTXLOGERROR(ctx, "Failed to invoke async task for sending unsubscribe, result: {}({})", *invoke_result.get_error(),
+                 protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    return *invoke_result.get_error();
+  }
+
+  if (!task_type_trait::empty(*invoke_result.get_success()) &&
+      !task_type_trait::is_exiting(*invoke_result.get_success())) {
+    mgr.running_unsubscribe_task = std::move(*invoke_result.get_success());
+  }
+
+  FCTXLOGDEBUG(ctx, "Successfully invoked async task for sending unsubscribe, subscriber count: {}",
+               mgr.pending_unsubscribe_subscriber.size());
   return 0;
 }
 
@@ -2566,6 +2699,7 @@ void shared_subscriber::add_cached_shared_subscriber(const shared_subscriber::pt
   auto& mgr = get_internal_subscriber_manager();
   mgr.cached_subscriber_by_channel_id[subscriber->get_channel_key().channel_id()] = subscriber;
   mgr.cached_subscriber_by_raw_pointer[subscriber.get()] = subscriber;
+  mgr.pending_unsubscribe_subscriber.erase(subscriber->get_channel_key().channel_id());
 
   // 注册定时器执行订阅和垃圾回收
   subscriber->setup_timer(timer_action_type::kGc);
@@ -2595,6 +2729,7 @@ void shared_subscriber::remove_cached_shared_subscriber(const shared_subscriber*
 
   mgr.cached_subscriber_by_channel_id.erase(subscriber->get_channel_key().channel_id());
   mgr.cached_subscriber_by_raw_pointer.erase(hold_lifetime.get());
+  mgr.pending_unsubscribe_subscriber[subscriber->get_channel_key().channel_id()] = hold_lifetime;
 
   // 移除待执行任务
   mgr.pending_heartbeat_subscriber.erase(hold_lifetime.get());

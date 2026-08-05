@@ -8,6 +8,43 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
+import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.chat.proto";
+import "protocol/pbdesc/com.struct.dtmq.proto";
 
 package atframework.chat;
+
+message CSChatGetAllChannelsReq {}
+
+message SCChatGetAllChannelsRsp {
+  repeated atframework.dtmq.DChannelMetadata channel_metadata = 1;
+}
+
+message CSChatGetChannelSnapshotReq {
+  string channel_id = 1;
+}
+
+message SCChatGetChannelSnapshotRsp {
+  atframework.dtmq.DChannelSnapshot channel_snapshot = 1;
+}
+
+message CSChatChannelHeartbeatReq {
+  repeated atframework.dtmq.DChannelSyncPoint heartbeat_data = 1;
+}
+
+message SCChatChannelHeartbeatRsp {}
+
+message CSChatChannelUnsubscribeReq {
+  repeated atframework.dtmq.DChannelIdKey channel_key = 1;
+}
+
+message SCChatChannelUnsubscribeRsp {}
+
+message CSChatSendMessageReq {
+  atframework.dtmq.DChannelIdKey channel_key = 1;
+  atframework.dtmq.DChannelMessageDetail detail = 2;
+}
+
+message SCChatSendMessageRsp {
+  atframework.dtmq.DChannelMessage msg = 1;
+}
