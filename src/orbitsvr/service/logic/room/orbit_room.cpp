@@ -135,7 +135,7 @@ int32_t orbit_room::join_users(
         if (ret != 0 || rsp.ret_code() != 0) {
           FWLOGERROR("orbit_room {} user_init failed, ret: {}, rsp ret: {}", room_ptr->get_client_id(), ret,
                      rsp.ret_code());
-          room_ptr->on_client_end(child_ctx);
+          room_ptr->on_client_end(child_ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_USER_INIT_FAILED);
           RPC_RETURN_CODE(ret != 0 ? ret : rsp.ret_code());
         }
 
@@ -289,7 +289,7 @@ int32_t orbit_room::tick(rpc::context& ctx, int64_t now) {
   }
   if (status_end_timepoint_ > 0 && now >= status_end_timepoint_) {
     FWLOGWARNING("orbit_room {} timeout, status: {}", get_client_id(), static_cast<int32_t>(status_));
-    return on_client_end(ctx);
+    return on_client_end(ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT);
   }
   return 0;
 }

@@ -140,14 +140,14 @@ int32_t orbit_room_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
             RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, args, ""));
         if (sub_ret != 0) {
           FWLOGERROR("orbit_room {} start_client failed, ret: {}", room->get_client_id(), sub_ret);
-          room->on_client_end(child_ctx);
+          room->on_client_end(child_ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED);
           RPC_RETURN_CODE(sub_ret);
         }
         RPC_RETURN_CODE(0);
       });
   if (invoke_result.is_error()) {
     FWLOGERROR("orbit_room {} invoke start_client failed, result: {}", client_id, *invoke_result.get_error());
-    room->on_client_end(ctx);
+    room->on_client_end(ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED);
     rsp.set_result_code(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
   }
