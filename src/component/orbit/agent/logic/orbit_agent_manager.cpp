@@ -497,8 +497,9 @@ int orbit_agent_manager::stop() {
     ret = 1;
   }
   while (!clients_.empty()) {
-    delete_client(clients_.begin()->second);
-    async_notify_client_exit(clients_.begin()->second);
+    auto record = clients_.begin()->second;
+    delete_client(record);
+    async_notify_client_exit(record);
   }
   return ret;
 }
@@ -1170,16 +1171,14 @@ void orbit_agent_manager::process_spawn_completions() {
     return;
   }
 
+  record->process_id = completion.process_id;
+  record->process_handle = completion.process_handle;
   if (completion.uv_result < 0) {
-    record->process_handle = completion.process_handle;
-    record->process_id = completion.process_id;
     delete_client(record);
     async_notify_client_exit(record);
     return;
   }
   // 启动成功
-  record->process_id = completion.process_id;
-  record->process_handle = completion.process_handle;
   FWLOGINFO("orbit agent spawn completion for {}: pid={}", record->client_id, record->process_id);
 }
 
@@ -1257,7 +1256,20 @@ void orbit_agent_manager::stop_client_process(orbit_agent_client_record_ptr clie
   client_record->exit_code = exit_code;
   set_client_state(client_record, orbit::EN_CLIENT_STATE_EXITING);
   // 发送stop_client
-  async_notify_client_exit(client_record);
+  auto invoke_result = rpc::async_invoke(
+      logic_server_get_current_tick_context(), "async stop_client_process",
+      [client_server_id = client_record->client_server_id,
+       exit_reason](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+        auto notify_request = rpc::make_shared_message<orbit::ATDStopClientReq>(sub_ctx);
+        notify_request->set_reason(exit_reason);
+        RPC_RETURN_CODE(
+            RPC_AWAIT_CODE_RESULT(rpc::agenttoclientservice::stop_client(sub_ctx, client_server_id, *notify_request)));
+      });
+  if (!invoke_result.is_success()) {
+    FWLOGERROR("orbit agent failed to spawn async stop_client_process task for {}, res: {}({})",
+               client_record->client_id, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
 }
 
 void orbit_agent_manager::on_client_process_exit(orbit_agent_client_record_ptr record, int64_t exit_status,
