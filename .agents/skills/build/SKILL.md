@@ -32,10 +32,19 @@ In this checkout's Windows tree (`build_jobs_cmake_tools`) ninja records `#deps 
 `msvc_deps_prefix` in `CMakeFiles/rules.ninja` does not match the localized cl.exe `/showIncludes` output, so
 **header changes never trigger recompilation**. Incremental builds after editing a header silently keep stale
 objects and can produce ABI-mismatched binaries that crash at runtime (observed: `runtime_options` layout change
-crashing at the first `options` copy with exit code 3). After editing any header, clean the affected targets
-before rebuilding, e.g. `ninja -t clean <target...>` (or the whole tree for shared/public headers), then rebuild.
-Source-file (`.cpp`) mtime changes are still tracked normally. Verify suspicion with
-`ninja -t deps <obj>` showing `#deps 0`.
+crashing at the first `options` copy with exit code 3). After editing any header, force recompilation of the
+affected translation units, then rebuild. Source-file (`.cpp`) mtime changes are still tracked normally. Verify
+suspicion with `ninja -t deps <obj>` showing `#deps 0`.
+
+**Do not use `ninja -t clean <target>` for this.** On targets that carry generated outputs (protoc/mako
+byproducts, e.g. anything linking a `*-protocol` target or `generate-for-pb` flows) the clean tool also deletes
+generated `.pb`/`.pb.h` files and the directory `cmake_install.cmake`; the missing `cmake_install.cmake` then
+forces a full build.ninja regen, and the regen-time `generate-for-pb` print step needs `serverframe_all.pb` —
+which protoc cannot rebuild whenever the current (possibly dirty) protocol tree does not compile. Recovery then
+requires manually rerunning the `src/server_frame/CMakeFiles/serverframe_all.pb-*.bat` custom command before
+`cmake .` can succeed again. Instead, delete only the stale objects:
+`Remove-Item -Recurse <BUILD_DIR>/<path>/CMakeFiles/<target>.dir/*.obj` (or remove the whole `<target>.dir`
+object directory) and rebuild; ninja recompiles those TUs and relinks without triggering a regen.
 
 ## Windows (MSVC + vcpkg example)
 
