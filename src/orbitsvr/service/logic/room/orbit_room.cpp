@@ -186,7 +186,7 @@ int32_t orbit_room::on_user_finish(
     event_log.mutable_timepoint()->set_seconds(finish_timepoint);
     event_log.set_orbit_room_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_USER_FINISH);
     event_log.mutable_room_key()->CopyFrom(room_key_);
-    event_log.mutable_user_finish()->mutable_user_key()->CopyFrom(result.user_key());
+    event_log.mutable_user_finish()->mutable_user_key()->CopyFrom(result.user_key().user_key());
     wal_handle_->add_event_log(ctx, std::move(event_log));
   }
   wal_handle_->broadcast_events(ctx);
