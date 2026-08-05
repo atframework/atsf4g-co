@@ -10,6 +10,7 @@
 // clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/common/orbit.common.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -21,6 +22,8 @@
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_utils.h>
 #include <rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.h>
+
+#include <set>
 
 #if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
 #  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
@@ -273,6 +276,20 @@ void orbit_server_manager::check_client_timeout() {
                 client_info_ptr_->timeout_exit_time - client_timeout_sec_, client_info_ptr_->timeout_exit_time);
       client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_EXITED;
       erase_client_info(client_info_ptr_->client_id);
+      if (on_client_end_notify_) {
+        auto invoke_result = rpc::async_invoke(
+            logic_server_get_current_tick_context(), "orbit_server_manager.check_client_timeout.on_client_end_notify_",
+            [client_id = client_info_ptr_->client_id,
+             on_client_end_notify = on_client_end_notify_](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                  on_client_end_notify(sub_ctx, client_id, orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT, "", 0)));
+            });
+        if (!invoke_result.is_success()) {
+          FWLOGERROR("orbit server failed to spawn async_notify_client_exit task for {}, res: {}({})",
+                     client_info_ptr_->client_id, *invoke_result.get_error(),
+                     protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+        }
+      }
     }
   }
 }

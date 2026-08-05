@@ -4,6 +4,8 @@
 
 #include <uv.h>
 
+#include <tbb/concurrent_queue.h>
+
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -54,7 +56,8 @@ struct orbit_agent_client_record {
   orbit::DClientLoadSnapshot load_snapshot;
   time_t last_heartbeat_timepoint = 0;
   std::string client_addr;
-  uint64_t client_server_id = 0;  // 初步用于发送消息给Client
+  uint64_t client_server_id = 0;    // 初步用于发送消息给Client
+  bool notify_client_exit = false;  // 是否通知Client退出
 
   // 进程管理
   int64_t process_id = 0;
@@ -115,14 +118,15 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
       rpc::context& ctx, const orbit::DTAClientExitReq& request, orbit::ATDClientExitRsp& response);
 
-  void on_client_process_exit(const std::string& client_id, int64_t exit_status, int term_signal);
+  void on_client_process_exit(orbit_agent_client_record_ptr record, int64_t exit_status, int term_signal);
   uint64_t select_controller_server_id(const std::string& client_id) const;
+
+  orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
+  const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
 
  private:
   int startup_seed_client();
 
-  orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
-  const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
   void set_client_state(orbit_agent_client_record_ptr record, orbit::EnClientState state);
 
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
@@ -136,7 +140,12 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                      const std::vector<std::string>& command_line, std::vector<std::string>& output);
 
   void fill_client_identity(orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
-  void stop_client_process(orbit_agent_client_record_ptr client_record, orbit::EnClientExitReason exit_reason, int32_t exit_code);
+  void stop_client_process(orbit_agent_client_record_ptr client_record, orbit::EnClientExitReason exit_reason,
+                           int32_t exit_code);
+  void async_notify_client_exit(orbit_agent_client_record_ptr client_record);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type notify_client_exit(rpc::context& ctx,
+                                                                   orbit_agent_client_record_ptr client_record,
+                                                                   const std::string& custom_data);
   void check_client_timeouts(time_t now);
   void check_client_force_kill(time_t now);
   void check_server_identity_timeouts(time_t now);
@@ -158,6 +167,14 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // Agent无法再提供服务
   void agent_fatal_error();
+
+  struct spawn_completion_t {
+    std::string client_id;
+    uv_process_t* process_handle = nullptr;
+    int64_t process_id = 0;
+    int32_t uv_result = 0;
+  };
+  void process_spawn_completions();
 
  private:
   bool stoped_ = false;
@@ -216,4 +233,5 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   uint64_t sequence_allocator_ = 0;
 
   std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;
+  tbb::concurrent_queue<spawn_completion_t> spawn_completions_;
 };

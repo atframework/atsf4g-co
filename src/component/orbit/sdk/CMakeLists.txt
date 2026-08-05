@@ -28,7 +28,7 @@ project_component_declare_sdk(
   INCLUDE_DIR
   "${CMAKE_CURRENT_LIST_DIR}/client"
   DLLEXPORT_DECL
-  ORBIT_SLAVE_SDK_API
+  ORBIT_CLIENT_SDK_API
   USE_COMPONENTS
   "orbit-client-protocol"
   GENERATED_FLOW_NAMES
