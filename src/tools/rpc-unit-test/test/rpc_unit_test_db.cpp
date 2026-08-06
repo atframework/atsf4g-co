@@ -10,14 +10,16 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <chrono>
-#include <cstdint>
-#include <vector>
+#include <memory/object_allocator.h>
 
 #include <atframework/testing/mock_db.h>
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
+
+#include <chrono>
+#include <cstdint>
+#include <vector>
 
 #include "frame/test_macros.h"
 #include "rpc/db/hash_table.h"
@@ -68,7 +70,7 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(1, static_cast<int>(version));
 
-        auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+        auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
         res = RPC_AWAIT_CODE_RESULT(
             rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:cas", output, nullptr));
         CASE_EXPECT_EQ(0, res);
@@ -149,7 +151,7 @@ CASE_TEST(rpc_unit_test, db_kv_get_missing_and_partly_get_presence) {
 
   auto task = test.run_task(
       "db_kv_missing_partly", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+        auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
         int32_t res = RPC_AWAIT_CODE_RESULT(
             rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:missing", output, nullptr));
         CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
@@ -240,7 +242,7 @@ CASE_TEST(rpc_unit_test, db_kv_inc_field_and_uuid_allocator) {
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(8, static_cast<int>(inc_msg->counter()));
 
-        auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+        auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
         res = RPC_AWAIT_CODE_RESULT(
             rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:inc", output, nullptr));
         CASE_EXPECT_EQ(0, res);
@@ -403,7 +405,7 @@ CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
         res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set_ttl(ctx, kTestDbChannel, "ut:kv:ttl", 60));
         CASE_EXPECT_EQ(0, res);
 
-        auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+        auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
         res = RPC_AWAIT_CODE_RESULT(
             rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:ttl", output, nullptr));
         CASE_EXPECT_EQ(0, res);

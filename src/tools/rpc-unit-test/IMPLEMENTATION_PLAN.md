@@ -86,7 +86,7 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
 - 注入 discovery 节点的稳定入口是 `app.get_service_discovery_module()->get_global_discovery()`，它返回
   **非 const** 的 `etcd_discovery_set&`（`libatapp/include/atframe/modules/service_discovery_module.h`；
   `app` 自身只有 const 重载，必须经 module 获取），可调用 `add_node(const etcd_discovery_node::ptr_t&)` /
-  `remove_node(...)`；节点经 `atfw::util::memory::make_strong_rc<etcd_discovery_node>()` 构造后用
+  `remove_node(...)`；节点经 `atfw::component::memory::stl::make_strong_rc<etcd_discovery_node>()` 构造后用
   `etcd_discovery_node::copy_from(atapp_discovery, node_version, 0)` 填充。libatapp 大量单元测试
   （`atframework/libatapp/test/case/atapp_message_test.cpp`、`atapp_upstream_forward_test.cpp` 等）正是用此
   入口注入 fake 节点，是已存在的扩展面。
@@ -1194,56 +1194,63 @@ package 由 `PROJECT_NAMESPACE` 决定）：
 
 ## 12. 分阶段实施清单
 
+当前进度：阶段 0-7 全部完成；阶段 8（框架本身）仅剩跨环境验证矩阵（另行安排）；阶段 9（组件/SDK 消费
+者抽样，框架外扩展）进行中（rank 样例已完成）。**全程约束：单元测试不依赖任何外部系统或服务**
+（Redis/etcd/atbus/系统 DNS 一律由 mock 引擎替代；原计划的真机 Redis golden tests 因此移除，语义一致性
+由离线行为用例保证）。
+
 ### 阶段 0：建立契约和 build feature
 
-- [ ] 在工程构建选项中新增 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`（`cmake_dependent_option`），在
+- [x] 在工程构建选项中新增 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`（`cmake_dependent_option`），在
   `server_frame_build_feature.h.in` 增加 `#cmakedefine01` 项；默认值与
   `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST` 对齐。
-- [ ] 确认 OFF 构建完全裁剪 hook，并增加 compile-only 验证。
-- [ ] 按 owning target 分别放置唯一 registry：核心在 `server_frame`、资源在 `server_frame-config`、Orbit 在 SDK；
+- [x] 确认 OFF 构建完全裁剪 hook，并增加 compile-only 验证。
+- [x] 按 owning target 分别放置唯一 registry：核心在 `server_frame`、资源在 `server_frame-config`、Orbit 在 SDK；
   为 DLL 边界规定 export、ownership、generation 和恢复协议，且不改变既有公开 class 布局或反转链接依赖。
-- [ ] 基于 2.9 建立 RPC/transport inventory，记录每个生成 API 的最终 seam。
+- [x] 基于 2.9 建立 RPC/transport inventory，记录每个生成 API 的最终 seam。
 
 完成条件：评审通过 seam 表，生产 OFF target 不依赖测试库。
 
 ### 阶段 1：CMake helper、私有测试框架和 runtime
 
-- [ ] 在 `src/CMakeLists.txt` 的 `component` 之前按 `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST` 门控添加
+- [x] 在 `src/CMakeLists.txt` 的 `component` 之前按 `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST` 门控添加
   `src/tools/rpc-unit-test`，创建库 target 和 alias。
-- [ ] 实现 `project_add_rpc_unit_test`，复用集中编译的 atframe_utils 私有 main/frame support targets。
-- [ ] 自动 `add_test`、labels、CTest timeout、`ENVIRONMENT_MODIFICATION` PATH、运行时依赖和既有 post-build
+- [x] 实现 `project_add_rpc_unit_test`，复用集中编译的 atframe_utils 私有 main/frame support targets。
+- [x] 自动 `add_test`、labels、CTest timeout、`ENVIRONMENT_MODIFICATION` PATH、运行时依赖和既有 post-build
   helper。
-- [ ] 实现 runtime 状态机、最小 app/common module、setup callback、task handle 和 wait pump（含
+- [x] 实现 runtime 状态机、最小 app/common module、setup callback、task handle 和 wait pump（含
   `time_utility::update()`）。
-- [ ] 覆盖 success/fault/cancel/task-timeout/hard-timeout poison+kill-all/teardown deadline/连续 fixture。
+- [x] 覆盖 success/fault/cancel/task-timeout/hard-timeout poison+kill-all/teardown deadline/连续 fixture。
 
 完成条件：一个空的 async task 能在两种协程模式下由普通 `CASE_TEST` 带超时等待完成。
 
 ### 阶段 2：atapp discovery 与 SS
 
-- [ ] 实现 `mock://` connector（含 `get_address_type`、fake connection handle），使用 app global discovery
+- [x] 实现 `mock://` connector（含 `get_address_type`、fake connection handle），使用 app global discovery
   注入节点。
-- [ ] 完成独立 raw transport rule/history、owned 异步队列、一代 pump barrier、正确 sender/ack 和严格诊断；覆盖
+- [x] 完成独立 raw transport rule/history、owned 异步队列、一代 pump barrier、正确 sender/ack 和严格诊断；覆盖
   id/name/discovery-node/consistent-hash/random/round-robin/metadata/broadcast。
-- [ ] 在 raw transport 上完成 typed SS rule engine、真实 dispatcher 回注及 stream/unary/no-wait/wait-later。
-- [ ] 实现 `router_test_manager` + `router_test_object`（同步寻址到 mock 节点），完成 router/unary、router/stream 与
+- [x] 在 raw transport 上完成 typed SS rule engine、真实 dispatcher 回注及 stream/unary/no-wait/wait-later。
+- [x] 实现 `router_test_manager` + `router_test_object`（同步寻址到 mock 节点），完成 router/unary、router/stream 与
   manager-not-found 契约测试；不修改 Mako。
-- [ ] 用内置普通 unary `${PROJECT_NAMESPACE}.RouterService/router_transfer` 完成响应唤醒证明。
-- [ ] 必须生成 test-only proto，覆盖当前仓库未实例化的 `router_rpc: true` 和其他缺失 Mako 组合；生成物只在
+- [x] 用内置普通 unary `${PROJECT_NAMESPACE}.RouterService/router_transfer` 完成响应唤醒证明。
+- [x] 必须生成 test-only proto，覆盖当前仓库未实例化的 `router_rpc: true` 和其他缺失 Mako 组合；生成物只在
   build tree。
-- [ ] 完成内置 SS stream smoke（`${PROJECT_NAMESPACE}.LogicCommonService/set_server_time`）。
-- [ ] 落实 3.4 两类默认行为：单向通知类默认记录并成功，需响应类默认快速失败，且 per-rule 可覆盖。
-- [ ] 在 `rpc_call_api_for_ss.*.mako` 增量生成 `<service>::mock` typed 注册辅助（宏门控纯新增），经现有流程
+- [x] 完成内置 SS stream smoke（`${PROJECT_NAMESPACE}.LogicCommonService/set_server_time`）。
+- [x] 落实 3.4 两类默认行为：单向通知类默认记录并成功，需响应类默认快速失败，且 per-rule 可覆盖。
+- [x] 在 `rpc_call_api_for_ss.*.mako` 增量生成 `<service>::mock` typed 注册辅助（宏门控纯新增），经现有流程
   重新生成并双模式编译；test-only proto 同步获得生成 mock 接口。
+  （handler 签名为 `std::function<rpc::result_code_type(rpc::context &, const Req &, Rsp &)>`，支持嵌套协程，见
+  8.2 嵌套协程段。）
 
 完成条件：普通 unary 在 task 中 suspend/resume；router 和 broadcast 有独立契约测试；未匹配调用按 3.4 默认行为
 处理（需响应类快速失败，单向通知类记录并成功）。
 
 ### 阶段 3：DNS
 
-- [ ] 在 `send_dns_lookup` 发起 `uv_getaddrinfo` 前增加 hook 和 scoped registry。
-- [ ] 用原 message type/sequence/custom-resume 完成异步响应。
-- [ ] 覆盖 A/AAAA/error/delay/乱序/timeout/unmatched。
+- [x] 在 `send_dns_lookup` 发起 `uv_getaddrinfo` 前增加 hook 和 scoped registry。
+- [x] 用原 message type/sequence/custom-resume 完成异步响应。
+- [x] 覆盖 A/AAAA/error/delay/乱序/timeout/unmatched。
 
 完成条件：无系统 DNS 请求，`dns::lookup` 的真实 wait 路径在 task 中完成。
 
@@ -1257,7 +1264,6 @@ package 由 `PROJECT_NAMESPACE` 决定）：
 - [x] 实现 presence-aware KV/KL/TTL/CAS 内存 backend（含 field merge、ordered missing slots、TTL public
   semantics、`EN_DB_OLD_VERSION` + 版本回写）和可控时钟。
   （`mock_db`：存序列化字节保 presence，partly_get 清理未请求字段，KL 单调索引/trim，TTL 惰性过期。）
-- [ ] 以当前 Redis 命令和两段内嵌 Lua 建 golden tests。
 - [x] 在五类 UUID 公共入口接入 provider，完成确定性默认实现和覆盖 API。
   （偏离：`uuid_allocator::inc_field_auto_inc_id` 经由 `hash_table::key_value::inc_field`，已被 DB hook
   覆盖，无需 uuid.cpp provider seam；`generate_global_unique_id` 由 mock_db 确定性服务。注意
@@ -1308,24 +1314,27 @@ package 由 `PROJECT_NAMESPACE` 决定）：
 
 ### 阶段 6：server_frame 组件单元测试 target
 
-- [ ] 选址 `src/server_frame/test/` 放置 server_frame 组件的单元测试 case 代码（与 vendored 子项目
+- [x] 选址 `src/server_frame/test/` 放置 server_frame 组件的单元测试 case 代码（与 vendored 子项目
   `libatbus/test`、`libatapp/test` 的"测试贴近被测组件"惯例一致）。框架自测保留在
   `src/tools/rpc-unit-test/test/`：自测验证工具库自身契约，组件测试验证 server_frame 行为
   （dispatchers、生成 RPC/DB API、session_manager、router、uuid 等）；两者共用同一私有测试框架与
   `project_add_rpc_unit_test` helper，互不引用 case 代码。
-- [ ] `server_frame/CMakeLists.txt` 的 GLOB_RECURSE 跳过 `test/` 子目录（沿用 config/protocol 的
+- [x] `server_frame/CMakeLists.txt` 的 GLOB_RECURSE 跳过 `test/` 子目录（沿用 config/protocol 的
   skip-glob 机制）；`src/CMakeLists.txt` 在 hooks 条件块内追加 `add_subdirectory(server_frame/test)`，
   hooks-off 构建中不产生任何相关 target。
-- [ ] target `${PROJECT_NAME}-server-frame-unit-test`（COMPONENT `server-frame`，LABELS fast，链接
-  `${PROJECT_NAME}::rpc-unit-test` 与 `${PROJECT_SERVER_FRAME_LIB_LINK}`，经 `ctest -L "component:server-frame"`
-  独立可筛选）。
-- [ ] 初始用例：`rpc::db::login_auth` 生成 API 全流程（replace/get_all/CAS 冲突
-  `EN_DB_OLD_VERSION` + 版本回写/remove_all，与 `<table>::mock` per-table 规则组合）；
-  `rpc::db::uuid_allocator::inc_field_auto_inc_id` 按 `(major, minor, path)` 独立单调递增；
-  CS session 生命周期（`mock_client` add 经真实 `session_manager` 建 session、remove 触发 kickoff
-  下行捕获、注入错误与多客户端）。
-- [ ] 后续把 rank/dtmq/distributed_transaction/user/auth 等组件级用例放入各自 component 的 `test/`
-  子目录并复用同一 helper（见阶段 8 的抽样契约测试）。
+- [x] target 拆分（偏离：单 target 改三 target，见 8.9 补充——telemetry provider/exporter 是进程生命周期
+  状态，冲突配置不能同进程）：`${PROJECT_NAME}-server-frame-unit-test`（db/cs/resource）、
+  `${PROJECT_NAME}-server-frame-hpa-unit-test`、`${PROJECT_NAME}-server-frame-telemetry-unit-test`
+  （COMPONENT `server-frame`，LABELS fast，链接 `${PROJECT_NAME}::rpc-unit-test` 与
+  `${PROJECT_SERVER_FRAME_LIB_LINK}`，经 `ctest -L "component:server-frame"` 独立可筛选）。
+- [x] 初始用例：`rpc::db::login_auth` 生成 API 全流程（`server_frame_test_db_login_auth.cpp`：
+  replace/get_all/CAS 冲突 `EN_DB_OLD_VERSION` + 版本回写/remove_all + typed mock handler）；
+  `rpc::db::uuid_allocator::inc_field_auto_inc_id` 按 `(major, minor, path)` 独立单调递增
+  （`db_kv_inc_field_and_uuid_allocator`，框架自测侧）；CS session 生命周期
+  （`server_frame_test_cs_session.cpp`：`mock_client` add 经真实 `session_manager` 建 session、remove
+  触发 kickoff 下行捕获、注入错误与多客户端）。
+- [ ] 后续把 dtmq/distributed_transaction/user/auth 等组件级用例放入各自 component 的 `test/`
+  子目录并复用同一 helper（见阶段 9 的抽样契约测试；rank 样例已完成）。
 
 完成条件：`ctest -L "component:server-frame"` 独立通过；hooks-off 构建中 `src/server_frame/test/` 不产生
 任何 target 且不污染 server_frame 库源码列表。
@@ -1347,23 +1356,42 @@ package 由 `PROJECT_NAMESPACE` 决定）：
 
 ### 阶段 8：其他 transport、整合自测和文档
 
-- [ ] 完成 rank/dtmq/distributed_transaction/user/auth 及 `src/component/orbit/sdk/**` 的 SS/DB 消费者抽样契约测试。
+- [x] 实现必需的 DB + DNS + SS 组合 smoke case。（`combined_dns_ss_db_smoke`：单 task 内 DNS lookup →
+  SS echo → login_auth replace/get_all，三引擎各记录一次调用。）
+- [x] 实现 HPA `do_pull` seam 与 `mock` 子命名空间注入 API；runtime 启用 HPA feature 时默认安装 hook，验证无
+  etcd 配置下 policy 回调链路完整、未配置答案报错。（server_frame `logic/hpa/mock/`：do_pull 入口 hooks-on
+  分支记录 query 不发 HTTP，answer 经真实 `trigger_event_on_pull_result` 链喂回；工具 `mock_hpa` 按
+  metrics_name 配置答案，未配置默认喂 error 且不置 ready。注意 policy 仅在存在激活的 instant/range 回调时
+  才真正 pull——`is_pulling_available` 语义，测试需先注册回调。）
+- [x] 验证 telemetry 空配置 noop 零网络、file-only 导出与禁止项 fail-fast。（`server_frame_test_telemetry.cpp`
+  三案；otlp_file 需小 flush 参数。进程生命周期限制见 8.9 补充：telemetry 相冲突配置的用例必须独占
+  executable。）
+- [x] 编写 README，并让示例参与编译。（`src/tools/rpc-unit-test/README.md` 按第 11 节大纲；示例镜像在
+  `test/example_readme.cpp`，4 个 `rpc_unit_test_readme.*` case 编译进 selftest 并保持绿色。）
+- [ ] 在 Debug hooks-on、Release hooks-on、production hooks-off、两种协程、Windows/Linux 可用环境执行矩阵；
+  公开接口示例另以 C++17 编译约束验证。（纯构建/环境矩阵，不依赖任何外部系统或服务；按既定约束在整个
+  阶段本地全绿后执行。）
+
+完成条件：**单元测试框架本身**（支持库 + 全部 mock 引擎 + 生成 mock + CMake helper + 自测 + 文档）完成，
+除上条验证矩阵（跨环境，另行安排）外无遗留项；CTest label 可被组件和 CI 直接使用。组件/SDK 消费者侧
+测试不属于框架本身，统一在阶段 9 按需推进。
+
+### 阶段 9：组件/SDK 消费者抽样契约测试（框架外扩展，最后推进）
+
+以下不属于单元测试框架本身的流程，框架完成后按需逐个组件推进；所有用例继续遵守"不依赖任何外部系统或
+服务"约束（Redis/etcd/atbus/系统 DNS 一律由 mock 引擎替代）。
+
+- [x] rank SDK 抽样：`src/component/rank/test/rank_test_sdk_update_score.cpp`（
+  `rpc::rank_board::update_score` 经真实 discovery type index 一致性哈希选节点 + SS mock 应答）。
+  两个复用要点：注入节点后需 `logic_server_last_common_module()->reload()` 才能让 discovery index 看到
+  （node 事件只在 etcd watch 路径触发）；HPA controller 会给 scaling_ready selector 打
+  `hpa_scaling_ready=1` 标签要求，经 `logic_hpa_discovery_select` 选节点的消费者（rank/dtmq/dtcoordsvr）
+  要求 mock 节点带同名标签 `node.add_label("hpa_scaling_ready", "1")`。
+- [ ] dtmq/distributed_transaction/user/auth 及 `src/component/orbit/sdk/**` 的 SS/DB 消费者抽样契约测试。
 - [ ] 实现独立 Orbit client adapter target、component-owned seam 和 callback waiter；覆盖两套请求入口、
   callback/retry/error/timeout/fallback，且从真实 `rpc::async_invoke` task 发起。
-- [ ] 实现必需的 DB + DNS + SS 组合 smoke case。
-- [x] 实现 HPA `do_pull` seam 与 `mock` 子命名空间注入 API；runtime 启用 HPA feature 时默认安装 hook，验证无
-      etcd 配置下 policy 回调链路完整、未配置答案报错。（server_frame `logic/hpa/mock/`：do_pull 入口 hooks-on
-      分支记录 query 不发 HTTP，answer 经真实 `trigger_event_on_pull_result` 链喂回；工具 `mock_hpa` 按
-      metrics_name 配置答案，未配置默认喂 error 且不置 ready。注意 policy 仅在存在激活的 instant/range 回调时
-      才真正 pull——`is_pulling_available` 语义，测试需先注册回调。）
-- [x] 验证 telemetry 空配置 noop 零网络、file-only 导出与禁止项 fail-fast。（`server_frame_test_telemetry.cpp`
-      三案；otlp_file 需小 flush 参数。进程生命周期限制见 8.9 补充：telemetry 相冲突配置的用例必须独占
-      executable。）
-- [ ] 编写 README，并让示例参与编译。
-- [ ] 在 Debug hooks-on、Release hooks-on、production hooks-off、两种协程、Windows/Linux 可用环境执行矩阵；
-  公开接口示例另以 C++17 编译约束验证。
 
-完成条件：本文第 14 节全部验收条件满足，CTest label 可被组件和 CI 直接使用。
+完成条件：每个组件至少一条代表性消费者路径经 SS/DB mock 离线闭环；§14 全部验收条件满足。
 
 ## 13. 验证命令计划
 
@@ -1408,38 +1436,39 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 
 ## 14. 最终验收条件
 
-- [ ] `src/tools/rpc-unit-test` 提供独立支持库、CMake helper、自测和 README。
-- [ ] 所有测试 executable 只使用 atframe_utils 私有框架；即使工作区存在 GTest target 也不会切换。
-- [ ] 任意组件能用一次 CMake 调用创建 target、注册 CTest、labels 和 timeout。
-- [ ] 普通 `CASE_TEST` 能启动真实 `rpc::async_invoke` task，并带 hard timeout 等待完成；hard timeout 会 kill-all、
+- [x] `src/tools/rpc-unit-test` 提供独立支持库、CMake helper、自测和 README。
+- [x] 所有测试 executable 只使用 atframe_utils 私有框架；即使工作区存在 GTest target 也不会切换。
+- [x] 任意组件能用一次 CMake 调用创建 target、注册 CTest、labels 和 timeout。
+- [x] 普通 `CASE_TEST` 能启动真实 `rpc::async_invoke` task，并带 hard timeout 等待完成；hard timeout 会 kill-all、
   poison runtime 并受限时 teardown。
-- [ ] 同一套测试源码通过标准协程 ON/OFF 两种构建。
-- [ ] discovery 在 atapp global discovery 注入，SS 通过 `mock://` connector；不在 `logic_server_setup` 注入
+- [ ] 同一套测试源码通过标准协程 ON/OFF 两种构建。（本机 std-coroutine 已验证；legacy 模式随矩阵执行。）
+- [x] discovery 在 atapp global discovery 注入，SS 通过 `mock://` connector；不在 `logic_server_setup` 注入
   伪数据。
-- [ ] raw transport 覆盖 atapp 的 id/name/discovery/hash/random/round-robin 数据发送选择、owned payload/metadata、
+- [x] raw transport 覆盖 atapp 的 id/name/discovery/hash/random/round-robin 数据发送选择、owned payload/metadata、
   send-ack 与入站 sender；SS mock 建立在它之上。
-- [ ] SS unary/stream/no-wait/wait-later/broadcast/user 均有 mock 和契约测试；router RPC 经
+- [x] SS unary/stream/no-wait/wait-later/broadcast/user 均有 mock 和契约测试；router RPC 经
   `router_test_manager` + `router_test_object` + mock connector 覆盖，Mako 不加入 mock 分支。
-- [ ] DNS 通过原 custom-resume 机制完成，测试过程无系统 DNS 请求。
-- [ ] CS 上行走真实 dispatch/action（gateway 线格式封装），下行 data/kick/set-router/broadcast 均可捕获且无
+- [x] DNS 通过原 custom-resume 机制完成，测试过程无系统 DNS 请求。
+- [x] CS 上行走真实 dispatch/action（gateway 线格式封装），下行 data/kick/set-router/broadcast 均可捕获且无
   atbus。
-- [ ] 默认 DB 是完整 presence-aware 内存实现，field merge/CAS/KL/TTL 语义与当前 Redis/Lua 和公共 API 一致
+- [x] 默认 DB 是完整 presence-aware 内存实现，field merge/CAS/KL/TTL 语义与当前 Redis/Lua 和公共 API 一致
   （含 `EN_DB_OLD_VERSION`、版本回写和 ordered missing slots），所有操作可覆盖；v1 不虚构 DB latency。
-- [ ] 五类 UUID 默认被确定性 provider 接管，且用户可覆盖、case 间不泄漏。
-- [ ] Excel/config 资源通过 wrapper provider 进入真实 manager reload/index；provider generation 可可靠清除，
+- [x] 五类 UUID 默认被确定性 provider 接管，且用户可覆盖、case 间不泄漏。
+- [x] Excel/config 资源通过 wrapper provider 进入真实 manager reload/index；provider generation 可可靠清除，
   不注册不可移除的 per-case callback。
 - [ ] `src/component/orbit/sdk/**` 的 RPC 由 SS mock 契约证明；`GameSharedComponent/Orbit` 直连 atbus 由独立可选
   adapter 覆盖 callback/retry/timeout，外层调用仍在真实 task 中。
-- [ ] 必需的 DB + DNS + 基础内置 SS 组合 case 在一个 task 中完成并由外层等待后退出。
-- [ ] 网络 mock 未匹配时快速失败并输出调用与规则诊断（单向通知类除外：默认记录并成功，见 3.4）；timeout case
+- [x] 必需的 DB + DNS + 基础内置 SS 组合 case 在一个 task 中完成并由外层等待后退出。
+  （`combined_dns_ss_db_smoke`。）
+- [x] 网络 mock 未匹配时快速失败并输出调用与规则诊断（单向通知类除外：默认记录并成功，见 3.4）；timeout case
   有 RPC、task、runtime hard、CTest 四层保护。
-- [ ] 工具目录只含公共代码；service/功能 mock 接口位于各自实现/生成代码的 `mock` 子命名空间并被宏整体门控。
-- [ ] DB 引擎层 per-table 规则与模板层 `<db 命名空间>::mock` typed 接口，可在测试中对单表注入错误/
+- [x] 工具目录只含公共代码；service/功能 mock 接口位于各自实现/生成代码的 `mock` 子命名空间并被宏整体门控。
+- [x] DB 引擎层 per-table 规则与模板层 `<db 命名空间>::mock` typed 接口，可在测试中对单表注入错误/
   canned 数据并断言记录内容、版本、TTL 与 KL 索引（见 8.5）。
-- [ ] telemetry 在 fixture 默认配置下零网络（noop），file-only 导出可选，禁止项 fail-fast。
-- [ ] HPA 默认零网络；测试启用时默认安装 pull hook，预置指标经公开回调完整注入，未配置答案报错。
-- [ ] hooks-off 的生产构建没有测试状态、热路径分支、`mock` 符号或测试库依赖。
-- [ ] test-only proto 通过现有 helper 生成到 build tree，覆盖当前未实例化的生成分支；不手改生成输出。若 CS 审计
+- [x] telemetry 在 fixture 默认配置下零网络（noop），file-only 导出可选，禁止项 fail-fast。
+- [x] HPA 默认零网络；测试启用时默认安装 pull hook，预置指标经公开回调完整注入，未配置答案报错。
+- [x] hooks-off 的生产构建没有测试状态、热路径分支、`mock` 符号或测试库依赖。
+- [x] test-only proto 通过现有 helper 生成到 build tree，覆盖当前未实例化的生成分支；不手改生成输出。若 CS 审计
   确需 Mako 变更，必须经过统一重新生成和双模式编译验证。
 
 ## 15. 风险与实施 gate
@@ -1451,7 +1480,7 @@ cmake-lint，Markdown 用 markdownlint；生成文件通过生成命令验证，
 | test manager/object 能同步把 key 寻址到 mock 节点且不触发真实 cache 拉取 | 补齐 manager/object 全部纯虚接口、校验 type-id 无冲突和 object lifetime，跑 test-only router unary/stream 契约测试 | 禁止修改生产 Mako 或声称 router 已覆盖 |
 | test-only proto 的生成覆盖可重复 | 用现有 helper 实例化 `router_rpc: true` 等缺失组合，检查 build-tree 输出、依赖边与二次构建无无效重生成 | 禁止提交/手改生成输出或用普通 `router_transfer` 冒充 router 分支 |
 | CS 所有下行路径汇聚到单一 send seam | 枚举 dispatcher 和 CS Mako 的 data/kick/router/broadcast 分支 | 禁止只 hook `send_data` 后声称 CS 全覆盖 |
-| DB 内存语义与 Redis 一致 | 以现有命令和两段内嵌 Lua 建 golden tests，含 CAS 首写、版本回写和 KL 裁剪 | 禁止凭常见 Redis 习惯实现版本/索引 |
+| DB 内存语义与 Redis 一致 | 对照现有 Redis 命令与两段内嵌 Lua 的**文档化语义**建立离线行为用例（CAS 首写、版本回写、KL 裁剪、ordered missing slots），不引入外部 Redis 服务（单元测试禁止依赖任何外部系统或服务，原计划的真机 golden tests 已移除） | 禁止凭常见 Redis 习惯实现版本/索引 |
 | 默认 DB 身份不触发 I/O | hooks-on 仅设置既有 prefix/channel，断言 timer/连接未初始化且 teardown 恢复；已初始化实例默认拒绝覆盖 | 禁止为获得有效 channel 调用 `db_msg_dispatcher::init()` |
 | resource provider 隔离 | 连续两个 fixture 做 init/reload/teardown，检查 active provider generation 已清除；production loader/group wrapper 保持进程生命周期 | 禁止保存 fixture 裸指针、注册不可移除的 per-case callback 或承诺恢复 manager loader |
 | Orbit client seam 覆盖两套入口 | 枚举 `OrbitClientRuntime` method-descriptor API 与 `OrbitRPCDispatcher` legacy API，验证它们在 pending 注册后汇聚 send seam，并由原 receive/timeout/retry 路径完成 | 禁止用 SS mock 冒充 direct-atbus 覆盖或同步直接调用 callback |

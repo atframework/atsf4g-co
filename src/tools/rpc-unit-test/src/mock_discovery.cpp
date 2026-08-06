@@ -7,6 +7,8 @@
 
 #include <memory/rc_ptr.h>
 
+#include <memory/object_allocator.h>
+
 namespace atframework {
 namespace testing {
 
@@ -40,7 +42,7 @@ atfw::atapp::etcd_discovery_node::ptr_t mock_discovery::add_node(const mock_node
     }
   }
 
-  auto new_node = atfw::util::memory::make_strong_rc<atfw::atapp::etcd_discovery_node>();
+  auto new_node = atfw::component::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_node>();
   if (!new_node) {
     return nullptr;
   }

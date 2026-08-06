@@ -7,7 +7,16 @@
 #include <atframe/atapp.h>
 
 #include <config/atframe_service_types.h>
+
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 namespace atframework {
 namespace testing {

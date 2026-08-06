@@ -12,10 +12,16 @@
 #include <string>
 #include <vector>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <atgateway/protocol/libatgw_server_protocol.h>
 #include <protocol/extension/atframework.pb.h>
+
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <atframework/testing/runtime.h>
 

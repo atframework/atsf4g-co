@@ -4,7 +4,17 @@
 
 #include <log/log_wrapper.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <protocol/pbdesc/svr.const.err.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <memory/object_allocator.h>
 
 #include <dispatcher/db_msg_dispatcher.h>
 
@@ -343,7 +353,7 @@ bool mock_db::make_output(
   }
   auto message = factory_iter->second(ctx);
   message->CopyFrom(source);
-  out = atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+  out = atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
       std::move(message));
   return true;
 }
@@ -529,7 +539,7 @@ int32_t mock_db::make_kv_output(const kv_record &record, rpc::context &ctx,
     FWLOGERROR("mock_db: parse stored data of {} failed", record.type_name);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
-  output->message = atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+  output->message = atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
       std::move(message));
   output->version = record.version;
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -548,7 +558,7 @@ int32_t mock_db::make_kl_output(const kl_entry &entry, rpc::context &ctx,
     FWLOGERROR("mock_db: parse stored data of {} failed", entry.type_name);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
-  output.message = atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+  output.message = atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
       std::move(message));
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
