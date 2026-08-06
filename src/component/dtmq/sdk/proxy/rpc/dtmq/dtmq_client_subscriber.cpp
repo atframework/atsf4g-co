@@ -719,8 +719,8 @@ DTMQ_PROXY_SDK_API int32_t client_subscriber::global_tick(rpc::context& ctx) {
   internal_subscriber_manager_do_retry_heartbeat(ctx);
 
   // 统一处理反订阅
-  if (!task_type_trait::empty(mgr.running_unsubscribe_task) &&
-      !task_type_trait::is_exiting(mgr.running_unsubscribe_task)) {
+  if (task_type_trait::empty(mgr.running_unsubscribe_task) ||
+      task_type_trait::is_exiting(mgr.running_unsubscribe_task)) {
     internal_subscriber_manager_do_send_unsubscribe(ctx);
     if (!task_type_trait::empty(mgr.running_unsubscribe_task) &&
         !task_type_trait::is_exiting(mgr.running_unsubscribe_task)) {
