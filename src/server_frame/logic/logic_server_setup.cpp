@@ -376,14 +376,15 @@ std::unique_ptr<rpc::context> &logic_server_get_fallback_tick_context() {
 }  // namespace
 
 rpc::context &logic_server_get_current_tick_context() {
-  logic_server_common_module *module = logic_server_last_common_module();
-  if (module == nullptr) {
+  logic_server_common_module *mod = logic_server_last_common_module();
+  if (mod == nullptr) {
     auto &fallback_context = logic_server_get_fallback_tick_context();
     if (!fallback_context) {
       fallback_context = gsl::make_unique<rpc::context>(rpc::context::create_without_task());
     }
+    return *fallback_context;
   }
-  return module->get_current_tick_context();
+  return mod->get_current_tick_context();
 }
 
 SERVER_FRAME_API logic_server_common_module::logic_server_common_module(
