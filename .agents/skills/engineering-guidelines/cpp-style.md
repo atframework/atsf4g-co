@@ -30,6 +30,15 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
   ODR-identical for every consumer so those copies have identical behavior.
 - For the exported-symbol model, keep non-template function, method, constructor, destructor, and static-data
   implementations in `.cpp` files by default so the ABI stays stable across compilers and build options.
+- Never cover a whole **class** with a library `*_API` export macro when it holds members whose types are not
+  themselves exported (`std::string`, `std::vector`, `std::shared_ptr`, `std::function`, STL containers in general):
+  on MSVC that triggers C4251 (an error under `/WX`), and even where tolerated it makes the DLL ABI depend on the
+  exact compiler/STL version of both sides. Export free functions, or export individual member functions, instead.
+- Small RAII handles or value structs that must cross the DLL boundary (rule tokens, hook handles) use the handle
+  pattern: mark the class `ATFW_UTIL_SYMBOL_VISIBLE`, define every special member and accessor `ATFW_UTIL_FORCEINLINE`
+  in the header, and move non-trivial logic into exported free/detail functions. Reference implementation:
+  `rpc::unit_test::mock_rule_handle` in `src/server_frame/rpc/unit_test/mock_engine_bridge.h`; applied example:
+  `logic_hpa::mock::prometheus_pull_hook_handle` in `src/server_frame/logic/hpa/mock/logic_hpa_mock_prometheus.h`.
 - Library-internal helpers, executable-only code, and other interfaces that are not exported may use implicit inline,
   `constexpr`, or explicit `inline` when they satisfy the C++ ODR and match the local design. In this internal-only
   scope, use `ATFW_UTIL_FORCEINLINE` only when local convention or a concrete performance requirement calls for it.

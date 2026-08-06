@@ -51,6 +51,11 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
   instantiations can share one visible copy and that every consumer sees the same ODR-identical definition. For
   library-internal helpers and executable-only code, accept ODR-correct implicit inline, `constexpr`, and intentional
   plain `inline`; require forced inlining there only when local convention or concrete performance evidence supports it.
+- Flag any `*_API`-exported class whose members have non-exported STL types (`std::string`/`std::shared_ptr`/
+  `std::function`/containers): MSVC C4251 becomes an error under `/WX` and the DLL ABI becomes compiler/STL-version
+  dependent. Require the handle pattern from `cpp-style.md` ("Header and ABI boundaries"): `ATFW_UTIL_SYMBOL_VISIBLE`
+  class, all methods `ATFW_UTIL_FORCEINLINE`, logic in exported free/detail functions (reference:
+  `rpc::unit_test::mock_rule_handle`).
 - Expected result: no warnings and no required formatting changes.
 
 ## CMake format and lint

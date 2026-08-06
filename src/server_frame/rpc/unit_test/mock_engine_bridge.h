@@ -24,6 +24,7 @@
 #include <string>
 #include <tuple>
 #include <vector>
+#include <utility>
 
 #include "rpc/rpc_common_types.h"
 
@@ -93,13 +94,18 @@ struct ATFW_UTIL_SYMBOL_VISIBLE mock_engine_bridge_t {
 };
 
 // RAII handle of one rule registered through the bridge. Destroying the handle deactivates the rule.
-class SERVER_FRAME_API mock_rule_handle {
+class ATFW_UTIL_SYMBOL_VISIBLE mock_rule_handle {
  public:
-  mock_rule_handle() = default;
-  explicit mock_rule_handle(std::shared_ptr<void> token) noexcept : token_(std::move(token)) {}
+  ATFW_UTIL_FORCEINLINE mock_rule_handle() = default;
+  ATFW_UTIL_FORCEINLINE explicit mock_rule_handle(std::shared_ptr<void> token) noexcept : token_(std::move(token)) {}
 
-  void reset() noexcept { token_.reset(); }
-  explicit operator bool() const noexcept { return !!token_; }
+  ATFW_UTIL_FORCEINLINE mock_rule_handle(const mock_rule_handle&) = default;
+  ATFW_UTIL_FORCEINLINE mock_rule_handle(mock_rule_handle&&) = default;
+  ATFW_UTIL_FORCEINLINE mock_rule_handle& operator=(const mock_rule_handle&) = default;
+  ATFW_UTIL_FORCEINLINE mock_rule_handle& operator=(mock_rule_handle&&) = default;
+
+  ATFW_UTIL_FORCEINLINE void reset() noexcept { token_.reset(); }
+  ATFW_UTIL_FORCEINLINE explicit operator bool() const noexcept { return !!token_; }
 
  private:
   std::shared_ptr<void> token_;

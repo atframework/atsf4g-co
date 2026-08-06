@@ -36,21 +36,40 @@ struct ATFW_UTIL_SYMBOL_VISIBLE prometheus_pull_query {
 // result; return false (or leave out_json empty) to feed an error result as the default no-answer diagnostic.
 using prometheus_pull_answer_fn = std::function<bool(const prometheus_pull_query& query, std::string& out_json)>;
 
-// RAII handle of the installed pull hook. The hook is uninstalled when the last handle is released (only if
-// it is still the active one).
-class SERVER_FRAME_API prometheus_pull_hook_handle {
- public:
-  prometheus_pull_hook_handle() = default;
+namespace details {
+// Uninstall the process-wide pull hook only when `state` is still the active hook state.
+SERVER_FRAME_API void uninstall_prometheus_pull_hook_if_active(const void* state) noexcept;
+}  // namespace details
 
-  bool empty() const noexcept;
-  explicit operator bool() const noexcept;
-  void reset();
+// RAII handle of the installed pull hook. reset() (or letting reset() be called by the owning engine
+// at teardown) uninstalls the hook only if it is still the active one. Follows the
+// rpc::unit_test::mock_rule_handle pattern: visibility macro + fully inline methods, so the class has
+// no DLL-exported ABI surface and no C4251 member-interface warning.
+class ATFW_UTIL_SYMBOL_VISIBLE prometheus_pull_hook_handle {
+ public:
+  ATFW_UTIL_FORCEINLINE prometheus_pull_hook_handle() = default;
+  ATFW_UTIL_FORCEINLINE explicit prometheus_pull_hook_handle(std::shared_ptr<void> state) noexcept
+      : state_(std::move(state)) {}
+
+  ATFW_UTIL_FORCEINLINE prometheus_pull_hook_handle(const prometheus_pull_hook_handle&) = default;
+  ATFW_UTIL_FORCEINLINE prometheus_pull_hook_handle(prometheus_pull_hook_handle&&) = default;
+  ATFW_UTIL_FORCEINLINE prometheus_pull_hook_handle& operator=(const prometheus_pull_hook_handle&) = default;
+  ATFW_UTIL_FORCEINLINE prometheus_pull_hook_handle& operator=(prometheus_pull_hook_handle&&) = default;
+
+  ATFW_UTIL_FORCEINLINE bool empty() const noexcept { return !state_; }
+  ATFW_UTIL_FORCEINLINE explicit operator bool() const noexcept { return !!state_; }
+
+  ATFW_UTIL_FORCEINLINE void reset() noexcept {
+    if (!state_) {
+      return;
+    }
+    const void* state = state_.get();
+    state_.reset();
+    details::uninstall_prometheus_pull_hook_if_active(state);
+  }
 
  private:
-  explicit prometheus_pull_hook_handle(std::shared_ptr<void> state);
   std::shared_ptr<void> state_;
-
-  friend SERVER_FRAME_API prometheus_pull_hook_handle install_prometheus_pull_hook(prometheus_pull_answer_fn fn);
 };
 
 SERVER_FRAME_API prometheus_pull_hook_handle install_prometheus_pull_hook(prometheus_pull_answer_fn fn);

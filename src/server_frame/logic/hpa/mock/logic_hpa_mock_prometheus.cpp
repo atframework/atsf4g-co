@@ -49,23 +49,14 @@ std::string sanitize_error_message(gsl::string_view message) {
 
 }  // namespace
 
-prometheus_pull_hook_handle::prometheus_pull_hook_handle(std::shared_ptr<void> state) : state_(std::move(state)) {}
-
-bool prometheus_pull_hook_handle::empty() const noexcept { return !state_; }
-
-prometheus_pull_hook_handle::operator bool() const noexcept { return !empty(); }
-
-void prometheus_pull_hook_handle::reset() {
-  if (!state_) {
-    return;
-  }
-  std::shared_ptr<void> state = state_;
-  state_.reset();
-  if (get_installed_pull_hook_state().get() == state.get()) {
+namespace details {
+void uninstall_prometheus_pull_hook_if_active(const void* state) noexcept {
+  if (nullptr != state && get_installed_pull_hook_state().get() == state) {
     get_installed_pull_hook_state().reset();
     get_installed_pull_hook() = nullptr;
   }
 }
+}  // namespace details
 
 prometheus_pull_hook_handle install_prometheus_pull_hook(prometheus_pull_answer_fn fn) {
   auto state = std::make_shared<prometheus_pull_hook_state>();
