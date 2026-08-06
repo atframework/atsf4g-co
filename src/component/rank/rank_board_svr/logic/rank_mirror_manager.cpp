@@ -4,6 +4,7 @@
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/config/rank_board_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
@@ -11,8 +12,11 @@
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <memory/object_allocator.h>
 
 #include <utility>
 
@@ -142,7 +146,7 @@ rpc::result_code_type rank_mirror_manager::create_mirror(rpc::context& ctx, int6
                 total_rank_size, cur_data_version, mirror_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_MIRROR_ALLOC_FAILED);
   }
-  auto mirror_task = atfw::util::memory::make_strong_rc<dump_mirror_task>();
+  auto mirror_task = atfw::component::memory::stl::make_strong_rc<dump_mirror_task>();
   mirror_task->mirror_ptr_ = cur_rank_mirror;
   mirror_task->mirror_id_ = mirror_id;
   mirror_task->data_version_ = cur_data_version;

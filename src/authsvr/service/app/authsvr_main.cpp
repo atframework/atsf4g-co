@@ -26,6 +26,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <service_discovery_index/discovery_index.h>
 
 #include <memory>
@@ -108,7 +110,7 @@ int main(int argc, char *argv[]) {
 
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to_) {
-        auto config_ptr = atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::config::authsvr_cfg>();
+        auto config_ptr = atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::config::authsvr_cfg>();
         app_.parse_configures_into(*config_ptr, "authsvr", "ATAPP_AUTHSVR");
         to_ = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
       });

@@ -27,9 +27,9 @@ class user_chat_manager {
  private:
   atfw::util::nostd::nonnull<player*> owner_;
 
-  rpc::dtmq::dtmq_client_subscriber::ptr_t world_chat_channel_;
-  rpc::dtmq::dtmq_client_subscriber::ptr_t private_chat_channel_;
+  rpc::dtmq::client_subscriber::ptr_t world_chat_channel_;
+  rpc::dtmq::client_subscriber::ptr_t private_chat_channel_;
 
-  rpc::dtmq::dtmq_client_subscriber::ptr_t sys_notification_channel_;
-  rpc::dtmq::dtmq_client_subscriber::ptr_t sys_announcement_channel_;
+  rpc::dtmq::client_subscriber::ptr_t sys_notification_channel_;
+  rpc::dtmq::client_subscriber::ptr_t sys_announcement_channel_;
 };

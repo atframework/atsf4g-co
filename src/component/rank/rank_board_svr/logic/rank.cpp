@@ -6,7 +6,9 @@
 #include <random/random_generator.h>
 #include <time/time_utility.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/config/rank_board_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
@@ -14,7 +16,11 @@
 #include <protocol/pbdesc/rank_board_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <memory/object_allocator.h>
 
 #include <config/excel_config_rank_index.h>
 #include <config/logic_config.h>
@@ -46,7 +52,7 @@
 rank::rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t capacity, compare_fn_t compare_fn,
            int64_t data_version)
     : capacity_(capacity),
-      btree_(atfw::memory::stl::make_strong_rc<rank_tree>(
+      btree_(atfw::component::memory::stl::make_strong_rc<rank_tree>(
           static_cast<size_t>(logic_config::me()
                                   ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
                                   .rank_btree_degree()),
@@ -59,7 +65,7 @@ rank::rank(const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t capacity, co
       next_custom_settlement_id_(0),
       next_settlement_timepoint_(0),
       is_saving_mirror_(false),
-      mirror_manager_(atfw::memory::stl::make_strong_rc<rank_mirror_manager>(this)),
+      mirror_manager_(atfw::component::memory::stl::make_strong_rc<rank_mirror_manager>(this)),
       last_save_time_(atfw::util::time::time_utility::get_now()) {
   key_.set_rank_type(rank_key.rank_type());
   key_.set_rank_instance_id(rank_key.rank_instance_id());
@@ -137,7 +143,7 @@ void rank::slave_confirm_info(rpc::context& ctx, uint64_t slave_node, int64_t da
   auto subscriber = wal_publisher_->find_subscriber(slave_node, wal_ctx);
   if (!subscriber) {
     rank_wal_subscriber_private_data private_data_ptr =
-        atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::DRankSubscriberData>();
+        atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::DRankSubscriberData>();
     private_data_ptr->set_server_id(slave_node);
     protobuf_copy_message(*private_data_ptr->mutable_rank_key(), get_key());
 

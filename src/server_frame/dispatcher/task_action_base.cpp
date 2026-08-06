@@ -4,17 +4,19 @@
 
 #include "dispatcher/task_action_base.h"
 
-//clang-format off
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
-//clang-format on
+// clang-format on
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.protocol.pb.h>
 
-//clang-format off
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
-//clang-format on
+// clang-format on
+
+#include <memory/object_allocator.h>
 
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
@@ -34,6 +36,8 @@
 #include <cassert>
 #include <functional>
 #include <utility>
+#include <memory>
+#include <string>
 
 #include "config/server_frame_build_feature.h"
 
@@ -87,7 +91,7 @@ SERVER_FRAME_API task_action_base::task_action_base(const dispatcher_start_data_
       event_disabled_(false),
       external_error_code_(0),
       dispatcher_options_(start_param.options),
-      shared_context_(atfw::util::memory::make_strong_rc<rpc::context>(rpc::context::create_without_task())) {
+      shared_context_(atfw::component::memory::stl::make_strong_rc<rpc::context>(rpc::context::create_without_task())) {
   if (start_param.context != nullptr) {
     get_shared_context().try_reuse_protobuf_arena(start_param.context->mutable_protobuf_arena());
   }

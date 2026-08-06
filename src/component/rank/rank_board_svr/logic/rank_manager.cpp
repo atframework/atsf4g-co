@@ -143,7 +143,7 @@ rpc::result_code_type rank_manager::mutable_rank(rpc::context& ctx, const PROJEC
     }
 
     rank::compare_fn_t compare_fn = get_compare_fn(rank_cfg->sort_type());
-    rank_ptr = atfw::memory::stl::make_strong_rc<rank>(rank_key, rank_cfg->capacity(), compare_fn, 0);
+    rank_ptr = atfw::component::memory::stl::make_strong_rc<rank>(rank_key, rank_cfg->capacity(), compare_fn, 0);
     FWLOGDEBUG("rank create success rank({}:{}:{}:{})", rank_key.rank_type(), rank_key.rank_instance_id(),
                rank_key.sub_rank_type(), rank_key.sub_rank_instance_id());
   }

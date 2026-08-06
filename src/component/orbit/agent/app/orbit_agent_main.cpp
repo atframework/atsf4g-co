@@ -14,6 +14,8 @@
 #include <config/extern_service_types.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_macro.h>
@@ -70,7 +72,7 @@ int main(int argc, char *argv[]) {
 
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to_) {
-        auto config_ptr = atfw::util::memory::make_strong_rc<orbit::config::orbit_agent_cfg>();
+        auto config_ptr = atfw::component::memory::stl::make_strong_rc<orbit::config::orbit_agent_cfg>();
         app_.parse_configures_into(*config_ptr, "orbit_agent");
         to_ = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
       });

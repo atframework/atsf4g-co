@@ -34,6 +34,8 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 
 #include <hiredis_happ.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/logic_config.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>

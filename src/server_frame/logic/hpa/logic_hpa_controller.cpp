@@ -305,7 +305,7 @@ struct ATFW_UTIL_SYMBOL_LOCAL logic_hpa_controller::hpa_discovery_data {
         default_hpa_discovery_scaling_up_expect_replicas(0),
         default_hpa_discovery_scaling_down_expect_replicas(0),
         event_loop_pointer(nullptr),
-        discovery_set(atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>()),
+        discovery_set(atfw::component::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>()),
         node_event_has_handle(false),
         current_setting_data_version(0),
         current_setting_modify_revision(0),
@@ -3567,7 +3567,7 @@ void logic_hpa_controller::setup_hpa_controller() {
 
   hpa_discovery_data_->discovery_set.reset();
   if (!hpa_discovery_data_->discovery_set) {
-    hpa_discovery_data_->discovery_set = atfw::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
+    hpa_discovery_data_->discovery_set = atfw::component::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   // 用已有的服务发现初始化节点分布

@@ -16,6 +16,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 #include <rpc/rpc_async_invoke.h>
@@ -74,7 +76,7 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CONTROLLER_SERVER_NOT_FOUND);
   }
 
-  client_info_ptr_ = atfw::util::memory::make_strong_rc<client_info>();
+  client_info_ptr_ = atfw::component::memory::stl::make_strong_rc<client_info>();
   client_info_ptr_->client_id = client_id;
   client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_START_CONFIRMING;
   client_info_ptr_->region = region;

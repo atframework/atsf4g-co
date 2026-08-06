@@ -23,6 +23,8 @@
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
 
+#include <memory/object_allocator.h>
+
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -260,7 +262,7 @@ batch_get_all(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key,
     }
 
     auto current_key = key[index];
-    auto output_ptr = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+    auto output_ptr = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
     output_ptr->result = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
     output[index] = output_ptr;
     auto invoke_task = rpc::async_invoke(
@@ -342,7 +344,7 @@ batch_partly_get(rpc::context &ctx, uint32_t channel, gsl::span<std::string> key
     }
 
     auto current_key = key[index];
-    auto output_ptr = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+    auto output_ptr = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
     output_ptr->result = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
     output[index] = output_ptr;
     auto invoke_task = rpc::async_invoke(

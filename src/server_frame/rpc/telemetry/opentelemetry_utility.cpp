@@ -30,6 +30,8 @@
 
 #include <config/logic_config.h>
 
+#include <memory/object_allocator.h>
+
 #include <utility/protobuf_mini_dumper.h>
 #include <utility/tls_buffers.h>
 
@@ -1073,7 +1075,7 @@ SERVER_FRAME_API void opentelemetry_utility::stop() {
 
 SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_attributes_with_lifetime>
 opentelemetry_utility::create_attributes_with_lifetime() {
-  return atfw::util::memory::make_strong_rc<metrics_attributes_with_lifetime>();
+  return atfw::component::memory::stl::make_strong_rc<metrics_attributes_with_lifetime>();
 }
 
 SERVER_FRAME_API const std::unordered_map<std::string, opentelemetry::common::AttributeValue>&
@@ -1311,7 +1313,7 @@ SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
     metrics_observer& observer, opentelemetry::nostd::variant<int64_t, double> value,
     const opentelemetry::common::KeyValueIterable& attributes) {
   atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record =
-      atfw::util::memory::make_strong_rc<opentelemetry_utility::metrics_record>();
+      atfw::component::memory::stl::make_strong_rc<opentelemetry_utility::metrics_record>();
   if (!record) {
     return;
   }
@@ -1327,7 +1329,7 @@ SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
 SERVER_FRAME_API void opentelemetry_utility::global_metics_observe_record(
     metrics_observer& observer, opentelemetry::nostd::variant<int64_t, double> value, attribute_span_type attributes) {
   atfw::util::memory::strong_rc_ptr<opentelemetry_utility::metrics_record> record =
-      atfw::util::memory::make_strong_rc<opentelemetry_utility::metrics_record>();
+      atfw::component::memory::stl::make_strong_rc<opentelemetry_utility::metrics_record>();
   if (!record) {
     return;
   }

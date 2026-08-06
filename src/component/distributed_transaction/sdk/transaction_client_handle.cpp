@@ -58,7 +58,7 @@ DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_h
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle::create_transaction(
     rpc::context& ctx, storage_ptr_type& output, const transaction_options& options) {
-  output = atfw::memory::stl::make_strong_rc<storage_type>();
+  output = atfw::component::memory::stl::make_strong_rc<storage_type>();
   if (!output) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }

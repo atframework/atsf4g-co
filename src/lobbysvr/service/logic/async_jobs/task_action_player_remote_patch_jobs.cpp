@@ -18,6 +18,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
 #include <data/player.h>
@@ -185,7 +187,7 @@ task_action_player_remote_patch_jobs::result_type task_action_player_remote_patc
                                                               (*job_list[i].message)->job_data().action_uuid());
 
       async_job_ptr_type job_data_ptr =
-          atfw::util::memory::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
+          atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
               std::move(*(*job_list[i].message)->mutable_job_data()));
 
       ++batch_job_number;

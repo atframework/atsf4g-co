@@ -290,7 +290,7 @@ SERVER_FRAME_API gsl::string_view logic_hpa_pull_range_record_prometheus::get_la
 }
 
 SERVER_FRAME_API logic_hpa_pull_result_prometheus::logic_hpa_pull_result_prometheus()
-    : internal_data_{atfw::memory::stl::make_strong_rc<logic_hpa_pull_internal_prometheus_result_data>()} {}
+    : internal_data_{atfw::component::memory::stl::make_strong_rc<logic_hpa_pull_internal_prometheus_result_data>()} {}
 
 SERVER_FRAME_API logic_hpa_pull_result_prometheus::~logic_hpa_pull_result_prometheus() {}
 
@@ -344,7 +344,7 @@ SERVER_FRAME_API bool logic_hpa_pull_result_prometheus::parse(gsl::string_view i
   }
 
   if (result_iter->value.IsObject()) {
-    auto internal_record_data = atfw::memory::stl::make_strong_rc<logic_hpa_pull_internal_prometheus_record_data>();
+    auto internal_record_data = atfw::component::memory::stl::make_strong_rc<logic_hpa_pull_internal_prometheus_record_data>();
     internal_record_data->data = result_iter->value;
     internal_record_data->result = internal_data_;
     if (internal_record_data->data.MemberEnd() != internal_record_data->data.FindMember("value")) {
@@ -360,7 +360,7 @@ SERVER_FRAME_API bool logic_hpa_pull_result_prometheus::parse(gsl::string_view i
       if (!(*item_iter).IsObject()) {
         continue;
       }
-      auto internal_record_data = atfw::memory::stl::make_strong_rc<logic_hpa_pull_internal_prometheus_record_data>();
+      auto internal_record_data = atfw::component::memory::stl::make_strong_rc<logic_hpa_pull_internal_prometheus_record_data>();
       internal_record_data->data = *item_iter;
       internal_record_data->result = internal_data_;
 

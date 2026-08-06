@@ -15,6 +15,8 @@
 
 #include <atframe/modules/worker_pool_module.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 #include <logic/logic_server_setup.h>
@@ -942,7 +944,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
 int orbit_agent_manager::startup_seed_client() {
   std::string client_id = atfw::util::log::format("seed_client_{}_{}", logic_config::me()->get_local_server_id(),
                                                   util::time::time_utility::get_sys_now());
-  auto record = atfw::util::memory::make_strong_rc<orbit_agent_client_record>();
+  auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
   clients_[client_id] = record;
   seed_client_record_ = record;
   record->seed_process = true;
@@ -1028,7 +1030,7 @@ int orbit_agent_manager::prepare_start_client_record(const orbit::CTAStartClient
     return PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_ID_ALREADY_EXISTS;
   }
 
-  auto record = atfw::util::memory::make_strong_rc<orbit_agent_client_record>();
+  auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
   clients_[client_id] = record;
   record->client_id = client_id;
   record->custom_args = request.args().client_start_args().custom_args();

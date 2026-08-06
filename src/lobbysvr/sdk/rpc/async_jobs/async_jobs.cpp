@@ -19,6 +19,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <config/logic_config.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
@@ -64,7 +66,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, user_id, rsp, version));
   if (0 == ret) {
     local_cache[user_id] =
-        atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login_lock>>(rsp);
+        atfw::component::memory::stl::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login_lock>>(rsp);
   }
   RPC_RETURN_CODE(ret);
 }

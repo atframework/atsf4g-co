@@ -161,7 +161,7 @@ rpc::result_code_type transaction_manager::create_transaction(
   }
 
   transaction_lru_map_type::cache_ptr_type transaction_cache_ptr =
-      atfw::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(
+      atfw::component::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(
           storage.metadata().transaction_uuid());
   protobuf_move_message(transaction_cache_ptr->data_object, std::move(storage));
   lru_caches_.set_cache(transaction_cache_ptr);

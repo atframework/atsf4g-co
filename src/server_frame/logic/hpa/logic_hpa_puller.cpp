@@ -30,7 +30,7 @@ SERVER_FRAME_API atfw::util::memory::strong_rc_ptr<logic_hpa_puller> logic_hpa_p
   auto metrics_configure = rpc::telemetry::global_service::get_metrics_configure(telemetry_group);
   if (metrics_configure.has_exporters() && metrics_configure.exporters().has_prometheus_http_api()) {
     return atfw::util::memory::static_pointer_cast<logic_hpa_puller>(
-        atfw::memory::stl::make_strong_rc<logic_hpa_puller_prometheus>(policy, telemetry_group, hpa_cfg, policy_cfg));
+        atfw::component::memory::stl::make_strong_rc<logic_hpa_puller_prometheus>(policy, telemetry_group, hpa_cfg, policy_cfg));
   }
 
   return nullptr;

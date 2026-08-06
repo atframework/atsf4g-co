@@ -72,7 +72,7 @@ static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, cons
   msg.head_message.set_response_int(version);
   if (record_existed) {
     msg.body_message =
-        atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
+        atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
   }
   return ret;
 }
@@ -113,7 +113,7 @@ ${emit_mock_intercept_get("get_all", index.enable_cas, key_fields, message_name)
   if (result.size < static_cast<int64_t>(keylen)) {
     keylen = static_cast<size_t>(result.size);
   }
-  auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+  auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::get_all(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 output,
@@ -175,7 +175,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
     result.version = output->version;
 % endif
     if (output->message) {
-      result.message = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(*output->message);
+      result.message = atfw::component::memory::stl::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(*output->message);
 % for key_field in key_fields:
       (*result.message)->set_${key_field["raw_name"]}(
       % for arg in key_field["set_args"]:
@@ -246,7 +246,7 @@ static int32_t unpack_${message_name}_inc_field_${inc_field["raw_name"]}(rpc::co
   shared_message<PROJECT_NAMESPACE_ID::${message_name}> table_pb{*ctx};
   table_pb->set_${inc_field["raw_name"]}(static_cast<uint64_t>(reply->integer));
   msg.body_message =
-      atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
+      atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 }
@@ -344,7 +344,7 @@ static int32_t unpack_${message_name}_${partly_field_name}(rpc::context *ctx, db
   msg.head_message.set_response_int(version);
   if (record_existed) {
     msg.body_message =
-        atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
+        atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(std::move(table_pb));
   }
   return ret;
 }
@@ -387,7 +387,7 @@ ${emit_mock_intercept_get("partly_get_" + partly_field_name, index.enable_cas, k
   field_index = field_index + 1
 %>
 %     endfor
-  auto output = atfw::util::memory::make_strong_rc<db_key_value_message_result_t>();
+  auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::partly_get(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 partly_get_field,
@@ -476,7 +476,7 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
     result.version = output->version;
 % endif
     if (output->message) {
-      result.message = atfw::util::memory::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(*output->message);
+      result.message = atfw::component::memory::stl::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(*output->message);
 % for key_field in key_fields:
       (*result.message)->set_${key_field["raw_name"]}(
       % for arg in key_field["set_args"]:

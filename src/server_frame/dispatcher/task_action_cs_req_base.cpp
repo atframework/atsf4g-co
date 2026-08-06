@@ -10,6 +10,8 @@
 
 #include <atframe/atapp.h>
 
+#include <memory/object_allocator.h>
+
 #include <data/player_cache.h>
 #include <logic/player_manager.h>
 #include <logic/session_manager.h>
@@ -350,7 +352,7 @@ const task_action_cs_req_base::gateway_info_t &task_action_cs_req_base::get_gate
     return *gateway_info_t_;
   }
 
-  gateway_info_t_ = atfw::util::memory::make_strong_rc<gateway_info_t>();
+  gateway_info_t_ = atfw::component::memory::stl::make_strong_rc<gateway_info_t>();
 
   const message_type &cs_msg = get_request();
   gateway_info_t_->node_id = cs_msg.head().session_node_id();
