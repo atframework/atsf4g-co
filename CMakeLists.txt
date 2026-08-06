@@ -247,4 +247,4 @@ install(
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake")
 
 # ========================== 工具集成 ==========================
-include("project/integration/integration.cmake")
+include("project/integration/Bootstrap.cmake")
