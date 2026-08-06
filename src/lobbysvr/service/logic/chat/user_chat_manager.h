@@ -5,8 +5,8 @@
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 
-#include <rpc/rpc_common_types.h>
 #include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_common_types.h>
 
 namespace rpc {
 class context;
@@ -25,7 +25,12 @@ class user_chat_manager {
   const player& get_owner() const { return *owner_; }
 
  private:
+  void setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
+
+ private:
   atfw::util::nostd::nonnull<player*> owner_;
+
+  bool has_get_all_channels_;
 
   rpc::dtmq::client_subscriber::ptr_t world_chat_channel_;
   rpc::dtmq::client_subscriber::ptr_t private_chat_channel_;

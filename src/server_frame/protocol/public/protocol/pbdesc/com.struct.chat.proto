@@ -11,6 +11,7 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 
 import "protocol/common/com.struct.dtmq.common.proto";
+import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -24,4 +25,40 @@ enum EnChatChannelType {
   EN_CHAT_CHANNEL_TYPE_PRIVATE = 2;           // 私聊用户 Channel
   EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION = 3;  // 系统通知 Channel(生命周期短)
   EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT = 4;  // 系统公告 Channel(生命周期长)
+}
+
+message DChatChannelMeta {
+  atframework.dtmq.DChannelIdKey channel_key = 1;
+
+  // configure 仅拉取快照时下发
+  atframework.dtmq.DChannelConfigure channel_configure = 2;
+
+  // 创建时间/sequence
+  google.protobuf.Timestamp create_timepoint = 21;
+  int64 create_sequence = 22;
+  // 销毁时间/sequence
+  google.protobuf.Timestamp destroy_timepoint = 23;
+  int64 destroy_sequence = 24;
+
+  // 已经GC的日志sequence
+  int64 last_removed_sequence = 81;
+}
+
+message DChatChannelSnapshot {
+}
+
+message DChatChannelMessageList {
+  repeated atframework.dtmq.DChannelMessage message_list = 1;
+}
+
+message DChatChannelData {
+  DChatChannelMeta metadata = 1;
+
+  oneof data_type {
+    // 增量数据
+    DChatChannelMessageList incremental = 8;
+
+    // 快照数据
+    DChatChannelSnapshot snapshot = 9;
+  }
 }

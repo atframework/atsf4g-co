@@ -265,6 +265,13 @@ service LobbysvrClientService {
     };
   };
 
+  rpc chat_channel_sync(google.protobuf.Empty) returns (stream atframework.chat.SCChatChannelSync) {
+    option (atframework.rpc_options) = {
+      module_name: "chat"
+      api_name: "聊天频道推送同步"
+    };
+  };
+
   rpc chat_channel_unsubscribe(atframework.chat.CSChatChannelUnsubscribeReq) returns (atframework.chat.SCChatChannelUnsubscribeRsp) {
     option (atframework.rpc_options) = {
       module_name: "chat"

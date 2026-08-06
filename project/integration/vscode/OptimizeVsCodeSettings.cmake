@@ -99,7 +99,8 @@ find_program(PROJECT_VSCODE_CLANG_FORMAT NAMES clang-format)
 # ---------------------------------------------------------------------------------------------------------------------
 set(PROJECT_VSCODE_PY_ARGS
     "${CMAKE_CURRENT_LIST_DIR}/optimize_vscode_settings.py" "--settings"
-    "${PROJECT_VSCODE_WORKSPACE_DIR}/.vscode/settings.json" "--workspace-dir" "${PROJECT_VSCODE_WORKSPACE_DIR}")
+    "${PROJECT_VSCODE_WORKSPACE_DIR}/.vscode/settings.json" "--workspace-dir" "${PROJECT_VSCODE_WORKSPACE_DIR}"
+    "--quiet")
 if(PROJECT_VSCODE_BUILD_DIR)
   list(APPEND PROJECT_VSCODE_PY_ARGS "--build-dir" "${PROJECT_VSCODE_BUILD_DIR}")
 endif()
@@ -119,9 +120,12 @@ if(PROJECT_VSCODE_DRY_RUN)
   list(APPEND PROJECT_VSCODE_PY_ARGS "--dry-run")
 endif()
 
-message(STATUS "[optimize-vscode] workspace : ${PROJECT_VSCODE_WORKSPACE_DIR}")
-message(STATUS "[optimize-vscode] build dir  : ${PROJECT_VSCODE_BUILD_DIR}")
-message(STATUS "[optimize-vscode] compiler   : ${PROJECT_VSCODE_COMPILER_ID} (${PROJECT_VSCODE_COMPILER_PATH})")
+message(
+  STATUS
+    "[VSCode Integration]
+    Workspace : ${PROJECT_VSCODE_WORKSPACE_DIR}
+    build dir  : ${PROJECT_VSCODE_BUILD_DIR}
+    compiler   : ${PROJECT_VSCODE_COMPILER_ID} (${PROJECT_VSCODE_COMPILER_PATH})")
 
 execute_process(COMMAND "${Python3_EXECUTABLE}" ${PROJECT_VSCODE_PY_ARGS} RESULT_VARIABLE PROJECT_VSCODE_RESULT)
 if(NOT PROJECT_VSCODE_RESULT EQUAL 0)

@@ -24,7 +24,7 @@
 
 #include "data/player.h"
 
-user_chat_manager::user_chat_manager(player& owner) : owner_(&owner) {}
+user_chat_manager::user_chat_manager(player& owner) : owner_(&owner), has_get_all_channels_(false) {}
 
 user_chat_manager::~user_chat_manager() {}
 
@@ -40,6 +40,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
     channel_key.set_channel_id(rpc::dtmq::make_world_partition_channel_id(
         channel_key.channel_type(), logic_config::me()->get_local_world_id(), partition_id));
     world_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+    setup_subscriber_callback(world_chat_channel_);
   }
 
   if (!private_chat_channel_) {
@@ -49,6 +50,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
     channel_key.set_channel_id(
         rpc::dtmq::make_unicast_channel_id(channel_key.channel_type(), owner_->get_zone_id(), owner_->get_user_id()));
     private_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+    setup_subscriber_callback(private_chat_channel_);
   }
 
   // 创建系统通知 Channel(生命周期短)
@@ -59,6 +61,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
     channel_key.set_channel_id(rpc::dtmq::make_world_broadcast_channel_id(channel_key.channel_type(),
                                                                           logic_config::me()->get_local_world_id()));
     sys_notification_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+    setup_subscriber_callback(sys_notification_channel_);
   }
 
   // 创建系统公告 Channel(生命周期长)
@@ -69,6 +72,9 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
     channel_key.set_channel_id(rpc::dtmq::make_world_broadcast_channel_id(channel_key.channel_type(),
                                                                           logic_config::me()->get_local_world_id()));
     sys_announcement_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+    setup_subscriber_callback(sys_announcement_channel_);
   }
   RPC_RETURN_CODE(0);
 }
+
+void user_chat_manager::setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& /*channel*/) {}

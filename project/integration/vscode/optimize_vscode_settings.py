@@ -286,6 +286,7 @@ def parse_args(argv):
     parser.add_argument(
         "--dry-run", action="store_true", help="Report changes without writing"
     )
+    parser.add_argument("--quiet", action="store_true", help="Suppress output")
     return parser.parse_args(argv)
 
 
@@ -331,15 +332,18 @@ def main(argv):
     )
 
     if not changed:
-        print("[optimize-vscode] settings.json already optimized; no changes.")
+        if not opts.quiet:
+            print("[optimize-vscode] settings.json already optimized; no changes.")
         return 0
 
-    print("[optimize-vscode] planned changes for %s:" % settings_path)
+    if not opts.quiet:
+        print("[optimize-vscode] planned changes for %s:" % settings_path)
     for entry in changes:
         print("  - %s" % entry)
 
     if opts.dry_run:
-        print("[optimize-vscode] dry-run: no file written.")
+        if not opts.quiet:
+            print("[optimize-vscode] dry-run: no file written.")
         return 0
 
     try:
@@ -357,12 +361,16 @@ def main(argv):
         return 1
 
     if had_comments:
+        if not opts.quiet:
+            print(
+                "[optimize-vscode] WARNING: comments were present and are not preserved; "
+                "the original was backed up to settings.json.bak.",
+                file=sys.stderr,
+            )
+    if not opts.quiet:
         print(
-            "[optimize-vscode] WARNING: comments were present and are not preserved; "
-            "the original was backed up to settings.json.bak.",
-            file=sys.stderr,
+            "[optimize-vscode] updated %s (backup: settings.json.bak)." % settings_path
         )
-    print("[optimize-vscode] updated %s (backup: settings.json.bak)." % settings_path)
     return 0
 
 

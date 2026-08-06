@@ -25,7 +25,7 @@ message CSChatGetChannelSnapshotReq {
 }
 
 message SCChatGetChannelSnapshotRsp {
-  atframework.dtmq.DChannelSnapshot channel_snapshot = 1;
+  DChatChannelData channel_snapshot = 1;
 }
 
 message CSChatChannelHeartbeatReq {
@@ -33,6 +33,10 @@ message CSChatChannelHeartbeatReq {
 }
 
 message SCChatChannelHeartbeatRsp {}
+
+message SCChatChannelSync {
+  repeated DChatChannelData chat_channel = 1;
+}
 
 message CSChatChannelUnsubscribeReq {
   repeated atframework.dtmq.DChannelIdKey channel_key = 1;
