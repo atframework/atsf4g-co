@@ -6,8 +6,12 @@ $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
 
 Set-Location $SCRIPT_DIR
 
-Remove-Item -Recurse -Force third_party/install
-Remove-Item -Recurse -Force third_party/packages
+if (Test-Path "third_party/install") {
+  Remove-Item -Recurse -Force third_party/install
+}
+if (Test-Path "third_party/packages") {
+  Remove-Item -Recurse -Force third_party/packages
+}
 
 if (Test-Path "build") {
   Remove-Item -Recurse -Force "build"

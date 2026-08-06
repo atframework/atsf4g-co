@@ -15,6 +15,7 @@ import "protocol/pbdesc/com.const.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.protocol.rank.proto";
 import "protocol/pbdesc/com.protocol.cache.proto";
+import "protocol/pbdesc/com.protocol.chat.proto";
 import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -239,6 +240,42 @@ service LobbysvrClientService {
       module_name: "cache"
       api_name: "主动通知服务器更新meta"
       frequency_limit: { frequency_limit_ms: 5000 frequency_limit_count: 30 }
+    };
+  };
+
+  // ================ 聊天RPC ================
+  rpc chat_get_all_channel(atframework.chat.CSChatGetAllChannelReq) returns (atframework.chat.SCChatGetAllChannelRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "chat"
+      api_name: "获取所有聊天频道"
+    };
+  };
+
+  rpc chat_get_channel_snapshot(atframework.chat.CSChatGetChannelSnapshotReq) returns (atframework.chat.SCChatGetChannelSnapshotRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "chat"
+      api_name: "获取聊天频道快照"
+    };
+  };
+
+  rpc chat_channel_heartbeat(atframework.chat.CSChatChannelHeartbeatReq) returns (atframework.chat.SCChatChannelHeartbeatRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "chat"
+      api_name: "聊天频道心跳"
+    };
+  };
+
+  rpc chat_channel_unsubscribe(atframework.chat.CSChatChannelUnsubscribeReq) returns (atframework.chat.SCChatChannelUnsubscribeRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "chat"
+      api_name: "聊天频道退订"
+    };
+  };
+
+  rpc chat_send_message(atframework.chat.CSChatSendMessageReq) returns (atframework.chat.SCChatSendMessageRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "chat"
+      api_name: "发送聊天消息"
     };
   };
 }

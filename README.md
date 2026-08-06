@@ -146,7 +146,7 @@ Diagnostics:
     "--background-index",
     "--clang-tidy",
     "--completion-style=detailed",
-    "--header-insertion=iwyu",
+    "--header-insertion=Never",
     "-j=8"
   ]
 }

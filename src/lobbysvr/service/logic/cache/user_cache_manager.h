@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/common/com.struct.cache.common.pb.h>
 #include <protocol/pbdesc/com.protocol.cache.pb.h>
 #include <protocol/pbdesc/com.struct.pb.h>
 
@@ -24,7 +25,6 @@
 
 #include <cstdint>
 #include <string>
-#include "protocol/common/com.struct.cache.common.pb.h"
 
 namespace rpc {
 class context;

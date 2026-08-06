@@ -14,9 +14,9 @@ import "protocol/pbdesc/com.struct.dtmq.proto";
 
 package atframework.chat;
 
-message CSChatGetAllChannelsReq {}
+message CSChatGetAllChannelReq {}
 
-message SCChatGetAllChannelsRsp {
+message SCChatGetAllChannelRsp {
   repeated atframework.dtmq.DChannelMetadata channel_metadata = 1;
 }
 
