@@ -158,8 +158,8 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.sh.in"
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.ps1.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.sh.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/start_all.sh" ESCAPE_QUOTES @ONLY)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/start_all.sh"
+               ESCAPE_QUOTES @ONLY)
 
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.bat.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/start_all.bat" ESCAPE_QUOTES @ONLY)
@@ -167,8 +167,8 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.bat.in"
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.sh"
                ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.bat.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.bat" ESCAPE_QUOTES @ONLY)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.bat.in" "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.bat"
+               ESCAPE_QUOTES @ONLY)
 
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.conf.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/start_all.conf" ESCAPE_QUOTES @ONLY)
@@ -225,8 +225,7 @@ else()
     COMMENT "Cleanup old dlls...")
 endif()
 
-# 清理预编译头(precompile headers)产物的工具目标, 按需手动执行:
-#   cmake --build <build dir> --target cleanup-precompile-headers
+# 清理预编译头(precompile headers)产物的工具目标, 按需手动执行: cmake --build <build dir> --target cleanup-precompile-headers
 add_custom_target(
   "cleanup-precompile-headers"
   COMMAND "${CMAKE_COMMAND}" "-DPROJECT_PCH_CLEANUP_DIR=${PROJECT_BINARY_DIR}" "-P"
@@ -246,3 +245,6 @@ install(
   EXPORT ${PROJECT_INSTALL_EXPORT_NAME}
   NAMESPACE "${PROJECT_NAME}::"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake")
+
+# ========================== 工具集成 ==========================
+include("project/integration/integration.cmake")
