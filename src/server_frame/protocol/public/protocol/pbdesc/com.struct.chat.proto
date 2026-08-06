@@ -17,12 +17,11 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 
 package atframework.chat;
 
+// 注意和DtMq.xlsx 表对应，多个模块之间类型不要冲突
 enum EnChatChannelType {
   EN_CHAT_CHANNEL_TYPE_INVALID = 0;
-  EN_CHAT_CHANNEL_TYPE_PUBLIC = 1;        // 公共频道 Channel
-  EN_CHAT_CHANNEL_TYPE_PRIVATE = 2;       // 私聊用户 Channel
-  EN_CHAT_CHANNEL_TYPE_TEAM = 3;          // 组队频道 Channel
-  EN_CHAT_CHANNEL_TYPE_SYS_NOTIFY = 4;    // 系统通知 Channel
-  EN_CHAT_CHANNEL_TYPE_TOP_BOARD = 5;     // 跑马灯 Channel
-  EN_CHAT_CHANNEL_TYPE_PRIVATE_ROOM = 6;  // 私人房间 Channel
+  EN_CHAT_CHANNEL_TYPE_PUBLIC = 1;            // 公共频道 Channel
+  EN_CHAT_CHANNEL_TYPE_PRIVATE = 2;           // 私聊用户 Channel
+  EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION = 3;  // 系统通知 Channel(生命周期短)
+  EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT = 4;  // 系统公告 Channel(生命周期长)
 }

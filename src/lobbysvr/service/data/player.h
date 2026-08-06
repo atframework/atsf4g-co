@@ -6,6 +6,7 @@
 #include <design_pattern/noncopyable.h>
 #include <gsl/select-gsl.h>
 
+#include <memory/rc_ptr.h>
 #include <memory/object_stl_unordered_map.h>
 
 #include <config/server_frame_build_feature.h>
@@ -20,7 +21,7 @@
 
 #define REG_PLAYER_MGR_PTR_DEF(mgr)                       \
  private:                                                 \
-  std::unique_ptr<mgr> mgr##_;                            \
+  atfw::util::memory::strong_rc_ptr<mgr> mgr##_;          \
                                                           \
  public:                                                  \
   inline const mgr &get_##mgr() const { return *mgr##_; } \
@@ -29,6 +30,7 @@
 class user_async_jobs_manager;
 class user_rank_manager;
 class user_cache_manager;
+class user_chat_manager;
 
 class player : public player_cache {
  private:
@@ -237,6 +239,7 @@ class player : public player_cache {
   REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
   REG_PLAYER_MGR_PTR_DEF(user_rank_manager)
   REG_PLAYER_MGR_PTR_DEF(user_cache_manager)
+  REG_PLAYER_MGR_PTR_DEF(user_chat_manager)
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN

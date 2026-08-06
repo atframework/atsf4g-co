@@ -34,7 +34,7 @@ class player;
 
 class user_cache_manager {
  public:
-  user_cache_manager(player& owner);
+  explicit user_cache_manager(player& owner);
   ~user_cache_manager();
 
   std::string memory_leak_debug();

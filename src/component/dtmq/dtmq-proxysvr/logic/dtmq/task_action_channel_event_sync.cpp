@@ -20,6 +20,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
@@ -136,7 +138,7 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   bool all_logs_received = true;
   for (const auto& event_data : req_body.channel_message()) {
     mq_channel_wal_object_type::log_pointer log_ptr =
-        atfw::util::memory::make_strong_rc<atfw::dtmq::DChannelMessage>(event_data);
+        atfw::component::memory::stl::make_strong_rc<atfw::dtmq::DChannelMessage>(event_data);
 
     auto receive_result = channel->get_wal_client()->receive_hole_log(client_param, log_ptr);
     if (atfw::util::distributed_system::wal_result_code::kHashCodeMismatch == receive_result) {

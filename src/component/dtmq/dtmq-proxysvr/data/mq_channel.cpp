@@ -183,7 +183,7 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
         continue;
       }
 
-      auto log_ptr = atfw::memory::stl::make_strong_rc<mq_channel_wal_publisher_type::log_type>(log);
+      auto log_ptr = atfw::component::memory::stl::make_strong_rc<mq_channel_wal_publisher_type::log_type>(log);
       if (!log_ptr) {
         FCTXLOGERROR(ctx, "channel {} load log failed, malloc failed.", get_channel_id());
         continue;

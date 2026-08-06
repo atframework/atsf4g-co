@@ -279,7 +279,7 @@ rpc::result_code_type mq_channel_manager::create_channel(rpc::context& ctx, mq_c
 
   channel = get_channel(channel_key.channel_id());
   if (!channel) {
-    channel = atfw::memory::stl::make_strong_rc<mq_channel>(*this, channel_key, configure);
+    channel = atfw::component::memory::stl::make_strong_rc<mq_channel>(*this, channel_key, configure);
     if (!channel) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }

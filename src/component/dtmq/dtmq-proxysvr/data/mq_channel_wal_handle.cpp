@@ -119,7 +119,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
     return ret;
   }
 
-  ret = atfw::memory::stl::make_strong_rc<wal_object_type::vtable_type>();
+  ret = atfw::component::memory::stl::make_strong_rc<wal_object_type::vtable_type>();
   if (!ret) {
     return ret;
   }
@@ -148,7 +148,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
         continue;
       }
 
-      auto log_ptr = atfw::memory::stl::make_strong_rc<wal_object_type::log_type>();
+      auto log_ptr = atfw::component::memory::stl::make_strong_rc<wal_object_type::log_type>();
       if (!log_ptr) {
         param.result_code.get() = static_cast<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         return wal_result_code::kCallbackError;
@@ -296,7 +296,7 @@ static mq_channel_wal_client_type::vtable_pointer create_mq_channel_client_vtabl
     return ret;
   }
 
-  ret = atfw::memory::stl::make_strong_rc<wal_client_type::vtable_type>();
+  ret = atfw::component::memory::stl::make_strong_rc<wal_client_type::vtable_type>();
   if (!ret) {
     return ret;
   }
@@ -548,7 +548,7 @@ static mq_channel_wal_publisher_type::vtable_pointer create_mq_channel_publisher
     return ret;
   }
 
-  ret = atfw::memory::stl::make_strong_rc<wal_publisher_type::vtable_type>();
+  ret = atfw::component::memory::stl::make_strong_rc<wal_publisher_type::vtable_type>();
   if (!ret) {
     return ret;
   }

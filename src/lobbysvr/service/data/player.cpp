@@ -21,13 +21,16 @@
 #include <logic/async_jobs/user_async_jobs_manager.h>
 #include <logic/cache/user_cache_manager.h>
 #include <logic/rank/user_rank_manager.h>
+#include <logic/chat/user_chat_manager.h>
 
 #include <logic/player_manager.h>
 
 #include <data/session.h>
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/rpc_utils.h>
-#include "rpc/rpc_common_types.h"
+#include <rpc/rpc_common_types.h>
+
+#include <string>
 
 player::internal_flag_guard_t::internal_flag_guard_t()
     : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
@@ -61,9 +64,10 @@ void player::internal_flag_guard_t::reset() {
 player::player(fake_constructor &ctor)
     : base_type(ctor),
       heartbeat_data_{},
-      user_async_jobs_manager_(new user_async_jobs_manager(*this)),
-      user_rank_manager_(new user_rank_manager(*this)),
-      user_cache_manager_(new user_cache_manager(*this)) {
+      user_async_jobs_manager_(atfw::component::memory::stl::make_strong_rc<user_async_jobs_manager>(*this)),
+      user_rank_manager_(atfw::component::memory::stl::make_strong_rc<user_rank_manager>(*this)),
+      user_cache_manager_(atfw::component::memory::stl::make_strong_rc<user_cache_manager>(*this)),
+      user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)) {
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -123,7 +127,6 @@ rpc::result_code_type player::create_init(rpc::context &parent_ctx) {
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
   user_async_jobs_manager_->create_init(ctx);
   user_rank_manager_->create_init(ctx);
-  // TODO init all interval checkpoint
 
   // TODO init items
   // if (PROJECT_NAMESPACE_ID::EN_VERSION_GM != version_type) {
@@ -161,6 +164,11 @@ rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
   user_rank_manager_->login_init(ctx);
 
   ret = RPC_AWAIT_CODE_RESULT(user_cache_manager_->login_init(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(trace.finish({ret, {}}));
+  }
+
+  ret = RPC_AWAIT_CODE_RESULT(user_chat_manager_->login_init(ctx));
   if (ret < 0) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
