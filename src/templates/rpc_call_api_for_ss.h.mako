@@ -207,11 +207,12 @@ namespace mock {
  * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is enabled. Non-template
  *       exported function (see 3.6 in IMPLEMENTATION_PLAN.md) implemented in the generated .cpp;
  *       calls through rpc::unit_test::get_mock_engine_bridge_for_unit_test() and returns an empty
- *       handle when no mock engine is bound. The handler receives the concrete request/response
- *       messages.
+ *       handle when no mock engine is bound. The handler receives the coroutine context (usable for
+ *       nested RPC calls) and the concrete request/response messages, and returns
+ *       rpc::result_code_type (RPC_RETURN_CODE).
  */
 ${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
-    std::function<int(const ${rpc.get_request().get_cpp_class_name()} &,
+    std::function<rpc::result_code_type(rpc::context &, const ${rpc.get_request().get_cpp_class_name()} &,
                       ${rpc.get_response().get_cpp_class_name()} &)>
         __handler,
     const rpc::unit_test::ss_mock_rule_options &__options = rpc::unit_test::ss_mock_rule_options{});

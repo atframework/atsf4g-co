@@ -42,34 +42,64 @@ struct ATFW_UTIL_SYMBOL_VISIBLE db_request_record {
 
 class mock_db;
 
-// Behavior options of one per-table rule. Rules match by the table name embedded in the request key;
-// when several active rules match, the latest registered one wins.
-struct ATFW_UTIL_SYMBOL_VISIBLE db_table_rule_options {
-  // Injected error code per op (keyed by op_type value); ops absent from the map are not affected.
-  std::unordered_map<int32_t, int32_t> op_error_codes;
-  // Read ops (kv_get_all/kv_partly_get/kl_get_all/kl_get_by_indexs) return EN_DB_RECORD_NOT_FOUND.
-  bool force_not_found = false;
-  // kv_get_all/kv_partly_get serve this canned record instead of the stored one (partly_get still
-  // applies requested-field filtering to the canned message).
-  bool use_canned_kv = false;
-  std::string canned_kv_type_name;
-  std::string canned_kv_data;
-  uint64_t canned_kv_version = 0;
-  // The rule matches but defers to the in-memory backend (shadows an earlier rule).
-  bool fallthrough = false;
+// Callback context of one intercepted hash_table operation on a per-table mock rule. The handler may
+// inspect the request inputs, set return_code, fill the returned record (output_table + output_version
+// for kv reads, kl_output entries for kl reads, inc_message for kv_inc_field) and decide the outcome:
+// returning true means the operation is handled and the common mock layer (in-memory backend) is
+// skipped entirely; returning false falls through to the common mock layer.
+struct ATFW_UTIL_SYMBOL_VISIBLE db_table_context {
+  using op_type = rpc::db::hash_table::unit_test_request::op_type;
+
+  op_type op = op_type::kv_get_all;
+  gsl::string_view key;
+  gsl::string_view table_name;
+  rpc::context *rpc_context = nullptr;
+
+  // Inputs (empty/nullptr when unused by the op).
+  const google::protobuf::Message *input_table = nullptr;  // kv_set: the record being stored
+  gsl::span<const gsl::string_view> partly_get_fields{};   // kv_partly_get: requested fields
+  gsl::string_view inc_field;                              // kv_inc_field: target field name
+  gsl::span<const uint64_t> list_index{};                  // kl_get_by_indexs/kl_update_by_index/kl_remove_by_index
+  uint32_t max_list_length = 0;                            // kl ops
+  uint64_t ttl_second = 0;                                 // set_ttl
+
+  // Outputs.
+  int32_t return_code = 0;  // function-level result code reported to the caller
+  // kv_get_all/kv_partly_get: the returned record; set it with mock_db::make_output (empty means the
+  // handler decided to report no record, e.g. together with an error return_code).
+  atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> output_table;
+  // kv read result CAS version; also written back to the caller's version pointer when requested.
+  uint64_t output_version = 0;
+  // kl_get_all/kl_get_by_indexs: append entries here (same vector the caller receives); use
+  // mock_db::make_kl_entry to build entries.
+  std::vector<db_key_list_message_result_t> *kl_output = nullptr;
+  // kv_inc_field: in/out message whose inc_field is mutated by the handler.
+  google::protobuf::Message *inc_message = nullptr;
 };
+
+// Per-table, per-interface mock handler. Returns true when the operation is handled (the context outputs
+// decide the outcome), false to defer this single operation to the common mock layer.
+using db_table_handler = std::function<bool(db_table_context &)>;
+
+class mock_db;
 
 namespace detail {
 struct db_table_rule_state {
   std::string table_name;
-  db_table_rule_options options;
+  std::unordered_map<int32_t, db_table_handler> op_handlers;
+  db_table_handler any_handler;
   bool active = true;
 };
 }  // namespace detail
 
-// RAII handle of one per-table rule. The rule is disabled when the handle is destroyed.
+// RAII handle of one per-table mock rule with per-interface callbacks. Register handlers with on() for a
+// single interface or on_any() as the table-level catch-all; operations without a matching callback fall
+// through to the common mock layer (in-memory backend). The rule is disabled when the handle is
+// destroyed; when several active rules match one table, the latest registered one wins.
 class RPC_UNIT_TEST_API db_table_rule_handle {
  public:
+  using op_type = rpc::db::hash_table::unit_test_request::op_type;
+
   db_table_rule_handle() = default;
   ~db_table_rule_handle();
 
@@ -77,6 +107,12 @@ class RPC_UNIT_TEST_API db_table_rule_handle {
   db_table_rule_handle &operator=(const db_table_rule_handle &) = delete;
   db_table_rule_handle(db_table_rule_handle &&other) noexcept;
   db_table_rule_handle &operator=(db_table_rule_handle &&other) noexcept;
+
+  // Register/replace the callback of one interface (e.g. op_type::kv_get_all).
+  db_table_rule_handle &on(op_type op, db_table_handler fn);
+  // Register/replace the table-level catch-all, used when no per-interface callback matches.
+  db_table_rule_handle &on_any(db_table_handler fn);
+  db_table_rule_handle &clear_handlers();
 
   void reset();
   explicit operator bool() const noexcept { return !!rule_; }
@@ -90,6 +126,10 @@ class RPC_UNIT_TEST_API db_table_rule_handle {
 // In-memory mock of the rpc::db::hash_table backend. Installed through the server_frame unit-test
 // hook so every primitive operation (and therefore batch operations and generated db helpers such
 // as rpc::db::uuid_allocator) is served synchronously without a real Redis or DB dispatcher init.
+//
+// Dispatch order: per-table rules registered with mock_table() intercept matching operations through
+// per-interface callbacks first; only operations without a matching callback reach this common mock
+// layer (the in-memory backend below).
 //
 // Data model mirrors the real backend contract:
 // - values are stored as serialized protobuf bytes (presence of explicitly set fields survives)
@@ -170,11 +210,21 @@ class RPC_UNIT_TEST_API mock_db {
   const db_request_record *last_call(gsl::string_view table_name) const;
   void clear_history() noexcept { calls_.clear(); }
 
-  // Per-table rules. table_name is the generated db namespace name (e.g. "login_auth"); requests
-  // whose keys embed a different table fall through to the in-memory backend.
-  db_table_rule_handle mock_table(gsl::string_view table_name, const db_table_rule_options &options = {});
+  // Per-table mock rules with per-interface callbacks. table_name is the generated db namespace name
+  // (e.g. "login_auth"); requests whose keys embed a different table, and operations without a matching
+  // callback, fall through to the common mock layer (in-memory backend).
+  db_table_rule_handle mock_table(gsl::string_view table_name);
   // Extract the table name from a generated-layout key; empty when not recognizable.
   std::string extract_table_name(gsl::string_view key) const;
+
+  // Helpers for per-table callbacks: materialize a record into the shared-message wrapper using the
+  // registered message factory (returns false when no factory is registered for the message type),
+  // and build one key_list output entry the same way.
+  bool make_output(
+      rpc::context &ctx, const google::protobuf::Message &source,
+      atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> &out) const;
+  int32_t make_kl_entry(rpc::context &ctx, const google::protobuf::Message &source, uint64_t list_index,
+                        db_key_list_message_result_t &out) const;
 
   std::string get_diagnostic() const { return diagnostic_; }
 
@@ -215,15 +265,13 @@ class RPC_UNIT_TEST_API mock_db {
   // Production unpackers never set db_key_list_message_result_t::version (it stays 0), so the mock
   // reports no KL version either.
   int32_t make_kl_output(const kl_entry &entry, rpc::context &ctx, db_key_list_message_result_t &output) const;
-  // Drop all fields not listed in req.partly_get_fields from req.kv_output (shared by the stored
-  // and canned-record paths).
+  // Drop all fields not listed in req.partly_get_fields from req.kv_output (storage read path).
   int32_t filter_partly_fields(const rpc::db::hash_table::unit_test_request &req) const;
-  int32_t serve_canned_kv(const rpc::db::hash_table::unit_test_request &req,
-                          const db_table_rule_options &rule);
-  // Apply the latest matching active per-table rule. Returns true when the rule decided the
-  // outcome (result in result_code); false means fall through to the in-memory backend.
-  bool apply_table_rules(const rpc::db::hash_table::unit_test_request &req, gsl::string_view table_name,
-                         int32_t &result_code);
+  // Apply the latest matching active per-table rule: invoke its callback for this op (or the table
+  // catch-all). Returns true when a callback handled the operation (outcome already materialized into
+  // req outputs and result_code); false means fall through to the in-memory backend.
+  bool apply_table_handlers(const rpc::db::hash_table::unit_test_request &req, gsl::string_view table_name,
+                            int32_t &result_code);
 
   int32_t on_kv_get_all(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_partly_get(const rpc::db::hash_table::unit_test_request &req);
@@ -246,6 +294,8 @@ class RPC_UNIT_TEST_API mock_db {
   std::unordered_map<std::string, kl_record> kl_records_;
   std::unordered_map<std::string, message_factory_t> factories_;
   std::vector<std::shared_ptr<detail::db_table_rule_state>> table_rules_;
+  // Clear closures of typed per-interface handlers installed by generated code; invoked on unbind.
+  std::vector<std::function<void()>> typed_handler_clearers_;
   std::deque<db_request_record> calls_;
 };
 

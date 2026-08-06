@@ -6,6 +6,8 @@
 
 #include <gsl/select-gsl.h>
 
+#include "rpc/rpc_common_types.h"
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -39,18 +41,24 @@ class Message;
 }  // namespace protobuf
 }  // namespace google
 
+namespace rpc {
+class context;
+}  // namespace rpc
+
 namespace atframework {
 namespace testing {
 
 class mock_ss;
 
 // Untyped view of one captured SS request, passed to mock handlers. The concrete request type is
-// guaranteed by descriptor validation at registration time; downcast with static_cast.
+// guaranteed by descriptor validation at registration time; downcast with static_cast. context is the
+// coroutine context of the task driving the handler; use it to await nested RPC calls.
 struct ATFW_UTIL_SYMBOL_VISIBLE ss_request_view {
   const google::protobuf::Message &body;
   const atframework::SSMsgHead &head;
   uint64_t target_node_id = 0;
   std::string target_node_name;
+  rpc::context *context = nullptr;
 };
 
 // Behavior and matching options of one SS rule.
@@ -76,8 +84,10 @@ struct ss_rule_state {
   std::string request_type_url;
   std::string response_type_url;
   ss_rule_options options;
-  // (request SSMsg, response SSMsg) -> error code. May be empty for record-only rules.
-  std::function<int(const atframework::SSMsg &, atframework::SSMsg &, uint64_t, gsl::string_view)> invoker;
+  // (context, request SSMsg, response SSMsg) -> result_code_type. May be empty for record-only rules.
+  std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &, uint64_t,
+                                      gsl::string_view)>
+      invoker;
   // Explicit error response without calling any handler (0 = use invoker).
   int32_t forced_error_code = 0;
   uint32_t remaining_times = 0;
@@ -161,17 +171,21 @@ class RPC_UNIT_TEST_API mock_ss {
   // registrations fail immediately (check the returned handle and get_diagnostic()). The handler
   // receives the parsed request through ss_request_view and fills a fresh response instance of the
   // registered response type; descriptor lookup, prototype creation and parse/serialize all happen
-  // inside the library (see 3.6 in IMPLEMENTATION_PLAN.md: no template API surface).
+  // inside the library (see 3.6 in IMPLEMENTATION_PLAN.md: no template API surface). The handler
+  // returns rpc::result_code_type so it may await nested RPC calls (run it with RPC_RETURN_CODE;
+  // the engine drives it as a coroutine task and sends the response when it completes).
   ss_rule_handle mock(gsl::string_view full_rpc_name, gsl::string_view request_type_name,
                       gsl::string_view response_type_name,
-                      std::function<int(const ss_request_view &, google::protobuf::Message &)> handler,
+                      std::function<rpc::result_code_type(const ss_request_view &, google::protobuf::Message &)>
+                          handler,
                       const ss_rule_options &options = ss_rule_options{});
 
   // Register an untyped handler working directly on SSMsg (advanced use, no descriptor validation of
-  // the body types).
-  ss_rule_handle mock_untyped(gsl::string_view full_rpc_name,
-                              std::function<int(const atframework::SSMsg &, atframework::SSMsg &)> handler,
-                              const ss_rule_options &options = ss_rule_options{});
+  // the body types). Same coroutine contract as mock().
+  ss_rule_handle mock_untyped(
+      gsl::string_view full_rpc_name,
+      std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &)> handler,
+      const ss_rule_options &options = ss_rule_options{});
 
   // Register an immediate error response for a (normally unmatched) RPC.
   ss_rule_handle mock_error(gsl::string_view full_rpc_name, int32_t error_code,
@@ -206,7 +220,9 @@ class RPC_UNIT_TEST_API mock_ss {
 
   ss_rule_handle mock_typed(
       gsl::string_view full_rpc_name, gsl::string_view request_type_url, gsl::string_view response_type_url,
-      std::function<int(const atframework::SSMsg &, atframework::SSMsg &, uint64_t, gsl::string_view)> invoker,
+      std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &,
+                                          uint64_t, gsl::string_view)>
+          invoker,
       const ss_rule_options &options);
 
   void inject_response(const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg, int32_t error_code,
@@ -221,6 +237,9 @@ class RPC_UNIT_TEST_API mock_ss {
   atfw::atapp::app *owner_ = nullptr;
   raw_transport *transport_ = nullptr;
   raw_transport::outbound_cursor cursor_;
+  // Lifecycle token for handler tasks spawned by deliver_pending(): unbind() expires it so late
+  // completions skip their response without touching the engine.
+  std::shared_ptr<char> lifecycle_token_;
   std::vector<std::shared_ptr<detail::ss_rule_state>> rules_;
   std::deque<ss_call_record> history_;
   std::vector<std::shared_ptr<detail::ss_expectation_state>> expectations_;

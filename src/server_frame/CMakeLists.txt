@@ -91,6 +91,12 @@ generate_for_pb_add_custom_configure(
   TEMPLATE_DEPENDS
   "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.cpp.mako"
   "${PROJECT_SOURCE_TEMPLATE_DIR}/db_interface.h.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis.h.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis.cpp.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kv.h.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kv.cpp.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kl.h.mako"
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kl.cpp.mako"
 )
 
 list(APPEND PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES

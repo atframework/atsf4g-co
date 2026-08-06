@@ -61,101 +61,130 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::contex
 );
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
-// Per-table typed mock interface for ${message_full_name} (index "${index.name}"). All functions are
-// non-template exported functions implemented in the generated .cpp (see 3.6 in
-// IMPLEMENTATION_PLAN.md) and call through rpc::unit_test::get_mock_engine_bridge_for_unit_test();
-// data access goes directly through the bound mock backend, without RPC or task context. When no
-// mock engine is bound, rule helpers return empty handles and data helpers fail/no-op.
+// SS-style typed mock of ${message_full_name} (index "${index.name}"): one handler registration per
+// generated table interface, mirroring <service>::mock. Registering installs the handler at the entry
+// of the corresponding interface above; the handler receives a typed input message (key fields filled),
+// fills the output record(s) and the extensible rpc::unit_test::db_mock_meta (CAS version etc.), and
+// returns rpc::result_code_type (RPC_RETURN_CODE) so it may await nested RPC calls, bypassing the
+// common mock layer entirely. Interfaces without a registered handler fall through to the in-memory
+// mock backend. All functions are non-template exported functions implemented in the generated .cpp
+// (see 3.6/8.5 in IMPLEMENTATION_PLAN.md), return an RAII rpc::unit_test::mock_rule_handle that
+// deactivates the handler on destruction, and degrade to an empty handle when no mock engine is bound.
+// Runtime teardown deactivates all registered handlers through the mock engine bridge.
 namespace mock {
-/**
- * @brief Build the storage key of this table ("{record_prefix}-${index.name}.{key fields}").
- */
-SERVER_FRAME_API std::string make_key(
-%     for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
-%     endfor
-);
-
-/**
- * @brief Inject an error code for one op of this table until the returned handle is destroyed.
- */
-SERVER_FRAME_API rpc::unit_test::mock_rule_handle set_error(
-    rpc::db::hash_table::unit_test_request::op_type __op, int32_t __error_code);
-
-/**
- * @brief Make all read ops of this table return EN_DB_RECORD_NOT_FOUND until the handle is destroyed.
- */
-SERVER_FRAME_API rpc::unit_test::mock_rule_handle force_not_found();
-
-/**
- * @brief Set a TTL on the mock backend entry (uses the mock engine clock).
- */
-SERVER_FRAME_API void set_ttl(
-%     for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]},
-%     endfor
-    uint64_t __ttl_seconds);
 %     if index_type_kv:
+/**
+ * @brief Mock get_all: input carries the key fields; fill output and meta.version (CAS tables).
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle get_all(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      PROJECT_NAMESPACE_ID::${message_name} &, rpc::unit_test::db_mock_meta &)>
+        __handler);
 
 /**
- * @brief Write one typed record directly into the mock backend (presence of set fields survives).
+ * @brief Mock replace: input is the record being stored; meta.version carries the expected CAS version
+ *        in and the new version out (CAS tables).
  */
-SERVER_FRAME_API bool set_record(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]},
-%         endfor
-    const PROJECT_NAMESPACE_ID::${message_name} &__record, uint64_t __version = 0);
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle replace(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
+%         for inc_field in atomic_inc_fields:
 
 /**
- * @brief Read one typed record from the mock backend. Returns false when absent or undecodable.
+ * @brief Mock inc_field_${inc_field["raw_name"]}: input carries the key fields; set inc_value as the result.
  */
-SERVER_FRAME_API bool get(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]},
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle inc_field_${inc_field["raw_name"]}(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      ${inc_field["cpp_type"]} &, rpc::unit_test::db_mock_meta &)>
+        __handler);
 %         endfor
-    PROJECT_NAMESPACE_ID::${message_name} &__output, uint64_t *__version = nullptr);
+%         for partly_get in index.partly_get:
+<%
+    partly_mock_name = ""
+    if partly_get.name != "":
+        partly_mock_name += partly_get.name
+    else:
+        for field in partly_get.fields:
+            partly_mock_name += field
+%>
 
-SERVER_FRAME_API bool has_record(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
+/**
+ * @brief Mock partly_get_${partly_mock_name}: input carries the key fields; fill output and meta.version (CAS tables).
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle partly_get_${partly_mock_name}(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      PROJECT_NAMESPACE_ID::${message_name} &, rpc::unit_test::db_mock_meta &)>
+        __handler);
 %         endfor
-);
-
-SERVER_FRAME_API bool version_equal(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]},
-%         endfor
-    uint64_t __expected_version);
 %     else:
+/**
+ * @brief Mock get_all: input carries the key fields; fill (list_index, record) entries.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle get_all(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::${message_name}>> &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
 
 /**
- * @brief Append one typed KL entry with the per-key monotonic index; returns the allocated index
- *        (0 when no mock engine is bound).
+ * @brief Mock get_by_indexs: input carries the key fields; fill (list_index, record) entries.
  */
-SERVER_FRAME_API uint64_t append_entry(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]},
-%         endfor
-    const PROJECT_NAMESPACE_ID::${message_name} &__entry);
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle get_by_indexs(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      gsl::span<const uint64_t>,
+                      std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::${message_name}>> &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
 
-SERVER_FRAME_API size_t count(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
-%         endfor
-);
+/**
+ * @brief Mock add: input is the entry being appended; set the allocated list index.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle add(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &, uint64_t &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
 
-SERVER_FRAME_API std::vector<uint64_t> indexes(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]}${"," if not loop.last else ""}
-%         endfor
-);
+/**
+ * @brief Mock update: input is the entry stored at list_index.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle update(
+    std::function<rpc::result_code_type(rpc::context &, uint64_t, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
 
-SERVER_FRAME_API bool entry_at(
-%         for key_field in key_fields:
-    ${key_field["cpp_type"]} ${key_field["raw_name"]},
-%         endfor
-    uint64_t __index, PROJECT_NAMESPACE_ID::${message_name} &__output);
+/**
+ * @brief Mock remove_by_index: input carries the key fields.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle remove_by_index(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      gsl::span<const uint64_t>, rpc::unit_test::db_mock_meta &)>
+        __handler);
 %     endif
+
+/**
+ * @brief Mock remove_all: input carries the key fields.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle remove_all(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
+
+/**
+ * @brief Mock set_ttl: input carries the key fields.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle set_ttl(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &, uint64_t,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
+
+/**
+ * @brief Mock remove_ttl: input carries the key fields.
+ */
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle remove_ttl(
+    std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::${message_name} &,
+                      rpc::unit_test::db_mock_meta &)>
+        __handler);
 }  // namespace mock
 #endif
 

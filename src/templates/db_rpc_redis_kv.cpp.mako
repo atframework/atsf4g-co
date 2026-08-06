@@ -1,5 +1,63 @@
 ## -*- coding: utf-8 -*-
 <%page args="message_name,index,key_fields,all_fields,atomic_inc_fields,prefix_fmt_key,prefix_fmt_value_from_args,prefix_fmt_value_from_key,prefix_fmt_value_from_pb" />
+<%def name="emit_mock_slot(slot, handler_type)">
+namespace mock_detail {
+using ${slot}_handler_t = ${handler_type};
+static std::mutex g_${slot}_mutex;
+static ${slot}_handler_t g_${slot}_handler;
+static uint64_t g_${slot}_generation = 0;
+static inline ${slot}_handler_t ${slot}_handler() {
+  std::lock_guard<std::mutex> lock(g_${slot}_mutex);
+  return g_${slot}_handler;
+}
+}  // namespace mock_detail
+</%def>
+<%def name="emit_mock_register(fn, slot, op_code, table_name)">
+SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_handler_t __handler) {
+  const auto &__bridge = rpc::unit_test::get_mock_engine_bridge_for_unit_test();
+  if (!__bridge.db_register_typed_handler || !__handler) {
+    return rpc::unit_test::mock_rule_handle{};
+  }
+  uint64_t __generation = 0;
+  {
+    std::lock_guard<std::mutex> __lock(mock_detail::g_${slot}_mutex);
+    mock_detail::g_${slot}_handler = std::move(__handler);
+    __generation = ++mock_detail::g_${slot}_generation;
+  }
+  auto __clear = [__generation]() {
+    std::lock_guard<std::mutex> __lock(mock_detail::g_${slot}_mutex);
+    if (__generation == mock_detail::g_${slot}_generation) {
+      mock_detail::g_${slot}_handler = nullptr;
+    }
+  };
+  __bridge.db_register_typed_handler("${table_name}", ${op_code}, __clear);
+  auto __state = std::make_shared<char>(0);
+  return rpc::unit_test::mock_rule_handle{std::shared_ptr<void>{__state.get(), [__state, __clear](void *) { __clear(); }}};
+}
+</%def>
+<%def name="emit_mock_input_fill(key_fields)">
+%   for key_field in key_fields:
+    __input.set_${key_field["raw_name"]}(
+%     for arg in key_field["set_args"]:
+        ${arg}
+%     endfor
+    );
+%   endfor
+</%def>
+<%def name="emit_mock_intercept_get(slot, with_version, key_fields, message_name)">
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (auto __handler = mock_detail::${slot}_handler()) {
+    PROJECT_NAMESPACE_ID::${message_name} __input;
+${emit_mock_input_fill(key_fields)}\
+    rpc::unit_test::db_mock_meta __meta;
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, *rsp, __meta));
+%   if with_version:
+    version = __meta.version;
+%   endif
+    RPC_DB_RETURN_CODE(__res);
+  }
+#endif
+</%def>
 namespace detail {
 static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, const redisReply *reply) {
   if (nullptr == reply) {
@@ -19,6 +77,26 @@ static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, cons
   return ret;
 }
 } // namespace detail
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+${emit_mock_slot("get_all", "std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::" + message_name + " &, PROJECT_NAMESPACE_ID::" + message_name + " &, rpc::unit_test::db_mock_meta &)>")}
+${emit_mock_slot("replace", "std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::" + message_name + " &, rpc::unit_test::db_mock_meta &)>")}
+% for inc_field in atomic_inc_fields:
+${emit_mock_slot("inc_field_" + inc_field["raw_name"], "std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::" + message_name + " &, " + inc_field["cpp_type"] + " &, rpc::unit_test::db_mock_meta &)>")}
+% endfor
+% for partly_get in index.partly_get:
+<%
+    partly_slot_name = ""
+    if partly_get.name != "":
+        partly_slot_name += partly_get.name
+    else:
+        for field in partly_get.fields:
+            partly_slot_name += field
+%>
+${emit_mock_slot("partly_get_" + partly_slot_name, "std::function<rpc::result_code_type(rpc::context &, const PROJECT_NAMESPACE_ID::" + message_name + " &, PROJECT_NAMESPACE_ID::" + message_name + " &, rpc::unit_test::db_mock_meta &)>")}
+% endfor
+#endif
+
 SERVER_FRAME_API result_type get_all(rpc::context &ctx
 % for key_field in key_fields:
                                                              , ${key_field["cpp_type"]} ${key_field["raw_name"]}
@@ -27,9 +105,9 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
 % if index.enable_cas:
                                                              , uint64_t &version) {
 % else:
-                                                             ) {
+                                                              ) {
 % endif
-  char db_key[256];
+${emit_mock_intercept_get("get_all", index.enable_cas, key_fields, message_name)}  char db_key[256];
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   if (result.size < static_cast<int64_t>(keylen)) {
@@ -116,8 +194,21 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
 % if index.enable_cas:
                                                          ,uint64_t &version) {
 % else:
-                                                         ) {
+                                                          ) {
 % endif
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (auto __handler = mock_detail::replace_handler()) {
+    rpc::unit_test::db_mock_meta __meta;
+% if index.enable_cas:
+    __meta.version = version;
+% endif
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, *store, __meta));
+% if index.enable_cas:
+    version = __meta.version;
+% endif
+    RPC_DB_RETURN_CODE(__res);
+  }
+#endif
   char db_key[256];
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
@@ -163,8 +254,18 @@ SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ct
 %         for key_field in key_fields:
                                                          , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 %         endfor
-                                                         , ${inc_field["cpp_type"]}& inc_value
+                                                          , ${inc_field["cpp_type"]}& inc_value
 ) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (auto __handler = mock_detail::inc_field_${inc_field["raw_name"]}_handler()) {
+    PROJECT_NAMESPACE_ID::${message_name} __input;
+${emit_mock_input_fill(key_fields)}    ${inc_field["cpp_type"]} __inc_out = 0;
+    rpc::unit_test::db_mock_meta __meta;
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, __inc_out, __meta));
+    inc_value = __inc_out;
+    RPC_DB_RETURN_CODE(__res);
+  }
+#endif
   char db_key[256];
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
@@ -256,9 +357,9 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
 %     if index.enable_cas:
                                                          , uint64_t &version) {
 %     else:
-                                                         ) {
+                                                          ) {
 %     endif
-  char db_key[256];
+${emit_mock_intercept_get("partly_get_" + partly_field_name, index.enable_cas, key_fields, message_name)}  char db_key[256];
   size_t keylen = sizeof(db_key);
   auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_args});
   if (result.size < static_cast<int64_t>(keylen)) {
@@ -389,3 +490,27 @@ SERVER_FRAME_API result_type batch_partly_get_${partly_field_name}(rpc::context 
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 % endfor
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace mock {
+${emit_mock_register("get_all", "get_all", "static_cast<int32_t>(rpc::db::hash_table::unit_test_request::op_type::kv_get_all)", index.name)}
+
+${emit_mock_register("replace", "replace", "static_cast<int32_t>(rpc::db::hash_table::unit_test_request::op_type::kv_set)", index.name)}
+% for inc_field in atomic_inc_fields:
+
+${emit_mock_register("inc_field_" + inc_field["raw_name"], "inc_field_" + inc_field["raw_name"], "static_cast<int32_t>(rpc::db::hash_table::unit_test_request::op_type::kv_inc_field)", index.name)}
+% endfor
+% for partly_get in index.partly_get:
+<%
+    partly_reg_name = ""
+    if partly_get.name != "":
+        partly_reg_name += partly_get.name
+    else:
+        for field in partly_get.fields:
+            partly_reg_name += field
+%>
+
+${emit_mock_register("partly_get_" + partly_reg_name, "partly_get_" + partly_reg_name, "static_cast<int32_t>(rpc::db::hash_table::unit_test_request::op_type::kv_partly_get)", index.name)}
+% endfor
+}  // namespace mock
+#endif

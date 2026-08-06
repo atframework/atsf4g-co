@@ -25,6 +25,8 @@
 #include <tuple>
 #include <vector>
 
+#include "rpc/rpc_common_types.h"
+
 namespace google {
 namespace protobuf {
 class Message;
@@ -32,6 +34,8 @@ class Message;
 }  // namespace google
 
 namespace rpc {
+class context;
+
 namespace unit_test {
 
 // Server-frame-owned mirror of the tool-side SS rule options, so generated mock code never
@@ -45,15 +49,29 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ss_mock_rule_options {
   bool malformed_body = false;
 };
 
-// Server-frame-owned view of one captured SS request, converted by the tool-side adapter.
+// Server-frame-owned view of one captured SS request, converted by the tool-side adapter. context is
+// the coroutine context of the task driving the handler (use it to await nested RPC calls).
 struct ATFW_UTIL_SYMBOL_VISIBLE ss_mock_request_view {
   const google::protobuf::Message *body = nullptr;
   const atframework::SSMsgHead *head = nullptr;
   uint64_t target_node_id = 0;
   std::string target_node_name;
+  rpc::context *context = nullptr;
 };
 
-using ss_mock_handler_t = std::function<int(const ss_mock_request_view &, google::protobuf::Message &)>;
+// SS/DB mock handlers return rpc::result_code_type so a handler may itself be a coroutine and await
+// nested RPC calls (e.g. a mock SS handler calling another service, or a mock DB handler composing
+// several table ops). Plain synchronous handlers simply use RPC_RETURN_CODE(...) without co_await.
+using ss_mock_handler_t =
+    std::function<rpc::result_code_type(const ss_mock_request_view &, google::protobuf::Message &)>;
+
+// Extensible in/out meta of one DB mock handler invocation (avoids bare scalar parameters so new
+// fields can be added without changing handler signatures). version carries the record CAS version:
+// in = expected version for write ops (0 = no CAS check), out = current record version for read ops
+// and the new version for successful write ops.
+struct ATFW_UTIL_SYMBOL_VISIBLE db_mock_meta {
+  uint64_t version = 0;
+};
 
 // Type-erased invocation slots of the rpc-unit-test mock engines, registered by the test runtime
 // (mock_ss::bind/mock_db::bind) and cleared on unbind. Generated mock implementations call through
@@ -66,21 +84,12 @@ struct ATFW_UTIL_SYMBOL_VISIBLE mock_engine_bridge_t {
                                       const ss_mock_rule_options &options)>
       register_ss_rule;
 
-  // DB: per-table rules (op is rpc::db::hash_table::unit_test_request::op_type as int32_t).
-  std::function<std::shared_ptr<void>(gsl::string_view table_name, int32_t op, int32_t error_code)>
-      db_set_error_rule;
-  std::function<std::shared_ptr<void>(gsl::string_view table_name)> db_force_not_found_rule;
-
-  // DB: raw entry access (direct backend read/write, no RPC, no task context).
-  std::function<void(gsl::string_view key, gsl::string_view type_name, gsl::string_view data, uint64_t version)>
-      db_set_raw_kv;
-  std::function<bool(gsl::string_view key, std::string *type_name, std::string *data, uint64_t *version)>
-      db_get_raw_kv;
-  std::function<uint64_t(gsl::string_view key, gsl::string_view type_name, gsl::string_view data)>
-      db_append_raw_kl;
-  std::function<bool(gsl::string_view key, std::vector<std::tuple<uint64_t, std::string, std::string>> *entries)>
-      db_get_raw_kl;
-  std::function<void(gsl::string_view key, uint64_t ttl_seconds)> db_set_raw_ttl;
+  // DB: register one typed per-interface table handler. Generated code installs the handler into its
+  // own TU-local slot and passes a clear closure here; the engine invokes all pending clear closures on
+  // unbind so no typed handler survives a runtime teardown (clearing is idempotent; the RAII
+  // mock_rule_handle clears the same slot on destruction).
+  std::function<void(gsl::string_view table_name, int32_t op, std::function<void()> clear_handler)>
+      db_register_typed_handler;
 };
 
 // RAII handle of one rule registered through the bridge. Destroying the handle deactivates the rule.

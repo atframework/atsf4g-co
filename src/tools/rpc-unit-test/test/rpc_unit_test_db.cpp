@@ -1,17 +1,29 @@
 // Copyright 2026 atframework
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/pbdesc/rpc_unit_test.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <chrono>
 #include <cstdint>
 #include <vector>
 
 #include <atframework/testing/mock_db.h>
+#include <atframework/testing/mock_discovery.h>
+#include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
 
 #include "frame/test_macros.h"
-#include "protocol/pbdesc/rpc_unit_test.pb.h"
 #include "rpc/db/hash_table.h"
 #include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/db/uuid.h"
+#include "rpc/unit_test/rpcunittestservice.atfw.gen.h"
 
 namespace {
 constexpr uint32_t kTestDbChannel = static_cast<uint32_t>(db_msg_dispatcher::channel_t::RAW_DEFAULT);
@@ -28,6 +40,12 @@ bool start_db_runtime(atframework::testing::runtime &test) {
   test.db().register_message_type<rpc_unit_test::RpcUnitTestTable>();
   test.db().register_message_type<rpc_unit_test::RpcUnitTestListEntry>();
   return true;
+}
+
+atframework::testing::mock_node make_db_remote_node(uint64_t id, const char *name) {
+  atframework::testing::mock_node node;
+  node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(1);
+  return node;
 }
 }  // namespace
 
@@ -434,8 +452,9 @@ CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// Smoke test of the generated per-table typed mock interface (rpc::db::login_auth::mock) on top of
-// the engine-level table rules and raw entry access.
+// SS-style typed per-interface mock of the generated per-table API (rpc::db::login_auth::mock): each
+// generated table interface accepts one handler (typed input/output messages + CAS version); interfaces
+// without a registered handler fall through to the common in-memory backend.
 CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   atframework::testing::runtime test;
   if (!start_db_runtime(test)) {
@@ -443,93 +462,332 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
   }
   test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();
 
-  namespace login_mock = rpc::db::login_auth::mock;
-
-  // Typed data preparation and inspection without any RPC/task.
-  PROJECT_NAMESPACE_ID::table_login_auth record;
-  record.set_open_id("openid-smoke");
-  record.set_user_id(42);
-  CASE_EXPECT_TRUE(login_mock::set_record("openid-smoke", record, 3));
-  CASE_EXPECT_TRUE(login_mock::has_record("openid-smoke"));
-  CASE_EXPECT_TRUE(login_mock::version_equal("openid-smoke", 3));
-  {
-    PROJECT_NAMESPACE_ID::table_login_auth restored;
-    uint64_t stored_version = 0;
-    CASE_EXPECT_TRUE(login_mock::get("openid-smoke", restored, &stored_version));
-    CASE_EXPECT_EQ(42, static_cast<int>(restored.user_id()));
-    CASE_EXPECT_EQ(3, static_cast<int>(stored_version));
+  // Arrange through the real write path (served by the in-memory backend).
+  auto arrange_task = test.run_task(
+      "db_login_auth_arrange", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> store{ctx};
+        store->set_open_id("openid-smoke");
+        store->set_user_id(42);
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(store), version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (!arrange_task.empty()) {
+    auto arrange_result = test.wait(arrange_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(arrange_result.task_exited);
+    CASE_EXPECT_EQ(0, arrange_result.result_code);
   }
 
-  // The generated RPC API reads exactly what the typed mock wrote (same key layout).
-  auto task = test.run_task(
-      "db_login_auth_smoke", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+  // Intercept get_all: the handler sees the typed input (key fields), fills the output record and the
+  // CAS version; the backend is bypassed entirely.
+  auto get_rule = rpc::db::login_auth::mock::get_all(
+      [](rpc::context &, const PROJECT_NAMESPACE_ID::table_login_auth &input,
+         PROJECT_NAMESPACE_ID::table_login_auth &output, rpc::unit_test::db_mock_meta &meta) -> rpc::result_code_type {
+        CASE_EXPECT_EQ("openid-smoke", input.open_id());
+        output.set_open_id(input.open_id());
+        output.set_user_id(100);
+        meta.version = 9;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!get_rule);
+  auto get_task = test.run_task(
+      "db_login_auth_mocked_get", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
         int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
         CASE_EXPECT_EQ(0, res);
-        CASE_EXPECT_EQ(42, static_cast<int>(rsp->user_id()));
-        CASE_EXPECT_EQ(3, static_cast<int>(version));
-
-        // replace goes through the real generated CAS path and bumps the version.
-        rsp->set_user_id(43);
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(rsp), version));
-        CASE_EXPECT_EQ(0, res);
-        CASE_EXPECT_EQ(4, static_cast<int>(version));
+        CASE_EXPECT_EQ(100, static_cast<int>(rsp->user_id()));
+        CASE_EXPECT_EQ(9, static_cast<int>(version));
         RPC_RETURN_CODE(0);
+      });
+  if (!get_task.empty()) {
+    auto get_result = test.wait(get_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(get_result.task_exited);
+    CASE_EXPECT_EQ(0, get_result.result_code);
+  }
+
+  // Intercept replace: version carries the expected CAS version in and the new version out.
+  auto replace_rule = rpc::db::login_auth::mock::replace(
+      [](rpc::context &, const PROJECT_NAMESPACE_ID::table_login_auth &input,
+         rpc::unit_test::db_mock_meta &meta) -> rpc::result_code_type {
+        CASE_EXPECT_EQ("openid-smoke", input.open_id());
+        CASE_EXPECT_EQ(43, static_cast<int>(input.user_id()));
+        CASE_EXPECT_EQ(1, static_cast<int>(meta.version));
+        meta.version = 7;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!replace_rule);
+  auto replace_task = test.run_task(
+      "db_login_auth_mocked_replace", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> store{ctx};
+        store->set_open_id("openid-smoke");
+        store->set_user_id(43);
+        uint64_t version = 1;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(store), version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(7, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (!replace_task.empty()) {
+    auto replace_result = test.wait(replace_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(replace_result.task_exited);
+    CASE_EXPECT_EQ(0, replace_result.result_code);
+  }
+
+  // remove_all has no registered handler: it falls through to the in-memory backend.
+  auto remove_task = test.run_task(
+      "db_login_auth_fallthrough_remove", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, "openid-smoke"));
+        CASE_EXPECT_EQ(0, res);
+        RPC_RETURN_CODE(0);
+      });
+  if (!remove_task.empty()) {
+    auto remove_result = test.wait(remove_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(remove_result.task_exited);
+    CASE_EXPECT_EQ(0, remove_result.result_code);
+  }
+
+  // After the handles end, get_all falls through again and the backend record is gone.
+  get_rule.reset();
+  replace_rule.reset();
+  auto restored_task = test.run_task(
+      "db_login_auth_restored_get", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
+        RPC_RETURN_CODE(0);
+      });
+  if (!restored_task.empty()) {
+    auto restored_result = test.wait(restored_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(restored_result.task_exited);
+    CASE_EXPECT_EQ(0, restored_result.result_code);
+  }
+
+  // Intercepted calls never reach the engine hook; only the fallthrough ops are in the history.
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", op_type::kv_set)));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", op_type::remove_all)));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// A DB mock handler is a coroutine (rpc::result_code_type) driven inline at the generated interface
+// entry: it may await nested RPC calls (here one SS RPC) before filling output/meta.
+CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::db, atframework::testing::feature::ss};
+  if (0 != test.start(options) || !test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+  test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();
+
+  auto remote = test.discovery().add_node(make_db_remote_node(0x130071, "unit-test-remote-db-nested"));
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    test.stop();
+    return;
+  }
+  auto ss_rule = test.ss().mock(
+      "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
+          -> rpc::result_code_type {
+        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("nested:" + typed_request.payload());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!ss_rule);
+
+  auto db_rule = rpc::db::login_auth::mock::get_all(
+      [](rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_login_auth &input,
+         PROJECT_NAMESPACE_ID::table_login_auth &output, rpc::unit_test::db_mock_meta &meta)
+          -> rpc::result_code_type {
+        // Nested coroutine call: await one SS RPC inside the DB mock handler.
+        rpc_unit_test::RpcUnitTestEchoReq nested_req;
+        nested_req.set_payload("db-handler");
+        rpc_unit_test::RpcUnitTestEchoRsp nested_rsp;
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            rpc::unit_test::rpc_unit_test_user(ctx, 0x130071, 1, 10001, "openid-nested", nested_req, nested_rsp));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ("nested:db-handler", nested_rsp.echo());
+        output.set_open_id(input.open_id());
+        output.set_user_id(81);
+        meta.version = 3;
+        RPC_RETURN_CODE(res);
+      });
+  CASE_EXPECT_TRUE(!!db_rule);
+
+  auto task = test.run_task(
+      "db_nested_handler", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-nested", rsp, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(81, static_cast<int>(rsp->user_id()));
+        CASE_EXPECT_EQ(3, static_cast<int>(version));
+        RPC_RETURN_CODE(res);
       });
   if (task.empty()) {
     test.stop();
     return;
   }
-  auto result = test.wait(task, std::chrono::seconds{5});
+  auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
-  CASE_EXPECT_TRUE(login_mock::version_equal("openid-smoke", 4));
 
-  // Per-table error injection only affects login_auth ops, and ends with the RAII handle.
-  {
-    auto error_rule = login_mock::set_error(op_type::kv_get_all, -12345);
-    CASE_EXPECT_TRUE(!!error_rule);
-    auto error_task = test.run_task(
-        "db_login_auth_injected_error", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-          rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
-          uint64_t version = 0;
-          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
-          CASE_EXPECT_EQ(-12345, res);
-          RPC_RETURN_CODE(0);
-        });
-    if (!error_task.empty()) {
-      auto error_result = test.wait(error_task, std::chrono::seconds{5});
-      CASE_EXPECT_TRUE(error_result.task_exited);
-      CASE_EXPECT_EQ(0, error_result.result_code);
+  // The nested SS call went through the SS mock engine (recorded once); the intercepted DB call never
+  // reached the DB engine hook.
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user")));
+  CASE_EXPECT_EQ(0, static_cast<int>(test.db().calls("login_auth")));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// Per-table per-interface callbacks: the handler inspects the request inputs (key, stored record), sets
+// the return code and the returned record/version, and operations without a callback fall through to the
+// common in-memory backend.
+CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
+  atframework::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+  test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();
+
+  // Seed one record through the engine raw entry API (canonical key layout).
+  PROJECT_NAMESPACE_ID::table_login_auth seed;
+  seed.set_open_id("openid-callback");
+  seed.set_user_id(7);
+  const std::string seed_key = std::string{db_msg_dispatcher::me()->get_record_prefix()} + "-login_auth.openid-callback";
+  const std::string seed_type_name{PROJECT_NAMESPACE_ID::table_login_auth::descriptor()->full_name()};
+  test.db().set_raw_kv(seed_key, seed_type_name, seed.SerializeAsString(), 1);
+
+  auto rule = test.db().mock_table("login_auth");
+  CASE_EXPECT_TRUE(!!rule);
+
+  // Spy on writes: inspect the record being stored, then decline so the common backend persists it.
+  std::string last_stored_open_id;
+  uint64_t last_stored_user_id = 0;
+  rule.on(op_type::kv_set, [&](atframework::testing::db_table_context &context) {
+    CASE_EXPECT_EQ(op_type::kv_set, context.op);
+    CASE_EXPECT_EQ("login_auth", context.table_name);
+    if (nullptr != context.input_table) {
+      const auto &stored = static_cast<const PROJECT_NAMESPACE_ID::table_login_auth &>(*context.input_table);
+      last_stored_open_id = stored.open_id();
+      last_stored_user_id = stored.user_id();
     }
+    return false;
+  });
+
+  // Reads of the untouched key fall through to the common backend.
+  auto fallthrough_task = test.run_task(
+      "db_callback_fallthrough", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", rsp, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(7, static_cast<int>(rsp->user_id()));
+        CASE_EXPECT_EQ(1, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (!fallthrough_task.empty()) {
+    auto fallthrough_result = test.wait(fallthrough_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(fallthrough_result.task_exited);
+    CASE_EXPECT_EQ(0, fallthrough_result.result_code);
   }
 
-  // force_not_found shadows reads while the backend record stays intact.
-  {
-    auto not_found_rule = login_mock::force_not_found();
-    CASE_EXPECT_TRUE(!!not_found_rule);
-    auto nf_task = test.run_task(
-        "db_login_auth_forced_not_found", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-          rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
-          uint64_t version = 0;
-          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
-          CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
-          RPC_RETURN_CODE(0);
-        });
-    if (!nf_task.empty()) {
-      auto nf_result = test.wait(nf_task, std::chrono::seconds{5});
-      CASE_EXPECT_TRUE(nf_result.task_exited);
-      CASE_EXPECT_EQ(0, nf_result.result_code);
+  // Write through the generated API: the spy sees the stored record and the common backend persists it
+  // (declined callback), bumping the version.
+  auto write_task = test.run_task(
+      "db_callback_write", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 1;
+        rsp->set_open_id("openid-callback");
+        rsp->set_user_id(8);
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(rsp), version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(2, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (!write_task.empty()) {
+    auto write_result = test.wait(write_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(write_result.task_exited);
+    CASE_EXPECT_EQ(0, write_result.result_code);
+  }
+  CASE_EXPECT_EQ("openid-callback", last_stored_open_id);
+  CASE_EXPECT_EQ(8, static_cast<int>(last_stored_user_id));
+
+  // Now intercept reads: serve a canned record + version with a success code, bypassing the backend.
+  rule.on(op_type::kv_get_all, [&](atframework::testing::db_table_context &context) {
+    CASE_EXPECT_TRUE(context.key.find("openid-callback") != gsl::string_view::npos);
+    PROJECT_NAMESPACE_ID::table_login_auth canned;
+    canned.set_open_id("openid-canned");
+    canned.set_user_id(100);
+    CASE_EXPECT_TRUE(test.db().make_output(*context.rpc_context, canned, context.output_table));
+    context.output_version = 9;
+    context.return_code = 0;
+    return true;
+  });
+  auto canned_task = test.run_task(
+      "db_callback_canned_read", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", rsp, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(100, static_cast<int>(rsp->user_id()));
+        CASE_EXPECT_EQ(9, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (!canned_task.empty()) {
+    auto canned_result = test.wait(canned_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(canned_result.task_exited);
+    CASE_EXPECT_EQ(0, canned_result.result_code);
+  }
+  // The backend record is untouched by the handled read.
+  CASE_EXPECT_EQ(2, static_cast<int>(test.db().get_version(seed_key)));
+
+  // Table-level catch-all for remaining interfaces: report a custom error for remove_all while kv_set
+  // and kv_get_all still have their own callbacks and everything else keeps falling through.
+  rule.on_any([](atframework::testing::db_table_context &context) {
+    if (op_type::remove_all == context.op) {
+      context.return_code = -23456;
+      return true;
     }
-    CASE_EXPECT_TRUE(login_mock::has_record("openid-smoke"));
+    return false;
+  });
+  auto remove_task = test.run_task(
+      "db_callback_catch_all", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, "openid-callback"));
+        CASE_EXPECT_EQ(-23456, res);
+        RPC_RETURN_CODE(0);
+      });
+  if (!remove_task.empty()) {
+    auto remove_result = test.wait(remove_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(remove_result.task_exited);
+    CASE_EXPECT_EQ(0, remove_result.result_code);
   }
 
-  // Table-level statistics are derived from the recorded table name.
-  CASE_EXPECT_TRUE(test.db().calls("login_auth") >= 4);
-  CASE_EXPECT_TRUE(test.db().calls("login_auth", op_type::kv_get_all) >= 3);
-  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", op_type::kv_set)));
-  CASE_EXPECT_TRUE(nullptr != test.db().last_call("login_auth"));
+  // Ending the rule restores the common layer for every interface.
+  rule.reset();
+  auto restored_task = test.run_task(
+      "db_callback_rule_reset", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
+        uint64_t version = 0;
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", rsp, version));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(8, static_cast<int>(rsp->user_id()));
+        CASE_EXPECT_EQ(2, static_cast<int>(version));
+        RPC_RETURN_CODE(0);
+      });
+  if (!restored_task.empty()) {
+    auto restored_result = test.wait(restored_task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(restored_result.task_exited);
+    CASE_EXPECT_EQ(0, restored_result.result_code);
+  }
 
   CASE_EXPECT_EQ(0, test.stop());
 }

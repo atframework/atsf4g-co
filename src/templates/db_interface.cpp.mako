@@ -42,6 +42,11 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include "rpc/db/db_utils.h"
 #include "rpc/db/hash_table.h"
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// Typed mock handler slots below are guarded per op.
+#  include <mutex>
+#endif
+
 namespace rpc {
 namespace db {
 

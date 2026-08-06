@@ -420,7 +420,8 @@ stop/drain；该 runtime 不得复用。事件泵使用有界批次和 thread yi
 - 生成 mock 代码编译进 server_frame（及服务自身的生成 TU），因此**禁止直接链接工具库符号**；引擎调用
   一律经 `rpc/unit_test/mock_engine_bridge.h` 的类型擦除桥接槽转发（server_frame 自有镜像类型
   `ss_mock_rule_options`/`ss_mock_request_view`/`mock_rule_handle`，规则停用用 `shared_ptr<void>` token
-  的 deleter 传递），由 `mock_ss::bind`/`mock_db::bind` 注册、unbind 清理。桥接为空时生成 helper 降级为
+  的 deleter 传递；DB typed handler 经 `db_register_typed_handler` 槽把清除闭包交给引擎统一生命周期管
+  理），由 `mock_ss::bind`/`mock_db::bind` 注册、unbind 清理。桥接为空时生成 helper 降级为
   空 handle/false/no-op。引擎直连接口（`mock_ss::mock`、`mock_db::mock_table` 等）仍保留给测试直接使用。
 
 ## 4. 目标架构
@@ -708,14 +709,25 @@ ingress 设置为 `mock://<endpoint>`。实现要点（对应 2.2 的约束）�
 
 ```cpp
 test.ss().mock(full_rpc_name, Request::descriptor()->full_name(), Response::descriptor()->full_name(),
-               [](const atframework::testing::ss_request_view& request, google::protobuf::Message& response) -> int {
+               [](const atframework::testing::ss_request_view& request, google::protobuf::Message& response)
+                   -> rpc::result_code_type {
                  const auto& req = static_cast<const Request&>(request.body);
                  auto& rsp = static_cast<Response&>(response);
-                 return 0;
+                 RPC_RETURN_CODE(0);
                });
-// 生成层等价快捷方式：<service>::mock::method(handler_typed)（非模板导出函数，内部完成上述适配）。
+// 生成层等价快捷方式：<service>::mock::method(handler_typed)（非模板导出函数，内部完成上述适配；
+// typed handler 首参为 rpc::context&）。
 test.ss().expect(full_rpc_name).times(1).to_node(remote.id());
 ```
+
+**嵌套协程**：SS/DB mock handler 一律返回 `rpc::result_code_type`，因此 handler 自身可以是协程、可用
+`RPC_AWAIT_CODE_RESULT` 等待嵌套 RPC（例如 mock 一个服务时内部再调另一个被 mock 的服务，或 DB mock
+handler 内等待一次 SS RPC）。SS handler 经引擎 `rpc::async_invoke` 任务驱动：`deliver_pending` 收集到匹配
+消息后 spawn 协程任务，handler 完成后才把响应注入 `pending_responses_`（`delay_generations` 从完成时刻起
+算）；嵌套调用所需的 context 经 `ss_request_view.context`/桥接 `ss_mock_request_view.context`/生成 typed
+handler 首参 `rpc::context&` 贯通。unbind 使生命周期 token 失效，迟到的完成直接丢弃响应、不再触碰引擎。
+DB handler 在生成接口入口的协程内被直接 co_await（首参即接口的 `rpc::context&`）。纯同步 handler 不写
+co_await、`RPC_RETURN_CODE(...)` 返回即可，两种协程模式（std-coroutine/legacy）下行为一致。
 
 规则匹配维度：完整 RPC 名、目标节点、请求 protobuf 类型、metadata、user/router header；支持 FIFO 脚本和默认
 handler。
@@ -869,38 +881,52 @@ presence-aware merge，并维护 CAS version、TTL，KL 另存单调索引与每
 - `EXPIRE`/`PERSIST` 只修改已存在 key，但公共 API 仍按当前 `unpack_nothing` 的可观测语义返回成功，即使 Redis
   integer reply 为 0。
 
-覆盖顺序：per-operation user rule -> per-table rule -> user backend -> 默认内存 backend。用户规则可选择
-handled、继续默认或显式 passthrough；默认不允许真实 Redis passthrough。只有 fixture 显式初始化 DB
+覆盖顺序：typed 接口 handler（生成层）-> 引擎层 per-table 回调 -> 默认内存 backend。未注册 handler/回调的
+接口一律回落内存 backend；默认不允许真实 Redis passthrough。只有 fixture 显式初始化 DB
 dispatcher 且提供真实配置时才允许 passthrough，否则立即返回“passthrough unavailable”，不得进入可能永不
 完成的发送路径。
 
-**per-table mock（每个表接口单独的 mock 接口）**。表身份无需扩展 hook ABI：生成 DB 层的 key 恒为
+**per-table mock（每个表接口单独的 mock 接口，SS 风格）**。每个生成的表接口提供与 `<service>::mock` 同
+构的 typed handler 注册接口；表身份无需扩展 hook ABI：生成 DB 层的 key 恒为
 `{record_prefix}-{table_name}.{key_fields...}`，`table_name` 是 proto 消息名字面量（不含 `.`，见
 `db_rpc_redis_kv/kl.cpp.mako` 的 `prefix_fmt_key` 与已生成代码），mock engine 在 handle 时剥离
 `db_msg_dispatcher::me()->get_record_prefix()` 前缀并取到首个 `.` 即得表名；解析失败（非规范 key）视为
 无表规则，回落默认后端。分两层：
 
-- **引擎层表规则（无代码生成）**：`mock_db::mock_table(table_name)` 返回 RAII `db_table_rule_handle`
-  （仿 `dns_rule_handle`，析构撤销；同表后注册规则优先）。规则选项：按 `op_type` 的错误注入
-  （`set_error(op, code)`，表内其余 op 不受影响）、canned KV 记录（bytes + version，仅作用于
-  get_all/partly_get/batch 组合）、强制 `EN_DB_RECORD_NOT_FOUND`、`set_passthrough(false)` 之外的
-  `fallthrough`（规则放行时继续内存后端）。检查侧提供表级过滤统计 `calls(table_name, op)` 与
+- **生成层 typed 接口 handler（首选，仿 `<service>::mock`）**：`db_rpc_redis` 模板按表（index 命名空间）
+  为**每个生成的表接口**生成 `mock::<interface>(std::function<rpc::result_code_type(...)>)` 注册函数，返回
+  `rpc::unit_test::mock_rule_handle`（RAII 析构撤销）。拦截点在生成接口函数入口（宏门控纯新增）：已注册
+  handler 时，用 key fields 构造 typed input message，在接口协程内直接 co_await handler（支持嵌套 RPC，
+  见 8.2 嵌套协程段），并以其返回码直接返回，完全绕过公共层；未注册则走原实现（经 hash_table hook 进内
+  存 backend）。handler 首参为 `rpc::context &`，末参统一为可扩展的 `rpc::unit_test::db_mock_meta &`
+  （当前含 `version`：写接口传入期望 CAS 版本、读出记录版本；后续新增 in/out 字段不改签名），按接口形状：
+  - KV `get_all`/`partly_get_*`：`(ctx, const table &input, table &output, db_mock_meta &meta)`——input 仅
+    key fields 有效，output 为返回数据表，meta.version 为返回数据版本号（CAS 表）；
+  - KV `replace`/`insert`：`(ctx, const table &input, db_mock_meta &meta)`（CAS 表 meta.version 传入期望
+    值、传出新版本）；
+  - `inc_field_*`：`(ctx, const table &input, <field_type> &inc_value, db_mock_meta &meta)`；
+  - `remove_all`/`remove_ttl`：`(ctx, const table &input, db_mock_meta &meta)`；`set_ttl`：`(ctx, const
+    table &input, uint64_t ttl_second, db_mock_meta &meta)`；
+  - KL `get_all`：`(ctx, const table &input, std::vector<std::pair<uint64_t, table>> &output, db_mock_meta
+    &meta)`；`get_by_indexs` 另加 `gsl::span<const uint64_t> indexes` 输入；`add`/`update`/`remove_by_index`
+    同理在既有参数后追加 meta。
+  handler 存储于生成 cpp 的同 TU 静态槽（互斥保护、代数计数防旧 handle 误清新注册），注册时经桥接
+  `db_register_typed_handler` 把清除闭包交给引擎，runtime unbind 统一清除所有 typed handler（RAII 与
+  引擎清除均幂等）；未绑定引擎时注册返回空 handle 且不安装（同 `<service>::mock` 约定）。batch 组合接口
+  不单独提供 handler，由逐 key 的单接口 handler/内存 backend 自然覆盖。注意：生成层拦截的调用在
+  hash_table hook 之前返回，不进入引擎调用历史；历史只覆盖到达公共层的操作。
+- **引擎层表规则（无代码生成，通用兜底）**：`mock_db::mock_table(table_name)` 返回 RAII
+  `db_table_rule_handle`，针对**各个接口分别注册回调函数**（`on(op_type, fn)`；`on_any(fn)` 为表级兜
+  底）：回调收到 `db_table_context`（op、key、表名、写入记录 `input_table`、partly 字段、KL 索引等输
+  入），可检查输入数据、设置返回码（`return_code`）、返回的数据表（`make_output` 填充
+  `output_table`）、数据版本号（`output_version`，CAS 表需要时）与 KL 输出条目（`kl_output` +
+  `make_kl_entry`）；返回 true 表示该操作已被处理、完全绕过公共 mock 层，返回 false 或未注册回调的接
+  口回落到公共 mock 层（内存 backend）。检查侧提供表级过滤统计 `calls(table_name, op)` 与
   `last_call(table_name)`，复用统一调用历史。
-- **模板层 typed 接口（生成）**：见下段 `<db 命名空间>::mock`，把表规则的字符串表名与 bytes 包装成
-  该表 descriptor 的 typed API。
-
-typed 数据检查与行为注入接口（遵循 3.5/3.6）：`db_rpc_redis` 模板按表（index 命名空间）增量生成
-`<db 命名空间>::mock` 子命名空间（宏门控纯新增，与 `<service>::mock` 同约定），**不传引擎、不引用工具库
-类型**，经 `rpc::unit_test` 桥接访问绑定的 mock backend（raw entry：channel + 规范 key → bytes、CAS
-version、TTL、KL 索引与条目），生成层持 `prefix_fmt_key`/`key_fields` 全信息，可按表 descriptor 精确重建
-key 并编解码 typed message。每个表提供：
-
-- key 构造：`make_key(key_fields...)`；
-- 行为注入（返回 `rpc::unit_test::mock_rule_handle`，RAII 析构停用）：`set_error(op, code)`、
-  `force_not_found()`；通用 canned/fallthrough 组合仍由引擎直连接口 `mock_db::mock_table` 提供；
-- 数据准备（直写 backend，不经过 RPC、不要求 task 上下文）：KV `set_record(key_fields..., const
-  table_xxx&, uint64_t version = 0)`、`set_ttl(key_fields..., seconds)`、KL `append_entry(const table_xxx&)`；
-- 只读检查：KV `get`（含版本输出）/`has_record`/`version_equal`，KL `indexes()`/`entry_at(index)`/`count`。
+- **数据准备**：优先经真实写接口（`replace`/`insert`/KL append）写入内存 backend；需要直接种子 CAS
+  版本号或精确 bytes 时使用引擎层 raw entry API（`mock_db::set_raw_kv`/`get_raw_kv`/`append_raw_kl`/
+  `set_raw_ttl`，规范 key + descriptor type name + owned bytes）。生成层不再提供 `set_record`/`get`/
+  `has_record`/`version_equal`/`indexes`/`entry_at`/`count`/`set_error`/`force_not_found` 等 helper。
 
 ### 8.6 UUID
 
@@ -1238,18 +1264,28 @@ package 由 `PROJECT_NAMESPACE` 决定）：
   `g_unique_id_pools` 静态号段缓存在单进程跨 case 不清零，号段基数会延续，测试不得断言绝对 id 值。）
 - [x] 证明默认 fixture 不初始化 Redis dispatcher、不创建网络连接、无跨 case 静态状态泄漏（含
   `g_unique_id_pools`）。
-- [x] 引擎层 per-table 规则（见 8.5）：`mock_db::mock_table(table_name)` RAII 表规则（按 op 错误注入、
-  canned 记录、强制 NOT_FOUND、fallthrough）、表名从规范 key 提取（剥离 record prefix 取首个 `.` 前段），
-  表级 `calls(table, op)`/`last_call(table)` 统计；未匹配表回落内存后端。
+- [x] 引擎层 per-table 规则（见 8.5）：`mock_db::mock_table(table_name)` RAII 表规则，针对各个接口注册
+  回调（`on(op, fn)`/`on_any(fn)`），回调经 `db_table_context` 检查输入数据、设置返回码、返回数据表
+  （`output_table`，`make_output` 辅助）与数据版本号（`output_version`）；返回 false 或未注册回调的接口
+  回落公共 mock 层（内存后端）。表名从规范 key 提取（剥离 record prefix 取首个 `.` 前段），表级
+  `calls(table, op)`/`last_call(table)` 统计；smoke case 见
+  `db_table_callback_inspects_input_and_sets_output`。
 - [x] raw entry 访问 API：`mock_db` 暴露 channel + 规范 key 直读写（descriptor/type 名、owned bytes、
-  CAS version、TTL、KL 索引与条目），供模板层 typed 适配与断言使用，不经过 RPC、不要求 task 上下文。
-- [x] 模板层 `<db 命名空间>::mock` typed per-table 接口（`db_rpc_redis` 宏门控增量生成，经
-  `rpc::unit_test` 桥接访问引擎）：`make_key`、`set_error`/`force_not_found`（RAII
-  `mock_rule_handle`）、数据准备（`set_record`/`set_ttl`/KL `append_entry`）、只读检查（`get`/
-  `has_record`/`version_equal`/KL `indexes`/`entry_at`/`count`）；smoke case 见
-  `db_login_auth_typed_mock_table_interface`。
+  CAS version、TTL、KL 索引与条目），供引擎层数据准备（CAS 版本种子、精确 bytes）与断言使用，不经过
+  RPC、不要求 task 上下文。
+- [x] 生成层 `<db 命名空间>::mock` typed per-interface handler（SS 风格，`db_rpc_redis` 宏门控增量生
+  成）：每个生成的表接口一个注册函数 `mock::<interface>(std::function<rpc::result_code_type(...)>)`，
+  handler 首参 `rpc::context &`、收到 typed input（key fields 构造）/output message，末参统一为可扩展
+  `rpc::unit_test::db_mock_meta &`（version 等 in/out header 信息，不再传裸露标量），返回码决定接口结
+  果且支持嵌套协程调用；拦截点在生成接口入口（接口协程内 co_await），未注册回落内存 backend；
+  `rpc::unit_test::mock_rule_handle` RAII 撤销 + 引擎 unbind 经 `db_register_typed_handler` 统一清除。
+  移除旧的 `set_error`/`force_not_found`/typed 数据 helper 设计。
+- [x] SS/DB mock handler 嵌套协程：handler 统一返回 `rpc::result_code_type`；SS 侧引擎经
+  `rpc::async_invoke` 任务驱动 handler 并在完成后注入响应，context 经 `ss_request_view.context`/桥接
+  view/生成 typed handler 首参贯通；unbind 生命周期 token 过期后迟到完成安全丢弃。smoke case 见
+  `ss_mock_handler_awaits_nested_rpc` 与 `db_mock_handler_awaits_nested_rpc`。
 - [x] 自测明确调用 `rpc::db::login_auth::replace/get_all` 与 `PROJECT_NAMESPACE_ID::table_login_auth`，不使用仅测试 backend 的
-  私有捷径；并用 `rpc::db::login_auth::mock` 覆盖单表错误注入与 typed 断言。
+  私有捷径；并用 `rpc::db::login_auth::mock` typed handler 覆盖单接口拦截与回落。
 
 完成条件：完整 DB 操作矩阵通过，CAS/列表与当前 Lua 一致，用户能覆盖单操作或整个 backend/provider。
 
@@ -1344,8 +1380,11 @@ Windows 的 CTest 用例由 helper 通过 `ENVIRONMENT_MODIFICATION` 自动补 P
 
 注意：本工作区 Windows 构建树的 ninja 头文件依赖追踪失效（本地化 cl.exe `/showIncludes` 前缀与
 `msvc_deps_prefix` 不匹配，`ninja -t deps <obj>` 显示 `#deps 0`），**修改头文件后增量构建不会重编译**，必须
-先 `ninja -t clean <受影响 target>` 再构建，否则新旧 ABI 混链会在运行期崩溃。详见
-`.agents/skills/build/SKILL.md` 的 Header-change incremental-build pitfall 一节。
+删除受影响 TU 的对象文件（`Remove-Item -Recurse <BUILD_DIR>/.../CMakeFiles/<target>.dir/*.obj`）再构建，
+否则新旧 ABI 混链会在运行期崩溃。**禁止 `ninja -t clean <target>`**：它会连带删除生成产物（`.pb`/`.pb.h`）
+与目录 `cmake_install.cmake`，进而强制 build.ninja 全量再生成，而再生成期 `generate-for-pb` 打印步骤依赖
+`serverframe_all.pb`，一旦当前（可能脏的）协议树无法通过 protoc 就会导致 configure 失败且 ninja 无法继续。
+详见 `.agents/skills/build/SKILL.md` 的 Header-change incremental-build pitfall 一节。
 
 第二协程模式使用独立 build tree，不能覆盖当前配置；路径放在已解析 build dir 下：
 

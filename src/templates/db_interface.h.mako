@@ -35,6 +35,11 @@ if index_type_enum is None:
 #include <cstddef>
 #include <string>
 #include <vector>
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// SS-style typed mock handler registrations below use std::function/std::pair in their signatures.
+#  include <functional>
+#  include <utility>
+#endif
 
 #include <nostd/string_view.h>
 #include "rpc/db/db_utils.h"

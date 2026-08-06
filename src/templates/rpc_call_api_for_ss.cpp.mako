@@ -506,7 +506,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
 namespace mock {
 % for rpc in rpcs.values():
 ${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
-    std::function<int(const ${rpc.get_request().get_cpp_class_name()} &,
+    std::function<rpc::result_code_type(rpc::context &, const ${rpc.get_request().get_cpp_class_name()} &,
                       ${rpc.get_response().get_cpp_class_name()} &)>
         __handler,
     const rpc::unit_test::ss_mock_rule_options &__options) {
@@ -519,13 +519,13 @@ ${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
       ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name(),
       ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(),
       [__handler = std::move(__handler)](const rpc::unit_test::ss_mock_request_view &__view,
-                                         google::protobuf::Message &__response) -> int {
-        if (nullptr == __view.body) {
-          return -1;
+                                         google::protobuf::Message &__response) -> rpc::result_code_type {
+        if (nullptr == __view.body || nullptr == __view.context) {
+          RPC_RETURN_CODE(-1);
         }
-        return __handler(
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__handler(*__view.context,
             static_cast<const ${rpc.get_request().get_cpp_class_name()} &>(*__view.body),
-            static_cast<${rpc.get_response().get_cpp_class_name()} &>(__response));
+            static_cast<${rpc.get_response().get_cpp_class_name()} &>(__response))));
       },
       __options)};
 }

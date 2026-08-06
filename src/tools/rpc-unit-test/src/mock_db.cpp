@@ -258,14 +258,13 @@ const db_request_record *mock_db::last_call(gsl::string_view table_name) const {
   return nullptr;
 }
 
-db_table_rule_handle mock_db::mock_table(gsl::string_view table_name, const db_table_rule_options &options) {
+db_table_rule_handle mock_db::mock_table(gsl::string_view table_name) {
   if (table_name.empty()) {
     diagnostic_ = "mock_table: empty table name";
     return db_table_rule_handle{};
   }
   auto rule = std::make_shared<detail::db_table_rule_state>();
   rule->table_name = std::string{table_name.data(), table_name.size()};
-  rule->options = options;
   table_rules_.push_back(rule);
   return db_table_rule_handle{std::move(rule)};
 }
@@ -307,6 +306,58 @@ void db_table_rule_handle::reset() {
   }
 }
 
+db_table_rule_handle &db_table_rule_handle::on(op_type op, db_table_handler fn) {
+  if (rule_) {
+    if (fn) {
+      rule_->op_handlers[static_cast<int32_t>(op)] = std::move(fn);
+    } else {
+      rule_->op_handlers.erase(static_cast<int32_t>(op));
+    }
+  }
+  return *this;
+}
+
+db_table_rule_handle &db_table_rule_handle::on_any(db_table_handler fn) {
+  if (rule_) {
+    rule_->any_handler = std::move(fn);
+  }
+  return *this;
+}
+
+db_table_rule_handle &db_table_rule_handle::clear_handlers() {
+  if (rule_) {
+    rule_->op_handlers.clear();
+    rule_->any_handler = nullptr;
+  }
+  return *this;
+}
+
+bool mock_db::make_output(
+    rpc::context &ctx, const google::protobuf::Message &source,
+    atfw::util::memory::strong_rc_ptr<rpc::shared_abstract_message<google::protobuf::Message>> &out) const {
+  const absl::string_view full_name = source.GetDescriptor()->full_name();
+  auto factory_iter = factories_.find(std::string{full_name.data(), full_name.size()});
+  if (factory_iter == factories_.end() || !factory_iter->second) {
+    FWLOGERROR("mock_db: no message factory registered for {}", full_name);
+    return false;
+  }
+  auto message = factory_iter->second(ctx);
+  message->CopyFrom(source);
+  out = atfw::util::memory::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+      std::move(message));
+  return true;
+}
+
+int32_t mock_db::make_kl_entry(rpc::context &ctx, const google::protobuf::Message &source, uint64_t list_index,
+                               db_key_list_message_result_t &out) const {
+  out.list_index = list_index;
+  out.version = 0;
+  if (!make_output(ctx, source, out.message)) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+  }
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
 void mock_db::bind() {
   if (bound_) {
     return;
@@ -317,72 +368,14 @@ void mock_db::bind() {
       });
   bound_ = true;
 
-  // Expose this engine to generated per-table mock helpers through the server-frame bridge, so
-  // generated code never links the rpc-unit-test library.
+  // Expose this engine to generated per-table typed handlers through the server-frame bridge, so
+  // generated code never links the rpc-unit-test library. Generated code owns the handler slot; the
+  // engine only keeps the clear closures so runtime teardown deactivates every typed handler.
   rpc::unit_test::mock_engine_bridge_t slots;
-  slots.db_set_error_rule = [this](gsl::string_view table_name, int32_t op, int32_t error_code)
-      -> std::shared_ptr<void> {
-    db_table_rule_options options;
-    options.op_error_codes[op] = error_code;
-    db_table_rule_handle rule = mock_table(table_name, options);
-    if (!rule.rule_) {
-      return nullptr;
+  slots.db_register_typed_handler = [this](gsl::string_view, int32_t, std::function<void()> clear_handler) {
+    if (clear_handler) {
+      typed_handler_clearers_.push_back(std::move(clear_handler));
     }
-    // Detach the rule state before the local handle destroys it; deactivation is owned by the
-    // returned bridge token from now on.
-    std::shared_ptr<detail::db_table_rule_state> state = rule.rule_;
-    rule.rule_.reset();
-    return std::shared_ptr<void>{state.get(), [state](void *) { state->active = false; }};
-  };
-  slots.db_force_not_found_rule = [this](gsl::string_view table_name) -> std::shared_ptr<void> {
-    db_table_rule_options options;
-    options.force_not_found = true;
-    db_table_rule_handle rule = mock_table(table_name, options);
-    if (!rule.rule_) {
-      return nullptr;
-    }
-    std::shared_ptr<detail::db_table_rule_state> state = rule.rule_;
-    rule.rule_.reset();
-    return std::shared_ptr<void>{state.get(), [state](void *) { state->active = false; }};
-  };
-  slots.db_set_raw_kv = [this](gsl::string_view key, gsl::string_view type_name, gsl::string_view data,
-                               uint64_t version) { set_raw_kv(key, type_name, data, version); };
-  slots.db_get_raw_kv = [this](gsl::string_view key, std::string *type_name, std::string *data,
-                               uint64_t *version) -> bool {
-    kv_raw_entry entry;
-    if (!get_raw_kv(key, entry)) {
-      return false;
-    }
-    if (nullptr != type_name) {
-      *type_name = entry.type_name;
-    }
-    if (nullptr != data) {
-      *data = entry.data;
-    }
-    if (nullptr != version) {
-      *version = entry.version;
-    }
-    return true;
-  };
-  slots.db_append_raw_kl = [this](gsl::string_view key, gsl::string_view type_name,
-                                  gsl::string_view data) { return append_raw_kl(key, type_name, data); };
-  slots.db_get_raw_kl = [this](gsl::string_view key,
-                               std::vector<std::tuple<uint64_t, std::string, std::string>> *entries) -> bool {
-    std::vector<kl_raw_entry> stored;
-    if (!get_raw_kl(key, stored)) {
-      return false;
-    }
-    if (nullptr != entries) {
-      entries->clear();
-      entries->reserve(stored.size());
-      for (const auto &entry : stored) {
-        entries->emplace_back(entry.index, entry.type_name, entry.data);
-      }
-    }
-    return true;
-  };
-  slots.db_set_raw_ttl = [this](gsl::string_view key, uint64_t ttl_seconds) {
-    set_raw_ttl(key, now() + std::chrono::seconds{static_cast<int64_t>(ttl_seconds)});
   };
   rpc::unit_test::merge_mock_engine_bridge_for_unit_test(std::move(slots));
 }
@@ -394,6 +387,14 @@ void mock_db::unbind() {
   rpc::db::hash_table::set_hash_table_hook_for_unit_test(nullptr);
   rpc::unit_test::clear_db_mock_engine_bridge_slots();
   bound_ = false;
+  // Deactivate every typed per-interface handler installed by generated code (idempotent; RAII handles
+  // may already have cleared some).
+  for (auto &clear_handler : typed_handler_clearers_) {
+    if (clear_handler) {
+      clear_handler();
+    }
+  }
+  typed_handler_clearers_.clear();
   // Uniform engine lifecycle contract: unbind resets all state so a runtime restart starts clean
   // (same as mock_ss/mock_dns).
   kv_records_.clear();
@@ -408,7 +409,7 @@ bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t 
   std::string table_name = extract_table_name(req.key);
 
   int32_t res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-  if (!table_name.empty() && apply_table_rules(req, table_name, res)) {
+  if (!table_name.empty() && apply_table_handlers(req, table_name, res)) {
     calls_.push_back(db_request_record{req.op, std::string{req.key}, std::move(table_name), res});
     result_code = res;
     return true;
@@ -461,56 +462,59 @@ bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t 
   return true;
 }
 
-bool mock_db::apply_table_rules(const rpc::db::hash_table::unit_test_request &req, gsl::string_view table_name,
-                                int32_t &result_code) {
+bool mock_db::apply_table_handlers(const rpc::db::hash_table::unit_test_request &req, gsl::string_view table_name,
+                                   int32_t &result_code) {
   // Latest registered matching active rule wins.
   for (auto iter = table_rules_.rbegin(); iter != table_rules_.rend(); ++iter) {
     const auto &rule = *iter;
     if (!rule->active || table_name != rule->table_name) {
       continue;
     }
-    if (rule->options.fallthrough) {
+    const db_table_handler *handler = nullptr;
+    auto op_iter = rule->op_handlers.find(static_cast<int32_t>(req.op));
+    if (op_iter != rule->op_handlers.end() && op_iter->second) {
+      handler = &op_iter->second;
+    } else if (rule->any_handler) {
+      handler = &rule->any_handler;
+    }
+    if (nullptr == handler) {
+      // Rule matched but has no callback for this op: defer to the common mock layer (and shadow any
+      // older rule for the same table).
       return false;
     }
-    auto error_iter = rule->options.op_error_codes.find(static_cast<int32_t>(req.op));
-    if (error_iter != rule->options.op_error_codes.end()) {
-      result_code = error_iter->second;
-      return true;
+
+    db_table_context context;
+    context.op = req.op;
+    context.key = req.key;
+    context.table_name = table_name;
+    context.rpc_context = req.ctx;
+    context.input_table = req.store;
+    if (nullptr != req.partly_get_fields && req.partly_get_field_count > 0) {
+      context.partly_get_fields = gsl::span<const gsl::string_view>{
+          req.partly_get_fields, static_cast<size_t>(req.partly_get_field_count)};
     }
-    bool is_read = op_type::kv_get_all == req.op || op_type::kv_partly_get == req.op ||
-                   op_type::kl_get_all == req.op || op_type::kl_get_by_indexs == req.op;
-    if (rule->options.force_not_found && is_read) {
-      result_code = PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
-      return true;
+    context.inc_field = req.inc_field;
+    context.list_index = req.list_index;
+    context.max_list_length = req.max_list_length;
+    context.ttl_second = req.ttl_second;
+    context.kl_output = req.kl_output;
+    context.inc_message = req.inc_message;
+
+    if (!(*handler)(context)) {
+      return false;
     }
-    if (rule->options.use_canned_kv &&
-        (op_type::kv_get_all == req.op || op_type::kv_partly_get == req.op)) {
-      result_code = serve_canned_kv(req, rule->options);
-      return true;
+    // Materialize kv read outputs exactly like the real wait/unpack path.
+    if (nullptr != req.kv_output && context.output_table) {
+      req.kv_output->message = context.output_table;
+      req.kv_output->version = context.output_version;
     }
-    // Rule matched but no option applies to this op: defer to the in-memory backend.
-    return false;
+    if (nullptr != req.version) {
+      *req.version = context.output_version;
+    }
+    result_code = context.return_code;
+    return true;
   }
   return false;
-}
-
-int32_t mock_db::serve_canned_kv(const rpc::db::hash_table::unit_test_request &req,
-                                 const db_table_rule_options &rule) {
-  if (nullptr == req.kv_output || nullptr == req.ctx) {
-    return PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND;
-  }
-  kv_record canned;
-  canned.type_name = rule.canned_kv_type_name;
-  canned.data = rule.canned_kv_data;
-  canned.version = rule.canned_kv_version;
-  int32_t res = make_kv_output(canned, *req.ctx, req.kv_output);
-  if (res < 0) {
-    return res;
-  }
-  if (op_type::kv_partly_get == req.op) {
-    return filter_partly_fields(req);
-  }
-  return res;
 }
 
 int32_t mock_db::make_kv_output(const kv_record &record, rpc::context &ctx,
