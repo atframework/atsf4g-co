@@ -202,6 +202,5 @@ DTMQ_COMMON_SDK_API std::string make_world_partition_channel_id(uint32_t type_id
  * @return 解析的频道类型
  */
 DTMQ_COMMON_SDK_API uint32_t parse_world_partition_channel_type_from_channel_id(gsl::string_view channel_id);
-
 }  // namespace dtmq
 }  // namespace rpc

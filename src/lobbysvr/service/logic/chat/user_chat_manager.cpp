@@ -10,6 +10,7 @@
 
 #include <protocol/common/com.struct.dtmq.common.pb.h>
 #include <protocol/pbdesc/com.struct.chat.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -25,6 +26,7 @@
 #include <utility>
 
 #include "data/player.h"
+#include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
 user_chat_manager::user_chat_manager(player& owner)
     : owner_(&owner), last_send_to_world_channel_timepoint_unix_sec_(0) {}
@@ -125,16 +127,13 @@ int32_t user_chat_manager::check_writable(rpc::context& /*ctx*/, const atfw::dtm
   }
 }
 
-rpc::result_code_type user_chat_manager::send_text_message(rpc::context& ctx, gsl::string_view channel_id,
+rpc::result_code_type user_chat_manager::send_text_message(rpc::context& ctx,
+                                                           const atfw::dtmq::DChannelIdKey& channel_key,
                                                            gsl::string_view text) {
-  uint32_t channel_type = rpc::dtmq::parse_unicast_channel_type_from_channel_id(channel_id);
+  uint32_t channel_type = parse_channel_type_from_channel_id(channel_key);
   if (channel_type == 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
-
-  atfw::dtmq::DChannelIdKey channel_key;
-  channel_key.set_channel_type(channel_type);
-  channel_key.set_channel_id(channel_id.data(), channel_id.size());
 
   int32_t ret = check_writable(ctx, channel_key);
   if (ret != 0) {
@@ -159,16 +158,13 @@ rpc::result_code_type user_chat_manager::send_text_message(rpc::context& ctx, gs
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type user_chat_manager::send_event_message(rpc::context& ctx, gsl::string_view channel_id,
+rpc::result_code_type user_chat_manager::send_event_message(rpc::context& ctx,
+                                                            const atfw::dtmq::DChannelIdKey& channel_key,
                                                             google::protobuf::Any&& event_data) {
-  uint32_t channel_type = rpc::dtmq::parse_unicast_channel_type_from_channel_id(channel_id);
+  uint32_t channel_type = parse_channel_type_from_channel_id(channel_key);
   if (channel_type == 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
-
-  atfw::dtmq::DChannelIdKey channel_key;
-  channel_key.set_channel_type(channel_type);
-  channel_key.set_channel_id(channel_id.data(), channel_id.size());
 
   int32_t ret = check_writable(ctx, channel_key);
   if (ret != 0) {
@@ -217,6 +213,56 @@ int32_t user_chat_manager::get_snapshot(rpc::context& ctx, gsl::string_view chan
   return ret;
 }
 
+int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq::DChannelSyncPoint& sync_point,
+                                             atfw::chat::SCChatChannelSync& sync_msg) {
+  auto channel_ptr = get_channel_by_key(sync_point.channel_key());
+  if (!channel_ptr) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND;
+  }
+
+  rpc::dtmq::client_subscriber::query_options options{};
+  ::atfw::chat::DChatChannelData* sync_channel = nullptr;
+  options.start_sequence = sync_point.last_sequence();
+  bool need_snapshot = false;
+  channel_ptr->query_message(
+      ctx, atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)>(
+               [&ctx, &need_snapshot, &sync_point, &sync_channel, &sync_msg](const atfw::dtmq::DChannelMessage& msg) {
+                 if (msg.sequence() == sync_point.last_sequence() && sync_point.last_hash_code() != 0 &&
+                     msg.hash_code() != sync_point.last_hash_code()) {
+                   need_snapshot = true;
+                   return false;
+                 }
+
+                 if (sync_channel == nullptr) {
+                   sync_channel = sync_msg.add_chat_channel();
+                 }
+                 if (sync_channel == nullptr) {
+                   FCTXLOGERROR(ctx, "malloc chat_channel is failed");
+                   return true;
+                 }
+
+                 protobuf_copy_message(*sync_channel->mutable_incremental()->add_message_list(), msg);
+                 return true;
+               }));
+
+  if (need_snapshot) {
+    if (sync_channel == nullptr) {
+      sync_channel = sync_msg.add_chat_channel();
+    }
+    if (sync_channel == nullptr) {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+    }
+    dump_dtmq_to_chat_channel_snapshot(ctx, *channel_ptr, *sync_channel->mutable_metadata(),
+                                       *sync_channel->mutable_snapshot());
+    return 0;
+  }
+
+  if (sync_channel->has_incremental()) {
+    dump_dtmq_to_chat_channel_metadata(ctx, *channel_ptr, *sync_channel->mutable_metadata(), false);
+  }
+  return 0;
+}
+
 void user_chat_manager::dump_dtmq_to_chat_channel_metadata(rpc::context& /*ctx*/,
                                                            const rpc::dtmq::client_subscriber& channel,
                                                            atfw::chat::DChatChannelMeta& metadata,
@@ -249,6 +295,54 @@ void user_chat_manager::dump_dtmq_to_chat_channel_snapshot(rpc::context& ctx,
     protobuf_copy_message(*snapshot.add_message_list(), msg);
     return true;
   });
+}
+
+uint32_t user_chat_manager::parse_channel_type_from_channel_id(const atfw::dtmq::DChannelIdKey& channel_key) {
+  switch (channel_key.channel_type()) {
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC):
+      return rpc::dtmq::parse_world_partition_channel_type_from_channel_id(channel_key.channel_id());
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE):
+      return rpc::dtmq::parse_unicast_channel_type_from_channel_id(channel_key.channel_id());
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION):
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT):
+      return rpc::dtmq::parse_world_broadcast_channel_type_from_channel_id(channel_key.channel_id());
+    default:
+      return 0;
+  }
+}
+
+rpc::dtmq::client_subscriber::ptr_t user_chat_manager::get_channel_by_key(
+    const atfw::dtmq::DChannelIdKey& channel_key) const {
+  switch (channel_key.channel_type()) {
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC):
+      if (world_chat_channel_ && world_chat_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
+        return world_chat_channel_;
+      } else {
+        return nullptr;
+      }
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE):
+      if (private_chat_channel_ && private_chat_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
+        return private_chat_channel_;
+      } else {
+        return nullptr;
+      }
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION):
+      if (sys_notification_channel_ &&
+          sys_notification_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
+        return sys_notification_channel_;
+      } else {
+        return nullptr;
+      }
+    case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT):
+      if (sys_announcement_channel_ &&
+          sys_announcement_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
+        return sys_announcement_channel_;
+      } else {
+        return nullptr;
+      }
+    default:
+      return 0;
+  }
 }
 
 void user_chat_manager::setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& /*channel*/) {}

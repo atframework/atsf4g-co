@@ -26,6 +26,10 @@
 
 #include <utility>
 
+#include "logic/chat/user_chat_manager.h"
+
+#include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
+
 GAMECLIENT_SERVICE_API task_action_chat_channel_heartbeat::task_action_chat_channel_heartbeat(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -38,7 +42,7 @@ GAMECLIENT_SERVICE_API const char* task_action_chat_channel_heartbeat::name() co
 
 GAMECLIENT_SERVICE_API task_action_chat_channel_heartbeat::result_type
 task_action_chat_channel_heartbeat::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   player::ptr_t user = get_player<player>();
@@ -48,7 +52,25 @@ task_action_chat_channel_heartbeat::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  rpc::context::message_holder<atfw::chat::SCChatChannelSync> sync_msg{get_shared_context()};
+
+  for (const auto& sync_point : req_body.heartbeat_data()) {
+    int32_t response_code =
+        user->get_user_chat_manager().receive_heartbeat(get_shared_context(), sync_point, *sync_msg);
+    if (response_code != 0) {
+      FCTXLOGWARNING(get_shared_context(), "user {} receive_heartbeat failed, response_code={}({})", *user,
+                     response_code, protobuf_mini_dumper_get_error_msg(response_code));
+      set_response_code(response_code);
+    }
+  }
+
+  if (sync_msg->chat_channel_size() > 0) {
+    auto sess = get_session();
+    if (sess) {
+      RPC_AWAIT_IGNORE_RESULT(
+          rpc::lobbysvrclientservice::send_chat_channel_sync(get_shared_context(), *sync_msg, *sess));
+    }
+  }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

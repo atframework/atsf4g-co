@@ -52,12 +52,11 @@ GAMECLIENT_SERVICE_API task_action_chat_send_message::result_type task_action_ch
   switch (req_body.detail().command_case()) {
     case atfw::dtmq::DChannelMessageDetail::CommandCase::kText:
       response_code = RPC_AWAIT_CODE_RESULT(user->get_user_chat_manager().send_text_message(
-          get_shared_context(), req_body.channel_key().channel_id(), req_body.detail().text()));
+          get_shared_context(), req_body.channel_key(), req_body.detail().text()));
       break;
     case atfw::dtmq::DChannelMessageDetail::CommandCase::kEvent:
-      response_code = RPC_AWAIT_CODE_RESULT(
-          user->get_user_chat_manager().send_event_message(get_shared_context(), req_body.channel_key().channel_id(),
-                                                           std::move(*req_body.mutable_detail()->mutable_event())));
+      response_code = RPC_AWAIT_CODE_RESULT(user->get_user_chat_manager().send_event_message(
+          get_shared_context(), req_body.channel_key(), std::move(*req_body.mutable_detail()->mutable_event())));
       break;
     default:
       response_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
