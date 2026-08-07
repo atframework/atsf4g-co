@@ -41,6 +41,7 @@
 #include "app/handle_ss_rpc_lobbysvrservice.atfw.gen.h"
 
 #include "data/player.h"
+#include "logic/chat/user_chat_manager.h"
 #include "rpc/rpc_context.h"
 
 namespace {
@@ -127,6 +128,7 @@ class main_service_module : public atfw::atapp::module_impl {
     int ret = 0;
 
     ret += rpc::dtmq::client_subscriber::global_tick(logic_server_get_current_tick_context());
+    ret += user_chat_manager::global_tick(logic_server_get_current_tick_context());
 
     return ret;
   }

@@ -40,6 +40,8 @@ class player;
 
 class user_chat_manager {
  public:
+  static int32_t global_tick(rpc::context& ctx);
+
   explicit user_chat_manager(player& owner);
   ~user_chat_manager();
 
@@ -87,7 +89,7 @@ class user_chat_manager {
  private:
   rpc::dtmq::client_subscriber::ptr_t get_channel_by_key(const atfw::dtmq::DChannelIdKey& channel_key) const;
 
-  void setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
+  static void setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
 
  private:
   player* ATFW_UTIL_MACRO_NONNULL owner_;

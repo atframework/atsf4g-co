@@ -13,7 +13,15 @@ import "google/protobuf/timestamp.proto";
 
 import "atframe/atapp_conf.proto";
 
+message lobbysvr_chat_cfg {
+  int64 push_message_per_second = 1
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3000" min_value: "30" }];
+  int64 push_message_buffer_max_count = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200000" min_value: "100" }];
+}
+
 message lobbysvr_cfg {
   google.protobuf.Duration rank_auto_update_interval = 101
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "30s" }];  // 排行榜强制刷新间隔
+  lobbysvr_chat_cfg chat = 201;
 }

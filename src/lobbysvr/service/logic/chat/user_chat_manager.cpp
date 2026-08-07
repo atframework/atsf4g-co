@@ -9,6 +9,7 @@
 // clang-format on
 
 #include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/config/lobbysvr_config.pb.h>
 #include <protocol/pbdesc/com.struct.chat.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -22,11 +23,123 @@
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_context.h>
 
+#include <list>
 #include <string>
 #include <utility>
 
 #include "data/player.h"
+#include "data/session.h"
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
+
+namespace {
+struct global_chat_manager_private_data {
+  time_t last_push_message_tick = 0;
+
+  std::list<std::pair<std::weak_ptr<session>, atfw::chat::SCChatChannelSync>> pending_sync_messages;
+};
+
+static global_chat_manager_private_data& get_global_chat_manager_private_data() {
+  static global_chat_manager_private_data ret;
+  return ret;
+}
+
+static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_chat_channel_event_callback_set() {
+  rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret =
+      rpc::dtmq::client_subscriber::create_event_callback_set();
+
+  rpc::dtmq::client_subscriber::set_event_callback_on_ready(
+      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
+        if (!subscriber) {
+          return;
+        }
+        auto local_private_data = subscriber->get_local_private_data();
+        if (local_private_data.empty()) {
+          FWLOGERROR("local private data is empty for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
+                     subscriber->get_channel_key().channel_id());
+          return;
+        }
+        // NOLINTNEXTLINE(performance-no-int-to-ptr)
+        user_chat_manager* chat_mgr = reinterpret_cast<user_chat_manager*>(local_private_data[0]);
+        if (nullptr == chat_mgr) {
+          FWLOGERROR("local private data is null for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
+                     subscriber->get_channel_key().channel_id());
+          return;
+        }
+
+        // if session is removed, then the player is removed, so no need to send sync messages
+        auto sess = chat_mgr->get_owner().get_session();
+        if (!sess) {
+          return;
+        }
+
+        const auto& server_cfg =
+            logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+        int64_t pending_message_buffer_max_count = server_cfg.chat().push_message_buffer_max_count();
+        if (pending_message_buffer_max_count <= 0) {
+          pending_message_buffer_max_count = 100000;
+        }
+        // Too many pending messages, just drop it, and let the client to re-sync
+        if (get_global_chat_manager_private_data().pending_sync_messages.size() >=
+            static_cast<size_t>(pending_message_buffer_max_count)) {
+          return;
+        }
+
+        // TODO: handle on_ready event
+      });
+
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_snapshot_finished(
+      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& /*subscriber*/,
+               const ::atfw::dtmq::DChannelSnapshot& /*data*/, int32_t /*result_code*/) {
+        // TODO: handle on_ready event
+      });
+
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(
+      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& /*subscriber*/,
+               int64_t /*log_sequence*/, gsl::string_view /*text*/) {
+        // TODO: handle on_ready event
+      });
+
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_event(
+      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& /*subscriber*/,
+               int64_t /*log_sequence*/, const ::google::protobuf::Any& /*data*/) {
+        // TODO: handle on_ready event
+      });
+  return ret;
+}
+
+static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_chat_channel_event_callback_set() {
+  static rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret = build_shared_chat_channel_event_callback_set();
+  return ret;
+}
+
+static void push_pending_message_once(rpc::context& /*ctx*/, int64_t /*max_count*/) {
+  // TODO(owent): implement push_pending_message_once
+}
+
+}  // namespace
+
+int32_t user_chat_manager::global_tick(rpc::context& ctx) {
+  global_chat_manager_private_data& global_data = get_global_chat_manager_private_data();
+  time_t now_tick =
+      (atfw::util::time::time_utility::get_now() * 10) + (atfw::util::time::time_utility::get_now_usec() / 100000);
+  if (global_data.last_push_message_tick == now_tick) {
+    return 0;
+  }
+  global_data.last_push_message_tick = now_tick;
+
+  if (global_data.pending_sync_messages.empty()) {
+    return 0;
+  }
+
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+  int64_t max_push_message_per_tick = server_cfg.chat().push_message_per_second() / 10;
+  if (max_push_message_per_tick <= 0) {
+    max_push_message_per_tick = 200;
+  }
+  push_pending_message_once(ctx, max_push_message_per_tick);
+
+  return 0;
+}
 
 user_chat_manager::user_chat_manager(player& owner)
     : owner_(&owner), last_send_to_world_channel_timepoint_unix_sec_(0) {}
@@ -35,6 +148,8 @@ user_chat_manager::~user_chat_manager() {}
 
 rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
   subscriber_key_ = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
+  uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
+
   // 创建聊天频道
   if (!world_chat_channel_) {
     // TODO(ANY): 如果以后世界频道要分片，这里添加分片逻辑
@@ -45,7 +160,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(rpc::dtmq::make_world_partition_channel_id(
         channel_key.channel_type(), logic_config::me()->get_local_world_id(), partition_id));
     world_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    setup_subscriber_callback(world_chat_channel_);
+    world_chat_channel_->set_local_private_data(local_private_data);
   }
 
   if (!private_chat_channel_) {
@@ -55,7 +170,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(
         rpc::dtmq::make_unicast_channel_id(channel_key.channel_type(), owner_->get_zone_id(), owner_->get_user_id()));
     private_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    setup_subscriber_callback(private_chat_channel_);
+    private_chat_channel_->set_local_private_data(local_private_data);
   }
 
   // 创建系统通知 Channel(生命周期短)
@@ -66,7 +181,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(rpc::dtmq::make_world_broadcast_channel_id(channel_key.channel_type(),
                                                                           logic_config::me()->get_local_world_id()));
     sys_notification_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    setup_subscriber_callback(sys_notification_channel_);
+    sys_notification_channel_->set_local_private_data(local_private_data);
   }
 
   // 创建系统公告 Channel(生命周期长)
@@ -77,7 +192,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(rpc::dtmq::make_world_broadcast_channel_id(channel_key.channel_type(),
                                                                           logic_config::me()->get_local_world_id()));
     sys_announcement_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    setup_subscriber_callback(sys_announcement_channel_);
+    sys_announcement_channel_->set_local_private_data(local_private_data);
   }
   RPC_RETURN_CODE(0);
 }
@@ -192,23 +307,23 @@ rpc::result_code_type user_chat_manager::send_event_message(rpc::context& ctx,
 int32_t user_chat_manager::get_snapshot(rpc::context& ctx, gsl::string_view channel_id,
                                         atfw::chat::DChatChannelData& data) {
   int32_t ret = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND;
-  foreach_channel([&ret, &ctx, &channel_id, &data,
-                   this](const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>& channel) {
-    if (channel_id != channel->get_channel_key().channel_id()) {
-      return true;
-    }
+  foreach_channel(
+      [&ret, &ctx, &channel_id, &data](const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>& channel) {
+        if (channel_id != channel->get_channel_key().channel_id()) {
+          return true;
+        }
 
-    dump_dtmq_to_chat_channel_snapshot(ctx, *channel, *data.mutable_metadata(), *data.mutable_snapshot());
+        dump_dtmq_to_chat_channel_snapshot(ctx, *channel, *data.mutable_metadata(), *data.mutable_snapshot());
 
-    // 我们要求客户端拉取一次之后才会主动推送频道通知
-    // 如果没设置回调函数组，说明之前没拉过，设置回调函数组也能触发后续的主动通知
-    if (!channel->get_shared_event_callback_set()) {
-      setup_subscriber_callback(channel);
-    }
+        // 我们要求客户端拉取一次之后才会主动推送频道通知
+        // 如果没设置回调函数组，说明之前没拉过，设置回调函数组也能触发后续的主动通知
+        if (!channel->get_shared_event_callback_set()) {
+          setup_subscriber_callback(channel);
+        }
 
-    ret = 0;
-    return false;
-  });
+        ret = 0;
+        return false;
+      });
 
   return ret;
 }
@@ -361,8 +476,14 @@ rpc::dtmq::client_subscriber::ptr_t user_chat_manager::get_channel_by_key(
         return nullptr;
       }
     default:
-      return 0;
+      return nullptr;
   }
 }
 
-void user_chat_manager::setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& /*channel*/) {}
+void user_chat_manager::setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel) {
+  if (!channel) {
+    return;
+  }
+
+  channel->set_shared_event_callback_set(get_shared_chat_channel_event_callback_set());
+}
