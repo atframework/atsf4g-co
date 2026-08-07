@@ -26,6 +26,8 @@
 
 #include <utility>
 
+#include "logic/chat/user_chat_manager.h"
+
 GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::task_action_chat_get_all_channel(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -38,7 +40,7 @@ GAMECLIENT_SERVICE_API const char* task_action_chat_get_all_channel::name() cons
 
 GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::result_type task_action_chat_get_all_channel::operator()() {
   // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   player::ptr_t user = get_player<player>();
   if (!user) {
@@ -47,7 +49,15 @@ GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::result_type task_action
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  user->get_user_chat_manager().foreach_channel(
+      [&rsp_body](const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>& channel) {
+        auto* metadata = rsp_body.add_channel_metadata();
+        if (metadata != nullptr) {
+          user_chat_manager::dump_dtmq_to_chat_channel_metadata(*channel, *metadata, true);
+        }
+
+        return true;
+      });
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

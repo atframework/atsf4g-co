@@ -272,13 +272,6 @@ service LobbysvrClientService {
     };
   };
 
-  rpc chat_channel_unsubscribe(atframework.chat.CSChatChannelUnsubscribeReq) returns (atframework.chat.SCChatChannelUnsubscribeRsp) {
-    option (atframework.rpc_options) = {
-      module_name: "chat"
-      api_name: "聊天频道退订"
-    };
-  };
-
   rpc chat_send_message(atframework.chat.CSChatSendMessageReq) returns (atframework.chat.SCChatSendMessageRsp) {
     option (atframework.rpc_options) = {
       module_name: "chat"

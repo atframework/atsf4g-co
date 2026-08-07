@@ -97,7 +97,7 @@ class user_cache_manager {
       ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>& output);
 
  private:
-  atfw::util::nostd::nonnull<player*> owner_;
+  player* ATFW_UTIL_MACRO_NONNULL owner_;
 
   int64_t cachesvr_discovery_version_;
   bool need_notify_user_cache_expired_;

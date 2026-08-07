@@ -17,7 +17,7 @@ package atframework.chat;
 message CSChatGetAllChannelReq {}
 
 message SCChatGetAllChannelRsp {
-  repeated atframework.dtmq.DChannelMetadata channel_metadata = 1;
+  repeated DChatChannelMeta channel_metadata = 1;
 }
 
 message CSChatGetChannelSnapshotReq {
@@ -37,12 +37,6 @@ message SCChatChannelHeartbeatRsp {}
 message SCChatChannelSync {
   repeated DChatChannelData chat_channel = 1;
 }
-
-message CSChatChannelUnsubscribeReq {
-  repeated atframework.dtmq.DChannelIdKey channel_key = 1;
-}
-
-message SCChatChannelUnsubscribeRsp {}
 
 message CSChatSendMessageReq {
   atframework.dtmq.DChannelIdKey channel_key = 1;

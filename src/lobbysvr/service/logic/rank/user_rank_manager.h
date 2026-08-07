@@ -419,7 +419,7 @@ class user_rank_manager {
   void convert_to(PROJECT_NAMESPACE_ID::DRankUserBasicData &output, const logic_rank_handle_data &input);
 
  private:
-  player *const owner_;
+  player *ATFW_UTIL_MACRO_NONNULL owner_;
   bool is_dirty_;
 
   // 保护过于频繁得启动刷新/提交排行榜任务

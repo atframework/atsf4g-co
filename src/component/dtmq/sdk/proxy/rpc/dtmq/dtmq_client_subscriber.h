@@ -249,9 +249,28 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_destroy_timepoint() const noexcept;
 
+  DTMQ_PROXY_SDK_API int64_t get_last_message_sequence() const noexcept;
+
+  DTMQ_PROXY_SDK_API int64_t get_last_removed_sequence() const noexcept;
+
   DTMQ_PROXY_SDK_API bool get_option_auto_create_channel() const noexcept;
 
   DTMQ_PROXY_SDK_API bool get_option_with_private_data() const noexcept;
+
+  /**
+   * @brief 设置共享的回调函数组
+   *
+   * @param event_callbacl_set 整个回调函数组
+   */
+  DTMQ_PROXY_SDK_API void set_shared_event_callback_set(const event_callback_set_ptr_t& event_callbacl_set);
+
+  /**
+   * @brief 获取共享的回调函数组
+   *
+   * @return 当前绑定的整个回调函数组
+   */
+  DTMQ_PROXY_SDK_API const atfw::util::nostd::nullable<event_callback_set_ptr_t>& get_shared_event_callback_set()
+      const noexcept;
 
   /**
    * @brief Set the event callback on ready object

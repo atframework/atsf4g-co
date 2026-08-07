@@ -14,9 +14,7 @@
 
 #include <rpc/rpc_async_invoke.h>
 
-#include <stdint.h>
-#include <cstddef>
-#include <cstring>
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -92,7 +90,7 @@ class user_async_jobs_manager {
   friend class task_action_player_remote_patch_jobs;
 
  private:
-  player* const owner_;
+  player* ATFW_UTIL_MACRO_NONNULL owner_;
 
   mutable task_type_trait::task_type remote_command_patch_task_;
 

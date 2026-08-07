@@ -2,6 +2,9 @@
 
 #pragma once
 
+#include <gsl/select-gsl.h>
+
+#include <nostd/function_ref.h>
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 
@@ -11,6 +14,14 @@
 namespace rpc {
 class context;
 }
+
+namespace atframework {
+namespace chat {
+class DChatChannelMeta;
+class DChatChannelData;
+class DChatChannelSnapshot;
+}  // namespace chat
+}  // namespace atframework
 
 class player;
 
@@ -24,13 +35,24 @@ class user_chat_manager {
   player& get_owner() { return *owner_; }
   const player& get_owner() const { return *owner_; }
 
+  void foreach_channel(
+      atfw::util::nostd::function_ref<bool(const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&)>
+          callback) const;
+
+  void get_snapshot(rpc::context& ctx, gsl::string_view channel_id, atfw::chat::DChatChannelData& data);
+
+  static void dump_dtmq_to_chat_channel_metadata(const rpc::dtmq::client_subscriber& channel,
+                                                 atfw::chat::DChatChannelMeta& metadata, bool with_configure);
+
+  static void dump_dtmq_to_chat_channel_snapshot(const rpc::dtmq::client_subscriber& channel,
+                                                 atfw::chat::DChatChannelMeta& metadata,
+                                                 atfw::chat::DChatChannelSnapshot& snapshot);
+
  private:
   void setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
 
  private:
-  atfw::util::nostd::nonnull<player*> owner_;
-
-  bool has_get_all_channels_;
+  player* ATFW_UTIL_MACRO_NONNULL owner_;
 
   rpc::dtmq::client_subscriber::ptr_t world_chat_channel_;
   rpc::dtmq::client_subscriber::ptr_t private_chat_channel_;

@@ -45,6 +45,7 @@ message DChatChannelMeta {
 }
 
 message DChatChannelSnapshot {
+  repeated atframework.dtmq.DChannelMessage message_list = 1;
 }
 
 message DChatChannelMessageList {
