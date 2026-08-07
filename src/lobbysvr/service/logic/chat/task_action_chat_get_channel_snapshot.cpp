@@ -26,6 +26,8 @@
 
 #include <utility>
 
+#include "logic/chat/user_chat_manager.h"
+
 GAMECLIENT_SERVICE_API task_action_chat_get_channel_snapshot::task_action_chat_get_channel_snapshot(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -38,8 +40,8 @@ GAMECLIENT_SERVICE_API const char* task_action_chat_get_channel_snapshot::name()
 
 GAMECLIENT_SERVICE_API task_action_chat_get_channel_snapshot::result_type
 task_action_chat_get_channel_snapshot::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
 
   player::ptr_t user = get_player<player>();
   if (!user) {
@@ -48,8 +50,14 @@ task_action_chat_get_channel_snapshot::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  if (req_body.channel_id().empty()) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
 
+  int32_t response_code = user->get_user_chat_manager().get_snapshot(get_shared_context(), req_body.channel_id(),
+                                                                     *rsp_body.mutable_channel_snapshot());
+  set_response_code(response_code);
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

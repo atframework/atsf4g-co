@@ -299,5 +299,11 @@ enum EnErrorCode {
   EN_ERR_DTMQ_CHANNEL_TRANSFER_FAILED = -709
                                         [(error_code.description) = "频道迁移失败"];
 
+  // 聊天频道[701-800]
+  EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE = -801
+                                      [(error_code.description) = "无该聊天频道的写权限"];
+  EN_ERR_CHAT_WRITE_TOO_FREQUENT = -802
+                                   [(error_code.description) = "聊天频道写入过于频繁"];
+
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

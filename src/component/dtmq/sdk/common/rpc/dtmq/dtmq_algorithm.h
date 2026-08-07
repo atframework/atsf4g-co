@@ -143,6 +143,14 @@ ATFW_UTIL_SYMBOL_VISIBLE inline void setup_common_vtable(typename WalObjectType:
 DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id, uint64_t instance_id);
 
 /**
+ * @brief 解析单播频道的频道类型
+ *
+ * @param channel_id 频道ID
+ * @return 解析的频道类型
+ */
+DTMQ_COMMON_SDK_API uint32_t parse_unicast_channel_type_from_channel_id(gsl::string_view channel_id);
+
+/**
  * @brief 创建区域广播频道ID的标准算法
  *
  * @param type_id 类型ID
@@ -150,6 +158,14 @@ DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64
  * @return std::string 频道ID
  */
 DTMQ_COMMON_SDK_API std::string make_zone_broadcast_channel_id(uint32_t type_id, uint64_t zone_id);
+
+/**
+ * @brief 解析区域广播频道的频道类型
+ *
+ * @param channel_id 频道ID
+ * @return 解析的频道类型
+ */
+DTMQ_COMMON_SDK_API uint32_t parse_zone_broadcast_channel_type_from_channel_id(gsl::string_view channel_id);
 
 /**
  * @brief 创建世界广播频道ID的标准算法
@@ -161,6 +177,14 @@ DTMQ_COMMON_SDK_API std::string make_zone_broadcast_channel_id(uint32_t type_id,
 DTMQ_COMMON_SDK_API std::string make_world_broadcast_channel_id(uint32_t type_id, uint64_t world_id);
 
 /**
+ * @brief 解析世界广播频道的频道类型
+ *
+ * @param channel_id 频道ID
+ * @return 解析的频道类型
+ */
+DTMQ_COMMON_SDK_API uint32_t parse_world_broadcast_channel_type_from_channel_id(gsl::string_view channel_id);
+
+/**
  * @brief 创建世界分区频道ID的标准算法
  *
  * @param type_id 类型ID
@@ -170,5 +194,14 @@ DTMQ_COMMON_SDK_API std::string make_world_broadcast_channel_id(uint32_t type_id
  */
 DTMQ_COMMON_SDK_API std::string make_world_partition_channel_id(uint32_t type_id, uint64_t world_id,
                                                                 uint64_t partition_id);
+
+/**
+ * @brief 解析世界分区频道的频道类型
+ *
+ * @param channel_id 频道ID
+ * @return 解析的频道类型
+ */
+DTMQ_COMMON_SDK_API uint32_t parse_world_partition_channel_type_from_channel_id(gsl::string_view channel_id);
+
 }  // namespace dtmq
 }  // namespace rpc

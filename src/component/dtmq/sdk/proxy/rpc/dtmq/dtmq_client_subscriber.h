@@ -6,6 +6,7 @@
 #include <config/compile_optimize.h>
 
 #include <gsl/select-gsl.h>
+#include <nostd/function_ref.h>
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 
@@ -84,6 +85,19 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
     // 可以设置 event_callback_set 来让多个 client_subscriber 共享同一组事件回调函数，避免浪费
     event_callback_set_ptr_t event_callback_set;
+  };
+
+  struct ATFW_UTIL_SYMBOL_VISIBLE query_options {
+    int64_t start_sequence = 0;  // include
+    int64_t end_sequence = 0;    // exclude,0表示不限制
+    int64_t max_count = 0;       // 最大数量,0表示不限制
+
+    ATFW_UTIL_FORCEINLINE query_options() {}
+
+    ATFW_UTIL_FORCEINLINE query_options(const query_options&) = default;
+    ATFW_UTIL_FORCEINLINE query_options(query_options&&) = default;
+    ATFW_UTIL_FORCEINLINE query_options& operator=(const query_options&) = default;
+    ATFW_UTIL_FORCEINLINE query_options& operator=(query_options&&) = default;
   };
 
   using event_callback_on_ready_t = std::function<void(rpc::context& ctx, const ptr_t& subscriber)>;
@@ -453,7 +467,18 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       bool auto_create_channel = false, bool no_wait = false);
 
   /**
-   * @brief 查找消息
+   * @brief 查找本地消息缓存
+   *
+   * @param ctx RPC上下文
+   * @param fn 如果查找到消息，则会调用此回调函数，传入消息对象
+   * @return 如果查找到消息，返回 true， 否则返回 false
+   */
+  DTMQ_PROXY_SDK_API bool find_cached_message(
+      rpc::context& ctx, int64_t sequence,
+      atfw::util::nostd::function_ref<void(const atfw::dtmq::DChannelMessage&)> fn) const noexcept;
+
+  /**
+   * @brief 查找消息，如果本地缓存未准备好，会去服务器拉取
    *
    * @param ctx RPC上下文
    * @param sequence 消息序列号
@@ -463,6 +488,18 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type find_message(rpc::context& ctx,
                                                                                      int64_t sequence,
                                                                                      atfw::dtmq::DChannelMessage& msg);
+
+  /**
+   * @brief 查询消息
+   *
+   * @param ctx RPC上下文
+   * @param fn 如果查找到消息，则会调用此回调函数，传入消息对象
+   * @param options 查询数据的选项
+   * @return 如果还有后续消息，返回true，否则返回false
+   */
+  DTMQ_PROXY_SDK_API bool query_message(rpc::context& ctx,
+                                        atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
+                                        query_options options = {}) const noexcept;
 
   /**
    * @brief 分页查询消息

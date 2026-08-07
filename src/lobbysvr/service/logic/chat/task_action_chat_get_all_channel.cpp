@@ -50,10 +50,10 @@ GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::result_type task_action
   }
 
   user->get_user_chat_manager().foreach_channel(
-      [&rsp_body](const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>& channel) {
+      [&rsp_body, this](const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>& channel) {
         auto* metadata = rsp_body.add_channel_metadata();
         if (metadata != nullptr) {
-          user_chat_manager::dump_dtmq_to_chat_channel_metadata(*channel, *metadata, true);
+          user_chat_manager::dump_dtmq_to_chat_channel_metadata(get_shared_context(), *channel, *metadata, true);
         }
 
         return true;

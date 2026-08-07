@@ -26,6 +26,8 @@
 
 #include <utility>
 
+#include "logic/chat/user_chat_manager.h"
+
 GAMECLIENT_SERVICE_API task_action_chat_send_message::task_action_chat_send_message(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
@@ -36,7 +38,7 @@ GAMECLIENT_SERVICE_API const char* task_action_chat_send_message::name() const {
 }
 
 GAMECLIENT_SERVICE_API task_action_chat_send_message::result_type task_action_chat_send_message::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   player::ptr_t user = get_player<player>();
@@ -46,8 +48,23 @@ GAMECLIENT_SERVICE_API task_action_chat_send_message::result_type task_action_ch
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  int32_t response_code = 0;
+  switch (req_body.detail().command_case()) {
+    case atfw::dtmq::DChannelMessageDetail::CommandCase::kText:
+      response_code = RPC_AWAIT_CODE_RESULT(user->get_user_chat_manager().send_text_message(
+          get_shared_context(), req_body.channel_key().channel_id(), req_body.detail().text()));
+      break;
+    case atfw::dtmq::DChannelMessageDetail::CommandCase::kEvent:
+      response_code = RPC_AWAIT_CODE_RESULT(
+          user->get_user_chat_manager().send_event_message(get_shared_context(), req_body.channel_key().channel_id(),
+                                                           std::move(*req_body.mutable_detail()->mutable_event())));
+      break;
+    default:
+      response_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      break;
+  }
 
+  set_response_code(response_code);
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

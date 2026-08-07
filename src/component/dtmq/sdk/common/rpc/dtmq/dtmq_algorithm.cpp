@@ -5,6 +5,7 @@
 
 #include <xxhash.h>
 
+#include <common/string_oprs.h>
 #include <gsl/select-gsl.h>
 #include <string/string_format.h>
 
@@ -58,17 +59,73 @@ DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64
   return atfw::util::string::format("channel:{}:{}:{}", type_id, zone_id, instance_id);
 }
 
+DTMQ_COMMON_SDK_API uint32_t parse_unicast_channel_type_from_channel_id(gsl::string_view channel_id) {
+  if (channel_id.size() <= 8 || channel_id.substr(0, 8) != "channel:") {
+    return 0;
+  }
+
+  auto substr = channel_id.substr(8);
+  auto pos = substr.find(':');
+  if (pos != gsl::string_view::npos) {
+    substr = substr.substr(0, pos);
+  }
+
+  return atfw::util::string::to_int<uint32_t>(substr);
+}
+
 DTMQ_COMMON_SDK_API std::string make_zone_broadcast_channel_id(uint32_t type_id, uint64_t zone_id) {
   return atfw::util::string::format("zone:{}:{}", type_id, zone_id);
+}
+
+DTMQ_COMMON_SDK_API uint32_t parse_zone_broadcast_channel_type_from_channel_id(gsl::string_view channel_id) {
+  if (channel_id.size() <= 5 || channel_id.substr(0, 5) != "zone:") {
+    return 0;
+  }
+
+  auto substr = channel_id.substr(5);
+  auto pos = substr.find(':');
+  if (pos != gsl::string_view::npos) {
+    substr = substr.substr(0, pos);
+  }
+
+  return atfw::util::string::to_int<uint32_t>(substr);
 }
 
 DTMQ_COMMON_SDK_API std::string make_world_broadcast_channel_id(uint32_t type_id, uint64_t world_id) {
   return atfw::util::string::format("world:{}:{}", type_id, world_id);
 }
 
+DTMQ_COMMON_SDK_API uint32_t parse_world_broadcast_channel_type_from_channel_id(gsl::string_view channel_id) {
+  if (channel_id.size() <= 6 || channel_id.substr(0, 6) != "world:") {
+    return 0;
+  }
+
+  auto substr = channel_id.substr(6);
+  auto pos = substr.find(':');
+  if (pos != gsl::string_view::npos) {
+    substr = substr.substr(0, pos);
+  }
+
+  return atfw::util::string::to_int<uint32_t>(substr);
+}
+
 DTMQ_COMMON_SDK_API std::string make_world_partition_channel_id(uint32_t type_id, uint64_t world_id,
                                                                 uint64_t partition_id) {
   return atfw::util::string::format("world-partition:{}:{}:{}", type_id, world_id, partition_id);
+}
+
+DTMQ_COMMON_SDK_API uint32_t parse_world_partition_channel_type_from_channel_id(gsl::string_view channel_id) {
+  if (channel_id.size() <= 16 || channel_id.substr(0, 16) != "world-partition:") {
+    return 0;
+  }
+
+  auto substr = channel_id.substr(16);
+  auto pos = substr.find(':');
+  if (pos != gsl::string_view::npos) {
+    substr = substr.substr(0, pos);
+  }
+
+  return atfw::util::string::to_int<uint32_t>(substr);
 }
 
 }  // namespace dtmq

@@ -93,6 +93,7 @@ DTMQ_PROXY_SERVICE_API task_action_send_message::result_type task_action_send_me
                                                            req_body.message_content());
   result_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (message) {
+    message->set_channel_type(channel->get_channel_key().channel_type());
     FCTXLOGDEBUG(get_shared_context(), "channel {} receive message {}.", req_body.channel_key().channel_id(),
                  message->sequence());
     rsp_body.set_message_sequence(message->sequence());

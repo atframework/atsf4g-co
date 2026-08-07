@@ -53,7 +53,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
-#include <gsl/util>
+#include <limits>
 #include <list>
 #include <memory>
 #include <string>
@@ -64,6 +64,10 @@
 
 #include "rpc/dtmq/dtmq_client_api.h"
 #include "rpc/rpc_common_types.h"
+
+#ifdef max
+#  undef max
+#endif
 
 namespace rpc {
 namespace dtmq {
@@ -313,6 +317,11 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
   int64_t get_last_message_sequence() const noexcept;
 
   int64_t get_last_removed_sequence() const noexcept;
+
+  mq_client_subscriber_wal_client_type::log_const_pointer get_message_by_sequence(int64_t sequence) const noexcept;
+
+  bool query_message(atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
+                     const client_subscriber::query_options& option);
 
   int32_t tick(rpc::context& ctx);
 
@@ -1450,21 +1459,75 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
   rpc::context::message_holder<atfw::dtmq::channel_subscriber> subscriber_info_holder{ctx};
   protobuf_copy_message(*subscriber_info_holder, internal_data_->shared_instance->get_subscriber_info());
 
+  // 这里需要重新设置subscriber_key，不能用共享的subscriber_info里的subscriber_key，因为共享的subscriber_info里的subscriber_key可能是空的
+  subscriber_info_holder->set_subscriber_key(get_subscriber_key());
+
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(
       ctx, std::move(*subscriber_info_holder), internal_data_->shared_instance->get_channel_key(), std::move(detail),
       compare_and_maybe_reset_lock_ptr, compare_and_maybe_reset_lock_rsp_ptr, auto_create_channel, no_wait)));
 }
 
+DTMQ_PROXY_SDK_API bool client_subscriber::find_cached_message(
+    rpc::context& /*ctx*/, int64_t sequence,
+    atfw::util::nostd::function_ref<void(const atfw::dtmq::DChannelMessage&)> fn) const noexcept {
+  if (internal_data_->shared_instance->is_ready()) {
+    auto log_ptr = internal_data_->shared_instance->get_message_by_sequence(sequence);
+    if (!log_ptr) {
+      return false;
+    }
+    fn(*log_ptr);
+    return true;
+  }
+
+  return false;
+}
+
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::find_message(rpc::context& ctx, int64_t sequence,
                                                                          atfw::dtmq::DChannelMessage& msg) {
+  // 优先从本地缓存拉取
+  if (internal_data_->shared_instance->is_ready()) {
+    auto log_ptr = internal_data_->shared_instance->get_message_by_sequence(sequence);
+    if (!log_ptr) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_MESSAGE_NOT_FOUND);
+    }
+    protobuf_copy_message(msg, *log_ptr);
+
+    RPC_RETURN_CODE(0);
+  }
+
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
       rpc::dtmq::find_message(ctx, internal_data_->shared_instance->get_channel_key(),
                               internal_data_->shared_instance->get_readonly_replicate_index(), sequence, msg)));
 }
 
+DTMQ_PROXY_SDK_API bool client_subscriber::query_message(
+    rpc::context& /*ctx*/, atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
+    query_options options) const noexcept {
+  if (internal_data_->shared_instance->is_ready()) {
+    return internal_data_->shared_instance->query_message(fn, options);
+  }
+
+  return false;
+}
+
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::page_query_message(
     rpc::context& ctx, atfw::dtmq::channel_page_info& page_info,
     google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs) {
+  if (internal_data_->shared_instance->is_ready()) {
+    client_subscriber::query_options options;
+    options.max_count = page_info.page_size();
+    options.start_sequence = page_info.page_start_sequence();
+
+    bool has_more = internal_data_->shared_instance->query_message(
+        [&msgs](const atfw::dtmq::DChannelMessage& msg) {
+          protobuf_copy_message(*msgs.Add(), msg);
+          return true;
+        },
+        options);
+    page_info.set_page_more(has_more);
+    RPC_RETURN_CODE(0);
+  }
+
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
       rpc::dtmq::page_query_message(ctx, internal_data_->shared_instance->get_channel_key(),
                                     internal_data_->shared_instance->get_readonly_replicate_index(), page_info, msgs)));
@@ -2404,6 +2467,44 @@ int64_t shared_subscriber::get_last_removed_sequence() const noexcept {
   }
 
   return *last_removed_key;
+}
+
+mq_client_subscriber_wal_client_type::log_const_pointer shared_subscriber::get_message_by_sequence(
+    int64_t sequence) const noexcept {
+  if (wal_client_ == nullptr) {
+    return nullptr;
+  }
+
+  return wal_client_->find_log(sequence);
+}
+
+bool shared_subscriber::query_message(atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
+                                      const client_subscriber::query_options& option) {
+  if (wal_client_ == nullptr) {
+    return false;
+  }
+
+  auto begin_iter = option.start_sequence > 0 ? wal_client_->get_log_manager().log_lower_bound(option.start_sequence)
+                                              : wal_client_->get_log_manager().log_begin();
+
+  int64_t left_count = option.max_count > 0 ? option.max_count : std::numeric_limits<int64_t>::max();
+  while (begin_iter != wal_client_->get_log_manager().log_end() && left_count > 0) {
+    const auto& log = *begin_iter;
+    ++begin_iter;
+    if (!log) {
+      continue;
+    }
+
+    if (option.end_sequence > 0 && log->sequence() >= option.end_sequence) {
+      break;
+    }
+
+    if (!fn(*log)) {
+      break;
+    }
+  }
+
+  return begin_iter != wal_client_->get_log_manager().log_end();
 }
 
 int32_t shared_subscriber::tick(rpc::context& ctx) {
