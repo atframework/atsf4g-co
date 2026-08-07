@@ -90,19 +90,6 @@ enum EnVersionType {
   EN_VERSION_GM = 10001;     // gm
 }
 
-// chat channel type
-enum EnChatChannelType {
-  EN_CCT_INVALID = 0;              // invalid
-  EN_CCT_ALL_DEFAULT = 1001;       // all zones
-  EN_CCT_ALL_BOUND = 2000;         // all zones bound
-  EN_CCT_ZONE_DEFAULT = 2001;      // one zone
-  EN_CCT_ZONE_BOUND = 3000;        // one zone bound
-  EN_CCT_PERSONAL_DEFAULT = 3001;  // personal
-  EN_CCT_PERSONAL_BOUND = 4000;    // personal bound
-
-  EN_CCT_SUB_GUILD = 8001;  // subcribe-guild
-}
-
 // item change type
 enum EnItemChgMainType {
   EN_ICMT_UNKNOWN = 0;  // unknown
