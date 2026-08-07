@@ -483,6 +483,13 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
           });
     }
   }
+
+  // 初始化Worker回调
+  auto worker_pool = (nullptr != owner_app_) ? owner_app_->get_worker_pool_module() : nullptr;
+  if (!worker_pool) {
+    return -12;
+  }
+  worker_pool->add_event_callback_on_worker_exiting(orbit_agent_manager::worker_exit_callback);
   return 0;
 }
 
@@ -645,7 +652,8 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
 
   auto client_record = find_client(client_id);
   if (nullptr == client_record || 0 == client_record->client_server_id ||
-      orbit::EN_CLIENT_STATE_RUNNING != client_record->state) {
+      (orbit::EN_CLIENT_STATE_RUNNING != client_record->state &&
+       orbit::EN_CLIENT_STATE_EXITING != client_record->state)) {
     FWLOGWARNING("orbit agent forward_to_client ignored for {}: client_server_id={:#x}, state={}", client_id,
                  nullptr != client_record ? client_record->client_server_id : 0,
                  nullptr != client_record ? static_cast<int>(client_record->state)
@@ -1076,28 +1084,42 @@ void orbit_agent_manager::build_client_launch_arguments(
   fill_normal_client_start_command(*record, app_id, output);
 }
 
-int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr record,
-                                              const std::vector<std::string>& command_line) {
-  std::vector<std::string> launch_arguments;
+void orbit_agent_manager::worker_exit_callback(const atfw::atapp::worker_context& worker_ctx) {
+  uint64_t worker_unique_id = worker_ctx.worker_unique_id;
+  uv_loop_t* loop_ = nullptr;
+  tbb::concurrent_hash_map<uint64_t, uv_loop_t*>::accessor accessor;
+  if (orbit_agent_manager::me()->uv_loop_queue_.find(accessor, worker_unique_id)) {
+    loop_ = accessor->second;
+    uv_stop(loop_);
+    uv_loop_close(loop_);
+    delete loop_;
+    orbit_agent_manager::me()->uv_loop_queue_.erase(accessor);
+  }
+}
 
-  // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
-  std::unordered_map<std::string, std::string> render_values;
-  render_values.emplace("client_id", record->client_id);
-  std::tm tm_local = atfw::util::time::time_utility::get_local_tm(atfw::util::time::time_utility::get_sys_now());
-  char buf[64] = {0};
-  std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
-  render_values.emplace("time", buf);
-
-  build_client_launch_arguments(record, render_values, command_line, launch_arguments);
-
+int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line) {
   auto worker_pool = (nullptr != owner_app_) ? owner_app_->get_worker_pool_module() : nullptr;
   if (!worker_pool) {
-    FWLOGERROR("orbit agent spawn client {} failed: worker pool module is not available", record->client_id);
+    FWLOGERROR("orbit agent spawn client {} failed: worker pool module is not available", client_id);
     return atfw::atapp::EN_ATAPP_ERR_WORKER_POOL_CLOSED;
   }
 
-  int spawn_result = worker_pool->spawn([client_id = record->client_id, launch_arguments = std::move(launch_arguments)](
-                                            const atfw::atapp::worker_context&) mutable {
+  auto spawn_func = [client_id_copy = client_id, launch_arguments = std::move(command_line),
+                     worker_pool](const atfw::atapp::worker_context& worker_ctx) mutable {
+    uint64_t worker_unique_id = worker_ctx.worker_unique_id;
+    uv_loop_t* loop_ = nullptr;
+    tbb::concurrent_hash_map<uint64_t, uv_loop_t*>::accessor accessor;
+    if (!orbit_agent_manager::me()->uv_loop_queue_.find(accessor, worker_unique_id)) {
+      // 创建流程
+      loop_ = new uv_loop_t();
+      uv_loop_init(loop_);
+      orbit_agent_manager::me()->uv_loop_queue_.emplace(worker_unique_id, loop_);
+      worker_pool->add_tick_callback([loop_](const atfw::atapp::worker_context&) { uv_run(loop_, UV_RUN_NOWAIT); },
+                                     worker_ctx);
+    } else {
+      loop_ = accessor->second;
+    }
+
     std::vector<char*> launch_argv;
     launch_argv.reserve(launch_arguments.size() + 1);
     for (std::string& launch_argument : launch_arguments) {
@@ -1118,7 +1140,7 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
     std::memset(process_handle, 0, sizeof(*process_handle));
 
     auto* exit_data = new orbit_agent_process_exit_data();
-    exit_data->client_id = client_id;
+    exit_data->client_id = client_id_copy;
     process_handle->data = exit_data;
 
     uv_process_options_t options;
@@ -1127,11 +1149,11 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
     options.args = launch_argv.data();
     options.exit_cb = on_uv_process_exit;
 
-    FWLOGINFO("orbit agent spawning client {} by command {}", client_id, command_line_str);
-    int uv_result = uv_spawn(uv_default_loop(), process_handle, &options);
+    FWLOGINFO("orbit agent spawning client {} by command {}", client_id_copy, command_line_str);
+    int uv_result = uv_spawn(loop_, process_handle, &options);
 
     spawn_completion_t completion;
-    completion.client_id = client_id;  // record is not captured in the lambda anymore
+    completion.client_id = client_id_copy;  // record is not captured in the lambda anymore
     completion.process_handle = process_handle;
     completion.uv_result = uv_result;
     if (uv_result >= 0) {
@@ -1139,14 +1161,32 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
       if (completion.process_id <= 0) {
         completion.process_id = static_cast<int64_t>(process_handle->pid);
       }
-      FWLOGINFO("orbit agent started client {} with pid {} by command {}", client_id, completion.process_id,
+      FWLOGINFO("orbit agent started client {} with pid {} by command {}", client_id_copy, completion.process_id,
                 command_line_str);
     } else {
-      FWLOGERROR("orbit agent start_client failed for {}: {} by command {}", client_id, uv_strerror(uv_result),
+      FWLOGERROR("orbit agent start_client failed for {}: {} by command {}", client_id_copy, uv_strerror(uv_result),
                  command_line_str);
     }
     orbit_agent_manager::me()->spawn_completions_.push(std::move(completion));
-  });
+  };
+  return worker_pool->spawn(spawn_func);
+}
+
+int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr record,
+                                              const std::vector<std::string>& command_line) {
+  std::vector<std::string> launch_arguments;
+
+  // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
+  std::unordered_map<std::string, std::string> render_values;
+  render_values.emplace("client_id", record->client_id);
+  std::tm tm_local = atfw::util::time::time_utility::get_local_tm(atfw::util::time::time_utility::get_sys_now());
+  char buf[64] = {0};
+  std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
+  render_values.emplace("time", buf);
+
+  build_client_launch_arguments(record, render_values, command_line, launch_arguments);
+
+  int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments));
   if (spawn_result < 0) {
     FWLOGERROR("orbit agent submit spawn client {} to worker pool failed, res: {}({})", record->client_id, spawn_result,
                protobuf_mini_dumper_get_error_msg(spawn_result));

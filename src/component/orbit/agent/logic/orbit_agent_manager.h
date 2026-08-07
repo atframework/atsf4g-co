@@ -5,6 +5,7 @@
 #include <uv.h>
 
 #include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_hash_map.h>
 
 #include <chrono>
 #include <cstdint>
@@ -17,6 +18,7 @@
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_keepalive.h>
 #include <atframe/modules/etcd_module.h>
+#include <atframe/modules/worker_pool_module.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -175,6 +177,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
     int32_t uv_result = 0;
   };
   void process_spawn_completions();
+  static void worker_exit_callback(const atfw::atapp::worker_context& worker_ctx);
+  static void worker_tick_callback(const atfw::atapp::worker_context& worker_ctx);
+  int32_t spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line);
 
  private:
   bool stoped_ = false;
@@ -234,4 +239,5 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;
   tbb::concurrent_queue<spawn_completion_t> spawn_completions_;
+  tbb::concurrent_hash_map<uint64_t, uv_loop_t*> uv_loop_queue_;
 };
