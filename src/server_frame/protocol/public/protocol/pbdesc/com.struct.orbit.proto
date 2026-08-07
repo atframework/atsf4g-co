@@ -13,6 +13,12 @@ import "protocol/pbdesc/com.struct.proto";
 
 package hello;
 
+// 注意和DtMq.xlsx 表对应，多个模块之间类型不要冲突
+enum EnOrbitChannelType {
+  EN_ORBIT_CHANNEL_TYPE_INVALID = 0;
+  EN_ORBIT_CHANNEL_TYPE_ROOM = 101;
+}
+
 message DOrbitRoomKey {
   string client_id = 1;
 }
@@ -59,22 +65,19 @@ message DOrbitUserFinishResult {
   DOrbitUserFinishResultDetail data = 4;
 }
 
-message DOrbitMapData {
-  int32 map_id = 1;
-  string region = 2;
-}
-
 message DOrbitRoomInitData {
-  DOrbitMapData map_data = 1;
+  uint32 client_template_id = 1;
+  string region = 2;
+  uint64 match_id = 3;
 }
 
 enum EnOrbitRoomStatus {
   EN_ORBIT_ROOM_STATUS_INVALID = 0;         // 无效值
-  EN_ORBIT_ROOM_STATUS_CLIENT_LOADING = 1;  // 加载中
-  EN_ORBIT_ROOM_STATUS_CLIENT_LOADED = 2;   // 加载完成
-  EN_ORBIT_ROOM_STATUS_USER_INITING = 3;    // 用户初始化中
-  EN_ORBIT_ROOM_STATUS_USER_RUNNING = 4;    // 用户运行中
-  EN_ORBIT_ROOM_STATUS_USER_FINISH = 5;     // 用户结束
+  EN_ORBIT_ROOM_STATUS_CREATED = 1;         // 房间创建成功
+  EN_ORBIT_ROOM_STATUS_CLIENT_LOADING = 2;  // 加载中
+  EN_ORBIT_ROOM_STATUS_CLIENT_LOADED = 3;   // 加载完成
+  EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING = 4;  // 用户运行中
+  EN_ORBIT_ROOM_STATUS_FINISH = 5;          // 结束
   EN_ORBIT_ROOM_STATUS_EXIT = 6;            // 退出
 }
 
@@ -82,8 +85,9 @@ enum EnOrbitRoomExitReason {
   EN_ORBIT_ROOM_EXIT_REASON_UNKNOWN = 0;
   EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED = 1;       // 分配失败
   EN_ORBIT_ROOM_EXIT_REASON_USER_INIT_FAILED = 2;  // 用户初始化失败
-  EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT = 3;           // 超时
-  EN_ORBIT_ROOM_EXIT_REASON_USER_FINISH = 4;       // 用户结束
+  EN_ORBIT_ROOM_EXIT_REASON_CRASH = 3;             // 崩溃
+  EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT = 4;           // 超时
+  EN_ORBIT_ROOM_EXIT_REASON_FINISH = 5;            // 正常结束
 }
 
 // ====== WAL 事件体 ======
@@ -93,26 +97,17 @@ message DOrbitRoomExitInfo {
 }
 
 message DOrbitRoomRunningData {
-  int64 last_event_id = 1;
+  DOrbitRoomKey room_key = 1;
   EnOrbitRoomStatus room_status = 2;
   int64 status_end_timepoint = 3;
+  int64 create_timepoint = 5;
+  int64 expired_timepoint = 6;
+  DOrbitRoomExitInfo exit_info = 7;
 
-  uint64 orbit_server_id = 4;   // 房间服务器ID
-  DOrbitRoomKey room_key = 5;   // 房间key
-  int64 create_timepoint = 6;   // 创建房间的时间
-  int64 expired_timepoint = 7;  // 房间最大过期时间
-  DOrbitRoomExitInfo exit_info = 8;
-
-  string client_address = 11;   // 客户端连接地址
-  DOrbitMapData map_data = 12;  // 地图信息
+  string client_address = 11;
+  DOrbitRoomInitData init_data = 12;
   repeated DOrbitUserInitResult user_init = 13;
   repeated DUserIDKey user_finish = 14;
-}
-
-message DOrbitClientStartLoading {}
-
-message DOrbitClientFinishLoading {
-  string client_address = 1;
 }
 
 message DOrbitUserInit {
@@ -128,17 +123,12 @@ message DOrbitClientExit {
 }
 
 message DOrbitRoomEventLog {
-  int64 event_id = 1;                       // 事件ID
-  google.protobuf.Timestamp timepoint = 2;  // 插入时间
-  EnOrbitRoomStatus orbit_room_status = 3;  // 战斗房间状态
-  DOrbitRoomKey room_key = 4;               // 房间key
+  EnOrbitRoomStatus orbit_room_status = 1;  // 战斗房间状态
+  DOrbitRoomKey room_key = 2;               // 房间key
 
   oneof event {
-    DOrbitClientStartLoading start_loading = 101;    // 开始加载Client
-    DOrbitClientFinishLoading finish_loading = 102;  // Client加载完成
-    DOrbitUserInit user_init_success = 103;          // 用户初始化成功
-    DOrbitUserFinish user_finish = 104;              // 用户结束
-    DOrbitClientExit client_exit = 111;              // Client退出
+    DOrbitUserInit user_init_success = 101;  // 用户初始化成功
+    DOrbitClientExit client_exit = 102;      // Client退出
   }
 }
 

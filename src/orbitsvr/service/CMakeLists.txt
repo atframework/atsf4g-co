@@ -2,6 +2,27 @@ set(SERVICE_TARGET_NAME orbit-server)
 file(GLOB_RECURSE SERVICE_SOURCES *.cpp *.cc *.c *.cxx)
 file(GLOB_RECURSE SERVICE_HEADERS *.h *.hpp)
 
+generate_for_pb_add_ss_service(
+  "atframework.dtmq.DtmqProxysvrNotifyService"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk"
+  SERVICE_DLLEXPORT_DECL
+  ORBIT_SERVER_API
+  NO_RPC
+  EXTERNAL_COMPONENT_PROTOCOLS
+  "dtmq-protocol-proxy-pbdesc"
+  INCLUDE_HEADERS
+  "protocol/pbdesc/dtmq_proxy.pb.h"
+  GENERATED_FLOW_NAME
+  "atframework.dtmq.DtmqProxysvrNotifyService.orbitsvr")
+
 project_service_declare_instance(
   ${SERVICE_TARGET_NAME}
   "${CMAKE_CURRENT_LIST_DIR}"
@@ -12,6 +33,7 @@ project_service_declare_instance(
   USE_COMPONENTS
   "orbit-common-protocol"
   "orbit-server-sdk"
+  "dtmq-proxy-sdk"
   HEADERS
   ${SERVICE_HEADERS}
   SOURCES
@@ -20,7 +42,9 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/log"
   USE_SERVICE_PROTOCOL
   "orbitsvr-protocol"
+  "orbitsvr-config"
   GENERATED_FLOW_NAMES
+  "atframework.dtmq.DtmqProxysvrNotifyService.orbitsvr"
   "${PROJECT_NAMESPACE}.OrbitServerRpcService"
   "${PROJECT_NAMESPACE}.OrbitClientRpcService"
   "${PROJECT_NAMESPACE}.OrbitsvrService")

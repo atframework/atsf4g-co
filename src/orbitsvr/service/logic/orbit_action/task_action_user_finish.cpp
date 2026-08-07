@@ -31,10 +31,8 @@ GAME_SERVICE_API task_action_user_finish::result_type task_action_user_finish::o
   const rpc_request_type &req_body = get_request_body();
   EXPLICIT_UNUSED_ATTR rpc_response_type &rsp_body = get_response_body();
 
-  // OrbitServerRpcService.user_finish（stream，Client 上报对局结束）：
-  // 按请求来源 client_id 定位房间 -> 逐个用户 user_finish 事件 -> 每玩家 orbit_finish 异步任务 -> EXIT
   const std::string &client_id = get_request_client_id();
-  orbit_room_manager::me()->on_user_finish(client_id, req_body.results());
+  RPC_AWAIT_CODE_RESULT(orbit_room_manager::me()->on_user_finish(get_shared_context(), client_id, req_body.results()));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

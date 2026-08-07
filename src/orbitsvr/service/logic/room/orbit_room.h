@@ -1,5 +1,5 @@
 // Copyright 2026 atframework
-// Created by atsf4g-co battle module migration
+// Created by atsf4g-co orbit_room module migration
 
 #pragma once
 
@@ -10,12 +10,16 @@
 #include <vector>
 
 #include <config/extern_service_types.h>
+#include <dispatcher/task_type_traits.h>
+#include <memory/rc_ptr.h>
 #include <rpc/rpc_common_types.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/common/orbit.common.pb.h>
 #include <protocol/pbdesc/com.struct.orbit.pb.h>
 
 // clang-format off
@@ -28,71 +32,81 @@ namespace rpc {
 class context;
 }  // namespace rpc
 
-class orbit_room_wal_handle;
+enum EnOrbitRoomUserStatus {
+  EN_ORBIT_ROOM_USER_STATUS_INVALID = 0,
+  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_MATCH = 1,  // 注册玩家ID到服务
+  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_LOBBY = 2,  // 注册玩家数据到服务
+  EN_ORBIT_ROOM_USER_STATUS_INIT_TO_CLIENT = 3,   // 注册玩家数据到客户端
+  EN_ORBIT_ROOM_USER_STATUS_FINISH_CLIENT = 4,    // 客户端完成
+};
 
-// 战斗房间（裁剪版，内嵌于 orbitsvr）
-// 状态机（EnOrbitRoomStatus）：
-//   CLIENT_LOADING -> CLIENT_LOADED -> USER_INITING -> USER_RUNNING -> USER_FINISH -> EXIT
-// 步骤 4 职责：建房拉起 Client（CLIENT_LOADING）、Client 就绪（CLIENT_LOADED）、
-//   用户初始化（USER_INITING -> user_init -> USER_RUNNING）、退出处理（EXIT）。
-class orbit_room : public std::enable_shared_from_this<orbit_room> {
+struct orbit_room_user_data {
+  EnOrbitRoomUserStatus user_status_ = EN_ORBIT_ROOM_USER_STATUS_INVALID;
+  PROJECT_NAMESPACE_ID::DOrbitUserInitData init_data_;
+  PROJECT_NAMESPACE_ID::DOrbitUserInitResult init_result_;
+  PROJECT_NAMESPACE_ID::DOrbitUserFinishResult finish_result_;
+  PROJECT_NAMESPACE_ID::DUserIDKey user_key_;
+  bool init_ = false;
+  bool finish_ = false;
+  bool settlement_finish_ = false;
+  int64_t finish_timepoint_ = 0;
+  int32_t settlement_retry_count_ = 0;
+  task_type_trait::task_type settlement_task;
+};
+
+using orbit_room_user_data_ptr_t = atfw::util::memory::strong_rc_ptr<orbit_room_user_data>;
+
+class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_room> {
  public:
   orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
              const PROJECT_NAMESPACE_ID::DOrbitRoomInitData& room_data);
-  ~orbit_room();
+
+  void tick();
 
   const std::string& get_client_id() const noexcept;
-  const PROJECT_NAMESPACE_ID::DOrbitRoomKey& get_room_key() const noexcept;
-  const PROJECT_NAMESPACE_ID::DOrbitRoomInitData& get_room_data() const noexcept;
-  PROJECT_NAMESPACE_ID::EnOrbitRoomStatus get_status() const noexcept;
+  const std::string& get_region() const;
 
-  // 建房：进入 CLIENT_LOADING，写 start_loading 事件
-  int32_t create(rpc::context& ctx);
-  // Client 启动成功：进入 CLIENT_LOADED，写 finish_loading 事件
+  int32_t create(rpc::context& ctx, uint64_t match_server_id);
+  int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserKey>& user_keys,
+                    bool is_last_one);
+  rpc::result_code_type start_client(rpc::context& ctx, const orbit::DAgentClientStartArgs& args);
   int32_t on_client_start(rpc::context& ctx, const std::string& client_addr);
-  // 用户入房：收集用户 -> USER_INITING -> 调 Client user_init -> USER_RUNNING
-  int32_t join_users(rpc::context& ctx,
-                     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserInitData>& users);
-  // Client 上报对局结束（步骤 5）：逐个用户写 user_finish 事件 -> USER_FINISH，
-  // 每个玩家组装 DOrbitUserFinishAsyncData -> rpc::async_jobs::add_jobs(orbit_finish)，最后 EXIT
+  rpc::result_code_type join_users(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserInitData& user_init_data);
+
   int32_t on_user_finish(
       rpc::context& ctx,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results);
-  // Client 退出：进入 EXIT，写 client_exit 事件
-  int32_t on_client_end(rpc::context& ctx,
-                        PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason =
-                            PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_UNKNOWN);
+  int32_t on_client_end(rpc::context& ctx, orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
-  // 生成房间快照
-  void dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) const;
-  // 查询玩家初始化数据（get_player_info 用）；未找到返回 nullptr
-  const PROJECT_NAMESPACE_ID::DOrbitUserInitData* get_user_init_data(
-      const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
-  // 超时推进（tick 由 orbit_room_manager 驱动）
-  int32_t tick(rpc::context& ctx, int64_t now);
-
-  const std::shared_ptr<orbit_room_wal_handle>& get_wal_handle() const noexcept { return wal_handle_; }
+  bool ready_to_destroy() const;
+  void on_destroy();
 
  private:
+  int32_t add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log);
   int32_t set_status(PROJECT_NAMESPACE_ID::EnOrbitRoomStatus v);
+  void dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) const;
 
+  int32_t room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason);
+  void async_user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);
+  rpc::result_code_type user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);
+
+  uint64_t match_server_id_ = 0;
   PROJECT_NAMESPACE_ID::DOrbitRoomKey room_key_;
   PROJECT_NAMESPACE_ID::DOrbitRoomInitData room_data_;
-  PROJECT_NAMESPACE_ID::EnOrbitRoomStatus status_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_INVALID;
+  PROJECT_NAMESPACE_ID::EnOrbitRoomStatus room_status_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_INVALID;
   int64_t create_timepoint_ = 0;
   int64_t status_end_timepoint_ = 0;
   std::string client_address_;
+  int64_t expired_timepoint_ = 0;
 
-  // 用户：user_key -> 初始 init 数据
-  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, PROJECT_NAMESPACE_ID::DOrbitUserInitData, player_key_hash_t,
+  PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_FINISH;
+  bool client_end_ = false;
+  bool init_user_finish_ = false;
+  bool need_retry_settlement_ = false;
+  int32_t join_user_finish_count_ = 0;
+  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, player_key_hash_t,
                      player_key_equal_t>
-      user_index_;
-  // 用户初始化结果：user_key -> token
-  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, PROJECT_NAMESPACE_ID::DOrbitUserInitResult, player_key_hash_t,
-                     player_key_equal_t>
-      user_init_result_index_;
-  // 对局结束上报的玩家完成结果（步骤 5，供快照/结算上下文使用）
-  std::vector<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult> user_finish_results_;
-
-  std::shared_ptr<orbit_room_wal_handle> wal_handle_;
+      user_data_index_;
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> finish_user_list_;
+  atfw::dtmq::DChannelIdKey channel_key_;
 };

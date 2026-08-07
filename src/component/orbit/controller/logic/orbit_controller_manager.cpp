@@ -509,7 +509,7 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
 
   uint64_t server_node_id = request.server_identity().server_node_id();
   if (server_node_id == 0) {
-    FWLOGWARNING("orbit controller launch_client: server unique_id={} not connected", server_unique_id);
+    FWLOGWARNING("orbit controller launch_client: server node_id={} not connected", server_node_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -526,7 +526,7 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
 
   int32_t retry_count = 3;
   while (retry_count > 0) {
-    auto agent = select_agent_for_launch(request.args().resource(), request.match_tag());
+    auto agent = select_agent_for_launch(request.args().resource(), request.args().match_tag());
     if (agent.agent_server_id() == 0) {
       FWLOGWARNING("orbit controller launch_client: no available agent");
       RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds(1000)));

@@ -38,9 +38,9 @@ GAME_SERVICE_API task_action_create_room::result_type task_action_create_room::o
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  // matchsvr 建房：创建 orbit_room + Orbit 拉起 Client
-  int32_t result = orbit_room_manager::me()->create_room(get_shared_context(), req_body, rsp_body);
-  TASK_ACTION_RETURN_CODE(result);
+  rsp_body.set_result_code(RPC_AWAIT_CODE_RESULT(
+      orbit_room_manager::me()->create_room(get_shared_context(), req_body, get_request_node_id())));
+  TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 GAME_SERVICE_API int task_action_create_room::on_success() { return get_result(); }

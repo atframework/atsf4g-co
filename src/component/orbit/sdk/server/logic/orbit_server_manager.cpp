@@ -61,8 +61,7 @@ ORBIT_SERVER_SERVICE_API void orbit_server_manager::tick() {
 }
 
 ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_client(
-    rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args,
-    const std::string& match_tag) {
+    rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args) {
   const std::string& client_id = args.client_start_args().client_id().client_id();
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ != nullptr) {
@@ -88,7 +87,6 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
 
   *req->mutable_server_identity() = server_identity_;
   *req->mutable_args() = args;
-  req->set_match_tag(match_tag);
 
   int32_t rpc_result =
       RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::launch_client(ctx, controller_server_id, *req, *rsp));

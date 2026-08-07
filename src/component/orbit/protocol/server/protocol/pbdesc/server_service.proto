@@ -96,9 +96,7 @@ service ServerToControllerService {
 
 message STCLaunchClientReq {
   DServerIdentity server_identity = 1;
-
   DAgentClientStartArgs args = 2;
-  string match_tag = 3;
 }
 message CTSLaunchClientRsp {
   int32 error_code = 1;

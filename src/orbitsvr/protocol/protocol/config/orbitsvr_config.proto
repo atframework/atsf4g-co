@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package hello.config;
+
+import "atframe/atapp_conf.proto";
+
+message orbitsvr_cfg {
+  uint32 server_heartbeat_interval_sec = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5" }];
+  int64 room_client_loading_timeout_sec = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" }];
+  int64 room_user_init_timeout_sec = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" }];
+}

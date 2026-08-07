@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
-// @brief Created by yousongyang with mako-generator.py at 2026-08-04 17:26:47
+// @brief Created by yousongyang with mako-generator.py at 2026-08-07 17:00:03
 
-#include "logic/action/task_action_join_room.h"
+#include "logic/action/task_action_init_user.h"
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -27,21 +27,21 @@
 
 #include <utility>
 
-GAME_SERVICE_API task_action_join_room::task_action_join_room(dispatcher_start_data_type&& param)
+ORBIT_SERVER_API task_action_init_user::task_action_init_user(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAME_SERVICE_API task_action_join_room::~task_action_join_room() {}
+ORBIT_SERVER_API task_action_init_user::~task_action_init_user() {}
 
-GAME_SERVICE_API const char* task_action_join_room::name() const { return "task_action_join_room"; }
+ORBIT_SERVER_API const char* task_action_init_user::name() const { return "task_action_init_user"; }
 
-GAME_SERVICE_API task_action_join_room::result_type task_action_join_room::operator()() {
+ORBIT_SERVER_API task_action_init_user::result_type task_action_init_user::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  rsp_body.set_result_code(RPC_AWAIT_CODE_RESULT(orbit_room_manager::me()->join_room(get_shared_context(), req_body)));
+  rsp_body.set_result_code(orbit_room_manager::me()->init_user(get_shared_context(), req_body));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAME_SERVICE_API int task_action_join_room::on_success() { return get_result(); }
+ORBIT_SERVER_API int task_action_init_user::on_success() { return get_result(); }
 
-GAME_SERVICE_API int task_action_join_room::on_failed() { return get_result(); }
+ORBIT_SERVER_API int task_action_init_user::on_failed() { return get_result(); }
