@@ -179,7 +179,7 @@ message logic_excel_cfg {
   bool enable = 1;
   bool override_same_version = 2;
   uint32 group_number = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" }];
-  string bindir = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "../../resource/excel" }];
+  repeated string bindir = 4;
 }
 
 message logic_rank_cfg {

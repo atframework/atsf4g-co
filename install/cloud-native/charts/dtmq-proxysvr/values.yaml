@@ -24,3 +24,5 @@ vector:
 
 redis:
   enable: true
+
+enable_excel_config: true

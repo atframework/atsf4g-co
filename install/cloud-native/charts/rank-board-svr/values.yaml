@@ -47,3 +47,5 @@ ranksvr_ranking:
     gc_expire_duration: 3600
     gc_log_size: 30
     max_log_size: 300
+
+enable_excel_config: true

@@ -146,3 +146,6 @@ persistence:
       - name: log
         storage: 5Gi
         accessMode: ReadWriteOnce
+
+enabel_session_manager: false
+enable_excel_config: false
