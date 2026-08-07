@@ -84,7 +84,10 @@ struct ATFW_UTIL_SYMBOL_VISIBLE runtime_options {
   uint32_t zone_id = 1;
   uint32_t world_id = 1;
   // Directory used to materialize the generated YAML config. Must be inside the build tree.
-  // When empty, the current working directory is used.
+  // When empty, the runtime resolves to: the RPC_UNIT_TEST_WORKDIR environment variable (set per target
+  // by the CMake helper for ctest), then the build-tree default baked by the helper, then the current
+  // working directory as a last resort. Leaving it empty keeps the generated config out of the repo root
+  // even for direct binary invocations.
   std::string working_directory;
   // Hard deadline of the whole stop()/teardown procedure. Must be short and non-zero.
   std::chrono::system_clock::duration teardown_deadline = std::chrono::seconds{10};

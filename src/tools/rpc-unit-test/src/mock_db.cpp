@@ -285,8 +285,9 @@ db_table_rule_handle mock_db::mock_table(gsl::string_view table_name) {
 
 std::string mock_db::extract_table_name(gsl::string_view key) const {
   size_t offset = 0;
-  const std::string &prefix = db_msg_dispatcher::me()->get_record_prefix();
-  if (!prefix.empty()) {
+  auto dispatcher = db_msg_dispatcher::me();
+  if (dispatcher && !dispatcher->get_record_prefix().empty()) {
+    const std::string &prefix = dispatcher->get_record_prefix();
     if (key.size() <= prefix.size() + 1 || 0 != key.compare(0, prefix.size(), prefix.data()) ||
         key[prefix.size()] != '-') {
       return std::string{};
@@ -769,6 +770,9 @@ int32_t mock_db::on_kl_update_by_index(const rpc::db::hash_table::unit_test_requ
   const std::string type_name{store_full_name.data(), store_full_name.size()};
   uint64_t index = req.list_index.front();
 
+  // Purge a lazily-expired record first: a write to an expired key must create a fresh record without
+  // the stale TTL (Redis semantics), not revive the dead record.
+  (void)find_live_kl(req.key);
   kl_record &record = kl_records_[std::string{req.key}];
   auto entry_iter = std::find_if(record.entries.begin(), record.entries.end(),
                                  [index](const kl_entry &entry) { return entry.index == index; });
@@ -777,6 +781,10 @@ int32_t mock_db::on_kl_update_by_index(const rpc::db::hash_table::unit_test_requ
   } else {
     entry_iter->type_name = type_name;
     entry_iter->data = std::move(data);
+  }
+  // Keep next_index ahead of any explicitly-written index to avoid collisions on subsequent add_index.
+  if (index >= record.next_index) {
+    record.next_index = index + 1;
   }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
@@ -791,6 +799,9 @@ int32_t mock_db::on_kl_add_index(const rpc::db::hash_table::unit_test_request &r
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
+  // Purge a lazily-expired record first (same as on_kl_update_by_index): appending to an expired key
+  // starts a fresh record without the stale TTL.
+  (void)find_live_kl(req.key);
   kl_record &record = kl_records_[std::string{req.key}];
   const absl::string_view store_full_name = req.store->GetDescriptor()->full_name();
   record.entries.push_back(
@@ -824,11 +835,13 @@ int32_t mock_db::on_remove_all(const rpc::db::hash_table::unit_test_request &req
 int32_t mock_db::on_set_ttl(const rpc::db::hash_table::unit_test_request &req) {
   clock::time_point expire_at = now() + std::chrono::seconds{req.ttl_second};
   kv_record *kv = find_live_kv(req.key);
+  kl_record *kl = find_live_kl(req.key);
+  // Production maps EXPIRE's plain integer reply (0 for a missing key) through unpack_nothing, so a
+  // missing key is a successful no-op here (same as on_remove_ttl mirroring PERSIST).
   if (nullptr != kv) {
     kv->has_expire = true;
     kv->expire_at = expire_at;
   }
-  kl_record *kl = find_live_kl(req.key);
   if (nullptr != kl) {
     kl->has_expire = true;
     kl->expire_at = expire_at;

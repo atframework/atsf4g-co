@@ -31,6 +31,8 @@
 #include <utility>
 #include <vector>
 
+#include "detail/pending_drain.h"
+
 namespace atframework {
 namespace testing {
 
@@ -282,6 +284,7 @@ void mock_ss::unbind() {
   expectations_.clear();
   history_.clear();
   pending_responses_.clear();
+  drop_unmatched_request_ = false;
   owner_ = nullptr;
   transport_ = nullptr;
 }
@@ -296,6 +299,12 @@ void mock_ss::deliver_pending() {
   transport_->collect_outbound(cursor_, records);
   for (const outbound_message *record : records) {
     if (nullptr == record || record->type != static_cast<int32_t>(::atfw::component::message_type::kInServerMessage)) {
+      continue;
+    }
+
+    // Skip messages that the transport layer already marked as errored (immediate_error != 0): the send
+    // was rejected and no mock response should be generated for it.
+    if (record->immediate_error != 0) {
       continue;
     }
 
@@ -366,6 +375,8 @@ void mock_ss::deliver_pending() {
       continue;
     }
 
+    // Consume the rule budget only after we have committed to handling it (forced-error, sync invoker,
+    // or successful async-start). A failed async-start below refunds the budget.
     if (matched_rule->options.times > 0 && matched_rule->remaining_times > 0) {
       --matched_rule->remaining_times;
     }
@@ -401,25 +412,27 @@ void mock_ss::deliver_pending() {
           RPC_RETURN_CODE(res);
         },
         std::chrono::seconds{30});
-    if (!invoke_result.is_success() && needs_response) {
-      FWLOGERROR("mock_ss failed to start the handler task for rpc {}, fail with an immediate error response",
-                 rpc_name);
-      atframework::SSMsg response_msg;
-      inject_response(request_msg, response_msg, PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY,
-                      record->target_node_id, record->target_node_name, &matched_rule->options);
+    if (!invoke_result.is_success()) {
+      // Refund the budget consumed above — the handler never ran.
+      if (matched_rule->options.times > 0 && matched_rule->remaining_times >= 0) {
+        ++matched_rule->remaining_times;
+      }
+      if (needs_response) {
+        FWLOGERROR("mock_ss failed to start the handler task for rpc {}, fail with an immediate error response",
+                   rpc_name);
+        atframework::SSMsg response_msg;
+        inject_response(request_msg, response_msg, PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY,
+                        record->target_node_id, record->target_node_name, &matched_rule->options);
+      }
     }
   }
 
-  // Deliver due responses.
-  while (!pending_responses_.empty()) {
-    const pending_response &front = pending_responses_.front();
-    if (front.deliver_at_generation > transport_->get_current_generation()) {
-      break;
-    }
+  // Deliver due responses. See detail::drain_due_events for the due-order scan and the
+  // re-entrancy-safe two-phase contract.
+  std::vector<pending_response> due_events =
+      detail::drain_due_events(pending_responses_, transport_->get_current_generation());
 
-    pending_response event = std::move(pending_responses_.front());
-    pending_responses_.pop_front();
-
+  for (auto &event : due_events) {
     auto discovery_module = owner_->get_service_discovery_module();
     if (!discovery_module) {
       continue;

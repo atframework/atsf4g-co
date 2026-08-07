@@ -116,12 +116,15 @@ function(project_add_rpc_unit_test)
 
   add_test(NAME ${PROJECT_RPC_UNIT_TEST_TARGET}.unit COMMAND $<TARGET_FILE:${PROJECT_RPC_UNIT_TEST_TARGET}>)
 
-  set(PROJECT_RPC_UNIT_TEST_LABELS ${PROJECT_NAME} unit rpc-unit-test "component:${PROJECT_RPC_UNIT_TEST_COMPONENT}")
+  # The user-supplied LABELS argument is PROJECT_RPC_UNIT_TEST_LABELS after cmake_parse_arguments; build the
+  # final label list in a separate variable so the argument survives.
+  set(PROJECT_RPC_UNIT_TEST_ALL_LABELS ${PROJECT_NAME} unit rpc-unit-test
+                                       "component:${PROJECT_RPC_UNIT_TEST_COMPONENT}")
   foreach(PROJECT_RPC_UNIT_TEST_FEATURE IN LISTS PROJECT_RPC_UNIT_TEST_FEATURES)
     string(TOLOWER "${PROJECT_RPC_UNIT_TEST_FEATURE}" PROJECT_RPC_UNIT_TEST_FEATURE_LOWER)
-    list(APPEND PROJECT_RPC_UNIT_TEST_LABELS "feature:${PROJECT_RPC_UNIT_TEST_FEATURE_LOWER}")
+    list(APPEND PROJECT_RPC_UNIT_TEST_ALL_LABELS "feature:${PROJECT_RPC_UNIT_TEST_FEATURE_LOWER}")
   endforeach()
-  list(APPEND PROJECT_RPC_UNIT_TEST_LABELS ${PROJECT_RPC_UNIT_TEST_LABELS})
+  list(APPEND PROJECT_RPC_UNIT_TEST_ALL_LABELS ${PROJECT_RPC_UNIT_TEST_LABELS})
 
   if(NOT PROJECT_RPC_UNIT_TEST_TIMEOUT)
     set(PROJECT_RPC_UNIT_TEST_TIMEOUT 120)
@@ -129,7 +132,7 @@ function(project_add_rpc_unit_test)
 
   set_tests_properties(
     ${PROJECT_RPC_UNIT_TEST_TARGET}.unit
-    PROPERTIES LABELS "${PROJECT_RPC_UNIT_TEST_LABELS}"
+    PROPERTIES LABELS "${PROJECT_RPC_UNIT_TEST_ALL_LABELS}"
                TIMEOUT "${PROJECT_RPC_UNIT_TEST_TIMEOUT}"
                WORKING_DIRECTORY "${PROJECT_RPC_UNIT_TEST_WORKING_DIRECTORY}")
 
@@ -139,9 +142,13 @@ function(project_add_rpc_unit_test)
     set_property(
       TEST ${PROJECT_RPC_UNIT_TEST_TARGET}.unit APPEND
       PROPERTY ENVIRONMENT_MODIFICATION
-               "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY};PATH=path_list_prepend:${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin"
-    )
+               "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY};PATH=path_list_prepend:${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin")
   endif()
+
+  # Per-target working directory for the runtime (preserves per-fixture isolation when ctest runs targets
+  # in parallel). The runtime reads RPC_UNIT_TEST_WORKDIR before falling back to its build-tree default.
+  set_property(TEST ${PROJECT_RPC_UNIT_TEST_TARGET}.unit APPEND PROPERTY ENVIRONMENT
+               "RPC_UNIT_TEST_WORKDIR=${PROJECT_RPC_UNIT_TEST_WORKING_DIRECTORY}")
 
   if(PROJECT_RPC_UNIT_TEST_ENVIRONMENT)
     set_property(TEST ${PROJECT_RPC_UNIT_TEST_TARGET}.unit APPEND PROPERTY ENVIRONMENT

@@ -422,6 +422,11 @@ CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
     res = RPC_AWAIT_CODE_RESULT(
         rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:ttl", output, nullptr));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
+
+    // Production contract: EXPIRE on a missing key is a successful no-op (integer reply 0 mapped
+    // through unpack_nothing), not an error.
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set_ttl(ctx, kTestDbChannel, "ut:kv:ttl", 60));
+    CASE_EXPECT_EQ(0, res);
     RPC_RETURN_CODE(0);
   });
   if (task.empty()) {
@@ -434,9 +439,72 @@ CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
   CASE_EXPECT_EQ(0, result.result_code);
 
   CASE_EXPECT_FALSE(test.db().has_key("ut:kv:ttl"));
-  CASE_EXPECT_EQ(2, static_cast<int>(test.db().calls(op_type::set_ttl)));
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls(op_type::set_ttl)));
   CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls(op_type::remove_ttl)));
   CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls(op_type::remove_all)));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// A key_list write (add_index/update_by_index) to a lazily-expired key must start a fresh record without
+// the stale TTL and without the dead entries (Redis semantics), not revive the expired record.
+CASE_TEST(rpc_unit_test, db_key_list_write_after_expiry_starts_fresh) {
+  atframework::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+
+  test.db().set_now(std::chrono::system_clock::time_point{std::chrono::seconds{1700000000}});
+
+  auto task =
+      test.run_task("db_kl_expiry_write", std::chrono::seconds{2}, [&test](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<rpc_unit_test::RpcUnitTestListEntry> entry{ctx};
+        entry->set_id(1);
+        entry->set_payload("old");
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+            ctx, kTestDbChannel, "ut:kl:ttl", 10, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+        CASE_EXPECT_EQ(0, res);
+
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::set_ttl(ctx, kTestDbChannel, "ut:kl:ttl", 60));
+        CASE_EXPECT_EQ(0, res);
+
+        // Past the TTL: the record is logically gone. Appending must create a fresh record holding only the
+        // new entry, and the fresh record must not carry the expired TTL.
+        test.db().advance(std::chrono::seconds{61});
+        entry->set_id(2);
+        entry->set_payload("new");
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+            ctx, kTestDbChannel, "ut:kl:ttl", 10, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+        CASE_EXPECT_EQ(0, res);
+
+        std::vector<db_key_list_message_result_t> output;
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_list::get_all(ctx, kTestDbChannel, "ut:kl:ttl", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        if (!output.empty() && output[0].message) {
+          CASE_EXPECT_EQ("new",
+                         static_cast<const rpc_unit_test::RpcUnitTestListEntry &>(*output[0].message->get()).payload());
+        }
+
+        // The fresh record has no TTL: advancing far past the original deadline must not expire it.
+        test.db().advance(std::chrono::seconds{3600});
+        output.clear();
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_list::get_all(ctx, kTestDbChannel, "ut:kl:ttl", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        RPC_RETURN_CODE(0);
+      });
+  if (task.empty()) {
+    CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
 
   CASE_EXPECT_EQ(0, test.stop());
 }

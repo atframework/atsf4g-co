@@ -14,7 +14,7 @@ atsf4g-co 的 RPC 单元测试支持库：在普通进程内启动一个最小 a
 
 单元测试 seam 由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 整体门控（默认跟随
 `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST`）。hooks-off 的生产构建中：无测试状态、无热路径分支、无
-`mock` 符号、无测试库依赖。所有 `mock` 子命名空间接口（生成 SS/DB mock、HPA/UUID 功能 mock）同样被宏
+`mock` 符号、无测试库依赖。所有 `mock` 子命名空间接口（生成 SS/DB mock、HPA 功能 mock）同样被宏
 整体裁剪。
 
 ## 最小 CMake 示例
@@ -30,10 +30,10 @@ project_add_rpc_unit_test(
   TIMEOUT 120)
 ```
 
-`project_add_rpc_unit_test`（`project/ProjectRpcUnitTest.cmake`）参数：`TARGET`（必填）、`COMPONENT`、
-`SOURCES`、`LINK_LIBRARIES`、`FEATURES`、`LABELS`（默认 fast）、`TIMEOUT`（秒，写入 CTest）。它复用集中
-编译的 atframe_utils 私有 main/frame support targets，自动 `add_test`、配 labels、CTest timeout 和 Windows
-DLL `ENVIRONMENT_MODIFICATION` PATH。
+`project_add_rpc_unit_test`（`src/tools/rpc-unit-test/cmake/ProjectRpcUnitTest.cmake`）参数：`TARGET`（必填）、
+`COMPONENT`、`SOURCES`、`LINK_LIBRARIES`、`FEATURES`、`LABELS`（附加 CTest labels，惯例传 `fast`）、`TIMEOUT`
+（秒，写入 CTest，默认 120）。它复用集中编译的 atframe_utils 私有 main/frame support targets，自动
+`add_test`、配 labels、CTest timeout 和 Windows DLL `ENVIRONMENT_MODIFICATION` PATH。
 
 ## 最小 CASE_TEST 示例
 
@@ -158,8 +158,10 @@ handler 首参 `rpc::context &`（可等待嵌套 RPC），末参统一为可扩
 
 ### UUID / resource / CS
 
-- UUID：五类公共入口默认被确定性 provider 接管（`feature::uuid`），可整体替换 provider 或覆盖单个
-  family；号段静态缓存跨 case 延续，不要断言绝对 id 值。
+- UUID：`generate_global_increase_id` / `generate_global_unique_id` 经 DB `inc_field` 流入 DB mock（
+  `feature::db` 即可覆盖；号段静态缓存跨 case 延续，不要断言绝对 id 值）；`generate_standard_uuid*` /
+  `generate_short_uuid` 是纯本地函数，不触网、无需 mock。`feature::uuid` 当前不做额外 runtime 装配，
+  仅作为 feature 标签保留。
 - resource：`test.resource()` 提供 path→bytes/version/version_error 内存 loader，`reload()` 驱动真实
   manager 完整 reload/index 流程。
 - CS：`test.cs()` / `mock_client` 模拟 gateway 客户端（add/post/remove/set-router-rsp），上行走真实
@@ -184,7 +186,8 @@ handler 首参 `rpc::context &`（可等待嵌套 RPC），末参统一为可扩
 - 工具库公共 API：`atframework::testing::*`（`src/tools/rpc-unit-test`），只含公共代码。
 - 生成 mock：`<service>::mock`（`rpc_call_api_for_ss.*.mako`）、`<db 命名空间>::mock`
   （`db_rpc_redis*.mako`），宏门控纯新增，编译进 server_frame/服务自身生成 TU。
-- 功能私有 mock：`logic_hpa::mock`（`src/server_frame/logic/hpa/mock/`）、`rpc::db::mock`（UUID）。
+- 功能私有 mock：`logic_hpa::mock`（`src/server_frame/logic/hpa/mock/`）。UUID 的 DB 型入口无独立 mock
+  命名空间，直接经 DB hook 覆盖（见上节）。
 
 ## 外部依赖离线矩阵与禁止配置项
 

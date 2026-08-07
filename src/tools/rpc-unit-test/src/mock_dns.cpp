@@ -7,7 +7,9 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
+#include "detail/pending_drain.h"
 #include "dispatcher/ss_msg_dispatcher.h"
 #include "dispatcher/task_manager.h"
 #include "rpc/rpc_utils.h"
@@ -47,6 +49,7 @@ void mock_dns::bind() {
     return;
   }
   bound_ = true;
+  diagnostic_.clear();
 
   ss_msg_dispatcher::me()->set_dns_lookup_hook_for_unit_test(
       [this](const ss_msg_dispatcher::dns_lookup_hook_request &request) -> bool {
@@ -67,6 +70,12 @@ void mock_dns::unbind() {
   rules_.clear();
   calls_.clear();
   pending_.clear();
+  // Uniform engine lifecycle contract: unbind resets all state so a runtime restart starts clean
+  // (same as mock_ss/mock_cs/mock_db).
+  current_generation_ = 0;
+  late_responses_ = 0;
+  unmatched_ = 0;
+  diagnostic_.clear();
 }
 
 dns_rule_handle mock_dns::mock(gsl::string_view domain, rpc::dns::details::callback_data_type records,
@@ -169,18 +178,21 @@ void mock_dns::queue_response(dns_request_record &request, rpc::dns::details::ca
   pending_response pending;
   pending.request = request;
   pending.records = std::move(records);
-  pending.deliver_at_generation = current_generation_ + delay_generations;
+  // deliver_pending() advances the generation first and then delivers everything due, so the +1 makes
+  // delay_generations==0 complete in the pump that observed the lookup and every extra generation count
+  // as one more full pump (matching the SS engine's delay semantics).
+  pending.deliver_at_generation = current_generation_ + 1 + delay_generations;
   pending_.push_back(std::move(pending));
 }
 
 void mock_dns::deliver_pending() {
   ++current_generation_;
 
-  while (!pending_.empty() && pending_.front().deliver_at_generation <= current_generation_) {
-    pending_response pending = std::move(pending_.front());
-    pending_.pop_front();
+  // See detail::drain_due_events for the due-order scan and the re-entrancy-safe two-phase contract.
+  std::vector<pending_response> due_responses = detail::drain_due_events(pending_, current_generation_);
 
-    if (task_manager::is_instance_destroyed()) {
+  for (auto &pending : due_responses) {
+    if (task_manager::is_instance_destroyed() || ss_msg_dispatcher::is_instance_destroyed()) {
       ++late_responses_;
       continue;
     }

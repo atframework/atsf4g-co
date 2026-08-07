@@ -236,12 +236,15 @@ int runtime::start(const runtime_options &options) {
   if (!impl_) {
     impl_ = std::make_unique<impl_data>();
   }
+  impl_->diagnostic.clear();
   if (impl_->state == runtime_state::running || impl_->state == runtime_state::starting) {
+    impl_->diagnostic = "runtime is already running";
     return -1;
   }
 
   runtime *expected = nullptr;
   if (!g_active_runtime.compare_exchange_strong(expected, this)) {
+    impl_->diagnostic = "another atframework::testing::runtime is active in this process";
     return -1;
   }
 
@@ -309,6 +312,20 @@ int runtime::start(const runtime_options &options) {
   // Working directory and config file
   do {
     std::string workdir = options.working_directory;
+    if (workdir.empty()) {
+      // ctest sets RPC_UNIT_TEST_WORKDIR per target (preserves per-target isolation); a directly-invoked
+      // executable has no such env, so fall back to the build-tree default baked by the CMake helper
+      // (RPC_UNIT_TEST_DEFAULT_WORKDIR) instead of the current working directory, which may be the
+      // repository root and would pollute it with the generated config file.
+      std::string env_workdir = atfw::util::file_system::getenv("RPC_UNIT_TEST_WORKDIR");
+      if (!env_workdir.empty()) {
+        workdir = env_workdir;
+      } else {
+#if defined(RPC_UNIT_TEST_DEFAULT_WORKDIR)
+        workdir = RPC_UNIT_TEST_DEFAULT_WORKDIR;
+#endif
+      }
+    }
     if (workdir.empty()) {
       workdir = atfw::util::file_system::get_cwd();
     }

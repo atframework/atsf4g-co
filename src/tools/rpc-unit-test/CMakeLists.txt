@@ -28,6 +28,8 @@ add_library(
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_db.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_discovery.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_dns.h"
+  "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_hpa.h"
+  "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_resource.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_router.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_ss.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/raw_transport.h")
@@ -36,6 +38,11 @@ add_library(${PROJECT_NAME}::rpc-unit-test ALIAS ${PROJECT_NAME}-rpc-unit-test)
 target_include_directories(${PROJECT_NAME}-rpc-unit-test
                            PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>")
 target_compile_definitions(${PROJECT_NAME}-rpc-unit-test PRIVATE RPC_UNIT_TEST_NATIVE=1)
+# Build-tree default working directory for directly-invoked test executables (no RPC_UNIT_TEST_WORKDIR
+# env, e.g. a manual `-r <case>` run). Keeps the generated config out of the repository root. ctest runs
+# override this per target via RPC_UNIT_TEST_WORKDIR.
+target_compile_definitions(${PROJECT_NAME}-rpc-unit-test
+                           PRIVATE "RPC_UNIT_TEST_DEFAULT_WORKDIR=\"${CMAKE_BINARY_DIR}/rpc-unit-test-workdir\"")
 target_compile_options(${PROJECT_NAME}-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 target_link_libraries(${PROJECT_NAME}-rpc-unit-test PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}
                                                     ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})

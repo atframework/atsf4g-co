@@ -47,8 +47,6 @@ struct ATFW_UTIL_SYMBOL_VISIBLE db_request_record {
   int32_t result_code = 0;
 };
 
-class mock_db;
-
 // Callback context of one intercepted hash_table operation on a per-table mock rule. The handler may
 // inspect the request inputs, set return_code, fill the returned record (output_table + output_version
 // for kv reads, kl_output entries for kl reads, inc_message for kv_inc_field) and decide the outcome:
@@ -87,8 +85,6 @@ struct ATFW_UTIL_SYMBOL_VISIBLE db_table_context {
 // Per-table, per-interface mock handler. Returns true when the operation is handled (the context outputs
 // decide the outcome), false to defer this single operation to the common mock layer.
 using db_table_handler = std::function<bool(db_table_context &)>;
-
-class mock_db;
 
 namespace detail {
 struct db_table_rule_state {

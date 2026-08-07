@@ -276,7 +276,9 @@ atbus 或网关进程的条件下，运行真实的 RPC 生成代码、dispatche
   `uuid_allocator::inc_field_auto_inc_id` 走 DB `inc_field`；`generate_global_unique_id` 内含静态号段缓存
   （`get_global_unique_id_pools()` + `spin_rw_lock`，含 alloc_task/wake_tasks 协程排队）再调
   `generate_global_increase_id`。因此只 hook DB `inc_field` 无法覆盖前三类，必须在所有公共 UUID 分配入口统一
-  hook；统一 hook 后生产静态号段缓存自然不会被触发。
+  hook；统一 hook 后生产静态号段缓存自然不会被触发。**实施结论（与状态表一致）**：前三类是纯本地函数、
+  不触网，确定性 provider seam 未实施（descope）；DB 型两个入口经 `inc_field` hook 覆盖，
+  `feature::uuid` 不做额外 runtime 装配。
 
 ### 2.8 资源加载
 
@@ -1193,7 +1195,7 @@ lobbysvr/orbit 五个样例已完成，剩 Orbit client adapter）。**全程约
 | 1 | CMake helper `project_add_rpc_unit_test`、runtime 状态机、task pump、连续 fixture | ✅ |
 | 2 | mock connector + raw transport + SS rule engine + router_test_manager + `<service>::mock` 生成 + 嵌套协程 | ✅ |
 | 3 | DNS hook（`uv_getaddrinfo` 前）+ A/AAAA/error/delay/timeout | ✅ |
-| 4 | DB hash_table 同步 hook + 内存 backend（KV/KL/TTL/CAS/field merge）+ UUID provider + 引擎层 per-table 回调 + 生成层 typed handler + `db_mock_meta` | ✅ |
+| 4 | DB hash_table 同步 hook + 内存 backend（KV/KL/TTL/CAS/field merge）+ UUID DB 入口经 `inc_field` 覆盖（无独立 provider seam，本地 UUID 函数无需 mock）+ 引擎层 per-table 回调 + 生成层 typed handler + `db_mock_meta` | ✅ |
 | 5 | CS gateway-send 收敛 + hook + mock_client（上行 dispatch / 下行捕获） | ✅ |
 | 6 | server_frame test target（3 拆分：db/cs/resource + hpa + telemetry）+ 初始用例 | ✅ |
 | 7 | 资源 provider（excel scoped active provider + 真 manager reload/index） | ✅ |

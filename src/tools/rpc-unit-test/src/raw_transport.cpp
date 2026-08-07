@@ -143,7 +143,9 @@ size_t raw_transport::collect_outbound(outbound_cursor &cursor, std::vector<cons
   size_t ret = 0;
   while (cursor.next_index < outbound_history_.size()) {
     const outbound_message &record = outbound_history_[cursor.next_index];
-    // One-generation barrier: records captured in this pump call are only consumable from the next one.
+    // Two-generation barrier: a record captured at generation N is only consumable at generation N+2 or
+    // later. This guarantees the current pump's coroutines finish before the record triggers downstream
+    // effects (mock response injection). inject_inbound uses the same +2 convention.
     if (record.pump_generation + 1 >= current_generation_) {
       break;
     }
