@@ -31,4 +31,11 @@ project_game_shared_component_declare_sdk(
 set(ORBIT_CLIENT_SDK_TARGET "${TARGET_FULL_NAME}")
 target_link_libraries(${ORBIT_CLIENT_SDK_TARGET} PRIVATE tbb)
 
+if(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
+  target_compile_definitions(${ORBIT_CLIENT_SDK_TARGET} PRIVATE PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS=1)
+  if((BUILD_TESTING OR PROJECT_ENABLE_UNITTEST) AND PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
+    add_subdirectory(test)
+  endif()
+endif()
+
 add_subdirectory(AutoClient)

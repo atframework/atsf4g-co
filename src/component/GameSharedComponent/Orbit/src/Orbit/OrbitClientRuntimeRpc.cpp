@@ -208,6 +208,12 @@ void OrbitClientRuntime::on_received_message(const std::string &message) {
 int32_t OrbitClientRuntime::send_message(const std::string &packed_message,
                                          const google::protobuf::MethodDescriptor &method, bool reliable,
                                          uint64_t task_id) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (unit_test_send_hook_for_orbit_client_) {
+    return unit_test_send_hook_for_orbit_client_(get_rpc_full_name(method), packed_message, task_id, reliable);
+  }
+#endif
+
   if (nullptr == app_ || !app_->get_bus_node()) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "send rejected: atapp bus node is unavailable");
     return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
@@ -234,6 +240,12 @@ int32_t OrbitClientRuntime::send_message(const std::string &packed_message,
 
   return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+void OrbitClientRuntime::set_unit_test_send_hook(orbit_client_send_hook_t hook) {
+  unit_test_send_hook_for_orbit_client_ = std::move(hook);
+}
+#endif
 
 int32_t OrbitClientRuntime::send_stream_message(const google::protobuf::MessageLite &body,
                                                 const google::protobuf::MethodDescriptor &method) {

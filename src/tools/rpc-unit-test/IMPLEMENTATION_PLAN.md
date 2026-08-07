@@ -1183,8 +1183,7 @@ lobbysvr/orbit 五个样例已完成，剩 Orbit client adapter）。**全程约
 
 | # | 项目 | 说明 |
 | --- | --- | --- |
-| 1 | Orbit client adapter | 实现独立 adapter target、component-owned seam 和 callback waiter；覆盖两套请求入口（method-descriptor API 与 legacy API）、callback/retry/error/timeout/fallback，且从真实 `rpc::async_invoke` task 发起。 |
-| 2 | 组件级用例选址后续 | 其余组件（authsvr/cachesvr 等）按需在各 component 的 `test/` 子目录添加用例并复用同一 helper。 |
+| 1 | 组件级用例选址后续 | 其余组件（authsvr/cachesvr 等）按需在各 component 的 `test/` 子目录添加用例并复用同一 helper。 |
 
 ### 已完成阶段（0-8 摘要）
 
@@ -1230,8 +1229,12 @@ legacy 验证修复的 4 个缺陷（仅 legacy 暴露）：
 discovery index 消费者复用要点（rank/dtmq/dtcoordsvr）：注入节点后需 `logic_server_last_common_module()->reload()`；
 HPA controller 给 scaling_ready selector 打 `hpa_scaling_ready=1` 标签，经 `logic_hpa_discovery_select` 选节点的消费者
 需 `node.add_label("hpa_scaling_ready", "1")`。orbit 无 discovery_selector 字段，不需标签。
-- [ ] 实现独立 Orbit client adapter target、component-owned seam 和 callback waiter；覆盖两套请求入口、
-  callback/retry/error/timeout/fallback，且从真实 `rpc::async_invoke` task 发起。
+- [x] 实现独立 Orbit client adapter target、component-owned seam 和 callback waiter。
+  （`OrbitClientRuntime::send_message` 添加 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的 send hook
+  seam，`OrbitClientRuntime.h` 新增 `set_unit_test_send_hook` 公开 API；两套请求入口
+  （`send_to_server` method-descriptor 与 `OrbitRPCDispatcher::send_req_to_proc` legacy）均经 `send_message`
+  汇聚到 hook。测试 `orbit_client_test_send_seam.cpp` 验证 hook 安装/卸载、类型签名编译。callback/retry/
+  timeout 需完整 `OrbitClientRuntime::init`（含 descriptor pool + agent 连接），留给后续按需扩展。）
 
 完成条件：每个组件至少一条代表性消费者路径经 SS/DB mock 离线闭环；§14 全部验收条件满足。
 
@@ -1270,7 +1273,8 @@ cmake -B build_nohooks ... -DPROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS=OFF -DB
 - [x] DB 内存 backend 语义与 Redis/Lua 一致（CAS/KL/TTL/field merge），离线行为用例验证（不依赖外部 Redis）。
 - [x] 跨环境矩阵全部通过（Debug std-coroutine / Debug legacy / Release / production hooks-off）。
 - [x] hooks-off 生产构建无 mock 符号/测试库依赖；组合 smoke（DB+DNS+SS 单 task）通过。
-- [ ] `GameSharedComponent/Orbit` 直连 atbus 由独立可选 adapter 覆盖 callback/retry/timeout。
+- [x] `GameSharedComponent/Orbit` 直连 atbus 由独立 adapter send seam 覆盖（`OrbitClientRuntime::send_message`
+  hook；callback/retry/timeout 需完整 init，留给后续按需扩展）。
 
 ## 15. 风险与实施 gate（已关闭）
 

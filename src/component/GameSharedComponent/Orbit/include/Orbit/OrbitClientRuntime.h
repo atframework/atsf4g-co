@@ -208,6 +208,19 @@ class OrbitClientRuntime {
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;
   double last_self_cpu_used_ = 0.0;
   bool has_self_usage_sample_ = false;
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+ public:
+  using orbit_client_send_hook_t =
+      std::function<int32_t(const std::string &rpc_full_name, const std::string &packed_message, uint64_t task_id,
+                             bool reliable)>;
+  ORBIT_CLIENT_SDK_API void set_unit_test_send_hook(orbit_client_send_hook_t hook);
+#endif
+
+ private:
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  orbit_client_send_hook_t unit_test_send_hook_for_orbit_client_;
+#endif
 };
 
 }  // namespace orbit_client_sdk
