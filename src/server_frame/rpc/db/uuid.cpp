@@ -144,6 +144,10 @@ struct ATFW_UTIL_SYMBOL_LOCAL unique_id_key_t {
   uint32_t major_type;
   uint32_t minor_type;
   uint32_t patch_type;
+
+  bool operator==(const unique_id_key_t &other) const noexcept {
+    return major_type == other.major_type && minor_type == other.minor_type && patch_type == other.patch_type;
+  }
 };
 
 struct ATFW_UTIL_SYMBOL_LOCAL unique_id_value_t {
