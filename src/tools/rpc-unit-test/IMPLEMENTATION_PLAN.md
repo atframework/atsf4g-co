@@ -1195,7 +1195,8 @@ package 由 `PROJECT_NAMESPACE` 决定）：
 ## 12. 分阶段实施清单
 
 当前进度：阶段 0-7 全部完成；阶段 8（框架本身）仅剩跨环境验证矩阵（另行安排）；阶段 9（组件/SDK 消费
-者抽样，框架外扩展）进行中（rank 样例已完成）。**全程约束：单元测试不依赖任何外部系统或服务**
+者抽样，框架外扩展）进行中（rank/distributed_transaction/dtmq/lobbysvr async_jobs 四个样例已完成，剩
+orbit SDK 抽样与 Orbit adapter）。**全程约束：单元测试不依赖任何外部系统或服务**
 （Redis/etcd/atbus/系统 DNS 一律由 mock 引擎替代；原计划的真机 Redis golden tests 因此移除，语义一致性
 由离线行为用例保证）。
 
@@ -1387,7 +1388,15 @@ package 由 `PROJECT_NAMESPACE` 决定）：
   （node 事件只在 etcd watch 路径触发）；HPA controller 会给 scaling_ready selector 打
   `hpa_scaling_ready=1` 标签要求，经 `logic_hpa_discovery_select` 选节点的消费者（rank/dtmq/dtcoordsvr）
   要求 mock 节点带同名标签 `node.add_label("hpa_scaling_ready", "1")`。
-- [ ] dtmq/distributed_transaction/user/auth 及 `src/component/orbit/sdk/**` 的 SS/DB 消费者抽样契约测试。
+- [x] distributed_transaction SDK 抽样：
+  `src/component/distributed_transaction/test/distributed_transaction_test_create_contract.cpp`
+  （`rpc::transaction_api::create_transaction` → `atframework.distributed_system.DtcoordsvrService/create`）。
+- [x] dtmq client SDK 抽样：`src/component/dtmq/test/dtmq_test_send_message_contract.cpp`
+  （`rpc::dtmq::send_message` client API → `atframework.dtmq.DtmqProxysvrService/send_message`）。
+- [x] user/auth（lobbysvr）DB 消费者抽样：`src/lobbysvr/test/lobbysvr_test_async_jobs_db_contract.cpp`
+  （`async_jobs::add_jobs/get_jobs/del_jobs` 经真实生成 KL 表 API `rpc::db::async_jobs` 进出内存 backend；
+  空 key KL 读返回 `EN_DB_RECORD_NOT_FOUND`；引擎表名取自 index 名 `async_jobs`）。
+- [ ] `src/component/orbit/sdk/**` 的 SS/DB 消费者抽样契约测试。
 - [ ] 实现独立 Orbit client adapter target、component-owned seam 和 callback waiter；覆盖两套请求入口、
   callback/retry/error/timeout/fallback，且从真实 `rpc::async_invoke` task 发起。
 

@@ -28,7 +28,7 @@ user_chat_manager::user_chat_manager(player& owner) : owner_(&owner), has_get_al
 
 user_chat_manager::~user_chat_manager() {}
 
-rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
+rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
   std::string subscriber_key = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
   // 创建聊天频道
   if (!world_chat_channel_) {

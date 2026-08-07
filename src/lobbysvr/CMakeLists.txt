@@ -40,3 +40,7 @@ generate_for_pb_add_cs_service(
 
 add_subdirectory(sdk)
 add_subdirectory(service)
+
+if((BUILD_TESTING OR PROJECT_ENABLE_UNITTEST) AND PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
+  add_subdirectory(test)
+endif()

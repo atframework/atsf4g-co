@@ -15,11 +15,11 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <chrono>
-
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
+
+#include <chrono>
 
 #include "config/extern_service_types.h"
 #include "frame/test_macros.h"
@@ -65,8 +65,8 @@ CASE_TEST(component_rank, rank_sdk_update_score_contract) {
       PROJECT_NAMESPACE ".RankBoardService/rank_set_score",
       PROJECT_NAMESPACE_ID::SSRankSetScoreReq::descriptor()->full_name(),
       PROJECT_NAMESPACE_ID::SSRankSetScoreRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
-          -> rpc::result_code_type {
+      [](const atframework::testing::ss_request_view &request,
+         google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const PROJECT_NAMESPACE_ID::SSRankSetScoreReq &>(request.body);
         CASE_EXPECT_EQ(0x1A0001, static_cast<int64_t>(request.target_node_id));
         CASE_EXPECT_EQ(11, static_cast<int>(typed_request.rank_key().rank_type()));
@@ -84,8 +84,8 @@ CASE_TEST(component_rank, rank_sdk_update_score_contract) {
     return;
   }
 
-  auto task = test.run_task(
-      "rank_update_score", std::chrono::seconds{3}, [](rpc::context &ctx) -> rpc::result_code_type {
+  auto task =
+      test.run_task("rank_update_score", std::chrono::seconds{3}, [](rpc::context &ctx) -> rpc::result_code_type {
         PROJECT_NAMESPACE_ID::DRankUserKey user;
         user.set_user_id(10001);
         user.set_zone_id(1);
