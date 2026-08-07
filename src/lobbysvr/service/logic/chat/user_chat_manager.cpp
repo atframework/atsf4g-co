@@ -263,6 +263,26 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
   return 0;
 }
 
+int32_t user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(
+    const atfw::chat::DChatChannelKey& chat_channel_key, atfw::dtmq::DChannelIdKey& dtmq_channel_key) {
+  switch (chat_channel_key.key_type_case()) {
+    case atfw::chat::DChatChannelKey::KeyTypeCase::kWorldPartitionChannel:
+      dtmq_channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC));
+      dtmq_channel_key.set_channel_id(rpc::dtmq::make_world_partition_channel_id(
+          static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC), logic_config::me()->get_local_world_id(),
+          chat_channel_key.world_partition_channel()));
+      return 0;
+    case atfw::chat::DChatChannelKey::KeyTypeCase::kPrivateChannel:
+      dtmq_channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+      dtmq_channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(dtmq_channel_key.channel_type(),
+                                                                         chat_channel_key.private_channel().zone_id(),
+                                                                         chat_channel_key.private_channel().user_id()));
+      return 0;
+    default:
+      return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL;
+  }
+}
+
 void user_chat_manager::dump_dtmq_to_chat_channel_metadata(rpc::context& /*ctx*/,
                                                            const rpc::dtmq::client_subscriber& channel,
                                                            atfw::chat::DChatChannelMeta& metadata,

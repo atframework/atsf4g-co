@@ -48,15 +48,23 @@ GAMECLIENT_SERVICE_API task_action_chat_send_message::result_type task_action_ch
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  int32_t response_code = 0;
+  atfw::dtmq::DChannelIdKey dtmq_channel_key;
+  int32_t response_code =
+      user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(req_body.channel_key(), dtmq_channel_key);
+
+  if (response_code < 0) {
+    set_response_code(response_code);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
   switch (req_body.detail().command_case()) {
     case atfw::dtmq::DChannelMessageDetail::CommandCase::kText:
       response_code = RPC_AWAIT_CODE_RESULT(user->get_user_chat_manager().send_text_message(
-          get_shared_context(), req_body.channel_key(), req_body.detail().text()));
+          get_shared_context(), dtmq_channel_key, req_body.detail().text()));
       break;
     case atfw::dtmq::DChannelMessageDetail::CommandCase::kEvent:
       response_code = RPC_AWAIT_CODE_RESULT(user->get_user_chat_manager().send_event_message(
-          get_shared_context(), req_body.channel_key(), std::move(*req_body.mutable_detail()->mutable_event())));
+          get_shared_context(), dtmq_channel_key, std::move(*req_body.mutable_detail()->mutable_event())));
       break;
     default:
       response_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;

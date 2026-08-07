@@ -39,7 +39,7 @@ message SCChatChannelSync {
 }
 
 message CSChatSendMessageReq {
-  atframework.dtmq.DChannelIdKey channel_key = 1;
+  DChatChannelKey channel_key = 1;
   atframework.dtmq.DChannelMessageDetail detail = 2;
 }
 

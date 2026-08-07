@@ -29,6 +29,7 @@ class DChannelIdKey;
 class DChannelSyncPoint;
 }  // namespace dtmq
 namespace chat {
+class DChatChannelKey;
 class DChatChannelMeta;
 class DChatChannelData;
 class DChatChannelSnapshot;
@@ -70,6 +71,9 @@ class user_chat_manager {
 
   int32_t receive_heartbeat(rpc::context& ctx, const atfw::dtmq::DChannelSyncPoint& sync_point,
                             atfw::chat::SCChatChannelSync& sync_msg);
+
+  static int32_t build_dtmq_channel_key_from_chat_channel_key(const atfw::chat::DChatChannelKey& chat_channel_key,
+                                                              atfw::dtmq::DChannelIdKey& dtmq_channel_key);
 
   static void dump_dtmq_to_chat_channel_metadata(rpc::context& ctx, const rpc::dtmq::client_subscriber& channel,
                                                  atfw::chat::DChatChannelMeta& metadata, bool with_configure);

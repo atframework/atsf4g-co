@@ -44,6 +44,13 @@ message DChatChannelMeta {
   int64 last_removed_sequence = 81;
 }
 
+message DChatChannelKey {
+  oneof key_type {
+    uint64 world_partition_channel = 1;
+    hello.DUserIDKey private_channel = 2;
+  }
+}
+
 message DChatChannelSnapshot {
   repeated atframework.dtmq.DChannelMessage message_list = 1;
 }
