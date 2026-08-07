@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/duration.proto";
+
+import "protocol/extension/xrescode_extensions_v3.proto";
+import "protocol/extension/v3/xresloader.proto";
+
+import "protocol/common/com.struct.dtmq.common.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
+
+package orbit.config;
+
+// 聊天频道配置
+message ExcelOrbitClientTemplate {
+  option (xrescode.loader) = {
+    file_path: "orbit_client_template.bytes"
+    indexes: { fields: "client_template_id" index_type: EN_INDEX_KV }
+
+    tags: "server"
+  };
+
+  uint32 client_template_id = 1 [(org.xresloader.field_unique_tag) = "client_template_id"];
+  double expected_normal_cpu = 2;
+  double expected_normal_memory_mb = 3;
+  double expected_seed_cpu = 4;
+  double expected_seed_memory_mb = 5;
+  uint32 startup_timeout_sec = 6;
+  uint32 heartbeat_timeout_sec = 7;
+  string match_tag = 8;
+  uint32 room_expired_timeout = 9;
+  repeated string launch_args = 21;
+}

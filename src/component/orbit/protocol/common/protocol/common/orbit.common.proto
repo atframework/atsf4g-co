@@ -91,6 +91,7 @@ message DAgentClientStartArgs {
   uint32 startup_timeout_sec = 2;
   uint32 heartbeat_timeout_sec = 3;
   DAgentClientStartArgsResource resource = 4;
+  string match_tag = 5; // 数据截至到Controller后无用
 }
 
 message DAgentLoadSnapshot {

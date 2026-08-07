@@ -31,6 +31,9 @@ generate_for_pb_add_orbit_client(
 project_service_declare_protocol("orbitsvr-protocol" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
                                  "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/pbdesc/orbit_service.proto")
 
+project_service_declare_protocol("orbitsvr-config" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
+                                 "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/config/orbitsvr_config.proto")
+
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.OrbitsvrService"
   "${CMAKE_CURRENT_LIST_DIR}/service"
