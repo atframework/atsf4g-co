@@ -42,3 +42,6 @@ httproute:
 
 lobbysvr:
   rank_auto_update_interval: 3600s
+
+enable_excel_config: true
+enabel_session_manager: true

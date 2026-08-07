@@ -6,9 +6,15 @@ logic:
   logic_id: {{ include "libapp.logicID" . }} # svr_zone_id
   server:
     log_path: "{{ .Values.server_log_dir }}"
+    shared_component:
+      session_manager: {{ .Values.enabel_session_manager }}
+      excel_config: {{ .Values.enable_excel_config }}
   excel:
     enable: true
-    bindir: "../../resource/excel"
+    bindir:
+      - "../../resource/excel/ServerOnly"
+      - "../../resource/excel/Both"
+      - "../../resource/excel"
   user:
     enable_session_actor_log: {{ .Values.enable_session_actor_log }}
   operation_support_system:

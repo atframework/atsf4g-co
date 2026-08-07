@@ -58,20 +58,21 @@ static bool excel_config_callback_get_buffer(std::string& out, const char* path)
   }
 #endif
   char file_path[atfw::util::file_system::MAX_PATH_LEN + 1];
-  int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
-                                  logic_config::me()->get_logic_cfg().excel().bindir().c_str(),
-                                  atfw::util::file_system::DIRECTORY_SEPARATOR, path);
-  if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
-    file_path[res] = 0;
-  } else {
-    return false;
+  for (const std::string& bindir : logic_config::me()->get_logic_cfg().excel().bindir()) {
+    int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s", bindir.c_str(),
+                                    atfw::util::file_system::DIRECTORY_SEPARATOR, path);
+    if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
+      file_path[res] = 0;
+    } else {
+      return false;
+    }
+
+    if (atfw::util::file_system::is_exist(file_path)) {
+      return atfw::util::file_system::get_file_content(out, file_path, true);
+    }
   }
 
-  if (!atfw::util::file_system::is_exist(file_path)) {
-    return false;
-  }
-
-  return atfw::util::file_system::get_file_content(out, file_path, true);
+  return false;
 }
 
 static bool excel_config_callback_get_version(std::string& out) {
@@ -81,21 +82,23 @@ static bool excel_config_callback_get_version(std::string& out) {
   }
 #endif
   char file_path[atfw::util::file_system::MAX_PATH_LEN + 1];
-  int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s",
-                                  logic_config::me()->get_logic_cfg().excel().bindir().c_str(),
-                                  atfw::util::file_system::DIRECTORY_SEPARATOR, "version.txt");
-  if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
-    file_path[res] = 0;
-  } else {
-    return false;
-  }
-
   out = "0.0.0.0";
-  if (atfw::util::file_system::is_exist(file_path)) {
-    std::string buffer;
-    if (atfw::util::file_system::get_file_content(buffer, file_path, true)) {
-      std::pair<const char*, size_t> ver = atfw::util::string::trim(buffer.c_str(), buffer.size());
-      out.assign(ver.first, ver.second);
+  for (const std::string& bindir : logic_config::me()->get_logic_cfg().excel().bindir()) {
+    int res = UTIL_STRFUNC_SNPRINTF(file_path, sizeof(file_path) - 1, "%s%c%s", bindir.c_str(),
+                                    atfw::util::file_system::DIRECTORY_SEPARATOR, "version.txt");
+    if (res > 0 && static_cast<size_t>(res) < atfw::util::file_system::MAX_PATH_LEN) {
+      file_path[res] = 0;
+    } else {
+      return false;
+    }
+
+    if (atfw::util::file_system::is_exist(file_path)) {
+      std::string buffer;
+      if (atfw::util::file_system::get_file_content(buffer, file_path, true)) {
+        std::pair<const char*, size_t> ver = atfw::util::string::trim(buffer.c_str(), buffer.size());
+        out.assign(ver.first, ver.second);
+        break;
+      }
     }
   }
 
@@ -149,7 +152,7 @@ static void excel_config_callback_logger(const excel::config_manager::log_caller
 
   if (util::log::log_wrapper::check_level(WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT),
                                           log_caller.level_id)) {
-    WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->write_log(log_caller, content, strlen(content));
+    WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->format_log(log_caller, "{}", content);
   }
 }
 }  // namespace
