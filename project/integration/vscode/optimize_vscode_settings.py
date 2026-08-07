@@ -7,8 +7,14 @@ compiler, build directory and helper tools), but it can also be run standalone.
 
 Applied rules (existing user values are preserved unless a repair is required):
 
-* ``cmake.configureEnvironment`` gains ``CPRINTF_MODE=none`` and ``VSLANG=1033``
-  (each key is added only when it is missing; present keys are never overwritten).
+* ``cmake.configureEnvironment`` gains ``CPRINTF_MODE=none`` (configure only).
+* ``cmake.environment`` gains ``VSLANG=1033`` (applies to configure **and** build).
+  ``VSLANG`` must reach the build so cl.exe emits the English ``/showIncludes`` prefix
+  that CMake+Ninja match for header/PCH dependency tracking under a non-UTF-8 system
+  codepage; putting it only in ``cmake.configureEnvironment`` leaves the build broken.
+* Each key is added only when missing (present keys are never overwritten); a stale
+  ``VSLANG`` left in ``cmake.configureEnvironment`` by an older version of this script is
+  migrated to ``cmake.environment``.
 * ``cpplint.cpplintPath`` is filled or repaired only when unset or pointing at a
   missing executable; a still-valid user path is kept.
 * ``C_Cpp.clang_format_path`` is filled or repaired the same way, but only when
@@ -31,7 +37,18 @@ import re
 import shutil
 import sys
 
-DESIRED_CONFIGURE_ENVIRONMENT = (("CPRINTF_MODE", "none"), ("VSLANG", "1033"))
+# Env vars required during CMake configure only.
+DESIRED_CONFIGURE_ENVIRONMENT = (("CPRINTF_MODE", "none"),)
+
+# Env vars required for configure AND build, so they live in the shared ``cmake.environment``
+# block. VSLANG=1033 forces cl.exe to emit the English ``/showIncludes`` prefix that
+# CMake+Ninja match for header/PCH dependency tracking under a non-UTF-8 system codepage; it
+# must reach the build step, not only configure.
+DESIRED_ENVIRONMENT = (("VSLANG", "1033"),)
+
+# Keys an older version of this script injected into ``cmake.configureEnvironment`` but that
+# now belong in ``cmake.environment``; migrated away on every run for correctness.
+MIGRATE_TO_ENVIRONMENT = ("VSLANG",)
 
 
 def strip_jsonc_comments(text):
@@ -164,8 +181,12 @@ def find_arg_index(args, flag):
     return -1
 
 
-def apply_configure_environment(data, changes):
-    key = "cmake.configureEnvironment"
+def apply_environment_block(data, key, desired, changes):
+    """Ensure each (name, value) in ``desired`` is present under settings key ``key``.
+
+    Existing keys are never overwritten; the block is created when missing and left as-is
+    when it already holds a non-object value (a warning is printed instead).
+    """
     env = data.get(key)
     if env is not None and not isinstance(env, dict):
         print(
@@ -175,11 +196,44 @@ def apply_configure_environment(data, changes):
         return
     if env is None:
         env = {}
-    for name, value in DESIRED_CONFIGURE_ENVIRONMENT:
+    for name, value in desired:
         if name not in env:
             env[name] = value
             changes.append("%s: add %s=%s" % (key, name, value))
     data[key] = env
+
+
+def migrate_environment_keys(data, src_key, dst_key, names, changes):
+    """Move ``names`` from settings block ``src_key`` to ``dst_key`` (idempotent).
+
+    Used to clean up keys a previous version of this script placed in the wrong block.
+    Only the listed names are moved; everything else in ``src_key`` is left untouched.
+    """
+    src = data.get(src_key)
+    if not isinstance(src, dict):
+        return
+    dst = data.get(dst_key)
+    if dst is None:
+        dst = {}
+    elif not isinstance(dst, dict):
+        return
+    touched = False
+    for name in names:
+        if name in src:
+            value = src.pop(name)
+            touched = True
+            if name not in dst:
+                dst[name] = value
+                changes.append(
+                    "%s: add %s=%s (migrated from %s)" % (dst_key, name, value, src_key)
+                )
+            else:
+                changes.append(
+                    "%s: drop redundant %s (already in %s)" % (src_key, name, dst_key)
+                )
+    if touched:
+        data[dst_key] = dst
+        data[src_key] = src
 
 
 def apply_tool_path(data, key, hint, names, changes):
@@ -306,7 +360,17 @@ def main(argv):
     original = copy.deepcopy(data)
     changes = []
 
-    apply_configure_environment(data, changes)
+    migrate_environment_keys(
+        data,
+        "cmake.configureEnvironment",
+        "cmake.environment",
+        MIGRATE_TO_ENVIRONMENT,
+        changes,
+    )
+    apply_environment_block(
+        data, "cmake.configureEnvironment", DESIRED_CONFIGURE_ENVIRONMENT, changes
+    )
+    apply_environment_block(data, "cmake.environment", DESIRED_ENVIRONMENT, changes)
     apply_tool_path(
         data, "cpplint.cpplintPath", opts.cpplint, ["cpplint", "cpplint.exe"], changes
     )
