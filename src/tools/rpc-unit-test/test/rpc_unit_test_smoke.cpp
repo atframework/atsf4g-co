@@ -17,6 +17,7 @@
 #include <atframework/testing/runtime.h>
 
 #include <chrono>
+#include <utility>
 #include <vector>
 
 #include "frame/test_macros.h"
@@ -103,8 +104,8 @@ CASE_TEST(rpc_unit_test, runtime_task_timeout) {
     return;
   }
 
-  auto task = test.run_task(
-      "task_timeout", std::chrono::milliseconds{300}, [](rpc::context &ctx) -> rpc::result_code_type {
+  auto task =
+      test.run_task("task_timeout", std::chrono::milliseconds{300}, [](rpc::context &ctx) -> rpc::result_code_type {
         // Wait on a custom type/sequence that is never resumed; the task-level timeout must fire.
         static int never_resumed_rpc_type;
         auto await_options = dispatcher_make_default<dispatcher_await_options>();
@@ -175,8 +176,11 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
 
   // SS: echo service on the "resolved" node.
   atframework::testing::mock_node node;
-  node.set_id(0x130081).set_name("unit-test-combined-remote").set_type_id(4097).set_type_name(
-      "rpc-unit-test-remote").set_zone_id(1);
+  node.set_id(0x130081)
+      .set_name("unit-test-combined-remote")
+      .set_type_id(4097)
+      .set_type_name("rpc-unit-test-remote")
+      .set_zone_id(1);
   auto remote = test.discovery().add_node(node);
   CASE_EXPECT_TRUE(!!remote);
   if (!remote) {
@@ -187,8 +191,8 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
       "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
-          -> rpc::result_code_type {
+      [](const atframework::testing::ss_request_view &request,
+         google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("combined:" + typed_request.payload());
         RPC_RETURN_CODE(0);
@@ -199,8 +203,8 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
     return;
   }
 
-  auto task = test.run_task(
-      "combined_dns_ss_db", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
+  auto task =
+      test.run_task("combined_dns_ss_db", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
         // 1. DNS lookup.
         std::vector<rpc::dns::address_record> records;
         int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "directory.unit-test.local", records));
@@ -257,7 +261,8 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
   CASE_EXPECT_EQ(1, static_cast<int>(test.dns().calls("directory.unit-test.local")));
   CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user")));
   CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_set)));
-  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_get_all)));
+  CASE_EXPECT_EQ(1,
+                 static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_get_all)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

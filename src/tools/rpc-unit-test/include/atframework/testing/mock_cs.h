@@ -6,12 +6,6 @@
 
 #include <gsl/select-gsl.h>
 
-#include <cstddef>
-#include <cstdint>
-#include <deque>
-#include <string>
-#include <vector>
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -24,6 +18,12 @@
 // clang-format on
 
 #include <atframework/testing/runtime.h>
+
+#include <cstddef>
+#include <cstdint>
+#include <deque>
+#include <string>
+#include <vector>
 
 #include "dispatcher/cs_msg_dispatcher.h"
 
@@ -72,8 +72,7 @@ class RPC_UNIT_TEST_API mock_client {
   // kRemoveSession: closes the session through the real remove path (including the logout task).
   int32_t remove() const;
   // kSetRouterRsp: completes a set-router request/response chain.
-  int32_t set_router_rsp(int32_t error_code, uint64_t target_service_id,
-                         gsl::string_view target_service_name) const;
+  int32_t set_router_rsp(int32_t error_code, uint64_t target_service_id, gsl::string_view target_service_name) const;
 
  private:
   friend class mock_cs;
@@ -101,7 +100,9 @@ class RPC_UNIT_TEST_API mock_cs {
 
   bool is_active() const noexcept;
 
-  mock_client create_client(uint64_t node_id, uint64_t session_id) noexcept { return mock_client{this, node_id, session_id}; }
+  mock_client create_client(uint64_t node_id, uint64_t session_id) noexcept {
+    return mock_client{this, node_id, session_id};
+  }
 
   // History
   size_t call_count() const noexcept { return calls_.size(); }

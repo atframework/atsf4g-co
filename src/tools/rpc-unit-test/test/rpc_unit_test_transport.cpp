@@ -4,13 +4,13 @@
 
 #include <config/extern_service_types.h>
 
-#include <chrono>
-#include <cstring>
-#include <string>
-
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/raw_transport.h>
 #include <atframework/testing/runtime.h>
+
+#include <chrono>
+#include <cstring>
+#include <string>
 
 #include "frame/test_macros.h"
 
@@ -141,8 +141,8 @@ CASE_TEST(rpc_unit_test, transport_send_selection_modes) {
   atfw::atapp::app *owner = test.get_app();
   uint64_t sequence = 3001;
 
-  CASE_EXPECT_EQ(0, owner->send_message_by_consistent_hash(static_cast<uint64_t>(1234567), 225,
-                                                           make_payload("by-hash"), &sequence));
+  CASE_EXPECT_EQ(0, owner->send_message_by_consistent_hash(static_cast<uint64_t>(1234567), 225, make_payload("by-hash"),
+                                                           &sequence));
   ++sequence;
   CASE_EXPECT_EQ(0, owner->send_message_by_random(225, make_payload("by-random"), &sequence));
   ++sequence;
@@ -257,8 +257,8 @@ CASE_TEST(rpc_unit_test, transport_inject_inbound) {
   // Inject an in-server message with an invalid body. The real SS dispatcher will reject it during
   // unpack; the point of this case is the atapp forward path, sender identity and pump barrier.
   CASE_EXPECT_EQ(0, test.transport().inject_inbound(
-                         remote, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
-                         make_payload("invalid-ss-body"), 6001));
+                        remote, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
+                        make_payload("invalid-ss-body"), 6001));
   CASE_EXPECT_EQ(1, static_cast<int>(test.transport().pending_event_count()));
 
   test.pump_once();

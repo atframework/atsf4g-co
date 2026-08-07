@@ -4,13 +4,15 @@
 
 #include <config/excel_config_wrapper.h>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace atframework {
 namespace testing {
 
 mock_resource::mock_resource() = default;
-mock_resource::~mock_resource() {
-  unbind();
-}
+mock_resource::~mock_resource() { unbind(); }
 
 void mock_resource::bind() {
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS

@@ -4,6 +4,10 @@
 
 #include <log/log_wrapper.h>
 
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "dispatcher/ss_msg_dispatcher.h"
 #include "dispatcher/task_manager.h"
 #include "rpc/rpc_utils.h"

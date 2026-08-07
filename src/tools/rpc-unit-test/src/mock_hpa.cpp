@@ -2,6 +2,10 @@
 
 #include <atframework/testing/mock_hpa.h>
 
+#include <string>
+#include <utility>
+#include <vector>
+
 namespace atframework {
 namespace testing {
 

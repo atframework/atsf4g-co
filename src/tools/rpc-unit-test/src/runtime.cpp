@@ -29,8 +29,12 @@
 #include <algorithm>
 #include <atomic>
 #include <fstream>
+#include <memory>
 #include <sstream>
+#include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #include "rpc/rpc_async_invoke.h"
 
@@ -326,8 +330,7 @@ int runtime::start(const runtime_options &options) {
       }
     }
     if (old_content != config_content) {
-      std::ofstream config_file(impl_->config_file_path.c_str(),
-                                std::ios::out | std::ios::binary | std::ios::trunc);
+      std::ofstream config_file(impl_->config_file_path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
       if (!config_file) {
         impl_->diagnostic = "can not write config file: " + impl_->config_file_path;
         return rollback(-1);
@@ -382,8 +385,7 @@ int runtime::start(const runtime_options &options) {
     return rollback(-1);
   }
 
-  if (options.has_feature(feature::ss) || options.has_feature(feature::dns) ||
-      options.has_feature(feature::router)) {
+  if (options.has_feature(feature::ss) || options.has_feature(feature::dns) || options.has_feature(feature::router)) {
     // Dispatcher singletons outlive one fixture: atapp disables modules on stop, so re-enable them
     // before adding, otherwise app->init skips their init() and their state (e.g. is_closing_)
     // leaks into the next fixture.

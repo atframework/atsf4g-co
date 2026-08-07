@@ -11,6 +11,8 @@
 
 #include <atframework/testing/raw_transport.h>
 
+#include <string>
+
 namespace atframework {
 namespace testing {
 
@@ -36,8 +38,7 @@ int32_t mock_connector::on_start_listen(const atfw::atbus::channel::channel_addr
 }
 
 int32_t mock_connector::on_start_connect(const atfw::atapp::etcd_discovery_node &discovery,
-                                         atfw::atapp::atapp_endpoint &,
-                                         const atfw::atbus::channel::channel_address_t &,
+                                         atfw::atapp::atapp_endpoint &, const atfw::atbus::channel::channel_address_t &,
                                          const atfw::atapp::atapp_connection_handle::ptr_t &handle) {
   if (!handle) {
     return atfw::atapp::EN_ATAPP_ERR_NOT_INITED;

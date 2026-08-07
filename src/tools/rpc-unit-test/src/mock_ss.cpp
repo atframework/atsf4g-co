@@ -22,9 +22,14 @@
 // clang-format on
 
 #include <config/extern_service_types.h>
+
 #include <config/logic_config.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/unit_test/mock_engine_bridge.h>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace atframework {
 namespace testing {
@@ -127,10 +132,9 @@ ss_rule_handle mock_ss::mock(
     return ss_rule_handle{};
   }
 
-  auto invoker = [handler = std::move(handler), request_desc,
-                  response_desc](rpc::context &ctx, const atframework::SSMsg &request_msg,
-                                 atframework::SSMsg &response_msg, uint64_t target_node_id,
-                                 gsl::string_view target_node_name) -> rpc::result_code_type {
+  auto invoker = [handler = std::move(handler), request_desc, response_desc](
+                     rpc::context &ctx, const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg,
+                     uint64_t target_node_id, gsl::string_view target_node_name) -> rpc::result_code_type {
     const auto *request_proto = google::protobuf::MessageFactory::generated_factory()->GetPrototype(request_desc);
     const auto *response_proto = google::protobuf::MessageFactory::generated_factory()->GetPrototype(response_desc);
     if (nullptr == request_proto || nullptr == response_proto) {
@@ -155,8 +159,7 @@ ss_rule_handle mock_ss::mock(
   return mock_typed(full_rpc_name, request_type_name, response_type_name, std::move(invoker), options);
 }
 
-ss_rule_handle mock_ss::mock_error(gsl::string_view full_rpc_name, int32_t error_code,
-                                   const ss_rule_options &options) {
+ss_rule_handle mock_ss::mock_error(gsl::string_view full_rpc_name, int32_t error_code, const ss_rule_options &options) {
   ss_rule_handle ret = mock_typed(full_rpc_name, "", "", nullptr, options);
   if (ret.rule_) {
     ret.rule_->forced_error_code = error_code;
@@ -239,15 +242,15 @@ void mock_ss::bind(atfw::atapp::app *owner, raw_transport &transport) {
     engine_options.no_response = options.no_response;
     engine_options.malformed_type_url = options.malformed_type_url;
     engine_options.malformed_body = options.malformed_body;
-    ss_rule_handle rule =
-        mock(full_rpc_name, request_type_name, response_type_name,
-             [handler = std::move(handler)](const ss_request_view &view,
-                                            google::protobuf::Message &response) -> rpc::result_code_type {
-               rpc::unit_test::ss_mock_request_view bridge_view{&view.body, &view.head, view.target_node_id,
-                                                                view.target_node_name, view.context};
-               RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handler(bridge_view, response)));
-             },
-             engine_options);
+    ss_rule_handle rule = mock(
+        full_rpc_name, request_type_name, response_type_name,
+        [handler = std::move(handler)](const ss_request_view &view,
+                                       google::protobuf::Message &response) -> rpc::result_code_type {
+          rpc::unit_test::ss_mock_request_view bridge_view{&view.body, &view.head, view.target_node_id,
+                                                           view.target_node_name, view.context};
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handler(bridge_view, response)));
+        },
+        engine_options);
     if (!rule.rule_) {
       return nullptr;
     }
@@ -292,8 +295,7 @@ void mock_ss::deliver_pending() {
   std::vector<const outbound_message *> records;
   transport_->collect_outbound(cursor_, records);
   for (const outbound_message *record : records) {
-    if (nullptr == record ||
-        record->type != static_cast<int32_t>(::atfw::component::message_type::kInServerMessage)) {
+    if (nullptr == record || record->type != static_cast<int32_t>(::atfw::component::message_type::kInServerMessage)) {
       continue;
     }
 
@@ -376,8 +378,8 @@ void mock_ss::deliver_pending() {
     if (0 != forced_error_code || !matched_rule->invoker) {
       if (needs_response) {
         atframework::SSMsg response_msg;
-        inject_response(request_msg, response_msg, forced_error_code, record->target_node_id,
-                        record->target_node_name, &matched_rule->options);
+        inject_response(request_msg, response_msg, forced_error_code, record->target_node_id, record->target_node_name,
+                        &matched_rule->options);
       }
       continue;
     }
@@ -394,8 +396,7 @@ void mock_ss::deliver_pending() {
           int32_t res = RPC_AWAIT_CODE_RESULT(
               matched_rule->invoker(ctx, request_msg, response_msg, target_node_id, target_node_name));
           if (needs_response && !lifecycle.expired() && is_active()) {
-            inject_response(request_msg, response_msg, res, target_node_id, target_node_name,
-                            &matched_rule->options);
+            inject_response(request_msg, response_msg, res, target_node_id, target_node_name, &matched_rule->options);
           }
           RPC_RETURN_CODE(res);
         },
@@ -471,24 +472,24 @@ ss_rule_handle mock_ss::mock_typed(
     return ss_rule_handle{};
   }
   if (!request_type_url.empty() && method->input_type()->full_name() != request_type_url) {
-    diagnostic_ = "request type mismatch for " + std::string{full_rpc_name.data(), full_rpc_name.size()} +
-                  ": expect " + std::string{method->input_type()->full_name()} + ", got " +
-                  std::string{request_type_url.data(), request_type_url.size()};
+    diagnostic_ = "request type mismatch for " + std::string(full_rpc_name.data(), full_rpc_name.size()) + ": expect " +
+                  std::string(method->input_type()->full_name()) + ", got " +
+                  std::string(request_type_url.data(), request_type_url.size());
     return ss_rule_handle{};
   }
   if (!response_type_url.empty() && method->output_type()->full_name() != response_type_url) {
-    diagnostic_ = "response type mismatch for " + std::string{full_rpc_name.data(), full_rpc_name.size()} +
-                  ": expect " + std::string{method->output_type()->full_name()} + ", got " +
-                  std::string{response_type_url.data(), response_type_url.size()};
+    diagnostic_ = "response type mismatch for " + std::string(full_rpc_name.data(), full_rpc_name.size()) +
+                  ": expect " + std::string(method->output_type()->full_name()) + ", got " +
+                  std::string(response_type_url.data(), response_type_url.size());
     return ss_rule_handle{};
   }
 
   auto rule = std::make_shared<detail::ss_rule_state>();
-  rule->rpc_name = std::string{full_rpc_name.data(), full_rpc_name.size()};
-  rule->request_type_url = std::string{request_type_url.data(), request_type_url.size()};
-  rule->response_type_url = std::string{response_type_url.data(), response_type_url.size()};
+  rule->rpc_name = std::string(full_rpc_name.data(), full_rpc_name.size());
+  rule->request_type_url = std::string(request_type_url.data(), request_type_url.size());
+  rule->response_type_url = std::string(response_type_url.data(), response_type_url.size());
   if (rule->response_type_url.empty()) {
-    rule->response_type_url = std::string{method->output_type()->full_name()};
+    rule->response_type_url = std::string(method->output_type()->full_name());
   }
   rule->options = options;
   rule->invoker = std::move(invoker);
@@ -510,9 +511,9 @@ void mock_ss::inject_response(const atframework::SSMsg &request_msg, atframework
   }
 
   head->set_error_code(error_code);
-  head->set_timestamp(
-      std::chrono::duration_cast<std::chrono::milliseconds>(atfw::util::time::time_utility::sys_now().time_since_epoch())
-          .count());
+  head->set_timestamp(std::chrono::duration_cast<std::chrono::milliseconds>(
+                          atfw::util::time::time_utility::sys_now().time_since_epoch())
+                          .count());
   head->set_sequence(request_msg.head().sequence());
   // The response comes from the remote node the request was sent to.
   head->set_node_id(target_node_id);
@@ -556,8 +557,8 @@ void mock_ss::inject_response(const atframework::SSMsg &request_msg, atframework
   }
 
   pending_response event;
-  event.deliver_at_generation = transport_->get_current_generation() +
-                                (nullptr == options ? 0 : options->delay_generations);
+  event.deliver_at_generation =
+      transport_->get_current_generation() + (nullptr == options ? 0 : options->delay_generations);
   event.target_node_id = target_node_id;
   std::string serialized = response_msg.SerializeAsString();
   event.payload.assign(serialized.begin(), serialized.end());

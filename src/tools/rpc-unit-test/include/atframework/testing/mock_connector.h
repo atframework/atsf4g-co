@@ -7,10 +7,10 @@
 #include <atframe/atapp_config.h>
 #include <atframe/connectors/atapp_connector_impl.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstdint>
 #include <unordered_map>
-
-#include <atframework/testing/runtime.h>
 
 namespace atframework {
 namespace testing {

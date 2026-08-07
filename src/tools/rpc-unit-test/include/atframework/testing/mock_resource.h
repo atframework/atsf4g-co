@@ -6,13 +6,13 @@
 
 #include <gsl/select-gsl.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <atframework/testing/runtime.h>
 
 namespace atframework {
 namespace testing {

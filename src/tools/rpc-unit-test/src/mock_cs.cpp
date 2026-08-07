@@ -16,6 +16,9 @@
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
+
+#include <string>
+#include <utility>
 // clang-format on
 
 namespace atframework {
@@ -100,8 +103,8 @@ bool mock_cs::on_send(const cs_msg_dispatcher::unit_test_gateway_send_request &r
       record.op = cs_downstream_record::op_type::set_router;
       break;
     case atfw::gateway::server_message_body::kPost:
-      record.op = 0 == record.session_id ? cs_downstream_record::op_type::broadcast
-                                         : cs_downstream_record::op_type::post;
+      record.op =
+          0 == record.session_id ? cs_downstream_record::op_type::broadcast : cs_downstream_record::op_type::post;
       break;
     default:
       FWLOGERROR("mock_cs: unexpected downstream cmd_case {}", static_cast<int>(record.message.body().cmd_case()));
@@ -130,8 +133,8 @@ int32_t mock_client::dispatch_message(atfw::gateway::server_message &msg) const 
 
   LIBATAPP_MACRO_NAMESPACE_ID::app::message_t dispatch_msg;
   dispatch_msg.type = static_cast<int32_t>(::atfw::component::service_type::kAtGateway);
-  dispatch_msg.data = gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed.data()),
-                                                     packed.size()};
+  dispatch_msg.data =
+      gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(packed.data()), packed.size()};
   return cs_msg_dispatcher::me()->dispatch(source, dispatch_msg);
 }
 

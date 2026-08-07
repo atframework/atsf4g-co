@@ -6,12 +6,12 @@
 
 #include <gsl/select-gsl.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstdint>
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <atframework/testing/runtime.h>
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 #  include "logic/hpa/mock/logic_hpa_mock_prometheus.h"

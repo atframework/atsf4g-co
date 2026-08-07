@@ -21,7 +21,10 @@
 #include <rpc/unit_test/mock_engine_bridge.h>
 
 #include <algorithm>
+#include <memory>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace atframework {
 namespace testing {
@@ -40,7 +43,8 @@ bool is_integer_field(const google::protobuf::FieldDescriptor &fd) noexcept {
 }
 
 int64_t get_integer_field(const google::protobuf::Message &msg, const google::protobuf::FieldDescriptor &fd) {
-  const google::protobuf::Reflection *reflect = msg.GetReflection();  switch (fd.cpp_type()) {
+  const google::protobuf::Reflection *reflect = msg.GetReflection();
+  switch (fd.cpp_type()) {
     case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
       return static_cast<int64_t>(reflect->GetInt32(msg, &fd));
     case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
@@ -500,8 +504,8 @@ bool mock_db::apply_table_handlers(const rpc::db::hash_table::unit_test_request 
     context.rpc_context = req.ctx;
     context.input_table = req.store;
     if (nullptr != req.partly_get_fields && req.partly_get_field_count > 0) {
-      context.partly_get_fields = gsl::span<const gsl::string_view>{
-          req.partly_get_fields, static_cast<size_t>(req.partly_get_field_count)};
+      context.partly_get_fields =
+          gsl::span<const gsl::string_view>{req.partly_get_fields, static_cast<size_t>(req.partly_get_field_count)};
     }
     context.inc_field = req.inc_field;
     context.list_index = req.list_index;
@@ -539,14 +543,14 @@ int32_t mock_db::make_kv_output(const kv_record &record, rpc::context &ctx,
     FWLOGERROR("mock_db: parse stored data of {} failed", record.type_name);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
-  output->message = atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
-      std::move(message));
+  output->message =
+      atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+          std::move(message));
   output->version = record.version;
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-int32_t mock_db::make_kl_output(const kl_entry &entry, rpc::context &ctx,
-                                db_key_list_message_result_t &output) const {
+int32_t mock_db::make_kl_output(const kl_entry &entry, rpc::context &ctx, db_key_list_message_result_t &output) const {
   output.list_index = entry.index;
   auto factory_iter = factories_.find(entry.type_name);
   if (factory_iter == factories_.end() || !factory_iter->second) {
@@ -558,8 +562,9 @@ int32_t mock_db::make_kl_output(const kl_entry &entry, rpc::context &ctx,
     FWLOGERROR("mock_db: parse stored data of {} failed", entry.type_name);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
   }
-  output.message = atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
-      std::move(message));
+  output.message =
+      atfw::component::memory::stl::make_strong_rc<rpc::shared_abstract_message<google::protobuf::Message>>(
+          std::move(message));
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
@@ -804,8 +809,8 @@ int32_t mock_db::on_kl_remove_by_index(const rpc::db::hash_table::unit_test_requ
   }
   record->entries.erase(std::remove_if(record->entries.begin(), record->entries.end(),
                                        [&req](const kl_entry &entry) {
-                                         return std::find(req.list_index.begin(), req.list_index.end(),
-                                                          entry.index) != req.list_index.end();
+                                         return std::find(req.list_index.begin(), req.list_index.end(), entry.index) !=
+                                                req.list_index.end();
                                        }),
                         record->entries.end());
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;

@@ -2,6 +2,9 @@
 
 #include <atframework/testing/mock_router.h>
 
+#include <memory>
+#include <utility>
+
 #include "rpc/rpc_common_types.h"
 
 namespace atframework {

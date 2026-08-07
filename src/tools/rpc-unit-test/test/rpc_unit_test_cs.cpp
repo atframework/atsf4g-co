@@ -1,13 +1,14 @@
 // Copyright 2026 atframework
 
-#include <chrono>
-#include <cstdint>
-#include <string>
-
 #include <atframework/testing/mock_cs.h>
 #include <atframework/testing/runtime.h>
 
 #include <logic/session_manager.h>
+
+#include <chrono>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 #include "frame/test_macros.h"
 

@@ -19,11 +19,11 @@
 #include <atframe/atapp_config.h>
 #include <atframe/etcdcli/etcd_discovery.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include <atframework/testing/runtime.h>
 
 LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;

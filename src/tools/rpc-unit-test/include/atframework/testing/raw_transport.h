@@ -19,14 +19,14 @@
 #include <atframe/atapp_config.h>
 #include <atframe/etcdcli/etcd_discovery.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <atframework/testing/runtime.h>
 
 LIBATAPP_MACRO_NAMESPACE_BEGIN
 class app;
@@ -64,8 +64,8 @@ struct ATFW_UTIL_SYMBOL_VISIBLE transport_send_behavior {
 
 namespace detail {
 struct transport_rule_state {
-  uint64_t node_id = 0;   // 0 matches any target
-  int32_t type = -1;      // -1 matches any message type
+  uint64_t node_id = 0;  // 0 matches any target
+  int32_t type = -1;     // -1 matches any message type
   transport_send_behavior behavior;
   bool active = true;
 };
@@ -155,8 +155,7 @@ class RPC_UNIT_TEST_API raw_transport {
 
   // Called by mock_connector in the send call stack. Returns the immediate error code (0 = accepted).
   int32_t capture_outbound(uint64_t node_id, gsl::string_view node_name, int32_t type, uint64_t sequence,
-                           gsl::span<const unsigned char> data,
-                           const atfw::atapp::protocol::atapp_metadata *metadata);
+                           gsl::span<const unsigned char> data, const atfw::atapp::protocol::atapp_metadata *metadata);
   void capture_connect(uint64_t node_id);
   void capture_disconnect(uint64_t node_id);
 

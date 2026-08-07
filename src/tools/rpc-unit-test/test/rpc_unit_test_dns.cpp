@@ -1,10 +1,10 @@
 // Copyright 2026 atframework
 
-#include <chrono>
-#include <vector>
-
 #include <atframework/testing/mock_dns.h>
 #include <atframework/testing/runtime.h>
+
+#include <chrono>
+#include <vector>
 
 #include "frame/test_macros.h"
 #include "rpc/dns/lookup.h"
@@ -28,17 +28,16 @@ CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
     return;
   }
 
-  auto task = test.run_task(
-      "dns_lookup", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        std::vector<rpc::dns::address_record> records;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "unit-test.local", records));
-        CASE_EXPECT_EQ(1, static_cast<int>(records.size()));
-        if (!records.empty()) {
-          CASE_EXPECT_EQ(static_cast<int>(rpc::dns::address_type::kA), static_cast<int>(records[0].type));
-          CASE_EXPECT_EQ("10.1.2.3", records[0].address);
-        }
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("dns_lookup", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    std::vector<rpc::dns::address_record> records;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "unit-test.local", records));
+    CASE_EXPECT_EQ(1, static_cast<int>(records.size()));
+    if (!records.empty()) {
+      CASE_EXPECT_EQ(static_cast<int>(rpc::dns::address_type::kA), static_cast<int>(records[0].type));
+      CASE_EXPECT_EQ("10.1.2.3", records[0].address);
+    }
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
     test.stop();
@@ -85,8 +84,8 @@ CASE_TEST(rpc_unit_test, dns_lookup_multiple_records_and_error) {
     return;
   }
 
-  auto task = test.run_task(
-      "dns_multi_and_error", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+  auto task =
+      test.run_task("dns_multi_and_error", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         std::vector<rpc::dns::address_record> records;
         int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "multi.unit-test.local", records));
         if (res < 0) {
@@ -132,13 +131,12 @@ CASE_TEST(rpc_unit_test, dns_unmatched_lookup_fast_fail) {
 
   // No rule registered: the lookup must complete fast with an empty record set instead of waiting
   // for the full lookup timeout.
-  auto task = test.run_task(
-      "dns_unmatched", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        std::vector<rpc::dns::address_record> records;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "unregistered.unit-test.local", records));
-        CASE_EXPECT_EQ(0, static_cast<int>(records.size()));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("dns_unmatched", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    std::vector<rpc::dns::address_record> records;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "unregistered.unit-test.local", records));
+    CASE_EXPECT_EQ(0, static_cast<int>(records.size()));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -174,12 +172,11 @@ CASE_TEST(rpc_unit_test, dns_no_response_times_out_task) {
   }
 
   // The lookup never completes; the task-level timeout kills the task.
-  auto task = test.run_task(
-      "dns_no_response", std::chrono::seconds{1}, [](rpc::context &ctx) -> rpc::result_code_type {
-        std::vector<rpc::dns::address_record> records;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "silent.unit-test.local", records));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("dns_no_response", std::chrono::seconds{1}, [](rpc::context &ctx) -> rpc::result_code_type {
+    std::vector<rpc::dns::address_record> records;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::dns::lookup(ctx, "silent.unit-test.local", records));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;

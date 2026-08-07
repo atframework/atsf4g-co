@@ -11,12 +11,12 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <chrono>
-
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/raw_transport.h>
 #include <atframework/testing/runtime.h>
+
+#include <chrono>
 
 #include "dispatcher/ss_msg_dispatcher.h"
 #include "frame/test_macros.h"
@@ -51,7 +51,8 @@ CASE_TEST(rpc_unit_test, ss_unary_suspend_resume) {
   }
 
   auto rule = test.ss().mock(
-      PROJECT_NAMESPACE ".RouterService/router_transfer", PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
+      PROJECT_NAMESPACE ".RouterService/router_transfer",
+      PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
       PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
       [](const atframework::testing::ss_request_view &request, google::protobuf::Message &) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const PROJECT_NAMESPACE_ID::SSRouterTransferReq &>(request.body);
@@ -66,14 +67,13 @@ CASE_TEST(rpc_unit_test, ss_unary_suspend_resume) {
     return;
   }
 
-  auto task = test.run_task(
-      "ss_unary", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
-        req_body.mutable_object()->set_object_type_id(7);
-        PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130001, req_body, rsp_body));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_unary", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
+    req_body.mutable_object()->set_object_type_id(7);
+    PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130001, req_body, rsp_body));
+    RPC_RETURN_CODE(res);
+  });
   CASE_EXPECT_FALSE(task.empty());
   if (task.empty()) {
     CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
@@ -118,19 +118,19 @@ CASE_TEST(rpc_unit_test, ss_unary_business_error_code) {
     return;
   }
 
-  auto rule = test.ss().mock(
-      PROJECT_NAMESPACE ".RouterService/router_transfer", PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
-      PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &, google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(-54321); });
+  auto rule = test.ss().mock(PROJECT_NAMESPACE ".RouterService/router_transfer",
+                             PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
+                             PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
+                             [](const atframework::testing::ss_request_view &,
+                                google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(-54321); });
   CASE_EXPECT_TRUE(!!rule);
 
-  auto task = test.run_task(
-      "ss_unary_error", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
-        PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130011, req_body, rsp_body));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_unary_error", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
+    PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130011, req_body, rsp_body));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -161,13 +161,12 @@ CASE_TEST(rpc_unit_test, ss_unmatched_unary_fast_fail) {
   }
 
   // No mock rule registered: the unmatched unary call must fail fast instead of waiting to timeout.
-  auto task = test.run_task(
-      "ss_unmatched", std::chrono::seconds{30}, [](rpc::context &ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
-        PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130021, req_body, rsp_body));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_unmatched", std::chrono::seconds{30}, [](rpc::context &ctx) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
+    PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130021, req_body, rsp_body));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -200,13 +199,12 @@ CASE_TEST(rpc_unit_test, ss_stream_record_only) {
     return;
   }
 
-  auto task = test.run_task(
-      "ss_stream", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync req_body;
-        req_body.set_global_now_offset(12345);
-        int32_t res = rpc::logic::set_server_time(ctx, 0x130031, req_body);
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_stream", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync req_body;
+    req_body.set_global_now_offset(12345);
+    int32_t res = rpc::logic::set_server_time(ctx, 0x130031, req_body);
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -250,14 +248,13 @@ CASE_TEST(rpc_unit_test, ss_broadcast_to_all_nodes) {
     return;
   }
 
-  auto task = test.run_task(
-      "ss_broadcast", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync req_body;
-        req_body.set_global_now_offset(6789);
-        // Empty index selects the whole global discovery set.
-        int32_t res = rpc::logic::broadcast::set_server_time(ctx, req_body, ss_msg_logic_index{});
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_broadcast", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync req_body;
+    req_body.set_global_now_offset(6789);
+    // Empty index selects the whole global discovery set.
+    int32_t res = rpc::logic::broadcast::set_server_time(ctx, req_body, ss_msg_logic_index{});
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -294,20 +291,20 @@ CASE_TEST(rpc_unit_test, ss_expectation_verified_at_stop) {
     return;
   }
 
-  auto rule = test.ss().mock(
-      PROJECT_NAMESPACE ".RouterService/router_transfer", PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
-      PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &, google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
+  auto rule = test.ss().mock(PROJECT_NAMESPACE ".RouterService/router_transfer",
+                             PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
+                             PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
+                             [](const atframework::testing::ss_request_view &,
+                                google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
 
   test.ss().expect(PROJECT_NAMESPACE ".RouterService/router_transfer").times(1).to_node(0x130051);
 
-  auto task = test.run_task(
-      "ss_expect", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
-        PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130051, req_body, rsp_body));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_expect", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::SSRouterTransferReq req_body;
+    PROJECT_NAMESPACE_ID::SSRouterTransferRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::router::router_transfer(ctx, 0x130051, req_body, rsp_body));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -364,8 +361,8 @@ CASE_TEST(rpc_unit_test, ss_mock_handler_awaits_nested_rpc) {
       "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
-          -> rpc::result_code_type {
+      [](const atframework::testing::ss_request_view &request,
+         google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         CASE_EXPECT_EQ(0x130061, static_cast<int64_t>(request.target_node_id));
         static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("inner:" + typed_request.payload());
@@ -380,17 +377,16 @@ CASE_TEST(rpc_unit_test, ss_mock_handler_awaits_nested_rpc) {
       "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
-          -> rpc::result_code_type {
+      [](const atframework::testing::ss_request_view &request,
+         google::protobuf::Message &response) -> rpc::result_code_type {
         CASE_EXPECT_TRUE(nullptr != request.context);
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         // Nested coroutine call: await another mocked SS RPC inside the mock handler.
         rpc_unit_test::RpcUnitTestEchoReq nested_req;
         nested_req.set_payload(typed_request.payload());
         rpc_unit_test::RpcUnitTestEchoRsp nested_rsp;
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_user(*request.context, 0x130061, 1, 10001, "openid-nested", nested_req,
-                                               nested_rsp));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(
+            *request.context, 0x130061, 1, 10001, "openid-nested", nested_req, nested_rsp));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ("inner:nested-payload", nested_rsp.echo());
         static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo(nested_rsp.echo() + "-outer");
@@ -399,17 +395,16 @@ CASE_TEST(rpc_unit_test, ss_mock_handler_awaits_nested_rpc) {
       outer_options);
   CASE_EXPECT_TRUE(!!outer_rule);
 
-  auto task = test.run_task(
-      "ss_nested", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc_unit_test::RpcUnitTestEchoReq req_body;
-        req_body.set_payload("nested-payload");
-        rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_user(ctx, 0x130062, 1, 10001, "openid-nested", req_body, rsp_body));
-        CASE_EXPECT_EQ(0, res);
-        CASE_EXPECT_EQ("inner:nested-payload-outer", rsp_body.echo());
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("ss_nested", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc_unit_test::RpcUnitTestEchoReq req_body;
+    req_body.set_payload("nested-payload");
+    rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(
+        rpc::unit_test::rpc_unit_test_user(ctx, 0x130062, 1, 10001, "openid-nested", req_body, rsp_body));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ("inner:nested-payload-outer", rsp_body.echo());
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -436,25 +431,25 @@ CASE_TEST(rpc_unit_test, ss_mock_registration_validation) {
   // Invalid name format.
   auto bad_rule = test.ss().mock("no-separator", PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
                                  PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
-                                 [](const atframework::testing::ss_request_view &, google::protobuf::Message &) -> rpc::result_code_type {
-                                   RPC_RETURN_CODE(0);
-                                 });
+                                 [](const atframework::testing::ss_request_view &,
+                                    google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
   CASE_EXPECT_FALSE(!!bad_rule);
   CASE_EXPECT_FALSE(test.ss().get_diagnostic().empty());
 
   // Unknown service.
-  auto unknown_rule = test.ss().mock(PROJECT_NAMESPACE ".NoSuchService/method", PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
+  auto unknown_rule = test.ss().mock(PROJECT_NAMESPACE ".NoSuchService/method",
+                                     PROJECT_NAMESPACE_ID::SSRouterTransferReq::descriptor()->full_name(),
                                      PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
-                                     [](const atframework::testing::ss_request_view &, google::protobuf::Message &) -> rpc::result_code_type {
-                                       RPC_RETURN_CODE(0);
-                                     });
+                                     [](const atframework::testing::ss_request_view &,
+                                        google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
   CASE_EXPECT_FALSE(!!unknown_rule);
 
   // Request type mismatch.
-  auto mismatch_rule = test.ss().mock(
-      PROJECT_NAMESPACE ".RouterService/router_transfer", PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync::descriptor()->full_name(),
-      PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &, google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
+  auto mismatch_rule = test.ss().mock(PROJECT_NAMESPACE ".RouterService/router_transfer",
+                                      PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync::descriptor()->full_name(),
+                                      PROJECT_NAMESPACE_ID::SSRouterTransferRsp::descriptor()->full_name(),
+                                      [](const atframework::testing::ss_request_view &,
+                                         google::protobuf::Message &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
   CASE_EXPECT_FALSE(!!mismatch_rule);
 
   CASE_EXPECT_EQ(0, test.stop());

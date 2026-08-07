@@ -6,6 +6,12 @@
 
 #include <gsl/select-gsl.h>
 
+#include <config/compiler/protobuf_prefix.h>
+#include <config/compiler/protobuf_suffix.h>
+#include <google/protobuf/message.h>
+
+#include <atframework/testing/runtime.h>
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -14,13 +20,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
-
-#include <config/compiler/protobuf_prefix.h>
-#include <google/protobuf/message.h>
-#include <config/compiler/protobuf_suffix.h>
-
-#include <atframework/testing/runtime.h>
 
 #include "rpc/db/hash_table.h"
 #include "rpc/rpc_shared_message.h"
@@ -142,8 +143,7 @@ class RPC_UNIT_TEST_API db_table_rule_handle {
 class RPC_UNIT_TEST_API mock_db {
  public:
   using clock = std::chrono::system_clock;
-  using message_factory_t =
-      std::function<rpc::shared_abstract_message<google::protobuf::Message>(rpc::context &)>;
+  using message_factory_t = std::function<rpc::shared_abstract_message<google::protobuf::Message>(rpc::context &)>;
   using op_type = rpc::db::hash_table::unit_test_request::op_type;
 
   mock_db();
@@ -260,8 +260,7 @@ class RPC_UNIT_TEST_API mock_db {
   kl_record *find_live_kl(gsl::string_view key);
   bool is_expired(bool has_expire, clock::time_point expire_at) const;
 
-  int32_t make_kv_output(const kv_record &record, rpc::context &ctx,
-                         db_key_value_message_result_t *output) const;
+  int32_t make_kv_output(const kv_record &record, rpc::context &ctx, db_key_value_message_result_t *output) const;
   // Production unpackers never set db_key_list_message_result_t::version (it stays 0), so the mock
   // reports no KL version either.
   int32_t make_kl_output(const kl_entry &entry, rpc::context &ctx, db_key_list_message_result_t &output) const;

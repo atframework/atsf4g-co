@@ -6,6 +6,10 @@
 #include <atframe/modules/service_discovery_module.h>
 
 #include <algorithm>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace atframework {
 namespace testing {
@@ -36,8 +40,7 @@ raw_transport::~raw_transport() { unbind(); }
 
 bool raw_transport::is_active() const noexcept { return nullptr != owner_; }
 
-transport_rule_handle raw_transport::add_rule(uint64_t node_id, int32_t type,
-                                              const transport_send_behavior &behavior) {
+transport_rule_handle raw_transport::add_rule(uint64_t node_id, int32_t type, const transport_send_behavior &behavior) {
   auto rule = std::make_shared<detail::transport_rule_state>();
   rule->node_id = node_id;
   rule->type = type;

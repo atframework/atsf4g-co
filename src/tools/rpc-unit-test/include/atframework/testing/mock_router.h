@@ -4,11 +4,11 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstdint>
 #include <map>
 #include <memory>
-
-#include <atframework/testing/runtime.h>
 
 #include "router/router_manager_base.h"
 #include "router/router_object_base.h"

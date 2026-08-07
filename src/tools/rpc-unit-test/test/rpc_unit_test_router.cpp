@@ -11,13 +11,13 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <chrono>
-#include <string>
-
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_router.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
+
+#include <chrono>
+#include <string>
 
 #include "dispatcher/ss_msg_dispatcher.h"
 #include "frame/test_macros.h"
@@ -76,16 +76,15 @@ CASE_TEST(rpc_unit_test, router_unary_suspend_resume) {
     return;
   }
 
-  auto task = test.run_task(
-      "router_unary", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc_unit_test::RpcUnitTestRouterReq req_body;
-        req_body.set_payload("router-transfer-echo");
-        rpc_unit_test::RpcUnitTestRouterRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_router_unary(ctx, kRouterTypeId, kZoneId, kObjectId, req_body, rsp_body));
-        CASE_EXPECT_EQ("router-transfer-echo", rsp_body.echo());
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("router_unary", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc_unit_test::RpcUnitTestRouterReq req_body;
+    req_body.set_payload("router-transfer-echo");
+    rpc_unit_test::RpcUnitTestRouterRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(
+        rpc::unit_test::rpc_unit_test_router_unary(ctx, kRouterTypeId, kZoneId, kObjectId, req_body, rsp_body));
+    CASE_EXPECT_EQ("router-transfer-echo", rsp_body.echo());
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
     test.stop();
@@ -127,8 +126,8 @@ CASE_TEST(rpc_unit_test, router_unary_missing_cache_fast_fail) {
   }
   // No object seeded: mutable_cache must fail fast without any SS traffic.
 
-  auto task = test.run_task(
-      "router_unary_missing", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+  auto task =
+      test.run_task("router_unary_missing", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc_unit_test::RpcUnitTestRouterReq req_body;
         rpc_unit_test::RpcUnitTestRouterRsp rsp_body;
         int32_t res = RPC_AWAIT_CODE_RESULT(
@@ -166,14 +165,13 @@ CASE_TEST(rpc_unit_test, router_stream_record_only) {
   auto object = manager->add_object(router_object_base::key_t{kRouterTypeId, kZoneId, kObjectId}, kRouterServerId);
   CASE_EXPECT_TRUE(!!object);
 
-  auto task = test.run_task(
-      "router_stream", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc_unit_test::RpcUnitTestRouterReq req_body;
-        req_body.set_payload("router-stream");
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_router_stream(ctx, kRouterTypeId, kZoneId, kObjectId, req_body));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("router_stream", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc_unit_test::RpcUnitTestRouterReq req_body;
+    req_body.set_payload("router-stream");
+    int32_t res = RPC_AWAIT_CODE_RESULT(
+        rpc::unit_test::rpc_unit_test_router_stream(ctx, kRouterTypeId, kZoneId, kObjectId, req_body));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -213,34 +211,35 @@ CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
     return;
   }
 
-  auto rule = test.ss().mock(
-      "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user", rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
-      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
-        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
-        auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
-        CASE_EXPECT_EQ(kZoneId, request.head.player_zone_id());
-        CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.player_user_id()));
-        CASE_EXPECT_EQ("openid-x", request.head.player_open_id());
-        typed_response.set_echo(typed_request.payload());
-        RPC_RETURN_CODE(0);
-      });
+  auto rule = test.ss().mock("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
+                             rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+                             rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+                             [](const atframework::testing::ss_request_view &request,
+                                google::protobuf::Message &response) -> rpc::result_code_type {
+                               const auto &typed_request =
+                                   static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+                               auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
+                               CASE_EXPECT_EQ(kZoneId, request.head.player_zone_id());
+                               CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.player_user_id()));
+                               CASE_EXPECT_EQ("openid-x", request.head.player_open_id());
+                               typed_response.set_echo(typed_request.payload());
+                               RPC_RETURN_CODE(0);
+                             });
   CASE_EXPECT_TRUE(!!rule);
   if (!rule) {
     test.stop();
     return;
   }
 
-  auto task = test.run_task(
-      "user_rpc", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc_unit_test::RpcUnitTestEchoReq req_body;
-        req_body.set_payload("user-rpc");
-        rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_user(ctx, 0x140011, kZoneId, 10001, "openid-x", req_body, rsp_body));
-        CASE_EXPECT_EQ("user-rpc", rsp_body.echo());
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("user_rpc", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc_unit_test::RpcUnitTestEchoReq req_body;
+    req_body.set_payload("user-rpc");
+    rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
+    int32_t res = RPC_AWAIT_CODE_RESULT(
+        rpc::unit_test::rpc_unit_test_user(ctx, 0x140011, kZoneId, 10001, "openid-x", req_body, rsp_body));
+    CASE_EXPECT_EQ("user-rpc", rsp_body.echo());
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -292,8 +291,8 @@ CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
     return;
   }
 
-  auto task = test.run_task(
-      "broadcast_per_target", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+  auto task =
+      test.run_task("broadcast_per_target", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc_unit_test::RpcUnitTestEchoReq req_body;
         req_body.set_payload("per-target");
         // Empty index selects the whole global discovery set.
@@ -353,15 +352,14 @@ CASE_TEST(rpc_unit_test, no_wait_immediate_return) {
     return;
   }
 
-  auto task = test.run_task(
-      "no_wait", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc_unit_test::RpcUnitTestEchoReq req_body;
-        req_body.set_payload("no-wait");
-        rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_no_wait(ctx, 0x140021, req_body, rsp_body, true, nullptr));
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("no_wait", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc_unit_test::RpcUnitTestEchoReq req_body;
+    req_body.set_payload("no-wait");
+    rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_no_wait(ctx, 0x140021, req_body, rsp_body, true, nullptr));
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;
@@ -395,39 +393,39 @@ CASE_TEST(rpc_unit_test, no_wait_wait_later_response) {
     return;
   }
 
-  auto rule = test.ss().mock(
-      "rpc_unit_test.RpcUnitTestService/rpc_unit_test_no_wait",
-      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
-      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
-        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
-        auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
-        typed_response.set_echo(typed_request.payload());
-        RPC_RETURN_CODE(0);
-      });
+  auto rule = test.ss().mock("rpc_unit_test.RpcUnitTestService/rpc_unit_test_no_wait",
+                             rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+                             rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+                             [](const atframework::testing::ss_request_view &request,
+                                google::protobuf::Message &response) -> rpc::result_code_type {
+                               const auto &typed_request =
+                                   static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+                               auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
+                               typed_response.set_echo(typed_request.payload());
+                               RPC_RETURN_CODE(0);
+                             });
   CASE_EXPECT_TRUE(!!rule);
   if (!rule) {
     test.stop();
     return;
   }
 
-  auto task = test.run_task(
-      "wait_later", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
-        rpc_unit_test::RpcUnitTestEchoReq req_body;
-        req_body.set_payload("wait-later");
-        rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
-        dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
-        int32_t res = RPC_AWAIT_CODE_RESULT(
-            rpc::unit_test::rpc_unit_test_no_wait(ctx, 0x140031, req_body, rsp_body, false, &await_options));
-        if (res < 0) {
-          RPC_RETURN_CODE(res);
-        }
-        res = RPC_AWAIT_CODE_RESULT(rpc::internal::wait_and_unpack_ss_response(
-            ctx, rsp_body, "rpc_unit_test.RpcUnitTestService/rpc_unit_test_no_wait",
-            "rpc_unit_test.RpcUnitTestEchoRsp", await_options));
-        CASE_EXPECT_EQ("wait-later", rsp_body.echo());
-        RPC_RETURN_CODE(res);
-      });
+  auto task = test.run_task("wait_later", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc_unit_test::RpcUnitTestEchoReq req_body;
+    req_body.set_payload("wait-later");
+    rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
+    dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+    int32_t res = RPC_AWAIT_CODE_RESULT(
+        rpc::unit_test::rpc_unit_test_no_wait(ctx, 0x140031, req_body, rsp_body, false, &await_options));
+    if (res < 0) {
+      RPC_RETURN_CODE(res);
+    }
+    res = RPC_AWAIT_CODE_RESULT(rpc::internal::wait_and_unpack_ss_response(
+        ctx, rsp_body, "rpc_unit_test.RpcUnitTestService/rpc_unit_test_no_wait", "rpc_unit_test.RpcUnitTestEchoRsp",
+        await_options));
+    CASE_EXPECT_EQ("wait-later", rsp_body.echo());
+    RPC_RETURN_CODE(res);
+  });
   if (task.empty()) {
     test.stop();
     return;

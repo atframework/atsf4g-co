@@ -6,14 +6,14 @@
 
 #include <gsl/select-gsl.h>
 
+#include <atframework/testing/runtime.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <atframework/testing/runtime.h>
 
 #include "rpc/dns/lookup.h"
 

@@ -9,6 +9,8 @@
 
 #include <memory/object_allocator.h>
 
+#include <string>
+
 namespace atframework {
 namespace testing {
 
