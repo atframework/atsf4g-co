@@ -1284,10 +1284,21 @@ SERVER_FRAME_API void logic_hpa_controller::remove_on_cleanup_controller_status(
 }
 
 SERVER_FRAME_API void logic_hpa_controller::set_on_setup_custom_policy(const std::string& metrics_name,
-                                                                       on_setup_policy_callback fn) {
+                                                                        on_setup_policy_callback fn) {
   if (!fn) {
     remove_on_setup_custom_policy(metrics_name);
     return;
+  }
+
+  // If a configure reload is pending (set by reload() but not yet consumed by tick()), flush it now
+  // so that the policy already exists and the callback fires immediately. Without this, callers that
+  // register a callback between reload() and the first tick() see an empty policy_custom_ map and the
+  // callback never fires — a race that depends on the runtime pump timing (which differs between
+  // std-coroutine and legacy coroutine modes).
+  if (need_configure_) {
+    need_configure_ = false;
+    do_reload_hpa_configure();
+    do_reload_hpa_metrics();
   }
 
   auto& callbacks = policy_callback_custom_[metrics_name];

@@ -218,7 +218,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_result {
       : result_data_(input.get())
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
         ,
-        waited_(false)
+        awaited_(false)
 #  endif
   {
   }

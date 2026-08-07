@@ -523,10 +523,8 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
     }
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
     if (stack_pool_) {
-      get_task_manager_metrics_data().pool_free_memory = stack_pool_->get_limit().free_stack_size,
-      std::memory_order_release;
-      get_task_manager_metrics_data().pool_used_memory = stack_pool_->get_limit().used_stack_size,
-      std::memory_order_release;
+      get_task_manager_metrics_data().pool_free_memory = stack_pool_->get_limit().free_stack_size;
+      get_task_manager_metrics_data().pool_used_memory = stack_pool_->get_limit().used_stack_size;
       FWLOGWARNING(
           "[STATISTICS] Coroutine stack stats:\n\tConfigure - Max GC Number: {}\n\tConfigure - Stack Max: number {}, "
           "size "

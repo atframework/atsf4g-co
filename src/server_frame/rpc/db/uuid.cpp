@@ -29,9 +29,10 @@
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
 
-#include <stdint.h>
+#include <cstdint>
 #include <list>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <utility>
 
@@ -138,31 +139,14 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &c
   RPC_RETURN_CODE(static_cast<int64_t>(inc_value));
 }
 
-struct unique_id_key_t {
+namespace {
+struct ATFW_UTIL_SYMBOL_LOCAL unique_id_key_t {
   uint32_t major_type;
   uint32_t minor_type;
   uint32_t patch_type;
-
-  friend bool operator==(const unique_id_key_t &l, const unique_id_key_t &r) noexcept {
-    return l.major_type == r.major_type && l.minor_type == r.minor_type && l.patch_type == r.patch_type;
-  }
-
-  friend bool operator<(const unique_id_key_t &l, const unique_id_key_t &r) noexcept {
-    if (l.major_type != r.major_type) {
-      return l.major_type < r.major_type;
-    }
-
-    if (l.minor_type != r.minor_type) {
-      return l.minor_type < r.minor_type;
-    }
-
-    return l.patch_type < r.patch_type;
-  }
-
-  friend bool operator<=(const unique_id_key_t &l, const unique_id_key_t &r) noexcept { return l == r || l < r; }
 };
 
-struct unique_id_value_t {
+struct ATFW_UTIL_SYMBOL_LOCAL unique_id_value_t {
   task_type_trait::task_type alloc_task;
   atfw::util::lock::atomic_int_type<int64_t> unique_id_index;
   atfw::util::lock::atomic_int_type<int64_t> unique_id_base;
@@ -171,7 +155,7 @@ struct unique_id_value_t {
   unique_id_value_t() noexcept
       :
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-        alloc_task{},
+        alloc_task{},  // NOLINT(readability-redundant-member-init)
 #else
         alloc_task{nullptr},
 #endif
@@ -186,7 +170,7 @@ struct unique_id_value_t {
         wake_tasks{std::move(other.wake_tasks)} {}
 };
 
-struct unique_id_container_helper {
+struct ATFW_UTIL_SYMBOL_LOCAL unique_id_container_helper {
   std::size_t operator()(unique_id_key_t const &v) const noexcept {
     uint32_t data[3] = {v.major_type, v.minor_type, v.patch_type};
     uint64_t out[2];
@@ -195,10 +179,18 @@ struct unique_id_container_helper {
   }
 };
 
-static std::unordered_map<unique_id_key_t, unique_id_value_t, unique_id_container_helper> g_unique_id_pools;
-static atfw::util::lock::spin_rw_lock g_unique_id_pool_locker;
+static std::unordered_map<unique_id_key_t, unique_id_value_t, unique_id_container_helper> &
+get_global_unique_id_pools() {
+  static std::unordered_map<unique_id_key_t, unique_id_value_t, unique_id_container_helper> ret;
+  return ret;
+}
 
-struct unique_id_container_waker {
+static atfw::util::lock::spin_rw_lock &get_global_unique_id_pool_locker() {
+  static atfw::util::lock::spin_rw_lock ret;
+  return ret;
+}
+
+struct ATFW_UTIL_SYMBOL_LOCAL unique_id_container_waker {
   unique_id_key_t key;
   inline explicit unique_id_container_waker(unique_id_key_t k) : key(k) {}
 
@@ -207,9 +199,9 @@ struct unique_id_container_waker {
     real_map_type::iterator iter;
 
     {
-      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
-      iter = g_unique_id_pools.find(key);
-      if (iter == g_unique_id_pools.end()) {
+      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(get_global_unique_id_pool_locker());
+      iter = get_global_unique_id_pools().find(key);
+      if (iter == get_global_unique_id_pools().end()) {
         return;
       }
     }
@@ -225,7 +217,7 @@ struct unique_id_container_waker {
           !task_type_trait::equal(failed_task, wake_task)) {
         // iter will be erased in task
         dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
-        callback_data.message.message_type = reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&iter->second));
+        callback_data.message.message_type = reinterpret_cast<uintptr_t>(&iter->second);
         callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
         if (rpc::custom_resume(wake_task, callback_data) < 0) {
@@ -271,29 +263,29 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
   constexpr int64_t bits_range = 1 << bits_off;
   constexpr int64_t bits_mask = bits_range - 1;
 
-  unique_id_key_t key;
+  unique_id_key_t key{};
   key.major_type = major_type;
   key.minor_type = minor_type;
   key.patch_type = patch_type;
 
-  unique_id_value_t *alloc;
+  unique_id_value_t *alloc = nullptr;
   do {
     using real_map_type = std::unordered_map<unique_id_key_t, unique_id_value_t, unique_id_container_helper>;
     real_map_type::iterator iter;
 
     {
-      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
-      iter = g_unique_id_pools.find(key);
-      if (g_unique_id_pools.end() != iter) {
+      atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(get_global_unique_id_pool_locker());
+      iter = get_global_unique_id_pools().find(key);
+      if (get_global_unique_id_pools().end() != iter) {
         alloc = &iter->second;
         break;
       }
     }
 
-    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(g_unique_id_pool_locker);
-    iter = g_unique_id_pools.insert(real_map_type::value_type(key, unique_id_value_t{})).first;
+    atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(get_global_unique_id_pool_locker());
+    iter = get_global_unique_id_pools().insert(real_map_type::value_type(key, unique_id_value_t{})).first;
 
-    if (g_unique_id_pools.end() == iter) {
+    if (get_global_unique_id_pools().end() == iter) {
       RPC_RETURN_TYPE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }
 
@@ -374,6 +366,7 @@ static rpc::rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uin
   }
   RPC_RETURN_TYPE(ret);
 }
+}  // namespace
 
 SERVER_FRAME_API rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx, uint32_t major_type,
                                                                uint32_t minor_type, uint32_t patch_type) {
@@ -384,10 +377,10 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx
     // EN_GLOBAL_UUID_MAT_GUILD_ID:    [1 | 55 | 5] | 3
     // 公会和玩家账号分配采用短ID模式
     return generate_global_unique_id<5>(ctx, major_type, minor_type, patch_type);
-  } else {
-    // POOL => 1 | 50 | 13
-    return generate_global_unique_id<13>(ctx, major_type, minor_type, patch_type);
   }
+
+  // POOL => 1 | 50 | 13
+  return generate_global_unique_id<13>(ctx, major_type, minor_type, patch_type);
 }
 }  // namespace uuid
 }  // namespace db

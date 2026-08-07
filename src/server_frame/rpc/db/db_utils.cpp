@@ -102,7 +102,7 @@ namespace db {
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
 result_type::result_type()
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-    : waited_(false)
+    : awaited_(false)
 #  endif
 {
 }
@@ -113,7 +113,7 @@ SERVER_FRAME_API result_type::result_type(result_type &&other)
   other.awaited_ = false;
 }
 
-SERVER_FRAME_API result_type::result_type &operator=(result_type &&other) {
+SERVER_FRAME_API result_type &result_type::operator=(result_type &&other) {
   result_data_ = std::move(other.result_data_);
   awaited_ = other.awaited_;
 
@@ -134,7 +134,7 @@ result_type::result_type(int32_t code)
     : result_data_(code)
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
       ,
-      waited_(false)
+      awaited_(false)
 #  endif
 {
 }

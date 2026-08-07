@@ -54,7 +54,7 @@ class result_type {
 
   template <class TINPUT>
   ATFW_UTIL_SYMBOL_VISIBLE result_type(rpc_result_guard<TINPUT>&& guard)
-      : result_data_(guard.get()),
+      : result_data_(guard.get())
 #  if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
         ,
         awaited_(false)
