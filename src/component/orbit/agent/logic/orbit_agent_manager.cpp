@@ -251,18 +251,8 @@ static int64_t get_total_process_cpu_time_us(const uv_rusage_t& usage) {
   return total_us;
 }
 
-static void on_uv_process_exit(uv_process_t* handle, int64_t exit_status, int term_signal) {
-  auto* data = static_cast<orbit_agent_process_exit_data*>(handle->data);
-  auto record = orbit_agent_manager::me()->find_client(data->client_id);
-  if (!record) {
-    // 已移除
-    delete data;
-    handle->data = nullptr;
-    uv_close(reinterpret_cast<uv_handle_t*>(handle),
-             [](uv_handle_t* handle) { delete reinterpret_cast<uv_process_t*>(handle); });
-    return;
-  }
-  orbit_agent_manager::me()->on_client_process_exit(record, exit_status, term_signal);
+static void on_uv_process_exit_callback(uv_process_t* handle, int64_t exit_status, int term_signal) {
+  orbit_agent_manager::me()->on_uv_process_exit(handle, exit_status, term_signal);
 }
 
 static uint64_t make_initial_sequence_allocator() {
@@ -514,7 +504,7 @@ int orbit_agent_manager::stop() {
 }
 
 void orbit_agent_manager::tick() {
-  process_spawn_completions();
+  process_uv_actions();
   etcd_mod_.tick();
   if (stoped_) {
     return;
@@ -1147,7 +1137,7 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
     std::memset(&options, 0, sizeof(options));
     options.file = launch_argv[0];
     options.args = launch_argv.data();
-    options.exit_cb = on_uv_process_exit;
+    options.exit_cb = on_uv_process_exit_callback;
 
     FWLOGINFO("orbit agent spawning client {} by command {}", client_id_copy, command_line_str);
     int uv_result = uv_spawn(loop_, process_handle, &options);
@@ -1167,7 +1157,10 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
       FWLOGERROR("orbit agent start_client failed for {}: {} by command {}", client_id_copy, uv_strerror(uv_result),
                  command_line_str);
     }
-    orbit_agent_manager::me()->spawn_completions_.push(std::move(completion));
+    uv_action_t action;
+    action.is_spawn_completion_ = true;
+    action.spawn_completion_ = std::move(completion);
+    orbit_agent_manager::me()->uv_actions_.push(std::move(action));
   };
   return worker_pool->spawn(spawn_func);
 }
@@ -1197,12 +1190,20 @@ int orbit_agent_manager::spawn_client_process(orbit_agent_client_record_ptr reco
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-void orbit_agent_manager::process_spawn_completions() {
-  spawn_completion_t completion;
-  if (!spawn_completions_.try_pop(completion)) {
+void orbit_agent_manager::process_uv_actions() {
+  uv_action_t action;
+  if (!uv_actions_.try_pop(action)) {
     return;
   }
 
+  if (action.is_spawn_completion_) {
+    process_spawn_completion(action.spawn_completion_);
+  } else {
+    process_exit_action(action.process_exit_action_);
+  }
+}
+
+void orbit_agent_manager::process_spawn_completion(const spawn_completion_t& completion) {
   auto record = find_client(completion.client_id);
   if (nullptr == record) {
     FWLOGERROR("orbit agent spawn completion ignored for {}: record not found", completion.client_id);
@@ -1222,6 +1223,27 @@ void orbit_agent_manager::process_spawn_completions() {
   }
   // 启动成功
   FWLOGINFO("orbit agent spawn completion for {}: pid={}", record->client_id, record->process_id);
+}
+
+void orbit_agent_manager::on_uv_process_exit(uv_process_t* process_handle, int64_t exit_status, int term_signal) {
+  uv_action_t action;
+  action.is_spawn_completion_ = false;
+  action.process_exit_action_ = {process_handle, exit_status, term_signal};
+  uv_actions_.push(std::move(action));
+}
+
+void orbit_agent_manager::process_exit_action(const process_exit_action_t& action) {
+  auto* data = static_cast<orbit_agent_process_exit_data*>(action.handle_->data);
+  auto record = find_client(data->client_id);
+  if (!record) {
+    // 已移除
+    delete data;
+    action.handle_->data = nullptr;
+    uv_close(reinterpret_cast<uv_handle_t*>(action.handle_),
+             [](uv_handle_t* handle) { delete reinterpret_cast<uv_process_t*>(handle); });
+    return;
+  }
+  on_client_process_exit(record, action.exit_status_, action.term_signal_);
 }
 
 rpc::result_code_type orbit_agent_manager::spawn_seed_client_process(rpc::context& ctx,

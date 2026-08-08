@@ -37,7 +37,6 @@ enum EnOrbitRoomUserStatus {
   EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_MATCH = 1,  // 注册玩家ID到服务
   EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_LOBBY = 2,  // 注册玩家数据到服务
   EN_ORBIT_ROOM_USER_STATUS_INIT_TO_CLIENT = 3,   // 注册玩家数据到客户端
-  EN_ORBIT_ROOM_USER_STATUS_FINISH_CLIENT = 4,    // 客户端完成
 };
 
 struct orbit_room_user_data {
@@ -67,10 +66,11 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   const std::string& get_region() const;
 
   int32_t create(rpc::context& ctx, uint64_t match_server_id);
-  int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserKey>& user_keys,
-                    bool is_last_one);
   rpc::result_code_type start_client(rpc::context& ctx, const orbit::DAgentClientStartArgs& args);
   int32_t on_client_start(rpc::context& ctx, const std::string& client_addr);
+
+  int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserKey>& user_keys,
+                    bool is_last_one);
   rpc::result_code_type join_users(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserInitData& user_init_data);
 
   int32_t on_user_finish(
@@ -95,9 +95,10 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   PROJECT_NAMESPACE_ID::DOrbitRoomInitData room_data_;
   PROJECT_NAMESPACE_ID::EnOrbitRoomStatus room_status_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_INVALID;
   int64_t create_timepoint_ = 0;
-  int64_t status_end_timepoint_ = 0;
   std::string client_address_;
   int64_t expired_timepoint_ = 0;
+  int64_t join_end_timepoint_ = 0;
+  int64_t loading_timeout_ = 0;
 
   PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason_ = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_FINISH;
   bool client_end_ = false;

@@ -46,4 +46,4 @@ lobbysvr:
     push_message_buffer_max_count: 200000
 
 enable_excel_config: true
-enabel_session_manager: true
+enable_session_manager: true
