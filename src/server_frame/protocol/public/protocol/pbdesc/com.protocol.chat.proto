@@ -43,6 +43,4 @@ message CSChatSendMessageReq {
   atframework.dtmq.DChannelMessageDetail detail = 2;
 }
 
-message SCChatSendMessageRsp {
-  atframework.dtmq.DChannelMessage msg = 1;
-}
+message SCChatSendMessageRsp {}

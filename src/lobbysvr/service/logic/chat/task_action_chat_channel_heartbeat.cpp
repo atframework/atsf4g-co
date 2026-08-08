@@ -24,6 +24,8 @@
 
 #include <data/player.h>
 
+#include <string>
+#include <unordered_set>
 #include <utility>
 
 #include "logic/chat/user_chat_manager.h"
@@ -54,7 +56,14 @@ task_action_chat_channel_heartbeat::operator()() {
 
   rpc::context::message_holder<atfw::chat::SCChatChannelSync> sync_msg{get_shared_context()};
 
+  std::unordered_set<std::string> channel_id_set;
   for (const auto& sync_point : req_body.heartbeat_data()) {
+    if (channel_id_set.end() != channel_id_set.find(sync_point.channel_key().channel_id())) {
+      FCTXLOGWARNING(get_shared_context(), "duplicate channel_id {} in heartbeat_data will be ignored",
+                     sync_point.channel_key().channel_id());
+      continue;
+    }
+    channel_id_set.insert(sync_point.channel_key().channel_id());
     int32_t response_code =
         user->get_user_chat_manager().receive_heartbeat(get_shared_context(), sync_point, *sync_msg);
     if (response_code != 0) {

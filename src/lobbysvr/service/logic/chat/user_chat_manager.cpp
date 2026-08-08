@@ -66,7 +66,7 @@ struct global_chat_pending_channel_data {
   uint64_t shared_channel_identify = 0;
   atfw::chat::SCChatChannelSync sync_message;
 
-  std::unordered_set<const session*> already_registered_sessions;
+  std::unordered_map<const session*, std::weak_ptr<session>> already_registered_sessions;
 
   inline explicit global_chat_pending_channel_data(uint64_t channel_identify) noexcept
       : ignored(false), shared_channel_identify(channel_identify) {}
@@ -77,9 +77,8 @@ static global_chat_manager_private_data& get_global_chat_manager_private_data() 
   return ret;
 }
 
-static global_chat_pending_channel_ptr_t append_incremental_event_message(rpc::context& ctx,
-                                                                          const rpc::dtmq::client_subscriber& channel,
-                                                                          const std::shared_ptr<session>& sess) {
+static global_chat_pending_channel_ptr_t global_chat_manager_append_incremental_event_message(
+    rpc::context& ctx, const rpc::dtmq::client_subscriber& channel, const std::shared_ptr<session>& sess) {
   if (!sess) {
     return nullptr;
   }
@@ -102,7 +101,7 @@ static global_chat_pending_channel_ptr_t append_incremental_event_message(rpc::c
 
   if (reuse_cache_set->already_registered_sessions.find(sess.get()) ==
       reuse_cache_set->already_registered_sessions.end()) {
-    reuse_cache_set->already_registered_sessions.insert(sess.get());
+    reuse_cache_set->already_registered_sessions[sess.get()] = sess;
     // 添加一次待发送队列就行了
     mgr.pending_sync_message_queue.emplace_back(sess.get(), sess, reuse_cache_set);
   }
@@ -110,9 +109,8 @@ static global_chat_pending_channel_ptr_t append_incremental_event_message(rpc::c
   return reuse_cache_set;
 }
 
-static global_chat_pending_channel_ptr_t append_snapshot_event_message(rpc::context& ctx,
-                                                                       const rpc::dtmq::client_subscriber& channel,
-                                                                       const std::shared_ptr<session>& sess) {
+static global_chat_pending_channel_ptr_t global_chat_manager_append_snapshot_event_message(
+    rpc::context& ctx, const rpc::dtmq::client_subscriber& channel, const std::shared_ptr<session>& sess) {
   if (!sess) {
     return nullptr;
   }
@@ -146,7 +144,7 @@ static global_chat_pending_channel_ptr_t append_snapshot_event_message(rpc::cont
 
   if (reuse_cache_set->already_registered_sessions.find(sess.get()) ==
       reuse_cache_set->already_registered_sessions.end()) {
-    reuse_cache_set->already_registered_sessions.insert(sess.get());
+    reuse_cache_set->already_registered_sessions[sess.get()] = sess;
     // 添加一次待发送队列就行了
     mgr.pending_sync_message_queue.emplace_back(sess.get(), sess, reuse_cache_set);
   }
@@ -209,16 +207,16 @@ static void push_pending_message_once(
   func(ctx, subscriber, sess, *chat_mgr);
 }
 
-static void user_chat_callback_receive_text_or_event_fn(rpc::context& ctx,
-                                                        const rpc::dtmq::client_subscriber::ptr_t& subscriber,
-                                                        const ::atfw::dtmq::DChannelMessage& data) {
+static void user_chat_callback_receive_raw_message_fn(rpc::context& ctx,
+                                                      const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                                      const ::atfw::dtmq::DChannelMessage& data) {
   push_pending_message_once(
       ctx, subscriber,
       // =====================================================================================================================
       [&data](rpc::context& child_ctx, const rpc::dtmq::client_subscriber::ptr_t& sub_subscriber,
               const session::ptr_t& sess, user_chat_manager& /*chat_mgr*/) {
         global_chat_pending_channel_ptr_t sync_data =
-            append_incremental_event_message(child_ctx, *sub_subscriber, sess);
+            global_chat_manager_append_incremental_event_message(child_ctx, *sub_subscriber, sess);
 
         if (!sync_data) {
           return;
@@ -244,6 +242,9 @@ static void user_chat_callback_receive_text_or_event_fn(rpc::context& ctx,
         }
 
         protobuf_copy_message(*chat_channel->mutable_incremental()->add_message_list(), data);
+        if (data.sequence() > chat_channel->metadata().last_message_sequence()) {
+          chat_channel->mutable_metadata()->set_last_message_sequence(data.sequence());
+        }
       });
 }
 
@@ -255,7 +256,8 @@ static void user_chat_callback_receive_ready_or_snapshot_fn(rpc::context& ctx,
       // =====================================================================================================================
       [&snapshot_sequence](rpc::context& child_ctx, const rpc::dtmq::client_subscriber::ptr_t& sub_subscriber,
                            const session::ptr_t& sess, user_chat_manager& /*chat_mgr*/) {
-        global_chat_pending_channel_ptr_t sync_data = append_snapshot_event_message(child_ctx, *sub_subscriber, sess);
+        global_chat_pending_channel_ptr_t sync_data =
+            global_chat_manager_append_snapshot_event_message(child_ctx, *sub_subscriber, sess);
 
         if (!sync_data) {
           return;
@@ -272,16 +274,16 @@ static void user_chat_callback_receive_ready_or_snapshot_fn(rpc::context& ctx,
         }
 
         // 如果已经添加过了，则不用重复添加。（一个频道可能同时下发到多个订阅者，事件触发多次）
-        if (chat_channel->has_snapshot() && chat_channel->metadata().last_message_sequence() >= snapshot_sequence &&
-            chat_channel->metadata().custom_data_sequence() >= sub_subscriber->get_custom_data_sequence() &&
-            chat_channel->metadata().private_data_sequence() >= sub_subscriber->get_private_data_sequence()) {
+        if (chat_channel->has_snapshot() && chat_channel->metadata().last_message_sequence() != snapshot_sequence &&
+            chat_channel->metadata().custom_data_sequence() != sub_subscriber->get_custom_data_sequence() &&
+            chat_channel->metadata().private_data_sequence() != sub_subscriber->get_private_data_sequence()) {
           return;
         }
 
         user_chat_manager::dump_dtmq_to_chat_channel_snapshot(
             child_ctx, *sub_subscriber, *chat_channel->mutable_metadata(), *chat_channel->mutable_snapshot());
       });
-};
+}
 
 static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_chat_channel_event_callback_set() {
   rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret =
@@ -322,8 +324,8 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_chat_
         });
   });
 
-  rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(*ret, user_chat_callback_receive_text_or_event_fn);
-  rpc::dtmq::client_subscriber::set_event_callback_on_receive_event(*ret, user_chat_callback_receive_text_or_event_fn);
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_raw_message(*ret,
+                                                                          user_chat_callback_receive_raw_message_fn);
   return ret;
 }
 
@@ -423,9 +425,13 @@ user_chat_manager::user_chat_manager(player& owner)
 
 user_chat_manager::~user_chat_manager() {}
 
-rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
+rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
   subscriber_key_ = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
+
+  // 换session时，大部分情况下客户端已经拿到了最新消息，如果拿不到，下一次心跳也会触发修正
+  // 如果客户端没有缓存，后面仍然会通过一次 get_snapshot 拉取最新数据
+  // 所以不需要立即补发，以便减少额外的负载
 
   // 创建聊天频道
   if (!world_chat_channel_) {
@@ -437,7 +443,12 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(rpc::dtmq::make_world_partition_channel_id(
         channel_key.channel_type(), logic_config::me()->get_local_world_id(), partition_id));
     world_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    world_chat_channel_->set_local_private_data(local_private_data);
+    if (world_chat_channel_) {
+      world_chat_channel_->set_local_private_data(local_private_data);
+    } else {
+      FCTXLOGERROR(ctx, "Failed to create world chat channel {}:{}, maybe configure is missing.",
+                   channel_key.channel_type(), channel_key.channel_id());
+    }
   }
 
   if (!private_chat_channel_) {
@@ -447,7 +458,12 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(
         rpc::dtmq::make_unicast_channel_id(channel_key.channel_type(), owner_->get_zone_id(), owner_->get_user_id()));
     private_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    private_chat_channel_->set_local_private_data(local_private_data);
+    if (private_chat_channel_) {
+      private_chat_channel_->set_local_private_data(local_private_data);
+    } else {
+      FCTXLOGERROR(ctx, "Failed to create private chat channel {}:{}, maybe configure is missing.",
+                   channel_key.channel_type(), channel_key.channel_id());
+    }
   }
 
   // 创建系统通知 Channel(生命周期短)
@@ -458,7 +474,12 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(rpc::dtmq::make_world_broadcast_channel_id(channel_key.channel_type(),
                                                                           logic_config::me()->get_local_world_id()));
     sys_notification_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    sys_notification_channel_->set_local_private_data(local_private_data);
+    if (sys_notification_channel_) {
+      sys_notification_channel_->set_local_private_data(local_private_data);
+    } else {
+      FCTXLOGERROR(ctx, "Failed to create system notification channel {}:{}, maybe configure is missing.",
+                   channel_key.channel_type(), channel_key.channel_id());
+    }
   }
 
   // 创建系统公告 Channel(生命周期长)
@@ -469,8 +490,14 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& /*ctx*/) {
     channel_key.set_channel_id(rpc::dtmq::make_world_broadcast_channel_id(channel_key.channel_type(),
                                                                           logic_config::me()->get_local_world_id()));
     sys_announcement_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
-    sys_announcement_channel_->set_local_private_data(local_private_data);
+    if (sys_announcement_channel_) {
+      sys_announcement_channel_->set_local_private_data(local_private_data);
+    } else {
+      FCTXLOGERROR(ctx, "Failed to create system announcement channel {}:{}, maybe configure is missing.",
+                   channel_key.channel_type(), channel_key.channel_id());
+    }
   }
+
   RPC_RETURN_CODE(0);
 }
 
@@ -494,12 +521,14 @@ int32_t user_chat_manager::check_writable(rpc::context& /*ctx*/, const atfw::dtm
   }
 
   if (sys_notification_channel_ &&
-      channel_key.channel_id() == sys_notification_channel_->get_channel_key().channel_id()) {
+      (channel_key.channel_type() == static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION) ||
+       channel_key.channel_id() == sys_notification_channel_->get_channel_key().channel_id())) {
     return PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE;
   }
 
   if (sys_announcement_channel_ &&
-      channel_key.channel_id() == sys_announcement_channel_->get_channel_key().channel_id()) {
+      (channel_key.channel_type() == static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT) ||
+       channel_key.channel_id() == sys_announcement_channel_->get_channel_key().channel_id())) {
     return PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE;
   }
 
@@ -615,27 +644,31 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
   rpc::dtmq::client_subscriber::query_options options{};
   ::atfw::chat::DChatChannelData* sync_channel = nullptr;
   options.start_sequence = sync_point.last_sequence();
-  bool need_snapshot = false;
-  channel_ptr->query_message(
-      ctx, atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)>(
-               [&ctx, &need_snapshot, &sync_point, &sync_channel, &sync_msg](const atfw::dtmq::DChannelMessage& msg) {
-                 if (msg.sequence() == sync_point.last_sequence() && sync_point.last_hash_code() != 0 &&
-                     msg.hash_code() != sync_point.last_hash_code()) {
-                   need_snapshot = true;
-                   return false;
-                 }
+  bool need_snapshot = channel_ptr->get_last_removed_sequence() > sync_point.last_sequence();
+  if (!need_snapshot) {
+    channel_ptr->query_message(
+        ctx,
+        atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)>(
+            [&ctx, &need_snapshot, &sync_point, &sync_channel, &sync_msg](const atfw::dtmq::DChannelMessage& msg) {
+              if (msg.sequence() == sync_point.last_sequence() && sync_point.last_hash_code() != 0 &&
+                  msg.hash_code() != sync_point.last_hash_code()) {
+                need_snapshot = true;
+                return false;
+              }
 
-                 if (sync_channel == nullptr) {
-                   sync_channel = sync_msg.add_chat_channel();
-                 }
-                 if (sync_channel == nullptr) {
-                   FCTXLOGERROR(ctx, "malloc chat_channel is failed");
-                   return true;
-                 }
+              if (sync_channel == nullptr) {
+                sync_channel = sync_msg.add_chat_channel();
+              }
+              if (sync_channel == nullptr) {
+                FCTXLOGERROR(ctx, "malloc chat_channel is failed");
+                return true;
+              }
 
-                 protobuf_copy_message(*sync_channel->mutable_incremental()->add_message_list(), msg);
-                 return true;
-               }));
+              protobuf_copy_message(*sync_channel->mutable_incremental()->add_message_list(), msg);
+              return true;
+            }),
+        options);
+  }
 
   if (need_snapshot) {
     if (sync_channel == nullptr) {
@@ -649,7 +682,7 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
     return 0;
   }
 
-  if (sync_channel->has_incremental()) {
+  if (sync_channel != nullptr && sync_channel->has_incremental()) {
     dump_dtmq_to_chat_channel_metadata(ctx, *channel_ptr, *sync_channel->mutable_metadata(), false);
   }
   return 0;
@@ -658,12 +691,18 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
 int32_t user_chat_manager::build_dtmq_channel_key_from_chat_channel_key(
     const atfw::chat::DChatChannelKey& chat_channel_key, atfw::dtmq::DChannelIdKey& dtmq_channel_key) {
   switch (chat_channel_key.key_type_case()) {
-    case atfw::chat::DChatChannelKey::KeyTypeCase::kWorldPartitionChannel:
+    case atfw::chat::DChatChannelKey::KeyTypeCase::kWorldPartitionChannel: {
+      // TODO(ANY): 限制partition_id的范围，防止客户端恶意构造
+      uint64_t partition_id = chat_channel_key.world_partition_channel();
+      if (partition_id > 0) {
+        return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL;
+      }
       dtmq_channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC));
-      dtmq_channel_key.set_channel_id(rpc::dtmq::make_world_partition_channel_id(
-          static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC), logic_config::me()->get_local_world_id(),
-          chat_channel_key.world_partition_channel()));
+      dtmq_channel_key.set_channel_id(
+          rpc::dtmq::make_world_partition_channel_id(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC),
+                                                     logic_config::me()->get_local_world_id(), partition_id));
       return 0;
+    }
     case atfw::chat::DChatChannelKey::KeyTypeCase::kPrivateChannel:
       dtmq_channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
       dtmq_channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(dtmq_channel_key.channel_type(),
@@ -706,6 +745,7 @@ void user_chat_manager::dump_dtmq_to_chat_channel_snapshot(rpc::context& ctx,
                                                            atfw::chat::DChatChannelSnapshot& snapshot) {
   dump_dtmq_to_chat_channel_metadata(ctx, channel, metadata, true);
 
+  snapshot.clear_message_list();
   channel.query_message(ctx, [&snapshot](const atfw::dtmq::DChannelMessage& msg) {
     protobuf_copy_message(*snapshot.add_message_list(), msg);
     return true;
