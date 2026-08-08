@@ -13,10 +13,11 @@ endif()
 # 编译的组件
 option(PROJECT_ENABLE_SAMPLE "Enable build sample." OFF)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-  option(PROJECT_ENABLE_TOOLS "Enable build tools." ON)
+  option(PROJECT_ENABLE_UNITTEST "Enable build tools." ON)
 else()
-  option(PROJECT_ENABLE_TOOLS "Enable build tools." OFF)
+  option(PROJECT_ENABLE_UNITTEST "Enable build tools." OFF)
 endif()
+option(PROJECT_ENABLE_TOOLS "Enable build tools." ON)
 option(PROJECT_ENABLE_PRECOMPILE_HEADERS "Enable precompile headers." ON)
 # Unity build(jumbo build) merges sources into unity_*.cxx, which removes per-file compile_commands.json entries and
 # breaks clangd/IDE per-file indexing. Keep it OFF for local/clangd builds; enable it (e.g. in CI) for faster builds.
