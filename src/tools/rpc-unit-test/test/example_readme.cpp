@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 
-// Compiled mirror of the README.md examples (see IMPLEMENTATION_PLAN.md 11): every snippet shown in the
+// Compiled mirror of the README.md examples: every snippet shown in the
 // README is exercised here so documentation and API never drift apart.
 
 // clang-format off

@@ -171,7 +171,7 @@ class RPC_UNIT_TEST_API mock_ss {
   // registrations fail immediately (check the returned handle and get_diagnostic()). The handler
   // receives the parsed request through ss_request_view and fills a fresh response instance of the
   // registered response type; descriptor lookup, prototype creation and parse/serialize all happen
-  // inside the library (see 3.6 in IMPLEMENTATION_PLAN.md: no template API surface). The handler
+  // inside the library (no template API surface; see doc/docs/development/rpc-unit-test.md). The handler
   // returns rpc::result_code_type so it may await nested RPC calls (run it with RPC_RETURN_CODE;
   // the engine drives it as a coroutine task and sends the response when it completes).
   ss_rule_handle mock(

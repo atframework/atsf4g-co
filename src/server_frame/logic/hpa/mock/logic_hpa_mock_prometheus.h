@@ -17,7 +17,8 @@
 class logic_hpa_policy;
 class logic_hpa_puller_prometheus;
 
-// Unit-test mock seam for the HPA prometheus puller (see IMPLEMENTATION_PLAN.md 8.10). The registry is a
+// Unit-test mock seam for the HPA prometheus puller (see the HPA section of doc/docs/development/rpc-unit-test.md).
+// The registry is a
 // single process-wide hook owned by the server_frame DLL. When installed, logic_hpa_puller_prometheus::do_pull
 // records the query and never creates an http_request; the installed answer function decides which JSON body
 // is fed back through the real logic_hpa_policy::trigger_event_on_pull_result callback chain.

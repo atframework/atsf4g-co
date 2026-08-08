@@ -68,7 +68,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type remove_ttl(rpc::contex
 // returns rpc::result_code_type (RPC_RETURN_CODE) so it may await nested RPC calls, bypassing the
 // common mock layer entirely. Interfaces without a registered handler fall through to the in-memory
 // mock backend. All functions are non-template exported functions implemented in the generated .cpp
-// (see 3.6/8.5 in IMPLEMENTATION_PLAN.md), return an RAII rpc::unit_test::mock_rule_handle that
+// (no template API surface; see doc/docs/development/rpc-unit-test.md), return an RAII rpc::unit_test::mock_rule_handle that
 // deactivates the handler on destruction, and degrade to an empty handle when no mock engine is bound.
 // Runtime teardown deactivates all registered handlers through the mock engine bridge.
 namespace mock {

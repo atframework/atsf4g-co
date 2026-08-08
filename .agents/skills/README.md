@@ -11,6 +11,7 @@ small; put task-specific steps, commands, caveats, and examples in each `SKILL.m
 | `change-workflow/`        | Risk-scaled design, change contracts, debugging, TDD, review, and completion evidence      |
 | `build/`                  | Configure and build the project (Windows / Unix)                                          |
 | `testing/`                | Run unit tests (including Windows DLL/PATH notes)                                         |
+| `rpc-unit-test/`          | Author offline RPC unit tests with the mock-RPC fixture/engines in `src/tools/rpc-unit-test` |
 | `deployment-config/`      | Generate deployment configs/scripts and analyze `install/**/*.tpl` Go templates           |
 | `configure-expression/`   | Environment-variable expression expansion in configuration fields                         |
 | `atgateway-protocol/`     | atgateway v2 protocol SDK — ECDH handshake, encryption, testing                           |

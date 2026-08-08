@@ -205,7 +205,8 @@ namespace mock {
 /**
  * @brief Register a typed SS mock rule for ${service.get_full_name()}/${rpc.get_name()}.
  * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is enabled. Non-template
- *       exported function (see 3.6 in IMPLEMENTATION_PLAN.md) implemented in the generated .cpp;
+ *       exported function (no template API surface; see doc/docs/development/rpc-unit-test.md)
+ *       implemented in the generated .cpp;
  *       calls through rpc::unit_test::get_mock_engine_bridge_for_unit_test() and returns an empty
  *       handle when no mock engine is bound. The handler receives the coroutine context (usable for
  *       nested RPC calls) and the concrete request/response messages, and returns

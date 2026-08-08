@@ -34,7 +34,8 @@ struct ATFW_UTIL_SYMBOL_VISIBLE hpa_pull_query {
 };
 #endif
 
-// HPA prometheus pull mock (IMPLEMENTATION_PLAN.md 8.10). The runtime installs the default pull hook when the
+// HPA prometheus pull mock (see the HPA section of doc/docs/development/rpc-unit-test.md). The runtime installs the
+// default pull hook when the
 // hpa feature is enabled: pulls are recorded and never create a real http_request. Metrics without a
 // configured answer are fed an error result (do_ready is not triggered, which is the signal to configure an
 // answer); configured answers are fed through the real logic_hpa_policy::trigger_event_on_pull_result chain.

@@ -21,6 +21,8 @@ high-performance game server architectures.
   replication), `distributed_transaction/` (2PC coordinator `dtcoordsvr` + SDK), `rank/` (`rank_board_svr` + SDK),
   `orbit/` (controller/agent/server SDK), `GameSharedComponent/` (pure algorithm libs).
 - `src/robot/`: Go stress-test robot client; `src/tools/`: code generator (`generate-for-pb`), etcd debug tools.
+- `src/tools/rpc-unit-test/`: offline mock-RPC unit-test framework (`atframework::testing::runtime` + mock
+  SS/DNS/DB/CS/router/transport/resource/hpa engines) for testing service RPC logic without Redis/DNS/atbus/HTTP.
 - `src/templates/`: Mako templates for generated RPC/task code.
 - `doc/`: Docusaurus documentation site (architecture + development docs, zh-CN/en i18n).
 - `project/`, `third_party/`, `install/`, `resource/`: build tooling, dependency setup, deployment assets, resources.
@@ -75,7 +77,8 @@ Read the matching `.agents/skills/*/SKILL.md` before doing specialized work:
 | `engineering-guidelines`  | Writing/reviewing C++/CMake/Markdown, header inline/template visibility/API ABI rules, RPC/Arena |
 | `change-workflow`         | Diagnosing defects or delivering nontrivial/high-risk changes with a reviewable contract       |
 | `build`                   | Configuring or building with CMake                                                      |
-| `testing`                 | Running or writing unit tests                                                           |
+| `testing`                 | Running or writing unit tests (generic private framework, DLL/PATH)                            |
+| `rpc-unit-test`           | Authoring offline RPC unit tests with the mock-RPC fixture/engines in `src/tools/rpc-unit-test` |
 | `deployment-config`       | Generating/editing deployment configs, Go `.tpl` chart templates, or Helm values        |
 | `configure-expression`    | Editing env-expression-enabled config fields                                            |
 | `atgateway-protocol`      | Working on atgateway v2 protocol, crypto, compression, reconnection, or tests           |

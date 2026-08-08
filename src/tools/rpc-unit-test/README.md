@@ -4,6 +4,9 @@ atsf4g-co 的 RPC 单元测试支持库：在普通进程内启动一个最小 a
 依赖（SS/DNS/CS/DB/UUID/resource/HPA/telemetry），让业务代码的真实 RPC 路径（dispatcher、task、协程、
 生成 API）可以在单测中被驱动和断言，无需 Redis、etcd、atbus 或系统 DNS。
 
+> AI agent 使用本库时见 `.agents/skills/rpc-unit-test/SKILL.md`（流程化指引 + gotchas）；修改 mock 引擎/hook
+> seam 时见 `.agents/skills/rpc-unit-test/references/engine-invariants.md`。
+
 ## 适用范围与非目标
 
 - 适用：service/component 逻辑的离线单元测试；router/SS/CS/DB 生成 API 的契约测试。
@@ -222,9 +225,10 @@ timeout（`project_add_rpc_unit_test` 的 `TIMEOUT`）。hard timeout 会 poison
 
 ## 组件私有 transport adapter / Orbit client adapter
 
-组件私有直连 transport（如 Orbit 直连 atbus）应以独立可选 adapter target 接入：component-owned seam +
+组件私有直连 transport（如 Orbit 直连 atbus）以独立可选 adapter target 接入：component-owned seam +
 callback waiter，覆盖 callback/retry/error/timeout/fallback，外层调用仍在真实 `rpc::async_invoke` task
-中（计划中，见 IMPLEMENTATION_PLAN.md 阶段 8）。
+中。Orbit 客户端 SDK 已按此模式实现并自测（见 `src/component/GameSharedComponent/Orbit/test/`），不由本库
+runtime 引擎驱动。
 
 ## 构建与运行
 

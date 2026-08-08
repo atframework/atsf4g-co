@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 
-// Sampling contract test for the lobbysvr async_jobs SDK DB consumer path (IMPLEMENTATION_PLAN.md
-// 阶段 9): async_jobs::add_jobs/get_jobs/del_jobs go through the real generated KL table API
+// Sampling contract test for the lobbysvr async_jobs SDK DB consumer path (see
+// doc/docs/development/rpc-unit-test.md): async_jobs::add_jobs/get_jobs/del_jobs go through the real generated KL table API
 // (rpc::db::async_jobs) served by the mock in-memory backend, offline without Redis.
 
 // clang-format off

@@ -155,7 +155,7 @@ CASE_TEST(rpc_unit_test, runtime_consecutive_fixture) {
   }
 }
 
-// Required combined smoke (IMPLEMENTATION_PLAN.md 阶段 8 / 14): one task performs DNS lookup -> SS RPC ->
+// Required combined smoke (see doc/docs/development/rpc-unit-test.md): one task performs DNS lookup -> SS RPC ->
 // DB write/read in a single coroutine, and the outer wait drives everything to completion.
 CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
   atframework::testing::runtime test;

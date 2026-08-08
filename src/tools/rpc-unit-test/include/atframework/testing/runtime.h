@@ -59,9 +59,9 @@ class mock_ss;
 class raw_transport;
 
 // Wired now: ss, dns, cs, db, router, resource, hpa. uuid flows through the db hook (uuid_allocator uses
-// hash_table inc_field) and needs no runtime wiring. orbit is declared for the planned phase in
-// IMPLEMENTATION_PLAN.md (phase 8). telemetry has no engine: it is handled by pure config materialization
-// (see the telemetry_* options below and IMPLEMENTATION_PLAN.md 8.9).
+// hash_table inc_field) and needs no runtime wiring. orbit is declared for a planned component adapter phase.
+// telemetry has no engine: it is handled by pure config materialization (see the telemetry_* options below and
+// the telemetry section of doc/docs/development/rpc-unit-test.md).
 enum class feature : int32_t {
   ss = 0,
   dns = 1,
@@ -94,7 +94,8 @@ struct ATFW_UTIL_SYMBOL_VISIBLE runtime_options {
   // Optional callback to add component modules/dispatchers/router managers before app init.
   std::function<int(runtime &)> setup_callback;
 
-  // Telemetry (IMPLEMENTATION_PLAN.md 8.9): file-only exporters materialized into the generated YAML.
+  // Telemetry (see the telemetry section of doc/docs/development/rpc-unit-test.md): file-only exporters
+  // materialized into the generated YAML.
   // otlp_file base pattern; ".trace.log"/".metrics.log"/".logs.log" suffixes are appended. The path must
   // stay inside the build-tree working directory.
   std::string telemetry_otlp_file_pattern;

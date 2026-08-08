@@ -115,7 +115,7 @@ CASE_TEST(server_frame_unit_test, resource_provider_missing_file_fails_reload) {
 
 // server_frame component: teardown clears the active provider; the next fixture's provider serves its own
 // bytes and sees none of the previous fixture's files. The excel manager singleton is process-lifetime, so
-// each fixture must use a distinct version (see IMPLEMENTATION_PLAN.md 8.7).
+// each fixture must use a distinct version (see doc/docs/development/rpc-unit-test.md).
 CASE_TEST(server_frame_unit_test, resource_provider_isolated_between_fixtures) {
   {
     atframework::testing::runtime first;

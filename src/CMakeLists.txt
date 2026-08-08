@@ -28,7 +28,7 @@ if((BUILD_TESTING OR PROJECT_ENABLE_UNITTEST) AND PROJECT_SERVER_FRAME_ENABLE_UN
   target_include_directories(
     ${PROJECT_SERVER_FRAME_LIB_LINK}
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/tools/rpc-unit-test/include>")
-  # server_frame component unit tests (cases live next to the component, see IMPLEMENTATION_PLAN.md phase 6).
+  # server_frame component unit tests (cases live next to the component, see doc/docs/development/rpc-unit-test.md).
   add_subdirectory(server_frame/test)
 endif()
 

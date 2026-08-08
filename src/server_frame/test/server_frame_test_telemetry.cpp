@@ -15,7 +15,8 @@ int32_t run_tracer_task(atframework::testing::runtime &test, gsl::string_view na
   auto task = test.run_task(
       name, std::chrono::seconds{2}, [name](rpc::context &ctx) -> rpc::result_code_type {
         // A tracer can always be started in a fixture: with no exporter configured it is a noop span, with
-        // file-only exporters it is exported through the real provider chain (IMPLEMENTATION_PLAN.md 8.9).
+        // file-only exporters it is exported through the real provider chain (see the telemetry section of
+        // doc/docs/development/rpc-unit-test.md).
         rpc::telemetry::trace_start_option trace_option;
         rpc::telemetry::tracer tracer = ctx.make_tracer(name, std::move(trace_option));
         RPC_RETURN_CODE(0);

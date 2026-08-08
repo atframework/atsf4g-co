@@ -53,6 +53,7 @@ const sidebars = {
         'development/add-db-table',
         'development/excel-config',
         'development/testing',
+        'development/rpc-unit-test',
       ],
     },
   ],

@@ -31,7 +31,8 @@ bool pump_until(atframework::testing::runtime &test, const std::function<bool()>
 }  // namespace
 
 // server_frame component: with the hpa feature the runtime installs the default prometheus pull hook
-// (IMPLEMENTATION_PLAN.md 8.10). Pulls are recorded without creating any http_request; metrics without a
+// (see the HPA section of doc/docs/development/rpc-unit-test.md). Pulls are recorded without creating any
+// http_request; metrics without a
 // configured answer are fed an error result so the policy stays not-ready; a configured success answer flows
 // through the real parse -> trigger_event_on_pull_result -> do_ready chain.
 CASE_TEST(server_frame_unit_test, hpa_prometheus_pull_hook_chain) {

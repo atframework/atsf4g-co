@@ -1,12 +1,13 @@
 # =========== server_frame component unit tests ===========
 #
-# Cases live next to the component under test (see src/tools/rpc-unit-test/IMPLEMENTATION_PLAN.md phase 6).
+# Cases live next to the component under test (see doc/docs/development/rpc-unit-test.md).
 # They exercise server_frame behavior (dispatchers, generated RPC/DB APIs, session_manager, uuid) through
 # the rpc-unit-test runtime; the framework's own contract tests stay in src/tools/rpc-unit-test/test.
 #
 # HPA and telemetry cases get their own executables: the opentelemetry provider chain and the named
 # telemetry groups are process-lifetime state that is not rebuilt cleanly across fixtures, so cases with
-# conflicting telemetry configurations must not share a process (see IMPLEMENTATION_PLAN.md 8.9).
+# conflicting telemetry configurations must not share a process (see the telemetry section of
+# doc/docs/development/rpc-unit-test.md).
 
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-server-frame-unit-test

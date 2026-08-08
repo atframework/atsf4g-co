@@ -40,7 +40,7 @@ class context;
 namespace unit_test {
 
 // Server-frame-owned mirror of the tool-side SS rule options, so generated mock code never
-// references rpc-unit-test library types (see 3.6 in IMPLEMENTATION_PLAN.md).
+// references rpc-unit-test library types (no template API surface; see doc/docs/development/rpc-unit-test.md).
 struct ATFW_UTIL_SYMBOL_VISIBLE ss_mock_rule_options {
   uint64_t match_node_id = 0;
   uint32_t times = 0;
