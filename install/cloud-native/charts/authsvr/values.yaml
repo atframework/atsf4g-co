@@ -50,4 +50,4 @@ authsvr:
       #     district: cn
     relogin_expire: 14400
 
-enabel_session_manager: true
+enable_session_manager: true

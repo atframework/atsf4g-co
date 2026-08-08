@@ -120,12 +120,11 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
       rpc::context& ctx, const orbit::DTAClientExitReq& request, orbit::ATDClientExitRsp& response);
 
-  void on_client_process_exit(orbit_agent_client_record_ptr record, int64_t exit_status, int term_signal);
+  void on_uv_process_exit(uv_process_t* process_handle, int64_t exit_status, int term_signal);
   uint64_t select_controller_server_id(const std::string& client_id) const;
 
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
   const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
-
  private:
   int startup_seed_client();
 
@@ -158,6 +157,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
                                         const orbit::DServerIdentity& server_identity);
   orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
+  void on_client_process_exit(orbit_agent_client_record_ptr record, int64_t exit_status, int term_signal);
 
   void update_etcd_load_snapshot();
   void load_record_to_json();
@@ -176,7 +176,19 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
     int64_t process_id = 0;
     int32_t uv_result = 0;
   };
-  void process_spawn_completions();
+  struct process_exit_action_t {
+    uv_process_t* handle_ = nullptr;
+    int64_t exit_status_ = 0;
+    int term_signal_ = 0;
+  };
+  struct uv_action_t {
+    bool is_spawn_completion_ = false;
+    spawn_completion_t spawn_completion_;
+    process_exit_action_t process_exit_action_;
+  };
+  void process_uv_actions();
+  void process_spawn_completion(const spawn_completion_t& completion);
+  void process_exit_action(const process_exit_action_t& action);
   static void worker_exit_callback(const atfw::atapp::worker_context& worker_ctx);
   static void worker_tick_callback(const atfw::atapp::worker_context& worker_ctx);
   int32_t spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line);
@@ -238,6 +250,6 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   uint64_t sequence_allocator_ = 0;
 
   std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;
-  tbb::concurrent_queue<spawn_completion_t> spawn_completions_;
   tbb::concurrent_hash_map<uint64_t, uv_loop_t*> uv_loop_queue_;
+  tbb::concurrent_queue<uv_action_t> uv_actions_;
 };

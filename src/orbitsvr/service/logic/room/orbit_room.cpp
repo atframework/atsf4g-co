@@ -201,8 +201,8 @@ rpc::result_code_type orbit_room::join_users(rpc::context& ctx,
   }
 
   auto user_iter = user_data_index_.find(user_init_data.user_key().user_key());
-  if (user_iter != user_data_index_.end()) {
-    FWLOGERROR("orbit_room {} join_users failed, user already exists, user_key: {}:{}", get_client_id(),
+  if (user_iter == user_data_index_.end()) {
+    FWLOGERROR("orbit_room {} join_users failed, user not found, user_key: {}:{}", get_client_id(),
                user_init_data.user_key().user_key().user_id(), user_init_data.user_key().user_key().zone_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -338,6 +338,7 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
     }
   }
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH);
+  exit_reason_ = exit_reason;
 
   PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
   event_log.set_orbit_room_status(room_status_);
@@ -452,7 +453,7 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
                  user_key.user_id(), user_key.zone_id());
       continue;
     }
-    *async_data.add_user_finish_results() = user_ptr->finish_result_;
+    *async_data.add_user_finish_results() = user_iter->second->finish_result_;
   }
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::add_jobs(
@@ -470,6 +471,8 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
     } else {
       need_retry_settlement_ = true;
     }
+  } else {
+    user_ptr->settlement_finish_ = true;
   }
   RPC_RETURN_CODE(ret);
 }

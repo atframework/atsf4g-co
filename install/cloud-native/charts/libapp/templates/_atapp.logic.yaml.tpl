@@ -7,7 +7,7 @@ logic:
   server:
     log_path: "{{ .Values.server_log_dir }}"
     shared_component:
-      session_manager: {{ .Values.enabel_session_manager }}
+      session_manager: {{ .Values.enable_session_manager }}
       excel_config: {{ .Values.enable_excel_config }}
   excel:
     enable: true
