@@ -33,6 +33,13 @@ message DChatChannelMeta {
   // configure 仅拉取快照时下发
   atframework.dtmq.DChannelConfigure channel_configure = 2;
 
+  // 最后收到的message sequence
+  int64 last_message_sequence = 6;
+  // custom_data_sequence
+  int64 custom_data_sequence = 7;
+  // private_data_sequence
+  int64 private_data_sequence = 8;
+
   // 创建时间/sequence
   google.protobuf.Timestamp create_timepoint = 21;
   int64 create_sequence = 22;

@@ -120,10 +120,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t compact_log_sequence)>;
 
   using event_callback_on_receive_text_t =
-      std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, gsl::string_view text)>;
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
-  using event_callback_on_receive_event_t = std::function<void(
-      rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
+  using event_callback_on_receive_event_t =
+      std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
   using event_callback_on_receive_raw_message_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
@@ -272,6 +272,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API bool get_option_with_private_data() const noexcept;
 
   /**
+   * @brief 获取频道数据共享层标识，可以认为返回相同标识的频道共享同一底层数据。可以依据这个做一个合包操作
+   *
+   * @return 频道数据共享层标识
+   */
+  DTMQ_PROXY_SDK_API uint64_t get_shared_channel_identify() const noexcept;
+
+  /**
    * @brief 设置共享的回调函数组
    *
    * @param event_callbacl_set 整个回调函数组
@@ -408,6 +415,21 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       event_callback_set_t& event_callback_set, const event_callback_on_receive_event_t& on_receive_event);
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event(
       const event_callback_set_t& event_callback_set) noexcept;
+
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
+      const std::string& type_url, event_callback_on_receive_event_t&& on_receive_event);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
+      const std::string& type_url, const event_callback_on_receive_event_t& on_receive_event);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event_by_type_url(
+      const std::string& type_url) const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
+      event_callback_set_t& event_callback_set, const std::string& type_url,
+      event_callback_on_receive_event_t&& on_receive_event);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
+      event_callback_set_t& event_callback_set, const std::string& type_url,
+      const event_callback_on_receive_event_t& on_receive_event);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event_by_type_url(
+      const event_callback_set_t& event_callback_set, const std::string& type_url) noexcept;
 
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
       event_callback_on_receive_raw_message_t&& on_receive_raw_message);

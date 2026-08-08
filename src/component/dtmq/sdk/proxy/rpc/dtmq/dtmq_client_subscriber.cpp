@@ -212,7 +212,8 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
 
   // NOLINTNEXTLINE(modernize-pass-by-value)
   explicit shared_subscriber(const atfw::dtmq::DChannelIdKey& channel_key)
-      : timer_action_(timer_action_type::kNone),
+      : identify_key_(0),
+        timer_action_(timer_action_type::kNone),
         timer_timeout_tick_(0),
         timer_gc_tick_(0),
         channel_key_(channel_key),
@@ -227,6 +228,8 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
         private_data_sequence_(0),
         last_message_hash_code_(0),
         last_message_sequence_(0) {
+    static std::atomic<uint64_t> global_shared_subscriber_identify_key_allocator{1};
+    identify_key_ = global_shared_subscriber_identify_key_allocator.fetch_add(1, std::memory_order_acq_rel);
     subscriber_info_.set_subscriber_server_id(logic_config::me()->get_local_server_id());
 
     // 这里是共享 subscriber key
@@ -266,6 +269,8 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
   inline void set_flag(subscriber_flag flag, bool value) noexcept { flags_.set(static_cast<size_t>(flag), value); }
 
   inline bool is_ready() const noexcept { return check_flag(subscriber_flag::kReady); }
+
+  inline uint64_t get_shared_channel_identify() const noexcept { return identify_key_; }
 
   inline const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept { return channel_key_; }
 
@@ -357,6 +362,8 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
 
  private:
   friend class ATFW_UTIL_SYMBOL_LOCAL mq_client_subscriber_delegate_helper;
+
+  uint64_t identify_key_;
 
   std::bitset<static_cast<size_t>(subscriber_flag::kMax)> flags_;
   mq_client_subscriber_timer_type::timer_wptr_t timer_watcher_;
@@ -521,6 +528,7 @@ struct client_subscriber::event_callback_set_t {
   client_subscriber::event_callback_on_compact_t on_compact;
   client_subscriber::event_callback_on_receive_text_t on_receive_text;
   client_subscriber::event_callback_on_receive_event_t on_receive_event;
+  std::unordered_map<std::string, client_subscriber::event_callback_on_receive_event_t> on_receive_event_by_type_url;
   client_subscriber::event_callback_on_receive_raw_message_t on_receive_raw_message;
   client_subscriber::event_callback_on_receive_snapshot_t on_receive_snapshot_start;
   client_subscriber::event_callback_on_receive_snapshot_t on_receive_snapshot_finished;
@@ -934,6 +942,10 @@ DTMQ_PROXY_SDK_API bool client_subscriber::get_option_with_private_data() const 
   return internal_data_->options.with_private_data;
 }
 
+DTMQ_PROXY_SDK_API uint64_t client_subscriber::get_shared_channel_identify() const noexcept {
+  return internal_data_->shared_instance->get_shared_channel_identify();
+}
+
 DTMQ_PROXY_SDK_API void client_subscriber::set_shared_event_callback_set(
     const event_callback_set_ptr_t& event_callbacl_set) {
   internal_data_->shared_event_handler = event_callbacl_set;
@@ -1308,6 +1320,90 @@ DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event(
 DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_event_t&
 client_subscriber::get_event_callback_on_receive_event(const event_callback_set_t& event_callback_set) noexcept {
   return event_callback_set.on_receive_event;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event_by_type_url(
+    const std::string& type_url, event_callback_on_receive_event_t&& on_receive_event) {
+  if (!on_receive_event && !internal_data_->private_event_handler) {
+    return;
+  }
+
+  if (!internal_data_->private_event_handler) {
+    internal_data_->private_event_handler = client_subscriber::create_event_callback_set();
+  }
+
+  if (!on_receive_event) {
+    internal_data_->private_event_handler->on_receive_event_by_type_url.erase(type_url);
+  } else {
+    internal_data_->private_event_handler->on_receive_event_by_type_url[type_url] = std::move(on_receive_event);
+  }
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event_by_type_url(
+    const std::string& type_url, const event_callback_on_receive_event_t& on_receive_event) {
+  if (!on_receive_event && !internal_data_->private_event_handler) {
+    return;
+  }
+
+  if (!internal_data_->private_event_handler) {
+    internal_data_->private_event_handler = client_subscriber::create_event_callback_set();
+  }
+
+  if (!on_receive_event) {
+    internal_data_->private_event_handler->on_receive_event_by_type_url.erase(type_url);
+  } else {
+    internal_data_->private_event_handler->on_receive_event_by_type_url[type_url] = on_receive_event;
+  }
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_event_t&
+client_subscriber::get_event_callback_on_receive_event_by_type_url(const std::string& type_url) const noexcept {
+  if (internal_data_->private_event_handler) {
+    auto iter = internal_data_->private_event_handler->on_receive_event_by_type_url.find(type_url);
+    if (iter != internal_data_->private_event_handler->on_receive_event_by_type_url.end()) {
+      return iter->second;
+    }
+  }
+
+  if (internal_data_->shared_event_handler) {
+    auto iter = internal_data_->shared_event_handler->on_receive_event_by_type_url.find(type_url);
+    if (iter != internal_data_->shared_event_handler->on_receive_event_by_type_url.end()) {
+      return iter->second;
+    }
+  }
+
+  return get_default_event_callback_set().on_receive_event;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event_by_type_url(
+    event_callback_set_t& event_callback_set, const std::string& type_url,
+    event_callback_on_receive_event_t&& on_receive_event) {
+  if (!on_receive_event) {
+    event_callback_set.on_receive_event_by_type_url.erase(type_url);
+  } else {
+    event_callback_set.on_receive_event_by_type_url[type_url] = std::move(on_receive_event);
+  }
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_event_by_type_url(
+    event_callback_set_t& event_callback_set, const std::string& type_url,
+    const event_callback_on_receive_event_t& on_receive_event) {
+  if (!on_receive_event) {
+    event_callback_set.on_receive_event_by_type_url.erase(type_url);
+  } else {
+    event_callback_set.on_receive_event_by_type_url[type_url] = on_receive_event;
+  }
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_event_t&
+client_subscriber::get_event_callback_on_receive_event_by_type_url(const event_callback_set_t& event_callback_set,
+                                                                   const std::string& type_url) noexcept {
+  auto iter = event_callback_set.on_receive_event_by_type_url.find(type_url);
+  if (iter != event_callback_set.on_receive_event_by_type_url.end()) {
+    return iter->second;
+  }
+
+  return get_default_event_callback_set().on_receive_event;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_raw_message(
@@ -3143,7 +3239,7 @@ mq_client_subscriber_delegate_helper::wal_result_code mq_client_subscriber_deleg
   subscriber->foreach_registered_client_subscriber([&raw_message, &param](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_receive_text();
     if (fn) {
-      fn(param.context, client.shared_from_this(), raw_message.sequence(), raw_message.detail().text());
+      fn(param.context, client.shared_from_this(), raw_message);
     }
   });
 
@@ -3165,9 +3261,16 @@ mq_client_subscriber_delegate_helper::wal_result_code mq_client_subscriber_deleg
   }
 
   subscriber->foreach_registered_client_subscriber([&raw_message, &param](client_subscriber& client) {
-    const auto& fn = client.get_event_callback_on_receive_event();
-    if (fn) {
-      fn(param.context, client.shared_from_this(), raw_message.sequence(), raw_message.detail().event());
+    const auto& any_event_fn = client.get_event_callback_on_receive_event();
+    if (any_event_fn) {
+      any_event_fn(param.context, client.shared_from_this(), raw_message);
+    }
+    if (!raw_message.detail().event().type_url().empty()) {
+      const auto& one_event_fn =
+          client.get_event_callback_on_receive_event_by_type_url(raw_message.detail().event().type_url());
+      if (one_event_fn) {
+        one_event_fn(param.context, client.shared_from_this(), raw_message);
+      }
     }
   });
 

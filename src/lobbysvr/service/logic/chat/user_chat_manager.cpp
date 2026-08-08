@@ -19,12 +19,20 @@
 
 #include <config/logic_config.h>
 
+#include <memory/object_allocator.h>
+
 #include <rpc/dtmq/dtmq_algorithm.h>
 #include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 
+#include <utility/protobuf_mini_dumper.h>
+
 #include <list>
+#include <memory>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "data/player.h"
@@ -32,10 +40,36 @@
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
 namespace {
+
+struct global_chat_pending_channel_data;
+using global_chat_pending_channel_ptr_t = atfw::util::memory::strong_rc_ptr<global_chat_pending_channel_data>;
+struct global_chat_pending_session_data {
+  session* raw_ptr;
+  std::weak_ptr<session> sess;
+  global_chat_pending_channel_ptr_t sync_data;
+
+  inline global_chat_pending_session_data(session* input_raw_ptr, std::weak_ptr<session> sess_watcher,
+                                          global_chat_pending_channel_ptr_t input_sync_data) noexcept
+      : raw_ptr(input_raw_ptr), sess(std::move(sess_watcher)), sync_data(std::move(input_sync_data)) {}
+};
+
 struct global_chat_manager_private_data {
   time_t last_push_message_tick = 0;
 
-  std::list<std::pair<std::weak_ptr<session>, atfw::chat::SCChatChannelSync>> pending_sync_messages;
+  std::unordered_map<uint64_t, global_chat_pending_channel_ptr_t> reuse_pending_incremental_message;
+  std::unordered_map<uint64_t, global_chat_pending_channel_ptr_t> reuse_pending_snapshot_message;
+  std::list<global_chat_pending_session_data> pending_sync_message_queue;
+};
+
+struct global_chat_pending_channel_data {
+  bool ignored;
+  uint64_t shared_channel_identify = 0;
+  atfw::chat::SCChatChannelSync sync_message;
+
+  std::unordered_set<const session*> already_registered_sessions;
+
+  inline explicit global_chat_pending_channel_data(uint64_t channel_identify) noexcept
+      : ignored(false), shared_channel_identify(channel_identify) {}
 };
 
 static global_chat_manager_private_data& get_global_chat_manager_private_data() {
@@ -43,67 +77,253 @@ static global_chat_manager_private_data& get_global_chat_manager_private_data() 
   return ret;
 }
 
+static global_chat_pending_channel_ptr_t append_incremental_event_message(rpc::context& ctx,
+                                                                          const rpc::dtmq::client_subscriber& channel,
+                                                                          const std::shared_ptr<session>& sess) {
+  if (!sess) {
+    return nullptr;
+  }
+  auto& mgr = get_global_chat_manager_private_data();
+  auto& reuse_cache_set = mgr.reuse_pending_incremental_message[channel.get_shared_channel_identify()];
+  if (!reuse_cache_set) {
+    reuse_cache_set = atfw::component::memory::stl::make_strong_rc<global_chat_pending_channel_data>(
+        channel.get_shared_channel_identify());
+    if (!reuse_cache_set) {
+      FCTXLOGERROR(ctx, "Failed to allocate global_chat_pending_channel_data for channel: {}",
+                   channel.get_shared_channel_identify());
+      return nullptr;
+    }
+
+    auto* chat_channel = reuse_cache_set->sync_message.add_chat_channel();
+    if (chat_channel != nullptr) {
+      user_chat_manager::dump_dtmq_to_chat_channel_metadata(ctx, channel, *chat_channel->mutable_metadata(), false);
+    }
+  }
+
+  if (reuse_cache_set->already_registered_sessions.find(sess.get()) ==
+      reuse_cache_set->already_registered_sessions.end()) {
+    reuse_cache_set->already_registered_sessions.insert(sess.get());
+    // 添加一次待发送队列就行了
+    mgr.pending_sync_message_queue.emplace_back(sess.get(), sess, reuse_cache_set);
+  }
+
+  return reuse_cache_set;
+}
+
+static global_chat_pending_channel_ptr_t append_snapshot_event_message(rpc::context& ctx,
+                                                                       const rpc::dtmq::client_subscriber& channel,
+                                                                       const std::shared_ptr<session>& sess) {
+  if (!sess) {
+    return nullptr;
+  }
+  auto& mgr = get_global_chat_manager_private_data();
+
+  // 追加snapshot消息时要先移除掉增量消息
+  auto iter_incremental = mgr.reuse_pending_incremental_message.find(channel.get_shared_channel_identify());
+  if (iter_incremental != mgr.reuse_pending_incremental_message.end()) {
+    // 后续推进到这个增量消息，可以忽略发送
+    if (iter_incremental->second) {
+      iter_incremental->second->ignored = true;
+    }
+    mgr.reuse_pending_incremental_message.erase(iter_incremental);
+  }
+
+  auto& reuse_cache_set = mgr.reuse_pending_snapshot_message[channel.get_shared_channel_identify()];
+  if (!reuse_cache_set) {
+    reuse_cache_set = atfw::component::memory::stl::make_strong_rc<global_chat_pending_channel_data>(
+        channel.get_shared_channel_identify());
+    if (!reuse_cache_set) {
+      FCTXLOGERROR(ctx, "Failed to allocate global_chat_pending_channel_data for channel: {}",
+                   channel.get_shared_channel_identify());
+      return nullptr;
+    }
+
+    auto* chat_channel = reuse_cache_set->sync_message.add_chat_channel();
+    if (chat_channel != nullptr) {
+      user_chat_manager::dump_dtmq_to_chat_channel_metadata(ctx, channel, *chat_channel->mutable_metadata(), true);
+    }
+  }
+
+  if (reuse_cache_set->already_registered_sessions.find(sess.get()) ==
+      reuse_cache_set->already_registered_sessions.end()) {
+    reuse_cache_set->already_registered_sessions.insert(sess.get());
+    // 添加一次待发送队列就行了
+    mgr.pending_sync_message_queue.emplace_back(sess.get(), sess, reuse_cache_set);
+  }
+
+  return reuse_cache_set;
+}
+
+static void global_chat_manager_remove_cached_reuse_event_message_by_send(uint64_t shared_channel_identify) {
+  auto& mgr = get_global_chat_manager_private_data();
+  auto iter_incr = mgr.reuse_pending_incremental_message.find(shared_channel_identify);
+  if (iter_incr != mgr.reuse_pending_incremental_message.end()) {
+    mgr.reuse_pending_incremental_message.erase(iter_incr);
+  }
+
+  auto iter_snap = mgr.reuse_pending_snapshot_message.find(shared_channel_identify);
+  if (iter_snap != mgr.reuse_pending_snapshot_message.end()) {
+    mgr.reuse_pending_snapshot_message.erase(iter_snap);
+  }
+}
+
+static void push_pending_message_once(
+    rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+    atfw::util::nostd::function_ref<void(rpc::context&, const rpc::dtmq::client_subscriber::ptr_t&,
+                                         const session::ptr_t&, user_chat_manager&)>
+        func) {
+  if (!subscriber) {
+    return;
+  }
+  auto local_private_data = subscriber->get_local_private_data();
+  if (local_private_data.empty()) {
+    FWLOGERROR("local private data is empty for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
+               subscriber->get_channel_key().channel_id());
+    return;
+  }
+  // NOLINTNEXTLINE(performance-no-int-to-ptr)
+  user_chat_manager* chat_mgr = reinterpret_cast<user_chat_manager*>(local_private_data[0]);
+  if (nullptr == chat_mgr) {
+    FWLOGERROR("local private data is null for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
+               subscriber->get_channel_key().channel_id());
+    return;
+  }
+
+  // if session is removed, then the player is removed, so no need to send sync messages
+  auto sess = chat_mgr->get_owner().get_session();
+  if (!sess) {
+    return;
+  }
+
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+  int64_t pending_message_buffer_max_count = server_cfg.chat().push_message_buffer_max_count();
+  if (pending_message_buffer_max_count <= 0) {
+    pending_message_buffer_max_count = 100000;
+  }
+  // Too many pending messages, just drop it, and let the client to re-sync
+  if (get_global_chat_manager_private_data().pending_sync_message_queue.size() >=
+      static_cast<size_t>(pending_message_buffer_max_count)) {
+    return;
+  }
+
+  func(ctx, subscriber, sess, *chat_mgr);
+}
+
+static void user_chat_callback_receive_text_or_event_fn(rpc::context& ctx,
+                                                        const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                                        const ::atfw::dtmq::DChannelMessage& data) {
+  push_pending_message_once(
+      ctx, subscriber,
+      // =====================================================================================================================
+      [&data](rpc::context& child_ctx, const rpc::dtmq::client_subscriber::ptr_t& sub_subscriber,
+              const session::ptr_t& sess, user_chat_manager& /*chat_mgr*/) {
+        global_chat_pending_channel_ptr_t sync_data =
+            append_incremental_event_message(child_ctx, *sub_subscriber, sess);
+
+        if (!sync_data) {
+          return;
+        }
+
+        ::atfw::chat::DChatChannelData* chat_channel = nullptr;
+        if (sync_data->sync_message.chat_channel_size() <= 0) {
+          chat_channel = sync_data->sync_message.add_chat_channel();
+        } else {
+          chat_channel = sync_data->sync_message.mutable_chat_channel(0);
+        }
+        if (chat_channel == nullptr) {
+          return;
+        }
+
+        // 如果已经添加过了，则不用重复添加。（一个频道可能同时下发到多个订阅者，事件触发多次）
+        if (chat_channel->mutable_incremental()->message_list_size() > 0) {
+          const auto& last_message = chat_channel->mutable_incremental()->message_list(
+              chat_channel->mutable_incremental()->message_list_size() - 1);
+          if (last_message.sequence() == data.sequence()) {
+            return;
+          }
+        }
+
+        protobuf_copy_message(*chat_channel->mutable_incremental()->add_message_list(), data);
+      });
+}
+
+static void user_chat_callback_receive_ready_or_snapshot_fn(rpc::context& ctx,
+                                                            const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                                            int64_t snapshot_sequence) {
+  push_pending_message_once(
+      ctx, subscriber,
+      // =====================================================================================================================
+      [&snapshot_sequence](rpc::context& child_ctx, const rpc::dtmq::client_subscriber::ptr_t& sub_subscriber,
+                           const session::ptr_t& sess, user_chat_manager& /*chat_mgr*/) {
+        global_chat_pending_channel_ptr_t sync_data = append_snapshot_event_message(child_ctx, *sub_subscriber, sess);
+
+        if (!sync_data) {
+          return;
+        }
+
+        ::atfw::chat::DChatChannelData* chat_channel = nullptr;
+        if (sync_data->sync_message.chat_channel_size() <= 0) {
+          chat_channel = sync_data->sync_message.add_chat_channel();
+        } else {
+          chat_channel = sync_data->sync_message.mutable_chat_channel(0);
+        }
+        if (chat_channel == nullptr) {
+          return;
+        }
+
+        // 如果已经添加过了，则不用重复添加。（一个频道可能同时下发到多个订阅者，事件触发多次）
+        if (chat_channel->has_snapshot() && chat_channel->metadata().last_message_sequence() >= snapshot_sequence &&
+            chat_channel->metadata().custom_data_sequence() >= sub_subscriber->get_custom_data_sequence() &&
+            chat_channel->metadata().private_data_sequence() >= sub_subscriber->get_private_data_sequence()) {
+          return;
+        }
+
+        user_chat_manager::dump_dtmq_to_chat_channel_snapshot(
+            child_ctx, *sub_subscriber, *chat_channel->mutable_metadata(), *chat_channel->mutable_snapshot());
+      });
+};
+
 static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_chat_channel_event_callback_set() {
   rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret =
       rpc::dtmq::client_subscriber::create_event_callback_set();
 
-  rpc::dtmq::client_subscriber::set_event_callback_on_ready(
-      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
-        if (!subscriber) {
-          return;
-        }
-        auto local_private_data = subscriber->get_local_private_data();
-        if (local_private_data.empty()) {
-          FWLOGERROR("local private data is empty for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
-                     subscriber->get_channel_key().channel_id());
-          return;
-        }
-        // NOLINTNEXTLINE(performance-no-int-to-ptr)
-        user_chat_manager* chat_mgr = reinterpret_cast<user_chat_manager*>(local_private_data[0]);
-        if (nullptr == chat_mgr) {
-          FWLOGERROR("local private data is null for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
-                     subscriber->get_channel_key().channel_id());
-          return;
-        }
+  rpc::dtmq::client_subscriber::set_event_callback_on_ready(*ret, [](rpc::context& ctx,
+                                                                     const rpc::dtmq::client_subscriber::ptr_t&
+                                                                         subscriber) {
+    push_pending_message_once(
+        ctx, subscriber,
+        // =====================================================================================================================
+        [](rpc::context& child_ctx, const rpc::dtmq::client_subscriber::ptr_t& sub_subscriber,
+           const session::ptr_t& /*sess*/, user_chat_manager& /*chat_mgr*/) {
+          user_chat_callback_receive_ready_or_snapshot_fn(child_ctx, sub_subscriber,
+                                                          sub_subscriber->get_last_message_sequence());
+        });
+  });
 
-        // if session is removed, then the player is removed, so no need to send sync messages
-        auto sess = chat_mgr->get_owner().get_session();
-        if (!sess) {
-          return;
-        }
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_snapshot_finished(*ret, [](rpc::context& ctx,
+                                                                                         const rpc::dtmq::
+                                                                                             client_subscriber::ptr_t&
+                                                                                                 subscriber,
+                                                                                         const ::atfw::dtmq::
+                                                                                             DChannelSnapshot& /*data*/,
+                                                                                         int32_t result_code) {
+    if (result_code < 0) {
+      FCTXLOGERROR(ctx, "Failed to receive snapshot finished: {}", result_code);
+      return;
+    }
 
-        const auto& server_cfg =
-            logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
-        int64_t pending_message_buffer_max_count = server_cfg.chat().push_message_buffer_max_count();
-        if (pending_message_buffer_max_count <= 0) {
-          pending_message_buffer_max_count = 100000;
-        }
-        // Too many pending messages, just drop it, and let the client to re-sync
-        if (get_global_chat_manager_private_data().pending_sync_messages.size() >=
-            static_cast<size_t>(pending_message_buffer_max_count)) {
-          return;
-        }
+    push_pending_message_once(
+        ctx, subscriber,
+        // =====================================================================================================================
+        [](rpc::context& child_ctx, const rpc::dtmq::client_subscriber::ptr_t& sub_subscriber,
+           const session::ptr_t& /*sess*/, user_chat_manager& /*chat_mgr*/) {
+          user_chat_callback_receive_ready_or_snapshot_fn(child_ctx, sub_subscriber,
+                                                          sub_subscriber->get_last_message_sequence());
+        });
+  });
 
-        // TODO: handle on_ready event
-      });
-
-  rpc::dtmq::client_subscriber::set_event_callback_on_receive_snapshot_finished(
-      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& /*subscriber*/,
-               const ::atfw::dtmq::DChannelSnapshot& /*data*/, int32_t /*result_code*/) {
-        // TODO: handle on_ready event
-      });
-
-  rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(
-      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& /*subscriber*/,
-               int64_t /*log_sequence*/, gsl::string_view /*text*/) {
-        // TODO: handle on_ready event
-      });
-
-  rpc::dtmq::client_subscriber::set_event_callback_on_receive_event(
-      *ret, [](rpc::context& /*ctx*/, const rpc::dtmq::client_subscriber::ptr_t& /*subscriber*/,
-               int64_t /*log_sequence*/, const ::google::protobuf::Any& /*data*/) {
-        // TODO: handle on_ready event
-      });
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(*ret, user_chat_callback_receive_text_or_event_fn);
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_event(*ret, user_chat_callback_receive_text_or_event_fn);
   return ret;
 }
 
@@ -112,8 +332,53 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_chat_c
   return ret;
 }
 
-static void push_pending_message_once(rpc::context& /*ctx*/, int64_t /*max_count*/) {
-  // TODO(owent): implement push_pending_message_once
+static void global_chat_manager_send_pending_message_once(rpc::context& ctx, int64_t max_count) {
+  auto invoke_result = rpc::async_invoke(
+      ctx, "user_chat_manager.push_channel_loop_once", [max_count](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto& mgr = get_global_chat_manager_private_data();
+        auto loop_message_count = max_count;
+        while (loop_message_count > 0 && !mgr.pending_sync_message_queue.empty()) {
+          global_chat_pending_session_data current_data{std::move(mgr.pending_sync_message_queue.front())};
+          mgr.pending_sync_message_queue.pop_front();
+
+          if (!current_data.sync_data) {
+            continue;
+          }
+
+          // 一旦数据开始发送，就不允许修改，不允许再被复用修改
+          global_chat_manager_remove_cached_reuse_event_message_by_send(
+              current_data.sync_data->shared_channel_identify);
+
+          // 无数据或老数据可以忽略则不用再发送了
+          if (current_data.sync_data->ignored || current_data.sync_data->sync_message.chat_channel_size() <= 0) {
+            continue;
+          }
+
+          // 会话已退出或无频道数据则不用再发送了
+          if (current_data.sess.expired()) {
+            continue;
+          }
+
+          auto sess = current_data.sess.lock();
+          if (!sess) {
+            continue;
+          }
+
+          int32_t result_code = RPC_AWAIT_CODE_RESULT(rpc::lobbysvrclientservice::send_chat_channel_sync(
+              child_ctx, current_data.sync_data->sync_message, *sess));
+          if (result_code < 0) {
+            FCTXLOGERROR(child_ctx, "Failed to send_chat_channel_sync to {}: {}({})", *sess, result_code,
+                         protobuf_mini_dumper_get_error_msg(result_code));
+          }
+          --loop_message_count;
+        }
+        RPC_RETURN_CODE(0);
+      });
+
+  if (invoke_result.is_error()) {
+    FCTXLOGERROR(ctx, "Failed to invoke push_channel_loop_once: {}({})", *invoke_result.get_error(),
+                 protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
 }
 
 }  // namespace
@@ -127,7 +392,7 @@ int32_t user_chat_manager::global_tick(rpc::context& ctx) {
   }
   global_data.last_push_message_tick = now_tick;
 
-  if (global_data.pending_sync_messages.empty()) {
+  if (global_data.pending_sync_message_queue.empty()) {
     return 0;
   }
 
@@ -136,7 +401,19 @@ int32_t user_chat_manager::global_tick(rpc::context& ctx) {
   if (max_push_message_per_tick <= 0) {
     max_push_message_per_tick = 200;
   }
-  push_pending_message_once(ctx, max_push_message_per_tick);
+  global_chat_manager_send_pending_message_once(ctx, max_push_message_per_tick);
+
+  // leak checking, if pending_sync_message_queue is empty, then reuse_pending_incremental_message and
+  // reuse_pending_snapshot_message should be empty too
+  if (global_data.pending_sync_message_queue.empty()) {
+    if (!global_data.reuse_pending_incremental_message.empty() || !global_data.reuse_pending_snapshot_message.empty()) {
+      FCTXLOGERROR(ctx,
+                   "pending_sync_message_queue is empty, but reuse_pending_incremental_message or "
+                   "reuse_pending_snapshot_message is not empty, this should not happen");
+      global_data.reuse_pending_snapshot_message.clear();
+      global_data.reuse_pending_incremental_message.clear();
+    }
+  }
 
   return 0;
 }
@@ -407,6 +684,9 @@ void user_chat_manager::dump_dtmq_to_chat_channel_metadata(rpc::context& /*ctx*/
   if (with_configure) {
     protobuf_copy_message(*metadata.mutable_channel_configure(), channel.get_configure());
   }
+  metadata.set_last_message_sequence(channel.get_last_message_sequence());
+  metadata.set_custom_data_sequence(channel.get_custom_data_sequence());
+  metadata.set_private_data_sequence(channel.get_private_data_sequence());
 
   if (channel.is_ready()) {
     metadata.set_create_sequence(channel.get_create_sequence());
