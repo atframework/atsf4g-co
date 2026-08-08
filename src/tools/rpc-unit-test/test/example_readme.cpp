@@ -77,7 +77,7 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
 
   // Engine-level typed rule: full RPC name + request/response type names.
   auto rule =
-      test.ss().mock("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
+      test.ss().mock(rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
                      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
                      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
                      [](const atframework::testing::ss_request_view &request,
@@ -88,7 +88,7 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
                      });
   CASE_EXPECT_TRUE(!!rule);
 
-  test.ss().expect("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user").times(1).to_node(0x130091);
+  test.ss().expect(rpc::unit_test::get_full_name_of_rpc_unit_test_user()).times(1).to_node(0x130091);
 
   auto task = test.run_task("readme_ss", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
     rpc_unit_test::RpcUnitTestEchoReq req_body;
@@ -107,7 +107,7 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
   }
 
   // History assertions.
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user")));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
 
   // stop() verifies expectations first; a failed expectation makes stop() non-zero.
   CASE_EXPECT_EQ(0, test.stop());

@@ -128,6 +128,10 @@ ${ns}
             rpc_unicast_params_decl_legacy.append(param)
 %>
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
+${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}() {
+  return "${rpc.get_service().get_full_name()}/${rpc.get_name()}";
+}
+
 namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input) {
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS ==
@@ -515,7 +519,7 @@ ${rpc_dllexport_decl} rpc::unit_test::mock_rule_handle ${rpc.get_name()}(
     return rpc::unit_test::mock_rule_handle{};
   }
   return rpc::unit_test::mock_rule_handle{__bridge.register_ss_rule(
-      "${service.get_full_name()}/${rpc.get_name()}",
+      get_full_name_of_${rpc.get_name()}(),
       ${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name(),
       ${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name(),
       [__handler = std::move(__handler)](const rpc::unit_test::ss_mock_request_view &__view,

@@ -86,9 +86,10 @@ dtcoordsvr 等 SDK 都走这条路）：
   `node.add_label("hpa_scaling_ready", "1")`。
 
 ```cpp
-// 引擎层 typed 规则：完整 RPC 名 + 请求/响应类型名
+// 引擎层 typed 规则：完整 RPC 名 + 请求/响应类型名。RPC 全名用生成接口
+// rpc::<module>::get_full_name_of_<rpc>()（gsl::string_view），不要硬编码字符串：
 auto rule = test.ss().mock(
-    "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
+    rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
     rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
     rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
     [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
@@ -104,9 +105,16 @@ auto rule = test.ss().mock(
 //        rpc_unit_test::RpcUnitTestEchoRsp &rsp) -> rpc::result_code_type { ... });
 
 // 期望（stop 时校验）与历史
-test.ss().expect("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user").times(1).to_node(0x130001);
-test.ss().calls("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user");
+test.ss().expect(rpc::unit_test::get_full_name_of_rpc_unit_test_user()).times(1).to_node(0x130001);
+test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user());
 ```
+
+> SS/CS 模板为每个 RPC 生成 `<service> 命名空间内` 的 `gsl::string_view get_full_name_of_<rpc>()`
+> （声明在 `<service>.atfw.gen.h`，例如 `rpc/router/routerservice.atfw.gen.h` 的
+> `rpc::router::get_full_name_of_router_transfer()`）。向 `test.ss()` 注册/断言 mock 时优先使用它，
+> 避免 RPC 重命名或包名变更时字符串漂移。orbit fork 模板同样生成同名接口，但其返回值为 orbit 协议的点分
+> 全名（如 `hello.OrbitClientRpcService.echo`），而 `test.ss()` 校验要求 `/` 分隔符（`mock_ss.cpp`）；
+> orbit RPC 经 orbit transport 不走 SS 引擎，因此 orbit fork 的 getter 不可传入 `test.ss()`。
 
 SS handler 返回 `rpc::result_code_type`，可以是协程：`RPC_AWAIT_CODE_RESULT` 等待嵌套 RPC（context 经
 `ss_request_view.context` / typed handler 首参传入）；纯同步 handler 直接 `RPC_RETURN_CODE(...)`。两种

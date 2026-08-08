@@ -36,6 +36,8 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include "rpc/rpc_common_types.h"
 
+#include <gsl/select-gsl.h>
+
 #include <cstdint>
 #include <cstddef>
 #include <cstring>
@@ -52,6 +54,13 @@ class context;
 ${ns}
 % endfor
 % for rpc in rpcs.values():
+// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
+/**
+ * @brief get full rpc name of ${rpc.get_name()}
+ * @return full rpc name of ${rpc.get_name()}
+ * @note  Use this instead of a hardcoded name when registering mock rules or expectations.
+ */
+${service_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}();
 <%
     # Only generate downstream calls
     if not rpc.is_response_stream():
@@ -62,7 +71,6 @@ ${ns}
         '__body           Message body to send'
     ]
 %>
-// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 /**
  * @brief send ${rpc.get_response().get_cpp_class_name()} for ${rpc.get_name()} to session
  * @brief ${rpc.get_extension_field('rpc_options', lambda x: x.api_name, rpc.get_name())}

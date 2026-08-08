@@ -27,6 +27,7 @@
 #include "frame/test_macros.h"
 #include "logic/logic_server_setup.h"
 #include "rpc/dtmq/dtmq_client_api.h"
+#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
   atframework::testing::runtime test;
@@ -61,21 +62,20 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
     logic_server_last_common_module()->reload();
   }
 
-  auto rule = test.ss().mock("atframework.dtmq.DtmqProxysvrService/send_message",
-                             atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
-                             atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
-                             [](const atframework::testing::ss_request_view &request,
-                                google::protobuf::Message &response) -> rpc::result_code_type {
-                               const auto &typed_request =
-                                   static_cast<const atfw::dtmq::SSChannelSendMessageReq &>(request.body);
-                               CASE_EXPECT_EQ(0x1C0001, static_cast<int64_t>(request.target_node_id));
-                               CASE_EXPECT_EQ("chan-unit-test", typed_request.channel_key().channel_id());
-                               CASE_EXPECT_EQ("hello-dtmq", typed_request.message_content().detail().text());
-                               CASE_EXPECT_EQ("U:1:10001", typed_request.subscriber().subscriber_key());
-                               CASE_EXPECT_TRUE(typed_request.auto_create_channel());
-                               static_cast<atfw::dtmq::SSChannelSendMessageRsp &>(response).set_client_result(0);
-                               RPC_RETURN_CODE(0);
-                             });
+  auto rule = test.ss().mock(
+      rpc::dtmq::get_full_name_of_send_message(), atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
+      [](const atframework::testing::ss_request_view &request,
+         google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq &>(request.body);
+        CASE_EXPECT_EQ(0x1C0001, static_cast<int64_t>(request.target_node_id));
+        CASE_EXPECT_EQ("chan-unit-test", typed_request.channel_key().channel_id());
+        CASE_EXPECT_EQ("hello-dtmq", typed_request.message_content().detail().text());
+        CASE_EXPECT_EQ("U:1:10001", typed_request.subscriber().subscriber_key());
+        CASE_EXPECT_TRUE(typed_request.auto_create_channel());
+        static_cast<atfw::dtmq::SSChannelSendMessageRsp &>(response).set_client_result(0);
+        RPC_RETURN_CODE(0);
+      });
   CASE_EXPECT_TRUE(!!rule);
   if (!rule) {
     CASE_MSG_INFO() << "mock registration failed: " << test.ss().get_diagnostic() << '\n';
@@ -110,7 +110,7 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("atframework.dtmq.DtmqProxysvrService/send_message")));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::dtmq::get_full_name_of_send_message())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

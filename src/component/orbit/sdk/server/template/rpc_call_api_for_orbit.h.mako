@@ -33,6 +33,8 @@ module_name = service.get_extension_field("service_options", lambda x: x.module_
 #include <cstring>
 #include <string>
 
+#include <gsl/select-gsl.h>
+
 #include <dispatcher/dispatcher_type_defines.h>
 #include <rpc/rpc_common_types.h>
 
@@ -67,6 +69,13 @@ ${ns}
         rpc_return_type = 'rpc::always_ready_code_type'
 %>
 // ============ ${rpc.get_full_name()} ============
+/**
+ * @brief get full rpc name of ${rpc.get_name()}
+ * @return full rpc name of ${rpc.get_name()}
+ * @note  Use this instead of a hardcoded name when registering mock rules or expectations.
+ */
+${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}();
+
 namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string &output, const ${rpc.get_request().get_cpp_class_name()} &input);
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string &input, ${rpc.get_request().get_cpp_class_name()} &output);

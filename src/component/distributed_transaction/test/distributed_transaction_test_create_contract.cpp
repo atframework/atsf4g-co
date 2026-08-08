@@ -24,6 +24,7 @@
 #include "config/extern_service_types.h"
 #include "frame/test_macros.h"
 #include "logic/logic_server_setup.h"
+#include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 #include "rpc/transaction/transaction_api.h"
 
 CASE_TEST(component_distributed_transaction, transaction_sdk_create_contract) {
@@ -60,7 +61,7 @@ CASE_TEST(component_distributed_transaction, transaction_sdk_create_contract) {
   }
 
   auto rule = test.ss().mock(
-      "atframework.distributed_system.DtcoordsvrService/create",
+      rpc::transaction::get_full_name_of_create(),
       atfw::distributed_system::SSDistributeTransactionCreateReq::descriptor()->full_name(),
       atfw::distributed_system::SSDistributeTransactionCreateRsp::descriptor()->full_name(),
       [](const atframework::testing::ss_request_view &request, google::protobuf::Message &) -> rpc::result_code_type {
@@ -101,7 +102,7 @@ CASE_TEST(component_distributed_transaction, transaction_sdk_create_contract) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("atframework.distributed_system.DtcoordsvrService/create")));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::transaction::get_full_name_of_create())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

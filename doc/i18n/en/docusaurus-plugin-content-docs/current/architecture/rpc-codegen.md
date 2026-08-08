@@ -51,15 +51,23 @@ flowchart LR
 | --- | --- |
 | `handle_ss_rpc.*.mako` | SS RPC registration function `register_handles_for_<service>` |
 | `task_action_ss_rpc.*.mako` | Server-side task action skeleton for each SS RPC method |
-| `rpc_call_api_for_ss.*.mako` | SS RPC client call APIs (unary/stream/no-wait/broadcast/metadata/user/router variants) |
+| `rpc_call_api_for_ss.*.mako` | SS RPC client call APIs (unary/stream/no-wait/broadcast/metadata/user/router variants) and per-RPC full-name accessors |
 | `handle_cs_rpc.*.mako` / `task_action_cs_rpc.*.mako` | Handlers and task actions for client RPCs |
-| `session_downstream_api_for_cs.*.mako` | Server→client session downstream push APIs |
+| `session_downstream_api_for_cs.*.mako` | Server→client session downstream push APIs and per-RPC full-name accessors |
 | `package_request_api_for_simulator.*.mako` | CS request packing APIs for the robot/simulator |
 | `task_action_no_msg.*.mako` | No-message task actions (used with `src/generate-nomsg-task.sh`) |
 | `db_interface.*.mako` / `db_rpc_redis(.kv/.kl).*.mako` | Redis database access layer (`rpc/db/local_db_interface.atfw.gen.*`) |
 | `config_manager.*.mako` / `config_set.*.mako` / `config_easy_api.*.mako` | Excel config loading framework and convenient read APIs |
 
-The orbit component has its own dedicated templates: `src/component/orbit/sdk/server/template/`.
+The orbit component has its own dedicated templates: `src/component/orbit/sdk/server/template/` (they also
+generate per-RPC full-name accessors).
+
+The SS/CS/orbit templates all generate `gsl::string_view get_full_name_of_<rpc>()` inside the `<service>` namespace
+(declared in `<service>.atfw.gen.h`), returning the on-wire full RPC name (`package.Service/method` for SS/CS; the
+orbit fork uses its dotted protocol name). When registering SS mocks or asserting call history via `test.ss()`, use the
+SS/CS-template accessor instead of a hardcoded string (see [RPC unit testing](../development/rpc-unit-test.md)); the
+orbit-fork getter returns its dotted name and orbit RPCs traverse orbit transport (not the SS engine), so it must not
+be passed to `test.ss()`.
 
 ## RPC Caller API Shape
 

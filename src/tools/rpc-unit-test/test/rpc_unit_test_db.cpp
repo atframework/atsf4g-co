@@ -649,7 +649,7 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
     return;
   }
   auto ss_rule = test.ss().mock(
-      "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
+      rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
       [](const atframework::testing::ss_request_view &request,
@@ -698,7 +698,7 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
 
   // The nested SS call went through the SS mock engine (recorded once); the intercepted DB call never
   // reached the DB engine hook.
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user")));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
   CASE_EXPECT_EQ(0, static_cast<int>(test.db().calls("login_auth")));
 
   CASE_EXPECT_EQ(0, test.stop());

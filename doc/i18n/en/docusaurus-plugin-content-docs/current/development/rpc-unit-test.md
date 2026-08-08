@@ -114,15 +114,18 @@ auto remote = test.discovery().add_node(node);
 logic_server_last_common_module()->reload();  // reload once after injection to replay nodes into the discovery index
 
 auto rule = test.ss().mock(
-    "pkg.MyService/my_method", Req::descriptor()->full_name(), Rsp::descriptor()->full_name(),
+    rpc::my_service::get_full_name_of_my_method(), Req::descriptor()->full_name(),
+    Rsp::descriptor()->full_name(),
     [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
         -> rpc::result_code_type {
       const auto &req = static_cast<const Req &>(request.body);
       static_cast<Rsp &>(response).set_echo("hello " + req.payload());
       RPC_RETURN_CODE(0);
     });
+// Use the generated rpc::<module>::get_full_name_of_<rpc>() (gsl::string_view, declared in
+// <service>.atfw.gen.h) instead of a hardcoded "pkg.MyService/my_method" string.
 // Generated equivalent: <service>::mock::my_method(handler), typed first arg rpc::context&.
-test.ss().expect("pkg.MyService/my_method").times(1).to_node(0x130001);
+test.ss().expect(rpc::my_service::get_full_name_of_my_method()).times(1).to_node(0x130001);
 ```
 
 An SS handler returns `rpc::result_code_type` and may be a coroutine awaiting nested RPC via `RPC_AWAIT_CODE_RESULT`.

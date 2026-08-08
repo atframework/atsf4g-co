@@ -106,15 +106,18 @@ auto remote = test.discovery().add_node(node);
 logic_server_last_common_module()->reload();  // 注入后 reload 一次，回放节点进 discovery index
 
 auto rule = test.ss().mock(
-    "pkg.MyService/my_method", Req::descriptor()->full_name(), Rsp::descriptor()->full_name(),
+    rpc::my_service::get_full_name_of_my_method(), Req::descriptor()->full_name(),
+    Rsp::descriptor()->full_name(),
     [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
         -> rpc::result_code_type {
       const auto &req = static_cast<const Req &>(request.body);
       static_cast<Rsp &>(response).set_echo("hello " + req.payload());
       RPC_RETURN_CODE(0);
     });
+// RPC 全名用生成接口 rpc::<module>::get_full_name_of_<rpc>()（gsl::string_view，声明在
+// <service>.atfw.gen.h），不要硬编码 "pkg.MyService/my_method" 字符串。
 // 生成层等价：<service>::mock::my_method(handler)，typed 首参 rpc::context&。
-test.ss().expect("pkg.MyService/my_method").times(1).to_node(0x130001);
+test.ss().expect(rpc::my_service::get_full_name_of_my_method()).times(1).to_node(0x130001);
 ```
 
 SS handler 返回 `rpc::result_code_type`，可以是协程并用 `RPC_AWAIT_CODE_RESULT` 等待嵌套 RPC。规则选项

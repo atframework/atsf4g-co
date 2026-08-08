@@ -114,6 +114,12 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
 - Generated mock (`<service>::mock`, `<db>::mock`) is compiled into server_frame/service TUs and must **not link** the
   tool library; it registers through the type-erased bridge `rpc/unit_test/mock_engine_bridge.h` (empty bridge →
   no-op/empty handle). Engine-level `test.ss().mock`/`test.db().mock_table` remain for direct test use.
+- For engine-level `test.ss().mock/expect/calls` always pass the RPC full name via the generated
+  `rpc::<module>::get_full_name_of_<rpc>()` (`gsl::string_view`, declared in `<service>.atfw.gen.h`; the component SDK
+  headers do not include it, so include the gen header in the test TU) — never hardcode `"pkg.Service/method"`
+  strings; keep hardcoded names only for intentionally invalid negative tests. This applies to SS/CS-template services
+  (slash wire name `package.Service/method`); the orbit-fork getter returns its dot-format protocol name and orbit RPCs
+  traverse orbit transport (not the SS engine), so do **not** pass it to `test.ss()`.
 - Mock handlers return `rpc::result_code_type` and may be coroutines awaiting nested RPC (SS handler driven by engine
   `async_invoke`; DB handler `co_await`ed at the generated interface entry).
 - `working_directory` empty → env `RPC_UNIT_TEST_WORKDIR` (ctest per-target) → baked `RPC_UNIT_TEST_DEFAULT_WORKDIR`

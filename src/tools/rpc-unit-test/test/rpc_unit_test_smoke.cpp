@@ -188,7 +188,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
     return;
   }
   auto ss_rule = test.ss().mock(
-      "rpc_unit_test.RpcUnitTestService/rpc_unit_test_user",
+      rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
       [](const atframework::testing::ss_request_view &request,
@@ -259,7 +259,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
 
   // All three engines observed exactly one call each.
   CASE_EXPECT_EQ(1, static_cast<int>(test.dns().calls("directory.unit-test.local")));
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("rpc_unit_test.RpcUnitTestService/rpc_unit_test_user")));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
   CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_set)));
   CASE_EXPECT_EQ(1,
                  static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_get_all)));

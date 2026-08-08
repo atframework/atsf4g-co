@@ -49,15 +49,21 @@ flowchart LR
 | --- | --- |
 | `handle_ss_rpc.*.mako` | SS RPC 注册函数 `register_handles_for_<service>` |
 | `task_action_ss_rpc.*.mako` | 每个 SS RPC 方法的服务端 task action 骨架 |
-| `rpc_call_api_for_ss.*.mako` | SS RPC 客户端调用 API（unary/stream/no-wait/broadcast/metadata/user/router 变体） |
+| `rpc_call_api_for_ss.*.mako` | SS RPC 客户端调用 API（unary/stream/no-wait/broadcast/metadata/user/router 变体）与 per-RPC 全名接口 |
 | `handle_cs_rpc.*.mako` / `task_action_cs_rpc.*.mako` | 客户端 RPC 的 handler 与 task action |
-| `session_downstream_api_for_cs.*.mako` | 服务器→客户端 session 下行推送 API |
+| `session_downstream_api_for_cs.*.mako` | 服务器→客户端 session 下行推送 API 与 per-RPC 全名接口 |
 | `package_request_api_for_simulator.*.mako` | robot/模拟器用的 CS 请求打包 API |
 | `task_action_no_msg.*.mako` | 无消息任务 Action（配合 `src/generate-nomsg-task.sh`） |
 | `db_interface.*.mako` / `db_rpc_redis(.kv/.kl).*.mako` | Redis 数据库访问层（`rpc/db/local_db_interface.atfw.gen.*`） |
 | `config_manager.*.mako` / `config_set.*.mako` / `config_easy_api.*.mako` | Excel 配置加载框架与便捷读取 API |
 
-orbit 组件另有专用模板：`src/component/orbit/sdk/server/template/`。
+orbit 组件另有专用模板：`src/component/orbit/sdk/server/template/`（同样生成 per-RPC 全名接口）。
+
+SS/CS/orbit 模板均为每个 RPC 生成 `<service> 命名空间内` 的 `gsl::string_view get_full_name_of_<rpc>()`
+（声明在 `<service>.atfw.gen.h`），返回线上 wire 全名（SS/CS 为 `包.服务/方法`，orbit fork 为其点分协议名）。
+向 `test.ss()` 注册 mock、断言调用历史等需要 RPC 全名的场景应使用 SS/CS 模板的该接口而非硬编码字符串（见
+[RPC 单元测试](../development/rpc-unit-test.md)）；orbit fork 的 getter 返回点分全名，且 orbit RPC 经 orbit
+transport 不走 SS 引擎，不可用于 `test.ss()`。
 
 ## RPC 调用端 API 形态
 

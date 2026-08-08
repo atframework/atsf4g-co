@@ -33,6 +33,8 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include <atframe/atapp_config.h>
 
+#include <gsl/select-gsl.h>
+
 #include <cstdint> // IWYU pragma: keep
 #include <cstddef> // IWYU pragma: keep
 #include <cstring> // IWYU pragma: keep
@@ -139,6 +141,13 @@ ${ns}
             rpc_unicast_params_decl_legacy.append(param)
 %>
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
+/**
+ * @brief get full rpc name of ${rpc.get_name()}
+ * @return full rpc name of ${rpc.get_name()}
+ * @note  Use this instead of a hardcoded name when registering mock rules or expectations.
+ */
+${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}();
+
 namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string& output, const ${rpc.get_request().get_cpp_class_name()}& input);
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string& input, ${rpc.get_request().get_cpp_class_name()}& output);

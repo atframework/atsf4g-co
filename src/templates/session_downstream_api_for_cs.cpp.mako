@@ -49,18 +49,24 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include <rpc/rpc_utils.h>
 #include <rpc/internal/rpc_template_cs_message.h>
 
+#include <gsl/select-gsl.h>
+
 namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
 ${ns}
 % endfor
 % for rpc in rpcs.values():
+// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
+${service_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}() {
+  return "${rpc.get_service().get_full_name()}/${rpc.get_name()}";
+}
+
 <%
     if not rpc.is_response_stream():
         continue
     rpc_allow_no_wait = False
     rpc_params = ['context& __ctx', '{0} &__body'.format(rpc.get_response().get_cpp_class_name())]
 %>
-// ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
 ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
   ${', '.join(rpc_params)}, session& __session) {
   atframework::CSMsg* msg_ptr = __ctx.create<atframework::CSMsg>();

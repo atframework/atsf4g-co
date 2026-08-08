@@ -54,7 +54,7 @@ CASE_TEST(component_orbit, orbit_sdk_launch_client_contract) {
     logic_server_last_common_module()->reload();
   }
 
-  auto rule = test.ss().mock("orbit.ServerToControllerService/launch_client",
+  auto rule = test.ss().mock(rpc::servertocontrollerservice::get_full_name_of_launch_client(),
                              orbit::STCLaunchClientReq::descriptor()->full_name(),
                              orbit::CTSLaunchClientRsp::descriptor()->full_name(),
                              [](const atframework::testing::ss_request_view &request,
@@ -95,7 +95,8 @@ CASE_TEST(component_orbit, orbit_sdk_launch_client_contract) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls("orbit.ServerToControllerService/launch_client")));
+  CASE_EXPECT_EQ(1,
+                 static_cast<int>(test.ss().calls(rpc::servertocontrollerservice::get_full_name_of_launch_client())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

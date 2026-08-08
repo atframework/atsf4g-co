@@ -25,6 +25,7 @@
 #include "frame/test_macros.h"
 #include "logic/logic_server_setup.h"
 #include "rpc/rank_board/rank.h"
+#include "rpc/rank_board/rankboardservice.atfw.gen.h"
 
 CASE_TEST(component_rank, rank_sdk_update_score_contract) {
   atframework::testing::runtime test;
@@ -62,7 +63,7 @@ CASE_TEST(component_rank, rank_sdk_update_score_contract) {
   }
 
   auto rule = test.ss().mock(
-      PROJECT_NAMESPACE ".RankBoardService/rank_set_score",
+      rpc::rank_board::get_full_name_of_rank_set_score(),
       PROJECT_NAMESPACE_ID::SSRankSetScoreReq::descriptor()->full_name(),
       PROJECT_NAMESPACE_ID::SSRankSetScoreRsp::descriptor()->full_name(),
       [](const atframework::testing::ss_request_view &request,
@@ -113,7 +114,7 @@ CASE_TEST(component_rank, rank_sdk_update_score_contract) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(PROJECT_NAMESPACE ".RankBoardService/rank_set_score")));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::rank_board::get_full_name_of_rank_set_score())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
