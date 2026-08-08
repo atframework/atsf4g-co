@@ -17,10 +17,12 @@ package atframework.chat;
 message CSChatGetAllChannelReq {}
 
 message SCChatGetAllChannelRsp {
+  // 此接口仅返回频道的meta信息，实际开始接收数据要在下面对每个频道发送 CSChatGetChannelSnapshotReq 拉取初始快照后
   repeated DChatChannelMeta channel_metadata = 1;
 }
 
 message CSChatGetChannelSnapshotReq {
+  // 拉取初始快照后才会开始收到推送消息
   string channel_id = 1;
 }
 

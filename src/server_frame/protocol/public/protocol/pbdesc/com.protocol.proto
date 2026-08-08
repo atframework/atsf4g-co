@@ -245,6 +245,7 @@ service LobbysvrClientService {
 
   // ================ 聊天RPC ================
   rpc chat_get_all_channel(atframework.chat.CSChatGetAllChannelReq) returns (atframework.chat.SCChatGetAllChannelRsp) {
+    // 此接口仅返回频道的meta信息，实际开始接收数据要在下面对每个频道发送 CSChatGetChannelSnapshotReq 拉取初始快照后
     option (atframework.rpc_options) = {
       module_name: "chat"
       api_name: "获取所有聊天频道"
@@ -252,6 +253,7 @@ service LobbysvrClientService {
   };
 
   rpc chat_get_channel_snapshot(atframework.chat.CSChatGetChannelSnapshotReq) returns (atframework.chat.SCChatGetChannelSnapshotRsp) {
+    // 拉取初始快照后才会开始收到推送消息
     option (atframework.rpc_options) = {
       module_name: "chat"
       api_name: "获取聊天频道快照"

@@ -44,13 +44,12 @@ namespace {
 struct global_chat_pending_channel_data;
 using global_chat_pending_channel_ptr_t = atfw::util::memory::strong_rc_ptr<global_chat_pending_channel_data>;
 struct global_chat_pending_session_data {
-  session* raw_ptr;
   std::weak_ptr<session> sess;
   global_chat_pending_channel_ptr_t sync_data;
 
-  inline global_chat_pending_session_data(session* input_raw_ptr, std::weak_ptr<session> sess_watcher,
+  inline global_chat_pending_session_data(std::weak_ptr<session> sess_watcher,
                                           global_chat_pending_channel_ptr_t input_sync_data) noexcept
-      : raw_ptr(input_raw_ptr), sess(std::move(sess_watcher)), sync_data(std::move(input_sync_data)) {}
+      : sess(std::move(sess_watcher)), sync_data(std::move(input_sync_data)) {}
 };
 
 struct global_chat_manager_private_data {
@@ -68,7 +67,7 @@ struct global_chat_pending_channel_data {
 
   std::unordered_map<const session*, std::weak_ptr<session>> already_registered_sessions;
 
-  inline explicit global_chat_pending_channel_data(uint64_t channel_identify) noexcept
+  inline explicit global_chat_pending_channel_data(uint64_t channel_identify)
       : ignored(false), shared_channel_identify(channel_identify) {}
 };
 
@@ -103,7 +102,7 @@ static global_chat_pending_channel_ptr_t global_chat_manager_append_incremental_
       reuse_cache_set->already_registered_sessions.end()) {
     reuse_cache_set->already_registered_sessions[sess.get()] = sess;
     // 添加一次待发送队列就行了
-    mgr.pending_sync_message_queue.emplace_back(sess.get(), sess, reuse_cache_set);
+    mgr.pending_sync_message_queue.emplace_back(sess, reuse_cache_set);
   }
 
   return reuse_cache_set;
@@ -146,7 +145,7 @@ static global_chat_pending_channel_ptr_t global_chat_manager_append_snapshot_eve
       reuse_cache_set->already_registered_sessions.end()) {
     reuse_cache_set->already_registered_sessions[sess.get()] = sess;
     // 添加一次待发送队列就行了
-    mgr.pending_sync_message_queue.emplace_back(sess.get(), sess, reuse_cache_set);
+    mgr.pending_sync_message_queue.emplace_back(sess, reuse_cache_set);
   }
 
   return reuse_cache_set;
@@ -232,7 +231,7 @@ static void user_chat_callback_receive_raw_message_fn(rpc::context& ctx,
           return;
         }
 
-        // 如果已经添加过了，则不用重复添加。（一个频道可能同时下发到多个订阅者，事件触发多次）
+        // 如果已经添加过了，则不用重复添加。（一个频道可能同时下发到多个订阅者，事件连续触发多次）
         if (chat_channel->mutable_incremental()->message_list_size() > 0) {
           const auto& last_message = chat_channel->mutable_incremental()->message_list(
               chat_channel->mutable_incremental()->message_list_size() - 1);
@@ -274,9 +273,9 @@ static void user_chat_callback_receive_ready_or_snapshot_fn(rpc::context& ctx,
         }
 
         // 如果已经添加过了，则不用重复添加。（一个频道可能同时下发到多个订阅者，事件触发多次）
-        if (chat_channel->has_snapshot() && chat_channel->metadata().last_message_sequence() != snapshot_sequence &&
-            chat_channel->metadata().custom_data_sequence() != sub_subscriber->get_custom_data_sequence() &&
-            chat_channel->metadata().private_data_sequence() != sub_subscriber->get_private_data_sequence()) {
+        if (chat_channel->has_snapshot() && chat_channel->metadata().last_message_sequence() == snapshot_sequence &&
+            chat_channel->metadata().custom_data_sequence() == sub_subscriber->get_custom_data_sequence() &&
+            chat_channel->metadata().private_data_sequence() == sub_subscriber->get_private_data_sequence()) {
           return;
         }
 
@@ -339,11 +338,17 @@ static void global_chat_manager_send_pending_message_once(rpc::context& ctx, int
       ctx, "user_chat_manager.push_channel_loop_once", [max_count](rpc::context& child_ctx) -> rpc::result_code_type {
         auto& mgr = get_global_chat_manager_private_data();
         auto loop_message_count = max_count;
+        int32_t skip_action_count = 100;
         while (loop_message_count > 0 && !mgr.pending_sync_message_queue.empty()) {
           global_chat_pending_session_data current_data{std::move(mgr.pending_sync_message_queue.front())};
           mgr.pending_sync_message_queue.pop_front();
 
           if (!current_data.sync_data) {
+            // 多次空操作消耗一次发送操作，防止空操作过多消费过多CPU
+            if (--skip_action_count <= 0) {
+              --loop_message_count;
+              skip_action_count = 100;
+            }
             continue;
           }
 
@@ -353,16 +358,31 @@ static void global_chat_manager_send_pending_message_once(rpc::context& ctx, int
 
           // 无数据或老数据可以忽略则不用再发送了
           if (current_data.sync_data->ignored || current_data.sync_data->sync_message.chat_channel_size() <= 0) {
+            // 多次空操作消耗一次发送操作，防止空操作过多消费过多CPU
+            if (--skip_action_count <= 0) {
+              --loop_message_count;
+              skip_action_count = 100;
+            }
             continue;
           }
 
           // 会话已退出或无频道数据则不用再发送了
           if (current_data.sess.expired()) {
+            // 多次空操作消耗一次发送操作，防止空操作过多消费过多CPU
+            if (--skip_action_count <= 0) {
+              --loop_message_count;
+              skip_action_count = 100;
+            }
             continue;
           }
 
           auto sess = current_data.sess.lock();
           if (!sess) {
+            // 多次空操作消耗一次发送操作，防止空操作过多消费过多CPU
+            if (--skip_action_count <= 0) {
+              --loop_message_count;
+              skip_action_count = 100;
+            }
             continue;
           }
 
@@ -654,6 +674,11 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
                   msg.hash_code() != sync_point.last_hash_code()) {
                 need_snapshot = true;
                 return false;
+              }
+
+              // 跳过已有消息
+              if (msg.sequence() == sync_point.last_sequence()) {
+                return true;
               }
 
               if (sync_channel == nullptr) {
