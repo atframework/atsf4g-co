@@ -75,10 +75,9 @@ enum EnOrbitRoomStatus {
   EN_ORBIT_ROOM_STATUS_INVALID = 0;         // 无效值
   EN_ORBIT_ROOM_STATUS_CREATED = 1;         // 房间创建成功
   EN_ORBIT_ROOM_STATUS_CLIENT_LOADING = 2;  // 加载中
-  EN_ORBIT_ROOM_STATUS_CLIENT_LOADED = 3;   // 加载完成
-  EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING = 4;  // 用户运行中
-  EN_ORBIT_ROOM_STATUS_FINISH = 5;          // 结束
-  EN_ORBIT_ROOM_STATUS_EXIT = 6;            // 退出
+  EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING = 3;  // 运行中
+  EN_ORBIT_ROOM_STATUS_FINISH = 4;          // 结束
+  EN_ORBIT_ROOM_STATUS_EXIT = 5;            // 退出
 }
 
 enum EnOrbitRoomExitReason {
@@ -99,15 +98,19 @@ message DOrbitRoomExitInfo {
 message DOrbitRoomRunningData {
   DOrbitRoomKey room_key = 1;
   EnOrbitRoomStatus room_status = 2;
-  int64 status_end_timepoint = 3;
-  int64 create_timepoint = 5;
-  int64 expired_timepoint = 6;
-  DOrbitRoomExitInfo exit_info = 7;
+  int64 create_timepoint = 4;
+  int64 expired_timepoint = 5;
+  DOrbitRoomExitInfo exit_info = 6;
+  DOrbitRoomReady ready_data = 7;
 
-  string client_address = 11;
   DOrbitRoomInitData init_data = 12;
   repeated DOrbitUserInitResult user_init = 13;
   repeated DUserIDKey user_finish = 14;
+}
+
+message DOrbitRoomReady {
+  int64 end_join_timepoint = 1;
+  string client_address = 2;
 }
 
 message DOrbitUserInit {
@@ -127,8 +130,9 @@ message DOrbitRoomEventLog {
   DOrbitRoomKey room_key = 2;               // 房间key
 
   oneof event {
-    DOrbitUserInit user_init_success = 101;  // 用户初始化成功
-    DOrbitClientExit client_exit = 102;      // Client退出
+    DOrbitRoomReady ready_data = 101;        // 房间准备就绪
+    DOrbitUserInit user_init_success = 102;  // 用户初始化成功
+    DOrbitClientExit client_exit = 103;      // Client退出
   }
 }
 
