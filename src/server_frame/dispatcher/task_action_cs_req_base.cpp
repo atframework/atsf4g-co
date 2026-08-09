@@ -116,7 +116,8 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
         router_player_manager::me()->get_type_id(), player_cache->get_zone_id(), player_cache->get_user_id()));
     if (router_obj && (!router_obj->is_writable() || !router_obj->is_object_equal(player_cache))) {
       router_obj.reset();
-    } else {
+    }
+    if (router_obj) {
       router_obj->trace_router(get_shared_context());
     }
 
@@ -330,7 +331,8 @@ SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::
     head->mutable_rpc_stream()->set_rpc_name(get_request().head().rpc_stream().rpc_name());
     head->mutable_rpc_stream()->set_type_url(response_type_url.data(), response_type_url.size());
 
-    head->mutable_rpc_stream()->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
+    gsl::string_view get_local_server_name = logic_config::me()->get_local_server_name();
+    head->mutable_rpc_stream()->set_caller(get_local_server_name.data(), get_local_server_name.size());
     head->mutable_rpc_stream()->set_callee(get_request().head().rpc_stream().caller());
   }
 

@@ -29,8 +29,8 @@
 #include "rpc/unit_test/rpcunittestservice.atfw.gen.h"
 
 namespace {
-atframework::testing::mock_node make_example_remote(uint64_t id, const char *name) {
-  atframework::testing::mock_node node;
+atfw::testing::mock_node make_example_remote(uint64_t id, const char *name) {
+  atfw::testing::mock_node node;
   node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(1);
   return node;
 }
@@ -38,9 +38,9 @@ atframework::testing::mock_node make_example_remote(uint64_t id, const char *nam
 
 // README: minimal fixture skeleton (runtime + run_task + wait).
 CASE_TEST(rpc_unit_test_readme, minimal_fixture) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
@@ -60,9 +60,9 @@ CASE_TEST(rpc_unit_test_readme, minimal_fixture) {
 
 // README: discovery node + typed SS mock (engine level and generated <service>::mock).
 CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -76,19 +76,18 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
   }
 
   // Engine-level typed rule: full RPC name + request/response type names.
-  auto rule =
-      test.ss().mock(rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
-                     rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
-                     rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-                     [](const atframework::testing::ss_request_view &request,
-                        google::protobuf::Message &response) -> rpc::result_code_type {
-                       const auto &req = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
-                       static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("hello " + req.payload());
-                       RPC_RETURN_CODE(0);
-                     });
+  auto rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &req = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("hello " + req.payload());
+        RPC_RETURN_CODE(0);
+      });
   CASE_EXPECT_TRUE(!!rule);
 
-  test.ss().expect(rpc::unit_test::get_full_name_of_rpc_unit_test_user()).times(1).to_node(0x130091);
+  test.ss().expect(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user()).times(1).to_node(0x130091);
 
   auto task = test.run_task("readme_ss", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
     rpc_unit_test::RpcUnitTestEchoReq req_body;
@@ -107,7 +106,7 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
   }
 
   // History assertions.
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user())));
 
   // stop() verifies expectations first; a failed expectation makes stop() non-zero.
   CASE_EXPECT_EQ(0, test.stop());
@@ -115,9 +114,9 @@ CASE_TEST(rpc_unit_test_readme, ss_mock_and_expectations) {
 
 // README: DNS rule.
 CASE_TEST(rpc_unit_test_readme, dns_mock) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -147,9 +146,9 @@ CASE_TEST(rpc_unit_test_readme, dns_mock) {
 
 // README: generated per-table typed DB mock handler (SS style) + default in-memory backend fallthrough.
 CASE_TEST(rpc_unit_test_readme, db_mock_handler_and_backend) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::db};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::db};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -193,9 +192,8 @@ CASE_TEST(rpc_unit_test_readme, db_mock_handler_and_backend) {
   }
 
   // Only the fallthrough write reached the engine hook; the intercepted read did not.
-  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_set)));
-  CASE_EXPECT_EQ(0,
-                 static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_get_all)));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atfw::testing::mock_db::op_type::kv_set)));
+  CASE_EXPECT_EQ(0, static_cast<int>(test.db().calls("login_auth", atfw::testing::mock_db::op_type::kv_get_all)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

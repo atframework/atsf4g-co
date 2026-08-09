@@ -30,21 +30,21 @@ constexpr uint32_t kZoneId = 1;
 constexpr uint64_t kObjectId = 42;
 constexpr uint64_t kRouterServerId = 0x150001;
 
-static atframework::testing::mock_node make_remote_node(uint64_t id, const char *name) {
-  atframework::testing::mock_node node;
+static atfw::testing::mock_node make_remote_node(uint64_t id, const char *name) {
+  atfw::testing::mock_node node;
   node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(kZoneId);
   return node;
 }
 
-static bool start_with_router(atframework::testing::runtime &test) {
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss, atframework::testing::feature::router};
+static bool start_with_router(atfw::testing::runtime &test) {
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::router};
   return 0 == test.start(options) && test.is_running();
 }
 }  // namespace
 
 CASE_TEST(rpc_unit_test, router_unary_suspend_resume) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   CASE_EXPECT_TRUE(start_with_router(test));
   if (!test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
@@ -98,8 +98,9 @@ CASE_TEST(rpc_unit_test, router_unary_suspend_resume) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_router_unary())));
-  const atframework::testing::ss_call_record *record = test.ss().call_at(0);
+  CASE_EXPECT_EQ(
+      1, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_router_unary())));
+  const atfw::testing::ss_call_record *record = test.ss().call_at(0);
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     // Router messages are finally delivered to the router server resolved from the cache object.
@@ -112,7 +113,7 @@ CASE_TEST(rpc_unit_test, router_unary_suspend_resume) {
 }
 
 CASE_TEST(rpc_unit_test, router_unary_missing_cache_fast_fail) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   CASE_EXPECT_TRUE(start_with_router(test));
   if (!test.is_running()) {
     return;
@@ -142,13 +143,14 @@ CASE_TEST(rpc_unit_test, router_unary_missing_cache_fast_fail) {
   auto result = test.wait(task, std::chrono::seconds{5});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND, result.result_code);
-  CASE_EXPECT_EQ(0, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_router_unary())));
+  CASE_EXPECT_EQ(
+      0, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_router_unary())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
 
 CASE_TEST(rpc_unit_test, router_stream_record_only) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   CASE_EXPECT_TRUE(start_with_router(test));
   if (!test.is_running()) {
     return;
@@ -184,8 +186,9 @@ CASE_TEST(rpc_unit_test, router_stream_record_only) {
   for (int i = 0; i < 4; ++i) {
     test.pump_once();
   }
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_router_stream())));
-  const atframework::testing::ss_call_record *record = test.ss().call_at(0);
+  CASE_EXPECT_EQ(
+      1, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_router_stream())));
+  const atfw::testing::ss_call_record *record = test.ss().call_at(0);
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     CASE_EXPECT_TRUE(record->is_stream);
@@ -196,9 +199,9 @@ CASE_TEST(rpc_unit_test, router_stream_record_only) {
 }
 
 CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -211,20 +214,19 @@ CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
     return;
   }
 
-  auto rule = test.ss().mock(rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
-                             rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
-                             rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-                             [](const atframework::testing::ss_request_view &request,
-                                google::protobuf::Message &response) -> rpc::result_code_type {
-                               const auto &typed_request =
-                                   static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
-                               auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
-                               CASE_EXPECT_EQ(kZoneId, request.head.player_zone_id());
-                               CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.player_user_id()));
-                               CASE_EXPECT_EQ("openid-x", request.head.player_open_id());
-                               typed_response.set_echo(typed_request.payload());
-                               RPC_RETURN_CODE(0);
-                             });
+  auto rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+        auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
+        CASE_EXPECT_EQ(kZoneId, request.head.player_zone_id());
+        CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.player_user_id()));
+        CASE_EXPECT_EQ("openid-x", request.head.player_open_id());
+        typed_response.set_echo(typed_request.payload());
+        RPC_RETURN_CODE(0);
+      });
   CASE_EXPECT_TRUE(!!rule);
   if (!rule) {
     test.stop();
@@ -248,15 +250,15 @@ CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
   auto result = test.wait(task, std::chrono::seconds{5});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
 
 CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -272,13 +274,13 @@ CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
   }
 
   // Only node A gets an explicit rule; node B falls back to the default one-way record+drop policy.
-  atframework::testing::ss_rule_options options_a;
+  atfw::testing::ss_rule_options options_a;
   options_a.match_node_id = 0x140041;
   auto rule_a = test.ss().mock(
-      rpc::unit_test::get_full_name_of_rpc_unit_test_broadcast(),
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_broadcast(),
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request, google::protobuf::Message &) -> rpc::result_code_type {
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         CASE_EXPECT_EQ("per-target", typed_request.payload());
         CASE_EXPECT_EQ(0x140041, static_cast<int64_t>(request.target_node_id));
@@ -311,7 +313,8 @@ CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
   for (int i = 0; i < 4; ++i) {
     test.pump_once();
   }
-  CASE_EXPECT_EQ(2, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_broadcast())));
+  CASE_EXPECT_EQ(2,
+                 static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_broadcast())));
   CASE_EXPECT_EQ(1, static_cast<int>(test.transport().outbound_count_to(0x140041)));
   CASE_EXPECT_EQ(1, static_cast<int>(test.transport().outbound_count_to(0x140042)));
 
@@ -319,7 +322,7 @@ CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
   bool saw_matched_a = false;
   bool saw_default_b = false;
   for (size_t i = 0; i < 2; ++i) {
-    const atframework::testing::ss_call_record *record = test.ss().call_at(i);
+    const atfw::testing::ss_call_record *record = test.ss().call_at(i);
     if (nullptr == record) {
       continue;
     }
@@ -337,9 +340,9 @@ CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
 }
 
 CASE_TEST(rpc_unit_test, no_wait_immediate_return) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -372,15 +375,16 @@ CASE_TEST(rpc_unit_test, no_wait_immediate_return) {
   for (int i = 0; i < 4; ++i) {
     test.pump_once();
   }
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_no_wait())));
+  CASE_EXPECT_EQ(1,
+                 static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_no_wait())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
 
 CASE_TEST(rpc_unit_test, no_wait_wait_later_response) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -393,17 +397,16 @@ CASE_TEST(rpc_unit_test, no_wait_wait_later_response) {
     return;
   }
 
-  auto rule = test.ss().mock(rpc::unit_test::get_full_name_of_rpc_unit_test_no_wait(),
-                             rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
-                             rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-                             [](const atframework::testing::ss_request_view &request,
-                                google::protobuf::Message &response) -> rpc::result_code_type {
-                               const auto &typed_request =
-                                   static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
-                               auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
-                               typed_response.set_echo(typed_request.payload());
-                               RPC_RETURN_CODE(0);
-                             });
+  auto rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_no_wait(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+        auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
+        typed_response.set_echo(typed_request.payload());
+        RPC_RETURN_CODE(0);
+      });
   CASE_EXPECT_TRUE(!!rule);
   if (!rule) {
     test.stop();
@@ -421,7 +424,7 @@ CASE_TEST(rpc_unit_test, no_wait_wait_later_response) {
       RPC_RETURN_CODE(res);
     }
     res = RPC_AWAIT_CODE_RESULT(rpc::internal::wait_and_unpack_ss_response(
-        ctx, rsp_body, rpc::unit_test::get_full_name_of_rpc_unit_test_no_wait(),
+        ctx, rsp_body, rpc::unit_test::packer::get_full_name_of_rpc_unit_test_no_wait(),
         rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(), await_options));
     CASE_EXPECT_EQ("wait-later", rsp_body.echo());
     RPC_RETURN_CODE(res);

@@ -13,9 +13,9 @@ namespace {
 constexpr uint64_t kGatewayNodeId = 0x82000001;
 constexpr uint64_t kSessionId = 2001;
 
-bool start_cs_runtime(atframework::testing::runtime &test) {
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::cs};
+bool start_cs_runtime(atfw::testing::runtime &test) {
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::cs};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return false;
@@ -32,7 +32,7 @@ bool session_exists(uint64_t node_id, uint64_t session_id) {
 
 // The remove path completes asynchronously inside the logout task; pump until the process-lifetime
 // session_manager actually drops the session so a later fixture can reuse the ids.
-void pump_until_session_removed(atframework::testing::runtime &test, uint64_t node_id, uint64_t session_id) {
+void pump_until_session_removed(atfw::testing::runtime &test, uint64_t node_id, uint64_t session_id) {
   for (int i = 0; i < 256 && session_exists(node_id, session_id); ++i) {
     test.pump_once();
   }
@@ -42,7 +42,7 @@ void pump_until_session_removed(atframework::testing::runtime &test, uint64_t no
 // server_frame component: kAddSession/kRemoveSession drive the real session_manager, and the
 // dispatcher's own send_data/send_kickoff APIs deliver downstream through the unified gateway send.
 CASE_TEST(server_frame_unit_test, cs_session_manager_lifecycle_and_downstream_capture) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_cs_runtime(test)) {
     return;
   }
@@ -57,8 +57,8 @@ CASE_TEST(server_frame_unit_test, cs_session_manager_lifecycle_and_downstream_ca
   // Downstream data and kickoff through the dispatcher's public send APIs are captured with the
   // real session id attached.
   const char payload[] = "server-frame-data";
-  CASE_EXPECT_EQ(0, cs_msg_dispatcher::me()->send_data(kGatewayNodeId, kSessionId, payload,
-                                                       sizeof("server-frame-data") - 1));
+  CASE_EXPECT_EQ(
+      0, cs_msg_dispatcher::me()->send_data(kGatewayNodeId, kSessionId, payload, sizeof("server-frame-data") - 1));
   CASE_EXPECT_EQ(0, cs_msg_dispatcher::me()->send_kickoff(kGatewayNodeId, kSessionId, 7, "server-frame-bye"));
 
   // Remove closes through the real logout path and drops the session from session_manager.
@@ -66,11 +66,11 @@ CASE_TEST(server_frame_unit_test, cs_session_manager_lifecycle_and_downstream_ca
   pump_until_session_removed(test, kGatewayNodeId, kSessionId);
   CASE_EXPECT_FALSE(session_exists(kGatewayNodeId, kSessionId));
 
-  using op_type = atframework::testing::cs_downstream_record::op_type;
-  const atframework::testing::cs_downstream_record *post_record = nullptr;
-  const atframework::testing::cs_downstream_record *kickoff_record = nullptr;
+  using op_type = atfw::testing::cs_downstream_record::op_type;
+  const atfw::testing::cs_downstream_record *post_record = nullptr;
+  const atfw::testing::cs_downstream_record *kickoff_record = nullptr;
   for (size_t i = 0; i < test.cs().call_count(); ++i) {
-    const atframework::testing::cs_downstream_record *candidate = test.cs().call_at(i);
+    const atfw::testing::cs_downstream_record *candidate = test.cs().call_at(i);
     if (nullptr == candidate || candidate->session_id != kSessionId) {
       continue;
     }

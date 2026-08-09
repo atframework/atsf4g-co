@@ -21,7 +21,7 @@ high-performance game server architectures.
   replication), `distributed_transaction/` (2PC coordinator `dtcoordsvr` + SDK), `rank/` (`rank_board_svr` + SDK),
   `orbit/` (controller/agent/server SDK), `GameSharedComponent/` (pure algorithm libs).
 - `src/robot/`: Go stress-test robot client; `src/tools/`: code generator (`generate-for-pb`), etcd debug tools.
-- `src/tools/rpc-unit-test/`: offline mock-RPC unit-test framework (`atframework::testing::runtime` + mock
+- `src/tools/rpc-unit-test/`: offline mock-RPC unit-test framework (`atfw::testing::runtime` + mock
   SS/DNS/DB/CS/router/transport/resource/hpa engines) for testing service RPC logic without Redis/DNS/atbus/HTTP.
 - `src/templates/`: Mako templates for generated RPC/task code.
 - `doc/`: Docusaurus documentation site (architecture + development docs, zh-CN/en i18n).

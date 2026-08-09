@@ -1,11 +1,11 @@
 ---
 name: rpc-unit-test
-description: "Use when: authoring or running offline RPC unit tests with the atframework::testing::runtime mock fixture in src/tools/rpc-unit-test (mock SS/DNS/DB/CS/router/transport/resource/hpa engines), registering mock rules, choosing feature flags, or adding a project_add_rpc_unit_test CMake target. For generic unit-test running/filtering/DLL-PATH issues use testing; for production RPC implementation use engineering-guidelines."
+description: "Use when: authoring or running offline RPC unit tests with the atfw::testing::runtime mock fixture in src/tools/rpc-unit-test (mock SS/DNS/DB/CS/router/transport/resource/hpa engines), registering mock rules, choosing feature flags, or adding a project_add_rpc_unit_test CMake target. For generic unit-test running/filtering/DLL-PATH issues use testing; for production RPC implementation use engineering-guidelines."
 ---
 
 # RPC unit testing (offline mock fixture)
 
-`src/tools/rpc-unit-test` provides an offline mock-RPC fixture: `atframework::testing::runtime` boots a real
+`src/tools/rpc-unit-test` provides an offline mock-RPC fixture: `atfw::testing::runtime` boots a real
 `atapp::app` + dispatchers against `mock://` connectors and hook seams, so a test drives real coroutine tasks and real
 generated RPC code without Redis/DNS/atbus/HTTP. Library API namespace is `atframework::testing`; test support code lives
 only when `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` is on (default ON when `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST`,
@@ -18,9 +18,9 @@ Full API/feature matrix is in `src/tools/rpc-unit-test/README.md`; read it when 
 
 ```cpp
 CASE_TEST(rpc_unit_test, my_case) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss, atframework::testing::feature::db};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::db};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;  // CASE_EXPECT_* is non-fatal: you MUST early-return on precondition failure.
@@ -76,6 +76,7 @@ pure). See README §"feature 标志" for the exact per-flag module/component set
 project_add_rpc_unit_test(
   TARGET component_name_rpc_test
   COMPONENT component-name
+  CATEGORY component          # component (default) | sdk | service
   SOURCES test_a.cpp
   LINK_LIBRARIES components::component_name_sdk
   FEATURES SS DNS DB
@@ -84,8 +85,11 @@ project_add_rpc_unit_test(
 ```
 
 - Reuses the centralized private framework main/frame targets; registers `add_test`, labels
-  (`<project>;unit;rpc-unit-test;component:<name>;feature:<x>` + caller labels), CTest timeout, per-target build-tree
+  (`<project>;unit;rpc-unit-test;${CATEGORY}:<name>;feature:<x>` + caller labels), CTest timeout, per-target build-tree
   working directory, and Windows `ENVIRONMENT_MODIFICATION` PATH. Never hardcode the project prefix in target names.
+- `CATEGORY` controls the label prefix: `component` (default) for `component-functions.cmake` targets, `sdk` for
+  library/SDK tests, `service` for service-internal tests. Never use `COMPONENT` as a catch-all — pick the category that
+  matches what the test links (component SDK vs service internals vs framework library).
 - `TIMEOUT` must exceed the worst **serial sum** of all cases' hard-timeout + teardown, not just one runtime timeout.
 
 ## Build & run
@@ -115,7 +119,7 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
   tool library; it registers through the type-erased bridge `rpc/unit_test/mock_engine_bridge.h` (empty bridge →
   no-op/empty handle). Engine-level `test.ss().mock`/`test.db().mock_table` remain for direct test use.
 - For engine-level `test.ss().mock/expect/calls` always pass the RPC full name via the generated
-  `rpc::<module>::get_full_name_of_<rpc>()` (`gsl::string_view`, declared in `<service>.atfw.gen.h`; the component SDK
+  `rpc::<module>::packer::get_full_name_of_<rpc>()` (`gsl::string_view`, declared in `<service>.atfw.gen.h`; the component SDK
   headers do not include it, so include the gen header in the test TU) — never hardcode `"pkg.Service/method"`
   strings; keep hardcoded names only for intentionally invalid negative tests. This applies to SS/CS-template services
   (slash wire name `package.Service/method`); the orbit-fork getter returns its dot-format protocol name and orbit RPCs

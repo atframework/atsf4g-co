@@ -1,6 +1,6 @@
 ---
 name: testing
-description: "Use when: running or writing unit tests, discovering/filtering private test-framework cases, or fixing Windows DLL/PATH test startup issues. For the offline mock-RPC fixture (atframework::testing::runtime, mock SS/DNS/DB engines in src/tools/rpc-unit-test) use rpc-unit-test instead."
+description: "Use when: running or writing unit tests, discovering/filtering private test-framework cases, or fixing Windows DLL/PATH test startup issues. For the offline mock-RPC fixture (atfw::testing::runtime, mock SS/DNS/DB engines in src/tools/rpc-unit-test) use rpc-unit-test instead."
 ---
 
 # Unit testing (atsf4g-co)

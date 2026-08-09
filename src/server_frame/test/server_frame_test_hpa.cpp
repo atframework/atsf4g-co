@@ -16,8 +16,7 @@
 #include "logic/logic_server_setup.h"
 
 namespace {
-bool pump_until(atframework::testing::runtime &test, const std::function<bool()> &pred,
-                std::chrono::milliseconds timeout) {
+bool pump_until(atfw::testing::runtime &test, const std::function<bool()> &pred, std::chrono::milliseconds timeout) {
   auto deadline = std::chrono::steady_clock::now() + timeout;
   while (std::chrono::steady_clock::now() < deadline) {
     test.pump_once();
@@ -36,9 +35,9 @@ bool pump_until(atframework::testing::runtime &test, const std::function<bool()>
 // configured answer are fed an error result so the policy stays not-ready; a configured success answer flows
 // through the real parse -> trigger_event_on_pull_result -> do_ready chain.
 CASE_TEST(server_frame_unit_test, hpa_prometheus_pull_hook_chain) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::hpa};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::hpa};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return;
@@ -83,15 +82,15 @@ CASE_TEST(server_frame_unit_test, hpa_prometheus_pull_hook_chain) {
       [&error_callback_count](logic_hpa_policy &, gsl::string_view, gsl::string_view) { ++error_callback_count; });
 
   // Unconfigured answer: the pull is recorded, an error result is fed, and the policy must NOT become ready.
-  CASE_EXPECT_TRUE(pump_until(test, [&test] { return !test.hpa().pull_history().empty(); },
-                              std::chrono::milliseconds{10000}));
+  CASE_EXPECT_TRUE(
+      pump_until(test, [&test] { return !test.hpa().pull_history().empty(); }, std::chrono::milliseconds{10000}));
   const auto &history = test.hpa().pull_history();
   CASE_EXPECT_EQ("rpc_unit_test_custom", history.front().metrics_name);
   CASE_EXPECT_TRUE(!history.front().url.empty());
   CASE_EXPECT_TRUE(!history.front().query.empty());
   // Give the policy a few more pull cycles; an unanswered pull must feed the error path and never do_ready.
-  CASE_EXPECT_TRUE(pump_until(test, [&error_callback_count] { return error_callback_count > 0; },
-                              std::chrono::milliseconds{10000}));
+  CASE_EXPECT_TRUE(
+      pump_until(test, [&error_callback_count] { return error_callback_count > 0; }, std::chrono::milliseconds{10000}));
   CASE_EXPECT_EQ(0, instant_callback_count);
   CASE_EXPECT_TRUE(!policy->is_ready());
 
@@ -100,8 +99,8 @@ CASE_TEST(server_frame_unit_test, hpa_prometheus_pull_hook_chain) {
       "rpc_unit_test_custom",
       "{\"status\":\"success\",\"data\":{\"resultType\":\"vector\",\"result\":[{\"metric\":{\"__name__\":"
       "\"rpc_unit_test_custom\"},\"value\":[1735689600,\"42\"]}]}}");
-  CASE_EXPECT_TRUE(pump_until(test, [&instant_callback_count] { return instant_callback_count > 0; },
-                              std::chrono::milliseconds{10000}));
+  CASE_EXPECT_TRUE(pump_until(
+      test, [&instant_callback_count] { return instant_callback_count > 0; }, std::chrono::milliseconds{10000}));
   CASE_EXPECT_EQ(42, static_cast<int>(last_instant_value));
   CASE_EXPECT_TRUE(pump_until(test, [&policy] { return policy->is_ready(); }, std::chrono::milliseconds{10000}));
 

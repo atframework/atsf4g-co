@@ -59,8 +59,9 @@ flowchart LR
 
 orbit 组件另有专用模板：`src/component/orbit/sdk/server/template/`（同样生成 per-RPC 全名接口）。
 
-SS/CS/orbit 模板均为每个 RPC 生成 `<service> 命名空间内` 的 `gsl::string_view get_full_name_of_<rpc>()`
-（声明在 `<service>.atfw.gen.h`），返回线上 wire 全名（SS/CS 为 `包.服务/方法`，orbit fork 为其点分协议名）。
+SS 模板为每个 RPC 在 `packer` 子命名空间中生成 `gsl::string_view get_full_name_of_<rpc>()`（与 `pack_<rpc>`/`unpack_<rpc>`
+一致，声明在 `<service>.atfw.gen.h`），返回线上 wire 全名（`包.服务/方法`）。CS 模板同理在 `packer` 子命名空间中生成。
+orbit fork 模板同样在 `packer` 子命名空间中生成，返回其点分协议名。
 向 `test.ss()` 注册 mock、断言调用历史等需要 RPC 全名的场景应使用 SS/CS 模板的该接口而非硬编码字符串（见
 [RPC 单元测试](../development/rpc-unit-test.md)）；orbit fork 的 getter 返回点分全名，且 orbit RPC 经 orbit
 transport 不走 SS 引擎，不可用于 `test.ss()`。

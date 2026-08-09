@@ -30,9 +30,9 @@
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -42,7 +42,7 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
 
   // The only dtmq-proxysvr node: consistent hash must select it. The HPA-patched scaling_ready selector
   // requires the hpa_scaling_ready=1 metadata label (see logic_hpa_controller and the rank sample).
-  atframework::testing::mock_node node;
+  atfw::testing::mock_node node;
   node.set_id(0x1C0001)
       .set_name("unit-test-dtmq-proxy")
       .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kDtMqProxySvr))
@@ -63,10 +63,10 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
   }
 
   auto rule = test.ss().mock(
-      rpc::dtmq::get_full_name_of_send_message(), atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
+      rpc::dtmq::packer::get_full_name_of_send_message(),
+      atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
       atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request,
-         google::protobuf::Message &response) -> rpc::result_code_type {
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq &>(request.body);
         CASE_EXPECT_EQ(0x1C0001, static_cast<int64_t>(request.target_node_id));
         CASE_EXPECT_EQ("chan-unit-test", typed_request.channel_key().channel_id());
@@ -110,7 +110,7 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::dtmq::get_full_name_of_send_message())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::dtmq::packer::get_full_name_of_send_message())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

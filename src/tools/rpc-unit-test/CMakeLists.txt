@@ -39,10 +39,17 @@ target_include_directories(${PROJECT_NAME}-rpc-unit-test
                            PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>")
 target_compile_definitions(${PROJECT_NAME}-rpc-unit-test PRIVATE RPC_UNIT_TEST_NATIVE=1)
 # Build-tree default working directory for directly-invoked test executables (no RPC_UNIT_TEST_WORKDIR
-# env, e.g. a manual `-r <case>` run). Keeps the generated config out of the repository root. ctest runs
+# env, no ctest) so they don't write the generated config into the repository root. project_add_rpc_unit_test
 # override this per target via RPC_UNIT_TEST_WORKDIR.
 target_compile_definitions(${PROJECT_NAME}-rpc-unit-test
-                           PRIVATE "RPC_UNIT_TEST_DEFAULT_WORKDIR=\"${CMAKE_BINARY_DIR}/rpc-unit-test-workdir\"")
+PRIVATE "RPC_UNIT_TEST_DEFAULT_WORKDIR=\"${CMAKE_BINARY_DIR}/rpc-unit-test-workdir\"")
+# Real excel resource directory so the excel config manager (lazy default file loader) reads the actual
+# generated tables instead of requiring mock resource injection. Empty when the resource pipeline did not
+# produce the directory yet (the runtime simply skips the bindir entry then).
+if(EXISTS "${PROJECT_INSTALL_RES_DIR}/excel")
+  target_compile_definitions(${PROJECT_NAME}-rpc-unit-test
+  PRIVATE "RPC_UNIT_TEST_EXCEL_RESOURCE_DIR=\"${PROJECT_INSTALL_RES_DIR}/excel\"")
+endif()
 target_compile_options(${PROJECT_NAME}-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 target_link_libraries(${PROJECT_NAME}-rpc-unit-test PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}
                                                     ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})

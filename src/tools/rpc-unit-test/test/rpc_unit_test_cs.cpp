@@ -17,11 +17,11 @@ constexpr uint64_t kGatewayNodeId = 0x81000001;
 constexpr uint64_t kSessionId = 1001;
 constexpr uint64_t kSessionIdCapture = 1002;
 
-using op_type = atframework::testing::cs_downstream_record::op_type;
+using op_type = atfw::testing::cs_downstream_record::op_type;
 
-bool start_cs_runtime(atframework::testing::runtime &test) {
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::cs};
+bool start_cs_runtime(atfw::testing::runtime &test) {
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::cs};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return false;
@@ -38,7 +38,7 @@ bool session_exists(uint64_t node_id, uint64_t session_id) {
 
 // The remove path completes asynchronously inside the logout task; pump until the process-lifetime
 // session_manager actually drops the session so a later fixture can reuse the ids.
-void pump_until_session_removed(atframework::testing::runtime &test, uint64_t node_id, uint64_t session_id) {
+void pump_until_session_removed(atfw::testing::runtime &test, uint64_t node_id, uint64_t session_id) {
   for (int i = 0; i < 256 && session_exists(node_id, session_id); ++i) {
     test.pump_once();
   }
@@ -46,7 +46,7 @@ void pump_until_session_removed(atframework::testing::runtime &test, uint64_t no
 }  // namespace
 
 CASE_TEST(rpc_unit_test, cs_session_lifecycle_and_unknown_rpc_error_response) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_cs_runtime(test)) {
     return;
   }
@@ -65,9 +65,9 @@ CASE_TEST(rpc_unit_test, cs_session_lifecycle_and_unknown_rpc_error_response) {
   int32_t res = client.post(request);
   CASE_EXPECT_TRUE(res < 0);
 
-  const atframework::testing::cs_downstream_record *record = nullptr;
+  const atfw::testing::cs_downstream_record *record = nullptr;
   for (size_t i = 0; i < test.cs().call_count(); ++i) {
-    const atframework::testing::cs_downstream_record *candidate = test.cs().call_at(i);
+    const atfw::testing::cs_downstream_record *candidate = test.cs().call_at(i);
     if (nullptr != candidate && candidate->op == op_type::post) {
       record = candidate;
     }
@@ -90,7 +90,7 @@ CASE_TEST(rpc_unit_test, cs_session_lifecycle_and_unknown_rpc_error_response) {
 }
 
 CASE_TEST(rpc_unit_test, cs_downstream_capture_data_kickoff_set_router) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_cs_runtime(test)) {
     return;
   }
@@ -111,7 +111,7 @@ CASE_TEST(rpc_unit_test, cs_downstream_capture_data_kickoff_set_router) {
 
   CASE_EXPECT_EQ(3, static_cast<int>(test.cs().call_count()));
 
-  const atframework::testing::cs_downstream_record *post_record = test.cs().call_at(0);
+  const atfw::testing::cs_downstream_record *post_record = test.cs().call_at(0);
   CASE_EXPECT_TRUE(nullptr != post_record);
   if (nullptr != post_record) {
     CASE_EXPECT_EQ(static_cast<int>(op_type::post), static_cast<int>(post_record->op));
@@ -119,7 +119,7 @@ CASE_TEST(rpc_unit_test, cs_downstream_capture_data_kickoff_set_router) {
     CASE_EXPECT_EQ("cs-ec", post_record->message.body().post().content());
   }
 
-  const atframework::testing::cs_downstream_record *kickoff_record = test.cs().call_at(1);
+  const atfw::testing::cs_downstream_record *kickoff_record = test.cs().call_at(1);
   CASE_EXPECT_TRUE(nullptr != kickoff_record);
   if (nullptr != kickoff_record) {
     CASE_EXPECT_EQ(static_cast<int>(op_type::kickoff), static_cast<int>(kickoff_record->op));
@@ -128,7 +128,7 @@ CASE_TEST(rpc_unit_test, cs_downstream_capture_data_kickoff_set_router) {
     CASE_EXPECT_EQ(42, kickoff_record->message.head().error_code());
   }
 
-  const atframework::testing::cs_downstream_record *router_record = test.cs().call_at(2);
+  const atfw::testing::cs_downstream_record *router_record = test.cs().call_at(2);
   CASE_EXPECT_TRUE(nullptr != router_record);
   if (nullptr != router_record) {
     CASE_EXPECT_EQ(static_cast<int>(op_type::set_router), static_cast<int>(router_record->op));
@@ -145,7 +145,7 @@ CASE_TEST(rpc_unit_test, cs_downstream_capture_data_kickoff_set_router) {
 }
 
 CASE_TEST(rpc_unit_test, cs_broadcast_and_multi_session_observability) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_cs_runtime(test)) {
     return;
   }
@@ -158,7 +158,7 @@ CASE_TEST(rpc_unit_test, cs_broadcast_and_multi_session_observability) {
 
   CASE_EXPECT_EQ(2, static_cast<int>(test.cs().calls(op_type::broadcast)));
 
-  const atframework::testing::cs_downstream_record *plain = test.cs().call_at(0);
+  const atfw::testing::cs_downstream_record *plain = test.cs().call_at(0);
   CASE_EXPECT_TRUE(nullptr != plain);
   if (nullptr != plain) {
     CASE_EXPECT_EQ(0, static_cast<int>(plain->session_id));
@@ -166,7 +166,7 @@ CASE_TEST(rpc_unit_test, cs_broadcast_and_multi_session_observability) {
     CASE_EXPECT_EQ("notify", plain->message.body().post().content());
   }
 
-  const atframework::testing::cs_downstream_record *multi = test.cs().call_at(1);
+  const atfw::testing::cs_downstream_record *multi = test.cs().call_at(1);
   CASE_EXPECT_TRUE(nullptr != multi);
   if (nullptr != multi) {
     CASE_EXPECT_EQ(2, static_cast<int>(multi->session_ids.size()));
@@ -180,7 +180,7 @@ CASE_TEST(rpc_unit_test, cs_broadcast_and_multi_session_observability) {
 }
 
 CASE_TEST(rpc_unit_test, cs_send_error_injection_and_session_not_found_kickoff) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_cs_runtime(test)) {
     return;
   }
@@ -192,7 +192,7 @@ CASE_TEST(rpc_unit_test, cs_send_error_injection_and_session_not_found_kickoff) 
   int32_t res = client.post(request);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, res);
 
-  const atframework::testing::cs_downstream_record *kickoff_record = test.cs().call_at(0);
+  const atfw::testing::cs_downstream_record *kickoff_record = test.cs().call_at(0);
   CASE_EXPECT_TRUE(nullptr != kickoff_record);
   if (nullptr != kickoff_record) {
     CASE_EXPECT_EQ(static_cast<int>(op_type::kickoff), static_cast<int>(kickoff_record->op));

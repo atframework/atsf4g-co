@@ -12,6 +12,7 @@
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-server-frame-unit-test
   COMPONENT server-frame
+  CATEGORY sdk
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_db_login_auth.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_cs_session.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_resource.cpp"
@@ -22,6 +23,7 @@ project_add_rpc_unit_test(
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-server-frame-hpa-unit-test
   COMPONENT server-frame
+  CATEGORY sdk
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_hpa.cpp"
   FEATURES HPA
   LABELS fast
@@ -30,6 +32,7 @@ project_add_rpc_unit_test(
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-server-frame-telemetry-unit-test
   COMPONENT server-frame
+  CATEGORY sdk
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_telemetry.cpp"
   FEATURES TELEMETRY
   LABELS fast

@@ -30,11 +30,12 @@ std::string make_const_table_bytes(int32_t fake_key, int32_t mail_max_count) {
   return blocks.SerializeAsString();
 }
 
-// All 7 tables are mandatory: a missing file fails load_all() of its table and therefore reload_all().
-void seed_all_tables(atframework::testing::mock_resource &resource, int32_t fake_key, int32_t mail_max_count) {
+// All tables loaded at startup are mandatory: a missing file fails load_all() of its table and therefore reload_all().
+void seed_all_tables(atfw::testing::mock_resource &resource, int32_t fake_key, int32_t mail_max_count) {
   resource.set_file("const.bytes", make_const_table_bytes(fake_key, mail_max_count));
   resource.set_file("dtmq_channel_type.bytes", make_empty_table_bytes());
   resource.set_file("item_type.bytes", make_empty_table_bytes());
+  resource.set_file("orbit_client_template.bytes", make_empty_table_bytes());
   resource.set_file("rank_define.bytes", make_empty_table_bytes());
   resource.set_file("rank_period_reward_pool.bytes", make_empty_table_bytes());
   resource.set_file("rank_rule.bytes", make_empty_table_bytes());
@@ -58,10 +59,10 @@ int32_t get_mail_max_count_by_fake_key(int32_t fake_key) {
 // excel config manager; parse, index build and group swap all go through the production reload path.
 // Replacing version + bytes and driving excel_config_wrapper_reload_all(false) must surface the new data.
 CASE_TEST(server_frame_unit_test, resource_provider_parse_index_and_reload) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::resource};
-  options.setup_callback = [](atframework::testing::runtime &rt) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::resource};
+  options.setup_callback = [](atfw::testing::runtime &rt) {
     seed_all_tables(rt.resource(), 123, 11);
     rt.resource().set_version("0.0.0.1");
     return 0;
@@ -92,10 +93,10 @@ CASE_TEST(server_frame_unit_test, resource_provider_parse_index_and_reload) {
 // server_frame component: a missing mandatory resource file fails the reload through the real manager
 // instead of being silently skipped.
 CASE_TEST(server_frame_unit_test, resource_provider_missing_file_fails_reload) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::resource};
-  options.setup_callback = [](atframework::testing::runtime &rt) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::resource};
+  options.setup_callback = [](atfw::testing::runtime &rt) {
     seed_all_tables(rt.resource(), 456, 44);
     rt.resource().set_version("0.0.0.3");
     return 0;
@@ -118,10 +119,10 @@ CASE_TEST(server_frame_unit_test, resource_provider_missing_file_fails_reload) {
 // each fixture must use a distinct version (see doc/docs/development/rpc-unit-test.md).
 CASE_TEST(server_frame_unit_test, resource_provider_isolated_between_fixtures) {
   {
-    atframework::testing::runtime first;
-    atframework::testing::runtime_options options;
-    options.features = {atframework::testing::feature::resource};
-    options.setup_callback = [](atframework::testing::runtime &rt) {
+    atfw::testing::runtime first;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::resource};
+    options.setup_callback = [](atfw::testing::runtime &rt) {
       seed_all_tables(rt.resource(), 789, 77);
       rt.resource().set_version("0.0.0.6");
       return 0;
@@ -137,10 +138,10 @@ CASE_TEST(server_frame_unit_test, resource_provider_isolated_between_fixtures) {
   }
 
   {
-    atframework::testing::runtime second;
-    atframework::testing::runtime_options options;
-    options.features = {atframework::testing::feature::resource};
-    options.setup_callback = [](atframework::testing::runtime &rt) {
+    atfw::testing::runtime second;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::resource};
+    options.setup_callback = [](atfw::testing::runtime &rt) {
       seed_all_tables(rt.resource(), 789, 88);
       rt.resource().set_version("0.0.1.0");
       return 0;

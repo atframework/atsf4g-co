@@ -11,9 +11,9 @@
 #include "rpc/dns/lookup.h"
 
 CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -53,7 +53,7 @@ CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
   CASE_EXPECT_EQ(0, result.result_code);
 
   CASE_EXPECT_EQ(1, static_cast<int>(test.dns().calls("unit-test.local")));
-  const atframework::testing::dns_request_record *record = test.dns().call_at(0);
+  const atfw::testing::dns_request_record *record = test.dns().call_at(0);
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     CASE_EXPECT_TRUE(record->matched_rule);
@@ -64,9 +64,9 @@ CASE_TEST(rpc_unit_test, dns_lookup_single_a_record) {
 }
 
 CASE_TEST(rpc_unit_test, dns_lookup_multiple_records_and_error) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -121,9 +121,9 @@ CASE_TEST(rpc_unit_test, dns_lookup_multiple_records_and_error) {
 }
 
 CASE_TEST(rpc_unit_test, dns_unmatched_lookup_fast_fail) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -154,16 +154,16 @@ CASE_TEST(rpc_unit_test, dns_unmatched_lookup_fast_fail) {
 }
 
 CASE_TEST(rpc_unit_test, dns_no_response_times_out_task) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
   }
 
-  atframework::testing::dns_rule_options options_silent;
+  atfw::testing::dns_rule_options options_silent;
   options_silent.no_response = true;
   auto rule = test.dns().mock_a("silent.unit-test.local", "10.9.9.9", options_silent);
   CASE_EXPECT_TRUE(!!rule);
@@ -193,9 +193,9 @@ CASE_TEST(rpc_unit_test, dns_no_response_times_out_task) {
 // two pumps later than a delay-0 lookup. The assertion uses the relative pump distance so it is immune to
 // the absolute coroutine-resume latency of the task driver.
 CASE_TEST(rpc_unit_test, dns_delay_generations_defer_response) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -204,7 +204,7 @@ CASE_TEST(rpc_unit_test, dns_delay_generations_defer_response) {
 
   // Returns the number of pumps between the lookup being issued and the task completing.
   auto measure_completion_pumps = [&test](uint32_t delay_generations, const char *domain) -> int {
-    atframework::testing::dns_rule_options rule_options;
+    atfw::testing::dns_rule_options rule_options;
     rule_options.delay_generations = delay_generations;
     auto rule = test.dns().mock_a(domain, "10.3.3.3", rule_options);
     CASE_EXPECT_TRUE(!!rule);
@@ -258,16 +258,16 @@ CASE_TEST(rpc_unit_test, dns_delay_generations_defer_response) {
 // Rules with different delays complete out of order: the zero-delay lookup finishes first even though the
 // delayed lookup was issued first.
 CASE_TEST(rpc_unit_test, dns_out_of_order_responses) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::dns};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::dns};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
   }
 
-  atframework::testing::dns_rule_options slow_options;
+  atfw::testing::dns_rule_options slow_options;
   slow_options.delay_generations = 3;
   auto slow_rule = test.dns().mock_a("slow-ooo.unit-test.local", "10.4.0.1", slow_options);
   auto fast_rule = test.dns().mock_a("fast-ooo.unit-test.local", "10.4.0.2");

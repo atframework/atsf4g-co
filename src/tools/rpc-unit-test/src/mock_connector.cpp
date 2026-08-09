@@ -23,7 +23,7 @@ mock_connector::mock_connector(atfw::atapp::app &owner, raw_transport &transport
 
 mock_connector::~mock_connector() { cleanup(); }
 
-gsl::string_view mock_connector::name() const noexcept { return "atframework::testing::mock_connector"; }
+gsl::string_view mock_connector::name() const noexcept { return "atfw::testing::mock_connector"; }
 
 uint32_t mock_connector::get_address_type(const atfw::atbus::channel::channel_address_t &) const noexcept {
   uint32_t ret = 0;

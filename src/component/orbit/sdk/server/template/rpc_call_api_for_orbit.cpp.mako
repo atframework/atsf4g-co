@@ -236,11 +236,11 @@ ${ns}
         rpc_return_sentense = rpc_return_always_ready_code_sentense
 %>
 // ============ ${rpc.get_full_name()} ============
+namespace packer {
 ${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}() {
   return "${rpc.get_full_name()}";
 }
 
-namespace packer {
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string &output, const ${rpc.get_request().get_cpp_class_name()} &input) {
   return ${project_namespace}::err::EN_SUCCESS ==
          __pack_rpc_body(input, &output, "${rpc.get_full_name()}",

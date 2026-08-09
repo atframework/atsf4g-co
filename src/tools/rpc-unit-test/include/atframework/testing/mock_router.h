@@ -24,7 +24,7 @@ class RPC_UNIT_TEST_API router_test_object : public router_object_base {
  public:
   explicit router_test_object(const key_t &key);
 
-  const char *name() const override { return "atframework::testing::router_test_object"; }
+  const char *name() const override { return "atfw::testing::router_test_object"; }
 
   rpc::result_code_type pull_object(rpc::context &ctx, void *priv_data) override;
   rpc::result_code_type save_object(rpc::context &ctx, void *priv_data) override;
@@ -38,7 +38,7 @@ class RPC_UNIT_TEST_API router_test_manager : public router_manager_base {
   explicit router_test_manager(uint32_t type_id);
   ~router_test_manager() override;
 
-  const char *name() const override { return "atframework::testing::router_test_manager"; }
+  const char *name() const override { return "atfw::testing::router_test_manager"; }
 
   std::shared_ptr<router_object_base> get_base_cache(const key_t &key) const override;
   rpc::result_code_type mutable_cache(rpc::context &ctx, std::shared_ptr<router_object_base> &out, const key_t &key,

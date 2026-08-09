@@ -57,9 +57,11 @@ ${ns}
 % endfor
 % for rpc in rpcs.values():
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
+namespace packer {
 ${service_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}() {
   return "${rpc.get_service().get_full_name()}/${rpc.get_name()}";
 }
+}  // namespace packer
 
 <%
     if not rpc.is_response_stream():

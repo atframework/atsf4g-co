@@ -62,9 +62,11 @@ flowchart LR
 The orbit component has its own dedicated templates: `src/component/orbit/sdk/server/template/` (they also
 generate per-RPC full-name accessors).
 
-The SS/CS/orbit templates all generate `gsl::string_view get_full_name_of_<rpc>()` inside the `<service>` namespace
-(declared in `<service>.atfw.gen.h`), returning the on-wire full RPC name (`package.Service/method` for SS/CS; the
-orbit fork uses its dotted protocol name). When registering SS mocks or asserting call history via `test.ss()`, use the
+The SS template generates `gsl::string_view get_full_name_of_<rpc>()` inside the `packer` sub-namespace (alongside
+`pack_<rpc>`/`unpack_<rpc>`, declared in `<service>.atfw.gen.h`), returning the on-wire full RPC name
+(`package.Service/method`). The CS template generates it in the same `packer` sub-namespace. The orbit fork also
+uses the `packer` sub-namespace, returning its dotted protocol name.
+When registering SS mocks or asserting call history via `test.ss()`, use the
 SS/CS-template accessor instead of a hardcoded string (see [RPC unit testing](../development/rpc-unit-test.md)); the
 orbit-fork getter returns its dotted name and orbit RPCs traverse orbit transport (not the SS engine), so it must not
 be passed to `test.ss()`.

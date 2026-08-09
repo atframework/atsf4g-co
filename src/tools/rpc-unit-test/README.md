@@ -26,6 +26,7 @@ atsf4g-co 的 RPC 单元测试支持库：在普通进程内启动一个最小 a
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-my-component-unit-test
   COMPONENT my-component
+  CATEGORY component          # component（默认）| sdk | service
   SOURCES "my_test.cpp"
   LINK_LIBRARIES my-component-lib
   FEATURES SS DNS DB
@@ -34,17 +35,19 @@ project_add_rpc_unit_test(
 ```
 
 `project_add_rpc_unit_test`（`src/tools/rpc-unit-test/cmake/ProjectRpcUnitTest.cmake`）参数：`TARGET`（必填）、
-`COMPONENT`、`SOURCES`、`LINK_LIBRARIES`、`FEATURES`、`LABELS`（附加 CTest labels，惯例传 `fast`）、`TIMEOUT`
+`COMPONENT`（必填，名称）、`CATEGORY`（可选，默认 `component`；控制 CTest label 前缀：`component` 适用于
+component-functions.cmake 创建的目标，`sdk` 适用于库/SDK 测试，`service` 适用于服务内部测试）、`SOURCES`、
+`LINK_LIBRARIES`、`FEATURES`、`LABELS`（附加 CTest labels，惯例传 `fast`）、`TIMEOUT`
 （秒，写入 CTest，默认 120）。它复用集中编译的 atframe_utils 私有 main/frame support targets，自动
-`add_test`、配 labels、CTest timeout 和 Windows DLL `ENVIRONMENT_MODIFICATION` PATH。
+`add_test`、配 labels（`${CATEGORY}:<name>` 前缀）、CTest timeout 和 Windows DLL `ENVIRONMENT_MODIFICATION` PATH。
 
 ## 最小 CASE_TEST 示例
 
 ```cpp
 CASE_TEST(my_component, hello) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;
@@ -69,7 +72,7 @@ CASE_TEST(my_component, hello) {
 ### discovery 节点 + SS
 
 ```cpp
-atframework::testing::mock_node node;
+atfw::testing::mock_node node;
 node.set_id(0x130001).set_name("remote").set_type_id(4097).set_type_name("remote-type").set_zone_id(1);
 auto remote = test.discovery().add_node(node);
 ```
@@ -87,12 +90,12 @@ dtcoordsvr 等 SDK 都走这条路）：
 
 ```cpp
 // 引擎层 typed 规则：完整 RPC 名 + 请求/响应类型名。RPC 全名用生成接口
-// rpc::<module>::get_full_name_of_<rpc>()（gsl::string_view），不要硬编码字符串：
+// rpc::<module>::packer::get_full_name_of_<rpc>()（gsl::string_view），不要硬编码字符串：
 auto rule = test.ss().mock(
-    rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
+    rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
     rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
     rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-    [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
+    [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response)
         -> rpc::result_code_type {
       const auto &req = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
       static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("hello " + req.payload());
@@ -105,16 +108,17 @@ auto rule = test.ss().mock(
 //        rpc_unit_test::RpcUnitTestEchoRsp &rsp) -> rpc::result_code_type { ... });
 
 // 期望（stop 时校验）与历史
-test.ss().expect(rpc::unit_test::get_full_name_of_rpc_unit_test_user()).times(1).to_node(0x130001);
-test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user());
+test.ss().expect(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user()).times(1).to_node(0x130001);
+test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user());
 ```
 
-> SS/CS 模板为每个 RPC 生成 `<service> 命名空间内` 的 `gsl::string_view get_full_name_of_<rpc>()`
-> （声明在 `<service>.atfw.gen.h`，例如 `rpc/router/routerservice.atfw.gen.h` 的
-> `rpc::router::get_full_name_of_router_transfer()`）。向 `test.ss()` 注册/断言 mock 时优先使用它，
-> 避免 RPC 重命名或包名变更时字符串漂移。orbit fork 模板同样生成同名接口，但其返回值为 orbit 协议的点分
-> 全名（如 `hello.OrbitClientRpcService.echo`），而 `test.ss()` 校验要求 `/` 分隔符（`mock_ss.cpp`）；
-> orbit RPC 经 orbit transport 不走 SS 引擎，因此 orbit fork 的 getter 不可传入 `test.ss()`。
+> SS/CS 模板为每个 RPC 在 `packer` 子命名空间中生成全名接口（与 `pack_<rpc>`/`unpack_<rpc>` 一致），例如
+> `rpc/router/routerservice.atfw.gen.h` 的 `rpc::router::packer::get_full_name_of_router_transfer()`，
+> CS 模板同理（如 `rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync()`）。向 `test.ss()`
+> 注册/断言 mock 时优先使用它，避免 RPC 重命名或包名变更时字符串漂移。orbit fork 模板同样在 `packer` 子命名空间中
+> 生成同名接口，但其返回值为 orbit 协议的点分全名（如 `hello.OrbitClientRpcService.echo`），而 `test.ss()` 校验
+> 要求 `/` 分隔符（`mock_ss.cpp`）；orbit RPC 经 orbit transport 不走 SS 引擎，因此 orbit fork 的 getter 不可传入
+> `test.ss()`。
 
 SS handler 返回 `rpc::result_code_type`，可以是协程：`RPC_AWAIT_CODE_RESULT` 等待嵌套 RPC（context 经
 `ss_request_view.context` / typed handler 首参传入）；纯同步 handler 直接 `RPC_RETURN_CODE(...)`。两种
@@ -194,7 +198,7 @@ handler 首参 `rpc::context &`（可等待嵌套 RPC），末参统一为可扩
 
 ## mock 子命名空间与代码分布（3.5）
 
-- 工具库公共 API：`atframework::testing::*`（`src/tools/rpc-unit-test`），只含公共代码。
+- 工具库公共 API：`atfw::testing::*`（`src/tools/rpc-unit-test`），只含公共代码。
 - 生成 mock：`<service>::mock`（`rpc_call_api_for_ss.*.mako`）、`<db 命名空间>::mock`
   （`db_rpc_redis*.mako`），宏门控纯新增，编译进 server_frame/服务自身生成 TU。
 - 功能私有 mock：`logic_hpa::mock`（`src/server_frame/logic/hpa/mock/`）。UUID 的 DB 型入口无独立 mock
@@ -245,7 +249,7 @@ runtime 引擎驱动。
 cmake --build build_jobs_cmake_tools --target atf4g-co-rpc-unit-test-selftest --parallel 12
 # 按 label 运行
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
-ctest --test-dir build_jobs_cmake_tools -L "component:server-frame" --output-on-failure
+ctest --test-dir build_jobs_cmake_tools -L "sdk:server-frame" --output-on-failure
 # 过滤单 case（atframe_utils 私有框架）
 build_jobs_cmake_tools/publish/bin/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.combined_dns_ss_db_smoke"
 ```

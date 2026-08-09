@@ -65,6 +65,7 @@ CMake (`src/tools/rpc-unit-test/cmake/ProjectRpcUnitTest.cmake`; see [Unit Testi
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-my-component-unit-test
   COMPONENT my-component
+  CATEGORY component          # component (default) | sdk | service
   SOURCES "my_test.cpp"
   LINK_LIBRARIES my-component-lib
   FEATURES SS DNS DB
@@ -77,9 +78,9 @@ with the real API):
 
 ```cpp
 CASE_TEST(my_component, hello) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
     return;  // CASE_EXPECT_* is non-fatal: you MUST return early after a precondition failure.
@@ -107,14 +108,14 @@ CMake `FEATURES` argument only validates/links/labels and never decides per-case
 ### Service discovery + SS
 
 ```cpp
-atframework::testing::mock_node node;
+atfw::testing::mock_node node;
 node.set_id(0x130001).set_name("remote").set_type_id(4097).set_type_name("remote-type").set_zone_id(1);
 node.add_label("hpa_scaling_ready", "1");  // consumers that select via logic_hpa_discovery_select need this label
 auto remote = test.discovery().add_node(node);
 logic_server_last_common_module()->reload();  // reload once after injection to replay nodes into the discovery index
 
 auto rule = test.ss().mock(
-    rpc::my_service::get_full_name_of_my_method(), Req::descriptor()->full_name(),
+    rpc::my_service::packer::get_full_name_of_my_method(), Req::descriptor()->full_name(),
     Rsp::descriptor()->full_name(),
     [](const atframework::testing::ss_request_view &request, google::protobuf::Message &response)
         -> rpc::result_code_type {
@@ -122,10 +123,10 @@ auto rule = test.ss().mock(
       static_cast<Rsp &>(response).set_echo("hello " + req.payload());
       RPC_RETURN_CODE(0);
     });
-// Use the generated rpc::<module>::get_full_name_of_<rpc>() (gsl::string_view, declared in
+// Use the generated rpc::<module>::packer::get_full_name_of_<rpc>() (gsl::string_view, declared in
 // <service>.atfw.gen.h) instead of a hardcoded "pkg.MyService/my_method" string.
 // Generated equivalent: <service>::mock::my_method(handler), typed first arg rpc::context&.
-test.ss().expect(rpc::my_service::get_full_name_of_my_method()).times(1).to_node(0x130001);
+test.ss().expect(rpc::my_service::packer::get_full_name_of_my_method()).times(1).to_node(0x130001);
 ```
 
 An SS handler returns `rpc::result_code_type` and may be a coroutine awaiting nested RPC via `RPC_AWAIT_CODE_RESULT`.

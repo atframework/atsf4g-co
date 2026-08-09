@@ -41,6 +41,7 @@ endif()
 # project_add_rpc_unit_test(
 #   TARGET <target>                # required, executable target name
 #   COMPONENT <component-name>     # required, used for stable labels/folder, never guessed from paths
+#   CATEGORY <component|sdk|service>  # optional label category prefix, defaults to "component"
 #   SOURCES <a.cpp> [<b.cpp> ...]  # required, test sources of this component
 #   LINK_LIBRARIES <targets...>    # optional, component SDK/protocol/implementation targets
 #   FEATURES <SS DNS CS DB UUID RESOURCE ROUTER ORBIT HPA...> # optional, validated feature tags
@@ -52,7 +53,7 @@ endif()
 # )
 function(project_add_rpc_unit_test)
   set(PROJECT_RPC_UNIT_TEST_KNOWN_FEATURES SS DNS CS DB UUID RESOURCE ROUTER ORBIT HPA TELEMETRY)
-  cmake_parse_arguments(PROJECT_RPC_UNIT_TEST "" "TARGET;COMPONENT;TIMEOUT;CONFIG;WORKING_DIRECTORY"
+  cmake_parse_arguments(PROJECT_RPC_UNIT_TEST "" "TARGET;COMPONENT;CATEGORY;TIMEOUT;CONFIG;WORKING_DIRECTORY"
                         "SOURCES;LINK_LIBRARIES;FEATURES;LABELS;ENVIRONMENT" ${ARGN})
 
   if(NOT PROJECT_RPC_UNIT_TEST_TARGET)
@@ -118,8 +119,11 @@ function(project_add_rpc_unit_test)
 
   # The user-supplied LABELS argument is PROJECT_RPC_UNIT_TEST_LABELS after cmake_parse_arguments; build the
   # final label list in a separate variable so the argument survives.
+  if(NOT PROJECT_RPC_UNIT_TEST_CATEGORY)
+    set(PROJECT_RPC_UNIT_TEST_CATEGORY "component")
+  endif()
   set(PROJECT_RPC_UNIT_TEST_ALL_LABELS ${PROJECT_NAME} unit rpc-unit-test
-                                       "component:${PROJECT_RPC_UNIT_TEST_COMPONENT}")
+                                       "${PROJECT_RPC_UNIT_TEST_CATEGORY}:${PROJECT_RPC_UNIT_TEST_COMPONENT}")
   foreach(PROJECT_RPC_UNIT_TEST_FEATURE IN LISTS PROJECT_RPC_UNIT_TEST_FEATURES)
     string(TOLOWER "${PROJECT_RPC_UNIT_TEST_FEATURE}" PROJECT_RPC_UNIT_TEST_FEATURE_LOWER)
     list(APPEND PROJECT_RPC_UNIT_TEST_ALL_LABELS "feature:${PROJECT_RPC_UNIT_TEST_FEATURE_LOWER}")

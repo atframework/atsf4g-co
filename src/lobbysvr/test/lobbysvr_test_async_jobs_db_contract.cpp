@@ -1,8 +1,8 @@
 // Copyright 2026 atframework
 
 // Sampling contract test for the lobbysvr async_jobs SDK DB consumer path (see
-// doc/docs/development/rpc-unit-test.md): async_jobs::add_jobs/get_jobs/del_jobs go through the real generated KL table API
-// (rpc::db::async_jobs) served by the mock in-memory backend, offline without Redis.
+// doc/docs/development/rpc-unit-test.md): async_jobs::add_jobs/get_jobs/del_jobs go through the real generated KL table
+// API (rpc::db::async_jobs) served by the mock in-memory backend, offline without Redis.
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -33,9 +33,9 @@ constexpr uint32_t kZoneId = 1;
 }  // namespace
 
 CASE_TEST(component_lobbysvr, async_jobs_db_contract) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::db};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::db};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -100,12 +100,10 @@ CASE_TEST(component_lobbysvr, async_jobs_db_contract) {
   CASE_EXPECT_EQ(0, result.result_code);
 
   // Engine history: 2 KL adds + 1 remove_by_index + 3 get_all on the async_jobs table.
-  CASE_EXPECT_EQ(2,
-                 static_cast<int>(test.db().calls("async_jobs", atframework::testing::mock_db::op_type::kl_add_index)));
-  CASE_EXPECT_EQ(
-      1, static_cast<int>(test.db().calls("async_jobs", atframework::testing::mock_db::op_type::kl_remove_by_index)));
-  CASE_EXPECT_EQ(3,
-                 static_cast<int>(test.db().calls("async_jobs", atframework::testing::mock_db::op_type::kl_get_all)));
+  CASE_EXPECT_EQ(2, static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_add_index)));
+  CASE_EXPECT_EQ(1,
+                 static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_remove_by_index)));
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls("async_jobs", atfw::testing::mock_db::op_type::kl_get_all)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

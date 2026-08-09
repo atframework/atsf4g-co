@@ -27,10 +27,9 @@
 #include "rpc/unit_test/rpcunittestservice.atfw.gen.h"
 
 CASE_TEST(rpc_unit_test, runtime_start_stop) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss, atframework::testing::feature::dns,
-                      atframework::testing::feature::db};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::dns, atfw::testing::feature::db};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -41,9 +40,9 @@ CASE_TEST(rpc_unit_test, runtime_start_stop) {
 }
 
 CASE_TEST(rpc_unit_test, runtime_empty_task) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -71,9 +70,9 @@ CASE_TEST(rpc_unit_test, runtime_empty_task) {
 }
 
 CASE_TEST(rpc_unit_test, runtime_task_business_result_code) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -95,9 +94,9 @@ CASE_TEST(rpc_unit_test, runtime_task_business_result_code) {
 }
 
 CASE_TEST(rpc_unit_test, runtime_task_timeout) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -133,9 +132,9 @@ CASE_TEST(rpc_unit_test, runtime_consecutive_fixture) {
   // A second runtime must start cleanly after the previous one stopped: no leaked app, task or
   // process-level state may block a consecutive fixture.
   for (int i = 0; i < 2; ++i) {
-    atframework::testing::runtime test;
-    atframework::testing::runtime_options options;
-    options.features = {atframework::testing::feature::ss};
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
 
     CASE_EXPECT_EQ(0, test.start(options));
     if (!test.is_running()) {
@@ -158,10 +157,9 @@ CASE_TEST(rpc_unit_test, runtime_consecutive_fixture) {
 // Required combined smoke (see doc/docs/development/rpc-unit-test.md): one task performs DNS lookup -> SS RPC ->
 // DB write/read in a single coroutine, and the outer wait drives everything to completion.
 CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::ss, atframework::testing::feature::dns,
-                      atframework::testing::feature::db};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::dns, atfw::testing::feature::db};
 
   CASE_EXPECT_EQ(0, test.start(options));
   if (!test.is_running()) {
@@ -175,7 +173,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
   CASE_EXPECT_TRUE(!!dns_rule);
 
   // SS: echo service on the "resolved" node.
-  atframework::testing::mock_node node;
+  atfw::testing::mock_node node;
   node.set_id(0x130081)
       .set_name("unit-test-combined-remote")
       .set_type_id(4097)
@@ -188,11 +186,10 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
     return;
   }
   auto ss_rule = test.ss().mock(
-      rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request,
-         google::protobuf::Message &response) -> rpc::result_code_type {
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("combined:" + typed_request.payload());
         RPC_RETURN_CODE(0);
@@ -259,10 +256,9 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
 
   // All three engines observed exactly one call each.
   CASE_EXPECT_EQ(1, static_cast<int>(test.dns().calls("directory.unit-test.local")));
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
-  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_set)));
-  CASE_EXPECT_EQ(1,
-                 static_cast<int>(test.db().calls("login_auth", atframework::testing::mock_db::op_type::kv_get_all)));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atfw::testing::mock_db::op_type::kv_set)));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls("login_auth", atfw::testing::mock_db::op_type::kv_get_all)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

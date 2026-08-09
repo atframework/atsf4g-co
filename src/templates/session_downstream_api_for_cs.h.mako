@@ -55,12 +55,14 @@ ${ns}
 % endfor
 % for rpc in rpcs.values():
 // ============ ${rpc.get_service().get_full_name()}/${rpc.get_name()} ============
+namespace packer {
 /**
  * @brief get full rpc name of ${rpc.get_name()}
  * @return full rpc name of ${rpc.get_name()}
  * @note  Use this instead of a hardcoded name when registering mock rules or expectations.
  */
 ${service_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}();
+}  // namespace packer
 <%
     # Only generate downstream calls
     if not rpc.is_response_stream():

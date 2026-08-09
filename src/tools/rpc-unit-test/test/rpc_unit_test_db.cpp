@@ -32,11 +32,11 @@
 namespace {
 constexpr uint32_t kTestDbChannel = static_cast<uint32_t>(db_msg_dispatcher::channel_t::RAW_DEFAULT);
 
-using op_type = atframework::testing::mock_db::op_type;
+using op_type = atfw::testing::mock_db::op_type;
 
-bool start_db_runtime(atframework::testing::runtime &test) {
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::db};
+bool start_db_runtime(atfw::testing::runtime &test) {
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::db};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return false;
@@ -46,15 +46,15 @@ bool start_db_runtime(atframework::testing::runtime &test) {
   return true;
 }
 
-atframework::testing::mock_node make_db_remote_node(uint64_t id, const char *name) {
-  atframework::testing::mock_node node;
+atfw::testing::mock_node make_db_remote_node(uint64_t id, const char *name) {
+  atfw::testing::mock_node node;
   node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(1);
   return node;
 }
 }  // namespace
 
 CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -142,7 +142,7 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
 }
 
 CASE_TEST(rpc_unit_test, db_kv_get_missing_and_partly_get_presence) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -218,7 +218,7 @@ CASE_TEST(rpc_unit_test, db_kv_get_missing_and_partly_get_presence) {
 }
 
 CASE_TEST(rpc_unit_test, db_kv_inc_field_and_uuid_allocator) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -274,7 +274,7 @@ CASE_TEST(rpc_unit_test, db_kv_inc_field_and_uuid_allocator) {
 }
 
 CASE_TEST(rpc_unit_test, db_key_list_add_get_update_remove) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -376,7 +376,7 @@ CASE_TEST(rpc_unit_test, db_key_list_add_get_update_remove) {
 }
 
 CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -449,7 +449,7 @@ CASE_TEST(rpc_unit_test, db_ttl_expiry_and_remove_all) {
 // A key_list write (add_index/update_by_index) to a lazily-expired key must start a fresh record without
 // the stale TTL and without the dead entries (Redis semantics), not revive the expired record.
 CASE_TEST(rpc_unit_test, db_key_list_write_after_expiry_starts_fresh) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -513,7 +513,7 @@ CASE_TEST(rpc_unit_test, db_key_list_write_after_expiry_starts_fresh) {
 // generated table interface accepts one handler (typed input/output messages + CAS version); interfaces
 // without a registered handler fall through to the common in-memory backend.
 CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -633,9 +633,9 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
 // A DB mock handler is a coroutine (rpc::result_code_type) driven inline at the generated interface
 // entry: it may await nested RPC calls (here one SS RPC) before filling output/meta.
 CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
-  atframework::testing::runtime test;
-  atframework::testing::runtime_options options;
-  options.features = {atframework::testing::feature::db, atframework::testing::feature::ss};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::db, atfw::testing::feature::ss};
   if (0 != test.start(options) || !test.is_running()) {
     CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
     return;
@@ -649,11 +649,10 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
     return;
   }
   auto ss_rule = test.ss().mock(
-      rpc::unit_test::get_full_name_of_rpc_unit_test_user(),
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
       rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
       rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
-      [](const atframework::testing::ss_request_view &request,
-         google::protobuf::Message &response) -> rpc::result_code_type {
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("nested:" + typed_request.payload());
         RPC_RETURN_CODE(0);
@@ -698,7 +697,7 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
 
   // The nested SS call went through the SS mock engine (recorded once); the intercepted DB call never
   // reached the DB engine hook.
-  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::get_full_name_of_rpc_unit_test_user())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user())));
   CASE_EXPECT_EQ(0, static_cast<int>(test.db().calls("login_auth")));
 
   CASE_EXPECT_EQ(0, test.stop());
@@ -708,7 +707,7 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
 // the return code and the returned record/version, and operations without a callback fall through to the
 // common in-memory backend.
 CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
-  atframework::testing::runtime test;
+  atfw::testing::runtime test;
   if (!start_db_runtime(test)) {
     return;
   }
@@ -729,7 +728,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
   // Spy on writes: inspect the record being stored, then decline so the common backend persists it.
   std::string last_stored_open_id;
   uint64_t last_stored_user_id = 0;
-  rule.on(op_type::kv_set, [&](atframework::testing::db_table_context &context) {
+  rule.on(op_type::kv_set, [&](atfw::testing::db_table_context &context) {
     CASE_EXPECT_EQ(op_type::kv_set, context.op);
     CASE_EXPECT_EQ("login_auth", context.table_name);
     if (nullptr != context.input_table) {
@@ -779,7 +778,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
   CASE_EXPECT_EQ(8, static_cast<int>(last_stored_user_id));
 
   // Now intercept reads: serve a canned record + version with a success code, bypassing the backend.
-  rule.on(op_type::kv_get_all, [&](atframework::testing::db_table_context &context) {
+  rule.on(op_type::kv_get_all, [&](atfw::testing::db_table_context &context) {
     CASE_EXPECT_TRUE(context.key.find("openid-callback") != gsl::string_view::npos);
     PROJECT_NAMESPACE_ID::table_login_auth canned;
     canned.set_open_id("openid-canned");
@@ -809,7 +808,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
 
   // Table-level catch-all for remaining interfaces: report a custom error for remove_all while kv_set
   // and kv_get_all still have their own callbacks and everything else keeps falling through.
-  rule.on_any([](atframework::testing::db_table_context &context) {
+  rule.on_any([](atfw::testing::db_table_context &context) {
     if (op_type::remove_all == context.op) {
       context.return_code = -23456;
       return true;

@@ -399,7 +399,7 @@ void mock_ss::deliver_pending() {
     // RPC calls; the response is injected when it completes (delay generations count from completion).
     std::weak_ptr<char> lifecycle = lifecycle_token_;
     auto invoke_result = rpc::async_invoke(
-        "atframework::testing::mock_ss", "mock_ss:invoke",
+        "atfw::testing::mock_ss", "mock_ss:invoke",
         [this, lifecycle = std::move(lifecycle), matched_rule, request_msg, needs_response,
          target_node_id = record->target_node_id,
          target_node_name = record->target_node_name](rpc::context &ctx) mutable -> rpc::result_code_type {
