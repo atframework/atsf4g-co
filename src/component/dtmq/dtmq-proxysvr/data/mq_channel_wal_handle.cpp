@@ -222,24 +222,32 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
 
   ret->on_log_added = [](wal_object_type& wal, const wal_object_type::log_pointer& log) {
     mq_channel* channel = wal.get_private_data().channel;
-    if (nullptr == channel) {
+    if (nullptr == channel || !log) {
       return;
     }
 
     // 刷新最后收到的sequence
-    if (log && log->sequence() > channel->get_sequence_allocator()) {
+    if (log->sequence() > channel->get_sequence_allocator()) {
       channel->set_sequence_allocator(log->sequence());
     }
 
     channel->set_dirty();
+
+    FWLOGDEBUG("mq channel {} add log, sequence: {}, command_case: {}, timepoint: {}",
+               channel->get_channel_key().channel_id(), log->sequence(),
+               static_cast<int32_t>(log->detail().command_case()), log->create_timepoint().seconds());
     return;
   };
 
-  ret->on_log_removed = [](wal_object_type& wal, const wal_object_type::log_pointer&) {
+  ret->on_log_removed = [](wal_object_type& wal, const wal_object_type::log_pointer& log) {
     mq_channel* channel = wal.get_private_data().channel;
-    if (nullptr == channel) {
+    if (nullptr == channel || !log) {
       return;
     }
+
+    FWLOGDEBUG("mq channel {} add log, sequence: {}, command_case: {}, timepoint: {}",
+               channel->get_channel_key().channel_id(), log->sequence(),
+               static_cast<int32_t>(log->detail().command_case()), log->create_timepoint().seconds());
 
     channel->set_dirty();
   };

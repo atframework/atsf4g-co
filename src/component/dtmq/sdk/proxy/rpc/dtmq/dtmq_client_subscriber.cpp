@@ -233,6 +233,13 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
     identify_key_ = global_shared_subscriber_identify_key_allocator.fetch_add(1, std::memory_order_acq_rel);
     subscriber_info_.set_subscriber_server_id(logic_config::me()->get_local_server_id());
 
+    auto channel_cfg = excel::get_dtmq_channel_configure(channel_key.channel_type());
+    if (channel_cfg) {
+      reload_configure(*channel_cfg);
+    } else {
+      excel::normalize_dtmq_channel_configure(configure_);
+    }
+
     // 这里是共享 subscriber key
     if (!logic_config::me()->get_local_server_name().empty()) {
       subscriber_info_.set_subscriber_key(
@@ -2015,7 +2022,7 @@ shared_subscriber::ptr_t shared_subscriber::make_shared(const atfw::dtmq::DChann
     return iter->second;
   }
 
-  auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
+  auto channel_cfg = excel::get_dtmq_channel_configure(channel_key.channel_type());
   if (!channel_cfg) {
     FWLOGWARNING("Failed to get channel config for channel type: {}", channel_key.channel_type());
     return nullptr;
@@ -2310,13 +2317,9 @@ void shared_subscriber::setup_timer(timer_action_type action, bool ignore_same_a
 
       timer_watcher_.reset();
 
-      if (configure_.heartbeat_retry_interval().seconds() > 0) {
-        timeout_tp =
-            atfw::util::time::time_utility::now() +
-            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_retry_interval());
-      } else {
-        timeout_tp = atfw::util::time::time_utility::now() + std::chrono::seconds{60};
-      }
+      timeout_tp =
+          atfw::util::time::time_utility::now() +
+          protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_retry_interval());
       mgr.retry_setup_timer_list.emplace_back(timeout_tp, shared_from_this());
       return;
     }
@@ -2827,8 +2830,10 @@ void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChan
 }
 
 void shared_subscriber::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
-  protobuf_copy_message(configure_, config);
-  excel::normalize_dtmq_channel_configure(configure_);
+  if (&configure_ != &config) {
+    protobuf_copy_message(configure_, config);
+    excel::normalize_dtmq_channel_configure(configure_);
+  }
 
   // 确保配置有效
 

@@ -451,6 +451,8 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
   }
   forward_server_id = 0;
 
+  uint64_t local_server_id = logic_config::me()->get_local_server_id();
+
   // 已有数据
   if (channel_ptr) {
     auto result = RPC_AWAIT_CODE_RESULT(channel_ptr->await_transfer(ctx, forward_server_id));
@@ -467,7 +469,7 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
     }
 
     channel_ptr.reset();
-    if (0 != forward_server_id) {
+    if (0 != forward_server_id && forward_server_id != local_server_id) {
       FCTXLOGDEBUG(ctx, "channel {} should transfer readonly message to server {:#x}", channel_key.channel_id(),
                    forward_server_id);
       RPC_RETURN_CODE(0);
@@ -480,7 +482,6 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
         RPC_AWAIT_CODE_RESULT(make_writable_channel(ctx, channel_ptr, forward_server_id, channel_key, auto_create)));
   }
 
-  uint64_t local_server_id = logic_config::me()->get_local_server_id();
   auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
   if (!channel_cfg || channel_cfg->readonly_replicate_count() <= 0) {
     // 判定无只读副本，可写副本为本机，但本机又不能成为可写副本。说明本机正在被关闭
@@ -599,6 +600,12 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
       RPC_RETURN_CODE(0);
     }
   } while (false);
+
+  // 如果本地无缓存或不是writable，且本节点可以提升writable，则走提升为writable流程
+  if (mq_channel::should_be_writable_or_get_server_id(channel_key, forward_server_id)) {
+    RPC_RETURN_CODE(
+        RPC_AWAIT_CODE_RESULT(make_writable_channel(ctx, channel_ptr, forward_server_id, channel_key, auto_create)));
+  }
 
   if (!mq_channel::should_be_readonly_or_get_server_id(channel_key, forward_server_id, replicate_index)) {
     // 判定只读副本为本机，但本机又不能成为只读副本。说明本机正在被关闭
