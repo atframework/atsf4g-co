@@ -17,8 +17,8 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef LOBBY_SERVICE_API
-#  define LOBBY_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
+#ifndef ORBIT_SERVER_API
+#  define ORBIT_SERVER_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class task_action_join_room : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq,
@@ -35,13 +35,13 @@ class task_action_join_room : public task_action_ss_rpc_base<PROJECT_NAMESPACE_I
   using task_action_ss_req_base::operator();
 
  public:
-  LOBBY_SERVICE_API explicit task_action_join_room(dispatcher_start_data_type&& param);
-  LOBBY_SERVICE_API ~task_action_join_room() override;
+  ORBIT_SERVER_API explicit task_action_join_room(dispatcher_start_data_type&& param);
+  ORBIT_SERVER_API ~task_action_join_room() override;
 
-  LOBBY_SERVICE_API const char* name() const override;
+  ORBIT_SERVER_API const char* name() const override;
 
-  LOBBY_SERVICE_API result_type operator()() override;
+  ORBIT_SERVER_API result_type operator()() override;
 
-  LOBBY_SERVICE_API int on_success() override;
-  LOBBY_SERVICE_API int on_failed() override;
+  ORBIT_SERVER_API int on_success() override;
+  ORBIT_SERVER_API int on_failed() override;
 };
