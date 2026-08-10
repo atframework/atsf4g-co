@@ -20,14 +20,14 @@
 
 #include <logic/room/orbit_room_manager.h>
 
-GAME_SERVICE_API task_action_user_finish::task_action_user_finish(dispatcher_start_data_type &&param)
+LOBBY_SERVICE_API task_action_user_finish::task_action_user_finish(dispatcher_start_data_type &&param)
     : base_type(std::move(param)) {}
 
-GAME_SERVICE_API task_action_user_finish::~task_action_user_finish() {}
+LOBBY_SERVICE_API task_action_user_finish::~task_action_user_finish() {}
 
-GAME_SERVICE_API const char *task_action_user_finish::name() const { return "task_action_user_finish"; }
+LOBBY_SERVICE_API const char *task_action_user_finish::name() const { return "task_action_user_finish"; }
 
-GAME_SERVICE_API task_action_user_finish::result_type task_action_user_finish::operator()() {
+LOBBY_SERVICE_API task_action_user_finish::result_type task_action_user_finish::operator()() {
   const rpc_request_type &req_body = get_request_body();
   EXPLICIT_UNUSED_ATTR rpc_response_type &rsp_body = get_response_body();
 
@@ -36,6 +36,6 @@ GAME_SERVICE_API task_action_user_finish::result_type task_action_user_finish::o
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAME_SERVICE_API int task_action_user_finish::on_success() { return get_result(); }
+LOBBY_SERVICE_API int task_action_user_finish::on_success() { return get_result(); }
 
-GAME_SERVICE_API int task_action_user_finish::on_failed() { return get_result(); }
+LOBBY_SERVICE_API int task_action_user_finish::on_failed() { return get_result(); }

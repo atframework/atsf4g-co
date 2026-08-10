@@ -1,0 +1,104 @@
+// Copyright 2026 atframework
+
+#include <common/file_system.h>
+#include <time/time_utility.h>
+
+#include <atframe/atapp.h>
+#include <libatbus_protocol.h>
+
+#include <memory/object_allocator.h>
+
+#include <config/atframe_service_types.h>
+#include <config/extern_service_types.h>
+#include <config/server_frame_build_feature.h>
+#include <dispatcher/db_msg_dispatcher.h>
+#include <dispatcher/ss_msg_dispatcher.h>
+
+#include <logic/logic_server_macro.h>
+#include <logic/logic_server_setup.h>
+
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/config/team_match.config.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+#include <utility/protobuf_mini_dumper.h>
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
+#include "app/handle_ss_rpc_teammatchservice.atfw.gen.h"
+
+namespace {
+class main_service_module : public atfw::atapp::module_impl {
+ public:
+  int init() override {
+    {
+      // register all router managers
+    }
+
+    // register handles
+    INIT_CALL_FN(handle::team::register_handles_for_teammatchservice);
+    return 0;
+  };
+
+  const char *name() const override { return "main_service_module"; }
+
+  int tick() override { return 0; }
+
+  int stop() override { return 0; }
+
+  void ready() override {}
+
+  int reload() override {
+    int ret = 0;
+    if (!is_actived()) {
+      // app::init时会调用这个接口,此时某些模块没有加载表是不能reload的,挡住init时的调用
+      return ret;
+    }
+
+    // 只有在通过CMD RELOAD时才会调用到此处
+    FWLOGINFO("MAIN SERVER MODULE RELOAD");
+
+    return ret;
+  }
+};
+}  // namespace
+
+int main(int argc, char *argv[]) {
+  atfw::atapp::app app;
+
+  // project directory
+  {
+    std::string proj_dir;
+    atfw::util::file_system::dirname(__FILE__, 0, proj_dir, 4);
+    atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
+  }
+
+  logic_config::me()->set_server_instance_config_loader(
+      [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to) {
+        auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::config::teamsvr_match_cfg>();
+        app_.parse_configures_into(*config_ptr, "teamsvr_match", "ATAPP_TEAMSVR_MATCH");
+        to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
+      });
+
+  logic_server_common_module_configure logic_mod_conf;
+  if (logic_server_setup_common(app, logic_mod_conf) < 0) {
+    return -1;
+  }
+
+  app.add_module(atfw::memory::stl::make_shared<main_service_module>());
+  app.add_module(ss_msg_dispatcher::me());
+  app.add_module(db_msg_dispatcher::me());
+
+  // run
+  return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+}

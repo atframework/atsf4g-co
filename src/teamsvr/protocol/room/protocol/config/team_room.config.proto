@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/duration.proto";
+
+import "atframe/atapp_conf.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/src/service-teamsvr/protocol/room/protocol/config";
+
+package atframework.team.config;
+
+message teamsvr_room_cfg {
+}

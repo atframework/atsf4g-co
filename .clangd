@@ -1,0 +1,73 @@
+# clangd project configuration.
+#
+# Goal: keep the language-server responsive on this workspace without changing how the project
+# actually builds. Every rule below applies to clangd only; compile_commands.json, cl.exe/gcc/clang
+# builds and the .clang-tidy checks run at commit/CI time are untouched.
+#
+# Why this file exists
+# --------------------
+# The CMake build precompiles a large header (cmake_pch.hxx -> a 600-700MB cmake_pch.cxx.pch) per
+# target via target_precompile_headers, and every TU is compiled with the flags that consume it.
+# clangd must deserialize that PCH on every AST rebuild, which dominates editor latency
+# (hover/inlayHint/codeAction pile up and get cancelled, see the "ASTWorker building" +
+# "Task was cancelled" pattern in the clangd output). Dropping the PCH flags from clangd's view
+# lets it build a normal preamble that it can cache and reuse, at the cost of some extra RAM.
+# Pair this with -j=4 in clangd.arguments.
+#
+# IMPORTANT: clangd config merging
+# --------------------------------
+# clangd applies config fragments independently and a later fragment's CompileFlags REPLACES
+# (does not merge with) an earlier fragment's, even when that later fragment does not match the
+# file. Therefore the PCH CompileFlags must live in a fragment that matches every source file.
+# We keep exactly one CompileFlags fragment (unconditional) so it is never shadowed.
+
+CompileFlags:
+  # Strip precompiled-header flags so clangd never loads the giant MSVC/GCC/Clang PCH and instead
+  # parses cmake_pch.hxx as a normal header. cmake_pch.* is CMake's PCH header name.
+  #
+  # clangd's Remove uses THREE matching modes (per https://clangd.llvm.org/config.html):
+  #   1. recognized clang flag (e.g. -I)      -> flag + its argument(s) removed (incl. synonyms)
+  #   2. value ends with '*'                  -> prefix match on the whole token
+  #   3. otherwise                            -> exact whole-token match
+  # It is NOT regex; use a trailing '*' for prefix matching.
+  #
+  # clangd turns driver-level PCH flags into cc1-level ones before building the preamble, so we
+  # cover BOTH layers to be robust across compilers:
+  #   driver (cl.exe):    /Yc<path>  /Yu<path>  /Fp<path.pch>  /FI<path>      (flag + path fused)
+  #   driver (gcc/clang): -include cmake_pch.hxx   -include-pch foo.pch
+  #   cc1 (clang):        -include-pch <file.pch>  -pch-through-header=<hdr>  -include cmake_pch.hxx
+  Remove:
+    # --- MSVC driver (cl.exe): the flag and its path are one token, e.g.
+    #     /YuD:/workspace/.../cmake_pch.hxx , /FpD:/.../cmake_pch.cxx.pch , /FID:/.../cmake_pch.hxx
+    - '/Yc*'
+    - '/Yu*'
+    - '/Fp*'
+    - '/FI*cmake_pch*'
+    # --- Clang driver + cc1: explicit PCH file consumption (recognized flag -> flag+arg dropped) ---
+    - '-include-pch'
+    # --- GCC/Clang driver + cc1: -include cmake_pch.hxx (force-include that pulls the .gch/.pch).
+    #     -include is a recognized clang flag -> flag + its argument dropped together.
+    #     This would also drop a legitimate -include of some other header, but cmake_pch.hxx is the
+    #     only forced include in this project's compile_commands.json, so it is safe here. ---
+    - '-include'
+    # --- cc1 (clang internal): -pch-through-header=<hdr> drives the PCH-through mechanism ---
+    - '-pch-through-header=*'
+    # --- GCC/Clang PCH directives / validation flags (harmless to drop for clangd) ---
+    - '-fpch-preprocess'
+    - '-fpch-deps'
+    - '-fno-pch-deps'
+    - '-fpch-inject'
+    - '-fpch-codegen'
+    - '-Winvalid-pch'
+    - '-Wno-invalid-pch'
+
+---
+If:
+  PathMatch:
+    - 'build_jobs_cmake_tools/.*'   # generated code, PCH artifacts
+    - 'build/.*'                    # generated code, PCH artifacts
+    - 'third_party/.*'              # third-party libraries
+    - 'atframework/.*\.h'           # vendored subproject headers
+Diagnostics:
+  ClangTidy:
+    Remove: ['*']                   # skip clang-tidy on these (heaviest part)

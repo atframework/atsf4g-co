@@ -31,17 +31,17 @@
 #include <logic/cache/user_cache_manager.h>
 #include <logic/player_manager.h>
 
-GAME_SERVICE_API task_action_object_cache_meta_sync::task_action_object_cache_meta_sync(
+LOBBY_SERVICE_API task_action_object_cache_meta_sync::task_action_object_cache_meta_sync(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAME_SERVICE_API task_action_object_cache_meta_sync::~task_action_object_cache_meta_sync() {}
+LOBBY_SERVICE_API task_action_object_cache_meta_sync::~task_action_object_cache_meta_sync() {}
 
-GAME_SERVICE_API const char* task_action_object_cache_meta_sync::name() const {
+LOBBY_SERVICE_API const char* task_action_object_cache_meta_sync::name() const {
   return "task_action_object_cache_meta_sync";
 }
 
-GAME_SERVICE_API task_action_object_cache_meta_sync::result_type task_action_object_cache_meta_sync::operator()() {
+LOBBY_SERVICE_API task_action_object_cache_meta_sync::result_type task_action_object_cache_meta_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
@@ -123,6 +123,6 @@ GAME_SERVICE_API task_action_object_cache_meta_sync::result_type task_action_obj
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAME_SERVICE_API int task_action_object_cache_meta_sync::on_success() { return get_result(); }
+LOBBY_SERVICE_API int task_action_object_cache_meta_sync::on_success() { return get_result(); }
 
-GAME_SERVICE_API int task_action_object_cache_meta_sync::on_failed() { return get_result(); }
+LOBBY_SERVICE_API int task_action_object_cache_meta_sync::on_failed() { return get_result(); }

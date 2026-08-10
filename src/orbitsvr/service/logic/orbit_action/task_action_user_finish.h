@@ -16,8 +16,8 @@
 
 #include <logic/task_action_orbit_req_base.h>
 
-#ifndef GAME_SERVICE_API
-#  define GAME_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
+#ifndef LOBBY_SERVICE_API
+#  define LOBBY_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class task_action_user_finish : public task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID::OrbitServerUserFinishReq,
@@ -34,13 +34,13 @@ class task_action_user_finish : public task_action_orbit_rpc_base<PROJECT_NAMESP
   using base_type::operator();
 
  public:
-  GAME_SERVICE_API explicit task_action_user_finish(dispatcher_start_data_type &&param);
-  GAME_SERVICE_API ~task_action_user_finish();
+  LOBBY_SERVICE_API explicit task_action_user_finish(dispatcher_start_data_type &&param);
+  LOBBY_SERVICE_API ~task_action_user_finish();
 
-  GAME_SERVICE_API const char *name() const override;
+  LOBBY_SERVICE_API const char *name() const override;
 
-  GAME_SERVICE_API result_type operator()() override;
+  LOBBY_SERVICE_API result_type operator()() override;
 
-  GAME_SERVICE_API int on_success() override;
-  GAME_SERVICE_API int on_failed() override;
+  LOBBY_SERVICE_API int on_success() override;
+  LOBBY_SERVICE_API int on_failed() override;
 };

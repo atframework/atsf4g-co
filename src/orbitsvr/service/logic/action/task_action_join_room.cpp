@@ -27,14 +27,14 @@
 
 #include <utility>
 
-GAME_SERVICE_API task_action_join_room::task_action_join_room(dispatcher_start_data_type&& param)
+LOBBY_SERVICE_API task_action_join_room::task_action_join_room(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAME_SERVICE_API task_action_join_room::~task_action_join_room() {}
+LOBBY_SERVICE_API task_action_join_room::~task_action_join_room() {}
 
-GAME_SERVICE_API const char* task_action_join_room::name() const { return "task_action_join_room"; }
+LOBBY_SERVICE_API const char* task_action_join_room::name() const { return "task_action_join_room"; }
 
-GAME_SERVICE_API task_action_join_room::result_type task_action_join_room::operator()() {
+LOBBY_SERVICE_API task_action_join_room::result_type task_action_join_room::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
@@ -42,6 +42,6 @@ GAME_SERVICE_API task_action_join_room::result_type task_action_join_room::opera
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAME_SERVICE_API int task_action_join_room::on_success() { return get_result(); }
+LOBBY_SERVICE_API int task_action_join_room::on_success() { return get_result(); }
 
-GAME_SERVICE_API int task_action_join_room::on_failed() { return get_result(); }
+LOBBY_SERVICE_API int task_action_join_room::on_failed() { return get_result(); }

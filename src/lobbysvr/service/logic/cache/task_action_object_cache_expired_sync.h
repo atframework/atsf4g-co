@@ -17,8 +17,8 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef GAME_SERVICE_API
-#  define GAME_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
+#ifndef LOBBY_SERVICE_API
+#  define LOBBY_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class task_action_object_cache_expired_sync
@@ -34,13 +34,13 @@ class task_action_object_cache_expired_sync
   using task_action_ss_req_base::operator();
 
  public:
-  GAME_SERVICE_API explicit task_action_object_cache_expired_sync(dispatcher_start_data_type&& param);
-  GAME_SERVICE_API ~task_action_object_cache_expired_sync();
+  LOBBY_SERVICE_API explicit task_action_object_cache_expired_sync(dispatcher_start_data_type&& param);
+  LOBBY_SERVICE_API ~task_action_object_cache_expired_sync();
 
-  GAME_SERVICE_API const char* name() const override;
+  LOBBY_SERVICE_API const char* name() const override;
 
-  GAME_SERVICE_API result_type operator()() override;
+  LOBBY_SERVICE_API result_type operator()() override;
 
-  GAME_SERVICE_API int on_success() override;
-  GAME_SERVICE_API int on_failed() override;
+  LOBBY_SERVICE_API int on_success() override;
+  LOBBY_SERVICE_API int on_failed() override;
 };

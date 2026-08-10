@@ -25,13 +25,14 @@ Applied rules (existing user values are preserved unless a repair is required):
     - ``--background-index`` and ``--clang-tidy`` are ensured.
     - ``--header-insertion`` is forced to ``never`` (the only value clangd accepts;
       note that ``Never`` / ``iwyu`` casing variants are rejected by clangd).
-* File-watcher / Explorer / search exclusions are ensured to keep the editor responsive on
-  workspaces with a large build tree. ``files.watcherExclude`` and ``search.exclude`` gain
-  the configured build directory (``--build-dir``, sourced by the CMake driver from
+* File-watcher / search exclusions are ensured to keep the editor responsive on workspaces
+  with a large build tree. ``files.watcherExclude`` and ``search.exclude`` gain the configured
+  build directory (``--build-dir``, sourced by the CMake driver from
   ``CMAKE_CURRENT_BINARY_DIR``), ``**/atframework/**/build`` (every vendored subproject may
   own an independent build tree) and the append-only ``**/.git/objects/**`` /
-  ``**/.git/subtree-cache/**``. ``files.exclude`` only hides the heavy build trees so the
-  Explorer is not cluttered. Existing globs are always kept.
+  ``**/.git/subtree-cache/**``. ``files.exclude`` is intentionally NOT touched: it hides
+  entries from the Explorer, which makes browsing the workspace inconvenient. Existing globs
+  under the touched keys are always kept.
 
 JSONC comments are not preserved on rewrite; a ``.bak`` copy is written before any change.
 """
@@ -57,11 +58,11 @@ DESIRED_ENVIRONMENT = (("VSLANG", "1033"),)
 # now belong in ``cmake.environment``; migrated away on every run for correctness.
 MIGRATE_TO_ENVIRONMENT = ("VSLANG",)
 
-# Static exclusion glob patterns applied to the file watcher, the Explorer file list and the
-# search scope. They are the main cure for VSCode watcher/index latency on workspaces that
-# carry multi-GB build output trees: the build step writes thousands of .obj/.pdb/.ilk/.log
-# files, and every change notification has to flow through the watcher queue before an editor
-# save or directory create is acknowledged.
+# Static exclusion glob patterns applied to the file watcher and the search scope (but NOT to
+# ``files.exclude``, which hides entries from the Explorer). They are the main cure for VSCode
+# watcher/index latency on workspaces that carry multi-GB build output trees: the build step
+# writes thousands of .obj/.pdb/.ilk/.log files, and every change notification has to flow
+# through the watcher queue before an editor save or directory create is acknowledged.
 #
 # ``atframework/**`` is vendored and every subproject may own an independent build tree
 # (e.g. ``atframe_utils/build``); the wildcard form adapts to all of them.
@@ -70,13 +71,6 @@ STATIC_EXCLUDE_GLOBS = (
     "**/atframework/**/build",
     "**/.git/objects/**",
     "**/.git/subtree-cache/**",
-)
-
-# Subset shown as hidden in the Explorer (``files.exclude``). The ``.git`` internal
-# directories are already invisible through .git semantics, so they are intentionally kept out
-# of the Explorer hide list to avoid surprising the user.
-FILES_HIDE_GLOBS = (
-    "**/atframework/**/build",
 )
 
 
@@ -449,21 +443,19 @@ def main(argv):
     apply_environment_block(data, "cmake.environment", DESIRED_ENVIRONMENT, changes)
 
     # Exclude the build output tree and other heavy/append-only directories from the file
-    # watcher, the Explorer file list and the search scope. This is the primary fix for the
-    # editor/save/directory-create latency observed on workspaces whose build tree reaches
-    # tens of GB: the build step generates a steady stream of .obj/.pdb/.log change events
-    # that would otherwise block the watcher queue on every editor operation.
+    # watcher and the search scope. This is the primary fix for the editor/save/directory-create
+    # latency observed on workspaces whose build tree reaches tens of GB: the build step
+    # generates a steady stream of .obj/.pdb/.log change events that would otherwise block the
+    # watcher queue on every editor operation. ``files.exclude`` is intentionally NOT touched:
+    # it hides entries from the Explorer, which makes browsing the workspace inconvenient.
     build_glob = compute_build_exclude_glob(opts.build_dir, opts.workspace_dir)
     watcher_globs = list(STATIC_EXCLUDE_GLOBS)
     search_globs = list(STATIC_EXCLUDE_GLOBS)
-    files_globs = list(FILES_HIDE_GLOBS)
     if build_glob is not None:
         watcher_globs.insert(0, build_glob)
         search_globs.insert(0, build_glob)
-        files_globs.insert(0, build_glob)
     apply_glob_block(data, "files.watcherExclude", watcher_globs, changes)
     apply_glob_block(data, "search.exclude", search_globs, changes)
-    apply_glob_block(data, "files.exclude", files_globs, changes)
 
     apply_tool_path(
         data, "cpplint.cpplintPath", opts.cpplint, ["cpplint", "cpplint.exe"], changes

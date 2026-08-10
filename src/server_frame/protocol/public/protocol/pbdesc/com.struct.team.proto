@@ -6,6 +6,113 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+import "protocol/pbdesc/com.struct.proto";
+
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 package atframework.team;
+
+enum DTeamExitReason {
+  EN_TEAM_EXIT_REASON_DEFAULT = 0;
+  EN_TEAM_EXIT_REASON_LOGOUT = 1;
+  EN_TEAM_EXIT_REASON_EXPIRED = 2;
+  EN_TEAM_EXIT_REASON_DESTROY_TEAM = 3;
+  EN_TEAM_EXIT_REASON_REMOVE_MEMBER = 4;
+  EN_TEAM_EXIT_REASON_CANCEL = 5;
+  EN_TEAM_EXIT_REASON_UNSUBSCRIBE_TEAM_CHANNEL = 6;
+  EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED = 7;
+  EN_TEAM_EXIT_REASON_EXIT_TEAM = 8;
+  EN_TEAM_EXIT_REASON_UPDATE_CUSTOM_LOCK_ERROR = 11;
+  EN_TEAM_EXIT_REASON_MODULE_BAN = 12;
+  EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM = 13;
+}
+
+enum EnTeamJoinType {
+  EN_TEAM_SEND_METHOD_TYPE_NONE = 0;
+  EN_TEAM_SEND_METHOD_TYPE_SNS_PLATFORM = 1;
+  EN_TEAM_SEND_METHOD_TYPE_FRIEND = 2;
+  EN_TEAM_SEND_METHOD_TYPE_MATCH = 3;
+  EN_TEAM_SEND_METHOD_TYPE_BATTLE = 4;
+}
+message DTeamKey {
+  int64 team_id = 1;
+}
+
+message DTeamMember {
+  hello.DUserIDKey user_key = 1;
+  // 入队时间
+  google.protobuf.Timestamp joined_timepoint = 2;
+
+  // 入队方式和额外数据
+  EnTeamJoinType join_team_type = 3;
+  google.protobuf.Any join_team_data = 4;
+
+  // 退出原因
+  DTeamExitReason remove_member_reason = 5;
+
+  string client_version = 6;
+  uint64 user_router_server_id = 7;
+  
+  // 最后收到的组队通道的消息sequence和hash code
+  int64 acknowledge_action_sequence = 11;
+  uint64 acknowledge_action_hash_code = 12;  
+
+  // 共享的成员数据，通常是阵容信息、状态信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, google.protobuf.Any> shared_member_data = 13;
+}
+
+message DTeamApply {
+  DTeamKey team_key = 1;
+  hello.DUserIDKey user_key = 2;
+
+  EnTeamJoinType join_team_type = 3;
+  google.protobuf.Any join_team_data = 4;
+
+  string client_version = 6;
+  uint64 user_router_server_id = 7;
+
+  // 过期时间
+  google.protobuf.Timestamp expired_timepoint = 8;
+
+  // 共享的成员数据，通常是阵容信息、状态信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, google.protobuf.Any> shared_member_data = 13;
+}
+
+message DTeamStorage {
+  DTeamKey team_key = 1;
+  // 当前队长
+  hello.DUserIDKey captain_user_key = 2;
+
+  // 当前成员
+  repeated DTeamMember member = 6;
+
+  // 当前待处理的申请列表
+  repeated DTeamApply pending_apply = 7;
+
+  // 最后收到的组队通道的消息sequence和hash code
+  int64 acknowledge_action_sequence = 11;
+  uint64 acknowledge_action_hash_code = 12;
+  // 已保存的数据sequence，这之前的数据log可以压缩
+  int64 saved_action_sequence = 13;  
+
+  // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, google.protobuf.Any> shared_team_data = 14;
+}
+
+message DTeamAction {
+  oneof action {
+    DTeamKey destroy_team = 1;  // 有这个消息或者订阅失败则视为小队已解散
+    // DTeamHeartBeatInfo heartbeat = 2;  // 定期ping包，防止聊天频道过期销毁
+    DTeamMember add_member = 3;
+    DTeamMember remove_member = 4;
+    DTeamMember member_confirm = 5;  // 队员准备
+    // DTeamMember cancel_wait = 6;                    // 取消等待，直接进入队伍房间
+    DTeamMember election_captain = 7;  // 重新选出的队长
+  }
+}

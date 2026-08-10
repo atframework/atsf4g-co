@@ -11,7 +11,51 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/any.proto";
 
 import "protocol/extension/atframework.proto";
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.team.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/service-teamsvr/protocol/room/protocol/pbdesc";
 
 package atframework.team;
+
+message SSTeamRoomSendMessageReq {
+  DTeamKey team_key = 1;
+  hello.DUserIDKey sender_user_key = 2;
+  DTeamAction action = 3;
+}
+
+message SSTeamRoomSendMessageRsp {
+  int32 client_result = 1;
+}
+
+message SSTeamRoomHeartbeatReq {
+  DTeamKey team_key = 1;
+  hello.DUserIDKey user_key = 2;
+  uint64 user_router_server_id = 3;
+  int64 sequence = 4;
+  uint64 hash_code = 6;
+}
+
+message SSTeamRoomHeartbeatRsp {
+  int32 client_result = 1;
+}
+
+service TeamRoomService {
+  option (atframework.service_options) = {
+    module_name: "team"
+  };
+
+  rpc send_message(SSTeamRoomSendMessageReq) returns (SSTeamRoomSendMessageRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "发送消息"
+      allow_no_wait: true
+    };
+  };
+
+  rpc heartbeat(SSTeamRoomHeartbeatReq) returns (SSTeamRoomHeartbeatRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "成员心跳"
+      allow_no_wait: true
+    };
+  }
+}

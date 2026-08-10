@@ -11,7 +11,33 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/any.proto";
 
 import "protocol/extension/atframework.proto";
+import "protocol/pbdesc/com.struct.team.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/service-teamsvr/protocol/match/protocol/pbdesc";
 
 package atframework.team;
+
+message SSTeamMatchSearchReq {
+  // team_matching_data matching_data = 1;
+  // TODO(owent): implement me
+}
+
+message SSTeamMatchSearchRsp {
+  int32 client_result = 1;
+  // DTeamMatchData match_data = 2;
+  DTeamKey team_key = 3;
+  // TODO(owent): implement me
+}
+
+service TeamMatchService {
+  option (atframework.service_options) = {
+    module_name: "team"
+  };
+
+  rpc search(SSTeamMatchSearchReq) returns (SSTeamMatchSearchRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "寻找队友"
+      allow_no_wait: true
+    };
+  };
+}

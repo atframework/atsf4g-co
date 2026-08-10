@@ -64,7 +64,6 @@ __pycache__
 .mako_modules-*
 .cache
 /compile_commands.json
-/.clangd
 
 /src/tools/generate-for-pb/__pycache__/*
 

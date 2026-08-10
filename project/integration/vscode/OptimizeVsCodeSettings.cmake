@@ -31,7 +31,7 @@ endif()
 # Resolve the build directory. Prefer an explicit value, then the live binary dir, then a couple of common defaults.
 # When ``include()``-d from the top-level project ``CMAKE_BINARY_DIR`` equals the current build tree
 # (``CMAKE_CURRENT_BINARY_DIR`` at the project root), which is the directory whose change events dominate editor
-# latency and that the optimizer excludes from the VSCode watcher/search/Explorer via ``--build-dir``.
+# latency and that the optimizer excludes from the VSCode watcher/search via ``--build-dir``.
 # ---------------------------------------------------------------------------------------------------------------------
 if(NOT DEFINED PROJECT_VSCODE_BUILD_DIR OR PROJECT_VSCODE_BUILD_DIR STREQUAL "")
   if(DEFINED CMAKE_BINARY_DIR
