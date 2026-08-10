@@ -1,73 +1,52 @@
-# clangd project configuration.
+# clangd 工程配置(仅作用于 clangd,不影响 CMake 真实构建、compile_commands.json、CI 的 clang-tidy)。
 #
-# Goal: keep the language-server responsive on this workspace without changing how the project
-# actually builds. Every rule below applies to clangd only; compile_commands.json, cl.exe/gcc/clang
-# builds and the .clang-tidy checks run at commit/CI time are untouched.
+# 关于 PCH(实测结论,2026-08-10,clangd 22.1.8):
+#   A/B 实测 dtmq_client_subscriber.cpp:保留 PCH 3.01~3.04s,剥离 PCH 2.82~2.90s,差距仅 ~5%。
+#   剥离 PCH 并不消除卡顿——剥掉后 clangd 仍要从源码重解析 cmake_pch.hxx 及其传递包含的头文件树,
+#   成本 ≈ 反序列化 634MB PCH。故此处不再剥离,真正的延迟来自那棵巨大的头文件树。
 #
-# Why this file exists
-# --------------------
-# The CMake build precompiles a large header (cmake_pch.hxx -> a 600-700MB cmake_pch.cxx.pch) per
-# target via target_precompile_headers, and every TU is compiled with the flags that consume it.
-# clangd must deserialize that PCH on every AST rebuild, which dominates editor latency
-# (hover/inlayHint/codeAction pile up and get cancelled, see the "ASTWorker building" +
-# "Task was cancelled" pattern in the clangd output). Dropping the PCH flags from clangd's view
-# lets it build a normal preamble that it can cache and reuse, at the cost of some extra RAM.
-# Pair this with -j=4 in clangd.arguments.
+# clangd preamble 缓存:默认 --pch-storage=disk,把每个文件的 preamble 序列化到系统临时目录
+#   (preamble-*.pch),跨进程持久,易积累到数十 GB。陈旧缓存由
+#   project/integration/vscode/OptimizeVsCodeSettings.cmake 在每次 configure 时清理。
 #
-# IMPORTANT: clangd config merging
-# --------------------------------
-# clangd applies config fragments independently and a later fragment's CompileFlags REPLACES
-# (does not merge with) an earlier fragment's, even when that later fragment does not match the
-# file. Therefore the PCH CompileFlags must live in a fragment that matches every source file.
-# We keep exactly one CompileFlags fragment (unconditional) so it is never shadowed.
-
-CompileFlags:
-  # Strip precompiled-header flags so clangd never loads the giant MSVC/GCC/Clang PCH and instead
-  # parses cmake_pch.hxx as a normal header. cmake_pch.* is CMake's PCH header name.
-  #
-  # clangd's Remove uses THREE matching modes (per https://clangd.llvm.org/config.html):
-  #   1. recognized clang flag (e.g. -I)      -> flag + its argument(s) removed (incl. synonyms)
-  #   2. value ends with '*'                  -> prefix match on the whole token
-  #   3. otherwise                            -> exact whole-token match
-  # It is NOT regex; use a trailing '*' for prefix matching.
-  #
-  # clangd turns driver-level PCH flags into cc1-level ones before building the preamble, so we
-  # cover BOTH layers to be robust across compilers:
-  #   driver (cl.exe):    /Yc<path>  /Yu<path>  /Fp<path.pch>  /FI<path>      (flag + path fused)
-  #   driver (gcc/clang): -include cmake_pch.hxx   -include-pch foo.pch
-  #   cc1 (clang):        -include-pch <file.pch>  -pch-through-header=<hdr>  -include cmake_pch.hxx
-  Remove:
-    # --- MSVC driver (cl.exe): the flag and its path are one token, e.g.
-    #     /YuD:/workspace/.../cmake_pch.hxx , /FpD:/.../cmake_pch.cxx.pch , /FID:/.../cmake_pch.hxx
-    - '/Yc*'
-    - '/Yu*'
-    - '/Fp*'
-    - '/FI*cmake_pch*'
-    # --- Clang driver + cc1: explicit PCH file consumption (recognized flag -> flag+arg dropped) ---
-    - '-include-pch'
-    # --- GCC/Clang driver + cc1: -include cmake_pch.hxx (force-include that pulls the .gch/.pch).
-    #     -include is a recognized clang flag -> flag + its argument dropped together.
-    #     This would also drop a legitimate -include of some other header, but cmake_pch.hxx is the
-    #     only forced include in this project's compile_commands.json, so it is safe here. ---
-    - '-include'
-    # --- cc1 (clang internal): -pch-through-header=<hdr> drives the PCH-through mechanism ---
-    - '-pch-through-header=*'
-    # --- GCC/Clang PCH directives / validation flags (harmless to drop for clangd) ---
-    - '-fpch-preprocess'
-    - '-fpch-deps'
-    - '-fno-pch-deps'
-    - '-fpch-inject'
-    - '-fpch-codegen'
-    - '-Winvalid-pch'
-    - '-Wno-invalid-pch'
+# clangd 配置合并语义(见 https://clangd.llvm.org/config.html):
+#   - ClangTidy.Add/Remove:跨 fragment 及 .clang-tidy 合并,clangd 配置优先。
+#     所以全局基线 + 第三方 If 片段可叠加:src/** 只摘 clang-analyzer-*,third_party 全关。
 
 ---
+# ---------------------------------------------------------------------------
+# clang-tidy baseline (applies to ALL files; merged with .clang-tidy, this wins)
+# ---------------------------------------------------------------------------
+# Why: clangd runs clang-tidy synchronously on the per-file ASTWorker thread, so heavy checks
+# block hover/codeAction/inlayHint/formatting on that file. The single biggest cost is
+# clang-analyzer-* (path-sensitive static analysis); clangd's built-in speed table
+# (TidyFastChecks.inc) only flags 2 checks as SLOW (misc-const-correctness, +103%;
+# altera-id-dependent-backward-branch, +17%), it does NOT cover clang-analyzer-*, which is the
+# real latency driver in practice. Removing just that one family keeps the high-value bug checks
+# (bugprone-*, cppcoreguidelines-*, performance-*, readability-*, ...) live in the editor.
+#
+# FastCheckFilter: Loose runs every check that is not *known* to be slow, and auto-skips the two
+# measured-slow checks above. It is broader than the default Strict (which also drops checks clangd
+# has never timed, including newly-added ones), so we keep more analysis. If editor latency is still
+# too high on a heavy TU, switch this to Strict to trim further.
+Diagnostics:
+  ClangTidy:
+    Remove:
+      - 'clang-analyzer-*'      # path-sensitive analysis: the dominant per-AST cost in clangd
+    FastCheckFilter: Loose      # auto-skip measured-slow checks; keep the rest of .clang-tidy
+
+---
+# ---------------------------------------------------------------------------
+# Third-party / generated / vendored code: skip clang-tidy entirely (heaviest, lowest value)
+# ---------------------------------------------------------------------------
 If:
   PathMatch:
     - 'build_jobs_cmake_tools/.*'   # generated code, PCH artifacts
     - 'build/.*'                    # generated code, PCH artifacts
     - 'third_party/.*'              # third-party libraries
     - 'atframework/.*\.h'           # vendored subproject headers
+    - 'atframework/.*\.cpp'         # vendored subproject implementation
+    - 'atframework/.*\.cc'          # vendored subproject implementation
 Diagnostics:
   ClangTidy:
-    Remove: ['*']                   # skip clang-tidy on these (heaviest part)
+    Remove: ['*']                   # Remove merges with the global fragment -> all checks off here

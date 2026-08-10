@@ -245,7 +245,7 @@ static mq_channel_wal_object_type::vtable_pointer create_mq_channel_shared_objec
       return;
     }
 
-    FWLOGDEBUG("mq channel {} add log, sequence: {}, command_case: {}, timepoint: {}",
+    FWLOGDEBUG("mq channel {} remove log, sequence: {}, command_case: {}, timepoint: {}",
                channel->get_channel_key().channel_id(), log->sequence(),
                static_cast<int32_t>(log->detail().command_case()), log->create_timepoint().seconds());
 

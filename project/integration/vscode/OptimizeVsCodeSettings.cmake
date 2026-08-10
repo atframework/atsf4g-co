@@ -141,3 +141,49 @@ if(NOT PROJECT_VSCODE_RESULT EQUAL 0)
     message(FATAL_ERROR "[optimize-vscode] optimizer failed with exit code ${PROJECT_VSCODE_RESULT}.")
   endif()
 endif()
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Clean stale clangd preamble cache (preamble-*.pch) from the system temp directory.
+# clangd serializes each file's preamble to the system temp dir (default --pch-storage=disk) and the files persist
+# across editor restarts. They accumulate (one project can produce hundreds of 40-90MB files = tens of GB) and become
+# stale whenever the build tree changes. Removing them once per configure keeps the temp dir bounded; clangd simply
+# regenerates the preamble for any file it opens again. Best-effort, never fatal.
+#
+# Temp dir resolution mirrors LLVM's sys::path (what clangd uses) per platform:
+#   Windows:  $TEMP / $TMP            -> default %LOCALAPPDATA%\Temp
+#   Linux:    $TMPDIR                 -> falls back to /tmp when unset
+#   macOS:    $TMPDIR                 -> set by launchd to /var/folders/... (rarely unset)
+# ---------------------------------------------------------------------------------------------------------------------
+set(PROJECT_VSCODE_CLANGD_TMP "")
+if(WIN32)
+  foreach(PROJECT_VSCODE_TMP_CANDIDATE "$ENV{TEMP}" "$ENV{TMP}")
+    if(NOT PROJECT_VSCODE_CLANGD_TMP
+       AND NOT "${PROJECT_VSCODE_TMP_CANDIDATE}" STREQUAL ""
+       AND IS_DIRECTORY "${PROJECT_VSCODE_TMP_CANDIDATE}")
+      set(PROJECT_VSCODE_CLANGD_TMP "${PROJECT_VSCODE_TMP_CANDIDATE}")
+    endif()
+  endforeach()
+else()
+  if(NOT "$ENV{TMPDIR}" STREQUAL "" AND IS_DIRECTORY "$ENV{TMPDIR}")
+    set(PROJECT_VSCODE_CLANGD_TMP "$ENV{TMPDIR}")
+  elseif(IS_DIRECTORY "/tmp")
+    set(PROJECT_VSCODE_CLANGD_TMP "/tmp")
+  endif()
+endif()
+if(PROJECT_VSCODE_CLANGD_TMP)
+  file(GLOB PROJECT_VSCODE_STALE_PREAMBLES "${PROJECT_VSCODE_CLANGD_TMP}/preamble-*.pch")
+  list(LENGTH PROJECT_VSCODE_STALE_PREAMBLES PROJECT_VSCODE_STALE_COUNT)
+  if(PROJECT_VSCODE_STALE_COUNT GREATER 0)
+    set(PROJECT_VSCODE_STALE_BYTES 0)
+    foreach(PROJECT_VSCODE_PCH IN LISTS PROJECT_VSCODE_STALE_PREAMBLES)
+      file(SIZE "${PROJECT_VSCODE_PCH}" PROJECT_VSCODE_PCH_SIZE)
+      math(EXPR PROJECT_VSCODE_STALE_BYTES "${PROJECT_VSCODE_STALE_BYTES} + ${PROJECT_VSCODE_PCH_SIZE}")
+    endforeach()
+    math(EXPR PROJECT_VSCODE_STALE_MB "${PROJECT_VSCODE_STALE_BYTES} / 1048576")
+    foreach(PROJECT_VSCODE_PCH IN LISTS PROJECT_VSCODE_STALE_PREAMBLES)
+      file(REMOVE "${PROJECT_VSCODE_PCH}")
+    endforeach()
+    message(STATUS "[optimize-vscode] Cleaned ${PROJECT_VSCODE_STALE_COUNT} stale clangd preamble files "
+                   "(${PROJECT_VSCODE_STALE_MB} MB) from ${PROJECT_VSCODE_CLANGD_TMP}")
+  endif()
+endif()
