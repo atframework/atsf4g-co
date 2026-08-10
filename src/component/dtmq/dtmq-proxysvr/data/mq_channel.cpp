@@ -103,11 +103,11 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
       resolved_transfer_etcd_revision_(0),
       server_distribution_etcd_revision_(0) {
   protobuf_copy_message(channel_key_, channel_key);
-
-  shared_wal_object_ = create_mq_channel_object(*this, configure);
-  wal_publisher_ = create_mq_channel_publisher(*this, configure);
-
   reload_configure(configure);
+
+  shared_wal_object_ = create_mq_channel_object(*this, configure_);
+  wal_publisher_ = create_mq_channel_publisher(*this, configure_);
+
   next_send_oss_time_ = atfw::util::time::time_utility::now();
 
   FWLOGINFO("channel {}({}) constructed.", get_channel_id(), reinterpret_cast<const void*>(this));
@@ -387,29 +387,23 @@ void mq_channel::dump(atfw::dtmq::DChannelSnapshot& snapshot, bool with_configur
 }
 
 void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
-  protobuf_copy_message(configure_, config);
+  if (&configure_ != &config) {
+    protobuf_copy_message(configure_, config);
+    excel::normalize_dtmq_channel_configure(configure_);
+  }
 
   auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(get_channel_key().channel_type());
 
-  {
+  if (shared_wal_object_) {
     auto& wal_obj_conf = get_shared_wal_object()->get_configure();
 
-    // 未配置则用默认值
-    if (configure_.gc_expire_duration().seconds() > 0) {
-      wal_obj_conf.gc_expire_duration =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.gc_expire_duration());
-    }
-
-    if (configure_.gc_log_count() > 0) {
-      wal_obj_conf.gc_log_size = configure_.gc_log_count();
-    }
-
-    if (configure_.max_log_count() > 0) {
-      wal_obj_conf.max_log_size = configure_.max_log_count();
-    }
+    wal_obj_conf.gc_expire_duration =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.gc_expire_duration());
+    wal_obj_conf.gc_log_size = configure_.gc_log_count();
+    wal_obj_conf.max_log_size = configure_.max_log_count();
   }
 
-  {
+  if (wal_publisher_) {
     auto& wal_obj_conf = get_shared_wal_object()->get_configure();
     auto& publisher_conf = get_wal_publisher().get_configure();
 
@@ -428,21 +422,11 @@ void mq_channel::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
     client_conf.gc_log_size = wal_obj_conf.gc_log_size;
     client_conf.max_log_size = wal_obj_conf.max_log_size;
 
-    if (configure_.heartbeat_interval().seconds() > 0) {
-      client_conf.subscriber_heartbeat_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.heartbeat_interval());
-    } else {
-      client_conf.subscriber_heartbeat_interval =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-    }
-    if (configure_.heartbeat_retry_interval().seconds() > 0) {
-      client_conf.subscriber_heartbeat_retry_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-              configure_.heartbeat_retry_interval());
-    } else {
-      client_conf.subscriber_heartbeat_retry_interval =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-    }
+    client_conf.subscriber_heartbeat_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.heartbeat_interval());
+    client_conf.subscriber_heartbeat_retry_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+            configure_.heartbeat_retry_interval());
   }
 
   if (channel_cfg && readonly_replicate_configure_count_ != channel_cfg->readonly_replicate_count()) {
@@ -2317,10 +2301,7 @@ void mq_channel::maybe_create_wal_client() {
     return;
   }
 
-  auto configure = excel::get_dtmq_channel_configure(get_channel_key().channel_type());
-  if (configure) {
-    wal_client_ = create_mq_channel_client(*this, *configure);
-  }
+  wal_client_ = create_mq_channel_client(*this, configure_);
 }
 
 void mq_channel::hash_mismatch_increase() {

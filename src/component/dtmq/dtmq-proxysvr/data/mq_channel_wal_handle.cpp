@@ -262,26 +262,10 @@ static mq_channel_wal_object_type::configure_pointer create_mq_channel_shared_ob
   mq_channel_wal_object_type::default_configure(*ret);
 
   // 以下不同类型的聊天频道配置不一样
-  if (configure.gc_expire_duration().seconds() <= 0) {
-    ret->gc_expire_duration =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
-  } else {
-    ret->gc_expire_duration =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
-  }
-  auto channel_log_keep_count = configure.gc_log_count();
-  if (channel_log_keep_count <= 0) {
-    ret->gc_log_size = 30;
-  } else {
-    ret->gc_log_size = channel_log_keep_count;
-  }
-
-  auto channel_log_max_count = configure.max_log_count();
-  if (channel_log_max_count <= 0) {
-    ret->max_log_size = 300;
-  } else {
-    ret->max_log_size = channel_log_max_count;
-  }
+  ret->gc_expire_duration =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
+  ret->gc_log_size = configure.gc_log_count();
+  ret->max_log_size = configure.max_log_count();
 
   return ret;
 }
@@ -609,40 +593,19 @@ static mq_channel_wal_client_type::configure_pointer create_mq_channel_client_co
     return ret;
   }
 
-  if (configure.heartbeat_interval().seconds() > 0) {
-    ret->subscriber_heartbeat_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
-  } else {
-    ret->subscriber_heartbeat_interval =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-  }
-  if (configure.heartbeat_retry_interval().seconds() > 0) {
-    ret->subscriber_heartbeat_retry_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
-  } else {
-    ret->subscriber_heartbeat_retry_interval =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-  }
+  ret->subscriber_heartbeat_interval =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
+  ret->subscriber_heartbeat_retry_interval =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
 
   ret->require_snapshot = true;
 
   // 以下不同类型的聊天频道配置不一样
-  if (configure.gc_expire_duration().seconds() <= 0) {
-    ret->gc_expire_duration =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
-  } else {
-    ret->gc_expire_duration =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
-  }
+  ret->gc_expire_duration =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
   ret->gc_log_size = configure.gc_log_count();
-  if (ret->gc_log_size <= 0) {
-    ret->gc_log_size = 30;
-  }
-
   ret->max_log_size = configure.max_log_count();
-  if (ret->max_log_size <= 0) {
-    ret->max_log_size = 300;
-  }
+
   return ret;
 }
 
@@ -655,23 +618,10 @@ static mq_channel_wal_publisher_type::configure_pointer create_mq_channel_publis
   // 无需通知移除订阅
   // ret->enable_last_broadcast_for_removed_subscriber = true;
 
-  if (configure.gc_expire_duration().seconds() <= 0) {
-    ret->gc_expire_duration =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
-  } else {
-    ret->gc_expire_duration =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
-  }
-
+  ret->gc_expire_duration =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
   ret->gc_log_size = configure.gc_log_count();
-  if (ret->gc_log_size <= 0) {
-    ret->gc_log_size = 30;
-  }
-
   ret->max_log_size = configure.max_log_count();
-  if (ret->max_log_size <= 0) {
-    ret->max_log_size = 300;
-  }
 
   ret->enable_hole_log = true;
 
@@ -703,18 +653,9 @@ atfw::util::distributed_system::wal_duration get_mq_channel_subscriber_timeout(
   }
 
   atfw::util::distributed_system::wal_duration subscriber_heartbeat_interval =
-      std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-  if (configure.heartbeat_interval().seconds() > 0) {
-    subscriber_heartbeat_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
-  }
-
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
   atfw::util::distributed_system::wal_duration subscriber_heartbeat_retry_interval =
-      std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-  if (configure.heartbeat_retry_interval().seconds() > 0) {
-    subscriber_heartbeat_retry_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
-  }
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
 
   return subscriber_heartbeat_interval + subscriber_heartbeat_interval + subscriber_heartbeat_retry_interval;
 }

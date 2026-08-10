@@ -52,8 +52,13 @@ struct object_allocator_backend : public object_allocator_default_backend<T> {};
 
 template <class BackendAllocator>
 class object_allocator_backend_is_always_equal {
+#if __cplusplus >= 202002L
+  template <class BackendAllocatorOther>
+  static typename std::allocator_traits<BackendAllocatorOther>::is_always_equal _S_test(int);
+#else
   template <class BackendAllocatorOther>
   static typename BackendAllocatorOther::is_always_equal _S_test(int);
+#endif
 
   template <class>
   static typename ::std::is_empty<BackendAllocator>::type _S_test(...);
@@ -65,7 +70,7 @@ class object_allocator_backend_is_always_equal {
 template <class LeftBackendAllocator, class RightBackendAllocator>
 class object_allocator_backend_equal {
   template <class LeftAllocator, class RightAllocator>
-  static auto _S_check(int)
+  static auto _S_check(int)  // NOLINT: readability/casting
       -> decltype(::std::declval<const LeftAllocator&>() == ::std::declval<const RightAllocator&>(),
                   ::std::true_type());
 

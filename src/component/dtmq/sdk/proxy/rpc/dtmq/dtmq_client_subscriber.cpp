@@ -41,6 +41,7 @@
 #include <rpc/rpc_utils.h>
 
 #include <config/excel/config_easy_api.h>
+#include <config/excel_config_dtmq_index.h>
 #include <config/extern_service_types.h>
 #include <config/server_frame_build_feature.h>
 
@@ -2045,40 +2046,19 @@ mq_client_subscriber_wal_client_type::configure_pointer shared_subscriber::creat
     return ret;
   }
 
-  if (configure.heartbeat_interval().seconds() > 0) {
-    ret->subscriber_heartbeat_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
-  } else {
-    ret->subscriber_heartbeat_interval =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-  }
-  if (configure.heartbeat_retry_interval().seconds() > 0) {
-    ret->subscriber_heartbeat_retry_interval =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
-  } else {
-    ret->subscriber_heartbeat_retry_interval =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-  }
+  ret->subscriber_heartbeat_interval =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_interval());
+  ret->subscriber_heartbeat_retry_interval =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.heartbeat_retry_interval());
 
   ret->require_snapshot = true;
 
   // 以下不同类型的消息队列频道配置不一样
-  if (configure.gc_expire_duration().seconds() <= 0) {
-    ret->gc_expire_duration =
-        std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::hours{3650 * 24});
-  } else {
-    ret->gc_expire_duration =
-        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
-  }
+  ret->gc_expire_duration =
+      protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure.gc_expire_duration());
   ret->gc_log_size = configure.gc_log_count();
-  if (ret->gc_log_size <= 0) {
-    ret->gc_log_size = 30;
-  }
-
   ret->max_log_size = configure.max_log_count();
-  if (ret->max_log_size <= 0) {
-    ret->max_log_size = 300;
-  }
+
   return ret;
 }
 
@@ -2239,57 +2219,24 @@ void shared_subscriber::setup_timer(timer_action_type action, bool ignore_same_a
       if (wal_client_) {
         timeout_tp = wal_client_->get_next_heartbeat_timepoint();
       } else {
-        if (configure_.heartbeat_interval().seconds() > 0) {
-          timeout_tp =
-              atfw::util::time::time_utility::now() +
-              protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_interval());
-        } else {
-          timeout_tp = atfw::util::time::time_utility::now() + std::chrono::seconds{300};
-        }
+        timeout_tp = atfw::util::time::time_utility::now() +
+                     protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_interval());
       }
       break;
     case timer_action_type::kRetryHeartbeat:
       if (wal_client_) {
         timeout_tp = wal_client_->get_next_heartbeat_timepoint();
       } else {
-        if (configure_.heartbeat_retry_interval().seconds() > 0) {
-          timeout_tp =
-              atfw::util::time::time_utility::now() +
-              protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_retry_interval());
-        } else {
-          timeout_tp = atfw::util::time::time_utility::now() + std::chrono::seconds{60};
-        }
+        timeout_tp =
+            atfw::util::time::time_utility::now() +
+            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_retry_interval());
       }
       break;
     case timer_action_type::kGc:
       // 这里指删除频道的间隔，不是log的过期时间
-      if (configure_.shared_subscriber_gc_timeout().seconds() > 0 ||
-          configure_.shared_subscriber_gc_timeout().nanos() > 0) {
-        timeout_tp =
-            atfw::util::time::time_utility::now() +
-            protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.shared_subscriber_gc_timeout());
-
-      } else if (configure_.subscriber_timeout().seconds() <= 0) {
-        atfw::util::distributed_system::wal_duration subscriber_heartbeat_interval =
-            std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-        if (configure_.heartbeat_interval().seconds() > 0) {
-          subscriber_heartbeat_interval = protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-              configure_.heartbeat_interval());
-        }
-
-        atfw::util::distributed_system::wal_duration subscriber_heartbeat_retry_interval =
-            std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-        if (configure_.heartbeat_retry_interval().seconds() > 0) {
-          subscriber_heartbeat_retry_interval =
-              protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-                  configure_.heartbeat_retry_interval());
-        }
-        timeout_tp = atfw::util::time::time_utility::now() + subscriber_heartbeat_interval +
-                     subscriber_heartbeat_interval + subscriber_heartbeat_retry_interval;
-      } else {
-        timeout_tp = atfw::util::time::time_utility::now() +
-                     protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.subscriber_timeout());
-      }
+      timeout_tp =
+          atfw::util::time::time_utility::now() +
+          protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.shared_subscriber_gc_timeout());
 
       break;
     default:
@@ -2881,45 +2828,28 @@ void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChan
 
 void shared_subscriber::reload_configure(const atfw::dtmq::DChannelConfigure& config) {
   protobuf_copy_message(configure_, config);
+  excel::normalize_dtmq_channel_configure(configure_);
+
+  // 确保配置有效
 
   if (wal_client_) {
     auto& wal_obj_conf = wal_client_->get_log_manager().get_configure();
 
-    // 未配置则用默认值
-    if (configure_.gc_expire_duration().seconds() > 0) {
-      wal_obj_conf.gc_expire_duration =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.gc_expire_duration());
-    }
-
-    if (configure_.gc_log_count() > 0) {
-      wal_obj_conf.gc_log_size = configure_.gc_log_count();
-    }
-
-    if (configure_.max_log_count() > 0) {
-      wal_obj_conf.max_log_size = configure_.max_log_count();
-    }
+    wal_obj_conf.gc_expire_duration =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.gc_expire_duration());
+    wal_obj_conf.gc_log_size = configure_.gc_log_count();
+    wal_obj_conf.max_log_size = configure_.max_log_count();
 
     auto& client_conf = wal_client_->get_configure();
     client_conf.gc_expire_duration = wal_obj_conf.gc_expire_duration;
     client_conf.gc_log_size = wal_obj_conf.gc_log_size;
     client_conf.max_log_size = wal_obj_conf.max_log_size;
 
-    if (configure_.heartbeat_interval().seconds() > 0) {
-      client_conf.subscriber_heartbeat_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.heartbeat_interval());
-    } else {
-      client_conf.subscriber_heartbeat_interval =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{300});
-    }
-
-    if (configure_.heartbeat_retry_interval().seconds() > 0) {
-      client_conf.subscriber_heartbeat_retry_interval =
-          protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
-              configure_.heartbeat_retry_interval());
-    } else {
-      client_conf.subscriber_heartbeat_retry_interval =
-          std::chrono::duration_cast<atfw::util::distributed_system::wal_duration>(std::chrono::seconds{60});
-    }
+    client_conf.subscriber_heartbeat_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(configure_.heartbeat_interval());
+    client_conf.subscriber_heartbeat_retry_interval =
+        protobuf_to_chrono_duration<atfw::util::distributed_system::wal_duration>(
+            configure_.heartbeat_retry_interval());
   }
 }
 

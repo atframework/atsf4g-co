@@ -20,6 +20,7 @@ namespace atframework {
 namespace dtmq {
 class DChannelIdKey;
 class DChannelMessage;
+class DChannelConfigure;
 }  // namespace dtmq
 }  // namespace atframework
 
