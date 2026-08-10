@@ -36,7 +36,8 @@ func LoginCmd(action base.TaskActionImpl, cmd []string) string {
 	}
 
 	openId := cmd[0]
-	u := user_data.CreateUser(openId, user_data.CreateDefaultUserLogHandler(openId), true, false)
+	// u := user_data.CreateUser(openId, user_data.CreateDefaultUserLogHandler(openId), true, false)
+	u := user_data.CreateUser(openId, action.Log, true, false)
 	if u == nil {
 		return "Create User Failed"
 	}
