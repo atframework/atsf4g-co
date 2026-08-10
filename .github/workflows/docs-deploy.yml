@@ -1,11 +1,9 @@
 name: Deploy Docs
-
 # Build the Docusaurus site under doc/ and publish it to the gh-pages branch of
 # atframework/atframe.work (served at https://atframe.work/ via a custom domain).
 # Authentication uses the DOCUMENT_DEPLOY_KEY SSH deploy key (cross-repo write access
 # to atframework/atframe.work must be granted by adding the matching public key as a
 # deploy key with write access on that repository).
-
 on:
   push:
     branches:
@@ -15,14 +13,11 @@ on:
       - "doc/**"
       - ".github/workflows/docs-deploy.yml"
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: docs-deploy
   cancel-in-progress: false
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -32,29 +27,42 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
-      # pnpm MUST be set up before Node: setup-node's `cache: pnpm` runs
-      # `pnpm store path`, so pnpm has to be on PATH already.
+      # pnpm MUST be set up before Node: setup-node needs pnpm on PATH.
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           version: latest
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           # lts/* tracks the current Active LTS. pnpm 11 requires Node >= 22.13
           # (it uses the node:sqlite builtin), which any recent LTS satisfies.
+          # No `cache: pnpm` here: that mode requires a committed lockfile to
+          # derive the cache key, but this repo deliberately does not commit
+          # doc/pnpm-lock.yaml. The pnpm store is cached by the step below.
           node-version: "lts/*"
-          cache: pnpm
-
+      # Cache the global pnpm store with a stable key that does NOT depend on a
+      # lockfile (since none is committed). pnpm/action-setup does not expose the
+      # store path as an output, so resolve it at runtime and hand it to
+      # actions/cache via GITHUB_ENV (env.* is evaluated when this step runs).
+      - name: Resolve pnpm store path
+        shell: bash
+        run: |
+          echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache pnpm store
+        uses: actions/cache@v6
+        with:
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: docs-pnpm-store-${{ runner.os }}
+          restore-keys: |
+            docs-pnpm-store-${{ runner.os }}
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+        # No --frozen-lockfile: doc/pnpm-lock.yaml is not committed, so pnpm
+        # resolves the dependency graph from package.json on each run.
+        run: pnpm install
       - name: Build site
         run: pnpm build
-
       - name: Configure SSH deploy key
         shell: bash
         run: |
@@ -63,7 +71,6 @@ jobs:
           printf '%s\n' "${{ secrets.DOCUMENT_DEPLOY_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-
       - name: Deploy to atframework/atframe.work:gh-pages
         env:
           GIT_SSH_COMMAND: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes

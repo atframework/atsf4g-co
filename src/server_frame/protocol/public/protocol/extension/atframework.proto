@@ -91,7 +91,7 @@ message RpcRequestMeta {
   string caller = 11;  // 请求方服务名
   string callee = 12;  // 被调方服务名
 
-  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>/<MethodName>
+  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
   string type_url = 22;  // 类型地址
 
   google.protobuf.Timestamp caller_timestamp = 33;
@@ -100,7 +100,7 @@ message RpcRequestMeta {
 message RpcResponseMeta {
   string version = 1;  // 协议版本号
 
-  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>/<MethodName>
+  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
   string type_url = 22;  // 类型地址
 
   uint64 caller_node_id = 31;
@@ -114,7 +114,7 @@ message RpcStreamMeta {
   string caller = 11;  // 请求方服务名
   string callee = 12;  // 被调方服务名
 
-  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>/<MethodName>
+  string rpc_name = 21;  // 调度分发名称: <ServiceFullName>.<MethodName>
   string type_url = 22;  // 类型地址
 
   google.protobuf.Timestamp caller_timestamp = 33;
