@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 set(ORBIT_AUTO_CLIENT_NAME OrbitAutoClient)
 set(ORBIT_AUTO_CLIENT_ROOT_DIRECTORY orbit-auto-client)
 

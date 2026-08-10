@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 get_filename_component(GENERATE_FOR_PB_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
 set(GENERATE_FOR_PB_SERVER_PID_FILE "${CMAKE_BINARY_DIR}/generate-for-pb-run.server.pid")
 set(GENERATE_FOR_PB_SERVER_PORT_FILE "${CMAKE_BINARY_DIR}/generate-for-pb-run.server.port")

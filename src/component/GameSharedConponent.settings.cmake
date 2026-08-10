@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 set(PROJECT_GAME_SHARED_COMPONENT_PRIVATE_DEFINITIONS GAME_SHARED_COMPONENT_SERVER_MODE=1
                                                       "PROJECT_PROTOCOL_NAMESPACE_ID=${PROJECT_NAMESPACE}")
 

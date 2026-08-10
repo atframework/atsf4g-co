@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # ============ Orbit component unit tests (rpc-unit-test based) ============
 
 project_add_rpc_unit_test(

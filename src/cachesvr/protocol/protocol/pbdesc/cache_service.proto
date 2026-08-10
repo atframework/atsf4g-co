@@ -7,8 +7,6 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
-option go_package = "github.com/atframework/atsf4g-go/service-cachesvr/protocol/protocol/pbdesc";
-
 // import "google/protobuf/duration.proto";
 // import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
@@ -18,6 +16,8 @@ import "protocol/extension/atframework.proto";
 import "protocol/common/com.struct.cache.common.proto";
 import "protocol/pbdesc/svr.struct.cache.proto";
 import "protocol/pbdesc/svr.struct.proto";
+
+option go_package = "github.com/atframework/atsf4g-go/service-cachesvr/protocol/protocol/pbdesc";
 
 package hello;
 

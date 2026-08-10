@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # =========== ItemAlgorithm Unit Tests ===========
 set(ITEM_ALGORITHM_TEST_FRAME_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../atframework/atframe_utils/test")
 

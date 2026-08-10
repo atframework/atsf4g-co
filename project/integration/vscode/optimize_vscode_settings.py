@@ -25,6 +25,13 @@ Applied rules (existing user values are preserved unless a repair is required):
     - ``--background-index`` and ``--clang-tidy`` are ensured.
     - ``--header-insertion`` is forced to ``never`` (the only value clangd accepts;
       note that ``Never`` / ``iwyu`` casing variants are rejected by clangd).
+* File-watcher / Explorer / search exclusions are ensured to keep the editor responsive on
+  workspaces with a large build tree. ``files.watcherExclude`` and ``search.exclude`` gain
+  the configured build directory (``--build-dir``, sourced by the CMake driver from
+  ``CMAKE_CURRENT_BINARY_DIR``), ``**/atframework/**/build`` (every vendored subproject may
+  own an independent build tree) and the append-only ``**/.git/objects/**`` /
+  ``**/.git/subtree-cache/**``. ``files.exclude`` only hides the heavy build trees so the
+  Explorer is not cluttered. Existing globs are always kept.
 
 JSONC comments are not preserved on rewrite; a ``.bak`` copy is written before any change.
 """
@@ -49,6 +56,28 @@ DESIRED_ENVIRONMENT = (("VSLANG", "1033"),)
 # Keys an older version of this script injected into ``cmake.configureEnvironment`` but that
 # now belong in ``cmake.environment``; migrated away on every run for correctness.
 MIGRATE_TO_ENVIRONMENT = ("VSLANG",)
+
+# Static exclusion glob patterns applied to the file watcher, the Explorer file list and the
+# search scope. They are the main cure for VSCode watcher/index latency on workspaces that
+# carry multi-GB build output trees: the build step writes thousands of .obj/.pdb/.ilk/.log
+# files, and every change notification has to flow through the watcher queue before an editor
+# save or directory create is acknowledged.
+#
+# ``atframework/**`` is vendored and every subproject may own an independent build tree
+# (e.g. ``atframe_utils/build``); the wildcard form adapts to all of them.
+# ``.git/objects`` and ``.git/subtree-cache`` are very large, append-only, and never edited.
+STATIC_EXCLUDE_GLOBS = (
+    "**/atframework/**/build",
+    "**/.git/objects/**",
+    "**/.git/subtree-cache/**",
+)
+
+# Subset shown as hidden in the Explorer (``files.exclude``). The ``.git`` internal
+# directories are already invisible through .git semantics, so they are intentionally kept out
+# of the Explorer hide list to avoid surprising the user.
+FILES_HIDE_GLOBS = (
+    "**/atframework/**/build",
+)
 
 
 def strip_jsonc_comments(text):
@@ -179,6 +208,53 @@ def find_arg_index(args, flag):
         if value == flag or value.startswith(prefix):
             return index
     return -1
+
+
+def compute_build_exclude_glob(build_dir, workspace_dir):
+    """Return the ``files.watcherExclude``-style glob that matches the build tree.
+
+    The build directory (``--build-dir``, sourced by the CMake driver from
+    ``CMAKE_CURRENT_BINARY_DIR``) is the largest source of file-change churn, so it is
+    expressed relative to the workspace when possible (``**/<basename>/**``) to stay valid
+    even if the absolute path is moved. When the build tree lives outside the workspace the
+    absolute path is used directly so the watcher still skips it. ``None`` is returned when no
+    build directory was supplied.
+    """
+    if not build_dir:
+        return None
+    build_abs = os.path.abspath(build_dir)
+    workspace_abs = os.path.abspath(workspace_dir)
+    try:
+        rel = os.path.relpath(build_abs, workspace_abs)
+    except ValueError:
+        rel = None
+    if rel and not rel.startswith("..") and not os.path.isabs(rel):
+        return "**/%s/**" % normalize_path(rel)
+    return normalize_path(build_abs)
+
+
+def apply_glob_block(data, key, globs, changes):
+    """Ensure each glob in ``globs`` is present under settings key ``key`` (idempotent).
+
+    Existing entries are never overwritten; the block is created when missing and left as-is
+    when it already holds a non-object value (a warning is printed instead). Mirrors the
+    defensive behaviour of :func:`apply_environment_block`.
+    """
+    block = data.get(key)
+    if block is not None and not isinstance(block, dict):
+        print(
+            "[optimize-vscode] skip %s: existing value is not an object" % key,
+            file=sys.stderr,
+        )
+        return
+    if block is None:
+        block = {}
+    for glob in globs:
+        if glob is None or glob in block:
+            continue
+        block[glob] = True
+        changes.append("%s: add %s" % (key, glob))
+    data[key] = block
 
 
 def apply_environment_block(data, key, desired, changes):
@@ -371,6 +447,24 @@ def main(argv):
         data, "cmake.configureEnvironment", DESIRED_CONFIGURE_ENVIRONMENT, changes
     )
     apply_environment_block(data, "cmake.environment", DESIRED_ENVIRONMENT, changes)
+
+    # Exclude the build output tree and other heavy/append-only directories from the file
+    # watcher, the Explorer file list and the search scope. This is the primary fix for the
+    # editor/save/directory-create latency observed on workspaces whose build tree reaches
+    # tens of GB: the build step generates a steady stream of .obj/.pdb/.log change events
+    # that would otherwise block the watcher queue on every editor operation.
+    build_glob = compute_build_exclude_glob(opts.build_dir, opts.workspace_dir)
+    watcher_globs = list(STATIC_EXCLUDE_GLOBS)
+    search_globs = list(STATIC_EXCLUDE_GLOBS)
+    files_globs = list(FILES_HIDE_GLOBS)
+    if build_glob is not None:
+        watcher_globs.insert(0, build_glob)
+        search_globs.insert(0, build_glob)
+        files_globs.insert(0, build_glob)
+    apply_glob_block(data, "files.watcherExclude", watcher_globs, changes)
+    apply_glob_block(data, "search.exclude", search_globs, changes)
+    apply_glob_block(data, "files.exclude", files_globs, changes)
+
     apply_tool_path(
         data, "cpplint.cpplintPath", opts.cpplint, ["cpplint", "cpplint.exe"], changes
     )

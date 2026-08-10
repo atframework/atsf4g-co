@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # Helper functions and support targets for component RPC unit tests.
 #
 # This file is included by src/tools/rpc-unit-test/CMakeLists.txt, which is added before `component` in

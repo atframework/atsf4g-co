@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 set(PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE 16)
 set(PROJECT_SERVICE_UNITY_BUILD_MIN_FILE_COUNT 1)
 

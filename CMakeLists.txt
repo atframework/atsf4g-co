@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 cmake_minimum_required(VERSION 3.24.0)
 
 if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.27.0")

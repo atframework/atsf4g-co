@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 include("${CMAKE_CURRENT_LIST_DIR}/component-functions.cmake")
 
 # ============ protocol-first server components ============

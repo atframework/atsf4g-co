@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # =========== RPC unit test support library ===========
 # Only added by src/CMakeLists.txt when `BUILD_TESTING OR PROJECT_ENABLE_UNITTEST` is true, and only when
 # PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is on.

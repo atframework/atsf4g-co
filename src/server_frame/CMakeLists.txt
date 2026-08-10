@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 unset(PROJECT_SERVER_FRAME_PUBLIC_LINK_NAMES)
 unset(PROJECT_SERVER_FRAME_PUBLIC_INCLUDE_DIRS)
 unset(PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS)

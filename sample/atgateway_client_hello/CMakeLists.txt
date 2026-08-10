@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # ============ sample - [...] ============
 
 get_filename_component(SAMPLE_SRC_BIN_NAME ${CMAKE_CURRENT_LIST_DIR} NAME_WE)

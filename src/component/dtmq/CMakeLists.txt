@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 project_component_declare_protocol(
   "dtmq-protocol-common" "${CMAKE_CURRENT_LIST_DIR}/protocol/common" PROTOCOLS
   "${CMAKE_CURRENT_LIST_DIR}/protocol/common/protocol/common/svr.struct.dtmq.common.proto")

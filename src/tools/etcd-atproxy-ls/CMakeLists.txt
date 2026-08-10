@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # ============ scan services fo atproxy - [...] ============
 get_filename_component(TOOL_SRC_DIR_NAME ${CMAKE_CURRENT_LIST_DIR} NAME)
 set(TOOL_SRC_BIN_NAME "${TOOL_SRC_DIR_NAME}-cli")

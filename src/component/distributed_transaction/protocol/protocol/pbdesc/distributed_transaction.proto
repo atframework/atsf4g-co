@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-package atframework.distributed_system;
-
 import "google/protobuf/any.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
@@ -14,6 +12,10 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 option cc_generic_services = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/distributed_transaction/protocol/protocol/pbdesc";
+
+package atframework.distributed_system;
 
 // ============ Basic data ============
 enum EnDistibutedTransactionStatus {

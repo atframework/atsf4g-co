@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 project_game_shared_component_declare_sdk(
   OrbitSDK
   "${CMAKE_CURRENT_LIST_DIR}"

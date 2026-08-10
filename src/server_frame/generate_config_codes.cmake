@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # Python3_EXECUTABLE
 # PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY
 function(project_server_frame_add_config_target)

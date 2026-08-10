@@ -22,7 +22,10 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 - For C/C++ review findings, parse the current nearest `.clang-tidy` and `CPPLINT.cfg` instead of relying on memory.
   Cite issues only when they are active in config or supported by local project convention.
 - Copyright headers are a required review item when `CPPLINT.cfg` does not filter `legal/copyright`; new or modified
-  C/C++ files should keep the project copyright header style used by nearby files.
+  C/C++ files should keep the project copyright header style used by nearby files. CMake scripts follow the same rule:
+  every main-project `CMakeLists.txt`/`*.cmake` must start with the two-line `# Copyright <year> atframework` /
+  `# Licensed under the Apache License, Version 2.0 (the "License");` header described in
+  [`cmake-and-generated.md`](cmake-and-generated.md).
 - Include review must check self-header inclusion, system/project include grouping and `.clang-format` sorting within
   preserved blocks, protobuf prefix/suffix wrappers, and obvious missing or stale includes. In the root project,
   `.clang-tidy` disables `misc-include-cleaner`, so do not report include-cleaner-only guesses as lint violations unless

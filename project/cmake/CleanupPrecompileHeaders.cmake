@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # =====================================================================================================================
 # Remove CMake-generated precompiled header (PCH) build artifacts from a build tree.
 #

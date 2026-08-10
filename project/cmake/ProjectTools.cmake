@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 set(LOG_WRAPPER_CATEGORIZE_SIZE
     16
     CACHE STRING "全局日志分类个数限制")

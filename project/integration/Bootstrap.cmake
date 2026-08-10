@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 include_guard(GLOBAL)
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/.vscode")

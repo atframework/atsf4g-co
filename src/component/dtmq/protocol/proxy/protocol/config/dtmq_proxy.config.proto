@@ -11,6 +11,8 @@ import "google/protobuf/duration.proto";
 
 import "atframe/atapp_conf.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/dtmq/protocol/proxy/protocol/config";
+
 package atframework.dtmq.config;
 
 message dtmq_proxysvr_cfg {

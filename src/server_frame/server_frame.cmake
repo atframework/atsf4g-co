@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # =========== server_frame ===========
 set(PROJECT_SERVER_FRAME_BAS_DIR ${CMAKE_CURRENT_LIST_DIR})
 set(PROJECT_SERVER_FRAME_INC_DIR ${PROJECT_SERVER_FRAME_BAS_DIR})

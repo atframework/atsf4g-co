@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 generate_for_pb_add_orbit_service(
   "${PROJECT_NAMESPACE}.OrbitServerRpcService"
   "${CMAKE_CURRENT_LIST_DIR}/service"

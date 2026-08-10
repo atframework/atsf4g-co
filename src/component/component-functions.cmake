@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 set(PROJECT_INSTALL_COMPONENT_EXPORT_NAME "${PROJECT_NAME}-component-target")
 set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
     "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}.cmake")

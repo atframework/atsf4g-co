@@ -4,6 +4,17 @@ Detail companion to `SKILL.md`. Load when editing CMake files, protobuf, templat
 
 ## CMake style
 
+- Every main-project CMake script (`CMakeLists.txt`, `*.cmake`; excluding vendored `atframework/**` and
+  `third_party/**`) must begin with the standard two-line copyright header followed by one blank line:
+
+  ```cmake
+  # Copyright <year> atframework
+  # Licensed under the Apache License, Version 2.0 (the "License");
+  ```
+
+  It must be the first thing in the file (`.cmake-format.yaml` sets `first_comment_is_literal: True` so it is never
+  reflowed), before `cmake_minimum_required` or `include_guard`. Use the current year when creating a file; do not
+  rewrite years in existing headers.
 - Format CMake with `.cmake-format.yaml`: 120 columns, two-space indentation, Unix line endings.
 - Prefer project helper functions over manual target wiring when a helper expresses the relationship.
 - Target names must never hardcode the project name prefix: write `${PROJECT_NAME}-<name>` (or the `atframework`

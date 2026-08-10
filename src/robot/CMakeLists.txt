@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # CMakeLists.txt for src/robot (Go-based robot/testing framework)
 #
 # The Go robot is built by go-task at build time through the `robot-build` target, which is intentionally NOT

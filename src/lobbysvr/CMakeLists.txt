@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 project_service_declare_protocol("lobbysvr-protocol" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
                                  "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/pbdesc/lobby_service.proto")
 project_service_declare_protocol("lobbysvr-config" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS

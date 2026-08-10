@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 # =========== server_frame component unit tests ===========
 #
 # Cases live next to the component under test (see doc/docs/development/rpc-unit-test.md).

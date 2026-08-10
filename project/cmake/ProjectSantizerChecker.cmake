@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 include_guard(GLOBAL)
 
 # ASAN_OPTIONS=sleep_before_dying=3:abort_on_error=1:halt_on_error=1:disable_coredump=0:disable_core=0:unmap_shadow_on_exit=1:detect_leaks=1:atexit=1:log_path=process_name.asan.log

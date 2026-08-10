@@ -1,3 +1,6 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 set(GENERATE_FOR_ORBIT_PB_WORK_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 function(generate_for_pb_add_orbit_service SERVICE_NAME SERVICE_ROOT_DIR)

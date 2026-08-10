@@ -9,6 +9,8 @@ option cc_generic_services = true;
 
 import "google/protobuf/timestamp.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/dtmq/protocol/common/protocol/common";
+
 package atframework.dtmq;
 
 message channel_subscriber {

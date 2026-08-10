@@ -15,6 +15,8 @@ import "protocol/common/svr.struct.dtmq.common.proto";
 import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 
+option go_package = "github.com/atframework/atsf4g-co/component/dtmq/protocol/proxy/protocol/pbdesc";
+
 package atframework.dtmq;
 
 // 仅用于DB落地，依赖反转。
