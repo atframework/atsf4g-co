@@ -61,7 +61,7 @@
    <item name="Orbit Client 模板" cat="orbit" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">OrbitClient.xlsx|template|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">orbit.config.ExcelOrbitClientTemplate</scheme>
-      <scheme name="OutputFile" desc="输出文件名">orbit_client_template.bytes</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/orbit_client_template.bytes</scheme>
    </item>
   </list>
 </root>

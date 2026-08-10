@@ -8,10 +8,10 @@ if [[ ! -z "$SYSTEMD_CAT_IDENTIFIER" ]]; then
 
   # Using journalctl -e -t "$SYSTEMD_CAT_IDENTIFIER" to see the log
 
-  ./otelcol-contrib --config=../etc/config.yaml 2>&1 | systemd-cat -t "$SYSTEMD_CAT_IDENTIFIER" -p info
+  ./otelcol-contrib --config=../cfg/config.yaml 2>&1 | systemd-cat -t "$SYSTEMD_CAT_IDENTIFIER" -p info
 
 else
 
-  ./otelcol-contrib --config=../etc/config.yaml
+  ./otelcol-contrib --config=../cfg/config.yaml
 
 fi
