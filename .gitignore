@@ -68,6 +68,9 @@ __pycache__
 .cache
 /compile_commands.json
 
+# document
+/doc/pnpm-lock.yaml
+
 /src/tools/generate-for-pb/__pycache__/*
 
 # protocol
