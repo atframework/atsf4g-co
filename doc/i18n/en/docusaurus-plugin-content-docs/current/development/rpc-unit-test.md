@@ -100,6 +100,40 @@ CASE_TEST(my_component, hello) {
 Key points: only one active runtime per process (app/dispatcher/task singletons); the `run_task` body runs a real task
 with `RPC_AWAIT_*`/`RPC_RETURN_CODE`; put assertions after `wait()`.
 
+### Invoke an inbound SS action directly
+
+When testing a known `task_action_ss_rpc_base` implementation, use `<atframework/testing/ss_action.h>` instead of
+rebuilding an `SSMsg` and driving `task_manager` in every test:
+
+```cpp
+atfw::testing::ss_action_invoke_options invoke_options{
+    rpc::my_service::packer::get_full_name_of_my_method()};
+invoke_options.source.node_id = source_node_id;
+invoke_options.source.node_name = "my-test-source";
+invoke_options.source.source_task_id = source_task_id;
+invoke_options.source.sequence = source_sequence;
+
+auto task = test.run_task(
+    "my_inbound_action", std::chrono::seconds{2},
+    [request, invoke_options](rpc::context &ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+          atfw::testing::invoke_ss_action<task_action_my_method>(ctx, request, invoke_options)));
+    });
+```
+
+The helper performs real SSMsg serialization/unpacking and action create/start/wait, and the runtime must enable
+`feature::ss`. The request type is fixed by `TAction::rpc_request_type`; pass only the generated
+`packer::get_full_name_of_<rpc>()`. Before creating the action, the helper verifies that both protobuf request and
+response descriptors match the named method. Request and options are copied into the coroutine frame, so temporaries
+cannot dangle.
+
+The return value is the action's final task result, not a business code stored in the response protobuf. Zero source IDs
+represent an anonymous/system source; set all relevant fields explicitly for `forward_rpc`, tracing, replies, or
+source-sensitive authorization tests. The helper creates the template-selected action directly and therefore does not
+test the dispatcher's RPC-to-action registration lookup. Use raw transport/dispatcher APIs for registry, unknown-RPC,
+or malformed type URL/body/envelope tests. Compiled usage and contract tests live in `test/example_readme.cpp` and
+`test/rpc_unit_test_ss_action.cpp`; `src/component/dtmq/test/dtmq_test_task_forward.cpp` is a forwarding example.
+
 ## Usage guide
 
 `runtime_options.features` decides the module/hook set (`ss/dns/cs/db/uuid/resource/router/orbit/hpa/telemetry`); the

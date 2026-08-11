@@ -18,22 +18,51 @@
 #include <atframework/testing/mock_dns.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
+#include <atframework/testing/ss_action.h>
 
 #include <chrono>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
+#include "dispatcher/task_action_ss_req_base.h"
 #include "frame/test_macros.h"
 #include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/dns/lookup.h"
 #include "rpc/unit_test/rpcunittestservice.atfw.gen.h"
 
 namespace {
+constexpr uint64_t kReadmeSourceNodeId = 0x130092;
+
 atfw::testing::mock_node make_example_remote(uint64_t id, const char *name) {
   atfw::testing::mock_node node;
   node.set_id(id).set_name(name).set_type_id(4097).set_type_name("rpc-unit-test-remote").set_zone_id(1);
   return node;
 }
+
+class readme_inbound_action
+    : public task_action_ss_rpc_base<rpc_unit_test::RpcUnitTestEchoReq, rpc_unit_test::RpcUnitTestEchoRsp> {
+ public:
+  using base_type = task_action_ss_rpc_base<rpc_unit_test::RpcUnitTestEchoReq, rpc_unit_test::RpcUnitTestEchoRsp>;
+  using result_type = base_type::result_type;
+  using base_type::operator();
+
+  explicit readme_inbound_action(dispatcher_start_data_type &&param) : base_type(std::move(param)) {}
+  ~readme_inbound_action() override = default;
+
+  const char *name() const override { return "readme_inbound_action"; }
+
+  result_type operator()() override {
+    disable_response_message();
+    if (get_request_body().payload() != "inbound" || get_request().head().node_id() != kReadmeSourceNodeId) {
+      TASK_ACTION_RETURN_CODE(-1);
+    }
+    TASK_ACTION_RETURN_CODE(0);
+  }
+
+  int on_success() override { return get_result(); }
+  int on_failed() override { return get_result(); }
+};
 }  // namespace
 
 // README: minimal fixture skeleton (runtime + run_task + wait).
@@ -49,6 +78,39 @@ CASE_TEST(rpc_unit_test_readme, minimal_fixture) {
 
   auto task = test.run_task("hello", std::chrono::seconds{2},
                             [](rpc::context &) -> rpc::result_code_type { RPC_RETURN_CODE(0); });
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{5});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// README: invoke one concrete inbound SS action without duplicating SSMsg/task-manager plumbing.
+CASE_TEST(rpc_unit_test_readme, invoke_ss_action) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  rpc_unit_test::RpcUnitTestEchoReq request;
+  request.set_payload("inbound");
+  atfw::testing::ss_action_invoke_options invoke_options{rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user()};
+  invoke_options.source.node_id = kReadmeSourceNodeId;
+  invoke_options.source.node_name = "readme-source";
+  invoke_options.source.source_task_id = 101;
+  invoke_options.source.sequence = 102;
+
+  auto task =
+      test.run_task("readme_inbound_action", std::chrono::seconds{2},
+                    [request, invoke_options](rpc::context &ctx) -> rpc::result_code_type {
+                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                          atfw::testing::invoke_ss_action<readme_inbound_action>(ctx, request, invoke_options)));
+                    });
   if (!task.empty()) {
     auto result = test.wait(task, std::chrono::seconds{5});
     CASE_EXPECT_TRUE(result.task_exited);

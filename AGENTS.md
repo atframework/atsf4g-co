@@ -64,6 +64,9 @@ high-performance game server architectures.
   and the rendered target language, and validate target syntax only after rendering representative output.
 - For coding or code review in `src/**`, first read `engineering-guidelines`; it owns shared style, configured
   `.clang-tidy`/`CPPLINT.cfg` review checks, header/template visibility and API ABI boundaries, and project conventions.
+- In offline service-internal SS action tests, use `atframework::testing::invoke_ss_action<TAction>` instead of
+  rebuilding SSMsg/task-manager plumbing. Pass the generated RPC full-name getter and explicitly set source metadata
+  for forwarding/source-sensitive behavior; use raw transport/dispatcher APIs for registration or malformed envelopes.
 - CMake target names must not hardcode the project prefix: use `${PROJECT_NAME}-<name>` (or the established
   `atframework` prefix where applicable), never literal `atf4g-co-...`/`atf4g-co::...`, in any target declaration,
   alias, `if(TARGET ...)`, dependency, folder, or label.

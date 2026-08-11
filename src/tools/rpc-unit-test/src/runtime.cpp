@@ -91,7 +91,7 @@ void rpc_unit_test_event_on_start_excel_config_loader() {
 }
 
 // NOLINTNEXTLINE(misc-use-anonymous-namespace)
-static test_on_start_base rpc_unit_test_obj_on_start_excel_config_loader(
+static atfw::util::testing::test_on_start_base rpc_unit_test_obj_on_start_excel_config_loader(
     "rpc_unit_test_event_on_start_excel_config_loader", &rpc_unit_test_event_on_start_excel_config_loader);
 }  // namespace
 #endif

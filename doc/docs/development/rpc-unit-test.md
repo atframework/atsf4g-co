@@ -92,6 +92,38 @@ CASE_TEST(my_component, hello) {
 要点：单进程同时只允许一个 active runtime（app/dispatcher/task 单例）；`run_task` 体用
 `RPC_AWAIT_*`/`RPC_RETURN_CODE` 跑真实 task；断言放在 `wait()` 之后。
 
+### 直接驱动服务端 SS action
+
+测试某个已知的 `task_action_ss_rpc_base` 实现时，使用 `<atframework/testing/ss_action.h>`，不要在测试中
+重复拼装 `SSMsg` 和调用 `task_manager`：
+
+```cpp
+atfw::testing::ss_action_invoke_options invoke_options{
+    rpc::my_service::packer::get_full_name_of_my_method()};
+invoke_options.source.node_id = source_node_id;
+invoke_options.source.node_name = "my-test-source";
+invoke_options.source.source_task_id = source_task_id;
+invoke_options.source.sequence = source_sequence;
+
+auto task = test.run_task(
+    "my_inbound_action", std::chrono::seconds{2},
+    [request, invoke_options](rpc::context &ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+          atfw::testing::invoke_ss_action<task_action_my_method>(ctx, request, invoke_options)));
+    });
+```
+
+该接口走真实 SSMsg 序列化/反序列化和 action create/start/wait；runtime 必须启用 `feature::ss`。请求类型由
+`TAction::rpc_request_type` 固定，RPC 名必须使用生成的 `packer::get_full_name_of_<rpc>()`，运行时还会用
+protobuf method descriptor 同时校验 action 的请求和响应类型。请求与选项按值保存在协程帧中，临时对象也
+不会悬空。
+
+返回值是 action 的最终 task result，不是响应 protobuf 内的业务码。`source` 的零 ID 表示匿名/系统来源；
+测试 `forward_rpc`、链路追踪、回包或来源鉴权时应显式填写相关字段。此接口直接创建模板指定的 action，
+不覆盖 dispatcher 的 RPC→action 注册查找；注册表、未知 RPC、非法 type URL/body/envelope 应走 raw
+transport/dispatcher 接口。可编译示例和契约自测分别见 `test/example_readme.cpp`、
+`test/rpc_unit_test_ss_action.cpp`，DTMQ 转发案例见 `src/component/dtmq/test/dtmq_test_task_forward.cpp`。
+
 ## 使用指南
 
 `runtime_options.features` 决定模块/hook 集合（`ss/dns/cs/db/uuid/resource/router/orbit/hpa/telemetry`）；CMake

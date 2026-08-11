@@ -35,7 +35,8 @@ add_library(
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_resource.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_router.h"
   "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/mock_ss.h"
-  "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/raw_transport.h")
+  "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/raw_transport.h"
+  "${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}/atframework/testing/ss_action.h")
 add_library(${PROJECT_NAME}::rpc-unit-test ALIAS ${PROJECT_NAME}-rpc-unit-test)
 
 target_include_directories(${PROJECT_NAME}-rpc-unit-test

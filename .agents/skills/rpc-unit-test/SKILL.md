@@ -55,6 +55,35 @@ Key rules:
   on hit it kills all tasks and poisons the runtime, which then only allows `stop()`, never reuse).
 - Put assertions **after** `wait()`; pass business failure through the task's return code.
 
+## Driving an inbound SS action
+
+For a service-internal test of a known `task_action_ss_rpc_base`, include
+`<atframework/testing/ss_action.h>` and use the shared typed helper; do not duplicate SSMsg serialization or
+`task_manager` create/start/wait plumbing:
+
+```cpp
+atfw::testing::ss_action_invoke_options invoke_options{
+    rpc::my_service::packer::get_full_name_of_my_method()};
+invoke_options.source.node_id = source_node_id;
+invoke_options.source.node_name = "my-test-source";
+invoke_options.source.source_task_id = source_task_id;
+invoke_options.source.sequence = source_sequence;
+
+int32_t result = RPC_AWAIT_CODE_RESULT(
+    atfw::testing::invoke_ss_action<task_action_my_method>(ctx, request, invoke_options));
+```
+
+- Enable `feature::ss` and await the helper only from `runtime::run_task` or another real action coroutine.
+- Use the generated `packer::get_full_name_of_<rpc>()`. The request type is fixed by `TAction::rpc_request_type`, and
+  the helper validates both request and response descriptors against that method before creating the action.
+- Request/options use by-value coroutine snapshots. Temporaries are safe; mutations after invocation do not affect the
+  action.
+- Zero source IDs mean anonymous/system. Set all relevant source fields explicitly for forwarding, tracing, replies,
+  or source-sensitive authorization.
+- The result is the action's final task result, not the response protobuf's business code.
+- This is a typed direct-action path, not a dispatcher registration lookup. Use raw transport/dispatcher APIs when the
+  subject is registration, unknown RPC names, or malformed type URL/body/envelope handling.
+
 ## feature flags (`runtime_options.features`)
 
 `ss, dns, cs, db, uuid, resource, router, orbit, hpa, telemetry`. Each enables the matching dispatcher/hook; CMake

@@ -417,6 +417,7 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
+  forward_server_id = 0;
   // 如果有到channel，但是不是writable，需要提升为writable
   if (!channel_ptr->is_writable()) {
     result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx));
@@ -531,6 +532,7 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
+  forward_server_id = 0;
   // 已拉取完数据，直接返回
   if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
     FCTXLOGDEBUG(ctx, "channel {} is created and inited successfully", channel_key.channel_id());
@@ -640,6 +642,7 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
   }
 
+  forward_server_id = 0;
   // 已拉取完数据，直接返回
   if (channel_ptr->is_readonly() || channel_ptr->is_writable()) {
     FCTXLOGDEBUG(ctx, "channel {} is created and inited successfully", channel_key.channel_id());

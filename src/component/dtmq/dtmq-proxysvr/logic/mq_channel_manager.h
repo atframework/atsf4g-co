@@ -141,6 +141,11 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
 
   void add_pending_io_channel(const mq_channel_ptr_type& channel);
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // 单元测试专用访问器集中定义在测试代码的 MqChannelManagerUnitTest 中，避免在业务代码里散落 test-only 接口。
+  friend class MqChannelManagerUnitTest;
+#endif
+
  private:
   void compact_pending_io_channels();
 

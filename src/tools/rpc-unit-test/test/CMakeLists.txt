@@ -46,6 +46,7 @@ project_add_rpc_unit_test(
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_smoke.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_transport.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_ss.cpp"
+          "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_ss_action.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_router.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_dns.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_db.cpp"
