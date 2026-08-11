@@ -30,12 +30,12 @@ enum DTeamExitReason {
   EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM = 13;
 }
 
-enum EnTeamJoinType {
-  EN_TEAM_SEND_METHOD_TYPE_NONE = 0;
-  EN_TEAM_SEND_METHOD_TYPE_SNS_PLATFORM = 1;
-  EN_TEAM_SEND_METHOD_TYPE_FRIEND = 2;
-  EN_TEAM_SEND_METHOD_TYPE_MATCH = 3;
-  EN_TEAM_SEND_METHOD_TYPE_BATTLE = 4;
+enum EnTeamSourceType {
+  EN_TEAM_SOURCE_TYPE_NONE = 0;
+  EN_TEAM_SOURCE_TYPE_SNS_PLATFORM = 1;
+  EN_TEAM_SOURCE_TYPE_FRIEND = 2;
+  EN_TEAM_SOURCE_TYPE_MATCH = 3;
+  EN_TEAM_SOURCE_TYPE_BATTLE = 4;
 }
 message DTeamKey {
   int64 team_id = 1;
@@ -47,18 +47,18 @@ message DTeamMember {
   google.protobuf.Timestamp joined_timepoint = 2;
 
   // 入队方式和额外数据
-  EnTeamJoinType join_team_type = 3;
-  google.protobuf.Any join_team_data = 4;
+  EnTeamSourceType team_source_type = 3;
+  google.protobuf.Any team_source_data = 4;
 
   // 退出原因
   DTeamExitReason remove_member_reason = 5;
 
   string client_version = 6;
   uint64 user_router_server_id = 7;
-  
+
   // 最后收到的组队通道的消息sequence和hash code
   int64 acknowledge_action_sequence = 11;
-  uint64 acknowledge_action_hash_code = 12;  
+  uint64 acknowledge_action_hash_code = 12;
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
@@ -69,8 +69,8 @@ message DTeamApply {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey user_key = 2;
 
-  EnTeamJoinType join_team_type = 3;
-  google.protobuf.Any join_team_data = 4;
+  EnTeamSourceType team_source_type = 3;
+  google.protobuf.Any team_source_data = 4;
 
   string client_version = 6;
   uint64 user_router_server_id = 7;
@@ -98,7 +98,7 @@ message DTeamStorage {
   int64 acknowledge_action_sequence = 11;
   uint64 acknowledge_action_hash_code = 12;
   // 已保存的数据sequence，这之前的数据log可以压缩
-  int64 saved_action_sequence = 13;  
+  int64 saved_action_sequence = 13;
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开

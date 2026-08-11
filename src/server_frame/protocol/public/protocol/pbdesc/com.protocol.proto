@@ -16,6 +16,7 @@ import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.protocol.rank.proto";
 import "protocol/pbdesc/com.protocol.cache.proto";
 import "protocol/pbdesc/com.protocol.chat.proto";
+import "protocol/pbdesc/com.protocol.team.proto";
 import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -82,7 +83,7 @@ message CSLoginReq {
   string access_token_code = 1;  // 认证码
   string open_id = 2;
   uint64 user_id = 3;  // 玩家数字ID
-  uint32 zone_id = 4;   // 大区ID
+  uint32 zone_id = 4;  // 大区ID
 
   DAccountData account = 5;  // 平台信息
   DClientDeviceInfo client_info = 11;
@@ -94,7 +95,7 @@ message SCLoginRsp {
   int64 heartbeat_interval = 2;  // 心跳包间隔
   bool is_new_player = 3;        // 是否是新玩家
   int32 version_type = 4;        // 版本类型 @EnVersionType
-  uint32 zone_id = 5;             // 大区ID
+  uint32 zone_id = 5;            // 大区ID
 }
 
 message SCPlayerProfileSyn {
@@ -252,7 +253,8 @@ service LobbysvrClientService {
     };
   };
 
-  rpc chat_get_channel_snapshot(atframework.chat.CSChatGetChannelSnapshotReq) returns (atframework.chat.SCChatGetChannelSnapshotRsp) {
+  rpc chat_get_channel_snapshot(atframework.chat.CSChatGetChannelSnapshotReq)
+      returns (atframework.chat.SCChatGetChannelSnapshotRsp) {
     // 拉取初始快照后才会开始收到推送消息
     option (atframework.rpc_options) = {
       module_name: "chat"
@@ -260,7 +262,8 @@ service LobbysvrClientService {
     };
   };
 
-  rpc chat_channel_heartbeat(atframework.chat.CSChatChannelHeartbeatReq) returns (atframework.chat.SCChatChannelHeartbeatRsp) {
+  rpc chat_channel_heartbeat(atframework.chat.CSChatChannelHeartbeatReq)
+      returns (atframework.chat.SCChatChannelHeartbeatRsp) {
     option (atframework.rpc_options) = {
       module_name: "chat"
       api_name: "聊天频道心跳"
@@ -280,4 +283,86 @@ service LobbysvrClientService {
       api_name: "发送聊天消息"
     };
   };
+
+  // ================ 组队RPC ================
+  rpc team_send_invitation(atframework.team.CSTeamSendInvitationReq)
+      returns (atframework.team.SCTeamSendInvitationRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "发送组队邀请"
+    };
+  }
+
+  rpc team_approve_invitation(atframework.team.CSTeamApproveInvitationReq)
+      returns (atframework.team.SCTeamApproveInvitationRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "同意组队邀请"
+    };
+  }
+
+  rpc team_reject_invitation(atframework.team.CSTeamRejectInvitationReq)
+      returns (atframework.team.SCTeamRejectInvitationRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "拒绝组队邀请"
+    };
+  }
+
+  rpc team_exit(atframework.team.CSTeamExitReq) returns (atframework.team.SCTeamExitRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "退出组队"
+    };
+  }
+
+  rpc team_remove_member(atframework.team.CSTeamRemoveMemberReq) returns (atframework.team.SCTeamRemoveMemberRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "移除组队成员"
+    };
+  }
+
+  rpc team_set_ready(atframework.team.CSTeamSetReadyReq) returns (atframework.team.SCTeamSetReadyRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "设置组队准备状态"
+    };
+  }
+
+  rpc team_set_unready(atframework.team.CSTeamSetUnreadyReq) returns (atframework.team.SCTeamSetUnreadyRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "设置组队未准备状态"
+    };
+  }
+
+  rpc team_transfer_captain(atframework.team.CSTeamTransferCaptainReq)
+      returns (atframework.team.SCTeamTransferCaptainRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "转移组队队长"
+    };
+  }
+
+  rpc team_apply_join_team(atframework.team.CSTeamApplyJoinTeamReq) returns (atframework.team.SCTeamApplyJoinTeamRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "申请加入组队"
+    };
+  }
+
+  rpc team_accept_apply(atframework.team.CSTeamAcceptApplyReq) returns (atframework.team.SCTeamAcceptApplyRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "同意加入组队申请"
+    };
+  }
+
+  rpc team_reject_apply(atframework.team.CSTeamRejectApplyReq) returns (atframework.team.SCTeamRejectApplyRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "拒绝加入组队申请"
+    };
+  }
 }
