@@ -9,7 +9,7 @@ type_id: 15
 type_name: "rank-board-svr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/rank-board-svr
+  repository: harbor.atframe.work/atsf4g-co/rank-board-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

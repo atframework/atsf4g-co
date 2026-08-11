@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "teamsvr-match.pvc") -}}
+{{- define "teamsvr-match.pvc" -}}
+{{- end -}}

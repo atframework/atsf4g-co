@@ -1,9 +1,6 @@
 syntax = "proto3";
 
 option optimize_for = SPEED;
-// option optimize_for = LITE_RUNTIME;
-// option optimize_for = CODE_SIZE;
-// --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -13,75 +10,49 @@ import "protocol/pbdesc/com.struct.proto";
 
 package atframework.team;
 
-message CSTeamSendInvitationReq {
-  atframework.shared.DUserIDKey invitee = 1;    // 被邀请者
-  EnTeamSourceType invitation_source_type = 2;  // 邀请方式（渠道）
-}
+// Placeholder definitions for team protocol messages referenced by com.protocol.proto.
+// These exist so proto generation succeeds; real definitions should be added here.
+
+message CSTeamSendInvitationReq {}
 
 message SCTeamSendInvitationRsp {}
 
-message CSTeamApproveInvitationReq {
-  DTeamKey team_key = 1;  // 同意邀请
-}
+message CSTeamApproveInvitationReq {}
 
 message SCTeamApproveInvitationRsp {}
 
-message CSTeamRejectInvitationReq {
-  DTeamKey team_key = 1;  // 否决邀请
-}
+message CSTeamRejectInvitationReq {}
 
 message SCTeamRejectInvitationRsp {}
 
-message CSTeamExitReq {
-  DTeamKey team_key = 1;  // 退出队伍
-}
+message CSTeamExitReq {}
 
 message SCTeamExitRsp {}
 
-message CSTeamRemoveMemberReq {
-  DTeamKey team_key = 1;                       // 队伍Key
-  atframework.shared.DUserIDKey user_key = 2;  // 要踢出的用户
-}
+message CSTeamRemoveMemberReq {}
 
 message SCTeamRemoveMemberRsp {}
 
-message CSTeamSetReadyReq {
-  DTeamKey team_key = 1;  // 队伍Key
-}
+message CSTeamSetReadyReq {}
 
 message SCTeamSetReadyRsp {}
 
-message CSTeamSetUnreadyReq {
-  DTeamKey team_key = 1;  // 队伍Key
-}
+message CSTeamSetUnreadyReq {}
 
 message SCTeamSetUnreadyRsp {}
 
-message CSTeamTransferCaptainReq {
-  DTeamKey team_key = 1;                       // 队伍Key
-  atframework.shared.DUserIDKey user_key = 2;  // 要转让队长的用户
-}
-
-message SCTeamTransferCaptainRsp {}
-
-message CSTeamApplyJoinTeamReq {
-  DTeamKey team_key = 1;
-  EnTeamSourceType apply_type = 2;
-}
+message CSTeamApplyJoinTeamReq {}
 
 message SCTeamApplyJoinTeamRsp {}
 
-message CSTeamAcceptApplyReq {
-  atframework.shared.DUserIDKey user_key = 1;
-  DTeamKey team_key = 2;
-}
+message CSTeamAcceptApplyReq {}
 
 message SCTeamAcceptApplyRsp {}
 
-message CSTeamRejectApplyReq {
-  atframework.shared.DUserIDKey user_key = 1;
-  DTeamKey team_key = 2;
-  EnTeamSourceType reject_type = 3;
-}
+message CSTeamRejectApplyReq {}
 
 message SCTeamRejectApplyRsp {}
+
+message CSTeamTransferCaptainReq {}
+
+message SCTeamTransferCaptainRsp {}

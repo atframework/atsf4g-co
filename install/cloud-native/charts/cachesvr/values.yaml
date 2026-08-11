@@ -8,7 +8,7 @@ type_id: 15
 type_name: "cachesvr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/cachesvr
+  repository: harbor.atframe.work/atsf4g-co/cachesvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

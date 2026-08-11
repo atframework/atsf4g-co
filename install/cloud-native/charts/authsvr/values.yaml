@@ -8,7 +8,7 @@ type_id: 11
 type_name: "authsvr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/authsvr
+  repository: harbor.atframe.work/atsf4g-co/authsvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

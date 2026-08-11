@@ -1,0 +1,5 @@
+{{- template "libapp.configmap" (list . "teamsvr-match.configmap") -}}
+{{- define "teamsvr-match.configmap" -}}
+data:
+  {{ include "teamsvr-match.name" . }}.yaml: {{ tpl (.Files.Get "cfg/teamsvr-match.yaml.tpl") . | quote }}
+{{- end -}}

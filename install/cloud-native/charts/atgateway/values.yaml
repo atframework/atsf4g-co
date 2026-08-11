@@ -8,7 +8,7 @@ type_id: 2
 type_name: "atgateway"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/atgateway
+  repository: harbor.atframe.work/atsf4g-co/atgateway
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -21,7 +21,6 @@ volumeMounts:
 vector:
   enabled: false
   log_path: /data/atframework/publish/atgateway/log
-
 
 service:
   type: LoadBalancer

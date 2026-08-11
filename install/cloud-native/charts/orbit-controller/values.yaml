@@ -8,7 +8,7 @@ type_id: 27
 type_name: "orbit-controller"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/orbit-controller
+  repository: harbor.atframe.work/atsf4g-co/orbit-controller
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

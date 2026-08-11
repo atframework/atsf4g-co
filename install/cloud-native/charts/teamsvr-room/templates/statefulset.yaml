@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "teamsvr-room.statefulset") -}}
+{{- define "teamsvr-room.statefulset" -}}
+{{- end -}}

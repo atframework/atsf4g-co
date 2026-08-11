@@ -2,25 +2,25 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-proc_name: dtmq-proxysvrd
+proc_name: teamsvr-roomd
 
-type_id: 21
-type_name: "dtmq-proxysvr"
+type_id: 18
+type_name: "teamsvr-room"
 
 image:
-  repository: harbor.atframe.work/atsf4g-co/dtmq-proxysvr
+  repository: harbor.atframe.work/atsf4g-co/teamsvr-room
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
   secrets: harbor-regcred
 
 volumeMounts:
-  configMountPath: /etc/atframework/publish/dtmq-proxysvr/cfg
-  logMountPath: /data/atframework/publish/dtmq-proxysvr/log
+  configMountPath: /etc/atframework/publish/teamsvr-room/cfg
+  logMountPath: /data/atframework/publish/teamsvr-room/log
 
 vector:
   enabled: false
-  log_path: /data/atframework/publish/dtmq-proxysvr/log
+  log_path: /data/atframework/publish/teamsvr-room/log
 
 redis:
   enable: true

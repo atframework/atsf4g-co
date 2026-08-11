@@ -8,7 +8,7 @@ type_id: 13
 type_name: "dtcoordsvr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/dtcoordsvr
+  repository: harbor.atframe.work/atsf4g-co/dtcoordsvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

@@ -8,7 +8,7 @@ type_id: 14
 type_name: "rank-settlement-svr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/rank-settlement-svr
+  repository: harbor.atframe.work/atsf4g-co/rank-settlement-svr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest

@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "teamsvr-match.service") -}}
+{{- define "teamsvr-match.service" -}}
+{{- end -}}

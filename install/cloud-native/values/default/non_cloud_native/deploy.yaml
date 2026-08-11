@@ -59,6 +59,18 @@ proc_desc:
     instance_count: 1
     start_instance_id: 1
 
+  - chart_name: "teamsvr-room"
+    instance_type_id: 18
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+
+  - chart_name: "teamsvr-match"
+    instance_type_id: 19
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+
   - chart_name: "dtmq-proxysvr"
     instance_type_id: 21
     world_instance: true

@@ -8,7 +8,7 @@ type_id: 10
 type_name: "echosvr"
 
 image:
-  repository: harbor.m-oa.com:6023/project-x/echosvr
+  repository: harbor.atframe.work/atsf4g-co/echosvr
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: latest
@@ -21,7 +21,6 @@ volumeMounts:
 vector:
   enabled: false
   log_path: /data/atframework/publish/echosvr/log
-
 
 redis:
   enable: true
