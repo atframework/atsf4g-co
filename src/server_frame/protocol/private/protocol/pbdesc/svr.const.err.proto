@@ -225,6 +225,26 @@ enum EnSysErrorType {
   EN_SERVER_CLIENT_NOT_RUNNING = -2300004
                                  [(error_code.description) = "Client不在运行状态"];
 
+  // Orbit房间错误码
+  EN_ORBIT_ROOM_STATUS_INVALID = -2400001
+                                 [(error_code.description) = "房间状态异常"];
+  EN_ORBIT_ROOM_ALREADY_EXISTS = -2400002
+                                 [(error_code.description) = "房间已经存在"];
+  EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND = -2400003
+                                            [(error_code.description) = "找不到Client配置模板"];
+  EN_ORBIT_ROOM_JOIN_TIMEOUT = -2400004
+                               [(error_code.description) = "加入房间超时"];
+  EN_ORBIT_ROOM_USER_NOT_FOUND = -2400005
+                                 [(error_code.description) = "房间内找不到用户"];
+  EN_ORBIT_ROOM_USER_STATUS_INVALID = -2400006
+                                      [(error_code.description) = "用户状态异常"];
+  EN_ORBIT_ROOM_USER_INIT_RESULT_INVALID = -2400007
+                                           [(error_code.description) = "用户初始化结果数据异常"];
+  EN_ORBIT_ROOM_USER_FINISH_RESULT_EMPTY = -2400008
+                                           [(error_code.description) = "用户完成结果为空"];
+  EN_ORBIT_ROOM_USER_SETTLEMENT_ALREADY_FINISH = -2400009
+                                                 [(error_code.description) = "用户结算已完成"];
+
   EN_ROUTER_NOT_FOUND = -10000081
                         [(error_code.description) = "路由信息找不到"];
   EN_ROUTER_TTL_EXTEND = -10000082

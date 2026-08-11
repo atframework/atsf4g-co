@@ -305,5 +305,9 @@ enum EnErrorCode {
   EN_ERR_CHAT_WRITE_TOO_FREQUENT = -802
                                    [(error_code.description) = "聊天频道写入过于频繁"];
 
+  // orbit错误码
+  EN_ERR_ORBIT_ALREADY_IN_ROOM = -901
+                                [(error_code.description) = "已经在房间中"];
+
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

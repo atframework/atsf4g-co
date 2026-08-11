@@ -29,6 +29,7 @@
 
 #include <dispatcher/task_manager.h>
 #include <logic/async_jobs/user_async_jobs_manager.h>
+#include <logic/orbit/user_orbit_manager.h>
 
 #include <rpc/async_jobs/async_jobs.h>
 
@@ -459,6 +460,14 @@ void task_action_player_remote_patch_jobs::register_callbacks(
          async_job_ptr_type job_data) -> int32_t {
     FWPLOGINFO(user, "[TODO] do async action {}, message: {}", static_cast<int32_t>(job_data->action_case()),
                job_data->DebugString());
+    return 0;
+  };
+  sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish)] =
+      [](task_action_player_remote_patch_jobs& task_action_inst, player& user, int32_t /*job_type*/,
+         async_job_ptr_type job_data) -> int32_t {
+    const PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = job_data->orbit_finish();
+    user.get_user_orbit_manager().receive_orbit_settlement(task_action_inst.get_shared_context(),
+                                                           orbit_finish_data.data());
     return 0;
   };
 }

@@ -83,7 +83,7 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
   }
   if (room_index_by_client_id_.find(client_id) != room_index_by_client_id_.end()) {
     FWLOGERROR("orbit_room_manager create_room failed, client_id {} already exists", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_ALREADY_EXISTS);
   }
   if (req.room_data().client_template_id() == 0 || req.room_data().region().empty()) {
     FWLOGERROR("orbit_room_manager create_room failed, client_template_id or region is empty");
@@ -93,7 +93,7 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
   atfw::orbit::DAgentClientStartArgs args;
   if (!fill_client_start_args_from_template_id(req.room_data().client_template_id(), client_id, args)) {
     FWLOGERROR("orbit_room_manager create_room failed, fill_client_start_args_from_template_id failed");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND);
   }
 
   auto room = atfw::util::memory::make_strong_rc<orbit_room>(req.room_key(), req.room_data());

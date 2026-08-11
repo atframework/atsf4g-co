@@ -22,6 +22,7 @@
 #include <logic/cache/user_cache_manager.h>
 #include <logic/rank/user_rank_manager.h>
 #include <logic/chat/user_chat_manager.h>
+#include <logic/orbit/user_orbit_manager.h>
 
 #include <logic/player_manager.h>
 
@@ -67,7 +68,8 @@ player::player(fake_constructor &ctor)
       user_async_jobs_manager_(atfw::component::memory::stl::make_strong_rc<user_async_jobs_manager>(*this)),
       user_rank_manager_(atfw::component::memory::stl::make_strong_rc<user_rank_manager>(*this)),
       user_cache_manager_(atfw::component::memory::stl::make_strong_rc<user_cache_manager>(*this)),
-      user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)) {
+      user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)),
+      user_orbit_manager_(atfw::component::memory::stl::make_strong_rc<user_orbit_manager>(*this)) {
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -173,6 +175,11 @@ rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
 
+  ret = RPC_AWAIT_CODE_RESULT(user_orbit_manager_->login_init(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(trace.finish({ret, {}}));
+  }
+
   set_inited();
   on_login(ctx);
 
@@ -217,6 +224,7 @@ void player::refresh_feature_limit(rpc::context &ctx) {
     // 每秒仅需要执行一次的refresh_feature_limit
 
     user_cache_manager_->refresh_feature_limit_second(ctx);
+    user_orbit_manager_->refresh_feature_limit_second(ctx);
   }
   if (now >= cache_data_.refresh_feature_limit_minute + atfw::util::time::time_utility::MINITE_SECONDS ||
       now < cache_data_.refresh_feature_limit_minute) {

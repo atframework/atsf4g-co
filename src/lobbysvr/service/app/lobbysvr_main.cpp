@@ -42,6 +42,7 @@
 
 #include "data/player.h"
 #include "logic/chat/user_chat_manager.h"
+#include "logic/orbit/user_orbit_manager.h"
 #include "rpc/rpc_context.h"
 
 namespace {

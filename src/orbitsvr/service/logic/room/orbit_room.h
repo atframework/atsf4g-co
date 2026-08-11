@@ -84,7 +84,6 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
  private:
   int32_t add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log);
   int32_t set_status(PROJECT_NAMESPACE_ID::EnOrbitRoomStatus v);
-  void dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) const;
 
   int32_t room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason);
   void async_user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);

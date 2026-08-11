@@ -12,7 +12,6 @@ import "protocol/extension/atframework.proto";
 
 import "protocol/pbdesc/svr.struct.proto";
 import "protocol/pbdesc/svr.struct.cache.proto";
-import "protocol/pbdesc/com.struct.orbit.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/lobbysvr/protocol/protocol/pbdesc";
@@ -66,13 +65,6 @@ message SSObjectCacheGetUserCacheDataRsp {
 ////  缓存服的协议到此结束
 /////////////////////////////////////////////////////
 
-message SSOrbitRoomEventSync {
-  DOrbitRoomKey room_key = 1;                  // 房间key
-  repeated DUserIDKey user_keys = 2;           // 要同步的玩家列表
-  repeated DOrbitRoomEventLog event_logs = 3;  // 事件列表
-  DOrbitRoomSnapshotData room_snapshot = 4;    // 房间快照
-}
-
 // 提供 lobbysvr 内部服务之间的 RPC 接口定义。
 service LobbysvrService {
   option (atframework.service_options) = {
@@ -122,14 +114,6 @@ service LobbysvrService {
       module_name: "cache"
       api_name: "拉取用户缓存信息"
       user_rpc: true
-    };
-  };
-
-  rpc orbit_room_event_sync(stream SSOrbitRoomEventSync) returns (google.protobuf.Empty) {
-    option (atframework.rpc_options) = {
-      module_name: "orbit"
-      api_name: "房间事件通知"
-      descriptions: "notify another server instance to sync orbit room events"
     };
   };
 }

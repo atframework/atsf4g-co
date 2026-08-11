@@ -58,3 +58,4 @@ generate_for_pb_add_ss_service(
   "protocol/pbdesc/orbit_service.pb.h")
 
 add_subdirectory(service)
+add_subdirectory(sdk)

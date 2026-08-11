@@ -31,6 +31,7 @@ class user_async_jobs_manager;
 class user_rank_manager;
 class user_cache_manager;
 class user_chat_manager;
+class user_orbit_manager;
 
 class player : public player_cache {
  private:
@@ -240,6 +241,7 @@ class player : public player_cache {
   REG_PLAYER_MGR_PTR_DEF(user_rank_manager)
   REG_PLAYER_MGR_PTR_DEF(user_cache_manager)
   REG_PLAYER_MGR_PTR_DEF(user_chat_manager)
+  REG_PLAYER_MGR_PTR_DEF(user_orbit_manager)
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN

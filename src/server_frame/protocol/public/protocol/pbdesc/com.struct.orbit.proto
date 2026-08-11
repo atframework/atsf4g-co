@@ -95,17 +95,12 @@ message DOrbitRoomExitInfo {
   EnOrbitRoomExitReason exit_reason = 1;
 }
 
-message DOrbitRoomRunningData {
-  DOrbitRoomKey room_key = 1;
-  EnOrbitRoomStatus room_status = 2;
+message DOrbitRoomInit {
+  uint32 client_template_id = 1;
+  string region = 2;
+  uint64 match_id = 3;
   int64 create_timepoint = 4;
   int64 expired_timepoint = 5;
-  DOrbitRoomExitInfo exit_info = 6;
-  DOrbitRoomReady ready_data = 7;
-
-  DOrbitRoomInitData init_data = 12;
-  repeated DOrbitUserInitResult user_init = 13;
-  repeated DUserIDKey user_finish = 14;
 }
 
 message DOrbitRoomReady {
@@ -130,12 +125,9 @@ message DOrbitRoomEventLog {
   DOrbitRoomKey room_key = 2;               // 房间key
 
   oneof event {
+    DOrbitRoomInit room_init = 100;          // 房间创建
     DOrbitRoomReady ready_data = 101;        // 房间准备就绪
     DOrbitUserInit user_init_success = 102;  // 用户初始化成功
     DOrbitClientExit client_exit = 103;      // Client退出
   }
-}
-
-message DOrbitRoomSnapshotData {
-  DOrbitRoomRunningData running_data = 1;
 }

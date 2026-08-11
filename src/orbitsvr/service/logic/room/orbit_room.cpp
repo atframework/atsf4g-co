@@ -110,12 +110,12 @@ void orbit_room::on_destroy() {
 int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t match_server_id) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_INVALID != room_status_) {
     FWLOGERROR("orbit_room {} create failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
   }
 
   auto row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(room_data_.client_template_id());
   if (row == nullptr) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND;
   }
 
   // 初始化流程
@@ -127,13 +127,23 @@ int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t matc
   // Loading 超时
   loading_timeout_ = create_timepoint_ + get_orbitsvr_cfg().room_client_loading_timeout_sec();
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED);
+
+  PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
+  event_log.set_orbit_room_status(room_status_);
+  *event_log.mutable_room_key() = room_key_;
+  event_log.mutable_room_init()->set_client_template_id(room_data_.client_template_id());
+  event_log.mutable_room_init()->set_region(room_data_.region());
+  event_log.mutable_room_init()->set_match_id(room_data_.match_id());
+  event_log.mutable_room_init()->set_create_timepoint(create_timepoint_);
+  event_log.mutable_room_init()->set_expired_timepoint(expired_timepoint_);
+  add_event_log(ctx, std::move(event_log));
   return 0;
 }
 
 rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const atfw::orbit::DAgentClientStartArgs& args) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED != room_status_) {
     FWLOGERROR("orbit_room {} start_client failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID);
   }
   int32_t ret = RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(ctx, get_region(), args));
   if (ret != 0) {
@@ -148,7 +158,7 @@ rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const atfw::or
 int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, const std::string& client_addr) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_LOADING != room_status_) {
     FWLOGERROR("orbit_room {} on_client_start failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
   }
 
   client_address_ = client_addr;
@@ -165,6 +175,7 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
 
   // 通知 match_server 房间已加载完成
   // TODO
+  // 传入 DOrbitRoomKey expired_timepoint_
   return 0;
 }
 
@@ -172,12 +183,12 @@ int32_t orbit_room::init_user(const google::protobuf::RepeatedPtrField<PROJECT_N
                               bool is_last_one) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING != room_status_) {
     FWLOGERROR("orbit_room {} init_user failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
   }
   if (init_user_finish_) {
     FWLOGERROR("orbit_room {} init_user failed, already finish, status: {}", get_client_id(),
                static_cast<int32_t>(room_status_));
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
   }
 
   for (const auto& user_key : user_keys) {
@@ -196,19 +207,19 @@ rpc::result_code_type orbit_room::join_users(rpc::context& ctx,
                                              const PROJECT_NAMESPACE_ID::DOrbitUserInitData& user_init_data) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING != room_status_) {
     FWLOGERROR("orbit_room {} join_users failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID);
   }
   if (join_end_timepoint_ != 0 && util::time::time_utility::get_now() > join_end_timepoint_) {
     FWLOGERROR("orbit_room {} join_users failed, join_end_timepoint: {}, now: {}", get_client_id(), join_end_timepoint_,
                util::time::time_utility::get_now());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_JOIN_TIMEOUT);
   }
 
   auto user_iter = user_data_index_.find(user_init_data.user_key().user_key());
   if (user_iter == user_data_index_.end()) {
     FWLOGERROR("orbit_room {} join_users failed, user not found, user_key: {}:{}", get_client_id(),
                user_init_data.user_key().user_key().user_id(), user_init_data.user_key().user_key().zone_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_NOT_FOUND);
   }
 
   auto user_ptr = user_iter->second;
@@ -216,7 +227,7 @@ rpc::result_code_type orbit_room::join_users(rpc::context& ctx,
     FWLOGERROR("orbit_room {} join_users failed, user status invalid, user_key: {}:{}, status: {}", get_client_id(),
                user_init_data.user_key().user_key().user_id(), user_init_data.user_key().user_key().zone_id(),
                static_cast<int32_t>(user_ptr->user_status_));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_STATUS_INVALID);
   }
   user_ptr->init_data_ = user_init_data;
   user_ptr->user_status_ = EnOrbitRoomUserStatus::EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_LOBBY;
@@ -238,11 +249,11 @@ rpc::result_code_type orbit_room::join_users(rpc::context& ctx,
     FWLOGERROR("orbit_room {} user_init failed, user status invalid, user_key: {}:{}, status: {}", get_client_id(),
                user_init_data.user_key().user_key().user_id(), user_init_data.user_key().user_key().zone_id(),
                static_cast<int32_t>(user_ptr->user_status_));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_STATUS_INVALID);
   }
   if (rsp->data_size() != 1) {
     FWLOGERROR("orbit_room {} user_init failed, rsp data size: {}", get_client_id(), rsp->data_size());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_INIT_RESULT_INVALID);
   }
   user_ptr->init_result_ = rsp->data(0);
   user_ptr->user_status_ = EnOrbitRoomUserStatus::EN_ORBIT_ROOM_USER_STATUS_INIT_TO_CLIENT;
@@ -262,7 +273,7 @@ int32_t orbit_room::on_user_finish(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results) {
   if (results.empty()) {
     FWLOGWARNING("orbit_room {} on_user_finish with empty results, room will exit directly", get_client_id());
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_FINISH_RESULT_EMPTY;
   }
 
   for (const auto& result : results) {
@@ -358,28 +369,6 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
   return 0;
 }
 
-void orbit_room::dump(PROJECT_NAMESPACE_ID::DOrbitRoomSnapshotData& out) const {
-  PROJECT_NAMESPACE_ID::DOrbitRoomRunningData* running = out.mutable_running_data();
-  running->set_room_status(room_status_);
-  *running->mutable_room_key() = room_key_;
-  running->set_create_timepoint(create_timepoint_);
-  running->mutable_ready_data()->set_client_address(client_address_);
-  running->mutable_ready_data()->set_end_join_timepoint(join_end_timepoint_);
-  *running->mutable_init_data() = room_data_;
-  for (const auto& data : user_data_index_) {
-    if (!data.second->init_) {
-      continue;
-    }
-    *running->add_user_init() = data.second->init_result_;
-  }
-  for (const auto& data : user_data_index_) {
-    if (!data.second->finish_) {
-      continue;
-    }
-    *running->add_user_finish() = data.first;
-  }
-}
-
 void orbit_room::async_user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr) {
   if (!user_ptr->finish_) {
     return;
@@ -421,13 +410,13 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
     FWLOGERROR("orbit_room {} user_settlement failed, user not finish, user_key: {}:{}, status: {}", get_client_id(),
                user_ptr->init_data_.user_key().user_key().user_id(),
                user_ptr->init_data_.user_key().user_key().zone_id(), static_cast<int32_t>(user_ptr->user_status_));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_STATUS_INVALID);
   }
   if (user_ptr->settlement_finish_) {
     FWLOGERROR("orbit_room {} user_settlement failed, user settlement already done, user_key: {}:{}, status: {}",
                get_client_id(), user_ptr->init_data_.user_key().user_key().user_id(),
                user_ptr->init_data_.user_key().user_key().zone_id(), static_cast<int32_t>(user_ptr->user_status_));
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_SETTLEMENT_ALREADY_FINISH);
   }
 
   auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(ctx);
@@ -493,16 +482,14 @@ int32_t orbit_room::add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbi
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  const std::string channel_id = channel_key_.channel_id();
-  auto channel_key = channel_key_;
   auto invoke_result = rpc::async_invoke(
       ctx, "orbit_room.add_event_log",
-      [channel_id, sender = std::move(*sender_info), channel_key = std::move(channel_key),
+      [sender = std::move(*sender_info), channel_key = channel_key_,
        detail = std::move(*message_detail)](rpc::context& child_ctx) mutable -> rpc::result_code_type {
         int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(child_ctx, std::move(sender), channel_key,
                                                                     std::move(detail), nullptr, nullptr, true, false));
         if (ret != 0) {
-          FWLOGERROR("orbit_room {} send_message failed, ret: {}", channel_id, ret);
+          FWLOGERROR("orbit_room {} send_message failed, ret: {}", channel_key.channel_id(), ret);
         }
         RPC_RETURN_CODE(ret);
       });

@@ -49,6 +49,7 @@ project_service_declare_instance(
   USE_SERVICE_SDK
   "lobbysvr-sdk"
   "cachesvr-sdk"
+  "orbitsvr-sdk"
   USE_SERVICE_PROTOCOL
   "lobbysvr-config"
   GENERATED_FLOW_NAMES
