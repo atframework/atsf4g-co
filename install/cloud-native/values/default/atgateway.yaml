@@ -10,7 +10,7 @@ atgateway:
     #   api_version: apps/v1
     #   kind: StatefulSet
     #   name: authsvr
-    #   namespace_name: atframework.shard
+    #   namespace_name: atframework.shared
     #   service_subset: ""
     #   labels:
     #     district: cn

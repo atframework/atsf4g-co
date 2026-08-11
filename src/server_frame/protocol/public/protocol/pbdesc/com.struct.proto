@@ -6,7 +6,7 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-package atframework.shard;
+package atframework.shared;
 
 import "google/protobuf/timestamp.proto";
 import "protocol/pbdesc/com.const.proto";

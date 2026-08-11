@@ -13,7 +13,7 @@ import "protocol/extension/atframework.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 
-package atframework.shard;
+package atframework.shared;
 
 message SSOrbitCreateRoomReq {
   DOrbitRoomKey room_key = 1;

@@ -16,29 +16,29 @@ import "protocol/pbdesc/com.struct.rank.proto";
 package atframework.rank;
 
 message SSRankGetSpecifyRankReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankUserKey user_key = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankUserKey user_key = 2;
 }
 
 message SSRankGetSpecifyRankRsp {
   int32 result = 1;
-  atframework.shard.DRankUserBoardData rank_records = 2;
+  atframework.shared.DRankUserBoardData rank_records = 2;
 }
 
 message SSRankGetUserFrontBackReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankUserKey user_key = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankUserKey user_key = 2;
   uint32 count = 3;
 }
 
 message SSRankGetUserFrontBackRsp {
   int32 result = 1;
-  atframework.shard.DRankQueryRspData data = 2;
+  atframework.shared.DRankQueryRspData data = 2;
 }
 
 message SSRankSetScoreReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankEventUpdateUserScore data = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankEventUpdateUserScore data = 2;
 }
 
 message SSRankSetScoreRsp {
@@ -47,8 +47,8 @@ message SSRankSetScoreRsp {
 }
 
 message SSRankModifyScoreReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankEventUpdateUserScore data = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankEventUpdateUserScore data = 2;
 }
 
 message SSRankModifyScoreRsp {
@@ -57,8 +57,8 @@ message SSRankModifyScoreRsp {
 }
 
 message SSRankDelUserReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankEventRemoveUserScore data = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankEventRemoveUserScore data = 2;
 }
 
 message SSRankDelUserRsp {
@@ -66,19 +66,19 @@ message SSRankDelUserRsp {
 }
 
 message SSRankGetTopReq {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   uint32 start_no = 2;  // 起始排名
   uint32 count = 3;     // 拉取数量（一次拉取最多100个）
 }
 
 message SSRankGetTopRsp {
   int32 result = 1;
-  atframework.shard.DRankQueryRspData data = 2;
+  atframework.shared.DRankQueryRspData data = 2;
 }
 
 message SSRankClearReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankEventClear data = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankEventClear data = 2;
 }
 
 message SSRankClearRsp {
@@ -86,69 +86,69 @@ message SSRankClearRsp {
 }
 
 message SSRankMakeNewMirrorReq {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
 }
 
 message SSRankMakeNewMirrorRsp {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   int64 mirror_id = 2;
 }
 
 message SSRankCheckMirrorDumpFinishReq {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   int64 mirror_id = 2;
 }
 
 message SSRankCheckMirrorDumpFinishRsp {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   int64 mirror_id = 2;
   bool is_dump_finish = 3;
 }
 
 message SSRankEventSync {
-  atframework.shard.DRankKey rank_key = 1;
-  repeated atframework.shard.DRankEventLog event_logs = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  repeated atframework.shared.DRankEventLog event_logs = 2;
 }
 
 //----------------------------- 主从相关 -------------------------------------
 message SSRankLoadMainReq {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   int32 ttl = 2;
 }
 
 message SSRankLoadMainRsp {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankRouterData router_data = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankRouterData router_data = 2;
 }
 
 message SSRankCheckSlaveReq {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
 }
 
 message SSRankCheckSlaveRsp {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   bool is_slave = 2;
   int64 data_version = 3;
 }
 
 message SSRankHeartbeatReq {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
   int64 data_version = 2;
   uint64 router_version = 3;
 }
 
 message SSRankHeartbeatRsp {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
 }
 
 message SSRankSwitchToSlaveReq {
-  atframework.shard.DRankKey rank_key = 1;
-  atframework.shard.DRankRouterData router_data = 2;
+  atframework.shared.DRankKey rank_key = 1;
+  atframework.shared.DRankRouterData router_data = 2;
   int64 data_version = 3;
 }
 
 message SSRankSwitchToSlaveRsp {
-  atframework.shard.DRankKey rank_key = 1;
+  atframework.shared.DRankKey rank_key = 1;
 }
 
 service RankBoardService {

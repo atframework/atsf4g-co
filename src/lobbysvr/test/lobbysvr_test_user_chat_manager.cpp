@@ -276,7 +276,7 @@ template <class TRequest>
 atframework::CSMsg pack_chat_cs_request(gsl::string_view rpc_full_name, const TRequest &req_body) {
   atframework::CSMsg msg;
   rpc::internal::setup_cs_rpc_request_header(*msg.mutable_head(), "1.0.0.0", "unit-test-client",
-                                             "atframework.shard.LobbysvrClientService", rpc_full_name,
+                                             "atframework.shared.LobbysvrClientService", rpc_full_name,
                                              TRequest::descriptor()->full_name());
   CASE_EXPECT_TRUE(req_body.SerializeToString(msg.mutable_body_bin()));
   msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());

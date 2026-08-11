@@ -19,7 +19,7 @@ import "protocol/pbdesc/svr.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-go/service-cachesvr/protocol/protocol/pbdesc";
 
-package atframework.shard;
+package atframework.shared;
 
 message object_cache_pull_key {
   EnCacheApiGetCacheType get_type = 1;

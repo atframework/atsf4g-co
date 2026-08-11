@@ -2,7 +2,7 @@
 
 // Sampling contract test for the rank SDK SS consumer path (see doc/docs/development/rpc-unit-test.md):
 // rank_api::update_score resolves the rank-board node by consistent hash over the real discovery index
-// and issues atframework.shard.RankBoardService/rank_set_score; the SS mock engine answers it offline.
+// and issues atframework.shared.RankBoardService/rank_set_score; the SS mock engine answers it offline.
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

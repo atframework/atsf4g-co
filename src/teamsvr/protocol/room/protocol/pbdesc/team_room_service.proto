@@ -20,7 +20,7 @@ package atframework.team;
 
 message SSTeamRoomSendMessageReq {
   DTeamKey team_key = 1;
-  atframework.shard.DUserIDKey sender_user_key = 2;
+  atframework.shared.DUserIDKey sender_user_key = 2;
   DTeamAction action = 3;
 }
 
@@ -30,7 +30,7 @@ message SSTeamRoomSendMessageRsp {
 
 message SSTeamRoomHeartbeatReq {
   DTeamKey team_key = 1;
-  atframework.shard.DUserIDKey user_key = 2;
+  atframework.shared.DUserIDKey user_key = 2;
   uint64 user_router_server_id = 3;
   int64 sequence = 4;
   uint64 hash_code = 6;

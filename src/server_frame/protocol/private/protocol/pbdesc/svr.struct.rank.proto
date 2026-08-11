@@ -14,7 +14,7 @@ import "protocol/pbdesc/com.struct.proto";
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
-package atframework.shard;
+package atframework.shared;
 
 message history_rank_show_data {
   int64 role_guid = 3;

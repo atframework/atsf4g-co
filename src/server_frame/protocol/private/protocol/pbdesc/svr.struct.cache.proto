@@ -13,7 +13,7 @@ import "google/protobuf/any.proto";
 
 import "protocol/common/com.struct.cache.common.proto";
 
-package atframework.shard;
+package atframework.shared;
 
 message object_cache_key {
   EnCacheApiCacheType cache_type = 11;

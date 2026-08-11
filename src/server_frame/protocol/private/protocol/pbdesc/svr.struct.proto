@@ -13,7 +13,7 @@ import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 import "protocol/common/com.struct.rank.common.proto";
 
-package atframework.shard;
+package atframework.shared;
 
 message client_session_index {
   uint64 node_id = 1;

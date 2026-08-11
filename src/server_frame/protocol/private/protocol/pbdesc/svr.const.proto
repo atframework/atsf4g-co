@@ -10,7 +10,7 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 
 // 后台协议常量定义
 
-package atframework.shard;
+package atframework.shared;
 
 enum EnSystemLimit {
   // option allow_alias   = true;

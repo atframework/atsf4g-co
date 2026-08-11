@@ -13,7 +13,7 @@ import "protocol/extension/com.const.extension.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-package atframework.shard;
+package atframework.shared;
 
 option (CONST_SETTINGS) = {
   time_tolerate: 10

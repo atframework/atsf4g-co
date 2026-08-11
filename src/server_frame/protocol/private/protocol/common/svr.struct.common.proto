@@ -8,6 +8,6 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/common/protocol/common";
 
-package atframework.shard;
+package atframework.shared;
 
 import "google/protobuf/descriptor.proto";

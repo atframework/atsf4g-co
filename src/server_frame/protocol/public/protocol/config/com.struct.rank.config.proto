@@ -15,7 +15,7 @@ import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
 
-package atframework.shard.config;
+package atframework.shared.config;
 
 // 排行榜配置
 message ExcelRankDefine {

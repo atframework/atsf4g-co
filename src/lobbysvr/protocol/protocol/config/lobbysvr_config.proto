@@ -13,7 +13,7 @@ import "atframe/atapp_conf.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/lobbysvr/protocol/protocol/config";
 
-package atframework.shard.config;
+package atframework.shared.config;
 
 message lobbysvr_chat_cfg {
   int64 push_message_per_second = 1

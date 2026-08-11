@@ -54,7 +54,7 @@ message DChatChannelMeta {
 message DChatChannelKey {
   oneof key_type {
     uint64 world_partition_channel = 1;
-    atframework.shard.DUserIDKey private_channel = 2;
+    atframework.shared.DUserIDKey private_channel = 2;
   }
 }
 

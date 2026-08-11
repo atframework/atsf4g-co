@@ -11,7 +11,7 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 import "protocol/common/com.struct.cache.common.proto";
 import "protocol/pbdesc/com.struct.cache.proto";
 
-package atframework.shard;
+package atframework.shared;
 
 // 批量请求数据
 message CSCacheApiBatchGetReq {

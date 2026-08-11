@@ -19,7 +19,7 @@ import "protocol/pbdesc/svr.struct.rank.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
-package atframework.shard;
+package atframework.shared;
 
 message table_login_auth {
   // clang-format off

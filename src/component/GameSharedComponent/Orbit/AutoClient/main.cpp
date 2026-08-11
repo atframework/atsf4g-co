@@ -81,7 +81,7 @@ const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClie
 }
 }  // namespace
 
-ORBIT_RPC_HANDLE(echo, atframework.shard.OrbitServerRpcService, PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
+ORBIT_RPC_HANDLE(echo, atframework.shared.OrbitServerRpcService, PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
                  PROJECT_NAMESPACE_ID::OrbitServerEchoRsp)
 ORBIT_TASK_ACTION(echo, PROJECT_NAMESPACE_ID::OrbitClientEchoReq, PROJECT_NAMESPACE_ID::OrbitClientEchoRsp)
 
