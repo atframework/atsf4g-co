@@ -60,7 +60,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::init() {
 ORBIT_SERVER_SERVICE_API const char *orbit_msg_dispatcher::name() const { return "orbit_msg_dispatcher"; }
 
 ORBIT_SERVER_SERVICE_API uint64_t orbit_msg_dispatcher::pick_msg_task_id(msg_raw_t &raw_msg) {
-  orbit::OrbitRpcMessage *real_msg = get_protobuf_msg<orbit::OrbitRpcMessage>(raw_msg);
+  atfw::orbit::OrbitRpcMessage *real_msg = get_protobuf_msg<atfw::orbit::OrbitRpcMessage>(raw_msg);
   if (nullptr == real_msg || !real_msg->has_head()) {
     return 0;
   }
@@ -69,17 +69,17 @@ ORBIT_SERVER_SERVICE_API uint64_t orbit_msg_dispatcher::pick_msg_task_id(msg_raw
 }
 
 ORBIT_SERVER_SERVICE_API const std::string &orbit_msg_dispatcher::pick_rpc_name(
-    const orbit::OrbitRpcMessage &orbit_msg) {
+    const atfw::orbit::OrbitRpcMessage &orbit_msg) {
   if (!orbit_msg.has_head()) {
     return get_empty_string();
   }
 
   switch (orbit_msg.head().rpc_type_case()) {
-    case orbit::OrbitRpcMessageHead::kRpcRequest:
+    case atfw::orbit::OrbitRpcMessageHead::kRpcRequest:
       return orbit_msg.head().rpc_request().rpc_name();
-    case orbit::OrbitRpcMessageHead::kRpcStream:
+    case atfw::orbit::OrbitRpcMessageHead::kRpcStream:
       return orbit_msg.head().rpc_stream().rpc_name();
-    case orbit::OrbitRpcMessageHead::kRpcResponse:
+    case atfw::orbit::OrbitRpcMessageHead::kRpcResponse:
       return orbit_msg.head().rpc_response().rpc_name();
     default:
       break;
@@ -89,7 +89,7 @@ ORBIT_SERVER_SERVICE_API const std::string &orbit_msg_dispatcher::pick_rpc_name(
 }
 
 ORBIT_SERVER_SERVICE_API const std::string &orbit_msg_dispatcher::pick_rpc_name(msg_raw_t &raw_msg) {
-  orbit::OrbitRpcMessage *real_msg = get_protobuf_msg<orbit::OrbitRpcMessage>(raw_msg);
+  atfw::orbit::OrbitRpcMessage *real_msg = get_protobuf_msg<atfw::orbit::OrbitRpcMessage>(raw_msg);
   if (nullptr == real_msg) {
     return get_empty_string();
   }
@@ -104,7 +104,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::dispatch(rpc::context &ct
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  orbit::OrbitRpcMessage *orbit_msg = ctx.create<orbit::OrbitRpcMessage>();
+  atfw::orbit::OrbitRpcMessage *orbit_msg = ctx.create<atfw::orbit::OrbitRpcMessage>();
   if (nullptr == orbit_msg) {
     FWLOGERROR("{} create message instance failed", name());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
@@ -150,7 +150,7 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
     return;
   }
 
-  orbit::OrbitRpcMessage *real_msg = get_protobuf_msg<orbit::OrbitRpcMessage>(start_data.message);
+  atfw::orbit::OrbitRpcMessage *real_msg = get_protobuf_msg<atfw::orbit::OrbitRpcMessage>(start_data.message);
   if (nullptr == real_msg || !real_msg->has_head() || !real_msg->head().has_rpc_request() ||
       0 == real_msg->head().source_task_id()) {
     return;
@@ -177,8 +177,8 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
     response_ctx->setup_tracer(tracer, rpc_name, std::move(trace_start_option));
   }
 
-  rpc::context::message_holder<orbit::OrbitRpcMessage> rsp{*response_ctx};
-  orbit::OrbitRpcMessageHead *head = rsp->mutable_head();
+  rpc::context::message_holder<atfw::orbit::OrbitRpcMessage> rsp{*response_ctx};
+  atfw::orbit::OrbitRpcMessageHead *head = rsp->mutable_head();
   if (nullptr == head) {
     FWLOGERROR("malloc header failed when pack response of {} (source task id: {})", rpc_name,
                real_msg->head().source_task_id());
@@ -213,7 +213,7 @@ ORBIT_SERVER_SERVICE_API uint64_t orbit_msg_dispatcher::allocate_sequence() { re
 
 ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_client_no_wait(rpc::context &ctx,
                                                                               const std::string &client_id,
-                                                                              orbit::OrbitRpcMessage &orbit_msg) {
+                                                                              atfw::orbit::OrbitRpcMessage &orbit_msg) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");
@@ -259,7 +259,7 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_client_no_wait(rp
 
 ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_msg_dispatcher::send_to_client(rpc::context &ctx,
                                                                                     const std::string &client_id,
-                                                                                    orbit::OrbitRpcMessage &orbit_msg) {
+                                                                                    atfw::orbit::OrbitRpcMessage &orbit_msg) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");

@@ -22,9 +22,9 @@
 #endif
 
 class task_action_notify_client_exit
-    : public task_action_ss_rpc_base<orbit::ATCNotifyClientExitReq, orbit::CTANotifyClientExitRsp> {
+    : public task_action_ss_rpc_base<atfw::orbit::ATCNotifyClientExitReq, atfw::orbit::CTANotifyClientExitRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::ATCNotifyClientExitReq, orbit::CTANotifyClientExitRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::ATCNotifyClientExitReq, atfw::orbit::CTANotifyClientExitRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

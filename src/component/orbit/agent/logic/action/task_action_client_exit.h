@@ -21,9 +21,9 @@
 #  define ORBIT_AGENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_client_exit : public task_action_ss_rpc_base<orbit::DTAClientExitReq, orbit::ATDClientExitRsp> {
+class task_action_client_exit : public task_action_ss_rpc_base<atfw::orbit::DTAClientExitReq, atfw::orbit::ATDClientExitRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::DTAClientExitReq, orbit::ATDClientExitRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::DTAClientExitReq, atfw::orbit::ATDClientExitRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

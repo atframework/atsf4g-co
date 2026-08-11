@@ -39,7 +39,7 @@ class context;
 
 struct orbit_controller_agent_info {
   bool seed_mode = false;
-  orbit::DAgentEtcdLoadRecord load_record;
+  atfw::orbit::DAgentEtcdLoadRecord load_record;
   double preallocated_cpu = 0.0;
   double preallocated_memory_mb = 0.0;
   uint32_t preallocated_client_count = 0;
@@ -56,39 +56,39 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   // ---- 来自 Agent ----
   // Client 已启动（Agent 上报）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_started(
-      rpc::context& ctx, const orbit::ATCNotifyClientStartedReq& request, orbit::CTANotifyClientStartedRsp& response);
+      rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request, atfw::orbit::CTANotifyClientStartedRsp& response);
 
   // Client 已退出（Agent 上报）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_exit(
-      rpc::context& ctx, const orbit::ATCNotifyClientExitReq& request, orbit::CTANotifyClientExitRsp& response);
+      rpc::context& ctx, const atfw::orbit::ATCNotifyClientExitReq& request, atfw::orbit::CTANotifyClientExitRsp& response);
 
   // Agent 心跳（Agent 上报）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_agent_heartbeat(
-      rpc::context& ctx, const orbit::ATCAgentHeartbeatReq& request);
+      rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request);
 
   // Client 发送消息至 Server（Agent 转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_forward_to_server(
-      rpc::context& ctx, const orbit::ATCForwardToServerReq& request, orbit::CTAForwardToServerRsp& response);
+      rpc::context& ctx, const atfw::orbit::ATCForwardToServerReq& request, atfw::orbit::CTAForwardToServerRsp& response);
 
   // ---- 来自 Server ----
   // Server 请求启动 Client
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_launch_client(
-      rpc::context& ctx, const orbit::STCLaunchClientReq& request, orbit::CTSLaunchClientRsp& response);
+      rpc::context& ctx, const atfw::orbit::STCLaunchClientReq& request, atfw::orbit::CTSLaunchClientRsp& response);
 
   // Server 发送消息至 Client（下行转发）
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_send_to_client(
-      rpc::context& ctx, const orbit::STCSendToClientReq& request, orbit::CTSSendToClientRsp& response);
+      rpc::context& ctx, const atfw::orbit::STCSendToClientReq& request, atfw::orbit::CTSSendToClientRsp& response);
 
   // Server 心跳
   EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_server_heartbeat(
-      rpc::context& ctx, const orbit::STCServerHeartbeatNotify& request);
+      rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request);
 
  private:
-  orbit::DAgentIdentity select_agent_for_launch(const orbit::DAgentClientStartArgsResource& resource,
+  atfw::orbit::DAgentIdentity select_agent_for_launch(const atfw::orbit::DAgentClientStartArgsResource& resource,
                                                 const std::string& match_tag) noexcept;
   void on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
-                           const orbit::DAgentEtcdLoadRecord& record);
-  void update_agent_load(const orbit::DAgentEtcdLoadRecord& record);
+                           const atfw::orbit::DAgentEtcdLoadRecord& record);
+  void update_agent_load(const atfw::orbit::DAgentEtcdLoadRecord& record);
 
  private:
   bool stopped_ = false;

@@ -14,7 +14,7 @@ import "protocol/common/com.struct.equipment.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
-package hello;
+package atframework.shard;
 
 message DItemPositionCfg {
   int32 accumulation_limit = 1;

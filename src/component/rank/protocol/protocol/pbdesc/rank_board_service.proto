@@ -13,32 +13,32 @@ import "protocol/extension/atframework.proto";
 import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 
-package hello;
+package atframework.rank;
 
 message SSRankGetSpecifyRankReq {
-  DRankKey rank_key = 1;
-  DRankUserKey user_key = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankUserKey user_key = 2;
 }
 
 message SSRankGetSpecifyRankRsp {
   int32 result = 1;
-  DRankUserBoardData rank_records = 2;
+  atframework.shard.DRankUserBoardData rank_records = 2;
 }
 
 message SSRankGetUserFrontBackReq {
-  DRankKey rank_key = 1;
-  DRankUserKey user_key = 2;
-  uint32 count = 3;  
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankUserKey user_key = 2;
+  uint32 count = 3;
 }
 
 message SSRankGetUserFrontBackRsp {
   int32 result = 1;
-  DRankQueryRspData data = 2;
+  atframework.shard.DRankQueryRspData data = 2;
 }
 
 message SSRankSetScoreReq {
-  DRankKey rank_key = 1;
-  DRankEventUpdateUserScore data = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankEventUpdateUserScore data = 2;
 }
 
 message SSRankSetScoreRsp {
@@ -46,10 +46,9 @@ message SSRankSetScoreRsp {
   int32 result = 1;
 }
 
-
 message SSRankModifyScoreReq {
-  DRankKey rank_key = 1;
-  DRankEventUpdateUserScore data = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankEventUpdateUserScore data = 2;
 }
 
 message SSRankModifyScoreRsp {
@@ -57,10 +56,9 @@ message SSRankModifyScoreRsp {
   int32 result = 1;
 }
 
-
 message SSRankDelUserReq {
-  DRankKey rank_key = 1;
-  DRankEventRemoveUserScore data = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankEventRemoveUserScore data = 2;
 }
 
 message SSRankDelUserRsp {
@@ -68,92 +66,90 @@ message SSRankDelUserRsp {
 }
 
 message SSRankGetTopReq {
-  DRankKey rank_key = 1;
-  uint32 start_no = 2; // 起始排名
-  uint32 count = 3; // 拉取数量（一次拉取最多100个）
+  atframework.shard.DRankKey rank_key = 1;
+  uint32 start_no = 2;  // 起始排名
+  uint32 count = 3;     // 拉取数量（一次拉取最多100个）
 }
 
 message SSRankGetTopRsp {
   int32 result = 1;
-  DRankQueryRspData data = 2;
+  atframework.shard.DRankQueryRspData data = 2;
 }
 
-message SSRankClearReq{
-  DRankKey rank_key = 1;
-  DRankEventClear data = 2;
+message SSRankClearReq {
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankEventClear data = 2;
 }
 
-
-message SSRankClearRsp{
+message SSRankClearRsp {
   int32 result = 1;
 }
 
 message SSRankMakeNewMirrorReq {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
 }
 
 message SSRankMakeNewMirrorRsp {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
   int64 mirror_id = 2;
 }
 
 message SSRankCheckMirrorDumpFinishReq {
-  DRankKey rank_key = 1;
-  int64 mirror_id = 2;  
+  atframework.shard.DRankKey rank_key = 1;
+  int64 mirror_id = 2;
 }
 
 message SSRankCheckMirrorDumpFinishRsp {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
   int64 mirror_id = 2;
-  bool is_dump_finish = 3;  
+  bool is_dump_finish = 3;
 }
 
 message SSRankEventSync {
-  DRankKey rank_key = 1;
-  repeated DRankEventLog event_logs = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  repeated atframework.shard.DRankEventLog event_logs = 2;
 }
 
 //----------------------------- 主从相关 -------------------------------------
 message SSRankLoadMainReq {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
   int32 ttl = 2;
 }
 
 message SSRankLoadMainRsp {
-  DRankKey rank_key = 1;
-  DRankRouterData router_data = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankRouterData router_data = 2;
 }
 
 message SSRankCheckSlaveReq {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
 }
 
 message SSRankCheckSlaveRsp {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
   bool is_slave = 2;
   int64 data_version = 3;
 }
 
 message SSRankHeartbeatReq {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
   int64 data_version = 2;
   uint64 router_version = 3;
 }
 
 message SSRankHeartbeatRsp {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
 }
 
 message SSRankSwitchToSlaveReq {
-  DRankKey rank_key = 1;
-  DRankRouterData router_data = 2;
+  atframework.shard.DRankKey rank_key = 1;
+  atframework.shard.DRankRouterData router_data = 2;
   int64 data_version = 3;
 }
 
 message SSRankSwitchToSlaveRsp {
-  DRankKey rank_key = 1;
+  atframework.shard.DRankKey rank_key = 1;
 }
-
 
 service RankBoardService {
   option (atframework.service_options) = {
@@ -217,7 +213,7 @@ service RankBoardService {
       api_name: "主从节点信息同步"
       allow_no_wait: true
     };
-  }; 
+  };
   rpc rank_heartbeat(SSRankHeartbeatReq) returns (SSRankHeartbeatRsp) {
     option (atframework.rpc_options) = {
       api_name: "主从心跳"
@@ -229,26 +225,23 @@ service RankBoardService {
       api_name: "切换到从节点"
       allow_no_wait: true
     };
-  };  
+  };
   rpc rank_get_special_one_front_back(SSRankGetUserFrontBackReq) returns (SSRankGetUserFrontBackRsp) {
     option (atframework.rpc_options) = {
       api_name: "获取玩家前后排名count的排行榜数据"
       allow_no_wait: true
     };
-  };  
+  };
   rpc rank_make_new_mirror(SSRankMakeNewMirrorReq) returns (SSRankMakeNewMirrorRsp) {
     option (atframework.rpc_options) = {
       api_name: "请求生成排行榜镜像"
       allow_no_wait: true
     };
-  }; 
+  };
   rpc rank_check_mirror_dump_finish(SSRankCheckMirrorDumpFinishReq) returns (SSRankCheckMirrorDumpFinishRsp) {
     option (atframework.rpc_options) = {
       api_name: "检查镜像是否生成完成"
       allow_no_wait: true
     };
-  };   
+  };
 }
-
-
-

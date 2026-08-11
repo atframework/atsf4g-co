@@ -48,7 +48,7 @@ int64_t get_total_process_cpu_time_us(const uv_rusage_t &usage) {
   return total_us;
 }
 
-void fill_client_id(orbit::DClientId &client_id, const std::string &value) { client_id.set_client_id(value); }
+void fill_client_id(atfw::orbit::DClientId &client_id, const std::string &value) { client_id.set_client_id(value); }
 
 void emit_log(const OrbitClientCallbacks &callbacks, OrbitClientLogLevel level, const char *file_name, int line_number,
               const std::string &message) {
@@ -468,7 +468,7 @@ bool OrbitClientRuntime::connect() {
 ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::is_seed_process() const { return options_.seed_mode; }
 
 int32_t OrbitClientRuntime::notify_seed_process_ready_inner() {
-  orbit::DTAClientStartReq request;
+  atfw::orbit::DTAClientStartReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
@@ -482,23 +482,23 @@ int32_t OrbitClientRuntime::notify_seed_process_ready_inner() {
   last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   set_state(OrbitClientRuntimeState::kRunning);
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "client_start sent");
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_seed_process_ready() {
   if (!is_seed_process()) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "notify_seed_process_ready rejected: not a seed process");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (state_.load() != OrbitClientRuntimeState::kConnected) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "notify_seed_process_ready rejected: runtime is not connected");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (enabled_io_thread()) {
     post_to_io_thread([this] { notify_seed_process_ready_inner(); });
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
   return notify_seed_process_ready_inner();
 }
@@ -524,31 +524,31 @@ int32_t OrbitClientRuntime::blocking_seed_process() {
       break;
     }
   }
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-int32_t OrbitClientRuntime::on_received_fork_request(const orbit::ATDForkSeedClientReq &request) {
+int32_t OrbitClientRuntime::on_received_fork_request(const atfw::orbit::ATDForkSeedClientReq &request) {
   if (!is_seed_process()) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "on_received_fork_request rejected: not a seed process");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
   pending_fork_requests_.push(request);
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-void OrbitClientRuntime::on_received_stop_request(const orbit::ATDStopClientReq &request) {
+void OrbitClientRuntime::on_received_stop_request(const atfw::orbit::ATDStopClientReq &request) {
   request_end(request.reason(), 0);
 }
 
 int32_t OrbitClientRuntime::process_fork_request() {
   if (!is_seed_process()) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "process_fork_request rejected: not a seed process");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  orbit::ATDForkSeedClientReq request;
+  atfw::orbit::ATDForkSeedClientReq request;
   if (!pending_fork_requests_.try_pop(request)) {
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
 
 #if defined(__linux__) || defined(__unix__)
@@ -558,16 +558,16 @@ int32_t OrbitClientRuntime::process_fork_request() {
   if (child_pid < 0) {
     ORBIT_LOG(OrbitClientLogLevel::kError, std::string{"process_fork_request rejected: fork failed, errno="} +
                                                std::to_string(static_cast<int>(errno)));
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (child_pid != 0) {
     // Seed返回
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
 #else
   ORBIT_LOG(OrbitClientLogLevel::kError, "process_fork_request rejected: not linux or unix platform, cannot fork");
-  return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
 #endif
 
   // Child进程 需要重新初始化自己
@@ -597,7 +597,7 @@ ORBIT_CLIENT_SDK_API const std::string &OrbitClientRuntime::find_custom_launch_a
 }
 
 int32_t OrbitClientRuntime::notify_process_ready_inner(const std::string &client_addr, const std::string &custom_data) {
-  orbit::DTAClientStartReq request;
+  atfw::orbit::DTAClientStartReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.set_client_addr(client_addr);
   request.set_custom_data(custom_data);
@@ -616,24 +616,24 @@ int32_t OrbitClientRuntime::notify_process_ready_inner(const std::string &client
   set_state(OrbitClientRuntimeState::kRunning);
 
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "client_start sent");
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std::string &client_addr,
                                                                       const std::string &custom_data) {
   if (state_.load() != OrbitClientRuntimeState::kConnected) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "notify_process_ready rejected: runtime is not connected");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (client_addr.empty()) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "notify_process_ready rejected: client_addr is empty");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (enabled_io_thread()) {
     post_to_io_thread([this, client_addr, custom_data] { notify_process_ready_inner(client_addr, custom_data); });
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
   return notify_process_ready_inner(client_addr, custom_data);
 }
@@ -714,10 +714,10 @@ void OrbitClientRuntime::io_tick() {
 int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapshot) {
   if (state_.load() != OrbitClientRuntimeState::kRunning) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "send_heartbeat rejected: runtime is not running");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  orbit::DTAClientHeartbeatNotify request;
+  atfw::orbit::DTAClientHeartbeatNotify request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.mutable_snapshot()->set_cpu_used(snapshot.cpu_used);
   request.mutable_snapshot()->set_memory_used_mb(snapshot.memory_used_mb);
@@ -730,18 +730,18 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
   }
 
   last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::send_to_server(
-    const std::string &payload, OrbitClientRpcCallback<orbit::ATDSendToServerRsp> callback,
+    const std::string &payload, OrbitClientRpcCallback<atfw::orbit::ATDSendToServerRsp> callback,
     const OrbitClientRequestOptions &request_options) {
   if (state_.load() != OrbitClientRuntimeState::kRunning) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "send_to_server rejected: runtime is not running");
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  orbit::DTASendToServerReq request;
+  atfw::orbit::DTASendToServerReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
   request.set_payload(payload);
 
@@ -752,10 +752,10 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::send_to_server(
     return send_result;
   }
 
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-int32_t OrbitClientRuntime::request_end_inner(orbit::EnClientExitReason reason, int32_t exit_code,
+int32_t OrbitClientRuntime::request_end_inner(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
                                               const std::string &custom_data) {
   OrbitClientRuntimeState previous_state = state_.load();
   set_state(OrbitClientRuntimeState::kStopping);
@@ -763,14 +763,14 @@ int32_t OrbitClientRuntime::request_end_inner(orbit::EnClientExitReason reason, 
   request_options.reliable = true;
   request_options.retry_times = 3;
 
-  int32_t send_result = orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  int32_t send_result = atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   if (previous_state == OrbitClientRuntimeState::kConnected || previous_state == OrbitClientRuntimeState::kRunning) {
-    orbit::DTAClientExitReq request;
+    atfw::orbit::DTAClientExitReq request;
     fill_client_id(*request.mutable_client_id(), options_.client_id);
     request.set_exit_reason(reason);
     request.set_custom_data(custom_data);
     request.set_exit_code(exit_code);
-    auto wrapped_callback = [this](int32_t, const orbit::ATDClientExitRsp &) mutable { finalize_shutdown(); };
+    auto wrapped_callback = [this](int32_t, const atfw::orbit::ATDClientExitRsp &) mutable { finalize_shutdown(); };
     send_result = rpc_send_client_exit(request, std::move(wrapped_callback), request_options);
     if (send_result < 0) {
       ORBIT_LOG(OrbitClientLogLevel::kError,
@@ -786,11 +786,11 @@ int32_t OrbitClientRuntime::request_end_inner(orbit::EnClientExitReason reason, 
   return send_result;
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(orbit::EnClientExitReason reason, int32_t exit_code,
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
                                                              const std::string &custom_data) {
   if (enabled_io_thread()) {
     post_to_io_thread([this, reason, exit_code, custom_data] { request_end_inner(reason, exit_code, custom_data); });
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
   return request_end_inner(reason, exit_code, custom_data);
 }

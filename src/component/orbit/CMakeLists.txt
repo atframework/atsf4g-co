@@ -45,14 +45,14 @@ project_component_declare_protocol(
   "${CMAKE_CURRENT_LIST_DIR}/controller/protocol/protocol/config/orbit_controller_config.proto")
 
 generate_for_pb_add_ss_service(
-  "orbit.ControllerToAgentService"
+  "atframework.orbit.ControllerToAgentService"
   "${CMAKE_CURRENT_LIST_DIR}/agent"
   TASK_PATH_PREFIX
   "logic"
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
+  "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/agent"
   SERVICE_DLLEXPORT_DECL
@@ -65,14 +65,14 @@ generate_for_pb_add_ss_service(
   "protocol/pbdesc/agent_service.pb.h")
 
 generate_for_pb_add_ss_service(
-  "orbit.AgentToControllerService"
+  "atframework.orbit.AgentToControllerService"
   "${CMAKE_CURRENT_LIST_DIR}/controller"
   TASK_PATH_PREFIX
   "logic"
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
+  "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/controller"
   SERVICE_DLLEXPORT_DECL
@@ -85,14 +85,14 @@ generate_for_pb_add_ss_service(
   "protocol/pbdesc/controller_service.pb.h")
 
 generate_for_pb_add_ss_service(
-  "orbit.ServerToControllerService"
+  "atframework.orbit.ServerToControllerService"
   "${CMAKE_CURRENT_LIST_DIR}/controller"
   TASK_PATH_PREFIX
   "logic"
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
+  "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/controller"
   SERVICE_DLLEXPORT_DECL
@@ -105,14 +105,14 @@ generate_for_pb_add_ss_service(
   "protocol/pbdesc/server_service.pb.h")
 
 generate_for_pb_add_ss_service(
-  "orbit.ControllerToServerService"
+  "atframework.orbit.ControllerToServerService"
   "${CMAKE_CURRENT_LIST_DIR}/sdk/server"
   TASK_PATH_PREFIX
   "logic"
   HANDLE_PATH_PREFIX
   "handle"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
+  "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/server"
   SERVICE_DLLEXPORT_DECL
@@ -125,14 +125,14 @@ generate_for_pb_add_ss_service(
   "protocol/pbdesc/server_service.pb.h")
 
 generate_for_pb_add_ss_service(
-  "orbit.ClientToAgentService"
+  "atframework.orbit.ClientToAgentService"
   "${CMAKE_CURRENT_LIST_DIR}/agent"
   TASK_PATH_PREFIX
   "logic"
   HANDLE_PATH_PREFIX
   "app"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
+  "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/agent"
   SERVICE_DLLEXPORT_DECL
@@ -146,14 +146,14 @@ generate_for_pb_add_ss_service(
   "protocol/pbdesc/client_service.pb.h")
 
 generate_for_pb_add_ss_service(
-  "orbit.AgentToClientService"
+  "atframework.orbit.AgentToClientService"
   "${CMAKE_CURRENT_LIST_DIR}/sdk/client"
   TASK_PATH_PREFIX
   "logic"
   HANDLE_PATH_PREFIX
   "logic"
   PROJECT_NAMESPACE
-  "${PROJECT_NAMESPACE}"
+  "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk/client"
   SERVICE_DLLEXPORT_DECL

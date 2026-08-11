@@ -66,7 +66,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   const std::string& get_region() const;
 
   int32_t create(rpc::context& ctx, uint64_t match_server_id);
-  rpc::result_code_type start_client(rpc::context& ctx, const orbit::DAgentClientStartArgs& args);
+  rpc::result_code_type start_client(rpc::context& ctx, const atfw::orbit::DAgentClientStartArgs& args);
   int32_t on_client_start(rpc::context& ctx, const std::string& client_addr);
 
   int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserKey>& user_keys,
@@ -76,7 +76,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   int32_t on_user_finish(
       rpc::context& ctx,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results);
-  int32_t on_client_end(rpc::context& ctx, orbit::EnClientExitReason exit_reason, int32_t exit_code);
+  int32_t on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   bool ready_to_destroy() const;
   void on_destroy();

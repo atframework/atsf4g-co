@@ -22,9 +22,9 @@
 #endif
 
 class task_action_client_start_notify
-    : public task_action_ss_rpc_base<orbit::CTSClientStartReq, orbit::STCClientStartRsp> {
+    : public task_action_ss_rpc_base<atfw::orbit::CTSClientStartReq, atfw::orbit::STCClientStartRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::CTSClientStartReq, orbit::STCClientStartRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::CTSClientStartReq, atfw::orbit::STCClientStartRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

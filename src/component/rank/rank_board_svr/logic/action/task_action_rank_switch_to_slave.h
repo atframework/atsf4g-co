@@ -21,11 +21,11 @@
 #  define RANK_SERVICE_API UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_rank_switch_to_slave : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveReq,
-                                                                        PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveRsp> {
+class task_action_rank_switch_to_slave : public task_action_ss_rpc_base<atfw::rank::SSRankSwitchToSlaveReq,
+                                                                        atfw::rank::SSRankSwitchToSlaveRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveReq,
-                                            PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::rank::SSRankSwitchToSlaveReq,
+                                            atfw::rank::SSRankSwitchToSlaveRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

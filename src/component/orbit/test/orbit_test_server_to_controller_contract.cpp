@@ -56,12 +56,12 @@ CASE_TEST(component_orbit, orbit_sdk_launch_client_contract) {
 
   auto rule = test.ss().mock(
       rpc::servertocontrollerservice::packer::get_full_name_of_launch_client(),
-      orbit::STCLaunchClientReq::descriptor()->full_name(), orbit::CTSLaunchClientRsp::descriptor()->full_name(),
+      atfw::orbit::STCLaunchClientReq::descriptor()->full_name(), atfw::orbit::CTSLaunchClientRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
-        const auto &typed_request = static_cast<const orbit::STCLaunchClientReq &>(request.body);
+        const auto &typed_request = static_cast<const atfw::orbit::STCLaunchClientReq &>(request.body);
         CASE_EXPECT_EQ(0x1D0001, static_cast<int64_t>(request.target_node_id));
         CASE_EXPECT_EQ("unit-test-orbit-match-tag", typed_request.args().match_tag());
-        static_cast<orbit::CTSLaunchClientRsp &>(response).set_error_code(0);
+        static_cast<atfw::orbit::CTSLaunchClientRsp &>(response).set_error_code(0);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!rule);
@@ -73,10 +73,10 @@ CASE_TEST(component_orbit, orbit_sdk_launch_client_contract) {
 
   auto task =
       test.run_task("orbit_launch_client", std::chrono::seconds{3}, [](rpc::context &ctx) -> rpc::result_code_type {
-        orbit::STCLaunchClientReq req;
+        atfw::orbit::STCLaunchClientReq req;
         req.mutable_args()->set_match_tag("unit-test-orbit-match-tag");
         req.mutable_server_identity()->set_unique_id(0x1D0002);
-        orbit::CTSLaunchClientRsp rsp;
+        atfw::orbit::CTSLaunchClientRsp rsp;
 
         int32_t res = RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::launch_client(ctx, 0x1D0001, req, rsp));
         CASE_EXPECT_EQ(0, res);

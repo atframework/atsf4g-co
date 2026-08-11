@@ -22,11 +22,11 @@
 #endif
 
 class task_action_rank_check_mirror_dump_finish
-    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankCheckMirrorDumpFinishReq,
-                                     PROJECT_NAMESPACE_ID::SSRankCheckMirrorDumpFinishRsp> {
+    : public task_action_ss_rpc_base<atfw::rank::SSRankCheckMirrorDumpFinishReq,
+                                     atfw::rank::SSRankCheckMirrorDumpFinishRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankCheckMirrorDumpFinishReq,
-                                            PROJECT_NAMESPACE_ID::SSRankCheckMirrorDumpFinishRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::rank::SSRankCheckMirrorDumpFinishReq,
+                                            atfw::rank::SSRankCheckMirrorDumpFinishRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

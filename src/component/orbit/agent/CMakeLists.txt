@@ -22,5 +22,5 @@ project_component_declare_service(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   GENERATED_FLOW_NAMES
-  "orbit.ClientToAgentService"
-  "orbit.ControllerToAgentService")
+  "atframework.orbit.ClientToAgentService"
+  "atframework.orbit.ControllerToAgentService")

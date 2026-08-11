@@ -31,8 +31,8 @@ namespace rank_board {
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank,
     PROJECT_NAMESPACE_ID::DRankUserBoardData& output) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetSpecifyRankReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetSpecifyRankRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankGetSpecifyRankReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankGetSpecifyRankRsp> response_body{ctx};
 
   protobuf_copy_message(*request_body->mutable_user_key(), user);
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
@@ -56,8 +56,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_specia
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank, uint32_t start_no, uint32_t count,
     PROJECT_NAMESPACE_ID::DRankQueryRspData& output) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetTopReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetTopRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankGetTopReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankGetTopRsp> response_body{ctx};
 
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
   request_body->set_start_no(start_no);
@@ -81,8 +81,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top(
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_special_one_front_back(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank, const PROJECT_NAMESPACE_ID::DRankUserKey& user,
     uint32_t count, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBoardData>& output) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetUserFrontBackReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankGetUserFrontBackRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankGetUserFrontBackReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankGetUserFrontBackRsp> response_body{ctx};
 
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
   protobuf_copy_message(*request_body->mutable_user_key(), user);
@@ -107,8 +107,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_specia
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_score(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank,
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankSetScoreReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankSetScoreRsp> response_body{ctx};
   auto* req_data = request_body->mutable_data();
 
   protobuf_copy_message(*req_data->mutable_user_key(), user);
@@ -129,8 +129,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_sco
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_score(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank,
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankSetScoreRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankSetScoreReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankSetScoreRsp> response_body{ctx};
   auto* req_data = request_body->mutable_data();
 
   protobuf_copy_message(*req_data->mutable_user_key(), user);
@@ -150,8 +150,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_sco
 
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type remove_one(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankUserKey& user, const PROJECT_NAMESPACE_ID::DRankKey& rank) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankDelUserReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankDelUserRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankDelUserReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankDelUserRsp> response_body{ctx};
 
   protobuf_copy_message(*request_body->mutable_data()->mutable_user_key(), user);
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
@@ -168,8 +168,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type remove_one
 
 ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type clear_rank(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankClearReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankClearRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankClearReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankClearRsp> response_body{ctx};
 
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
 
@@ -246,8 +246,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top_fr
 
 RANK_BOARD_SDK_API rpc::result_code_type make_new_mirror(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank,
                                                          int64_t& mirror_id) {
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorReq> request_body{ctx};
-  rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankMakeNewMirrorRsp> response_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankMakeNewMirrorReq> request_body{ctx};
+  rpc::context::message_holder<atfw::rank::SSRankMakeNewMirrorRsp> response_body{ctx};
 
   protobuf_copy_message(*request_body->mutable_rank_key(), rank);
 

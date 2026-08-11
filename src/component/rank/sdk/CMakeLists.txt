@@ -11,7 +11,7 @@ project_component_declare_sdk(
   OUTPUT_TARGET_NAME
   PROJECT_COMPONENT_RANK_BOARD_SVR_SDK
   GENERATED_FLOW_NAMES
-  "${PROJECT_NAMESPACE}.RankBoardService"
+  "atframework.rank.RankBoardService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/rank.h"
   "${CMAKE_CURRENT_LIST_DIR}/rank_board_svr/rpc/rank_board/sharding.h"

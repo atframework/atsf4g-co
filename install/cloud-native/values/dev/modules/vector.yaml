@@ -1,7 +1,7 @@
 sliks:
   opensearch:
     enable: true
-    data_stream_type: hello
+    data_stream_type: atframework.shard
     username: username
     password: password
     endpoint: endpoint

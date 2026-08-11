@@ -52,7 +52,7 @@ ORBIT_CLIENT_SDK_API bool OrbitRPCDispatcher::check_rpc_success() {
   return true;
 }
 
-ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(const orbit::OrbitRpcMessage& raw_msg) {
+ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(const atfw::orbit::OrbitRpcMessage& raw_msg) {
   if (!raw_msg.has_head()) {
     return get_empty_string();
   }
@@ -66,16 +66,16 @@ ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(const 
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::dispatch(const std::string& message) {
-  orbit::OrbitRpcMessage orbit_msg;
+  atfw::orbit::OrbitRpcMessage orbit_msg;
   if (!orbit_msg.ParseFromString(message)) {
     OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] parse message failed.\n{}", message));
-    return orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
   }
   if (!orbit_msg.has_head()) {
     OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] message head not found.\n{}", message));
-    return orbit::EN_ORBIT_ERROR_CODE_MESSAGE_HEAD_NOT_FOUND;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_MESSAGE_HEAD_NOT_FOUND;
   }
   if (orbit_msg.head().has_rpc_request() || orbit_msg.head().has_rpc_stream()) {
     return on_rpc_req_message(orbit_msg);
@@ -86,11 +86,11 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::dispatch(const std::string& mes
         OrbitClientLogLevel::kError, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] unknown message.\n{}",
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
-    return orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARSE_MESSAGE_FAILED;
   }
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::OrbitRpcMessage& orbit_msg) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(atfw::orbit::OrbitRpcMessage& orbit_msg) {
   int32_t ret = 0;
   do {
     OrbitClientRuntime::me()->log(
@@ -99,31 +99,31 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_req_message(orbit::Orbit
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
     const std::string& rpc_name = pick_rpc_name(orbit_msg);
     if (rpc_name.empty()) {
-      ret = orbit::EN_ORBIT_ERROR_CODE_RPC_NAME_NOTFOUND;
+      ret = atfw::orbit::EN_ORBIT_ERROR_CODE_RPC_NAME_NOTFOUND;
       break;
     }
     if (task_action_map_by_name_.empty()) {
-      ret = orbit::EN_ORBIT_ERROR_CODE_TASK_ACTION_EMPTY;
+      ret = atfw::orbit::EN_ORBIT_ERROR_CODE_TASK_ACTION_EMPTY;
       break;
     }
     rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_name);
     if (task_action_map_by_name_.end() != iter && iter->second) {
       return (*iter->second)(private_data_callback_ ? private_data_callback_() : nullptr, std::move(orbit_msg));
     }
-    ret = orbit::EN_ORBIT_ERROR_CODE_TASK_ACTION_NOTFOUND;
+    ret = atfw::orbit::EN_ORBIT_ERROR_CODE_TASK_ACTION_NOTFOUND;
   } while (false);
   on_create_task_failed(orbit_msg, ret);
   return ret;
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::OrbitRpcMessage& orbit_msg) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_rsp_message(atfw::orbit::OrbitRpcMessage& orbit_msg) {
   OrbitClientRuntime::me()->log(
       OrbitClientLogLevel::kInfo, __FILE__, __LINE__,
       LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] recv rsp msg.\n{}",
                                OrbitClientRuntime::protobuf_mini_dumper_get_readable(orbit_msg)));
   uint64_t sequence = orbit_msg.head().destination_task_id();
   if (sequence == 0) {
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
   auto iter = sequence_callback_map_.find(sequence);
   if (iter == sequence_callback_map_.end()) {
@@ -143,7 +143,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::on_rpc_rsp_message(orbit::Orbit
 
 ORBIT_CLIENT_SDK_API uint64_t OrbitRPCDispatcher::allocate_sequence() { return ++sequence_allocator_; }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRpcMessage& orbit_msg) {
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_rsp_to_proc(atfw::orbit::OrbitRpcMessage& orbit_msg) {
   if (0 == orbit_msg.head().sequence()) {
     orbit_msg.mutable_head()->set_sequence(allocate_sequence());
   }
@@ -158,7 +158,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_rsp_to_proc(orbit::OrbitRp
   return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_req_to_proc(orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence,
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_req_to_proc(atfw::orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence,
                                                                   const OrbitClientRequestOptions& request_options) {
   if (0 == orbit_msg.head().sequence()) {
     orbit_msg.mutable_head()->set_sequence(allocate_sequence());
@@ -178,13 +178,13 @@ ORBIT_CLIENT_SDK_API int OrbitRPCDispatcher::_register_action(const std::string&
                                                               task_action_creator_t action) {
   rpc_task_action_set_t::iterator iter = task_action_map_by_name_.find(rpc_full_name);
   if (task_action_map_by_name_.end() != iter) {
-    return orbit::EN_ORBIT_ERROR_CODE_ALREADY_REGISTER_ACTION;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_ALREADY_REGISTER_ACTION;
   }
   task_action_map_by_name_[rpc_full_name] = action;
   return 0;
 }
 
-void OrbitRPCDispatcher::on_create_task_failed(orbit::OrbitRpcMessage& orbit_msg, int32_t ret_code) {
+void OrbitRPCDispatcher::on_create_task_failed(atfw::orbit::OrbitRpcMessage& orbit_msg, int32_t ret_code) {
   if (!orbit_msg.has_head()) {
     return;
   }
@@ -193,7 +193,7 @@ void OrbitRPCDispatcher::on_create_task_failed(orbit::OrbitRpcMessage& orbit_msg
     return;
   }
 
-  orbit::OrbitRpcMessage rsp;
+  atfw::orbit::OrbitRpcMessage rsp;
   auto rsp_head = rsp.mutable_head();
 
   rsp_head->set_source_task_id(0);
@@ -210,11 +210,11 @@ void OrbitRPCDispatcher::on_create_task_failed(orbit::OrbitRpcMessage& orbit_msg
 ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::init_rpc_req_callback(uint64_t sequence, time_t timeout,
                                                                        rsp_callback_t callback) {
   if (sequence == 0) {
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
   // 注册回调
   if (sequence_callback_map_.find(sequence) != sequence_callback_map_.end()) {
-    return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
   time_t timeout_stamp = ::util::time::time_utility::get_sys_now() + timeout;
   auto ptr = std::make_shared<rsp_callback_t>(callback);
@@ -242,13 +242,13 @@ void OrbitRPCDispatcher::rsp_callback_execute() {
         // CALL TIMEOUT
         if (OrbitClientRuntime::me()->enabled_io_thread()) {
           OrbitClientRuntime::me()->post_to_caller_thread([callback]() {
-            orbit::OrbitRpcMessage orbit_msg;
-            orbit_msg.mutable_head()->set_error_code(orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
+            atfw::orbit::OrbitRpcMessage orbit_msg;
+            orbit_msg.mutable_head()->set_error_code(atfw::orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
             callback(orbit_msg);
           });
         } else {
-          orbit::OrbitRpcMessage orbit_msg;
-          orbit_msg.mutable_head()->set_error_code(orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
+          atfw::orbit::OrbitRpcMessage orbit_msg;
+          orbit_msg.mutable_head()->set_error_code(atfw::orbit::EN_ORBIT_ERROR_CODE_TIMEOUT);
           callback(orbit_msg);
         }
       }

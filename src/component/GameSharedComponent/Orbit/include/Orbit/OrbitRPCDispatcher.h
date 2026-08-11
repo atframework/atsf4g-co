@@ -32,12 +32,12 @@ namespace orbit_client_sdk {
 struct task_action_maker_base_t {
   explicit task_action_maker_base_t() {};
   virtual ~task_action_maker_base_t() {};
-  virtual int operator()(void *private_data, orbit::OrbitRpcMessage &&orbit_msg) = 0;
+  virtual int operator()(void *private_data, atfw::orbit::OrbitRpcMessage &&orbit_msg) = 0;
 };
 
 template <typename TAction>
 struct task_action_maker_t : public task_action_maker_base_t {
-  int operator()(void *private_data, orbit::OrbitRpcMessage &&orbit_msg) override {
+  int operator()(void *private_data, atfw::orbit::OrbitRpcMessage &&orbit_msg) override {
     auto ptr = std::make_shared<TAction>(private_data, std::move(orbit_msg));
     return (*ptr)();
   };
@@ -48,7 +48,7 @@ class OrbitRPCDispatcher {
   using task_action_creator_t = std::shared_ptr<task_action_maker_base_t>;
   using rpc_task_action_set_t = std::unordered_map<std::string, task_action_creator_t>;
 
-  using rsp_callback_t = std::function<void(const orbit::OrbitRpcMessage &)>;
+  using rsp_callback_t = std::function<void(const atfw::orbit::OrbitRpcMessage &)>;
 
 #if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
 #  if defined(ORBIT_CLIENT_SDK_NATIVE) && ORBIT_CLIENT_SDK_NATIVE
@@ -71,11 +71,11 @@ class OrbitRPCDispatcher {
 
   ORBIT_CLIENT_SDK_API bool check_rpc_success();
 
-  ORBIT_CLIENT_SDK_API const std::string &pick_rpc_name(const orbit::OrbitRpcMessage &raw_msg);
+  ORBIT_CLIENT_SDK_API const std::string &pick_rpc_name(const atfw::orbit::OrbitRpcMessage &raw_msg);
 
   ORBIT_CLIENT_SDK_API int32_t dispatch(const std::string &message);
-  ORBIT_CLIENT_SDK_API int32_t on_rpc_req_message(orbit::OrbitRpcMessage &orbit_msg);
-  ORBIT_CLIENT_SDK_API int32_t on_rpc_rsp_message(orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_CLIENT_SDK_API int32_t on_rpc_req_message(atfw::orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_CLIENT_SDK_API int32_t on_rpc_rsp_message(atfw::orbit::OrbitRpcMessage &orbit_msg);
 
   ORBIT_CLIENT_SDK_API uint64_t allocate_sequence();
 
@@ -92,10 +92,10 @@ class OrbitRPCDispatcher {
   ATFW_UTIL_SYMBOL_VISIBLE int register_action(const ::google::protobuf::ServiceDescriptor *service_desc,
                                                const std::string &rpc_name, bool allow_after_init) {
     if (nullptr == service_desc) {
-      return orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
+      return atfw::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
     }
     if (sequence_allocator_ != 0 && !allow_after_init) {
-      return orbit::EN_ORBIT_ERROR_CODE_CALL_AFTER_INIT;
+      return atfw::orbit::EN_ORBIT_ERROR_CODE_CALL_AFTER_INIT;
     }
     std::string::size_type final_segment = rpc_name.find_last_of('.');
     std::string rpc_short_name;
@@ -106,18 +106,18 @@ class OrbitRPCDispatcher {
     }
     const ::google::protobuf::MethodDescriptor *method = service_desc->FindMethodByName(rpc_short_name);
     if (nullptr == method) {
-      return orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
+      return atfw::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
     }
     if (method->full_name() != rpc_name) {
-      return orbit::EN_ORBIT_ERROR_CODE_RPC_NAME_ERROR;
+      return atfw::orbit::EN_ORBIT_ERROR_CODE_RPC_NAME_ERROR;
     }
     return _register_action(static_cast<std::string>(method->full_name()), make_task_creator<TAction>());
   }
 
  public:
-  ORBIT_CLIENT_SDK_API int32_t send_rsp_to_proc(orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_CLIENT_SDK_API int32_t send_rsp_to_proc(atfw::orbit::OrbitRpcMessage &orbit_msg);
   ORBIT_CLIENT_SDK_API int32_t
-  send_req_to_proc(orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
+  send_req_to_proc(atfw::orbit::OrbitRpcMessage &orbit_msg, uint64_t &sequence,
                    const OrbitClientRequestOptions &request_options = OrbitClientRequestOptions{});
 
   ATFW_UTIL_FORCEINLINE const std::string &get_empty_string() {
@@ -127,7 +127,7 @@ class OrbitRPCDispatcher {
 
  private:
   ORBIT_CLIENT_SDK_API int _register_action(const std::string &rpc_full_name, task_action_creator_t action);
-  void on_create_task_failed(orbit::OrbitRpcMessage &orbit_msg, int32_t ret_code);
+  void on_create_task_failed(atfw::orbit::OrbitRpcMessage &orbit_msg, int32_t ret_code);
   void rsp_callback_execute();
 
   uint64_t sequence_allocator_ = 0;

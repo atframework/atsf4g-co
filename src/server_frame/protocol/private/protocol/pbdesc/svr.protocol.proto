@@ -14,7 +14,7 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
 
-package hello;
+package atframework.shard;
 
 /////////////////////////////////////////////////////
 ////  此处开始是外部接入支持的协议

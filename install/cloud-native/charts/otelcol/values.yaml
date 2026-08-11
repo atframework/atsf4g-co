@@ -5,13 +5,13 @@
 replicaCount: 1
 
 image:
-  repository: images.atframe.work/atsf4g-co-hello/otelcol
+  repository: images.atframe.work/atsf4g-co-share/otelcol
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
 
 imagePullSecrets:
-  - name: "hello-mirror-secret"
+  - name: "shard-mirror-secret"
 
 nameOverride: "otelcol"
 

@@ -22,9 +22,9 @@
 #endif
 
 class task_action_forward_to_server
-    : public task_action_ss_rpc_base<orbit::CTSForwardToServerReq, orbit::STCForwardToServerRsp> {
+    : public task_action_ss_rpc_base<atfw::orbit::CTSForwardToServerReq, atfw::orbit::STCForwardToServerRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::CTSForwardToServerReq, orbit::STCForwardToServerRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::CTSForwardToServerReq, atfw::orbit::STCForwardToServerRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

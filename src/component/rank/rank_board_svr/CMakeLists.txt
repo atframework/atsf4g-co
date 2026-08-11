@@ -20,4 +20,4 @@ project_component_declare_service(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   GENERATED_FLOW_NAMES
-  "${PROJECT_NAMESPACE}.RankBoardService")
+  "atframework.rank.RankBoardService")

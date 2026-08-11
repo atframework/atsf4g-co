@@ -13,7 +13,7 @@ import "atframe/atapp_conf.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/service-authsvr/protocol/protocol/config";
 
-package hello.config;
+package atframework.shard.config;
 
 enum authsvr_router_policy {
   EN_AUTHSVR_ROUTER_POLICY_RANDOM = 0 [(atframework.atapp.protocol.ENUMVALUE) = { alias_name: "random" }];

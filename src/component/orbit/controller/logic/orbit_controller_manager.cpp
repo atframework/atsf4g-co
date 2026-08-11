@@ -47,7 +47,7 @@ constexpr const char* kEtcdByNameDir = "by_name";
 constexpr const char* kEtcdTopologyDir = "topology";
 constexpr const char* kEtcdOrbitLoadDir = "orbit_load";
 
-static bool unpack_agent_load_record(orbit::DAgentEtcdLoadRecord& out, const std::string& /*path*/,
+static bool unpack_agent_load_record(atfw::orbit::DAgentEtcdLoadRecord& out, const std::string& /*path*/,
                                      const std::string& json, bool reset_data) {
   if (reset_data) {
     out.Clear();
@@ -69,7 +69,7 @@ struct orbit_load_watcher_state_t {
   using node_action_t = atfw::atapp::service_discovery_module::node_action_t;
 
   std::unordered_set<uint64_t> known_agent_ids;
-  std::function<void(node_action_t, const orbit::DAgentEtcdLoadRecord&)> on_event;
+  std::function<void(node_action_t, const atfw::orbit::DAgentEtcdLoadRecord&)> on_event;
 };
 
 struct orbit_load_watcher_callback_list_wrapper_t {
@@ -78,7 +78,7 @@ struct orbit_load_watcher_callback_list_wrapper_t {
   std::shared_ptr<orbit_load_watcher_state_t> state;
 
   explicit orbit_load_watcher_callback_list_wrapper_t(
-      std::function<void(node_action_t, const orbit::DAgentEtcdLoadRecord&)> callback)
+      std::function<void(node_action_t, const atfw::orbit::DAgentEtcdLoadRecord&)> callback)
       : state(std::make_shared<orbit_load_watcher_state_t>()) {
     state->on_event = std::move(callback);
   }
@@ -97,7 +97,7 @@ struct orbit_load_watcher_callback_list_wrapper_t {
     for (size_t i = 0; i < body.events.size(); ++i) {
       const ::atframework::atapp::etcd_watcher::event_t& evt_data = body.events[i];
 
-      orbit::DAgentEtcdLoadRecord record;
+      atfw::orbit::DAgentEtcdLoadRecord record;
       if (!unpack_agent_load_record(record, evt_data.kv.key.empty() ? evt_data.prev_kv.key : evt_data.kv.key,
                                     evt_data.kv.value.empty() ? evt_data.prev_kv.value : evt_data.kv.value, true)) {
         continue;
@@ -123,7 +123,7 @@ struct orbit_load_watcher_callback_list_wrapper_t {
     }
 
     for (uint64_t stale_agent_id : stale_agent_ids) {
-      orbit::DAgentEtcdLoadRecord deleted_record;
+      atfw::orbit::DAgentEtcdLoadRecord deleted_record;
       deleted_record.set_server_id(stale_agent_id);
       state->known_agent_ids.erase(stale_agent_id);
       state->on_event(node_action_t::kDelete, deleted_record);
@@ -176,7 +176,7 @@ int orbit_controller_manager::init(atfw::atapp::app* app) {
     watcher_ = discovery_watcher_load;
     discovery_watcher_load->set_evt_handle(orbit_load_watcher_callback_list_wrapper_t(
         [this](atfw::atapp::service_discovery_module::node_action_t action_type,
-               const orbit::DAgentEtcdLoadRecord& record) { on_agent_load_event(action_type, record); }));
+               const atfw::orbit::DAgentEtcdLoadRecord& record) { on_agent_load_event(action_type, record); }));
   }
 
   return 0;
@@ -204,8 +204,8 @@ void orbit_controller_manager::tick() {
 
 // ===================== private helpers =====================
 
-orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
-    const orbit::DAgentClientStartArgsResource& resource, const std::string& match_tag) noexcept {
+atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
+    const atfw::orbit::DAgentClientStartArgsResource& resource, const std::string& match_tag) noexcept {
   // 收集候选 agent 及其权重
   struct candidate_t {
     uint64_t agent_server_id;
@@ -265,7 +265,7 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
     total_weight += weight;
   }
 
-  orbit::DAgentIdentity result;
+  atfw::orbit::DAgentIdentity result;
   if (candidates.empty()) {
     return result;
   }
@@ -296,7 +296,7 @@ orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
 }
 
 void orbit_controller_manager::on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
-                                                   const orbit::DAgentEtcdLoadRecord& record) {
+                                                   const atfw::orbit::DAgentEtcdLoadRecord& record) {
   switch (action_type) {
     case atfw::atapp::service_discovery_module::node_action_t::kPut: {
       update_agent_load(record);
@@ -313,7 +313,7 @@ void orbit_controller_manager::on_agent_load_event(atfw::atapp::service_discover
   }
 }
 
-void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadRecord& record) {
+void orbit_controller_manager::update_agent_load(const atfw::orbit::DAgentEtcdLoadRecord& record) {
   const uint64_t agent_server_id = record.server_id();
 
   if (record.region() != region_) {
@@ -343,7 +343,7 @@ void orbit_controller_manager::update_agent_load(const orbit::DAgentEtcdLoadReco
 
 // ===================== Agent 侧 handlers =====================
 rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
-    rpc::context& ctx, const orbit::ATCNotifyClientStartedReq& request, orbit::CTANotifyClientStartedRsp& response) {
+    rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request, atfw::orbit::CTANotifyClientStartedRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -362,8 +362,8 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSClientStartReq>(ctx);
-  auto rsp = rpc::make_shared_message<orbit::STCClientStartRsp>(ctx);
+  auto notify = rpc::make_shared_message<atfw::orbit::CTSClientStartReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::STCClientStartRsp>(ctx);
   *notify->mutable_client_identity() = identity;
   notify->set_client_addr(request.client_addr());
   notify->set_data(request.custom_data());
@@ -380,8 +380,8 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
 }
 
 rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(rpc::context& ctx,
-                                                                          const orbit::ATCNotifyClientExitReq& request,
-                                                                          orbit::CTANotifyClientExitRsp& response) {
+                                                                          const atfw::orbit::ATCNotifyClientExitReq& request,
+                                                                          atfw::orbit::CTANotifyClientExitRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -404,8 +404,8 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(rpc::c
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSClientEndReq>(ctx);
-  auto rsp = rpc::make_shared_message<orbit::STCClientEndRsp>(ctx);
+  auto notify = rpc::make_shared_message<atfw::orbit::CTSClientEndReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::STCClientEndRsp>(ctx);
   *notify->mutable_client_identity() = identity;
   notify->set_exit_reason(request.exit_reason());
   notify->set_exit_data(request.custom_data());
@@ -423,7 +423,7 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(rpc::c
 }
 
 rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::context& ctx,
-                                                                       const orbit::ATCAgentHeartbeatReq& request) {
+                                                                       const atfw::orbit::ATCAgentHeartbeatReq& request) {
   // 通过请求中携带的 server_identity 路由到目标 Server
   const uint64_t target_server_unique_id = request.server_identity().unique_id();
   if (0 == target_server_unique_id) {
@@ -437,7 +437,7 @@ rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::cont
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSClientAgentHeartbeatNotify>(ctx);
+  auto notify = rpc::make_shared_message<atfw::orbit::CTSClientAgentHeartbeatNotify>(ctx);
   *notify->mutable_agent_identity() = request.agent_identity();
   *notify->mutable_client_ids() = request.client_ids();
 
@@ -452,8 +452,8 @@ rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::cont
 }
 
 rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::context& ctx,
-                                                                         const orbit::ATCForwardToServerReq& request,
-                                                                         orbit::CTAForwardToServerRsp& response) {
+                                                                         const atfw::orbit::ATCForwardToServerReq& request,
+                                                                         atfw::orbit::CTAForwardToServerRsp& response) {
   const auto& identity = request.client_message().client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -473,8 +473,8 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto notify = rpc::make_shared_message<orbit::CTSForwardToServerReq>(ctx);
-  auto rsp = rpc::make_shared_message<orbit::STCForwardToServerRsp>(ctx);
+  auto notify = rpc::make_shared_message<atfw::orbit::CTSForwardToServerReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::STCForwardToServerRsp>(ctx);
   *notify->mutable_client_message() = request.client_message();
 
   int32_t rpc_result =
@@ -491,8 +491,8 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::co
 
 // ===================== Server 侧 handlers =====================
 rpc::result_code_type orbit_controller_manager::handle_launch_client(
-    rpc::context& ctx, const orbit::STCLaunchClientReq& request,
-    ATFW_EXPLICIT_UNUSED_ATTR orbit::CTSLaunchClientRsp& response) {
+    rpc::context& ctx, const atfw::orbit::STCLaunchClientReq& request,
+    ATFW_EXPLICIT_UNUSED_ATTR atfw::orbit::CTSLaunchClientRsp& response) {
   const uint64_t server_unique_id = request.server_identity().unique_id();
   if (0 == server_unique_id) {
     FWLOGERROR("orbit controller launch_client rejected: server unique_id is 0");
@@ -534,8 +534,8 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
       continue;
     }
 
-    auto start_req = rpc::make_shared_message<orbit::CTAStartClientReq>(ctx);
-    auto start_rsp = rpc::make_shared_message<orbit::ATCStartClientRsp>(ctx);
+    auto start_req = rpc::make_shared_message<atfw::orbit::CTAStartClientReq>(ctx);
+    auto start_rsp = rpc::make_shared_message<atfw::orbit::ATCStartClientRsp>(ctx);
     *start_req->mutable_args() = request.args();
     *start_req->mutable_server_identity() = request.server_identity();
 
@@ -570,14 +570,14 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
 }
 
 rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::context& ctx,
-                                                                      const orbit::STCSendToClientReq& request,
-                                                                      orbit::CTSSendToClientRsp& response) {
+                                                                      const atfw::orbit::STCSendToClientReq& request,
+                                                                      atfw::orbit::CTSSendToClientRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
   const uint64_t agent_server_id = identity.agent_identity().agent_server_id();
 
-  auto forward_req = rpc::make_shared_message<orbit::CTAForwardToClientReq>(ctx);
-  auto forward_rsp = rpc::make_shared_message<orbit::ATCForwardToClientRsp>(ctx);
+  auto forward_req = rpc::make_shared_message<atfw::orbit::CTAForwardToClientReq>(ctx);
+  auto forward_rsp = rpc::make_shared_message<atfw::orbit::ATCForwardToClientRsp>(ctx);
   *forward_req->mutable_server_identity() = request.server_identity();
   *forward_req->mutable_client_id() = identity.client_id();
   forward_req->set_payload(request.payload());
@@ -594,8 +594,8 @@ rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::conte
 }
 
 rpc::result_code_type orbit_controller_manager::handle_server_heartbeat(
-    rpc::context& ctx, const orbit::STCServerHeartbeatNotify& request) {
-  auto forward_req = rpc::make_shared_message<orbit::CTAServerHeartbeatReq>(ctx);
+    rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request) {
+  auto forward_req = rpc::make_shared_message<atfw::orbit::CTAServerHeartbeatReq>(ctx);
   *forward_req->mutable_server_identity() = request.server_identity();
 
   for (const auto& agent_identity : request.agent_identity()) {

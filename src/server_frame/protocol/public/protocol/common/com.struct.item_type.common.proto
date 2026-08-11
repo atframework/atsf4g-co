@@ -12,7 +12,7 @@ import "protocol/common/com.struct.extension.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
-package hello;
+package atframework.shard;
 
 enum EnItemType {
   EN_ITEM_TYPE_NONE = 0;

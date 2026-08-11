@@ -10,7 +10,7 @@ import "google/protobuf/descriptor.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/extension";
 
-package hello;
+package atframework.shard;
 
 message DConstSettingsType {
   int64 time_tolerate = 1;  // 时间错容忍值

@@ -6,7 +6,7 @@ configure:
 
 rules:
   - service:
-      name: "hello.LobbysvrClientService"
+      name: "atframework.shard.LobbysvrClientService"
       overwrite: true
       output_directory: "rpc_handle/lobbysvr"
       service_template:
@@ -14,7 +14,7 @@ rules:
           input: "template/robot_rpc_handle.go.mako"
           output: "rpc_handle_lobby.go"
   - service:
-      name: "hello.AuthsvrClientService"
+      name: "atframework.shard.AuthsvrClientService"
       overwrite: true
       output_directory: "rpc_handle/authsvr"
       service_template:

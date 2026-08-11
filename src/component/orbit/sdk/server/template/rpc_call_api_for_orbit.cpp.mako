@@ -85,7 +85,7 @@ inline static int __unpack_rpc_body(TBodyType &&output, const std::string &input
 
 inline static rpc::telemetry::tracer::span_ptr_type __setup_tracer(rpc::context &__child_ctx,
                                                                    rpc::telemetry::tracer &__tracer,
-                                                                   orbit::OrbitRpcMessageHead &head,
+                                                                   atfw::orbit::OrbitRpcMessageHead &head,
                                                                    atfw::util::nostd::string_view rpc_full_name,
                                                                    rpc::telemetry::trace_attributes_type attributes) {
   rpc::telemetry::trace_start_option __trace_option;
@@ -123,7 +123,7 @@ inline static rpc::telemetry::tracer::span_ptr_type __setup_tracer(rpc::context 
   return rpc::telemetry::tracer::span_ptr_type();
 }
 
-inline static int __setup_rpc_stream_header(orbit::OrbitRpcMessageHead &head, atfw::util::nostd::string_view rpc_full_name,
+inline static int __setup_rpc_stream_header(atfw::orbit::OrbitRpcMessageHead &head, atfw::util::nostd::string_view rpc_full_name,
                                             atfw::util::nostd::string_view type_full_name,
                                             atfw::util::nostd::string_view callee_name) {
   head.set_timestamp(util::time::time_utility::get_now());
@@ -143,7 +143,7 @@ inline static int __setup_rpc_stream_header(orbit::OrbitRpcMessageHead &head, at
   return ${project_namespace}::err::EN_SUCCESS;
 }
 
-inline static int __setup_rpc_request_header(orbit::OrbitRpcMessageHead &head, task_type_trait::id_type task_id,
+inline static int __setup_rpc_request_header(atfw::orbit::OrbitRpcMessageHead &head, task_type_trait::id_type task_id,
                                              atfw::util::nostd::string_view rpc_full_name,
                                              atfw::util::nostd::string_view type_full_name,
                                              atfw::util::nostd::string_view callee_name) {
@@ -170,21 +170,21 @@ inline static rpc::result_code_type __rpc_wait_and_unpack_response(rpc::context 
                                                                    atfw::util::nostd::string_view rpc_full_name,
                                                                    atfw::util::nostd::string_view type_full_name,
                                                                    dispatcher_await_options &await_options) {
-  orbit::OrbitRpcMessage *rsp_msg_ptr = __ctx.create<orbit::OrbitRpcMessage>();
+  atfw::orbit::OrbitRpcMessage *rsp_msg_ptr = __ctx.create<atfw::orbit::OrbitRpcMessage>();
   if (nullptr == rsp_msg_ptr) {
     FWLOGERROR("rpc {} create response message failed", rpc_full_name);
     RPC_RETURN_CODE(${project_namespace}::err::EN_SYS_MALLOC);
   }
 
-  orbit::OrbitRpcMessage &rsp_msg = *rsp_msg_ptr;
+  atfw::orbit::OrbitRpcMessage &rsp_msg = *rsp_msg_ptr;
   rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(rpc::custom_wait(
       __ctx, reinterpret_cast<const void *>(orbit_msg_dispatcher::me()->get_instance_ident()), await_options,
-      [](const dispatcher_resume_data_type *resume_data, orbit::OrbitRpcMessage &stack_rsp) {
+      [](const dispatcher_resume_data_type *resume_data, atfw::orbit::OrbitRpcMessage &stack_rsp) {
         if (nullptr == resume_data || nullptr == resume_data->message.msg_addr) {
           return;
         }
 
-        stack_rsp.Swap(reinterpret_cast<orbit::OrbitRpcMessage *>(resume_data->message.msg_addr));
+        stack_rsp.Swap(reinterpret_cast<atfw::orbit::OrbitRpcMessage *>(resume_data->message.msg_addr));
       },
       rsp_msg));
 
@@ -277,14 +277,14 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   TASK_COMPAT_CHECK_TASK_ACTION_RETURN("[ORBIT_RPC] rpc {} must be called in a task", "${rpc.get_full_name()}")
 % endif
 
-  orbit::OrbitRpcMessage *req_msg_ptr = __ctx.create<orbit::OrbitRpcMessage>();
+  atfw::orbit::OrbitRpcMessage *req_msg_ptr = __ctx.create<atfw::orbit::OrbitRpcMessage>();
   if (nullptr == req_msg_ptr) {
     FWLOGERROR("[ORBIT_RPC] rpc {} create request message failed", "${rpc.get_full_name()}");
     ${rpc_return_sentense(project_namespace + '::err::EN_SYS_MALLOC')}
   }
 
   rpc::result_code_type::value_type res = ${project_namespace}::err::EN_SUCCESS;
-  orbit::OrbitRpcMessage &req_msg = *req_msg_ptr;
+  atfw::orbit::OrbitRpcMessage &req_msg = *req_msg_ptr;
 % if rpc_allow_no_wait:
   if (__no_wait) {
     res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_full_name()}",

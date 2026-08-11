@@ -90,7 +90,7 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  orbit::DAgentClientStartArgs args;
+  atfw::orbit::DAgentClientStartArgs args;
   if (!fill_client_start_args_from_template_id(req.room_data().client_template_id(), client_id, args)) {
     FWLOGERROR("orbit_room_manager create_room failed, fill_client_start_args_from_template_id failed");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -162,7 +162,7 @@ rpc::result_code_type orbit_room_manager::on_client_start(rpc::context& ctx, con
 }
 
 rpc::result_code_type orbit_room_manager::on_client_end(rpc::context& ctx, const std::string& client_id,
-                                                        const std::string&, orbit::EnClientExitReason exit_reason,
+                                                        const std::string&, atfw::orbit::EnClientExitReason exit_reason,
                                                         int32_t exit_code) {
   FWLOGINFO("orbit_room_manager on_client_end, client_id: {}", client_id);
   auto room = get_room(client_id);
@@ -186,7 +186,7 @@ rpc::result_code_type orbit_room_manager::on_user_finish(
 }
 
 bool orbit_room_manager::fill_client_start_args_from_template_id(uint32_t template_id, const std::string& client_id,
-                                                                 orbit::DAgentClientStartArgs& args) {
+                                                                 atfw::orbit::DAgentClientStartArgs& args) {
   args.mutable_client_start_args()->mutable_client_id()->set_client_id(client_id);
   auto row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(template_id);
   if (row == nullptr) {

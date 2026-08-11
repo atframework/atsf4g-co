@@ -460,10 +460,10 @@ rpc::result_code_type rank_manager::check_slave_and_highest_data_version_slave(
         ctx, "rank_manager.check_slave_and_get_data_version",
         // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
         [&](rpc::context& child_ctx) -> rpc::result_code_type {
-          PROJECT_NAMESPACE_ID::SSRankCheckSlaveReq req_body;
+          atfw::rank::SSRankCheckSlaveReq req_body;
           protobuf_copy_message(*req_body.mutable_rank_key(), rank_key);
 
-          PROJECT_NAMESPACE_ID::SSRankCheckSlaveRsp rsp_body;
+          atfw::rank::SSRankCheckSlaveRsp rsp_body;
           auto ret =
               RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_check_slave(child_ctx, slave_node, req_body, rsp_body));
           if (ret != 0) {

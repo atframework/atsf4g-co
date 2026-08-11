@@ -11,7 +11,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-agent-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.ControllerToAgentService")
+  "atframework.orbit.ControllerToAgentService")
 
 project_component_declare_sdk(
   "orbit-agent-controller-sdk"
@@ -23,7 +23,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-controller-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.AgentToControllerService")
+  "atframework.orbit.AgentToControllerService")
 
 project_component_declare_sdk(
   "orbit-agent-client-sdk"
@@ -35,7 +35,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-client-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.AgentToClientService")
+  "atframework.orbit.AgentToClientService")
 
 project_component_declare_sdk(
   "orbit-server-controller-sdk"
@@ -47,7 +47,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-server-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.ServerToControllerService")
+  "atframework.orbit.ServerToControllerService")
 
 project_component_declare_sdk(
   "orbit-controller-server-sdk"
@@ -59,7 +59,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-server-protocol"
   GENERATED_FLOW_NAMES
-  "orbit.ControllerToServerService")
+  "atframework.orbit.ControllerToServerService")
 
 project_component_declare_sdk(
   "orbit-server-sdk"
@@ -75,7 +75,7 @@ project_component_declare_sdk(
   USE_COMPONENTS
   "orbit-server-controller-sdk"
   GENERATED_FLOW_NAMES
-  "orbit.ControllerToServerService"
+  "atframework.orbit.ControllerToServerService"
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_msg_dispatcher.h"
   "${CMAKE_CURRENT_LIST_DIR}/server/logic/orbit_server_manager.h"

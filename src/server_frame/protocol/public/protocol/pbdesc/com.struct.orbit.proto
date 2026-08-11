@@ -11,7 +11,7 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 import "google/protobuf/timestamp.proto";
 import "protocol/pbdesc/com.struct.proto";
 
-package hello;
+package atframework.shard;
 
 // 注意和DtMq.xlsx 表对应，多个模块之间类型不要冲突
 enum EnOrbitChannelType {

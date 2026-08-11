@@ -30,9 +30,9 @@
 
 class orbit_msg_dispatcher;
 
-class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_req_base : public task_action_req_base<orbit::OrbitRpcMessage> {
+class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_req_base : public task_action_req_base<atfw::orbit::OrbitRpcMessage> {
  public:
-  using base_type = task_action_req_base<orbit::OrbitRpcMessage>;
+  using base_type = task_action_req_base<atfw::orbit::OrbitRpcMessage>;
   using message_type = base_type::message_type;
   using result_type = base_type::result_type;
   using msg_ref_type = message_type &;
@@ -205,7 +205,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
   }
 
   void pack_response() {
-    orbit::OrbitRpcMessage &rsp = add_response_message();
+    atfw::orbit::OrbitRpcMessage &rsp = add_response_message();
 
     if (false == get_response_body().SerializeToString(rsp.mutable_body_bin())) {
       FWLOGERROR("{}Try to serialize message {} failed, success: {}", get_shared_context_log_prefix(),
