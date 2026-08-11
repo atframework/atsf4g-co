@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 
-// Sampling contract test for the orbit SDK SS consumer path (IMPLEMENTATION_PLAN.md 阶段 9):
+// Sampling contract test for the orbit SDK SS consumer path (see doc/docs/development/rpc-unit-test.md):
 // rpc::servertocontrollerservice::launch_client sends a request to an orbit controller node; the SS
 // mock engine answers it offline. Unlike rank/dtmq/dtcoordsvr, orbit has no dedicated discovery_selector
 // field, so no hpa_scaling_ready metadata label is required on the mock node.

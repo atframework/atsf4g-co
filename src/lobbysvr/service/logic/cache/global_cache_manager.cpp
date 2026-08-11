@@ -173,7 +173,7 @@ void global_cache_manager::hot_data_watch() {
     return;
   }
 
-  rpc::context ctx{logic_server_get_current_tick_context()};
+  rpc::context ctx = logic_server_get_current_tick_context().create_temporary_child();
   rpc::context::tracer tracer;
   rpc::context::trace_start_option trace_start_option;
   trace_start_option.dispatcher = nullptr;

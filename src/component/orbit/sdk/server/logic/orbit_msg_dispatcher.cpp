@@ -161,7 +161,7 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
     return;
   }
 
-  rpc::context fallback_ctx{logic_server_get_current_tick_context()};
+  rpc::context fallback_ctx = logic_server_get_current_tick_context().create_temporary_child();
   rpc::context *response_ctx = &fallback_ctx;
   rpc::telemetry::tracer tracer;
   std::unique_ptr<rpc::context> child_context;

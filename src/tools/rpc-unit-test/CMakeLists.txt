@@ -39,7 +39,8 @@ add_library(
 add_library(${PROJECT_NAME}::rpc-unit-test ALIAS ${PROJECT_NAME}-rpc-unit-test)
 
 target_include_directories(${PROJECT_NAME}-rpc-unit-test
-                           PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>")
+                           PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>"
+                           PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
 target_compile_definitions(${PROJECT_NAME}-rpc-unit-test PRIVATE RPC_UNIT_TEST_NATIVE=1)
 # Build-tree default working directory for directly-invoked test executables (no RPC_UNIT_TEST_WORKDIR
 # env, no ctest) so they don't write the generated config into the repository root. project_add_rpc_unit_test

@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 
-// Sampling contract test for the rank SDK SS consumer path (IMPLEMENTATION_PLAN.md 阶段 8):
+// Sampling contract test for the rank SDK SS consumer path (see doc/docs/development/rpc-unit-test.md):
 // rank_api::update_score resolves the rank-board node by consistent hash over the real discovery index
 // and issues hello.RankBoardService/rank_set_score; the SS mock engine answers it offline.
 

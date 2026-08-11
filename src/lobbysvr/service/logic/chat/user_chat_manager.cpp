@@ -665,7 +665,7 @@ int32_t user_chat_manager::receive_heartbeat(rpc::context& ctx, const atfw::dtmq
   options.start_sequence = sync_point.last_sequence();
   bool need_snapshot = channel_ptr->get_last_removed_sequence() > sync_point.last_sequence();
   if (!need_snapshot) {
-    channel_ptr->query_message(
+    channel_ptr->query_cached_message(
         ctx,
         atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)>(
             [&ctx, &need_snapshot, &sync_point, &sync_channel, &sync_msg](const atfw::dtmq::DChannelMessage& msg) {
@@ -770,7 +770,7 @@ void user_chat_manager::dump_dtmq_to_chat_channel_snapshot(rpc::context& ctx,
   dump_dtmq_to_chat_channel_metadata(ctx, channel, metadata, true);
 
   snapshot.clear_message_list();
-  channel.query_message(ctx, [&snapshot](const atfw::dtmq::DChannelMessage& msg) {
+  channel.query_cached_message(ctx, [&snapshot](const atfw::dtmq::DChannelMessage& msg) {
     protobuf_copy_message(*snapshot.add_message_list(), msg);
     return true;
   });

@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 
-// Sampling contract test for the dtmq client SDK SS consumer path (IMPLEMENTATION_PLAN.md 阶段 9):
+// Sampling contract test for the dtmq client SDK SS consumer path (see doc/docs/development/rpc-unit-test.md):
 // rpc::dtmq::send_message (client API) resolves the dtmq-proxysvr node by consistent hash over the real
 // discovery index and issues atframework.dtmq.DtmqProxysvrService/send_message; the SS mock engine
 // answers it offline.

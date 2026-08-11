@@ -1604,7 +1604,7 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::find_message(rpc::co
                               internal_data_->shared_instance->get_readonly_replicate_index(), sequence, msg)));
 }
 
-DTMQ_PROXY_SDK_API bool client_subscriber::query_message(
+DTMQ_PROXY_SDK_API bool client_subscriber::query_cached_message(
     rpc::context& /*ctx*/, atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
     query_options options) const noexcept {
   if (internal_data_->shared_instance->is_ready()) {

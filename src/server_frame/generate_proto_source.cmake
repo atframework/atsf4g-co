@@ -144,6 +144,7 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/validator.yaml"
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/validator.yaml"
   DEPENDS "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/validator.yaml"
+          "${PROJECT_SERVER_FRAME_PROTOCOL_DIR}/public/xresconv.xml"
           "${CMAKE_CURRENT_BINARY_DIR}/_generated/xml/xresconv.gen.xml"
   COMMENT "Generate xresconv.xml,xresconv.data.xml,validator.yaml into ${CMAKE_CURRENT_BINARY_DIR}/_generated/xml")
 

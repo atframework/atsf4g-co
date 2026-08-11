@@ -519,9 +519,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @param options 查询数据的选项
    * @return 如果还有后续消息，返回true，否则返回false
    */
-  DTMQ_PROXY_SDK_API bool query_message(rpc::context& ctx,
-                                        atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
-                                        query_options options = {}) const noexcept;
+  DTMQ_PROXY_SDK_API bool query_cached_message(
+      rpc::context& ctx, atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
+      query_options options = {}) const noexcept;
 
   /**
    * @brief 分页查询消息

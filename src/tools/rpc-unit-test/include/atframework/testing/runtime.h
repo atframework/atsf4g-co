@@ -142,6 +142,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_handle {
   std::string diagnostic_;
 };
 
+// Create a valid rpc::context for driving SDK calls directly from a test body (outside any task).
+// Implemented with rpc::context::create_without_task(), so the returned context is a real object
+// instead of a dereferenced null placeholder.
+RPC_UNIT_TEST_API rpc::context make_context();
+
 class RPC_UNIT_TEST_API runtime {
  public:
   runtime();

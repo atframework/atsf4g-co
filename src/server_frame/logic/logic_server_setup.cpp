@@ -109,7 +109,7 @@ static int send_notification(util::cli::callback_param params) {
     domain = rpc::telemetry::notification_domain::kWarning;
   }
 
-  rpc::context ctx{logic_server_get_current_tick_context()};
+  rpc::context ctx = logic_server_get_current_tick_context().create_temporary_child();
   rpc::telemetry::opentelemetry_utility::send_notification_event(ctx, domain, params[1]->to_cpp_string(),
                                                                  params[2]->to_cpp_string(), {{"source", "command"}});
   ::atfw::atapp::app::add_custom_command_rsp(params, "success");

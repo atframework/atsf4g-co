@@ -7,11 +7,13 @@
 #include <common/file_system.h>
 #include <time/time_utility.h>
 
+#include <config/excel_config_wrapper.h>
 #include <config/logic_config.h>
 #include <dispatcher/cs_msg_dispatcher.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
+#include <frame/test_case_base.h>
 #include <logic/logic_server_setup.h>
 #include <testing/unit_test_reset.h>
 
@@ -37,6 +39,62 @@
 #include <vector>
 
 #include "rpc/rpc_async_invoke.h"
+#include "rpc/rpc_context.h"
+
+#if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
+namespace {
+// Mirror the deployment bindir layout (install/cloud-native/charts/libapp/templates/_atapp.logic.yaml.tpl):
+// class-filtered tables live in the ServerOnly/ and Both/ sub-directories, which take precedence over the
+// root directory (e.g. orbit_client_template.bytes is generated into Both/).
+std::vector<std::string> rpc_unit_test_get_excel_resource_bindirs() {
+  std::vector<std::string> ret;
+  const std::string root_dir = RPC_UNIT_TEST_EXCEL_RESOURCE_DIR;
+  for (const char* sub_dir : {"ServerOnly", "Both", ""}) {
+    std::string dir = root_dir;
+    if (sub_dir[0] != '\0') {
+      dir += "/";
+      dir += sub_dir;
+    }
+    if (atfw::util::file_system::is_exist(dir.c_str())) {
+      ret.push_back(std::move(dir));
+    }
+  }
+  return ret;
+}
+}  // namespace
+#endif
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace {
+
+// Load the real excel config once per test process before the first case runs: seed the default logic
+// config with the real excel bindirs and enable excel, so excel_config_wrapper_reload_all(true) wires the
+// bindir-aware file/version loaders, installs the group-loaded index hooks and eagerly loads the real
+// tables, building the denormalized indices (e.g. excel::get_dtmq_channel_configure) up front. Every
+// fixture's app init later clears logic_config and reloads it from the generated YAML, so this seeding
+// does not leak into fixtures; fixtures with the resource feature still get their mock-provider group via
+// the per-fixture reload (the provider version always differs from the preloaded one).
+// NOTE: CASE_TEST_EVENT_ON_START is not usable here because its empty __VA_ARGS__ expansion does not
+// compile under /Zc:preprocessor, so the same registration is done directly.
+void rpc_unit_test_event_on_start_excel_config_loader() {
+#if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
+  auto bindirs = rpc_unit_test_get_excel_resource_bindirs();
+  if (!bindirs.empty()) {
+    auto* excel_cfg = logic_config::me()->mutable_logic_cfg()->mutable_excel();
+    excel_cfg->set_enable(true);
+    for (const auto& dir : bindirs) {
+      excel_cfg->add_bindir(dir);
+    }
+  }
+#endif
+  excel_config_wrapper_reload_all(true);
+}
+
+// NOLINTNEXTLINE(misc-use-anonymous-namespace)
+static test_on_start_base rpc_unit_test_obj_on_start_excel_config_loader(
+    "rpc_unit_test_event_on_start_excel_config_loader", &rpc_unit_test_event_on_start_excel_config_loader);
+}  // namespace
+#endif
 
 namespace {
 
@@ -106,11 +164,17 @@ static bool runtime_generate_config(const atfw::testing::runtime_options &option
   ss << "  excel:\n";
   ss << "    enable: " << (use_excel_config ? "true" : "false") << '\n';
 #if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
-  // Always expose the real excel resource directory as a bindir so the lazy default file loader resolves
-  // tables from the generated resource tree without requiring feature::resource (mock provider) injection.
-  if (atfw::util::file_system::is_exist(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)) {
-    ss << "    bindir:\n";
-    ss << "      - \"" << RPC_UNIT_TEST_EXCEL_RESOURCE_DIR << "\"\n";
+  // Always expose the real excel resource directories as bindirs (deployment-style ServerOnly/Both/root
+  // layout) so lazily loaded tables resolve from the generated resource tree without requiring
+  // feature::resource (mock provider) injection.
+  {
+    auto bindirs = rpc_unit_test_get_excel_resource_bindirs();
+    if (!bindirs.empty()) {
+      ss << "    bindir:\n";
+      for (const auto& dir : bindirs) {
+        ss << "      - \"" << dir << "\"\n";
+      }
+    }
   }
 #endif
   ss << "  dns:\n";
@@ -220,6 +284,8 @@ struct runtime::impl_data {
 bool runtime_options::has_feature(feature input) const noexcept {
   return std::find(features.begin(), features.end(), input) != features.end();
 }
+
+RPC_UNIT_TEST_API rpc::context make_context() { return rpc::context{rpc::context::create_without_task()}; }
 
 bool task_handle::empty() const noexcept { return !started_ || task_type_trait::empty(task_); }
 

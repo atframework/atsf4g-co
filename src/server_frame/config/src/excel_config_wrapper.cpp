@@ -155,6 +155,44 @@ static void excel_config_callback_logger(const excel::config_manager::log_caller
     WDTLOGGETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->format_log(log_caller, "{}", content);
   }
 }
+// Install the bindir-aware buffer/version loaders, the log callback and the on-group-reload hook chain
+// exactly once per process. excel_config_wrapper_reload_all installs them even when excel is disabled,
+// because code may still lazily load tables through the excel bindir (e.g. unit tests that expose the
+// real excel bindir without the resource feature), and the generated default file loader does not
+// search the bindir on its own.
+static void excel_config_wrapper_setup_loader_and_hooks_once() {
+  if (get_excel_config_manager_inited()) {
+    return;
+  }
+
+  int res = ::excel::config_manager::me()->init(false);
+  if (res < 0) {
+    FWLOGERROR("excel::config_manager init failed, res: {}", res);
+    return;
+  }
+
+  excel::config_manager::me()->set_buffer_loader(excel_config_callback_get_buffer);
+  excel::config_manager::me()->set_version_loader(excel_config_callback_get_version);
+  excel::config_manager::me()->set_on_log(excel_config_callback_logger);
+
+  excel::config_manager::on_load_func_t origin_reload_callback =
+      excel::config_manager::me()->get_on_group_reload_all();
+  excel::config_manager::me()->set_on_group_reload_all(
+      // NOLINTNEXTLINE(performance-unnecessary-value-param)
+      [origin_reload_callback](excel::config_manager::config_group_ptr_t group) {
+        if (origin_reload_callback) {
+          origin_reload_callback(group);
+        }
+        excel_config_callback_on_reload_all(group);
+
+        if (group) {
+          for (auto& fn : get_excel_on_group_loaded_fns()) {
+            fn(*group);
+          }
+        }
+      });
+  get_excel_config_manager_inited() = true;
+}
 }  // namespace
 
 SERVER_FRAME_CONFIG_API excel_config_block_report_t::excel_config_block_report_t() { ++get_excel_reporter_blocker(); }
@@ -166,37 +204,17 @@ SERVER_FRAME_CONFIG_API int excel_config_wrapper_reload_all(bool is_init) {
     return 0;
   }
 
+  // Install the bindir-aware loaders and the group-loaded hook chain whenever initialization is
+  // requested, even if excel is disabled: code may still lazily load tables through the excel bindir
+  // (e.g. unit tests that expose the real excel bindir without the resource feature), and the
+  // generated default file loader does not search the bindir on its own.
+  excel_config_wrapper_setup_loader_and_hooks_once();
+  if (!get_excel_config_manager_inited()) {
+    FWLOGERROR("excel::config_manager init failed");
+    return -1;
+  }
+
   if (logic_config::me()->get_logic_cfg().excel().enable()) {
-    if (!get_excel_config_manager_inited()) {
-      int res = ::excel::config_manager::me()->init(false);
-      if (res < 0) {
-        FWLOGERROR("excel::config_manager init failed, res: {}", res);
-        return res;
-      }
-
-      excel::config_manager::me()->set_buffer_loader(excel_config_callback_get_buffer);
-      excel::config_manager::me()->set_version_loader(excel_config_callback_get_version);
-      excel::config_manager::me()->set_on_log(excel_config_callback_logger);
-
-      excel::config_manager::on_load_func_t origin_reload_callback =
-          excel::config_manager::me()->get_on_group_reload_all();
-      excel::config_manager::me()->set_on_group_reload_all(
-          // NOLINTNEXTLINE(performance-unnecessary-value-param)
-          [origin_reload_callback](excel::config_manager::config_group_ptr_t group) {
-            if (origin_reload_callback) {
-              origin_reload_callback(group);
-            }
-            excel_config_callback_on_reload_all(group);
-
-            if (group) {
-              for (auto& fn : get_excel_on_group_loaded_fns()) {
-                fn(*group);
-              }
-            }
-          });
-      get_excel_config_manager_inited() = true;
-    }
-
     excel::config_manager::me()->set_override_same_version(
         logic_config::me()->get_logic_cfg().excel().override_same_version());
     excel::config_manager::me()->set_group_number(logic_config::me()->get_logic_cfg().excel().group_number());

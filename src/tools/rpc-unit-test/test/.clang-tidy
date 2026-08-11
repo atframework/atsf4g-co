@@ -1,0 +1,9 @@
+﻿# Inherit the repository root .clang-tidy and only relax checks that are noisy for test code.
+# - misc-use-anonymous-namespace: CASE_TEST registration objects live in macro-generated statics.
+# - bugprone-throwing-static-initialization / cppcoreguidelines-avoid-non-const-global-variables:
+#   the CASE_TEST framework registers cases through non-const global objects in every test TU.
+InheritParentConfig: true
+Checks:
+  - "-misc-use-anonymous-namespace"
+  - "-bugprone-throwing-static-initialization"
+  - "-cppcoreguidelines-avoid-non-const-global-variables"
