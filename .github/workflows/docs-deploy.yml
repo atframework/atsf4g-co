@@ -1,0 +1,77 @@
+name: Deploy Docs
+
+# Build the Docusaurus site under doc/ and publish it to the gh-pages branch of
+# atframework/atframe.work (served at https://atframe.work/ via a custom domain).
+# Authentication uses the DOCUMENT_DEPLOY_KEY SSH deploy key (cross-repo write access
+# to atframework/atframe.work must be granted by adding the matching public key as a
+# deploy key with write access on that repository).
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'doc/**'
+      - '.github/workflows/docs-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: doc
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: doc/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build site
+        run: pnpm build
+
+      - name: Configure SSH deploy key
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.DOCUMENT_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy to atframework/atframe.work:gh-pages
+        env:
+          GIT_SSH_COMMAND: ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes
+        shell: bash
+        working-directory: doc/build
+        run: |
+          git init
+          git checkout -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy docs from ${{ github.repository }}@${{ github.sha }}"
+          git remote add origin git@github.com:atframework/atframe.work.git
+          git push --force origin gh-pages

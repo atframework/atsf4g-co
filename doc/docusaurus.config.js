@@ -14,11 +14,11 @@ const config = {
   tagline: 'AT Service Framework for Game - Coroutine',
   favicon: 'img/logo.svg',
 
-  url: 'https://atframework.github.io',
-  baseUrl: '/atsf4g-co/',
-
-  organizationName: 'atframework',
-  projectName: 'atsf4g-co',
+  // The site is published to the root of atframework/atframe.work:gh-pages and served
+  // at https://atframe.work/ via a custom domain (see doc/static/CNAME). baseUrl must be
+  // '/' so assets resolve at the domain root.
+  url: 'https://atframe.work',
+  baseUrl: '/',
 
   onBrokenLinks: 'warn',
 

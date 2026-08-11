@@ -57,6 +57,9 @@ __pycache__
 
 # editors
 .codex/*
+.kilo/kilo.json
+.kilo/kilo.jsonc
+.zcode
 .vscode/*
 !.vscode/tasks.json
 .idea
