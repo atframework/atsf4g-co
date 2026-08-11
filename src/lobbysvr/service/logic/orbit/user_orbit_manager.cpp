@@ -173,7 +173,7 @@ void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::
     FWLOGERROR("user_orbit_manager load_orbit_room_snapshot subscriber mismatch");
     return;
   }
-  subscriber_->query_message(ctx, [this, &ctx](const atfw::dtmq::DChannelMessage& msg) {
+  subscriber_->query_cached_message(ctx, [this, &ctx](const atfw::dtmq::DChannelMessage& msg) {
     if (msg.detail().event().type_url().empty()) {
       return true;
     }
