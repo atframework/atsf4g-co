@@ -6,8 +6,6 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-import "google/protobuf/duration.proto";
-
 import "protocol/extension/xrescode_extensions_v3.proto";
 import "protocol/extension/v3/xresloader.proto";
 

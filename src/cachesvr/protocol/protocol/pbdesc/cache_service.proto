@@ -15,7 +15,6 @@ import "protocol/extension/atframework.proto";
 
 import "protocol/common/com.struct.cache.common.proto";
 import "protocol/pbdesc/svr.struct.cache.proto";
-import "protocol/pbdesc/svr.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-go/service-cachesvr/protocol/protocol/pbdesc";
 

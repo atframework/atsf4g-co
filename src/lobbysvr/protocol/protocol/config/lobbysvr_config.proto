@@ -7,7 +7,6 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 
 import "google/protobuf/duration.proto";
-import "google/protobuf/timestamp.proto";
 
 import "atframe/atapp_conf.proto";
 
