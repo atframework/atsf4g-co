@@ -5,7 +5,7 @@
 set(ITEM_ALGORITHM_TEST_FRAME_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../atframework/atframe_utils/test")
 
 set(ITEM_ALGORITHM_TEST_SRC
-    "${CMAKE_CURRENT_LIST_DIR}/item_grid_algorithm_test.cpp" "${CMAKE_CURRENT_LIST_DIR}/app/main.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/item_grid_algorithm_test.cpp" "${ITEM_ALGORITHM_TEST_FRAME_DIR}/app/main.cpp"
     "${ITEM_ALGORITHM_TEST_FRAME_DIR}/frame/test_case_base.cpp"
     "${ITEM_ALGORITHM_TEST_FRAME_DIR}/frame/test_manager.cpp")
 

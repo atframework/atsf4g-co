@@ -64,67 +64,6 @@ message SCLoginAuthRsp {
   int64 start_time = 102;  // 开服时间
 }
 
-// 修改密码
-message CSAccessUpdateReq {
-  string open_id = 1;
-  uint64 user_id = 2;     // 玩家数字ID
-  string old_access = 3;  // 老密码
-  string new_access = 4;
-}
-
-message SCAccessUpdateRsp {}
-
-////////////////////////////////////////////////////////
-// 到gamesvr的CS协议
-////////////////////////////////////////////////////////
-
-// 登录请求
-message CSLoginReq {
-  string access_token_code = 1;  // 认证码
-  string open_id = 2;
-  uint64 user_id = 3;  // 玩家数字ID
-  uint32 zone_id = 4;   // 大区ID
-
-  DAccountData account = 5;  // 平台信息
-  DClientDeviceInfo client_info = 11;
-}
-
-// 登录返回
-message SCLoginRsp {
-  int32 last_sequence = 1;       // 上次收包的seq(不算MCSLogin)
-  int64 heartbeat_interval = 2;  // 心跳包间隔
-  bool is_new_player = 3;        // 是否是新玩家
-  int32 version_type = 4;        // 版本类型 @EnVersionType
-  uint32 zone_id = 5;             // 大区ID
-}
-
-message SCPlayerProfileSyn {
-  DUserProfile player = 1;
-}
-
-// 脏数据同步包
-message SCPlayerDirtyChgSync {
-  repeated DItemInstance dirty_items = 1;
-}
-
-// 心跳包，上行包
-message CSPingReq {}
-
-// 心跳包，下行包
-message SCPongRsp {}
-
-// 请求用户数据
-message CSPlayerGetInfoReq {
-  bool need_user_information = 1;  // 标记为true 回包才有会有玩家基本数据
-  bool need_user_options = 2;      // 标记为true 回包才有会有玩家选项数据
-}
-
-// 用户数据返回
-message SCPlayerGetInfoRsp {
-  DUserInformation user_information = 1;  // 玩家数据
-  DUserOptions user_options = 2;          // 玩家自定义选项
-}
-
 service AuthsvrClientService {
   rpc login_auth(CSLoginAuthReq) returns (SCLoginAuthRsp) {
     option (atframework.rpc_options) = {
