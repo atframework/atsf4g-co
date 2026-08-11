@@ -23,7 +23,7 @@ ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready();
 ORBIT_CLIENT_SDK_API int32_t blocking_seed_process();
 ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr,
                                                   const std::string& custom_data = std::string{});
-ORBIT_CLIENT_SDK_API int32_t request_end(orbit::EnClientExitReason reason, int32_t exit_code,
+ORBIT_CLIENT_SDK_API int32_t request_end(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
                                          const std::string& custom_data = std::string{});
 
 }  // namespace orbit_client_sdk_easy_api
@@ -61,7 +61,7 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
                                                                                                   orbit_rpc_rsp_type>; \
                                                                                                                        \
    public:                                                                                                             \
-    explicit ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)(void* private_data, orbit::OrbitRpcMessage&& ds_msg)    \
+    explicit ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)(void* private_data, atfw::orbit::OrbitRpcMessage&& ds_msg)    \
         : base_type(std::move(ds_msg)), private_data_(private_data) {}                                                 \
     int operator()() {                                                                                                 \
       set_rsp_code(hook_run(private_data_, get_request_body(), get_response_body()));                                  \

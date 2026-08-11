@@ -20,7 +20,7 @@ import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-package hello;
+package atframework.shard;
 
 /////////////////////////////////////////////////////
 // 到loginsvr的CS协议

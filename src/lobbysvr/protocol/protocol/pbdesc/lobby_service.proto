@@ -17,7 +17,7 @@ import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/lobbysvr/protocol/protocol/pbdesc";
 
-package hello;
+package atframework.shard;
 
 /////////////////////////////////////////////////////
 ////  此处开始是登入相关协议

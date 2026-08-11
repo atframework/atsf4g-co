@@ -22,9 +22,9 @@
 #endif
 
 class task_action_send_to_client
-    : public task_action_ss_rpc_base<orbit::STCSendToClientReq, orbit::CTSSendToClientRsp> {
+    : public task_action_ss_rpc_base<atfw::orbit::STCSendToClientReq, atfw::orbit::CTSSendToClientRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::STCSendToClientReq, orbit::CTSSendToClientRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::STCSendToClientReq, atfw::orbit::CTSSendToClientRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

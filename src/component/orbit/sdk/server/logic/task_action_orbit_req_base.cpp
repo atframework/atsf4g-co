@@ -41,7 +41,7 @@ ORBIT_SERVER_SERVICE_API task_action_orbit_req_base::msg_ref_type task_action_or
 
   init_msg(*msg, get_request());
 
-  orbit::OrbitRpcMessageHead *head = msg->mutable_head();
+  atfw::orbit::OrbitRpcMessageHead *head = msg->mutable_head();
   if (nullptr == head) {
     static message_type empty_msg;
     empty_msg.Clear();

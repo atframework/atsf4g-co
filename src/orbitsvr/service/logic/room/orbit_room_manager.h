@@ -51,13 +51,13 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
   rpc::result_code_type on_client_start(rpc::context& ctx, const std::string& client_id, const std::string& client_addr,
                                         const std::string& payload);
   rpc::result_code_type on_client_end(rpc::context& ctx, const std::string& client_id, const std::string& payload,
-                                      orbit::EnClientExitReason exit_reason, int32_t exit_code);
+                                      atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
   rpc::result_code_type on_user_finish(
       rpc::context& ctx, const std::string& client_id,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results);
 
   static bool fill_client_start_args_from_template_id(uint32_t template_id, const std::string& client_id,
-                                                      orbit::DAgentClientStartArgs& args);
+                                                      atfw::orbit::DAgentClientStartArgs& args);
 
  private:
   atfw::util::memory::strong_rc_ptr<orbit_room> get_room(const std::string& client_id) noexcept;

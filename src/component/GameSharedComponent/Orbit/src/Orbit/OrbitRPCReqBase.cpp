@@ -22,7 +22,7 @@ task_action_orbit_req_base::msg_ref_type task_action_orbit_req_base::add_rsp_msg
   return response_messages_;
 }
 
-int32_t task_action_orbit_req_base::init_msg(orbit::OrbitRpcMessage& msg, const orbit::OrbitRpcMessage& req_msg) {
+int32_t task_action_orbit_req_base::init_msg(atfw::orbit::OrbitRpcMessage& msg, const atfw::orbit::OrbitRpcMessage& req_msg) {
   *msg.mutable_head() = req_msg.head();
   msg.mutable_head()->set_timestamp(::util::time::time_utility::get_sys_now());
 

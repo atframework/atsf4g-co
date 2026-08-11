@@ -137,7 +137,7 @@ static rank_wal_publisher_type::vtable_pointer create_rank_publisher_vtable() {
       return wal_result_code::kInvalidParam;
     }
 
-    rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSRankEventSync> sync_body(param.context);
+    rpc::context::message_holder<atfw::rank::SSRankEventSync> sync_body(param.context);
     protobuf_copy_message(*sync_body->mutable_rank_key(), publish_private_data->get_key());
 
     for (; log_begin != log_end; ++log_begin) {

@@ -12,7 +12,7 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 
 import "protocol/extension/extensions_error_code.proto";
 
-package hello.err;
+package atframework.shard.err;
 
 enum EnSysErrorType {
   EN_SUCCESS = 0 [(error_code.description) = "成功"];

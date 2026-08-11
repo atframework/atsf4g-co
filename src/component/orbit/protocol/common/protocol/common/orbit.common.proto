@@ -8,7 +8,7 @@ option cc_enable_arenas = true;
 
 import "protocol/extension/atframework.proto";
 
-package orbit;
+package atframework.orbit;
 
 enum EnOrbitErrorCode {
   EN_ORBIT_ERROR_CODE_SUCCESS = 0;

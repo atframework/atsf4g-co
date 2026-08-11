@@ -88,7 +88,7 @@ class main_service_module : public atfw::atapp::module_impl {
           RPC_AWAIT_CODE_RESULT(orbit_room_manager::me()->on_client_start(ctx, client_id, client_addr, payload)));
     });
     orbit_server_manager::me()->set_on_client_end_notify(
-        [](rpc::context &ctx, const std::string &client_id, orbit::EnClientExitReason exit_reason,
+        [](rpc::context &ctx, const std::string &client_id, atfw::orbit::EnClientExitReason exit_reason,
            const std::string &payload, int32_t exit_code) -> rpc::result_code_type {
           FWLOGINFO("orbit client {} exited, reason: {}, code: {}, payload size: {}", client_id,
                     static_cast<int>(exit_reason), exit_code, payload.size());
@@ -131,7 +131,7 @@ class main_service_module : public atfw::atapp::module_impl {
         ctx, "lobbysvr.orbit_start_client",
         [region = std::move(region), client_id = std::move(client_id),
          match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
-          orbit::DAgentClientStartArgs request;
+          atfw::orbit::DAgentClientStartArgs request;
           orbit_room_manager::fill_client_start_args_from_template_id(1, client_id, request);
           RPC_RETURN_CODE(
               RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, request)));

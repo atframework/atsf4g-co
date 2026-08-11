@@ -14,7 +14,7 @@ import "protocol/extension/atframework.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 
-package hello;
+package atframework.shard;
 
 service OrbitServerRpcService {
   option (atframework.service_options) = {

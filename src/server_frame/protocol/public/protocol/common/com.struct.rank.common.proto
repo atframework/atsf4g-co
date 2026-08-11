@@ -15,7 +15,7 @@ import "protocol/common/com.struct.condition.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
-package hello;
+package atframework.shard;
 
 enum EnRankImplType{
   EN_RANK_IMPL_TYPE_DEFAULT = 0;

@@ -138,8 +138,8 @@ class router_rank_manager : public atfw::util::design_pattern::singleton<router_
         ctx, "rank load main task",
         // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
         [server_id, hash_key, rank_key](rpc::context& child_ctx) -> rpc::result_code_type {
-          PROJECT_NAMESPACE_ID::SSRankLoadMainReq request_body;
-          PROJECT_NAMESPACE_ID::SSRankLoadMainRsp response_body;
+          atfw::rank::SSRankLoadMainReq request_body;
+          atfw::rank::SSRankLoadMainRsp response_body;
           request_body.mutable_rank_key()->set_rank_type(rank_key.rank_type());
           request_body.mutable_rank_key()->set_rank_instance_id(rank_key.rank_instance_id());
           request_body.mutable_rank_key()->set_sub_rank_type(rank_key.sub_rank_type());

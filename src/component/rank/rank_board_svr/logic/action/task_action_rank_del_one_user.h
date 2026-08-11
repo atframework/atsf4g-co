@@ -22,10 +22,10 @@
 #endif
 
 class task_action_rank_del_one_user
-    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankDelUserReq, PROJECT_NAMESPACE_ID::SSRankDelUserRsp> {
+    : public task_action_ss_rpc_base<atfw::rank::SSRankDelUserReq, atfw::rank::SSRankDelUserRsp> {
  public:
   using base_type =
-      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankDelUserReq, PROJECT_NAMESPACE_ID::SSRankDelUserRsp>;
+      task_action_ss_rpc_base<atfw::rank::SSRankDelUserReq, atfw::rank::SSRankDelUserRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

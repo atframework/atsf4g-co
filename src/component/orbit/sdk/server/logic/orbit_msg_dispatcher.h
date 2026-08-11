@@ -49,7 +49,7 @@ class orbit_msg_dispatcher : public dispatcher_implement {
   ORBIT_SERVER_SERVICE_API uint64_t pick_msg_task_id(msg_raw_t &raw_msg) override;
 
   ORBIT_SERVER_SERVICE_API const std::string &pick_rpc_name(msg_raw_t &raw_msg) override;
-  ORBIT_SERVER_SERVICE_API const std::string &pick_rpc_name(const orbit::OrbitRpcMessage &orbit_msg);
+  ORBIT_SERVER_SERVICE_API const std::string &pick_rpc_name(const atfw::orbit::OrbitRpcMessage &orbit_msg);
 
   ORBIT_SERVER_SERVICE_API int32_t dispatch(rpc::context &ctx, const std::string &client_id, const std::string &data);
 
@@ -59,9 +59,9 @@ class orbit_msg_dispatcher : public dispatcher_implement {
   ORBIT_SERVER_SERVICE_API uint64_t allocate_sequence();
 
   ORBIT_SERVER_SERVICE_API int32_t send_to_client_no_wait(rpc::context &ctx, const std::string &client_id,
-                                                          orbit::OrbitRpcMessage &orbit_msg);
+                                                          atfw::orbit::OrbitRpcMessage &orbit_msg);
   ORBIT_SERVER_SERVICE_API rpc::result_code_type send_to_client(rpc::context &ctx, const std::string &client_id,
-                                                                orbit::OrbitRpcMessage &orbit_msg);
+                                                                atfw::orbit::OrbitRpcMessage &orbit_msg);
 
   ORBIT_SERVER_SERVICE_API static void *make_private_data(const std::string &client_id) noexcept;
   ORBIT_SERVER_SERVICE_API static const std::string &get_source_client_id(const void *private_data) noexcept;

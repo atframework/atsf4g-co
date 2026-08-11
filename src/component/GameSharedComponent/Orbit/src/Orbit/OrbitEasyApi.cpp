@@ -32,7 +32,7 @@ ORBIT_CLIENT_SDK_API int32_t blocking_seed_process() {
 ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr, const std::string& custom_data) {
   return orbit_client_sdk::OrbitClientRuntime::me()->notify_process_ready(client_addr, custom_data);
 }
-ORBIT_CLIENT_SDK_API int32_t request_end(orbit::EnClientExitReason reason, int32_t exit_code,
+ORBIT_CLIENT_SDK_API int32_t request_end(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
                                          const std::string& custom_data) {
   return orbit_client_sdk::OrbitClientRuntime::me()->request_end(reason, exit_code, custom_data);
 }

@@ -47,7 +47,7 @@ struct client_info {
   // 保底过期流程
   time_t timeout_exit_time;
 
-  orbit::DClientIdentity client_identity;
+  atfw::orbit::DClientIdentity client_identity;
 };
 
 struct client_timeout_info {
@@ -66,7 +66,7 @@ using on_forward_to_server_fn =
 using on_client_start_notify_fn = std::function<rpc::result_code_type(
     rpc::context& ctx, std::string client_id, const std::string& client_addr, const std::string& data)>;
 using on_client_end_notify_fn =
-    std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id, orbit::EnClientExitReason exit_reason,
+    std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id, atfw::orbit::EnClientExitReason exit_reason,
                                         const std::string& exit_data, int32_t exit_code)>;
 
 class orbit_server_manager {
@@ -94,7 +94,7 @@ class orbit_server_manager {
  public:
   // 启动Client
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type start_client(
-      rpc::context& ctx, const std::string& region, const orbit::DAgentClientStartArgs& args);
+      rpc::context& ctx, const std::string& region, const atfw::orbit::DAgentClientStartArgs& args);
   // 发送消息至Client
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API int32_t send_to_client_no_wait(rpc::context& ctx,
                                                                                   const std::string& client_id,
@@ -119,16 +119,16 @@ class orbit_server_manager {
   // SDK 内部使用
   // 收到Client消息
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_forward_to_server(
-      rpc::context& ctx, const orbit::CTSForwardToServerReq& req);
+      rpc::context& ctx, const atfw::orbit::CTSForwardToServerReq& req);
   // 收到Client Start通知
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_start_notify(
-      rpc::context& ctx, const orbit::CTSClientStartReq& req);
+      rpc::context& ctx, const atfw::orbit::CTSClientStartReq& req);
   // 收到Client End通知
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_end_notify(
-      rpc::context& ctx, const orbit::CTSClientEndReq& req);
+      rpc::context& ctx, const atfw::orbit::CTSClientEndReq& req);
   // 收到Client Heartbeat通知
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_agent_heartbeat_notify(
-      rpc::context& ctx, const orbit::CTSClientAgentHeartbeatNotify& req);
+      rpc::context& ctx, const atfw::orbit::CTSClientAgentHeartbeatNotify& req);
 
  private:
   void server_heartbeat();
@@ -149,7 +149,7 @@ class orbit_server_manager {
   on_client_start_notify_fn on_client_start_notify_;
   on_client_end_notify_fn on_client_end_notify_;
 
-  orbit::DServerIdentity server_identity_;
+  atfw::orbit::DServerIdentity server_identity_;
 
   std::deque<client_timeout_info> timeout_client_queue_;
   std::unordered_map<std::string, client_info_ptr> client_info_map_;

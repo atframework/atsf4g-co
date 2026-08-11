@@ -2,7 +2,7 @@
 
 // Sampling contract test for the rank SDK SS consumer path (IMPLEMENTATION_PLAN.md 阶段 8):
 // rank_api::update_score resolves the rank-board node by consistent hash over the real discovery index
-// and issues hello.RankBoardService/rank_set_score; the SS mock engine answers it offline.
+// and issues atframework.shard.RankBoardService/rank_set_score; the SS mock engine answers it offline.
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -64,17 +64,17 @@ CASE_TEST(component_rank, rank_sdk_update_score_contract) {
 
   auto rule = test.ss().mock(
       rpc::rank_board::packer::get_full_name_of_rank_set_score(),
-      PROJECT_NAMESPACE_ID::SSRankSetScoreReq::descriptor()->full_name(),
-      PROJECT_NAMESPACE_ID::SSRankSetScoreRsp::descriptor()->full_name(),
+      atfw::rank::SSRankSetScoreReq::descriptor()->full_name(),
+      atfw::rank::SSRankSetScoreRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
-        const auto &typed_request = static_cast<const PROJECT_NAMESPACE_ID::SSRankSetScoreReq &>(request.body);
+        const auto &typed_request = static_cast<const atfw::rank::SSRankSetScoreReq &>(request.body);
         CASE_EXPECT_EQ(0x1A0001, static_cast<int64_t>(request.target_node_id));
         CASE_EXPECT_EQ(11, static_cast<int>(typed_request.rank_key().rank_type()));
         CASE_EXPECT_EQ(22, static_cast<int>(typed_request.rank_key().rank_instance_id()));
         CASE_EXPECT_EQ(10001, static_cast<int64_t>(typed_request.data().user_key().user_id()));
         CASE_EXPECT_EQ(42, static_cast<int64_t>(typed_request.data().score()));
         CASE_EXPECT_EQ(2, static_cast<int>(typed_request.data().custom_data().sort_fields_size()));
-        static_cast<PROJECT_NAMESPACE_ID::SSRankSetScoreRsp &>(response).set_result(0);
+        static_cast<atfw::rank::SSRankSetScoreRsp &>(response).set_result(0);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!rule);

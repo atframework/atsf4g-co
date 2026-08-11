@@ -130,7 +130,7 @@ int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t matc
   return 0;
 }
 
-rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const orbit::DAgentClientStartArgs& args) {
+rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const atfw::orbit::DAgentClientStartArgs& args) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED != room_status_) {
     FWLOGERROR("orbit_room {} start_client failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -289,25 +289,25 @@ int32_t orbit_room::on_user_finish(
   return 0;
 }
 
-int32_t orbit_room::on_client_end(rpc::context& ctx, orbit::EnClientExitReason exit_reason, int32_t exit_code) {
+int32_t orbit_room::on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code) {
   FWLOGINFO("orbit_room {} on_client_end, reason: {}, exit_code: {}", get_client_id(), static_cast<int>(exit_reason),
             exit_code);
 
   PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason room_exit_reason =
       PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_UNKNOWN;
   switch (exit_reason) {
-    case orbit::EN_CLIENT_EXIT_REASON_CRASH:
+    case atfw::orbit::EN_CLIENT_EXIT_REASON_CRASH:
       room_exit_reason = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_CRASH;
       break;
-    case orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT:
-    case orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT:
+    case atfw::orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT:
+    case atfw::orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT:
       room_exit_reason = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT;
       break;
-    case orbit::EN_CLIENT_EXIT_STARTUP_FAILED:
+    case atfw::orbit::EN_CLIENT_EXIT_STARTUP_FAILED:
       room_exit_reason = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED;
       break;
-    case orbit::EN_CLIENT_EXIT_REASON_NORMAL:
-    case orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED:
+    case atfw::orbit::EN_CLIENT_EXIT_REASON_NORMAL:
+    case atfw::orbit::EN_CLIENT_EXIT_REASON_UNSPECIFIED:
     default:
       room_exit_reason = PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_UNKNOWN;
       break;

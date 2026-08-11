@@ -13,7 +13,7 @@ import "protocol/extension/xrescode_extensions_v3.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
 
-package hello.config;
+package atframework.shard.config;
 
 // 常量类型
 enum game_const_config {

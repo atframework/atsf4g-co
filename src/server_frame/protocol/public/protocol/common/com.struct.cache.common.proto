@@ -8,7 +8,7 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
-package hello;
+package atframework.shard;
 
 enum EnCacheApiCacheType {
   EN_CACHE_API_CACHE_TYPE_UNKNOWN = 0;

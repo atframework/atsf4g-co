@@ -15,7 +15,7 @@ import "protocol/common/com.struct.dtmq.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
 
-package hello.config;
+package atframework.shard.config;
 
 // 聊天频道配置
 message ExcelDtmqChannelType {

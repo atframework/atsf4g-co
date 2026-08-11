@@ -11,7 +11,7 @@ option go_package = "github.com/atframework/atsf4g-go/component-protocol-private
 import "protocol/common/com.struct.item.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 
-package hello;
+package atframework.shard;
 
 message OperationSupportSystemLogServiceInfo {
   uint64 service_instance_id = 11;

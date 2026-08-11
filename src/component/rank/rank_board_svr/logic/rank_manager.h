@@ -138,7 +138,7 @@ class rank_manager : public atfw::util::design_pattern::singleton<rank_manager> 
   bool closing_;
 
   std::unordered_map<
-      PROJECT_NAMESPACE_ID::DRankKey, std::pair<task_type_trait::task_type, PROJECT_NAMESPACE_ID::SSRankLoadMainRsp>,
+      PROJECT_NAMESPACE_ID::DRankKey, std::pair<task_type_trait::task_type, atfw::rank::SSRankLoadMainRsp>,
       PROJECT_NAMESPACE_ID::rank_api::rank_key_hash_type, PROJECT_NAMESPACE_ID::rank_api::rank_key_equal_type>
       load_main_task_mp_;
   time_t last_refresh_second_;

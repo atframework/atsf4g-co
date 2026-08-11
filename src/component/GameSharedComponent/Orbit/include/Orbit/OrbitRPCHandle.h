@@ -28,13 +28,13 @@ static inline int __pack_rpc_body(const TBodyType& input, std::string* output, c
         OrbitClientLogLevel::kError, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} serialization rpc request message failed:\n{}", rpc_full_name,
                                  input.InitializationErrorString()));
-    return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
   } else {
     OrbitClientRuntime::me()->log(
         OrbitClientLogLevel::kDebug, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} serialization rpc request message success:\n{}", rpc_full_name,
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(input)));
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
 }
 
@@ -45,38 +45,38 @@ static inline int __unpack_rpc_body(TBodyType&& output, const std::string& input
     OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} parse rpc request message failed:\n{}",
                                                            rpc_full_name, output.InitializationErrorString()));
-    return orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
   } else {
     OrbitClientRuntime::me()->log(
         OrbitClientLogLevel::kDebug, __FILE__, __LINE__,
         LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} parse rpc request message success:\n{}", rpc_full_name,
                                  OrbitClientRuntime::protobuf_mini_dumper_get_readable(output)));
-    return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
 }
 
-static inline int __setup_rpc_request_header(orbit::OrbitRpcMessageHead& head, const std::string& rpc_full_name,
+static inline int __setup_rpc_request_header(atfw::orbit::OrbitRpcMessageHead& head, const std::string& rpc_full_name,
                                              gsl::string_view type_full_name) {
   atframework::RpcRequestMeta* request_meta = head.mutable_rpc_request();
   if (nullptr == request_meta) {
-    return orbit::EN_ORBIT_ERROR_CODE_MALLOC;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_MALLOC;
   }
   request_meta->set_callee("orbit.ClientRPCService");
   request_meta->set_rpc_name(rpc_full_name);
   request_meta->set_type_url(type_full_name);
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-static inline int __setup_rpc_stream_header(orbit::OrbitRpcMessageHead& head, const std::string& rpc_full_name,
+static inline int __setup_rpc_stream_header(atfw::orbit::OrbitRpcMessageHead& head, const std::string& rpc_full_name,
                                             gsl::string_view type_full_name) {
   atframework::RpcStreamMeta* stream_meta = head.mutable_rpc_stream();
   if (nullptr == stream_meta) {
-    return orbit::EN_ORBIT_ERROR_CODE_MALLOC;
+    return atfw::orbit::EN_ORBIT_ERROR_CODE_MALLOC;
   }
   stream_meta->set_callee("orbit.ClientRPCService");
   stream_meta->set_rpc_name(rpc_full_name);
   stream_meta->set_type_url(type_full_name);
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 static inline OrbitClientRequestOptions __make_rpc_request_options(int32_t retry_time) {
@@ -109,7 +109,7 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_name,
                                               const orbit_rpc_req_type& req_body,
                                               std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback,
                                               int32_t retry_time) {
-  orbit::OrbitRpcMessage req_msg;
+  atfw::orbit::OrbitRpcMessage req_msg;
   std::string rpc_full_name = service_name + "." + rpc_name;
   OrbitClientRequestOptions request_options = __make_rpc_request_options(retry_time);
   int32_t res =
@@ -129,7 +129,7 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_name,
   }
   return OrbitRPCDispatcher::me()->init_rpc_req_callback(
       sequence, __get_rpc_wait_timeout(request_options),
-      [rpc_full_name, callback](const orbit::OrbitRpcMessage& rsp_msg) {
+      [rpc_full_name, callback](const atfw::orbit::OrbitRpcMessage& rsp_msg) {
         int32_t res = 0;
         orbit_rpc_rsp_type rsp_body;
         if (rsp_msg.head().rpc_response().type_url() == orbit_rpc_rsp_type::descriptor()->full_name() &&
@@ -158,7 +158,7 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_name, const
   OrbitClientRuntime::me()->post_to_io_thread([=]() {
     orbit_rpc_handle_inner<orbit_rpc_req_type, orbit_rpc_rsp_type>(rpc_name, service_name, req_body, callback, retry_time);
   });
-  return orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 }  // namespace orbit_client_sdk

@@ -81,7 +81,7 @@ const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClie
 }
 }  // namespace
 
-ORBIT_RPC_HANDLE(echo, PROJECT_NAMESPACE_ID.OrbitServerRpcService, PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
+ORBIT_RPC_HANDLE(echo, atframework.shard.OrbitServerRpcService, PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
                  PROJECT_NAMESPACE_ID::OrbitServerEchoRsp)
 ORBIT_TASK_ACTION(echo, PROJECT_NAMESPACE_ID::OrbitClientEchoReq, PROJECT_NAMESPACE_ID::OrbitClientEchoRsp)
 
@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
           "localhost:12345", "orbit-auto-client ready");
       if (ready_result != 0) {
         ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
-            orbit::EN_CLIENT_EXIT_STARTUP_FAILED, ready_result, "orbit-auto-client ready failed");
+            atfw::orbit::EN_CLIENT_EXIT_STARTUP_FAILED, ready_result, "orbit-auto-client ready failed");
       }
       ready_sent = true;
       ready_timepoint = now;
@@ -200,7 +200,7 @@ int main(int argc, char* argv[]) {
       int32_t echo_result = echo(req, nullptr, 1);
       if (echo_result < 0) {
         ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
-            orbit::EN_CLIENT_EXIT_STARTUP_FAILED, echo_result, "orbit-auto-client echo failed");
+            atfw::orbit::EN_CLIENT_EXIT_STARTUP_FAILED, echo_result, "orbit-auto-client echo failed");
         return echo_result;
       }
       ping_sent = true;
@@ -208,7 +208,7 @@ int main(int argc, char* argv[]) {
 
     if (ready_sent && now - ready_timepoint >= kExitDelay) {
       int32_t shutdown_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
-          orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "orbit-auto-client done");
+          atfw::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "orbit-auto-client done");
       if (shutdown_result < 0) {
         write_log_line(std::string{"orbit runtime shutdown failed, code="} + std::to_string(shutdown_result));
       }

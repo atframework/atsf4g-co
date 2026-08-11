@@ -466,8 +466,8 @@ rpc::result_code_type rank::notify_switch_to_slave(rpc::context& ctx) {
         ctx, "rank.switch_to_slave",
         // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
         [self_ptr, data_version, rank_key, router_data, slave_node](rpc::context& child_ctx) -> rpc::result_code_type {
-          PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveReq req;
-          PROJECT_NAMESPACE_ID::SSRankSwitchToSlaveRsp rsp;
+          atfw::rank::SSRankSwitchToSlaveReq req;
+          atfw::rank::SSRankSwitchToSlaveRsp rsp;
           protobuf_copy_message(*req.mutable_rank_key(), rank_key);
           protobuf_copy_message(*req.mutable_router_data(), router_data);
           req.set_data_version(data_version);
@@ -514,8 +514,8 @@ void rank::async_heartbeat(rpc::context& ctx) {
       ctx, "rank.heartbeat",
       // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
       [main_server_id, rank_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::SSRankHeartbeatReq req;
-        PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp rsp;
+        atfw::rank::SSRankHeartbeatReq req;
+        atfw::rank::SSRankHeartbeatRsp rsp;
         req.set_data_version(rank_ptr->get_data_version());
         protobuf_copy_message(*req.mutable_rank_key(), rank_ptr->get_key());
         auto ret = RPC_AWAIT_CODE_RESULT(rpc::rank_board::rank_heartbeat(child_ctx, main_server_id, req, rsp));

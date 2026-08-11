@@ -21,9 +21,9 @@
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_client_end_notify : public task_action_ss_rpc_base<orbit::CTSClientEndReq, orbit::STCClientEndRsp> {
+class task_action_client_end_notify : public task_action_ss_rpc_base<atfw::orbit::CTSClientEndReq, atfw::orbit::STCClientEndRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::CTSClientEndReq, orbit::STCClientEndRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::CTSClientEndReq, atfw::orbit::STCClientEndRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

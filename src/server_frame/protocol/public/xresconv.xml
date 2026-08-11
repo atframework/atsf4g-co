@@ -27,40 +27,39 @@
   <list>
     <item name="常量表" cat="misc" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Const.xlsx|常量|2,2,0,2</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.ExcelConstConfig</scheme>
-      <scheme name="OutputFile" desc="输出文件名">const.bytes</scheme>
-
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelConstConfig</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/const.bytes</scheme>
       <scheme name="KeyRow">1</scheme>
       <option desc="反转行列">--transpose-data-source</option>
     </item>
     <item name="道具描述总表" cat="item" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Item.xlsx|道具描述总表|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.ExcelItemType</scheme>
-      <scheme name="OutputFile" desc="输出文件名">item_type.bytes</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelItemType</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/item_type.bytes</scheme>
     </item>
     <item name="排行榜规则表" cat="rank" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Rank.xlsx|排行榜规则表|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.ExcelRankRule</scheme>
-      <scheme name="OutputFile" desc="输出文件名">rank_rule.bytes</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelRankRule</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/rank_rule.bytes</scheme>
     </item>
     <item name="排行榜定义表" cat="rank" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Rank.xlsx|排行榜定义表|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.ExcelRankDefine</scheme>
-      <scheme name="OutputFile" desc="输出文件名">rank_define.bytes</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelRankDefine</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/rank_define.bytes</scheme>
     </item>
     <item name="排行榜类型奖励池" cat="rank" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Rank.xlsx|排行榜奖励池|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.ExcelRankPeriodRewardPool</scheme>
-      <scheme name="OutputFile" desc="输出文件名">rank_period_reward_pool.bytes</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelRankPeriodRewardPool</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/rank_period_reward_pool.bytes</scheme>
    </item>
    <item name="消息队列频道配置" cat="dtmq" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">DtMq.xlsx|Channel类型配置|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">hello.config.ExcelDtmqChannelType</scheme>
-      <scheme name="OutputFile" desc="输出文件名">dtmq_channel_type.bytes</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelDtmqChannelType</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/dtmq_channel_type.bytes</scheme>
    </item>
    <item name="Orbit Client 模板" cat="orbit" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">OrbitClient.xlsx|template|3,1</scheme>
-      <scheme name="ProtoName" desc="协议名">orbit.config.ExcelOrbitClientTemplate</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shard.config.ExcelOrbitClientTemplate</scheme>
       <scheme name="OutputFile" desc="输出文件名">Both/orbit_client_template.bytes</scheme>
    </item>
   </list>

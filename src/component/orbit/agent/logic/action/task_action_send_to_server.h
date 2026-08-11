@@ -22,9 +22,9 @@
 #endif
 
 class task_action_send_to_server
-    : public task_action_ss_rpc_base<orbit::DTASendToServerReq, orbit::ATDSendToServerRsp> {
+    : public task_action_ss_rpc_base<atfw::orbit::DTASendToServerReq, atfw::orbit::ATDSendToServerRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::DTASendToServerReq, orbit::ATDSendToServerRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::DTASendToServerReq, atfw::orbit::ATDSendToServerRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

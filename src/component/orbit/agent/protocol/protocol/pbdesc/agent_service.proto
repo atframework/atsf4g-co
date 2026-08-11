@@ -10,7 +10,7 @@ option cc_generic_services = true;
 import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
 
-package orbit;
+package atframework.orbit;
 
 import "protocol/common/orbit.common.proto";
 

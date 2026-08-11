@@ -10,7 +10,7 @@ import "protocol/extension/v3/xresloader.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
 
-package hello;
+package atframework.shard;
 
 message DIsolationScopeSeason {
   option (org.xresloader.msg_separator) = "@";

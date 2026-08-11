@@ -22,9 +22,9 @@
 #endif
 
 class task_action_rank_clear
-    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankClearReq, PROJECT_NAMESPACE_ID::SSRankClearRsp> {
+    : public task_action_ss_rpc_base<atfw::rank::SSRankClearReq, atfw::rank::SSRankClearRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankClearReq, PROJECT_NAMESPACE_ID::SSRankClearRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::rank::SSRankClearReq, atfw::rank::SSRankClearRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

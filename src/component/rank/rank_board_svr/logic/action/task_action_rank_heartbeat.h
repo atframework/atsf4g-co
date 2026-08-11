@@ -21,11 +21,11 @@
 #  define RANK_SERVICE_API UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_rank_heartbeat : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankHeartbeatReq,
-                                                                  PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp> {
+class task_action_rank_heartbeat : public task_action_ss_rpc_base<atfw::rank::SSRankHeartbeatReq,
+                                                                  atfw::rank::SSRankHeartbeatRsp> {
  public:
   using base_type =
-      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSRankHeartbeatReq, PROJECT_NAMESPACE_ID::SSRankHeartbeatRsp>;
+      task_action_ss_rpc_base<atfw::rank::SSRankHeartbeatReq, atfw::rank::SSRankHeartbeatRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

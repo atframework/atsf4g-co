@@ -42,7 +42,7 @@ message DTeamKey {
 }
 
 message DTeamMember {
-  hello.DUserIDKey user_key = 1;
+  atframework.shard.DUserIDKey user_key = 1;
   // 入队时间
   google.protobuf.Timestamp joined_timepoint = 2;
 
@@ -67,7 +67,7 @@ message DTeamMember {
 
 message DTeamApply {
   DTeamKey team_key = 1;
-  hello.DUserIDKey user_key = 2;
+  atframework.shard.DUserIDKey user_key = 2;
 
   EnTeamJoinType join_team_type = 3;
   google.protobuf.Any join_team_data = 4;
@@ -86,7 +86,7 @@ message DTeamApply {
 message DTeamStorage {
   DTeamKey team_key = 1;
   // 当前队长
-  hello.DUserIDKey captain_user_key = 2;
+  atframework.shard.DUserIDKey captain_user_key = 2;
 
   // 当前成员
   repeated DTeamMember member = 6;

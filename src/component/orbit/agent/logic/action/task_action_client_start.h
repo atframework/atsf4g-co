@@ -21,9 +21,9 @@
 #  define ORBIT_AGENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_client_start : public task_action_ss_rpc_base<orbit::DTAClientStartReq, orbit::ATDClientStartRsp> {
+class task_action_client_start : public task_action_ss_rpc_base<atfw::orbit::DTAClientStartReq, atfw::orbit::ATDClientStartRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<orbit::DTAClientStartReq, orbit::ATDClientStartRsp>;
+  using base_type = task_action_ss_rpc_base<atfw::orbit::DTAClientStartReq, atfw::orbit::ATDClientStartRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
