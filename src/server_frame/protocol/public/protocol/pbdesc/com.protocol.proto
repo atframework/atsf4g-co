@@ -17,7 +17,7 @@ import "protocol/pbdesc/com.protocol.rank.proto";
 import "protocol/pbdesc/com.protocol.cache.proto";
 import "protocol/pbdesc/com.protocol.chat.proto";
 import "protocol/pbdesc/com.protocol.team.proto";
-import "protocol/common/com.struct.item.common.proto";
+import "protocol/pbdesc/com.protocol.lobby.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -83,7 +83,7 @@ message CSLoginReq {
   string access_token_code = 1;  // 认证码
   string open_id = 2;
   uint64 user_id = 3;  // 玩家数字ID
-  uint32 zone_id = 4;  // 大区ID
+  uint32 zone_id = 4;   // 大区ID
 
   DAccountData account = 5;  // 平台信息
   DClientDeviceInfo client_info = 11;
@@ -95,7 +95,7 @@ message SCLoginRsp {
   int64 heartbeat_interval = 2;  // 心跳包间隔
   bool is_new_player = 3;        // 是否是新玩家
   int32 version_type = 4;        // 版本类型 @EnVersionType
-  uint32 zone_id = 5;            // 大区ID
+  uint32 zone_id = 5;             // 大区ID
 }
 
 message SCPlayerProfileSyn {

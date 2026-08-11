@@ -9,9 +9,7 @@ option cc_generic_services = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
-import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 
 package atframework.shared;

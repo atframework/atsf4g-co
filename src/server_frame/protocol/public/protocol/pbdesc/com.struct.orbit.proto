@@ -8,7 +8,6 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-import "google/protobuf/timestamp.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 package atframework.shared;

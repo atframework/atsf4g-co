@@ -8,7 +8,6 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.chat.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 

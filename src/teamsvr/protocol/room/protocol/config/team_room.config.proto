@@ -7,10 +7,6 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
-import "google/protobuf/duration.proto";
-
-import "atframe/atapp_conf.proto";
-
 option go_package = "github.com/atframework/atsf4g-co/src/service-teamsvr/protocol/room/protocol/config";
 
 package atframework.team.config;

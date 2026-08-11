@@ -7,10 +7,8 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
-import "google/protobuf/empty.proto";
 import "protocol/extension/atframework.proto";
 
-import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 
 package atframework.shared;
