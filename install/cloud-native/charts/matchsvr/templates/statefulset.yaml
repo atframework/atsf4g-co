@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "matchsvr.statefulset") -}}
+{{- define "matchsvr.statefulset" -}}
+{{- end -}}

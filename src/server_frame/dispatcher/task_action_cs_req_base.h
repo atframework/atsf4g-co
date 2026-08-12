@@ -238,6 +238,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
     FWLOGDEBUG("{}Parse rpc request message {} success:\n{}", get_shared_context_log_prefix(), get_request_type_url(),
                protobuf_mini_dumper_get_readable(*request_body_));
 
+    write_actor_log_body(*request_body_, get_request().head(), true);
+
     has_unpack_request_ = true;
     return true;
   }
@@ -253,6 +255,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_rpc_base : public task_action_cs_r
     } else {
       FWLOGDEBUG("{}Serialize rpc response message {} success:\n{}", get_shared_context_log_prefix(),
                  get_response_type_url(), protobuf_mini_dumper_get_readable(get_response_body()));
+      write_actor_log_body(get_response_body(), rsp.head(), false);
     }
   }
 

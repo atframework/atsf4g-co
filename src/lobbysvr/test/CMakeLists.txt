@@ -51,14 +51,15 @@ project_add_rpc_unit_test(
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_get_channel_snapshot.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_send_message.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/user_chat_manager.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/matching/user_matching_manager.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/player/task_action_player_get_info.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/task_action_rank_get_self_rank.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/task_action_rank_get_specify_rank.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/user_rank_manager.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/orbit/user_orbit_manager.cpp"
     ${_LOBBYSVR_CHAT_TEST_GENERATED_SOURCE_FILES}
-  LINK_LIBRARIES sdk::lobbysvr-sdk sdk::cachesvr-sdk sdk::orbitsvr-sdk components::dtmq-proxy-sdk components::rank-logic-sdk
-                 protocol::lobbysvr-config
+  LINK_LIBRARIES sdk::lobbysvr-sdk sdk::cachesvr-sdk sdk::matchsvr-sdk sdk::orbitsvr-sdk components::dtmq-proxy-sdk
+                 components::rank-logic-sdk protocol::lobbysvr-config
   FEATURES SS CS
   LABELS fast
   TIMEOUT 180)
@@ -81,4 +82,3 @@ target_precompile_headers(
           "$<$<COMPILE_LANGUAGE:CXX>:\"data/player_type_define.h\">"
           "$<$<COMPILE_LANGUAGE:CXX>:\"dispatcher/task_action_cs_req_base.h\">"
           "$<$<COMPILE_LANGUAGE:CXX>:\"rpc/db/hash_table.h\">")
-

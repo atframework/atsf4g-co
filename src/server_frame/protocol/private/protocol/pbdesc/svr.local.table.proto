@@ -18,6 +18,7 @@ import "protocol/pbdesc/svr.struct.proto";
 import "protocol/pbdesc/svr.struct.rank.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
+import "protocol/pbdesc/com.struct.match.proto";
 
 package atframework.shared;
 
@@ -128,6 +129,7 @@ message table_user {
   user_option_private_data option_data_private = 200;  // 玩家选项
   DRankUserData rank_data = 201;                       // 玩家排行榜数据
   user_orbit_room_data orbit_room_data = 202;            // 玩家轨道房间数据
+  DUserMatchingData matching_data = 203;               // 匹配临时数据
 }
 
 message table_distribute_transaction {

@@ -1,0 +1,46 @@
+# Default values for lobby.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: matchsvrd
+
+type_id: 14
+type_name: "matchsvr"
+
+image:
+  repository: harbor.m-oa.com:6023/project-x/matchsvr
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/matchsvr/cfg
+  logMountPath: /data/atframework/publish/matchsvr/log
+
+# vector:
+#   enabled: true
+#   log_path: /data/atframework/publish/matchsvr/log
+
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/matchsvr/log
+
+redis:
+  enable: true
+
+cachesvr_shared:
+  enable: true
+
+cs_session:
+  enable: true
+
+httproute:
+  port: 7001
+  parentRefsName: project-x-tls-gateway
+
+matchsvr:
+  rank_auto_update_interval: 3600s
+
+enable_excel_config: true

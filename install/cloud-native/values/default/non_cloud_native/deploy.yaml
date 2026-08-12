@@ -94,3 +94,15 @@ proc_desc:
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+
+  - chart_name: "matchsvr"
+    instance_type_id: 14
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+
+  - chart_name: "robot"
+    instance_type_id: 255
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1

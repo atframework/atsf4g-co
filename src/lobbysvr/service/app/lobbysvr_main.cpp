@@ -39,6 +39,7 @@
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
 #include "app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.h"
 #include "app/handle_ss_rpc_lobbysvrservice.atfw.gen.h"
+#include "app/handle_ss_rpc_matchsvrnotifyservice.atfw.gen.h"
 
 #include "data/player.h"
 #include "logic/chat/user_chat_manager.h"
@@ -112,6 +113,7 @@ class main_service_module : public atfw::atapp::module_impl {
     INIT_CALL_FN(handle::lobby::register_handles_for_lobbysvrservice);
     INIT_CALL_FN(handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice);
     INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrnotifyservice);
+    INIT_CALL_FN(handle::matching::register_handles_for_matchsvrnotifyservice);
 
     // reload will be triggered before init, so reload again here
 

@@ -20,6 +20,7 @@ message logic_discovery_selector_cfg {
   atframework.atapp.protocol.atapp_metadata dtcoordsvr = 270;
   atframework.atapp.protocol.atapp_metadata ranksvr = 271;
   atframework.atapp.protocol.atapp_metadata cachesvr = 272;
+  atframework.atapp.protocol.atapp_metadata matchsvr = 273;
   atframework.atapp.protocol.atapp_metadata friendsvr = 274;
   atframework.atapp.protocol.atapp_metadata guildsvr = 275;
 

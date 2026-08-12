@@ -18,6 +18,8 @@ import "protocol/pbdesc/com.protocol.cache.proto";
 import "protocol/pbdesc/com.protocol.chat.proto";
 import "protocol/pbdesc/com.protocol.team.proto";
 import "protocol/pbdesc/com.protocol.lobby.proto";
+import "protocol/pbdesc/com.protocol.match.proto";
+import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -95,6 +97,43 @@ service LobbysvrClientService {
     option (atframework.rpc_options) = {
       module_name: "player"
       api_name: "Get player data"
+    };
+  };
+
+  // ================ 匹配 RPC ================
+  rpc matching_start(CSMatchingStartReq) returns (SCMatchingStartRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "开始匹配"
+    };
+  };
+
+  rpc matching_check(CSMatchingCheckReq) returns (SCMatchingCheckRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "检查并恢复匹配事件"
+    };
+  };
+
+  rpc matching_cancel(CSMatchingCancelReq) returns (SCMatchingCancelRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "取消匹配"
+    };
+  };
+
+  rpc matching_confirm(CSMatchingConfirmReq) returns (SCMatchingConfirmRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "确认或拒绝战斗"
+    };
+  };
+
+  rpc matching_log_sync(google.protobuf.Empty) returns (stream SCMatchingLogSync) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "推送匹配 WAL 日志或快照"
+      no_cache: true
     };
   };
 

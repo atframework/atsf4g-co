@@ -23,6 +23,7 @@ generate_for_pb_add_ss_service(
   GAME_RPC_API
   EXTERNAL_SERVICE_PROTOCOLS
   "lobbysvr-protocol"
+  "matchsvr-protocol"
   INCLUDE_HEADERS
   "protocol/pbdesc/lobby_service.pb.h")
 

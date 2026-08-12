@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.battle.shared.proto";
+
+package atframework.shared;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+enum EnMatchingRoomStatus {
+  EN_MATCHING_ROOM_STATUS_INVALID = 0;
+  EN_MATCHING_ROOM_STATUS_MATCHING = 1;
+  EN_MATCHING_ROOM_STATUS_CREATING_BATTLE = 2;
+  EN_MATCHING_ROOM_STATUS_FINISHED = 3;
+  EN_MATCHING_ROOM_STATUS_CANCELLED = 4;
+  EN_MATCHING_ROOM_STATUS_TIMEOUT = 5;
+  EN_MATCHING_ROOM_STATUS_FAILED = 6;
+  EN_MATCHING_ROOM_STATUS_CONFIRMING = 7;
+}
+
+enum EnMatchingUnitStatus {
+  EN_MATCHING_UNIT_STATUS_INVALID = 0;
+  EN_MATCHING_UNIT_STATUS_SEARCHING = 1;
+  EN_MATCHING_UNIT_STATUS_MATCHED = 2;
+  EN_MATCHING_UNIT_STATUS_CANCELLED = 3;
+}
+
+enum EnMatchingConfirmStatus {
+  EN_MATCHING_CONFIRM_STATUS_PENDING = 0;
+  EN_MATCHING_CONFIRM_STATUS_ACCEPTED = 1;
+  EN_MATCHING_CONFIRM_STATUS_REFUSED = 2;
+  EN_MATCHING_CONFIRM_STATUS_TIMEOUT = 3;
+}
+
+// 与旧项目 EnMatchSelectSvrType 保持一致，字段编号沿用旧协议。
+enum EnMatchSelectSvrType {
+  EN_MATCH_SELECT_SVR_TYPE_INVALID = 0;
+  EN_MATCH_SELECT_SVR_TYPE_CLIENT = 1;
+  EN_MATCH_SELECT_SVR_TYPE_PLAYER = 2;
+}
+
+// 硬隔离维度。四个字段全部相同的房间才允许互相撮合。
+message DMatchingScope {
+  int32 level_type = 1;
+  string region = 2;
+  string battle_version = 3;
+  int32 matching_pool_id = 4;
+}
+
+// 一个 unit 使用队长聚合后的参数参与规则比较，成员不会被拆开。
+message DMatchingParameter {
+  int32 rank_level = 1;
+  int32 rank_score = 2;
+  int32 tier_id = 3;
+  int32 true_skill = 4;
+  int32 role_level = 5;
+  int32 comprehensive_score = 6;
+  int32 chance_of_drawing = 7;
+  int32 force_type = 8;
+  bool challenge_team = 9;
+  bool thief_team = 10;
+  int64 search_start_time = 11;
+}
+
+message DMatchingPlayer {
+  DUserIDKey user_key = 1;
+  repeated DUserIDKey lasting_ban_users = 2;
+  repeated DUserIDKey last_battle_users = 3;
+  EnMatchingConfirmStatus confirm_status = 4;
+}
+
+message DMatchingUnit {
+  uint64 unit_id = 1;
+  EnMatchingUnitStatus status = 2;
+  DMatchingParameter parameter = 3;
+  repeated DMatchingPlayer players = 4;
+  repeated DUserIDKey ban_users = 5;
+  string client_version = 6;
+  string resource_version = 7;
+  DUserIDKey captain_user_key = 8;  // 成员顺序不表达队长或操作权限。
+}
+
+message DMatchingRoomSnapshot {
+  string matching_id = 1;
+  DMatchingScope scope = 2;
+  EnMatchingRoomStatus status = 3;
+  repeated DMatchingUnit units = 4;
+  int32 result_template_id = 5;
+  int64 created_time = 6;
+  int64 expire_time = 7;
+  string battle_room_id = 8;
+  int32 result = 9;
+  int64 last_event_id = 10;
+  int64 confirm_expire_time = 11;
+}
+
+message DMatchingConfirmEvent {
+  DUserIDKey user_key = 1;
+  EnMatchingConfirmStatus status = 2;
+}
+
+// 迁房事件携带原 unit 和目标房间。目标为空表示取消或普通移除。
+message DMatchingRemoveUnitEvent {
+  DMatchingUnit unit = 1;
+  string switch_to_matching_id = 2;
+}
+
+message DMatchingEventLog {
+  int64 event_id = 1;
+  google.protobuf.Timestamp timepoint = 2;
+  EnMatchingRoomStatus room_status = 3;
+
+  oneof event {
+    DMatchingUnit add_unit = 11;
+    DMatchingRemoveUnitEvent remove_unit = 12;
+    DMatchingRoomSnapshot matched = 13;
+    int64 timeout = 14;
+    int64 cancel = 15;
+    int32 failed = 16;
+    int64 notify_confirm = 17;
+    DMatchingConfirmEvent confirm_user = 18;
+    DMatchingConfirmEvent refuse_confirm = 19;
+  }
+}
+
+// lobbysvr 持久化的玩家匹配视图，用于重登录后从 WAL 游标恢复。
+message DUserMatchingData {
+  DMatchingRoomSnapshot snapshot = 1;
+  int64 last_event_id = 2;
+  int64 client_acknowledge_event_id = 3;
+}

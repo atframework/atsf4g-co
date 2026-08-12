@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package atframework.shared;
+
+import "google/protobuf/timestamp.proto";
+import "protocol/pbdesc/com.struct.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+message DBattleLevelParameter {
+  int32 level_type = 1;  // 匹配关卡类型(关联到 DBattleRoomData.battle_data)
+  int32 level_id = 2;    // 默认匹配关卡ID或当前的关卡ID
+  int32 matching_pool_id = 3;
+  string region = 5;
+}
+
+message DLevelSelect {
+  int32 level_type = 1;  // 匹配关卡类型(关联到 DBattleRoomData.battle_data)
+  int32 level_id = 2;    // 默认匹配关卡ID或当前的关卡ID
+  string region = 3;
+}

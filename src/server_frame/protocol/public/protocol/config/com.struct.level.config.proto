@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/xrescode_extensions_v3.proto";
+import "protocol/extension/v3/xresloader.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
+
+package atframework.shared.config;
+
+message ExcelLevel {
+  option (xrescode.loader) = {
+    file_path: "level.bytes"
+    indexes: { fields: "level_id" index_type: EN_INDEX_KV }
+
+    tags: "client"
+    tags: "server"
+  };
+
+  int32 level_id = 1 [(org.xresloader.field_unique_tag) = "level_id"];
+  int32 level_type = 2;
+  int32 matching_pool_id = 3;    // 匹配池ID
+}

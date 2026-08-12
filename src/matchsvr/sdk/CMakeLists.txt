@@ -1,0 +1,17 @@
+project_service_declare_sdk(
+  "matchsvr-sdk"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  INCLUDE_DIR
+  "${CMAKE_CURRENT_LIST_DIR}"
+  DLLEXPORT_DECL
+  GAME_RPC_API
+  USE_SERVICE_PROTOCOL
+  matchsvr-protocol
+  HEADERS
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matchsvrservice.atfw.gen.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matchsvrnotifyservice.atfw.gen.h"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matching_api.h"
+  SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matchsvrservice.atfw.gen.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matchsvrnotifyservice.atfw.gen.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matching_api.cpp")

@@ -19,6 +19,7 @@ enum class logic_service_type : uint32_t {
   kAuthSvr = 11,
   kLobbySvr = 12,
   kDtCoordSvr = 13,         // 用于分布式事务的协调者服务
+  kMatchSvr = 14,           // 匹配服务器
   kCacheSvr = 15,           // 缓存服务器
   kRankSettlementSvr = 16,  // 排行榜结算服务器
   kRankBoardSvr = 17,       // 排行榜展示服务器

@@ -21,6 +21,7 @@
 #include <logic/async_jobs/user_async_jobs_manager.h>
 #include <logic/cache/user_cache_manager.h>
 #include <logic/chat/user_chat_manager.h>
+#include <logic/matching/user_matching_manager.h>
 #include <logic/orbit/user_orbit_manager.h>
 #include <logic/rank/user_rank_manager.h>
 
@@ -69,7 +70,8 @@ player::player(fake_constructor &ctor)
       user_rank_manager_(atfw::component::memory::stl::make_strong_rc<user_rank_manager>(*this)),
       user_cache_manager_(atfw::component::memory::stl::make_strong_rc<user_cache_manager>(*this)),
       user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)),
-      user_orbit_manager_(atfw::component::memory::stl::make_strong_rc<user_orbit_manager>(*this)) {
+      user_orbit_manager_(atfw::component::memory::stl::make_strong_rc<user_orbit_manager>(*this)),
+      user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)) {
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -129,6 +131,8 @@ rpc::result_code_type player::create_init(rpc::context &parent_ctx) {
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
   user_async_jobs_manager_->create_init(ctx);
   user_rank_manager_->create_init(ctx);
+  user_matching_manager_->create_init(ctx);
+  // TODO init all interval checkpoint
 
   // TODO init items
   // if (PROJECT_NAMESPACE_ID::EN_VERSION_GM != version_type) {
@@ -174,6 +178,8 @@ rpc::result_code_type player::login_init(rpc::context &parent_ctx) {
   if (ret < 0) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
+  // 匹配恢复失败不阻断登录；玩家仍可通过 matching_check 主动重试。
+  RPC_AWAIT_IGNORE_RESULT(user_matching_manager_->login_init(ctx));
 
   ret = RPC_AWAIT_CODE_RESULT(user_orbit_manager_->login_init(ctx));
   if (ret < 0) {
@@ -198,6 +204,7 @@ bool player::is_dirty() const {
   //! === manager implement === 检查是否有脏数据
   PLAYER_CHECK_RET_DIRTY(ret, user_async_jobs_manager_->is_dirty());
   PLAYER_CHECK_RET_DIRTY(ret, user_rank_manager_->is_dirty());
+  PLAYER_CHECK_RET_DIRTY(ret, user_matching_manager_->is_dirty());
 
 #undef PLAYER_CHECK_RET_DIRTY
 
@@ -208,6 +215,7 @@ void player::clear_dirty() {
   //! === manager implement === 清理脏数据标记
   user_async_jobs_manager_->clear_dirty();
   user_rank_manager_->clear_dirty();
+  user_matching_manager_->clear_dirty();
 }
 
 void player::refresh_feature_limit(rpc::context &ctx) {
@@ -331,6 +339,8 @@ void player::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESP
     user_rank_manager_->init_from_table_data(ctx, tb_player);
   }
 
+  user_matching_manager_->init_from_table_data(ctx, tb_player);
+
   trace.finish({0, {}});
 }
 
@@ -359,6 +369,12 @@ int player::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &use
   ret = user_rank_manager_->dump(ctx, user);
   if (ret < 0) {
     FWPLOGERROR(*this, "dump user_rank_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_matching_manager_->dump(ctx, user);
+  if (ret < 0) {
+    FWPLOGERROR(*this, "dump user_matching_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 

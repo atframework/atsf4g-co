@@ -7,6 +7,27 @@ file(GLOB_RECURSE SERVICE_SOURCES *.cpp *.cc *.c *.cxx)
 file(GLOB_RECURSE SERVICE_HEADERS *.h *.hpp)
 
 generate_for_pb_add_ss_service(
+  "${PROJECT_NAMESPACE}.MatchsvrNotifyService"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk"
+  SERVICE_DLLEXPORT_DECL
+  GAME_SERVICE_API
+  NO_RPC
+  EXTERNAL_SERVICE_PROTOCOLS
+  "matchsvr-protocol"
+  INCLUDE_HEADERS
+  "rpc/matching/matchsvrnotifyservice.atfw.gen.h"
+  GENERATED_FLOW_NAME
+  "${PROJECT_NAMESPACE}.MatchsvrNotifyService.lobbysvr")
+
+generate_for_pb_add_ss_service(
   "atframework.dtmq.DtmqProxysvrNotifyService"
   "${CMAKE_CURRENT_LIST_DIR}"
   TASK_PATH_PREFIX
@@ -50,9 +71,11 @@ project_service_declare_instance(
   "lobbysvr-sdk"
   "cachesvr-sdk"
   "orbitsvr-sdk"
+  "matchsvr-sdk"
   USE_SERVICE_PROTOCOL
   "lobbysvr-config"
   GENERATED_FLOW_NAMES
+  "${PROJECT_NAMESPACE}.MatchsvrNotifyService.lobbysvr"
   "atframework.dtmq.DtmqProxysvrNotifyService.lobbysvr"
   "${PROJECT_NAMESPACE}.LobbysvrClientService"
   "${PROJECT_NAMESPACE}.LobbysvrService")

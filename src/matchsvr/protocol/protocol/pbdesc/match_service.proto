@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "google/protobuf/empty.proto";
+import "protocol/extension/atframework.proto";
+
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.match.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/lobbysvr/protocol/protocol/pbdesc";
+package atframework.shared;
+
+// WAL 订阅者的路由信息，由 matchsvr 保留在房间 publisher 中。
+message DMatchingSubscriberData {
+  uint64 server_id = 1;
+  int64 last_send_event_id = 2;
+  int64 valid_event_id_bound = 3;
+}
+
+// matchsvr 主动发给 lobbysvr 的增量日志或强制全量快照。
+message SSMatchingEventSync {
+  string matching_id = 1;
+  repeated DUserIDKey user_keys = 2;
+  repeated DMatchingEventLog event_logs = 3;
+  DMatchingRoomSnapshot room_snapshot = 8;
+}
+
+message SSMatchingCreateReq {
+  DMatchingScope scope = 1;      // 匹配的隔离维度
+  DMatchingUnit unit = 2;        // 参与匹配的信息
+  DUserIDKey operator_user = 3;  // 本次实际操作者，由 lobbysvr 根据登录态覆盖
+  uint64 subscriber_server_id = 4;  // 当前 lobbysvr 实例，由内部链路填写
+  int64 acknowledge_event_id = 5;   // lobbysvr 已消费的 WAL 游标
+}
+
+message SSMatchingCancelReq {
+  string matching_id = 1;
+  uint64 unit_id = 2;
+  DUserIDKey operator_user = 3;
+}
+
+message SSMatchingCheckReq {
+  string matching_id = 1;
+  uint64 unit_id = 2;
+  DUserIDKey operator_user = 3;
+  uint64 subscriber_server_id = 4;
+  int64 acknowledge_event_id = 5;
+}
+
+message SSMatchingConfirmReq {
+  string matching_id = 1;
+  uint64 unit_id = 2;
+  DUserIDKey operator_user = 3;
+  bool confirmed = 4;
+  uint64 subscriber_server_id = 5;
+  int64 acknowledge_event_id = 6;
+}
+
+message SSMatchingSnapshot {
+  int32 result = 1;
+  DMatchingRoomSnapshot snapshot = 2;
+}
+
+service MatchsvrService {
+  option (atframework.service_options) = { module_name: "matching" };
+
+  rpc create_matching(SSMatchingCreateReq) returns (SSMatchingSnapshot) {
+    option (atframework.rpc_options) = { api_name: "创建或加入匹配" };
+  };
+  rpc cancel_matching(SSMatchingCancelReq) returns (SSMatchingSnapshot) {
+    option (atframework.rpc_options) = { api_name: "取消匹配" };
+  };
+  rpc check_matching(SSMatchingCheckReq) returns (SSMatchingSnapshot) {
+    option (atframework.rpc_options) = { api_name: "查询匹配" };
+  };
+  rpc confirm_matching(SSMatchingConfirmReq) returns (SSMatchingSnapshot) {
+    option (atframework.rpc_options) = { api_name: "确认或拒绝战斗" };
+  };
+}
+
+// 发送端和接收端共用同一份 SDK；lobbysvr 只生成接收处理器。
+service MatchsvrNotifyService {
+  option (atframework.service_options) = { module_name: "matching" };
+
+  rpc matching_event_sync(stream SSMatchingEventSync) returns (google.protobuf.Empty) {
+    option (atframework.rpc_options) = {
+      api_name: "匹配 WAL 事件通知"
+      descriptions: "notify lobbysvr to sync matching events"
+      allow_no_wait: true
+    };
+  };
+}

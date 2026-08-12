@@ -305,9 +305,28 @@ enum EnErrorCode {
   EN_ERR_CHAT_WRITE_TOO_FREQUENT = -802
                                    [(error_code.description) = "聊天频道写入过于频繁"];
 
+  // 匹配模块[901-1000]
+  EN_MATCHING_RESULT_INVALID_ARGUMENT = -901
+                                        [(error_code.description) = "匹配无效的参数"];
+  EN_MATCHING_RESULT_NOT_FOUND = -902
+                                 [(error_code.description) = "没有找到"];
+  EN_MATCHING_RESULT_CONFLICT = -903
+                                 [(error_code.description) = "冲突"];
+  EN_MATCHING_RESULT_POOL_NOT_FOUND = -904
+                                      [(error_code.description) = "匹配池未找到"];
+  EN_MATCHING_RESULT_RULE_NOT_FOUND = -905
+                                      [(error_code.description) = "匹配规则未找到"];
+  EN_MATCHING_RESULT_ROOM_FULL = -906
+                                 [(error_code.description) = "房间已满"];
+  EN_MATCHING_RESULT_BATTLE_START_FAILED = -907
+                                           [(error_code.description) = "战斗启动失败"];
+  EN_MATCHING_POOL_ID_CFG_NOT_FOUND = -908
+                                           [(error_code.description) = "匹配池配置未找到"];
+  // 关卡模块[1001-1100]
+  EN_LEVEL_CFG_NOT_FOUND = -1001
+                                        [(error_code.description) = "关卡配置未找到"];
   // orbit错误码
-  EN_ERR_ORBIT_ALREADY_IN_ROOM = -901
+  EN_ERR_ORBIT_ALREADY_IN_ROOM = -1101
                                 [(error_code.description) = "已经在房间中"];
-
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

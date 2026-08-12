@@ -1,0 +1,6 @@
+{{- template "libapp.configmap" (list . "matchsvr.configmap") -}}
+{{- define "matchsvr.configmap" -}}
+data:
+  {{ include "matchsvr.name" . }}.yaml: {{ tpl (.Files.Get "cfg/matchsvr.yaml.tpl") . | quote }}
+  vector.yaml: {{ tpl (.Files.Get "cfg/vector.yaml.tpl") . | quote }}
+{{- end -}}

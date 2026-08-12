@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/xrescode_extensions_v3.proto";
+import "protocol/extension/v3/xresloader.proto";
+
+import "protocol/common/com.struct.item.common.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/config";
+
+package atframework.shared.config;
+
+enum EnMatchingRuleType {
+  EN_MATCHING_RULE_NONE = 0;
+  EN_MATCHING_RULE_RANK_DIFF = 1;
+}
+
+message DMatchingRuleItem {
+  EnMatchingRuleType type = 1;
+  repeated int32 values = 2 [(org.xresloader.field_separator) = ","];
+}
+
+message DMatchingTeamTemplate {
+  int32 player_number = 1;
+  int32 count = 2;
+}
+
+message DMatchingForceLimit {
+  int32 force_type = 1;
+  int32 count = 2;
+}
+
+// 匹配池负责容量和规则组选择；配置由 server_frame 的 config_manager 统一持有。
+message ExcelMatchingPool {
+  option (xrescode.loader) = {
+    file_path: "matching_pool.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+    tags: "server"
+  };
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  int32 user_upper = 2;
+  int32 user_lower = 3;
+  int32 team_max_size = 4;
+  repeated int32 rule_group_ids = 5 [(org.xresloader.field_separator) = ","];
+  int32 search_timeout_seconds = 6;
+  int32 confirm_timeout_seconds = 7;
+}
+
+// 根据全服匹配人数选择一个规则组，再按房间等待时间选择组内规则。
+message ExcelMatchingRuleGroup {
+  option (xrescode.loader) = {
+    file_path: "matching_rule_group.bytes"
+    indexes: { fields: "group_id" index_type: EN_INDEX_KV }
+    tags: "server"
+  };
+
+  int32 group_id = 1 [(org.xresloader.field_unique_tag) = "group_id"];
+  int32 global_user_lower = 2;
+  int32 global_user_upper = 3;
+  repeated int32 pool_rules = 4 [(org.xresloader.field_separator) = ","];
+}
+
+message ExcelMatchingRule {
+  option (xrescode.loader) = {
+    file_path: "matching_rule.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+    tags: "server"
+  };
+
+  message TimeLimit {
+    int32 min = 1;
+    int32 max = 2;
+  }
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  TimeLimit time_limit = 2;
+  repeated DMatchingRuleItem rules = 3;
+  repeated int32 result_template_ids = 4 [(org.xresloader.field_separator) = ","];
+  int32 min_total_player = 5;
+  int32 start_battle_min_player = 6;
+  repeated DMatchingForceLimit force_type_limits = 7 [(org.xresloader.field_separator) = ","];
+  repeated string region_limits = 9 [(org.xresloader.field_separator) = ","];
+}
+
+message ExcelMatchingResultTemplate {
+  option (xrescode.loader) = {
+    file_path: "matching_result_template.bytes"
+    indexes: { fields: "id" index_type: EN_INDEX_KV }
+    tags: "server"
+  };
+
+  int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
+  repeated DMatchingTeamTemplate team_template = 2;
+}
