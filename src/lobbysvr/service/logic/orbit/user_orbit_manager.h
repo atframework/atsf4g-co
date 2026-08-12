@@ -44,7 +44,7 @@ class user_orbit_manager {
   bool is_orbit_room_exist() const;
   // Orbitsvr已经创建并塞入了User 开始真正进入Orbitsvr
   rpc::result_code_type join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                        uint64_t orbit_server_id, int64_t expired_timepoint);
+                                        int64_t expired_timepoint);
   // 收到结算消息
   void receive_orbit_settlement(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
   // 组装历史数据

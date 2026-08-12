@@ -238,7 +238,7 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
         auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::OrbitClientUserInitReq>(child_ctx);
         auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::OrbitClientUserInitRsp>(child_ctx);
 
-        int32_t user_count = 0;
+        size_t user_count = 0;
         for (const auto& user_pair : room_ptr->user_data_index_) {
           auto user_ptr = user_pair.second;
           if (!user_ptr->init_ && !user_ptr->finish_) {
@@ -302,6 +302,7 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
           *event_log.mutable_user_init_success()->mutable_init_result() = user_ptr->init_result_;
           room_ptr->add_event_log(child_ctx, std::move(event_log));
         }
+        RPC_RETURN_CODE(0);
       });
   if (invoke_result.is_error()) {
     FWLOGERROR("orbit_room {} invoke add orbit_finish async job failed result: {}", get_client_id(),

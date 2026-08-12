@@ -176,7 +176,7 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
 
 rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
                                                           const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                                          uint64_t orbit_server_id, int64_t expired_timepoint) {
+                                                          int64_t expired_timepoint) {
   if (is_orbit_room_exist()) {
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM);
