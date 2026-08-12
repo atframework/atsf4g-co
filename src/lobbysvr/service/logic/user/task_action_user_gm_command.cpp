@@ -53,14 +53,6 @@ GAMECLIENT_SERVICE_API task_action_user_gm_command::result_type task_action_user
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  std::string gm;
-  for (int i = 0; i < req_body.cmd_args_size(); ++i) {
-    if (i > 0) {
-      gm.append(" ");
-    }
-    gm.append(req_body.cmd_args(i));
-  }
-
   // 启动GM异步任务
   task_type_trait::task_type task_inst;
   task_action_user_gm_cmd_nomsg::ctor_param_t task_params;
@@ -79,12 +71,6 @@ GAMECLIENT_SERVICE_API task_action_user_gm_command::result_type task_action_user
     FWLOGERROR("create {} failed", "task_action_user_gm_cmd_nomsg");
     rsp_body_ptr->set_result_code(::PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   } else {
-    if (task_type_trait::empty(task_inst)) {
-      FWLOGERROR("create {} success but get it failed", "task_action_user_gm_cmd_nomsg");
-      rsp_body_ptr->set_result_code(::PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-      TASK_ACTION_RETURN_CODE(::PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-    }
-
     dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
     task_manager::me()->start_task(task_inst, start_data);
 
