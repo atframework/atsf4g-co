@@ -15,6 +15,16 @@
 
 #include "rpc/dtmq/dtmq_algorithm.h"
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <google/protobuf/repeated_field.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 namespace atframework {
 namespace dtmq {
 class DChannelIdKey;

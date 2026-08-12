@@ -83,7 +83,18 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_
 
 }  // namespace
 
-user_orbit_manager::user_orbit_manager(player& owner) : owner_(&owner) {}
+user_orbit_manager::user_orbit_manager(player& owner) : owner_(&owner) {
+  static bool init_handle = false;
+  if (!init_handle) {
+    init_handle = true;
+    player::init_get_info_handle(&PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::need_user_orbit_room,
+                                 [](rpc::context&, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp& rsp, player& user) {
+                                   auto& orbit_mgr = user.get_user_orbit_manager();
+                                   PROJECT_NAMESPACE_ID::DOrbitRoomUserData user_data;
+                                   orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
+                                 });
+  }
+}
 
 void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
   if (orbit_room_expired_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= orbit_room_expired_timepoint_) {
@@ -92,20 +103,46 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
   }
 }
 
-rpc::result_code_type user_orbit_manager::login_init(rpc::context& /*ctx*/) {
+rpc::result_code_type user_orbit_manager::login_init(rpc::context& ctx) {
   subscriber_key_ = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
+  // 如果存在数据则创建房间
+  if (is_orbit_room_exist()) {
+    int32_t ret = create_room(ctx, room_key_, orbit_room_expired_timepoint_);
+    if (ret != 0) {
+      FWLOGERROR("user_orbit_manager login_init create_room failed: {} for room: {}", ret, room_key_.client_id());
+    }
+  }
   RPC_RETURN_CODE(0);
+}
+
+void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const {
+  if (room_data_) {
+    *user_data.mutable_room_key() = room_key_;
+    user_data.set_client_address(room_data_->ready_data_.client_address());
+    user_data.set_init(room_data_->is_joined_);
+    user_data.set_token(room_data_->init_result_.token());
+    user_data.set_client_template_id(room_data_->init_data_.client_template_id());
+    user_data.set_region(room_data_->init_data_.region());
+    user_data.set_create_timepoint(room_data_->init_data_.create_timepoint());
+  }
+}
+
+void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& player_table) {
+  room_key_ = player_table.orbit_room_data().room_key();
+  orbit_room_expired_timepoint_ = player_table.orbit_room_data().expired_timepoint();
+}
+
+int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user) const {
+  *user.mutable_orbit_room_data()->mutable_room_key() = room_key_;
+  user.mutable_orbit_room_data()->set_expired_timepoint(orbit_room_expired_timepoint_);
+  return 0;
 }
 
 bool user_orbit_manager::is_orbit_room_exist() const { return !room_key_.client_id().empty(); }
 
-rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
-                                                          const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                                          uint64_t orbit_server_id, int64_t expired_timepoint) {
-  if (is_orbit_room_exist()) {
-    FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM);
-  }
+int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
+                                        int64_t expired_timepoint) {
+  mark_dirty();
   room_key_ = room_key;
   orbit_room_expired_timepoint_ = expired_timepoint;
 
@@ -119,17 +156,13 @@ rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
   if (!subscriber_) {
     FWLOGERROR("Failed to create world chat channel {}:{}, maybe configure is missing.", channel_key.channel_type(),
                channel_key.channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    clear_orbit_room_data();
+    return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND;
   }
   subscriber_->set_local_private_data(local_private_data);
 
   // 初始化房间数据
   room_data_ = atfw::component::memory::stl::make_strong_rc<orbit_room_data>();
-  if (!room_data_) {
-    FWLOGERROR("user_orbit_manager join_orbit_room failed to allocate room_data");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-  }
-
   // 恢复房间快照
   if (subscriber_->is_ready()) {
     load_orbit_room_snapshot(ctx, subscriber_);
@@ -139,6 +172,21 @@ rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
   if (!subscriber_->get_shared_event_callback_set()) {
     subscriber_->set_shared_event_callback_set(get_shared_orbit_channel_event_callback_set());
   }
+  return 0;
+}
+
+rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
+                                                          const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
+                                                          uint64_t orbit_server_id, int64_t expired_timepoint) {
+  if (is_orbit_room_exist()) {
+    FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM);
+  }
+  int32_t ret = create_room(ctx, room_key_, expired_timepoint);
+  if (ret != 0) {
+    FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key_.client_id());
+    RPC_RETURN_CODE(ret);
+  }
 
   auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq>(ctx);
   auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomRsp>(ctx);
@@ -146,8 +194,9 @@ rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
   auto* user_init_data = req->mutable_user_init_data();
   user_init_data->mutable_user_key()->mutable_user_key()->set_user_id(owner_->get_user_id());
   user_init_data->mutable_user_key()->mutable_user_key()->set_zone_id(owner_->get_zone_id());
-  // 加载用户数据
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::join_room(ctx, orbit_server_id, *req, *rsp));
+  // 带入数据 用户TODO
+  // 进入房间 TODO 失败重试
+  ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::join_room(ctx, orbit_server_id, *req, *rsp));
   if (ret == 0) {
     ret = rsp->result_code();
   }
@@ -187,8 +236,7 @@ void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::
 void user_orbit_manager::receive_orbit_settlement(
     ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
     ATFW_EXPLICIT_UNUSED_ATTR const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data) {
-  // 结算
-  // 清理
+  // 结算 用户TODO
   clear_orbit_room_data();
 }
 
@@ -221,15 +269,18 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kRoomInit:
       room_data_->init_data_ = event_log.room_init();
       orbit_room_expired_timepoint_ = event_log.room_init().expired_timepoint();
+      mark_dirty();
       break;
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kReadyData:
       room_data_->ready_data_ = event_log.ready_data();
+      mark_dirty();
       break;
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kUserInitSuccess:
       if (event_log.user_init_success().init_result().user_key().user_key().user_id() == owner_->get_user_id() &&
           event_log.user_init_success().init_result().user_key().user_key().zone_id() == owner_->get_zone_id()) {
         room_data_->init_result_ = event_log.user_init_success().init_result();
         room_data_->is_joined_ = true;
+        mark_dirty();
       }
       break;
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kClientExit:
@@ -245,4 +296,25 @@ void user_orbit_manager::clear_orbit_room_data() {
   subscriber_ = nullptr;
   room_data_ = nullptr;
   orbit_room_expired_timepoint_ = 0;
+  mark_dirty();
+}
+
+void user_orbit_manager::mark_dirty() {
+  dirty_ = true;
+  owner_->insert_dirty_handle_if_not_exists(
+      reinterpret_cast<uintptr_t>(this), "player.user_orbit_manager.mark_dirty", [](gsl::string_view, player&) {
+        player::dirty_sync_handle_t handle;
+        handle.build_fn = [](player& user, player::dirty_message_container& output) {
+          if (!user.get_user_orbit_manager().dirty_) {
+            return;
+          }
+          if (!output.player_dirty) {
+            output.player_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync>();
+          }
+          auto& orbit_mgr = user.get_user_orbit_manager();
+          orbit_mgr.fetch_user_data(*output.player_dirty->mutable_dirty_orbit_rooms()->mutable_data());
+        };
+        handle.clear_fn = [](player& user) { user.get_user_orbit_manager().dirty_ = false; };
+        return handle;
+      });
 }

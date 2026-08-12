@@ -6,8 +6,8 @@
 #include <design_pattern/noncopyable.h>
 #include <gsl/select-gsl.h>
 
-#include <memory/rc_ptr.h>
 #include <memory/object_stl_unordered_map.h>
+#include <memory/rc_ptr.h>
 
 #include <config/server_frame_build_feature.h>
 
@@ -227,6 +227,12 @@ class player : public player_cache {
    */
   void insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name, build_dirty_message_fn_t build_fn,
                                          clear_dirty_cache_fn_t clear_fn);
+
+  static void init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*check_need_fn)() const,
+                                   void (*dump_fn)(rpc::context&, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &, player &));
+  static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*)() const,
+                               void (*)(rpc::context&, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &, player &)>>
+  get_get_info_handle();
 
  private:
   mutable std::bitset<internal_flag::EN_IFT_MAX> internal_flags_;

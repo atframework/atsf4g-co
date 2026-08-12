@@ -20,16 +20,16 @@
 
 #include <logic/async_jobs/user_async_jobs_manager.h>
 #include <logic/cache/user_cache_manager.h>
-#include <logic/rank/user_rank_manager.h>
 #include <logic/chat/user_chat_manager.h>
 #include <logic/orbit/user_orbit_manager.h>
+#include <logic/rank/user_rank_manager.h>
 
 #include <logic/player_manager.h>
 
 #include <data/session.h>
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
-#include <rpc/rpc_utils.h>
 #include <rpc/rpc_common_types.h>
+#include <rpc/rpc_utils.h>
 
 #include <string>
 
@@ -563,4 +563,24 @@ void player::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view h
   handle.build_fn = build_fn;
   handle.clear_fn = clear_fn;
   handle.name = handle_name;
+}
+
+static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*)() const,
+                             void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &, player &)>>
+    g_get_info_handle_list;
+
+void player::init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*check_need_fn)() const,
+                                  void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &,
+                                                  player &)) {
+  if (check_need_fn == nullptr || dump_fn == nullptr) {
+    FWLOGERROR("init_get_info_handle failed, check_need_fn or dump_fn is nullptr");
+    return;
+  }
+  g_get_info_handle_list.emplace_back(check_need_fn, dump_fn);
+}
+
+std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*)() const,
+                      void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &, player &)>>
+player::get_get_info_handle() {
+  return g_get_info_handle_list;
 }

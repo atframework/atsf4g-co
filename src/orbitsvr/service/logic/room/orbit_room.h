@@ -13,6 +13,7 @@
 #include <dispatcher/task_type_traits.h>
 #include <memory/rc_ptr.h>
 #include <rpc/rpc_common_types.h>
+#include <rpc/dtmq/dtmq_client_subscriber.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -107,6 +108,8 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, player_key_hash_t,
                      player_key_equal_t>
       user_data_index_;
+  std::string subscriber_key_;
+  rpc::dtmq::client_subscriber::ptr_t subscriber_;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> finish_user_list_;
   atfw::dtmq::DChannelIdKey channel_key_;
 };

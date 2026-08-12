@@ -10,6 +10,7 @@ option cc_generic_services = true;
 
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/common/com.struct.item.common.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -56,6 +57,7 @@ message SCPlayerProfileSyn {
 // 脏数据同步包
 message SCPlayerDirtyChgSync {
   repeated DItemInstance dirty_items = 1;
+  DOrbitRoomDirty dirty_orbit_rooms = 2;
 }
 
 // 心跳包，上行包
@@ -68,10 +70,12 @@ message SCPongRsp {}
 message CSPlayerGetInfoReq {
   bool need_user_information = 1;  // 标记为true 回包才有会有玩家基本数据
   bool need_user_options = 2;      // 标记为true 回包才有会有玩家选项数据
+  bool need_user_orbit_room = 3;   // 标记为true 回包才有会有玩家orbit房间数据
 }
 
 // 用户数据返回
 message SCPlayerGetInfoRsp {
   DUserInformation user_information = 1;  // 玩家数据
   DUserOptions user_options = 2;          // 玩家自定义选项
+  DOrbitRoomUserData user_orbit_room = 3;  // 玩家orbit房间数据
 }

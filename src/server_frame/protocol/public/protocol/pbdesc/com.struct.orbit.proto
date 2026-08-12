@@ -130,3 +130,17 @@ message DOrbitRoomEventLog {
     DOrbitClientExit client_exit = 103;      // Client退出
   }
 }
+
+message DOrbitRoomUserData {
+  DOrbitRoomKey room_key = 1;  // 房间key
+  string client_address = 2;   // Client地址
+  bool init = 3;               // 是否已经初始化成功
+  string token = 4;            // Client token
+  uint32 client_template_id = 5;
+  string region = 6;
+  int64 create_timepoint = 7;
+}
+
+message DOrbitRoomDirty {
+  DOrbitRoomUserData data = 1;
+}

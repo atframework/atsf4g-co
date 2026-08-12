@@ -49,6 +49,7 @@ orbit_room::orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
     : room_key_(room_key), room_data_(room_data) {
   channel_key_.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
   channel_key_.set_channel_id(room_key.client_id());
+  subscriber_key_ = atfw::util::string::format("orbit_room:{}", room_key.client_id());
 }
 
 void orbit_room::tick() {
@@ -127,6 +128,14 @@ int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t matc
   // Loading 超时
   loading_timeout_ = create_timepoint_ + get_orbitsvr_cfg().room_client_loading_timeout_sec();
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED);
+
+  rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
+  subscriber_ = rpc::dtmq::client_subscriber::create(channel_key_, subscribe_options);
+  if (!subscriber_) {
+    FWLOGERROR("Failed to create world chat channel {}:{}, maybe configure is missing.", channel_key_.channel_type(),
+               channel_key_.channel_id());
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
+  }
 
   PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
   event_log.set_orbit_room_status(room_status_);

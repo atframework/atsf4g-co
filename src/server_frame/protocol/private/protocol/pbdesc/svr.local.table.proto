@@ -127,6 +127,7 @@ message table_user {
   // 业务逻辑数据
   user_option_private_data option_data_private = 200;  // 玩家选项
   DRankUserData rank_data = 201;                       // 玩家排行榜数据
+  user_orbit_room_data orbit_room_data = 202;            // 玩家轨道房间数据
 }
 
 message table_distribute_transaction {
