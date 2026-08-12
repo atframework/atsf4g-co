@@ -268,9 +268,9 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
 % if rpc_allow_no_wait:
   if (__no_wait) {
     req_msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
-    res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-                                    __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
-                                    "${service.get_full_name()}");
+    res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}",
+                                    "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+                                    __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
   } else {
     res = __setup_rpc_request_header(*req_msg.mutable_head(), __ctx.get_task_context().task_id,
                                      "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
@@ -279,9 +279,9 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   }
 % elif rpc_is_stream_mode:
   req_msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
-  res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-                                  __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
-                                  "${service.get_full_name()}");
+  res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "${service.get_full_name()}",
+                                  "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+                                  __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
 % else:
   res = __setup_rpc_request_header(*req_msg.mutable_head(), __ctx.get_task_context().task_id,
                                    "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
