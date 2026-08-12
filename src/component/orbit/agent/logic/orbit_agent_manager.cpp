@@ -1320,7 +1320,14 @@ void orbit_agent_manager::stop_client_process(orbit_agent_client_record_ptr clie
   client_record->exit_reason = exit_reason;
   client_record->exit_code = exit_code;
   set_client_state(client_record, atfw::orbit::EN_CLIENT_STATE_EXITING);
+  // 通知退出
+  async_notify_client_exit(client_record);
   // 发送stop_client
+  if (client_record->client_server_id == 0) {
+    // 还没启动成功
+    FWLOGWARNING("orbit agent stop_client_process failed for {}: client_server_id is 0", client_record->client_id);
+    return;
+  }
   auto invoke_result = rpc::async_invoke(
       logic_server_get_current_tick_context(), "async stop_client_process",
       [client_server_id = client_record->client_server_id,
