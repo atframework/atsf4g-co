@@ -24,20 +24,11 @@ message SSOrbitCreateRoomRsp {
 
 message SSOrbitUserInitReq {
   DOrbitRoomKey room_key = 1;
-  repeated DOrbitUserKey user_list = 2;
+  repeated DOrbitUserInitData user_list = 2;
   bool is_last_one = 3;
 }
 
 message SSOrbitUserInitRsp {
-  int32 result_code = 1;
-}
-
-message SSOrbitUserJoinRoomReq {
-  DOrbitRoomKey room_key = 1;
-  DOrbitUserInitData user_init_data = 2;
-}
-
-message SSOrbitUserJoinRoomRsp {
   int32 result_code = 1;
 }
 
@@ -55,12 +46,6 @@ service OrbitsvrService {
   rpc init_user(SSOrbitUserInitReq) returns (SSOrbitUserInitRsp) {
     option (atframework.rpc_options) = {
       api_name: "初始化用户"
-    };
-  };
-
-  rpc join_room(SSOrbitUserJoinRoomReq) returns (SSOrbitUserJoinRoomRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "加入房间"
     };
   };
 }

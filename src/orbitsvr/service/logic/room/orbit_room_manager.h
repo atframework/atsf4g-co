@@ -46,7 +46,6 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
   rpc::result_code_type create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitCreateRoomReq& req,
                                     uint64_t match_server_id);
   int32_t init_user(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitUserInitReq& req);
-  rpc::result_code_type join_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq& req);
 
   rpc::result_code_type on_client_start(rpc::context& ctx, const std::string& client_id, const std::string& client_addr,
                                         const std::string& payload);

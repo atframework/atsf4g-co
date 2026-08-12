@@ -43,6 +43,7 @@ message DOrbitUserFinishAsyncData {
   int64 start_timepoint = 2;
   int64 finish_timepoint = 3;
   DOrbitRoomExitInfo exit_info = 4;
+  bool init_success = 5;
   repeated DOrbitUserInitData user_init_datas = 11;          // 参与用户
   repeated DOrbitUserFinishResult user_finish_results = 12;  // 参与用户完成结果
 }

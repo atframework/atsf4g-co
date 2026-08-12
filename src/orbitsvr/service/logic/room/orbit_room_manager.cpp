@@ -128,27 +128,6 @@ int32_t orbit_room_manager::init_user(EXPLICIT_UNUSED_ATTR rpc::context& ctx,
   return room->init_user(req.user_list(), req.is_last_one());
 }
 
-rpc::result_code_type orbit_room_manager::join_room(rpc::context& ctx,
-                                                    const PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq& req) {
-  if (req.room_key().client_id().empty()) {
-    FWLOGERROR("orbit_room_manager join_room failed, client_id empty");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-  }
-
-  if (!req.has_user_init_data()) {
-    FWLOGERROR("orbit_room_manager join_room failed, user_init_data empty");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-  }
-
-  auto room = get_room(req.room_key().client_id());
-  if (!room) {
-    FWLOGERROR("orbit_room_manager join_room failed, room {} not found", req.room_key().client_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
-  }
-
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->join_users(ctx, req.user_init_data())));
-}
-
 rpc::result_code_type orbit_room_manager::on_client_start(rpc::context& ctx, const std::string& client_id,
                                                           const std::string& client_addr, const std::string& payload) {
   FWLOGINFO("orbit_room_manager on_client_start, client_id: {}, addr: {}, payload size: {}", client_id, client_addr,

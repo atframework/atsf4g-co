@@ -187,25 +187,6 @@ rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
     RPC_RETURN_CODE(ret);
   }
 
-  auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomReq>(ctx);
-  auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSOrbitUserJoinRoomRsp>(ctx);
-  *req->mutable_room_key() = room_key_;
-  auto* user_init_data = req->mutable_user_init_data();
-  user_init_data->mutable_user_key()->mutable_user_key()->set_user_id(owner_->get_user_id());
-  user_init_data->mutable_user_key()->mutable_user_key()->set_zone_id(owner_->get_zone_id());
-  // 带入数据 用户TODO
-  // 进入房间 TODO 失败重试
-  ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::join_room(ctx, orbit_server_id, *req, *rsp));
-  if (ret == 0) {
-    ret = rsp->result_code();
-  }
-  if (ret != 0) {
-    clear_orbit_room_data();
-    FWLOGERROR("user_orbit_manager join_orbit_room failed, orbitsvr result: {} for room: {}", ret,
-               room_key_.client_id());
-    RPC_RETURN_CODE(ret);
-  }
-
   FWLOGINFO("user_orbit_manager joined orbit room: {}", room_key_.client_id());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

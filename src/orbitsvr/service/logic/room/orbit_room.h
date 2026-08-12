@@ -12,8 +12,8 @@
 #include <config/extern_service_types.h>
 #include <dispatcher/task_type_traits.h>
 #include <memory/rc_ptr.h>
-#include <rpc/rpc_common_types.h>
 #include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_common_types.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -33,25 +33,18 @@ namespace rpc {
 class context;
 }  // namespace rpc
 
-enum EnOrbitRoomUserStatus {
-  EN_ORBIT_ROOM_USER_STATUS_INVALID = 0,
-  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_MATCH = 1,  // 注册用户ID到服务
-  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_LOBBY = 2,  // 注册用户数据到服务
-  EN_ORBIT_ROOM_USER_STATUS_INIT_TO_CLIENT = 3,   // 注册用户数据到客户端
-};
-
 struct orbit_room_user_data {
-  EnOrbitRoomUserStatus user_status_ = EN_ORBIT_ROOM_USER_STATUS_INVALID;
   PROJECT_NAMESPACE_ID::DOrbitUserInitData init_data_;
   PROJECT_NAMESPACE_ID::DOrbitUserInitResult init_result_;
   PROJECT_NAMESPACE_ID::DOrbitUserFinishResult finish_result_;
   PROJECT_NAMESPACE_ID::DUserIDKey user_key_;
   bool init_ = false;
+  int32_t init_retry_count_ = 0;
   bool finish_ = false;
   bool settlement_finish_ = false;
   int64_t finish_timepoint_ = 0;
   int32_t settlement_retry_count_ = 0;
-  task_type_trait::task_type settlement_task;
+  task_type_trait::task_type settlement_task_;
 };
 
 using orbit_room_user_data_ptr_t = atfw::util::memory::strong_rc_ptr<orbit_room_user_data>;
@@ -70,9 +63,8 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   rpc::result_code_type start_client(rpc::context& ctx, const atfw::orbit::DAgentClientStartArgs& args);
   int32_t on_client_start(rpc::context& ctx, const std::string& client_addr);
 
-  int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserKey>& user_keys,
+  int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserInitData>& user_list,
                     bool is_last_one);
-  rpc::result_code_type join_users(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserInitData& user_init_data);
 
   int32_t on_user_finish(
       rpc::context& ctx,
@@ -85,6 +77,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
  private:
   int32_t add_event_log(rpc::context& ctx, PROJECT_NAMESPACE_ID::DOrbitRoomEventLog&& event_log);
   int32_t set_status(PROJECT_NAMESPACE_ID::EnOrbitRoomStatus v);
+  int32_t init_user_to_client(rpc::context& ctx);
 
   int32_t room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason);
   void async_user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr);
@@ -104,10 +97,10 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   bool client_end_ = false;
   bool init_user_finish_ = false;
   bool need_retry_settlement_ = false;
-  size_t join_user_finish_count_ = 0;
-  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t,
-                     user_key_equal_t>
+  size_t init_to_client_finish_count_ = 0;
+  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t, user_key_equal_t>
       user_data_index_;
+  task_type_trait::task_type init_to_client_task_;
   std::string subscriber_key_;
   rpc::dtmq::client_subscriber::ptr_t subscriber_;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> finish_user_list_;
