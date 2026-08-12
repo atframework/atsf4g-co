@@ -215,7 +215,7 @@ rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc
 rpc::result_code_type task_action_rank_send_settlement::settle_custom_rewards(
     rpc::context& ctx, logic_rank_handle_variant& /*rank_handle*/, const std::string& user_openid, int64_t& sub_score,
     int64_t& set_score, int32_t& score_change_type) {
-  // 调用RPC给玩家发送排行版奖励结算通知
+  // 调用RPC给用户发送排行版奖励结算通知
   if (param_.custom_settlement_pool_id == 0) {
     RPC_RETURN_CODE(0);
   }

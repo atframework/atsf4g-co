@@ -19,7 +19,7 @@
 
 #include <distributed_system/wal_publisher.h>
 
-#include <data/player_key_hash_helper.h>
+#include <data/user_key_hash_helper.h>
 
 #include <cstdint>
 #include <functional>

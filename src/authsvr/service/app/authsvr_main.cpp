@@ -53,7 +53,7 @@ class main_service_module : public atfw::atapp::module_impl {
   int init() override {
     {
       // register all router managers
-      // router_player_manager::me();
+      // router_user_manager::me();
     }
 
     // register handles

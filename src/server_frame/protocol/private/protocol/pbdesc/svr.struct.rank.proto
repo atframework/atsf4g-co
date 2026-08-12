@@ -55,7 +55,7 @@ message rank_data {
 message user_rank_unsubmit_data {
   DRankKey rank_key = 1;
 
-  DUserIDKey user_key = 2;  // 玩家ID
+  DUserIDKey user_key = 2;  // 用户ID
 
   DRankInstanceKey rank_instance_key = 4;  // 排行榜实例Key
 

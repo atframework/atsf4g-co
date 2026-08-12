@@ -38,7 +38,7 @@ namespace rpc {
 class context;
 };
 
-class player_cache;
+class user_cache;
 
 class session {
  public:
@@ -126,16 +126,16 @@ class session {
   SERVER_FRAME_API bool is_valid() const noexcept;
 
   /**
-   * @brief 监视关联的player
-   * @param 关联的player
+   * @brief 监视关联的user
+   * @param 关联的user
    */
-  SERVER_FRAME_API void set_player(const std::shared_ptr<player_cache> &u) noexcept;
+  SERVER_FRAME_API void set_user(const std::shared_ptr<user_cache> &u) noexcept;
 
   /**
    * @brief 获取关联的session
    * @return 关联的session
    */
-  SERVER_FRAME_API std::shared_ptr<player_cache> get_player() const noexcept;
+  SERVER_FRAME_API std::shared_ptr<user_cache> get_user() const noexcept;
 
   SERVER_FRAME_API void login_init(const atframework::CSMsg &login_task_msg);
   SERVER_FRAME_API bool login_protect(time_t timestamp) const;
@@ -176,7 +176,7 @@ class session {
  private:
   key_t id_;
   uint32_t flags_;
-  std::weak_ptr<player_cache> player_;
+  std::weak_ptr<user_cache> user_;
   task_type_trait::id_type login_task_id_;
   uint64_t session_sequence_;
   uint32_t cached_zone_id_;

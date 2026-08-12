@@ -2,7 +2,7 @@
 // Created by owent on 2018-05-07.
 //
 
-#include "router/router_player_manager.h"
+#include "router/router_user_manager.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -24,72 +24,72 @@
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(router_player_manager);
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DATA_DEFINITION(router_user_manager);
 #  else
-ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_player_manager);
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DATA_DEFINITION(router_user_manager);
 #  endif
 #else
-ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_player_manager);
+ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_user_manager);
 #endif
 
-SERVER_FRAME_API router_player_manager::router_player_manager() : base_type(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER) {}
+SERVER_FRAME_API router_user_manager::router_user_manager() : base_type(PROJECT_NAMESPACE_ID::EN_ROT_USER) {}
 
-SERVER_FRAME_API router_player_manager::~router_player_manager() {}
+SERVER_FRAME_API router_user_manager::~router_user_manager() {}
 
-SERVER_FRAME_API const char *router_player_manager::name() const { return "[player_cache router manager]"; }
+SERVER_FRAME_API const char *router_user_manager::name() const { return "[user_cache router manager]"; }
 
-SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_object(rpc::context &ctx, uint64_t user_id,
+SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_object(rpc::context &ctx, uint64_t user_id,
                                                                                    uint32_t zone_id,
                                                                                    priv_data_t priv_data) {
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_player_object(ctx, user_id, zone_id, nullptr, priv_data)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_user_object(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_object(
+SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_object(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
     priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_object(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_cache(rpc::context &ctx, uint64_t user_id,
+SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_cache(rpc::context &ctx, uint64_t user_id,
                                                                                   uint32_t zone_id,
                                                                                   priv_data_t priv_data) {
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_player_cache(ctx, user_id, zone_id, nullptr, priv_data)));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_user_cache(ctx, user_id, zone_id, nullptr, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_manager::remove_player_cache(
+SERVER_FRAME_API rpc::result_code_type router_user_manager::remove_user_cache(
     rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
     priv_data_t priv_data) {
   key_t key(get_type_id(), zone_id, user_id);
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_cache(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_API void router_player_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
+SERVER_FRAME_API void router_user_manager::set_create_object_fn(create_object_fn_t fn) { create_fn_ = fn; }
 
-SERVER_FRAME_API router_player_cache::object_ptr_t router_player_manager::create_player_object(
+SERVER_FRAME_API router_user_cache::object_ptr_t router_user_manager::create_user_object(
     uint64_t user_id, uint32_t zone_id, const std::string &openid) {
-  router_player_cache::object_ptr_t ret;
+  router_user_cache::object_ptr_t ret;
   if (create_fn_) {
     ret = create_fn_(user_id, zone_id, openid);
   }
 
   if (!ret) {
-    ret = player_cache::create(user_id, zone_id, openid);
+    ret = user_cache::create(user_id, zone_id, openid);
   }
 
   return ret;
 }
 
-rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &ctx, const key_t &key,
+rpc::result_code_type router_user_manager::on_evt_remove_object(rpc::context &ctx, const key_t &key,
                                                                   const ptr_t &cache, priv_data_t priv_data) {
-  player_cache::ptr_t obj = cache->get_object();
+  user_cache::ptr_t obj = cache->get_object();
   // 释放本地数据, 下线相关Session
   session::ptr_t s = obj->get_session();
   if (s) {
     obj->set_session(ctx, nullptr);
-    std::shared_ptr<player_cache> check_binded_user = s->get_player();
+    std::shared_ptr<user_cache> check_binded_user = s->get_user();
     if (!check_binded_user || check_binded_user == obj) {
-      s->set_player(nullptr);
+      s->set_user(nullptr);
       session_manager::me()->remove(ctx, s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
   }
@@ -97,16 +97,16 @@ rpc::result_code_type router_player_manager::on_evt_remove_object(rpc::context &
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_remove_object(ctx, key, cache, priv_data)));
 }
 
-rpc::result_code_type router_player_manager::on_evt_object_removed(rpc::context &ctx, const key_t &key,
+rpc::result_code_type router_user_manager::on_evt_object_removed(rpc::context &ctx, const key_t &key,
                                                                    const ptr_t &cache, priv_data_t priv_data) {
-  player_cache::ptr_t obj = cache->get_object();
+  user_cache::ptr_t obj = cache->get_object();
   // 释放本地数据, 下线相关Session
   session::ptr_t s = obj->get_session();
   if (s) {
     obj->set_session(ctx, nullptr);
-    std::shared_ptr<player_cache> check_binded_user = s->get_player();
+    std::shared_ptr<user_cache> check_binded_user = s->get_user();
     if (!check_binded_user || check_binded_user == obj) {
-      s->set_player(nullptr);
+      s->set_user(nullptr);
       session_manager::me()->remove(ctx, s, static_cast<int32_t>(::atframework::gateway::close_reason_t::kKickoff));
     }
   }
@@ -114,7 +114,7 @@ rpc::result_code_type router_player_manager::on_evt_object_removed(rpc::context 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(base_type::on_evt_object_removed(ctx, key, cache, priv_data)));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_manager::pull_online_server(rpc::context &, const key_t &,
+SERVER_FRAME_API rpc::result_code_type router_user_manager::pull_online_server(rpc::context &, const key_t &,
                                                                                  uint64_t &router_svr_id,
                                                                                  uint64_t &router_svr_ver) {
   router_svr_id = 0;
@@ -126,7 +126,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_manager::pull_online_server
   PROJECT_NAMESPACE_ID::table_user  tbu;
 
   // ** 如果login表和user表的jey保持一致的话也可以直接从login表取
-  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::player::get_basic(key.object_id, key.zone_id, tbu));
+  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::user::get_basic(key.object_id, key.zone_id, tbu));
   if (ret < 0) {
       return ret;
   }

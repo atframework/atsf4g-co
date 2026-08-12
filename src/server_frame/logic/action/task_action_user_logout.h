@@ -6,7 +6,7 @@
 
 #include <dispatcher/task_action_no_req_base.h>
 
-class task_action_player_logout : public task_action_no_req_base {
+class task_action_user_logout : public task_action_no_req_base {
  public:
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
     uint64_t atgateway_node_id;
@@ -17,8 +17,8 @@ class task_action_player_logout : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  explicit task_action_player_logout(ctor_param_t&& param);
-  ~task_action_player_logout();
+  explicit task_action_user_logout(ctor_param_t&& param);
+  ~task_action_user_logout();
 
   result_type operator()() override;
 

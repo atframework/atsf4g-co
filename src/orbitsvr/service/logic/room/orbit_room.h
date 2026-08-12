@@ -27,7 +27,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <data/player_key_hash_helper.h>
+#include <data/user_key_hash_helper.h>
 
 namespace rpc {
 class context;
@@ -35,9 +35,9 @@ class context;
 
 enum EnOrbitRoomUserStatus {
   EN_ORBIT_ROOM_USER_STATUS_INVALID = 0,
-  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_MATCH = 1,  // 注册玩家ID到服务
-  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_LOBBY = 2,  // 注册玩家数据到服务
-  EN_ORBIT_ROOM_USER_STATUS_INIT_TO_CLIENT = 3,   // 注册玩家数据到客户端
+  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_MATCH = 1,  // 注册用户ID到服务
+  EN_ORBIT_ROOM_USER_STATUS_INIT_FROM_LOBBY = 2,  // 注册用户数据到服务
+  EN_ORBIT_ROOM_USER_STATUS_INIT_TO_CLIENT = 3,   // 注册用户数据到客户端
 };
 
 struct orbit_room_user_data {
@@ -104,9 +104,9 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   bool client_end_ = false;
   bool init_user_finish_ = false;
   bool need_retry_settlement_ = false;
-  int32_t join_user_finish_count_ = 0;
-  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, player_key_hash_t,
-                     player_key_equal_t>
+  size_t join_user_finish_count_ = 0;
+  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, orbit_room_user_data_ptr_t, user_key_hash_t,
+                     user_key_equal_t>
       user_data_index_;
   std::string subscriber_key_;
   rpc::dtmq::client_subscriber::ptr_t subscriber_;

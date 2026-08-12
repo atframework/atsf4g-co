@@ -297,7 +297,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE formatter<rpc::context, CharT> : formatter<basic
 };
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END
 
-// 玩家日志输出工具
+// 用户日志输出工具
 #ifdef _MSC_VER
 // MSVC 启用 /Zc:preprocessor 时（_MSVC_TRADITIONAL == 0），可以使用 C++20 的 __VA_OPT__
 // 同时支持「仅 fmt」和「fmt + args」两种调用方式；未启用时保留传统写法，要求至少传入一个变参。

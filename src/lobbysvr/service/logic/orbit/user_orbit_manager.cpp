@@ -35,7 +35,7 @@
 #include <utility>
 #include <vector>
 
-#include "data/player.h"
+#include "data/user.h"
 #include "data/session.h"
 
 namespace {
@@ -83,14 +83,13 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_
 
 }  // namespace
 
-user_orbit_manager::user_orbit_manager(player& owner) : owner_(&owner) {
+user_orbit_manager::user_orbit_manager(user& owner) : owner_(&owner) {
   static bool init_handle = false;
   if (!init_handle) {
     init_handle = true;
-    player::init_get_info_handle(&PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::need_user_orbit_room,
-                                 [](rpc::context&, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp& rsp, player& user) {
-                                   auto& orbit_mgr = user.get_user_orbit_manager();
-                                   PROJECT_NAMESPACE_ID::DOrbitRoomUserData user_data;
+    user::init_get_info_handle(&PROJECT_NAMESPACE_ID::CSUserGetInfoReq::need_user_orbit_room,
+                                 [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
+                                   auto& orbit_mgr = user_inst.get_user_orbit_manager();
                                    orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
                                  });
   }
@@ -127,9 +126,9 @@ void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserDat
   }
 }
 
-void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& player_table) {
-  room_key_ = player_table.orbit_room_data().room_key();
-  orbit_room_expired_timepoint_ = player_table.orbit_room_data().expired_timepoint();
+void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
+  room_key_ = user_table.orbit_room_data().room_key();
+  orbit_room_expired_timepoint_ = user_table.orbit_room_data().expired_timepoint();
 }
 
 int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user) const {
@@ -182,9 +181,9 @@ rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM);
   }
-  int32_t ret = create_room(ctx, room_key_, expired_timepoint);
+  int32_t ret = create_room(ctx, room_key, expired_timepoint);
   if (ret != 0) {
-    FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key_.client_id());
+    FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key.client_id());
     RPC_RETURN_CODE(ret);
   }
 
@@ -302,19 +301,19 @@ void user_orbit_manager::clear_orbit_room_data() {
 void user_orbit_manager::mark_dirty() {
   dirty_ = true;
   owner_->insert_dirty_handle_if_not_exists(
-      reinterpret_cast<uintptr_t>(this), "player.user_orbit_manager.mark_dirty", [](gsl::string_view, player&) {
-        player::dirty_sync_handle_t handle;
-        handle.build_fn = [](player& user, player::dirty_message_container& output) {
-          if (!user.get_user_orbit_manager().dirty_) {
+      reinterpret_cast<uintptr_t>(this), "user.user_orbit_manager.mark_dirty", [](gsl::string_view, user&) {
+        user::dirty_sync_handle_t handle;
+        handle.build_fn = [](user& user_inst, user::dirty_message_container& output) {
+          if (!user_inst.get_user_orbit_manager().dirty_) {
             return;
           }
-          if (!output.player_dirty) {
-            output.player_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync>();
+          if (!output.user_dirty) {
+            output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
           }
-          auto& orbit_mgr = user.get_user_orbit_manager();
-          orbit_mgr.fetch_user_data(*output.player_dirty->mutable_dirty_orbit_rooms()->mutable_data());
+          auto& orbit_mgr = user_inst.get_user_orbit_manager();
+          orbit_mgr.fetch_user_data(*output.user_dirty->mutable_dirty_orbit_rooms()->mutable_data());
         };
-        handle.clear_fn = [](player& user) { user.get_user_orbit_manager().dirty_ = false; };
+        handle.clear_fn = [](user& user_inst) { user_inst.get_user_orbit_manager().dirty_ = false; };
         return handle;
       });
 }

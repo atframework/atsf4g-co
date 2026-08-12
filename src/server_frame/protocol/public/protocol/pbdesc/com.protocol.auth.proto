@@ -1,0 +1,53 @@
+syntax = "proto3";
+// 前后台通信协议定义
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "protocol/pbdesc/com.const.proto";
+import "protocol/pbdesc/com.struct.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+package atframework.shared;
+
+message CSLoginUpdateReq {
+  DAccountData account = 1;      // 平台信息
+  EnSystemID system_id = 2;      // 系统id，ios or android
+  string package_version = 11;   // 包版本
+  string resource_version = 12;  // 资源版本
+  string protocol_version = 13;  // 协议版本
+}
+
+message SCLoginUpdateRsp {
+  DClientUpdateCfg update_info = 1;  // 更新信息
+  int32 version_type = 2;            // 版本类型 @EnVersionType
+}
+
+message CSLoginAuthReq {
+  string open_id = 1;
+  DAccountData account = 2;      // 平台信息
+  EnSystemID system_id = 3;      // 系统id，ios or android
+  string package_version = 11;   // 包版本
+  string resource_version = 12;  // 资源版本
+  string protocol_version = 13;  // 协议版本
+
+  DClientDeviceInfo client_info = 21;
+}
+
+message SCLoginAuthRsp {
+  string access_token_code = 11;  // 认证码
+
+  DClientUpdateCfg update_info = 3;  // 更新信息
+  uint32 version_type = 4;           // 版本类型 @EnVersionType
+
+  string open_id = 21;  // 最终open_id
+  uint64 user_id = 22;  // 用户数字ID
+
+  int64 ban_time = 101;    // 封号期限
+  int64 start_time = 102;  // 开服时间
+}

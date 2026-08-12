@@ -32,19 +32,19 @@ namespace async_jobs {
 
 struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
   /**
-   * @brief 通知玩家
+   * @brief 通知用户
    */
-  bool notify_player = true;
+  bool notify_user = true;
 
   /**
-   * @brief 忽略玩家路由表缓存
+   * @brief 忽略用户路由表缓存
    * @note 注意如果这一项要设置为true，要评估QPS。不能太高否则可能影响login表负载和稳定性
    */
   bool ignore_router_cache = false;
 
   ATFW_UTIL_FORCEINLINE action_options() noexcept {}
-  ATFW_UTIL_FORCEINLINE action_options(bool in_notify_player) noexcept
-      : notify_player(in_notify_player)  // NOLINT: explicit
+  ATFW_UTIL_FORCEINLINE action_options(bool in_notify_user) noexcept
+      : notify_user(in_notify_user)  // NOLINT: explicit
   {}
 };
 
@@ -54,7 +54,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
  * @param user_id 用户的user_id
  * @param zone_id 大区ID
  * @param openid 用户的openid
- * @param out 返回的玩家数据
+ * @param out 返回的用户数据
  * @return 0或错误码
  */
 ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type get_jobs(
@@ -80,7 +80,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type del_jobs(::rpc:
  * @param user_id 用户的user_id
  * @param zone_id 用户的zone_id
  * @param in 待添加的数据
- * @param notify_player 是否立即通知在线玩家
+ * @param notify_user 是否立即通知在线用户
  * @note 最大异步任务数量如果要配置数据库表限制最大数量，请采用自动覆盖老记录的策略
  * @return 0或错误码
  */
@@ -94,7 +94,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type add_jobs(
  * @param user_id 用户的user_id
  * @param zone_id 用户的zone_id
  * @param inout 待添加的数据
- * @param notify_player 是否立即通知在线玩家
+ * @param notify_user 是否立即通知在线用户
  * @note 最大异步任务数量如果要配置数据库表限制最大数量，请采用自动覆盖老记录的策略
  * @return 0或错误码
  */

@@ -58,6 +58,6 @@ Scheduled/self-driven tasks use the `task_action_no_msg.*.mako` template, or use
 | rpc_options | Effect |
 | --- | --- |
 | `allow_no_wait: true` | The caller only sends without waiting for a response (no `co_await` result) |
-| stream return (`returns (stream X)`) | Server-side streaming downstream push (e.g., `player_dirty_chg_sync` in `com.protocol.proto`) |
+| stream return (`returns (stream X)`) | Server-side streaming downstream push (e.g., `user_dirty_chg_sync` in `com.protocol.proto`) |
 | stream request (`rpc x(stream Req) returns (...)`) | Caller-side streaming upload / response-free calls (e.g., dtmq `channel_event_sync`) |
 | `api_name` | The generated caller-side function name |

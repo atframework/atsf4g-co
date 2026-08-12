@@ -30,7 +30,7 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include "data/player.h"
+#include "data/user.h"
 #include "logic/async_jobs/user_async_jobs_manager.h"
 
 user_rank_manager::rank_data_index::rank_data_index(const PROJECT_NAMESPACE_ID::config::ExcelRankRule &rule) noexcept
@@ -60,7 +60,7 @@ user_rank_manager::rank_data_index &user_rank_manager::rank_data_index::operator
   return *this;
 }
 
-user_rank_manager::user_rank_manager(player &owner)
+user_rank_manager::user_rank_manager(user &owner)
     : owner_(&owner), is_dirty_(false), io_task_next_timepoint_(0), next_auto_update_score_timepoint_(0) {}
 
 user_rank_manager::~user_rank_manager() {}
@@ -124,8 +124,8 @@ void user_rank_manager::refresh_feature_limit_second(rpc::context &ctx) {
 }
 
 void user_rank_manager::init_from_table_data(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx,
-                                             const PROJECT_NAMESPACE_ID::table_user &player_table) {
-  if (!player_table.has_rank_data()) {
+                                             const PROJECT_NAMESPACE_ID::table_user &user_table) {
+  if (!user_table.has_rank_data()) {
     return;
   }
 
@@ -137,8 +137,8 @@ void user_rank_manager::init_from_table_data(ATFW_EXPLICIT_UNUSED_ATTR rpc::cont
   pending_update_no_action_index_.clear();
   db_data_.clear();
 
-  for (int i = 0; i < player_table.rank_data().ranks_size(); ++i) {
-    const PROJECT_NAMESPACE_ID::DRankUserBoard &data = player_table.rank_data().ranks(i);
+  for (int i = 0; i < user_table.rank_data().ranks_size(); ++i) {
+    const PROJECT_NAMESPACE_ID::DRankUserBoard &data = user_table.rank_data().ranks(i);
 
     auto rank_rule_cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(data.rank_key().rank_type(),
                                                                                 data.rank_key().rank_instance_id());
@@ -165,7 +165,7 @@ int user_rank_manager::dump(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx, PROJECT
   time_t now = atfw::util::time::time_utility::get_now();
   PROJECT_NAMESPACE_ID::DRankUserData *rank_data = user.mutable_rank_data();
   if (NULL == rank_data) {
-    // FWPLOGERROR(*owner_, "player {}({}) malloc player_rank failed");
+    // FWPLOGERROR(*owner_, "user {}({}) malloc user_rank failed");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
@@ -1825,7 +1825,7 @@ void user_rank_manager::submit_rank_score_no_wait(
           auto cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(unit.rank_key().rank_type(),
                                                                             unit.rank_key().rank_instance_id());
           if (cfg == nullptr) {
-            FWPLOGERROR(*user_ptr, "player update rank failed, not found rank {}:{} setting, score {}",
+            FWPLOGERROR(*user_ptr, "user update rank failed, not found rank {}:{} setting, score {}",
                         unit.rank_key().rank_type(), unit.rank_key().rank_instance_id(), unit.value());
             continue;
           }
@@ -2056,7 +2056,7 @@ bool user_rank_manager::check_rank_instance_key_invalid(
       return true;
     }
     case PROJECT_NAMESPACE_ID::EN_RANK_INSTANCE_TYPE_ROLE: {
-      // TODO jijunliang : 检测玩家角色和榜单类型是否匹配
+      // TODO jijunliang : 检测用户角色和榜单类型是否匹配
       return true;
     }
     default: {

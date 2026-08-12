@@ -36,19 +36,19 @@ class DChatChannelSnapshot;
 }  // namespace chat
 }  // namespace atframework
 
-class player;
+class user;
 
 class user_chat_manager {
  public:
   static int32_t global_tick(rpc::context& ctx);
 
-  explicit user_chat_manager(player& owner);
+  explicit user_chat_manager(user& owner);
   ~user_chat_manager();
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context&);
 
-  player& get_owner() { return *owner_; }
-  const player& get_owner() const { return *owner_; }
+  user& get_owner() { return *owner_; }
+  const user& get_owner() const { return *owner_; }
 
   void foreach_channel(
       atfw::util::nostd::function_ref<bool(const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&)>
@@ -92,7 +92,7 @@ class user_chat_manager {
   static void setup_subscriber_callback(const rpc::dtmq::client_subscriber::ptr_t& channel);
 
  private:
-  player* ATFW_UTIL_MACRO_NONNULL owner_;
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
   time_t last_send_to_world_channel_timepoint_unix_sec_;
   std::string subscriber_key_;
 

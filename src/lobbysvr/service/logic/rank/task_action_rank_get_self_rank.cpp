@@ -23,7 +23,7 @@
 #include <logic/rank/user_rank_manager.h>
 #include <utility/rank_util.h>
 
-#include <data/player.h>
+#include <data/user.h>
 
 task_action_rank_get_self_rank::task_action_rank_get_self_rank(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
@@ -35,8 +35,8 @@ task_action_rank_get_self_rank::result_type task_action_rank_get_self_rank::oper
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  player_ptr_t user = get_player<player>();
-  if (!user) {
+  user_ptr_t user_inst = get_user<user>();
+  if (!user_inst) {
     FWLOGERROR("not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -62,7 +62,7 @@ task_action_rank_get_self_rank::result_type task_action_rank_get_self_rank::oper
   }
 
   uint32_t total_count = 0;
-  int32_t res = RPC_AWAIT_CODE_RESULT(user->get_user_rank_manager().get_self_top_rank(
+  int32_t res = RPC_AWAIT_CODE_RESULT(user_inst->get_user_rank_manager().get_self_top_rank(
       get_shared_context(), rank_key, *rank_rule_cfg, req_body.rank_instance_key(), *rsp_body.mutable_rank_records(),
       total_count, req_body.up_count(), req_body.down_count()));
   set_response_code(res);

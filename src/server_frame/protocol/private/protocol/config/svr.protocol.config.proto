@@ -64,7 +64,7 @@ message logic_session_cfg {
   google.protobuf.Duration tick_sec = 104 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" }];
   bool enable_actor_log = 105 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
   bool enable_actor_otel_log = 106 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "false" }];
-  bool remove_player_cache_when_stop = 107 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
+  bool remove_user_cache_when_stop = 107 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "true" }];
   uint64 actor_log_size = 108 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10MB" size_mode: true }];
   uint64 actor_log_rotate = 109 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
   google.protobuf.Duration actor_auto_flush = 110

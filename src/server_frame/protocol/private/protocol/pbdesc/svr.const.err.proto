@@ -285,7 +285,7 @@ enum EnSysErrorType {
       -1000201
       [(error_code.description) = "使用定时器必须开启 logic_server_common_module"];
 
-  EN_PLAYER_KICKOUT = -1001001
+  EN_USER_KICKOUT = -1001001
                       [(error_code.description) = "踢出用户失败"];
 
   EN_TRANSACTION_NOT_FOUND = -1004001

@@ -98,8 +98,8 @@ func PingRpc(action base.TaskActionImpl, user user_data.User) error {
 	return nil
 }
 
-func GetInfoRpc(action base.TaskActionImpl, user user_data.User, args []string) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCPlayerGetInfoRsp], error) {
-	csBody := &public_protocol_pbdesc.CSPlayerGetInfoReq{}
+func GetInfoRpc(action base.TaskActionImpl, user user_data.User, args []string) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCUserGetInfoRsp], error) {
+	csBody := &public_protocol_pbdesc.CSUserGetInfoReq{}
 
 	ref := csBody.ProtoReflect()
 	fields := ref.Descriptor().Fields()
@@ -129,5 +129,5 @@ func GetInfoRpc(action base.TaskActionImpl, user user_data.User, args []string) 
 		}
 	}
 
-	return lobbysvr_rpc_handle.SendPlayerGetInfo(action, user, csBody, true)
+	return lobbysvr_rpc_handle.SendUserGetInfo(action, user, csBody, true)
 }

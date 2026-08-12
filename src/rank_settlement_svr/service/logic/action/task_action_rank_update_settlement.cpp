@@ -23,7 +23,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <data/player_key_hash_helper.h>
+#include <data/user_key_hash_helper.h>
 
 #include <dispatcher/task_manager.h>
 
@@ -447,7 +447,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
   callback_data.submit_timepoint = atfw::util::time::time_utility::get_now();
 
   ret = PROJECT_NAMESPACE_ID::err::EN_COMMON_BREAK;
-  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> prev_round_user_keys;
+  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> prev_round_user_keys;
   prev_round_user_keys.reserve(settle_loop_count);
   size_t repeated_count = 0;
   for (bool loop_again = true;
@@ -491,7 +491,7 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
     uint32_t cleanup_max_score = 0;
     uint32_t cleanup_min_score = UINT32_MAX;
     size_t cleanup_count = 0;
-    std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> cur_round_user_keys;
+    std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> cur_round_user_keys;
     cur_round_user_keys.reserve(settle_loop_count);
     for (bool need_next = true; need_next; need_next = rank_handle.previous_cursor()) {
       if (!rank_handle.valid_cursor()) {

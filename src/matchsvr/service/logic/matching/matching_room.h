@@ -50,11 +50,11 @@ class matching_room {
   const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& get_units() const noexcept;
 
   // 统计房间内的真实玩家数量。
-  size_t get_player_count() const noexcept;
+  size_t get_user_count() const noexcept;
   // 判断 unit 是否仍在本房间。
   bool has_unit(uint64_t unit_id) const noexcept;
   // 判断玩家是否仍在本房间。
-  bool has_player(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
+  bool has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
 
   // 原子加入一个不可拆分 unit；重复 unit 或玩家返回 false。
   bool add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
@@ -63,9 +63,9 @@ class matching_room {
   // 撮合完成后进入战斗确认，并把全部成员重置为待确认。
   void begin_confirmation(int64_t expire_time) noexcept;
   // 更新单个成员的确认选择；只有确认阶段且成员存在时成功。
-  bool confirm_player(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool accepted) noexcept;
+  bool confirm_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool accepted) noexcept;
   // 判断房间内所有成员是否均已接受。
-  bool are_all_players_confirmed() const noexcept;
+  bool are_all_users_confirmed() const noexcept;
   // 确认失败移除 Unit 后，让剩余 Unit 回到正常撮合。
   void resume_matching(int64_t expire_time) noexcept;
   // 保存当前规则选中的结果模板。

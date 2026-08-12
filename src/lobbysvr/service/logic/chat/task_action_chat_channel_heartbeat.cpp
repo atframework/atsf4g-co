@@ -22,7 +22,7 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
-#include <data/player.h>
+#include <data/user.h>
 
 #include <string>
 #include <unordered_set>
@@ -47,8 +47,8 @@ task_action_chat_channel_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
-  player::ptr_t user = get_player<player>();
-  if (!user) {
+  user::ptr_t user_inst = get_user<user>();
+  if (!user_inst) {
     FCTXLOGERROR(get_shared_context(), "not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -65,9 +65,9 @@ task_action_chat_channel_heartbeat::operator()() {
     }
     channel_id_set.insert(sync_point.channel_key().channel_id());
     int32_t response_code =
-        user->get_user_chat_manager().receive_heartbeat(get_shared_context(), sync_point, *sync_msg);
+        user_inst->get_user_chat_manager().receive_heartbeat(get_shared_context(), sync_point, *sync_msg);
     if (response_code != 0) {
-      FCTXLOGWARNING(get_shared_context(), "user {} receive_heartbeat failed, response_code={}({})", *user,
+      FCTXLOGWARNING(get_shared_context(), "user {} receive_heartbeat failed, response_code={}({})", *user_inst,
                      response_code, protobuf_mini_dumper_get_error_msg(response_code));
       set_response_code(response_code);
     }

@@ -63,6 +63,6 @@ class task_action_example : public task_action_ss_req_base<ExampleReq, ExampleRs
 
 ## 内置 task action
 
-`src/server_frame/logic/action/` 提供框架级 action：`set_server_time`、`player_logout`、
+`src/server_frame/logic/action/` 提供框架级 action：`set_server_time`、`user_logout`、
 `reload_remote_server_configure`、`async_invoke` 等；`src/server_frame/router/action/` 提供路由相关
 action（auto save、close、transfer、update_sync）。

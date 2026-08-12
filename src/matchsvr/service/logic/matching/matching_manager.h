@@ -76,20 +76,20 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   // 注入真实 battlesvr 调用；首版默认处理器只生成桩 room_id 并返回成功。
   void set_battle_start_handler(battle_start_handler_t handler);
   // 返回当前处于搜索阶段的玩家总数，用于选择规则组。
-  int32_t get_total_matching_player_count() const noexcept;
+  int32_t get_total_matching_user_count() const noexcept;
   // 返回当前保留的房间数，包括短暂保留供查询的终态房间。
   size_t get_room_count() const noexcept;
 
  private:
-  struct player_key {
+  struct user_key {
     uint64_t user_id = 0;
     uint32_t zone_id = 0;
 
-    bool operator==(const player_key& other) const noexcept;
+    bool operator==(const user_key& other) const noexcept;
   };
 
-  struct player_key_hash {
-    size_t operator()(const player_key& value) const noexcept;
+  struct user_key_hash {
+    size_t operator()(const user_key& value) const noexcept;
   };
 
   // 把协议 scope 转为可排序的硬隔离键。
@@ -129,7 +129,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   // 活动 unit_id 到 matching_id 的索引。
   std::unordered_map<uint64_t, std::string> unit_to_room_;
   // 活动玩家到 unit_id 的冲突索引，保证同一 matchsvr 内只能参加一个匹配。
-  std::unordered_map<player_key, uint64_t, player_key_hash> player_to_unit_;
+  std::unordered_map<user_key, uint64_t, user_key_hash> user_to_unit_;
   // 四维硬隔离桶以及桶内的老房间优先队列。
   std::map<bucket_key, std::set<queue_entry>> searching_rooms_by_bucket_;
   // battlesvr 请求边界；未来替换桩时无需修改撮合核心。

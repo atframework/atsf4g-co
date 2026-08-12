@@ -18,7 +18,7 @@
 #include <distributed_system/wal_client.h>
 #include <distributed_system/wal_publisher.h>
 
-#include <data/player_key_hash_helper.h>
+#include <data/user_key_hash_helper.h>
 
 #include <rpc/dtmq/dtmq_client_api.h>
 #include <rpc/rpc_async_invoke.h>

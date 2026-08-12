@@ -29,7 +29,7 @@ package atframework.shared;
 /////////////////////////////////////////////////////
 enum EnRouterObjectType {
   EN_ROT_INVALID = 0;
-  EN_ROT_PLAYER = 1;
+  EN_ROT_USER = 1;
   // Reserved for unit tests (src/tools/rpc-unit-test), never used by production services.
   EN_ROT_UNIT_TEST = 2;
 }

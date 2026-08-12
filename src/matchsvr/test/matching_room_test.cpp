@@ -16,9 +16,9 @@ namespace {
 PROJECT_NAMESPACE_ID::DMatchingUnit make_unit(uint64_t unit_id, uint64_t user_id, uint32_t zone_id) {
   PROJECT_NAMESPACE_ID::DMatchingUnit result;
   result.set_unit_id(unit_id);
-  auto* player = result.add_players();
-  player->mutable_user_key()->set_user_id(user_id);
-  player->mutable_user_key()->set_zone_id(zone_id);
+  auto* user = result.add_users();
+  user->mutable_user_key()->set_user_id(user_id);
+  user->mutable_user_key()->set_zone_id(zone_id);
   return result;
 }
 
@@ -37,23 +37,23 @@ matching_room make_room() {
 }
 }  // namespace
 
-CASE_TEST(matchsvr_matching_room, rejects_duplicate_unit_or_player) {
+CASE_TEST(matchsvr_matching_room, rejects_duplicate_unit_or_user) {
   auto room = make_room();
   const auto unit = make_unit(1, 10001, 1);
   CASE_EXPECT_TRUE(room.add_unit(unit));
   CASE_EXPECT_FALSE(room.add_unit(unit));
   CASE_EXPECT_FALSE(room.add_unit(make_unit(2, 10001, 1)));
-  CASE_EXPECT_EQ(1, room.get_player_count());
+  CASE_EXPECT_EQ(1, room.get_user_count());
 }
 
-CASE_TEST(matchsvr_matching_room, rejects_invalid_units_and_duplicate_players_inside_unit) {
+CASE_TEST(matchsvr_matching_room, rejects_invalid_units_and_duplicate_users_inside_unit) {
   auto room = make_room();
   CASE_EXPECT_FALSE(room.add_unit(make_unit(0, 10001, 1)));
 
-  PROJECT_NAMESPACE_ID::DMatchingUnit duplicate_players = make_unit(1, 10001, 1);
-  duplicate_players.add_players()->mutable_user_key()->CopyFrom(make_user(10001, 1));
-  CASE_EXPECT_FALSE(room.add_unit(duplicate_players));
-  CASE_EXPECT_EQ(0, room.get_player_count());
+  PROJECT_NAMESPACE_ID::DMatchingUnit duplicate_users = make_unit(1, 10001, 1);
+  duplicate_users.add_users()->mutable_user_key()->CopyFrom(make_user(10001, 1));
+  CASE_EXPECT_FALSE(room.add_unit(duplicate_users));
+  CASE_EXPECT_EQ(0, room.get_user_count());
 }
 
 CASE_TEST(matchsvr_matching_room, removes_units_only_while_room_is_active) {
@@ -69,7 +69,7 @@ CASE_TEST(matchsvr_matching_room, removes_units_only_while_room_is_active) {
   CASE_EXPECT_FALSE(room.add_unit(make_unit(3, 10003, 1)));
 }
 
-CASE_TEST(matchsvr_matching_room, confirms_all_players_and_resumes_matching) {
+CASE_TEST(matchsvr_matching_room, confirms_all_users_and_resumes_matching) {
   auto room = make_room();
   const auto first = make_unit(1, 10001, 1);
   const auto second = make_unit(2, 10002, 1);
@@ -78,29 +78,29 @@ CASE_TEST(matchsvr_matching_room, confirms_all_players_and_resumes_matching) {
 
   room.begin_confirmation(150);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING, room.get_status());
-  CASE_EXPECT_FALSE(room.are_all_players_confirmed());
-  CASE_EXPECT_TRUE(room.confirm_player(first.players(0).user_key(), true));
-  CASE_EXPECT_TRUE(room.confirm_player(second.players(0).user_key(), true));
-  CASE_EXPECT_TRUE(room.are_all_players_confirmed());
+  CASE_EXPECT_FALSE(room.are_all_users_confirmed());
+  CASE_EXPECT_TRUE(room.confirm_user(first.users(0).user_key(), true));
+  CASE_EXPECT_TRUE(room.confirm_user(second.users(0).user_key(), true));
+  CASE_EXPECT_TRUE(room.are_all_users_confirmed());
 
   room.resume_matching(300);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING, room.get_status());
   CASE_EXPECT_EQ(300, room.get_expire_time());
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING,
-                 room.get_units().at(1).players(0).confirm_status());
+                 room.get_units().at(1).users(0).confirm_status());
 }
 
-CASE_TEST(matchsvr_matching_room, rejects_confirmation_outside_confirming_or_for_unknown_player) {
+CASE_TEST(matchsvr_matching_room, rejects_confirmation_outside_confirming_or_for_unknown_user) {
   auto room = make_room();
   CASE_EXPECT_TRUE(room.add_unit(make_unit(1, 10001, 1)));
-  CASE_EXPECT_FALSE(room.confirm_player(make_user(10001, 1), true));
+  CASE_EXPECT_FALSE(room.confirm_user(make_user(10001, 1), true));
 
   room.begin_confirmation(150);
-  CASE_EXPECT_FALSE(room.confirm_player(make_user(99999, 1), true));
-  CASE_EXPECT_TRUE(room.confirm_player(make_user(10001, 1), false));
-  CASE_EXPECT_FALSE(room.are_all_players_confirmed());
+  CASE_EXPECT_FALSE(room.confirm_user(make_user(99999, 1), true));
+  CASE_EXPECT_TRUE(room.confirm_user(make_user(10001, 1), false));
+  CASE_EXPECT_FALSE(room.are_all_users_confirmed());
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_REFUSED,
-                 room.get_units().at(1).players(0).confirm_status());
+                 room.get_units().at(1).users(0).confirm_status());
 }
 
 CASE_TEST(matchsvr_matching_room, extends_expiry_monotonically_and_resets_confirmation_state) {

@@ -216,7 +216,7 @@ int32_t rank::modify_score(const PROJECT_NAMESPACE_ID::rank_storage_data& data) 
 int32_t rank::del_one_user(const PROJECT_NAMESPACE_ID::DRankUserKey& key) {
   auto iter = mp_.find(key);
   if (iter == mp_.end()) {
-    // 玩家不在榜单上
+    // 用户不在榜单上
     return 0;
   }
   increase_data_version();

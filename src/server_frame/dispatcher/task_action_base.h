@@ -45,7 +45,7 @@ namespace rpc {
 class context;
 }
 
-class player_cache;
+class user_cache;
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
 using task_action_result_type = rpc::result_code_type;

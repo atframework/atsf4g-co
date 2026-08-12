@@ -2,8 +2,8 @@
 // Created by owent on 2018-05-07.
 //
 
-#ifndef ROUTER_ROUTER_PLAYER_MANAGER_H
-#define ROUTER_ROUTER_PLAYER_MANAGER_H
+#ifndef ROUTER_ROUTER_USER_MANAGER_H
+#define ROUTER_ROUTER_USER_MANAGER_H
 
 #pragma once
 
@@ -14,11 +14,11 @@
 #include <string>
 
 #include "router/router_manager.h"
-#include "router/router_player_cache.h"
+#include "router/router_user_cache.h"
 
-class router_player_manager : public router_manager<router_player_cache, player_cache, router_player_private_type *> {
+class router_user_manager : public router_manager<router_user_cache, user_cache, router_user_private_type *> {
  public:
-  using base_type = router_manager<router_player_cache, player_cache, router_player_private_type *>;
+  using base_type = router_manager<router_user_cache, user_cache, router_user_private_type *>;
   using cache_t = base_type::cache_t;
   using priv_data_t = base_type::priv_data_t;
   using key_t = base_type::key_t;
@@ -26,49 +26,49 @@ class router_player_manager : public router_manager<router_player_cache, player_
   using object_ptr_t = base_type::object_ptr_t;
   using ptr_t = base_type::ptr_t;
   using store_ptr_t = base_type::store_ptr_t;
-  using self_type = router_player_manager;
+  using self_type = router_user_manager;
 
-  using create_object_fn_t = std::function<router_player_cache::object_ptr_t(uint64_t, uint32_t, const std::string &)>;
+  using create_object_fn_t = std::function<router_user_cache::object_ptr_t(uint64_t, uint32_t, const std::string &)>;
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(router_user_manager)
 #  else
-  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(router_user_manager)
 #  endif
 #else
-  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_user_manager)
 #endif
 
  private:
-  SERVER_FRAME_API router_player_manager();
+  SERVER_FRAME_API router_user_manager();
 
  public:
-  SERVER_FRAME_API ~router_player_manager();
+  SERVER_FRAME_API ~router_user_manager();
 
   SERVER_FRAME_API const char *name() const override;
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_object(rpc::context &ctx,
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_object(rpc::context &ctx,
                                                                                            uint64_t user_id,
                                                                                            uint32_t zone_id,
                                                                                            priv_data_t priv_data);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_object(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_object(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
       priv_data_t priv_data);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_cache(rpc::context &ctx,
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_cache(rpc::context &ctx,
                                                                                           uint64_t user_id,
                                                                                           uint32_t zone_id,
                                                                                           priv_data_t priv_data);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_player_cache(
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove_user_cache(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, std::shared_ptr<router_object_base> cache,
       priv_data_t priv_data);
 
   SERVER_FRAME_API void set_create_object_fn(create_object_fn_t fn);
 
-  SERVER_FRAME_API router_player_cache::object_ptr_t create_player_object(uint64_t user_id, uint32_t zone_id,
+  SERVER_FRAME_API router_user_cache::object_ptr_t create_user_object(uint64_t user_id, uint32_t zone_id,
                                                                           const std::string &openid);
 
   ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type pull_online_server(
@@ -87,4 +87,4 @@ class router_player_manager : public router_manager<router_player_cache, player_
   create_object_fn_t create_fn_;
 };
 
-#endif  // ROUTER_ROUTER_PLAYER_MANAGER_H
+#endif  // ROUTER_ROUTER_USER_MANAGER_H

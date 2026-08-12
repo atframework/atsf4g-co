@@ -11,7 +11,7 @@ title: 服务总览
 | `echosvr` | 最简示例服务：原样回显客户端数据（仅 `app/echosvr_main.cpp`），适合作为新服务模板 |
 | `authsvr` | 认证/登录服：CS RPC `AuthsvrClientService`（`task_action_login_auth`），处理客户端登录鉴权 |
 | `cachesvr` | 分布式对象缓存服：`cache_group` / `cache_group_manager` 管理缓存分组，对外提供 `cache_service.proto` 的 SS RPC，带 `sdk/` |
-| `lobbysvr` | 大厅服（核心逻辑服）：登录、踢下线、玩家信息、玩家异步任务（`async_jobs/`）、全局/用户缓存（`cache/`）、排行榜查询（`rank/`）、dtmq 频道事件接收（`logic/dtmq/`），带 `sdk/` |
+| `lobbysvr` | 大厅服（核心逻辑服）：登录、踢下线、用户信息、用户异步任务（`async_jobs/`）、全局/用户缓存（`cache/`）、排行榜查询（`rank/`）、dtmq 频道事件接收（`logic/dtmq/`），带 `sdk/` |
 | `rank_settlement_svr` | 排行榜结算服：`rank_settlement_manager` + `task_action_rank_send_settlement / task_action_rank_update_settlement` |
 | `orbitsvr` | Orbit 示例服务：演示 orbit 组件 server/client RPC |
 

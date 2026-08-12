@@ -163,21 +163,21 @@ service RankBoardService {
   };
   rpc rank_set_score(SSRankSetScoreReq) returns (SSRankSetScoreRsp) {
     option (atframework.rpc_options) = {
-      api_name: "更新玩家排行榜数据"
+      api_name: "更新用户排行榜数据"
       allow_no_wait: true
     };
   };
 
   rpc rank_modify_score(SSRankModifyScoreReq) returns (SSRankModifyScoreRsp) {
     option (atframework.rpc_options) = {
-      api_name: "修改玩家排行榜数据"
+      api_name: "修改用户排行榜数据"
       allow_no_wait: true
     };
   };
 
   rpc rank_del_one_user(SSRankDelUserReq) returns (SSRankDelUserRsp) {
     option (atframework.rpc_options) = {
-      api_name: "删除单个玩家数据"
+      api_name: "删除单个用户数据"
       allow_no_wait: true
     };
   };
@@ -228,7 +228,7 @@ service RankBoardService {
   };
   rpc rank_get_special_one_front_back(SSRankGetUserFrontBackReq) returns (SSRankGetUserFrontBackRsp) {
     option (atframework.rpc_options) = {
-      api_name: "获取玩家前后排名count的排行榜数据"
+      api_name: "获取用户前后排名count的排行榜数据"
       allow_no_wait: true
     };
   };

@@ -9,7 +9,7 @@ login_ban_time: 3h
 tick_sec: 60s
 enable_actor_log: true
 enable_actor_otel_log: false
-remove_player_cache_when_stop: true
+remove_user_cache_when_stop: true
 actor_log_size: 10MB
 actor_log_rotate: 3
 actor_auto_flush: 3s

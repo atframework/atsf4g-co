@@ -69,7 +69,7 @@ message DMatchingParameter {
   int64 search_start_time = 11;
 }
 
-message DMatchingPlayer {
+message DMatchingUser {
   DUserIDKey user_key = 1;
   repeated DUserIDKey lasting_ban_users = 2;
   repeated DUserIDKey last_battle_users = 3;
@@ -80,7 +80,7 @@ message DMatchingUnit {
   uint64 unit_id = 1;
   EnMatchingUnitStatus status = 2;
   DMatchingParameter parameter = 3;
-  repeated DMatchingPlayer players = 4;
+  repeated DMatchingUser users = 4;
   repeated DUserIDKey ban_users = 5;
   string client_version = 6;
   string resource_version = 7;

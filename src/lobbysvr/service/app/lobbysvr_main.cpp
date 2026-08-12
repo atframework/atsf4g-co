@@ -21,7 +21,7 @@
 
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
-#include <router/router_player_manager.h>
+#include <router/router_user_manager.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -41,7 +41,7 @@
 #include "app/handle_ss_rpc_lobbysvrservice.atfw.gen.h"
 #include "app/handle_ss_rpc_matchsvrnotifyservice.atfw.gen.h"
 
-#include "data/player.h"
+#include "data/user.h"
 #include "logic/chat/user_chat_manager.h"
 #include "logic/orbit/user_orbit_manager.h"
 #include "rpc/rpc_context.h"
@@ -49,23 +49,23 @@
 namespace {
 class main_service_module : public atfw::atapp::module_impl {
  private:
-  static router_player_cache::object_ptr_t create_player_fn(uint64_t user_id, uint32_t zone_id,
+  static router_user_cache::object_ptr_t create_user_fn(uint64_t user_id, uint32_t zone_id,
                                                             const std::string &openid) {
-    return std::static_pointer_cast<player_cache>(player::create(user_id, zone_id, openid));
+    return std::static_pointer_cast<user_cache>(user::create(user_id, zone_id, openid));
   }
 
   template <class TaskAction>
-  static rpc::result_code_type task_action_prepare_for_player_initialization(rpc::context &ctx, TaskAction &action) {
-    // Auto inject player
+  static rpc::result_code_type task_action_prepare_for_user_initialization(rpc::context &ctx, TaskAction &action) {
+    // Auto inject user
     do {
       if (action.get_user_id() == 0) {
         break;
       }
-      if (nullptr == router_manager_set::me()->get_manager(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER)) {
+      if (nullptr == router_manager_set::me()->get_manager(PROJECT_NAMESPACE_ID::EN_ROT_USER)) {
         break;
       }
-      auto user_cache = router_player_manager::me()->get_object(
-          router_object_base::key_t{PROJECT_NAMESPACE_ID::EN_ROT_PLAYER, action.get_zone_id(), action.get_user_id()});
+      auto user_cache = router_user_manager::me()->get_object(
+          router_object_base::key_t{PROJECT_NAMESPACE_ID::EN_ROT_USER, action.get_zone_id(), action.get_user_id()});
       if (!user_cache) {
         break;
       }
@@ -85,15 +85,15 @@ class main_service_module : public atfw::atapp::module_impl {
     RPC_RETURN_CODE(0);
   }
 
-  static rpc::result_code_type task_cs_action_prepare_for_player_initialization(rpc::context &ctx,
+  static rpc::result_code_type task_cs_action_prepare_for_user_initialization(rpc::context &ctx,
                                                                                 task_action_cs_req_base &action) {
-    std::shared_ptr<player_cache> player_cache = action.get_player_cache();
-    if (!player_cache) {
+    std::shared_ptr<user_cache> user_cache = action.get_user_cache();
+    if (!user_cache) {
       RPC_RETURN_CODE(0);
     }
 
-    if (player_cache->has_initialization_task_id()) {
-      auto res = RPC_AWAIT_CODE_RESULT(player_cache->await_initialization_task(ctx));
+    if (user_cache->has_initialization_task_id()) {
+      auto res = RPC_AWAIT_CODE_RESULT(user_cache->await_initialization_task(ctx));
       if (res < 0) {
         RPC_RETURN_CODE(res);
       }
@@ -106,7 +106,7 @@ class main_service_module : public atfw::atapp::module_impl {
   int init() override {
     {
       // register all router managers
-      router_player_manager::me();
+      router_user_manager::me();
     }
 
     // register handles
@@ -117,11 +117,11 @@ class main_service_module : public atfw::atapp::module_impl {
 
     // reload will be triggered before init, so reload again here
 
-    // setup how to create player
-    router_player_manager::me()->set_create_object_fn(create_player_fn);
-    task_action_cs_req_base::add_prepare_handle(task_cs_action_prepare_for_player_initialization);
-    task_action_ss_req_base::add_prepare_handle(task_action_prepare_for_player_initialization<task_action_ss_req_base>);
-    task_action_no_req_base::add_prepare_handle(task_action_prepare_for_player_initialization<task_action_no_req_base>);
+    // setup how to create user
+    router_user_manager::me()->set_create_object_fn(create_user_fn);
+    task_action_cs_req_base::add_prepare_handle(task_cs_action_prepare_for_user_initialization);
+    task_action_ss_req_base::add_prepare_handle(task_action_prepare_for_user_initialization<task_action_ss_req_base>);
+    task_action_no_req_base::add_prepare_handle(task_action_prepare_for_user_initialization<task_action_no_req_base>);
 
     return 0;
   }

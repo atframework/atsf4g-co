@@ -55,6 +55,6 @@ auto res = RPC_AWAIT_CODE_RESULT(rpc::MyService::my_method(ctx, req, /*目标*/.
 | rpc_options | 效果 |
 | --- | --- |
 | `allow_no_wait: true` | 调用端只发不等响应（无 `co_await` 结果） |
-| stream 返回（`returns (stream X)`） | 服务端流式下行推送（如 `com.protocol.proto` 的 `player_dirty_chg_sync`） |
+| stream 返回（`returns (stream X)`） | 服务端流式下行推送（如 `com.protocol.proto` 的 `user_dirty_chg_sync`） |
 | stream 请求（`rpc x(stream Req) returns (...)`） | 调用端流式上行/免等待响应（如 dtmq 的 `channel_event_sync`） |
 | `api_name` | 生成的调用端函数名 |

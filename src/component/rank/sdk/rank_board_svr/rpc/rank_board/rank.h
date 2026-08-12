@@ -49,8 +49,8 @@ class context;
 
 namespace rank_board {
 /**
- * @brief 获取某个玩家的分数
- * @param user 玩家key
+ * @brief 获取某个用户的分数
+ * @param user 用户key
  * @param rank 排行榜key
  * @param output 结果
  * @return future of 0 or error code
@@ -73,9 +73,9 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top(
     PROJECT_NAMESPACE_ID::DRankQueryRspData& output);
 
 /**
- * @brief 获取玩家前后排名count的排行榜数据
+ * @brief 获取用户前后排名count的排行榜数据
  * @param rank 排行榜key
- * @param user 玩家key
+ * @param user 用户key
  * @param count 前后的数量
  * @param output 结果
  * @return future of 0 or error code
@@ -85,8 +85,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_specia
     uint32_t count, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DRankUserBoardData>& output);
 
 /**
- * @brief 设置玩家分数
- * @param user 玩家key
+ * @brief 设置用户分数
+ * @param user 用户key
  * @param rank 排行榜key
  * @param score 上报的成绩
  * @param custom_data 榜单自定义数据
@@ -97,8 +97,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type update_sco
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data);
 
 /**
- * @brief 修改玩家分数(增量加减)
- * @param user 玩家key
+ * @brief 修改用户分数(增量加减)
+ * @param user 用户key
  * @param rank 排行榜key
  * @param score 上报的变化值
  * @param custom_data 榜单自定义数据 会覆盖之前的上报
@@ -109,8 +109,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type modify_sco
     int64_t score, const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data);
 
 /**
- * @brief 从排行榜上移除玩家
- * @param user 玩家key
+ * @brief 从排行榜上移除用户
+ * @param user 用户key
  * @param rank 排行榜key
  * @return future of 0 or error code
  */

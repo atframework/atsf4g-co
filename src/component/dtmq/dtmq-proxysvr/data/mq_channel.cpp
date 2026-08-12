@@ -2504,8 +2504,8 @@ bool mq_channel::downgrade_to_none() noexcept {
 void mq_channel::send_oss(rpc::context& /*ctx*/, const std::string& /*action*/, int32_t /*ret*/,
                           uint64_t /*transfer_to*/) {
   // FIXME: 这里需要发送OSS日志，暂时注释掉
-  // telemetry_oss_user_information user;
-  // user.zone_id = logic_config::me()->get_local_zone_id();
+  // telemetry_oss_user_information user_inst;
+  // user_inst.zone_id = logic_config::me()->get_local_zone_id();
   //
   // rpc::context::message_holder<PROJECT_NAMESPACE_ID::oss::DtmqChannel> oss_log{ctx};
   // oss_log->set_typeid_(static_cast<int32_t>(channel_key_.channel_type()));
@@ -2515,7 +2515,7 @@ void mq_channel::send_oss(rpc::context& /*ctx*/, const std::string& /*action*/, 
   // oss_log->set_ret(ret);
   // oss_log->set_transferfrom(static_cast<int64_t>(logic_config::me()->get_local_server_id()));
   // oss_log->set_transferto(static_cast<int64_t>(transfer_to));
-  // telemetry::oss::send_dtmq_channel(ctx, user, std::move(*oss_log));
+  // telemetry::oss::send_dtmq_channel(ctx, user_inst, std::move(*oss_log));
 }
 
 void mq_channel::recalculate_etcd_cache() {

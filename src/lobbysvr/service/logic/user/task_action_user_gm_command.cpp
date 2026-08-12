@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
-// @brief Created by owent with mako-generator.py at 2026-08-11 21:34:28
+// @brief Created by yousongyang with mako-generator.py at 2026-08-12 14:10:41
 
-#include "logic/team/task_action_team_reject_apply.h"
+#include "logic/user/task_action_user_gm_command.h"
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -26,16 +26,14 @@
 
 #include <utility>
 
-GAMECLIENT_SERVICE_API task_action_team_reject_apply::task_action_team_reject_apply(dispatcher_start_data_type&& param)
+GAMECLIENT_SERVICE_API task_action_user_gm_command::task_action_user_gm_command(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAMECLIENT_SERVICE_API task_action_team_reject_apply::~task_action_team_reject_apply() {}
+GAMECLIENT_SERVICE_API task_action_user_gm_command::~task_action_user_gm_command() {}
 
-GAMECLIENT_SERVICE_API const char* task_action_team_reject_apply::name() const {
-  return "task_action_team_reject_apply";
-}
+GAMECLIENT_SERVICE_API const char* task_action_user_gm_command::name() const { return "task_action_user_gm_command"; }
 
-GAMECLIENT_SERVICE_API task_action_team_reject_apply::result_type task_action_team_reject_apply::operator()() {
+GAMECLIENT_SERVICE_API task_action_user_gm_command::result_type task_action_user_gm_command::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
@@ -51,6 +49,6 @@ GAMECLIENT_SERVICE_API task_action_team_reject_apply::result_type task_action_te
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAMECLIENT_SERVICE_API int task_action_team_reject_apply::on_success() { return get_result(); }
+GAMECLIENT_SERVICE_API int task_action_user_gm_command::on_success() { return get_result(); }
 
-GAMECLIENT_SERVICE_API int task_action_team_reject_apply::on_failed() { return get_result(); }
+GAMECLIENT_SERVICE_API int task_action_user_gm_command::on_failed() { return get_result(); }

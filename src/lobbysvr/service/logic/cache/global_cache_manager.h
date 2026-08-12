@@ -21,7 +21,7 @@
 
 #include <memory/object_atfw_memory_lru_map.h>
 
-#include <data/player_key_hash_helper.h>
+#include <data/user_key_hash_helper.h>
 #include <dispatcher/task_manager.h>
 
 #include <mem_pool/lru_map.h>
@@ -56,7 +56,7 @@ struct hot_data {
   PROJECT_NAMESPACE_ID::object_cache_content cache_content_;
 };
 
-class player;
+class user;
 
 class global_cache_manager : public atfw::util::design_pattern::local_singleton<global_cache_manager> {
  public:

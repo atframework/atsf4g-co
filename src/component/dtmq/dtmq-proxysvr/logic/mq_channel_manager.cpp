@@ -896,12 +896,12 @@ void mq_channel_manager::resolve_channel_io() {
 
 void mq_channel_manager::report_channel_qty_oss() {
   // FIXME: 这里需要发送OSS日志，暂时注释掉
-  // telemetry_oss_user_information user;
-  // user.zone_id = logic_config::me()->get_local_zone_id();
+  // telemetry_oss_user_information user_inst;
+  // user_inst.zone_id = logic_config::me()->get_local_zone_id();
   // rpc::context& ctx = logic_server_get_current_tick_context();
   // rpc::context::message_holder<PROJECT_NAMESPACE_ID::oss::DtmqChannelQty> oss_log{ctx};
   // oss_log->set_total_qty(static_cast<int32_t>(channels_.size()));
   // oss_log->set_penddind_io_qty(static_cast<int32_t>(pending_io_channels_.size()));
   // oss_log->set_running_io_qty(static_cast<int32_t>(running_io_channels_.size()));
-  // telemetry::oss::send_dtmq_channel_qty(ctx, user, std::move(*oss_log));
+  // telemetry::oss::send_dtmq_channel_qty(ctx, user_inst, std::move(*oss_log));
 }

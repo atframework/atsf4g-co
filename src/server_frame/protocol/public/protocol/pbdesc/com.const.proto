@@ -138,7 +138,7 @@ enum EnErrorCode {
   EN_ERR_SYSTEM = -106
                   [(error_code.description) = "服务器系统错误"];
   EN_ERR_USER_NOT_FOUND = -107
-                          [(error_code.description) = "没有找到这个玩家"];
+                          [(error_code.description) = "没有找到这个用户"];
   EN_ERR_REWARD_RECEIVED = -108
                            [(error_code.description) = "这个奖励已经领取"];
   EN_ERR_NOT_FOUND_UUID = -109
@@ -211,7 +211,7 @@ enum EnErrorCode {
                                 [(error_code.description) = "device_id 为空"];
   EN_ERR_LOGIN_OPENID_NOT_MATCH = -415
                                   [(error_code.description) = "上传上来的openid不匹配"];
-  EN_ERR_LOGIN_CREATE_PLAYER_FAILED = -416
+  EN_ERR_LOGIN_CREATE_USER_FAILED = -416
                                       [(error_code.description) = "创建用户失败"];
   EN_ERR_LOGIN_USERID_NOT_MATCH = -417
                                   [(error_code.description) = "用户ID不匹配"];
@@ -237,7 +237,7 @@ enum EnErrorCode {
                                [(error_code.description) = "堆叠数量超过上限"];
   // 排行榜[601-700]
   EN_ERR_RANK_USER_NOT_FOUND = -601
-                               [(error_code.description) = "排行榜玩家不在榜单上"];
+                               [(error_code.description) = "排行榜用户不在榜单上"];
   EN_ERR_RANK_NO_NOT_FOUND = -602
                              [(error_code.description) = "排行榜排名不存在"];
   EN_ERR_RANK_NO_HAS_BUT_NO_FOUND_DETAIL_DATA = -603

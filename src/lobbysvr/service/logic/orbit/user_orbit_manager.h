@@ -24,20 +24,20 @@ class table_user;
 
 PROJECT_NAMESPACE_END
 
-class player;
+class user;
 
 class user_orbit_manager {
  public:
-  explicit user_orbit_manager(player& owner);
+  explicit user_orbit_manager(user& owner);
   void refresh_feature_limit_second(rpc::context& ctx);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context&);
 
-  player& get_owner() { return *owner_; }
-  const player& get_owner() const { return *owner_; }
+  user& get_owner() { return *owner_; }
+  const user& get_owner() const { return *owner_; }
 
   void fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const;
-  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& player_table);
+  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user) const;
 
   // 开始匹配前需要确认是否还存在房间
@@ -58,7 +58,7 @@ class user_orbit_manager {
   void on_receive_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomEventLog& event_log);
   void mark_dirty();
   int32_t create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key, int64_t expired_timepoint);
-  player* ATFW_UTIL_MACRO_NONNULL owner_;
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
 
   struct orbit_room_data {
     bool is_joined_ = false;

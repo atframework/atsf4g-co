@@ -20,14 +20,14 @@ package atframework.shared;
 ////  此处开始是登入相关协议
 /////////////////////////////////////////////////////
 
-message SSPlayerKickOffReq {
+message SSUserKickOffReq {
   uint32 reason = 1;          // 原因
   string reason_message = 2;  // 原因文本
 }
 
-message SSPlayerKickOffRsp {}
+message SSUserKickOffRsp {}
 
-message SSPlayerAsyncJobsSync {}
+message SSUserAsyncJobsSync {}
 /////////////////////////////////////////////////////
 ////  登入相关协议到此结束
 /////////////////////////////////////////////////////
@@ -69,19 +69,19 @@ service LobbysvrService {
     module_name: "lobby"
   };
 
-  // 通知目标玩家下线。
-  rpc player_kickoff(SSPlayerKickOffReq) returns (SSPlayerKickOffRsp) {
+  // 通知目标用户下线。
+  rpc user_kickoff(SSUserKickOffReq) returns (SSUserKickOffRsp) {
     option (atframework.rpc_options) = {
-      module_name: "player"
-      api_name: "通知提用户下线"
+      module_name: "user"
+      api_name: "通知踢用户下线"
       user_rpc: true
     };
   };
 
   // 通知其他服务实例同步并执行异步任务。
-  rpc player_async_jobs_sync(stream SSPlayerAsyncJobsSync) returns (google.protobuf.Empty) {
+  rpc user_async_jobs_sync(stream SSUserAsyncJobsSync) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
-      module_name: "player"
+      module_name: "user"
       api_name: "通知更新和执行异步任务"
       descriptions: "notify another server instance to sync async jobs"
       user_rpc: true

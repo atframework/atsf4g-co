@@ -64,11 +64,11 @@ bool matching_manager::queue_entry::operator<(const queue_entry& other) const no
   return std::tie(created_time, matching_id) < std::tie(other.created_time, other.matching_id);
 }
 
-bool matching_manager::player_key::operator==(const player_key& other) const noexcept {
+bool matching_manager::user_key::operator==(const user_key& other) const noexcept {
   return user_id == other.user_id && zone_id == other.zone_id;
 }
 
-size_t matching_manager::player_key_hash::operator()(const player_key& value) const noexcept {
+size_t matching_manager::user_key_hash::operator()(const user_key& value) const noexcept {
   const size_t first = std::hash<uint64_t>{}(value.user_id);
   const size_t second = std::hash<uint32_t>{}(value.zone_id);
   return first ^ (second + 0x9e3779b9U + (first << 6U) + (first >> 2U));
@@ -126,7 +126,7 @@ int32_t matching_manager::tick() {
 
 void matching_manager::clear() {
   searching_rooms_by_bucket_.clear();
-  player_to_unit_.clear();
+  user_to_unit_.clear();
   unit_to_room_.clear();
   rooms_.clear();
 }
@@ -137,10 +137,10 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
   const auto& scope = request.scope();
   const auto& unit = request.unit();
   FCTXLOGDEBUG(ctx,
-               "create matching, unit_id={}, user={}:{}, player_count={}, level_type={}, region={}, "
+               "create matching, unit_id={}, user={}:{}, user_count={}, level_type={}, region={}, "
                "battle_version={}, matching_pool_id={}, subscriber_server_id={:#x}, acknowledge_event_id={}",
                unit.unit_id(), request.operator_user().user_id(), request.operator_user().zone_id(),
-               unit.players_size(), scope.level_type(), scope.region(), scope.battle_version(),
+               unit.users_size(), scope.level_type(), scope.region(), scope.battle_version(),
                scope.matching_pool_id(), request.subscriber_server_id(), request.acknowledge_event_id());
   if (scope.level_type() <= 0 || scope.region().empty() || scope.battle_version().empty() ||
       scope.matching_pool_id() <= 0) {
@@ -150,7 +150,7 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
     return response.result();
   }
   if (request.operator_user().user_id() == 0 ||
-      !matching_utility::unit_has_player(unit, request.operator_user()) ||
+      !matching_utility::unit_has_user(unit, request.operator_user()) ||
       !matching_utility::same_user(request.operator_user(), unit.captain_user_key())) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
     FCTXLOGERROR(ctx, "create matching rejected by invalid operator, unit_id={}, user={}:{}, result={}", unit.unit_id(),
@@ -169,12 +169,12 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
                  response.result());
     return response.result();
   }
-  for (const auto& player : unit.players()) {
-    if (player_to_unit_.find(player_key{player.user_key().user_id(), player.user_key().zone_id()}) !=
-        player_to_unit_.end()) {
+  for (const auto& user : unit.users()) {
+    if (user_to_unit_.find(user_key{user.user_key().user_id(), user.user_key().zone_id()}) !=
+        user_to_unit_.end()) {
       response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);
-      FCTXLOGERROR(ctx, "create matching rejected by duplicated player, unit_id={}, user={}:{}, result={}",
-                   unit.unit_id(), player.user_key().user_id(), player.user_key().zone_id(), response.result());
+      FCTXLOGERROR(ctx, "create matching rejected by duplicated user, unit_id={}, user={}:{}, result={}",
+                   unit.unit_id(), user.user_key().user_id(), user.user_key().zone_id(), response.result());
       return response.result();
     }
   }
@@ -199,8 +199,8 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
     FCTXLOGDEBUG(ctx, "create matching allocated room, matching_id={}, unit_id={}, expire_time={}",
                  selected_room->get_matching_id(), unit.unit_id(), now + timeout);
   } else {
-    FCTXLOGDEBUG(ctx, "create matching selected existing room, matching_id={}, unit_id={}, current_player_count={}",
-                 selected_room->get_matching_id(), unit.unit_id(), selected_room->get_player_count());
+    FCTXLOGDEBUG(ctx, "create matching selected existing room, matching_id={}, unit_id={}, current_user_count={}",
+                 selected_room->get_matching_id(), unit.unit_id(), selected_room->get_user_count());
   }
 
   if (!selected_room->add_unit(unit)) {
@@ -230,9 +230,9 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
                           : 0);
   selected_room->dump(*response.mutable_snapshot());
   FCTXLOGDEBUG(ctx,
-               "create matching finish, matching_id={}, unit_id={}, created_room={}, player_count={}, status={}, "
+               "create matching finish, matching_id={}, unit_id={}, created_room={}, user_count={}, status={}, "
                "result={}, last_event_id={}",
-               selected_room->get_matching_id(), unit.unit_id(), created_room, selected_room->get_player_count(),
+               selected_room->get_matching_id(), unit.unit_id(), created_room, selected_room->get_user_count(),
                static_cast<int>(selected_room->get_status()), response.result(), selected_room->get_last_event_id());
   return response.result();
 }
@@ -244,15 +244,15 @@ int32_t matching_manager::cancel_matching(rpc::context& ctx, const PROJECT_NAMES
                request.operator_user().user_id(), request.operator_user().zone_id());
   auto room = find_room(request.matching_id(), request.unit_id());
   if (!room || request.unit_id() == 0 || !room->has_unit(request.unit_id()) ||
-      !room->has_player(request.operator_user())) {
+      !room->has_user(request.operator_user())) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
-    FCTXLOGERROR(ctx, "cancel matching failed to find room or player, matching_id={}, unit_id={}, result={}",
+    FCTXLOGERROR(ctx, "cancel matching failed to find room or user, matching_id={}, unit_id={}, result={}",
                  request.matching_id(), request.unit_id(), response.result());
     return response.result();
   }
   auto unit_iter = room->get_units().find(request.unit_id());
   if (unit_iter == room->get_units().end() ||
-      !matching_utility::unit_has_player(unit_iter->second, request.operator_user())) {
+      !matching_utility::unit_has_user(unit_iter->second, request.operator_user())) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
     FCTXLOGERROR(ctx, "cancel matching failed to find unit member, matching_id={}, unit_id={}, result={}",
                  request.matching_id(), request.unit_id(), response.result());
@@ -312,7 +312,7 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
   }
   auto unit_iter = room->get_units().find(request.unit_id());
   if (unit_iter == room->get_units().end() ||
-      !matching_utility::unit_has_player(unit_iter->second, request.operator_user())) {
+      !matching_utility::unit_has_user(unit_iter->second, request.operator_user())) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
     FCTXLOGERROR(ctx, "check matching failed to find unit member, matching_id={}, unit_id={}, result={}",
                  request.matching_id(), request.unit_id(), response.result());
@@ -363,10 +363,10 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
   }
   auto unit_iter = room->get_units().find(request.unit_id());
   if (unit_iter == room->get_units().end() ||
-      !matching_utility::unit_has_player(unit_iter->second, request.operator_user()) ||
-      !room->confirm_player(request.operator_user(), request.confirmed())) {
+      !matching_utility::unit_has_user(unit_iter->second, request.operator_user()) ||
+      !room->confirm_user(request.operator_user(), request.confirmed())) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
-    FCTXLOGERROR(ctx, "confirm matching failed to update player, matching_id={}, unit_id={}, user={}:{}, result={}",
+    FCTXLOGERROR(ctx, "confirm matching failed to update user, matching_id={}, unit_id={}, user={}:{}, result={}",
                  request.matching_id(), request.unit_id(), request.operator_user().user_id(),
                  request.operator_user().zone_id(), response.result());
     return response.result();
@@ -399,7 +399,7 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
       room->resume_matching(now + get_search_timeout_seconds(room->get_scope().matching_pool_id()));
       index_room(room);
     }
-  } else if (room->are_all_players_confirmed()) {
+  } else if (room->are_all_users_confirmed()) {
     start_battle(ctx, room, now);
   }
 
@@ -418,14 +418,14 @@ void matching_manager::set_battle_start_handler(battle_start_handler_t handler) 
   battle_start_handler_ = handler ? std::move(handler) : stub_start_battle;
 }
 
-int32_t matching_manager::get_total_matching_player_count() const noexcept {
+int32_t matching_manager::get_total_matching_user_count() const noexcept {
   int32_t result = 0;
   for (const auto& bucket : searching_rooms_by_bucket_) {
     for (const auto& entry : bucket.second) {
       auto room_iter = rooms_.find(entry.matching_id);
       if (room_iter != rooms_.end() && room_iter->second &&
           room_iter->second->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
-        result += static_cast<int32_t>(room_iter->second->get_player_count());
+        result += static_cast<int32_t>(room_iter->second->get_user_count());
       }
     }
   }
@@ -463,18 +463,18 @@ matching_room::ptr_t matching_manager::find_joinable_room(const PROJECT_NAMESPAC
     return nullptr;
   }
 
-  const int32_t global_matching_players = get_total_matching_player_count();
+  const int32_t global_matching_users = get_total_matching_user_count();
   for (const auto& entry : bucket_iter->second) {
     auto room_iter = rooms_.find(entry.matching_id);
     if (room_iter == rooms_.end() || !room_iter->second || room_iter->second.get() == source_room ||
         room_iter->second->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
       continue;
     }
-    if (source_room != nullptr && room_iter->second->get_player_count() + static_cast<size_t>(unit.players_size()) <=
-                                      source_room->get_player_count()) {
+    if (source_room != nullptr && room_iter->second->get_user_count() + static_cast<size_t>(unit.users_size()) <=
+                                      source_room->get_user_count()) {
       continue;
     }
-    auto check = matching_logic::check_unit_can_join(*room_iter->second, unit, now, global_matching_players);
+    auto check = matching_logic::check_unit_can_join(*room_iter->second, unit, now, global_matching_users);
     if (!check.can_join) {
       continue;
     }
@@ -505,12 +505,12 @@ bool matching_manager::move_unit(rpc::context& ctx, const matching_room::ptr_t& 
 
   target_room->extend_expire_time(now + get_search_timeout_seconds(target_room->get_scope().matching_pool_id()));
   index_unit(target_room->get_matching_id(), unit);
-  for (const auto& player : unit.players()) {
+  for (const auto& user : unit.users()) {
     uint64_t server_id = 0;
     int64_t acknowledge_event_id = 0;
-    if (source_room->get_subscriber_route(player.user_key(), server_id, acknowledge_event_id)) {
-      target_room->subscribe(ctx, player.user_key(), server_id, 0);
-      source_room->unsubscribe(ctx, player.user_key());
+    if (source_room->get_subscriber_route(user.user_key(), server_id, acknowledge_event_id)) {
+      target_room->subscribe(ctx, user.user_key(), server_id, 0);
+      source_room->unsubscribe(ctx, user.user_key());
     }
   }
   source_room->publish(ctx, make_remove_unit_event(unit, target_room->get_matching_id()));
@@ -532,15 +532,15 @@ bool matching_manager::move_unit(rpc::context& ctx, const matching_room::ptr_t& 
 
 void matching_manager::index_unit(const std::string& matching_id, const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
   unit_to_room_[unit.unit_id()] = matching_id;
-  for (const auto& player : unit.players()) {
-    player_to_unit_[player_key{player.user_key().user_id(), player.user_key().zone_id()}] = unit.unit_id();
+  for (const auto& user : unit.users()) {
+    user_to_unit_[user_key{user.user_key().user_id(), user.user_key().zone_id()}] = unit.unit_id();
   }
 }
 
 void matching_manager::unindex_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
   unit_to_room_.erase(unit.unit_id());
-  for (const auto& player : unit.players()) {
-    player_to_unit_.erase(player_key{player.user_key().user_id(), player.user_key().zone_id()});
+  for (const auto& user : unit.users()) {
+    user_to_unit_.erase(user_key{user.user_key().user_id(), user.user_key().zone_id()});
   }
 }
 
@@ -572,8 +572,8 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
   }
   unindex_room(*room);
   room->mark_creating_battle();
-  FCTXLOGDEBUG(ctx, "start battle for matching, matching_id={}, player_count={}, result_template_id={}",
-               room->get_matching_id(), room->get_player_count(), room->get_result_template_id());
+  FCTXLOGDEBUG(ctx, "start battle for matching, matching_id={}, user_count={}, result_template_id={}",
+               room->get_matching_id(), room->get_user_count(), room->get_result_template_id());
 
   PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot snapshot;
   room->dump(snapshot);
@@ -604,7 +604,7 @@ void matching_manager::evaluate_room(rpc::context& ctx, const matching_room::ptr
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
     return;
   }
-  auto result = matching_logic::check_room_ready(*room, now, get_total_matching_player_count());
+  auto result = matching_logic::check_room_ready(*room, now, get_total_matching_user_count());
   if (result.result == 0 && result.result_template_id != 0) {
     room->set_result_template_id(result.result_template_id);
   }
@@ -615,9 +615,9 @@ void matching_manager::evaluate_room(rpc::context& ctx, const matching_room::ptr
     event_log.set_notify_confirm(room->get_confirm_expire_time());
     room->publish(ctx, std::move(event_log));
     FCTXLOGDEBUG(ctx,
-                 "matching room ready for confirmation, matching_id={}, player_count={}, result_template_id={}, "
+                 "matching room ready for confirmation, matching_id={}, user_count={}, result_template_id={}, "
                  "confirm_expire_time={}",
-                 room->get_matching_id(), room->get_player_count(), room->get_result_template_id(),
+                 room->get_matching_id(), room->get_user_count(), room->get_result_template_id(),
                  room->get_confirm_expire_time());
   }
 }
@@ -626,25 +626,25 @@ void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_
   if (!room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING) {
     return;
   }
-  FCTXLOGDEBUG(ctx, "handle matching confirmation timeout, matching_id={}, units={}, player_count={}",
-               room->get_matching_id(), room->get_units().size(), room->get_player_count());
+  FCTXLOGDEBUG(ctx, "handle matching confirmation timeout, matching_id={}, units={}, user_count={}",
+               room->get_matching_id(), room->get_units().size(), room->get_user_count());
   std::vector<PROJECT_NAMESPACE_ID::DMatchingUnit> removed_units;
   for (const auto& unit : room->get_units()) {
     const bool has_unconfirmed =
-        std::any_of(unit.second.players().begin(), unit.second.players().end(), [](const auto& player) {
-          return player.confirm_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED;
+        std::any_of(unit.second.users().begin(), unit.second.users().end(), [](const auto& user) {
+          return user.confirm_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED;
         });
     if (has_unconfirmed) {
       removed_units.emplace_back(unit.second);
     }
   }
   for (const auto& unit : removed_units) {
-    for (const auto& player : unit.players()) {
-      if (player.confirm_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED) {
+    for (const auto& user : unit.users()) {
+      if (user.confirm_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED) {
         continue;
       }
       PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
-      protobuf_copy_message(*event_log.mutable_refuse_confirm()->mutable_user_key(), player.user_key());
+      protobuf_copy_message(*event_log.mutable_refuse_confirm()->mutable_user_key(), user.user_key());
 
       event_log.mutable_refuse_confirm()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_TIMEOUT);
       room->publish(ctx, std::move(event_log));
@@ -672,7 +672,7 @@ void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_
 int32_t matching_manager::stub_start_battle(const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot,
                                             std::string& battle_room_id) {
   battle_room_id = "battle-stub-" + snapshot.matching_id();
-  FWLOGINFO("battlesvr stub accepted matching {}, players will be forwarded after battlesvr is implemented",
+  FWLOGINFO("battlesvr stub accepted matching {}, users will be forwarded after battlesvr is implemented",
             snapshot.matching_id());
   return 0;
 }

@@ -19,7 +19,7 @@
 
 #include <config/excel_config_const_index.h>
 #include <config/logic_config.h>
-#include <data/player.h>
+#include <data/user.h>
 
 #include <logic/logic_server_setup.h>
 

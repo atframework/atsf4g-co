@@ -221,9 +221,9 @@ CASE_TEST(rpc_unit_test, user_rpc_unary_head_fields) {
       [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
         auto &typed_response = static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response);
-        CASE_EXPECT_EQ(kZoneId, request.head.player_zone_id());
-        CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.player_user_id()));
-        CASE_EXPECT_EQ("openid-x", request.head.player_open_id());
+        CASE_EXPECT_EQ(kZoneId, request.head.user_zone_id());
+        CASE_EXPECT_EQ(10001, static_cast<int64_t>(request.head.user_user_id()));
+        CASE_EXPECT_EQ("openid-x", request.head.user_open_id());
         typed_response.set_echo(typed_request.payload());
         RPC_RETURN_CODE(0);
       });

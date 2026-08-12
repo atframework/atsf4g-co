@@ -41,20 +41,20 @@ const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& matchin
   return units_;
 }
 
-size_t matching_room::get_player_count() const noexcept {
+size_t matching_room::get_user_count() const noexcept {
   size_t result = 0;
   for (const auto& unit : units_) {
-    result += static_cast<size_t>(unit.second.players_size());
+    result += static_cast<size_t>(unit.second.users_size());
   }
   return result;
 }
 
 bool matching_room::has_unit(uint64_t unit_id) const noexcept { return units_.find(unit_id) != units_.end(); }
 
-bool matching_room::has_player(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept {
+bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept {
   for (const auto& unit : units_) {
-    for (const auto& player : unit.second.players()) {
-      if (matching_utility::same_user(player.user_key(), user_key)) {
+    for (const auto& user : unit.second.users()) {
+      if (matching_utility::same_user(user.user_key(), user_key)) {
         return true;
       }
     }
@@ -67,13 +67,13 @@ bool matching_room::add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
       units_.find(unit.unit_id()) != units_.end()) {
     return false;
   }
-  for (int left = 0; left < unit.players_size(); ++left) {
-    const auto& player = unit.players(left);
-    if (has_player(player.user_key())) {
+  for (int left = 0; left < unit.users_size(); ++left) {
+    const auto& user = unit.users(left);
+    if (has_user(user.user_key())) {
       return false;
     }
-    for (int right = left + 1; right < unit.players_size(); ++right) {
-      if (matching_utility::same_user(player.user_key(), unit.players(right).user_key())) {
+    for (int right = left + 1; right < unit.users_size(); ++right) {
+      if (matching_utility::same_user(user.user_key(), unit.users(right).user_key())) {
         return false;
       }
     }
@@ -96,20 +96,20 @@ void matching_room::begin_confirmation(int64_t expire_time) noexcept {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING;
   confirm_expire_time_ = expire_time;
   for (auto& unit : units_) {
-    for (auto& player : *unit.second.mutable_players()) {
-      player.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+    for (auto& user : *unit.second.mutable_users()) {
+      user.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
     }
   }
 }
 
-bool matching_room::confirm_player(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool accepted) noexcept {
+bool matching_room::confirm_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool accepted) noexcept {
   if (status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING) {
     return false;
   }
   for (auto& unit : units_) {
-    for (auto& player : *unit.second.mutable_players()) {
-      if (matching_utility::same_user(player.user_key(), user_key)) {
-        player.set_confirm_status(accepted ? PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED
+    for (auto& user : *unit.second.mutable_users()) {
+      if (matching_utility::same_user(user.user_key(), user_key)) {
+        user.set_confirm_status(accepted ? PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED
                                            : PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_REFUSED);
         return true;
       }
@@ -118,13 +118,13 @@ bool matching_room::confirm_player(const PROJECT_NAMESPACE_ID::DUserIDKey& user_
   return false;
 }
 
-bool matching_room::are_all_players_confirmed() const noexcept {
+bool matching_room::are_all_users_confirmed() const noexcept {
   if (status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING || units_.empty()) {
     return false;
   }
   for (const auto& unit : units_) {
-    for (const auto& player : unit.second.players()) {
-      if (player.confirm_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED) {
+    for (const auto& user : unit.second.users()) {
+      if (user.confirm_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED) {
         return false;
       }
     }
@@ -139,8 +139,8 @@ void matching_room::resume_matching(int64_t expire_time) noexcept {
   result_template_id_ = 0;
   for (auto& unit : units_) {
     unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
-    for (auto& player : *unit.second.mutable_players()) {
-      player.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+    for (auto& user : *unit.second.mutable_users()) {
+      user.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
     }
   }
 }

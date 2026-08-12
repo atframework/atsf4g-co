@@ -70,10 +70,10 @@ class rank_manager : public atfw::util::design_pattern::singleton<rank_manager> 
                                                                        rank_ptr_type& out_rank);
 
   /**
-   * @brief 修改玩家分数
+   * @brief 修改用户分数
    * @param ctx rpc上下文
    * @param key 排行榜key
-   * @param user_key 玩家排序键
+   * @param user_key 用户排序键
    * @param score 分数
    * @param custom_data 自定义数据
    * @return rpc::result_code_type
@@ -87,8 +87,8 @@ class rank_manager : public atfw::util::design_pattern::singleton<rank_manager> 
    * @brief 查询指定key排行数据
    * @param ctx rpc上下文
    * @param key 排行榜key
-   * @param sort_key 玩家排序键
-   * @param output 返回的玩家排行数据
+   * @param sort_key 用户排序键
+   * @param output 返回的用户排行数据
    * @return rpc::result_code_type
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_one_user(rpc::context& ctx,

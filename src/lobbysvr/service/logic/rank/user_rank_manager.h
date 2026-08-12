@@ -37,7 +37,7 @@ class TABLE_USER_DEF;
 }
 }  // namespace tdr2pb
 
-class player;
+class user;
 
 namespace rpc {
 class context;
@@ -54,7 +54,7 @@ class user_rank_manager {
   };
 
  public:
-  explicit user_rank_manager(player &owner);
+  explicit user_rank_manager(user &owner);
   ~user_rank_manager();
 
   // 创建默认角色数据
@@ -68,7 +68,7 @@ class user_rank_manager {
   void refresh_feature_limit_second(rpc::context &ctx);
 
   // 从table数据初始化
-  void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &player_table);
+  void init_from_table_data(rpc::context &ctx, const PROJECT_NAMESPACE_ID::table_user &user_table);
 
   int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user);
 
@@ -242,14 +242,14 @@ class user_rank_manager {
       uint32_t up_count = 0, uint32_t down_count = 0);
 
   /**
-   * @brief  将玩家冲所有榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户所有榜单被封禁
+   * @brief  将用户冲所有榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户所有榜单被封禁
    * @param ctx 上下文
    * @return rpc::result_code_type
    */
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_all_rank(rpc::context &ctx);
 
   /**
-   * @brief  将玩家从指定的榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户对应榜单被封禁||缓存被删除
+   * @brief  将用户从指定的榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户对应榜单被封禁||缓存被删除
    * @param ctx 上下文
    * @param ban_id 封禁id
    * @return rpc::result_code_type
@@ -261,7 +261,7 @@ class user_rank_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type clear_user_one_rank(rpc::context &ctx, uint32_t rank_type,
                                                                          uint32_t rank_instance_id);
   /**
-   * @brief  将玩家从指定的榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户对应榜单被封禁||缓存被删除
+   * @brief  将用户从指定的榜单上删除 处罚用户使用 不改变排行榜缓存，调用前请先确定用户对应榜单被封禁||缓存被删除
    * @param ctx 上下文
    * @param ban_id 封禁id
    * @return rpc::result_code_type
@@ -419,7 +419,7 @@ class user_rank_manager {
   void convert_to(PROJECT_NAMESPACE_ID::DRankUserBasicData &output, const logic_rank_handle_data &input);
 
  private:
-  player *ATFW_UTIL_MACRO_NONNULL owner_;
+  user *ATFW_UTIL_MACRO_NONNULL owner_;
   bool is_dirty_;
 
   // 保护过于频繁得启动刷新/提交排行榜任务

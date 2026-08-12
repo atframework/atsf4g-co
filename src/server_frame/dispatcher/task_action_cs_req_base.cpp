@@ -12,12 +12,12 @@
 
 #include <memory/object_allocator.h>
 
-#include <data/player_cache.h>
-#include <logic/player_manager.h>
+#include <data/user_cache.h>
+#include <logic/user_manager.h>
 #include <logic/session_manager.h>
 
-// #include <router/router_player_cache.h>
-#include <router/router_player_manager.h>
+// #include <router/router_user_cache.h>
+#include <router/router_user_manager.h>
 
 #include <dispatcher/cs_msg_dispatcher.h>
 
@@ -60,9 +60,9 @@ SERVER_FRAME_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_sta
 
     session::ptr_t sess = get_session();
     if (sess) {
-      player_cache::ptr_t player_cache = sess->get_player();
-      if (player_cache) {
-        set_user_key(player_cache->get_user_id(), player_cache->get_zone_id());
+      user_cache::ptr_t user_cache = sess->get_user();
+      if (user_cache) {
+        set_user_key(user_cache->get_user_id(), user_cache->get_zone_id());
       }
     }
   }
@@ -76,7 +76,7 @@ SERVER_FRAME_API task_action_cs_req_base::task_action_cs_req_base(dispatcher_sta
 SERVER_FRAME_API task_action_cs_req_base::~task_action_cs_req_base() {}
 
 SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::hook_run() {
-  std::shared_ptr<player_cache> player_cache = get_player_cache();
+  std::shared_ptr<user_cache> user_cache = get_user_cache();
   /**
   do {
     std::shared_ptr<session> sess = get_session();
@@ -104,17 +104,17 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     }
   }
 
-  router_player_manager::ptr_t router_obj;
+  router_user_manager::ptr_t router_obj;
   do {
-    if (player_cache == nullptr) {
+    if (user_cache == nullptr) {
       break;
     }
 
-    player_cache->refresh_feature_limit(get_shared_context());
+    user_cache->refresh_feature_limit(get_shared_context());
 
-    router_obj = router_player_manager::me()->get_cache(router_player_manager::key_t(
-        router_player_manager::me()->get_type_id(), player_cache->get_zone_id(), player_cache->get_user_id()));
-    if (router_obj && (!router_obj->is_writable() || !router_obj->is_object_equal(player_cache))) {
+    router_obj = router_user_manager::me()->get_cache(router_user_manager::key_t(
+        router_user_manager::me()->get_type_id(), user_cache->get_zone_id(), user_cache->get_user_id()));
+    if (router_obj && (!router_obj->is_writable() || !router_obj->is_object_equal(user_cache))) {
       router_obj.reset();
     }
     if (router_obj) {
@@ -143,7 +143,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
     int64_t current_time = static_cast<int64_t>((util::time::time_utility::get_now() * 1000) +
                                                 (util::time::time_utility::get_now_usec() / 1000));
 
-    auto &frequency_limit = player_cache->get_protocol_frequency_limit();
+    auto &frequency_limit = user_cache->get_protocol_frequency_limit();
     auto last_time_deque = frequency_limit.find(name());
     if (last_time_deque == frequency_limit.end()) {
       frequency_limit[name()].push_back(current_time);
@@ -172,11 +172,11 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
 
   // 用户层消息过滤
   do {
-    if (player_cache == nullptr) {
+    if (user_cache == nullptr) {
       break;
     }
 
-    int32_t result = player_cache->client_rpc_filter(get_shared_context(), *this, get_dispatcher_options());
+    int32_t result = user_cache->client_rpc_filter(get_shared_context(), *this, get_dispatcher_options());
     if (result < 0) {
       write_actor_log_head();
       set_response_code(result);
@@ -192,7 +192,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
 
   result_type::value_type ret{};
   {
-    task_lock_guard cs_task_lock_guard(get_player_cache(), get_task_id());
+    task_lock_guard cs_task_lock_guard(get_user_cache(), get_task_id());
     ret = RPC_AWAIT_CODE_RESULT(base_type::hook_run());
   }
 
@@ -207,27 +207,27 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
       break;
     }
 
-    router_manager_base *mgr = router_manager_set::me()->get_manager(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER);
+    router_manager_base *mgr = router_manager_set::me()->get_manager(PROJECT_NAMESPACE_ID::EN_ROT_USER);
     if (nullptr == mgr) {
       break;
     }
 
-    if (!player_cache) {
-      player_cache = get_player_cache();
-      if (player_cache) {
-        player_cache->refresh_feature_limit(get_shared_context());
+    if (!user_cache) {
+      user_cache = get_user_cache();
+      if (user_cache) {
+        user_cache->refresh_feature_limit(get_shared_context());
       }
     }
 
-    if (!player_cache || !router_obj) {
+    if (!user_cache || !router_obj) {
       break;
     }
 
     if (dispatcher_options->mark_wait_save()) {
-      ret = RPC_AWAIT_CODE_RESULT(player_manager::me()->save(get_shared_context(), player_cache->get_user_id(),
-                                                             player_cache->get_zone_id(), player_cache.get()));
+      ret = RPC_AWAIT_CODE_RESULT(user_manager::me()->save(get_shared_context(), user_cache->get_user_id(),
+                                                             user_cache->get_zone_id(), user_cache.get()));
       if (ret < 0) {
-        FWLOGERROR("save player {}:{} failed, res: {}({})", player_cache->get_zone_id(), player_cache->get_user_id(),
+        FWLOGERROR("save user {}:{} failed, res: {}({})", user_cache->get_zone_id(), user_cache->get_user_id(),
                    ret, protobuf_mini_dumper_get_error_msg(ret));
       }
     } else {
@@ -291,13 +291,13 @@ SERVER_FRAME_API session::ptr_t task_action_cs_req_base::get_session() const {
   return session_inst_;
 }
 
-SERVER_FRAME_API std::shared_ptr<player_cache> task_action_cs_req_base::get_player_cache() const {
+SERVER_FRAME_API std::shared_ptr<user_cache> task_action_cs_req_base::get_user_cache() const {
   std::shared_ptr<session> sess = get_session();
   if (!sess) {
     return nullptr;
   }
 
-  return sess->get_player();
+  return sess->get_user();
 }
 
 SERVER_FRAME_API task_action_cs_req_base::msg_ref_type task_action_cs_req_base::add_response_message() {
@@ -431,7 +431,7 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response() {
     int32_t res = sess->send_msg_to_client(get_shared_context(), **iter);
     if (res) {
       if (get_user_id() != 0) {
-        FWLOGERROR("task {} [{}] send message to player_cache {}:{} failed, res: {}", name(), get_task_id(),
+        FWLOGERROR("task {} [{}] send message to user_cache {}:{} failed, res: {}", name(), get_task_id(),
                    get_zone_id(), get_user_id(), res);
       } else {
         FWLOGERROR("task {} [{}] send message to {} failed, res: {}", name(), get_task_id(), *sess, res);
@@ -455,19 +455,19 @@ SERVER_FRAME_API void task_action_cs_req_base::send_response(bool sync_dirty) {
     }
     has_sync_dirty_ = true;
 
-    player_cache::ptr_t owner_player = get_player_cache();
-    if (!owner_player) {
+    user_cache::ptr_t owner_user = get_user_cache();
+    if (!owner_user) {
       FWLOGWARNING("session may be invalid now, ignore sync message for user {}:{}", get_zone_id(), get_user_id());
       break;
     }
 
-    owner_player->send_all_syn_msg(get_shared_context());
+    owner_user->send_all_syn_msg(get_shared_context());
 
     // refresh visit time if success
     if (0 == get_response_code()) {
-      router_player_manager::ptr_t router_cache = router_player_manager::me()->get_cache(router_player_manager::key_t(
-          router_player_manager::me()->get_type_id(), owner_player->get_zone_id(), owner_player->get_user_id()));
-      if (router_cache && router_cache->is_object_equal(owner_player)) {
+      router_user_manager::ptr_t router_cache = router_user_manager::me()->get_cache(router_user_manager::key_t(
+          router_user_manager::me()->get_type_id(), owner_user->get_zone_id(), owner_user->get_user_id()));
+      if (router_cache && router_cache->is_object_equal(owner_user)) {
         router_cache->refresh_visit_time();
       }
     }

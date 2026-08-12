@@ -41,11 +41,11 @@ class task_action_cs_req_base;
  * @note 能够隐式转换到只读类型，手动使用get或ref函数提取数据会视为即将写脏
  */
 template <typename Ty>
-class ATFW_UTIL_SYMBOL_VISIBLE player_cache_dirty_wrapper {
+class ATFW_UTIL_SYMBOL_VISIBLE user_cache_dirty_wrapper {
  public:
   using value_type = Ty;
 
-  ATFW_UTIL_FORCEINLINE player_cache_dirty_wrapper() : dirty_(false) {}
+  ATFW_UTIL_FORCEINLINE user_cache_dirty_wrapper() : dirty_(false) {}
 
   ATFW_UTIL_FORCEINLINE bool is_dirty() const { return dirty_; }
 
@@ -78,12 +78,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache_dirty_wrapper {
   bool dirty_;
 };
 
-class player_cache;
+class user_cache;
 
 class ATFW_UTIL_SYMBOL_VISIBLE initialization_task_lock_guard {
  public:
   SERVER_FRAME_API ~initialization_task_lock_guard();
-  SERVER_FRAME_API initialization_task_lock_guard(std::shared_ptr<player_cache> user,
+  SERVER_FRAME_API initialization_task_lock_guard(std::shared_ptr<user_cache> user_inst,
                                                   task_type_trait::id_type task_id) noexcept;
 
   SERVER_FRAME_API initialization_task_lock_guard(initialization_task_lock_guard &&) noexcept;
@@ -96,20 +96,20 @@ class ATFW_UTIL_SYMBOL_VISIBLE initialization_task_lock_guard {
   initialization_task_lock_guard &operator=(const initialization_task_lock_guard &) = delete;
 
  private:
-  std::shared_ptr<player_cache> guard_;
+  std::shared_ptr<user_cache> guard_;
 };
 
-class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_this<player_cache> {
+class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<user_cache> {
  public:
-  using ptr_t = std::shared_ptr<player_cache>;
-  friend class player_manager;
+  using ptr_t = std::shared_ptr<user_cache>;
+  friend class user_manager;
 
  protected:
   struct ATFW_UTIL_SYMBOL_VISIBLE fake_constructor {};
 
  public:
-  SERVER_FRAME_API explicit player_cache(fake_constructor &);
-  SERVER_FRAME_API virtual ~player_cache();
+  SERVER_FRAME_API explicit user_cache(fake_constructor &);
+  SERVER_FRAME_API virtual ~user_cache();
 
   SERVER_FRAME_API virtual bool can_be_writable() const;
 
@@ -156,15 +156,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
 
   // 从table数据初始化
   SERVER_FRAME_API virtual void init_from_table_data(rpc::context &ctx,
-                                                     const PROJECT_NAMESPACE_ID::table_user &stTableplayer_cache);
+                                                     const PROJECT_NAMESPACE_ID::table_user &stTableuser_cache);
 
   /**
    * @brief 转储数据
-   * @param user 转储目标
+   * @param user_inst 转储目标
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  SERVER_FRAME_API virtual int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always);
+  SERVER_FRAME_API virtual int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user_inst, bool always);
 
   /**
    * @brief 下发同步消息
@@ -261,7 +261,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type await_initialization_task(rpc::context &ctx);
 
  private:
-  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &mutable_player_data() { return user_data_.ref(); }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &mutable_user_data() { return user_data_.ref(); }
 
  protected:
   ATFW_UTIL_FORCEINLINE void set_data_version(uint32_t ver) { data_version_ = ver; }
@@ -283,11 +283,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   std::shared_ptr<task_lock> task_lock_;
   task_type_trait::id_type initialization_task_id_;
 
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_login_data> login_info_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::account_information> account_info_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_data> user_data_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_option_public_data> user_option_public_data_;
-  player_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_option_private_data> user_option_private_data_;
+  user_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_login_data> login_info_;
+  user_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::account_information> account_info_;
+  user_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_data> user_data_;
+  user_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_option_public_data> user_option_public_data_;
+  user_cache_dirty_wrapper<PROJECT_NAMESPACE_ID::user_option_private_data> user_option_private_data_;
 
   uint64_t server_sequence_;
   uint64_t data_version_;
@@ -295,55 +295,55 @@ class ATFW_UTIL_SYMBOL_VISIBLE player_cache : public std::enable_shared_from_thi
   std::unordered_map<const char *, std::deque<int64_t>> protocol_frequency_limit_;
 };
 
-// 玩家日志输出工具
+// 用户日志输出工具
 #ifdef _MSC_VER
-#  define FWPLOGTRACE(PLAYER, fmt, ...)                                                                         \
-    FWLOGTRACE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGTRACE(USER, fmt, ...)                                                                         \
+    FWLOGTRACE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                __VA_ARGS__)
-#  define FWPLOGDEBUG(PLAYER, fmt, ...)                                                                         \
-    FWLOGDEBUG("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGDEBUG(USER, fmt, ...)                                                                         \
+    FWLOGDEBUG("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                __VA_ARGS__)
-#  define FWPLOGNOTICE(PLAYER, fmt, ...)                                                                         \
-    FWLOGNOTICE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGNOTICE(USER, fmt, ...)                                                                         \
+    FWLOGNOTICE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                 __VA_ARGS__)
-#  define FWPLOGINFO(PLAYER, fmt, ...)                                                                         \
-    FWLOGINFO("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGINFO(USER, fmt, ...)                                                                         \
+    FWLOGINFO("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
               __VA_ARGS__)
-#  define FWPLOGWARNING(PLAYER, fmt, ...)                                                                         \
-    FWLOGWARNING("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGWARNING(USER, fmt, ...)                                                                         \
+    FWLOGWARNING("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                  __VA_ARGS__)
-#  define FWPLOGERROR(PLAYER, fmt, ...)                                                                         \
-    FWLOGERROR("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGERROR(USER, fmt, ...)                                                                         \
+    FWLOGERROR("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                __VA_ARGS__)
-#  define FWPLOGFATAL(PLAYER, fmt, ...)                                                                         \
-    FWLOGFATAL("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGFATAL(USER, fmt, ...)                                                                         \
+    FWLOGFATAL("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                __VA_ARGS__)
 
 #else
-#  define FWPLOGTRACE(PLAYER, fmt, args...) \
-    FWLOGTRACE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
-#  define FWPLOGDEBUG(PLAYER, fmt, args...) \
-    FWLOGDEBUG("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
-#  define FWPLOGNOTICE(PLAYER, fmt, args...) \
-    FWLOGNOTICE("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
-#  define FWPLOGINFO(PLAYER, fmt, args...) \
-    FWLOGINFO("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
-#  define FWPLOGWARNING(PLAYER, fmt, args...)                                                                     \
-    FWLOGWARNING("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), \
+#  define FWPLOGTRACE(USER, fmt, args...) \
+    FWLOGTRACE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
+#  define FWPLOGDEBUG(USER, fmt, args...) \
+    FWLOGDEBUG("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
+#  define FWPLOGNOTICE(USER, fmt, args...) \
+    FWLOGNOTICE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
+#  define FWPLOGINFO(USER, fmt, args...) \
+    FWLOGINFO("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
+#  define FWPLOGWARNING(USER, fmt, args...)                                                                     \
+    FWLOGWARNING("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
                  ##args)
-#  define FWPLOGERROR(PLAYER, fmt, args...) \
-    FWLOGERROR("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
-#  define FWPLOGFATAL(PLAYER, fmt, args...) \
-    FWLOGFATAL("player {}({}:{}) " fmt, (PLAYER).get_open_id(), (PLAYER).get_zone_id(), (PLAYER).get_user_id(), ##args)
+#  define FWPLOGERROR(USER, fmt, args...) \
+    FWLOGERROR("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
+#  define FWPLOGFATAL(USER, fmt, args...) \
+    FWLOGFATAL("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
 #endif
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
-struct ATFW_UTIL_SYMBOL_VISIBLE formatter<player_cache, CharT> : formatter<basic_string_view<CharT>, CharT> {
+struct ATFW_UTIL_SYMBOL_VISIBLE formatter<user_cache, CharT> : formatter<basic_string_view<CharT>, CharT> {
   template <class FormatContext>
-  auto format(const player_cache &user, FormatContext &ctx) const {
-    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "player {}({}:{})", user.get_open_id(), user.get_zone_id(),
-                                       user.get_user_id());
+  auto format(const user_cache &user_inst, FormatContext &ctx) const {
+    return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "user {}({}:{})", user_inst.get_open_id(), user_inst.get_zone_id(),
+                                       user_inst.get_user_id());
   }
 };
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

@@ -15,7 +15,7 @@ bool same_user(const PROJECT_NAMESPACE_ID::DUserIDKey& left,
                const PROJECT_NAMESPACE_ID::DUserIDKey& right) noexcept;
 
 // 判断不可拆分的匹配 Unit 是否包含指定玩家。
-bool unit_has_player(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
+bool unit_has_user(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
                      const PROJECT_NAMESPACE_ID::DUserIDKey& expected) noexcept;
 
 // 判断用户键列表是否包含指定玩家。

@@ -26,7 +26,7 @@
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
-#include <data/player.h>
+#include <data/user.h>
 
 #include <rpc/cache/cache_algorithm.h>
 #include <rpc/cache/cache_api.h>
@@ -50,7 +50,7 @@ std::string user_cache_manager::memory_leak_debug() {
   return atfw::util::log::format("user_cache_manager: {} \n", watch_data_.size());
 }
 
-user_cache_manager::user_cache_manager(player& owner)
+user_cache_manager::user_cache_manager(user& owner)
     : owner_(&owner),
       cachesvr_discovery_version_(0),
       need_notify_user_cache_expired_(false),
@@ -75,7 +75,7 @@ void user_cache_manager::on_logout(rpc::context& ctx) {
     return;
   }
 
-  // 如果玩家尚未保存，记录缓存过期即可，等保存时会进行
+  // 如果用户尚未保存，记录缓存过期即可，等保存时会进行
   // 否则需要立即发出缓存失效通知
   if (send_expired_right_now) {
     async_send_update_user_basic_meta_to_cachesvr(ctx);
@@ -226,7 +226,7 @@ void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx
         RPC_RETURN_CODE(res);
       });
   if (notify_task.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke task to notify player cache expired failed, res: {}({})",
+    FWPLOGERROR(*owner_, "async_invoke task to notify user cache expired failed, res: {}({})",
                 *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
   } else {
     need_notify_user_cache_expired_ = false;
@@ -278,7 +278,7 @@ void user_cache_manager::async_send_update_user_basic_meta_to_cachesvr(rpc::cont
         RPC_RETURN_CODE(ret);
       });
   if (notify_task.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke task to notify player cache update meta failed, res: {}({})",
+    FWPLOGERROR(*owner_, "async_invoke task to notify user cache update meta failed, res: {}({})",
                 *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
   } else {
     need_notify_user_meta_expired_ = false;
@@ -367,7 +367,7 @@ rpc::result_code_type user_cache_manager::unwatch_cache_keys(
   ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>* cache_keys =
       ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>>();
   if (nullptr == cache_keys) {
-    FWLOGERROR("malloc RepeatedPtrField<PROJECT_NAMESPACE_ID::DPlayerIDKey> failed");
+    FWLOGERROR("malloc RepeatedPtrField<PROJECT_NAMESPACE_ID::DUserIDKey> failed");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
   }
 
@@ -677,23 +677,23 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
     ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* not_found_keys) {
   std::unordered_map<PROJECT_NAMESPACE_ID::object_cache_key, PROJECT_NAMESPACE_ID::EnCacheApiGetCacheType,
                      rpc::cache_api::cache_key_hash_t, rpc::cache_api::cache_key_equal_t>
-      player_map;
+      user_map;
 
   for (const auto& key : keys) {
     PROJECT_NAMESPACE_ID::object_cache_key cache_key;
     cache_key.set_cache_type(key.cache_key().cache_type());
     cache_key.set_zone_id(key.cache_key().zone_id());
     cache_key.set_instance_id(key.cache_key().instance_id());
-    player_map[cache_key] = key.get_type();
+    user_map[cache_key] = key.get_type();
   }
 
-  if (player_map.empty()) {
+  if (user_map.empty()) {
     RPC_RETURN_CODE(0);
   }
   int32_t ret = 0;
   if (rpc::cache_api::has_cachesvr()) {
-    global_cache_manager::me()->fetch_hot_data(player_map, output);
-    if (player_map.empty()) {
+    global_cache_manager::me()->fetch_hot_data(user_map, output);
+    if (user_map.empty()) {
       RPC_RETURN_CODE(0);
     }
 
@@ -731,7 +731,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
     cache_pull_keys->Reserve(keys.size());
     cache_contents->Reserve(keys.size());
 
-    for (const auto& data : player_map) {
+    for (const auto& data : user_map) {
       PROJECT_NAMESPACE_ID::object_cache_pull_key* pull_key = cache_pull_keys->Add();
       if (nullptr == pull_key) {
         FWLOGERROR("malloc object_cache_key failed");
@@ -744,7 +744,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
     ret = RPC_AWAIT_CODE_RESULT(
         rpc::cache_api::batch_get_cache(ctx, *watcher, std::move(*cache_pull_keys), *cache_contents));
     if (ret != 0) {
-      FWPLOGERROR(*owner_, "pull cache failed size {}, ret {}", player_map.size(), ret);
+      FWPLOGERROR(*owner_, "pull cache failed size {}, ret {}", user_map.size(), ret);
       RPC_RETURN_CODE(ret);
     }
 
@@ -777,20 +777,20 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
       }
 
       // 检查所有支持的类型
-      if (player_map[got_cache_key] == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA) {
+      if (user_map[got_cache_key] == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_HOT_DATA) {
         global_cache_manager::me()->update_hot_data(got_cache_key, cache_contents->Get(i));
       }
 
       // 记录数据版本号
-      if (player_map[got_cache_key] == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE) {
+      if (user_map[got_cache_key] == PROJECT_NAMESPACE_ID::EN_CACHE_API_GET_CACHE_TYPE_SUBSCRIBE) {
         watch_data_[got_cache_key].data_version = static_cast<uint64_t>(cache_contents->Get(i).data_version());
       }
 
-      player_map.erase(got_cache_key);
+      user_map.erase(got_cache_key);
     }
   }
   if (not_found_keys != nullptr) {
-    for (const auto& unit : player_map) {
+    for (const auto& unit : user_map) {
       auto* key = not_found_keys->Add();
       if (key != nullptr) {
         key->set_cache_type(unit.first.cache_type());

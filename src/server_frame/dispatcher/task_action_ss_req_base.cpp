@@ -7,7 +7,7 @@
 #include <std/explicit_declare.h>
 
 #include <log/log_wrapper.h>
-#include <logic/player_manager.h>
+#include <logic/user_manager.h>
 #include <time/time_utility.h>
 
 #include <utility/protobuf_mini_dumper.h>
@@ -53,7 +53,7 @@ SERVER_FRAME_API task_action_ss_req_base::task_action_ss_req_base(dispatcher_sta
   if (nullptr != ss_msg) {
     get_request().Swap(ss_msg);
 
-    set_user_key(get_request().head().player_user_id(), get_request().head().player_zone_id());
+    set_user_key(get_request().head().user_user_id(), get_request().head().user_zone_id());
   }
 
   // 最后设置caller
@@ -156,14 +156,14 @@ SERVER_FRAME_API int32_t task_action_ss_req_base::init_msg(msg_ref_type msg, uin
   if (request_head.has_rpc_trace()) {
     protobuf_copy_message(*head->mutable_rpc_trace(), request_head.rpc_trace());
   }
-  if (!request_head.player_open_id().empty()) {
-    head->set_player_open_id(request_head.player_open_id());
+  if (!request_head.user_open_id().empty()) {
+    head->set_user_open_id(request_head.user_open_id());
   }
-  if (request_head.player_user_id() != 0) {
-    head->set_player_user_id(request_head.player_user_id());
+  if (request_head.user_user_id() != 0) {
+    head->set_user_user_id(request_head.user_user_id());
   }
-  if (request_head.player_zone_id() != 0) {
-    head->set_player_user_id(request_head.player_user_id());
+  if (request_head.user_zone_id() != 0) {
+    head->set_user_user_id(request_head.user_user_id());
   }
 
   // set task information
@@ -432,9 +432,9 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(
       if (!forward_response->head().external_error_message().empty()) {
         head->set_external_error_message(forward_response->head().external_error_message());
       }
-      head->set_player_user_id(forward_response->head().player_user_id());
-      head->set_player_open_id(forward_response->head().player_open_id());
-      head->set_player_zone_id(forward_response->head().player_zone_id());
+      head->set_user_user_id(forward_response->head().user_user_id());
+      head->set_user_open_id(forward_response->head().user_open_id());
+      head->set_user_zone_id(forward_response->head().user_zone_id());
 
       // Swap body
       response_message.mutable_body_bin()->swap(*forward_response->mutable_body_bin());
@@ -474,9 +474,9 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::forward_rpc(uint
       if (!forward_response->head().external_error_message().empty()) {
         head->set_external_error_message(forward_response->head().external_error_message());
       }
-      head->set_player_user_id(forward_response->head().player_user_id());
-      head->set_player_open_id(forward_response->head().player_open_id());
-      head->set_player_zone_id(forward_response->head().player_zone_id());
+      head->set_user_user_id(forward_response->head().user_user_id());
+      head->set_user_open_id(forward_response->head().user_open_id());
+      head->set_user_zone_id(forward_response->head().user_zone_id());
 
       // Swap body
       response_message.mutable_body_bin()->swap(*forward_response->mutable_body_bin());

@@ -10,12 +10,12 @@
 
 #include <memory>
 
-class player;
+class user;
 
-class task_action_player_async_jobs : public task_action_no_req_base {
+class task_action_user_async_jobs : public task_action_no_req_base {
  public:
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
-    std::shared_ptr<player> user;
+    std::shared_ptr<user> user_inst;
     task_type_trait::task_type after;
   };
 
@@ -23,8 +23,8 @@ class task_action_player_async_jobs : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  explicit task_action_player_async_jobs(ctor_param_t&& param);
-  ~task_action_player_async_jobs();
+  explicit task_action_user_async_jobs(ctor_param_t&& param);
+  ~task_action_user_async_jobs();
 
   result_type operator()() override;
 

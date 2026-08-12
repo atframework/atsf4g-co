@@ -414,7 +414,7 @@ void mock_ss::deliver_pending() {
         std::chrono::seconds{30});
     if (!invoke_result.is_success()) {
       // Refund the budget consumed above — the handler never ran.
-      if (matched_rule->options.times > 0 && matched_rule->remaining_times >= 0) {
+      if (matched_rule->options.times > 0 && matched_rule->remaining_times > 0) {
         ++matched_rule->remaining_times;
       }
       if (needs_response) {

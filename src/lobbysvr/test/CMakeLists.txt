@@ -15,7 +15,7 @@ project_add_rpc_unit_test(
 
 # ============ Lobbysvr user_chat_manager unit tests (rpc-unit-test based) ============
 
-# user_chat_manager, the chat task actions and their supporting player/manager code live in the lobbysvr service
+# user_chat_manager, the chat task actions and their supporting user/manager code live in the lobbysvr service
 # executable (no library target), so this target compiles the required service sources directly. The generated
 # *.atfw.gen.* sources for the CS flow are collected from the generation target (same mechanism as
 # project_service_declare_instance) so the dependency ordering is correct and we never edit generated files by hand.
@@ -34,12 +34,12 @@ project_add_rpc_unit_test(
   CATEGORY service
   SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_chat_manager.cpp"
-    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/data/player.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/data/user.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/action/task_action_access_update.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/action/task_action_login.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/action/task_action_ping.cpp"
-    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/action/task_action_player_async_jobs.cpp"
-    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/async_jobs/task_action_player_remote_patch_jobs.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/action/task_action_user_async_jobs.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/async_jobs/task_action_user_remote_patch_jobs.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/async_jobs/user_async_jobs_manager.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/cache/global_cache_manager.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/cache/task_action_cache_api_batch_get.cpp"
@@ -52,7 +52,7 @@ project_add_rpc_unit_test(
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_send_message.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/user_chat_manager.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/matching/user_matching_manager.cpp"
-    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/player/task_action_player_get_info.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/user/task_action_user_get_info.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/task_action_rank_get_self_rank.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/task_action_rank_get_specify_rank.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/user_rank_manager.cpp"
@@ -78,7 +78,7 @@ target_include_directories(${PROJECT_NAME}-lobbysvr-chat-unit-test
 # Some service sources (e.g. the rank task actions) rely on the service precompiled header set; mirror it.
 target_precompile_headers(
   ${PROJECT_NAME}-lobbysvr-chat-unit-test
-  PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:\"data/player.h\">"
-          "$<$<COMPILE_LANGUAGE:CXX>:\"data/player_type_define.h\">"
+  PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:\"data/user.h\">"
+          "$<$<COMPILE_LANGUAGE:CXX>:\"data/user_type_define.h\">"
           "$<$<COMPILE_LANGUAGE:CXX>:\"dispatcher/task_action_cs_req_base.h\">"
           "$<$<COMPILE_LANGUAGE:CXX>:\"rpc/db/hash_table.h\">")

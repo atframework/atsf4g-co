@@ -25,9 +25,9 @@
 
 #include <utility>
 
-#include <data/player.h>
+#include <data/user.h>
 #include <logic/matching/user_matching_manager.h>
-#include <logic/player_manager.h>
+#include <logic/user_manager.h>
 
 namespace {
 // 测试阶段由 lobbysvr 模拟客户端确认；联调客户端确认流程后应关闭。
@@ -65,14 +65,14 @@ GAME_SERVICE_API task_action_matching_event_sync::result_type task_action_matchi
   const bool auto_confirm = should_auto_confirm(req_body);
 
   for (const auto& user_key : req_body.user_keys()) {
-    auto user = player_manager::me()->find_as<player>(user_key.user_id(), user_key.zone_id());
-    if (!user) {
+    auto user_inst = user_manager::me()->find_as<user>(user_key.user_id(), user_key.zone_id());
+    if (!user_inst) {
       // 玩家离线时由持久化游标在下次登录执行 check_matching 恢复。
-      FCTXLOGDEBUG(get_shared_context(), "skip matching event sync for offline player, matching_id={}, user={}:{}",
+      FCTXLOGDEBUG(get_shared_context(), "skip matching event sync for offline user, matching_id={}, user={}:{}",
                    req_body.matching_id(), user_key.user_id(), user_key.zone_id());
       continue;
     }
-    user->get_user_matching_manager().acknowledge_matching_sync(get_shared_context(), req_body);
+    user_inst->get_user_matching_manager().acknowledge_matching_sync(get_shared_context(), req_body);
     if (!auto_confirm) {
       continue;
     }
@@ -82,7 +82,7 @@ GAME_SERVICE_API task_action_matching_event_sync::result_type task_action_matchi
     confirm_request->set_matching_id(req_body.matching_id());
     confirm_request->set_confirmed(true);
     const int32_t result = RPC_AWAIT_CODE_RESULT(
-        user->get_user_matching_manager().confirm_matching(get_shared_context(), *confirm_request, *confirm_response));
+        user_inst->get_user_matching_manager().confirm_matching(get_shared_context(), *confirm_request, *confirm_response));
     if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
       FCTXLOGERROR(get_shared_context(), "auto confirm matching failed, matching_id={}, user={}:{}, result={}({})",
                    req_body.matching_id(), user_key.user_id(), user_key.zone_id(), result,

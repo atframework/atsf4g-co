@@ -47,7 +47,7 @@
 #include <vector>
 
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
-#include "data/player.h"
+#include "data/user.h"
 #include "data/session.h"
 #include "frame/test_macros.h"
 #include "logic/chat/user_chat_manager.h"
@@ -67,7 +67,7 @@ constexpr uint64_t kUserId2 = 10002;
 constexpr uint32_t kZoneId = 1;
 
 struct chat_test_user {
-  player::ptr_t user;
+  user::ptr_t user_inst;
   atfw::testing::mock_client client;
   std::shared_ptr<session> sess;
   uint64_t session_id = 0;
@@ -214,7 +214,7 @@ bool run_sync_task(atfw::testing::runtime &test, const char *name,
   return true;
 }
 
-// Create the mock client session, bind player <-> session and run user_chat_manager::login_init (what the login
+// Create the mock client session, bind user <-> session and run user_chat_manager::login_init (what the login
 // flow does for chat channels).
 bool create_chat_user(atfw::testing::runtime &test, uint64_t user_id, uint64_t session_id, gsl::string_view openid,
                       chat_test_user &out) {
@@ -234,18 +234,18 @@ bool create_chat_user(atfw::testing::runtime &test, uint64_t user_id, uint64_t s
   }
 
   out.session_id = session_id;
-  out.user = player::create(user_id, kZoneId, std::string{openid});
-  if (!out.user) {
-    CASE_MSG_INFO() << "player create failed for user " << user_id << '\n';
+  out.user_inst = user::create(user_id, kZoneId, std::string{openid});
+  if (!out.user_inst) {
+    CASE_MSG_INFO() << "user create failed for user " << user_id << '\n';
     return false;
   }
 
-  player::ptr_t user = out.user;
+  user::ptr_t user_inst = out.user_inst;
   std::shared_ptr<session> sess = out.sess;
-  return run_sync_task(test, "chat.login_init", [&user, &sess](rpc::context &ctx) -> rpc::result_code_type {
-    sess->set_player(user);
-    user->set_session(ctx, sess);
-    int32_t res = RPC_AWAIT_CODE_RESULT(user->get_user_chat_manager().login_init(ctx));
+  return run_sync_task(test, "chat.login_init", [&user_inst, &sess](rpc::context &ctx) -> rpc::result_code_type {
+    sess->set_user(user_inst);
+    user_inst->set_session(ctx, sess);
+    int32_t res = RPC_AWAIT_CODE_RESULT(user_inst->get_user_chat_manager().login_init(ctx));
     RPC_RETURN_CODE(res);
   });
 }
@@ -463,15 +463,15 @@ CASE_TEST(lobbysvr_user_chat, login_init_subscribe_and_get_all_channel) {
   }
 
   // Four channels per user; world channel data layer is shared between users, private channels are not.
-  CASE_EXPECT_EQ(4, static_cast<int>(count_channels(user1.user->get_user_chat_manager())));
-  CASE_EXPECT_EQ(4, static_cast<int>(count_channels(user2.user->get_user_chat_manager())));
+  CASE_EXPECT_EQ(4, static_cast<int>(count_channels(user1.user_inst->get_user_chat_manager())));
+  CASE_EXPECT_EQ(4, static_cast<int>(count_channels(user2.user_inst->get_user_chat_manager())));
 
-  auto user1_world = find_channel(user1.user->get_user_chat_manager(), make_world_channel_key().channel_id());
-  auto user2_world = find_channel(user2.user->get_user_chat_manager(), make_world_channel_key().channel_id());
+  auto user1_world = find_channel(user1.user_inst->get_user_chat_manager(), make_world_channel_key().channel_id());
+  auto user2_world = find_channel(user2.user_inst->get_user_chat_manager(), make_world_channel_key().channel_id());
   auto user1_private =
-      find_channel(user1.user->get_user_chat_manager(), make_private_channel_key(kUserId1).channel_id());
+      find_channel(user1.user_inst->get_user_chat_manager(), make_private_channel_key(kUserId1).channel_id());
   auto user2_private =
-      find_channel(user2.user->get_user_chat_manager(), make_private_channel_key(kUserId2).channel_id());
+      find_channel(user2.user_inst->get_user_chat_manager(), make_private_channel_key(kUserId2).channel_id());
   CASE_EXPECT_TRUE(!!user1_world);
   CASE_EXPECT_TRUE(!!user2_world);
   CASE_EXPECT_TRUE(!!user1_private);
@@ -595,7 +595,7 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   // dtmq proxy publishes the world channel snapshot; both subscribers become ready and both sessions receive one
   // snapshot sync after the flush tick.
   int64_t base_sequence = 0;
-  if (auto world = find_channel(user1.user->get_user_chat_manager(), world_channel_id)) {
+  if (auto world = find_channel(user1.user_inst->get_user_chat_manager(), world_channel_id)) {
     base_sequence = world->get_last_message_sequence();
   }
   CASE_EXPECT_TRUE(
@@ -677,9 +677,9 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   CASE_EXPECT_TRUE(
       run_sync_task(test, "chat.world_rate_limit", [&user1, &world_key](rpc::context &ctx) -> rpc::result_code_type {
         int32_t first =
-            RPC_AWAIT_CODE_RESULT(user1.user->get_user_chat_manager().send_text_message(ctx, world_key, "first"));
+            RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_text_message(ctx, world_key, "first"));
         int32_t second =
-            RPC_AWAIT_CODE_RESULT(user1.user->get_user_chat_manager().send_text_message(ctx, world_key, "second"));
+            RPC_AWAIT_CODE_RESULT(user1.user_inst->get_user_chat_manager().send_text_message(ctx, world_key, "second"));
         // If the first send was accepted (fresh second), the second must be rate-limited. If the first was already
         // rate-limited (same second as an earlier send), the second stays rate-limited too.
         if (0 == first) {
@@ -735,7 +735,7 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
 
   // The private channel becomes ready via a snapshot event.
   int64_t private_base_sequence = 0;
-  if (auto channel = find_channel(user2.user->get_user_chat_manager(), user2_private_channel_id)) {
+  if (auto channel = find_channel(user2.user_inst->get_user_chat_manager(), user2_private_channel_id)) {
     private_base_sequence = channel->get_last_message_sequence();
   }
   CASE_EXPECT_TRUE(receive_channel_event(
@@ -814,10 +814,10 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
       test, "chat.sys_deny",
       [&user1, &sys_notification_key, &sys_announcement_key](rpc::context &ctx) -> rpc::result_code_type {
         int32_t res = RPC_AWAIT_CODE_RESULT(
-            user1.user->get_user_chat_manager().send_text_message(ctx, sys_notification_key, "notification"));
+            user1.user_inst->get_user_chat_manager().send_text_message(ctx, sys_notification_key, "notification"));
         CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE, res);
         res = RPC_AWAIT_CODE_RESULT(
-            user1.user->get_user_chat_manager().send_text_message(ctx, sys_announcement_key, "announcement"));
+            user1.user_inst->get_user_chat_manager().send_text_message(ctx, sys_announcement_key, "announcement"));
         CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_CHAT_ACCESS_DENY_FOR_WRITE, res);
         RPC_RETURN_CODE(0);
       }));
@@ -884,7 +884,7 @@ CASE_TEST(lobbysvr_user_chat, heartbeat_resync_and_snapshot_merge) {
 
   // Load three messages into the world channel cache through a snapshot event.
   int64_t base_sequence = 0;
-  if (auto channel = find_channel(user1.user->get_user_chat_manager(), world_channel_id)) {
+  if (auto channel = find_channel(user1.user_inst->get_user_chat_manager(), world_channel_id)) {
     base_sequence = channel->get_last_message_sequence();
   }
   const int64_t msg1_seq = base_sequence + 1;

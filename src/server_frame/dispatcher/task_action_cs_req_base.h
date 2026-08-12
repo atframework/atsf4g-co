@@ -28,7 +28,7 @@
 #include "utility/protobuf_mini_dumper.h"
 
 class session;
-class player_cache;
+class user_cache;
 
 class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_base<atframework::CSMsg> {
  public:
@@ -88,11 +88,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_cs_req_base : public task_action_req_
   SERVER_FRAME_API std::list<message_type *> &get_rsp_list();
   SERVER_FRAME_API const std::list<message_type *> &get_rsp_list() const;
 
-  SERVER_FRAME_API std::shared_ptr<player_cache> get_player_cache() const;
+  SERVER_FRAME_API std::shared_ptr<user_cache> get_user_cache() const;
 
-  template <typename TPLAYER>
-  ATFW_UTIL_FORCEINLINE std::shared_ptr<TPLAYER> get_player() const {
-    return std::static_pointer_cast<TPLAYER>(get_player_cache());
+  template <typename TUSER>
+  ATFW_UTIL_FORCEINLINE std::shared_ptr<TUSER> get_user() const {
+    return std::static_pointer_cast<TUSER>(get_user_cache());
   }
 
  private:

@@ -10,21 +10,21 @@
 
 #include <log/log_wrapper.h>
 
-#include <data/player_cache.h>
+#include <data/user_cache.h>
 #include <data/session.h>
-#include <logic/player_manager.h>
+#include <logic/user_manager.h>
 #include <logic/session_manager.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include "task_action_player_logout.h"
+#include "task_action_user_logout.h"
 
-task_action_player_logout::task_action_player_logout(ctor_param_t&& param)
+task_action_user_logout::task_action_user_logout(ctor_param_t&& param)
     : task_action_no_req_base(param), ctor_param_(std::move(param)) {}
-task_action_player_logout::~task_action_player_logout() {}
+task_action_user_logout::~task_action_user_logout() {}
 
-task_action_player_logout::result_type task_action_player_logout::operator()() {
-  FWLOGDEBUG("task_action_player_logout for session [{:#}, {}] start", ctor_param_.atgateway_node_id,
+task_action_user_logout::result_type task_action_user_logout::operator()() {
+  FWLOGDEBUG("task_action_user_logout for session [{:#}, {}] start", ctor_param_.atgateway_node_id,
              ctor_param_.atgateway_session_id);
   session::key_t key;
   key.node_id = ctor_param_.atgateway_node_id;
@@ -39,31 +39,31 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
     }
 
     // 连接断开的时候需要保存一下数据
-    player_cache::ptr_t user = s->get_player();
+    user_cache::ptr_t user_inst = s->get_user();
     bool user_writeable = false;
-    // 如果玩家数据是缓存，不是实际登入点，则不用保存
-    if (user) {
-      user_writeable = user->is_writable();
-      set_user_key(user->get_user_id(), user->get_zone_id());
-      user->set_session(get_shared_context(), nullptr);
-      s->set_player(nullptr);
+    // 如果用户数据是缓存，不是实际登入点，则不用保存
+    if (user_inst) {
+      user_writeable = user_inst->is_writable();
+      set_user_key(user_inst->get_user_id(), user_inst->get_zone_id());
+      user_inst->set_session(get_shared_context(), nullptr);
+      s->set_user(nullptr);
     }
     session_manager::me()->remove(get_shared_context(), s);
 
-    if (user) {
-      set_response_code(RPC_AWAIT_CODE_RESULT(user->await_before_logout_tasks(get_shared_context())));
+    if (user_inst) {
+      set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->await_before_logout_tasks(get_shared_context())));
       if (get_response_code() < 0) {
-        FWPLOGERROR(*user, "kickoff failed, res: {}({})", get_response_code(),
+        FWPLOGERROR(*user_inst, "kickoff failed, res: {}({})", get_response_code(),
                     protobuf_mini_dumper_get_error_msg(get_response_code()));
 
         TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
       }
 
-      if (user_writeable && !user->has_session()) {
-        auto remove_res = RPC_AWAIT_CODE_RESULT(player_manager::me()->remove(get_shared_context(), user, false));
+      if (user_writeable && !user_inst->has_session()) {
+        auto remove_res = RPC_AWAIT_CODE_RESULT(user_manager::me()->remove(get_shared_context(), user_inst, false));
         if (remove_res < 0) {
           set_response_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
-          FWPLOGERROR(*user, "logout failed, res: {}({})", static_cast<int>(remove_res),
+          FWPLOGERROR(*user_inst, "logout failed, res: {}({})", static_cast<int>(remove_res),
                       protobuf_mini_dumper_get_error_msg(remove_res));
         }
       }
@@ -73,6 +73,6 @@ task_action_player_logout::result_type task_action_player_logout::operator()() {
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int task_action_player_logout::on_success() { return get_result(); }
+int task_action_user_logout::on_success() { return get_result(); }
 
-int task_action_player_logout::on_failed() { return get_result(); }
+int task_action_user_logout::on_failed() { return get_result(); }

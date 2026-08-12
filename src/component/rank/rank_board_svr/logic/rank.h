@@ -56,7 +56,7 @@ class rank : public atfw::util::memory::enable_shared_rc_from_this<rank> {
 
   void slave_confirm_info(rpc::context& ctx, uint64_t slave_node, int64_t data_version);
   /**
-   * @brief 按照排行榜key查询玩家排名信息
+   * @brief 按照排行榜key查询用户排名信息
    *
    * @param key 排行榜key
    * @param output 返回的数据，排行榜排名等数据

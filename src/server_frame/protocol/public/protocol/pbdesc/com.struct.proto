@@ -47,10 +47,10 @@ message DClientDeviceInfo {
 
 message DAppleGameCenter {
   // 一个都不能少
-  string player_id = 1;            //
+  string user_id = 1;            //
   string public_key_url = 2;       //
   string signature = 3;            //
-  string encoded_signed_data = 4;  // 由player_id and salt and bundle_id and timestamp生成
+  string encoded_signed_data = 4;  // 由user_id and salt and bundle_id and timestamp生成
   string salt = 5;                 //
   string bundle_id = 6;            //
   int64 timestamp = 7;             //
@@ -86,7 +86,7 @@ message DUserProfile {
   string logo_url = 4;
   EnGenderType gender = 5;
 
-  string custom_nick_name = 11;  // 玩家自定义昵称
+  string custom_nick_name = 11;  // 用户自定义昵称
 }
 
 // 用户profile
@@ -98,7 +98,7 @@ message DUserStatistics {
 // 用户数据
 message DUserInformation {
   DUserProfile profile = 1;
-  int32 user_level = 2;  // 玩家（主城）等级
+  int32 user_level = 2;  // 用户（主城）等级
   DUserStatistics user_statistics = 4;
 }
 
@@ -139,7 +139,7 @@ message DUserBasicData {
   uint32 package_login_channel = 36;     // 包登录渠道号
   int32 version_type = 37;               // 上一次的登入版本类型 @EnVersionType
 
-  int32 user_level = 51;          // 玩家等级
+  int32 user_level = 51;          // 用户等级
   uint64 user_data_version = 53;  // data version
 
   DUserSharedOptions shared_options = 101;  // 公开的用户自定义选项

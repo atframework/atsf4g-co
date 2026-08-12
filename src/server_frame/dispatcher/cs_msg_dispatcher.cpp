@@ -27,7 +27,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <config/logic_config.h>
-#include <logic/action/task_action_player_logout.h>
+#include <logic/action/task_action_user_logout.h>
 #include <logic/session_manager.h>
 
 #include <rpc/rpc_context.h>
@@ -366,7 +366,7 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
         }
       }
 
-      // session 移除前强制update一次，用以处理debug调试断点导致task_action_player_logout被立刻认为超时
+      // session 移除前强制update一次，用以处理debug调试断点导致task_action_user_logout被立刻认为超时
       atfw::util::time::time_utility::update();
 
       FWLOGINFO("remove session [{:#x}: {}, {}]", session_key.node_id,
@@ -374,11 +374,11 @@ SERVER_FRAME_API int32_t cs_msg_dispatcher::dispatch(const atfw::atapp::app::mes
 
       // logout task
       task_type_trait::task_type task_inst;
-      task_action_player_logout::ctor_param_t task_param;
+      task_action_user_logout::ctor_param_t task_param;
       task_param.atgateway_session_id = session_key.session_id;
       task_param.atgateway_node_id = session_key.node_id;
 
-      ret = task_manager::me()->create_task<task_action_player_logout>(task_inst, std::move(task_param));
+      ret = task_manager::me()->create_task<task_action_user_logout>(task_inst, std::move(task_param));
       if (0 == ret) {
         dispatcher_start_data_type start_data = dispatcher_make_default<dispatcher_start_data_type>();
 

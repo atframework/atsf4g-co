@@ -36,7 +36,7 @@
 #include <string>
 #include <utility>
 
-#include "data/player_cache.h"
+#include "data/user_cache.h"
 
 namespace {
 constexpr const XXH64_hash_t kSessionKeyHashMagicNumber = static_cast<XXH64_hash_t>(11400714785074694791ULL);
@@ -187,8 +187,8 @@ SERVER_FRAME_API bool session::is_valid() const noexcept {
                          flag_t::EN_SESSION_FLAG_GATEWAY_REMOVED));
 }
 
-SERVER_FRAME_API void session::set_player(const std::shared_ptr<player_cache> &u) noexcept {
-  player_ = u;
+SERVER_FRAME_API void session::set_user(const std::shared_ptr<user_cache> &u) noexcept {
+  user_ = u;
 
   if (u) {
     cached_zone_id_ = u->get_zone_id();
@@ -200,13 +200,13 @@ SERVER_FRAME_API void session::set_player(const std::shared_ptr<player_cache> &u
   }
 }
 
-SERVER_FRAME_API std::shared_ptr<player_cache> session::get_player() const noexcept { return player_.lock(); }
+SERVER_FRAME_API std::shared_ptr<user_cache> session::get_user() const noexcept { return user_.lock(); }
 
 SERVER_FRAME_API int32_t session::send_msg_to_client(rpc::context &ctx, atframework::CSMsg &msg) {
   if (0 == msg.head().server_sequence()) {
-    std::shared_ptr<player_cache> user = get_player();
-    if (user) {
-      return send_msg_to_client(ctx, msg, user->alloc_server_sequence());
+    std::shared_ptr<user_cache> user_inst = get_user();
+    if (user_inst) {
+      return send_msg_to_client(ctx, msg, user_inst->alloc_server_sequence());
     }
   }
   return send_msg_to_client(ctx, msg, msg.head().server_sequence());
@@ -342,12 +342,12 @@ SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atf
   std::string hint_text;
   if (is_input) {
     hint_text = atfw::util::log::format(
-        "<<<<<<<<<<<< receive {} bytes from player {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size,
+        "<<<<<<<<<<<< receive {} bytes from user {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size,
         cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
 
   } else {
     hint_text = atfw::util::log::format(
-        ">>>>>>>>>>>> send {} bytes to player {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size, cached_zone_id_,
+        ">>>>>>>>>>>> send {} bytes to user {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size, cached_zone_id_,
         cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
   }
   if (actor_log_writter_) {
@@ -452,7 +452,7 @@ SERVER_FRAME_API void session::alloc_session_sequence(atframework::CSMsg &msg) {
       break;
     }
 
-    // if the current player's session is no longer valid and
+    // if the current user's session is no longer valid and
     // has not marked as no cache, sequence will be set to zero
     if (!is_valid()) {
       break;

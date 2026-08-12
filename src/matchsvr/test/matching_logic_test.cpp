@@ -87,8 +87,8 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   rule.mutable_time_limit()->set_min(0);
   rule.mutable_time_limit()->set_max(60);
   rule.add_result_template_ids(1000);
-  rule.set_min_total_player(2);
-  rule.set_start_battle_min_player(2);
+  rule.set_min_total_user(2);
+  rule.set_start_battle_min_user(2);
   auto* rank_rule = rule.add_rules();
   rank_rule->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
   rank_rule->add_values(5);
@@ -102,8 +102,8 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   strict_rule.mutable_time_limit()->set_min(0);
   strict_rule.mutable_time_limit()->set_max(60);
   strict_rule.add_result_template_ids(2000);
-  strict_rule.set_min_total_player(3);
-  strict_rule.set_start_battle_min_player(3);
+  strict_rule.set_min_total_user(3);
+  strict_rule.set_start_battle_min_user(3);
   auto* strict_rank_rule = strict_rule.add_rules();
   strict_rank_rule->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF);
   strict_rank_rule->add_values(5);
@@ -112,21 +112,21 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   relaxed_rule.set_id(201);
   relaxed_rule.mutable_time_limit()->set_min(61);
   relaxed_rule.add_result_template_ids(2000);
-  relaxed_rule.set_min_total_player(3);
-  relaxed_rule.set_start_battle_min_player(3);
+  relaxed_rule.set_min_total_user(3);
+  relaxed_rule.set_start_battle_min_user(3);
   relaxed_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
   resource.set_file("matching_rule.bytes", make_table_bytes({rule, strict_rule, relaxed_rule}));
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate result_template;
   result_template.set_id(1000);
   auto* team = result_template.add_team_template();
-  team->set_player_number(1);
+  team->set_user_number(1);
   team->set_count(2);
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate convergence_template;
   convergence_template.set_id(2000);
   auto* convergence_team = convergence_template.add_team_template();
-  convergence_team->set_player_number(1);
+  convergence_team->set_user_number(1);
   convergence_team->set_count(3);
   resource.set_file("matching_result_template.bytes", make_table_bytes({result_template, convergence_template}));
 
@@ -147,10 +147,10 @@ PROJECT_NAMESPACE_ID::DMatchingUnit make_unit(uint64_t unit_id, uint64_t user_id
   result.set_unit_id(unit_id);
   result.mutable_parameter()->set_rank_level(rank_level);
   result.mutable_parameter()->set_force_type(force_type);
-  auto* player = result.add_players();
-  player->mutable_user_key()->set_user_id(user_id);
-  player->mutable_user_key()->set_zone_id(1);
-  result.mutable_captain_user_key()->CopyFrom(player->user_key());
+  auto* user = result.add_users();
+  user->mutable_user_key()->set_user_id(user_id);
+  user->mutable_user_key()->set_zone_id(1);
+  result.mutable_captain_user_key()->CopyFrom(user->user_key());
   return result;
 }
 
@@ -208,13 +208,13 @@ CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_and_captain_cont
   invalid.mutable_captain_user_key()->set_user_id(99999);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
   invalid = valid;
-  invalid.add_players()->CopyFrom(invalid.players(0));
+  invalid.add_users()->CopyFrom(invalid.users(0));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
   invalid = valid;
-  invalid.add_players()->mutable_user_key()->set_user_id(10002);
-  invalid.mutable_players(1)->mutable_user_key()->set_zone_id(1);
-  invalid.add_players()->mutable_user_key()->set_user_id(10003);
-  invalid.mutable_players(2)->mutable_user_key()->set_zone_id(1);
+  invalid.add_users()->mutable_user_key()->set_user_id(10002);
+  invalid.mutable_users(1)->mutable_user_key()->set_zone_id(1);
+  invalid.add_users()->mutable_user_key()->set_user_id(10003);
+  invalid.mutable_users(2)->mutable_user_key()->set_zone_id(1);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
 
   CASE_EXPECT_EQ(0, runtime.stop());
@@ -241,7 +241,7 @@ CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_template_and_force_limi
 
   auto oversized = make_unit(5, 10005, 12, 2);
   for (uint64_t user_id = 10006; user_id <= 10008; ++user_id) {
-    oversized.add_players()->mutable_user_key()->set_user_id(user_id);
+    oversized.add_users()->mutable_user_key()->set_user_id(user_id);
   }
   auto room_full = matching_logic::check_unit_can_join(room, oversized, 110, 2);
   CASE_EXPECT_FALSE(room_full.can_join);
@@ -263,7 +263,7 @@ CASE_TEST(matchsvr_matching_logic, rejects_banned_users_wrong_region_and_expired
 
   auto room = make_room();
   auto stored = make_unit(1, 10001, 10);
-  stored.add_ban_users()->CopyFrom(make_unit(2, 10002, 10).players(0).user_key());
+  stored.add_ban_users()->CopyFrom(make_unit(2, 10002, 10).users(0).user_key());
   CASE_EXPECT_TRUE(room.add_unit(stored));
   CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(2, 10002, 10), 110, 2).can_join);
   CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(3, 10003, 10), 161, 2).can_join);
@@ -293,7 +293,7 @@ CASE_TEST(matchsvr_matching_manager, creates_joins_confirms_and_finishes_battle)
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, first_request, first_response));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING, first_response.snapshot().status());
   CASE_EXPECT_EQ(1, manager->get_room_count());
-  CASE_EXPECT_EQ(1, manager->get_total_matching_player_count());
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
 
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot second_response;
   auto second_request = make_create_request(2, 10002, 14, 2);
@@ -342,9 +342,9 @@ CASE_TEST(matchsvr_matching_manager, rejects_conflicts_and_unauthorized_operatio
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT,
                  manager->create_matching(ctx, request, conflict_response));
 
-  auto same_player = make_create_request(11, 20001, 10);
+  auto same_user = make_create_request(11, 20001, 10);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT,
-                 manager->create_matching(ctx, same_player, conflict_response));
+                 manager->create_matching(ctx, same_user, conflict_response));
 
   PROJECT_NAMESPACE_ID::SSMatchingCheckReq check;
   check.set_matching_id(response.snapshot().matching_id());
@@ -361,7 +361,7 @@ CASE_TEST(matchsvr_matching_manager, rejects_conflicts_and_unauthorized_operatio
   cancel.mutable_operator_user()->CopyFrom(request.operator_user());
   CASE_EXPECT_EQ(0, manager->cancel_matching(ctx, cancel, response));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED, response.snapshot().status());
-  CASE_EXPECT_EQ(0, manager->get_total_matching_player_count());
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
 
   manager->clear();
   CASE_EXPECT_EQ(0, runtime.stop());
@@ -472,7 +472,7 @@ CASE_TEST(matchsvr_matching_manager, isolates_rooms_by_every_scope_dimension) {
   auto different_pool = make_create_request(45, 50005, 10, 0, 1);
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, different_pool, response));
   CASE_EXPECT_EQ(5, manager->get_room_count());
-  CASE_EXPECT_EQ(5, manager->get_total_matching_player_count());
+  CASE_EXPECT_EQ(5, manager->get_total_matching_user_count());
 
   manager->clear();
   CASE_EXPECT_EQ(0, runtime.stop());
@@ -501,7 +501,7 @@ CASE_TEST(matchsvr_matching_manager, times_out_and_recycles_terminal_rooms) {
   check.mutable_operator_user()->CopyFrom(request.operator_user());
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, response));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT, response.snapshot().status());
-  CASE_EXPECT_EQ(0, manager->get_total_matching_player_count());
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{181});
   CASE_EXPECT_EQ(1, manager->tick());
@@ -546,7 +546,7 @@ CASE_TEST(matchsvr_matching_manager, removes_unconfirmed_unit_and_resumes_after_
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, response));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING, response.snapshot().status());
   CASE_EXPECT_EQ(1, response.snapshot().units_size());
-  CASE_EXPECT_EQ(1, manager->get_total_matching_player_count());
+  CASE_EXPECT_EQ(1, manager->get_total_matching_user_count());
 
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot retry_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, timeout_request, retry_response));

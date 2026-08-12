@@ -34,7 +34,7 @@
 #include <unordered_map>
 #include <utility>
 
-#include "data/player.h"
+#include "data/user.h"
 #include "data/session.h"
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
@@ -185,7 +185,7 @@ static void push_pending_message_once(
     return;
   }
 
-  // if session is removed, then the player is removed, so no need to send sync messages
+  // if session is removed, then the user is removed, so no need to send sync messages
   auto sess = chat_mgr->get_owner().get_session();
   if (!sess) {
     return;
@@ -439,7 +439,7 @@ int32_t user_chat_manager::global_tick(rpc::context& ctx) {
   return 0;
 }
 
-user_chat_manager::user_chat_manager(player& owner)
+user_chat_manager::user_chat_manager(user& owner)
     : owner_(&owner), last_send_to_world_channel_timepoint_unix_sec_(0) {}
 
 user_chat_manager::~user_chat_manager() {}

@@ -63,6 +63,6 @@ Business code only uses the `RPC_AWAIT_*` / `RPC_RETURN_*` macros and the
 
 ## Built-in task actions
 
-`src/server_frame/logic/action/` provides framework-level actions: `set_server_time`, `player_logout`,
+`src/server_frame/logic/action/` provides framework-level actions: `set_server_time`, `user_logout`,
 `reload_remote_server_configure`, `async_invoke`, etc.; `src/server_frame/router/action/` provides router-related
 actions (auto save, close, transfer, update_sync).

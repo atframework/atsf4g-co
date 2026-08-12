@@ -42,8 +42,8 @@ auto res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get(ctx, user_id, ...));
 `src/server_frame/rpc/db/uuid.{h,cpp}` 提供 ID 生成：`standard` / `short` / `global_increase`（DB 自增）/
 `global_unique`。
 
-## 会话与玩家缓存
+## 会话与用户缓存
 
 - `src/server_frame/data/session.{h,cpp}`：网关会话，key = `(gateway_node_id, session_id)`，负责下行发送；
-- `src/server_frame/data/player_cache.{h,cpp}`：玩家数据缓存基类，脏标记、初始化 task 等待；
-- `src/server_frame/logic/session_manager.*` / `player_manager.*`：对应管理单例。
+- `src/server_frame/data/user_cache.{h,cpp}`：用户数据缓存基类，脏标记、初始化 task 等待；
+- `src/server_frame/logic/session_manager.*` / `user_manager.*`：对应管理单例。

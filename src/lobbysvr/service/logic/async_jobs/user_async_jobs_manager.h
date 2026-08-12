@@ -30,14 +30,14 @@ class user_async_jobs_blob_data;
 class table_user;
 PROJECT_NAMESPACE_END
 
-class player;
+class user;
 
 class user_async_jobs_manager {
  public:
   using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>;
 
  public:
-  explicit user_async_jobs_manager(player& owner);
+  explicit user_async_jobs_manager(user& owner);
   ~user_async_jobs_manager();
 
   // 创建默认角色数据
@@ -50,9 +50,9 @@ class user_async_jobs_manager {
   void refresh_feature_limit(rpc::context& ctx);
 
   // 从table数据初始化
-  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& player_table);
+  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
 
-  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user) const;
+  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& table) const;
 
   bool is_dirty() const;
 
@@ -63,8 +63,8 @@ class user_async_jobs_manager {
 
   /**
    * @brief 尝试开始执行远程命令，如果已经有一个命令正在运行中了，会等待那个命令完成后再启动一次
-   * @note 远程命令一般用于多写入方，利用数据库插入命令。然后再通知玩家对象，单点执行读入数据。
-   * @note 比如说多个玩家对一个玩家发送消息或邮件，可以插入消息或邮件的command到数据库，然后这里拉取后append到玩家数据里
+   * @note 远程命令一般用于多写入方，利用数据库插入命令。然后再通知用户对象，单点执行读入数据。
+   * @note 比如说多个用户对一个用户发送消息或邮件，可以插入消息或邮件的command到数据库，然后这里拉取后append到用户数据里
    * @return 启动新任务返回true，如果有正在运行的异步任务或者保护时间间隔未到而导致放弃执行则返回false
    */
   bool try_async_jobs(rpc::context& ctx);
@@ -87,10 +87,10 @@ class user_async_jobs_manager {
   std::vector<async_job_ptr_type> get_retry_jobs(int32_t job_type) const;
 
  private:
-  friend class task_action_player_remote_patch_jobs;
+  friend class task_action_user_remote_patch_jobs;
 
  private:
-  player* ATFW_UTIL_MACRO_NONNULL owner_;
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
 
   mutable task_type_trait::task_type remote_command_patch_task_;
 

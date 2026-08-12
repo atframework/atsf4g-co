@@ -11,7 +11,7 @@
 
 #include <config/server_frame_build_feature.h>
 
-#include <data/player_cache.h>
+#include <data/user_cache.h>
 
 #include <dispatcher/task_type_traits.h>
 
@@ -19,7 +19,7 @@
 #include <memory>
 #include <string>
 
-#define REG_PLAYER_MGR_PTR_DEF(mgr)                       \
+#define REG_USER_MGR_PTR_DEF(mgr)                       \
  private:                                                 \
   atfw::util::memory::strong_rc_ptr<mgr> mgr##_;          \
                                                           \
@@ -34,9 +34,9 @@ class user_chat_manager;
 class user_orbit_manager;
 class user_matching_manager;
 
-class player : public player_cache {
+class user : public user_cache {
  private:
-  static constexpr const uint32_t PLAYER_DATA_LOGIC_VERSION = 1;
+  static constexpr const uint32_t USER_DATA_LOGIC_VERSION = 1;
   struct internal_flag {
     enum type {
       EN_IFT_FEATURE_INVALID = 0,
@@ -53,7 +53,7 @@ class player : public player_cache {
     internal_flag_guard_t();
     ~internal_flag_guard_t();
 
-    void setup(player &owner, internal_flag::type f);
+    void setup(user &owner, internal_flag::type f);
     void reset();
     inline operator bool() const noexcept {
       return nullptr != owner_ && internal_flag::EN_IFT_FEATURE_INVALID != flag_;
@@ -64,13 +64,13 @@ class player : public player_cache {
 
    private:
     internal_flag::type flag_;
-    player *owner_;
+    user *owner_;
   };
 
  public:
-  using base_type = player_cache;
-  using ptr_t = std::shared_ptr<player>;
-  friend class task_action_player_remote_patch_jobs;
+  using base_type = user_cache;
+  using ptr_t = std::shared_ptr<user>;
+  friend class task_action_user_remote_patch_jobs;
 
   struct heartbeat_t {
     time_t last_recv_time;        // 上一次收到心跳包时间
@@ -80,11 +80,11 @@ class player : public player_cache {
   /** 因为会对其进行memset，所以内部不允许出现非POD类型 **/
 
   struct dirty_message_container {
-    std::unique_ptr<PROJECT_NAMESPACE_ID::SCPlayerDirtyChgSync> player_dirty;
+    std::unique_ptr<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> user_dirty;
   };
 
-  using build_dirty_message_fn_t = std::function<void(player &, dirty_message_container &)>;
-  using clear_dirty_cache_fn_t = std::function<void(player &)>;
+  using build_dirty_message_fn_t = std::function<void(user &, dirty_message_container &)>;
+  using clear_dirty_cache_fn_t = std::function<void(user &)>;
   struct dirty_sync_handle_t {
     build_dirty_message_fn_t build_fn;
     clear_dirty_cache_fn_t clear_fn;
@@ -95,7 +95,7 @@ class player : public player_cache {
     time_t refresh_feature_limit_second;
     time_t refresh_feature_limit_minute;
     time_t refresh_feature_limit_hour;
-    // PROJECT_NAMESPACE_ID::SCPlayerLevelupSyn user_level_up_syn;
+    // PROJECT_NAMESPACE_ID::SCUserLevelupSyn user_level_up_syn;
 
     atfw::memory::stl::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItemInstance> dirty_item_by_type;
 
@@ -104,11 +104,11 @@ class player : public player_cache {
   };
 
  public:
-  ptr_t shared_from_this() { return std::static_pointer_cast<player>(base_type::shared_from_this()); }
+  ptr_t shared_from_this() { return std::static_pointer_cast<user>(base_type::shared_from_this()); }
 
  public:
-  explicit player(fake_constructor &);
-  virtual ~player();
+  explicit user(fake_constructor &);
+  virtual ~user();
 
   bool can_be_writable() const override;
 
@@ -151,23 +151,23 @@ class player : public player_cache {
 
   /**
    * @brief 转储数据
-   * @param user 转储目标
+   * @param table 转储目标
    * @param always 是否忽略脏数据
    * @return 0或错误码
    */
-  int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user, bool always) override;
+  int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &table, bool always) override;
 
   /**
    * @brief 是否完整执行过初始化
-   * @note 如果完整执行了登入流程，则会走完整初始化流程。这个flag还有一个含义是玩家数据仅仅在此进程内可写。
-   *       比如如果一个玩家对象是缓存，则不会走完整的登入流程，也不会被完全初始化，那么这个数据就是只读的。
-   *        这时候如果登出或者移除玩家对象的时候清理就不能写数据库。
+   * @note 如果完整执行了登入流程，则会走完整初始化流程。这个flag还有一个含义是用户数据仅仅在此进程内可写。
+   *       比如如果一个用户对象是缓存，则不会走完整的登入流程，也不会被完全初始化，那么这个数据就是只读的。
+   *        这时候如果登出或者移除用户对象的时候清理就不能写数据库。
    */
   bool is_inited() const { return internal_flags_.test(internal_flag::EN_IFT_IS_INITED); }
   /**
-   * @brief 标记为完全初始化，也表示在此进程中玩家数据是可写的。
-   * @note 这个flag用于标记玩家实时数据必须最多唯一存在于一个进程中，其他进程的数据都是缓存。
-   *       缓存可以升级为实时数据，但是不能降级。如果需要降级，则直接移除玩家对象，下一次需要的时候重新拉取缓存
+   * @brief 标记为完全初始化，也表示在此进程中用户数据是可写的。
+   * @note 这个flag用于标记用户实时数据必须最多唯一存在于一个进程中，其他进程的数据都是缓存。
+   *       缓存可以升级为实时数据，但是不能降级。如果需要降级，则直接移除用户对象，下一次需要的时候重新拉取缓存
    */
   void set_inited() { internal_flags_.set(internal_flag::EN_IFT_IS_INITED, true); }
 
@@ -215,7 +215,7 @@ class player : public player_cache {
    * 所有回调函数请尽可能小，保证整个闭包在3个指针以内（成员函数占2个指针）。这样std::function会使用小对象优化
    */
   void insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
-                                         dirty_sync_handle_t (*create_handle_fn)(gsl::string_view, player &));
+                                         dirty_sync_handle_t (*create_handle_fn)(gsl::string_view, user &));
 
   /**
    * @brief 插入脏数据handle
@@ -229,10 +229,10 @@ class player : public player_cache {
   void insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name, build_dirty_message_fn_t build_fn,
                                          clear_dirty_cache_fn_t clear_fn);
 
-  static void init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*check_need_fn)() const,
-                                   void (*dump_fn)(rpc::context&, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &, player &));
-  static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSPlayerGetInfoReq::*)() const,
-                               void (*)(rpc::context&, PROJECT_NAMESPACE_ID::SCPlayerGetInfoRsp &, player &)>>
+  static void init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*check_need_fn)() const,
+                                   void (*dump_fn)(rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &));
+  static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() const,
+                               void (*)(rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
   get_get_info_handle();
 
  private:
@@ -244,15 +244,15 @@ class player : public player_cache {
   cache_t cache_data_;
   // -------------------------------------------------------
 
-  REG_PLAYER_MGR_PTR_DEF(user_async_jobs_manager)
-  REG_PLAYER_MGR_PTR_DEF(user_rank_manager)
-  REG_PLAYER_MGR_PTR_DEF(user_cache_manager)
-  REG_PLAYER_MGR_PTR_DEF(user_chat_manager)
-  REG_PLAYER_MGR_PTR_DEF(user_orbit_manager)
-  REG_PLAYER_MGR_PTR_DEF(user_matching_manager)
+  REG_USER_MGR_PTR_DEF(user_async_jobs_manager)
+  REG_USER_MGR_PTR_DEF(user_rank_manager)
+  REG_USER_MGR_PTR_DEF(user_cache_manager)
+  REG_USER_MGR_PTR_DEF(user_chat_manager)
+  REG_USER_MGR_PTR_DEF(user_orbit_manager)
+  REG_USER_MGR_PTR_DEF(user_matching_manager)
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
-struct formatter<player, CharT> : formatter<player_cache, CharT> {};
+struct formatter<user, CharT> : formatter<user_cache, CharT> {};
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_END

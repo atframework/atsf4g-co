@@ -9,7 +9,7 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <data/player.h>
+#include <data/user.h>
 #include <logic/matching/user_matching_manager.h>
 
 task_action_matching_confirm::task_action_matching_confirm(dispatcher_start_data_type&& param)
@@ -18,12 +18,12 @@ task_action_matching_confirm::~task_action_matching_confirm() = default;
 const char* task_action_matching_confirm::name() const { return "task_action_matching_confirm"; }
 
 task_action_matching_confirm::result_type task_action_matching_confirm::operator()() {
-  auto user = get_player<player>();
-  if (!user) {
+  auto user_inst = get_user<user>();
+  if (!user_inst) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
-  set_response_code(RPC_AWAIT_CODE_RESULT(user->get_user_matching_manager().confirm_matching(
+  set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().confirm_matching(
       get_shared_context(), get_request_body(), get_response_body())));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -40,7 +40,7 @@ namespace rpc {
 namespace async_jobs {
 
 namespace detail {
-// 如果短期内发生太多次针对同一玩家得在线表拉取，则直接用缓存。这可以优化短期频繁拉取login表，并且异步任务就算过期也只是回延后触发，不影响逻辑
+// 如果短期内发生太多次针对同一用户得在线表拉取，则直接用缓存。这可以优化短期频繁拉取login表，并且异步任务就算过期也只是回延后触发，不影响逻辑
 static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t user_id,
                                                     shared_message<PROJECT_NAMESPACE_ID::table_login_lock>& rsp,
                                                     bool ignore_cache) {
@@ -82,7 +82,7 @@ GAME_RPC_API ::rpc::db::result_type get_jobs(
   }
 
   if (NULL ==
-      PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={})", __FUNCTION__, jobs_type, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -99,7 +99,7 @@ GAME_RPC_API ::rpc::db::result_type del_jobs(rpc::context& ctx, int32_t jobs_typ
   }
 
   if (NULL ==
-      PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
                zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -123,7 +123,7 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
   }
 
   if (NULL ==
-      PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -152,14 +152,14 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
     RPC_DB_RETURN_CODE(ret);
   }
 
-  // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
+  // 尝试通知在线用户, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
-    if (!options.notify_player) {
+    if (!options.notify_user) {
       break;
     }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
     shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
-    shared_message<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync> req_body{ctx};
+    shared_message<PROJECT_NAMESPACE_ID::SSUserAsyncJobsSync> req_body{ctx};
 
     auto res =
         RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
@@ -178,7 +178,7 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
       break;
     }
 
-    RPC_AWAIT_IGNORE_RESULT(rpc::lobby::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
+    RPC_AWAIT_IGNORE_RESULT(rpc::lobby::user_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
                                                                atfw::util::log::format("{}", user_id), *req_body));
   } while (false);
   RPC_DB_RETURN_CODE(ret);
@@ -203,7 +203,7 @@ GAME_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t j
   }
 
   if (NULL ==
-      PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
                zone_id, user_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -223,7 +223,7 @@ GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_
   }
 
   if (NULL ==
-      PROJECT_NAMESPACE_ID::EnPlayerAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
+      PROJECT_NAMESPACE_ID::EnUserAsyncJobsType_descriptor()->FindValueByNumber(static_cast<int>(jobs_type))) {
     FWLOGERROR("{} be called with unsupported type.(jobs_type={}, user_id={}, zone_id={})", __FUNCTION__, jobs_type,
                user_id, zone_id);
     RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -247,14 +247,14 @@ GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_
     RPC_DB_RETURN_CODE(ret);
   }
 
-  // 尝试通知在线玩家, 失败则放弃。只是会延迟到账，不影响逻辑。
+  // 尝试通知在线用户, 失败则放弃。只是会延迟到账，不影响逻辑。
   do {
-    if (!options.notify_player) {
+    if (!options.notify_user) {
       break;
     }
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
     shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
-    shared_message<PROJECT_NAMESPACE_ID::SSPlayerAsyncJobsSync> req_body{ctx};
+    shared_message<PROJECT_NAMESPACE_ID::SSUserAsyncJobsSync> req_body{ctx};
 
     auto res =
         RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
@@ -273,7 +273,7 @@ GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_
       break;
     }
 
-    RPC_AWAIT_IGNORE_RESULT(rpc::lobby::player_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
+    RPC_AWAIT_IGNORE_RESULT(rpc::lobby::user_async_jobs_sync(ctx, login_table->router_server_id(), zone_id, user_id,
                                                                atfw::util::log::format("{}", user_id), *req_body));
   } while (false);
 

@@ -65,7 +65,7 @@ struct task_action_stat_guard {
                    action->get_user_id(), std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(),
                    action->get_result(), action->get_response_code());
       } else {
-        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|NO PLAYER|{}us|{}|{}", action->name(), action->get_task_id(),
+        FWCLOGINFO(log_categorize_t::PROTO_STAT, "{}|{}|NO USER|{}us|{}|{}", action->name(), action->get_task_id(),
                    std::chrono::duration_cast<std::chrono::microseconds>(end - start).count(), action->get_result(),
                    action->get_response_code());
       }
@@ -191,7 +191,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
   shared_context_->update_task_instance(current_task_id, name());
 
   if (0 != get_user_id()) {
-    FCTXLOGDEBUG(get_shared_context(), "task {} [{}] for player {}:{} start to run\n", name(), get_task_id(),
+    FCTXLOGDEBUG(get_shared_context(), "task {} [{}] for user {}:{} start to run\n", name(), get_task_id(),
                  get_zone_id(), get_user_id());
   } else {
     FCTXLOGDEBUG(get_shared_context(), "task {} [{}] start to run\n", name(), get_task_id());
@@ -277,7 +277,7 @@ SERVER_FRAME_API int task_action_base::operator()(void *priv_data)
   }
 
   if (0 != get_user_id()) {
-    FCTXLOGERROR(get_shared_context(), "task {} [{}] for player {}:{} ret code ({}){}, rsp code ({}){}\n", name(),
+    FCTXLOGERROR(get_shared_context(), "task {} [{}] for user {}:{} ret code ({}){}, rsp code ({}){}\n", name(),
                  get_task_id(), get_zone_id(), get_user_id(), protobuf_mini_dumper_get_error_msg(result_), result_,
                  protobuf_mini_dumper_get_error_msg(response_code_), response_code_);
   } else {
@@ -350,7 +350,7 @@ SERVER_FRAME_API void task_action_base::set_user_key(uint64_t user_id, uint32_t 
   if (user_id != 0 && zone_id != 0 && shared_context_->get_task_context().reference_object_type_id == 0 &&
       shared_context_->get_task_context().reference_object_zone_id == 0 &&
       shared_context_->get_task_context().reference_object_instance_id == 0) {
-    shared_context_->update_task_context_reference_object(PROJECT_NAMESPACE_ID::EN_ROT_PLAYER, zone_id, user_id);
+    shared_context_->update_task_context_reference_object(PROJECT_NAMESPACE_ID::EN_ROT_USER, zone_id, user_id);
   }
 }
 

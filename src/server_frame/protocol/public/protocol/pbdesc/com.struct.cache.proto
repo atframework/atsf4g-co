@@ -17,7 +17,7 @@ message DUserCacheMetaBasicProfile {
   string logo_url = 4;
   EnGenderType gender = 5;
 
-  string custom_nick_name = 11;  // 玩家自定义昵称
+  string custom_nick_name = 11;  // 用户自定义昵称
 }
 
 message DUserCacheMetaLoginBasicData {

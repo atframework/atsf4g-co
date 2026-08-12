@@ -36,7 +36,7 @@ class matching_logic {
   // 只检查 unit 能否作为一个整体加入指定房间，不判断房间是否成局。
   static unit_join_result check_unit_can_join(const matching_room& room,
                                               const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now,
-                                              int32_t global_matching_players);
+                                              int32_t global_matching_users);
   // 只检查房间当前已有的 unit 是否满足成局条件，不尝试加入新 unit。
-  static room_ready_result check_room_ready(const matching_room& room, int64_t now, int32_t global_matching_players);
+  static room_ready_result check_room_ready(const matching_room& room, int64_t now, int32_t global_matching_users);
 };

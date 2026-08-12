@@ -8,7 +8,7 @@
 
 #include <config/logic_config.h>
 
-#include <data/player_cache.h>
+#include <data/user_cache.h>
 
 SERVER_FRAME_API rpc::result_code_type task_lock::wait_task(rpc::context &ctx) {
   if (id_.empty()) {
@@ -81,11 +81,11 @@ SERVER_FRAME_API void task_lock::remove_task(uint64_t id) {
   FWLOGDEBUG("[TASK_LOCK]:({}) task remove:({}). current size:({})", user_id_, id, id_.size());
 }
 
-SERVER_FRAME_API task_lock_guard::task_lock_guard(std::shared_ptr<player_cache> player, uint64_t task_id) {
-  if (player != nullptr) {
-    ptr_ = player;
+SERVER_FRAME_API task_lock_guard::task_lock_guard(std::shared_ptr<user_cache> user_inst, uint64_t task_id) {
+  if (user_inst != nullptr) {
+    ptr_ = user_inst;
     task_id_ = task_id;
-    player->task_lock_init_task(task_id_);
+    user_inst->task_lock_init_task(task_id_);
   }
 }
 

@@ -8,7 +8,7 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <data/player_key_hash_helper.h>
+#include <data/user_key_hash_helper.h>
 #include <distributed_system/wal_publisher.h>
 #include <memory/object_allocator.h>
 
@@ -65,8 +65,8 @@ using matching_wal_subscriber_private_data =
 // 每个玩家是一个订阅者；同一 lobbysvr 的玩家会合并成一次通知 RPC。
 struct matching_wal_subscriber
     : public atfw::util::distributed_system::wal_subscriber<matching_wal_subscriber_private_data,
-                                                            PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t,
-                                                            player_key_equal_t> {};
+                                                            PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t,
+                                                            user_key_equal_t> {};
 
 using matching_wal_publisher =
     atfw::util::distributed_system::wal_publisher<matching_wal_storage, matching_wal_log_operator,

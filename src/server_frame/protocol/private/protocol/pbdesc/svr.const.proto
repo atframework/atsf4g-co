@@ -17,7 +17,7 @@ enum EnSystemLimit {
   EN_SL_NONE = 0;
   EN_SL_MAX_SS_MSG_LEN = 262144;
   EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET = 1577836800;  // 2020-01-01 00:00:00 UTC
-  EN_SL_PLAYER_ASYNC_JOBS_BATCH_NUMBER = 50;
+  EN_SL_USER_ASYNC_JOBS_BATCH_NUMBER = 50;
   EN_SL_RPC_MAX_MISMATCH_RETRY_TIMES = 256;
 }
 
@@ -37,8 +37,8 @@ enum EnGlobalUUIDMinorType {
   EN_GLOBAL_UUID_MIT_DB_LIST_RECORD_ID_ASYNC_JOBS = 1;  // AsyncJobs 类型的DB List Record ID
 }
 
-// player async job type
-enum EnPlayerAsyncJobsType {
+// user async job type
+enum EnUserAsyncJobsType {
   EN_PAJT_INVALID = 0;  // INVALID
   EN_PAJT_PAY = 1001;
   EN_PAJT_NORMAL = 1002;          // 普通类型的异步任务，比如GM加道具

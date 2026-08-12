@@ -23,16 +23,16 @@ class context;
 namespace user {
 /**
  * @brief 分配User ID
- * @param out player's user id(最后3个bits是校验位)
+ * @param out user's user id(最后3个bits是校验位)
  * @note 我们取2^5作为一个池的分配数量，这样当QPS为1K时能承载30/s的分配量。
- *       即便是大批玩家涌入比较极端的情况下，数据库访问30k/s时，能提供百万级的分配QPS。
+ *       即便是大批用户涌入比较极端的情况下，数据库访问30k/s时，能提供百万级的分配QPS。
  * @return allocated user id or error code(< 0)
  */
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::rpc_result<int64_t> allocate_user_id(::rpc::context& ctx);
 
 /**
  * @brief 检测User ID是否合法
- * @param in player's account id
+ * @param in user's account id
  * @return true or false
  */
 SERVER_FRAME_API bool is_valid_user_id(int64_t in) noexcept;

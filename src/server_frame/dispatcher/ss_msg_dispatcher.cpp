@@ -771,9 +771,9 @@ SERVER_FRAME_API void ss_msg_dispatcher::on_create_task_failed(dispatcher_start_
     protobuf_copy_message(*head->mutable_router(), real_msg->head().router());
   }
 
-  head->set_player_user_id(real_msg->head().player_user_id());
-  head->set_player_open_id(real_msg->head().player_open_id());
-  head->set_player_zone_id(real_msg->head().player_zone_id());
+  head->set_user_user_id(real_msg->head().user_user_id());
+  head->set_user_open_id(real_msg->head().user_open_id());
+  head->set_user_zone_id(real_msg->head().user_zone_id());
 
   int res = send_to_proc(real_msg->head().node_id(), *rsp);
   if (res < 0) {

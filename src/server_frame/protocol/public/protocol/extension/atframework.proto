@@ -300,10 +300,10 @@ message SSMsgHead {
   RpcTraceSpan rpc_trace = 34;  // 用于链路追踪
   RpcForward rpc_forward = 35;  // RPC转发
 
-  // 玩家标识
-  uint64 player_user_id = 101;  // 如果涉及玩家此项必需
-  string player_open_id = 102;  // 此项可选
-  uint32 player_zone_id = 103;  // 如果涉及玩家此项必需
+  // 用户标识
+  uint64 user_user_id = 101;  // 如果涉及用户此项必需
+  string user_open_id = 102;  // 此项可选
+  uint32 user_zone_id = 103;  // 如果涉及用户此项必需
 }
 
 // 协议包

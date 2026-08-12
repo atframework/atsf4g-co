@@ -53,7 +53,7 @@ service RpcUnitTestService {
     option (atframework.rpc_options) = {allow_no_wait: true};
   }
 
-  // User RPC: attaches player identifiers into the SS head.
+  // User RPC: attaches user identifiers into the SS head.
   rpc rpc_unit_test_user(RpcUnitTestEchoReq) returns (RpcUnitTestEchoRsp) {
     option (atframework.rpc_options) = {user_rpc: true};
   }

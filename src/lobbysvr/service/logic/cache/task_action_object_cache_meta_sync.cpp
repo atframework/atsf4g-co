@@ -26,10 +26,10 @@
 
 #include <rpc/cache/cache_api.h>
 
-#include <data/player.h>
+#include <data/user.h>
 #include <logic/cache/global_cache_manager.h>
 #include <logic/cache/user_cache_manager.h>
-#include <logic/player_manager.h>
+#include <logic/user_manager.h>
 
 LOBBY_SERVICE_API task_action_object_cache_meta_sync::task_action_object_cache_meta_sync(
     dispatcher_start_data_type&& param)
@@ -77,14 +77,14 @@ LOBBY_SERVICE_API task_action_object_cache_meta_sync::result_type task_action_ob
         break;
       }
 
-      player_ptr_t user = player_manager::me()->find_as<player>(watcher_key.instance_id(), watcher_key.zone_id());
-      if (!user) {
+      user_ptr_t user_inst = user_manager::me()->find_as<user>(watcher_key.instance_id(), watcher_key.zone_id());
+      if (!user_inst) {
         need_unwatch = true;
         FCTXLOGDEBUG(get_shared_context(), "cache watcher {}:{}:{} maybe logout",
                      static_cast<uint32_t>(watcher_key.cache_type()), watcher_key.zone_id(), watcher_key.instance_id());
         break;
       }
-      if (!user->has_session()) {
+      if (!user_inst->has_session()) {
         need_unwatch = true;
         FCTXLOGDEBUG(get_shared_context(), "cache watcher {}:{}:{} already logout",
                      static_cast<uint32_t>(watcher_key.cache_type()), watcher_key.zone_id(), watcher_key.instance_id());
@@ -92,7 +92,7 @@ LOBBY_SERVICE_API task_action_object_cache_meta_sync::result_type task_action_ob
       }
 
       RPC_AWAIT_IGNORE_RESULT(
-          user->get_user_cache_manager().send_update_meta_to_client(get_shared_context(), req_body.update_meta()));
+          user_inst->get_user_cache_manager().send_update_meta_to_client(get_shared_context(), req_body.update_meta()));
     } while (false);
 
     do {

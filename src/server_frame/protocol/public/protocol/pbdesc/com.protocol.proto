@@ -17,54 +17,13 @@ import "protocol/pbdesc/com.protocol.rank.proto";
 import "protocol/pbdesc/com.protocol.cache.proto";
 import "protocol/pbdesc/com.protocol.chat.proto";
 import "protocol/pbdesc/com.protocol.team.proto";
-import "protocol/pbdesc/com.protocol.lobby.proto";
+import "protocol/pbdesc/com.protocol.user.proto";
+import "protocol/pbdesc/com.protocol.auth.proto";
 import "protocol/pbdesc/com.protocol.match.proto";
-import "protocol/common/com.struct.item.common.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 package atframework.shared;
-
-/////////////////////////////////////////////////////
-// 到loginsvr的CS协议
-/////////////////////////////////////////////////////
-
-message CSLoginUpdateReq {
-  DAccountData account = 1;      // 平台信息
-  EnSystemID system_id = 2;      // 系统id，ios or android
-  string package_version = 11;   // 包版本
-  string resource_version = 12;  // 资源版本
-  string protocol_version = 13;  // 协议版本
-}
-
-message SCLoginUpdateRsp {
-  DClientUpdateCfg update_info = 1;  // 更新信息
-  int32 version_type = 2;            // 版本类型 @EnVersionType
-}
-
-message CSLoginAuthReq {
-  string open_id = 1;
-  DAccountData account = 2;      // 平台信息
-  EnSystemID system_id = 3;      // 系统id，ios or android
-  string package_version = 11;   // 包版本
-  string resource_version = 12;  // 资源版本
-  string protocol_version = 13;  // 协议版本
-
-  DClientDeviceInfo client_info = 21;
-}
-
-message SCLoginAuthRsp {
-  string access_token_code = 11;  // 认证码
-
-  DClientUpdateCfg update_info = 3;  // 更新信息
-  uint32 version_type = 4;           // 版本类型 @EnVersionType
-
-  string open_id = 21;  // 最终open_id
-  uint64 user_id = 22;  // 玩家数字ID
-
-  int64 ban_time = 101;    // 封号期限
-  int64 start_time = 102;  // 开服时间
-}
 
 service AuthsvrClientService {
   rpc login_auth(CSLoginAuthReq) returns (SCLoginAuthRsp) {
@@ -93,10 +52,10 @@ service LobbysvrClientService {
     };
   };
 
-  rpc player_get_info(CSPlayerGetInfoReq) returns (SCPlayerGetInfoRsp) {
+  rpc user_get_info(CSUserGetInfoReq) returns (SCUserGetInfoRsp) {
     option (atframework.rpc_options) = {
-      module_name: "player"
-      api_name: "Get player data"
+      module_name: "user"
+      api_name: "Get user data"
     };
   };
 
@@ -138,10 +97,17 @@ service LobbysvrClientService {
   };
 
   // Use stream request to disable waiting for response
-  rpc player_dirty_chg_sync(google.protobuf.Empty) returns (stream SCPlayerDirtyChgSync) {
+  rpc user_dirty_chg_sync(google.protobuf.Empty) returns (stream SCUserDirtyChgSync) {
     option (atframework.rpc_options) = {
-      module_name: "player"
+      module_name: "user"
       api_name: "Push dirty data"
+    };
+  };
+
+  rpc user_gm_command(CSUserGMCommandReq) returns (SCUserGMCommandRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "user"
+      api_name: "user管理命令"
     };
   };
 

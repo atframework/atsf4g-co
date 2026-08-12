@@ -17,7 +17,7 @@
 #include <string>
 #include <unordered_set>
 
-#include "data/player_key_hash_helper.h"
+#include "data/user_key_hash_helper.h"
 #include "rpc/rpc_common_types.h"
 #include "rpc/rpc_shared_message.h"
 
@@ -25,33 +25,33 @@ namespace rpc {
 class context;
 }
 
-class player_cache;
+class user_cache;
 
-class player_manager {
+class user_manager {
  public:
-  using player_ptr_t = std::shared_ptr<player_cache>;
+  using user_ptr_t = std::shared_ptr<user_cache>;
 
 #if defined(SERVER_FRAME_API_DLL) && SERVER_FRAME_API_DLL
 #  if defined(SERVER_FRAME_API_NATIVE) && SERVER_FRAME_API_NATIVE
-  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_EXPORT_DECL(user_manager)
 #  else
-  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_IMPORT_DECL(user_manager)
 #  endif
 #else
-  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(player_manager)
+  ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(user_manager)
 #endif
 
  private:
-  SERVER_FRAME_API player_manager();
-  SERVER_FRAME_API ~player_manager();
+  SERVER_FRAME_API user_manager();
+  SERVER_FRAME_API ~user_manager();
 
  public:
   /**
    * @brief 移除用户
-   * @param user user指针
+   * @param user_inst user指针
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove(rpc::context &ctx, player_ptr_t user,
+  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove(rpc::context &ctx, user_ptr_t user_inst,
                                                                              bool force_kickoff = false);
 
   /**
@@ -63,7 +63,7 @@ class player_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type remove(rpc::context &ctx, uint64_t user_id,
                                                                              uint32_t zone_id,
                                                                              bool force_kickoff = false,
-                                                                             player_cache *check_user = nullptr);
+                                                                             user_cache *check_user = nullptr);
 
   /**
    * @brief 启动异步任务移除用户
@@ -71,7 +71,7 @@ class player_manager {
    * @param zone_id zone_id
    * @param force_kickoff 强制移除，不进入离线缓存
    */
-  SERVER_FRAME_API void async_remove(rpc::context &ctx, player_ptr_t user, bool force_kickoff = false);
+  SERVER_FRAME_API void async_remove(rpc::context &ctx, user_ptr_t user_inst, bool force_kickoff = false);
 
   /**
    * @brief 启动异步任务移除用户
@@ -80,7 +80,7 @@ class player_manager {
    * @param force_kickoff 强制移除，不进入离线缓存
    */
   SERVER_FRAME_API void async_remove(rpc::context &ctx, uint64_t user_id, uint32_t zone_id, bool force_kickoff = false,
-                                     player_cache *check_user = nullptr);
+                                     user_cache *check_user = nullptr);
 
   /**
    * @brief 保存用户数据
@@ -88,7 +88,7 @@ class player_manager {
    */
   ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, uint64_t user_id,
                                                                            uint32_t zone_id,
-                                                                           const player_cache *check_user = nullptr);
+                                                                           const user_cache *check_user = nullptr);
 
   /**
    * @brief 添加到计划保存队列
@@ -99,15 +99,15 @@ class player_manager {
   SERVER_FRAME_API bool add_save_schedule(uint64_t user_id, uint32_t zone_id, bool kickoff = false);
 
   /**
-   * @brief 加载指定玩家数据。
+   * @brief 加载指定用户数据。
    * @note 注意这个函数只是读数据库做缓存。
-   * @note lobbysvr 请不要强制拉去数据 会冲掉玩家数据
-   * @note 返回的 user 指针不能用于改写玩家数据，不做保存。
+   * @note lobbysvr 请不要强制拉去数据 会冲掉用户数据
+   * @note 返回的 user 指针不能用于改写用户数据，不做保存。
    * @param user_id
    * @return null 或者 user指针
    */
   ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type load(rpc::context &ctx, uint64_t user_id,
-                                                                           uint32_t zone_id, player_ptr_t &output,
+                                                                           uint32_t zone_id, user_ptr_t &output,
                                                                            bool force = false);
 
   SERVER_FRAME_API size_t size() const;
@@ -115,27 +115,27 @@ class player_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type create(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
       rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> &login_lock_tb, uint64_t login_lock_ver,
-      player_ptr_t &output);
-  template <typename TPLAYER>
+      user_ptr_t &output);
+  template <typename TUSER>
   ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type create_as(
       rpc::context &ctx, uint64_t user_id, uint32_t zone_id, const std::string &openid,
       rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> &login_lock_tb, uint64_t login_lock_ver,
-      std::shared_ptr<TPLAYER> &output) {
-    player_ptr_t output_base;
+      std::shared_ptr<TUSER> &output) {
+    user_ptr_t output_base;
     auto ret = RPC_AWAIT_CODE_RESULT(create(ctx, user_id, zone_id, openid, login_lock_tb, login_lock_ver, output_base));
-    output = std::static_pointer_cast<TPLAYER>(output_base);
+    output = std::static_pointer_cast<TUSER>(output_base);
     RPC_RETURN_CODE(ret);
   }
 
-  SERVER_FRAME_API player_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
+  SERVER_FRAME_API user_ptr_t find(uint64_t user_id, uint32_t zone_id) const;
 
-  template <typename TPLAYER>
-  ATFW_UTIL_SYMBOL_VISIBLE const std::shared_ptr<TPLAYER> find_as(uint64_t user_id, uint32_t zone_id) const {
-    return std::static_pointer_cast<TPLAYER>(find(user_id, zone_id));
+  template <typename TUSER>
+  ATFW_UTIL_SYMBOL_VISIBLE const std::shared_ptr<TUSER> find_as(uint64_t user_id, uint32_t zone_id) const {
+    return std::static_pointer_cast<TUSER>(find(user_id, zone_id));
   }
 
   SERVER_FRAME_API bool has_create_user_lock(uint64_t user_id, uint32_t zone_id) const noexcept;
 
  private:
-  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, player_key_hash_t, player_key_equal_t> create_user_lock_;
+  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> create_user_lock_;
 };

@@ -1,4 +1,4 @@
-﻿// Copyright 2021 atframework
+// Copyright 2021 atframework
 // @brief Created by owent with generate-for-pb.py at 2021-11-14 20:57:03
 
 #pragma once
@@ -22,7 +22,7 @@
 #  define GAMECLIENT_RPC_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class player;
+class user;
 
 class task_action_login
     : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSLoginReq, PROJECT_NAMESPACE_ID::SCLoginRsp> {
@@ -51,12 +51,12 @@ class task_action_login
   ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type kickoff_other_session(
       uint64_t user_id, rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock>& login_lock_tb,
       uint64_t& login_lock_cas_version);
-  ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type replace_session(std::shared_ptr<player> user);
+  ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API rpc::result_code_type replace_session(std::shared_ptr<user> user_inst);
   ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API static rpc::result_code_type await_login_io_task(
-      rpc::context& ctx, std::shared_ptr<player> user);
+      rpc::context& ctx, std::shared_ptr<user> user_inst);
   ATFW_EXPLICIT_NODISCARD_ATTR GAMECLIENT_RPC_API static rpc::result_code_type await_logout_io_task(
-      rpc::context& ctx, std::shared_ptr<player> user);
+      rpc::context& ctx, std::shared_ptr<user> user_inst);
 
  private:
-  bool is_new_player_;
+  bool is_new_user_;
 };

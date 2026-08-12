@@ -58,8 +58,8 @@ project_service_declare_instance(
   SOURCES
   ${SERVICE_SOURCES}
   PRECOMPILE_HEADERS
-  "data/player.h"
-  "data/player_type_define.h"
+  "data/user.h"
+  "data/user_type_define.h"
   "dispatcher/task_action_cs_req_base.h"
   "rpc/db/hash_table.h"
   RESOURCE_DIRECTORIES

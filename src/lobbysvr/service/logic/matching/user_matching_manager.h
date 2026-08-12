@@ -22,12 +22,12 @@ namespace rpc {
 class context;
 }
 
-class player;
+class user;
 
 // 玩家级匹配流程入口。它保存本玩家的匹配快照和 WAL 游标，并负责 CS/SS 协议之间的转换。
 class user_matching_manager {
  public:
-  explicit user_matching_manager(player& owner);
+  explicit user_matching_manager(user& owner);
   ~user_matching_manager();
 
   // 玩家数据生命周期钩子。匹配视图随 table_user 持久化，以便重登录后恢复订阅。
@@ -82,7 +82,7 @@ class user_matching_manager {
 
  private:
   // manager 的生命周期严格从属于 owner，不拥有玩家对象。
-  player* owner_;
+  user* owner_;
   // 当前玩家的匹配快照、已应用 WAL 游标和客户端确认游标。
   PROJECT_NAMESPACE_ID::DUserMatchingData data_;
   // 迁房时暂存目标 matching_id，使目标房间首包能够被识别为合法切换。

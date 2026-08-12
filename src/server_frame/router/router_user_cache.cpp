@@ -2,7 +2,7 @@
 // Created by owent on 2018-05-07.
 //
 
-#include "router/router_player_cache.h"
+#include "router/router_user_cache.h"
 
 #include <config/logic_config.h>
 
@@ -18,37 +18,37 @@
 #include <string>
 #include <utility>
 
-#include "router/router_player_manager.h"
+#include "router/router_user_manager.h"
 
-SERVER_FRAME_API router_player_private_type::router_player_private_type()
+SERVER_FRAME_API router_user_private_type::router_user_private_type()
     : login_lock_tb(nullptr), login_lock_cas_ver(0) {}
-SERVER_FRAME_API router_player_private_type::router_player_private_type(
+SERVER_FRAME_API router_user_private_type::router_user_private_type(
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb_t, uint64_t login_lock_cas_ver_t,
     const std::string &openid_t)
     : login_lock_tb(login_lock_tb_t), login_lock_cas_ver(login_lock_cas_ver_t), openid(openid_t) {}
-SERVER_FRAME_API router_player_private_type::~router_player_private_type() {}
+SERVER_FRAME_API router_user_private_type::~router_user_private_type() {}
 
-SERVER_FRAME_API router_player_cache::router_player_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)
-    : base_type(router_player_manager::me()->create_player_object(user_id, zone_id, openid),
-                key_t(router_player_manager::me()->get_type_id(), zone_id, user_id)) {}
+SERVER_FRAME_API router_user_cache::router_user_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)
+    : base_type(router_user_manager::me()->create_user_object(user_id, zone_id, openid),
+                key_t(router_user_manager::me()->get_type_id(), zone_id, user_id)) {}
 
 // 这个时候openid无效，后面需要再init一次
-SERVER_FRAME_API router_player_cache::router_player_cache(const key_t &key)
-    : base_type(router_player_manager::me()->create_player_object(key.object_id, key.zone_id, ""), key) {}
+SERVER_FRAME_API router_user_cache::router_user_cache(const key_t &key)
+    : base_type(router_user_manager::me()->create_user_object(key.object_id, key.zone_id, ""), key) {}
 
-SERVER_FRAME_API const char *router_player_cache::name() const { return "[player  router cache]"; }
+SERVER_FRAME_API const char *router_user_cache::name() const { return "[user  router cache]"; }
 
-SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx, void *priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx, void *priv_data) {
   if (nullptr == priv_data) {
-    router_player_private_type local_priv_data;
+    router_user_private_type local_priv_data;
     return pull_cache(ctx, local_priv_data);
   }
 
-  return pull_cache(ctx, *reinterpret_cast<router_player_private_type *>(priv_data));
+  return pull_cache(ctx, *reinterpret_cast<router_user_private_type *>(priv_data));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::context &ctx,
-                                                                       router_player_private_type &priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx,
+                                                                       router_user_private_type &priv_data) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_table_ptr{ctx};
   if (nullptr != priv_data.login_lock_tb) {
     login_lock_table_ptr = *priv_data.login_lock_tb;
@@ -63,13 +63,13 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::cont
       rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
-      FWLOGERROR("load player_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
+      FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
                  res);
     }
     RPC_RETURN_CODE(res);
   }
 
-  player_cache::ptr_t obj = get_object();
+  user_cache::ptr_t obj = get_object();
   if (obj->get_open_id().empty()) {
     obj->init(get_key().object_id, get_key().zone_id, tbu->open_id());
   }
@@ -91,7 +91,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::cont
   obj->load_and_move_login_lock(std::move(*login_lock_table_ptr), local_login_lock_ver);
   login_lock_table_ptr->set_user_id(0);
 
-  // table_login内的平台信息复制到player里
+  // table_login内的平台信息复制到user里
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
     obj->init_from_table_data(ctx, *tbu);
   }
@@ -99,24 +99,24 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_cache(rpc::cont
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx, void *priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx, void *priv_data) {
   if (nullptr == priv_data) {
-    router_player_private_type local_priv_data;
+    router_user_private_type local_priv_data;
     return pull_object(ctx, local_priv_data);
   }
 
-  return pull_object(ctx, *reinterpret_cast<router_player_private_type *>(priv_data));
+  return pull_object(ctx, *reinterpret_cast<router_user_private_type *>(priv_data));
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::context &ctx,
-                                                                        router_player_private_type &priv_data) {
+SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx,
+                                                                        router_user_private_type &priv_data) {
   if (priv_data.login_lock_tb == nullptr) {
     FWLOGERROR("pull_object for {}:{}:{} failed, priv_data.login_lock_tb is nullptr", get_key().type_id,
                get_key().zone_id, get_key().object_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
 
-  player_cache::ptr_t obj = get_object();
+  user_cache::ptr_t obj = get_object();
   if (!obj || !obj->can_be_writable()) {
     FWLOGERROR("pull_object for {}:{}:{} failed, error code: {}", get_key().type_id, get_key().zone_id,
                get_key().object_id, static_cast<int>(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));
@@ -137,7 +137,7 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
       rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
-      FWLOGERROR("load player_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
+      FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
                  res);
       RPC_RETURN_CODE(res);
     } else {
@@ -169,13 +169,13 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
     }
   }
 
-  // 拉取玩家数据
+  // 拉取用户数据
   // 设置路由ID
   set_router_server_id((*priv_data.login_lock_tb)->router_server_id(), (*priv_data.login_lock_tb)->router_version());
   obj->load_and_move_login_lock(std::move(**priv_data.login_lock_tb), priv_data.login_lock_cas_ver);
   (*priv_data.login_lock_tb)->set_user_id(0);
 
-  // table_login内的平台信息复制到player里
+  // table_login内的平台信息复制到user里
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
     obj->init_from_table_data(ctx, *tbu);
   }
@@ -211,9 +211,9 @@ SERVER_FRAME_API rpc::result_code_type router_player_cache::pull_object(rpc::con
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-SERVER_FRAME_API rpc::result_code_type router_player_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
+SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::context &ctx, void * /*priv_data*/) {
   // 保存数据
-  player_cache::ptr_t obj = object();
+  user_cache::ptr_t obj = object();
   if (!obj || !obj->can_be_writable()) {
     FWLOGERROR("save_object for {}:{}:{} failed, error code: {}", get_key().type_id, get_key().zone_id,
                get_key().object_id, static_cast<int>(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY));

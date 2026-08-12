@@ -17,12 +17,12 @@ PROJECT_NAMESPACE_BEGIN
 class user_async_jobs_blob_data;
 PROJECT_NAMESPACE_END
 
-class player;
+class user;
 
-class task_action_player_remote_patch_jobs : public task_action_no_req_base {
+class task_action_user_remote_patch_jobs : public task_action_no_req_base {
  public:
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
-    std::shared_ptr<player> user;
+    std::shared_ptr<user> user_inst;
     std::chrono::system_clock::duration timeout_duration;
     std::chrono::system_clock::time_point timeout_timepoint;
     std::unordered_set<int32_t> async_job_type;
@@ -32,8 +32,8 @@ class task_action_player_remote_patch_jobs : public task_action_no_req_base {
   using task_action_no_req_base::operator();
 
  public:
-  explicit task_action_player_remote_patch_jobs(ctor_param_t&& param);
-  ~task_action_player_remote_patch_jobs();
+  explicit task_action_user_remote_patch_jobs(ctor_param_t&& param);
+  ~task_action_user_remote_patch_jobs();
 
   result_type operator()() override;
 
@@ -42,8 +42,8 @@ class task_action_player_remote_patch_jobs : public task_action_no_req_base {
 
  private:
   using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>;
-  using sync_callback_type = int32_t (*)(task_action_player_remote_patch_jobs&, player&, int32_t, async_job_ptr_type);
-  using async_callback_type = rpc::result_code_type (*)(rpc::context&, player&, int32_t, async_job_ptr_type);
+  using sync_callback_type = int32_t (*)(task_action_user_remote_patch_jobs&, user&, int32_t, async_job_ptr_type);
+  using async_callback_type = rpc::result_code_type (*)(rpc::context&, user&, int32_t, async_job_ptr_type);
 
   void register_callbacks(std::unordered_map<int32_t, sync_callback_type>& sync_callbacks,
                           std::unordered_map<int32_t, async_callback_type>& async_callbacks);

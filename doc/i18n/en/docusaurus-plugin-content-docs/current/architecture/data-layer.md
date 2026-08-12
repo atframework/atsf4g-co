@@ -42,10 +42,10 @@ auto res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get(ctx, user_id, ...));
 `src/server_frame/rpc/db/uuid.{h,cpp}` provides ID generation: `standard` / `short` / `global_increase`
 (DB auto-increment) / `global_unique`.
 
-## Session and Player Cache
+## Session and User Cache
 
 - `src/server_frame/data/session.{h,cpp}`: gateway session, key = `(gateway_node_id, session_id)`, responsible
   for downstream sending;
-- `src/server_frame/data/player_cache.{h,cpp}`: player data cache base class with dirty marking and init-task
+- `src/server_frame/data/user_cache.{h,cpp}`: user data cache base class with dirty marking and init-task
   waiting;
-- `src/server_frame/logic/session_manager.*` / `player_manager.*`: the corresponding manager singletons.
+- `src/server_frame/logic/session_manager.*` / `user_manager.*`: the corresponding manager singletons.

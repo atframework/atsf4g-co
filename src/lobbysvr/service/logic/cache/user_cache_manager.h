@@ -30,11 +30,11 @@ namespace rpc {
 class context;
 }
 
-class player;
+class user;
 
 class user_cache_manager {
  public:
-  explicit user_cache_manager(player& owner);
+  explicit user_cache_manager(user& owner);
   ~user_cache_manager();
 
   std::string memory_leak_debug();
@@ -45,8 +45,8 @@ class user_cache_manager {
   void on_saved(rpc::context&);
   void refresh_feature_limit_minute(rpc::context& ctx);
 
-  player& get_owner() { return *owner_; }
-  const player& get_owner() const { return *owner_; }
+  user& get_owner() { return *owner_; }
+  const user& get_owner() const { return *owner_; }
 
   void refresh_feature_limit_second(rpc::context& ctx);
 
@@ -97,7 +97,7 @@ class user_cache_manager {
       ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>& output);
 
  private:
-  player* ATFW_UTIL_MACRO_NONNULL owner_;
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
 
   int64_t cachesvr_discovery_version_;
   bool need_notify_user_cache_expired_;

@@ -43,8 +43,8 @@ message login_record {
 }
 
 message user_data {
-  int32 user_level = 1;         // 玩家等级
-  uint64 session_sequence = 2;  // 玩家的全局递增发包序号
+  int32 user_level = 1;         // 用户等级
+  uint64 session_sequence = 2;  // 用户的全局递增发包序号
 }
 
 message user_option_private_data {
@@ -88,7 +88,7 @@ message user_async_job_settle_rank {
   int64 custom_reward_cycle_no = 12;  // 自定义结算周期奖励的奖励周期ID（防止重复结算）
 }
 
-message player_async_jobs_data {
+message user_async_jobs_data {
   message history_job_meta {
     int32 job_type = 1;
     string action_uuid = 2;
@@ -130,7 +130,7 @@ message user_async_jobs_blob_data {
 }
 
 message user_async_jobs_cache_blob_data {
-  player_async_jobs_data async_jobs = 1;  // 异步任务缓存
+  user_async_jobs_data async_jobs = 1;  // 异步任务缓存
 
   message retry_job_data {
     int32 job_type = 1;
@@ -141,7 +141,7 @@ message user_async_jobs_cache_blob_data {
 
 message table_user_instance_rank_battle_blob_data {
   int64 occur_time = 1;
-  int32 kill_player_count = 2;
+  int32 kill_user_count = 2;
 }
 
 message user_orbit_room_data {

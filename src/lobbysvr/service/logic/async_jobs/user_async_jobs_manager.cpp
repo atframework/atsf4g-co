@@ -21,16 +21,16 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/logic_config.h>
-#include <data/player.h>
+#include <data/user.h>
 
 #include <rpc/rpc_async_invoke.h>
 
 #include <unordered_set>
 #include <utility>
 
-#include "logic/async_jobs/task_action_player_remote_patch_jobs.h"
+#include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
 
-user_async_jobs_manager::user_async_jobs_manager(player& owner)
+user_async_jobs_manager::user_async_jobs_manager(user& owner)
     : owner_(&owner), is_dirty_(false), remote_command_patch_task_next_timepoint_(0) {}
 
 user_async_jobs_manager::~user_async_jobs_manager() {}
@@ -42,22 +42,22 @@ void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_prote
 void user_async_jobs_manager::refresh_feature_limit(rpc::context& ctx) { try_async_jobs(ctx); }
 
 void user_async_jobs_manager::init_from_table_data(rpc::context&,
-                                                   const PROJECT_NAMESPACE_ID::table_user& player_table) {
-  if (player_table.has_async_job_blob_data()) {
+                                                   const PROJECT_NAMESPACE_ID::table_user& user_table) {
+  if (user_table.has_async_job_blob_data()) {
     remote_command_patch_task_next_timepoint_ =
-        static_cast<time_t>(player_table.async_job_blob_data().async_jobs().next_task_active_time());
+        static_cast<time_t>(user_table.async_job_blob_data().async_jobs().next_task_active_time());
 
     history_uuids_.clear();
-    for (int i = 0; i < player_table.async_job_blob_data().async_jobs().history_size(); ++i) {
-      auto& history_db_data = player_table.async_job_blob_data().async_jobs().history(i);
+    for (int i = 0; i < user_table.async_job_blob_data().async_jobs().history_size(); ++i) {
+      auto& history_db_data = user_table.async_job_blob_data().async_jobs().history(i);
       history_item item;
       item.timeout = history_db_data.timeout();
       history_uuids_[history_db_data.job_type()].insert_key_value(history_db_data.action_uuid(), item);
     }
 
     retry_jobs_.clear();
-    for (int i = 0; i < player_table.async_job_blob_data().retry_jobs_size(); ++i) {
-      auto& retry_job = player_table.async_job_blob_data().retry_jobs(i);
+    for (int i = 0; i < user_table.async_job_blob_data().retry_jobs_size(); ++i) {
+      auto& retry_job = user_table.async_job_blob_data().retry_jobs(i);
       retry_jobs_[retry_job.job_type()][retry_job.job_data().action_uuid()] =
           atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(retry_job.job_data());
     }
@@ -77,9 +77,9 @@ void user_async_jobs_manager::init_from_table_data(rpc::context&,
   }
 }
 
-int user_async_jobs_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user) const {
-  auto async_jobs_data = user.mutable_async_job_blob_data();
-  PROJECT_NAMESPACE_ID::player_async_jobs_data* jobs_data = async_jobs_data->mutable_async_jobs();
+int user_async_jobs_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& table) const {
+  auto async_jobs_data = table.mutable_async_job_blob_data();
+  PROJECT_NAMESPACE_ID::user_async_jobs_data* jobs_data = async_jobs_data->mutable_async_jobs();
   if (NULL == jobs_data) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
@@ -158,7 +158,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
     return false;
   }
 
-  // 玩家临时性登出，暂时也不需要patch数据
+  // 用户临时性登出，暂时也不需要patch数据
   if (NULL == owner_ || !owner_->has_session()) {
     return false;
   }
@@ -172,18 +172,18 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   }
 
   task_type_trait::task_type task_inst;
-  task_action_player_remote_patch_jobs::ctor_param_t params;
-  params.user = owner_->shared_from_this();
+  task_action_user_remote_patch_jobs::ctor_param_t params;
+  params.user_inst = owner_->shared_from_this();
   params.timeout_duration =
       task_manager::make_timeout_duration(logic_config::me()->get_logic_cfg().user().async_job().timeout());
   params.timeout_timepoint = atfw::util::time::time_utility::now() + params.timeout_duration;
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
-  task_manager::me()->create_task_with_timeout<task_action_player_remote_patch_jobs>(task_inst, params.timeout_duration,
+  task_manager::me()->create_task_with_timeout<task_action_user_remote_patch_jobs>(task_inst, params.timeout_duration,
                                                                                      std::move(params));
 
   if (task_type_trait::empty(task_inst)) {
-    FWLOGERROR("create task_action_player_remote_patch_jobs failed");
+    FWLOGERROR("create task_action_user_remote_patch_jobs failed");
   } else {
     remote_command_patch_task_ = task_inst;
 
@@ -191,7 +191,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
 
     int res = task_manager::me()->start_task(task_inst, start_data);
     if (res < 0) {
-      FWPLOGERROR(*owner_, "start task_action_player_remote_patch_jobs failed, res: {}({})", res,
+      FWPLOGERROR(*owner_, "start task_action_user_remote_patch_jobs failed, res: {}({})", res,
                   protobuf_mini_dumper_get_error_msg(res));
       task_type_trait::reset_task(remote_command_patch_task_);
       return false;

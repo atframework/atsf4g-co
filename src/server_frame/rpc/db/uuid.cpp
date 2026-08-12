@@ -379,7 +379,7 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx
     // POOL => 1 | * | 5
     // EN_GLOBAL_UUID_MAT_USER_ID:     [1 | 55 | 5] | 3
     // EN_GLOBAL_UUID_MAT_GUILD_ID:    [1 | 55 | 5] | 3
-    // 公会和玩家账号分配采用短ID模式
+    // 公会和用户账号分配采用短ID模式
     return generate_global_unique_id<5>(ctx, major_type, minor_type, patch_type);
   }
 

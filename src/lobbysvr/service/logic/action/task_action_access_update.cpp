@@ -1,4 +1,4 @@
-﻿// Copyright 2021 atframework
+// Copyright 2021 atframework
 // @brief Created by owent with generate-for-pb.py at 2021-11-14 20:33:44
 
 #include "logic/action/task_action_access_update.h"
@@ -19,7 +19,7 @@
 
 #include <config/extern_service_types.h>
 
-#include <data/player.h>
+#include <data/user.h>
 
 task_action_access_update::task_action_access_update(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -30,25 +30,25 @@ const char* task_action_access_update::name() const { return "task_action_access
 task_action_access_update::result_type task_action_access_update::operator()() {
   const rpc_request_type& req_body = get_request_body();
 
-  player::ptr_t user = get_player<player>();
-  if (!user) {
+  user::ptr_t user_inst = get_user<user>();
+  if (!user_inst) {
     FWLOGERROR("not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 未更新，忽略
-  if (user->get_account_info().platform_access_token() == req_body.new_access()) {
+  if (user_inst->get_account_info().platform_access_token() == req_body.new_access()) {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 更新平台登入码
-  if (user->get_account_info().platform_access_token() != req_body.old_access()) {
+  if (user_inst->get_account_info().platform_access_token() != req_body.old_access()) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  user->get_account_info().set_platform_access_token(req_body.new_access());
+  user_inst->get_account_info().set_platform_access_token(req_body.new_access());
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

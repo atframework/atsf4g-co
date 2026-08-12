@@ -24,10 +24,10 @@
 
 #include <config/extern_service_types.h>
 
-#include <data/player.h>
+#include <data/user.h>
 #include <logic/cache/global_cache_manager.h>
 #include <logic/cache/user_cache_manager.h>
-#include <logic/player_manager.h>
+#include <logic/user_manager.h>
 
 LOBBY_SERVICE_API task_action_object_cache_expired_sync::task_action_object_cache_expired_sync(
     dispatcher_start_data_type&& param)
@@ -69,21 +69,21 @@ task_action_object_cache_expired_sync::operator()() {
         break;
       }
 
-      player_ptr_t user = player_manager::me()->find_as<player>(watcher_key.instance_id(), watcher_key.zone_id());
-      if (!user) {
+      user_ptr_t user_inst = user_manager::me()->find_as<user>(watcher_key.instance_id(), watcher_key.zone_id());
+      if (!user_inst) {
         need_unwatch = true;
         FWLOGDEBUG("cache watcher {}:{}:{} maybe logout", static_cast<uint32_t>(watcher_key.cache_type()),
                    watcher_key.zone_id(), watcher_key.instance_id());
         break;
       }
-      if (!user->has_session()) {
+      if (!user_inst->has_session()) {
         need_unwatch = true;
         FWLOGDEBUG("cache watcher {}:{}:{} already logout", static_cast<uint32_t>(watcher_key.cache_type()),
                    watcher_key.zone_id(), watcher_key.instance_id());
         break;
       }
 
-      RPC_AWAIT_IGNORE_RESULT(user->get_user_cache_manager().send_cache_expired_notify_to_client(
+      RPC_AWAIT_IGNORE_RESULT(user_inst->get_user_cache_manager().send_cache_expired_notify_to_client(
           get_shared_context(), req_body.expired_key()));
     } while (false);
 

@@ -115,7 +115,7 @@ message table_user {
   // BasicInfo
   user_login_data login_data = 11;                  // 登入数据
   account_information account_data = 12;            // 账号信息
-  user_data user_data = 13;                         // 玩家数据
+  user_data user_data = 13;                         // 用户数据
   user_option_public_data option_data_public = 14;  // 公开的设置
   // BasicInfo
 
@@ -126,9 +126,9 @@ message table_user {
   bool create_init = 103;     // 是否已经执行过创建初始化
 
   // 业务逻辑数据
-  user_option_private_data option_data_private = 200;  // 玩家选项
-  DRankUserData rank_data = 201;                       // 玩家排行榜数据
-  user_orbit_room_data orbit_room_data = 202;            // 玩家轨道房间数据
+  user_option_private_data option_data_private = 200;  // 用户选项
+  DRankUserData rank_data = 201;                       // 用户排行榜数据
+  user_orbit_room_data orbit_room_data = 202;          // 用户房间数据
   DUserMatchingData matching_data = 203;               // 匹配临时数据
 }
 

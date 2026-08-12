@@ -6,11 +6,11 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_player_kickoff : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSPlayerKickOffReq,
-                                                                  PROJECT_NAMESPACE_ID::SSPlayerKickOffRsp> {
+class task_action_user_kickoff : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSUserKickOffReq,
+                                                                  PROJECT_NAMESPACE_ID::SSUserKickOffRsp> {
  public:
   using base_type =
-      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSPlayerKickOffReq, PROJECT_NAMESPACE_ID::SSPlayerKickOffRsp>;
+      task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSUserKickOffReq, PROJECT_NAMESPACE_ID::SSUserKickOffRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -20,8 +20,8 @@ class task_action_player_kickoff : public task_action_ss_rpc_base<PROJECT_NAMESP
   using task_action_ss_req_base::operator();
 
  public:
-  explicit task_action_player_kickoff(dispatcher_start_data_type&& param);
-  ~task_action_player_kickoff();
+  explicit task_action_user_kickoff(dispatcher_start_data_type&& param);
+  ~task_action_user_kickoff();
 
   bool is_stream_rpc() const noexcept override;
 

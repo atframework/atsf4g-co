@@ -24,21 +24,21 @@ using matching_rule_ptr = decltype(excel::get_ExcelMatchingRule_by_id(0));
 
 bool units_are_banned(const PROJECT_NAMESPACE_ID::DMatchingUnit& left,
                       const PROJECT_NAMESPACE_ID::DMatchingUnit& right) {
-  for (const auto& left_player : left.players()) {
-    if (matching_utility::contains_user(right.ban_users(), left_player.user_key())) {
+  for (const auto& left_user : left.users()) {
+    if (matching_utility::contains_user(right.ban_users(), left_user.user_key())) {
       return true;
     }
-    for (const auto& right_player : right.players()) {
-      if (matching_utility::contains_user(right_player.lasting_ban_users(), left_player.user_key()) ||
-          matching_utility::contains_user(left_player.lasting_ban_users(), right_player.user_key()) ||
-          matching_utility::contains_user(right_player.last_battle_users(), left_player.user_key()) ||
-          matching_utility::contains_user(left_player.last_battle_users(), right_player.user_key())) {
+    for (const auto& right_user : right.users()) {
+      if (matching_utility::contains_user(right_user.lasting_ban_users(), left_user.user_key()) ||
+          matching_utility::contains_user(left_user.lasting_ban_users(), right_user.user_key()) ||
+          matching_utility::contains_user(right_user.last_battle_users(), left_user.user_key()) ||
+          matching_utility::contains_user(left_user.last_battle_users(), right_user.user_key())) {
         return true;
       }
     }
   }
-  for (const auto& right_player : right.players()) {
-    if (matching_utility::contains_user(left.ban_users(), right_player.user_key())) {
+  for (const auto& right_user : right.users()) {
+    if (matching_utility::contains_user(left.ban_users(), right_user.user_key())) {
       return true;
     }
   }
@@ -65,7 +65,7 @@ bool matches_rule_item(const PROJECT_NAMESPACE_ID::config::DMatchingRuleItem& it
   }
 }
 
-std::vector<matching_rule_ptr> select_rules(const matching_room& room, int64_t now, int32_t global_matching_players) {
+std::vector<matching_rule_ptr> select_rules(const matching_room& room, int64_t now, int32_t global_matching_users) {
   std::vector<matching_rule_ptr> result;
   auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
   if (!pool) {
@@ -74,8 +74,8 @@ std::vector<matching_rule_ptr> select_rules(const matching_room& room, int64_t n
 
   for (int32_t group_id : pool->rule_group_ids()) {
     auto group = excel::get_ExcelMatchingRuleGroup_by_group_id(group_id);
-    if (!group || global_matching_players < group->global_user_lower() ||
-        (group->global_user_upper() > 0 && global_matching_players > group->global_user_upper())) {
+    if (!group || global_matching_users < group->global_user_lower() ||
+        (group->global_user_upper() > 0 && global_matching_users > group->global_user_upper())) {
       continue;
     }
     const int64_t elapsed = std::max<int64_t>(0, now - room.get_created_time());
@@ -138,7 +138,7 @@ bool check_rule_limits(const matching_room& room, const PROJECT_NAMESPACE_ID::DM
 std::map<int32_t, int32_t> get_team_composition(const matching_room& room) {
   std::map<int32_t, int32_t> actual;
   for (const auto& stored : room.get_units()) {
-    ++actual[stored.second.players_size()];
+    ++actual[stored.second.users_size()];
   }
   return actual;
 }
@@ -147,7 +147,7 @@ std::map<int32_t, int32_t> get_team_composition(
     const PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate& result_template) {
   std::map<int32_t, int32_t> expected;
   for (const auto& entry : result_template.team_template()) {
-    expected[entry.player_number()] += entry.count();
+    expected[entry.user_number()] += entry.count();
   }
   return expected;
 }
@@ -155,7 +155,7 @@ std::map<int32_t, int32_t> get_team_composition(
 bool template_can_accept_unit(const matching_room& room, const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
                               const PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate& result_template) {
   auto actual = get_team_composition(room);
-  ++actual[unit.players_size()];
+  ++actual[unit.users_size()];
   const auto expected = get_team_composition(result_template);
   for (const auto& value : actual) {
     auto iter = expected.find(value.first);
@@ -190,19 +190,19 @@ int32_t matching_logic::validate_unit(int32_t matching_pool_id, const PROJECT_NA
   if (!pool) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND;
   }
-  if (unit.unit_id() == 0 || unit.players_size() == 0 ||
-      (pool->team_max_size() > 0 && unit.players_size() > pool->team_max_size())) {
+  if (unit.unit_id() == 0 || unit.users_size() == 0 ||
+      (pool->team_max_size() > 0 && unit.users_size() > pool->team_max_size())) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
   }
-  if (unit.captain_user_key().user_id() == 0 || !matching_utility::unit_has_player(unit, unit.captain_user_key())) {
+  if (unit.captain_user_key().user_id() == 0 || !matching_utility::unit_has_user(unit, unit.captain_user_key())) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
   }
-  for (int left = 0; left < unit.players_size(); ++left) {
-    if (unit.players(left).user_key().user_id() == 0) {
+  for (int left = 0; left < unit.users_size(); ++left) {
+    if (unit.users(left).user_key().user_id() == 0) {
       return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
     }
-    for (int right = left + 1; right < unit.players_size(); ++right) {
-      if (matching_utility::same_user(unit.players(left).user_key(), unit.players(right).user_key())) {
+    for (int right = left + 1; right < unit.users_size(); ++right) {
+      if (matching_utility::same_user(unit.users(left).user_key(), unit.users(right).user_key())) {
         return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
       }
     }
@@ -212,7 +212,7 @@ int32_t matching_logic::validate_unit(int32_t matching_pool_id, const PROJECT_NA
 
 matching_logic::unit_join_result matching_logic::check_unit_can_join(const matching_room& room,
                                                                      const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
-                                                                     int64_t now, int32_t global_matching_players) {
+                                                                     int64_t now, int32_t global_matching_users) {
   unit_join_result result;
   auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
   if (!pool) {
@@ -220,12 +220,12 @@ matching_logic::unit_join_result matching_logic::check_unit_can_join(const match
     return result;
   }
   if (pool->user_upper() > 0 &&
-      static_cast<int32_t>(room.get_player_count()) + unit.players_size() > pool->user_upper()) {
+      static_cast<int32_t>(room.get_user_count()) + unit.users_size() > pool->user_upper()) {
     result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
     return result;
   }
 
-  for (const auto& rule : select_rules(room, now, global_matching_players)) {
+  for (const auto& rule : select_rules(room, now, global_matching_users)) {
     if (!is_unit_compatible_with_room(room, unit, rule) || !check_rule_limits(room, &unit, rule)) {
       continue;
     }
@@ -249,22 +249,22 @@ matching_logic::unit_join_result matching_logic::check_unit_can_join(const match
 }
 
 matching_logic::room_ready_result matching_logic::check_room_ready(const matching_room& room, int64_t now,
-                                                                   int32_t global_matching_players) {
+                                                                   int32_t global_matching_users) {
   room_ready_result result;
   auto pool = excel::get_ExcelMatchingPool_by_id(room.get_scope().matching_pool_id());
   if (!pool) {
     result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND;
     return result;
   }
-  const int32_t total_players = static_cast<int32_t>(room.get_player_count());
-  for (const auto& rule : select_rules(room, now, global_matching_players)) {
+  const int32_t total_users = static_cast<int32_t>(room.get_user_count());
+  for (const auto& rule : select_rules(room, now, global_matching_users)) {
     if (!check_rule_limits(room, nullptr, rule)) {
       continue;
     }
     if (rule->result_template_ids_size() == 0) {
-      const int32_t ready_players =
-          rule->start_battle_min_player() > 0 ? rule->start_battle_min_player() : pool->user_upper();
-      result.ready = ready_players > 0 && total_players >= ready_players;
+      const int32_t ready_users =
+          rule->start_battle_min_user() > 0 ? rule->start_battle_min_user() : pool->user_upper();
+      result.ready = ready_users > 0 && total_users >= ready_users;
       result.result = 0;
       if (result.ready) {
         return result;
@@ -278,7 +278,7 @@ matching_logic::room_ready_result matching_logic::check_room_ready(const matchin
       }
       result.result_template_id = template_id;
       result.result = 0;
-      result.ready = total_players >= std::max(rule->min_total_player(), rule->start_battle_min_player()) &&
+      result.ready = total_users >= std::max(rule->min_total_user(), rule->start_battle_min_user()) &&
                      template_is_complete(room, *result_template);
       if (result.ready) {
         return result;

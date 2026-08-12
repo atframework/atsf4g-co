@@ -13,7 +13,7 @@
 #include <assert.h>
 #include <memory>
 
-class player;
+class user;
 
-using player_ptr_t = std::shared_ptr<player>;
-using player_weak_ptr_t = std::weak_ptr<player>;
+using user_ptr_t = std::shared_ptr<user>;
+using user_weak_ptr_t = std::weak_ptr<user>;

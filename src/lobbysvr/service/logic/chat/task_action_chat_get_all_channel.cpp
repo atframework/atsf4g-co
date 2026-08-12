@@ -22,7 +22,7 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
-#include <data/player.h>
+#include <data/user.h>
 
 #include <utility>
 
@@ -42,14 +42,14 @@ GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::result_type task_action
   // const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  player::ptr_t user = get_player<player>();
-  if (!user) {
+  user::ptr_t user_inst = get_user<user>();
+  if (!user_inst) {
     FCTXLOGERROR(get_shared_context(), "not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  user->get_user_chat_manager().foreach_channel(
+  user_inst->get_user_chat_manager().foreach_channel(
       [&rsp_body, this](const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>& channel) {
         auto* metadata = rsp_body.add_channel_metadata();
         if (metadata != nullptr) {

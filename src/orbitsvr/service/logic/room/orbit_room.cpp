@@ -365,7 +365,7 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
   event_log.mutable_client_exit()->mutable_exit_info()->set_exit_reason(exit_reason);
   add_event_log(ctx, std::move(event_log));
 
-  // 结算未结算的玩家
+  // 结算未结算的用户
   for (auto& user_data : user_data_index_) {
     if (!user_data.second->finish_) {
       user_data.second->finish_ = true;

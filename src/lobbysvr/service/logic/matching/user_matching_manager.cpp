@@ -18,7 +18,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <config/logic_config.h>
-#include <data/player.h>
+#include <data/user.h>
 #include <rpc/db/uuid.h>
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/matching/matching_api.h>
@@ -43,9 +43,9 @@ void erase_unit(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot, uint64_t 
 void update_confirm_status(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot,
                            const PROJECT_NAMESPACE_ID::DMatchingConfirmEvent& event) {
   for (auto& unit : *snapshot.mutable_units()) {
-    for (auto& matching_player : *unit.mutable_players()) {
-      if (same_user(matching_player.user_key(), event.user_key())) {
-        matching_player.set_confirm_status(event.status());
+    for (auto& matching_user : *unit.mutable_users()) {
+      if (same_user(matching_user.user_key(), event.user_key())) {
+        matching_user.set_confirm_status(event.status());
         return;
       }
     }
@@ -60,7 +60,7 @@ bool is_terminal_status(PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status) {
 }
 }  // namespace
 
-user_matching_manager::user_matching_manager(player& owner) : owner_(&owner), dirty_(false) {}
+user_matching_manager::user_matching_manager(user& owner) : owner_(&owner), dirty_(false) {}
 
 user_matching_manager::~user_matching_manager() = default;
 
@@ -79,9 +79,9 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
   auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingCheckRsp>(ctx);
   request->set_matching_id(data_.snapshot().matching_id());
   for (const auto& unit : data_.snapshot().units()) {
-    for (const auto& matching_player : unit.players()) {
-      if (matching_player.user_key().user_id() == owner_->get_user_id() &&
-          matching_player.user_key().zone_id() == owner_->get_zone_id()) {
+    for (const auto& matching_user : unit.users()) {
+      if (matching_user.user_key().user_id() == owner_->get_user_id() &&
+          matching_user.user_key().zone_id() == owner_->get_zone_id()) {
         request->set_unit_id(unit.unit_id());
         break;
       }
@@ -159,9 +159,9 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
 
   const auto& operator_user = rpc_request->operator_user();
   bool operator_is_member = false;
-  for (auto& matching_player : *rpc_request->mutable_unit()->mutable_players()) {
-    matching_player.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
-    operator_is_member = operator_is_member || same_user(matching_player.user_key(), operator_user);
+  for (auto& matching_user : *rpc_request->mutable_unit()->mutable_users()) {
+    matching_user.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+    operator_is_member = operator_is_member || same_user(matching_user.user_key(), operator_user);
   }
 
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
@@ -419,9 +419,9 @@ void user_matching_manager::apply_event(const PROJECT_NAMESPACE_ID::DMatchingEve
       protobuf_copy_message(*snapshot.add_units(), event_log.add_unit());
       break;
     case PROJECT_NAMESPACE_ID::DMatchingEventLog::kRemoveUnit:
-      for (const auto& matching_player : event_log.remove_unit().unit().players()) {
-        if (matching_player.user_key().user_id() == owner_->get_user_id() &&
-            matching_player.user_key().zone_id() == owner_->get_zone_id()) {
+      for (const auto& matching_user : event_log.remove_unit().unit().users()) {
+        if (matching_user.user_key().user_id() == owner_->get_user_id() &&
+            matching_user.user_key().zone_id() == owner_->get_zone_id()) {
           pending_switch_matching_id_ = event_log.remove_unit().switch_to_matching_id();
           break;
         }
@@ -499,9 +499,9 @@ rpc::result_code_type user_matching_manager::fill_matching_unit(rpc::context& ct
   output.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
   output.mutable_parameter()->set_role_level(owner_->get_user_data().user_level());
   output.mutable_parameter()->set_search_start_time(atfw::util::time::time_utility::get_now());
-  auto* matching_player = output.add_players();
-  fill_operator_user(*matching_player->mutable_user_key());
-  matching_player->set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+  auto* matching_user = output.add_users();
+  fill_operator_user(*matching_user->mutable_user_key());
+  matching_user->set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
   output.set_client_version(owner_->get_client_info().client_version());
   // 组队未接入前，队长固定为当前玩家，unit 只包含当前玩家。
   fill_operator_user(*output.mutable_captain_user_key());
@@ -515,9 +515,9 @@ void user_matching_manager::fill_operator_user(PROJECT_NAMESPACE_ID::DUserIDKey&
 
 uint64_t user_matching_manager::get_current_unit_id() const {
   for (const auto& unit : data_.snapshot().units()) {
-    for (const auto& matching_player : unit.players()) {
-      if (matching_player.user_key().user_id() == owner_->get_user_id() &&
-          matching_player.user_key().zone_id() == owner_->get_zone_id()) {
+    for (const auto& matching_user : unit.users()) {
+      if (matching_user.user_key().user_id() == owner_->get_user_id() &&
+          matching_user.user_key().zone_id() == owner_->get_zone_id()) {
         return unit.unit_id();
       }
     }

@@ -533,7 +533,7 @@ class DualGridContainer : public ItemGridContainer {
 ITEM_ALGORITHM_NAMESPACE_END
 
 // ============================================================
-// 玩家游玩模拟 — 完整生命周期大测试
+// 用户游玩模拟 — 完整生命周期大测试
 //
 // 覆盖操作: check_add / add (货币/虚拟/1x1/2x2/装备GUID),
 //           add 合并 / stack overflow / position occupied / out of range,
@@ -546,7 +546,7 @@ ITEM_ALGORITHM_NAMESPACE_END
 //           服务器→客户端同步验证
 // ============================================================
 
-CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
+CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   ServerTestItemGridAlgorithm server;
   init_server_grid(server);
   // 同时注册装备配置, 使服务器支持所有道具类型
@@ -1615,7 +1615,7 @@ CASE_TEST(ItemGridAlgorithm, player_gameplay_simulation) {
     verify_grid_dump(client);
   }
 
-  CASE_MSG_INFO() << "=== 玩家游玩模拟完成 ===\n";
+  CASE_MSG_INFO() << "=== 用户游玩模拟完成 ===\n";
 }
 
 // ============================================================

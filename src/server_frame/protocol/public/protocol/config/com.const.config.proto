@@ -23,7 +23,7 @@ enum game_const_config {
   EN_GCC_RESOURCE_MAX_LIMIT = 99999999;   // 资源限制
   EN_GCC_LEVEL_LIMIT = 999;               // 最大等级限制
   EN_GCC_ACTIVATION_CODE_PERMANENT = 64;  // 永久生效的激活码最大批次
-  EN_GCC_START_PLAYER_ID = 10000;         // start id for alloc player id
+  EN_GCC_START_USER_ID = 10000;         // start id for alloc user id
 }
 
 message ExcelConstConfig {

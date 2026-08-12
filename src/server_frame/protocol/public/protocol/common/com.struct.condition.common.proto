@@ -116,7 +116,7 @@ message DConditionRule {
     // @see EnAccountITopLoginChannelType
     DConditionRuleMultipleUInt login_channel = 101 [(org.xresloader.field_alias) = "登入渠道"];
     DConditionRuleMultipleUInt system_platform = 102 [(org.xresloader.field_alias) = "系统平台"];  // @see EnPlatformID
-    DConditionRuleRangeInt user_level = 201 [(org.xresloader.field_alias) = "玩家等级"];
+    DConditionRuleRangeInt user_level = 201 [(org.xresloader.field_alias) = "用户等级"];
     DConditionRuleRangeInt team_member_count = 301 [(org.xresloader.field_alias) = "组队人数"];
     DConditionRuleRangeDatetime register_time = 401 [(org.xresloader.field_alias) = "注册时间"];
     DConditionRuleRangeVersion client_version = 501 [(org.xresloader.field_alias) = "版本号限制"];

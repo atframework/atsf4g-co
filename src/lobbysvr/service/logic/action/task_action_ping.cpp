@@ -19,9 +19,9 @@
 
 #include <rpc/db/local_db_interface.atfw.gen.h>
 
-#include <data/player.h>
+#include <data/user.h>
 #include <data/session.h>
-#include <logic/player_manager.h>
+#include <logic/user_manager.h>
 #include <logic/session_manager.h>
 
 #include <config/logic_config.h>
@@ -38,18 +38,18 @@ task_action_ping::result_type task_action_ping::operator()() {
   ATFW_EXPLICIT_UNUSED_ATTR const rpc_request_type& req_body = get_request_body();
   ATFW_EXPLICIT_UNUSED_ATTR rpc_response_type& rsp_body = get_response_body();
 
-  player::ptr_t user = get_player<player>();
-  if (!user) {
+  user::ptr_t user_inst = get_user<user>();
+  if (!user_inst) {
     FWLOGERROR("not logined.");
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 用户更新心跳信息
-  user->update_heartbeat();
+  user_inst->update_heartbeat();
 
   // 心跳超出容忍值，直接提下线
-  if (user->get_heartbeat_data().continue_error_times >=
+  if (user_inst->get_heartbeat_data().continue_error_times >=
       logic_config::me()->get_logic_cfg().heartbeat().error_times()) {
     // 封号一段时间
 
@@ -59,9 +59,9 @@ task_action_ping::result_type task_action_ping::operator()() {
     do {
       uint64_t login_lock_cas_ver = 0;
       int res = RPC_AWAIT_CODE_RESULT(
-          rpc::db::login_lock::get_all(get_shared_context(), user->get_user_id(), tb, login_lock_cas_ver));
+          rpc::db::login_lock::get_all(get_shared_context(), user_inst->get_user_id(), tb, login_lock_cas_ver));
       if (res < 0) {
-        FWLOGERROR("call login rpc Get method failed, user {}, res: {}", user->get_user_id(), res);
+        FWLOGERROR("call login rpc Get method failed, user {}, res: {}", user_inst->get_user_id(), res);
         break;
       }
 
@@ -97,10 +97,10 @@ task_action_ping::result_type task_action_ping::operator()() {
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(get_shared_context(), tb),
           login_lock_cas_ver));
       if (res < 0) {
-        FWLOGERROR("call login rpc Set method failed, user {}, zone id: {}, res: {}", user->get_user_id(),
-                   user->get_zone_id(), res);
+        FWLOGERROR("call login rpc Set method failed, user {}, zone id: {}, res: {}", user_inst->get_user_id(),
+                   user_inst->get_zone_id(), res);
       } else {
-        user->load_and_move_login_lock(std::move(*tb), login_lock_cas_ver);
+        user_inst->load_and_move_login_lock(std::move(*tb), login_lock_cas_ver);
       }
     } while (false);
 
@@ -110,13 +110,13 @@ task_action_ping::result_type task_action_ping::operator()() {
     // 先发包
     send_response();
 
-    session::ptr_t sess = user->get_session();
+    session::ptr_t sess = user_inst->get_session();
     if (sess) {
       sess->send_kickoff(kick_off_reason, "heartbeat errors.");
     }
 
     // 再踢下线
-    RPC_AWAIT_IGNORE_RESULT(player_manager::me()->remove(get_shared_context(), user));
+    RPC_AWAIT_IGNORE_RESULT(user_manager::me()->remove(get_shared_context(), user_inst));
   }
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

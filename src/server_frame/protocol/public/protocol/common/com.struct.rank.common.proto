@@ -25,7 +25,7 @@ enum EnRankImplType{
 enum EnRankLogicType {
   EN_RANK_LOGIC_TYPE_INVALID = 0;
   EN_RANK_LOGIC_TYPE_TEST = 999; // 测试使用
-  EN_RANK_LOGIC_TYPE_MAIN = 101; // 主排行榜（玩家战力排行榜）
+  EN_RANK_LOGIC_TYPE_MAIN = 101; // 主排行榜（用户战力排行榜）
   EN_RANK_LOGIC_TYPE_ABC_BASIC = 1001; // 三榜轮换类型
 }
 
@@ -77,7 +77,7 @@ enum rank_cache_mode {
 }
 
 enum RankInstanceType {
-  EN_RANK_INSTANCE_TYPE_USER = 0; // 玩家
+  EN_RANK_INSTANCE_TYPE_USER = 0; // 用户
   EN_RANK_INSTANCE_TYPE_ROLE = 1; // 角色
 }
 
