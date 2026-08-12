@@ -149,3 +149,6 @@ persistence:
 
 enable_session_manager: false
 enable_excel_config: false
+
+gm:
+  enable_gm_cmd: false

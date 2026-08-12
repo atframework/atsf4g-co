@@ -20,6 +20,7 @@ func init() {
 	robot_cmd.RegisterUserCommand([]string{"user", "logout"}, LogoutCmd, "", "登出协议", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "getInfo"}, GetInfoCmd, "", "拉取用户信息", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "ping"}, PingCmd, "", "Ping包", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"user", "gm"}, GMCmd, "", "GM指令", nil, cmdDefaultTimeout)
 }
 
 func LogoutCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
@@ -74,6 +75,29 @@ func PingCmd(action base.TaskActionImpl, user user_data.User, cmd []string) erro
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(func(task *user_data.TaskActionUser) error {
 		return protocol.PingRpc(task, user)
 	}, "Ping Task"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GMCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
+	// 发送登录请求
+	err := action.AwaitTask(user.RunTaskDefaultTimeout(func(task *user_data.TaskActionUser) error {
+		errCode, rsp, rpcErr := protocol.GMRpc(task, user, cmd)
+		if rpcErr != nil {
+			return rpcErr
+		}
+		if errCode < 0 {
+			return fmt.Errorf("gm command failed, errCode: %d", errCode)
+		}
+		rspBody, err := rsp.GetMessage()
+		if err != nil {
+			return fmt.Errorf("gm command get Message failed, err: %v", err)
+		}
+		task.Log("Gm Result Code: %d, Message: %s", rspBody.GetResultCode(), rspBody.GetResultMessage())
+		return nil
+	}, "GM Task"))
 	if err != nil {
 		return err
 	}

@@ -11,11 +11,11 @@
 #  define GAMECLIENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_user_gm_command
-    : public task_action_cs_rpc_base<atframework::shared::CSUserGMCommandReq, atframework::shared::SCUserGMCommandRsp> {
+class task_action_user_gm_command : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSUserGMCommandReq,
+                                                                   PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> {
  public:
   using base_type =
-      task_action_cs_rpc_base<atframework::shared::CSUserGMCommandReq, atframework::shared::SCUserGMCommandRsp>;
+      task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSUserGMCommandReq, PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;

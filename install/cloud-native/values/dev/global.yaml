@@ -5,3 +5,6 @@
 # 日志级别
 log_level: DEBUG
 log_stacktrace_level: ERROR
+
+gm:
+  enable_gm_cmd: true

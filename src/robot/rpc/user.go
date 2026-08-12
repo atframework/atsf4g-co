@@ -131,3 +131,10 @@ func GetInfoRpc(action base.TaskActionImpl, user user_data.User, args []string) 
 
 	return lobbysvr_rpc_handle.SendUserGetInfo(action, user, csBody, true)
 }
+
+func GMRpc(action base.TaskActionImpl, user user_data.User, args []string) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCUserGMCommandRsp], error) {
+	csBody := &public_protocol_pbdesc.CSUserGMCommandReq{
+		CmdArgs: args,
+	}
+	return lobbysvr_rpc_handle.SendUserGmCommand(action, user, csBody, true)
+}

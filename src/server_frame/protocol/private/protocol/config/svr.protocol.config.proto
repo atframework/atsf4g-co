@@ -105,6 +105,10 @@ message logic_task_trace_cfg {
   int32 max_count_per_minute = 22;
 }
 
+message logic_gm_cfg {
+  bool enable_gm_cmd = 1;
+}
+
 message logic_task_cfg {
   logic_task_type_cfg csmsg = 101;
   logic_task_type_cfg nomsg = 102;
@@ -235,12 +239,9 @@ message logic_section_cfg {
   logic_telemetry_cfg telemetry = 108;
   logic_excel_cfg excel = 110;
   logic_transaction_cfg transaction = 111;
-
-  // configure for rank service
   logic_rank_cfg rank = 112;
-
-  // configure for cache service
   logic_cache_cfg cache = 113;
+  logic_gm_cfg gm = 114;
 }
 
 message db_group_gateway_cfg {

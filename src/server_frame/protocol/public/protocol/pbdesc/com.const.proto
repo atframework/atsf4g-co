@@ -161,6 +161,12 @@ enum EnErrorCode {
                          [(error_code.description) = "登录保护"];
   EN_ERR_CS_PROTOCOL_FREQUENCY_LIMIT = -118
                                        [(error_code.description) = "CS协议限频"];
+  EN_ERR_USER_GM_CMD_ACCESS_DENY = -119
+                                   [(error_code.description) = "GM命令访问被拒绝"];
+  EN_ERR_USER_GM_CMD_INVALID = -120
+                               [(error_code.description) = "GM命令无效"];
+  EN_ERR_USER_GM_CMD_PARAM_NUMBER = -121
+                                     [(error_code.description) = "GM命令参数数量错误"];
   // openapi
   EN_ERR_OPENAPI_LIMIT = -201
                          [(error_code.description) = "openapi调用频率限制"];

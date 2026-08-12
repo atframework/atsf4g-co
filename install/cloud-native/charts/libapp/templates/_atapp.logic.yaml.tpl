@@ -15,6 +15,8 @@ logic:
       - "../../resource/excel/ServerOnly"
       - "../../resource/excel/Both"
       - "../../resource/excel"
+  gm:
+    enable_gm_cmd: {{ .Values.gm.enable_gm_cmd }}
   user:
     enable_session_actor_log: {{ .Values.enable_session_actor_log }}
   operation_support_system:

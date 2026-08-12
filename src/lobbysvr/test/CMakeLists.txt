@@ -57,6 +57,8 @@ project_add_rpc_unit_test(
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/task_action_rank_get_specify_rank.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/user_rank_manager.cpp"
     "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/orbit/user_orbit_manager.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/user/task_action_user_gm_cmd_nomsg.cpp"
+    "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/user/task_action_user_gm_command.cpp"
     ${_LOBBYSVR_CHAT_TEST_GENERATED_SOURCE_FILES}
   LINK_LIBRARIES sdk::lobbysvr-sdk sdk::cachesvr-sdk sdk::matchsvr-sdk sdk::orbitsvr-sdk components::dtmq-proxy-sdk
                  components::rank-logic-sdk protocol::lobbysvr-config
