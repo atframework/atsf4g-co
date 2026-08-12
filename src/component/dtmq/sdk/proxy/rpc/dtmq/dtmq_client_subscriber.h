@@ -521,8 +521,6 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    *
    * @param ctx RPC上下文
    * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
-   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
-   * @param auto_create_channel 是否自动创建频道
    * @param no_wait 是否不等待
    * @return rpc::result_code_type 发送结果
    */
@@ -591,7 +589,7 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @brief 发送原始消息
    *
    * @param ctx RPC上下文
-   * @param text 消息内容
+   * @param detail 原始消息详情
    * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
    * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
    * @param auto_create_channel 是否自动创建频道

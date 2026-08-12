@@ -2,7 +2,8 @@
 
 // Offline mock-RPC unit tests for rpc::dtmq::client_subscriber (the dtmq client SDK subscriber wrapper).
 // Covers all exported interfaces grouped by behavior flow:
-//   - create + options + getters (lifecycle/metadata accessors, local private data, shared callback set)
+//   - create + options + getters (lifecycle/metadata accessors, local private data, shared callback
+//     set, get_shared_subscriber_info shared-layer identity and heartbeat bookkeeping)
 //   - callback setters/getters (all event callbacks, instance + static overloads, private > shared > default)
 //   - heartbeat + ready (global_tick/global_has_pending_heartbeat/global_is_sending_heartbeat/
 //     global_await_pending_heartbeat, on_ready, subscribe RPC mock)
@@ -276,6 +277,13 @@ CASE_TEST(component_dtmq_subscriber, create_and_options) {
   CASE_EXPECT_EQ(0u, subscriber->get_channel_key().channel_type());
   CASE_EXPECT_EQ("UT:create", subscriber->get_subscriber_key());
 
+  // get_shared_subscriber_info exposes the SHARED layer subscriber (used by the heartbeat and by
+  // send_update's force_update_subscribers): the framework-generated "server:<name>" key and the
+  // local server id, distinct from the client subscriber_key.
+  CASE_EXPECT_EQ(shared_subscriber_key_for(), subscriber->get_shared_subscriber_info().subscriber_key());
+  CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(),
+                 subscriber->get_shared_subscriber_info().subscriber_server_id());
+
   // Options are reflected by their getters.
   CASE_EXPECT_TRUE(subscriber->get_option_auto_create_channel());
   CASE_EXPECT_FALSE(subscriber->get_option_with_private_data());
@@ -336,6 +344,8 @@ CASE_TEST(component_dtmq_subscriber, create_and_options) {
   CASE_EXPECT_TRUE(!!subscriber2);
   if (subscriber2) {
     CASE_EXPECT_EQ(subscriber->get_shared_channel_identify(), subscriber2->get_shared_channel_identify());
+    // Both clients resolve to the exact same shared-layer subscriber info object.
+    CASE_EXPECT_TRUE(&subscriber->get_shared_subscriber_info() == &subscriber2->get_shared_subscriber_info());
   }
 
   // Empty channel_id causes create() to return null (shared_subscriber::make_shared rejects it).
@@ -590,6 +600,8 @@ CASE_TEST(component_dtmq_subscriber, heartbeat_and_ready) {
 
   // A heartbeat round was sent above, so the heartbeat bookkeeping timepoint moved past the epoch.
   CASE_EXPECT_TRUE(subscriber->get_last_heartbeat_timepoint() > std::chrono::system_clock::from_time_t(0));
+  // The shared-layer subscriber info carries the same heartbeat bookkeeping.
+  CASE_EXPECT_TRUE(subscriber->get_shared_subscriber_info().last_heartbeat_timepoint().seconds() > 0);
 
   CASE_EXPECT_EQ(0, test.stop());
 }
@@ -1648,9 +1660,10 @@ CASE_TEST(component_dtmq_subscriber, send_destroy_reset_lock_and_update) {
         google::protobuf::Any private_payload;
         private_payload.set_type_url("type.googleapis.com/UnitTestPrivateData");
         update_options.private_data = &private_payload;
-        atfw::dtmq::channel_subscriber other_subscriber;
-        other_subscriber.set_subscriber_key("U:1:90001");
-        const atfw::dtmq::channel_subscriber* force_update_list[] = {&other_subscriber, nullptr};
+        // get_shared_subscriber_info() is documented as the input for force_update_subscribers; the
+        // nullptr hole is skipped by send_update.
+        const atfw::dtmq::channel_subscriber* force_update_list[] = {&subscriber->get_shared_subscriber_info(),
+                                                                     nullptr};
         update_options.force_update_subscribers = gsl::span<const atfw::dtmq::channel_subscriber*>{force_update_list};
         auto update_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         update_lock->mutable_expect_value()->set_lock_holder("update-expected");
@@ -1699,7 +1712,8 @@ CASE_TEST(component_dtmq_subscriber, send_destroy_reset_lock_and_update) {
     CASE_EXPECT_EQ(41, update_req.stateful_sequence());
     CASE_EXPECT_EQ(1, update_req.update_others_size());
     if (update_req.update_others_size() > 0) {
-      CASE_EXPECT_EQ("U:1:90001", update_req.update_others(0).subscriber_key());
+      // The shared-layer subscriber info passed to force_update_subscribers is forwarded as-is.
+      CASE_EXPECT_EQ(shared_subscriber_key_for(), update_req.update_others(0).subscriber_key());
     }
     CASE_EXPECT_EQ("type.googleapis.com/atframework.dtmq.DChannelIdKey", update_req.custom_data().type_url());
     atfw::dtmq::DChannelIdKey unpacked_custom;

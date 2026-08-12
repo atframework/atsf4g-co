@@ -898,29 +898,59 @@ CASE_TEST(component_dtmq_channel, tick_writable_channel) {
     return;
   }
 
+  // The tick-triggered save is verified through the typed DB mock, so use the DB-backed channel type.
+  size_t replace_calls = 0;
+  PROJECT_NAMESPACE_ID::table_dtmq_channel_record saved_record;
+  auto replace_rule = rpc::db::dtmq_channel_record::mock::replace(
+      [&replace_calls, &saved_record](rpc::context& /*ctx*/,
+                                      const PROJECT_NAMESPACE_ID::table_dtmq_channel_record& input,
+                                      rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
+        ++replace_calls;
+        saved_record.CopyFrom(input);
+        meta.version = 1;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!replace_rule);
+  if (!replace_rule) {
+    test.stop();
+    return;
+  }
+
   auto local_id = logic_config::me()->get_local_server_id();
-  auto channel_id = find_local_writable_channel_id("tick-w", local_id);
+  auto channel_id = find_local_writable_channel_id("tick-w", local_id, 200, kTestDbBackedChannelType);
   auto task =
       test.run_task("tick_w", std::chrono::seconds{4}, [channel_id](rpc::context& ctx) -> rpc::result_code_type {
         atfw::dtmq::DChannelIdKey channel_key;
         channel_key.set_channel_id(channel_id);
-        channel_key.set_channel_type(kTestChannelType);
+        channel_key.set_channel_type(kTestDbBackedChannelType);
 
         mq_channel_manager::mq_channel_ptr_type channel;
         uint64_t fwd = 0;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(
                               mq_channel_manager::me()->make_writable_channel(ctx, channel, fwd, channel_key, true)));
-        CASE_EXPECT_TRUE(!!channel);
+        CASE_EXPECT_TRUE(!!channel && channel->is_writable());
+        CASE_EXPECT_FALSE(channel->get_configure().memory_only());
         if (!channel) {
           RPC_RETURN_CODE(0);
         }
 
-        // Subscribe a subscriber and mark the channel dirty so the periodic tick path has both a
-        // pending save and a subscriber to expire.
+        // Subscribe a subscriber and append a text message so the periodic tick path has a pending
+        // save (with a verifiable DB payload) and a subscriber to expire.
         atfw::dtmq::channel_subscriber sub;
         sub.set_subscriber_server_id(kPeerNode1);
         sub.set_subscriber_key("U:1:20002");
         CASE_EXPECT_EQ(0, channel->subscribe(ctx, sub, 0, 0, false));
+
+        int32_t wal_result = 0;
+        mq_channel_wal_object_context wal_context{ctx, wal_result};
+        auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                                 atfw::dtmq::DChannelMessageDetail::kText, wal_context);
+        CASE_EXPECT_TRUE(!!message);
+        if (message) {
+          message->mutable_detail()->set_text("tick-save-payload");
+          channel->get_wal_publisher().emplace_back_log(std::move(message), wal_context);
+        }
+
         channel->set_dirty();
         CASE_EXPECT_TRUE(channel->is_dirty());
         {
@@ -930,7 +960,7 @@ CASE_TEST(component_dtmq_channel, tick_writable_channel) {
 
         // Register a short timer and jump the clock past both the save interval and the subscriber
         // timeout, then let mq_channel_manager::tick() fire the channel's update_timer. The timer
-        // callback runs the periodic save and then tick(), which evicts the expired subscriber.
+        // callback kicks off the periodic save and then tick(), which evicts the expired subscriber.
         mq_channel_timer_type::timer_wptr_t timer_handle;
         mq_channel_manager::me()->update_timer(*channel, timer_handle, std::chrono::seconds{2});
         {
@@ -942,16 +972,20 @@ CASE_TEST(component_dtmq_channel, tick_writable_channel) {
           global_now_offset_guard offset_guard{advance_by};
           CASE_EXPECT_TRUE(mq_channel_manager::me()->tick() > 0);
 
-          // The periodic save ran: the dirty version is caught up even for a memory-only channel.
-          CASE_EXPECT_FALSE(channel->is_dirty());
-
-          // The expired subscriber was evicted by tick().
+          // The expired subscriber was evicted by tick() synchronously.
           auto subscribers = channel->get_wal_publisher().subscriber_all_range();
           CASE_EXPECT_TRUE(subscribers.first == subscribers.second);
           int32_t result_code = 0;
           mq_channel_wal_object_context params{ctx, result_code};
           CASE_EXPECT_FALSE(!!channel->get_wal_publisher().find_subscriber("U:1:20002", params));
         }
+
+        // The DB-backed save runs asynchronously through the dtmq_channel_record replace RPC; wait
+        // for the IO task before checking the dirty flag and the saved payload.
+        int32_t save_result = -1;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->await_io_task(ctx, &save_result)));
+        CASE_EXPECT_EQ(0, save_result);
+        CASE_EXPECT_FALSE(channel->is_dirty());
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_FALSE(task.empty());
@@ -963,6 +997,21 @@ CASE_TEST(component_dtmq_channel, tick_writable_channel) {
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
+
+  // The tick-triggered save went through the DB replace mock with the live channel state.
+  CASE_EXPECT_EQ(1u, replace_calls);
+  CASE_EXPECT_EQ(channel_id, saved_record.channel_id());
+  CASE_EXPECT_EQ(channel_id, saved_record.channel_metadata().channel_key().channel_id());
+  CASE_EXPECT_EQ(kTestDbBackedChannelType, saved_record.channel_metadata().channel_key().channel_type());
+  CASE_EXPECT_TRUE(saved_record.channel_metadata().create_sequence() > 0);
+  bool found_payload = false;
+  for (const auto& record : saved_record.record_set().record()) {
+    if (record.detail().text() == "tick-save-payload") {
+      found_payload = true;
+      break;
+    }
+  }
+  CASE_EXPECT_TRUE(found_payload);
   CASE_EXPECT_EQ(0, test.stop());
 }
 
