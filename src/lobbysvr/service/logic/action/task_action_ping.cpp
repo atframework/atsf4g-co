@@ -59,7 +59,7 @@ task_action_ping::result_type task_action_ping::operator()() {
     do {
       uint64_t login_lock_cas_ver = 0;
       int res = RPC_AWAIT_CODE_RESULT(
-          rpc::db::login_lock::get_all(get_shared_context(), user_inst->get_user_id(), tb, login_lock_cas_ver));
+          rpc::db::login_lock::get_all(get_shared_context(), user_inst->get_user_id(), *tb, login_lock_cas_ver));
       if (res < 0) {
         FWLOGERROR("call login rpc Get method failed, user {}, res: {}", user_inst->get_user_id(), res);
         break;

@@ -674,7 +674,7 @@ void user_cache_manager::pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPAC
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cache(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_pull_key>& keys,
     ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>& output, bool filter_unused_id,
-    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* not_found_keys) {
+    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* ATFW_UTIL_MACRO_NULLABLE not_found_keys) {
   std::unordered_map<PROJECT_NAMESPACE_ID::object_cache_key, PROJECT_NAMESPACE_ID::EnCacheApiGetCacheType,
                      rpc::cache_api::cache_key_hash_t, rpc::cache_api::cache_key_equal_t>
       user_map;
@@ -818,7 +818,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::check_use
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::get_user_cache(
-    rpc::context& ctx, uint32_t zone_id, uint64_t user_id, PROJECT_NAMESPACE_ID::DUserBasicData* out) {
+    rpc::context& ctx, uint32_t zone_id, uint64_t user_id, PROJECT_NAMESPACE_ID::DUserBasicData* ATFW_UTIL_MACRO_NULLABLE out) {
   PROJECT_NAMESPACE_ID::object_cache_key key;
   ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>* cache_contents =
       ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>>();

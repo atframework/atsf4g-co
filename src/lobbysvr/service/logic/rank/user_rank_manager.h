@@ -137,7 +137,7 @@ class user_rank_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type set_rank_score(
       rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, uint32_t score,
-      const logic_rank_user_extend_span *user_extend = nullptr, bool sync_mode = false);
+      const logic_rank_user_extend_span * ATFW_UTIL_MACRO_NULLABLE user_extend = nullptr, bool sync_mode = false);
 
   /**
    * @brief 对指定用户增加分数
@@ -355,16 +355,16 @@ class user_rank_manager {
                                                     const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
                                                     logic_rank_user_extend_span user_extend) noexcept;
 
-  PROJECT_NAMESPACE_ID::DRankInstanceBoard *get_instance_rank_data(
+  PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE get_instance_rank_data(
       std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key);
-  PROJECT_NAMESPACE_ID::DRankInstanceBoard *mutable_instance_rank_data(
+  PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE mutable_instance_rank_data(
       std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key);
 
-  PROJECT_NAMESPACE_ID::DRankUnsubmitData *get_unsubmit_data(const rank_data_index &rank_index,
+  PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE get_unsubmit_data(const rank_data_index &rank_index,
                                                              uint32_t target_user_zone_id, uint64_t target_user_id);
-  PROJECT_NAMESPACE_ID::DRankUnsubmitData *mutable_unsubmit_data(
+  PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE mutable_unsubmit_data(
       const rank_data_index &rank_index, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
       uint32_t target_user_zone_id, uint64_t target_user_id,
       const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, logic_rank_user_extend_span user_extend);

@@ -346,7 +346,7 @@ rpc::rpc_result<user_rank_manager::rank_board_cache> user_rank_manager::get_rank
 rpc::result_code_type user_rank_manager::set_rank_score(rpc::context &ctx, const logic_rank_handle_key &rank_key,
                                                         const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
                                                         const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key,
-                                                        uint32_t score, const logic_rank_user_extend_span *user_extend,
+                                                        uint32_t score, const logic_rank_user_extend_span * ATFW_UTIL_MACRO_NULLABLE user_extend,
                                                         bool sync_mode) {
   if (!check_rank_instance_key_invalid(cfg, rank_instance_key)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_INSTANCE_KEY_INVALID);
@@ -1189,7 +1189,7 @@ std::shared_ptr<user_rank_manager::rank_data_type> user_rank_manager::get_rank_d
   return iter->second;
 }
 
-PROJECT_NAMESPACE_ID::DRankInstanceBoard *user_rank_manager::get_instance_rank_data(
+PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::get_instance_rank_data(
     std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
     const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
   for (auto &instance_rank_data : *rank_data->rank_data.mutable_rank_instance_data()) {
@@ -1200,7 +1200,7 @@ PROJECT_NAMESPACE_ID::DRankInstanceBoard *user_rank_manager::get_instance_rank_d
   return nullptr;
 }
 
-PROJECT_NAMESPACE_ID::DRankInstanceBoard *user_rank_manager::mutable_instance_rank_data(
+PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::mutable_instance_rank_data(
     std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
     const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
   for (auto &instance_rank_data : *rank_data->rank_data.mutable_rank_instance_data()) {
@@ -1253,7 +1253,7 @@ std::shared_ptr<user_rank_manager::rank_data_type> user_rank_manager::mutable_ra
   return rank_data;
 }
 
-PROJECT_NAMESPACE_ID::DRankUnsubmitData *user_rank_manager::get_unsubmit_data(const rank_data_index &rank_index,
+PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::get_unsubmit_data(const rank_data_index &rank_index,
                                                                               uint32_t target_user_zone_id,
                                                                               uint64_t target_user_id) {
   std::shared_ptr<rank_data_type> rank_data = get_rank_data(rank_index);
@@ -1268,7 +1268,7 @@ PROJECT_NAMESPACE_ID::DRankUnsubmitData *user_rank_manager::get_unsubmit_data(co
   return nullptr;
 }
 
-PROJECT_NAMESPACE_ID::DRankUnsubmitData *user_rank_manager::mutable_unsubmit_data(
+PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::mutable_unsubmit_data(
     const rank_data_index &rank_index, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
     uint32_t target_user_zone_id, uint64_t target_user_id,
     const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, logic_rank_user_extend_span user_extend) {

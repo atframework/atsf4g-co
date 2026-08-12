@@ -63,7 +63,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
   }
 
   uint64_t version = 0;
-  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, user_id, rsp, version));
+  int ret = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, user_id, *rsp, version));
   if (0 == ret) {
     local_cache[user_id] =
         atfw::component::memory::stl::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::table_login_lock>>(rsp);

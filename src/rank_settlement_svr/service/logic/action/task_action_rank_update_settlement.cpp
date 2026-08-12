@@ -647,7 +647,7 @@ rpc::result_code_type task_action_rank_update_settlement::process_rank(
   uint64_t rank_settlement_dbversion = 0;
   int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::get_all(
       ctx, zone_id, cfg.rank_type(), cfg.rank_instance_id(), cfg.content().sub_rank_type(),
-      cfg.content().sub_rank_instance_id(), rank_settlement_dbdata, rank_settlement_dbversion));
+      cfg.content().sub_rank_instance_id(), *rank_settlement_dbdata, rank_settlement_dbversion));
   if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FWLOGERROR("Fetch rank {}-{},{},{},{} settlement data failed, res: {}({})", zone_id, cfg.rank_type(),
                cfg.rank_instance_id(), cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res,

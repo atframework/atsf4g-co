@@ -4,7 +4,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type get_all(rpc::context &
 % for key_field in key_fields:
                                                              , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
-                                                             , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &rsp
+                                                             , PROJECT_NAMESPACE_ID::${message_name} &rsp
 % if index.enable_cas:
                                                              , uint64_t &version);
 % else:
@@ -70,7 +70,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type partly_get_${partly_fi
 %     for key_field in key_fields:
                                                          , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 %     endfor
-                                                         , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &rsp
+                                                         , PROJECT_NAMESPACE_ID::${message_name} &rsp
 %     if index.enable_cas:
                                                          , uint64_t &version);
 %     else:

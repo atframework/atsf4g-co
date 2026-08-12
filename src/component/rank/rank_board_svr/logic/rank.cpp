@@ -568,7 +568,7 @@ void rank::async_router_lock(rpc::context& ctx) {
             auto tmp_ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::get_all(
                 child_ctx, rank_ptr->get_key().rank_type(), rank_ptr->get_key().rank_instance_id(),
                 rank_ptr->get_key().sub_rank_type(), rank_ptr->get_key().sub_rank_instance_id(),
-                logic_config::me()->get_local_zone_id(), tmp_db_router, new_version));
+                logic_config::me()->get_local_zone_id(), *tmp_db_router, new_version));
             if (tmp_ret == 0) {
               FWRLOGDEBUG(*rank_ptr.get(), "rank router cur_version:{} db_version:{}", version, new_version);
             } else {

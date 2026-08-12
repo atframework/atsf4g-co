@@ -51,9 +51,8 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
       for (auto &__entry : __entries) {
         ${message_name}_list_message __list_message;
         __list_message.list_index = __entry.first;
-        shared_message<PROJECT_NAMESPACE_ID::${message_name}> __message{ctx};
-        *__message = std::move(__entry.second);
-        __list_message.message = atfw::component::memory::stl::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(std::move(__message));
+        __list_message.message = atfw::component::memory::stl::make_strong_rc<shared_message<PROJECT_NAMESPACE_ID::${message_name}>>(ctx);
+        protobuf_move_message(**__list_message.message, std::move(__entry.second));
         output.push_back(std::move(__list_message));
       }
     }

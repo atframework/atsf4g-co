@@ -187,7 +187,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
           uint64_t data_version = 0;
           rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
           int sub_ret = RPC_AWAIT_CODE_RESULT(
-              rpc::db::distribute_transaction::get_all(subctx, zone_id, key.c_str(), storage, data_version));
+              rpc::db::distribute_transaction::get_all(subctx, zone_id, key.c_str(), *storage, data_version));
           if (sub_ret < 0) {
             RPC_RETURN_CODE(sub_ret);
           }

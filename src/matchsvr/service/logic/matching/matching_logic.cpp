@@ -111,17 +111,17 @@ bool is_unit_compatible_with_room(const matching_room& room, const PROJECT_NAMES
 bool check_rule_limits(const matching_room& room, const PROJECT_NAMESPACE_ID::DMatchingUnit* candidate,
                        const matching_rule_ptr& rule) {
   std::unordered_map<int32_t, int32_t> force_counts;
-  int32_t challenge_teams = 0;
-  int32_t thief_teams = 0;
+  // int32_t challenge_teams = 0;
+  // int32_t thief_teams = 0;
   for (const auto& stored : room.get_units()) {
     ++force_counts[stored.second.parameter().force_type()];
-    challenge_teams += stored.second.parameter().challenge_team() ? 1 : 0;
-    thief_teams += stored.second.parameter().thief_team() ? 1 : 0;
+    // challenge_teams += stored.second.parameter().challenge_team() ? 1 : 0;
+    // thief_teams += stored.second.parameter().thief_team() ? 1 : 0;
   }
   if (candidate != nullptr) {
     ++force_counts[candidate->parameter().force_type()];
-    challenge_teams += candidate->parameter().challenge_team() ? 1 : 0;
-    thief_teams += candidate->parameter().thief_team() ? 1 : 0;
+    // challenge_teams += candidate->parameter().challenge_team() ? 1 : 0;
+    // thief_teams += candidate->parameter().thief_team() ? 1 : 0;
   }
   for (const auto& limit : rule->force_type_limits()) {
     if (limit.count() > 0 && force_counts[limit.force_type()] > limit.count()) {

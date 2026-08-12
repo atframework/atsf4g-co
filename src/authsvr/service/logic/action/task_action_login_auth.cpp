@@ -54,7 +54,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
 
   // 拉取鉴权表
   int res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::login_auth::get_all(get_shared_context(), req_body.open_id(), login_auth_tb, login_auth_cas_version));
+      rpc::db::login_auth::get_all(get_shared_context(), req_body.open_id(), *login_auth_tb, login_auth_cas_version));
   if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to get login auth table failed, error code: {}({})",
                  session_key.node_id, session_key.session_id, req_body.open_id(), res,
@@ -100,7 +100,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_tb{get_shared_context()};
   uint64_t login_lock_cas_version = 0;
   res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), login_auth_tb->user_id(),
-                                                           login_lock_tb, login_lock_cas_version));
+                                                           *login_lock_tb, login_lock_cas_version));
   if (res < 0 && res != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FCTXLOGERROR(get_shared_context(),
                  "session {}:{}, user {}(user_id={}) try to get login lock table failed, error code: {}({})",

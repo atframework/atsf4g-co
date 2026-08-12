@@ -154,16 +154,16 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> get_wal_client() { return wal_client_; }
 
   static bool should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
-                                                  uint64_t& writable_server_id, mq_channel* channel = nullptr);
+                                                  uint64_t& writable_server_id, mq_channel* ATFW_UTIL_MACRO_NULLABLE channel = nullptr);
   bool should_be_writable();
 
   static bool should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                   uint64_t& readonly_server_id, uint64_t readonly_replicate_index,
-                                                  mq_channel* channel = nullptr);
+                                                  mq_channel* ATFW_UTIL_MACRO_NULLABLE channel = nullptr);
 
   static bool should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                      uint64_t& readonly_replicate_index, uint64_t& readonly_server_id,
-                                                     mq_channel* channel = nullptr);
+                                                     mq_channel* ATFW_UTIL_MACRO_NULLABLE channel = nullptr);
 
   bool should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_NULLABLE & readonly_replicate_index_set);
 
@@ -193,7 +193,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   bool need_save_db() const noexcept;
 
   bool is_io_task_running() const noexcept;
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx, int32_t* task_result = nullptr);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx, int32_t* ATFW_UTIL_MACRO_NULLABLE task_result = nullptr);
 
   bool is_io_task_too_many_continue_failed() const noexcept;
 

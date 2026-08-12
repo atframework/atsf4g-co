@@ -56,7 +56,7 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> user_lg{get_shared_context()};
     uint64_t version = 0;
     int res =
-        RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), user_user_id, user_lg, version));
+        RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), user_user_id, *user_lg, version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", user_open_id, user_zone_id, user_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);

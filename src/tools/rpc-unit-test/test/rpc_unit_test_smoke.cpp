@@ -237,7 +237,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
 
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> loaded{ctx};
         version = 0;
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-combined", loaded, version));
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-combined", *loaded, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(88, static_cast<int>(loaded->user_id()));
         CASE_EXPECT_EQ(1, static_cast<int>(version));

@@ -190,7 +190,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR RANK_BOARD_SDK_API rpc::result_code_type get_top_fr
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_mirror> mirror_rank{ctx};
   auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror::get_all(ctx, rank.rank_type(), rank.rank_instance_id(),
                                                                  rank.sub_rank_type(), rank.sub_rank_instance_id(),
-                                                                 zone_id, mirror_id, 0, mirror_rank));
+                                                                 zone_id, mirror_id, 0, *mirror_rank));
   if (ret != 0) {
     FWLOGERROR(
         "fetch_rank_total_count TABLE_RANK_MIRROR_DEF get failed rank ({}:{}:{}:{}), zone_id {}, mirror_id {}"

@@ -58,7 +58,7 @@ class user_cache_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_user_id_valid(rpc::context& ctx, uint32_t zone_id,
                                                                          uint64_t user_id);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type get_user_cache(
-      rpc::context& ctx, uint32_t zone_id, uint64_t user_id, PROJECT_NAMESPACE_ID::DUserBasicData* out = nullptr);
+      rpc::context& ctx, uint32_t zone_id, uint64_t user_id, PROJECT_NAMESPACE_ID::DUserBasicData* ATFW_UTIL_MACRO_NULLABLE out = nullptr);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_cache_expired_notify_to_client(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::object_cache_key& cache_key);
@@ -70,7 +70,7 @@ class user_cache_manager {
       rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_pull_key>& user_keys,
       ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>& output,
       bool filter_unused_id = false,
-      ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* not_found_keys = nullptr);
+      ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* ATFW_UTIL_MACRO_NULLABLE not_found_keys = nullptr);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type unwatch_cache_keys(
       rpc::context& ctx, PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,

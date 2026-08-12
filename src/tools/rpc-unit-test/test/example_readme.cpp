@@ -232,7 +232,7 @@ CASE_TEST(rpc_unit_test_readme, db_mock_handler_and_backend) {
     // Intercepted: served by the handler above.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> loaded{ctx};
     uint64_t version = 0;
-    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-readme", loaded, version));
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-readme", *loaded, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(7, static_cast<int>(loaded->user_id()));
     CASE_EXPECT_EQ(3, static_cast<int>(version));

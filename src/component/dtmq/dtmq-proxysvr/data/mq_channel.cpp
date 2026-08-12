@@ -861,7 +861,7 @@ void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& 
 }
 
 bool mq_channel::should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
-                                                     uint64_t& writable_server_id, mq_channel* channel) {
+                                                     uint64_t& writable_server_id, mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
   bool can_be_writable = true;
   do {
     if (mq_channel_manager::is_instance_destroyed()) {
@@ -899,7 +899,7 @@ bool mq_channel::should_be_writable() {
 
 bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                      uint64_t& readonly_server_id, uint64_t readonly_replicate_index,
-                                                     mq_channel* channel) {
+                                                     mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
   readonly_replicate_index = rpc::dtmq::normalize_replicate_index(readonly_replicate_index, channel_key);
   if (readonly_replicate_index <= 0) {
     return should_be_writable_or_get_server_id(channel_key, readonly_server_id, channel);
@@ -947,7 +947,7 @@ bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelI
 
 bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                         uint64_t& readonly_replicate_index,
-                                                        uint64_t& readonly_server_id, mq_channel* channel) {
+                                                        uint64_t& readonly_server_id, mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
   auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
   if (!channel_cfg || channel_cfg->readonly_replicate_count() <= 0) {
     readonly_replicate_index = 0;
@@ -1222,7 +1222,7 @@ bool mq_channel::is_io_task_running() const noexcept {
   return false;
 }
 
-rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx, int32_t* task_result) {
+rpc::result_code_type mq_channel::await_io_task(rpc::context& ctx, int32_t* ATFW_UTIL_MACRO_NULLABLE task_result) {
   // 正在转移或读取
   if (!task_type_trait::empty(io_task_)) {
     if (task_type_trait::is_exiting(io_task_)) {
@@ -1665,7 +1665,7 @@ void mq_channel::ensure_recreate_after_destroyed(rpc::context& ctx) {
 
 rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), record));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), *record));
   if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FCTXLOGINFO(ctx, "rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
     ret = 0;

@@ -42,9 +42,6 @@
 #include <rpc/controllertoserverservice/controllertoserverservice.atfw.gen.h>
 
 namespace {
-constexpr const char* kEtcdByIdDir = "by_id";
-constexpr const char* kEtcdByNameDir = "by_name";
-constexpr const char* kEtcdTopologyDir = "topology";
 constexpr const char* kEtcdOrbitLoadDir = "orbit_load";
 
 static bool unpack_agent_load_record(atfw::orbit::DAgentEtcdLoadRecord& out, const std::string& /*path*/,

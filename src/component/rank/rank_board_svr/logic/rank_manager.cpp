@@ -193,7 +193,7 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> rank_router_rsp(ctx);
     auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::get_all(
         ctx, rank_key.rank_type(), rank_key.rank_instance_id(), rank_key.sub_rank_type(),
-        rank_key.sub_rank_instance_id(), logic_config::me()->get_local_zone_id(), rank_router_rsp, version));
+        rank_key.sub_rank_instance_id(), logic_config::me()->get_local_zone_id(), *rank_router_rsp, version));
     FWLOGDEBUG("get rank({}:{}:{}:{}) router from db ret:{}", rank_key.rank_type(), rank_key.rank_instance_id(),
                rank_key.sub_rank_type(), rank_key.sub_rank_instance_id(), ret);
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {

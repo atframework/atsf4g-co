@@ -123,26 +123,6 @@ inline static rpc::telemetry::tracer::span_ptr_type __setup_tracer(rpc::context 
   return rpc::telemetry::tracer::span_ptr_type();
 }
 
-inline static int __setup_rpc_stream_header(atfw::orbit::OrbitRpcMessageHead &head, atfw::util::nostd::string_view rpc_full_name,
-                                            atfw::util::nostd::string_view type_full_name,
-                                            atfw::util::nostd::string_view callee_name) {
-  head.set_timestamp(util::time::time_utility::get_now());
-
-  atframework::RpcStreamMeta *stream_meta = head.mutable_rpc_stream();
-  if (nullptr == stream_meta) {
-    return ${project_namespace}::err::EN_SYS_MALLOC;
-  }
-
-  stream_meta->set_version(logic_config::me()->get_atframework_settings().rpc_version());
-  stream_meta->set_caller(static_cast<std::string>(logic_config::me()->get_local_server_name()));
-  stream_meta->set_callee(static_cast<std::string>(callee_name));
-  stream_meta->set_rpc_name(static_cast<std::string>(rpc_full_name));
-  stream_meta->set_type_url(type_full_name.data(), type_full_name.size());
-  stream_meta->mutable_caller_timestamp()->set_seconds(util::time::time_utility::get_sys_now());
-  stream_meta->mutable_caller_timestamp()->set_nanos(util::time::time_utility::get_now_nanos());
-  return ${project_namespace}::err::EN_SUCCESS;
-}
-
 inline static int __setup_rpc_request_header(atfw::orbit::OrbitRpcMessageHead &head, task_type_trait::id_type task_id,
                                              atfw::util::nostd::string_view rpc_full_name,
                                              atfw::util::nostd::string_view type_full_name,
@@ -287,7 +267,8 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   atfw::orbit::OrbitRpcMessage &req_msg = *req_msg_ptr;
 % if rpc_allow_no_wait:
   if (__no_wait) {
-    res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+    req_msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
+    res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                                     __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
                                     "${service.get_full_name()}");
   } else {
@@ -297,7 +278,8 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
                                      "${service.get_full_name()}");
   }
 % elif rpc_is_stream_mode:
-  res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
+  req_msg.mutable_head()->set_timestamp(util::time::time_utility::get_now());
+  res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                                   __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
                                   "${service.get_full_name()}");
 % else:

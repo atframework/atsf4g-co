@@ -553,7 +553,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
       "db_login_auth_mocked_get", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(100, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(9, static_cast<int>(version));
@@ -613,7 +613,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
       "db_login_auth_restored_get", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-smoke", *rsp, version));
         CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
         RPC_RETURN_CODE(0);
       });
@@ -681,7 +681,7 @@ CASE_TEST(rpc_unit_test, db_mock_handler_awaits_nested_rpc) {
       test.run_task("db_nested_handler", std::chrono::seconds{4}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-nested", rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-nested", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(81, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(3, static_cast<int>(version));
@@ -744,7 +744,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_fallthrough", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(7, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(1, static_cast<int>(version));
@@ -792,7 +792,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_canned_read", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(100, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(9, static_cast<int>(version));
@@ -833,7 +833,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
       test.run_task("db_callback_rule_reset", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> rsp{ctx};
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", rsp, version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-callback", *rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(8, static_cast<int>(rsp->user_id()));
         CASE_EXPECT_EQ(2, static_cast<int>(version));

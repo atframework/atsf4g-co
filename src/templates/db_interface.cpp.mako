@@ -39,6 +39,7 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include <config/logic_config.h>
 #include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include "rpc/rpc_context.h"
 #include "rpc/db/db_utils.h"

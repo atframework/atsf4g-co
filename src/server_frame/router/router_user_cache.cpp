@@ -60,7 +60,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> tbu{ctx};
   uint64_t tbu_version = 0;
   auto res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, tbu, tbu_version));
+      rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
@@ -76,7 +76,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
 
   if (0 == login_lock_table_ptr->user_id()) {
     auto ret = RPC_AWAIT_CODE_RESULT(
-        rpc::db::login_lock::get_all(ctx, get_key().object_id, login_lock_table_ptr, local_login_lock_ver));
+        rpc::db::login_lock::get_all(ctx, get_key().object_id, *login_lock_table_ptr, local_login_lock_ver));
     if (ret < 0) {
       RPC_RETURN_CODE(ret);
     }
@@ -134,7 +134,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> tbu{ctx};
   uint64_t tbu_version = 0;
   auto res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, tbu, tbu_version));
+      rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
@@ -228,7 +228,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
     if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, obj->get_login_lock());
-      res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, get_key().object_id, save_login_blob_data,
+      res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, get_key().object_id, *save_login_blob_data,
                                                                obj->get_login_lock_cas_version()));
       if (res < 0) {
         FWPLOGERROR(*obj, "try load login data failed, result: {}({}).", res, protobuf_mini_dumper_get_error_msg(res));

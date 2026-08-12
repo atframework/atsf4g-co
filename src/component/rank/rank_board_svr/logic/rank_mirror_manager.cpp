@@ -47,7 +47,7 @@ rpc::result_code_type rank_mirror_manager::init_from_db(rpc::context& ctx) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_mirror_meta> out;
   auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror_meta::get_all(
       ctx, owner_->get_key().rank_type(), owner_->get_key().rank_instance_id(), owner_->get_key().sub_rank_type(),
-      owner_->get_key().sub_rank_instance_id(), logic_config::me()->get_local_zone_id(), out));
+      owner_->get_key().sub_rank_instance_id(), logic_config::me()->get_local_zone_id(), *out));
   if (ret != 0 && ret != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     RPC_RETURN_CODE(ret);
   }

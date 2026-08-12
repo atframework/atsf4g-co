@@ -50,7 +50,7 @@ SERVER_FRAME_API rpc::unit_test::mock_rule_handle ${fn}(mock_detail::${slot}_han
     PROJECT_NAMESPACE_ID::${message_name} __input;
 ${emit_mock_input_fill(key_fields)}\
     rpc::unit_test::db_mock_meta __meta;
-    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, *rsp, __meta));
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, __input, rsp, __meta));
 %   if with_version:
     version = __meta.version;
 %   endif
@@ -101,7 +101,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx
 % for key_field in key_fields:
                                                              , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 % endfor
-                                                             , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &rsp
+                                                             , PROJECT_NAMESPACE_ID::${message_name} &rsp
 % if index.enable_cas:
                                                              , uint64_t &version) {
 % else:
@@ -121,12 +121,13 @@ ${emit_mock_intercept_get("get_all", index.enable_cas, key_fields, message_name)
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
-  rsp = shared_message<PROJECT_NAMESPACE_ID::${message_name}>{*output->message};
+  rpc::shared_message<PROJECT_NAMESPACE_ID::${message_name}> tmp{*output->message};
+  protobuf_move_message(rsp, std::move(*tmp));
 % if index.enable_cas:
   version = output->version;
 % endif
 % for key_field in key_fields:
-  rsp->set_${key_field["raw_name"]}(
+  rsp.set_${key_field["raw_name"]}(
   % for arg in key_field["set_args"]:
       ${arg}
   % endfor
@@ -353,7 +354,7 @@ SERVER_FRAME_API result_type partly_get_${partly_field_name}(rpc::context &ctx
 %     for key_field in key_fields:
                                                          , ${key_field["cpp_type"]} ${key_field["raw_name"]}
 %     endfor
-                                                         , shared_message<PROJECT_NAMESPACE_ID::${message_name}> &rsp
+                                                         , PROJECT_NAMESPACE_ID::${message_name} &rsp
 %     if index.enable_cas:
                                                          , uint64_t &version) {
 %     else:
@@ -397,17 +398,18 @@ ${emit_mock_intercept_get("partly_get_" + partly_field_name, index.enable_cas, k
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
-  rsp = shared_message<PROJECT_NAMESPACE_ID::${message_name}>{*output->message};
+  rpc::shared_message<PROJECT_NAMESPACE_ID::${message_name}> tmp{*output->message};
+  protobuf_move_message(rsp, std::move(*tmp));
 % if index.enable_cas:
   version = output->version;
 % endif
-%     for key_field in key_fields:
-  rsp->set_${key_field["raw_name"]}(
-      % for arg in key_field["set_args"]:
-        ${arg}
-      % endfor
-    );
-%     endfor
+% for key_field in key_fields:
+  rsp.set_${key_field["raw_name"]}(
+  % for arg in key_field["set_args"]:
+      ${arg}
+  % endfor
+  );
+% endfor
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

@@ -36,7 +36,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     // Missing record reads as EN_DB_RECORD_NOT_FOUND.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> record{ctx};
     uint64_t version = 0;
-    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", record, version));
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *record, version));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
 
     // First replace of a versionless record succeeds and starts the CAS sequence at 1.
@@ -67,7 +67,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     // The conflicting write did not land.
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> restored{ctx};
     version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", restored, version));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *restored, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(1002, static_cast<int>(restored->user_id()));
     CASE_EXPECT_EQ(2, static_cast<int>(version));
@@ -76,7 +76,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::remove_all(ctx, "openid-crud"));
     CASE_EXPECT_EQ(0, res);
     version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", restored, version));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::get_all(ctx, "openid-crud", *restored, version));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND, res);
     RPC_RETURN_CODE(0);
   });
