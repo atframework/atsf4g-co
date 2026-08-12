@@ -148,16 +148,14 @@ rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
   user_init_data->mutable_user_key()->mutable_user_key()->set_zone_id(owner_->get_zone_id());
   // 加载用户数据
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::join_room(ctx, orbit_server_id, *req, *rsp));
-  if (ret != 0) {
-    FWLOGERROR("user_orbit_manager join_orbit_room failed to call orbitsvr::join_room for room: {}, res: {}",
-               room_key_.client_id(), ret);
-    RPC_RETURN_CODE(ret);
+  if (ret == 0) {
+    ret = rsp->result_code();
   }
-  if (rsp->result_code() != 0) {
+  if (ret != 0) {
     clear_orbit_room_data();
-    FWLOGERROR("user_orbit_manager join_orbit_room failed, orbitsvr result: {} for room: {}", rsp->result_code(),
+    FWLOGERROR("user_orbit_manager join_orbit_room failed, orbitsvr result: {} for room: {}", ret,
                room_key_.client_id());
-    RPC_RETURN_CODE(rsp->result_code());
+    RPC_RETURN_CODE(ret);
   }
 
   FWLOGINFO("user_orbit_manager joined orbit room: {}", room_key_.client_id());

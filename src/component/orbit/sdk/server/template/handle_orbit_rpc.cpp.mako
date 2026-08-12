@@ -40,7 +40,7 @@ ${ns}
 ${service_dllexport_decl} int register_handles_for_${service.get_name_lower_rule()}() {
   int ret = 0;
 % for rpc in rpcs.values():
-  REG_TASK_RPC_HANDLE(orbit_msg_dispatcher, ret, task_action_${rpc.get_name()}, ${service.get_cpp_class_name()}::descriptor(), "${rpc.get_full_name()}");
+  REG_TASK_RPC_HANDLE(orbit_msg_dispatcher, ret, task_action_${rpc.get_name()}, ${service.get_cpp_class_name()}::descriptor(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}");
 % endfor
   return ret;
 }

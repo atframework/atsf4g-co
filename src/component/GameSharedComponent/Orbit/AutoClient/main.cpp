@@ -81,7 +81,7 @@ const char* to_string(ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClie
 }
 }  // namespace
 
-ORBIT_RPC_HANDLE(echo, atframework.shared.OrbitServerRpcService, PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
+ORBIT_RPC_HANDLE(echo, "atframework.shared.OrbitServerRpcService/echo", PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
                  PROJECT_NAMESPACE_ID::OrbitServerEchoRsp)
 ORBIT_TASK_ACTION(echo, PROJECT_NAMESPACE_ID::OrbitClientEchoReq, PROJECT_NAMESPACE_ID::OrbitClientEchoRsp)
 
@@ -116,10 +116,7 @@ int main(int argc, char* argv[]) {
               << '\n';
   };
 
-  {
-    ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService,
-                               PROJECT_NAMESPACE_ID.OrbitClientRpcService.echo);
-  }
+  { ORBIT_REGISTER_ACTION_CODE(echo, PROJECT_NAMESPACE_ID::OrbitClientRpcService); }
 
   if (log_file.is_open()) {
     write_log_line(std::string{"log file: "} + log_file_path.string());

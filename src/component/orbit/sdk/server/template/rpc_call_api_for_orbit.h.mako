@@ -68,7 +68,7 @@ ${ns}
     else:
         rpc_return_type = 'rpc::always_ready_code_type'
 %>
-// ============ ${rpc.get_full_name()} ============
+// ============ "${rpc.get_service().get_full_name()}/${rpc.get_name()}" ============
 namespace packer {
 /**
  * @brief get full rpc name of ${rpc.get_name()}

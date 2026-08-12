@@ -33,23 +33,22 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
 #define ORBIT_STRINGIFY_HELPER(x) #x
 #define ORBIT_CONCAT_HELPER(x, y) x##y
 
-#define ORBIT_RPC_HANDLE(orbit_rpc_name, orbit_service_name, orbit_rpc_req_type, orbit_rpc_rsp_type)            \
-  int orbit_rpc_name(const orbit_rpc_req_type& req_body,                                                        \
-                     std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback, int32_t retry_time) {    \
-    return ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::orbit_rpc_handle(                                   \
-        ORBIT_STRINGIFY_HELPER(orbit_rpc_name), ORBIT_STRINGIFY_HELPER(orbit_service_name), req_body, callback, \
-        retry_time);                                                                                            \
+#define ORBIT_RPC_HANDLE(handle_name, orbit_rpc_full_name, orbit_rpc_req_type, orbit_rpc_rsp_type)                    \
+  int handle_name(const orbit_rpc_req_type& req_body,                                                                 \
+                  std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback, int32_t retry_time) {             \
+    return ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::orbit_rpc_handle(orbit_rpc_full_name, req_body, callback, \
+                                                                             retry_time);                             \
   }
 
-#define ORBIT_REGISTER_ACTION_CODE(orbit_rpc_name, orbit_service_name, rpc_name)                                    \
-  int ret = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()                               \
-                ->register_action<ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)>(                               \
-                    orbit_service_name::descriptor(), ORBIT_STRINGIFY_HELPER(rpc_name), true);                      \
-  if (ret != 0) {                                                                                                   \
-    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                                 \
-        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError, __FILE__, __LINE__,           \
-        LOG_WRAPPER_FWAPI_FORMAT("register_orbit_rpc_action register action {} failed, ret: [{}]", #orbit_rpc_name, \
-                                 ret));                                                                             \
+#define ORBIT_REGISTER_ACTION_CODE(orbit_rpc_name, orbit_service_name)                                    \
+  int ret = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitRPCDispatcher::me()                     \
+                ->register_action<ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)>(                     \
+                    orbit_service_name::descriptor(), ORBIT_STRINGIFY_HELPER(orbit_rpc_name), true);      \
+  if (ret != 0) {                                                                                         \
+    ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientRuntime::me()->log(                       \
+        ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk::OrbitClientLogLevel::kError, __FILE__, __LINE__, \
+        LOG_WRAPPER_FWAPI_FORMAT("register_orbit_rpc_action register action {} failed, ret: [{}]",        \
+                                 ORBIT_STRINGIFY_HELPER(orbit_rpc_name), ret));                           \
   }
 
 #define ORBIT_TASK_ACTION(orbit_rpc_name, orbit_rpc_req_type, orbit_rpc_rsp_type)                                      \
@@ -61,7 +60,8 @@ ORBIT_CLIENT_SDK_NAMESPACE_END
                                                                                                   orbit_rpc_rsp_type>; \
                                                                                                                        \
    public:                                                                                                             \
-    explicit ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)(void* private_data, atfw::orbit::OrbitRpcMessage&& ds_msg)    \
+    explicit ORBIT_CONCAT_HELPER(task_action_, orbit_rpc_name)(void* private_data,                                     \
+                                                               atfw::orbit::OrbitRpcMessage&& ds_msg)                  \
         : base_type(std::move(ds_msg)), private_data_(private_data) {}                                                 \
     int operator()() {                                                                                                 \
       set_rsp_code(hook_run(private_data_, get_request_body(), get_response_body()));                                  \

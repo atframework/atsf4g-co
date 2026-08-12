@@ -16,6 +16,9 @@
 
 #include <Orbit/OrbitConfig.h>
 
+#include <nostd/string_view.h>
+#include <string/string_format.h>
+
 #include <functional>
 #include <map>
 #include <memory>
@@ -97,21 +100,14 @@ class OrbitRPCDispatcher {
     if (sequence_allocator_ != 0 && !allow_after_init) {
       return atfw::orbit::EN_ORBIT_ERROR_CODE_CALL_AFTER_INIT;
     }
-    std::string::size_type final_segment = rpc_name.find_last_of('.');
-    std::string rpc_short_name;
-    if (std::string::npos == final_segment) {
-      rpc_short_name = rpc_name;
-    } else {
-      rpc_short_name = rpc_name.substr(final_segment + 1);
-    }
-    const ::google::protobuf::MethodDescriptor *method = service_desc->FindMethodByName(rpc_short_name);
+    std::string service_full_name = std::string{service_desc->full_name()};
+    const ::google::protobuf::MethodDescriptor *method = service_desc->FindMethodByName(rpc_name);
     if (nullptr == method) {
       return atfw::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
     }
-    if (method->full_name() != rpc_name) {
-      return atfw::orbit::EN_ORBIT_ERROR_CODE_RPC_NAME_ERROR;
-    }
-    return _register_action(static_cast<std::string>(method->full_name()), make_task_creator<TAction>());
+    std::string method_full_name_otel = atfw::util::string::format(
+        "{}/{}", service_full_name, atfw::util::nostd::string_view{method->name().data(), method->name().size()});
+    return _register_action(method_full_name_otel, make_task_creator<TAction>());
   }
 
  public:

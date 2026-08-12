@@ -105,12 +105,11 @@ static inline time_t __get_rpc_wait_timeout(const OrbitClientRequestOptions& req
 }  // namespace
 
 template <class orbit_rpc_req_type, class orbit_rpc_rsp_type>
-int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_name, const std::string& service_name,
-                                              const orbit_rpc_req_type& req_body,
-                                              std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback,
-                                              int32_t retry_time) {
+int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_name,
+                                                    const orbit_rpc_req_type& req_body,
+                                                    std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback,
+                                                    int32_t retry_time) {
   atfw::orbit::OrbitRpcMessage req_msg;
-  std::string rpc_full_name = service_name + "." + rpc_name;
   OrbitClientRequestOptions request_options = __make_rpc_request_options(retry_time);
   int32_t res =
       __setup_rpc_request_header(*req_msg.mutable_head(), rpc_full_name, orbit_rpc_req_type::descriptor()->full_name());
@@ -147,16 +146,16 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_name,
 }
 
 template <class orbit_rpc_req_type, class orbit_rpc_rsp_type>
-int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_name, const std::string& service_name,
-                                              const orbit_rpc_req_type& req_body,
+int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle(const std::string& rpc_full_name, const orbit_rpc_req_type& req_body,
                                               std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback,
                                               int32_t retry_time) {
   if (!OrbitClientRuntime::me()->enabled_io_thread()) {
-    return orbit_rpc_handle_inner<orbit_rpc_req_type, orbit_rpc_rsp_type>(rpc_name, service_name, req_body, callback, retry_time);
+    return orbit_rpc_handle_inner<orbit_rpc_req_type, orbit_rpc_rsp_type>(rpc_full_name, req_body, callback,
+                                                                          retry_time);
   }
   // 转入IO线程处理
   OrbitClientRuntime::me()->post_to_io_thread([=]() {
-    orbit_rpc_handle_inner<orbit_rpc_req_type, orbit_rpc_rsp_type>(rpc_name, service_name, req_body, callback, retry_time);
+    orbit_rpc_handle_inner<orbit_rpc_req_type, orbit_rpc_rsp_type>(rpc_full_name, req_body, callback, retry_time);
   });
   return atfw::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }

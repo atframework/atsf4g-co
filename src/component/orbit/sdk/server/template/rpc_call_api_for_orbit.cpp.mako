@@ -235,34 +235,34 @@ ${ns}
         rpc_return_type = 'rpc::always_ready_code_type'
         rpc_return_sentense = rpc_return_always_ready_code_sentense
 %>
-// ============ ${rpc.get_full_name()} ============
+// ============ "${rpc.get_service().get_full_name()}/${rpc.get_name()}" ============
 namespace packer {
 ${rpc_dllexport_decl} gsl::string_view get_full_name_of_${rpc.get_name()}() {
-  return "${rpc.get_full_name()}";
+  return "${rpc.get_service().get_full_name()}/${rpc.get_name()}";
 }
 
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string &output, const ${rpc.get_request().get_cpp_class_name()} &input) {
   return ${project_namespace}::err::EN_SUCCESS ==
-         __pack_rpc_body(input, &output, "${rpc.get_full_name()}",
+         __pack_rpc_body(input, &output, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                          __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
 }
 
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string &input, ${rpc.get_request().get_cpp_class_name()} &output) {
   return ${project_namespace}::err::EN_SUCCESS ==
-         __unpack_rpc_body(output, input, "${rpc.get_full_name()}",
+         __unpack_rpc_body(output, input, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                            __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
 }
 
 % if not rpc_is_stream_mode:
 ${rpc_dllexport_decl} bool pack_${rpc.get_name()}(std::string &output, const ${rpc.get_response().get_cpp_class_name()} &input) {
   return ${project_namespace}::err::EN_SUCCESS ==
-         __pack_rpc_body(input, &output, "${rpc.get_full_name()}",
+         __pack_rpc_body(input, &output, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                          __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 }
 
 ${rpc_dllexport_decl} bool unpack_${rpc.get_name()}(const std::string &input, ${rpc.get_response().get_cpp_class_name()} &output) {
   return ${project_namespace}::err::EN_SUCCESS ==
-         __unpack_rpc_body(output, input, "${rpc.get_full_name()}",
+         __unpack_rpc_body(output, input, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                            __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
 }
 % endif
@@ -274,12 +274,12 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   }
 
 % if not rpc_is_stream_mode:
-  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("[ORBIT_RPC] rpc {} must be called in a task", "${rpc.get_full_name()}")
+  TASK_COMPAT_CHECK_TASK_ACTION_RETURN("[ORBIT_RPC] rpc {} must be called in a task", "${rpc.get_service().get_full_name()}/${rpc.get_name()}")
 % endif
 
   atfw::orbit::OrbitRpcMessage *req_msg_ptr = __ctx.create<atfw::orbit::OrbitRpcMessage>();
   if (nullptr == req_msg_ptr) {
-    FWLOGERROR("[ORBIT_RPC] rpc {} create request message failed", "${rpc.get_full_name()}");
+    FWLOGERROR("[ORBIT_RPC] rpc {} create request message failed", "${rpc.get_service().get_full_name()}/${rpc.get_name()}");
     ${rpc_return_sentense(project_namespace + '::err::EN_SYS_MALLOC')}
   }
 
@@ -287,22 +287,22 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   atfw::orbit::OrbitRpcMessage &req_msg = *req_msg_ptr;
 % if rpc_allow_no_wait:
   if (__no_wait) {
-    res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_full_name()}",
+    res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                                     __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
                                     "${service.get_full_name()}");
   } else {
     res = __setup_rpc_request_header(*req_msg.mutable_head(), __ctx.get_task_context().task_id,
-                                     "${rpc.get_full_name()}",
+                                     "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                                      __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
                                      "${service.get_full_name()}");
   }
 % elif rpc_is_stream_mode:
-  res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_full_name()}",
+  res = __setup_rpc_stream_header(*req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                                   __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
                                   "${service.get_full_name()}");
 % else:
   res = __setup_rpc_request_header(*req_msg.mutable_head(), __ctx.get_task_context().task_id,
-                                   "${rpc.get_full_name()}",
+                                   "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                                    __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()),
                                    "${service.get_full_name()}");
 % endif
@@ -310,7 +310,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
     ${rpc_return_sentense('res')}
   }
 
-  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), "${rpc.get_full_name()}",
+  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
                         __to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
   if (res < 0) {
     ${rpc_return_sentense('res')}
@@ -320,13 +320,13 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
   rpc::telemetry::tracer __tracer;
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.orbit"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_full_name()}"}};
-  __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(), "${rpc.get_full_name()}", __trace_attributes);
+      {opentelemetry::semconv::rpc::kRpcMethod, "${rpc.get_service().get_full_name()}/${rpc.get_name()}"}};
+  __setup_tracer(__child_ctx, __tracer, *req_msg.mutable_head(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}", __trace_attributes);
 
 % if rpc_is_stream_mode:
   res = orbit_msg_dispatcher::me()->send_to_client_no_wait(__child_ctx, client_id, req_msg);
   if (res < 0) {
-    FWLOGERROR("[ORBIT_RPC] rpc {} call failed, res: {}({})", "${rpc.get_full_name()}", res,
+    FWLOGERROR("[ORBIT_RPC] rpc {} call failed, res: {}({})", "${rpc.get_service().get_full_name()}/${rpc.get_name()}", res,
                protobuf_mini_dumper_get_error_msg(res));
   }
   ${rpc_return_sentense('__tracer.finish({res, __trace_attributes})')}
@@ -357,12 +357,12 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(${', '.join(rpc_param
     }
 
     res = RPC_AWAIT_CODE_RESULT(__rpc_wait_and_unpack_response(
-        __ctx, rsp_body, "${rpc.get_full_name()}",
+         __ctx, rsp_body, "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
         __to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()), await_options));
   } while (false);
 
   if (res < 0) {
-    FWLOGERROR("[ORBIT_RPC] rpc {} call failed, res: {}({})", "${rpc.get_full_name()}", res,
+    FWLOGERROR("[ORBIT_RPC] rpc {} call failed, res: {}({})", "${rpc.get_service().get_full_name()}/${rpc.get_name()}", res,
                protobuf_mini_dumper_get_error_msg(res));
   }
 
