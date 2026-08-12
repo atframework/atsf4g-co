@@ -233,8 +233,7 @@ SERVER_FRAME_API rpc::result_code_type user_manager::create(
 
   output = cache->get_object();
   if (!output) {
-    FWLOGERROR("user_cache {}:{} already exists(data version={}), can not create again", zone_id, user_id,
-               output->get_data_version());
+    FWLOGERROR("user_cache {}:{} already exists, can not create again", zone_id, user_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
   }
 
