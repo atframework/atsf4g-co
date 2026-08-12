@@ -24,6 +24,8 @@
 
 #include <data/user.h>
 
+#include <rpc/rpc_context.h>
+
 #include <utility>
 
 #include "logic/chat/user_chat_manager.h"
@@ -56,7 +58,7 @@ task_action_chat_get_channel_snapshot::operator()() {
   }
 
   int32_t response_code = user_inst->get_user_chat_manager().get_snapshot(get_shared_context(), req_body.channel_id(),
-                                                                     *rsp_body.mutable_channel_snapshot());
+                                                                          *rsp_body.mutable_channel_snapshot());
   set_response_code(response_code);
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

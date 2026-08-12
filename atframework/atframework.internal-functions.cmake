@@ -198,12 +198,6 @@ function(atframework_install_directories TARGET_NAME)
   endif()
 endfunction()
 
-function(atframework_target_precompile_headers TARGET_NAME)
-  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${TARGET_NAME} ${ARGN})
-  endif()
-endfunction()
-
 function(atframework_add_library TARGET_NAME)
   set(optionArgs ENABLE_PUBLIC_PRECOMPILE_HEADERS ENABLE_PRIVATE_PRECOMPILE_HEADERS NO_INSTALL_HEADERS PROTOBUF_LIBRARY)
   set(oneValueArgs
@@ -278,11 +272,10 @@ function(atframework_add_library TARGET_NAME)
     endif()
     set(__atfw_add_library_is_interface FALSE)
   endif()
-  if(__atfw_add_library_args_FOLDER_PATH)
-    set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${__atfw_add_library_args_FOLDER_PATH}")
-  else()
-    set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "atframework/library")
+  if(NOT __atfw_add_library_args_FOLDER_PATH)
+    set(__atfw_add_library_args_FOLDER_PATH "atframework/library")
   endif()
+  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${__atfw_add_library_args_FOLDER_PATH}")
 
   if(__atfw_add_library_is_interface)
     if(__atfw_add_library_args_PUBLIC_INCLUDE_DIRECTORY)
@@ -295,9 +288,15 @@ function(atframework_add_library TARGET_NAME)
     endif()
     if(__atfw_add_library_args_ENABLE_PUBLIC_PRECOMPILE_HEADERS AND (__atfw_add_library_args_HEADERS
                                                                      OR __atfw_add_library_args_GENERATED_HEADERS))
-      atframework_target_precompile_headers(
-        ${TARGET_NAME} INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__atfw_add_library_args_HEADERS}>>"
-        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__atfw_add_library_args_GENERATED_HEADERS}>>")
+      project_pch_tool_set_precompile_headers(
+        "${TARGET_NAME}"
+        FOLDER
+        "${__atfw_add_library_args_FOLDER_PATH}"
+        PUBLIC_PRECOMPILE_HEADER
+        ${__atfw_add_library_args_HEADERS}
+        ${__atfw_add_library_args_GENERATED_HEADERS}
+        REUSE_FROM_TARGET
+        ${__atfw_add_library_args_PUBLIC_LINK_NAMES})
     endif()
   else()
     if(__atfw_add_library_args_PUBLIC_INCLUDE_DIRECTORY)
@@ -343,6 +342,10 @@ function(atframework_add_library TARGET_NAME)
     if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
       target_link_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
     endif()
+    if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+      target_include_directories(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+    endif()
+
     if(__atfw_add_library_args_PROTOBUF_LIBRARY)
       if(__atfw_add_library_is_interface)
         target_link_libraries(${TARGET_NAME} INTERFACE ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_LINK_NAME})
@@ -353,14 +356,26 @@ function(atframework_add_library TARGET_NAME)
 
     if(__atfw_add_library_args_ENABLE_PUBLIC_PRECOMPILE_HEADERS AND (__atfw_add_library_args_HEADERS
                                                                      OR __atfw_add_library_args_GENERATED_HEADERS))
-      atframework_target_precompile_headers(
-        ${TARGET_NAME} PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__atfw_add_library_args_HEADERS}>>"
-        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__atfw_add_library_args_GENERATED_HEADERS}>>")
+      project_pch_tool_set_precompile_headers(
+        "${TARGET_NAME}"
+        FOLDER
+        "${__atfw_add_library_args_FOLDER_PATH}"
+        PUBLIC_PRECOMPILE_HEADER
+        ${__atfw_add_library_args_HEADERS}
+        ${__atfw_add_library_args_GENERATED_HEADERS}
+        REUSE_FROM_TARGET
+        ${__atfw_add_library_args_PUBLIC_LINK_NAMES})
     elseif(__atfw_add_library_args_ENABLE_PRIVATE_PRECOMPILE_HEADERS AND (__atfw_add_library_args_HEADERS
                                                                           OR __atfw_add_library_args_GENERATED_HEADERS))
-      atframework_target_precompile_headers(
-        ${TARGET_NAME} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${__atfw_add_library_args_HEADERS}>"
-        "$<$<COMPILE_LANGUAGE:CXX>:${__atfw_add_library_args_GENERATED_HEADERS}>")
+      project_pch_tool_set_precompile_headers(
+        "${TARGET_NAME}"
+        FOLDER
+        "${__atfw_add_library_args_FOLDER_PATH}"
+        PRIVATE_PRECOMPILE_HEADER
+        ${__atfw_add_library_args_HEADERS}
+        ${__atfw_add_library_args_GENERATED_HEADERS}
+        REUSE_FROM_TARGET
+        ${__atfw_add_library_args_PUBLIC_LINK_NAMES})
     endif()
   endif()
 
@@ -527,17 +542,32 @@ function(atframework_add_executable TARGET_NAME)
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
   endif()
+  if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+    target_include_directories(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+  endif()
 
   if(__atfw_add_library_args_ENABLE_PUBLIC_PRECOMPILE_HEADERS AND (__atfw_add_library_args_HEADERS
                                                                    OR __atfw_add_library_args_GENERATED_HEADERS))
-    atframework_target_precompile_headers(
-      ${TARGET_NAME} PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__atfw_add_library_args_HEADERS}>>"
-      "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__atfw_add_library_args_GENERATED_HEADERS}>>")
+    project_pch_tool_set_precompile_headers(
+      "${TARGET_NAME}"
+      FOLDER
+      "${__atfw_add_library_args_FOLDER_PATH}"
+      PUBLIC_PRECOMPILE_HEADER
+      ${__atfw_add_library_args_HEADERS}
+      ${__atfw_add_library_args_GENERATED_HEADERS}
+      REUSE_FROM_TARGET
+      ${__atfw_add_library_args_PUBLIC_LINK_NAMES})
   elseif(__atfw_add_library_args_ENABLE_PRIVATE_PRECOMPILE_HEADERS AND (__atfw_add_library_args_HEADERS
                                                                         OR __atfw_add_library_args_GENERATED_HEADERS))
-    atframework_target_precompile_headers(
-      ${TARGET_NAME} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${__atfw_add_library_args_HEADERS}>"
-      "$<$<COMPILE_LANGUAGE:CXX>:${__atfw_add_library_args_GENERATED_HEADERS}>")
+    project_pch_tool_set_precompile_headers(
+      "${TARGET_NAME}"
+      FOLDER
+      "${__atfw_add_library_args_FOLDER_PATH}"
+      PRIVATE_PRECOMPILE_HEADER
+      ${__atfw_add_library_args_HEADERS}
+      ${__atfw_add_library_args_GENERATED_HEADERS}
+      REUSE_FROM_TARGET
+      ${__atfw_add_library_args_PUBLIC_LINK_NAMES})
   endif()
 
   add_executable(atframework::${TARGET_NAME} ALIAS ${TARGET_NAME})

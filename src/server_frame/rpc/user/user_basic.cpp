@@ -1,4 +1,4 @@
-﻿// Copyright 2026 atframework
+// Copyright 2026 atframework
 // Created by owent on 2026/04/28.
 //
 
@@ -10,6 +10,7 @@
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
+#include <protocol/pbdesc/svr.local.table.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

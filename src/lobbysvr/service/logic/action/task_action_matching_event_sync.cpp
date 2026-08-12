@@ -23,6 +23,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_context.h>
+
 #include <utility>
 
 #include <data/user.h>
@@ -81,8 +83,8 @@ GAME_SERVICE_API task_action_matching_event_sync::result_type task_action_matchi
     auto confirm_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp>(get_shared_context());
     confirm_request->set_matching_id(req_body.matching_id());
     confirm_request->set_confirmed(true);
-    const int32_t result = RPC_AWAIT_CODE_RESULT(
-        user_inst->get_user_matching_manager().confirm_matching(get_shared_context(), *confirm_request, *confirm_response));
+    const int32_t result = RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().confirm_matching(
+        get_shared_context(), *confirm_request, *confirm_response));
     if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
       FCTXLOGERROR(get_shared_context(), "auto confirm matching failed, matching_id={}, user={}:{}, result={}({})",
                    req_body.matching_id(), user_key.user_id(), user_key.zone_id(), result,

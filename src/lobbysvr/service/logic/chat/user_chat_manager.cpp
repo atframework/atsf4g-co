@@ -9,9 +9,10 @@
 // clang-format on
 
 #include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/lobbysvr_config.pb.h>
 #include <protocol/pbdesc/com.struct.chat.pb.h>
-#include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/dtmq_proxy.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -34,8 +35,8 @@
 #include <unordered_map>
 #include <utility>
 
-#include "data/user.h"
 #include "data/session.h"
+#include "data/user.h"
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
 namespace {
@@ -439,8 +440,7 @@ int32_t user_chat_manager::global_tick(rpc::context& ctx) {
   return 0;
 }
 
-user_chat_manager::user_chat_manager(user& owner)
-    : owner_(&owner), last_send_to_world_channel_timepoint_unix_sec_(0) {}
+user_chat_manager::user_chat_manager(user& owner) : owner_(&owner), last_send_to_world_channel_timepoint_unix_sec_(0) {}
 
 user_chat_manager::~user_chat_manager() {}
 

@@ -16,6 +16,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <atframe/etcdcli/etcd_discovery.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include "rpc/internal/rpc_template.h"  // IWYU pragma: keep

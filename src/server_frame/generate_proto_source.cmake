@@ -381,8 +381,22 @@ target_link_libraries(
             ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_CONFIG} ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_NET}
             ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_LOG})
 
-set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
-set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PROPERTY FOLDER "${PROJECT_NAME}/protocol")
+project_pch_tool_set_precompile_headers(
+  "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol"
+  FOLDER
+  "${PROJECT_NAME}/shared/protocol"
+  # 虚拟一个private的预编译头文件触发整个重建
+  PRIVATE_PRECOMPILE_HEADER
+  "google/protobuf/message.h"
+  REUSE_FROM_TARGET
+  ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_EXTENSION}
+  ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_COMMON}
+  ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_CONFIG}
+  ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_NET}
+  ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_LOG})
+
+set_property(TARGET protocol PROPERTY FOLDER "${PROJECT_NAME}/shared/protocol")
+set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-protocol PROPERTY FOLDER "${PROJECT_NAME}/shared/protocol")
 
 add_custom_command(
   TARGET resource-config

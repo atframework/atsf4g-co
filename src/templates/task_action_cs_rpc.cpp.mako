@@ -39,6 +39,8 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_context.h>
+
 #include <data/user.h>
 
 #include <utility>

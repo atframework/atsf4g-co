@@ -9,8 +9,8 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/common/orbit.common.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -18,10 +18,14 @@
 
 #include <memory/object_allocator.h>
 
+#include <config/logic_config.h>
+
 #include <dispatcher/ss_msg_dispatcher.h>
+#include <dispatcher/task_action_ss_req_base.h>
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
+#include <rpc/rpc_shared_message.h>
 #include <rpc/rpc_utils.h>
 #include <rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.h>
 
@@ -138,10 +142,11 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_server_manager::send_to_client_no_wait(rp
   atframework::SSMsg& req_msg = *req_msg_ptr;
   task_action_ss_req_base::init_msg(req_msg, logic_config::me()->get_local_server_id(),
                                     logic_config::me()->get_local_server_name());
-  res = rpc::setup_rpc_stream_header(*req_msg.mutable_head()->mutable_rpc_stream(), "orbit.ServerToControllerService",
-                                     "orbit.ServerToControllerService/send_to_client",
-                                     {atfw::util::nostd::data(atfw::orbit::STCSendToClientReq::descriptor()->full_name()),
-                                      atfw::util::nostd::size(atfw::orbit::STCSendToClientReq::descriptor()->full_name())});
+  res = rpc::setup_rpc_stream_header(
+      *req_msg.mutable_head()->mutable_rpc_stream(), "orbit.ServerToControllerService",
+      "orbit.ServerToControllerService/send_to_client",
+      {atfw::util::nostd::data(atfw::orbit::STCSendToClientReq::descriptor()->full_name()),
+       atfw::util::nostd::size(atfw::orbit::STCSendToClientReq::descriptor()->full_name())});
   if (res < 0) {
     return static_cast<int32_t>(res);
   }
@@ -281,8 +286,8 @@ void orbit_server_manager::check_client_timeout() {
             logic_server_get_current_tick_context(), "orbit_server_manager.check_client_timeout.on_client_end_notify_",
             [client_id = client_info_ptr_->client_id,
              on_client_end_notify = on_client_end_notify_](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
-              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                  on_client_end_notify(sub_ctx, client_id, atfw::orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT, "", 0)));
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(on_client_end_notify(
+                  sub_ctx, client_id, atfw::orbit::EN_CLIENT_EXIT_REASON_HEARTBEAT_TIMEOUT, "", 0)));
             });
         if (!invoke_result.is_success()) {
           FWLOGERROR("orbit server failed to spawn async_notify_client_exit task for {}, res: {}({})",

@@ -27,6 +27,7 @@
 #include <data/user.h>
 #include <logic/user_manager.h>
 #include <rpc/cache/cache_algorithm.h>
+#include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
 #include <rpc/user/user_basic.h>
 
@@ -50,8 +51,7 @@ task_action_object_cache_get_user_cache_data::operator()() {
 
   switch (req_body.key().cache_type()) {
     case PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER: {
-      user::ptr_t user_inst =
-          user_manager::me()->find_as<user>(req_body.key().instance_id(), req_body.key().zone_id());
+      user::ptr_t user_inst = user_manager::me()->find_as<user>(req_body.key().instance_id(), req_body.key().zone_id());
       if (user_inst) {
         rsp_body.set_result(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
         TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -62,8 +62,9 @@ task_action_object_cache_get_user_cache_data::operator()() {
       cache_meta->mutable_user_meta()->mutable_user_key()->set_user_id(user_inst->get_user_id());
 
       rpc::cache_api::update_cache_meta_from_origin_data(
-          get_shared_context(), *cache_meta->mutable_user_meta(), user_inst->get_data_version(), &user_inst->get_login_info(),
-          &user_inst->get_user_data(), &user_inst->get_account_info().profile(), &user_inst->get_client_info());
+          get_shared_context(), *cache_meta->mutable_user_meta(), user_inst->get_data_version(),
+          &user_inst->get_login_info(), &user_inst->get_user_data(), &user_inst->get_account_info().profile(),
+          &user_inst->get_client_info());
 
       if (!rpc::cache_api::pack_cache_meta_to_any(get_shared_context(),
                                                   *rsp_body.mutable_cache_meta()->mutable_cache_meta(), *cache_meta)) {

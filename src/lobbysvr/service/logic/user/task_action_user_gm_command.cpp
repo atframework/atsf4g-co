@@ -23,6 +23,8 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_context.h>
+
 #include <data/user.h>
 #include <dispatcher/task_manager.h>
 #include <logic/user/task_action_user_gm_cmd_nomsg.h>

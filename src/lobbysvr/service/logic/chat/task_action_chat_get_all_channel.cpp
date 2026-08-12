@@ -24,6 +24,8 @@
 
 #include <data/user.h>
 
+#include <rpc/rpc_context.h>
+
 #include <utility>
 
 #include "logic/chat/user_chat_manager.h"

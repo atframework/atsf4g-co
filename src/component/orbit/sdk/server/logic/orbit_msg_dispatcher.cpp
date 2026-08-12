@@ -16,6 +16,16 @@
 
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/pbdesc/svr.const.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <logic/logic_server_setup.h>
 
 #include <rpc/rpc_context.h>
@@ -257,9 +267,8 @@ ORBIT_SERVER_SERVICE_API int32_t orbit_msg_dispatcher::send_to_client_no_wait(rp
   return res;
 }
 
-ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_msg_dispatcher::send_to_client(rpc::context &ctx,
-                                                                                    const std::string &client_id,
-                                                                                    atfw::orbit::OrbitRpcMessage &orbit_msg) {
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_msg_dispatcher::send_to_client(
+    rpc::context &ctx, const std::string &client_id, atfw::orbit::OrbitRpcMessage &orbit_msg) {
   atfw::atapp::app *owner = get_app();
   if (nullptr == owner) {
     FWLOGERROR("module not attached to a atapp, maybe not initialized or already closed");

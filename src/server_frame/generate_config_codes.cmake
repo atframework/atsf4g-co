@@ -1,8 +1,7 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-# Python3_EXECUTABLE
-# PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY
+# Python3_EXECUTABLE PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY
 function(project_server_frame_add_config_target)
   unset(PROJECT_SERVER_FRAME_CONFIG_HEADER_LIST)
   unset(PROJECT_SERVER_FRAME_CONFIG_SOURCE_LIST)
@@ -49,9 +48,10 @@ function(project_server_frame_add_config_target)
   execute_process(
     COMMAND
       "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}" --add-package-prefix
-      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "server" -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
-      "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config"
-      -g "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
+      "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "server" -i "${PROJECT_SOURCE_TEMPLATE_DIR}"
+      -p "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o
+      "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config" -g
+      "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
       "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako:src/excel/config_manager.cpp" -l
       "H:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.h.mako:include/config/excel/\${loader.get_cpp_header_path()}" -l
       "S:${PROJECT_SOURCE_TEMPLATE_DIR}/config_set.cpp.mako:src/excel/\${loader.get_cpp_source_path()}" -g
@@ -65,8 +65,8 @@ function(project_server_frame_add_config_target)
   if(NOT ${PROJECT_SERVER_FRAME_CONFIG_SET_RES} EQUAL 0)
     set(_run_command
         "${Python3_EXECUTABLE}" "${PROJECT_THIRD_PARTY_XRESCODE_GENERATOR_PY}" --add-package-prefix
-        "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "server" -i "${PROJECT_SOURCE_TEMPLATE_DIR}" -p
-        "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o
+        "${PROJECT_THIRD_PARTY_PYTHON_MODULE_DIR}" --encoding "utf-8" --tag "server" -i
+        "${PROJECT_SOURCE_TEMPLATE_DIR}" -p "${CMAKE_CURRENT_BINARY_DIR}/config-test.pb" -o
         "${PROJECT_GENERATED_DIR}/${PROJECT_SERVER_FRAME_LIB_LINK}-config" -g
         "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.h.mako:include/config/excel/config_manager.h" -g
         "${PROJECT_SOURCE_TEMPLATE_DIR}/config_manager.cpp.mako:src/excel/config_manager.cpp" -l
@@ -126,7 +126,7 @@ function(project_server_frame_add_config_target)
     )
   endif()
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
-    "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '--tag' 'server'")
+      "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '--tag' 'server'")
   set(PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND
       "${PROJECT_SERVER_FRAME_CONFIG_GENERATE_EXCEL_CONFIG_LOADER_COMMAND} '-i' '${PROJECT_SOURCE_TEMPLATE_DIR}'")
 
@@ -342,10 +342,26 @@ function(project_server_frame_add_config_target)
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
   endif()
+  if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+    target_include_directories("${PROJECT_SERVER_FRAME_LIB_LINK}-config" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+  endif()
 
-  project_build_tools_target_precompile_headers(
-    ${PROJECT_SERVER_FRAME_LIB_LINK}-config PRIVATE
-    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST}>>")
+  list(LENGTH PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_HEADER_LIST __generated_config_set_count)
+  math(EXPR __current_pch_weight "8196 + 4000 * ${__generated_config_set_count}")
+
+  project_pch_tool_set_precompile_headers(
+    "${PROJECT_SERVER_FRAME_LIB_LINK}-config"
+    PCH_INIT_WEIGHT_RATIO
+    ${__current_pch_weight}
+    FOLDER
+    "${PROJECT_NAME}/config"
+    PUBLIC_PRECOMPILE_HEADER
+    "config/excel/config_traits.h"
+    "config/excel/item_type_config.h"
+    ${PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST}
+    REUSE_FROM_TARGET
+    ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_CONFIG})
+
   unset(PROJECT_SERVER_FRAME_CONFIG_SET_PCH_HEADER_LIST)
 
   add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-config protocol config-loader)

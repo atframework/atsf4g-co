@@ -22,6 +22,8 @@
 #include <config/server_frame_build_feature.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <rpc/rpc_context.h>
+
 #include <data/user.h>
 #include <logic/cache/user_cache_manager.h>
 
@@ -45,8 +47,8 @@ GAMECLIENT_SERVICE_API task_action_cache_api_unwatch::result_type task_action_ca
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  set_response_code(RPC_AWAIT_CODE_RESULT(
-      user_inst->get_user_cache_manager().unwatch_cache_keys(get_shared_context(), req_body.cache_type(), req_body.keys())));
+  set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_cache_manager().unwatch_cache_keys(
+      get_shared_context(), req_body.cache_type(), req_body.keys())));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

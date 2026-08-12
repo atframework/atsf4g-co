@@ -6,6 +6,8 @@
 
 #include <xxhash.h>
 
+#include <atframe/atapp.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -86,8 +88,6 @@
 // clang-format on
 
 #include <std/explicit_declare.h>
-
-#include <atframe/atapp.h>
 
 #include <design_pattern/singleton.h>
 #include <gsl/select-gsl.h>

@@ -7,6 +7,16 @@
 
 #include <dispatcher/task_action_cs_req_base.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/pbdesc/lobby_service.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #ifndef GAMECLIENT_SERVICE_API
 #  define GAMECLIENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif

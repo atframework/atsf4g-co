@@ -24,6 +24,10 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/cache/cache_api.h>
+#include <rpc/cache/cachesvrservice.atfw.gen.h>
+#include <rpc/rpc_context.h>
+
 #include <data/user.h>
 #include <logic/cache/global_cache_manager.h>
 #include <logic/cache/user_cache_manager.h>

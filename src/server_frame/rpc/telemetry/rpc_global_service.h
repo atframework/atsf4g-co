@@ -27,7 +27,7 @@
 
 #include <atframe/atapp_config.h>
 
-#include <stdint.h>
+#include <cstdint>
 #include <functional>
 #include <list>
 #include <memory>

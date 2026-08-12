@@ -6,8 +6,18 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_user_kickoff : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSUserKickOffReq,
-                                                                  PROJECT_NAMESPACE_ID::SSUserKickOffRsp> {
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/pbdesc/lobby_service.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
+class task_action_user_kickoff
+    : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSUserKickOffReq, PROJECT_NAMESPACE_ID::SSUserKickOffRsp> {
  public:
   using base_type =
       task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSUserKickOffReq, PROJECT_NAMESPACE_ID::SSUserKickOffRsp>;

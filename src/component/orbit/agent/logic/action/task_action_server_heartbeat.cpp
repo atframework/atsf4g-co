@@ -24,6 +24,8 @@
 
 #include <config/extern_service_types.h>
 
+#include "logic/orbit_agent_manager.h"
+
 ORBIT_AGENT_SERVICE_API task_action_server_heartbeat::task_action_server_heartbeat(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 

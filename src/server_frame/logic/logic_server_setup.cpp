@@ -375,6 +375,10 @@ std::unique_ptr<rpc::context> &logic_server_get_fallback_tick_context() {
 }
 }  // namespace
 
+struct logic_server_common_module::sys_rusage_t {
+  uv_rusage_t rusage;
+};
+
 rpc::context &logic_server_get_current_tick_context() {
   logic_server_common_module *mod = logic_server_last_common_module();
   if (mod == nullptr) {
@@ -395,7 +399,8 @@ SERVER_FRAME_API logic_server_common_module::logic_server_common_module(
       server_remote_conf_zone_version_(0),
       server_remote_conf_next_update_time_(0) {
   stats_ = atfw::memory::stl::make_shared<stats_data_t>();
-  memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
+  stats_->last_checkpoint_usage = std::make_shared<sys_rusage_t>();
+  memset(&stats_->last_checkpoint_usage->rusage, 0, sizeof(stats_->last_checkpoint_usage->rusage));
   stats_->collect_sequence.store(0, std::memory_order_release);
 
   stats_->last_update_usage_timepoint = 0;
@@ -479,7 +484,7 @@ SERVER_FRAME_API void logic_server_common_module::ready() {
 
   rpc::telemetry::opentelemetry_utility::setup();
 
-  memset(&stats_->last_checkpoint_usage, 0, sizeof(stats_->last_checkpoint_usage));
+  memset(&stats_->last_checkpoint_usage->rusage, 0, sizeof(stats_->last_checkpoint_usage->rusage));
   stats_->collect_sequence.store(0, std::memory_order_release);
   stats_->last_update_usage_timepoint = 0;
   stats_->last_collect_sequence = 0;
@@ -866,8 +871,9 @@ void logic_server_common_module::tick_stats() {
     }
 
     // 首次tick，初始化
-    if (0 == stats_->last_checkpoint_usage.ru_utime.tv_sec || 0 == stats_->last_checkpoint_usage.ru_stime.tv_sec) {
-      stats_->last_checkpoint_usage = last_usage;
+    if (0 == stats_->last_checkpoint_usage->rusage.ru_utime.tv_sec ||
+        0 == stats_->last_checkpoint_usage->rusage.ru_stime.tv_sec) {
+      stats_->last_checkpoint_usage->rusage = last_usage;
       stats_->last_checkpoint = sys_now;
       stats_->last_collect_sequence = stats_->collect_sequence.load(std::memory_order_acquire);
       stats_->collect_max_tick_interval_us.store(0, std::memory_order_release);
@@ -876,12 +882,12 @@ void logic_server_common_module::tick_stats() {
 
     opentelemetry::context::Context telemetry_context;
 
-    auto offset_usr = last_usage.ru_utime.tv_sec - stats_->last_checkpoint_usage.ru_utime.tv_sec;
-    auto offset_sys = last_usage.ru_stime.tv_sec - stats_->last_checkpoint_usage.ru_stime.tv_sec;
+    auto offset_usr = last_usage.ru_utime.tv_sec - stats_->last_checkpoint_usage->rusage.ru_utime.tv_sec;
+    auto offset_sys = last_usage.ru_stime.tv_sec - stats_->last_checkpoint_usage->rusage.ru_stime.tv_sec;
     offset_usr *= 1000000;
     offset_sys *= 1000000;
-    offset_usr += last_usage.ru_utime.tv_usec - stats_->last_checkpoint_usage.ru_utime.tv_usec;
-    offset_sys += last_usage.ru_stime.tv_usec - stats_->last_checkpoint_usage.ru_stime.tv_usec;
+    offset_usr += last_usage.ru_utime.tv_usec - stats_->last_checkpoint_usage->rusage.ru_utime.tv_usec;
+    offset_sys += last_usage.ru_stime.tv_usec - stats_->last_checkpoint_usage->rusage.ru_stime.tv_usec;
 
     auto checkpoint_offset =
         std::chrono::duration_cast<std::chrono::microseconds>(sys_now - stats_->last_checkpoint).count();
@@ -903,7 +909,7 @@ void logic_server_common_module::tick_stats() {
       stats_->last_collect_sequence = collect_sequence;
 
       stats_->collect_max_tick_interval_us.store(0, std::memory_order_release);
-      stats_->last_checkpoint_usage = last_usage;
+      stats_->last_checkpoint_usage->rusage = last_usage;
       stats_->last_checkpoint = sys_now;
     }
   } while (false);

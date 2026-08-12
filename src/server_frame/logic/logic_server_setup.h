@@ -3,16 +3,6 @@
 
 #pragma once
 
-#if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
-#  ifndef WIN32_LEAN_AND_MEAN
-#    define WIN32_LEAN_AND_MEAN
-#  endif
-
-#  include <WinSock2.h>
-#endif
-
-#include <uv.h>
-
 #include <config/compiler_features.h>
 
 #include <gsl/select-gsl.h>
@@ -48,6 +38,10 @@
 #include <memory>
 #include <queue>
 #include <string>
+
+namespace rpc {
+class context;
+}
 
 class logic_server_common_module;
 class logic_hpa_controller;
@@ -99,6 +93,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
   using etcd_keepalive_ptr_t = std::shared_ptr<atfw::atapp::etcd_keepalive>;
   using etcd_watcher_ptr_t = std::shared_ptr<atfw::atapp::etcd_watcher>;
 
+  struct sys_rusage_t;
   struct stats_data_t {
     // cross thread
     std::atomic<uint64_t> collect_sequence;
@@ -111,7 +106,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
     // main thread
     time_t last_update_usage_timepoint;
     uint64_t last_collect_sequence;
-    uv_rusage_t last_checkpoint_usage;
+    std::shared_ptr<sys_rusage_t> last_checkpoint_usage;
     std::chrono::system_clock::time_point last_checkpoint;
     std::chrono::system_clock::time_point previous_tick_checkpoint;
   };

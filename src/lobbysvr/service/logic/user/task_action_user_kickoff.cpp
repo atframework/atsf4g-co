@@ -22,21 +22,22 @@
 
 #include <rpc/db/local_db_interface.atfw.gen.h>
 
-#include <data/user.h>
 #include <data/session.h>
-#include <logic/user_manager.h>
+#include <data/user.h>
 #include <logic/session_manager.h>
+#include <logic/user_manager.h>
 
 #include <config/logic_config.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_context.h>
+
 #include <memory>
 #include <string>
 
-task_action_user_kickoff::task_action_user_kickoff(dispatcher_start_data_type&& param)
-    : base_type(std::move(param)) {}
+task_action_user_kickoff::task_action_user_kickoff(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 task_action_user_kickoff::~task_action_user_kickoff() {}
 
 bool task_action_user_kickoff::is_stream_rpc() const noexcept { return false; }
@@ -55,8 +56,7 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
     // 尝试保存用户数据
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> user_lg{get_shared_context()};
     uint64_t version = 0;
-    int res =
-        RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), user_user_id, *user_lg, version));
+    int res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(get_shared_context(), user_user_id, *user_lg, version));
     if (res < 0) {
       FWLOGERROR("user {}({}:{}) try load login data failed.", user_open_id, user_zone_id, user_user_id);
       set_response_code(PROJECT_NAMESPACE_ID::err::EN_DB_REPLY_ERROR);
@@ -106,8 +106,8 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
 
   auto remove_res = RPC_AWAIT_CODE_RESULT(user_manager::me()->remove(get_shared_context(), user_inst, true));
   if (remove_res < 0) {
-    FWLOGERROR("kickoff user {}({}:{}) failed, res: {}({})", user_inst->get_open_id(), user_zone_id, user_inst->get_user_id(),
-               remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
+    FWLOGERROR("kickoff user {}({}:{}) failed, res: {}({})", user_inst->get_open_id(), user_zone_id,
+               user_inst->get_user_id(), remove_res, protobuf_mini_dumper_get_error_msg(remove_res));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }

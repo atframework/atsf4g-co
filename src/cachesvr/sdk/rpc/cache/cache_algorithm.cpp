@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/common/com.struct.cache.common.pb.h>
 #include <protocol/pbdesc/cache_service.pb.h>
 #include <protocol/pbdesc/svr.struct.pb.h>
 
@@ -23,7 +24,6 @@
 
 #include <type_traits>
 #include <utility>
-#include "protocol/common/com.struct.cache.common.pb.h"
 
 namespace rpc {
 namespace cache_api {

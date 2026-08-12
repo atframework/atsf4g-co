@@ -99,17 +99,15 @@ generate_for_pb_add_custom_configure(
   "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kv.h.mako"
   "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kv.cpp.mako"
   "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kl.h.mako"
-  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kl.cpp.mako"
-)
+  "${PROJECT_SOURCE_TEMPLATE_DIR}/db_rpc_redis_kl.cpp.mako")
 
-list(APPEND PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES
-    "${PROJECT_NAMESPACE}.RouterService"
-    "${PROJECT_NAMESPACE}.LogicCommonService"
-    "db_code_generate")
-generate_for_pb_collect_output_from_flows("${PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES}" _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
+list(APPEND PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES "${PROJECT_NAMESPACE}.RouterService"
+     "${PROJECT_NAMESPACE}.LogicCommonService" "db_code_generate")
+generate_for_pb_collect_output_from_flows("${PROJECT_SERVER_FRAME_GENERATED_FLOW_NAMES}"
+                                          _PROJECT_COMPONENT_GENERATED_OUTPUT_FILES)
 generate_for_pb_collect_filtered_output_files(
-  "${CMAKE_CURRENT_LIST_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}"
-  _PROJECT_COMPONENT_GENERATED_SOURCE_FILES _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
+  "${CMAKE_CURRENT_LIST_DIR}" "${_PROJECT_COMPONENT_GENERATED_OUTPUT_FILES}" _PROJECT_COMPONENT_GENERATED_SOURCE_FILES
+  _PROJECT_COMPONENT_GENERATED_HEADER_FILES)
 if(_PROJECT_COMPONENT_GENERATED_SOURCE_FILES)
   list(APPEND SRC_LIST ${_PROJECT_COMPONENT_GENERATED_SOURCE_FILES})
 endif()
@@ -128,8 +126,8 @@ foreach(SRC_FILE_REALPATH IN LISTS SRC_LIST_ORIGIN)
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
   endif()
-  # Unit test cases live in test/ but are built by their own target (src/server_frame/test/CMakeLists.txt),
-  # never into the server_frame library.
+  # Unit test cases live in test/ but are built by their own target (src/server_frame/test/CMakeLists.txt), never into
+  # the server_frame library.
   if(SRC_FILE_REALPATH MATCHES "^${PROJECT_SERVER_FRAME_SRC_DIR}[/\\\\]test[/\\\\].*")
     file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/skip-glob-sources.txt" "${SRC_FILE_REALPATH}\r\n")
     continue()
@@ -195,14 +193,36 @@ target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK} PRIVATE ${PROJECT_COMMON
 if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
   target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
 endif()
+if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+  target_include_directories("${PROJECT_SERVER_FRAME_LIB_LINK}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+endif()
 
 if(PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS)
   target_compile_options(${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC ${PROJECT_SERVER_FRAME_PUBLIC_COMPILE_OPTIONS})
 endif()
 
-project_build_tools_target_precompile_headers(
-  ${PROJECT_SERVER_FRAME_LIB_LINK} PUBLIC
-  "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${PROJECT_SERVER_FRAME_PRECOMPILE_HEADERS}>>")
+set(__current_pch_weight 0)
+project_pch_tool_increase_pch_weight(
+  __current_pch_weight
+  1
+  "${PROJECT_SERVER_FRAME_INC_DIR}/dispatcher/task_type_traits.h"
+  "${PROJECT_SERVER_FRAME_INC_DIR}/dispatcher/task_action_ss_req_base.h"
+  "${PROJECT_SERVER_FRAME_INC_DIR}/dispatcher/task_action_no_req_base.h"
+  "${PROJECT_SERVER_FRAME_INC_DIR}/rpc/rpc_shared_message.h"
+  "${PROJECT_SERVER_FRAME_INC_DIR}/rpc/rpc_common_types.h"
+  "${PROJECT_SERVER_FRAME_INC_DIR}/utility/protobuf_mini_dumper.h")
+
+project_pch_tool_set_precompile_headers(
+  "${PROJECT_SERVER_FRAME_LIB_LINK}"
+  PCH_INIT_WEIGHT_RATIO
+  ${__current_pch_weight}
+  FOLDER
+  "${PROJECT_NAME}/framework"
+  PUBLIC_PRECOMPILE_HEADER
+  ${PROJECT_SERVER_FRAME_PRECOMPILE_HEADERS}
+  REUSE_FROM_TARGET
+  "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol"
+  "${PROJECT_SERVER_FRAME_LIB_LINK}-config")
 
 set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK} PROPERTY FOLDER "${PROJECT_NAME}/framework")
 

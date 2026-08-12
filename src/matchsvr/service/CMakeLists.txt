@@ -18,4 +18,5 @@ project_service_declare_instance(
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   GENERATED_FLOW_NAMES
-  "${PROJECT_NAMESPACE}.MatchsvrService")
+  "${PROJECT_NAMESPACE}.MatchsvrService"
+  "${PROJECT_NAMESPACE}.MatchsvrNotifyService")

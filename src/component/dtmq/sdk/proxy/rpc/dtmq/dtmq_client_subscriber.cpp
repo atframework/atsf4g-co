@@ -26,6 +26,7 @@
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -43,6 +44,7 @@
 #include <config/excel/config_easy_api.h>
 #include <config/excel_config_dtmq_index.h>
 #include <config/extern_service_types.h>
+#include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_setup.h>

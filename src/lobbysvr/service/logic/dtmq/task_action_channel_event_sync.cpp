@@ -25,6 +25,7 @@
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
+#include <rpc/rpc_context.h>
 
 LOBBY_SERVICE_API task_action_channel_event_sync::task_action_channel_event_sync(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}

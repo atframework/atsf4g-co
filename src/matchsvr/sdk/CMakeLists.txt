@@ -14,4 +14,6 @@ project_service_declare_sdk(
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matchsvrservice.atfw.gen.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matchsvrnotifyservice.atfw.gen.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matching_api.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/rpc/matching/matching_api.cpp"
+  GENERATED_FLOW_NAMES
+  "${PROJECT_NAMESPACE}.MatchsvrService")

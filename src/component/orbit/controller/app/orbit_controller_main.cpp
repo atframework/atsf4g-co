@@ -16,6 +16,7 @@
 #include <config/extern_service_types.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 
+#include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_macro.h>

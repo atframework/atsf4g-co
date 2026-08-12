@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/cache_service.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -24,6 +25,7 @@
 
 #include <data/user.h>
 #include <logic/cache/user_cache_manager.h>
+#include <rpc/rpc_context.h>
 
 GAMECLIENT_SERVICE_API task_action_cache_api_batch_get::task_action_cache_api_batch_get(
     dispatcher_start_data_type&& param)
@@ -57,7 +59,7 @@ GAMECLIENT_SERVICE_API task_action_cache_api_batch_get::result_type task_action_
     if (key.zone_id() == 0 && key.instance_id() == 0) {
       continue;
     }
-    auto unit = query_keys.Add();
+    auto* unit = query_keys.Add();
     if (nullptr != unit) {
       unit->set_get_type(key.get_type());
       unit->mutable_cache_key()->set_cache_type(req_body.cache_type());

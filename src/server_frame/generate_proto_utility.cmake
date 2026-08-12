@@ -21,12 +21,6 @@ function(project_build_tools_optimize_sources)
   endif()
 endfunction()
 
-function(project_build_tools_target_precompile_headers TARGET_NAME)
-  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${TARGET_NAME} ${ARGN})
-  endif()
-endfunction()
-
 function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OUTPUT_LIBRARY_TARGET_NAME)
   set(optionArgs "")
   set(oneValueArgs "")
@@ -169,9 +163,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     WORKING_DIRECTORY "${SANDBOX_PATH}"
     DEPENDS ${project_server_frame_create_protocol_target_PROTOCOLS}
             ${project_server_frame_create_protocol_target_DEPENDS}
-    COMMENT
-      "Generate [@${SANDBOX_PATH}] Protoc"
-  )
+    COMMENT "Generate [@${SANDBOX_PATH}] Protoc")
 
   add_custom_target(
     ${TARGET_NAME}
@@ -203,15 +195,19 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     # project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
   endif()
 
-  project_build_tools_target_precompile_headers(
-    ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}
-    PUBLIC
-    "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${PCH_HEADER_FILES}>>"
-    PRIVATE
-    "<limits>"
-    "<string>"
-    "<type_traits>"
-    "<utility>")
+  set(__current_pch_weight 0)
+  project_pch_tool_increase_pch_weight(__current_pch_weight 50 ${project_server_frame_create_protocol_target_PROTOCOLS})
+
+  project_pch_tool_set_precompile_headers(
+    "${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}"
+    PCH_INIT_WEIGHT_RATIO
+    ${__current_pch_weight}
+    FOLDER
+    "${PROJECT_NAME}/shared/protocol"
+    PROTOCOL_PRECOMPILE_HEADER
+    ${PCH_HEADER_FILES}
+    REUSE_FROM_TARGET
+    ${project_server_frame_create_protocol_target_PUBLIC_LINK_LIBRARIES})
 
   add_dependencies(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} ${TARGET_NAME})
 
@@ -258,10 +254,13 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
   endif()
+  if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+    target_include_directories("${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}"
+                               PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+  endif()
 
-  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/protocol")
-  set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} PROPERTY FOLDER
-                                                                               "${PROJECT_NAME}/framework/protocol")
+  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/shared/protocol")
+  set_property(TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/shared/protocol")
 
   project_install_and_export_targets(${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME})
 
@@ -295,7 +294,7 @@ function(project_server_frame_create_protocol_sandbox TARGET_NAME OUTPUT_DIR OUT
     list(APPEND OUTPUT_FILES "${OUTPUT_FILE}")
   endforeach()
   add_custom_target(${TARGET_NAME} ALL DEPENDS ${OUTPUT_FILES})
-  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/protocol/sandbox")
+  set_property(TARGET ${TARGET_NAME} PROPERTY FOLDER "${PROJECT_NAME}/shared/protocol/sandbox")
   set(${OUTPUT_VAR}
       ${${OUTPUT_VAR}} ${OUTPUT_FILES}
       PARENT_SCOPE)

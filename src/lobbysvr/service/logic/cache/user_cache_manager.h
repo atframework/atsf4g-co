@@ -30,6 +30,10 @@ namespace rpc {
 class context;
 }
 
+PROJECT_NAMESPACE_BEGIN
+class object_cache_pull_key;
+PROJECT_NAMESPACE_END
+
 class user;
 
 class user_cache_manager {

@@ -21,6 +21,10 @@
 
 #include <logic/user_manager.h>
 
+#include <rpc/rpc_context.h>
+
+#include <utility>
+
 #include "data/user.h"
 #include "logic/async_jobs/user_async_jobs_manager.h"
 

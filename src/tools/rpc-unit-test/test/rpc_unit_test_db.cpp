@@ -5,6 +5,8 @@
 // clang-format on
 
 #include <protocol/pbdesc/rpc_unit_test.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
+#include <protocol/pbdesc/svr.local.table.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

@@ -28,6 +28,7 @@
 
 #include <rpc/cache/cache_api.h>
 #include <rpc/cache/cachesvrservice.atfw.gen.h>
+#include <rpc/rpc_context.h>
 
 #include <utility/protobuf_mini_dumper.h>
 

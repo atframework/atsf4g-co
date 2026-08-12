@@ -16,6 +16,7 @@
 
 #include <memory/object_allocator.h>
 
+#include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
 
 #include <logic/logic_server_macro.h>

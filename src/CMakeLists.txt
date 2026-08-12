@@ -39,13 +39,18 @@ add_subdirectory(component)
 include("${CMAKE_CURRENT_LIST_DIR}/service-functions.cmake")
 
 add_subdirectory(echosvr)
+
+# lobbysvr比较特殊，可能被其他服务依赖，所以要先声明protocol和sdk。其他模块不允许循环依赖，必须依赖反转
+add_subdirectory(lobbysvr/protocol)
+add_subdirectory(lobbysvr/sdk)
+
 add_subdirectory(cachesvr)
 add_subdirectory(teamsvr)
 add_subdirectory(authsvr)
 add_subdirectory(matchsvr)
-add_subdirectory(lobbysvr)
 add_subdirectory(rank_settlement_svr)
 add_subdirectory(orbitsvr)
+add_subdirectory(lobbysvr)
 
 add_subdirectory(tools)
 add_subdirectory(robot)

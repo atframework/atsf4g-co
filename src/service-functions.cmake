@@ -4,16 +4,17 @@
 set(PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE 16)
 set(PROJECT_SERVICE_UNITY_BUILD_MIN_FILE_COUNT 1)
 
-function(project_service_target_precompile_headers TARGET_NAME)
-  if(PROJECT_ENABLE_PRECOMPILE_HEADERS AND CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
-    target_precompile_headers(${TARGET_NAME} ${ARGN})
-  endif()
-endfunction()
-
 function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
-  set(multiValueArgs HEADERS SOURCES USE_COMPONENTS USE_SERVICE_SDK USE_SERVICE_PROTOCOL GENERATED_FLOW_NAMES)
+  set(multiValueArgs
+      HEADERS
+      SOURCES
+      PRECOMPILE_HEADERS
+      USE_COMPONENTS
+      USE_SERVICE_SDK
+      USE_SERVICE_PROTOCOL
+      GENERATED_FLOW_NAMES)
   cmake_parse_arguments(project_service_declare_sdk "${optionArgs}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
   generate_for_pb_collect_output_from_flows("${project_service_declare_sdk_GENERATED_FLOW_NAMES}"
@@ -80,6 +81,9 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
     if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
       target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
     endif()
+    if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+      target_include_directories("${TARGET_FULL_NAME}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+    endif()
   else()
     add_library(${TARGET_FULL_NAME} INTERFACE)
   endif()
@@ -129,20 +133,6 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
         set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
                                                                             ${PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE})
       endif()
-      if(NOT PROJECT_ENABLE_UNITY_BUILD OR __project_service_declare_sdk_SOURCES_LENGTH GREATER
-                                           PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE)
-        project_service_target_precompile_headers(
-          ${TARGET_FULL_NAME} PUBLIC
-          "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
-      else()
-        project_service_target_precompile_headers(
-          ${TARGET_FULL_NAME} INTERFACE
-          "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
-      endif()
-    else()
-      project_service_target_precompile_headers(
-        ${TARGET_FULL_NAME} INTERFACE
-        "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
     endif()
   endif()
 
@@ -150,20 +140,55 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   unset(__INTERFACE_LINK_TARGETS)
   if(project_service_declare_sdk_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_service_declare_sdk_USE_COMPONENTS})
-      list(APPEND __PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
+      get_target_property(__RESOLVE_ALIAS_TARGET "components::${USE_COMPONENT}" ALIASED_TARGET)
+      if(__RESOLVE_ALIAS_TARGET)
+        list(APPEND __PUBLIC_LINK_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+      else()
+        list(APPEND __PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
+      endif()
     endforeach()
   endif()
   if(project_service_declare_sdk_USE_SERVICE_PROTOCOL)
     foreach(USE_SERVICE_PROTOCOL ${project_service_declare_sdk_USE_SERVICE_PROTOCOL})
-      list(APPEND __PUBLIC_LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
+      get_target_property(__RESOLVE_ALIAS_TARGET "protocol::${USE_SERVICE_PROTOCOL}" ALIASED_TARGET)
+      if(__RESOLVE_ALIAS_TARGET)
+        list(APPEND __PUBLIC_LINK_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+      else()
+        list(APPEND __PUBLIC_LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
+      endif()
     endforeach()
   endif()
   if(project_service_declare_sdk_USE_SERVICE_SDK)
     foreach(USE_SERVICE_SDK ${project_service_declare_sdk_USE_SERVICE_SDK})
-      list(APPEND __PUBLIC_LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
+      get_target_property(__RESOLVE_ALIAS_TARGET "sdk::${USE_SERVICE_SDK}" ALIASED_TARGET)
+      if(__RESOLVE_ALIAS_TARGET)
+        list(APPEND __PUBLIC_LINK_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+      else()
+        list(APPEND __PUBLIC_LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
+      endif()
     endforeach()
   endif()
   list(APPEND __PUBLIC_LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
+
+  if(project_service_declare_sdk_PRECOMPILE_HEADERS)
+    set(__current_pch_weight 0)
+    project_pch_tool_increase_pch_weight(__current_pch_weight 1 ${project_service_declare_sdk_PRECOMPILE_HEADERS})
+
+    project_pch_tool_set_precompile_headers(
+      "${TARGET_FULL_NAME}"
+      PCH_INIT_WEIGHT_RATIO
+      ${__current_pch_weight}
+      FOLDER
+      "${PROJECT_NAME}/service/sdk"
+      PUBLIC_PRECOMPILE_HEADER
+      ${project_service_declare_sdk_PRECOMPILE_HEADERS}
+      REUSE_FROM_TARGET
+      ${__PUBLIC_LINK_TARGETS})
+  else()
+    project_pch_tool_set_precompile_headers("${TARGET_FULL_NAME}" FOLDER "${PROJECT_NAME}/service/sdk"
+                                            REUSE_FROM_TARGET ${__PUBLIC_LINK_TARGETS})
+  endif()
+
   if(project_service_declare_sdk_SOURCES)
     if(__INTERFACE_LINK_TARGETS)
       target_link_libraries(${TARGET_FULL_NAME} INTERFACE ${__PUBLIC_LINK_TARGETS})
@@ -331,7 +356,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       if(__FIND_PROTO_DIR)
         list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${__FIND_PROTO_DIR}")
       endif()
-      list(APPEND __PUBLIC_LINK_TARGETS "components::${USE_COMPONENT}")
+      list(APPEND __PUBLIC_LINK_TARGETS "${__RESOLVE_PROTO_ALIAS_TARGET}")
     endforeach()
   endif()
   if(project_service_declare_protocol_USE_SERVICE_PROTOCOL)
@@ -345,7 +370,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
       if(__FIND_PROTO_DIR)
         list(APPEND PROTOBUF_PROTO_PATHS --proto_path "${__FIND_PROTO_DIR}")
       endif()
-      list(APPEND __PUBLIC_LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
+      list(APPEND __PUBLIC_LINK_TARGETS "${__RESOLVE_PROTO_ALIAS_TARGET}")
     endforeach()
   endif()
 
@@ -446,21 +471,32 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
                                                                         ${PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE})
   endif()
+
   if(NOT PROJECT_ENABLE_UNITY_BUILD OR __project_service_declare_protocol_PROTOCOLS_LENGTH GREATER
-                                       PROJECT_SERVICE_UNITY_BUILD_BATCH_SIZE)
-    project_service_target_precompile_headers(
-      ${TARGET_FULL_NAME}
-      PUBLIC
-      "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>"
-      PRIVATE
-      "<limits>"
-      "<string>"
-      "<type_traits>"
-      "<utility>")
+                                       PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE)
+    set(__current_pch_weight 0)
+    project_pch_tool_increase_pch_weight(__current_pch_weight 50 ${project_service_declare_protocol_PROTOCOLS})
+
+    project_pch_tool_set_precompile_headers(
+      "${TARGET_FULL_NAME}"
+      PCH_INIT_WEIGHT_RATIO
+      ${__current_pch_weight}
+      FOLDER
+      "${PROJECT_NAME}/service/protocol"
+      PROTOCOL_PRECOMPILE_HEADER
+      ${__FINAL_GENERATED_PCH_HEADER_FILES}
+      PRIVATE_PRECOMPILE_HEADER
+      [["limits"]]
+      [["string"]]
+      [["type_traits"]]
+      [["utility"]]
+      REUSE_FROM_TARGET
+      "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol"
+      ${__PUBLIC_LINK_TARGETS})
   else()
-    project_service_target_precompile_headers(
-      ${TARGET_FULL_NAME} INTERFACE
-      "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__FINAL_GENERATED_PCH_HEADER_FILES}>>")
+    project_pch_tool_set_precompile_headers(
+      "${TARGET_FULL_NAME}" FOLDER "${PROJECT_NAME}/service/protocol" REUSE_FROM_TARGET
+      "${PROJECT_SERVER_FRAME_LIB_LINK}-protocol" ${__PUBLIC_LINK_TARGETS})
   endif()
 
   add_custom_command(
@@ -489,6 +525,9 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+  endif()
+  if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+    target_include_directories("${TARGET_FULL_NAME}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
   endif()
 
   if(project_service_declare_protocol_OUTPUT_NAME)
@@ -572,6 +611,9 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   target_compile_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${TARGET_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+  endif()
+  if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+    target_include_directories("${TARGET_NAME}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
   endif()
   if(project_service_declare_instance_OUTPUT_NAME)
     set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME "${project_service_declare_instance_OUTPUT_NAME}"
@@ -684,48 +726,65 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
         list(APPEND project_service_declare_instance_PCH_FILES "\"${PRECOMPILE_HEADER}\"")
       endif()
     endforeach()
-  else()
-    foreach(PRECOMPILE_HEADER ${project_service_declare_instance_HEADERS})
-      if(IS_ABSOLUTE "${PRECOMPILE_HEADER}")
-        file(RELATIVE_PATH RELATIVE_HEADER_FILE "${SERVICE_ROOT_DIR}" "${PRECOMPILE_HEADER}")
-      else()
-        set(RELATIVE_HEADER_FILE "${PRECOMPILE_HEADER}")
-      endif()
-
-      if(PRECOMPILE_HEADER MATCHES "^app/")
-        continue()
-      endif()
-      get_filename_component(PRECOMPILE_HEADER_BASENAME "${PRECOMPILE_HEADER}" NAME)
-      if(PRECOMPILE_HEADER_BASENAME MATCHES "^task_action_")
-        continue()
-      endif()
-      list(APPEND project_service_declare_instance_PCH_FILES "\"${RELATIVE_HEADER_FILE}\"")
-    endforeach()
-  endif()
-  if(project_service_declare_instance_PCH_FILES)
-    project_service_target_precompile_headers(
-      ${TARGET_NAME} PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${project_service_declare_instance_PCH_FILES}>")
   endif()
 
   # Links
-  unset(LINK_TARGETS)
+  unset(__LINK_TARGETS)
   if(project_service_declare_instance_USE_COMPONENTS)
     foreach(USE_COMPONENT ${project_service_declare_instance_USE_COMPONENTS})
-      list(APPEND LINK_TARGETS "components::${USE_COMPONENT}")
+      get_target_property(__RESOLVE_ALIAS_TARGET "components::${USE_COMPONENT}" ALIASED_TARGET)
+      if(__RESOLVE_ALIAS_TARGET)
+        list(APPEND __LINK_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+      else()
+        list(APPEND __LINK_TARGETS "components::${USE_COMPONENT}")
+      endif()
     endforeach()
   endif()
   if(project_service_declare_instance_USE_SERVICE_PROTOCOL)
     foreach(USE_SERVICE_PROTOCOL ${project_service_declare_instance_USE_SERVICE_PROTOCOL})
-      list(APPEND LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
+      get_target_property(__RESOLVE_ALIAS_TARGET "protocol::${USE_SERVICE_PROTOCOL}" ALIASED_TARGET)
+      if(__RESOLVE_ALIAS_TARGET)
+        list(APPEND __LINK_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+      else()
+        list(APPEND __LINK_TARGETS "protocol::${USE_SERVICE_PROTOCOL}")
+      endif()
     endforeach()
   endif()
   if(project_service_declare_instance_USE_SERVICE_SDK)
     foreach(USE_SERVICE_SDK ${project_service_declare_instance_USE_SERVICE_SDK})
-      list(APPEND LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
+      if(TARGET "sdk::${USE_SERVICE_SDK}")
+        get_target_property(__RESOLVE_ALIAS_TARGET "sdk::${USE_SERVICE_SDK}" ALIASED_TARGET)
+        if(__RESOLVE_ALIAS_TARGET)
+          list(APPEND __LINK_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+        else()
+          list(APPEND __LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
+        endif()
+      else()
+        list(APPEND __LINK_TARGETS "sdk::${USE_SERVICE_SDK}")
+      endif()
     endforeach()
   endif()
-  list(APPEND LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
-  target_link_libraries(${TARGET_NAME} PRIVATE ${LINK_TARGETS})
+  list(APPEND __LINK_TARGETS ${PROJECT_SERVER_FRAME_LIB_LINK})
+
+  if(project_service_declare_instance_PCH_FILES)
+    set(__current_pch_weight 0)
+    project_pch_tool_increase_pch_weight(__current_pch_weight 1 ${project_service_declare_instance_PCH_FILES})
+
+    project_pch_tool_set_precompile_headers(
+      "${TARGET_NAME}"
+      PCH_INIT_WEIGHT_RATIO
+      ${__current_pch_weight}
+      FOLDER
+      "${PROJECT_NAME}/service/server"
+      PRIVATE_PRECOMPILE_HEADER
+      ${project_service_declare_instance_PCH_FILES}
+      REUSE_FROM_TARGET
+      ${__LINK_TARGETS})
+  else()
+    project_pch_tool_set_precompile_headers("${TARGET_NAME}" FOLDER "${PROJECT_NAME}/service/server" REUSE_FROM_TARGET
+                                            ${__LINK_TARGETS})
+  endif()
+  target_link_libraries("${TARGET_NAME}" PRIVATE ${__LINK_TARGETS})
 
   set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/server")
 
