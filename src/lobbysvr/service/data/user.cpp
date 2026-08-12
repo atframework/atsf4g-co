@@ -339,7 +339,13 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_rank_manager_->init_from_table_data(ctx, tb_user);
   }
 
-  user_matching_manager_->init_from_table_data(ctx, tb_user);
+  if (tb_user.has_orbit_room_data()) {
+    user_orbit_manager_->init_from_table_data(ctx, tb_user);
+  }
+
+  if (tb_user.has_matching_data()) {
+    user_matching_manager_->init_from_table_data(ctx, tb_user);
+  }
 
   trace.finish({0, {}});
 }
@@ -369,6 +375,12 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
   ret = user_rank_manager_->dump(ctx, table);
   if (ret < 0) {
     FWPLOGERROR(*this, "dump user_rank_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_orbit_manager_->dump(ctx, table);
+  if (ret < 0) {
+    FWPLOGERROR(*this, "dump user_orbit_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
