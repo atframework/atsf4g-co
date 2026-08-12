@@ -44,6 +44,10 @@ class MqChannelManagerUnitTest {
   // 直接设置停机标记，用于测试 stop/pre_stoping 路径。
   static void set_stoping(mq_channel_manager& mgr, bool v) noexcept { mgr.is_stoping_ = v; }
   static void set_pre_stoping(mq_channel_manager& mgr, bool v) noexcept { mgr.is_pre_stoping_ = v; }
+
+  // 读取定时器轮当前 tick（mq_channel_manager.cpp 内为 128ms 一格的绝对 tick）。定时器轮随单例跨
+  // case 存活，之前 case 用 global_now_offset 推进过的 tick 会被后续 case 继承。
+  static time_t get_timer_last_tick(mq_channel_manager& mgr) noexcept { return mgr.timers_.get_last_tick(); }
 };
 
 #endif  // PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS

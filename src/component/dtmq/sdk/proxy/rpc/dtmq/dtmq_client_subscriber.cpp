@@ -954,6 +954,11 @@ DTMQ_PROXY_SDK_API uint64_t client_subscriber::get_shared_channel_identify() con
   return internal_data_->shared_instance->get_shared_channel_identify();
 }
 
+DTMQ_PROXY_SDK_API const ::atfw::dtmq::channel_subscriber& client_subscriber::get_shared_subscriber_info()
+    const noexcept {
+  return internal_data_->shared_instance->get_subscriber_info();
+}
+
 DTMQ_PROXY_SDK_API void client_subscriber::set_shared_event_callback_set(
     const event_callback_set_ptr_t& event_callbacl_set) {
   internal_data_->shared_event_handler = event_callbacl_set;
@@ -1555,11 +1560,167 @@ client_subscriber::get_event_callback_on_receive_snapshot_finished(
   return event_callback_set.on_receive_snapshot_finished;
 }
 
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_text(
+    rpc::context& ctx, gsl::string_view text,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
+  rpc::context::message_holder<atfw::dtmq::DChannelMessageDetail> raw_msg{ctx};
+  raw_msg->mutable_text()->assign(text.data(), text.size());
+
+  auto ret = RPC_AWAIT_CODE_RESULT(send_message(ctx, std::move(*raw_msg), compare_and_maybe_reset_lock_ptr,
+                                                compare_and_maybe_reset_lock_rsp_ptr, auto_create_channel, no_wait));
+  RPC_RETURN_CODE(ret);
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_event(
+    rpc::context& ctx, ::google::protobuf::Any&& event_data,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
+  rpc::context::message_holder<atfw::dtmq::DChannelMessageDetail> raw_msg{ctx};
+  protobuf_move_message(*raw_msg->mutable_event(), std::move(event_data));
+
+  auto ret = RPC_AWAIT_CODE_RESULT(send_message(ctx, std::move(*raw_msg), compare_and_maybe_reset_lock_ptr,
+                                                compare_and_maybe_reset_lock_rsp_ptr, auto_create_channel, no_wait));
+  RPC_RETURN_CODE(ret);
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_destroy(
+    rpc::context& ctx,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    bool no_wait) {
+  rpc::context::message_holder<atfw::dtmq::SSChannelDestroyChannelReq> rpc_req_body{ctx};
+  rpc::context::message_holder<google::protobuf::Empty> rpc_rsp_body{ctx};
+  protobuf_copy_message(*rpc_req_body->mutable_channel_key(), get_channel_key());
+
+  if (compare_and_maybe_reset_lock_ptr) {
+    protobuf_copy_message(*rpc_req_body->mutable_compare_and_maybe_reset_lock(), *compare_and_maybe_reset_lock_ptr);
+  }
+
+  uint64_t target_server_id = get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", get_channel_key().channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+  }
+
+  auto ret =
+      RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
+  RPC_RETURN_CODE(ret);
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_reset_lock(
+    rpc::context& ctx,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
+  rpc::context::message_holder<atfw::dtmq::SSChannelResetLockReq> rpc_req_body{ctx};
+  rpc::context::message_holder<atfw::dtmq::SSChannelResetLockRsp> rpc_rsp_body{ctx};
+  protobuf_copy_message(*rpc_req_body->mutable_channel_key(), get_channel_key());
+
+  if (compare_and_maybe_reset_lock_ptr) {
+    protobuf_copy_message(*rpc_req_body->mutable_compare_and_maybe_reset_lock(), *compare_and_maybe_reset_lock_ptr);
+  }
+  rpc_req_body->set_auto_create_channel(auto_create_channel);
+
+  uint64_t target_server_id = get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", get_channel_key().channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+  }
+
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::reset_lock(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
+  if (compare_and_maybe_reset_lock_rsp_ptr != nullptr && rpc_rsp_body->has_compare_and_maybe_reset_lock()) {
+    protobuf_move_message(*compare_and_maybe_reset_lock_rsp_ptr,
+                          std::move(*rpc_rsp_body->mutable_compare_and_maybe_reset_lock()));
+  }
+  if (ret >= 0) {
+    ret = rpc_rsp_body->client_result();
+  }
+  RPC_RETURN_CODE(ret);
+}
+
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_update(
+    rpc::context& ctx, update_option options,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
+  rpc::context::message_holder<atfw::dtmq::SSChannelUpdateReq> rpc_req_body{ctx};
+  rpc::context::message_holder<atfw::dtmq::SSChannelUpdateRsp> rpc_rsp_body{ctx};
+  protobuf_copy_message(*rpc_req_body->mutable_channel_key(), get_channel_key());
+  // 使用共享层的subscriber信息
+  protobuf_copy_message(*rpc_req_body->mutable_subscriber(), internal_data_->shared_instance->get_subscriber_info());
+
+  rpc_req_body->set_save(options.save);
+  rpc_req_body->set_compact_sequence(options.compact_sequence);
+  rpc_req_body->set_stateful_sequence(options.stateful_sequence);
+  if (!options.force_update_subscribers.empty()) {
+    rpc_req_body->mutable_update_others()->Reserve(static_cast<int>(options.force_update_subscribers.size()));
+    for (const auto* subscriber : options.force_update_subscribers) {
+      if (subscriber == nullptr) {
+        continue;
+      }
+      protobuf_copy_message(*rpc_req_body->add_update_others(), *subscriber);
+    }
+  }
+
+  if (options.custom_data != nullptr) {
+    if (::google::protobuf::Any::descriptor() == options.custom_data->GetDescriptor()) {
+      rpc_req_body->mutable_custom_data()->CopyFrom(*options.custom_data);
+    } else {
+      if (!rpc_req_body->mutable_custom_data()->PackFrom(*options.custom_data)) {
+        FCTXLOGDEBUG(ctx, "Pack custom_data failed, type_url:({}), error message: {}",
+                     gsl::string_view{options.custom_data->GetDescriptor()->full_name().data(),
+                                      options.custom_data->GetDescriptor()->full_name().size()},
+                     rpc_req_body->mutable_custom_data()->InitializationErrorString());
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BAD_PACKAGE);
+      }
+    }
+
+    rpc_req_body->set_custom_data_skip_notify(options.custom_data_skip_notify);
+  }
+
+  if (options.private_data != nullptr) {
+    if (::google::protobuf::Any::descriptor() == options.private_data->GetDescriptor()) {
+      rpc_req_body->mutable_private_data()->CopyFrom(*options.private_data);
+    } else {
+      if (!rpc_req_body->mutable_private_data()->PackFrom(*options.private_data)) {
+        FCTXLOGDEBUG(ctx, "Pack private_data failed, type_url:({}), error message: {}",
+                     gsl::string_view{options.private_data->GetDescriptor()->full_name().data(),
+                                      options.private_data->GetDescriptor()->full_name().size()},
+                     rpc_req_body->mutable_private_data()->InitializationErrorString());
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BAD_PACKAGE);
+      }
+    }
+  }
+
+  if (compare_and_maybe_reset_lock_ptr) {
+    protobuf_copy_message(*rpc_req_body->mutable_compare_and_maybe_reset_lock(), *compare_and_maybe_reset_lock_ptr);
+  }
+  rpc_req_body->set_auto_create_channel(auto_create_channel);
+
+  uint64_t target_server_id = get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", get_channel_key().channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+  }
+
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::update(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
+  if (compare_and_maybe_reset_lock_rsp_ptr != nullptr && rpc_rsp_body->has_compare_and_maybe_reset_lock()) {
+    protobuf_move_message(*compare_and_maybe_reset_lock_rsp_ptr,
+                          std::move(*rpc_rsp_body->mutable_compare_and_maybe_reset_lock()));
+  }
+  if (ret >= 0) {
+    ret = rpc_rsp_body->client_result();
+  }
+  RPC_RETURN_CODE(ret);
+}
+
 DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
     rpc::context& ctx, atfw::dtmq::DChannelMessageDetail&& detail,
-    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
-    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr, bool auto_create_channel,
-    bool no_wait) {
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
   rpc::context::message_holder<atfw::dtmq::channel_subscriber> subscriber_info_holder{ctx};
   protobuf_copy_message(*subscriber_info_holder, internal_data_->shared_instance->get_subscriber_info());
 

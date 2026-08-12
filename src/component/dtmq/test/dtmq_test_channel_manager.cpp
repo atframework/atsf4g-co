@@ -1159,7 +1159,8 @@ CASE_TEST(component_dtmq_channel_manager, transfer_channel_snapshot_with_data) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// async_save writes a writable channel to the DB (mock replace). Exercises the full save path.
+// async_save writes a writable channel to the DB (mock replace). Exercises the full save path on a
+// DB-backed (non memory_only) channel type and validates the stored record through the DB RPC mock.
 CASE_TEST(component_dtmq_channel_manager, save_writable_channel_to_db_mock) {
   atframework::testing::runtime test;
   if (!start_channel_manager_runtime(test, 2, true)) {
@@ -1167,25 +1168,64 @@ CASE_TEST(component_dtmq_channel_manager, save_writable_channel_to_db_mock) {
     return;
   }
 
+  size_t replace_calls = 0;
+  PROJECT_NAMESPACE_ID::table_dtmq_channel_record saved_record;
+  auto replace_rule = rpc::db::dtmq_channel_record::mock::replace(
+      [&replace_calls, &saved_record](rpc::context& /*ctx*/,
+                                      const PROJECT_NAMESPACE_ID::table_dtmq_channel_record& input,
+                                      rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
+        ++replace_calls;
+        saved_record.CopyFrom(input);
+        meta.version = 1;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!replace_rule);
+  if (!replace_rule) {
+    test.stop();
+    return;
+  }
+
   auto local_id = logic_config::me()->get_local_server_id();
-  auto channel_id = find_local_writable_channel_id("save-db", local_id);
+  auto channel_id = find_local_writable_channel_id("save-db", local_id, 200, kTestDbBackedChannelType);
   auto task =
       test.run_task("save_db", std::chrono::seconds{4}, [channel_id](rpc::context& ctx) -> rpc::result_code_type {
         atfw::dtmq::DChannelIdKey channel_key;
         channel_key.set_channel_id(channel_id);
-        channel_key.set_channel_type(kTestChannelType);
+        channel_key.set_channel_type(kTestDbBackedChannelType);
 
+        // The DB-backed channel type loads from the (empty) mock DB during writable_init.
         mq_channel_manager::mq_channel_ptr_type channel;
         uint64_t fwd = 0;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(
                               mq_channel_manager::me()->make_writable_channel(ctx, channel, fwd, channel_key, true)));
         CASE_EXPECT_TRUE(!!channel && channel->is_writable());
+        CASE_EXPECT_FALSE(channel->get_configure().memory_only());
+        if (!channel) {
+          RPC_RETURN_CODE(0);
+        }
+
+        google::protobuf::Any custom_data;
+        custom_data.set_type_url("type.googleapis.com/dtmq.DbSaveCustomData");
+        custom_data.set_value("db-save-custom");
+        CASE_EXPECT_TRUE(channel->set_custom_data(custom_data));
+
+        int32_t wal_result = 0;
+        mq_channel_wal_object_context wal_context{ctx, wal_result};
+        auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                                 atfw::dtmq::DChannelMessageDetail::kText, wal_context);
+        CASE_EXPECT_TRUE(!!message);
+        if (message) {
+          message->mutable_detail()->set_text("db-save-payload");
+          channel->get_wal_publisher().emplace_back_log(std::move(message), wal_context);
+        }
 
         channel->set_dirty();
         CASE_EXPECT_TRUE(channel->need_save_db());
 
         auto res = RPC_AWAIT_CODE_RESULT(channel->save(ctx));
         CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_FALSE(channel->is_dirty());
+        CASE_EXPECT_FALSE(channel->need_save_db());
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_FALSE(task.empty());
@@ -1197,6 +1237,125 @@ CASE_TEST(component_dtmq_channel_manager, save_writable_channel_to_db_mock) {
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
+
+  // The save went through the dtmq_channel_record replace RPC with the live channel state.
+  CASE_EXPECT_EQ(1u, replace_calls);
+  CASE_EXPECT_EQ(channel_id, saved_record.channel_id());
+  CASE_EXPECT_EQ(channel_id, saved_record.channel_metadata().channel_key().channel_id());
+  CASE_EXPECT_EQ(kTestDbBackedChannelType, saved_record.channel_metadata().channel_key().channel_type());
+  CASE_EXPECT_TRUE(saved_record.channel_metadata().create_sequence() > 0);
+  CASE_EXPECT_EQ(0, saved_record.channel_metadata().destroy_sequence());
+  CASE_EXPECT_EQ("type.googleapis.com/dtmq.DbSaveCustomData", saved_record.channel_metadata().custom_data().type_url());
+  bool found_payload = false;
+  for (const auto& record : saved_record.record_set().record()) {
+    if (record.detail().text() == "db-save-payload") {
+      found_payload = true;
+      break;
+    }
+  }
+  CASE_EXPECT_TRUE(found_payload);
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// A writable channel without any subscriber is periodically saved to the DB and, once it has been idle
+// past the cache-expire window, removed from the manager (memory-leak protection). The whole flow is
+// driven by mq_channel_manager::tick() firing the channel timers.
+CASE_TEST(component_dtmq_channel_manager, idle_channel_saved_and_removed_by_tick) {
+  atframework::testing::runtime test;
+  if (!start_channel_manager_runtime(test, 2, true)) {
+    test.stop();
+    return;
+  }
+
+  size_t replace_calls = 0;
+  PROJECT_NAMESPACE_ID::table_dtmq_channel_record saved_record;
+  auto replace_rule = rpc::db::dtmq_channel_record::mock::replace(
+      [&replace_calls, &saved_record](rpc::context& /*ctx*/,
+                                      const PROJECT_NAMESPACE_ID::table_dtmq_channel_record& input,
+                                      rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
+        ++replace_calls;
+        saved_record.CopyFrom(input);
+        meta.version = 1;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!replace_rule);
+  if (!replace_rule) {
+    test.stop();
+    return;
+  }
+
+  auto local_id = logic_config::me()->get_local_server_id();
+  auto channel_id = find_local_writable_channel_id("idle-gc", local_id, 200, kTestDbBackedChannelType);
+
+  const auto& dtmq_proxysvr_cfg =
+      logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+  auto save_interval =
+      protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.save_interval());
+  auto gc_window =
+      protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.cache_expire_timeout()) +
+      get_mq_channel_subscriber_timeout(get_configure_for(kTestDbBackedChannelType));
+
+  auto task =
+      test.run_task("idle_gc", std::chrono::seconds{6},
+                    [channel_id, save_interval, gc_window](rpc::context& ctx) -> rpc::result_code_type {
+                      atfw::dtmq::DChannelIdKey channel_key;
+                      channel_key.set_channel_id(channel_id);
+                      channel_key.set_channel_type(kTestDbBackedChannelType);
+
+                      mq_channel_manager::mq_channel_ptr_type channel;
+                      uint64_t fwd = 0;
+                      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
+                                            ctx, channel, fwd, channel_key, true)));
+                      CASE_EXPECT_TRUE(!!channel && channel->is_writable());
+                      if (!channel) {
+                        RPC_RETURN_CODE(0);
+                      }
+
+                      channel->set_dirty();
+                      CASE_EXPECT_TRUE(channel->need_save_db());
+
+                      // Phase 1: jump past the save interval and fire the channel timer; the dirty channel is
+                      // saved to the DB and the no-subscriber idle clock starts. manager_tick_safe_offset keeps
+                      // the jump monotonic even if an earlier case already advanced the singleton timer wheel.
+                      const auto phase1_offset = manager_tick_safe_offset(save_interval + std::chrono::seconds{30});
+                      mq_channel_timer_type::timer_wptr_t timer_handle;
+                      mq_channel_manager::me()->update_timer(*channel, timer_handle, std::chrono::seconds{2});
+                      {
+                        global_now_offset_guard offset_guard{phase1_offset};
+                        CASE_EXPECT_TRUE(mq_channel_manager::me()->tick() > 0);
+                      }
+                      int32_t save_result = -1;
+                      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->await_io_task(ctx, &save_result)));
+                      CASE_EXPECT_EQ(0, save_result);
+                      CASE_EXPECT_FALSE(channel->is_dirty());
+                      // The idle channel is still cached right after the save.
+                      CASE_EXPECT_TRUE(!!mq_channel_manager::me()->get_channel(channel_id));
+
+                      // Phase 2: jump past cache_expire_timeout + subscriber_timeout relative to the phase-1
+                      // fire time; the idle channel is evicted.
+                      mq_channel_manager::me()->update_timer(*channel, timer_handle, std::chrono::seconds{2});
+                      {
+                        global_now_offset_guard offset_guard{phase1_offset + gc_window + std::chrono::seconds{90}};
+                        CASE_EXPECT_TRUE(mq_channel_manager::me()->tick() > 0);
+                      }
+                      CASE_EXPECT_TRUE(!mq_channel_manager::me()->get_channel(channel_id));
+                      RPC_RETURN_CODE(0);
+                    });
+  CASE_EXPECT_FALSE(task.empty());
+  if (task.empty()) {
+    test.stop();
+    return;
+  }
+
+  auto result = test.wait(task, std::chrono::seconds{12});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // The channel was saved exactly once (the eviction does not save again because it is not dirty).
+  CASE_EXPECT_EQ(1u, replace_calls);
+  CASE_EXPECT_EQ(channel_id, saved_record.channel_id());
+  CASE_EXPECT_EQ(channel_id, saved_record.channel_metadata().channel_key().channel_id());
+  CASE_EXPECT_TRUE(saved_record.channel_metadata().create_sequence() > 0);
   CASE_EXPECT_EQ(0, test.stop());
 }
 

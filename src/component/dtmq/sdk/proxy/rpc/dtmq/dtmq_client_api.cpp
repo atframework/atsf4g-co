@@ -215,9 +215,9 @@ DTMQ_PROXY_SDK_API bool has_dtmq_proxysvr() {
 DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
     atfw::dtmq::DChannelMessageDetail&& detail,
-    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
-    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr, bool auto_create_channel,
-    bool no_wait) {
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
   if (channel_key.channel_id().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }

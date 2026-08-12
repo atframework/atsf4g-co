@@ -11,6 +11,7 @@
 #include <std/explicit_declare.h>
 
 #include <memory/rc_ptr.h>
+#include <time/time_utility.h>
 
 #include <logic/hpa/logic_hpa_easy_api.h>
 
@@ -35,6 +36,7 @@ namespace atframework {
 namespace dtmq {
 class channel_page_info;
 class channel_lock_checker;
+class channel_subscriber;
 
 class DChannelIdKey;
 class DChannelMessage;
@@ -279,6 +281,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API uint64_t get_shared_channel_identify() const noexcept;
 
   /**
+   * @brief 获取频道数据共享层订阅者信息，用于传给下面send_update接口
+   *
+   * @return 频道数据共享层订阅者信息
+   */
+  DTMQ_PROXY_SDK_API const ::atfw::dtmq::channel_subscriber& get_shared_subscriber_info() const noexcept;
+
+  /**
    * @brief 设置共享的回调函数组
    *
    * @param event_callbacl_set 整个回调函数组
@@ -472,10 +481,117 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_set_t& event_callback_set) noexcept;
 
   /**
-   * @brief 发送消息
+   * @brief 发送文本消息
    *
    * @param ctx RPC上下文
-   * @param detail 消息详情
+   * @param text 消息内容
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_text(
+      rpc::context& ctx, gsl::string_view text,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  /**
+   * @brief 发送事件消息
+   *
+   * @param ctx RPC上下文
+   * @param event_data 消息内容
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_event(
+      rpc::context& ctx, ::google::protobuf::Any&& event_data,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  /**
+   * @brief 发送销毁频道消息(不是立即销毁，实际销毁生效要等待收到下发通知)
+   *
+   * @param ctx RPC上下文
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_destroy(
+      rpc::context& ctx,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      bool no_wait = false);
+
+  /**
+   * @brief 发送乐观锁解锁
+   *
+   * @param ctx RPC上下文
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_reset_lock(
+      rpc::context& ctx,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  struct ATFW_UTIL_SYMBOL_VISIBLE update_option {
+    // 是否执行DB保存数据
+    bool save = false;
+    // 主动压缩数据
+    int64_t compact_sequence = 0;
+    // 设置状态日志sequence，下发snapshot时会跳过低于这个sequence的stateful日志
+    int64_t stateful_sequence = 0;
+    // 强制更新其他订阅者信息（注意如果订阅者由client_subscriber管理，这里要传共享层的订阅者信息），走Merge策略
+    gsl::span<const ::atfw::dtmq::channel_subscriber*> force_update_subscribers;
+    // 如果要更新custom_data，这里传入指针
+    const ::google::protobuf::Message* custom_data = nullptr;
+    // 如果更新了Custom data，是否忽略主动通知
+    bool custom_data_skip_notify = false;
+    // 如果要更新private_data，这里传入指针
+    const ::google::protobuf::Message* private_data = nullptr;
+
+    ATFW_UTIL_FORCEINLINE update_option() noexcept {}
+    ATFW_UTIL_FORCEINLINE update_option(const update_option&) = default;
+    ATFW_UTIL_FORCEINLINE update_option(update_option&&) = default;
+    ATFW_UTIL_FORCEINLINE update_option& operator=(const update_option&) = default;
+    ATFW_UTIL_FORCEINLINE update_option& operator=(update_option&&) = default;
+  };
+  /**
+   * @brief 发送更新数据
+   *
+   * @param ctx RPC上下文
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_update(
+      rpc::context& ctx, update_option options = {},
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  /**
+   * @brief 发送原始消息
+   *
+   * @param ctx RPC上下文
+   * @param text 消息内容
    * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
    * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
    * @param auto_create_channel 是否自动创建频道
@@ -484,8 +600,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
       rpc::context& ctx, atfw::dtmq::DChannelMessageDetail&& detail,
-      std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
-      std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
       bool auto_create_channel = false, bool no_wait = false);
 
   /**

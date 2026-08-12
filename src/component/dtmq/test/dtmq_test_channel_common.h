@@ -24,6 +24,7 @@
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/com.struct.dtmq.config.pb.h>
+#include <protocol/config/dtmq_proxy.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
@@ -40,6 +41,7 @@
 #include <time/time_utility.h>
 
 #include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -57,6 +59,7 @@
 #include "rpc/dtmq/dtmq_client_api.h"               // IWYU pragma: keep
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"  // IWYU pragma: keep
 #include "rpc/rpc_context.h"
+#include "utility/protobuf_mini_dumper.h"
 
 #include "dtmq_test_channel_accessors.h"  // NOLINT(build/include_subdir)
 
@@ -74,6 +77,10 @@ constexpr uint64_t kPeerNode3 = 0x1C0003;
 // so that both a writable slot and two readonly replica slots exist in the consistent-hash distribution.
 constexpr uint32_t kTestChannelType = 0;
 
+// Second excel channel_type row (channel_type=1) that is always seeded as DB-backed (memory_only=false),
+// used by cases that exercise the real DB save/load path.
+constexpr uint32_t kTestDbBackedChannelType = 1;
+
 // Build an empty xresloader datablocks table (mandatory tables with no rows).
 inline std::string make_empty_table_bytes() {
   org::xresloader::pb::xresloader_datablocks blocks;
@@ -81,12 +88,10 @@ inline std::string make_empty_table_bytes() {
   return blocks.SerializeAsString();
 }
 
-// Build a populated dtmq_channel_type.bytes with one row. memory_only controls whether writable_init hits
+// Append one dtmq_channel_type row to blocks. memory_only controls whether writable_init hits
 // the DB or short-circuits to upgrade_to_writable(). readonly_replicate_count drives the replica slots.
-inline std::string make_dtmq_channel_type_bytes(uint32_t channel_type, bool memory_only,
-                                                uint32_t readonly_replicate_count) {
-  org::xresloader::pb::xresloader_datablocks blocks;
-  blocks.mutable_header()->set_hash_code("rpc-unit-test");
+inline void add_dtmq_channel_type_row(org::xresloader::pb::xresloader_datablocks& blocks, uint32_t channel_type,
+                                      bool memory_only, uint32_t readonly_replicate_count) {
   PROJECT_NAMESPACE_ID::config::ExcelDtmqChannelType item;
   item.set_channel_type(channel_type);
   item.set_readonly_replicate_count(readonly_replicate_count);
@@ -100,6 +105,18 @@ inline std::string make_dtmq_channel_type_bytes(uint32_t channel_type, bool memo
   configure->mutable_heartbeat_retry_interval()->set_seconds(60);
   configure->mutable_subscriber_timeout()->set_seconds(700);
   blocks.add_data_block(item.SerializeAsString());
+}
+
+// Build a populated dtmq_channel_type.bytes: one row for kTestChannelType (memory_only controlled by the
+// caller) plus the always-DB-backed kTestDbBackedChannelType row.
+inline std::string make_dtmq_channel_type_bytes(uint32_t channel_type, bool memory_only,
+                                                uint32_t readonly_replicate_count) {
+  org::xresloader::pb::xresloader_datablocks blocks;
+  blocks.mutable_header()->set_hash_code("rpc-unit-test");
+  add_dtmq_channel_type_row(blocks, channel_type, memory_only, readonly_replicate_count);
+  if (kTestDbBackedChannelType != channel_type) {
+    add_dtmq_channel_type_row(blocks, kTestDbBackedChannelType, false, readonly_replicate_count);
+  }
   return blocks.SerializeAsString();
 }
 
@@ -293,12 +310,12 @@ inline bool start_dtmq_proxysvr_runtime(atframework::testing::runtime& test, uin
 // writable-local cases deterministic regardless of hash function internals.
 // Tries up to max_trials ids of the form prefix-<n> and returns the first whose get_target_server_id
 // (kWritable, kTarget) == kLocalNodeId.
-inline std::string find_local_writable_channel_id(const std::string& prefix, uint64_t local_id,
-                                                  size_t max_trials = 200) {
+inline std::string find_local_writable_channel_id(const std::string& prefix, uint64_t local_id, size_t max_trials = 200,
+                                                  uint32_t channel_type = kTestChannelType) {
   for (size_t i = 0; i < max_trials; ++i) {
     atfw::dtmq::DChannelIdKey key;
     key.set_channel_id(prefix + "-" + std::to_string(i));
-    key.set_channel_type(kTestChannelType);
+    key.set_channel_type(channel_type);
     uint64_t sid = 0;
     sid = rpc::dtmq::get_target_server_id(key, rpc::dtmq::replicate_type::kWritable, 0,
                                           logic_hpa_discovery_select_mode::kTarget);
@@ -417,6 +434,43 @@ inline std::string find_writable_and_readonly_local_channel_id(const std::string
   }
   out_replicate_index = 0;
   return prefix + "-fallback";
+}
+
+// RAII guard that advances the global now offset (time_utility::now() and everything derived from it,
+// including channel timers/subscriber expiry) and restores the previous offset on destruction. Task and
+// runtime timeouts run on sys_now() and are not affected.
+class global_now_offset_guard {
+ public:
+  explicit global_now_offset_guard(std::chrono::system_clock::duration advance_by)
+      : previous_(atfw::util::time::time_utility::get_global_now_offset()) {
+    atfw::util::time::time_utility::set_global_now_offset(previous_ + advance_by);
+  }
+  ~global_now_offset_guard() { atfw::util::time::time_utility::set_global_now_offset(previous_); }
+
+  global_now_offset_guard(const global_now_offset_guard&) = delete;
+  global_now_offset_guard& operator=(const global_now_offset_guard&) = delete;
+
+ private:
+  std::chrono::system_clock::duration previous_;
+};
+
+// mq_channel_manager 的定时器轮随单例跨 case 存活：之前 case 用 global_now_offset_guard 推进过
+// mq_channel_manager::tick() 之后，jiffies_timer::last_tick_ 会停留在“未来”，后续 case 若用更小的
+// 偏移调用 tick() 会因 expires <= last_tick_ 而直接返回 0（定时器不触发）。这里把场景偏移叠加上
+// 已继承的未来 tick，保证每次 tick() 看到的时间单调递增。
+inline std::chrono::system_clock::duration manager_tick_safe_offset(
+    std::chrono::system_clock::duration scenario_offset) {
+  // 与 mq_channel_manager.cpp 中 chrono_to_timer_tick 保持一致：128ms 一格。
+  const time_t real_now_tick = static_cast<time_t>(
+      std::chrono::duration_cast<std::chrono::milliseconds>(atfw::util::time::time_utility::now().time_since_epoch())
+          .count() /
+      128);
+  const time_t inherited_tick = MqChannelManagerUnitTest::get_timer_last_tick(*mq_channel_manager::me());
+  if (inherited_tick > real_now_tick) {
+    // 向上取整到下一个 tick 边界，确保 now_tick 严格大于继承的 last_tick_。
+    return scenario_offset + std::chrono::milliseconds((inherited_tick - real_now_tick + 1) * 128);
+  }
+  return scenario_offset;
 }
 
 }  // namespace dtmq_channel_test

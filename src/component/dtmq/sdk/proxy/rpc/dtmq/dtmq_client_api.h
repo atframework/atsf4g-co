@@ -5,6 +5,8 @@
 
 #include <std/explicit_declare.h>
 
+#include <memory/rc_ptr.h>
+
 #include <logic/hpa/logic_hpa_easy_api.h>
 
 #include <rpc/rpc_common_types.h>
@@ -98,8 +100,8 @@ DTMQ_PROXY_SDK_API bool has_dtmq_proxysvr();
 ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
     atfw::dtmq::DChannelMessageDetail&& detail,
-    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
-    std::shared_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr = nullptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr = nullptr,
     bool auto_create_channel = false, bool no_wait = false);
 
 /**

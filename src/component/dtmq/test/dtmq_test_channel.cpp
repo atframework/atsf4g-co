@@ -399,9 +399,26 @@ CASE_TEST(component_dtmq_channel, compact_sequence) {
           }
         }
 
-        channel->compact_stateful_sequence(seqs.at(1));
-        channel->compact_sequence(seqs.at(1));
+        // remove_before 按日志时间点清理（timepoint < now 才移除），同一毫秒内写入的日志不会
+        // 被清理。把时钟拨快 2 秒再压缩，保证最老的消息被物理移除。
+        {
+          global_now_offset_guard offset_guard{std::chrono::seconds{2}};
+          channel->compact_stateful_sequence(seqs.at(1));
+          channel->compact_sequence(seqs.at(1));
+        }
         CASE_EXPECT_TRUE(channel->get_compact_stateful_sequence() >= seqs.at(1));
+
+        // After compaction the messages older than the watermark must be physically removed from
+        // the WAL. The watermark itself is exclusive (log_key_compare is strict less-than), so the
+        // message at seqs.at(1) and newer ones stay.
+        CASE_EXPECT_TRUE(nullptr == channel->get_shared_wal_object()->find_log(seqs.at(0)));
+        CASE_EXPECT_TRUE(!!channel->get_shared_wal_object()->find_log(seqs.at(1)));
+        CASE_EXPECT_TRUE(!!channel->get_shared_wal_object()->find_log(seqs.at(2)));
+        const auto* last_removed_key = channel->get_shared_wal_object()->get_last_removed_key();
+        CASE_EXPECT_TRUE(nullptr != last_removed_key);
+        if (nullptr != last_removed_key) {
+          CASE_EXPECT_TRUE(*last_removed_key >= seqs.at(1));
+        }
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_FALSE(task.empty());
@@ -448,13 +465,43 @@ CASE_TEST(component_dtmq_channel, lock_set_clear_compare) {
     channel->set_lock(ctx, lock, false);
     CASE_EXPECT_EQ("session-abc", channel->get_lock().lock_holder());
 
+    // compare_and_maybe_reset_lock with append_log=true must reset the lock and append a
+    // reset_lock event carrying the new value into the WAL.
     atfw::dtmq::channel_lock_checker checker;
     checker.mutable_expect_value()->set_lock_holder("session-abc");
-    CASE_EXPECT_TRUE(channel->compare_and_maybe_reset_lock(ctx, checker, false));
+    checker.mutable_reset_value()->set_lock_holder("session-def");
+    CASE_EXPECT_TRUE(channel->compare_and_maybe_reset_lock(ctx, checker, true));
+    CASE_EXPECT_EQ("session-def", channel->get_lock().lock_holder());
 
+    size_t reset_lock_log_count = 0;
+    const atfw::dtmq::DChannelMessage* reset_lock_log = nullptr;
+    for (const auto& wal_log : channel->get_shared_wal_object()->get_all_logs()) {
+      if (wal_log && wal_log->detail().command_case() == atfw::dtmq::DChannelMessageDetail::kResetLock) {
+        ++reset_lock_log_count;
+        reset_lock_log = wal_log.get();
+      }
+    }
+    CASE_EXPECT_EQ(1u, reset_lock_log_count);
+    CASE_EXPECT_TRUE(nullptr != reset_lock_log);
+    if (nullptr != reset_lock_log) {
+      CASE_EXPECT_EQ("session-def", reset_lock_log->detail().reset_lock().lock_holder());
+    }
+
+    // A mismatched expectation neither resets the lock nor appends another event; the real value is
+    // written back into the checker.
     atfw::dtmq::channel_lock_checker checker2;
     checker2.mutable_expect_value()->set_lock_holder("session-xyz");
+    checker2.mutable_reset_value()->set_lock_holder("session-zzz");
     CASE_EXPECT_FALSE(channel->compare_and_maybe_reset_lock(ctx, checker2, false));
+    CASE_EXPECT_EQ("session-def", channel->get_lock().lock_holder());
+    CASE_EXPECT_EQ("session-def", checker2.real_value().lock_holder());
+    reset_lock_log_count = 0;
+    for (const auto& wal_log : channel->get_shared_wal_object()->get_all_logs()) {
+      if (wal_log && wal_log->detail().command_case() == atfw::dtmq::DChannelMessageDetail::kResetLock) {
+        ++reset_lock_log_count;
+      }
+    }
+    CASE_EXPECT_EQ(1u, reset_lock_log_count);
 
     channel->clear_lock();
     CASE_EXPECT_TRUE(channel->get_lock().lock_holder().empty());
@@ -508,10 +555,35 @@ CASE_TEST(component_dtmq_channel, set_destroyed_and_merge) {
         CASE_EXPECT_TRUE(channel->is_destroyed());
         CASE_EXPECT_FALSE(channel->is_available());
 
-        channel->merge_destroy_timepoint_and_sequence(ctx, std::chrono::system_clock::from_time_t(0), 50);
-        CASE_EXPECT_TRUE(channel->is_destroyed());
+        // writable 主节点自己创建和分配 destroy_timepoint/destroy_sequence（忽略传入的参数，
+        // 通过 WAL kDestroy 日志回调 merge 进来，sequence 为基于时间的分配值）。先 dump 出实际值，
+        // 再验证 merge 的“较旧忽略/较新生效”语义。
+        atfw::dtmq::DChannelMetadata metadata;
+        channel->dump(metadata, false, false);
+        const int64_t destroyed_seq = metadata.destroy_sequence();
+        const auto destroyed_tp = protobuf_to_system_clock(metadata.destroy_timepoint());
+        CASE_EXPECT_TRUE(destroyed_seq > 0);
+        CASE_EXPECT_TRUE(destroyed_tp > std::chrono::system_clock::from_time_t(0));
+        if (destroyed_seq <= 0) {
+          RPC_RETURN_CODE(0);
+        }
 
-        channel->merge_destroy_timepoint_and_sequence(ctx, destroy_tp, 300);
+        // Older destroy information is ignored by the merge.
+        channel->merge_destroy_timepoint_and_sequence(ctx, std::chrono::system_clock::from_time_t(0),
+                                                      destroyed_seq - 1);
+        CASE_EXPECT_TRUE(channel->is_destroyed());
+        metadata.Clear();
+        channel->dump(metadata, false, false);
+        CASE_EXPECT_EQ(destroyed_seq, metadata.destroy_sequence());
+        CASE_EXPECT_TRUE(destroyed_tp == protobuf_to_system_clock(metadata.destroy_timepoint()));
+
+        // Newer destroy information takes effect after the merge.
+        const auto newer_destroy_tp = destroyed_tp + std::chrono::seconds{10};
+        channel->merge_destroy_timepoint_and_sequence(ctx, newer_destroy_tp, destroyed_seq + 100);
+        metadata.Clear();
+        channel->dump(metadata, false, false);
+        CASE_EXPECT_EQ(destroyed_seq + 100, metadata.destroy_sequence());
+        CASE_EXPECT_TRUE(newer_destroy_tp == protobuf_to_system_clock(metadata.destroy_timepoint()));
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_FALSE(task.empty());
@@ -679,6 +751,26 @@ CASE_TEST(component_dtmq_channel, force_refresh_distribution) {
         channel_key.set_channel_id(channel_id);
         channel_key.set_channel_type(kTestChannelType);
 
+        // A freshly constructed channel has stale (empty) distribution caches: no writable target and
+        // no readonly replica resolve yet.
+        atfw::dtmq::DChannelConfigure configure = get_configure_for(kTestChannelType);
+        auto fresh_channel =
+            atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), channel_key, configure);
+        mq_channel_manager::me()->add_channel(ctx, fresh_channel);
+        CASE_EXPECT_EQ(0u, fresh_channel->get_ready_distribution_writable_server_id());
+        CASE_EXPECT_EQ(0u, fresh_channel->get_target_distribution_writable_server_id());
+        CASE_EXPECT_EQ(0u, fresh_channel->get_target_distribution_server_id(1));
+
+        // force_refresh_distribution recalculates the caches when the distribution revision moved on.
+        MqChannelManagerUnitTest::set_latest_server_etcd_revision(
+            *mq_channel_manager::me(), mq_channel_manager::me()->get_latest_server_etcd_revision() + 1);
+        fresh_channel->force_refresh_distribution();
+        CASE_EXPECT_EQ(local_id, fresh_channel->get_ready_distribution_writable_server_id());
+        CASE_EXPECT_EQ(local_id, fresh_channel->get_target_distribution_writable_server_id());
+        CASE_EXPECT_NE(0u, fresh_channel->get_target_distribution_server_id(1));
+        CASE_EXPECT_TRUE(fresh_channel->should_be_writable());
+        mq_channel_manager::me()->remove_channel(channel_id, fresh_channel.get());
+
         mq_channel_manager::mq_channel_ptr_type channel;
         uint64_t fwd = 0;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(
@@ -688,6 +780,7 @@ CASE_TEST(component_dtmq_channel, force_refresh_distribution) {
           RPC_RETURN_CODE(0);
         }
 
+        // Re-refreshing an already up-to-date channel keeps the resolved distribution.
         channel->force_refresh_distribution();
         CASE_EXPECT_EQ(local_id, channel->get_ready_distribution_writable_server_id());
         CASE_EXPECT_EQ(local_id, channel->get_target_distribution_writable_server_id());
@@ -822,7 +915,43 @@ CASE_TEST(component_dtmq_channel, tick_writable_channel) {
           RPC_RETURN_CODE(0);
         }
 
-        channel->tick(ctx);
+        // Subscribe a subscriber and mark the channel dirty so the periodic tick path has both a
+        // pending save and a subscriber to expire.
+        atfw::dtmq::channel_subscriber sub;
+        sub.set_subscriber_server_id(kPeerNode1);
+        sub.set_subscriber_key("U:1:20002");
+        CASE_EXPECT_EQ(0, channel->subscribe(ctx, sub, 0, 0, false));
+        channel->set_dirty();
+        CASE_EXPECT_TRUE(channel->is_dirty());
+        {
+          auto subscribers = channel->get_wal_publisher().subscriber_all_range();
+          CASE_EXPECT_TRUE(subscribers.first != subscribers.second);
+        }
+
+        // Register a short timer and jump the clock past both the save interval and the subscriber
+        // timeout, then let mq_channel_manager::tick() fire the channel's update_timer. The timer
+        // callback runs the periodic save and then tick(), which evicts the expired subscriber.
+        mq_channel_timer_type::timer_wptr_t timer_handle;
+        mq_channel_manager::me()->update_timer(*channel, timer_handle, std::chrono::seconds{2});
+        {
+          const auto& dtmq_proxysvr_cfg =
+              logic_config::me()->get_server_instance_config<atfw::dtmq::config::dtmq_proxysvr_cfg>();
+          auto advance_by = manager_tick_safe_offset(
+              protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dtmq_proxysvr_cfg.save_interval()) +
+              get_mq_channel_subscriber_timeout(channel->get_configure()) + std::chrono::seconds{60});
+          global_now_offset_guard offset_guard{advance_by};
+          CASE_EXPECT_TRUE(mq_channel_manager::me()->tick() > 0);
+
+          // The periodic save ran: the dirty version is caught up even for a memory-only channel.
+          CASE_EXPECT_FALSE(channel->is_dirty());
+
+          // The expired subscriber was evicted by tick().
+          auto subscribers = channel->get_wal_publisher().subscriber_all_range();
+          CASE_EXPECT_TRUE(subscribers.first == subscribers.second);
+          int32_t result_code = 0;
+          mq_channel_wal_object_context params{ctx, result_code};
+          CASE_EXPECT_FALSE(!!channel->get_wal_publisher().find_subscriber("U:1:20002", params));
+        }
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_FALSE(task.empty());
@@ -898,8 +1027,17 @@ CASE_TEST(component_dtmq_channel, current_replicate_index) {
 
   auto local_id = logic_config::me()->get_local_server_id();
   auto channel_id = find_local_writable_channel_id("ridx-cur", local_id);
-  auto task =
-      test.run_task("ridx_cur", std::chrono::seconds{4}, [channel_id](rpc::context& ctx) -> rpc::result_code_type {
+  uint64_t readonly_replicate_index = 0;
+  auto readonly_channel_id = find_local_readonly_channel_id("ridx-ro", local_id, readonly_replicate_index);
+  CASE_EXPECT_NE(0u, readonly_replicate_index);
+  if (0 == readonly_replicate_index) {
+    test.stop();
+    return;
+  }
+
+  auto task = test.run_task(
+      "ridx_cur", std::chrono::seconds{4},
+      [channel_id, readonly_channel_id, readonly_replicate_index](rpc::context& ctx) -> rpc::result_code_type {
         atfw::dtmq::DChannelIdKey channel_key;
         channel_key.set_channel_id(channel_id);
         channel_key.set_channel_type(kTestChannelType);
@@ -913,8 +1051,23 @@ CASE_TEST(component_dtmq_channel, current_replicate_index) {
           RPC_RETURN_CODE(0);
         }
 
+        // The writable node always reports replicate index 0.
         CASE_EXPECT_TRUE(channel->is_writable());
         CASE_EXPECT_EQ(0u, channel->get_current_replicate_index());
+
+        // A readonly node reports its own readonly replicate index.
+        atfw::dtmq::DChannelIdKey readonly_channel_key;
+        readonly_channel_key.set_channel_id(readonly_channel_id);
+        readonly_channel_key.set_channel_type(kTestChannelType);
+        mq_channel_manager::mq_channel_ptr_type readonly_channel;
+        uint64_t readonly_fwd = 0;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel(
+                              ctx, readonly_channel, readonly_fwd, readonly_channel_key, true)));
+        CASE_EXPECT_EQ(0u, readonly_fwd);
+        CASE_EXPECT_TRUE(!!readonly_channel && readonly_channel->is_readonly());
+        if (readonly_channel) {
+          CASE_EXPECT_EQ(readonly_replicate_index, readonly_channel->get_current_replicate_index());
+        }
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_FALSE(task.empty());

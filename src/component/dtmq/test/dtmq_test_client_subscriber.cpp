@@ -12,6 +12,8 @@
 //     on_receive_snapshot_start/finished, is_destroyed)
 //   - business RPC + local cache (send_message/find_message/find_cached_message/query_cached_message/
 //     page_query_message)
+//   - send convenience wrappers (send_text/send_event detail packing, send_destroy/send_reset_lock/
+//     send_update request mapping, lock checker copy-in/copy-back, client_result propagation)
 //   - channel lifecycle on one client_subscriber (create -> destroy -> re-create via
 //     DChannelMessageDetail destroy/create events: ready -> destroyed -> ready again, no subscription
 //     loss)
@@ -1074,9 +1076,9 @@ CASE_TEST(component_dtmq_subscriber, business_rpc_and_cache) {
       test.run_task("send_msg", std::chrono::seconds{3}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
         atfw::dtmq::DChannelMessageDetail detail;
         detail.set_text("from-subscriber");
-        auto lock_checker = std::make_shared<atfw::dtmq::channel_lock_checker>();
+        auto lock_checker = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         lock_checker->mutable_expect_value()->set_lock_holder("expected-holder");
-        auto lock_checker_rsp = std::make_shared<atfw::dtmq::channel_lock_checker>();
+        auto lock_checker_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         int32_t res = RPC_AWAIT_CODE_RESULT(
             subscriber->send_message(ctx, std::move(detail), lock_checker, lock_checker_rsp, true, false));
         CASE_EXPECT_EQ(0, res);
@@ -1423,6 +1425,294 @@ CASE_TEST(component_dtmq_subscriber, shared_subscriber_retained_and_reused_after
   // heartbeat, so the proxysvr subscription stays alive.
   CASE_EXPECT_TRUE(rpc::dtmq::client_subscriber::global_has_pending_heartbeat());
   CASE_EXPECT_TRUE(drive_heartbeat_round(test, "hb_round_recreated"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ send_text / send_event (DChannelMessageDetail convenience wrappers) ============
+// send_text/send_event build a DChannelMessageDetail and delegate to send_message. The mock captures
+// each request so the detail payload, the sender/subscriber key override (the client subscriber_key,
+// not the shared one), auto_create_channel and the lock checker copy-in/copy-back can be verified.
+CASE_TEST(component_dtmq_subscriber, send_text_and_send_event) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+  auto subscribe_rule = mock_subscribe_ack(test);
+
+  std::vector<atfw::dtmq::SSChannelSendMessageReq> received_requests;
+  auto send_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_send_message(),
+      atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
+      [&received_requests](const atframework::testing::ss_request_view& request,
+                           google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body);
+        auto& typed_response = static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response);
+        received_requests.push_back(typed_request);
+        if (typed_request.has_compare_and_maybe_reset_lock()) {
+          typed_response.mutable_compare_and_maybe_reset_lock()->mutable_real_value()->set_lock_holder("actual-holder");
+        }
+        typed_response.set_client_result(0);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!subscribe_rule && !!send_rule);
+
+  auto channel_key = make_channel_key("chan-subscriber-send-text");
+  auto nullable = rpc::dtmq::client_subscriber::create(channel_key, make_subscriber_options("UT:send-text"));
+  CASE_EXPECT_TRUE(!!nullable);
+  if (!nullable) {
+    test.stop();
+    return;
+  }
+  subscriber_ptr subscriber = nullable;  // nullable<ptr_t> == ptr_t
+
+  auto task = test.run_task(
+      "send_text_event", std::chrono::seconds{4}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
+        // send_text with the lock checker pair and auto_create_channel=true.
+        auto lock_checker = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        lock_checker->mutable_expect_value()->set_lock_holder("expected-holder");
+        auto lock_checker_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        int32_t res = RPC_AWAIT_CODE_RESULT(
+            subscriber->send_text(ctx, "hello-send-text", lock_checker, lock_checker_rsp, true, false));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ("actual-holder", lock_checker_rsp->real_value().lock_holder());
+
+        // send_event with default options (no lock, no auto-create).
+        google::protobuf::Any event_data;
+        event_data.set_type_url("type.googleapis.com/UnitTestSendEvent");
+        event_data.set_value("event-value");
+        res = RPC_AWAIT_CODE_RESULT(subscriber->send_event(ctx, std::move(event_data)));
+        CASE_EXPECT_EQ(0, res);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+
+  CASE_EXPECT_EQ(2u, received_requests.size());
+  CASE_EXPECT_EQ(2, static_cast<int>(test.ss().calls(rpc::dtmq::packer::get_full_name_of_send_message())));
+  if (received_requests.size() < 2) {
+    test.stop();
+    return;
+  }
+
+  // send_text: the text payload lands in message_content.detail.text, the client subscriber_key
+  // overrides the shared one in both subscriber and message_content.sender_key, and the lock
+  // checker is copied into the request.
+  const auto& text_req = received_requests.at(0);
+  CASE_EXPECT_EQ("hello-send-text", text_req.message_content().detail().text());
+  CASE_EXPECT_EQ("UT:send-text", text_req.message_content().sender_key());
+  CASE_EXPECT_EQ("UT:send-text", text_req.subscriber().subscriber_key());
+  CASE_EXPECT_EQ(channel_key.channel_id(), text_req.channel_key().channel_id());
+  CASE_EXPECT_TRUE(text_req.auto_create_channel());
+  CASE_EXPECT_TRUE(text_req.has_compare_and_maybe_reset_lock());
+  CASE_EXPECT_EQ("expected-holder", text_req.compare_and_maybe_reset_lock().expect_value().lock_holder());
+
+  // send_event: the Any payload is moved into message_content.detail.event; defaults are no lock and
+  // no auto-create.
+  const auto& event_req = received_requests.at(1);
+  CASE_EXPECT_EQ("type.googleapis.com/UnitTestSendEvent", event_req.message_content().detail().event().type_url());
+  CASE_EXPECT_EQ("event-value", event_req.message_content().detail().event().value());
+  CASE_EXPECT_EQ("UT:send-text", event_req.subscriber().subscriber_key());
+  CASE_EXPECT_FALSE(event_req.auto_create_channel());
+  CASE_EXPECT_FALSE(event_req.has_compare_and_maybe_reset_lock());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ send_destroy / send_reset_lock / send_update (channel control wrappers) ============
+// send_destroy/send_reset_lock/send_update call the destroy_channel/reset_lock/update SS RPCs on the
+// writable node. The mocks capture each request so field mapping (channel_key, lock checker,
+// auto_create_channel, update_option fields, Any packing) and response handling (lock copy-back,
+// client_result propagation) can be verified.
+CASE_TEST(component_dtmq_subscriber, send_destroy_reset_lock_and_update) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+  auto subscribe_rule = mock_subscribe_ack(test);
+
+  std::vector<atfw::dtmq::SSChannelDestroyChannelReq> destroy_requests;
+  auto destroy_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_destroy_channel(),
+      atfw::dtmq::SSChannelDestroyChannelReq::descriptor()->full_name(),
+      google::protobuf::Empty::descriptor()->full_name(),
+      [&destroy_requests](const atframework::testing::ss_request_view& request,
+                          google::protobuf::Message& /*response*/) -> rpc::result_code_type {
+        destroy_requests.push_back(static_cast<const atfw::dtmq::SSChannelDestroyChannelReq&>(request.body));
+        RPC_RETURN_CODE(0);
+      });
+
+  std::vector<atfw::dtmq::SSChannelResetLockReq> reset_lock_requests;
+  auto reset_lock_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_reset_lock(), atfw::dtmq::SSChannelResetLockReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelResetLockRsp::descriptor()->full_name(),
+      [&reset_lock_requests](const atframework::testing::ss_request_view& request,
+                             google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelResetLockReq&>(request.body);
+        auto& typed_response = static_cast<atfw::dtmq::SSChannelResetLockRsp&>(response);
+        reset_lock_requests.push_back(typed_request);
+        typed_response.mutable_compare_and_maybe_reset_lock()->mutable_real_value()->set_lock_holder("reset-actual");
+        typed_response.set_client_result(0);
+        RPC_RETURN_CODE(0);
+      });
+
+  // A distinctive positive client_result verifies that send_update forwards the response
+  // client_result (not just the RPC transport result) to the caller.
+  constexpr int32_t kUpdateClientResult = 13579;
+  std::vector<atfw::dtmq::SSChannelUpdateReq> update_requests;
+  auto update_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_update(), atfw::dtmq::SSChannelUpdateReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelUpdateRsp::descriptor()->full_name(),
+      [&update_requests](const atframework::testing::ss_request_view& request,
+                         google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelUpdateReq&>(request.body);
+        auto& typed_response = static_cast<atfw::dtmq::SSChannelUpdateRsp&>(response);
+        update_requests.push_back(typed_request);
+        typed_response.mutable_compare_and_maybe_reset_lock()->mutable_real_value()->set_lock_holder("update-actual");
+        typed_response.set_client_result(kUpdateClientResult);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!subscribe_rule && !!destroy_rule && !!reset_lock_rule && !!update_rule);
+
+  auto channel_key = make_channel_key("chan-subscriber-send-ctl");
+  auto nullable = rpc::dtmq::client_subscriber::create(channel_key, make_subscriber_options("UT:send-ctl"));
+  CASE_EXPECT_TRUE(!!nullable);
+  if (!nullable) {
+    test.stop();
+    return;
+  }
+  subscriber_ptr subscriber = nullable;  // nullable<ptr_t> == ptr_t
+
+  auto task =
+      test.run_task("send_ctl", std::chrono::seconds{4}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
+        // send_destroy forwards the channel_key and the optional lock checker.
+        auto destroy_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        destroy_lock->mutable_expect_value()->set_lock_holder("destroy-expected");
+        int32_t res = RPC_AWAIT_CODE_RESULT(subscriber->send_destroy(ctx, destroy_lock, false));
+        CASE_EXPECT_EQ(0, res);
+
+        // send_reset_lock with the lock checker pair and auto_create_channel=true.
+        auto reset_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        reset_lock->mutable_expect_value()->set_lock_holder("reset-expected");
+        auto reset_lock_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        res = RPC_AWAIT_CODE_RESULT(subscriber->send_reset_lock(ctx, reset_lock, reset_lock_rsp, true, false));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ("reset-actual", reset_lock_rsp->real_value().lock_holder());
+
+        // send_update exercises every update_option field: custom_data as a typed message (PackFrom
+        // path), private_data as a pre-packed Any (CopyFrom path), force_update_subscribers with a
+        // nullptr hole, plus the lock checker pair.
+        rpc::dtmq::client_subscriber::update_option update_options;
+        update_options.save = true;
+        update_options.compact_sequence = 42;
+        update_options.stateful_sequence = 41;
+        atfw::dtmq::DChannelIdKey custom_payload;
+        custom_payload.set_channel_id("custom-payload");
+        update_options.custom_data = &custom_payload;
+        update_options.custom_data_skip_notify = true;
+        google::protobuf::Any private_payload;
+        private_payload.set_type_url("type.googleapis.com/UnitTestPrivateData");
+        update_options.private_data = &private_payload;
+        atfw::dtmq::channel_subscriber other_subscriber;
+        other_subscriber.set_subscriber_key("U:1:90001");
+        const atfw::dtmq::channel_subscriber* force_update_list[] = {&other_subscriber, nullptr};
+        update_options.force_update_subscribers = gsl::span<const atfw::dtmq::channel_subscriber*>{force_update_list};
+        auto update_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        update_lock->mutable_expect_value()->set_lock_holder("update-expected");
+        auto update_lock_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        res = RPC_AWAIT_CODE_RESULT(
+            subscriber->send_update(ctx, update_options, update_lock, update_lock_rsp, true, false));
+        CASE_EXPECT_EQ(13579, res);
+        CASE_EXPECT_EQ("update-actual", update_lock_rsp->real_value().lock_holder());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+
+  // send_destroy: channel_key + lock checker copied into the request.
+  CASE_EXPECT_EQ(1u, destroy_requests.size());
+  if (!destroy_requests.empty()) {
+    CASE_EXPECT_EQ(channel_key.channel_id(), destroy_requests.at(0).channel_key().channel_id());
+    CASE_EXPECT_EQ("destroy-expected",
+                   destroy_requests.at(0).compare_and_maybe_reset_lock().expect_value().lock_holder());
+  }
+
+  // send_reset_lock: auto_create_channel + lock checker copied into the request.
+  CASE_EXPECT_EQ(1u, reset_lock_requests.size());
+  if (!reset_lock_requests.empty()) {
+    CASE_EXPECT_TRUE(reset_lock_requests.at(0).auto_create_channel());
+    CASE_EXPECT_EQ(channel_key.channel_id(), reset_lock_requests.at(0).channel_key().channel_id());
+    CASE_EXPECT_EQ("reset-expected",
+                   reset_lock_requests.at(0).compare_and_maybe_reset_lock().expect_value().lock_holder());
+  }
+
+  // send_update: every update_option field mapped. The subscriber is the SHARED layer subscriber
+  // (shared_subscriber_key_for), and the typed custom_data is packed into an Any while the
+  // pre-packed private_data Any is copied as-is.
+  CASE_EXPECT_EQ(1u, update_requests.size());
+  if (!update_requests.empty()) {
+    const auto& update_req = update_requests.at(0);
+    CASE_EXPECT_EQ(channel_key.channel_id(), update_req.channel_key().channel_id());
+    CASE_EXPECT_EQ(shared_subscriber_key_for(), update_req.subscriber().subscriber_key());
+    CASE_EXPECT_TRUE(update_req.auto_create_channel());
+    CASE_EXPECT_TRUE(update_req.save());
+    CASE_EXPECT_EQ(42, update_req.compact_sequence());
+    CASE_EXPECT_EQ(41, update_req.stateful_sequence());
+    CASE_EXPECT_EQ(1, update_req.update_others_size());
+    if (update_req.update_others_size() > 0) {
+      CASE_EXPECT_EQ("U:1:90001", update_req.update_others(0).subscriber_key());
+    }
+    CASE_EXPECT_EQ("type.googleapis.com/atframework.dtmq.DChannelIdKey", update_req.custom_data().type_url());
+    atfw::dtmq::DChannelIdKey unpacked_custom;
+    CASE_EXPECT_TRUE(update_req.custom_data().UnpackTo(&unpacked_custom));
+    CASE_EXPECT_EQ("custom-payload", unpacked_custom.channel_id());
+    CASE_EXPECT_TRUE(update_req.custom_data_skip_notify());
+    CASE_EXPECT_EQ("type.googleapis.com/UnitTestPrivateData", update_req.private_data().type_url());
+    CASE_EXPECT_EQ("update-expected", update_req.compare_and_maybe_reset_lock().expect_value().lock_holder());
+  }
+
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::dtmq::packer::get_full_name_of_destroy_channel())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::dtmq::packer::get_full_name_of_reset_lock())));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::dtmq::packer::get_full_name_of_update())));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
