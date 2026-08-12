@@ -29,3 +29,5 @@ external_discovery:
       enabled: true
     keepalive:
       enabled: false
+
+enable_excel_config: true
