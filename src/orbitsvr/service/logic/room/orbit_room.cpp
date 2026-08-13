@@ -18,8 +18,8 @@
 #include <rpc/rpc_utils.h>
 
 #include <rpc/async_jobs/async_jobs.h>
-#include <rpc/orbit_client_rpc/orbitclientrpcservice.atfw.gen.h>
 #include <rpc/orbit/orbitsvrmatchsvrservice.atfw.gen.h>
+#include <rpc/orbit_client_rpc/orbitclientrpcservice.atfw.gen.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -110,7 +110,23 @@ int32_t orbit_room::set_status(PROJECT_NAMESPACE_ID::EnOrbitRoomStatus v) {
 bool orbit_room::ready_to_destroy() const { return room_status_ == PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_EXIT; }
 
 void orbit_room::on_destroy() {
-  // 回收资源 TODO
+  // 回收资源 通知清理频道
+  if (subscriber_) {
+    auto room_ptr = shared_from_this();
+    auto invoke_result = rpc::async_invoke(
+        logic_server_get_current_tick_context(), "orbit_room.notify_dtmq_destroy",
+        [room_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+          int32_t ret = RPC_AWAIT_CODE_RESULT(room_ptr->subscriber_->send_destroy(child_ctx, nullptr, true));
+          if (ret != 0) {
+            FWLOGERROR("orbit_room {} notify_dtmq_destroy failed, ret: {}", room_ptr->get_client_id(), ret);
+          }
+          RPC_RETURN_CODE(ret);
+        });
+    if (invoke_result.is_error()) {
+      FWLOGERROR("orbit_room {} invoke notify_dtmq_destroy failed, result: {}", room_ptr->get_client_id(),
+                 *invoke_result.get_error());
+    }
+  }
 }
 
 int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t match_server_id) {
@@ -194,6 +210,7 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
         auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq>(child_ctx);
         auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp>(child_ctx);
         req->set_matching_id(room_ptr->room_data_.match_id());
+        req->set_start_success(true);
         req->set_end_join_timepoint(room_ptr->join_end_timepoint_);
         req->set_expired_timepoint(room_ptr->expired_timepoint_);
         int32_t ret = 0;
@@ -418,6 +435,34 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
         break;
     }
   }
+
+  // 检查是否是Running 如果不是则需要通知Matchsvr
+  if (room_status_ != PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING && match_server_id_ != 0) {
+    auto room_ptr = shared_from_this();
+    auto invoke_result = rpc::async_invoke(
+        ctx, "orbit_room.async_matchsvr_room_start_failed",
+        [room_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+          auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq>(child_ctx);
+          auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp>(child_ctx);
+          req->set_matching_id(room_ptr->room_data_.match_id());
+          req->set_start_success(false);
+          int32_t ret = 0;
+          ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::orbit_room_ready(child_ctx, room_ptr->match_server_id_, *req, *rsp));
+          if (ret == 0) {
+            ret = rsp->result();
+          }
+          if (ret != 0) {
+            FWLOGERROR("orbit_room {} async_matchsvr_room_start_failed failed, ret: {}", room_ptr->get_client_id(),
+                       ret);
+          }
+          RPC_RETURN_CODE(ret);
+        });
+    if (invoke_result.is_error()) {
+      FWLOGERROR("orbit_room {} invoke async_matchsvr_room_start_failed failed, result: {}", room_ptr->get_client_id(),
+                 *invoke_result.get_error());
+    }
+  }
+
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH);
   exit_reason_ = exit_reason;
 

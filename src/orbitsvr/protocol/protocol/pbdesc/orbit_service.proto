@@ -52,8 +52,9 @@ service OrbitsvrService {
 
 message SSMatchingOrbitRoomReadyReq {
   string matching_id = 1;
-  int64 end_join_timepoint = 2;
-  int64 expired_timepoint = 3;
+  bool start_success = 2;
+  int64 end_join_timepoint = 3;
+  int64 expired_timepoint = 4;
 }
 
 message SSMatchingOrbitRoomReadyRsp {
@@ -66,6 +67,8 @@ service OrbitsvrMatchsvrService {
   };
 
   rpc orbit_room_ready(SSMatchingOrbitRoomReadyReq) returns (SSMatchingOrbitRoomReadyRsp) {
-    option (atframework.rpc_options) = { api_name: "Orbit房间初始化完成" };
+    option (atframework.rpc_options) = {
+      api_name: "Orbit房间初始化完成"
+    };
   };
 }
