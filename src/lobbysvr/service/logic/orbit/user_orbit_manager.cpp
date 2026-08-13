@@ -174,21 +174,20 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   return 0;
 }
 
-rpc::result_code_type user_orbit_manager::join_orbit_room(rpc::context& ctx,
+int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx,
                                                           const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
                                                           int64_t expired_timepoint) {
   if (is_orbit_room_exist()) {
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM);
+    return PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM;
   }
   int32_t ret = create_room(ctx, room_key, expired_timepoint);
   if (ret != 0) {
     FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key.client_id());
-    RPC_RETURN_CODE(ret);
+    return ret;
   }
-
   FWLOGINFO("user_orbit_manager joined orbit room: {}", room_key_.client_id());
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::client_subscriber::ptr_t subscriber) {
