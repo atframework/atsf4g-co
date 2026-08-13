@@ -5,9 +5,6 @@ set(PROJECT_INSTALL_COMPONENT_EXPORT_NAME "${PROJECT_NAME}-component-target")
 set(PROJECT_INSTALL_COMPONENT_EXPORT_FILE
     "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/cmake/${PROJECT_NAME}/${PROJECT_INSTALL_COMPONENT_EXPORT_NAME}.cmake")
 
-set(PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE 16)
-set(PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT 1)
-
 function(project_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   set(optionArgs "STATIC;SHARED")
   set(oneValueArgs INCLUDE_DIR OUTPUT_NAME OUTPUT_TARGET_NAME DLLEXPORT_DECL SHARED_LIBRARY_DECL NATIVE_CODE_DECL)
@@ -677,7 +674,8 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
                                PRIVATE "$<BUILD_INTERFACE:${project_component_declare_service_INCLUDE_DIR}>")
   endif()
 
-  if(PROJECT_ENABLE_UNITY_BUILD AND project_component_declare_service_SOURCES GREATER
+  list(LENGTH project_component_declare_service_SOURCES __project_component_declare_service_SOURCES_LENGTH)
+  if(PROJECT_ENABLE_UNITY_BUILD AND __project_component_declare_service_SOURCES_LENGTH GREATER
                                     PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
     set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
                                                                         ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})

@@ -25,6 +25,12 @@ option(PROJECT_ENABLE_PRECOMPILE_HEADERS "Enable precompile headers." ON)
 # Unity build(jumbo build) merges sources into unity_*.cxx, which removes per-file compile_commands.json entries and
 # breaks clangd/IDE per-file indexing. Keep it OFF for local/clangd builds; enable it (e.g. in CI) for faster builds.
 option(PROJECT_ENABLE_UNITY_BUILD "Enable unity build for component/service targets." OFF)
+set(PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE
+    16
+    CACHE STRING "Unity build batch size.")
+set(PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT
+    1
+    CACHE STRING "Unity build minimum file count.")
 # 默认使用动态库，防止遗漏符号导出
 if(NOT DEFINED ATFRAMEWORK_USE_DYNAMIC_LIBRARY AND NOT DEFINED BUILD_SHARED_LIBS)
   set(ATFRAMEWORK_USE_DYNAMIC_LIBRARY ON)

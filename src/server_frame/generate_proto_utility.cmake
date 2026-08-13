@@ -195,6 +195,12 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     # project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
   endif()
 
+  list(LENGTH SOURCES __SOURCES_LENGTH)
+  if(PROJECT_ENABLE_UNITY_BUILD AND __SOURCES_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
+    set_target_properties("${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}"
+                          PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
+  endif()
+
   set(__current_pch_weight 0)
   project_pch_tool_increase_pch_weight(__current_pch_weight 50 ${project_server_frame_create_protocol_target_PROTOCOLS})
 
