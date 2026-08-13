@@ -164,6 +164,74 @@ function(project_pch_tool_collect_precompile_header_include_path TARGET_NAME OUT
       PARENT_SCOPE)
 endfunction()
 
+# 获取或按需创建指定 PIC 模式的 PCH 变体目标(仅限非 MSVC)。
+#
+# 基础 <name>.pch.export 只是元数据容器(非 MSVC 下为 INTERFACE 库,保存 PCH 头文件列表、权重、变体链接目标等属性), 真正的 PCH 由变体目标按需构建: -
+# <name>.pch.export.pie: 以 -fPIE 构建,供可执行文件(-fPIE)复用; - <name>.pch.export.pic: 以 -fPIC 构建,供库目标(-fPIC)复用。 GCC/Clang 的 PCH
+# 校验要求 -fPIE/-fPIC 与使用方完全一致,两类变体都在消费者 REUSE 时按需创建, 没有消费者的变体不会构建(EXCLUDE_FROM_ALL)。 MSVC 没有 -fPIC/-fPIE 之分,直接复用基础版本即可。
+function(project_pch_tool_get_or_create_pch_variant INTERFACE_TARGET_NAME VARIANT_MODE OUT_VARIANT_NAME)
+  if(MSVC)
+    set("${OUT_VARIANT_NAME}"
+        "${INTERFACE_TARGET_NAME}"
+        PARENT_SCOPE)
+    return()
+  endif()
+
+  string(TOLOWER "${VARIANT_MODE}" _pch_variant_suffix)
+  set(_pch_variant_name "${INTERFACE_TARGET_NAME}.${_pch_variant_suffix}")
+  if(TARGET "${_pch_variant_name}")
+    set("${OUT_VARIANT_NAME}"
+        "${_pch_variant_name}"
+        PARENT_SCOPE)
+    return()
+  endif()
+
+  get_target_property(_pch_variant_headers "${INTERFACE_TARGET_NAME}" ATFW_TOOL_PCH_HEADER_INCLUDE_PATH)
+  get_target_property(_pch_variant_link_targets "${INTERFACE_TARGET_NAME}" ATFW_TOOL_PCH_VARIANT_LINK_TARGETS)
+  get_target_property(_pch_variant_folder "${INTERFACE_TARGET_NAME}" FOLDER)
+
+  add_library("${_pch_variant_name}" STATIC "${PROJECT_PCH_TOOL_SOURCE_FILE}")
+  set_target_properties(
+    "${_pch_variant_name}"
+    PROPERTIES EXCLUDE_FROM_ALL TRUE
+               POSITION_INDEPENDENT_CODE OFF
+               CXX_INCLUDE_WHAT_YOU_USE ""
+               CXX_CLANG_TIDY "")
+  if(_pch_variant_folder)
+    set_target_properties("${_pch_variant_name}" PROPERTIES FOLDER "${_pch_variant_folder}")
+  endif()
+
+  if(_pch_variant_headers)
+    target_precompile_headers("${_pch_variant_name}" PRIVATE
+                              "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${_pch_variant_headers}>>")
+  endif()
+
+  if(_pch_variant_link_targets)
+    target_link_libraries("${_pch_variant_name}" PRIVATE ${_pch_variant_link_targets})
+  endif()
+
+  if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+    target_include_directories("${_pch_variant_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+  endif()
+  target_compile_options("${_pch_variant_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+    target_link_options("${_pch_variant_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+  endif()
+
+  if(_pch_variant_suffix STREQUAL "pie")
+    # 可执行文件使用 -fPIE 且不带 -fvisibility=hidden
+    target_compile_options("${_pch_variant_name}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-fPIE>")
+  else()
+    # 库目标使用 -fPIC 和 -fvisibility=hidden
+    set_target_properties("${_pch_variant_name}" PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET "hidden")
+    target_compile_options("${_pch_variant_name}" PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-fPIC>")
+  endif()
+
+  set("${OUT_VARIANT_NAME}"
+      "${_pch_variant_name}"
+      PARENT_SCOPE)
+endfunction()
+
 # project_pch_tool_set_precompile_headers(TARGET_NAME [OPTIONS...])
 function(project_pch_tool_set_precompile_headers TARGET_NAME)
   if(NOT PROJECT_ENABLE_PRECOMPILE_HEADERS)
@@ -262,38 +330,52 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
       set(__current_pch_header_all_include_path ${__current_pch_header_include_path})
     endif()
 
-    if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
-      add_library("${_interface_target_name}" STATIC "${PROJECT_PCH_TOOL_SOURCE_FILE}")
-    else()
-      add_library("${_interface_target_name}" SHARED "${PROJECT_PCH_TOOL_SOURCE_FILE}")
-    endif()
     if(NOT __project_pch_tool_FOLDER)
       set(__project_pch_tool_FOLDER "${PROJECT_NAME}/tools/pch")
     endif()
 
-    if(_target_type STREQUAL "EXECUTABLE")
-      add_dependencies("${_interface_target_name}" "${TARGET_NAME}")
-    else()
-      target_link_libraries("${_interface_target_name}" PRIVATE "${TARGET_NAME}")
+    # 非 MSVC 下 <name>.pch.export 只是元数据容器(INTERFACE,保存 PCH 头文件列表、权重、变体链接目标等属性),PCH 由变体目标按需构建: - <name>.pch.export.pie:
+    # -fPIE,供可执行文件(-fPIE)复用; - <name>.pch.export.pic: -fPIC,供库目标(-fPIC)复用。 MSVC 没有 -fPIC/-fPIE 之分,继续由 <name>.pch.export
+    # 直接构建 PCH。
+    set(_pch_variant_link_targets ${__project_pch_tool_REUSE_FROM_TARGET})
+    if(NOT _target_type STREQUAL "EXECUTABLE")
+      list(APPEND _pch_variant_link_targets "${TARGET_NAME}")
     endif()
-    # The merged pch header list below also contains public pch headers inherited from reuse
-    # candidates, so propagate their usage requirements (include directories and build order).
-    foreach(__project_pch_tool_reuse_include_target ${__project_pch_tool_REUSE_FROM_TARGET})
-      if(TARGET ${__project_pch_tool_reuse_include_target})
-        target_link_libraries("${_interface_target_name}" PRIVATE ${__project_pch_tool_reuse_include_target})
+    list(APPEND _pch_variant_link_targets "${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
+
+    if(MSVC)
+      if(BUILD_SHARED_LIBS OR ATFRAMEWORK_USE_DYNAMIC_LIBRARY)
+        add_library("${_interface_target_name}" STATIC "${PROJECT_PCH_TOOL_SOURCE_FILE}")
+      else()
+        add_library("${_interface_target_name}" SHARED "${PROJECT_PCH_TOOL_SOURCE_FILE}")
       endif()
-    endforeach()
-    target_link_libraries("${_interface_target_name}" PRIVATE "${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
-    set_target_properties("${_interface_target_name}" PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
-                                                                                              "hidden")
-    target_compile_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
-    if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
-      target_link_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+      if(_target_type STREQUAL "EXECUTABLE")
+        add_dependencies("${_interface_target_name}" "${TARGET_NAME}")
+      else()
+        target_link_libraries("${_interface_target_name}" PRIVATE "${TARGET_NAME}")
+      endif()
+      # The merged pch header list below also contains public pch headers inherited from reuse candidates, so propagate
+      # their usage requirements (include directories and build order).
+      foreach(__project_pch_tool_reuse_include_target ${__project_pch_tool_REUSE_FROM_TARGET})
+        if(TARGET ${__project_pch_tool_reuse_include_target})
+          target_link_libraries("${_interface_target_name}" PRIVATE ${__project_pch_tool_reuse_include_target})
+        endif()
+      endforeach()
+      target_link_libraries("${_interface_target_name}" PRIVATE "${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
+      set_target_properties("${_interface_target_name}" PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
+                                                                                                "hidden")
+      target_compile_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+      if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
+        target_link_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
+      endif()
+      if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
+        target_include_directories("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+      endif()
+    else()
+      add_library("${_interface_target_name}" INTERFACE)
+      set_target_properties("${_interface_target_name}" PROPERTIES ATFW_TOOL_PCH_VARIANT_LINK_TARGETS
+                                                                   "${_pch_variant_link_targets}")
     endif()
-    if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
-      target_include_directories("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
-    endif()
-    target_compile_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PROTOCOL_SOURCE_COMPILE_OPTIONS})
 
     set_target_properties(
       "${_interface_target_name}"
@@ -324,8 +406,10 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
         "${TARGET_NAME}" PRIVATE
         "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__current_pch_header_all_include_path}>>")
     endif()
-    target_precompile_headers("${_interface_target_name}" PRIVATE
-                              "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__current_pch_header_include_path}>>")
+    if(MSVC)
+      target_precompile_headers("${_interface_target_name}" PRIVATE
+                                "$<$<COMPILE_LANGUAGE:CXX>:$<BUILD_INTERFACE:${__current_pch_header_include_path}>>")
+    endif()
     return()
   else()
     list(REMOVE_DUPLICATES __current_pch_header_include_path)
@@ -333,6 +417,7 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
   endif()
 
   # reuse模式
+  get_target_property(_target_type "${TARGET_NAME}" TYPE)
   set(_current_select_target)
   set(_current_select_weight 0)
   foreach(_reuse_target_name ${__project_pch_tool_REUSE_FROM_TARGET})
@@ -352,7 +437,16 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
                  ATFW_TOOL_PCH_WEIGHT "${__current_pch_weight}"
                  ATFW_TOOL_PCH_REUSE_WEIGHT "${_current_select_weight}")
 
-    target_precompile_headers("${_interface_target_name}" REUSE_FROM "${_current_select_target}")
-    add_dependencies("${_interface_target_name}" "${_current_select_target}")
+    if(_target_type STREQUAL "EXECUTABLE")
+      # 可执行文件使用 -fPIE,复用 <name>.pch.export.pie 版本
+      project_pch_tool_get_or_create_pch_variant("${_current_select_target}" "PIE" _current_pie_pch_target)
+      target_precompile_headers("${_interface_target_name}" REUSE_FROM "${_current_pie_pch_target}")
+      add_dependencies("${_interface_target_name}" "${_current_pie_pch_target}")
+    else()
+      # 库目标使用 -fPIC,复用 <name>.pch.export.pic 版本;若没有库目标复用,该版本不会构建
+      project_pch_tool_get_or_create_pch_variant("${_current_select_target}" "PIC" _current_pic_pch_target)
+      target_precompile_headers("${_interface_target_name}" REUSE_FROM "${_current_pic_pch_target}")
+      add_dependencies("${_interface_target_name}" "${_current_pic_pch_target}")
+    endif()
   endif()
 endfunction()
