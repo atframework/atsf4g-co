@@ -68,28 +68,28 @@
     <item name="关卡表" cat="level" class="client server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Level.xlsx|关卡定义表|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelLevel</scheme>
-      <scheme name="OutputFile" desc="输出文件名">level.bytes</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/level.bytes</scheme>
     </item>
 
     <item name="匹配池" cat="matching" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|匹配池|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingPool</scheme>
-      <scheme name="OutputFile" desc="输出文件名">matching_pool.bytes</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/matching_pool.bytes</scheme>
     </item>
     <item name="匹配规则组" cat="matching" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|匹配规则组|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingRuleGroup</scheme>
-      <scheme name="OutputFile" desc="输出文件名">matching_rule_group.bytes</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/matching_rule_group.bytes</scheme>
     </item>
     <item name="匹配规则" cat="matching" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|撮合期匹配规则|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingRule</scheme>
-      <scheme name="OutputFile" desc="输出文件名">matching_rule.bytes</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/matching_rule.bytes</scheme>
     </item>
     <item name="匹配结果模板" cat="matching" class="server">
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|匹配结果模板|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingResultTemplate</scheme>
-      <scheme name="OutputFile" desc="输出文件名">matching_result_template.bytes</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/matching_result_template.bytes</scheme>
     </item>
   </list>
 </root>
