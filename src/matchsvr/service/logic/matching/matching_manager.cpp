@@ -8,6 +8,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/config/com.struct.matching.config.pb.h>
+#include <protocol/config/com.struct.level.config.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -20,6 +21,7 @@
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
 
@@ -35,7 +37,6 @@ namespace {
 constexpr int64_t kDefaultSearchTimeout = 120;
 constexpr int64_t kDefaultConfirmTimeout = 15;
 constexpr int64_t kTerminalRetention = 60;
-constexpr uint32_t kDefaultOrbitClientTemplateId = 1;
 
 int64_t get_search_timeout_seconds(int32_t matching_pool_id) {
   auto pool = excel::get_ExcelMatchingPool_by_id(matching_pool_id);
@@ -398,14 +399,6 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
 
   room->subscribe(ctx, request.operator_user(), request.subscriber_server_id(), request.acknowledge_event_id());
 
-  PROJECT_NAMESPACE_ID::DMatchingEventLog confirm_event;
-  auto* confirm_data =
-      request.confirmed() ? confirm_event.mutable_confirm_user() : confirm_event.mutable_refuse_confirm();
-  protobuf_copy_message(*confirm_data->mutable_user_key(), request.operator_user());
-  confirm_data->set_status(request.confirmed() ? PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED
-                                               : PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_REFUSED);
-  room->publish(ctx, std::move(confirm_event));
-
   const int64_t now = atfw::util::time::time_utility::get_now();
   if (!request.confirmed()) {
     PROJECT_NAMESPACE_ID::DMatchingUnit removed_unit;
@@ -413,15 +406,18 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
 
     room->remove_unit(request.unit_id());
     unindex_unit(removed_unit);
-    room->publish(ctx, make_remove_unit_event(removed_unit));
     if (room->get_units().empty()) {
       room->mark_cancelled(now);
-      PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
-      event_log.set_cancel(now);
-      room->publish(ctx, std::move(event_log));
     } else {
       room->resume_matching(now + get_search_timeout_seconds(room->get_scope().matching_pool_id()));
       index_room(room);
+    }
+    // 拒绝结果由本次 RPC 回包告知操作玩家；房间广播只表达 Unit 被移除后的最终状态。
+    room->publish(ctx, make_remove_unit_event(removed_unit));
+    if (room->get_units().empty()) {
+      PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
+      event_log.set_cancel(now);
+      room->publish(ctx, std::move(event_log));
     }
   } else if (room->are_all_users_confirmed()) {
     start_battle(ctx, room, now);
@@ -494,10 +490,15 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     }
   }
 
-  int32_t result =
-      RPC_AWAIT_CODE_RESULT(rpc::orbit::init_user(ctx, room->get_orbit_server_id(), *init_request, *init_response));
-  if (result == 0) {
-    result = init_response->result_code();
+  int32_t retry_time = 3;
+  int result = 0;
+  for (int i = 0; i < retry_time; ++i) {
+    result =
+        RPC_AWAIT_CODE_RESULT(rpc::orbit::init_user(ctx, room->get_orbit_server_id(), *init_request, *init_response));
+    if (result == 0) {
+      result = init_response->result_code();
+      break;
+    }
   }
 
   if (result != 0) {
@@ -510,7 +511,7 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  room->mark_finished(room->get_orbit_room_key().client_id(), atfw::util::time::time_utility::get_now());
+  room->mark_finished(atfw::util::time::time_utility::get_now());
   PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
   room->dump(*event_log.mutable_matched());
   room->publish(ctx, std::move(event_log));
@@ -698,7 +699,16 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
         auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSOrbitCreateRoomRsp>(child_ctx);
         protobuf_copy_message(*request->mutable_room_key(), room->get_orbit_room_key());
 
-        request->mutable_room_data()->set_client_template_id(kDefaultOrbitClientTemplateId);
+        auto level_cfg = excel::get_ExcelLevel_by_level_id(room->get_scope().level_id());
+        if (!level_cfg) {
+          FCTXLOGERROR(child_ctx, "create orbit room failed, level_cfg not found, matching_id={}, level_type={}",
+                       room->get_matching_id(), room->get_scope().level_type());
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED);
+        }
+
+        const int32_t client_template_id = level_cfg->client_template_id();
+
+        request->mutable_room_data()->set_client_template_id(client_template_id);
         request->mutable_room_data()->set_region(room->get_scope().region());
         request->mutable_room_data()->set_match_id(room->get_matching_id());
         const int32_t result =
@@ -766,29 +776,26 @@ void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_
     }
   }
   for (const auto& unit : removed_units) {
-    for (const auto& user : unit.users()) {
-      if (user.confirm_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED) {
-        continue;
-      }
-      PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
-      protobuf_copy_message(*event_log.mutable_refuse_confirm()->mutable_user_key(), user.user_key());
-      event_log.mutable_refuse_confirm()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_TIMEOUT);
-      room->publish(ctx, std::move(event_log));
-    }
     room->remove_unit(unit.unit_id());
     unindex_unit(unit);
-    room->publish(ctx, make_remove_unit_event(unit));
   }
   if (room->get_units().empty()) {
     room->mark_timeout(now);
+  } else {
+    room->resume_matching(now + get_search_timeout_seconds(room->get_scope().matching_pool_id()));
+    index_room(room);
+  }
+  // 确认超时不广播单个玩家的私有确认状态，只同步 Unit 移除及房间最终状态。
+  for (const auto& unit : removed_units) {
+    room->publish(ctx, make_remove_unit_event(unit));
+  }
+  if (room->get_units().empty()) {
     PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
     event_log.set_timeout(now);
     room->publish(ctx, std::move(event_log));
     FCTXLOGDEBUG(ctx, "matching confirmation timeout finished with empty room, matching_id={}, status={}",
                  room->get_matching_id(), static_cast<int>(room->get_status()));
   } else {
-    room->resume_matching(now + get_search_timeout_seconds(room->get_scope().matching_pool_id()));
-    index_room(room);
     FCTXLOGDEBUG(ctx,
                  "matching confirmation timeout resumed search, matching_id={}, remaining_units={}, expire_time={}",
                  room->get_matching_id(), room->get_units().size(), room->get_expire_time());

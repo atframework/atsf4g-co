@@ -40,18 +40,6 @@ void erase_unit(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot, uint64_t 
   }
 }
 
-void update_confirm_status(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot,
-                           const PROJECT_NAMESPACE_ID::DMatchingConfirmEvent& event) {
-  for (auto& unit : *snapshot.mutable_units()) {
-    for (auto& matching_user : *unit.mutable_users()) {
-      if (same_user(matching_user.user_key(), event.user_key())) {
-        matching_user.set_confirm_status(event.status());
-        return;
-      }
-    }
-  }
-}
-
 bool is_terminal_status(PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status) {
   return status == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED ||
          status == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED ||
@@ -156,6 +144,8 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   }
 
   fill_operator_user(*rpc_request->mutable_operator_user());
+
+  // 后续接组队
 
   const auto& operator_user = rpc_request->operator_user();
   bool operator_is_member = false;
@@ -449,12 +439,6 @@ void user_matching_manager::apply_event(const PROJECT_NAMESPACE_ID::DMatchingEve
       snapshot.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING);
       snapshot.set_confirm_expire_time(event_log.notify_confirm());
       break;
-    case PROJECT_NAMESPACE_ID::DMatchingEventLog::kConfirmUser:
-      update_confirm_status(snapshot, event_log.confirm_user());
-      break;
-    case PROJECT_NAMESPACE_ID::DMatchingEventLog::kRefuseConfirm:
-      update_confirm_status(snapshot, event_log.refuse_confirm());
-      break;
     case PROJECT_NAMESPACE_ID::DMatchingEventLog::EVENT_NOT_SET:
       break;
   }
@@ -471,6 +455,7 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   output.set_level_type(level_select.level_type());
   output.set_region(level_select.region());
   output.set_battle_version(battle_version);
+  output.set_level_id(level_select.level_id());
 
   // TODO: 接入 level_type -> matching_pool_id 的配置映射（旧项目为 ExcelLevelType.match_making_pool_id）
   auto level_cfg = excel::get_ExcelLevel_by_level_id(level_select.level_id());

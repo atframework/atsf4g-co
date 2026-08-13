@@ -27,4 +27,5 @@ message ExcelLevel {
   int32 level_id = 1 [(org.xresloader.field_unique_tag) = "level_id"];
   int32 level_type = 2;
   int32 matching_pool_id = 3;    // 匹配池ID
+  int32 client_template_id = 4;  // ds启动模板id
 }

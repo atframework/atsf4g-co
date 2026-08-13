@@ -8,6 +8,7 @@ option cc_enable_arenas = true;
 
 import "google/protobuf/timestamp.proto";
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
 
 package atframework.shared;
 
@@ -48,9 +49,10 @@ enum EnMatchSelectSvrType {
 // 硬隔离维度。四个字段全部相同的房间才允许互相撮合。
 message DMatchingScope {
   int32 level_type = 1;
-  string region = 2;
-  string battle_version = 3;
-  int32 matching_pool_id = 4;
+  int32 level_id = 2;
+  string region = 3;
+  string battle_version = 4;
+  int32 matching_pool_id = 5;
 }
 
 // 一个 unit 使用队长聚合后的参数参与规则比较，成员不会被拆开。
@@ -94,15 +96,10 @@ message DMatchingRoomSnapshot {
   int32 result_template_id = 5;
   int64 created_time = 6;
   int64 expire_time = 7;
-  string battle_room_id = 8;
   int32 result = 9;
   int64 last_event_id = 10;
   int64 confirm_expire_time = 11;
-}
-
-message DMatchingConfirmEvent {
-  DUserIDKey user_key = 1;
-  EnMatchingConfirmStatus status = 2;
+  DOrbitRoomKey orbit_room_key = 12;
 }
 
 // 迁房事件携带原 unit 和目标房间。目标为空表示取消或普通移除。
@@ -124,8 +121,6 @@ message DMatchingEventLog {
     int64 cancel = 15;
     int32 failed = 16;
     int64 notify_confirm = 17;
-    DMatchingConfirmEvent confirm_user = 18;
-    DMatchingConfirmEvent refuse_confirm = 19;
   }
 }
 

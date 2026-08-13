@@ -87,7 +87,7 @@ class matching_room {
   // 锁定首次 orbitsvr ready 回调，防止重复初始化玩家。
   bool begin_orbit_ready() noexcept;
   // 标记战斗房间创建完成。
-  void mark_finished(std::string battle_room_id, int64_t now);
+  void mark_finished(int64_t now);
   // 标记战斗请求失败。
   void mark_failed(int32_t result, int64_t now) noexcept;
   // 标记搜索超时。
@@ -130,8 +130,6 @@ class matching_room {
   int64_t last_event_id_;
   // 当前规则选中的结果模板 ID。
   int32_t result_template_id_;
-  // battlesvr 返回或桩生成的战斗房间 ID。
-  std::string battle_room_id_;
   // 房间最终业务结果。
   int32_t result_;
   // 是否已经开始处理 orbitsvr ready 回调。

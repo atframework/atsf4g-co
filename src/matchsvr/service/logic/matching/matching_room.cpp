@@ -8,6 +8,7 @@
 #include <time/time_utility.h>
 
 #include <rpc/rpc_context.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <algorithm>
 #include <string>
@@ -112,7 +113,7 @@ bool matching_room::confirm_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_ke
     for (auto& user : *unit.second.mutable_users()) {
       if (matching_utility::same_user(user.user_key(), user_key)) {
         user.set_confirm_status(accepted ? PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED
-                                           : PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_REFUSED);
+                                         : PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_REFUSED);
         return true;
       }
     }
@@ -170,8 +171,7 @@ bool matching_room::begin_orbit_ready() noexcept {
   return true;
 }
 
-void matching_room::mark_finished(std::string battle_room_id, int64_t now) {
-  battle_room_id_ = std::move(battle_room_id);
+void matching_room::mark_finished(int64_t now) {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED;
   result_ = 0;
   terminal_time_ = now;
@@ -210,13 +210,13 @@ void matching_room::dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) co
   output.set_result_template_id(result_template_id_);
   output.set_created_time(created_time_);
   output.set_expire_time(expire_time_);
-  output.set_battle_room_id(battle_room_id_);
   output.set_result(result_);
   output.set_last_event_id(last_event_id_);
   output.set_confirm_expire_time(confirm_expire_time_);
   for (const auto& unit : units_) {
     output.add_units()->CopyFrom(unit.second);
   }
+  protobuf_copy_message(*output.mutable_orbit_room_key(), orbit_room_key_);
 }
 
 bool matching_room::subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,

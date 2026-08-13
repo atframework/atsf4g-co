@@ -81,12 +81,8 @@ class user_matching_manager {
   void send_log_sync(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync, bool is_switch);
 
  private:
-  // manager 的生命周期严格从属于 owner，不拥有玩家对象。
   user* owner_;
-  // 当前玩家的匹配快照、已应用 WAL 游标和客户端确认游标。
   PROJECT_NAMESPACE_ID::DUserMatchingData data_;
-  // 迁房时暂存目标 matching_id，使目标房间首包能够被识别为合法切换。
   std::string pending_switch_matching_id_;
-  // 控制 table_user 的增量保存。
   bool dirty_;
 };

@@ -28,7 +28,7 @@ func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.User
 	}
 	levelId := levelType
 	region := "cn"
-	selectType := public_protocol_pbdesc.EnMatchSelectSvrType_EN_MATCH_SELECT_SVR_TYPE_PLAYER
+	selectType := public_protocol_pbdesc.EnMatchSelectSvrType_EN_MATCH_SELECT_SVR_TYPE_USER
 	if len(args) > 1 {
 		levelId, err = strconv.ParseInt(args[1], 10, 32)
 		if err != nil {
