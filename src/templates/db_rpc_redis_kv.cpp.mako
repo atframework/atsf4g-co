@@ -230,6 +230,32 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+% if index.enable_cas:
+SERVER_FRAME_API result_type insert(rpc::context &ctx,
+                                 shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (auto __handler = mock_detail::replace_handler()) {
+    rpc::unit_test::db_mock_meta __meta;
+    int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, *store, __meta));
+    RPC_DB_RETURN_CODE(__res);
+  }
+#endif
+  char db_key[256];
+  size_t keylen = sizeof(db_key);
+  auto result = atfw::util::string::format_to_n(db_key, keylen, "${prefix_fmt_key}", ${prefix_fmt_value_from_pb});
+  if (result.size < static_cast<int64_t>(keylen)) {
+    keylen = size_t(result.size);
+  }
+  auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
+                                                                gsl::string_view{db_key, keylen},
+                                                                shared_abstract_message<google::protobuf::Message>{std::move(store)}));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(res);
+  }
+  RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+% endif
+
 % if len(atomic_inc_fields) > 0:
 %     for inc_field in atomic_inc_fields:
 namespace detail {

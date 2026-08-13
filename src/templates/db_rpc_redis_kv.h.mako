@@ -45,6 +45,11 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type replace(rpc::context &
                                                          );
 % endif
 
+% if index.enable_cas:
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type insert(rpc::context &ctx,
+                                                         shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store);
+% endif
+
 % if len(atomic_inc_fields) > 0:
 %     for inc_field in atomic_inc_fields:
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type inc_field_${inc_field["raw_name"]}(rpc::context &ctx

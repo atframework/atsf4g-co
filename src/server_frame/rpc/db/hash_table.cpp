@@ -502,6 +502,103 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
+SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::string_view key,
+                                 shared_abstract_message<google::protobuf::Message> &&store) {
+  rpc::context __child_ctx(ctx);
+  rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "rpc.db.hash_table/key_value.insert"},
+      {opentelemetry::semconv::db::kDbSystemName, opentelemetry::semconv::db::DbSystemValues::kRedis}};
+  rpc::telemetry::trace_start_option __trace_option;
+  __trace_option.dispatcher = std::static_pointer_cast<dispatcher_implement>(db_msg_dispatcher::me());
+  __trace_option.is_remote = true;
+  __trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_CLIENT;
+  __trace_option.attributes = __trace_attributes;
+
+  rpc::telemetry::tracer __tracer =
+      __child_ctx.make_tracer("rpc.db.hash_table/key_value.insert", std::move(__trace_option));
+
+  if (ctx.get_task_context().task_id == 0) {
+    FWLOGERROR("current not in a task");
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_NO_TASK, __trace_attributes}));
+  }
+
+  std::stringstream segs_debug_info;
+
+  std::vector<const ::google::protobuf::FieldDescriptor *> fds;
+  const google::protobuf::Reflection *reflect = store->GetReflection();
+  if (nullptr == reflect) {
+    FWLOGERROR("pack message {} failed, get reflection failed", store->GetDescriptor()->full_name());
+    RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, __trace_attributes}));
+  }
+  reflect->ListFields(*store, &fds);
+
+  uint64_t version = 0;
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_set, {
+    __ut_req.store = store.get();
+    __ut_req.version = &version;
+  })
+
+  size_t args_size = fds.size() * 2;
+  {
+    // EVALSHA
+    // sha1
+    // numkeys
+    // key
+    // version field name + version field value
+    args_size += 6;
+  }
+  redis_args args(args_size);
+  {
+    args.push("EVALSHA");
+    args.push(db_msg_dispatcher::me()->get_db_script_sha1(db_msg_dispatcher::script_type::kCompareAndSetHashTable));
+    args.push(1);
+    args.push(key.data(), key.size());
+  }
+
+  int res = rpc::db::pack_message(*store, args, fds, &version, &segs_debug_info);
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data content: {}", key,
+              protobuf_mini_dumper_get_readable(*store));
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, expect version: {}, detail: {}", key,
+              version, segs_debug_info.str());
+
+  uint64_t rpc_sequence = 0;
+  res = db_msg_dispatcher::me()->send_msg(
+      static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
+      logic_config::me()->get_local_server_id(), &unpack_nothing, rpc_sequence, static_cast<int>(args.size()),
+      args.get_args_values(), args.get_args_lengths());
+
+  // args unavailable now
+
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  dispatcher_await_options await_options = dispatcher_make_default<dispatcher_await_options>();
+  await_options.sequence = rpc_sequence;
+  await_options.timeout = rpc::make_duration_or_default(logic_config::me()->get_logic_cfg().task().csmsg().timeout(),
+                                                        std::chrono::seconds{6});
+
+  // 协程操作
+  db_message_t db_message;
+  res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && db_message.head_message.response_int() != 0) {
+      res = PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS;
+    }
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
+
+  FWCLOGINFO(log_categorize_t::DB, "table [key={}] data insert, new cas_version: {}", key,
+             db_message.head_message.response_int());
+  FWCLOGDEBUG(log_categorize_t::DB, "detail: {}", key, db_message.head_message.response_int(), segs_debug_info.str());
+  RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
+}
+
 SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl::string_view key,
                                        gsl::string_view inc_field,
                                        shared_abstract_message<google::protobuf::Message> &message,
