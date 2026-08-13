@@ -26,7 +26,7 @@ option(PROJECT_ENABLE_PRECOMPILE_HEADERS "Enable precompile headers." ON)
 # breaks clangd/IDE per-file indexing. Keep it OFF for local/clangd builds; enable it (e.g. in CI) for faster builds.
 option(PROJECT_ENABLE_UNITY_BUILD "Enable unity build for component/service targets." OFF)
 set(PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE
-    16
+    64
     CACHE STRING "Unity build batch size.")
 set(PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT
     1
