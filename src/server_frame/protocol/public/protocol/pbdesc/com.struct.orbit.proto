@@ -83,11 +83,12 @@ enum EnOrbitRoomStatus {
 
 enum EnOrbitRoomExitReason {
   EN_ORBIT_ROOM_EXIT_REASON_UNKNOWN = 0;
-  EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED = 1;       // 分配失败
-  EN_ORBIT_ROOM_EXIT_REASON_USER_INIT_FAILED = 2;  // 用户初始化失败
-  EN_ORBIT_ROOM_EXIT_REASON_CRASH = 3;             // 崩溃
-  EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT = 4;           // 超时
-  EN_ORBIT_ROOM_EXIT_REASON_FINISH = 5;            // 正常结束
+  EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED = 1;          // 分配失败
+  EN_ORBIT_ROOM_EXIT_REASON_NOTIFY_MATCH_FAILED = 2;  // 通知匹配服务器失败
+  EN_ORBIT_ROOM_EXIT_REASON_USER_INIT_FAILED = 3;     // 用户初始化失败
+  EN_ORBIT_ROOM_EXIT_REASON_CRASH = 4;                // 崩溃
+  EN_ORBIT_ROOM_EXIT_REASON_TIMEOUT = 5;              // 超时
+  EN_ORBIT_ROOM_EXIT_REASON_FINISH = 6;               // 正常结束
 }
 
 // ====== WAL 事件体 ======

@@ -89,7 +89,10 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
     FWLOGERROR("orbit_room_manager create_room failed, client_template_id or region is empty");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
-
+  if (req.room_data().match_id().empty()) {
+    FWLOGERROR("orbit_room_manager create_room failed, match_id is empty");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
   atfw::orbit::DAgentClientStartArgs args;
   if (!fill_client_start_args_from_template_id(req.room_data().client_template_id(), client_id, args)) {
     FWLOGERROR("orbit_room_manager create_room failed, fill_client_start_args_from_template_id failed");

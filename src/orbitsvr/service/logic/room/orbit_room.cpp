@@ -18,6 +18,7 @@
 
 #include <rpc/async_jobs/async_jobs.h>
 #include <rpc/orbit_client_rpc/orbitclientrpcservice.atfw.gen.h>
+#include <rpc/matching/matchsvrservice.atfw.gen.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -186,8 +187,28 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
   add_event_log(ctx, std::move(event_log));
 
   // 通知 match_server 房间已加载完成
-  // TODO
-  // 传入 DOrbitRoomKey expired_timepoint_
+  auto room_ptr = shared_from_this();
+  auto invoke_result = rpc::async_invoke(
+      ctx, "orbit_room.async_matchsvr_room_start", [room_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq>(child_ctx);
+        auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp>(child_ctx);
+        req->set_matching_id(room_ptr->room_data_.match_id());
+        req->set_expired_timepoint(room_ptr->join_end_timepoint_);
+        int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::matching::orbit_room_ready(child_ctx, room_ptr->match_server_id_, *req, *rsp));
+        if (ret == 0) {
+          ret = rsp->result();
+        }
+        if (ret != 0) {
+          FWLOGERROR("orbit_room {} async_matchsvr_room_start failed, ret: {}", room_ptr->get_client_id(), ret);
+          room_ptr->room_finish(child_ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_NOTIFY_MATCH_FAILED);
+        }
+        RPC_RETURN_CODE(ret);
+      });
+  if (invoke_result.is_error()) {
+    FWLOGERROR("orbit_room {} invoke async_matchsvr_room_start failed, result: {}", room_ptr->get_client_id(),
+               *invoke_result.get_error());
+    room_ptr->room_finish(ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_NOTIFY_MATCH_FAILED);
+  }
   return 0;
 }
 
