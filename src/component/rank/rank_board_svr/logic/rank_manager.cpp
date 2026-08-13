@@ -333,7 +333,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_top(
   RPC_RETURN_CODE(ret);
 }
 
-std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
                                                     uint64_t main_node) {
   std::vector<uint64_t> slave_nodes;
   auto* mod = logic_server_last_common_module();
@@ -399,7 +399,7 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to_main(
-    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, int32_t db_router_version) {
+    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint64_t db_router_version) {
   auto main_server_node = logic_config::me()->get_local_server_id();
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> new_db_router(ctx);
   new_db_router->set_rank_type(rank_key.rank_type());
