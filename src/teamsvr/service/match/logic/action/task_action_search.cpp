@@ -25,14 +25,14 @@
 
 #include <utility>
 
-TEAM_SERVICE_MATCH_API task_action_search::task_action_search(dispatcher_start_data_type&& param)
+task_action_search::task_action_search(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-TEAM_SERVICE_MATCH_API task_action_search::~task_action_search() {}
+task_action_search::~task_action_search() {}
 
-TEAM_SERVICE_MATCH_API const char* task_action_search::name() const { return "task_action_search"; }
+const char* task_action_search::name() const { return "task_action_search"; }
 
-TEAM_SERVICE_MATCH_API task_action_search::result_type task_action_search::operator()() {
+task_action_search::result_type task_action_search::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
@@ -44,6 +44,6 @@ TEAM_SERVICE_MATCH_API task_action_search::result_type task_action_search::opera
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-TEAM_SERVICE_MATCH_API int task_action_search::on_success() { return get_result(); }
+int task_action_search::on_success() { return get_result(); }
 
-TEAM_SERVICE_MATCH_API int task_action_search::on_failed() { return get_result(); }
+int task_action_search::on_failed() { return get_result(); }

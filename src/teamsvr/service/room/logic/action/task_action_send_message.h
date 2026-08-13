@@ -17,10 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef TEAM_SERVICE_ROOM_API
-#  define TEAM_SERVICE_ROOM_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
-
 class task_action_send_message : public task_action_ss_rpc_base<atframework::team::SSTeamRoomSendMessageReq,
                                                                 atframework::team::SSTeamRoomSendMessageRsp> {
  public:
@@ -35,13 +31,13 @@ class task_action_send_message : public task_action_ss_rpc_base<atframework::tea
   using task_action_ss_req_base::operator();
 
  public:
-  TEAM_SERVICE_ROOM_API explicit task_action_send_message(dispatcher_start_data_type&& param);
-  TEAM_SERVICE_ROOM_API ~task_action_send_message() override;
+  explicit task_action_send_message(dispatcher_start_data_type&& param);
+  ~task_action_send_message() override;
 
-  TEAM_SERVICE_ROOM_API const char* name() const override;
+  const char* name() const override;
 
-  TEAM_SERVICE_ROOM_API result_type operator()() override;
+  result_type operator()() override;
 
-  TEAM_SERVICE_ROOM_API int on_success() override;
-  TEAM_SERVICE_ROOM_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

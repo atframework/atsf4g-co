@@ -17,9 +17,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#ifndef GAMECLIENT_SERVICE_API
-#  define GAMECLIENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_user_gm_command : public task_action_cs_rpc_base<PROJECT_NAMESPACE_ID::CSUserGMCommandReq,
                                                                    PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> {
@@ -35,13 +33,13 @@ class task_action_user_gm_command : public task_action_cs_rpc_base<PROJECT_NAMES
   using task_action_cs_req_base::operator();
 
  public:
-  GAMECLIENT_SERVICE_API explicit task_action_user_gm_command(dispatcher_start_data_type&& param);
-  GAMECLIENT_SERVICE_API ~task_action_user_gm_command() override;
+  explicit task_action_user_gm_command(dispatcher_start_data_type&& param);
+  ~task_action_user_gm_command() override;
 
-  GAMECLIENT_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  GAMECLIENT_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  GAMECLIENT_SERVICE_API int on_success() override;
-  GAMECLIENT_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

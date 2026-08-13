@@ -33,17 +33,17 @@
 #include <logic/cache/user_cache_manager.h>
 #include <logic/user_manager.h>
 
-LOBBY_SERVICE_API task_action_object_cache_expired_sync::task_action_object_cache_expired_sync(
+task_action_object_cache_expired_sync::task_action_object_cache_expired_sync(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-LOBBY_SERVICE_API task_action_object_cache_expired_sync::~task_action_object_cache_expired_sync() {}
+task_action_object_cache_expired_sync::~task_action_object_cache_expired_sync() {}
 
-LOBBY_SERVICE_API const char* task_action_object_cache_expired_sync::name() const {
+const char* task_action_object_cache_expired_sync::name() const {
   return "task_action_object_cache_expired_sync";
 }
 
-LOBBY_SERVICE_API task_action_object_cache_expired_sync::result_type
+task_action_object_cache_expired_sync::result_type
 task_action_object_cache_expired_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
@@ -119,6 +119,6 @@ task_action_object_cache_expired_sync::operator()() {
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-LOBBY_SERVICE_API int task_action_object_cache_expired_sync::on_success() { return get_result(); }
+int task_action_object_cache_expired_sync::on_success() { return get_result(); }
 
-LOBBY_SERVICE_API int task_action_object_cache_expired_sync::on_failed() { return get_result(); }
+int task_action_object_cache_expired_sync::on_failed() { return get_result(); }

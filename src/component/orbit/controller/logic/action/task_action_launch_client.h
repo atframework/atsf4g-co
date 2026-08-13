@@ -17,9 +17,7 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef ORBIT_CONTROLLER_SERVICE_API
-#  define ORBIT_CONTROLLER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_launch_client : public task_action_ss_rpc_base<atfw::orbit::STCLaunchClientReq, atfw::orbit::CTSLaunchClientRsp> {
  public:
@@ -33,13 +31,13 @@ class task_action_launch_client : public task_action_ss_rpc_base<atfw::orbit::ST
   using task_action_ss_req_base::operator();
 
  public:
-  ORBIT_CONTROLLER_SERVICE_API explicit task_action_launch_client(dispatcher_start_data_type&& param);
-  ORBIT_CONTROLLER_SERVICE_API ~task_action_launch_client();
+  explicit task_action_launch_client(dispatcher_start_data_type&& param);
+  ~task_action_launch_client();
 
-  ORBIT_CONTROLLER_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  ORBIT_CONTROLLER_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  ORBIT_CONTROLLER_SERVICE_API int on_success() override;
-  ORBIT_CONTROLLER_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

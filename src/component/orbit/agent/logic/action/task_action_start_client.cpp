@@ -26,14 +26,14 @@
 
 #include <config/extern_service_types.h>
 
-ORBIT_AGENT_SERVICE_API task_action_start_client::task_action_start_client(dispatcher_start_data_type&& param)
+task_action_start_client::task_action_start_client(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ORBIT_AGENT_SERVICE_API task_action_start_client::~task_action_start_client() {}
+task_action_start_client::~task_action_start_client() {}
 
-ORBIT_AGENT_SERVICE_API const char* task_action_start_client::name() const { return "task_action_start_client"; }
+const char* task_action_start_client::name() const { return "task_action_start_client"; }
 
-ORBIT_AGENT_SERVICE_API task_action_start_client::result_type task_action_start_client::operator()() {
+task_action_start_client::result_type task_action_start_client::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
@@ -42,6 +42,6 @@ ORBIT_AGENT_SERVICE_API task_action_start_client::result_type task_action_start_
   TASK_ACTION_RETURN_CODE(rpc_result);
 }
 
-ORBIT_AGENT_SERVICE_API int task_action_start_client::on_success() { return get_result(); }
+int task_action_start_client::on_success() { return get_result(); }
 
-ORBIT_AGENT_SERVICE_API int task_action_start_client::on_failed() { return get_result(); }
+int task_action_start_client::on_failed() { return get_result(); }

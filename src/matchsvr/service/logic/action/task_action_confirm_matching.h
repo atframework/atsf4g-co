@@ -17,9 +17,7 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef MATCH_SERVICE_API
-#  define MATCH_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_confirm_matching : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSMatchingConfirmReq,
                                                                     PROJECT_NAMESPACE_ID::SSMatchingSnapshot> {
@@ -35,13 +33,13 @@ class task_action_confirm_matching : public task_action_ss_rpc_base<PROJECT_NAME
   using task_action_ss_req_base::operator();
 
  public:
-  MATCH_SERVICE_API explicit task_action_confirm_matching(dispatcher_start_data_type&& param);
-  MATCH_SERVICE_API ~task_action_confirm_matching() override;
+  explicit task_action_confirm_matching(dispatcher_start_data_type&& param);
+  ~task_action_confirm_matching() override;
 
-  MATCH_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  MATCH_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  MATCH_SERVICE_API int on_success() override;
-  MATCH_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

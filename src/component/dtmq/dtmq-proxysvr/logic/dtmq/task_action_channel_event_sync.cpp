@@ -39,17 +39,17 @@
 #include "logic/mq_channel_manager.h"
 #include "rpc/dtmq/dtmq_algorithm.h"
 
-DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::task_action_channel_event_sync(
+task_action_channel_event_sync::task_action_channel_event_sync(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::~task_action_channel_event_sync() {}
+task_action_channel_event_sync::~task_action_channel_event_sync() {}
 
-DTMQ_PROXY_SERVICE_API const char* task_action_channel_event_sync::name() const {
+const char* task_action_channel_event_sync::name() const {
   return "task_action_channel_event_sync";
 }
 
-DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_channel_event_sync::operator()() {
+task_action_channel_event_sync::result_type task_action_channel_event_sync::operator()() {
   rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
@@ -179,9 +179,9 @@ DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::result_type task_action_c
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-DTMQ_PROXY_SERVICE_API int task_action_channel_event_sync::on_success() { return get_result(); }
+int task_action_channel_event_sync::on_success() { return get_result(); }
 
-DTMQ_PROXY_SERVICE_API int task_action_channel_event_sync::on_failed() { return get_result(); }
+int task_action_channel_event_sync::on_failed() { return get_result(); }
 
 rpc::result_code_type task_action_channel_event_sync::unsubscribe() {
   rpc::context::message_holder<atfw::dtmq::SSChannelUnsubscribeReq> request_body{get_shared_context()};

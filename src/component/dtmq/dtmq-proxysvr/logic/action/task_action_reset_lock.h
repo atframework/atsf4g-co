@@ -17,9 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef DTMQ_PROXY_SERVICE_API
-#  define DTMQ_PROXY_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
 
 class task_action_reset_lock : public task_action_ss_rpc_base<atframework::dtmq::SSChannelResetLockReq,
                                                               atframework::dtmq::SSChannelResetLockRsp> {
@@ -35,13 +32,13 @@ class task_action_reset_lock : public task_action_ss_rpc_base<atframework::dtmq:
   using task_action_ss_req_base::operator();
 
  public:
-  DTMQ_PROXY_SERVICE_API explicit task_action_reset_lock(dispatcher_start_data_type&& param);
-  DTMQ_PROXY_SERVICE_API ~task_action_reset_lock() override;
+  explicit task_action_reset_lock(dispatcher_start_data_type&& param);
+  ~task_action_reset_lock() override;
 
-  DTMQ_PROXY_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  DTMQ_PROXY_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  DTMQ_PROXY_SERVICE_API int on_success() override;
-  DTMQ_PROXY_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

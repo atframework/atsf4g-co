@@ -26,16 +26,16 @@
 
 #include "logic/orbit_agent_manager.h"
 
-ORBIT_AGENT_SERVICE_API task_action_server_heartbeat::task_action_server_heartbeat(dispatcher_start_data_type&& param)
+task_action_server_heartbeat::task_action_server_heartbeat(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ORBIT_AGENT_SERVICE_API task_action_server_heartbeat::~task_action_server_heartbeat() {}
+task_action_server_heartbeat::~task_action_server_heartbeat() {}
 
-ORBIT_AGENT_SERVICE_API const char* task_action_server_heartbeat::name() const {
+const char* task_action_server_heartbeat::name() const {
   return "task_action_server_heartbeat";
 }
 
-ORBIT_AGENT_SERVICE_API task_action_server_heartbeat::result_type task_action_server_heartbeat::operator()() {
+task_action_server_heartbeat::result_type task_action_server_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
   disable_response_message();
 
@@ -43,6 +43,6 @@ ORBIT_AGENT_SERVICE_API task_action_server_heartbeat::result_type task_action_se
       orbit_agent_manager::me()->handle_server_heartbeat(get_shared_context(), get_request_node_id(), req_body)));
 }
 
-ORBIT_AGENT_SERVICE_API int task_action_server_heartbeat::on_success() { return get_result(); }
+int task_action_server_heartbeat::on_success() { return get_result(); }
 
-ORBIT_AGENT_SERVICE_API int task_action_server_heartbeat::on_failed() { return get_result(); }
+int task_action_server_heartbeat::on_failed() { return get_result(); }

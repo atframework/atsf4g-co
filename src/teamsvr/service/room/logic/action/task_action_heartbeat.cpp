@@ -25,14 +25,14 @@
 
 #include <utility>
 
-TEAM_SERVICE_ROOM_API task_action_heartbeat::task_action_heartbeat(dispatcher_start_data_type&& param)
+task_action_heartbeat::task_action_heartbeat(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-TEAM_SERVICE_ROOM_API task_action_heartbeat::~task_action_heartbeat() {}
+task_action_heartbeat::~task_action_heartbeat() {}
 
-TEAM_SERVICE_ROOM_API const char* task_action_heartbeat::name() const { return "task_action_heartbeat"; }
+const char* task_action_heartbeat::name() const { return "task_action_heartbeat"; }
 
-TEAM_SERVICE_ROOM_API task_action_heartbeat::result_type task_action_heartbeat::operator()() {
+task_action_heartbeat::result_type task_action_heartbeat::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
@@ -44,6 +44,6 @@ TEAM_SERVICE_ROOM_API task_action_heartbeat::result_type task_action_heartbeat::
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-TEAM_SERVICE_ROOM_API int task_action_heartbeat::on_success() { return get_result(); }
+int task_action_heartbeat::on_success() { return get_result(); }
 
-TEAM_SERVICE_ROOM_API int task_action_heartbeat::on_failed() { return get_result(); }
+int task_action_heartbeat::on_failed() { return get_result(); }

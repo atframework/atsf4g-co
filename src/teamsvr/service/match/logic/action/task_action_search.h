@@ -17,10 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef TEAM_SERVICE_MATCH_API
-#  define TEAM_SERVICE_MATCH_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
-
 class task_action_search
     : public task_action_ss_rpc_base<atframework::team::SSTeamMatchSearchReq, atframework::team::SSTeamMatchSearchRsp> {
  public:
@@ -35,13 +31,13 @@ class task_action_search
   using task_action_ss_req_base::operator();
 
  public:
-  TEAM_SERVICE_MATCH_API explicit task_action_search(dispatcher_start_data_type&& param);
-  TEAM_SERVICE_MATCH_API ~task_action_search() override;
+  explicit task_action_search(dispatcher_start_data_type&& param);
+  ~task_action_search() override;
 
-  TEAM_SERVICE_MATCH_API const char* name() const override;
+  const char* name() const override;
 
-  TEAM_SERVICE_MATCH_API result_type operator()() override;
+  result_type operator()() override;
 
-  TEAM_SERVICE_MATCH_API int on_success() override;
-  TEAM_SERVICE_MATCH_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

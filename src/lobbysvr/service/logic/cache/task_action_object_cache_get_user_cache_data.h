@@ -17,9 +17,7 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef LOBBY_SERVICE_API
-#  define LOBBY_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_object_cache_get_user_cache_data
     : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSObjectCacheGetUserCacheDataReq,
@@ -36,13 +34,13 @@ class task_action_object_cache_get_user_cache_data
   using task_action_ss_req_base::operator();
 
  public:
-  LOBBY_SERVICE_API explicit task_action_object_cache_get_user_cache_data(dispatcher_start_data_type&& param);
-  LOBBY_SERVICE_API ~task_action_object_cache_get_user_cache_data();
+  explicit task_action_object_cache_get_user_cache_data(dispatcher_start_data_type&& param);
+  ~task_action_object_cache_get_user_cache_data();
 
-  LOBBY_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  LOBBY_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  LOBBY_SERVICE_API int on_success() override;
-  LOBBY_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

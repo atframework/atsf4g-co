@@ -27,14 +27,14 @@
 
 #include <utility>
 
-ORBIT_SERVER_API task_action_create_room::task_action_create_room(dispatcher_start_data_type&& param)
+task_action_create_room::task_action_create_room(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ORBIT_SERVER_API task_action_create_room::~task_action_create_room() {}
+task_action_create_room::~task_action_create_room() {}
 
-ORBIT_SERVER_API const char* task_action_create_room::name() const { return "task_action_create_room"; }
+const char* task_action_create_room::name() const { return "task_action_create_room"; }
 
-ORBIT_SERVER_API task_action_create_room::result_type task_action_create_room::operator()() {
+task_action_create_room::result_type task_action_create_room::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
@@ -43,6 +43,6 @@ ORBIT_SERVER_API task_action_create_room::result_type task_action_create_room::o
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-ORBIT_SERVER_API int task_action_create_room::on_success() { return get_result(); }
+int task_action_create_room::on_success() { return get_result(); }
 
-ORBIT_SERVER_API int task_action_create_room::on_failed() { return get_result(); }
+int task_action_create_room::on_failed() { return get_result(); }

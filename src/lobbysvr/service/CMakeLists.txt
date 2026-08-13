@@ -17,8 +17,6 @@ generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk"
-  SERVICE_DLLEXPORT_DECL
-  LOBBY_SERVICE_API
   NO_RPC
   EXTERNAL_SERVICE_PROTOCOLS
   "matchsvr-protocol"
@@ -38,8 +36,6 @@ generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE_ID}"
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk"
-  SERVICE_DLLEXPORT_DECL
-  LOBBY_SERVICE_API
   NO_RPC
   EXTERNAL_COMPONENT_PROTOCOLS
   "dtmq-protocol-proxy-pbdesc"

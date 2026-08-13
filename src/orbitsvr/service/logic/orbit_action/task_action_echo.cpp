@@ -16,14 +16,14 @@
 
 #include <config/extern_service_types.h>
 
-ORBIT_SERVER_SERVER_API task_action_echo::task_action_echo(dispatcher_start_data_type &&param)
+task_action_echo::task_action_echo(dispatcher_start_data_type &&param)
     : base_type(std::move(param)) {}
 
-ORBIT_SERVER_SERVER_API task_action_echo::~task_action_echo() {}
+task_action_echo::~task_action_echo() {}
 
-ORBIT_SERVER_SERVER_API const char *task_action_echo::name() const { return "task_action_echo"; }
+const char *task_action_echo::name() const { return "task_action_echo"; }
 
-ORBIT_SERVER_SERVER_API task_action_echo::result_type task_action_echo::operator()() {
+task_action_echo::result_type task_action_echo::operator()() {
   EXPLICIT_UNUSED_ATTR const rpc_request_type &req_body = get_request_body();
   EXPLICIT_UNUSED_ATTR rpc_response_type &rsp_body = get_response_body();
 
@@ -31,6 +31,6 @@ ORBIT_SERVER_SERVER_API task_action_echo::result_type task_action_echo::operator
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-ORBIT_SERVER_SERVER_API int task_action_echo::on_success() { return get_result(); }
+int task_action_echo::on_success() { return get_result(); }
 
-ORBIT_SERVER_SERVER_API int task_action_echo::on_failed() { return get_result(); }
+int task_action_echo::on_failed() { return get_result(); }

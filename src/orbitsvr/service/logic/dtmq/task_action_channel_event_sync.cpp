@@ -28,14 +28,14 @@
 
 #include <utility>
 
-ORBIT_SERVER_API task_action_channel_event_sync::task_action_channel_event_sync(dispatcher_start_data_type&& param)
+task_action_channel_event_sync::task_action_channel_event_sync(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ORBIT_SERVER_API task_action_channel_event_sync::~task_action_channel_event_sync() {}
+task_action_channel_event_sync::~task_action_channel_event_sync() {}
 
-ORBIT_SERVER_API const char* task_action_channel_event_sync::name() const { return "task_action_channel_event_sync"; }
+const char* task_action_channel_event_sync::name() const { return "task_action_channel_event_sync"; }
 
-ORBIT_SERVER_API task_action_channel_event_sync::result_type task_action_channel_event_sync::operator()() {
+task_action_channel_event_sync::result_type task_action_channel_event_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
   disable_response_message();
 
@@ -48,6 +48,6 @@ ORBIT_SERVER_API task_action_channel_event_sync::result_type task_action_channel
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-ORBIT_SERVER_API int task_action_channel_event_sync::on_success() { return get_result(); }
+int task_action_channel_event_sync::on_success() { return get_result(); }
 
-ORBIT_SERVER_API int task_action_channel_event_sync::on_failed() { return get_result(); }
+int task_action_channel_event_sync::on_failed() { return get_result(); }

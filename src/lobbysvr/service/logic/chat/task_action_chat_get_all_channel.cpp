@@ -30,17 +30,17 @@
 
 #include "logic/chat/user_chat_manager.h"
 
-GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::task_action_chat_get_all_channel(
+task_action_chat_get_all_channel::task_action_chat_get_all_channel(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::~task_action_chat_get_all_channel() {}
+task_action_chat_get_all_channel::~task_action_chat_get_all_channel() {}
 
-GAMECLIENT_SERVICE_API const char* task_action_chat_get_all_channel::name() const {
+const char* task_action_chat_get_all_channel::name() const {
   return "task_action_chat_get_all_channel";
 }
 
-GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::result_type task_action_chat_get_all_channel::operator()() {
+task_action_chat_get_all_channel::result_type task_action_chat_get_all_channel::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
@@ -64,6 +64,6 @@ GAMECLIENT_SERVICE_API task_action_chat_get_all_channel::result_type task_action
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAMECLIENT_SERVICE_API int task_action_chat_get_all_channel::on_success() { return get_result(); }
+int task_action_chat_get_all_channel::on_success() { return get_result(); }
 
-GAMECLIENT_SERVICE_API int task_action_chat_get_all_channel::on_failed() { return get_result(); }
+int task_action_chat_get_all_channel::on_failed() { return get_result(); }

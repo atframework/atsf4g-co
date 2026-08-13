@@ -34,17 +34,17 @@
 
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
-GAMECLIENT_SERVICE_API task_action_chat_channel_heartbeat::task_action_chat_channel_heartbeat(
+task_action_chat_channel_heartbeat::task_action_chat_channel_heartbeat(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAMECLIENT_SERVICE_API task_action_chat_channel_heartbeat::~task_action_chat_channel_heartbeat() {}
+task_action_chat_channel_heartbeat::~task_action_chat_channel_heartbeat() {}
 
-GAMECLIENT_SERVICE_API const char* task_action_chat_channel_heartbeat::name() const {
+const char* task_action_chat_channel_heartbeat::name() const {
   return "task_action_chat_channel_heartbeat";
 }
 
-GAMECLIENT_SERVICE_API task_action_chat_channel_heartbeat::result_type
+task_action_chat_channel_heartbeat::result_type
 task_action_chat_channel_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
@@ -86,6 +86,6 @@ task_action_chat_channel_heartbeat::operator()() {
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAMECLIENT_SERVICE_API int task_action_chat_channel_heartbeat::on_success() { return get_result(); }
+int task_action_chat_channel_heartbeat::on_success() { return get_result(); }
 
-GAMECLIENT_SERVICE_API int task_action_chat_channel_heartbeat::on_failed() { return get_result(); }
+int task_action_chat_channel_heartbeat::on_failed() { return get_result(); }

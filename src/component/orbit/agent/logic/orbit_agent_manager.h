@@ -36,10 +36,6 @@
 #include <rpc/rpc_common_types.h>
 #include "memory/rc_ptr.h"
 
-#ifndef ORBIT_AGENT_SERVICE_API
-#  define ORBIT_AGENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
-
 namespace rpc {
 class context;
 }  // namespace rpc
@@ -96,29 +92,29 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 来自Controller
   // 启动 Client
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_start_client(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_start_client(
       rpc::context& ctx, const atfw::orbit::CTAStartClientReq& request, atfw::orbit::ATCStartClientRsp& response);
   // 转发至 Client
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_forward_to_client(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_forward_to_client(
       rpc::context& ctx, const atfw::orbit::CTAForwardToClientReq& request,
       atfw::orbit::ATCForwardToClientRsp& response);
   // Server 心跳
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_server_heartbeat(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_server_heartbeat(
       rpc::context& ctx, uint64_t controller_server_id, const atfw::orbit::CTAServerHeartbeatReq& request);
 
   // 来自Client
   // Client 启动
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_start(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_start(
       rpc::context& ctx, uint64_t client_server_id, const atfw::orbit::DTAClientStartReq& request,
       atfw::orbit::ATDClientStartRsp& response);
   // Client 心跳
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_heartbeat(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_heartbeat(
       rpc::context& ctx, const atfw::orbit::DTAClientHeartbeatNotify& request);
   // 转发至 Server
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_send_to_server(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_send_to_server(
       rpc::context& ctx, const atfw::orbit::DTASendToServerReq& request, atfw::orbit::ATDSendToServerRsp& response);
   // Client 退出
-  EXPLICIT_NODISCARD_ATTR ORBIT_AGENT_SERVICE_API rpc::result_code_type handle_client_exit(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_exit(
       rpc::context& ctx, const atfw::orbit::DTAClientExitReq& request, atfw::orbit::ATDClientExitRsp& response);
 
   void on_uv_process_exit(uv_process_t* process_handle, int64_t exit_status, int term_signal);

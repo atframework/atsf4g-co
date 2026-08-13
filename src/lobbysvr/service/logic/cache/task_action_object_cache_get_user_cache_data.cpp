@@ -31,17 +31,17 @@
 #include <rpc/rpc_shared_message.h>
 #include <rpc/user/user_basic.h>
 
-LOBBY_SERVICE_API task_action_object_cache_get_user_cache_data::task_action_object_cache_get_user_cache_data(
+task_action_object_cache_get_user_cache_data::task_action_object_cache_get_user_cache_data(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-LOBBY_SERVICE_API task_action_object_cache_get_user_cache_data::~task_action_object_cache_get_user_cache_data() {}
+task_action_object_cache_get_user_cache_data::~task_action_object_cache_get_user_cache_data() {}
 
-LOBBY_SERVICE_API const char* task_action_object_cache_get_user_cache_data::name() const {
+const char* task_action_object_cache_get_user_cache_data::name() const {
   return "task_action_object_cache_get_user_cache_data";
 }
 
-LOBBY_SERVICE_API task_action_object_cache_get_user_cache_data::result_type
+task_action_object_cache_get_user_cache_data::result_type
 task_action_object_cache_get_user_cache_data::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
@@ -87,6 +87,6 @@ task_action_object_cache_get_user_cache_data::operator()() {
   TASK_ACTION_RETURN_CODE(ret_code);
 }
 
-LOBBY_SERVICE_API int task_action_object_cache_get_user_cache_data::on_success() { return get_result(); }
+int task_action_object_cache_get_user_cache_data::on_success() { return get_result(); }
 
-LOBBY_SERVICE_API int task_action_object_cache_get_user_cache_data::on_failed() { return get_result(); }
+int task_action_object_cache_get_user_cache_data::on_failed() { return get_result(); }

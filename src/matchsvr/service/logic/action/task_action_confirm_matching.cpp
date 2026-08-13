@@ -27,20 +27,20 @@
 
 #include "logic/matching/matching_manager.h"
 
-MATCH_SERVICE_API task_action_confirm_matching::task_action_confirm_matching(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
+task_action_confirm_matching::task_action_confirm_matching(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 
-MATCH_SERVICE_API task_action_confirm_matching::~task_action_confirm_matching() {}
+task_action_confirm_matching::~task_action_confirm_matching() {}
 
-MATCH_SERVICE_API const char *task_action_confirm_matching::name() const {
+const char *task_action_confirm_matching::name() const {
   return "task_action_confirm_matching";
 }
 
-MATCH_SERVICE_API task_action_confirm_matching::result_type task_action_confirm_matching::operator()() {
+task_action_confirm_matching::result_type task_action_confirm_matching::operator()() {
   matching_manager::me()->confirm_matching(get_shared_context(), get_request_body(), get_response_body());
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-MATCH_SERVICE_API int task_action_confirm_matching::on_success() { return get_result(); }
+int task_action_confirm_matching::on_success() { return get_result(); }
 
-MATCH_SERVICE_API int task_action_confirm_matching::on_failed() { return get_result(); }
+int task_action_confirm_matching::on_failed() { return get_result(); }

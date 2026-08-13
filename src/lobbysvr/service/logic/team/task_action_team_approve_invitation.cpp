@@ -28,17 +28,17 @@
 
 #include <utility>
 
-GAMECLIENT_SERVICE_API task_action_team_approve_invitation::task_action_team_approve_invitation(
+task_action_team_approve_invitation::task_action_team_approve_invitation(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAMECLIENT_SERVICE_API task_action_team_approve_invitation::~task_action_team_approve_invitation() {}
+task_action_team_approve_invitation::~task_action_team_approve_invitation() {}
 
-GAMECLIENT_SERVICE_API const char* task_action_team_approve_invitation::name() const {
+const char* task_action_team_approve_invitation::name() const {
   return "task_action_team_approve_invitation";
 }
 
-GAMECLIENT_SERVICE_API task_action_team_approve_invitation::result_type
+task_action_team_approve_invitation::result_type
 task_action_team_approve_invitation::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
@@ -55,6 +55,6 @@ task_action_team_approve_invitation::operator()() {
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAMECLIENT_SERVICE_API int task_action_team_approve_invitation::on_success() { return get_result(); }
+int task_action_team_approve_invitation::on_success() { return get_result(); }
 
-GAMECLIENT_SERVICE_API int task_action_team_approve_invitation::on_failed() { return get_result(); }
+int task_action_team_approve_invitation::on_failed() { return get_result(); }

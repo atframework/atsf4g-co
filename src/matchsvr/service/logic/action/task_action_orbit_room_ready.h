@@ -17,9 +17,7 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef MATCH_SERVICE_API
-#  define MATCH_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_orbit_room_ready : public task_action_ss_rpc_base<atframework::shared::SSMatchingOrbitRoomReadyReq,
                                                                     atframework::shared::SSMatchingOrbitRoomReadyRsp> {
@@ -35,13 +33,13 @@ class task_action_orbit_room_ready : public task_action_ss_rpc_base<atframework:
   using task_action_ss_req_base::operator();
 
  public:
-  MATCH_SERVICE_API explicit task_action_orbit_room_ready(dispatcher_start_data_type&& param);
-  MATCH_SERVICE_API ~task_action_orbit_room_ready() override;
+  explicit task_action_orbit_room_ready(dispatcher_start_data_type&& param);
+  ~task_action_orbit_room_ready() override;
 
-  MATCH_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  MATCH_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  MATCH_SERVICE_API int on_success() override;
-  MATCH_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

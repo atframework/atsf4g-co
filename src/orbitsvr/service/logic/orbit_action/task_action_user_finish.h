@@ -16,9 +16,7 @@
 
 #include <logic/task_action_orbit_req_base.h>
 
-#ifndef ORBIT_SERVER_SERVER_API
-#  define ORBIT_SERVER_SERVER_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_user_finish : public task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID::OrbitServerUserFinishReq,
                                                                   PROJECT_NAMESPACE_ID::OrbitServerUserFinishRsp> {
@@ -34,13 +32,13 @@ class task_action_user_finish : public task_action_orbit_rpc_base<PROJECT_NAMESP
   using base_type::operator();
 
  public:
-  ORBIT_SERVER_SERVER_API explicit task_action_user_finish(dispatcher_start_data_type &&param);
-  ORBIT_SERVER_SERVER_API ~task_action_user_finish();
+  explicit task_action_user_finish(dispatcher_start_data_type &&param);
+  ~task_action_user_finish();
 
-  ORBIT_SERVER_SERVER_API const char *name() const override;
+  const char *name() const override;
 
-  ORBIT_SERVER_SERVER_API result_type operator()() override;
+  result_type operator()() override;
 
-  ORBIT_SERVER_SERVER_API int on_success() override;
-  ORBIT_SERVER_SERVER_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

@@ -29,9 +29,7 @@
 #include <string>
 #include <unordered_map>
 
-#ifndef ORBIT_CONTROLLER_SERVICE_API
-#  define ORBIT_CONTROLLER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 namespace rpc {
 class context;
@@ -55,32 +53,32 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
   // ---- 来自 Agent ----
   // Client 已启动（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_started(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_notify_client_started(
       rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request, atfw::orbit::CTANotifyClientStartedRsp& response);
 
   // Client 已退出（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_notify_client_exit(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_notify_client_exit(
       rpc::context& ctx, const atfw::orbit::ATCNotifyClientExitReq& request, atfw::orbit::CTANotifyClientExitRsp& response);
 
   // Agent 心跳（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_agent_heartbeat(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_agent_heartbeat(
       rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request);
 
   // Client 发送消息至 Server（Agent 转发）
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_forward_to_server(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_forward_to_server(
       rpc::context& ctx, const atfw::orbit::ATCForwardToServerReq& request, atfw::orbit::CTAForwardToServerRsp& response);
 
   // ---- 来自 Server ----
   // Server 请求启动 Client
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_launch_client(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_launch_client(
       rpc::context& ctx, const atfw::orbit::STCLaunchClientReq& request, atfw::orbit::CTSLaunchClientRsp& response);
 
   // Server 发送消息至 Client（下行转发）
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_send_to_client(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_send_to_client(
       rpc::context& ctx, const atfw::orbit::STCSendToClientReq& request, atfw::orbit::CTSSendToClientRsp& response);
 
   // Server 心跳
-  EXPLICIT_NODISCARD_ATTR ORBIT_CONTROLLER_SERVICE_API rpc::result_code_type handle_server_heartbeat(
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_server_heartbeat(
       rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request);
 
  private:

@@ -25,14 +25,14 @@
 
 #include <utility>
 
-TEAM_SERVICE_ROOM_API task_action_send_message::task_action_send_message(dispatcher_start_data_type&& param)
+task_action_send_message::task_action_send_message(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-TEAM_SERVICE_ROOM_API task_action_send_message::~task_action_send_message() {}
+task_action_send_message::~task_action_send_message() {}
 
-TEAM_SERVICE_ROOM_API const char* task_action_send_message::name() const { return "task_action_send_message"; }
+const char* task_action_send_message::name() const { return "task_action_send_message"; }
 
-TEAM_SERVICE_ROOM_API task_action_send_message::result_type task_action_send_message::operator()() {
+task_action_send_message::result_type task_action_send_message::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
@@ -44,6 +44,6 @@ TEAM_SERVICE_ROOM_API task_action_send_message::result_type task_action_send_mes
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-TEAM_SERVICE_ROOM_API int task_action_send_message::on_success() { return get_result(); }
+int task_action_send_message::on_success() { return get_result(); }
 
-TEAM_SERVICE_ROOM_API int task_action_send_message::on_failed() { return get_result(); }
+int task_action_send_message::on_failed() { return get_result(); }

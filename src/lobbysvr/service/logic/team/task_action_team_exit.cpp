@@ -28,14 +28,14 @@
 
 #include <utility>
 
-GAMECLIENT_SERVICE_API task_action_team_exit::task_action_team_exit(dispatcher_start_data_type&& param)
+task_action_team_exit::task_action_team_exit(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-GAMECLIENT_SERVICE_API task_action_team_exit::~task_action_team_exit() {}
+task_action_team_exit::~task_action_team_exit() {}
 
-GAMECLIENT_SERVICE_API const char* task_action_team_exit::name() const { return "task_action_team_exit"; }
+const char* task_action_team_exit::name() const { return "task_action_team_exit"; }
 
-GAMECLIENT_SERVICE_API task_action_team_exit::result_type task_action_team_exit::operator()() {
+task_action_team_exit::result_type task_action_team_exit::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
@@ -51,6 +51,6 @@ GAMECLIENT_SERVICE_API task_action_team_exit::result_type task_action_team_exit:
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-GAMECLIENT_SERVICE_API int task_action_team_exit::on_success() { return get_result(); }
+int task_action_team_exit::on_success() { return get_result(); }
 
-GAMECLIENT_SERVICE_API int task_action_team_exit::on_failed() { return get_result(); }
+int task_action_team_exit::on_failed() { return get_result(); }

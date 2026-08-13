@@ -25,17 +25,17 @@
 
 #include <config/extern_service_types.h>
 
-ORBIT_CONTROLLER_SERVICE_API task_action_agent_heartbeat::task_action_agent_heartbeat(
+task_action_agent_heartbeat::task_action_agent_heartbeat(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ORBIT_CONTROLLER_SERVICE_API task_action_agent_heartbeat::~task_action_agent_heartbeat() {}
+task_action_agent_heartbeat::~task_action_agent_heartbeat() {}
 
-ORBIT_CONTROLLER_SERVICE_API const char* task_action_agent_heartbeat::name() const {
+const char* task_action_agent_heartbeat::name() const {
   return "task_action_agent_heartbeat";
 }
 
-ORBIT_CONTROLLER_SERVICE_API task_action_agent_heartbeat::result_type task_action_agent_heartbeat::operator()() {
+task_action_agent_heartbeat::result_type task_action_agent_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
@@ -45,6 +45,6 @@ ORBIT_CONTROLLER_SERVICE_API task_action_agent_heartbeat::result_type task_actio
   TASK_ACTION_RETURN_CODE(rpc_result);
 }
 
-ORBIT_CONTROLLER_SERVICE_API int task_action_agent_heartbeat::on_success() { return get_result(); }
+int task_action_agent_heartbeat::on_success() { return get_result(); }
 
-ORBIT_CONTROLLER_SERVICE_API int task_action_agent_heartbeat::on_failed() { return get_result(); }
+int task_action_agent_heartbeat::on_failed() { return get_result(); }

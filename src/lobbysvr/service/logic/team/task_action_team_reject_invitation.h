@@ -7,9 +7,7 @@
 
 #include <dispatcher/task_action_cs_req_base.h>
 
-#ifndef GAMECLIENT_SERVICE_API
-#  define GAMECLIENT_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
-#endif
+
 
 class task_action_team_reject_invitation
     : public task_action_cs_rpc_base<atframework::team::CSTeamRejectInvitationReq,
@@ -26,13 +24,13 @@ class task_action_team_reject_invitation
   using task_action_cs_req_base::operator();
 
  public:
-  GAMECLIENT_SERVICE_API explicit task_action_team_reject_invitation(dispatcher_start_data_type&& param);
-  GAMECLIENT_SERVICE_API ~task_action_team_reject_invitation() override;
+  explicit task_action_team_reject_invitation(dispatcher_start_data_type&& param);
+  ~task_action_team_reject_invitation() override;
 
-  GAMECLIENT_SERVICE_API const char* name() const override;
+  const char* name() const override;
 
-  GAMECLIENT_SERVICE_API result_type operator()() override;
+  result_type operator()() override;
 
-  GAMECLIENT_SERVICE_API int on_success() override;
-  GAMECLIENT_SERVICE_API int on_failed() override;
+  int on_success() override;
+  int on_failed() override;
 };

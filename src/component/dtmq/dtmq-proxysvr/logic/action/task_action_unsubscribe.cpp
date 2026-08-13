@@ -32,14 +32,14 @@
 #include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
 
-DTMQ_PROXY_SERVICE_API task_action_unsubscribe::task_action_unsubscribe(dispatcher_start_data_type&& param)
+task_action_unsubscribe::task_action_unsubscribe(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-DTMQ_PROXY_SERVICE_API task_action_unsubscribe::~task_action_unsubscribe() {}
+task_action_unsubscribe::~task_action_unsubscribe() {}
 
-DTMQ_PROXY_SERVICE_API const char* task_action_unsubscribe::name() const { return "task_action_unsubscribe"; }
+const char* task_action_unsubscribe::name() const { return "task_action_unsubscribe"; }
 
-DTMQ_PROXY_SERVICE_API task_action_unsubscribe::result_type task_action_unsubscribe::operator()() {
+task_action_unsubscribe::result_type task_action_unsubscribe::operator()() {
   const rpc_request_type& req_body = get_request_body();
   if (is_stream_rpc()) {
     disable_response_message();
@@ -72,6 +72,6 @@ DTMQ_PROXY_SERVICE_API task_action_unsubscribe::result_type task_action_unsubscr
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-DTMQ_PROXY_SERVICE_API int task_action_unsubscribe::on_success() { return get_result(); }
+int task_action_unsubscribe::on_success() { return get_result(); }
 
-DTMQ_PROXY_SERVICE_API int task_action_unsubscribe::on_failed() { return get_result(); }
+int task_action_unsubscribe::on_failed() { return get_result(); }
