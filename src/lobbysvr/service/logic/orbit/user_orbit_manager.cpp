@@ -131,9 +131,9 @@ void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMES
   orbit_room_expired_timepoint_ = user_table.orbit_room_data().expired_timepoint();
 }
 
-int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user) const {
-  *user.mutable_orbit_room_data()->mutable_room_key() = room_key_;
-  user.mutable_orbit_room_data()->set_expired_timepoint(orbit_room_expired_timepoint_);
+int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
+  *user_table.mutable_orbit_room_data()->mutable_room_key() = room_key_;
+  user_table.mutable_orbit_room_data()->set_expired_timepoint(orbit_room_expired_timepoint_);
   return 0;
 }
 

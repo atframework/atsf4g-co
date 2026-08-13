@@ -33,8 +33,8 @@ class user_matching_manager {
   // 玩家数据生命周期钩子。匹配视图随 table_user 持久化，以便重登录后恢复订阅。
   void create_init(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context& ctx);
-  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user);
-  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user) const;
+  void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
+  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
   bool is_dirty() const;
   void clear_dirty();
 

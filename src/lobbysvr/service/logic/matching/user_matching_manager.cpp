@@ -94,17 +94,17 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
   RPC_RETURN_CODE(result);
 }
 
-void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user) {
+void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   data_.Clear();
-  if (user.has_matching_data()) {
-    protobuf_copy_message(data_, user.matching_data());
+  if (user_table.has_matching_data()) {
+    protobuf_copy_message(data_, user_table.matching_data());
   }
   pending_switch_matching_id_.clear();
   dirty_ = false;
 }
 
-int user_matching_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user) const {
-  protobuf_copy_message(*user.mutable_matching_data(), data_);
+int user_matching_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
+  protobuf_copy_message(*user_table.mutable_matching_data(), data_);
   return 0;
 }
 

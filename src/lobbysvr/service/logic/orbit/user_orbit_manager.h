@@ -38,7 +38,7 @@ class user_orbit_manager {
 
   void fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserData& user_data) const;
   void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
-  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user) const;
+  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
 
   // 开始匹配前需要确认是否还存在房间
   bool is_orbit_room_exist() const;
