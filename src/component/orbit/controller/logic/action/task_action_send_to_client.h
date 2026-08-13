@@ -17,8 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
 class task_action_send_to_client
     : public task_action_ss_rpc_base<atfw::orbit::STCSendToClientReq, atfw::orbit::CTSSendToClientRsp> {
  public:
@@ -33,7 +31,7 @@ class task_action_send_to_client
 
  public:
   explicit task_action_send_to_client(dispatcher_start_data_type&& param);
-  ~task_action_send_to_client();
+  ~task_action_send_to_client() override;
 
   const char* name() const override;
 

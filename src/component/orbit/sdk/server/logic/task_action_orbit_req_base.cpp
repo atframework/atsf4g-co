@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic/task_action_orbit_req_base.h"
 
 #include <std/explicit_declare.h>
@@ -6,6 +8,9 @@
 
 #include <logic/orbit_msg_dispatcher.h>
 #include <rpc/rpc_context.h>
+
+#include <memory>
+#include <string>
 
 ORBIT_SERVER_SERVICE_API task_action_orbit_req_base::task_action_orbit_req_base(
     dispatcher_start_data_type &&start_param)
@@ -49,7 +54,7 @@ ORBIT_SERVER_SERVICE_API task_action_orbit_req_base::msg_ref_type task_action_or
   }
 
   if (get_request().head().has_rpc_request()) {
-    auto rpc_response = head->mutable_rpc_response();
+    auto *rpc_response = head->mutable_rpc_response();
     if (nullptr != rpc_response) {
       auto response_type_url = get_response_type_url();
       rpc_response->set_version(logic_config::me()->get_atframework_settings().rpc_version());
@@ -61,7 +66,7 @@ ORBIT_SERVER_SERVICE_API task_action_orbit_req_base::msg_ref_type task_action_or
                             get_request().head().rpc_request().caller_timestamp());
     }
   } else if (get_request().head().has_rpc_stream()) {
-    auto rpc_stream = head->mutable_rpc_stream();
+    auto *rpc_stream = head->mutable_rpc_stream();
     if (nullptr != rpc_stream) {
       auto response_type_url = get_response_type_url();
       rpc_stream->set_version(logic_config::me()->get_atframework_settings().rpc_version());
@@ -112,7 +117,7 @@ ORBIT_SERVER_SERVICE_API const char *task_action_orbit_req_base::get_type_name()
 
 ORBIT_SERVER_SERVICE_API rpc::telemetry::trace_inherit_options task_action_orbit_req_base::get_inherit_option()
     const noexcept {
-  auto &req_msg = get_request();
+  const auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_request() && 0 != req_msg.head().source_task_id()) {
     return rpc::telemetry::trace_inherit_options{rpc::context::parent_mode::kParent, true, false};
   }
@@ -124,7 +129,7 @@ ORBIT_SERVER_SERVICE_API rpc::telemetry::trace_start_option task_action_orbit_re
     const noexcept {
   rpc::telemetry::trace_start_option ret = task_action_base::get_trace_option();
 
-  auto &req_msg = get_request();
+  const auto &req_msg = get_request();
   if (req_msg.has_head() && req_msg.head().has_rpc_trace() && !req_msg.head().rpc_trace().trace_id().empty()) {
     ret.parent_network_span = &req_msg.head().rpc_trace();
   }
@@ -147,10 +152,10 @@ ORBIT_SERVER_SERVICE_API void task_action_orbit_req_base::send_response() {
     return;
   }
 
-  for (std::list<message_type *>::iterator iter = response_messages_.begin(); iter != response_messages_.end();
-       ++iter) {
-    (*iter)->mutable_head()->set_error_code(get_response_code());
-    int32_t res = orbit_msg_dispatcher::me()->send_to_client_no_wait(get_shared_context(), client_id_, **iter);
+  for (auto &response_message : response_messages_) {
+    response_message->mutable_head()->set_error_code(get_response_code());
+    int32_t res =
+        orbit_msg_dispatcher::me()->send_to_client_no_wait(get_shared_context(), client_id_, *response_message);
     if (res < 0) {
       FWLOGERROR("task {} [{}] send orbit response to [{}] failed, res: {}({})", name(), get_task_id(), client_id_, res,
                  protobuf_mini_dumper_get_error_msg(res));

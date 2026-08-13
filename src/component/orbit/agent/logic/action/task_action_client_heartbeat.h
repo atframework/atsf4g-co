@@ -17,8 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
 class task_action_client_heartbeat
     : public task_action_ss_rpc_base<atfw::orbit::DTAClientHeartbeatNotify, google::protobuf::Empty> {
  public:
@@ -33,7 +31,7 @@ class task_action_client_heartbeat
 
  public:
   explicit task_action_client_heartbeat(dispatcher_start_data_type&& param);
-  ~task_action_client_heartbeat();
+  ~task_action_client_heartbeat() override;
 
   const char* name() const override;
 

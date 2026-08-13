@@ -17,9 +17,8 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
-class task_action_client_exit : public task_action_ss_rpc_base<atfw::orbit::DTAClientExitReq, atfw::orbit::ATDClientExitRsp> {
+class task_action_client_exit
+    : public task_action_ss_rpc_base<atfw::orbit::DTAClientExitReq, atfw::orbit::ATDClientExitRsp> {
  public:
   using base_type = task_action_ss_rpc_base<atfw::orbit::DTAClientExitReq, atfw::orbit::ATDClientExitRsp>;
   using message_type = base_type::message_type;
@@ -32,7 +31,7 @@ class task_action_client_exit : public task_action_ss_rpc_base<atfw::orbit::DTAC
 
  public:
   explicit task_action_client_exit(dispatcher_start_data_type&& param);
-  ~task_action_client_exit();
+  ~task_action_client_exit() override;
 
   const char* name() const override;
 

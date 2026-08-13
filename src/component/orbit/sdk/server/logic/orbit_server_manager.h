@@ -2,13 +2,6 @@
 
 #pragma once
 
-#include <cstdint>
-#include <deque>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-
 #include <atframe/atapp.h>
 
 // clang-format off
@@ -28,6 +21,14 @@
 #include <memory/rc_ptr.h>
 #include <rpc/rpc_common_types.h>
 
+#include <cstdint>
+#include <deque>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 #ifndef ORBIT_SERVER_SERVICE_API
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
@@ -42,10 +43,10 @@ enum class EnClientStatus : int {
 
 struct client_info {
   std::string client_id;
-  EnClientStatus status;
+  EnClientStatus status = EnClientStatus::EN_CLIENT_STATUS_UNSPECIFIED;
   std::string region;
   // 保底过期流程
-  time_t timeout_exit_time;
+  time_t timeout_exit_time = 0;
 
   atfw::orbit::DClientIdentity client_identity;
 };
@@ -65,9 +66,9 @@ using on_forward_to_server_fn =
     std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id, const std::string& data)>;
 using on_client_start_notify_fn = std::function<rpc::result_code_type(
     rpc::context& ctx, std::string client_id, const std::string& client_addr, const std::string& data)>;
-using on_client_end_notify_fn =
-    std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id, atfw::orbit::EnClientExitReason exit_reason,
-                                        const std::string& exit_data, int32_t exit_code)>;
+using on_client_end_notify_fn = std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id,
+                                                                    atfw::orbit::EnClientExitReason exit_reason,
+                                                                    const std::string& exit_data, int32_t exit_code)>;
 
 class orbit_server_manager {
  public:
@@ -135,11 +136,11 @@ class orbit_server_manager {
   void check_client_timeout();
 
   client_info_ptr get_client_info(const std::string& client_id);
-  void add_client_timeout(client_info_ptr client);
+  void add_client_timeout(const client_info_ptr& client);
   void erase_client_info(const std::string& client_id);
 
-  uint64_t select_controller_server_id(const std::string& client_id, const std::string& region);
-  uint64_t select_controller_server_id(const std::string& region);
+  static uint64_t select_controller_server_id(const std::string& client_id, const std::string& region);
+  static uint64_t select_controller_server_id(const std::string& region);
 
   uint64_t heartbeat_interval_sec_ = 0;
   time_t last_heartbeat_time_ = 0;

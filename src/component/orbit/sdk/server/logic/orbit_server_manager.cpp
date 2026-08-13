@@ -1,6 +1,6 @@
-#include "orbit_server_manager.h"
+// Copyright 2026 atframework
 
-#include "handle/handle_ss_rpc_controllertoserverservice.atfw.gen.h"
+#include "logic/orbit_server_manager.h"
 
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
@@ -30,6 +30,11 @@
 #include <rpc/servertocontrollerservice/servertocontrollerservice.atfw.gen.h>
 
 #include <set>
+#include <string>
+#include <unordered_map>
+#include <utility>
+
+#include "handle/handle_ss_rpc_controllertoserverservice.atfw.gen.h"
 
 #if defined(ORBIT_SERVER_SDK_DLL) && ORBIT_SERVER_SDK_DLL
 #  if defined(ORBIT_SERVER_SDK_NATIVE) && ORBIT_SERVER_SDK_NATIVE
@@ -322,13 +327,14 @@ void orbit_server_manager::erase_client_info(const std::string& client_id) {
   }
 }
 
-void orbit_server_manager::add_client_timeout(client_info_ptr client) {
+void orbit_server_manager::add_client_timeout(const client_info_ptr& client) {
   if (client == nullptr) {
     return;
   }
   client->timeout_exit_time = atfw::util::time::time_utility::get_sys_now() + client_timeout_sec_;
   // 加入到超时检查内
-  timeout_client_queue_.emplace_back(client_timeout_info{client, client->timeout_exit_time});
+  timeout_client_queue_.emplace_back(
+      client_timeout_info{.client_info_weak_ptr = client, .timeout_exit_time = client->timeout_exit_time});
 }
 
 uint64_t orbit_server_manager::select_controller_server_id(const std::string& client_id, const std::string& region) {

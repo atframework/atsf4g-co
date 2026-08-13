@@ -35,7 +35,7 @@ class task_action_client_agent_heartbeat
 
  public:
   ORBIT_SERVER_SERVICE_API explicit task_action_client_agent_heartbeat(dispatcher_start_data_type&& param);
-  ORBIT_SERVER_SERVICE_API ~task_action_client_agent_heartbeat();
+  ORBIT_SERVER_SERVICE_API ~task_action_client_agent_heartbeat() override;
 
   ORBIT_SERVER_SERVICE_API const char* name() const override;
 

@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
-#include "task_action_client_start.h"
+#include "logic/action/task_action_client_start.h"
 
 #include <logic/orbit_agent_manager.h>
 
@@ -25,9 +25,9 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <utility>
 
-task_action_client_start::task_action_client_start(dispatcher_start_data_type&& param)
-    : base_type(std::move(param)) {}
+task_action_client_start::task_action_client_start(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 
 task_action_client_start::~task_action_client_start() {}
 

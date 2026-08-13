@@ -35,7 +35,7 @@ class task_action_client_start_notify
 
  public:
   ORBIT_SERVER_SERVICE_API explicit task_action_client_start_notify(dispatcher_start_data_type&& param);
-  ORBIT_SERVER_SERVICE_API ~task_action_client_start_notify();
+  ORBIT_SERVER_SERVICE_API ~task_action_client_start_notify() override;
 
   ORBIT_SERVER_SERVICE_API const char* name() const override;
 

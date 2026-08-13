@@ -64,6 +64,7 @@ if output_render_dir and not os.path.isabs(output_render_dir):
 
 #include <cstdint> // IWYU pragma: keep
 #include <string>  // IWYU pragma: keep
+#include <utility> // IWYU pragma: keep
 
 namespace rpc {
 % for ns in service.get_cpp_namespace_begin(module_name, ''):
@@ -251,6 +252,7 @@ ${rpc_dllexport_decl} rpc::always_ready_code_type ${rpc.get_name()}(
 }  // namespace broadcast
 % endif
 namespace unicast {
+// NOLINTBEGIN(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
 %   if rpc_is_router_api:
 static ${rpc_return_type} __${rpc.get_name()}(
   ${', '.join(rpc_unicast_params_decl_modern)}) {
@@ -443,7 +445,8 @@ static ${rpc_return_type} __${rpc.get_name()}(
 %     if rpc_allow_no_wait:
     if (__no_wait) {
       break;
-    } else if (nullptr != __wait_later) {
+    }
+    if (nullptr != __wait_later) {
       *__wait_later = await_options;
       // need to call RPC_AWAIT_CODE_RESULT(rpc::wait(...)) to wait this rpc sequence later
       break;
@@ -494,6 +497,7 @@ ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(__${rpc.get_name()}(${', '.join(rpc_unicast_params_forward)})));
 %   endif
 }
+// NOLINTEND(misc-use-anonymous-namespace, cppcoreguidelines-missing-std-forward)
 }  // namespace unicast
 
 ${rpc_dllexport_decl} ${rpc_return_type} ${rpc.get_name()}(

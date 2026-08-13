@@ -17,8 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
 class task_action_notify_client_exit
     : public task_action_ss_rpc_base<atfw::orbit::ATCNotifyClientExitReq, atfw::orbit::CTANotifyClientExitRsp> {
  public:
@@ -33,7 +31,7 @@ class task_action_notify_client_exit
 
  public:
   explicit task_action_notify_client_exit(dispatcher_start_data_type&& param);
-  ~task_action_notify_client_exit();
+  ~task_action_notify_client_exit() override;
 
   const char* name() const override;
 

@@ -56,7 +56,8 @@ CASE_TEST(component_orbit, orbit_sdk_launch_client_contract) {
 
   auto rule = test.ss().mock(
       rpc::servertocontrollerservice::packer::get_full_name_of_launch_client(),
-      atfw::orbit::STCLaunchClientReq::descriptor()->full_name(), atfw::orbit::CTSLaunchClientRsp::descriptor()->full_name(),
+      atfw::orbit::STCLaunchClientReq::descriptor()->full_name(),
+      atfw::orbit::CTSLaunchClientRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
         const auto &typed_request = static_cast<const atfw::orbit::STCLaunchClientReq &>(request.body);
         CASE_EXPECT_EQ(0x1D0001, static_cast<int64_t>(request.target_node_id));

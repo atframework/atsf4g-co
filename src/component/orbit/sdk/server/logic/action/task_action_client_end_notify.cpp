@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
-#include "task_action_client_end_notify.h"
+#include "logic/action/task_action_client_end_notify.h"
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -23,6 +23,7 @@
 
 #include <config/extern_service_types.h>
 #include <logic/orbit_server_manager.h>
+#include <utility>
 
 ORBIT_SERVER_SERVICE_API task_action_client_end_notify::task_action_client_end_notify(
     dispatcher_start_data_type&& param)
@@ -38,8 +39,8 @@ ORBIT_SERVER_SERVICE_API task_action_client_end_notify::result_type task_action_
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  rsp_body.set_error_code(RPC_AWAIT_CODE_RESULT(
-      orbit_server_manager::me()->handle_client_end_notify(get_shared_context(), req_body)));
+  rsp_body.set_error_code(
+      RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->handle_client_end_notify(get_shared_context(), req_body)));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

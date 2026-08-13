@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <nostd/string_view.h>
@@ -18,15 +20,15 @@
 
 #include <config/logic_config.h>
 
-#include <list>
-#include <memory>
-#include <string>
-#include <utility>
-
 #include <dispatcher/dispatcher_type_defines.h>
 #include <dispatcher/task_action_base.h>
 #include <rpc/rpc_common_types.h>
 #include <utility/protobuf_mini_dumper.h>
+
+#include <list>
+#include <memory>
+#include <string>
+#include <utility>
 
 class orbit_msg_dispatcher;
 
@@ -52,7 +54,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_req_base : public task_action_r
 
  public:
   ORBIT_SERVER_SERVICE_API explicit task_action_orbit_req_base(dispatcher_start_data_type &&start_param);
-  ORBIT_SERVER_SERVICE_API virtual ~task_action_orbit_req_base();
+  ORBIT_SERVER_SERVICE_API ~task_action_orbit_req_base() override;
 
   ORBIT_SERVER_SERVICE_API result_type hook_run() override;
 
@@ -60,7 +62,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_req_base : public task_action_r
 
   ORBIT_SERVER_SERVICE_API const std::string &get_request_client_id() const noexcept;
 
-  ORBIT_SERVER_SERVICE_API void init_msg(msg_ref_type msg);
+  ORBIT_SERVER_SERVICE_API static void init_msg(msg_ref_type msg);
   ORBIT_SERVER_SERVICE_API void init_msg(msg_ref_type msg, msg_cref_type req_msg);
 
   ORBIT_SERVER_SERVICE_API std::shared_ptr<dispatcher_implement> get_dispatcher() const override;

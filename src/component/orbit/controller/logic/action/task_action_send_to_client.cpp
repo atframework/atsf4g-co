@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
-#include "task_action_send_to_client.h"
+#include "logic/action/task_action_send_to_client.h"
 
 #include <logic/orbit_controller_manager.h>
 
@@ -24,15 +24,14 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <utility>
 
 task_action_send_to_client::task_action_send_to_client(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_send_to_client::~task_action_send_to_client() {}
 
-const char* task_action_send_to_client::name() const {
-  return "task_action_send_to_client";
-}
+const char* task_action_send_to_client::name() const { return "task_action_send_to_client"; }
 
 task_action_send_to_client::result_type task_action_send_to_client::operator()() {
   const rpc_request_type& req_body = get_request_body();

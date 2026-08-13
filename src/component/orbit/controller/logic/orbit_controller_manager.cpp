@@ -2,14 +2,6 @@
 
 #include "logic/orbit_controller_manager.h"
 
-#include <algorithm>
-#include <functional>
-#include <limits>
-#include <string>
-#include <unordered_set>
-#include <utility>
-#include <vector>
-
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
@@ -40,6 +32,15 @@
 
 #include <rpc/controllertoagentservice/controllertoagentservice.atfw.gen.h>
 #include <rpc/controllertoserverservice/controllertoserverservice.atfw.gen.h>
+
+#include <algorithm>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace {
 constexpr const char* kEtcdOrbitLoadDir = "orbit_load";
@@ -340,7 +341,8 @@ void orbit_controller_manager::update_agent_load(const atfw::orbit::DAgentEtcdLo
 
 // ===================== Agent 侧 handlers =====================
 rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
-    rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request, atfw::orbit::CTANotifyClientStartedRsp& response) {
+    rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request,
+    atfw::orbit::CTANotifyClientStartedRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -376,9 +378,9 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_started(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(rpc::context& ctx,
-                                                                          const atfw::orbit::ATCNotifyClientExitReq& request,
-                                                                          atfw::orbit::CTANotifyClientExitRsp& response) {
+rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
+    rpc::context& ctx, const atfw::orbit::ATCNotifyClientExitReq& request,
+    atfw::orbit::CTANotifyClientExitRsp& response) {
   const auto& identity = request.client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 
@@ -419,8 +421,8 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(rpc::c
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::context& ctx,
-                                                                       const atfw::orbit::ATCAgentHeartbeatReq& request) {
+rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(
+    rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request) {
   // 通过请求中携带的 server_identity 路由到目标 Server
   const uint64_t target_server_unique_id = request.server_identity().unique_id();
   if (0 == target_server_unique_id) {
@@ -448,9 +450,9 @@ rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(rpc::cont
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_controller_manager::handle_forward_to_server(rpc::context& ctx,
-                                                                         const atfw::orbit::ATCForwardToServerReq& request,
-                                                                         atfw::orbit::CTAForwardToServerRsp& response) {
+rpc::result_code_type orbit_controller_manager::handle_forward_to_server(
+    rpc::context& ctx, const atfw::orbit::ATCForwardToServerReq& request,
+    atfw::orbit::CTAForwardToServerRsp& response) {
   const auto& identity = request.client_message().client_identity();
   const std::string& client_id_str = identity.client_id().client_id();
 

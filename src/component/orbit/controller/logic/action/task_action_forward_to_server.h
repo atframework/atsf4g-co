@@ -17,8 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
 class task_action_forward_to_server
     : public task_action_ss_rpc_base<atfw::orbit::ATCForwardToServerReq, atfw::orbit::CTAForwardToServerRsp> {
  public:
@@ -33,7 +31,7 @@ class task_action_forward_to_server
 
  public:
   explicit task_action_forward_to_server(dispatcher_start_data_type&& param);
-  ~task_action_forward_to_server();
+  ~task_action_forward_to_server() override;
 
   const char* name() const override;
 

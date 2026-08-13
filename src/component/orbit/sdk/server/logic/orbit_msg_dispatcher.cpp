@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include "logic/orbit_msg_dispatcher.h"
 
 #include "logic/orbit_server_manager.h"
@@ -176,7 +178,7 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
   rpc::telemetry::tracer tracer;
   std::unique_ptr<rpc::context> child_context;
   if (nullptr != start_data.context) {
-    child_context.reset(new rpc::context(*start_data.context));
+    child_context = std::make_unique<rpc::context>(*start_data.context);
     response_ctx = child_context.get();
 
     rpc::telemetry::trace_start_option trace_start_option;
@@ -201,7 +203,7 @@ ORBIT_SERVER_SERVICE_API void orbit_msg_dispatcher::on_create_task_failed(dispat
   head->set_error_code(error_code);
   head->set_timestamp(util::time::time_utility::get_now());
 
-  auto rpc_response = head->mutable_rpc_response();
+  auto *rpc_response = head->mutable_rpc_response();
   if (nullptr != rpc_response) {
     rpc_response->set_version(logic_config::me()->get_atframework_settings().rpc_version());
     rpc_response->set_rpc_name(rpc_name);

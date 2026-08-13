@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
-#include "task_action_forward_to_server.h"
+#include "logic/action/task_action_forward_to_server.h"
 
 #include <logic/orbit_controller_manager.h>
 
@@ -24,23 +24,21 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <utility>
 
-task_action_forward_to_server::task_action_forward_to_server(
-    dispatcher_start_data_type&& param)
+task_action_forward_to_server::task_action_forward_to_server(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_forward_to_server::~task_action_forward_to_server() {}
 
-const char* task_action_forward_to_server::name() const {
-  return "task_action_forward_to_server";
-}
+const char* task_action_forward_to_server::name() const { return "task_action_forward_to_server"; }
 
 task_action_forward_to_server::result_type task_action_forward_to_server::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
-  TASK_ACTION_RETURN_CODE(
-      RPC_AWAIT_CODE_RESULT(orbit_controller_manager::me()->handle_forward_to_server(get_shared_context(), req_body, rsp_body)));
+  TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      orbit_controller_manager::me()->handle_forward_to_server(get_shared_context(), req_body, rsp_body)));
 }
 
 int task_action_forward_to_server::on_success() { return get_result(); }

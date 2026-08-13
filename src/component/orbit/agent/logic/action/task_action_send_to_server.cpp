@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
-#include "task_action_send_to_server.h"
+#include "logic/action/task_action_send_to_server.h"
 
 #include <logic/orbit_agent_manager.h>
 
@@ -25,6 +25,7 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <utility>
 
 task_action_send_to_server::task_action_send_to_server(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}

@@ -1,22 +1,28 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <config/compiler_features.h>
 #include <design_pattern/singleton.h>
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <google/protobuf/descriptor.h>
 #include <protocol/common/orbit.common.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <gsl/select-gsl.h>
-
-#include <string>
 
 #include <dispatcher/dispatcher_implement.h>
 #include <dispatcher/dispatcher_type_defines.h>
 #include <rpc/rpc_common_types.h>
+
+#include <string>
 
 #ifndef ORBIT_SERVER_SERVICE_API
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
@@ -40,7 +46,7 @@ class orbit_msg_dispatcher : public dispatcher_implement {
   ORBIT_SERVER_SERVICE_API orbit_msg_dispatcher();
 
  public:
-  ORBIT_SERVER_SERVICE_API virtual ~orbit_msg_dispatcher();
+  ORBIT_SERVER_SERVICE_API ~orbit_msg_dispatcher() override;
 
   ORBIT_SERVER_SERVICE_API int32_t init() override;
 

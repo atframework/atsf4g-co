@@ -35,6 +35,8 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 
 #include <gsl/select-gsl.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <cstdint> // IWYU pragma: keep
 #include <cstddef> // IWYU pragma: keep
 #include <cstring> // IWYU pragma: keep
@@ -44,15 +46,14 @@ service_header_file_path = service_proto_file_prefix + ".pb.h"
 #include "rpc/rpc_common_types.h"
 #include "dispatcher/dispatcher_type_defines.h"
 
-#include <config/server_frame_build_feature.h>
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 // Typed mock registration helpers below call through the server-frame mock engine bridge. They only
 // exist in builds with PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS, never link the rpc-unit-test
 // library, and are never referenced by production code.
-#  include "rpc/unit_test/mock_engine_bridge.h"
-
 #  include <functional>
 #  include <utility>
+
+#  include "rpc/unit_test/mock_engine_bridge.h"
 #endif
 
 #ifndef ${rpc_dllexport_decl}

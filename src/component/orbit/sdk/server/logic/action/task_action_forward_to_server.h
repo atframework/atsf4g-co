@@ -35,7 +35,7 @@ class task_action_forward_to_server
 
  public:
   ORBIT_SERVER_SERVICE_API explicit task_action_forward_to_server(dispatcher_start_data_type&& param);
-  ORBIT_SERVER_SERVICE_API ~task_action_forward_to_server();
+  ORBIT_SERVER_SERVICE_API ~task_action_forward_to_server() override;
 
   ORBIT_SERVER_SERVICE_API const char* name() const override;
 

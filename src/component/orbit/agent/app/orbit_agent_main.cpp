@@ -1,9 +1,5 @@
 // Copyright 2026 atframework
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
-
 #include <common/file_system.h>
 #include <time/time_utility.h>
 
@@ -22,11 +18,6 @@
 #include <logic/logic_server_macro.h>
 #include <logic/logic_server_setup.h>
 
-#include "logic/orbit_agent_manager.h"
-
-#include "app/handle_ss_rpc_clienttoagentservice.atfw.gen.h"
-#include "app/handle_ss_rpc_controllertoagentservice.atfw.gen.h"
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -36,6 +27,15 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
+#include "app/handle_ss_rpc_clienttoagentservice.atfw.gen.h"
+#include "app/handle_ss_rpc_controllertoagentservice.atfw.gen.h"
+#include "logic/orbit_agent_manager.h"
 
 class main_service_module : public atapp::module_impl, public std::enable_shared_from_this<main_service_module> {
  public:
@@ -86,5 +86,5 @@ int main(int argc, char *argv[]) {
   app.add_module(ss_msg_dispatcher::me());
   app.add_module(std::make_shared<main_service_module>());
 
-  return app.run(uv_default_loop(), argc, (const char **)argv, NULL);
+  return app.run(uv_default_loop(), argc, (const char **)argv, nullptr);
 }

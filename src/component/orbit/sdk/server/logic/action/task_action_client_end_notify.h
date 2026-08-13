@@ -21,7 +21,8 @@
 #  define ORBIT_SERVER_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_client_end_notify : public task_action_ss_rpc_base<atfw::orbit::CTSClientEndReq, atfw::orbit::STCClientEndRsp> {
+class task_action_client_end_notify
+    : public task_action_ss_rpc_base<atfw::orbit::CTSClientEndReq, atfw::orbit::STCClientEndRsp> {
  public:
   using base_type = task_action_ss_rpc_base<atfw::orbit::CTSClientEndReq, atfw::orbit::STCClientEndRsp>;
   using message_type = base_type::message_type;
@@ -34,7 +35,7 @@ class task_action_client_end_notify : public task_action_ss_rpc_base<atfw::orbit
 
  public:
   ORBIT_SERVER_SERVICE_API explicit task_action_client_end_notify(dispatcher_start_data_type&& param);
-  ORBIT_SERVER_SERVICE_API ~task_action_client_end_notify();
+  ORBIT_SERVER_SERVICE_API ~task_action_client_end_notify() override;
 
   ORBIT_SERVER_SERVICE_API const char* name() const override;
 

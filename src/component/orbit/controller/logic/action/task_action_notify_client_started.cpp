@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-05-11 15:53:52
 
-#include "task_action_notify_client_started.h"
+#include "logic/action/task_action_notify_client_started.h"
 
 #include <logic/orbit_controller_manager.h>
 
@@ -24,19 +24,16 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <utility>
 
-task_action_notify_client_started::task_action_notify_client_started(
-    dispatcher_start_data_type&& param)
+task_action_notify_client_started::task_action_notify_client_started(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_notify_client_started::~task_action_notify_client_started() {}
 
-const char* task_action_notify_client_started::name() const {
-  return "task_action_notify_client_started";
-}
+const char* task_action_notify_client_started::name() const { return "task_action_notify_client_started"; }
 
-task_action_notify_client_started::result_type
-task_action_notify_client_started::operator()() {
+task_action_notify_client_started::result_type task_action_notify_client_started::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 

@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-04-29 11:47:42
 
-#include "task_action_client_heartbeat.h"
+#include "logic/action/task_action_client_heartbeat.h"
 
 #include <logic/orbit_agent_manager.h>
 
@@ -24,15 +24,14 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <config/extern_service_types.h>
+#include <utility>
 
 task_action_client_heartbeat::task_action_client_heartbeat(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_client_heartbeat::~task_action_client_heartbeat() {}
 
-const char* task_action_client_heartbeat::name() const {
-  return "task_action_client_heartbeat";
-}
+const char* task_action_client_heartbeat::name() const { return "task_action_client_heartbeat"; }
 
 task_action_client_heartbeat::result_type task_action_client_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();

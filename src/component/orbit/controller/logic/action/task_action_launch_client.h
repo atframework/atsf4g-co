@@ -17,9 +17,8 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
-class task_action_launch_client : public task_action_ss_rpc_base<atfw::orbit::STCLaunchClientReq, atfw::orbit::CTSLaunchClientRsp> {
+class task_action_launch_client
+    : public task_action_ss_rpc_base<atfw::orbit::STCLaunchClientReq, atfw::orbit::CTSLaunchClientRsp> {
  public:
   using base_type = task_action_ss_rpc_base<atfw::orbit::STCLaunchClientReq, atfw::orbit::CTSLaunchClientRsp>;
   using message_type = base_type::message_type;
@@ -32,7 +31,7 @@ class task_action_launch_client : public task_action_ss_rpc_base<atfw::orbit::ST
 
  public:
   explicit task_action_launch_client(dispatcher_start_data_type&& param);
-  ~task_action_launch_client();
+  ~task_action_launch_client() override;
 
   const char* name() const override;
 

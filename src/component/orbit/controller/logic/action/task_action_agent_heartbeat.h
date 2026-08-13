@@ -17,8 +17,6 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
 class task_action_agent_heartbeat
     : public task_action_ss_rpc_base<atfw::orbit::ATCAgentHeartbeatReq, google::protobuf::Empty> {
  public:
@@ -33,7 +31,7 @@ class task_action_agent_heartbeat
 
  public:
   explicit task_action_agent_heartbeat(dispatcher_start_data_type&& param);
-  ~task_action_agent_heartbeat();
+  ~task_action_agent_heartbeat() override;
 
   const char* name() const override;
 

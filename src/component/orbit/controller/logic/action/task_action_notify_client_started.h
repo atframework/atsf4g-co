@@ -17,12 +17,11 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-
-
 class task_action_notify_client_started
     : public task_action_ss_rpc_base<atfw::orbit::ATCNotifyClientStartedReq, atfw::orbit::CTANotifyClientStartedRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<atfw::orbit::ATCNotifyClientStartedReq, atfw::orbit::CTANotifyClientStartedRsp>;
+  using base_type =
+      task_action_ss_rpc_base<atfw::orbit::ATCNotifyClientStartedReq, atfw::orbit::CTANotifyClientStartedRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -33,7 +32,7 @@ class task_action_notify_client_started
 
  public:
   explicit task_action_notify_client_started(dispatcher_start_data_type&& param);
-  ~task_action_notify_client_started();
+  ~task_action_notify_client_started() override;
 
   const char* name() const override;
 

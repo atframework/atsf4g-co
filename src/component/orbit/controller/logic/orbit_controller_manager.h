@@ -29,8 +29,6 @@
 #include <string>
 #include <unordered_map>
 
-
-
 namespace rpc {
 class context;
 }  // namespace rpc
@@ -53,37 +51,41 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
 
   // ---- 来自 Agent ----
   // Client 已启动（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_notify_client_started(
-      rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request, atfw::orbit::CTANotifyClientStartedRsp& response);
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_notify_client_started(
+      rpc::context& ctx, const atfw::orbit::ATCNotifyClientStartedReq& request,
+      atfw::orbit::CTANotifyClientStartedRsp& response);
 
   // Client 已退出（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_notify_client_exit(
-      rpc::context& ctx, const atfw::orbit::ATCNotifyClientExitReq& request, atfw::orbit::CTANotifyClientExitRsp& response);
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_notify_client_exit(
+      rpc::context& ctx, const atfw::orbit::ATCNotifyClientExitReq& request,
+      atfw::orbit::CTANotifyClientExitRsp& response);
 
   // Agent 心跳（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_agent_heartbeat(
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_agent_heartbeat(
       rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request);
 
   // Client 发送消息至 Server（Agent 转发）
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_forward_to_server(
-      rpc::context& ctx, const atfw::orbit::ATCForwardToServerReq& request, atfw::orbit::CTAForwardToServerRsp& response);
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_forward_to_server(
+      rpc::context& ctx, const atfw::orbit::ATCForwardToServerReq& request,
+      atfw::orbit::CTAForwardToServerRsp& response);
 
   // ---- 来自 Server ----
   // Server 请求启动 Client
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_launch_client(
-      rpc::context& ctx, const atfw::orbit::STCLaunchClientReq& request, atfw::orbit::CTSLaunchClientRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_launch_client(rpc::context& ctx,
+                                                                     const atfw::orbit::STCLaunchClientReq& request,
+                                                                     atfw::orbit::CTSLaunchClientRsp& response);
 
   // Server 发送消息至 Client（下行转发）
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_send_to_client(
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_send_to_client(
       rpc::context& ctx, const atfw::orbit::STCSendToClientReq& request, atfw::orbit::CTSSendToClientRsp& response);
 
   // Server 心跳
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_server_heartbeat(
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_server_heartbeat(
       rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request);
 
  private:
   atfw::orbit::DAgentIdentity select_agent_for_launch(const atfw::orbit::DAgentClientStartArgsResource& resource,
-                                                const std::string& match_tag) noexcept;
+                                                      const std::string& match_tag) noexcept;
   void on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                            const atfw::orbit::DAgentEtcdLoadRecord& record);
   void update_agent_load(const atfw::orbit::DAgentEtcdLoadRecord& record);

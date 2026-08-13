@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #pragma once
 
 #include <design_pattern/singleton.h>
@@ -6,14 +8,6 @@
 
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_queue.h>
-
-#include <chrono>
-#include <cstdint>
-#include <deque>
-#include <set>
-#include <string>
-#include <unordered_map>
-#include <vector>
 
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_keepalive.h>
@@ -34,6 +28,15 @@
 // clang-format on
 
 #include <rpc/rpc_common_types.h>
+
+#include <chrono>
+#include <cstdint>
+#include <deque>
+#include <set>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "memory/rc_ptr.h"
 
 namespace rpc {
@@ -92,8 +95,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 来自Controller
   // 启动 Client
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_start_client(
-      rpc::context& ctx, const atfw::orbit::CTAStartClientReq& request, atfw::orbit::ATCStartClientRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_start_client(rpc::context& ctx,
+                                                                    const atfw::orbit::CTAStartClientReq& request,
+                                                                    atfw::orbit::ATCStartClientRsp& response);
   // 转发至 Client
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_forward_to_client(
       rpc::context& ctx, const atfw::orbit::CTAForwardToClientReq& request,
@@ -104,66 +108,68 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
 
   // 来自Client
   // Client 启动
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_start(
-      rpc::context& ctx, uint64_t client_server_id, const atfw::orbit::DTAClientStartReq& request,
-      atfw::orbit::ATDClientStartRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_start(rpc::context& ctx, uint64_t client_server_id,
+                                                                    const atfw::orbit::DTAClientStartReq& request,
+                                                                    atfw::orbit::ATDClientStartRsp& response);
   // Client 心跳
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_heartbeat(
       rpc::context& ctx, const atfw::orbit::DTAClientHeartbeatNotify& request);
   // 转发至 Server
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_send_to_server(
-      rpc::context& ctx, const atfw::orbit::DTASendToServerReq& request, atfw::orbit::ATDSendToServerRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_send_to_server(rpc::context& ctx,
+                                                                      const atfw::orbit::DTASendToServerReq& request,
+                                                                      atfw::orbit::ATDSendToServerRsp& response);
   // Client 退出
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_exit(
-      rpc::context& ctx, const atfw::orbit::DTAClientExitReq& request, atfw::orbit::ATDClientExitRsp& response);
+  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_client_exit(rpc::context& ctx,
+                                                                   const atfw::orbit::DTAClientExitReq& request,
+                                                                   atfw::orbit::ATDClientExitRsp& response);
 
   void on_uv_process_exit(uv_process_t* process_handle, int64_t exit_status, int term_signal);
   uint64_t select_controller_server_id(const std::string& client_id) const;
 
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
-  const orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
+  orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
 
  private:
   int startup_seed_client();
 
-  void set_client_state(orbit_agent_client_record_ptr record, atfw::orbit::EnClientState state);
+  void set_client_state(const orbit_agent_client_record_ptr& record, atfw::orbit::EnClientState state);
 
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
                                         std::vector<std::string>& output) const;
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
-  int spawn_client_process(orbit_agent_client_record_ptr record, const std::vector<std::string>& command_line);
+  int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(rpc::context& ctx,
                                                                           orbit_agent_client_record_ptr record);
-  void build_client_launch_arguments(orbit_agent_client_record_ptr record,
+  void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
                                      const std::unordered_map<std::string, std::string>& render_values,
                                      const std::vector<std::string>& command_line, std::vector<std::string>& output);
 
-  void fill_client_identity(atfw::orbit::DClientIdentity& output, orbit_agent_client_record_ptr client) const;
-  void stop_client_process(orbit_agent_client_record_ptr client_record, atfw::orbit::EnClientExitReason exit_reason,
-                           int32_t exit_code);
-  void async_notify_client_exit(orbit_agent_client_record_ptr client_record);
+  void fill_client_identity(atfw::orbit::DClientIdentity& output, const orbit_agent_client_record_ptr& client) const;
+  void stop_client_process(const orbit_agent_client_record_ptr& client_record,
+                           atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
+  void async_notify_client_exit(const orbit_agent_client_record_ptr& client_record);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type notify_client_exit(rpc::context& ctx,
                                                                    orbit_agent_client_record_ptr client_record,
                                                                    const std::string& custom_data);
   void check_client_timeouts(time_t now);
   void check_client_force_kill(time_t now);
   void check_server_identity_timeouts(time_t now);
-  int kill_client_process(orbit_agent_client_record_ptr client_record, int signal_number,
-                          atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
+  static int kill_client_process(const orbit_agent_client_record_ptr& client_record, int signal_number,
+                                 atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   void server_heartbeat(const atfw::orbit::DServerIdentity& server_identity);
   rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
                                         const atfw::orbit::DServerIdentity& server_identity);
   atfw::orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
-  void on_client_process_exit(orbit_agent_client_record_ptr record, int64_t exit_status, int term_signal);
+  void on_client_process_exit(const orbit_agent_client_record_ptr& record, int64_t exit_status, int term_signal);
 
   void update_etcd_load_snapshot();
   void load_record_to_json();
   void try_sync_load_to_etcd();
 
-  void delete_client(orbit_agent_client_record_ptr client_record);
+  void delete_client(const orbit_agent_client_record_ptr& client_record);
 
-  double get_load_value();
+  static double get_load_value();
 
   // Agent无法再提供服务
   void agent_fatal_error();
@@ -241,7 +247,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   std::string load_json_;              // 上次同步到etcd的负载记录JSON字符串
   bool dirty_load_json_ = true;        // load_json_是否有未同步的变更
 
-  uv_rusage_t last_self_rusage_;
+  uv_rusage_t last_self_rusage_{};
   std::chrono::steady_clock::time_point last_self_usage_sample_timepoint_;
   double last_self_cpu_used_ = 0.0;
   bool has_self_usage_sample_ = false;

@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // @brief Created by yousongyang with mako-generator.py at 2026-04-30 15:07:18
 
-#include "task_action_server_heartbeat.h"
+#include "logic/action/task_action_server_heartbeat.h"
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -24,6 +24,7 @@
 
 #include <config/extern_service_types.h>
 
+#include <utility>
 #include "logic/orbit_agent_manager.h"
 
 task_action_server_heartbeat::task_action_server_heartbeat(dispatcher_start_data_type&& param)
@@ -31,9 +32,7 @@ task_action_server_heartbeat::task_action_server_heartbeat(dispatcher_start_data
 
 task_action_server_heartbeat::~task_action_server_heartbeat() {}
 
-const char* task_action_server_heartbeat::name() const {
-  return "task_action_server_heartbeat";
-}
+const char* task_action_server_heartbeat::name() const { return "task_action_server_heartbeat"; }
 
 task_action_server_heartbeat::result_type task_action_server_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
