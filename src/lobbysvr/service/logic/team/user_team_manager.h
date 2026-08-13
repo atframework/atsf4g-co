@@ -11,7 +11,7 @@ class user_team_manager {
   explicit user_team_manager(user& owner);
   ~user_team_manager();
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context&);
+  ATFW_EXPLICIT_NODISCARD_ATTR int32_t login_init(rpc::context&);
 
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }

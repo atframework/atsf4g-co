@@ -47,8 +47,8 @@
 #include <vector>
 
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
-#include "data/user.h"
 #include "data/session.h"
+#include "data/user.h"
 #include "frame/test_macros.h"
 #include "logic/chat/user_chat_manager.h"
 #include "logic/logic_server_setup.h"
@@ -245,7 +245,7 @@ bool create_chat_user(atfw::testing::runtime &test, uint64_t user_id, uint64_t s
   return run_sync_task(test, "chat.login_init", [&user_inst, &sess](rpc::context &ctx) -> rpc::result_code_type {
     sess->set_user(user_inst);
     user_inst->set_session(ctx, sess);
-    int32_t res = RPC_AWAIT_CODE_RESULT(user_inst->get_user_chat_manager().login_init(ctx));
+    int32_t res = user_inst->get_user_chat_manager().login_init(ctx);
     RPC_RETURN_CODE(res);
   });
 }
@@ -336,7 +336,8 @@ size_t count_channel_sync_records(atfw::testing::runtime &test, uint64_t session
       continue;
     }
     if (cs_msg.head().has_rpc_stream() &&
-        cs_msg.head().rpc_stream().rpc_name() == rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync()) {
+        cs_msg.head().rpc_stream().rpc_name() ==
+            rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync()) {
       ++ret;
     }
   }
@@ -511,7 +512,8 @@ CASE_TEST(lobbysvr_user_chat, login_init_subscribe_and_get_all_channel) {
 
   // chat_get_all_channel through the real CS task action.
   atframework::chat::CSChatGetAllChannelReq get_all_req;
-  auto packed = pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_all_channel(), get_all_req);
+  auto packed =
+      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_all_channel(), get_all_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed));
 
   atframework::CSMsg rsp_msg;
@@ -574,13 +576,14 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   for (auto *chat_user : {&user1, &user2}) {
     atframework::chat::CSChatGetChannelSnapshotReq snapshot_req;
     snapshot_req.set_channel_id(world_channel_id);
-    auto packed =
-        pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), snapshot_req);
+    auto packed = pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(),
+                                       snapshot_req);
     CASE_EXPECT_TRUE(post_and_pump(test, chat_user->client, packed));
 
     atframework::CSMsg rsp_msg;
     const auto *record = find_downstream_by_rpc_name(
-        test, chat_user->session_id, rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), rsp_msg);
+        test, chat_user->session_id, rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(),
+        rsp_msg);
     CASE_EXPECT_TRUE(nullptr != record);
     if (nullptr == record) {
       test.stop();
@@ -612,7 +615,8 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   atframework::chat::CSChatSendMessageReq send_req;
   send_req.mutable_channel_key()->set_world_partition_channel(0);
   send_req.mutable_detail()->set_text("hello world from u1");
-  auto packed_send = pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
+  auto packed_send =
+      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_send));
 
   atframework::CSMsg send_rsp_msg;
@@ -646,8 +650,9 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   flush_pending_chat_messages(test);
   for (auto *chat_user : {&user1, &user2}) {
     atframework::CSMsg sync_msg;
-    const auto *sync_record = find_downstream_by_rpc_name(
-        test, chat_user->session_id, rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync(), sync_msg);
+    const auto *sync_record =
+        find_downstream_by_rpc_name(test, chat_user->session_id,
+                                    rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync(), sync_msg);
     CASE_EXPECT_TRUE(nullptr != sync_record);
     if (nullptr == sync_record) {
       continue;
@@ -729,8 +734,8 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   // user2 pulls the initial snapshot of its private channel to install push callbacks.
   atframework::chat::CSChatGetChannelSnapshotReq snapshot_req;
   snapshot_req.set_channel_id(user2_private_channel_id);
-  auto packed_snapshot =
-      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), snapshot_req);
+  auto packed_snapshot = pack_chat_cs_request(
+      rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), snapshot_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user2.client, packed_snapshot));
 
   // The private channel becomes ready via a snapshot event.
@@ -748,7 +753,8 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   atframework::chat::CSChatSendMessageReq send_req;
   *send_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId2, kZoneId);
   send_req.mutable_detail()->set_text("secret-u2");
-  auto packed_send = pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
+  auto packed_send =
+      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), send_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user2.client, packed_send));
 
   atframework::CSMsg send_rsp_msg;
@@ -830,7 +836,8 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   atframework::chat::CSChatSendMessageReq event_req;
   *event_req.mutable_channel_key() = make_chat_key_of_private_channel(kUserId1, kZoneId);
   event_req.mutable_detail()->mutable_event()->CopyFrom(any_payload);
-  auto packed_event = pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), event_req);
+  auto packed_event =
+      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_send_message(), event_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_event));
   atframework::CSMsg event_rsp_msg;
   const auto *event_rsp_record = find_downstream_by_rpc_name(
@@ -878,8 +885,8 @@ CASE_TEST(lobbysvr_user_chat, heartbeat_resync_and_snapshot_merge) {
 
   atframework::chat::CSChatGetChannelSnapshotReq snapshot_req;
   snapshot_req.set_channel_id(world_channel_id);
-  auto packed_snapshot =
-      pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), snapshot_req);
+  auto packed_snapshot = pack_chat_cs_request(
+      rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), snapshot_req);
   CASE_EXPECT_TRUE(post_and_pump(test, user1.client, packed_snapshot));
 
   // Load three messages into the world channel cache through a snapshot event.
@@ -909,8 +916,8 @@ CASE_TEST(lobbysvr_user_chat, heartbeat_resync_and_snapshot_merge) {
     sync_point->mutable_channel_key()->CopyFrom(world_channel_key);
     sync_point->set_last_sequence(last_sequence);
     sync_point->set_last_hash_code(last_hash_code);
-    auto packed =
-        pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_heartbeat(), heartbeat_req);
+    auto packed = pack_chat_cs_request(rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_heartbeat(),
+                                       heartbeat_req);
     return post_and_pump(test, user1.client, packed);
   };
 

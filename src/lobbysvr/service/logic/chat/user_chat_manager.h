@@ -4,11 +4,11 @@
 
 #include <gsl/select-gsl.h>
 
+#include <design_pattern/noncopyable.h>
 #include <nostd/function_ref.h>
 #include <nostd/nullability.h>
 #include <nostd/type_traits.h>
 #include <std/explicit_declare.h>
-#include <design_pattern/noncopyable.h>
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
@@ -51,7 +51,7 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   explicit user_chat_manager(user& owner);
   ~user_chat_manager();
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type login_init(rpc::context&);
+  ATFW_EXPLICIT_NODISCARD_ATTR int32_t login_init(rpc::context&);
 
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }

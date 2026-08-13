@@ -26,8 +26,8 @@ user_team_manager::user_team_manager(user& owner) : owner_(&owner) {}
 
 user_team_manager::~user_team_manager() {}
 
-rpc::result_code_type user_team_manager::login_init(rpc::context&) {
+int32_t user_team_manager::login_init(rpc::context&) {
   user_chat_manager::global_setup_private_channel_event_callback<::atfw::team::DTeamMemberAction>(
       reinterpret_cast<uintptr_t>(dispatch_team_member_event), dispatch_team_member_event);
-  RPC_RETURN_CODE(0);
+  return 0;
 }

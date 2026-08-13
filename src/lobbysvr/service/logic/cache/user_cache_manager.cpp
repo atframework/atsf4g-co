@@ -63,10 +63,10 @@ user_cache_manager::user_cache_manager(user& owner)
 
 user_cache_manager::~user_cache_manager() {}
 
-rpc::result_code_type user_cache_manager::login_init(rpc::context& /*ctx*/) {
+int32_t user_cache_manager::login_init(rpc::context& /*ctx*/) {
   set_user_cache_expired();
 
-  RPC_RETURN_CODE(0);
+  return 0;
 }
 
 void user_cache_manager::on_logout(rpc::context& ctx) {
@@ -226,8 +226,8 @@ void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx
         RPC_RETURN_CODE(res);
       });
   if (notify_task.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke task to notify user cache expired failed, res: {}({})",
-                *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
+    FWPLOGERROR(*owner_, "async_invoke task to notify user cache expired failed, res: {}({})", *notify_task.get_error(),
+                protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
   } else {
     need_notify_user_cache_expired_ = false;
   }
@@ -674,7 +674,8 @@ void user_cache_manager::pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPAC
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cache(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_pull_key>& keys,
     ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>& output, bool filter_unused_id,
-    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* ATFW_UTIL_MACRO_NULLABLE not_found_keys) {
+    ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiCacheKey>* ATFW_UTIL_MACRO_NULLABLE
+        not_found_keys) {
   std::unordered_map<PROJECT_NAMESPACE_ID::object_cache_key, PROJECT_NAMESPACE_ID::EnCacheApiGetCacheType,
                      rpc::cache_api::cache_key_hash_t, rpc::cache_api::cache_key_equal_t>
       user_map;
@@ -818,7 +819,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::check_use
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::get_user_cache(
-    rpc::context& ctx, uint32_t zone_id, uint64_t user_id, PROJECT_NAMESPACE_ID::DUserBasicData* ATFW_UTIL_MACRO_NULLABLE out) {
+    rpc::context& ctx, uint32_t zone_id, uint64_t user_id,
+    PROJECT_NAMESPACE_ID::DUserBasicData* ATFW_UTIL_MACRO_NULLABLE out) {
   PROJECT_NAMESPACE_ID::object_cache_key key;
   ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>* cache_contents =
       ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectData>>();

@@ -170,12 +170,12 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
   user_async_jobs_manager_->login_init(ctx);
   user_rank_manager_->login_init(ctx);
 
-  ret = RPC_AWAIT_CODE_RESULT(user_cache_manager_->login_init(ctx));
+  ret = user_cache_manager_->login_init(ctx);
   if (ret < 0) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
 
-  ret = RPC_AWAIT_CODE_RESULT(user_chat_manager_->login_init(ctx));
+  ret = user_chat_manager_->login_init(ctx);
   if (ret < 0) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
@@ -183,6 +183,11 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
   RPC_AWAIT_IGNORE_RESULT(user_matching_manager_->login_init(ctx));
 
   ret = RPC_AWAIT_CODE_RESULT(user_orbit_manager_->login_init(ctx));
+  if (ret < 0) {
+    RPC_RETURN_CODE(trace.finish({ret, {}}));
+  }
+
+  ret = user_team_manager_->login_init(ctx);
   if (ret < 0) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }

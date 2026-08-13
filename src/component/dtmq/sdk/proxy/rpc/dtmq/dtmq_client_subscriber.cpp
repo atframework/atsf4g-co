@@ -1817,6 +1817,12 @@ DTMQ_PROXY_SDK_API const std::string& client_subscriber::client_subscriber::get_
   }
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lg{lock};
+
+  auto iter = name_mapping.find(desc);
+  if (iter != name_mapping.end() && iter->second) {
+    return *iter->second;
+  }
+
   auto ret = atfw::util::memory::make_strong_rc<std::string>(parse_fn());
   name_mapping[desc] = ret;
 

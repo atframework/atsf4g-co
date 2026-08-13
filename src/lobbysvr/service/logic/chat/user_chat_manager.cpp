@@ -458,7 +458,7 @@ user_chat_manager::user_chat_manager(user& owner) : owner_(&owner), last_send_to
 
 user_chat_manager::~user_chat_manager() {}
 
-rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
+int32_t user_chat_manager::login_init(rpc::context& ctx) {
   subscriber_key_ = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
 
@@ -531,7 +531,7 @@ rpc::result_code_type user_chat_manager::login_init(rpc::context& ctx) {
     }
   }
 
-  RPC_RETURN_CODE(0);
+  return 0;
 }
 
 void user_chat_manager::foreach_channel(
