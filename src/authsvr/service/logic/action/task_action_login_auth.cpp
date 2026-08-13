@@ -85,7 +85,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
     login_auth_tb->set_user_id(static_cast<uint64_t>(new_user_id));
 
     res =
-        RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::insert(get_shared_context(), login_auth_tb, login_auth_cas_version));
+        RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::insert(get_shared_context(), login_auth_tb, &login_auth_cas_version));
     if (res < 0) {
       FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to save user_id failed, error code: {}({})",
                    session_key.node_id, session_key.session_id, req_body.open_id(), res,

@@ -233,13 +233,17 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
 % if index.enable_cas:
 SERVER_FRAME_API result_type insert(rpc::context &ctx,
                                  shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store,
-                                 uint64_t &version) {
+                                 uint64_t* version) {
+  uint64_t local_version = 0;
+  if (version == nullptr) {
+    version = &local_version;
+  }
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::replace_handler()) {
     rpc::unit_test::db_mock_meta __meta;
-    __meta.version = version;
+    __meta.version = *version;
     int __res = RPC_AWAIT_CODE_RESULT(__handler(ctx, *store, __meta));
-    version = __meta.version;
+    *version = __meta.version;
     RPC_DB_RETURN_CODE(__res);
   }
 #endif
@@ -252,7 +256,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx,
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
                                                                 shared_abstract_message<google::protobuf::Message>{store},
-                                                                version));
+                                                                *version));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }

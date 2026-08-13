@@ -138,7 +138,6 @@ rpc::result_code_type transaction_manager::create_transaction(
     storage.mutable_metadata()->mutable_expire_timepoint()->set_nanos(now_nanos);
   }
 
-  uint64_t db_version = 0;
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
   db_data->set_zone_id(get_transaction_zone_id(storage.metadata()));
   db_data->set_transaction_uuid(storage.metadata().transaction_uuid());
@@ -149,7 +148,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, db_version));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data));
     // TODO(owent): With TTL
 
     if (ret < 0) {
