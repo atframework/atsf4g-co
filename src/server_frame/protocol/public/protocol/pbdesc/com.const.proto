@@ -333,6 +333,20 @@ enum EnErrorCode {
                                         [(error_code.description) = "关卡配置未找到"];
   // orbit错误码
   EN_ERR_ORBIT_ALREADY_IN_ROOM = -1101
-                                [(error_code.description) = "已经在房间中"];
+                                 [(error_code.description) = "已经在房间中"];
+
+  // 组队模块[1201-1300]
+  EN_ERR_TEAM_NOT_IN_TEAM = -1201
+                            [(error_code.description) = "不在队伍中"];
+  EN_ERR_TEAM_ROOM_NOT_FOUND = -1202
+                               [(error_code.description) = "队伍不存在"];
+  EN_ERR_TEAM_NOT_MASTER = -1203
+                           [(error_code.description) = "当前节点不是队伍主控节点"];
+  EN_ERR_TEAM_MEMBER_NOT_FOUND = -1204
+                                 [(error_code.description) = "队伍成员不存在"];
+  EN_ERR_TEAM_DESTROYED = -1205
+                          [(error_code.description) = "队伍已解散"];
+  EN_ERR_TEAM_ALREADY_IN_TEAM = -1206
+                                [(error_code.description) = "已在队伍中"];
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

@@ -33,6 +33,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "data/session.h"
@@ -179,7 +180,7 @@ static void push_pending_message_once(
     return;
   }
   // NOLINTNEXTLINE(performance-no-int-to-ptr)
-  user_chat_manager* chat_mgr = reinterpret_cast<user_chat_manager*>(local_private_data[0]);
+  user_chat_manager* chat_mgr = reinterpret_cast<user_chat_manager*>(*local_private_data.data());
   if (nullptr == chat_mgr) {
     FWLOGERROR("local private data is null for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
                subscriber->get_channel_key().channel_id());
@@ -328,9 +329,22 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_chat_
   return ret;
 }
 
-static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_chat_channel_event_callback_set() {
-  static rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret = build_shared_chat_channel_event_callback_set();
-  return ret;
+static std::unordered_set<uintptr_t>& get_shared_chat_channel_event_handle_registered(uint32_t channel_type) {
+  static std::unordered_map<uint32_t, std::unordered_set<uintptr_t>> ret;
+
+  return ret[channel_type];
+}
+
+static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_chat_channel_event_callback_set(
+    uint32_t channel_type) {
+  static std::unordered_map<uint32_t, rpc::dtmq::client_subscriber::event_callback_set_ptr_t> ret;
+  auto iter = ret.find(channel_type);
+  if (iter != ret.end() && iter->second) {
+    return iter->second;
+  }
+
+  iter = ret.emplace(channel_type, build_shared_chat_channel_event_callback_set()).first;
+  return iter->second;
 }
 
 static void global_chat_manager_send_pending_message_once(rpc::context& ctx, int64_t max_count) {
@@ -829,5 +843,49 @@ void user_chat_manager::setup_subscriber_callback(const rpc::dtmq::client_subscr
     return;
   }
 
-  channel->set_shared_event_callback_set(get_shared_chat_channel_event_callback_set());
+  channel->set_shared_event_callback_set(
+      get_shared_chat_channel_event_callback_set(channel->get_channel_key().channel_type()));
+}
+
+rpc::dtmq::client_subscriber::event_callback_set_t&
+user_chat_manager::global_setup_private_channel_event_get_callback_set() {
+  return *get_shared_chat_channel_event_callback_set(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+}
+
+bool user_chat_manager::global_setup_private_channel_event_is_existed(uintptr_t unique_guard) {
+  auto& ret =
+      get_shared_chat_channel_event_handle_registered(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+  return ret.find(unique_guard) != ret.end();
+}
+
+rpc::dtmq::client_subscriber::event_callback_on_receive_event_t
+user_chat_manager::global_setup_private_channel_event_set_handle(uintptr_t unique_guard,
+                                                                 chat_channel_event_callback_t fn) {
+  auto& res =
+      get_shared_chat_channel_event_handle_registered(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+  res.insert(unique_guard);
+
+  return [fn](rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+              const ::atfw::dtmq::DChannelMessage& data) {
+    if (!subscriber) {
+      FCTXLOGERROR(ctx, "subscriber is null, bad parameter");
+      return;
+    }
+
+    auto local_private_data = subscriber->get_local_private_data();
+    if (local_private_data.empty()) {
+      FWLOGERROR("local private data is empty for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
+                 subscriber->get_channel_key().channel_id());
+      return;
+    }
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
+    user_chat_manager* chat_mgr = reinterpret_cast<user_chat_manager*>(*local_private_data.data());
+    if (nullptr == chat_mgr) {
+      FWLOGERROR("local private data is null for subscriber: {}, channel: {}", subscriber->get_subscriber_key(),
+                 subscriber->get_channel_key().channel_id());
+      return;
+    }
+
+    fn(ctx, chat_mgr->get_owner(), data);
+  };
 }

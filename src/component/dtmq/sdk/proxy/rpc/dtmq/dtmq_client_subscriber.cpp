@@ -8,6 +8,8 @@
 #include <gsl/select-gsl.h>
 #include <nostd/function_ref.h>
 
+#include <lock/lock_holder.h>
+#include <lock/spin_rw_lock.h>
 #include <log/log_wrapper.h>
 #include <memory/rc_ptr.h>
 #include <time/jiffies_timer.h>
@@ -1798,6 +1800,36 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::page_query_message(
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
       rpc::dtmq::page_query_message(ctx, internal_data_->shared_instance->get_channel_key(),
                                     internal_data_->shared_instance->get_readonly_replicate_index(), page_info, msgs)));
+}
+
+DTMQ_PROXY_SDK_API const std::string& client_subscriber::client_subscriber::get_any_type_url(
+    const ::google::protobuf::Descriptor* desc, _get_any_type_url_fn parse_fn) {
+  static std::unordered_map<const ::google::protobuf::Descriptor*, atfw::util::memory::strong_rc_ptr<std::string>>
+      name_mapping;
+  static atfw::util::lock::spin_rw_lock lock;
+
+  {
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> lg{lock};
+    auto iter = name_mapping.find(desc);
+    if (iter != name_mapping.end() && iter->second) {
+      return *iter->second;
+    }
+  }
+
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lg{lock};
+  auto ret = atfw::util::memory::make_strong_rc<std::string>(parse_fn());
+  name_mapping[desc] = ret;
+
+  return *ret;
+}
+
+DTMQ_PROXY_SDK_API std::string client_subscriber::parse_any_type_url(const ::google::protobuf::Message& m) {
+  ::google::protobuf::Any am;
+  if (!am.PackFrom(m)) {
+    return {};
+  }
+
+  return am.type_url();
 }
 
 namespace {

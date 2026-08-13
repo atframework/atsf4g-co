@@ -24,6 +24,7 @@
 #include <logic/matching/user_matching_manager.h>
 #include <logic/orbit/user_orbit_manager.h>
 #include <logic/rank/user_rank_manager.h>
+#include <logic/team/user_team_manager.h>
 
 #include <logic/user_manager.h>
 
@@ -34,8 +35,7 @@
 
 #include <string>
 
-user::internal_flag_guard_t::internal_flag_guard_t()
-    : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
+user::internal_flag_guard_t::internal_flag_guard_t() : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
 user::internal_flag_guard_t::~internal_flag_guard_t() { reset(); }
 
 void user::internal_flag_guard_t::setup(user &owner, internal_flag::type f) {
@@ -71,7 +71,8 @@ user::user(fake_constructor &ctor)
       user_cache_manager_(atfw::component::memory::stl::make_strong_rc<user_cache_manager>(*this)),
       user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)),
       user_orbit_manager_(atfw::component::memory::stl::make_strong_rc<user_orbit_manager>(*this)),
-      user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)) {
+      user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)),
+      user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this)) {
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -196,9 +197,9 @@ bool user::is_dirty() const {
   bool ret = base_type::is_dirty();
 
 #define USER_CHECK_RET_DIRTY(RET, EXPR) \
-  if (RET) {                              \
-    return RET;                           \
-  }                                       \
+  if (RET) {                            \
+    return RET;                         \
+  }                                     \
   RET = EXPR
 
   //! === manager implement === 检查是否有脏数据
@@ -303,7 +304,7 @@ void user::on_saved(rpc::context &ctx) {
 }
 
 void user::on_update_session(rpc::context &ctx, const std::shared_ptr<session> &from,
-                               const std::shared_ptr<session> &to) {
+                             const std::shared_ptr<session> &to) {
   base_type::on_update_session(ctx, from, to);
 
   user_cache_manager_->on_update_session(ctx);
@@ -551,8 +552,8 @@ PROJECT_NAMESPACE_ID::DItemInstance &user::mutable_dirty_item(const PROJECT_NAME
 }
 
 void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
-                                               dirty_sync_handle_t (*create_handle_fn)(gsl::string_view handle_name,
-                                                                                       user &)) {
+                                             dirty_sync_handle_t (*create_handle_fn)(gsl::string_view handle_name,
+                                                                                     user &)) {
   if (create_handle_fn == nullptr) {
     return;
   }
@@ -571,8 +572,8 @@ void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view han
 }
 
 void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
-                                               // NOLINTNEXTLINE(performance-unnecessary-value-param)
-                                               build_dirty_message_fn_t build_fn, clear_dirty_cache_fn_t clear_fn) {
+                                             // NOLINTNEXTLINE(performance-unnecessary-value-param)
+                                             build_dirty_message_fn_t build_fn, clear_dirty_cache_fn_t clear_fn) {
   if (!build_fn && !clear_fn) {
     return;
   }
@@ -598,8 +599,7 @@ static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() 
     g_get_info_handle_list;
 
 void user::init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*check_need_fn)() const,
-                                  void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &,
-                                                  user &)) {
+                                void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)) {
   if (check_need_fn == nullptr || dump_fn == nullptr) {
     FWLOGERROR("init_get_info_handle failed, check_need_fn or dump_fn is nullptr");
     return;

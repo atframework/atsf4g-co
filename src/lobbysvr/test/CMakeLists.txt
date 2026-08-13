@@ -43,6 +43,7 @@ project_add_rpc_unit_test(
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_get_channel_snapshot.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_send_message.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/user_chat_manager.cpp"
+  "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/team/user_team_manager.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/matching/user_matching_manager.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/user/task_action_user_get_info.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/rank/task_action_rank_get_self_rank.cpp"

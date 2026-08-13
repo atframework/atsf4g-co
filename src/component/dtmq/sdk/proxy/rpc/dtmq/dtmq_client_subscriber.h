@@ -8,6 +8,7 @@
 #include <gsl/select-gsl.h>
 #include <nostd/function_ref.h>
 #include <nostd/nullability.h>
+#include <nostd/type_traits.h>
 #include <std/explicit_declare.h>
 
 #include <memory/rc_ptr.h>
@@ -20,8 +21,8 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
-#include <memory>
 #include <string>
+#include <utility>
 
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_api.h"
@@ -29,6 +30,8 @@
 namespace google {
 namespace protobuf {
 class Any;
+class Message;
+class Descriptor;
 }  // namespace protobuf
 }  // namespace google
 
@@ -425,12 +428,37 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  template <class T, class FuncType,
+            class = atfw::util::nostd::enable_if_t<std::is_base_of<::google::protobuf::Message, T>::value>>
+  ATFW_UTIL_SYMBOL_VISIBLE void set_event_callback_on_receive_event_by_message_type(FuncType&& on_receive_event) {
+    return set_event_callback_on_receive_event_by_type_url(get_any_type_url(T::descriptor(),
+                                                                            []() -> std::string {
+                                                                              T m{};
+                                                                              return parse_any_type_url(m);
+                                                                            }),
+                                                           std::forward<FuncType>(on_receive_event));
+  }
+
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
       const std::string& type_url, event_callback_on_receive_event_t&& on_receive_event);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
       const std::string& type_url, const event_callback_on_receive_event_t& on_receive_event);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event_by_type_url(
       const std::string& type_url) const noexcept;
+
+  template <class T, class FuncType,
+            class = atfw::util::nostd::enable_if_t<std::is_base_of<::google::protobuf::Message, T>::value>>
+  static ATFW_UTIL_SYMBOL_VISIBLE void set_event_callback_on_receive_event_by_message_type(
+      event_callback_set_t& event_callback_set, FuncType&& on_receive_event) {
+    return set_event_callback_on_receive_event_by_type_url(event_callback_set,
+                                                           get_any_type_url(T::descriptor(),
+                                                                            []() -> std::string {
+                                                                              T m{};
+                                                                              return parse_any_type_url(m);
+                                                                            }),
+                                                           std::forward<FuncType>(on_receive_event));
+  }
+
   static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
       event_callback_set_t& event_callback_set, const std::string& type_url,
       event_callback_on_receive_event_t&& on_receive_event);
@@ -568,6 +596,7 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
     ATFW_UTIL_FORCEINLINE update_option& operator=(const update_option&) = default;
     ATFW_UTIL_FORCEINLINE update_option& operator=(update_option&&) = default;
   };
+
   /**
    * @brief 发送更新数据
    *
@@ -649,6 +678,12 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type page_query_message(
       rpc::context& ctx, atfw::dtmq::channel_page_info& page_info,
       google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage>& msgs);
+
+ private:
+  using _get_any_type_url_fn = atfw::util::nostd::function_ref<std::string()>;
+  static DTMQ_PROXY_SDK_API const std::string& get_any_type_url(const ::google::protobuf::Descriptor* desc,
+                                                                _get_any_type_url_fn parse_fn);
+  static DTMQ_PROXY_SDK_API std::string parse_any_type_url(const ::google::protobuf::Message& m);
 
  private:
   struct subscriber_internal_data;

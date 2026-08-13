@@ -19,7 +19,7 @@
 #include <memory>
 #include <string>
 
-#define REG_USER_MGR_PTR_DEF(mgr)                       \
+#define REG_USER_MGR_PTR_DEF(mgr)                         \
  private:                                                 \
   atfw::util::memory::strong_rc_ptr<mgr> mgr##_;          \
                                                           \
@@ -33,6 +33,7 @@ class user_cache_manager;
 class user_chat_manager;
 class user_orbit_manager;
 class user_matching_manager;
+class user_team_manager;
 
 class user : public user_cache {
  private:
@@ -230,9 +231,9 @@ class user : public user_cache {
                                          clear_dirty_cache_fn_t clear_fn);
 
   static void init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*check_need_fn)() const,
-                                   void (*dump_fn)(rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &));
+                                   void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &));
   static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() const,
-                               void (*)(rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
+                               void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
   get_get_info_handle();
 
  private:
@@ -250,6 +251,7 @@ class user : public user_cache {
   REG_USER_MGR_PTR_DEF(user_chat_manager)
   REG_USER_MGR_PTR_DEF(user_orbit_manager)
   REG_USER_MGR_PTR_DEF(user_matching_manager)
+  REG_USER_MGR_PTR_DEF(user_team_manager)
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN

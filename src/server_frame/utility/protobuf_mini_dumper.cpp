@@ -160,10 +160,13 @@ SERVER_FRAME_API std::chrono::system_clock::time_point protobuf_to_system_clock(
 
 SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chrono::system_clock::time_point tp) {
   google::protobuf::Timestamp ret;
-  ret.set_seconds(std::chrono::system_clock::to_time_t(tp));
-  ret.set_nanos(static_cast<int32_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(tp - std::chrono::system_clock::from_time_t(ret.seconds()))
-          .count() %
-      1000000000));
+  auto seconds = std::chrono::duration_cast<std::chrono::seconds>(tp.time_since_epoch());
+  auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch() - seconds);
+  if (nanos < std::chrono::nanoseconds::zero()) {
+    seconds -= std::chrono::seconds{1};
+    nanos += std::chrono::seconds{1};
+  }
+  ret.set_seconds(seconds.count());
+  ret.set_nanos(static_cast<int32_t>(nanos.count()));
   return ret;
 }

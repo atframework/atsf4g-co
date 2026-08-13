@@ -25,6 +25,7 @@
 #include <chrono>
 #include <cstddef>
 #include <string>
+#include <utility>
 
 /**
  * @brief 返回易读数据
@@ -319,8 +320,8 @@ ATFW_UTIL_SYMBOL_VISIBLE inline DurationType protobuf_to_chrono_duration(const g
  * @return Prototbuf well known 时间周期类型
  */
 template <class DurationType = std::chrono::system_clock::duration>
-ATFW_UTIL_SYMBOL_VISIBLE inline google::protobuf::Timestamp protobuf_from_chrono_duration(DurationType dur) {
-  google::protobuf::Timestamp ret;
+ATFW_UTIL_SYMBOL_VISIBLE inline google::protobuf::Duration protobuf_from_chrono_duration(DurationType dur) {
+  google::protobuf::Duration ret;
   ret.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(dur).count()));
   ret.set_nanos(static_cast<int32_t>(
       std::chrono::duration_cast<std::chrono::nanoseconds>(dur - std::chrono::seconds{ret.seconds()}).count() %

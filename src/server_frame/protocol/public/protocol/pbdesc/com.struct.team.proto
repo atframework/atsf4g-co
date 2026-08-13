@@ -15,6 +15,12 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 
 package atframework.team;
 
+// 注意和DtMq.xlsx 表对应，多个模块之间类型不要冲突
+enum EnTeamChannelType {
+  EN_TEAM_CHANNEL_TYPE_INVALID = 0;
+  EN_TEAM_CHANNEL_TYPE_TEAM_ROOM = 11;  // 组队房间
+}
+
 enum DTeamExitReason {
   EN_TEAM_EXIT_REASON_DEFAULT = 0;
   EN_TEAM_EXIT_REASON_LOGOUT = 1;
@@ -30,6 +36,32 @@ enum DTeamExitReason {
   EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM = 13;
 }
 
+enum EnTeamAdmissionCancelReason {
+  EN_TEAM_INVITATION_CANCEL_REASON_UNKNOWN = 0;
+  EN_TEAM_INVITATION_CANCEL_REASON_TEAM_ID_NOT_MATCHED = 1;
+  EN_TEAM_INVITATION_CANCEL_REASON_IS_MATCHING = 2;
+  EN_TEAM_INVITATION_CANCEL_REASON_IS_IN_BATTLE = 3;
+  EN_TEAM_INVITATION_CANCEL_REASON_TEAM_FULL = 4;
+  EN_TEAM_INVITATION_CANCEL_REASON_IS_IN_TEAM = 5;
+  EN_TEAM_INVITATION_CANCEL_REASON_TIMEOUT = 6;
+  EN_TEAM_INVITATION_CANCEL_REASON_IS_PRE_SEARCH = 7;
+  EN_TEAM_INVITATION_CANCEL_REASON_SEASON_ROLE_NOT_FOUND = 8;
+  EN_TEAM_INVITATION_CANCEL_REASON_IS_IN_PRIVATE_ROOM = 9;
+  EN_TEAM_INVITATION_CANCEL_REASON_MODULE_UNLOCK = 10;
+  EN_TEAM_INVITATION_CANCEL_REASON_SEASON_NOT_MATCH = 11;
+}
+
+enum EnTeamAdmissionRejectReason {
+  EN_TEAM_INVITATION_REJECT_REASON_UNKNOWN = 0;
+  EN_TEAM_INVITATION_REJECT_REASON_INVITEE_REJECT = 1;
+  EN_TEAM_INVITATION_REJECT_REASON_IS_IN_TEAM = 2;
+  EN_TEAM_INVITATION_REJECT_REASON_MODULE_BAN = 3;
+  EN_TEAM_INVITATION_REJECT_REASON_IS_IN_MATCHING = 4;
+  EN_TEAM_INVITATION_REJECT_REASON_IS_IN_BATTLE = 5;
+  EN_TEAM_INVITATION_REJECT_REASON_IS_PRE_SEARCH = 6;
+  EN_TEAM_INVITATION_REJECT_REASON_SEASON_NOT_MATCH = 7;
+}
+
 enum EnTeamSourceType {
   EN_TEAM_SOURCE_TYPE_NONE = 0;
   EN_TEAM_SOURCE_TYPE_SNS_PLATFORM = 1;
@@ -37,6 +69,17 @@ enum EnTeamSourceType {
   EN_TEAM_SOURCE_TYPE_MATCH = 3;
   EN_TEAM_SOURCE_TYPE_BATTLE = 4;
 }
+
+enum EnTeamPermissionType {
+  EN_TEAM_PERMISSION_TYPE_PUBLIC = 0;
+  EN_TEAM_PERMISSION_TYPE_MEMBER = 1;
+}
+
+message DTeamAnyData {
+  EnTeamPermissionType permission = 1;
+  google.protobuf.Any data = 2;
+}
+
 message DTeamKey {
   int64 team_id = 1;
 }
@@ -62,10 +105,37 @@ message DTeamMember {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, google.protobuf.Any> shared_member_data = 13;
+  map<int32, DTeamAnyData> shared_member_data = 13;
 }
 
-message DTeamApply {
+message DTeamAdmissionResult {
+  atframework.shared.DUserIDKey inviter = 1;
+  atframework.shared.DUserIDKey invitee = 2;
+  DTeamKey team_key = 3;
+
+  EnTeamAdmissionCancelReason cancel_reason = 21;
+  EnTeamAdmissionRejectReason reject_reason = 22;
+}
+
+message DTeamInvitation {
+  atframework.shared.DUserIDKey inviter = 1;
+  atframework.shared.DUserIDKey invitee = 2;
+  DTeamKey team_key = 3;
+
+  EnTeamSourceType team_source_type = 4;
+  google.protobuf.Any team_source_data = 5;
+
+  // 开始事件
+  google.protobuf.Timestamp start_timepoint = 8;
+  // 失效时间
+  google.protobuf.Timestamp expired_timepoint = 9;
+
+  // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> member_admission_data = 14;
+}
+
+message DTeamJoinRequest {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey user_key = 2;
 
@@ -78,9 +148,9 @@ message DTeamApply {
   // 过期时间
   google.protobuf.Timestamp expired_timepoint = 8;
 
-  // 共享的成员数据，通常是阵容信息、状态信息等。
+  // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, google.protobuf.Any> shared_member_data = 13;
+  map<int32, DTeamAnyData> member_admission_data = 14;
 }
 
 message DTeamStorage {
@@ -92,7 +162,10 @@ message DTeamStorage {
   repeated DTeamMember member = 6;
 
   // 当前待处理的申请列表
-  repeated DTeamApply pending_apply = 7;
+  repeated DTeamJoinRequest pending_apply = 7;
+
+  // 当前待处理的邀请列表
+  repeated DTeamInvitation pending_invitation = 8;
 
   // 最后收到的组队通道的消息sequence和hash code
   int64 acknowledge_action_sequence = 11;
@@ -102,7 +175,7 @@ message DTeamStorage {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, google.protobuf.Any> shared_team_data = 14;
+  map<int32, DTeamAnyData> shared_team_data = 14;
 }
 
 message DTeamAction {
@@ -114,5 +187,20 @@ message DTeamAction {
     DTeamMember member_confirm = 5;  // 队员准备
     // DTeamMember cancel_wait = 6;                    // 取消等待，直接进入队伍房间
     DTeamMember election_captain = 7;  // 重新选出的队长
+  }
+}
+
+message DTeamMemberAction {
+  oneof action {
+    DTeamInvitation invited = 1;
+    DTeamInvitation reject_invitation = 2;
+    DTeamInvitation cancel_invitation = 3;
+
+    DTeamJoinRequest apply_join_request = 8;
+    DTeamJoinRequest reject_join_request = 5;
+    DTeamJoinRequest cancel_join_request = 6;
+
+    DTeamInvitation join_in_team = 4;
+    DTeamMember remove_member = 7;
   }
 }
