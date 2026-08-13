@@ -677,6 +677,12 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
                                PRIVATE "$<BUILD_INTERFACE:${project_component_declare_service_INCLUDE_DIR}>")
   endif()
 
+  if(PROJECT_ENABLE_UNITY_BUILD AND project_component_declare_service_SOURCES GREATER
+                                    PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
+    set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
+                                                                        ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
+  endif()
+
   # Precompile headers
   set(project_component_declare_service_PCH_FILES)
   if(project_component_declare_service_PRECOMPILE_HEADERS)
