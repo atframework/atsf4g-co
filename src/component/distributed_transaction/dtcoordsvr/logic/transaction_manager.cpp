@@ -150,7 +150,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(ctx, std::move(db_data), db_version));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, std::move(db_data), db_version));
     // TODO(owent): With TTL
 
     if (ret < 0) {

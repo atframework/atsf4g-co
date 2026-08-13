@@ -191,7 +191,7 @@ SERVER_FRAME_API result_type batch_get_all(rpc::context &ctx, gsl::span<table_ke
 }
 
 SERVER_FRAME_API result_type replace(rpc::context &ctx,
-                                                         shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store
+                                                         shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store
 % if index.enable_cas:
                                                          ,uint64_t &version) {
 % else:
@@ -218,7 +218,7 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
   }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
-                                                                shared_abstract_message<google::protobuf::Message>{std::move(store)},
+                                                                shared_abstract_message<google::protobuf::Message>{store},
 % if index.enable_cas:
                                                                 &version));
 % else:
@@ -232,7 +232,7 @@ SERVER_FRAME_API result_type replace(rpc::context &ctx,
 
 % if index.enable_cas:
 SERVER_FRAME_API result_type insert(rpc::context &ctx,
-                                 shared_message<PROJECT_NAMESPACE_ID::${message_name}> &&store,
+                                 shared_message<PROJECT_NAMESPACE_ID::${message_name}> &store,
                                  uint64_t &version) {
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   if (auto __handler = mock_detail::replace_handler()) {
@@ -251,7 +251,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx,
   }
   auto res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(ctx, db_msg_dispatcher::me()->get_db_channel_type(),
                                                                 gsl::string_view{db_key, keylen},
-                                                                shared_abstract_message<google::protobuf::Message>{std::move(store)},
+                                                                shared_abstract_message<google::protobuf::Message>{store},
                                                                 version));
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
