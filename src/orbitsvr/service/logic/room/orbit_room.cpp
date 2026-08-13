@@ -194,7 +194,8 @@ int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, cons
         auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq>(child_ctx);
         auto rsp = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp>(child_ctx);
         req->set_matching_id(room_ptr->room_data_.match_id());
-        req->set_expired_timepoint(room_ptr->join_end_timepoint_);
+        req->set_end_join_timepoint(room_ptr->join_end_timepoint_);
+        req->set_expired_timepoint(room_ptr->expired_timepoint_);
         int32_t ret = 0;
         ret = RPC_AWAIT_CODE_RESULT(rpc::orbit::orbit_room_ready(child_ctx, room_ptr->match_server_id_, *req, *rsp));
         if (ret == 0) {

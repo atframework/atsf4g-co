@@ -52,6 +52,7 @@ service OrbitsvrService {
 
 message SSMatchingOrbitRoomReadyReq {
   string matching_id = 1;
+  int64 end_join_timepoint = 2;
   int64 expired_timepoint = 3;
 }
 
