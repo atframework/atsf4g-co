@@ -503,7 +503,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
 }
 
 SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-                                 shared_abstract_message<google::protobuf::Message> &&store) {
+                                    shared_abstract_message<google::protobuf::Message> &&store, uint64_t &version) {
   rpc::context __child_ctx(ctx);
   rpc::telemetry::trace_attribute_pair_type __trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.db"},
@@ -533,7 +533,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
   }
   reflect->ListFields(*store, &fds);
 
-  uint64_t version = 0;
+  version = 0;
   RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_set, {
     __ut_req.store = store.get();
     __ut_req.version = &version;
@@ -561,11 +561,10 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data content: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to insert data content: {}", key,
               protobuf_mini_dumper_get_readable(*store));
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, expect version: {}, detail: {}", key,
-              version, segs_debug_info.str());
-
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to insert data, expect version: {}, detail: {}", key, version,
+              segs_debug_info.str());
   uint64_t rpc_sequence = 0;
   res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -589,10 +588,12 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res && db_message.head_message.response_int() != 0) {
       res = PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS;
+      version = db_message.head_message.response_int();
     }
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
+  version = db_message.head_message.response_int();
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] data insert, new cas_version: {}", key,
              db_message.head_message.response_int());
   FWCLOGDEBUG(log_categorize_t::DB, "detail: {}", key, db_message.head_message.response_int(), segs_debug_info.str());
@@ -1017,9 +1018,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
 
-  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_remove_by_index, {
-    __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()};
-  })
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_remove_by_index,
+                             { __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()}; })
 
   size_t args_size = 2 + list_index.size();
   redis_args args(args_size);
@@ -1083,9 +1083,8 @@ SERVER_FRAME_API result_type remove_by_index(rpc::context &ctx, uint32_t channel
     RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
   }
 
-  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_remove_by_index, {
-    __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()};
-  })
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kl_remove_by_index,
+                             { __ut_req.list_index = gsl::span<const uint64_t>{list_index.data(), list_index.size()}; })
 
   size_t args_size = 2 + list_index.size();
   redis_args args(args_size);

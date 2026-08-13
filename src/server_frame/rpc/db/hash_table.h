@@ -110,7 +110,7 @@ set(rpc::context &ctx, uint32_t channel, gsl::string_view key,
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
 insert(rpc::context &ctx, uint32_t channel, gsl::string_view key,
-    shared_abstract_message<google::protobuf::Message> &&store);
+       shared_abstract_message<google::protobuf::Message> &&store, uint64_t &version);
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_type
 inc_field(rpc::context &ctx, uint32_t channel, gsl::string_view key, gsl::string_view inc_field,
