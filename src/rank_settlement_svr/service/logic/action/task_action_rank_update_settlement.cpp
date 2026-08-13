@@ -248,9 +248,8 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
   rank_settle_db_data.set_current_settle_server_id(logic_config::me()->get_local_server_id());
   rank_settle_db_data.set_current_settle_timeout(std::chrono::system_clock::to_time_t(param_.timeout) + 1);
 
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(
-      ctx, rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_settlement>(ctx, rank_settlement_dbdata),
-      rank_settlement_dbversion));
+  int32_t ret =
+      RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(ctx, rank_settlement_dbdata, rank_settlement_dbversion));
   if (ret < 0) {
     FWLOGERROR("Set rank ({},{}) settlement lock data failed, ret: {}({})", rank_settlement_dbdata->zone_id(),
                rank_settlement_dbdata->rank_type(), ret, protobuf_mini_dumper_get_error_msg(ret));
@@ -369,7 +368,7 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
           "start task_action_rank_send_settlement failed, "
           "ret: {}({})",
           ret, protobuf_mini_dumper_get_error_msg(ret));
-    break;
+      break;
     }
 
     // 刷新下一次结算排名,前面排过序，所以这里一定是递减的
@@ -378,14 +377,13 @@ rpc::result_code_type task_action_rank_update_settlement::settle_rank_once(
     if (!task_type_trait::empty(subtask)) {
       await_tasks.push_back(subtask);
     }
-    
-    
   }
 
   FWLOGINFO(
       "Await for rank {},{}-{},{},{},{} settlement for {}, "
       "latest_settlement_rank: {}, await_tasks size {} "
-      "ret = {}", rank_handle.get_world_id(), rank_handle.get_zone_id(), cfg.rank_type(), cfg.rank_instance_id(),
+      "ret = {}",
+      rank_handle.get_world_id(), rank_handle.get_zone_id(), cfg.rank_type(), cfg.rank_instance_id(),
       cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), next_settlement_rank,
       rank_settlement_dbdata->blob_data().latest_settlement_rank(), await_tasks.size(), ret);
   // 等待并发执行的结算任务
@@ -421,9 +419,8 @@ rpc::result_code_type task_action_rank_update_settlement::cleanup_save(
   }
 
   // final save progress
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(
-      ctx, rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_settlement>(ctx, rank_settlement_dbdata),
-      rank_settlement_dbversion));
+  int32_t ret =
+      RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(ctx, rank_settlement_dbdata, rank_settlement_dbversion));
   if (ret < 0) {
     FWLOGERROR("Reset rank ({}-{},{},{},{}) settlement lock data failed, ret: {}({})",
                rank_settlement_dbdata->zone_id(), cfg.rank_type(), cfg.rank_instance_id(),
@@ -570,9 +567,7 @@ static rpc::result_void_type query_mirror_create(
   // 保存镜像id
   rank_settle_db_data->mutable_blob_data()->set_mirror_id(mirror_id);
 
-  ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(
-      ctx, rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_settlement>(ctx, rank_settle_db_data),
-      rank_settlement_dbversion));
+  ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(ctx, rank_settle_db_data, rank_settlement_dbversion));
   if (ret < 0) {
     FWLOGERROR("Set rank ({},{},{},{}) settlement lock data failed, ret: {}({})", rank_settle_db_data->zone_id(),
                rank_settle_db_data->rank_type(), rank_settle_db_data->sub_rank_type(),
@@ -710,9 +705,8 @@ rpc::result_code_type task_action_rank_update_settlement::process_rank(
       } else {
         hold_optimistic_lock = true;
         if (!allow_continue) {
-          res = RPC_AWAIT_CODE_RESULT(rpc::db::rank_settlement::replace(
-              ctx, rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_settlement>(ctx, rank_settlement_dbdata),
-              rank_settlement_dbversion));
+          res = RPC_AWAIT_CODE_RESULT(
+              rpc::db::rank_settlement::replace(ctx, rank_settlement_dbdata, rank_settlement_dbversion));
           if (res < 0) {
             FWLOGERROR("Set rank ({},{}) settlement lock data failed, res: {}({})", rank_settlement_dbdata->zone_id(),
                        rank_settlement_dbdata->rank_type(), res, protobuf_mini_dumper_get_error_msg(res));

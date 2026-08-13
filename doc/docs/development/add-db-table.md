@@ -1,7 +1,6 @@
 ---
 title: 新增数据库表
 ---
-
 # 新增数据库表
 
 数据层只支持 Redis；表结构用 proto 描述，由模板生成访问代码。
@@ -20,7 +19,7 @@ title: 新增数据库表
 // 读取整行（version 为输出的 CAS 版本）
 auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::get_all(ctx, key, msg, version));
 // 整体替换（version 传入读到的 CAS 版本做乐观锁，成功后写回新版本）
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::replace(ctx, std::move(store), version));
+auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::replace(ctx, store, version));
 // 数值字段原子自增（每个可自增字段生成独立接口，inc_value 为输入增量并写回新值）
 auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::inc_field_<field_name>(ctx, key, inc_value));
 ```

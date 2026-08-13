@@ -233,27 +233,22 @@ rpc::result_code_type rank_manager::mutable_main_rank(rpc::context& ctx, const P
         FWLOGDEBUG("rank({}:{}:{}:{}) highest slave:{} upgrade main version:{}", rank_key.rank_type(),
                    rank_key.rank_instance_id(), rank_key.sub_rank_type(), rank_key.sub_rank_instance_id(),
                    highest_data_version_slave_node.first, highest_data_version_slave_node.second);
-        PROJECT_NAMESPACE_ID::table_rank_router tmp_rank_router;
-        tmp_rank_router.CopyFrom(*rank_router_rsp);
-        auto& db_slave_nodes = *tmp_rank_router.mutable_blob_data()->mutable_slave_nodes();
+        auto replace_db_router = rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_rank_router>(ctx, *rank_router_rsp);
+        auto& db_slave_nodes = *replace_db_router->mutable_blob_data()->mutable_slave_nodes();
         auto it = std::find(db_slave_nodes.begin(), db_slave_nodes.end(), highest_data_version_slave_node.first);
         if (it != db_slave_nodes.end()) {
           db_slave_nodes.erase(it);
         }
-        tmp_rank_router.set_router_main_node_id(highest_data_version_slave_node.first);
-        tmp_rank_router.set_router_save_timepoint(now_tm);
-        {
-          rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> replace_db_router(ctx);
-          replace_db_router->CopyFrom(tmp_rank_router);
-          ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::replace(ctx, std::move(replace_db_router), version));
-        }
+        replace_db_router->set_router_main_node_id(highest_data_version_slave_node.first);
+        replace_db_router->set_router_save_timepoint(now_tm);
+        ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::replace(ctx, replace_db_router, version));
         if (ret != 0) {
           RPC_RETURN_CODE(ret);
         }
         if (highest_data_version_slave_node.first == logic_config::me()->get_local_server_id()) {
-          RPC_AWAIT_IGNORE_RESULT(rank_ptr->switch_to_main(ctx, tmp_rank_router, version));
+          RPC_AWAIT_IGNORE_RESULT(rank_ptr->switch_to_main(ctx, *replace_db_router, version));
         } else {
-          rank_ptr->set_router_data(tmp_rank_router, version);
+          rank_ptr->set_router_data(*replace_db_router, version);
         }
         RPC_RETURN_CODE(0);
       }
@@ -406,31 +401,27 @@ std::vector<uint64_t> rank_manager::get_slave_nodes(rpc::context& ctx, const PRO
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to_main(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, int32_t db_router_version) {
   auto main_server_node = logic_config::me()->get_local_server_id();
-  PROJECT_NAMESPACE_ID::table_rank_router new_db_router;
-  new_db_router.set_rank_type(rank_key.rank_type());
-  new_db_router.set_rank_instance_id(rank_key.rank_instance_id());
-  new_db_router.set_sub_rank_type(rank_key.sub_rank_type());
-  new_db_router.set_sub_rank_instance_id(rank_key.sub_rank_instance_id());
-  new_db_router.set_zone_id(logic_config::me()->get_local_zone_id());
-  new_db_router.set_router_save_timepoint(atfw::util::time::time_utility::get_now());
-  new_db_router.set_router_main_node_id(main_server_node);
+  rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> new_db_router(ctx);
+  new_db_router->set_rank_type(rank_key.rank_type());
+  new_db_router->set_rank_instance_id(rank_key.rank_instance_id());
+  new_db_router->set_sub_rank_type(rank_key.sub_rank_type());
+  new_db_router->set_sub_rank_instance_id(rank_key.sub_rank_instance_id());
+  new_db_router->set_zone_id(logic_config::me()->get_local_zone_id());
+  new_db_router->set_router_save_timepoint(atfw::util::time::time_utility::get_now());
+  new_db_router->set_router_main_node_id(main_server_node);
   auto slave_nodes = rank_manager::get_slave_nodes(ctx, rank_key, main_server_node);
   if (slave_nodes.empty()) {
     FWLOGWARNING("save rank router failed, no slave node rank({}:{}:{}:{})", rank_key.rank_type(),
                  rank_key.rank_instance_id(), rank_key.sub_rank_type(), rank_key.sub_rank_instance_id());
   } else {
     for (auto& slave_node : slave_nodes) {
-      new_db_router.mutable_blob_data()->add_slave_nodes(slave_node);
+      new_db_router->mutable_blob_data()->add_slave_nodes(slave_node);
     }
   }
 
   uint64_t new_db_router_version = db_router_version;
   auto ret = 0;
-  {
-    rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> tmp_db_router(ctx);
-    tmp_db_router->CopyFrom(new_db_router);
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::replace(ctx, std::move(tmp_db_router), new_db_router_version));
-  }
+  ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::replace(ctx, new_db_router, new_db_router_version));
   if (ret != 0) {
     RPC_RETURN_CODE(ret);
   }
@@ -443,7 +434,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::upgrade_rank_to
     RPC_RETURN_CODE(ret);
   }
 
-  RPC_AWAIT_IGNORE_RESULT(rank_ptr->switch_to_main(ctx, new_db_router, new_db_router_version));
+  RPC_AWAIT_IGNORE_RESULT(rank_ptr->switch_to_main(ctx, *new_db_router, new_db_router_version));
   FWLOGDEBUG("upgrade_rank_to_main success, rank({}:{}:{}:{})", rank_key.rank_type(), rank_key.rank_instance_id(),
              rank_key.sub_rank_type(), rank_key.sub_rank_instance_id());
   RPC_RETURN_CODE(0);

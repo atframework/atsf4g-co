@@ -8,8 +8,8 @@
 
 #include <protocol/config/rank_board_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
-#include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.const.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
 // clang-format off
@@ -67,9 +67,7 @@ rpc::result_code_type rank_mirror_manager::get_mirror_data_from_db(
     std::vector<atfw::util::memory::strong_rc_ptr<rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_mirror>>>&
         db_data) {
   static const int32_t rank_max_batch_get_num =
-      logic_config::me()
-          ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
-          .rank_max_batch_get_num();
+      logic_config::me()->get_server_instance_config<atframework::rank::config::ranksvr_cfg>().rank_max_batch_get_num();
   // TODO(jijunliang): 先分批拉取，后续看看是否需要移到tick中处理
   int32_t cur_batch_index = 0;
   std::vector<rpc::db::rank_mirror::table_key_t> keys;
@@ -205,7 +203,7 @@ rpc::result_code_type rank_mirror_manager::dump_mirror_success(rpc::context& ctx
   db_data->set_last_data_version(last_data_version_);
   protobuf_copy_message(*db_data->mutable_blob_data(), meta_data_);
 
-  auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror_meta::replace(ctx, std::move(db_data)));
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror_meta::replace(ctx, db_data));
   if (ret != 0) {
     FWRLOGERROR(*owner_, "TABLE_rank_mirror_meta_DEF mirror_id:{} data_version:{} replace failed ret:{}",
                 task->mirror_id_, last_data_version_, ret);

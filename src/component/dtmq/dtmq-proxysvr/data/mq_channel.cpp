@@ -864,7 +864,8 @@ void mq_channel::dump_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot& 
 }
 
 bool mq_channel::should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
-                                                     uint64_t& writable_server_id, mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
+                                                     uint64_t& writable_server_id,
+                                                     mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
   bool can_be_writable = true;
   do {
     if (mq_channel_manager::is_instance_destroyed()) {
@@ -950,7 +951,8 @@ bool mq_channel::should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelI
 
 bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
                                                         uint64_t& readonly_replicate_index,
-                                                        uint64_t& readonly_server_id, mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
+                                                        uint64_t& readonly_server_id,
+                                                        mq_channel* ATFW_UTIL_MACRO_NULLABLE channel) {
   auto channel_cfg = excel::get_ExcelDtmqChannelType_by_channel_type(channel_key.channel_type());
   if (!channel_cfg || channel_cfg->readonly_replicate_count() <= 0) {
     readonly_replicate_index = 0;
@@ -1048,8 +1050,7 @@ bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChann
   return false;
 }
 
-bool mq_channel::should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_NULLABLE &
-                                    readonly_replicate_index_set) {
+bool mq_channel::should_be_readonly(const replicate_index_set* ATFW_UTIL_MACRO_NULLABLE& readonly_replicate_index_set) {
   if (server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
     recalculate_etcd_cache();
   }
@@ -1409,7 +1410,7 @@ int32_t mq_channel::async_save(rpc::context& ctx) {
         // rpc::db::
         uint64_t saved_version = self_ptr->dirty_version_;
         int64_t saved_sequence = self_ptr->get_last_message_sequence();
-        auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::replace(child_ctx, std::move(data)));
+        auto ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::replace(child_ctx, data));
         if (ret < 0) {
           FCTXLOGERROR(child_ctx, "rpc::db::dtmq_channel_record::replace faild, channel_id:{}, ret:{}({})",
                        self_ptr->get_channel_id(), ret, protobuf_mini_dumper_get_error_msg(ret));

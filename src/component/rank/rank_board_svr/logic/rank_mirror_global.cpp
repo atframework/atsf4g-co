@@ -136,7 +136,7 @@ rpc::result_code_type rank_mirror_global::tick_dump(rpc::context& ctx) {
       }
 
       cur_io_num++;
-      ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror::replace(ctx, std::move(db_data)));
+      ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_mirror::replace(ctx, db_data));
       if (ret == 0) {
         FWLOGDEBUG("({}:{}:{}:{}) mirror_id:{} max_slice:{} cur_slice:{} rank_mirror_global.tick_dump replace success",
                    task->rank_key_.rank_type(), task->rank_key_.rank_instance_id(), task->rank_key_.sub_rank_type(),

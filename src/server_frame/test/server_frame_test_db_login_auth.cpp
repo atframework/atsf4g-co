@@ -43,7 +43,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     record->set_open_id("openid-crud");
     record->set_user_id(1001);
     version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(record), version));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, record, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(1, static_cast<int>(version));
 
@@ -51,7 +51,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_auth> update{ctx};
     update->set_open_id("openid-crud");
     update->set_user_id(1002);
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(update), version));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, update, version));
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(2, static_cast<int>(version));
 
@@ -60,7 +60,7 @@ CASE_TEST(server_frame_unit_test, db_login_auth_generated_api_crud_and_cas_confl
     stale->set_open_id("openid-crud");
     stale->set_user_id(9999);
     uint64_t stale_version = 1;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(stale), stale_version));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, stale, stale_version));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, res);
     CASE_EXPECT_EQ(2, static_cast<int>(stale_version));
 

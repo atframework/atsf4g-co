@@ -528,7 +528,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
         store->set_open_id("openid-smoke");
         store->set_user_id(42);
         uint64_t version = 0;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(store), version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, store, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(1, static_cast<int>(version));
         RPC_RETURN_CODE(0);
@@ -584,7 +584,7 @@ CASE_TEST(rpc_unit_test, db_login_auth_typed_mock_table_interface) {
         store->set_open_id("openid-smoke");
         store->set_user_id(43);
         uint64_t version = 1;
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(store), version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, store, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(7, static_cast<int>(version));
         RPC_RETURN_CODE(0);
@@ -766,7 +766,7 @@ CASE_TEST(rpc_unit_test, db_table_callback_inspects_input_and_sets_output) {
         uint64_t version = 1;
         rsp->set_open_id("openid-callback");
         rsp->set_user_id(8);
-        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(rsp), version));
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, rsp, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(2, static_cast<int>(version));
         RPC_RETURN_CODE(0);

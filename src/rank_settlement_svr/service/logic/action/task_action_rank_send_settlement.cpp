@@ -440,7 +440,7 @@ rpc::result_code_type task_action_rank_send_settlement::save_history(rpc::contex
   table->set_user_id(param_.user_id);
   table->set_user_zone_id(param_.zone_id);
 
-  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_history::replace(ctx, table.clone(ctx)));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_history::replace(ctx, table));
   if (ret < 0) {
     FWLOGERROR(
         "rank {},{},{},{}(pool_id={}) save season (day_id: {}, season_id: {}) history for user {},{}(rank_no: {}, "

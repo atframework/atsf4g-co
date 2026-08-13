@@ -19,10 +19,10 @@
 
 #include <rpc/db/local_db_interface.atfw.gen.h>
 
-#include <data/user.h>
 #include <data/session.h>
-#include <logic/user_manager.h>
+#include <data/user.h>
 #include <logic/session_manager.h>
+#include <logic/user_manager.h>
 
 #include <config/logic_config.h>
 #include <time/time_utility.h>
@@ -92,10 +92,7 @@ task_action_ping::result_type task_action_ping::operator()() {
         set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_SPEED_WARNING);
       }
       // 保存封号结果
-      res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(
-          get_shared_context(),
-          rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(get_shared_context(), tb),
-          login_lock_cas_ver));
+      res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(get_shared_context(), tb, login_lock_cas_ver));
       if (res < 0) {
         FWLOGERROR("call login rpc Set method failed, user {}, zone id: {}, res: {}", user_inst->get_user_id(),
                    user_inst->get_zone_id(), res);

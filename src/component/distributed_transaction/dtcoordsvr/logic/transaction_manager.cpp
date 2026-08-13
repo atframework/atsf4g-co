@@ -100,8 +100,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
           FWLOGERROR("Serialize transaction_blob_storage failed, {}", storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
-        int ret =
-            RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, std::move(storage), data_version));
+        int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
         if (nullptr != out_version) {
           *out_version = static_cast<int64_t>(data_version);
         }
@@ -150,7 +149,7 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, std::move(db_data), db_version));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, db_version));
     // TODO(owent): With TTL
 
     if (ret < 0) {

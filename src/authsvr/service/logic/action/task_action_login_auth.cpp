@@ -84,8 +84,8 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
 
     login_auth_tb->set_user_id(static_cast<uint64_t>(new_user_id));
 
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::insert(
-        get_shared_context(), login_auth_tb.clone(get_shared_context()), login_auth_cas_version));
+    res =
+        RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::insert(get_shared_context(), login_auth_tb, login_auth_cas_version));
     if (res < 0) {
       FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to save user_id failed, error code: {}({})",
                    session_key.node_id, session_key.session_id, req_body.open_id(), res,
@@ -171,8 +171,8 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
       protobuf_to_chrono_duration<>(logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration());
   auto token_timeout = atfw::util::time::time_utility::now() + valid_duration;
   protobuf_copy_message(*login_auth_tb->mutable_access_token_expired(), protobuf_from_system_clock(token_timeout));
-  res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(
-      get_shared_context(), login_auth_tb.clone(get_shared_context()), login_auth_cas_version));
+  res =
+      RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(get_shared_context(), login_auth_tb, login_auth_cas_version));
   if (res < 0) {
     FCTXLOGERROR(get_shared_context(),
                  "session {}:{}, user {}(user_id={}) try to save access_token failed, error code: {}({})",

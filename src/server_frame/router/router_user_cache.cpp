@@ -20,8 +20,7 @@
 
 #include "router/router_user_manager.h"
 
-SERVER_FRAME_API router_user_private_type::router_user_private_type()
-    : login_lock_tb(nullptr), login_lock_cas_ver(0) {}
+SERVER_FRAME_API router_user_private_type::router_user_private_type() : login_lock_tb(nullptr), login_lock_cas_ver(0) {}
 SERVER_FRAME_API router_user_private_type::router_user_private_type(
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> *login_lock_tb_t, uint64_t login_lock_cas_ver_t,
     const std::string &openid_t)
@@ -48,7 +47,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
 }
 
 SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::context &ctx,
-                                                                       router_user_private_type &priv_data) {
+                                                                     router_user_private_type &priv_data) {
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_lock_table_ptr{ctx};
   if (nullptr != priv_data.login_lock_tb) {
     login_lock_table_ptr = *priv_data.login_lock_tb;
@@ -63,8 +62,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_cache(rpc::contex
       rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
-      FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
-                 res);
+      FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id, res);
     }
     RPC_RETURN_CODE(res);
   }
@@ -109,7 +107,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
 }
 
 SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::context &ctx,
-                                                                        router_user_private_type &priv_data) {
+                                                                      router_user_private_type &priv_data) {
   if (priv_data.login_lock_tb == nullptr) {
     FWLOGERROR("pull_object for {}:{}:{} failed, priv_data.login_lock_tb is nullptr", get_key().type_id,
                get_key().zone_id, get_key().object_id);
@@ -137,8 +135,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
       rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
-      FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id,
-                 res);
+      FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id, res);
       RPC_RETURN_CODE(res);
     } else {
       tbu->set_open_id(priv_data.openid);
@@ -197,8 +194,8 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   login_blob_data.set_router_version(old_router_ver + 1);
 
   auto save_login_blob_data = rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, login_blob_data);
-  auto ret = RPC_AWAIT_CODE_RESULT(
-      rpc::db::login_lock::replace(ctx, std::move(save_login_blob_data), obj->get_login_lock_cas_version()));
+  auto ret =
+      RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(ctx, save_login_blob_data, obj->get_login_lock_cas_version()));
   if (ret < 0) {
     FWPLOGERROR(*obj, "save login data failed, msg:\n{}", login_blob_data.DebugString());
     // 失败则恢复路由信息
@@ -280,7 +277,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, obj->get_login_lock());
       res = RPC_AWAIT_CODE_RESULT(
-          rpc::db::login_lock::replace(ctx, std::move(save_login_blob_data), obj->get_login_lock_cas_version()));
+          rpc::db::login_lock::replace(ctx, save_login_blob_data, obj->get_login_lock_cas_version()));
       if (res != 0) {
         obj->get_login_lock().set_router_server_id(old_router_server_id);
         obj->get_login_lock().set_router_version(old_router_ver);
@@ -305,7 +302,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, obj->get_login_lock());
       res = RPC_AWAIT_CODE_RESULT(
-          rpc::db::login_lock::replace(ctx, std::move(save_login_blob_data), obj->get_login_lock_cas_version()));
+          rpc::db::login_lock::replace(ctx, save_login_blob_data, obj->get_login_lock_cas_version()));
       if (res != 0) {
         obj->get_login_lock().set_router_server_id(old_router_server_id);
         obj->get_login_lock().set_router_version(old_router_ver);
@@ -328,7 +325,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
     FWPLOGDEBUG(*obj, "save curr cas version: {}", obj->get_user_cas_version());
 
     // RPC save to DB
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::user::replace(ctx, std::move(user_tb), obj->get_user_cas_version()));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::user::replace(ctx, user_tb, obj->get_user_cas_version()));
   }
 
   // CAS 序号错误（可能是先超时再返回成功）,重试一次
@@ -339,7 +336,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
     obj->dump(ctx, *user_tb, true);
     FWPLOGINFO(*obj, "force save curr cas version: {}", obj->get_user_cas_version());
 
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::user::replace(ctx, std::move(user_tb), obj->get_user_cas_version()));
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::user::replace(ctx, user_tb, obj->get_user_cas_version()));
   }
 
   if (res < 0) {

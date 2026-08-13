@@ -1,7 +1,6 @@
 ---
 title: Adding a Database Table
 ---
-
 # Adding a Database Table
 
 The data layer only supports Redis; table structures are described with protos and access code is generated
@@ -22,7 +21,7 @@ from templates.
 // Read an entire row (version is the output CAS version)
 auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::get_all(ctx, key, msg, version));
 // Replace the whole row (pass the read CAS version for optimistic locking; the new version is written back)
-auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::replace(ctx, std::move(store), version));
+auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::replace(ctx, store, version));
 // Atomic increment of a numeric field (one generated API per incrementable field; inc_value takes the
 // delta and returns the new value)
 auto res = RPC_AWAIT_CODE_RESULT(rpc::db::my_table::inc_field_<field_name>(ctx, key, inc_value));

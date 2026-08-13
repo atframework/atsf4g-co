@@ -228,7 +228,7 @@ CASE_TEST(rpc_unit_test, combined_dns_ss_db_smoke) {
         store->set_open_id("openid-combined");
         store->set_user_id(88);
         uint64_t version = 0;
-        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, std::move(store), version));
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::replace(ctx, store, version));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ(1, static_cast<int>(version));
         if (res < 0) {

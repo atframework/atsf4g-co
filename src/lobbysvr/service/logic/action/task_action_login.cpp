@@ -19,10 +19,10 @@
 
 #include <atgateway/protocol/libatgw_protocol_api.h>
 
-#include <data/user.h>
 #include <data/session.h>
-#include <logic/user_manager.h>
+#include <data/user.h>
 #include <logic/session_manager.h>
+#include <logic/user_manager.h>
 
 #include <config/logic_config.h>
 #include <rpc/db/local_db_interface.atfw.gen.h>
@@ -139,10 +139,8 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
   if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND == res) {
     login_lock_tb->set_user_id(req_body.user_id());
 
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(
-        get_shared_context(),
-        rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(get_shared_context(), login_lock_tb),
-        login_lock_cas_version));
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login_lock::replace(get_shared_context(), login_lock_tb, login_lock_cas_version));
     FCTXLOGDEBUG(get_shared_context(), "create last login user {}, res: {}", req_body.user_id(), res);
     if (res < 0) {
       FCTXLOGERROR(get_shared_context(), "user {}:{} try to add last login table failed, errcode {}", zone_id,
@@ -182,8 +180,8 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   // 3. 写入登入信息和登入信息续期会在路由系统中完成
   res = RPC_AWAIT_CODE_RESULT(user_manager::me()->create_as<user>(get_shared_context(), req_body.user_id(), zone_id,
-                                                                      req_body.open_id(), login_lock_tb,
-                                                                      login_lock_cas_version, user_inst));
+                                                                  req_body.open_id(), login_lock_tb,
+                                                                  login_lock_cas_version, user_inst));
   is_new_user_ = user_inst && user_inst->is_new_user();
   // ============ 在这之后tb不再有效 ============
 
@@ -273,7 +271,8 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
   }
 
   if (!user_inst->is_inited()) {
-    FCTXLOGWARNING(get_shared_context(), "login success but user_inst {}:{} not inited", get_zone_id(), req_body.user_id());
+    FCTXLOGWARNING(get_shared_context(), "login success but user_inst {}:{} not inited", get_zone_id(),
+                   req_body.user_id());
     user_manager::me()->async_remove(get_shared_context(), user_inst, true);
     return get_result();
   }
@@ -410,7 +409,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
 GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_login_io_task(rpc::context& ctx,
                                                                                 std::shared_ptr<user> user_inst) {
   router_user_cache::key_t router_key(router_user_manager::me()->get_type_id(), user_inst->get_zone_id(),
-                                        user_inst->get_user_id());
+                                      user_inst->get_user_id());
   router_user_cache::ptr_t router_cache = router_user_manager::me()->get_cache(router_key);
   if (!router_cache) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
@@ -436,7 +435,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_login_io_task(
 GAMECLIENT_RPC_API rpc::result_code_type task_action_login::await_logout_io_task(rpc::context& ctx,
                                                                                  std::shared_ptr<user> user_inst) {
   router_user_cache::key_t router_key(router_user_manager::me()->get_type_id(), user_inst->get_zone_id(),
-                                        user_inst->get_user_id());
+                                      user_inst->get_user_id());
   router_user_cache::ptr_t router_cache = router_user_manager::me()->get_cache(router_key);
   if (!router_cache) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);

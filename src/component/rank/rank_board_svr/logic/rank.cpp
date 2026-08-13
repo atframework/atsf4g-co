@@ -116,9 +116,8 @@ void rank::refresh_limit_second(rpc::context& ctx, time_t now_tm) {
   }
 
   if (is_main_node()) {
-    auto save_interval = logic_config::me()
-                             ->get_server_instance_config<atframework::rank::config::ranksvr_cfg>()
-                             .rank_save_interval();
+    auto save_interval =
+        logic_config::me()->get_server_instance_config<atframework::rank::config::ranksvr_cfg>().rank_save_interval();
     if (now_tm - last_save_time_ > save_interval) {
       async_save_rank_data(ctx);
       last_save_time_ = now_tm;
@@ -556,12 +555,7 @@ void rank::async_router_lock(rpc::context& ctx) {
         {
           uint64_t version = router_data.router_version();
           uint64_t old_version = version;
-          {
-            rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> replace_db_router(child_ctx);
-            protobuf_copy_message(*replace_db_router, *new_db_router);
-            ret =
-                RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::replace(child_ctx, std::move(replace_db_router), version));
-          }
+          ret = RPC_AWAIT_CODE_RESULT(rpc::db::rank_router::replace(child_ctx, new_db_router, version));
           if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
             uint64_t new_version = 0;
             rpc::shared_message<PROJECT_NAMESPACE_ID::table_rank_router> tmp_db_router;
