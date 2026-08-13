@@ -32,6 +32,7 @@
 #include <logic/session_manager.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_common_types.h>
+#include <rpc/rpc_context.h>
 #include <rpc/telemetry/semantic_conventions.h>
 #include <std/explicit_declare.h>
 #include <time/time_utility.h>

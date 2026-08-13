@@ -10,6 +10,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/config/authsvr_config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 

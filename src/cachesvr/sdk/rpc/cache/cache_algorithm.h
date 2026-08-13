@@ -10,7 +10,16 @@
 #include <cstdint>
 
 #include "config/compile_optimize.h"
+
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include "protocol/pbdesc/com.struct.cache.pb.h"
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 PROJECT_NAMESPACE_BEGIN
 class user_login_data;

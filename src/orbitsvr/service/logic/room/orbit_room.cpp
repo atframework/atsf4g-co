@@ -11,6 +11,7 @@
 
 #include <config/excel/config_easy_api.h>
 #include <logic/logic_server_setup.h>
+#include <logic/orbit_server_manager.h>
 #include <rpc/dtmq/dtmq_client_api.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>

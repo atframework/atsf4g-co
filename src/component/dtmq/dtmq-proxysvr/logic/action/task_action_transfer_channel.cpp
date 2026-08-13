@@ -31,6 +31,7 @@
 #include <utility>
 
 #include "rpc/dtmq/dtmq_client_api.h"
+#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 #include "data/mq_channel.h"
 #include "logic/mq_channel_manager.h"

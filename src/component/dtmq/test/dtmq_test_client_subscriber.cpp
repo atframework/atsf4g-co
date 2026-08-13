@@ -30,6 +30,8 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/any.h>
+#include <google/protobuf/empty.pb.h>
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/com.struct.dtmq.config.pb.h>
 #include <protocol/config/pb_header_v3.pb.h>
@@ -45,9 +47,6 @@
 #include <atframework/testing/mock_resource.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
-
-#include <google/protobuf/any.h>
-#include <google/protobuf/empty.pb.h>
 
 #include <chrono>
 #include <cstdint>

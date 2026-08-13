@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <config/server_frame_build_feature.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -12,7 +14,7 @@
 #include <protocol/pbdesc/svr.struct.rank.pb.h>
 
 // clang-format off
-#include <config/server_frame_build_feature.h>
+#include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
 PROJECT_NAMESPACE_BEGIN

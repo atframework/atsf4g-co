@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.struct.rank.pb.h>
 #include <protocol/pbdesc/rank_board_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -25,7 +26,6 @@
 
 #include <logic/rank_manager.h>
 #include "config/server_frame_build_feature.h"
-#include "protocol/pbdesc/com.struct.rank.pb.h"
 #include "rpc/rpc_common_types.h"
 
 RANK_SERVICE_API task_action_rank_event_sync::task_action_rank_event_sync(dispatcher_start_data_type&& param)

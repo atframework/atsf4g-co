@@ -27,6 +27,14 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include <unordered_map>
 
 // clang-format off
+% for pb_msg in pb_set.generate_message:
+%   for loader in pb_msg.loaders:
+#include "${loader.get_cpp_header_path()}"
+%   endfor
+% endfor
+// clang-format on
+
+// clang-format off
 #include "config/compiler/protobuf_prefix.h"
 // clang-format on
 
@@ -36,24 +44,17 @@ xresloader_include_prefix = pb_set.get_custom_variable("xresloader_include_prefi
 #include "${xresloader_include_prefix}pb_header_v3.pb.h"
 
 // clang-format off
-% for pb_msg in pb_set.generate_message:
-%   for loader in pb_msg.loaders:
-#include "${loader.get_cpp_header_path()}"
-%   endfor
-% endfor
-
 % for block_file in pb_set.get_custom_blocks("custom_config_manager_include"):
 // include custom_config_manager_include: ${block_file}
 <%include file="${block_file}" />
 % endfor
 // clang-format on
 
-#include "${cpp_include_prefix}config_traits.h"
-#include "${spin_lock_include_prefix}lock/spin_rw_lock.h"
-
-// clang-format off
 #include "config/compiler/protobuf_suffix.h"
 // clang-format on
+
+#include "${cpp_include_prefix}config_traits.h"
+#include "${spin_lock_include_prefix}lock/spin_rw_lock.h"
 
 #ifndef EXCEL_CONFIG_LOADER_API
 #  define EXCEL_CONFIG_LOADER_API

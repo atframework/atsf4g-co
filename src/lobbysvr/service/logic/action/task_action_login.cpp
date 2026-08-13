@@ -6,6 +6,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
@@ -36,7 +37,6 @@
 #include <string>
 
 #include "logic/action/task_action_user_async_jobs.h"
-#include "protocol/pbdesc/com.const.pb.h"
 #include "rpc/rpc_common_types.h"
 #include "rpc/rpc_context.h"
 

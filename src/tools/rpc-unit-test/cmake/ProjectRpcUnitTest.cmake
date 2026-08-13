@@ -94,6 +94,25 @@ function(project_add_rpc_unit_test)
   endif()
   target_compile_options(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 
+  # Reuse PCH from dependencies. The support library reuses the server_frame PCH, so it resolves to
+  # the same pch interface target; linked component SDK/protocol targets are candidates as well and
+  # the pch tool picks the one with the highest reuse weight.
+  set(PROJECT_RPC_UNIT_TEST_PCH_REUSE_TARGETS "${PROJECT_NAME}-rpc-unit-test" "${PROJECT_SERVER_FRAME_LIB_LINK}")
+  foreach(PROJECT_RPC_UNIT_TEST_PCH_REUSE_CANDIDATE IN LISTS PROJECT_RPC_UNIT_TEST_LINK_LIBRARIES)
+    if(NOT TARGET ${PROJECT_RPC_UNIT_TEST_PCH_REUSE_CANDIDATE})
+      continue()
+    endif()
+    get_target_property(__RESOLVE_ALIAS_TARGET "${PROJECT_RPC_UNIT_TEST_PCH_REUSE_CANDIDATE}" ALIASED_TARGET)
+    if(__RESOLVE_ALIAS_TARGET)
+      list(APPEND PROJECT_RPC_UNIT_TEST_PCH_REUSE_TARGETS "${__RESOLVE_ALIAS_TARGET}")
+    else()
+      list(APPEND PROJECT_RPC_UNIT_TEST_PCH_REUSE_TARGETS "${PROJECT_RPC_UNIT_TEST_PCH_REUSE_CANDIDATE}")
+    endif()
+    unset(__RESOLVE_ALIAS_TARGET)
+  endforeach()
+  project_pch_tool_set_precompile_headers(${PROJECT_RPC_UNIT_TEST_TARGET} FOLDER "${PROJECT_NAME}/test"
+                                          REUSE_FROM_TARGET ${PROJECT_RPC_UNIT_TEST_PCH_REUSE_TARGETS})
+
   set_target_properties(
     ${PROJECT_RPC_UNIT_TEST_TARGET}
     PROPERTIES INSTALL_RPATH_USE_LINK_PATH YES

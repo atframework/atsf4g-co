@@ -10,8 +10,9 @@
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/cache_service.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/svr.struct.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
@@ -25,7 +26,6 @@
 
 #include <logic/cache_group.h>
 #include <logic/cache_group_manager.h>
-#include "protocol/pbdesc/svr.struct.pb.h"
 
 task_action_update_meta::task_action_update_meta(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}

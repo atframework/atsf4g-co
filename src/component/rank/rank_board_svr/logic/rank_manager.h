@@ -13,10 +13,10 @@
 #include <protocol/common/com.struct.rank.common.pb.h>
 #include <protocol/pbdesc/com.struct.rank.pb.h>
 #include <protocol/pbdesc/rank_board_service.pb.h>
+#include <protocol/pbdesc/svr.local.table.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <protocol/pbdesc/svr.local.table.pb.h>
 #include <rpc/rpc_shared_message.h>
 
 #include <rpc/db/db_utils.h>

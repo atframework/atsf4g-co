@@ -10,6 +10,7 @@
 // clang-format on
 
 #include <protocol/config/com.struct.dtmq.config.pb.h>
+#include <protocol/config/dtmq_proxy.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 
 // clang-format off
@@ -23,6 +24,7 @@
 #include <logic/logic_server_setup.h>
 
 #include <rpc/rpc_context.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <chrono>
 #include <list>

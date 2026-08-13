@@ -6,6 +6,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <google/protobuf/descriptor.h>
+#include <protocol/common/orbit.common.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -15,7 +16,6 @@
 
 #include <dispatcher/dispatcher_implement.h>
 #include <dispatcher/dispatcher_type_defines.h>
-#include <protocol/common/orbit.common.pb.h>
 #include <rpc/rpc_common_types.h>
 
 #ifndef ORBIT_SERVER_SERVICE_API

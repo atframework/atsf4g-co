@@ -2,13 +2,12 @@
 #include <Orbit/OrbitClientRuntime.h>
 #include <Orbit/OrbitRPCDispatcher.h>
 
-#include <google/protobuf/descriptor.h>
-#include <google/protobuf/message_lite.h>
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/message_lite.h>
 #include <protocol/extension/atframework.pb.h>
 
 // clang-format off

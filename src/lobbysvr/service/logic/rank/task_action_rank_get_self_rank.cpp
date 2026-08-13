@@ -24,6 +24,7 @@
 #include <utility/rank_util.h>
 
 #include <data/user.h>
+#include <data/user_type_define.h>
 
 task_action_rank_get_self_rank::task_action_rank_get_self_rank(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}

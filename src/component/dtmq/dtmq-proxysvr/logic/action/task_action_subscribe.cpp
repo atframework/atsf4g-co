@@ -30,6 +30,7 @@
 #include <utility>
 
 #include "rpc/dtmq/dtmq_client_api.h"
+#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 #include "data/mq_channel.h"
 #include "data/mq_channel_wal_handle.h"

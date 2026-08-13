@@ -10,8 +10,16 @@
 #include "config/excel/config_manager.h"
 #include "frame/test_macros.h"
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <protocol/config/com.const.config.pb.h>
 #include <protocol/config/pb_header_v3.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 namespace {
 std::string make_empty_table_bytes() {

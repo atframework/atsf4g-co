@@ -23,6 +23,7 @@
 #include <logic/rank/user_rank_manager.h>
 
 #include <data/user.h>
+#include <data/user_type_define.h>
 
 task_action_rank_get_specify_rank::task_action_rank_get_specify_rank(dispatcher_start_data_type&& param)
     : base_type(COPP_MACRO_STD_MOVE(param)) {}
@@ -54,7 +55,7 @@ task_action_rank_get_specify_rank::result_type task_action_rank_get_specify_rank
   if (!rank_rule_cfg) {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_INVALID_TYPE);
   }
-  
+
   logic_rank_handle_key rank_key{*rank_rule_cfg};
   if (req_body.rank_key().sub_rank_instance_id() != 0) {
     rank_key.set_sub_instance_id(req_body.rank_key().sub_rank_instance_id());

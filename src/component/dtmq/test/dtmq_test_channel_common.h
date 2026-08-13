@@ -25,6 +25,7 @@
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/com.struct.dtmq.config.pb.h>
 #include <protocol/config/dtmq_proxy.config.pb.h>
+#include <protocol/config/pb_header_v3.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>

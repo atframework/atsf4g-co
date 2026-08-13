@@ -223,11 +223,11 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
       endif()
     endforeach()
 
+    string(APPEND __pch_include_content "\n")
     string(
       APPEND
       __pch_include_content
-      [=[
-// clang-format off
+      [=[// clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
@@ -276,6 +276,13 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
     else()
       target_link_libraries("${_interface_target_name}" PRIVATE "${TARGET_NAME}")
     endif()
+    # The merged pch header list below also contains public pch headers inherited from reuse
+    # candidates, so propagate their usage requirements (include directories and build order).
+    foreach(__project_pch_tool_reuse_include_target ${__project_pch_tool_REUSE_FROM_TARGET})
+      if(TARGET ${__project_pch_tool_reuse_include_target})
+        target_link_libraries("${_interface_target_name}" PRIVATE ${__project_pch_tool_reuse_include_target})
+      endif()
+    endforeach()
     target_link_libraries("${_interface_target_name}" PRIVATE "${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
     set_target_properties("${_interface_target_name}" PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
                                                                                               "hidden")

@@ -35,6 +35,9 @@
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 #include "data/mq_channel.h"
+#include "data/mq_channel_wal_handle.h"
+#include "logic/mq_channel_manager.h"
+#include "rpc/dtmq/dtmq_algorithm.h"
 
 DTMQ_PROXY_SERVICE_API task_action_channel_event_sync::task_action_channel_event_sync(
     dispatcher_start_data_type&& param)

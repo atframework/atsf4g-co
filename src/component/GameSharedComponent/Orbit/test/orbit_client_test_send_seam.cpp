@@ -6,7 +6,15 @@
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
 #include <google/protobuf/descriptor.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <Orbit/OrbitClientRuntime.h>
 #include <Orbit/OrbitRPCDispatcher.h>

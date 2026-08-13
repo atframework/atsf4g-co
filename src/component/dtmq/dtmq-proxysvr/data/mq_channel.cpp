@@ -11,6 +11,7 @@
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/com.struct.dtmq.config.pb.h>
+#include <protocol/config/dtmq_proxy.config.pb.h>
 #include <protocol/config/svr.protocol.config.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
@@ -36,6 +37,8 @@
 #include <rpc/rpc_shared_message.h>
 
 #include <rpc/dtmq/dtmq_algorithm.h>
+
+#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 
 #include <chrono>
 #include <cstdint>
