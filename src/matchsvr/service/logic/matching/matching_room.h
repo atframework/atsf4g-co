@@ -4,7 +4,8 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/pbdesc/match_service.pb.h>
+#include <protocol/pbdesc/com.struct.match.pb.h>
+#include <protocol/pbdesc/com.struct.orbit.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -29,25 +30,33 @@ class matching_room {
                 int64_t expire_time);
 
   // 返回房间的稳定 ID。
-  const std::string& get_matching_id() const noexcept;
+  const std::string& get_matching_id() const noexcept { return matching_id_; }
   // 返回 level/region/version/pool 四维硬隔离范围。
-  const PROJECT_NAMESPACE_ID::DMatchingScope& get_scope() const noexcept;
+  const PROJECT_NAMESPACE_ID::DMatchingScope& get_scope() const noexcept { return scope_; }
   // 返回当前房间状态。
-  PROJECT_NAMESPACE_ID::EnMatchingRoomStatus get_status() const noexcept;
+  PROJECT_NAMESPACE_ID::EnMatchingRoomStatus get_status() const noexcept { return status_; }
   // 返回房间创建时间，候选房间按它从旧到新排序。
-  int64_t get_created_time() const noexcept;
+  int64_t get_created_time() const noexcept { return created_time_; }
   // 返回搜索超时时间。
-  int64_t get_expire_time() const noexcept;
+  int64_t get_expire_time() const noexcept { return expire_time_; }
   // 返回终态发生时间，用于延迟回收以支持查询。
-  int64_t get_terminal_time() const noexcept;
+  int64_t get_terminal_time() const noexcept { return terminal_time_; }
   // 返回确认阶段截止时间；非确认阶段为 0。
-  int64_t get_confirm_expire_time() const noexcept;
+  int64_t get_confirm_expire_time() const noexcept { return confirm_expire_time_; }
   // 返回房间 WAL 最近分配的事件 ID。
-  int64_t get_last_event_id() const noexcept;
+  int64_t get_last_event_id() const noexcept { return last_event_id_; }
   // 返回当前匹配结果模板 ID。
-  int32_t get_result_template_id() const noexcept;
+  int32_t get_result_template_id() const noexcept { return result_template_id_; }
   // 返回当前所有 unit，key 为 unit_id。
-  const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& get_units() const noexcept;
+  const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& get_units() const noexcept { return units_; }
+
+  PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail get_orbit_user_init_detail(
+      const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const;
+
+  void add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                  const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail);
+
+  const PROJECT_NAMESPACE_ID::DOrbitRoomKey& get_orbit_room_key() const noexcept { return orbit_room_key_; }
 
   // 统计房间内的真实玩家数量。
   size_t get_user_count() const noexcept;
@@ -73,7 +82,10 @@ class matching_room {
   // 有新 unit 加入时延长房间级搜索截止时间，避免迁入老房间后立即超时。
   void extend_expire_time(int64_t value) noexcept;
   // 标记正在请求 battlesvr，之后不再接受新 unit。
-  void mark_creating_battle() noexcept;
+  void mark_creating_battle(uint64_t orbit_server_id) noexcept;
+  uint64_t get_orbit_server_id() const noexcept;
+  // 锁定首次 orbitsvr ready 回调，防止重复初始化玩家。
+  bool begin_orbit_ready() noexcept;
   // 标记战斗房间创建完成。
   void mark_finished(std::string battle_room_id, int64_t now);
   // 标记战斗请求失败。
@@ -105,6 +117,7 @@ class matching_room {
   PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status_;
   // unit_id 到完整组队数据的映射。
   std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit> units_;
+
   // 创建时间，同时作为老房间优先的排序时间。
   int64_t created_time_;
   // 匹配搜索截止时间。
@@ -121,6 +134,16 @@ class matching_room {
   std::string battle_room_id_;
   // 房间最终业务结果。
   int32_t result_;
+  // 是否已经开始处理 orbitsvr ready 回调。
+  bool orbit_ready_processing_;
+  // 本房间创建请求选中的 orbitsvr，用于校验 ready 回调来源及通知 lobbysvr。
+  uint64_t orbit_server_id_;
+
+  // OrbitRoom Key
+  PROJECT_NAMESPACE_ID::DOrbitRoomKey orbit_room_key_;
+
+  std::unordered_map<std::string, PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail> orbit_users_init_detail_;
+
   // 房间级 WAL publisher，负责日志保留、重放、快照和跨服通知。
   matching_wal_log_operator::strong_ptr<matching_wal_publisher> wal_publisher_;
 };

@@ -10,6 +10,7 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/bin"
   USE_SERVICE_SDK
   "matchsvr-sdk"
+  "orbitsvr-sdk"
   HEADERS
   ${SERVICE_HEADERS}
   SOURCES

@@ -26,19 +26,10 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
       last_event_id_(0),
       result_template_id_(0),
       result_(0),
-      wal_publisher_(create_matching_wal_publisher(*this)) {}
-
-const std::string& matching_room::get_matching_id() const noexcept { return matching_id_; }
-const PROJECT_NAMESPACE_ID::DMatchingScope& matching_room::get_scope() const noexcept { return scope_; }
-PROJECT_NAMESPACE_ID::EnMatchingRoomStatus matching_room::get_status() const noexcept { return status_; }
-int64_t matching_room::get_created_time() const noexcept { return created_time_; }
-int64_t matching_room::get_expire_time() const noexcept { return expire_time_; }
-int64_t matching_room::get_terminal_time() const noexcept { return terminal_time_; }
-int64_t matching_room::get_confirm_expire_time() const noexcept { return confirm_expire_time_; }
-int64_t matching_room::get_last_event_id() const noexcept { return last_event_id_; }
-int32_t matching_room::get_result_template_id() const noexcept { return result_template_id_; }
-const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& matching_room::get_units() const noexcept {
-  return units_;
+      orbit_ready_processing_(false),
+      orbit_server_id_(0),
+      wal_publisher_(create_matching_wal_publisher(*this)) {
+  orbit_room_key_.set_client_id("room_key_" + matching_id_);
 }
 
 size_t matching_room::get_user_count() const noexcept {
@@ -60,6 +51,17 @@ bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) c
     }
   }
   return false;
+}
+
+PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail matching_room::get_orbit_user_init_detail(
+    const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const {
+  auto iter = orbit_users_init_detail_.find(user_key.SerializeAsString());
+  return iter == orbit_users_init_detail_.end() ? PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail() : iter->second;
+}
+
+void matching_room::add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                               const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail) {
+  orbit_users_init_detail_[user_key.SerializeAsString()].CopyFrom(detail);
 }
 
 bool matching_room::add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
@@ -149,12 +151,23 @@ void matching_room::set_result_template_id(int32_t value) noexcept { result_temp
 
 void matching_room::extend_expire_time(int64_t value) noexcept { expire_time_ = std::max(expire_time_, value); }
 
-void matching_room::mark_creating_battle() noexcept {
+void matching_room::mark_creating_battle(uint64_t orbit_server_id) noexcept {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE;
+  orbit_server_id_ = orbit_server_id;
   confirm_expire_time_ = 0;
   for (auto& unit : units_) {
     unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_MATCHED);
   }
+}
+
+uint64_t matching_room::get_orbit_server_id() const noexcept { return orbit_server_id_; }
+
+bool matching_room::begin_orbit_ready() noexcept {
+  if (status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE || orbit_ready_processing_) {
+    return false;
+  }
+  orbit_ready_processing_ = true;
+  return true;
 }
 
 void matching_room::mark_finished(std::string battle_room_id, int64_t now) {

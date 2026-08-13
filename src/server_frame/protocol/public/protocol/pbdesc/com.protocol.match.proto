@@ -8,7 +8,6 @@ option cc_enable_arenas = true;
 
 
 import "protocol/pbdesc/com.struct.match.proto";
-import "protocol/pbdesc/com.struct.battle.shared.proto";
 
 package atframework.shared;
 
@@ -63,3 +62,4 @@ message SCMatchingLogSync {
   DMatchingRoomSnapshot snapshot = 3;
   bool is_switch = 4;
 }
+

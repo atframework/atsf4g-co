@@ -8,7 +8,6 @@ option cc_enable_arenas = true;
 
 import "google/protobuf/timestamp.proto";
 import "protocol/pbdesc/com.struct.proto";
-import "protocol/pbdesc/com.struct.battle.shared.proto";
 
 package atframework.shared;
 
@@ -39,11 +38,11 @@ enum EnMatchingConfirmStatus {
   EN_MATCHING_CONFIRM_STATUS_TIMEOUT = 3;
 }
 
-// 与旧项目 EnMatchSelectSvrType 保持一致，字段编号沿用旧协议。
+
 enum EnMatchSelectSvrType {
   EN_MATCH_SELECT_SVR_TYPE_INVALID = 0;
   EN_MATCH_SELECT_SVR_TYPE_CLIENT = 1;
-  EN_MATCH_SELECT_SVR_TYPE_PLAYER = 2;
+  EN_MATCH_SELECT_SVR_TYPE_USER = 2;
 }
 
 // 硬隔离维度。四个字段全部相同的房间才允许互相撮合。
@@ -135,4 +134,17 @@ message DUserMatchingData {
   DMatchingRoomSnapshot snapshot = 1;
   int64 last_event_id = 2;
   int64 client_acknowledge_event_id = 3;
+}
+
+message DBattleLevelParameter {
+  int32 level_type = 1;  // 匹配关卡类型(关联到 DBattleRoomData.battle_data)
+  int32 level_id = 2;    // 默认匹配关卡ID或当前的关卡ID
+  int32 matching_pool_id = 3;
+  string region = 5;
+}
+
+message DLevelSelect {
+  int32 level_type = 1;  // 匹配关卡类型(关联到 DBattleRoomData.battle_data)
+  int32 level_id = 2;    // 默认匹配关卡ID或当前的关卡ID
+  string region = 3;
 }

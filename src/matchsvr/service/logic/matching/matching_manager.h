@@ -10,8 +10,9 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <rpc/rpc_common_types.h>
+
 #include <cstdint>
-#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -27,9 +28,6 @@ class context;
 // 全局匹配管理器。它拥有房间和运行时索引，但不持有任何配置表副本。
 class matching_manager : public util::design_pattern::singleton<matching_manager> {
  public:
-  using battle_start_handler_t =
-      std::function<int32_t(const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot&, std::string&)>;
-
   // 硬隔离索引键。
   struct bucket_key {
     int32_t level_type = 0;
@@ -53,7 +51,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   ~matching_manager();
 
  public:
-  // 安装默认 battlesvr 桩并准备运行。
+  // 初始化匹配管理器。
   int32_t init();
   // 处理搜索超时和终态房间延迟回收。
   int32_t tick();
@@ -72,9 +70,10 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   // 接收成员的战斗确认；拒绝时整 Unit 退出，剩余 Unit 回到撮合。
   int32_t confirm_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingConfirmReq& request,
                            PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_room_ready(
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq& request,
+      PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp& response, uint64_t source_server_id);
 
-  // 注入真实 battlesvr 调用；首版默认处理器只生成桩 room_id 并返回成功。
-  void set_battle_start_handler(battle_start_handler_t handler);
   // 返回当前处于搜索阶段的玩家总数，用于选择规则组。
   int32_t get_total_matching_user_count() const noexcept;
   // 返回当前保留的房间数，包括短暂保留供查询的终态房间。
@@ -99,8 +98,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   // 在相同硬隔离桶中查找一个可容纳 unit 的房间；迁房时只向人数严格更多的房间收敛。
   matching_room::ptr_t find_joinable_room(const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
                                           const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now,
-                                          const matching_room* source_room,
-                                          int32_t& result_template_id) const;
+                                          const matching_room* source_room, int32_t& result_template_id) const;
   // 将 unit 从源房间迁到目标房间；先加入目标再移除源房间，失败时不改变现有归属。
   bool move_unit(rpc::context& ctx, const matching_room::ptr_t& source_room, const matching_room::ptr_t& target_room,
                  const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now);
@@ -114,16 +112,12 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   void unindex_room(const matching_room& room);
   // 释放房间中所有 unit 的活动索引。
   void unindex_all_units(const matching_room& room);
-  // 若规则已满足，直接调用 battlesvr 处理器并进入终态。
+  // 若规则已满足，向 orbitsvr 发起创建房间请求。
   void start_battle(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
   // 重新计算房间当前模板和成局状态，用于创建、迁房、查询和定时推进。
   void evaluate_room(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
   // 淘汰确认超时的 Unit，并让仍有效的 Unit 回到撮合。
   void handle_confirm_timeout(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
-  // 默认 battlesvr 桩：保留完整请求边界但不依赖尚未实现的 battlesvr。
-  static int32_t stub_start_battle(const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot,
-                                   std::string& battle_room_id);
-
   // matching_id 到房间对象的唯一所有权索引。
   std::unordered_map<std::string, matching_room::ptr_t> rooms_;
   // 活动 unit_id 到 matching_id 的索引。
@@ -132,6 +126,4 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   std::unordered_map<user_key, uint64_t, user_key_hash> user_to_unit_;
   // 四维硬隔离桶以及桶内的老房间优先队列。
   std::map<bucket_key, std::set<queue_entry>> searching_rooms_by_bucket_;
-  // battlesvr 请求边界；未来替换桩时无需修改撮合核心。
-  battle_start_handler_t battle_start_handler_;
 };

@@ -12,6 +12,7 @@ import "protocol/extension/atframework.proto";
 
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.match.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/lobbysvr/protocol/protocol/pbdesc";
 package atframework.shared;
@@ -60,11 +61,22 @@ message SSMatchingConfirmReq {
   bool confirmed = 4;
   uint64 subscriber_server_id = 5;
   int64 acknowledge_event_id = 6;
+  DOrbitUserInitDataDetail orbit_init_data = 7; // 保底的战斗房间初始化数据，确保玩家会进入到局内
 }
 
 message SSMatchingSnapshot {
   int32 result = 1;
   DMatchingRoomSnapshot snapshot = 2;
+}
+
+// orbitsvr 的房间进程启动完成后回调最初发起创建请求的 matchsvr。
+message SSMatchingOrbitRoomReadyReq {
+  string matching_id = 1;
+  int64 expired_timepoint = 3;
+}
+
+message SSMatchingOrbitRoomReadyRsp {
+  int32 result = 1;
 }
 
 service MatchsvrService {
@@ -81,6 +93,9 @@ service MatchsvrService {
   };
   rpc confirm_matching(SSMatchingConfirmReq) returns (SSMatchingSnapshot) {
     option (atframework.rpc_options) = { api_name: "确认或拒绝战斗" };
+  };
+  rpc orbit_room_ready(SSMatchingOrbitRoomReadyReq) returns (SSMatchingOrbitRoomReadyRsp) {
+    option (atframework.rpc_options) = { api_name: "Orbit房间初始化完成" };
   };
 }
 

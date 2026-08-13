@@ -37,7 +37,7 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 	if len(cmd) > 2 {
 		region = cmd[2]
 	}
-	selectType := public_protocol_pbdesc.EnMatchSelectSvrType_EN_MATCH_SELECT_SVR_TYPE_PLAYER
+	selectType := public_protocol_pbdesc.EnMatchSelectSvrType_EN_MATCH_SELECT_SVR_TYPE_USER
 	if len(cmd) > 3 {
 		selectTypeValue, parseErr := strconv.ParseInt(cmd[3], 10, 32)
 		if parseErr != nil {

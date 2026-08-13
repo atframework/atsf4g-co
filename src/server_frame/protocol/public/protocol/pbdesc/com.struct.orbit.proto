@@ -50,7 +50,8 @@ message DOrbitUserFinishAsyncData {
 
 message DOrbitUserInitData {
   DOrbitUserKey user_key = 1;
-  DOrbitUserInitDataDetail data = 2;
+  int32 faction_id = 2;
+  DOrbitUserInitDataDetail data = 3;
 }
 
 message DOrbitUserInitResult {
@@ -68,7 +69,7 @@ message DOrbitUserFinishResult {
 message DOrbitRoomInitData {
   uint32 client_template_id = 1;
   string region = 2;
-  uint64 match_id = 3;
+  string match_id = 3;
 }
 
 enum EnOrbitRoomStatus {
@@ -98,7 +99,7 @@ message DOrbitRoomExitInfo {
 message DOrbitRoomInit {
   uint32 client_template_id = 1;
   string region = 2;
-  uint64 match_id = 3;
+  string match_id = 3;
   int64 create_timepoint = 4;
   int64 expired_timepoint = 5;
 }

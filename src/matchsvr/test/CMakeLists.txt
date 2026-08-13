@@ -18,7 +18,8 @@ endif()
 
 target_include_directories(${MATCHSVR_TEST_TARGET} PRIVATE "${MATCHSVR_TEST_FRAME_DIR}"
                                                            "${PROJECT_SOURCE_DIR}/src/matchsvr/service")
-target_link_libraries(${MATCHSVR_TEST_TARGET} PRIVATE server_frame protocol::matchsvr-protocol sdk::matchsvr-sdk)
+target_link_libraries(${MATCHSVR_TEST_TARGET} PRIVATE server_frame protocol::matchsvr-protocol sdk::matchsvr-sdk
+                                                       sdk::orbitsvr-sdk)
 if(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
   target_link_libraries(${MATCHSVR_TEST_TARGET} PRIVATE ${PROJECT_NAME}::rpc-unit-test)
   target_compile_definitions(${MATCHSVR_TEST_TARGET}

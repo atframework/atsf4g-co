@@ -296,9 +296,11 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
   RPC_RETURN_CODE(rpc_response->result());
 }
 
+// 玩家的静默确认
 rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
                                                               const PROJECT_NAMESPACE_ID::CSMatchingConfirmReq& request,
                                                               PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp& response) {
+  // TODO 填充玩家的战斗数据
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingConfirmReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
   FWPLOGDEBUG(*owner_, "confirm matching, matching_id={}, confirmed={}", request.matching_id(), request.confirmed());

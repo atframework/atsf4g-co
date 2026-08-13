@@ -90,6 +90,19 @@ CASE_TEST(matchsvr_matching_room, confirms_all_users_and_resumes_matching) {
                  room.get_units().at(1).users(0).confirm_status());
 }
 
+CASE_TEST(matchsvr_matching_room, requires_confirmation_from_every_user_in_one_unit) {
+  auto room = make_room();
+  auto unit = make_unit(1, 10001, 1);
+  unit.add_users()->mutable_user_key()->CopyFrom(make_user(10002, 1));
+  CASE_EXPECT_TRUE(room.add_unit(unit));
+
+  room.begin_confirmation(150);
+  CASE_EXPECT_TRUE(room.confirm_user(unit.users(0).user_key(), true));
+  CASE_EXPECT_FALSE(room.are_all_users_confirmed());
+  CASE_EXPECT_TRUE(room.confirm_user(unit.users(1).user_key(), true));
+  CASE_EXPECT_TRUE(room.are_all_users_confirmed());
+}
+
 CASE_TEST(matchsvr_matching_room, rejects_confirmation_outside_confirming_or_for_unknown_user) {
   auto room = make_room();
   CASE_EXPECT_TRUE(room.add_unit(make_unit(1, 10001, 1)));
@@ -122,7 +135,7 @@ CASE_TEST(matchsvr_matching_room, extends_expiry_monotonically_and_resets_confir
 CASE_TEST(matchsvr_matching_room, exports_terminal_snapshot) {
   auto room = make_room();
   CASE_EXPECT_TRUE(room.add_unit(make_unit(1, 10001, 1)));
-  room.mark_creating_battle();
+  room.mark_creating_battle(0);
   room.mark_finished("battle-1", 220);
 
   PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot snapshot;
@@ -131,6 +144,20 @@ CASE_TEST(matchsvr_matching_room, exports_terminal_snapshot) {
   CASE_EXPECT_EQ("battle-1", snapshot.battle_room_id());
   CASE_EXPECT_EQ(220, room.get_terminal_time());
   CASE_EXPECT_EQ(1, snapshot.units_size());
+}
+
+CASE_TEST(matchsvr_matching_room, accepts_orbit_ready_only_once_for_selected_server) {
+  auto room = make_room();
+  CASE_EXPECT_TRUE(room.add_unit(make_unit(1, 10001, 1)));
+  CASE_EXPECT_FALSE(room.begin_orbit_ready());
+
+  room.mark_creating_battle(0x1234);
+  CASE_EXPECT_EQ(0x1234, room.get_orbit_server_id());
+  CASE_EXPECT_TRUE(room.begin_orbit_ready());
+  CASE_EXPECT_FALSE(room.begin_orbit_ready());
+
+  room.mark_finished("battle-1", 220);
+  CASE_EXPECT_FALSE(room.begin_orbit_ready());
 }
 
 CASE_TEST(matchsvr_matching_room, marks_timeout_units_cancelled) {

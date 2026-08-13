@@ -277,7 +277,7 @@ CASE_TEST(matchsvr_matching_logic, rejects_banned_users_wrong_region_and_expired
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_manager, creates_joins_confirms_and_finishes_battle) {
+CASE_TEST(matchsvr_matching_manager, fails_after_confirmation_when_orbitsvr_is_unavailable) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -313,8 +313,8 @@ CASE_TEST(matchsvr_matching_manager, creates_joins_confirms_and_finishes_battle)
   confirm.set_unit_id(2);
   confirm.mutable_operator_user()->CopyFrom(second_request.operator_user());
   CASE_EXPECT_EQ(0, manager->confirm_matching(ctx, confirm, confirm_response));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED, confirm_response.snapshot().status());
-  CASE_EXPECT_TRUE(!confirm_response.snapshot().battle_room_id().empty());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, confirm_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, confirm_response.snapshot().result());
 
   manager->clear();
   CASE_EXPECT_EQ(0, manager->get_room_count());
@@ -556,7 +556,7 @@ CASE_TEST(matchsvr_matching_manager, removes_unconfirmed_unit_and_resumes_after_
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_manager, releases_units_when_battle_creation_fails) {
+CASE_TEST(matchsvr_matching_manager, releases_units_when_orbitsvr_is_unavailable) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -564,8 +564,6 @@ CASE_TEST(matchsvr_matching_manager, releases_units_when_battle_creation_fails) 
 
   auto manager = matching_manager::me();
   manager->clear();
-  manager->set_battle_start_handler(
-      [](const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot&, std::string&) { return -777; });
   rpc::context ctx{rpc::context::create_without_task()};
   auto first_request = make_create_request(71, 80001, 10, 1);
   auto second_request = make_create_request(72, 80002, 14, 2);
@@ -583,13 +581,12 @@ CASE_TEST(matchsvr_matching_manager, releases_units_when_battle_creation_fails) 
   confirm.mutable_operator_user()->CopyFrom(second_request.operator_user());
   CASE_EXPECT_EQ(0, manager->confirm_matching(ctx, confirm, response));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED, response.snapshot().status());
-  CASE_EXPECT_EQ(-777, response.snapshot().result());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, response.snapshot().result());
 
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot retry_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, first_request, retry_response));
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, second_request, retry_response));
 
-  manager->set_battle_start_handler({});
   manager->clear();
   CASE_EXPECT_EQ(0, runtime.stop());
 }
