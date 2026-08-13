@@ -132,6 +132,26 @@ message table_user {
   DUserMatchingData matching_data = 203;               // 匹配临时数据
 }
 
+message table_string_mapping {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "string_mapping"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "type_id"
+      key_fields: "string_value"
+      key_fields: "zone_id"
+    }
+  };
+  // clang-format on
+  uint64 type_id = 1;       // 映射类型 @EnStringMappingType
+  string string_value = 2;  // 字符串值
+  uint32 zone_id = 3;       // 大区ID
+
+  user_string_mapping_data data = 11;  // 映射数据
+}
+
 message table_distribute_transaction {
   // clang-format off
   option (atframework.database_table) = {

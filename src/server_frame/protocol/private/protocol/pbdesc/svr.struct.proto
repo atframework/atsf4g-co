@@ -148,3 +148,6 @@ message user_orbit_room_data {
   DOrbitRoomKey room_key = 1;
   int64 expired_timepoint = 2;
 }
+
+message user_string_mapping_data {
+}
