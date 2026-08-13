@@ -33,7 +33,6 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/bin"
   USE_SERVICE_SDK
   "lobbysvr-sdk"
-  "matchsvr-sdk"
   USE_COMPONENTS
   "orbit-common-protocol"
   "orbit-server-sdk"
