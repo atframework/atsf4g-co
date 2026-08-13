@@ -11,6 +11,7 @@
 #include <memory/object_stl_unordered_map.h>
 
 #include <dispatcher/task_manager.h>
+#include <design_pattern/noncopyable.h>
 
 #include <rpc/rpc_async_invoke.h>
 
@@ -32,7 +33,7 @@ PROJECT_NAMESPACE_END
 
 class user;
 
-class user_async_jobs_manager {
+class user_async_jobs_manager : public atfw::util::design_pattern::noncopyable {
  public:
   using async_job_ptr_type = atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>;
 

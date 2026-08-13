@@ -7,6 +7,7 @@
 #include <nostd/function_ref.h>
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
+#include <design_pattern/noncopyable.h>
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
@@ -38,7 +39,7 @@ class DChatChannelSnapshot;
 
 class user;
 
-class user_chat_manager {
+class user_chat_manager : public atfw::util::design_pattern::noncopyable {
  public:
   static int32_t global_tick(rpc::context& ctx);
 

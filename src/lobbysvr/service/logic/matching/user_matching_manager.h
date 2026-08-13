@@ -3,6 +3,7 @@
 #pragma once
 
 #include <rpc/rpc_common_types.h>
+#include <design_pattern/noncopyable.h>
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -25,7 +26,7 @@ class context;
 class user;
 
 // 玩家级匹配流程入口。它保存本玩家的匹配快照和 WAL 游标，并负责 CS/SS 协议之间的转换。
-class user_matching_manager {
+class user_matching_manager : public atfw::util::design_pattern::noncopyable {
  public:
   explicit user_matching_manager(user& owner);
   ~user_matching_manager();

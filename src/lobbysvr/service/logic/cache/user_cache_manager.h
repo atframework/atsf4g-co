@@ -6,6 +6,7 @@
 #include <std/explicit_declare.h>
 
 #include <rpc/rpc_common_types.h>
+#include <design_pattern/noncopyable.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -36,7 +37,7 @@ PROJECT_NAMESPACE_END
 
 class user;
 
-class user_cache_manager {
+class user_cache_manager : public atfw::util::design_pattern::noncopyable{
  public:
   explicit user_cache_manager(user& owner);
   ~user_cache_manager();

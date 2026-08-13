@@ -5,6 +5,7 @@
 #include <gsl/select-gsl.h>
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
+#include <design_pattern/noncopyable.h>
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
@@ -26,7 +27,7 @@ PROJECT_NAMESPACE_END
 
 class user;
 
-class user_orbit_manager {
+class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
  public:
   explicit user_orbit_manager(user& owner);
   void refresh_feature_limit_second(rpc::context& ctx);

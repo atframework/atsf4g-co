@@ -1,6 +1,7 @@
 #pragma once
 
 #include <config/compiler_features.h>
+#include <design_pattern/noncopyable.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -43,7 +44,7 @@ namespace rpc {
 class context;
 }
 
-class user_rank_manager {
+class user_rank_manager : public atfw::util::design_pattern::noncopyable {
  public:
   struct rank_board_cache {
     uint32_t rank_no;  // 未上榜则为0
