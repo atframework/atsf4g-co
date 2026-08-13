@@ -21,8 +21,7 @@ namespace orbit_client_sdk {
 
 namespace {
 template <class TBodyType>
-static inline int __pack_rpc_body(const TBodyType& input, std::string* output, const std::string& rpc_full_name,
-                                  gsl::string_view type_full_name) {
+static inline int __pack_rpc_body(const TBodyType& input, std::string* output, const std::string& rpc_full_name) {
   if (false == input.SerializeToString(output)) {
     OrbitClientRuntime::me()->log(
         OrbitClientLogLevel::kError, __FILE__, __LINE__,
@@ -39,8 +38,7 @@ static inline int __pack_rpc_body(const TBodyType& input, std::string* output, c
 }
 
 template <class TBodyType>
-static inline int __unpack_rpc_body(TBodyType&& output, const std::string& input, const std::string& rpc_full_name,
-                                    gsl::string_view type_full_name) {
+static inline int __unpack_rpc_body(TBodyType&& output, const std::string& input, const std::string& rpc_full_name) {
   if (false == output.ParseFromString(input)) {
     OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
                                   LOG_WRAPPER_FWAPI_FORMAT("[ORBIT_RPC] {} parse rpc request message failed:\n{}",
@@ -116,8 +114,7 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_
   if (res < 0) {
     return res;
   }
-  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), rpc_full_name,
-                        orbit_rpc_req_type::descriptor()->full_name());
+  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), rpc_full_name);
   if (res < 0) {
     return res;
   }
@@ -133,8 +130,7 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_
         orbit_rpc_rsp_type rsp_body;
         if (rsp_msg.head().rpc_response().type_url() == orbit_rpc_rsp_type::descriptor()->full_name() &&
             !rsp_msg.body_bin().empty()) {
-          res = __unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name,
-                                  orbit_rpc_rsp_type::descriptor()->full_name());
+          res = __unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name);
         }
         if (res == 0) {
           res = rsp_msg.head().error_code();
