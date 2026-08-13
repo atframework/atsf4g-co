@@ -77,6 +77,8 @@ pb_msg_class_name = loader.get_cpp_class_name()
 ${pb_loader.CppNamespaceBegin(global_package)}
 ${loader.get_cpp_namespace_decl_begin()}
 
+#ifndef EXCEL_CONFIG_LOADER_COMMON_FUNCTIONS
+#  define EXCEL_CONFIG_LOADER_COMMON_FUNCTIONS
 namespace {
   template <typename TCH>
   static inline bool is_space(const TCH &c) {
@@ -119,6 +121,7 @@ namespace {
     return std::make_pair(str_begin, sub_str_sz);
   }
 }
+#endif
 
 EXCEL_CONFIG_LOADER_API ${pb_msg_class_name}::${pb_msg_class_name}(): all_loaded_(false), enable_multithread_lock_(true), hash_code_verison_(0) {
 }

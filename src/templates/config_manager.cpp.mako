@@ -21,7 +21,7 @@ spin_lock_include_prefix = pb_set.get_custom_variable("spin_lock_include_prefix"
  * @note 不支持 C++ Builder 编译器
  */
 // IOS 不支持tls
-#if defined(__APPLE__)
+#if !defined(THREAD_TLS) && defined(__APPLE__)
 #  include <TargetConditionals.h>
 
 #  if TARGET_OS_IPHONE || TARGET_OS_EMBEDDED || TARGET_IPHONE_SIMULATOR
@@ -83,39 +83,43 @@ spin_lock_include_prefix = pb_set.get_custom_variable("spin_lock_include_prefix"
 #include <sstream>
 #include <mutex>
 
-#if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
-#define EXCEL_CONFIG_FS_OPEN(e, f, path, mode) errno_t e = fopen_s(&f, path, mode)
-#define EXCEL_CONFIG_FS_CLOSE(f) fclose(f)
-#else
-#include <errno.h>
-#define EXCEL_CONFIG_FS_OPEN(e, f, path, mode)  \
-f = fopen(path, mode);                          \
-int e = errno
-#define EXCEL_CONFIG_FS_CLOSE(f) fclose(f)
-#endif
-
-
-#if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__STDC_LIB_EXT1__)
-
-#ifdef _MSC_VER
-#define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf_s(buffer, static_cast<size_t>(bufsz), _TRUNCATE, fmt, arg)
-#else
-#define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf_s(buffer, static_cast<size_t>(bufsz), fmt, arg)
-#endif
-
-#else
-#define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf(buffer, static_cast<size_t>(bufsz), fmt, arg)
-#endif
-
-#if defined(_REENTRANT)
-#  define EXCEL_CONFIG_TLS_USE_PTHREAD 1
-#elif defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
-#  define EXCEL_CONFIG_TLS_USE_THREAD_LOCAL 1
-#  if defined(THREAD_TLS)
-#    define EXCEL_CONFIG_TLS_THREAD_LOCAL THREAD_TLS
+#ifndef EXCEL_CONFIG_FS_OPEN
+#  if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L)
+#    define EXCEL_CONFIG_FS_OPEN(e, f, path, mode) errno_t e = fopen_s(&f, path, mode)
+#    define EXCEL_CONFIG_FS_CLOSE(f) fclose(f)
+#  else
+#    include <errno.h>
+#    define EXCEL_CONFIG_FS_OPEN(e, f, path, mode)  \
+     f = fopen(path, mode);                         \
+     int e = errno
+#    define EXCEL_CONFIG_FS_CLOSE(f) fclose(f)
 #  endif
-#else
-#  define EXCEL_CONFIG_TLS_USE_PTHREAD 1
+#endif
+
+
+#ifndef EXCEL_CONFIG_VSNPRINTF
+#  if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__STDC_LIB_EXT1__)
+#    ifdef _MSC_VER
+#      define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf_s(buffer, static_cast<size_t>(bufsz), _TRUNCATE, fmt, arg)
+#    else
+#      define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf_s(buffer, static_cast<size_t>(bufsz), fmt, arg)
+#    endif
+#  else
+#    define EXCEL_CONFIG_VSNPRINTF(buffer, bufsz, fmt, arg) vsnprintf(buffer, static_cast<size_t>(bufsz), fmt, arg)
+#  endif
+#endif
+
+#if !defined(EXCEL_CONFIG_TLS_USE_PTHREAD) && !defined(EXCEL_CONFIG_TLS_USE_THREAD_LOCAL)
+#  if defined(_REENTRANT)
+#    define EXCEL_CONFIG_TLS_USE_PTHREAD 1
+#  elif defined(THREAD_TLS_ENABLED) && THREAD_TLS_ENABLED
+#    define EXCEL_CONFIG_TLS_USE_THREAD_LOCAL 1
+#    if defined(THREAD_TLS)
+#      define EXCEL_CONFIG_TLS_THREAD_LOCAL THREAD_TLS
+#    endif
+#  else
+#    define EXCEL_CONFIG_TLS_USE_PTHREAD 1
+#  endif
 #endif
 
 // try to find TLS support
