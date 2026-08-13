@@ -1,6 +1,30 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
+project_service_declare_protocol("orbitsvr-protocol" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
+                                 "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/pbdesc/orbit_service.proto")
+
+generate_for_pb_add_ss_service(
+  "${PROJECT_NAMESPACE}.OrbitsvrMatchsvrService"
+  "${CMAKE_CURRENT_LIST_DIR}"
+  TASK_PATH_PREFIX
+  "logic"
+  HANDLE_PATH_PREFIX
+  "app"
+  PROJECT_NAMESPACE
+  "${PROJECT_NAMESPACE_ID}"
+  RPC_ROOT_DIR
+  "${CMAKE_CURRENT_LIST_DIR}/sdk"
+  RPC_DLLEXPORT_DECL
+  ORBIT_RPC_API
+  NO_SERVICE_TASK
+  EXTERNAL_SERVICE_PROTOCOLS
+  "orbitsvr-protocol"
+  INCLUDE_HEADERS
+  "protocol/pbdesc/orbit_service.pb.h"
+  GENERATED_FLOW_NAME
+  "${PROJECT_NAMESPACE}.OrbitsvrMatchsvrService")
+
 generate_for_pb_add_orbit_service(
   "${PROJECT_NAMESPACE}.OrbitServerRpcService"
   "${CMAKE_CURRENT_LIST_DIR}/service"
@@ -11,9 +35,9 @@ generate_for_pb_add_orbit_service(
   PROJECT_NAMESPACE
   "${PROJECT_NAMESPACE_ID}"
   SERVICE_DLLEXPORT_DECL
-  ORBIT_SERVER_API
+  ORBIT_SERVER_SERVER_API
   RPC_DLLEXPORT_DECL
-  ORBIT_RPC_API
+  ORBIT_SERVER_RPC_API
   INCLUDE_HEADERS
   "protocol/pbdesc/com.orbit.protocol.pb.h")
 
@@ -25,14 +49,11 @@ generate_for_pb_add_orbit_client(
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/service"
   SERVICE_DLLEXPORT_DECL
-  ORBIT_SERVER_API
+  ORBIT_CLIENT_SERVER_API
   RPC_DLLEXPORT_DECL
-  ORBIT_RPC_API
+  ORBIT_CLIENT_RPC_API
   INCLUDE_HEADERS
   "protocol/pbdesc/com.orbit.protocol.pb.h")
-
-project_service_declare_protocol("orbitsvr-protocol" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
-                                 "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/pbdesc/orbit_service.proto")
 
 project_service_declare_protocol("orbitsvr-config" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
                                  "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/config/orbitsvr_config.proto")
@@ -57,5 +78,5 @@ generate_for_pb_add_ss_service(
   INCLUDE_HEADERS
   "protocol/pbdesc/orbit_service.pb.h")
 
-add_subdirectory(service)
 add_subdirectory(sdk)
+add_subdirectory(service)

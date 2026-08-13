@@ -69,16 +69,6 @@ message SSMatchingSnapshot {
   DMatchingRoomSnapshot snapshot = 2;
 }
 
-// orbitsvr 的房间进程启动完成后回调最初发起创建请求的 matchsvr。
-message SSMatchingOrbitRoomReadyReq {
-  string matching_id = 1;
-  int64 expired_timepoint = 3;
-}
-
-message SSMatchingOrbitRoomReadyRsp {
-  int32 result = 1;
-}
-
 service MatchsvrService {
   option (atframework.service_options) = { module_name: "matching" };
 
@@ -93,9 +83,6 @@ service MatchsvrService {
   };
   rpc confirm_matching(SSMatchingConfirmReq) returns (SSMatchingSnapshot) {
     option (atframework.rpc_options) = { api_name: "确认或拒绝战斗" };
-  };
-  rpc orbit_room_ready(SSMatchingOrbitRoomReadyReq) returns (SSMatchingOrbitRoomReadyRsp) {
-    option (atframework.rpc_options) = { api_name: "Orbit房间初始化完成" };
   };
 }
 

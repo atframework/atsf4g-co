@@ -17,8 +17,8 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-#ifndef GAME_SERVICE_API
-#  define GAME_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
+#ifndef MATCH_SERVICE_API
+#  define MATCH_SERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class task_action_confirm_matching : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSMatchingConfirmReq,
@@ -35,13 +35,13 @@ class task_action_confirm_matching : public task_action_ss_rpc_base<PROJECT_NAME
   using task_action_ss_req_base::operator();
 
  public:
-  GAME_SERVICE_API explicit task_action_confirm_matching(dispatcher_start_data_type&& param);
-  GAME_SERVICE_API ~task_action_confirm_matching() override;
+  MATCH_SERVICE_API explicit task_action_confirm_matching(dispatcher_start_data_type&& param);
+  MATCH_SERVICE_API ~task_action_confirm_matching() override;
 
-  GAME_SERVICE_API const char* name() const override;
+  MATCH_SERVICE_API const char* name() const override;
 
-  GAME_SERVICE_API result_type operator()() override;
+  MATCH_SERVICE_API result_type operator()() override;
 
-  GAME_SERVICE_API int on_success() override;
-  GAME_SERVICE_API int on_failed() override;
+  MATCH_SERVICE_API int on_success() override;
+  MATCH_SERVICE_API int on_failed() override;
 };

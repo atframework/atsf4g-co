@@ -7,7 +7,7 @@ project_service_declare_sdk(
   INCLUDE_DIR
   "${CMAKE_CURRENT_LIST_DIR}"
   DLLEXPORT_DECL
-  GAME_RPC_API
+  LOBBY_RPC_API
   USE_SERVICE_PROTOCOL
   lobbysvr-protocol
   HEADERS

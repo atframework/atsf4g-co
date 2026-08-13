@@ -57,7 +57,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE action_options {
  * @param out 返回的用户数据
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type get_jobs(
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type get_jobs(
     ::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
     std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message> &out);
 
@@ -70,7 +70,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type get_jobs(
  * @param in 要删除的下标
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type del_jobs(::rpc::context &ctx, int32_t jobs_type,
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type del_jobs(::rpc::context &ctx, int32_t jobs_type,
                                                                           uint64_t user_id, uint32_t zone_id,
                                                                           const std::vector<uint64_t> &in);
 
@@ -84,7 +84,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type del_jobs(::rpc:
  * @note 最大异步任务数量如果要配置数据库表限制最大数量，请采用自动覆盖老记录的策略
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type add_jobs(
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type add_jobs(
     ::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &in, action_options options = {});
 
@@ -98,7 +98,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type add_jobs(
  * @note 最大异步任务数量如果要配置数据库表限制最大数量，请采用自动覆盖老记录的策略
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_code_type add_jobs_with_retry(
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API result_code_type add_jobs_with_retry(
     rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &inout, action_options options = {});
 
@@ -110,7 +110,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API result_code_type add_jobs_with_retry(
  * @param openid 用户的openid
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type remove_all_jobs(::rpc::context &ctx, int32_t jobs_type,
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type remove_all_jobs(::rpc::context &ctx, int32_t jobs_type,
                                                                                  uint64_t user_id, uint32_t zone_id);
 
 /**
@@ -124,7 +124,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type remove_all_jobs
  * @param version 版本号
  * @return 0或错误码
  */
-ATFW_EXPLICIT_NODISCARD_ATTR GAME_RPC_API ::rpc::db::result_type update_jobs(
+ATFW_EXPLICIT_NODISCARD_ATTR LOBBY_RPC_API ::rpc::db::result_type update_jobs(
     ::rpc::context &ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data> &input, uint64_t record_index,
     action_options options = {});

@@ -7,6 +7,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/match_service.pb.h>
+#include <protocol/pbdesc/orbit_service.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 

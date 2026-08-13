@@ -6,11 +6,15 @@
 
 #include <cstdint>
 
+#ifndef MATCH_RPC_API
+#  define MATCH_RPC_API ATFW_UTIL_SYMBOL_VISIBLE
+#endif
+
 namespace rpc {
 namespace matching_api {
 
 // 选择当前唯一的 ready matchsvr。保留集中入口，未来扩容时可替换为一致性路由。
-GAME_RPC_API uint64_t get_matchsvr_server_id();
+MATCH_RPC_API uint64_t get_matchsvr_server_id();
 
 }  // namespace matching_api
 }  // namespace rpc

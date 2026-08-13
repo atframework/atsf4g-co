@@ -72,7 +72,7 @@ static rpc::result_code_type fetch_user_login_cache(rpc::context& ctx, uint64_t 
 }
 }  // namespace detail
 
-GAME_RPC_API ::rpc::db::result_type get_jobs(
+LOBBY_RPC_API ::rpc::db::result_type get_jobs(
     rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
     std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message>& out) {
   if (0 == jobs_type || 0 == user_id) {
@@ -90,7 +90,7 @@ GAME_RPC_API ::rpc::db::result_type get_jobs(
   RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::get_all(ctx, jobs_type, user_id, zone_id, out)));
 }
 
-GAME_RPC_API ::rpc::db::result_type del_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+LOBBY_RPC_API ::rpc::db::result_type del_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                                              const std::vector<uint64_t>& in) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
@@ -113,7 +113,7 @@ GAME_RPC_API ::rpc::db::result_type del_jobs(rpc::context& ctx, int32_t jobs_typ
       rpc::db::async_jobs::remove_by_index(ctx, jobs_type, user_id, zone_id, gsl::make_span(in))));
 }
 
-GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
+LOBBY_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                                              shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& in,
                                              action_options options) {
   if (0 == jobs_type || 0 == user_id) {
@@ -184,7 +184,7 @@ GAME_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_typ
   RPC_DB_RETURN_CODE(ret);
 }
 
-GAME_RPC_API result_code_type
+LOBBY_RPC_API result_code_type
 add_jobs_with_retry(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint32_t zone_id,
                     shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>& inout, action_options options) {
   if (inout->left_retry_times() <= 0) {
@@ -194,7 +194,7 @@ add_jobs_with_retry(rpc::context& ctx, int32_t jobs_type, uint64_t user_id, uint
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(add_jobs(ctx, jobs_type, user_id, zone_id, inout, options)));
 }
 
-GAME_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
+LOBBY_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
                                                     uint32_t zone_id) {
   if (0 == jobs_type || 0 == user_id) {
     FWLOGERROR("{} be called with invalid parameters.(jobs_type={}, zone_id={}, user_id={})", __FUNCTION__, jobs_type,
@@ -212,7 +212,7 @@ GAME_RPC_API ::rpc::db::result_type remove_all_jobs(rpc::context& ctx, int32_t j
   RPC_DB_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::db::async_jobs::remove_all(ctx, jobs_type, user_id, zone_id)));
 }
 
-GAME_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
+LOBBY_RPC_API ::rpc::db::result_type update_jobs(rpc::context& ctx, int32_t jobs_type, uint64_t user_id,
                                                 uint32_t zone_id,
                                                 shared_message<PROJECT_NAMESPACE_ID::table_user_async_jobs>& input,
                                                 uint64_t record_index, action_options options) {

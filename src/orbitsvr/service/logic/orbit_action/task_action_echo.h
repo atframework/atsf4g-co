@@ -16,8 +16,8 @@
 
 #include <logic/task_action_orbit_req_base.h>
 
-#ifndef ORBIT_SERVER_API
-#  define ORBIT_SERVER_API ATFW_UTIL_SYMBOL_VISIBLE
+#ifndef ORBIT_SERVER_SERVER_API
+#  define ORBIT_SERVER_SERVER_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
 class task_action_echo : public task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID::OrbitServerEchoReq,
@@ -34,13 +34,13 @@ class task_action_echo : public task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID:
   using base_type::operator();
 
  public:
-  ORBIT_SERVER_API explicit task_action_echo(dispatcher_start_data_type &&param);
-  ORBIT_SERVER_API ~task_action_echo();
+  ORBIT_SERVER_SERVER_API explicit task_action_echo(dispatcher_start_data_type &&param);
+  ORBIT_SERVER_SERVER_API ~task_action_echo();
 
-  ORBIT_SERVER_API const char *name() const override;
+  ORBIT_SERVER_SERVER_API const char *name() const override;
 
-  ORBIT_SERVER_API result_type operator()() override;
+  ORBIT_SERVER_SERVER_API result_type operator()() override;
 
-  ORBIT_SERVER_API int on_success() override;
-  ORBIT_SERVER_API int on_failed() override;
+  ORBIT_SERVER_SERVER_API int on_success() override;
+  ORBIT_SERVER_SERVER_API int on_failed() override;
 };

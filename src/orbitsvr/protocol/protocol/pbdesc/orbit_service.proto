@@ -49,3 +49,22 @@ service OrbitsvrService {
     };
   };
 }
+
+message SSMatchingOrbitRoomReadyReq {
+  string matching_id = 1;
+  int64 expired_timepoint = 3;
+}
+
+message SSMatchingOrbitRoomReadyRsp {
+  int32 result = 1;
+}
+
+service OrbitsvrMatchsvrService {
+  option (atframework.service_options) = {
+    module_name: "orbit"
+  };
+
+  rpc orbit_room_ready(SSMatchingOrbitRoomReadyReq) returns (SSMatchingOrbitRoomReadyRsp) {
+    option (atframework.rpc_options) = { api_name: "Orbit房间初始化完成" };
+  };
+}

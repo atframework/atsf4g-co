@@ -13,13 +13,15 @@ generate_for_pb_add_ss_service(
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk"
   SERVICE_DLLEXPORT_DECL
-  GAME_SERVICE_API
+  MATCH_SERVICE_API
   RPC_DLLEXPORT_DECL
-  GAME_RPC_API
+  MATCH_RPC_API
   EXTERNAL_SERVICE_PROTOCOLS
   "matchsvr-protocol"
   INCLUDE_HEADERS
-  "protocol/pbdesc/match_service.pb.h")
+  "protocol/pbdesc/match_service.pb.h"
+  GENERATED_FLOW_NAME
+  "${PROJECT_NAMESPACE}.MatchsvrService")
 
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.MatchsvrNotifyService"
@@ -33,18 +35,16 @@ generate_for_pb_add_ss_service(
   RPC_ROOT_DIR
   "${CMAKE_CURRENT_LIST_DIR}/sdk"
   SERVICE_DLLEXPORT_DECL
-  GAME_SERVICE_API
+  MATCH_SERVICE_API
   RPC_DLLEXPORT_DECL
-  GAME_RPC_API
+  MATCH_RPC_API
   NO_SERVICE_TASK
   EXTERNAL_SERVICE_PROTOCOLS
   "matchsvr-protocol"
   INCLUDE_HEADERS
-  "protocol/pbdesc/match_service.pb.h")
+  "protocol/pbdesc/match_service.pb.h"
+  GENERATED_FLOW_NAME
+  "${PROJECT_NAMESPACE}.MatchsvrNotifyService")
 
 add_subdirectory(sdk)
 add_subdirectory(service)
-
-if(PROJECT_ENABLE_UNITTEST)
-  add_subdirectory(test)
-endif()

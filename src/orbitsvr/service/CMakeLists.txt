@@ -33,6 +33,7 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/bin"
   USE_SERVICE_SDK
   "lobbysvr-sdk"
+  "orbitsvr-matchsvr-sdk"
   USE_COMPONENTS
   "orbit-common-protocol"
   "orbit-server-sdk"
@@ -50,4 +51,5 @@ project_service_declare_instance(
   "atframework.dtmq.DtmqProxysvrNotifyService.orbitsvr"
   "${PROJECT_NAMESPACE}.OrbitServerRpcService"
   "${PROJECT_NAMESPACE}.OrbitClientRpcService"
-  "${PROJECT_NAMESPACE}.OrbitsvrService")
+  "${PROJECT_NAMESPACE}.OrbitsvrService"
+  "${PROJECT_NAMESPACE}.OrbitsvrMatchsvrService")
