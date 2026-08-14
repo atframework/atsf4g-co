@@ -24,6 +24,7 @@ message DOrbitRoomKey {
 
 message DOrbitUserKey {
   DUserIDKey user_key = 1;
+  string orbit_user_key = 2;
 }
 
 enum EnOrbitUserStatusType {
