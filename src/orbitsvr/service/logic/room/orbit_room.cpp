@@ -126,6 +126,7 @@ void orbit_room::on_destroy() {
                  *invoke_result.get_error());
     }
   }
+  FWLOGINFO("orbit_room {} on_destroy", get_client_id());
 }
 
 int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t match_server_id) {
@@ -252,6 +253,8 @@ int32_t orbit_room::init_user(
   for (const auto& user_init_data : user_list) {
     orbit_room_user_data_ptr_t user_data = atfw::util::memory::make_strong_rc<orbit_room_user_data>();
     user_data->init_data_ = user_init_data;
+    user_data->init_data_.mutable_user_key()->set_orbit_user_key(atfw::util::log::format(
+        "{}:{}", user_init_data.user_key().user_key().user_id(), user_init_data.user_key().user_key().zone_id()));
     user_data->user_key_ = user_init_data.user_key().user_key();
     user_data_index_[user_init_data.user_key().user_key()] = user_data;
   }
@@ -475,6 +478,7 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
   for (auto& user_data : user_data_index_) {
     if (user_data.second->init_ && !user_data.second->finish_) {
       user_data.second->finish_ = true;
+      need_retry_settlement_ = true;
       user_data.second->finish_timepoint_ = util::time::time_utility::get_now();
       FWLOGWARNING("orbit_room {} room_finish, user not finish, user_key: {}:{}", get_client_id(),
                    user_data.first.user_id(), user_data.first.zone_id());

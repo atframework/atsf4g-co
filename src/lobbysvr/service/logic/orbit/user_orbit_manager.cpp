@@ -56,6 +56,7 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
           return;
         }
         orbit_mgr->load_orbit_room_snapshot(ctx, subscriber);
+        orbit_mgr->get_owner().send_all_syn_msg(logic_server_get_current_tick_context());
       });
 
   rpc::dtmq::client_subscriber::set_event_callback_on_receive_event(
@@ -72,6 +73,7 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
           return;
         }
         orbit_mgr->on_receive_event(ctx, subscriber, data);
+        orbit_mgr->get_owner().send_all_syn_msg(logic_server_get_current_tick_context());
       });
   return ret;
 }
