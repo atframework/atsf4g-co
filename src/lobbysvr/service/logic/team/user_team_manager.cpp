@@ -31,3 +31,5 @@ int32_t user_team_manager::login_init(rpc::context&) {
       reinterpret_cast<uintptr_t>(dispatch_team_member_event), dispatch_team_member_event);
   return 0;
 }
+
+void user_team_manager::refresh_feature_limit_second(rpc::context&) {}

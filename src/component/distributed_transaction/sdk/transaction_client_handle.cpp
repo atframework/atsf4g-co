@@ -26,24 +26,15 @@
 
 #include <rpc/rpc_utils.h>
 
+#include <algorithm>
+#include <string>
 #include <unordered_set>
+#include <utility>
 
 #include "rpc/transaction/transaction_api.h"
 
 namespace atframework {
 namespace distributed_system {
-
-namespace {
-
-template <class Rep, class Period>
-static inline google::protobuf::Duration std_duration_to_protobuf_duration(std::chrono::duration<Rep, Period> input) {
-  google::protobuf::Duration ret;
-  ret.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(input).count()));
-  ret.set_nanos(static_cast<int32_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(input).count() % 1000000000));
-
-  return ret;
-}
-}  // namespace
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::transaction_client_handle(
     const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable)
@@ -80,15 +71,15 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   output->mutable_configure()->set_resolve_max_times(options.resolve_max_times);
   output->mutable_configure()->set_lock_retry_max_times(options.lock_retry_max_times);
   protobuf_copy_message(*output->mutable_configure()->mutable_resolve_retry_interval(),
-                        std_duration_to_protobuf_duration(options.resolve_retry_interval));
+                        protobuf_from_chrono_duration(options.resolve_retry_interval));
   protobuf_copy_message(*output->mutable_configure()->mutable_lock_wait_interval_min(),
-                        std_duration_to_protobuf_duration(options.lock_wait_interval_min));
+                        protobuf_from_chrono_duration(options.lock_wait_interval_min));
   protobuf_copy_message(*output->mutable_configure()->mutable_lock_wait_interval_max(),
-                        std_duration_to_protobuf_duration(options.lock_wait_interval_max));
+                        protobuf_from_chrono_duration(options.lock_wait_interval_max));
 
   rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::initialize_new_transaction(
-      child_ctx, *output, std_duration_to_protobuf_duration(options.timeout), options.replication_read_count,
-      options.replication_total_count, options.memory_only, options.force_commit));
+      child_ctx, *output, options.timeout, options.replication_read_count, options.replication_total_count,
+      options.memory_only, options.force_commit));
   if (res < 0) {
     RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   }
@@ -103,9 +94,19 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
+  if (nullptr != output_prepared_participators) {
+    output_prepared_participators->clear();
+  }
+  if (nullptr != output_failed_participators) {
+    output_failed_participators->clear();
+  }
+
   auto old_status = input->metadata().status();
   if (old_status > atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN);
+  }
+  if (input->participators().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
@@ -134,24 +135,32 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
     }
   }
 
-  auto expired_time = std::chrono::system_clock::from_time_t(input->metadata().expire_timepoint().seconds()) +
-                      std::chrono::nanoseconds{input->metadata().expire_timepoint().nanos()};
+  auto expired_time = protobuf_to_system_clock(input->metadata().expire_timepoint());
 
-  uint32_t retry_times = 0;
   std::unordered_set<std::string> prepared_participators;
   if (nullptr == output_prepared_participators) {
     output_prepared_participators = &prepared_participators;
-  } else {
-    output_prepared_participators->clear();
   }
   std::string failed_participator;
-  for (auto now = atfw::util::time::time_utility::now();
-       now < expired_time && retry_times <= input->configure().lock_retry_max_times();
-       ++retry_times, now = atfw::util::time::time_utility::now()) {
+  // force_commit 下仅当 failed_participator 的 prepare 失败投递结果不确定时才补发一次 undo
+  bool is_failed_participator_responded = false;
+  bool prepare_complete = false;
+  const uint64_t prepare_attempts = static_cast<uint64_t>(input->configure().lock_retry_max_times()) + 1;
+  for (uint64_t retry_times = 0; retry_times < prepare_attempts; ++retry_times) {
+    if (atfw::util::time::time_utility::now() >= expired_time) {
+      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      break;
+    }
+
     // 参与者准备
     bool retry_later = false;
     if (vtable_ && vtable_->prepare_participator) {
       for (const auto& participator : input->participators()) {
+        // 如果已经成功过则重试的时候不用再执行prepare了
+        if (output_prepared_participators->end() !=
+            output_prepared_participators->find(participator.second.participator_key())) {
+          continue;
+        }
         transaction_participator_failure_reason failure_reason;
         ret = RPC_AWAIT_CODE_RESULT(
             vtable_->prepare_participator(child_ctx, *this, *input, participator.second, failure_reason));
@@ -162,9 +171,9 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
           FWLOGWARNING("transaction {} prepare participator {} but resource preempted, we will retry soon later",
                        input->metadata().transaction_uuid(), participator.second.participator_key());
 
-          if (nullptr != output_failed_participators &&
-              ret == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED) {
+          if (ret == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED) {
             failed_participator = participator.second.participator_key();
+            is_failed_participator_responded = true;
           }
           break;
         }
@@ -173,24 +182,25 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
           FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
                      input->metadata().transaction_uuid(), participator.second.participator_key(), ret,
                      protobuf_mini_dumper_get_error_msg(ret));
-          if (nullptr != output_failed_participators) {
-            failed_participator = participator.second.participator_key();
-          }
+          failed_participator = participator.second.participator_key();
+          is_failed_participator_responded = false;
           break;
         }
 
         output_prepared_participators->insert(participator.second.participator_key());
         failed_participator.clear();
+        is_failed_participator_responded = false;
       }
     }
 
     if (retry_later) {
-      auto delay_min = std::chrono::duration_cast<std::chrono::system_clock::duration>(
-          std::chrono::seconds{input->configure().lock_wait_interval_min().seconds()} +
-          std::chrono::nanoseconds{input->configure().lock_wait_interval_min().nanos()});
-      auto delay_max = std::chrono::duration_cast<std::chrono::system_clock::duration>(
-          std::chrono::seconds{input->configure().lock_wait_interval_max().seconds()} +
-          std::chrono::nanoseconds{input->configure().lock_wait_interval_max().nanos()});
+      ret = PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED;
+      if (retry_times + 1 >= prepare_attempts) {
+        break;
+      }
+
+      auto delay_min = protobuf_to_chrono_duration(input->configure().lock_wait_interval_min());
+      auto delay_max = protobuf_to_chrono_duration(input->configure().lock_wait_interval_max());
 
       if (delay_min >= delay_max) {
         ret = RPC_AWAIT_CODE_RESULT(rpc::wait(child_ctx, delay_min));
@@ -213,61 +223,139 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       break;
     }
 
-    // 提交事务,强制自动提交的事务不需要commit请求
-    if (!input->configure().force_commit()) {
-      ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(child_ctx, *input->mutable_metadata()));
-    }
+    prepare_complete = true;
     break;
   }
 
-  if (ret >= 0) {
-    FWLOGDEBUG("transaction {} commit success", input->metadata().transaction_uuid());
-    // 通知参与者成功提交
-    // 自动强制提交的事务不需要通知参与者
-    if (!input->configure().force_commit() && vtable_ && vtable_->commit_participator) {
-      for (const auto& participator : input->participators()) {
-        ret = RPC_AWAIT_CODE_RESULT(vtable_->commit_participator(child_ctx, *this, *input, participator.second));
-        if (ret < 0) {
-          FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
-                     input->metadata().transaction_uuid(), participator.second.participator_key(), ret,
-                     protobuf_mini_dumper_get_error_msg(ret));
+  if (!prepare_complete && ret >= 0) {
+    ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+  }
+  const rpc::result_code_type::value_type prepare_result = ret;
+  bool coordinator_decision_confirmed = input->configure().force_commit();
+
+  if (input->configure().force_commit()) {
+    input->mutable_metadata()->set_status(prepare_complete
+                                              ? atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
+                                              : atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+  } else if (prepare_complete) {
+    ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(child_ctx, *input->mutable_metadata()));
+  } else {
+    ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_transaction(child_ctx, *input->mutable_metadata()));
+  }
+
+  if (!input->configure().force_commit() && ret >= 0 &&
+      (input->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED ||
+       input->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED)) {
+    coordinator_decision_confirmed = true;
+  }
+
+  // Coordinator metadata is the only global decision. An RPC error may be returned after the decision is persisted,
+  // so query it with a bounded retry budget before notifying any participant.
+  if (!input->configure().force_commit() && !coordinator_decision_confirmed) {
+    const uint32_t resolve_attempts = std::max<uint32_t>(1, input->configure().resolve_max_times());
+    for (uint32_t retry_times = 0; retry_times < resolve_attempts; ++retry_times) {
+      rpc::context::message_holder<storage_type> coordinator_storage(child_ctx);
+      rpc::result_code_type::value_type query_result = RPC_AWAIT_CODE_RESULT(
+          rpc::transaction_api::query_transaction(child_ctx, input->metadata(), *coordinator_storage));
+      if (query_result >= 0) {
+        rpc::transaction_api::merge_storage(*input, *coordinator_storage);
+        if (input->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED ||
+            input->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
+          coordinator_decision_confirmed = true;
+          ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+          break;
+        }
+      } else {
+        ret = query_result;
+      }
+
+      if (retry_times + 1 < resolve_attempts) {
+        rpc::result_code_type::value_type wait_result = RPC_AWAIT_CODE_RESULT(
+            rpc::wait(child_ctx, protobuf_to_chrono_duration(input->configure().resolve_retry_interval())));
+        if (wait_result < 0) {
+          ret = wait_result;
+          break;
         }
       }
     }
+  }
+
+  const auto coordinator_status = input->metadata().status();
+  if (coordinator_decision_confirmed &&
+      coordinator_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED) {
+    ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    FWLOGDEBUG("transaction {} commit success", input->metadata().transaction_uuid());
+  } else if (coordinator_decision_confirmed &&
+             coordinator_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
+    ret = prepare_result < 0 ? prepare_result : PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED;
+    FWLOGWARNING("transaction {} rejected by coordinator", input->metadata().transaction_uuid());
   } else {
-    FWLOGERROR("transaction {} commit failed, error code: {}({})", input->metadata().transaction_uuid(), ret,
-               protobuf_mini_dumper_get_error_msg(ret));
-    // 通知参与者否决提交
-    if (vtable_ && vtable_->reject_participator) {
-      for (const auto& participator_key : *output_prepared_participators) {
-        auto iter = input->participators().find(participator_key);
-        if (iter == input->participators().end()) {
+    if (ret >= 0) {
+      ret = prepare_result < 0 ? prepare_result : PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+    }
+    FWLOGERROR("transaction {} has no coordinator terminal decision, error code: {}({})",
+               input->metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
+  }
+
+  if (nullptr != output_failed_participators && !failed_participator.empty()) {
+    output_failed_participators->insert(failed_participator);
+  }
+
+  const bool should_commit = coordinator_decision_confirmed &&
+                             coordinator_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED;
+  const bool should_reject = coordinator_decision_confirmed &&
+                             coordinator_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+  if ((should_commit || should_reject) && (!input->configure().force_commit() || should_reject) && vtable_) {
+    const uint32_t notify_attempts = std::max<uint32_t>(1, input->configure().resolve_max_times());
+    for (const auto& participator : input->participators()) {
+      if (should_reject && output_prepared_participators->find(participator.second.participator_key()) ==
+                               output_prepared_participators->end()) {
+        // 未 prepare 的参与者不需要回滚；对投递结果不确定的 failed_participator 补发一次 undo/reject
+        if (participator.second.participator_key() != failed_participator || is_failed_participator_responded) {
           continue;
         }
+      }
 
-        rpc::result_code_type::value_type res =
-            RPC_AWAIT_CODE_RESULT(vtable_->reject_participator(child_ctx, *this, *input, iter->second));
-        if (res < 0) {
-          FWLOGERROR("transaction {} prepare participator {} failed, error code: {}({})",
-                     input->metadata().transaction_uuid(), iter->second.participator_key(), res,
-                     protobuf_mini_dumper_get_error_msg(res));
+      uint32_t participator_notify_attempts = notify_attempts;
+      if (input->configure().force_commit() && should_reject &&
+          output_prepared_participators->find(participator.second.participator_key()) ==
+              output_prepared_participators->end()) {
+        participator_notify_attempts = 1;
+      }
+
+      rpc::result_code_type::value_type notify_result = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      for (uint32_t retry_times = 0; retry_times < participator_notify_attempts; ++retry_times) {
+        if (should_commit && vtable_->commit_participator) {
+          notify_result =
+              RPC_AWAIT_CODE_RESULT(vtable_->commit_participator(child_ctx, *this, *input, participator.second));
+        } else if (should_reject && vtable_->reject_participator) {
+          notify_result =
+              RPC_AWAIT_CODE_RESULT(vtable_->reject_participator(child_ctx, *this, *input, participator.second));
+        } else {
+          break;
+        }
+
+        if (notify_result >= 0) {
+          break;
+        }
+        if (retry_times + 1 < participator_notify_attempts) {
+          rpc::result_code_type::value_type wait_result = RPC_AWAIT_CODE_RESULT(
+              rpc::wait(child_ctx, protobuf_to_chrono_duration(input->configure().resolve_retry_interval())));
+          if (wait_result < 0) {
+            break;
+          }
         }
       }
-    }
 
-    // 主动删除事务,因为可能参与角色没有全部有执行信息。如果resolve的时候发现不存在也会视为失败
-    // 强制自动提交的事务不需要commit请求
-    if (!input->configure().force_commit()) {
-      rpc::result_code_type::value_type res =
-          RPC_AWAIT_CODE_RESULT(rpc::transaction_api::remove_transaction_no_wait(child_ctx, input->metadata()));
-      if (0 != res) {
-        FWLOGERROR("transaction {} remove failed, res: {}({})", input->metadata().transaction_uuid(), res,
-                   protobuf_mini_dumper_get_error_msg(res));
+      if (notify_result < 0) {
+        FWLOGERROR("transaction {} notify {} participator {} failed after {} attempts, error code: {}({})",
+                   input->metadata().transaction_uuid(), should_commit ? "commit" : "reject",
+                   participator.second.participator_key(), participator_notify_attempts, notify_result,
+                   protobuf_mini_dumper_get_error_msg(notify_result));
+        if (nullptr != output_failed_participators) {
+          output_failed_participators->insert(participator.second.participator_key());
+        }
       }
-    }
-
-    if (nullptr != output_failed_participators && !failed_participator.empty()) {
-      output_failed_participators->insert(std::move(failed_participator));
     }
   }
   RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
@@ -325,8 +413,9 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
     if (false == iter->second.mutable_participator_data()->PackFrom(data)) {
       FWLOGERROR("Pack transaction participator data from {} failed, message: {}",
                  protobuf_mini_dumper_get_readable(data), iter->second.participator_data().InitializationErrorString());
+      return child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, {}});
     }
-    return child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PACK, {}});
+    return child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}});
   }
 
   auto& participator = (*input->mutable_participators())[participator_key];

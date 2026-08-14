@@ -77,17 +77,13 @@ task_action_participator_resolve_transaction::operator()() {
         break;
       }
 
-      // 不存在可能是之前已经执行过，这里是二次检查，直接视为成功即可
-      if (res >= 0 || res == PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND ||
-          res == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_PARTICIPATOR_NOT_FOUND ||
-          res == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_NOT_FOUND) {
-        RPC_AWAIT_IGNORE_RESULT(param_.participantor->remove_finished_transaction(get_shared_context(), trans_data));
-        continue;
+      RPC_AWAIT_IGNORE_RESULT(
+          param_.participantor->handle_finished_transaction_result(get_shared_context(), trans_data, res));
+      if (res < 0) {
+        FWLOGERROR("participator {} {} transaction {} failed, res: {}({})",
+                   param_.participantor->get_participator_key(), operation_name,
+                   trans_data->metadata().transaction_uuid(), res, protobuf_mini_dumper_get_error_msg(res));
       }
-
-      FWLOGERROR("participator {} commit transaction {} failed, res: {}({})",
-                 param_.participantor->get_participator_key(), trans_data->metadata().transaction_uuid(), res,
-                 protobuf_mini_dumper_get_error_msg(res));
     }
 
     // 检查所有的过期事务，准备resolve

@@ -13,6 +13,8 @@ class user_team_manager {
 
   ATFW_EXPLICIT_NODISCARD_ATTR int32_t login_init(rpc::context&);
 
+  void refresh_feature_limit_second(rpc::context&);
+
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
 

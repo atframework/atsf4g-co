@@ -39,6 +39,8 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
@@ -280,12 +282,13 @@ static rpc::result_code_type invoke_replication_rpc_call(
     rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata,
     rpc::context::message_holder<TRequest>& req_body, rpc::context::message_holder<TResponse>& rsp_body,
     gsl::string_view action_name, TRpcFn&& rpc_fn,
-    std::function<void(uint64_t, const atframework::SSMsg&)> on_receive_message_fn, bool no_wait = false) {
+    std::function<bool(uint64_t, const atframework::SSMsg&)> on_receive_message_fn, bool no_wait = false) {
   std::unordered_set<dispatcher_await_options> waiters;
   std::unordered_map<uint64_t, atframework::SSMsg> received;
-  size_t wakeup_count = metadata.replicate_read_count();
+  const size_t required_success_count = metadata.replicate_read_count();
   size_t send_success_count = 0;
-  int32_t last_error_res = 0;
+  size_t response_success_count = 0;
+  int32_t last_error_res = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED;
   waiters.reserve(static_cast<size_t>(metadata.replicate_node_server_id_size()));
 
   for (uint64_t target_server_id : metadata.replicate_node_server_id()) {
@@ -302,7 +305,7 @@ static rpc::result_code_type invoke_replication_rpc_call(
   }
   // No wait and send success should be treated as success
   if (no_wait) {
-    if (send_success_count >= wakeup_count) {
+    if (send_success_count >= required_success_count) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     } else {
       RPC_RETURN_CODE(last_error_res);
@@ -310,41 +313,37 @@ static rpc::result_code_type invoke_replication_rpc_call(
   }
 
   dispatcher_await_options one_waiter_options = dispatcher_make_default<dispatcher_await_options>();
-  while (wakeup_count > 0) {
-    if (send_success_count < wakeup_count) {
+  while (response_success_count < required_success_count) {
+    const size_t required_response_count = required_success_count - response_success_count;
+    if (waiters.size() < required_response_count) {
       RPC_RETURN_CODE(last_error_res);
     }
     received.clear();
 
-    last_error_res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, waiters, received, wakeup_count));
-    if (last_error_res < 0) {
+    int32_t wait_result = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, waiters, received, required_response_count));
+    if (wait_result < 0) {
       FWLOGERROR("Try to {} transaction {} and wait multiple response failed, res: {}({})", action_name,
-                 metadata.transaction_uuid(), last_error_res, protobuf_mini_dumper_get_error_msg(last_error_res));
-      RPC_RETURN_CODE(last_error_res);
+                 metadata.transaction_uuid(), wait_result, protobuf_mini_dumper_get_error_msg(wait_result));
+      RPC_RETURN_CODE(wait_result);
     }
     for (auto& received_message : received) {
-      if (send_success_count > 0) {
-        --send_success_count;
-      }
       one_waiter_options.sequence = received_message.first;
       waiters.erase(one_waiter_options);
 
-      if (received_message.second.body_bin().empty()) {
-        continue;
-      }
       if (received_message.second.head().error_code() != 0) {
+        last_error_res = received_message.second.head().error_code();
         FWLOGERROR("Try to {} transaction {} and wait response of sequence {} failed, res: {}({})", action_name,
                    metadata.transaction_uuid(), received_message.first, received_message.second.head().error_code(),
                    protobuf_mini_dumper_get_error_msg(received_message.second.head().error_code()));
         continue;
       }
 
-      if (wakeup_count > 0) {
-        --wakeup_count;
+      if (on_receive_message_fn && !on_receive_message_fn(received_message.first, received_message.second)) {
+        last_error_res = PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK;
+        continue;
       }
-      if (on_receive_message_fn) {
-        on_receive_message_fn(received_message.first, received_message.second);
-      }
+
+      ++response_success_count;
     }
   }
 
@@ -354,8 +353,9 @@ static rpc::result_code_type invoke_replication_rpc_call(
 }  // namespace
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction(
-    rpc::context&, atfw::distributed_system::transaction_blob_storage& inout, const google::protobuf::Duration& timeout,
-    uint32_t replication_read_count, uint32_t replication_total_count, bool memory_only, bool force_commit) {
+    rpc::context&, atfw::distributed_system::transaction_blob_storage& inout,
+    std::chrono::system_clock::duration timeout, uint32_t replication_read_count, uint32_t replication_total_count,
+    bool memory_only, bool force_commit) {
   std::string trans_uuid;
   atfw::util::base64_encode(trans_uuid, rpc::db::uuid::generate_standard_uuid_binary(),
                             atfw::util::base64_mode_t::EN_BMT_UTF7);
@@ -366,25 +366,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
   atfw::distributed_system::transaction_metadata& metadata = *inout.mutable_metadata();
   atfw::distributed_system::transaction_configure& configure = *inout.mutable_configure();
   metadata.set_transaction_uuid(trans_uuid);
-  metadata.mutable_prepare_timepoint()->set_seconds(util::time::time_utility::get_now());
-  metadata.mutable_prepare_timepoint()->set_nanos(
-      static_cast<int32_t>(util::time::time_utility::get_now_usec() * 1000));
-  int64_t timeout_sec = 0;
-  int32_t timeout_nanos = 0;
-  if (timeout.seconds() <= 0 && timeout.nanos() <= 0) {
-    timeout_sec = 10;
-    timeout_nanos = 0;
-  } else {
-    timeout_sec = timeout.seconds();
-    timeout_nanos = timeout.nanos();
+  auto now = util::time::time_utility::now();
+  protobuf_copy_message(*metadata.mutable_prepare_timepoint(), protobuf_from_system_clock(now));
+  if (timeout <= std::chrono::system_clock::duration::zero()) {
+    timeout = std::chrono::seconds{10};
   }
-  if (metadata.prepare_timepoint().nanos() + timeout_nanos > 1000000000) {
-    metadata.mutable_expire_timepoint()->set_seconds(metadata.prepare_timepoint().seconds() + timeout_sec + 1);
-    metadata.mutable_expire_timepoint()->set_nanos(metadata.prepare_timepoint().nanos() + timeout_nanos - 1000000000);
-  } else {
-    metadata.mutable_expire_timepoint()->set_seconds(metadata.prepare_timepoint().seconds() + timeout_sec);
-    metadata.mutable_expire_timepoint()->set_nanos(metadata.prepare_timepoint().nanos() + timeout_nanos);
-  }
+  protobuf_copy_message(*metadata.mutable_expire_timepoint(), protobuf_from_system_clock(now + timeout));
 
   metadata.set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED);
   initialize_replication_server_ids(metadata, replication_read_count, replication_total_count);
@@ -399,23 +386,22 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction
     configure.set_lock_retry_max_times(3);
   }
 
-  if (configure.resolve_retry_interval().seconds() <= 0 && configure.resolve_retry_interval().nanos()) {
-    configure.mutable_resolve_retry_interval()->set_seconds(10);
-    configure.mutable_resolve_retry_interval()->set_nanos(0);
+  if (protobuf_to_chrono_duration(configure.resolve_retry_interval()) <= std::chrono::system_clock::duration::zero()) {
+    protobuf_copy_message(*configure.mutable_resolve_retry_interval(),
+                          protobuf_from_chrono_duration(std::chrono::seconds{10}));
   }
 
-  if (configure.lock_wait_interval_min().seconds() <= 0 && configure.lock_wait_interval_min().nanos()) {
-    configure.mutable_lock_wait_interval_min()->set_seconds(0);
-    configure.mutable_lock_wait_interval_min()->set_nanos(32);
+  if (protobuf_to_chrono_duration(configure.lock_wait_interval_min()) <= std::chrono::system_clock::duration::zero()) {
+    protobuf_copy_message(*configure.mutable_lock_wait_interval_min(),
+                          protobuf_from_chrono_duration(std::chrono::milliseconds{32}));
   }
 
-  if (configure.lock_wait_interval_max().seconds() <= 0 && configure.lock_wait_interval_max().nanos()) {
-    configure.mutable_lock_wait_interval_max()->set_seconds(0);
-    configure.mutable_lock_wait_interval_max()->set_nanos(256);
+  if (protobuf_to_chrono_duration(configure.lock_wait_interval_max()) <= std::chrono::system_clock::duration::zero()) {
+    protobuf_copy_message(*configure.mutable_lock_wait_interval_max(),
+                          protobuf_from_chrono_duration(std::chrono::milliseconds{256}));
   }
-  if (configure.lock_wait_interval_max().seconds() < configure.lock_wait_interval_min().seconds() ||
-      (configure.lock_wait_interval_max().seconds() == configure.lock_wait_interval_min().seconds() &&
-       configure.lock_wait_interval_max().nanos() < configure.lock_wait_interval_min().nanos())) {
+  if (protobuf_to_chrono_duration(configure.lock_wait_interval_max()) <
+      protobuf_to_chrono_duration(configure.lock_wait_interval_min())) {
     protobuf_copy_message(*configure.mutable_lock_wait_interval_max(), configure.lock_wait_interval_min());
   }
 
@@ -437,12 +423,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
   if (is_replication_mode(metadata)) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, metadata, req_body, rsp_body, "query", rpc::transaction::query,
-        [&out, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
-          if (rpc::transaction::packer::unpack_query(received_message.body_bin(), *rsp_body)) {
-            if (rsp_body->has_storage()) {
-              merge_transaction_storage(out, rsp_body->storage());
-            }
+        [&out, &rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          if (!rpc::transaction::packer::unpack_query(received_message.body_bin(), *rsp_body) ||
+              !rsp_body->has_storage()) {
+            return false;
           }
+          merge_transaction_storage(out, rsp_body->storage());
+          return true;
         })));
   } else {
     uint64_t target_server_id = calculate_server_id(metadata);
@@ -487,8 +474,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type create_transaction(
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(inout.metadata())) {
-    res = RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(ctx, inout.metadata(), req_body, rsp_body, "create",
-                                                            rpc::transaction::create, nullptr));
+    res = RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
+        ctx, inout.metadata(), req_body, rsp_body, "create", rpc::transaction::create,
+        [&rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          return rpc::transaction::packer::unpack_create(received_message.body_bin(), *rsp_body);
+        }));
   } else {
     uint64_t target_server_id = calculate_server_id(inout.metadata());
     if (0 == target_server_id) {
@@ -525,12 +515,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_transaction(
   if (is_replication_mode(inout)) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "commit", rpc::transaction::commit,
-        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
-          if (rpc::transaction::packer::unpack_commit(received_message.body_bin(), *rsp_body)) {
-            if (rsp_body->has_metadata()) {
-              merge_transaction_metadata(inout, rsp_body->metadata());
-            }
+        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          if (!rpc::transaction::packer::unpack_commit(received_message.body_bin(), *rsp_body) ||
+              !rsp_body->has_metadata()) {
+            return false;
           }
+          merge_transaction_metadata(inout, rsp_body->metadata());
+          return true;
         })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -572,12 +563,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_transaction(
   if (is_replication_mode(inout)) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "reject", rpc::transaction::reject,
-        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
-          if (rpc::transaction::packer::unpack_reject(received_message.body_bin(), *rsp_body)) {
-            if (rsp_body->has_metadata()) {
-              merge_transaction_metadata(inout, rsp_body->metadata());
-            }
+        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          if (!rpc::transaction::packer::unpack_reject(received_message.body_bin(), *rsp_body) ||
+              !rsp_body->has_metadata()) {
+            return false;
           }
+          merge_transaction_metadata(inout, rsp_body->metadata());
+          return true;
         })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -644,8 +636,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction(
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(metadata)) {
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-        invoke_replication_rpc_call(ctx, metadata, req_body, rsp_body, "remove", rpc::transaction::remove, nullptr)));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
+        ctx, metadata, req_body, rsp_body, "remove", rpc::transaction::remove,
+        [&rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          return rpc::transaction::packer::unpack_remove(received_message.body_bin(), *rsp_body);
+        })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     int left_retry_times = TRANSACTION_API_RETRY_TIMES;
@@ -691,12 +686,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_participator(
   if (is_replication_mode(inout)) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "commit_participator", rpc::transaction::commit_participator,
-        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
-          if (rpc::transaction::packer::unpack_commit_participator(received_message.body_bin(), *rsp_body)) {
-            if (rsp_body->has_metadata()) {
-              merge_transaction_metadata(inout, rsp_body->metadata());
-            }
+        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          if (!rpc::transaction::packer::unpack_commit_participator(received_message.body_bin(), *rsp_body) ||
+              !rsp_body->has_metadata()) {
+            return false;
           }
+          merge_transaction_metadata(inout, rsp_body->metadata());
+          return true;
         })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
@@ -740,12 +736,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
   if (is_replication_mode(inout)) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
         ctx, inout, req_body, rsp_body, "reject_participator", rpc::transaction::reject_participator,
-        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) {
-          if (rpc::transaction::packer::unpack_reject_participator(received_message.body_bin(), *rsp_body)) {
-            if (rsp_body->has_metadata()) {
-              merge_transaction_metadata(inout, rsp_body->metadata());
-            }
+        [&inout, &rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+          if (!rpc::transaction::packer::unpack_reject_participator(received_message.body_bin(), *rsp_body) ||
+              !rsp_body->has_metadata()) {
+            return false;
           }
+          merge_transaction_metadata(inout, rsp_body->metadata());
+          return true;
         })));
   } else {
     int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;

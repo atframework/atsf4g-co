@@ -239,6 +239,7 @@ void user::refresh_feature_limit(rpc::context &ctx) {
 
     user_cache_manager_->refresh_feature_limit_second(ctx);
     user_orbit_manager_->refresh_feature_limit_second(ctx);
+    user_team_manager_->refresh_feature_limit_second(ctx);
   }
   if (now >= cache_data_.refresh_feature_limit_minute + atfw::util::time::time_utility::MINITE_SECONDS ||
       now < cache_data_.refresh_feature_limit_minute) {

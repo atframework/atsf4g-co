@@ -23,6 +23,7 @@
 #include <dispatcher/task_type_traits.h>
 
 #include <rpc/rpc_common_types.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <memory/rc_ptr.h>
 #include <functional>
@@ -83,13 +84,12 @@ class transaction_participator_handle
 
   using on_destroy_callback_type = void (*)(transaction_participator_handle*);
 
- private:
+ public:
   transaction_participator_handle(const transaction_participator_handle&) = delete;
   transaction_participator_handle(transaction_participator_handle&&) = delete;
   transaction_participator_handle& operator=(const transaction_participator_handle&) = delete;
   transaction_participator_handle& operator=(transaction_participator_handle&&) = delete;
 
- public:
   DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle(
       const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_participator_handle();
@@ -97,7 +97,7 @@ class transaction_participator_handle
   ATFW_UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
   ATFW_UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
   ATFW_UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
-  ATFW_UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+  ATFW_UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; }
 
   ATFW_UTIL_FORCEINLINE const std::string& get_participator_key() const noexcept { return participator_key_; }
 
@@ -287,11 +287,12 @@ class transaction_participator_handle
  private:
   friend class task_action_participator_resolve_transaction;
 
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_finished_transaction_result(
+      rpc::context& ctx, const storage_ptr_type& transaction_ptr, int32_t result);
+
   struct storage_resolve_timer_type {
     inline explicit storage_resolve_timer_type(const storage_type& storage)
-        : timepoint{std::chrono::system_clock::from_time_t(storage.resolve_timepoint().seconds()) +
-                    std::chrono::duration_cast<std::chrono::system_clock::duration>(
-                        std::chrono::nanoseconds{storage.resolve_timepoint().nanos()})},
+        : timepoint{protobuf_to_system_clock(storage.resolve_timepoint())},
           transaction_uuid(storage.metadata().transaction_uuid()) {}
 
     inline friend bool operator<(const storage_resolve_timer_type& l, const storage_resolve_timer_type& r) noexcept {

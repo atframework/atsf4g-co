@@ -16,6 +16,7 @@
 
 #include <rpc/rpc_common_types.h>
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -46,7 +47,7 @@ namespace transaction_api {
  */
 ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type initialize_new_transaction(
     rpc::context& ctx, atfw::distributed_system::transaction_blob_storage& inout,
-    const google::protobuf::Duration& timeout, uint32_t replication_read_count = 0,
+    std::chrono::system_clock::duration timeout, uint32_t replication_read_count = 0,
     uint32_t replication_total_count = 0, bool memory_only = false, bool force_commit = false);
 
 ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
