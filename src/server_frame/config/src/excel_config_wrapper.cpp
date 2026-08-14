@@ -22,6 +22,7 @@
 #include "config/server_frame_build_feature.h"
 
 #include "config/excel_config_dtmq_index.h"
+#include "config/excel_config_matching_index.h"
 #include "config/excel_config_rank_index.h"
 
 #include "config/excel/config_manager.h"
@@ -114,6 +115,7 @@ static void excel_config_callback_on_reload_all(excel::config_manager::config_gr
 
   setup_rank_config(*group);
   setup_dtmq_config(*group);
+  setup_matching_config(*group);
 
   // 自定义跨表索引在这之后初始化
   setup_const_config(*group);

@@ -87,6 +87,7 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   rule.mutable_time_limit()->set_min(0);
   rule.mutable_time_limit()->set_max(60);
   rule.add_result_template_ids(1000);
+  rule.add_result_template_ids(1001);
   rule.set_min_total_user(2);
   rule.set_start_battle_min_user(2);
   auto* rank_rule = rule.add_rules();
@@ -123,12 +124,19 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   team->set_user_number(1);
   team->set_count(2);
 
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate alternate_result_template;
+  alternate_result_template.set_id(1001);
+  auto* alternate_team = alternate_result_template.add_team_template();
+  alternate_team->set_user_number(1);
+  alternate_team->set_count(2);
+
   PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate convergence_template;
   convergence_template.set_id(2000);
   auto* convergence_team = convergence_template.add_team_template();
   convergence_team->set_user_number(1);
   convergence_team->set_count(3);
-  resource.set_file("matching_result_template.bytes", make_table_bytes({result_template, convergence_template}));
+  resource.set_file("matching_result_template.bytes",
+                    make_table_bytes({result_template, alternate_result_template, convergence_template}));
 
   resource.set_file("const.bytes", make_empty_table_bytes());
   resource.set_file("dtmq_channel_type.bytes", make_empty_table_bytes());
@@ -251,6 +259,50 @@ CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_template_and_force_limi
   auto ready = matching_logic::check_room_ready(room, 110, 2);
   CASE_EXPECT_TRUE(ready.ready);
   CASE_EXPECT_EQ(1000, ready.result_template_id);
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, reuses_valid_selected_template_before_scanning_rule_candidates) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  auto room = make_room();
+  CASE_EXPECT_TRUE(room.add_unit(make_unit(1, 10001, 10, 1)));
+  room.set_result_template_id(1001);
+
+  const auto result = matching_logic::check_room_ready(room, 110, 1);
+  CASE_EXPECT_EQ(0, result.result);
+  CASE_EXPECT_FALSE(result.ready);
+  CASE_EXPECT_EQ(1001, result.result_template_id);
+
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate result_template;
+  result_template.set_id(1000);
+  auto* team = result_template.add_team_template();
+  team->set_user_number(1);
+  team->set_count(2);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate changed_alternate_template;
+  changed_alternate_template.set_id(1001);
+  auto* changed_alternate_team = changed_alternate_template.add_team_template();
+  changed_alternate_team->set_user_number(2);
+  changed_alternate_team->set_count(1);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate convergence_template;
+  convergence_template.set_id(2000);
+  auto* convergence_team = convergence_template.add_team_template();
+  convergence_team->set_user_number(1);
+  convergence_team->set_count(3);
+  runtime.resource().set_file(
+      "matching_result_template.bytes",
+      make_table_bytes({result_template, changed_alternate_template, convergence_template}));
+  runtime.resource().set_version("matchsvr-unit-test-v2");
+  CASE_EXPECT_TRUE(runtime.resource().reload() >= 0);
+
+  const auto reloaded_result = matching_logic::check_room_ready(room, 110, 1);
+  CASE_EXPECT_EQ(0, reloaded_result.result);
+  CASE_EXPECT_FALSE(reloaded_result.ready);
+  CASE_EXPECT_EQ(1000, reloaded_result.result_template_id);
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }

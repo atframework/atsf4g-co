@@ -13,6 +13,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "logic/matching/matching_wal_handle.h"
 
@@ -59,7 +60,9 @@ class matching_room {
   const PROJECT_NAMESPACE_ID::DOrbitRoomKey& get_orbit_room_key() const noexcept { return orbit_room_key_; }
 
   // 统计房间内的真实玩家数量。
-  size_t get_user_count() const noexcept;
+  size_t get_user_count() const noexcept { return user_count_; }
+  // 返回按 Unit 人数索引的队伍数量，用于匹配模板快速判定。
+  const std::vector<size_t>& get_unit_size_counts() const noexcept { return unit_size_counts_; }
   // 判断 unit 是否仍在本房间。
   bool has_unit(uint64_t unit_id) const noexcept;
   // 判断玩家是否仍在本房间。
@@ -117,6 +120,9 @@ class matching_room {
   PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status_;
   // unit_id 到完整组队数据的映射。
   std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit> units_;
+  // 随 Unit 增删增量维护，避免高频成局检查重复遍历房间。
+  size_t user_count_;
+  std::vector<size_t> unit_size_counts_;
 
   // 创建时间，同时作为老房间优先的排序时间。
   int64_t created_time_;

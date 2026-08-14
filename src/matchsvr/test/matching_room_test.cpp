@@ -46,6 +46,22 @@ CASE_TEST(matchsvr_matching_room, rejects_duplicate_unit_or_user) {
   CASE_EXPECT_EQ(1, room.get_user_count());
 }
 
+CASE_TEST(matchsvr_matching_room, maintains_cached_user_and_unit_size_counts) {
+  auto room = make_room();
+  auto pair = make_unit(1, 10001, 1);
+  pair.add_users()->mutable_user_key()->CopyFrom(make_user(10002, 1));
+  CASE_EXPECT_TRUE(room.add_unit(pair));
+  CASE_EXPECT_TRUE(room.add_unit(make_unit(2, 10003, 1)));
+  CASE_EXPECT_EQ(3, room.get_user_count());
+  CASE_EXPECT_EQ(1, room.get_unit_size_counts().at(1));
+  CASE_EXPECT_EQ(1, room.get_unit_size_counts().at(2));
+
+  CASE_EXPECT_TRUE(room.remove_unit(1));
+  CASE_EXPECT_EQ(1, room.get_user_count());
+  CASE_EXPECT_EQ(1, room.get_unit_size_counts().at(1));
+  CASE_EXPECT_EQ(0, room.get_unit_size_counts().at(2));
+}
+
 CASE_TEST(matchsvr_matching_room, rejects_invalid_units_and_duplicate_users_inside_unit) {
   auto room = make_room();
   CASE_EXPECT_FALSE(room.add_unit(make_unit(0, 10001, 1)));

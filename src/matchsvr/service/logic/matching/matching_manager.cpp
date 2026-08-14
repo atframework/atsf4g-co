@@ -7,8 +7,8 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
-#include <protocol/config/com.struct.matching.config.pb.h>
 #include <protocol/config/com.struct.level.config.pb.h>
+#include <protocol/config/com.struct.matching.config.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -513,7 +513,9 @@ rpc::result_code_type matching_manager::orbit_room_ready(
 
   room->mark_finished(atfw::util::time::time_utility::get_now());
   PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
-  room->dump(*event_log.mutable_matched());
+  auto matched_event = event_log.mutable_matched();
+  room->dump(*matched_event);
+  matched_event->set_orbit_expired_timepoint(request.expired_timepoint());
   room->publish(ctx, std::move(event_log));
   response.set_result(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   FCTXLOGDEBUG(ctx,

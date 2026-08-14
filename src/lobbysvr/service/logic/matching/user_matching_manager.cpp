@@ -17,6 +17,8 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <logic/orbit/user_orbit_manager.h>
+
 #include <config/logic_config.h>
 #include <data/user.h>
 #include <rpc/db/uuid.h>
@@ -371,7 +373,7 @@ void user_matching_manager::acknowledge_matching_sync(rpc::context& ctx,
                     sync.matching_id(), event_log.event_id(), data_.last_event_id());
         continue;
       }
-      apply_event(event_log);
+      apply_event(ctx, event_log);
       data_.set_last_event_id(event_log.event_id());
       data_.mutable_snapshot()->set_last_event_id(event_log.event_id());
     }
@@ -402,7 +404,7 @@ void user_matching_manager::update_snapshot(const PROJECT_NAMESPACE_ID::DMatchin
   }
 }
 
-void user_matching_manager::apply_event(const PROJECT_NAMESPACE_ID::DMatchingEventLog& event_log) {
+void user_matching_manager::apply_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingEventLog& event_log) {
   auto& snapshot = *data_.mutable_snapshot();
   snapshot.set_status(event_log.room_status());
   switch (event_log.event_case()) {
@@ -424,6 +426,8 @@ void user_matching_manager::apply_event(const PROJECT_NAMESPACE_ID::DMatchingEve
       // The matched event carries the final room snapshot (including the battle room ID).
       // Replace the incremental view before forwarding it to the client.
       protobuf_copy_message(snapshot, event_log.matched());
+      owner_->get_user_orbit_manager().join_orbit_room(ctx, event_log.matched().orbit_room_key(),
+                                                       event_log.matched().orbit_expired_timepoint());
       break;
     case PROJECT_NAMESPACE_ID::DMatchingEventLog::kTimeout:
       snapshot.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT);

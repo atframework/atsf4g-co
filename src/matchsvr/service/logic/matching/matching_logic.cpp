@@ -12,10 +12,10 @@
 
 #include <algorithm>
 #include <cstdlib>
-#include <map>
 #include <unordered_map>
 #include <vector>
 
+#include "config/excel_config_matching_index.h"
 #include "logic/matching/matching_room.h"
 #include "logic/matching/matching_utility.h"
 
@@ -111,17 +111,11 @@ bool is_unit_compatible_with_room(const matching_room& room, const PROJECT_NAMES
 bool check_rule_limits(const matching_room& room, const PROJECT_NAMESPACE_ID::DMatchingUnit* candidate,
                        const matching_rule_ptr& rule) {
   std::unordered_map<int32_t, int32_t> force_counts;
-  // int32_t challenge_teams = 0;
-  // int32_t thief_teams = 0;
   for (const auto& stored : room.get_units()) {
     ++force_counts[stored.second.parameter().force_type()];
-    // challenge_teams += stored.second.parameter().challenge_team() ? 1 : 0;
-    // thief_teams += stored.second.parameter().thief_team() ? 1 : 0;
   }
   if (candidate != nullptr) {
     ++force_counts[candidate->parameter().force_type()];
-    // challenge_teams += candidate->parameter().challenge_team() ? 1 : 0;
-    // thief_teams += candidate->parameter().thief_team() ? 1 : 0;
   }
   for (const auto& limit : rule->force_type_limits()) {
     if (limit.count() > 0 && force_counts[limit.force_type()] > limit.count()) {
@@ -135,53 +129,26 @@ bool check_rule_limits(const matching_room& room, const PROJECT_NAMESPACE_ID::DM
   return true;
 }
 
-std::map<int32_t, int32_t> get_team_composition(const matching_room& room) {
-  std::map<int32_t, int32_t> actual;
-  for (const auto& stored : room.get_units()) {
-    ++actual[stored.second.users_size()];
-  }
-  return actual;
-}
-
-std::map<int32_t, int32_t> get_team_composition(
-    const PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate& result_template) {
-  std::map<int32_t, int32_t> expected;
-  for (const auto& entry : result_template.team_template()) {
-    expected[entry.user_number()] += entry.count();
-  }
-  return expected;
-}
-
-bool template_can_accept_unit(const matching_room& room, const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
-                              const PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate& result_template) {
-  auto actual = get_team_composition(room);
-  ++actual[unit.users_size()];
-  const auto expected = get_team_composition(result_template);
-  for (const auto& value : actual) {
-    auto iter = expected.find(value.first);
-    if (iter == expected.end() || value.second > iter->second) {
+bool template_can_contain(const matching_room& room, const excel::matching_result_template_index_t& result_template,
+                          size_t candidate_unit_size = 0) {
+  const auto& actual = room.get_unit_size_counts();
+  const size_t compare_size = std::max(actual.size(), candidate_unit_size + 1);
+  for (size_t unit_size = 1; unit_size < compare_size; ++unit_size) {
+    size_t actual_count = unit_size < actual.size() ? actual[unit_size] : 0;
+    if (unit_size == candidate_unit_size) {
+      ++actual_count;
+    }
+    const size_t expected_count =
+        unit_size < result_template.unit_size_counts.size() ? result_template.unit_size_counts[unit_size] : 0;
+    if (actual_count > expected_count) {
       return false;
     }
   }
   return true;
 }
 
-bool template_can_contain_room(const matching_room& room,
-                               const PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate& result_template) {
-  const auto actual = get_team_composition(room);
-  const auto expected = get_team_composition(result_template);
-  for (const auto& value : actual) {
-    auto iter = expected.find(value.first);
-    if (iter == expected.end() || value.second > iter->second) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool template_is_complete(const matching_room& room,
-                          const PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate& result_template) {
-  return get_team_composition(room) == get_team_composition(result_template);
+bool template_is_complete(const matching_room& room, const excel::matching_result_template_index_t& result_template) {
+  return room.get_user_count() == result_template.total_user_count && template_can_contain(room, result_template);
 }
 }  // namespace
 
@@ -219,8 +186,7 @@ matching_logic::unit_join_result matching_logic::check_unit_can_join(const match
     result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_POOL_NOT_FOUND;
     return result;
   }
-  if (pool->user_upper() > 0 &&
-      static_cast<int32_t>(room.get_user_count()) + unit.users_size() > pool->user_upper()) {
+  if (pool->user_upper() > 0 && static_cast<int32_t>(room.get_user_count()) + unit.users_size() > pool->user_upper()) {
     result.result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL;
     return result;
   }
@@ -235,8 +201,8 @@ matching_logic::unit_join_result matching_logic::check_unit_can_join(const match
       return result;
     }
     for (int32_t template_id : rule->result_template_ids()) {
-      auto result_template = excel::get_ExcelMatchingResultTemplate_by_id(template_id);
-      if (!result_template || !template_can_accept_unit(room, unit, *result_template)) {
+      auto result_template = excel::get_matching_result_template_index(template_id);
+      if (!result_template || !template_can_contain(room, *result_template, static_cast<size_t>(unit.users_size()))) {
         continue;
       }
       result.can_join = true;
@@ -271,9 +237,22 @@ matching_logic::room_ready_result matching_logic::check_room_ready(const matchin
       }
       continue;
     }
+    const int32_t selected_template_id = room.get_result_template_id();
+    if (selected_template_id != 0 && std::find(rule->result_template_ids().begin(), rule->result_template_ids().end(),
+                                               selected_template_id) != rule->result_template_ids().end()) {
+      auto selected_template = excel::get_matching_result_template_index(selected_template_id);
+      if (selected_template && template_can_contain(room, *selected_template)) {
+        result.result_template_id = selected_template_id;
+        result.result = 0;
+        result.ready = total_users >= std::max(rule->min_total_user(), rule->start_battle_min_user()) &&
+                       template_is_complete(room, *selected_template);
+        return result;
+      }
+    }
+
     for (int32_t template_id : rule->result_template_ids()) {
-      auto result_template = excel::get_ExcelMatchingResultTemplate_by_id(template_id);
-      if (!result_template || !template_can_contain_room(room, *result_template)) {
+      auto result_template = excel::get_matching_result_template_index(template_id);
+      if (!result_template || !template_can_contain(room, *result_template)) {
         continue;
       }
       result.result_template_id = template_id;

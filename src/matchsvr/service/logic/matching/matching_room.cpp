@@ -20,6 +20,7 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
     : matching_id_(std::move(matching_id)),
       scope_(scope),
       status_(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING),
+      user_count_(0),
       created_time_(now),
       expire_time_(expire_time),
       terminal_time_(0),
@@ -31,14 +32,6 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
       orbit_server_id_(0),
       wal_publisher_(create_matching_wal_publisher(*this)) {
   orbit_room_key_.set_client_id("room_key_" + matching_id_);
-}
-
-size_t matching_room::get_user_count() const noexcept {
-  size_t result = 0;
-  for (const auto& unit : units_) {
-    result += static_cast<size_t>(unit.second.users_size());
-  }
-  return result;
 }
 
 bool matching_room::has_unit(uint64_t unit_id) const noexcept { return units_.find(unit_id) != units_.end(); }
@@ -84,6 +77,12 @@ bool matching_room::add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
   auto& stored = units_[unit.unit_id()];
   stored.CopyFrom(unit);
   stored.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
+  const size_t unit_size = static_cast<size_t>(unit.users_size());
+  user_count_ += unit_size;
+  if (unit_size_counts_.size() <= unit_size) {
+    unit_size_counts_.resize(unit_size + 1, 0);
+  }
+  ++unit_size_counts_[unit_size];
   return true;
 }
 
@@ -92,7 +91,17 @@ bool matching_room::remove_unit(uint64_t unit_id) {
       status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING) {
     return false;
   }
-  return units_.erase(unit_id) > 0;
+  auto unit_iter = units_.find(unit_id);
+  if (unit_iter == units_.end()) {
+    return false;
+  }
+  const size_t unit_size = static_cast<size_t>(unit_iter->second.users_size());
+  user_count_ -= unit_size;
+  if (unit_size < unit_size_counts_.size() && unit_size_counts_[unit_size] > 0) {
+    --unit_size_counts_[unit_size];
+  }
+  units_.erase(unit_iter);
+  return true;
 }
 
 void matching_room::begin_confirmation(int64_t expire_time) noexcept {

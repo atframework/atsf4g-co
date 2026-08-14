@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include <rpc/rpc_common_types.h>
 #include <design_pattern/noncopyable.h>
+#include <rpc/rpc_common_types.h>
 
 #include <config/compiler/protobuf_prefix.h>
 
@@ -63,7 +63,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 将同步 RPC 回包写入本地视图，但不把“已应用”误当作“客户端已确认”。
   void update_snapshot(const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot);
   // 将一条严格递增的 WAL 日志合并到本地快照。
-  void apply_event(const PROJECT_NAMESPACE_ID::DMatchingEventLog& event_log);
+  void apply_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingEventLog& event_log);
 
   ATFW_EXPLICIT_NODISCARD_ATTR int32_t fill_matching_scope(const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                                            const std::string& battle_version,

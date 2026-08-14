@@ -20,7 +20,6 @@
 #include <rpc/async_jobs/async_jobs.h>
 #include <rpc/orbit/orbitsvrmatchsvrservice.atfw.gen.h>
 #include <rpc/orbit_client_rpc/orbitclientrpcservice.atfw.gen.h>
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -30,9 +29,9 @@
 #include <protocol/config/orbitsvr_config.pb.h>
 #include <protocol/pbdesc/com.orbit.protocol.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
+#include <protocol/pbdesc/orbit_service.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/svr.const.pb.h>
-#include <protocol/pbdesc/svr.struct.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>

@@ -100,6 +100,7 @@ message DMatchingRoomSnapshot {
   int64 last_event_id = 10;
   int64 confirm_expire_time = 11;
   DOrbitRoomKey orbit_room_key = 12;
+  int64 orbit_expired_timepoint = 13;
 }
 
 // 迁房事件携带原 unit 和目标房间。目标为空表示取消或普通移除。
