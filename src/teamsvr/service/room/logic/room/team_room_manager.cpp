@@ -1,0 +1,187 @@
+// Copyright 2026 atframework
+
+#include "logic/room/team_room_manager.h"
+
+#include <log/log_wrapper.h>
+#include <std/explicit_declare.h>
+#include <string/string_format.h>
+#include <time/time_utility.h>
+
+#include <config/logic_config.h>
+#include <logic/logic_server_setup.h>
+#include <memory/object_allocator.h>
+#include <rpc/rpc_context.h>
+
+#include <algorithm>
+#include <string>
+#include <utility>
+#include <vector>
+
+namespace {
+// 房间定时 action 使用秒级精度时间轮
+inline time_t team_room_now_timer_tick() { return static_cast<time_t>(atfw::util::time::time_utility::get_now()); }
+}  // namespace
+
+team_room_manager::team_room_manager() = default;
+
+team_room_manager::~team_room_manager() { clear(); }
+
+int32_t team_room_manager::init() {
+  timer_set_.init(team_room_now_timer_tick());
+  timer_running_ = true;
+  return 0;
+}
+
+int32_t team_room_manager::tick(rpc::context& ctx) {
+  int32_t ret = 0;
+
+  // 驱动时间轮，触发各房间到期的定时 action
+  if (timer_running_) {
+    timer_set_.set_private_data(reinterpret_cast<void*>(&ctx));
+    int res = timer_set_.tick(team_room_now_timer_tick());
+    timer_set_.set_private_data(nullptr);
+    if (res < 0) {
+      FCTXLOGERROR(ctx, "team_room_manager tick timer error: {}", res);
+    } else {
+      ret += res;
+    }
+  }
+
+  // 回收已销毁房间
+  std::vector<int64_t> destroyed_rooms;
+  for (auto& pair : rooms_) {
+    if (!pair.second) {
+      continue;
+    }
+    if (pair.second->ready_to_destroy()) {
+      destroyed_rooms.push_back(pair.first);
+    }
+  }
+  for (int64_t team_id : destroyed_rooms) {
+    auto iter = rooms_.find(team_id);
+    if (iter != rooms_.end() && iter->second) {
+      iter->second->on_remove();
+    }
+    rooms_.erase(iter);
+  }
+  return ret;
+}
+
+void team_room_manager::clear() {
+  for (auto& pair : rooms_) {
+    if (pair.second) {
+      pair.second->on_remove();
+    }
+  }
+  rooms_.clear();
+}
+
+team_room_manager::room_ptr_t team_room_manager::get_room(int64_t team_id) const {
+  auto iter = rooms_.find(team_id);
+  if (iter == rooms_.end()) {
+    return nullptr;
+  }
+  return iter->second;
+}
+
+team_room_manager::room_ptr_t team_room_manager::get_or_create_room(rpc::context& ctx, int64_t team_id) {
+  auto exist = get_room(team_id);
+  if (exist) {
+    return exist;
+  }
+
+  // 乐观锁持有者标识与服务节点名和节点ID相关，节点切换后新节点据此区分老锁
+  std::string server_name;
+  {
+    auto server_name_view = logic_config::me()->get_local_server_name();
+    server_name.assign(server_name_view.begin(), server_name_view.end());
+  }
+  uint64_t server_id = logic_config::me()->get_local_server_id();
+  std::string lock_holder = atfw::util::string::format("teamsvr-room:{}#{}", server_name, server_id);
+  std::string subscriber_key = atfw::util::string::format("team_room:{}:{}", server_id, team_id);
+
+  auto room = atfw::component::memory::stl::make_strong_rc<team_room>(team_id, std::move(subscriber_key),
+                                                                      std::move(lock_holder));
+  if (!room) {
+    FWLOGERROR("team_room_manager alloc room for team {} failed", team_id);
+    return nullptr;
+  }
+  int32_t ret = room->create(ctx);
+  if (0 != ret) {
+    FCTXLOGERROR(ctx, "team_room_manager create room for team {} failed: {}", team_id, ret);
+    return nullptr;
+  }
+
+  rooms_[team_id] = room;
+  FCTXLOGINFO(ctx, "team_room_manager create room for team {} success", team_id);
+  return room;
+}
+
+void team_room_manager::remove_room(int64_t team_id) {
+  auto iter = rooms_.find(team_id);
+  if (iter == rooms_.end()) {
+    return;
+  }
+  if (iter->second) {
+    iter->second->on_remove();
+  }
+  rooms_.erase(iter);
+}
+
+int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) {
+  if (!timer_running_) {
+    timer_set_.init(team_room_now_timer_tick());
+    timer_running_ = true;
+  }
+
+  remove_room_timer(room);
+
+  time_t timeout_tick = static_cast<time_t>((std::max)(timepoint, static_cast<int64_t>(team_room_now_timer_tick())));
+  if (timeout_tick <= timer_set_.get_last_tick()) {
+    timeout_tick = timer_set_.get_last_tick() + 1;
+  }
+
+  atfw::util::memory::weak_rc_ptr<team_room> room_weak = room.shared_from_this();
+  int64_t team_id = room.get_team_id();
+  auto fn = [room_weak, team_id](time_t /*tick_time*/, const timer_set_type::timer_t& /*timer*/) {
+    if (room_weak.expired()) {
+      return;
+    }
+    auto room = room_weak.lock();
+    if (!room) {
+      return;
+    }
+    // 房间可能已被回收(定时器未来得及移除)，校验 manager 仍持有该房间
+    if (team_room_manager::me()->get_room(team_id).get() != room.get()) {
+      return;
+    }
+
+    auto* ctx = reinterpret_cast<rpc::context*>(team_room_manager::me()->timer_set_.get_private_data());
+    if (nullptr != ctx) {
+      room->on_timer(*ctx);
+    } else {
+      room->on_timer(logic_server_get_current_tick_context());
+    }
+  };
+
+  int res =
+      timer_set_.add_timer(timeout_tick - timer_set_.get_last_tick(), std::move(fn), nullptr, &room.timer_watcher_);
+  if (res < 0) {
+    FWLOGERROR("team_room_manager add timer for team {} failed: {}", team_id, res);
+    room.timer_watcher_.reset();
+  }
+  return res;
+}
+
+void team_room_manager::remove_room_timer(team_room& room) {
+  if (room.timer_watcher_.expired()) {
+    return;
+  }
+  auto timer_ptr = room.timer_watcher_.lock();
+  room.timer_watcher_.reset();
+  if (timer_ptr) {
+    timer_set_type::remove_timer(*timer_ptr);
+  }
+}
+
+size_t team_room_manager::get_room_count() const noexcept { return rooms_.size(); }

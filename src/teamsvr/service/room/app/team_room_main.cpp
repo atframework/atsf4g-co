@@ -27,6 +27,9 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_context.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
 #include <chrono>
@@ -35,7 +38,9 @@
 #include <cstring>
 #include <string>
 
+#include "app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.h"
 #include "app/handle_ss_rpc_teamroomservice.atfw.gen.h"
+#include "logic/room/team_room_manager.h"
 
 namespace {
 class main_service_module : public atfw::atapp::module_impl {
@@ -47,14 +52,25 @@ class main_service_module : public atfw::atapp::module_impl {
 
     // register handles
     INIT_CALL_FN(handle::team::register_handles_for_teamroomservice);
-    return 0;
+    INIT_CALL_FN(handle::dtmq::register_handles_for_dtmqproxysvrnotifyservice);
+    return team_room_manager::me()->init();
   };
 
   const char *name() const override { return "main_service_module"; }
 
-  int tick() override { return 0; }
+  int tick() override {
+    int ret = 0;
+    // dtmq 订阅者心跳调度
+    ret += rpc::dtmq::client_subscriber::global_tick(logic_server_get_current_tick_context());
+    // 房间维护: 乐观锁续租、定期压缩、过期数据清理
+    ret += team_room_manager::me()->tick(logic_server_get_current_tick_context());
+    return ret;
+  }
 
-  int stop() override { return 0; }
+  int stop() override {
+    team_room_manager::me()->clear();
+    return 0;
+  }
 
   void ready() override {}
 

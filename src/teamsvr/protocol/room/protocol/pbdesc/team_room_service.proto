@@ -7,6 +7,8 @@ option optimize_for = SPEED;
 option cc_enable_arenas = true;
 option cc_generic_services = true;
 
+import "google/protobuf/timestamp.proto";
+
 import "protocol/extension/atframework.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.team.proto";
@@ -19,6 +21,7 @@ message SSTeamRoomSendMessageReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   DTeamAction action = 3;
+  DTeamMemberAction member_action = 4;
 }
 
 message SSTeamRoomSendMessageRsp {
@@ -35,6 +38,25 @@ message SSTeamRoomHeartbeatReq {
 
 message SSTeamRoomHeartbeatRsp {
   int32 client_result = 1;
+}
+
+// 成员运行时的私有簿记数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
+message DTeamRoomMemberRuntimeData {
+  atframework.shared.DUserIDKey user_key = 1;
+  // 最近一次成员心跳时间，用于离线过期清理
+  google.protobuf.Timestamp last_heartbeat_timepoint = 2;
+  // 成员最近一次心跳上报的路由服务ID
+  uint64 user_router_server_id = 3;
+}
+
+// 队伍管理用的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
+message DTeamRoomPrivateData {
+  // 成员心跳等运行时簿记
+  repeated DTeamRoomMemberRuntimeData member_runtime = 1;
+
+  // 上次压缩完成时的sequence和时间点
+  int64 last_compact_sequence = 11;
+  google.protobuf.Timestamp last_compact_timepoint = 12;
 }
 
 service TeamRoomService {
