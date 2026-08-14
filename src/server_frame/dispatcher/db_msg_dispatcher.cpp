@@ -397,7 +397,7 @@ if real_version_str ~= false and real_version_str ~= nil then
 end
 local except_version = tonumber(ARGV[2])
 local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
-if real_version == 0 or except_version == real_version then
+if real_version == 0 or except_version == real_version or except_version == 0 then
   ARGV[2] = real_version + 1;
   redis.call('HSET', KEYS[1], unpack_fn(ARGV))
   return  { ok = tostring(ARGV[2]) }
