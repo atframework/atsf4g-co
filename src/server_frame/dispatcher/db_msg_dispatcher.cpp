@@ -775,6 +775,7 @@ void db_msg_dispatcher::raw_on_connected(hiredis::happ::raw *raw_conn, hiredis::
   FWLOGINFO("connect to db host {} success", conn->get_key().name);
   // 注入redis的lua脚本
   me()->script_load(conn->get_context(), script_type::kCompareAndSetHashTable);
+  me()->script_load(conn->get_context(), script_type::kInsertHashTable);
   me()->script_load(conn->get_context(), script_type::kAddListIndexHashTable);
 
   for (int i = channel_t::RAW_DEFAULT; i < channel_t::RAW_BOUND; ++i) {
