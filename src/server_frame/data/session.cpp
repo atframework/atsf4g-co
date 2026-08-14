@@ -338,34 +338,37 @@ SERVER_FRAME_API void session::write_actor_log_head(rpc::context &ctx, const atf
       break;
   }
 
-  atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
-  std::string hint_text;
-  if (is_input) {
-    hint_text = atfw::util::log::format(
-        "<<<<<<<<<<<< receive {} bytes from user {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size,
-        cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
+  if (actor_log_writter_ || actor_log_otel_) {
+    atfw::util::log::log_wrapper::caller_info_t caller = WDTLOGFILENF(atfw::util::log::log_level::kInfo, {});
+    std::string hint_text;
+    if (is_input) {
+      hint_text = atfw::util::log::format(
+          "<<<<<<<<<<<< receive {} bytes from user {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size,
+          cached_zone_id_, cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
 
-  } else {
-    hint_text = atfw::util::log::format(
-        ">>>>>>>>>>>> send {} bytes to user {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size, cached_zone_id_,
-        cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
-  }
-  if (actor_log_writter_) {
-    actor_log_writter_->write_log(caller, hint_text.c_str(), hint_text.size());
-  }
-  if (actor_log_otel_) {
-    std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
-        {"gateway.node_id", get_key().node_id},
-        {opentelemetry::semconv::session::kSessionId, get_key().session_id},
-        {"session.event", is_input ? "receive_hint" : "send_hint"},
-        {opentelemetry::semconv::user::kUserId, cached_user_id_},
-        {"user.zone_id", cached_zone_id_},
-        {opentelemetry::semconv::rpc::kRpcMethod, opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}}};
-    if (ctx.get_trace_span()) {
-      actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes),
-                            ctx.get_trace_span()->GetContext());
     } else {
-      actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes));
+      hint_text = atfw::util::log::format(
+          ">>>>>>>>>>>> send {} bytes to user {}:{}, session: {:#x}:{}, rpc: {}, type: {}", byte_size, cached_zone_id_,
+          cached_user_id_, get_key().node_id, get_key().session_id, rpc_name, type_url);
+    }
+    if (actor_log_writter_) {
+      actor_log_writter_->format_log(caller, "{}", hint_text);
+    }
+    if (actor_log_otel_) {
+      std::pair<opentelemetry::nostd::string_view, opentelemetry::common::AttributeValue> attributes[] = {
+          {"gateway.node_id", get_key().node_id},
+          {opentelemetry::semconv::session::kSessionId, get_key().session_id},
+          {"session.event", is_input ? "receive_hint" : "send_hint"},
+          {opentelemetry::semconv::user::kUserId, cached_user_id_},
+          {"user.zone_id", cached_zone_id_},
+          {opentelemetry::semconv::rpc::kRpcMethod,
+           opentelemetry::nostd::string_view{rpc_name.data(), rpc_name.size()}}};
+      if (ctx.get_trace_span()) {
+        actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes),
+                              ctx.get_trace_span()->GetContext());
+      } else {
+        actor_log_otel_->Info(hint_text, opentelemetry::common::MakeAttributes(attributes));
+      }
     }
   }
 }

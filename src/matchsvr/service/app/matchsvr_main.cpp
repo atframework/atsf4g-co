@@ -11,6 +11,7 @@
 #include <logic/logic_server_setup.h>
 
 #include "app/handle_ss_rpc_matchsvrservice.atfw.gen.h"
+#include "app/handle_ss_rpc_orbitsvrmatchsvrservice.atfw.gen.h"
 #include "logic/matching/matching_manager.h"
 
 namespace {
@@ -19,6 +20,7 @@ class main_service_module : public atfw::atapp::module_impl {
   // 注册匹配 RPC，并初始化唯一的运行时管理器。
   int init() override {
     INIT_CALL_FN(handle::matching::register_handles_for_matchsvrservice);
+    INIT_CALL_FN(handle::orbit::register_handles_for_orbitsvrmatchsvrservice);
 
     return matching_manager::me()->init();
   }
