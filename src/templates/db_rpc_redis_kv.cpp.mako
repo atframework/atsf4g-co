@@ -318,6 +318,8 @@ ${emit_mock_input_fill(key_fields)}    ${inc_field["cpp_type"]} __inc_out = 0;
   if (res < 0) {
     RPC_DB_RETURN_CODE(res);
   }
+  shared_message<PROJECT_NAMESPACE_ID::${message_name}> tmp_db{message};
+  protobuf_move_message(*table_db, std::move(*tmp_db));
   inc_value = table_db->${inc_field["raw_name"]}();
   RPC_DB_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
