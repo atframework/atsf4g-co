@@ -18,12 +18,12 @@
 #include <memory>
 #include <mutex>
 
-namespace {
+namespace task_action_no_req_base_inner {
 static std::recursive_mutex& get_handle_lock() {
   static std::recursive_mutex ret;
   return ret;
 }
-}  // namespace
+}  // namespace task_action_no_req_base_inner
 
 std::list<rpc::result_code_type (*)(rpc::context&, task_action_no_req_base&)> task_action_no_req_base::prepare_handles_;
 
@@ -46,14 +46,14 @@ SERVER_FRAME_API void task_action_no_req_base::add_prepare_handle(
     return;
   }
 
-  std::lock_guard<std::recursive_mutex> lock_guard{get_handle_lock()};
+  std::lock_guard<std::recursive_mutex> lock_guard{task_action_no_req_base_inner::get_handle_lock()};
   prepare_handles_.push_back(fn);
 }
 
 SERVER_FRAME_API task_action_no_req_base::result_type task_action_no_req_base::hook_run() {
   // prepare handle
   {
-    std::lock_guard<std::recursive_mutex> lock_guard{get_handle_lock()};
+    std::lock_guard<std::recursive_mutex> lock_guard{task_action_no_req_base_inner::get_handle_lock()};
     for (auto& fn : prepare_handles_) {
       auto res = RPC_AWAIT_CODE_RESULT(fn(get_shared_context(), *this));
       if (res < 0) {

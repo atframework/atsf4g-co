@@ -13,8 +13,8 @@
 #include <memory/object_allocator.h>
 
 #include <data/user_cache.h>
-#include <logic/user_manager.h>
 #include <logic/session_manager.h>
+#include <logic/user_manager.h>
 
 // #include <router/router_user_cache.h>
 #include <router/router_user_manager.h>
@@ -31,12 +31,12 @@
 #include <memory>
 #include <mutex>
 
-namespace {
+namespace task_action_cs_req_base_inner {
 static std::recursive_mutex &get_handle_lock() {
   static std::recursive_mutex ret;
   return ret;
 }
-}  // namespace
+}  // namespace task_action_cs_req_base_inner
 
 struct task_action_cs_req_base::gateway_info_t {
   uint64_t node_id = 0;
@@ -95,7 +95,7 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
 
   // prepare handle
   {
-    std::lock_guard<std::recursive_mutex> lock_guard{get_handle_lock()};
+    std::lock_guard<std::recursive_mutex> lock_guard{task_action_cs_req_base_inner::get_handle_lock()};
     for (auto &fn : prepare_handles_) {
       auto res = RPC_AWAIT_CODE_RESULT(fn(get_shared_context(), *this));
       if (res < 0) {
@@ -225,10 +225,10 @@ SERVER_FRAME_API task_action_cs_req_base::result_type task_action_cs_req_base::h
 
     if (dispatcher_options->mark_wait_save()) {
       ret = RPC_AWAIT_CODE_RESULT(user_manager::me()->save(get_shared_context(), user_cache->get_user_id(),
-                                                             user_cache->get_zone_id(), user_cache.get()));
+                                                           user_cache->get_zone_id(), user_cache.get()));
       if (ret < 0) {
-        FWLOGERROR("save user {}:{} failed, res: {}({})", user_cache->get_zone_id(), user_cache->get_user_id(),
-                   ret, protobuf_mini_dumper_get_error_msg(ret));
+        FWLOGERROR("save user {}:{} failed, res: {}({})", user_cache->get_zone_id(), user_cache->get_user_id(), ret,
+                   protobuf_mini_dumper_get_error_msg(ret));
       }
     } else {
       router_manager_set::me()->mark_fast_save(mgr, router_obj);
@@ -250,7 +250,7 @@ SERVER_FRAME_API void task_action_cs_req_base::add_prepare_handle(
     return;
   }
 
-  std::lock_guard<std::recursive_mutex> lock_guard{get_handle_lock()};
+  std::lock_guard<std::recursive_mutex> lock_guard{task_action_cs_req_base_inner::get_handle_lock()};
   prepare_handles_.push_back(fn);
 }
 
