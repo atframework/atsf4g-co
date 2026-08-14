@@ -64,7 +64,7 @@ task_action_heartbeat::result_type task_action_heartbeat::operator()() {
   }
 
   // 本节点处理: 查找或创建房间(节点切换后首个心跳触发新节点订阅并接管)
-  auto room = team_room_manager::me()->get_or_create_room(get_shared_context(), req_body.team_key().team_id());
+  auto room = team_room_manager::me()->mutable_room(get_shared_context(), req_body.team_key().team_id());
   if (!room) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

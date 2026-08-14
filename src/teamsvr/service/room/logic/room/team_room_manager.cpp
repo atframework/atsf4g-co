@@ -14,12 +14,13 @@
 
 #include <algorithm>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace {
 // 房间定时 action 使用秒级精度时间轮
-inline time_t team_room_now_timer_tick() { return static_cast<time_t>(atfw::util::time::time_utility::get_now()); }
+inline time_t team_room_now_timer_tick() { return atfw::util::time::time_utility::get_now(); }
 }  // namespace
 
 team_room_manager::team_room_manager() = default;
@@ -48,6 +49,7 @@ int32_t team_room_manager::tick(rpc::context& ctx) {
   }
 
   // 回收已销毁房间
+  // TODO(owent): 不要靠轮询来触发销毁，而是应该在定时器回调里触发
   std::vector<int64_t> destroyed_rooms;
   for (auto& pair : rooms_) {
     if (!pair.second) {
@@ -68,12 +70,13 @@ int32_t team_room_manager::tick(rpc::context& ctx) {
 }
 
 void team_room_manager::clear() {
-  for (auto& pair : rooms_) {
+  std::unordered_map<int64_t, room_ptr_t> rooms;
+  rooms.swap(rooms_);
+  for (auto& pair : rooms) {
     if (pair.second) {
       pair.second->on_remove();
     }
   }
-  rooms_.clear();
 }
 
 team_room_manager::room_ptr_t team_room_manager::get_room(int64_t team_id) const {
@@ -84,21 +87,23 @@ team_room_manager::room_ptr_t team_room_manager::get_room(int64_t team_id) const
   return iter->second;
 }
 
-team_room_manager::room_ptr_t team_room_manager::get_or_create_room(rpc::context& ctx, int64_t team_id) {
+team_room_manager::room_ptr_t team_room_manager::mutable_room(rpc::context& ctx, int64_t team_id) {
   auto exist = get_room(team_id);
   if (exist) {
     return exist;
   }
 
   // 乐观锁持有者标识与服务节点名和节点ID相关，节点切换后新节点据此区分老锁
-  std::string server_name;
-  {
-    auto server_name_view = logic_config::me()->get_local_server_name();
-    server_name.assign(server_name_view.begin(), server_name_view.end());
+  gsl::string_view server_name = logic_config::me()->get_local_server_name();
+
+  std::string lock_holder;
+  if (server_name.empty()) {
+    uint64_t server_id = logic_config::me()->get_local_server_id();
+    lock_holder = atfw::util::string::format("teamsvr-room:{:#x}", server_id);
+  } else {
+    lock_holder = atfw::util::string::format("teamsvr-room:{}", server_name);
   }
-  uint64_t server_id = logic_config::me()->get_local_server_id();
-  std::string lock_holder = atfw::util::string::format("teamsvr-room:{}#{}", server_name, server_id);
-  std::string subscriber_key = atfw::util::string::format("team_room:{}:{}", server_id, team_id);
+  std::string subscriber_key = atfw::util::string::format("team_room:{}", team_id);
 
   auto room = atfw::component::memory::stl::make_strong_rc<team_room>(team_id, std::move(subscriber_key),
                                                                       std::move(lock_holder));
@@ -113,6 +118,8 @@ team_room_manager::room_ptr_t team_room_manager::get_or_create_room(rpc::context
   }
 
   rooms_[team_id] = room;
+  // TODO(owent): 创建房间必须伴随着设置定时器，以防泄露
+  // 初始定时器就是GC定时器，后续由房间自己维护
   FCTXLOGINFO(ctx, "team_room_manager create room for team {} success", team_id);
   return room;
 }
@@ -126,6 +133,7 @@ void team_room_manager::remove_room(int64_t team_id) {
     iter->second->on_remove();
   }
   rooms_.erase(iter);
+  // TODO(owent): 移除房间必须移除相关的定时器
 }
 
 int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) {
@@ -173,6 +181,7 @@ int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) 
   return res;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void team_room_manager::remove_room_timer(team_room& room) {
   if (room.timer_watcher_.expired()) {
     return;

@@ -26,8 +26,15 @@ TEAM_SDK_COMMON_API uint64_t get_teamsvr_room_server_id_of_zone(uint32_t zone_id
     return 0;
   }
 
-  auto discovery_set = mod->get_discovery_index_by_type_zone(
-      static_cast<uint64_t>(atfw::component::logic_service_type::kTeamRoomSvr), static_cast<uint64_t>(zone_id));
+  atfw::atapp::etcd_discovery_set::ptr_t discovery_set;
+  if (zone_id == 0) {
+    discovery_set =
+        mod->get_discovery_index_by_type(static_cast<uint64_t>(atfw::component::logic_service_type::kTeamRoomSvr));
+  } else {
+    discovery_set = mod->get_discovery_index_by_type_zone(
+        static_cast<uint64_t>(atfw::component::logic_service_type::kTeamRoomSvr), static_cast<uint64_t>(zone_id));
+  }
+
   if (!discovery_set) {
     return 0;
   }
