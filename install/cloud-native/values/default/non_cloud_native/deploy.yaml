@@ -6,103 +6,81 @@ zone_id: 1
 
 proc_desc:
   - chart_name: "atproxy"
-    instance_type_id: 1
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "atgateway"
-    instance_type_id: 2
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "echosvr"
-    instance_type_id: 10
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "authsvr"
-    instance_type_id: 11
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "lobbysvr"
-    instance_type_id: 12
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "dtcoordsvr"
-    instance_type_id: 13
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "cachesvr"
-    instance_type_id: 15
     world_instance: true
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "rank-settlement-svr"
-    instance_type_id: 16
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "rank-board-svr"
-    instance_type_id: 17
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "teamsvr-room"
-    instance_type_id: 18
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "teamsvr-match"
-    instance_type_id: 19
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "dtmq-proxysvr"
-    instance_type_id: 21
     world_instance: true
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "orbit-server"
-    instance_type_id: 25
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "orbit-agent"
-    instance_type_id: 26
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "orbit-controller"
-    instance_type_id: 27
     world_instance: false
     instance_count: 1
     start_instance_id: 1
 
   - chart_name: "matchsvr"
-    instance_type_id: 14
-    world_instance: false
-    instance_count: 1
-    start_instance_id: 1
-
-  - chart_name: "robot"
-    instance_type_id: 255
     world_instance: false
     instance_count: 1
     start_instance_id: 1
