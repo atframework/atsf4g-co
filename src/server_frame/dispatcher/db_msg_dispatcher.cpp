@@ -406,6 +406,22 @@ else
 end)";
       break;
     }
+    case script_type::kInsertHashTable: {
+      script = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
+local real_version = 0
+if real_version_str ~= false and real_version_str ~= nil then
+  real_version = tonumber(real_version_str)
+end
+local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
+if real_version == 0 then
+  ARGV[2] = real_version + 1;
+  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
+  return  { ok = tostring(ARGV[2]) }
+else
+  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
+end)";
+      break;
+    }
     case script_type::kAddListIndexHashTable: {
       script = R"(local max_len = tonumber(ARGV[1])
 local index_field = "index_number"
@@ -601,6 +617,7 @@ void db_msg_dispatcher::cluster_on_connected(hiredis::happ::cluster *clu, hiredi
   FWLOGINFO("connect to db host {} success", conn->get_key().name);
   // 注入redis的lua脚本
   me()->script_load(conn->get_context(), script_type::kCompareAndSetHashTable);
+  me()->script_load(conn->get_context(), script_type::kInsertHashTable);
   me()->script_load(conn->get_context(), script_type::kAddListIndexHashTable);
 
   for (int i = 0; i < channel_t::SENTINEL_BOUND; ++i) {

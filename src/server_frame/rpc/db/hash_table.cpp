@@ -551,7 +551,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
   redis_args args(args_size);
   {
     args.push("EVALSHA");
-    args.push(db_msg_dispatcher::me()->get_db_script_sha1(db_msg_dispatcher::script_type::kCompareAndSetHashTable));
+    args.push(db_msg_dispatcher::me()->get_db_script_sha1(db_msg_dispatcher::script_type::kInsertHashTable));
     args.push(1);
     args.push(key.data(), key.size());
   }
