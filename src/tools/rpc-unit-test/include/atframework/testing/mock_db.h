@@ -134,10 +134,13 @@ class RPC_UNIT_TEST_API db_table_rule_handle {
 // per-interface callbacks first; only operations without a matching callback reach this common mock
 // layer (the in-memory backend below).
 //
-// Data model mirrors the real backend contract:
+// Data model mirrors the real backend contract (the Lua scripts in dispatcher/db_msg_dispatcher.cpp):
 // - values are stored as serialized protobuf bytes (presence of explicitly set fields survives)
-// - key_value records carry a CAS version (RPC_DB_VERSION_NAME), incremented by versioned set
-// - key_list records use a monotonic per-key index allocator and trim to max_list_length
+// - key_value records carry a CAS version (RPC_DB_VERSION_NAME), incremented by versioned set; the
+//   CAS write accepts a missing/matching/zero expected version (0 ignores the check and forces the
+//   overwrite), insert-only writes reject an already-versioned record
+// - key_list records use a monotonic 1-based per-key index allocator and evict the smallest index
+//   when the entries reach max_list_length
 // - TTL is evaluated lazily against a controllable clock
 //
 // Get-like operations materialize outputs through message factories registered per protobuf
@@ -263,6 +266,10 @@ class RPC_UNIT_TEST_API mock_db {
   bool is_expired(bool has_expire, clock::time_point expire_at) const;
 
   int32_t make_kv_output(const kv_record &record, rpc::context &ctx, db_key_value_message_result_t *output) const;
+  // Serialize the store merged into the previously stored bytes: every write path (plain HSET and
+  // the CAS/insert scripts) HSETs only the fields present in the store message (see
+  // rpc::db::pack_message), so fields absent from a partial store survive in the stored record.
+  bool merge_stored_data(const kv_record *record, const google::protobuf::Message &store, std::string &output) const;
   // Production unpackers never set db_key_list_message_result_t::version (it stays 0), so the mock
   // reports no KL version either.
   int32_t make_kl_output(const kl_entry &entry, rpc::context &ctx, db_key_list_message_result_t &output) const;
@@ -277,6 +284,7 @@ class RPC_UNIT_TEST_API mock_db {
   int32_t on_kv_get_all(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_partly_get(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_set(const rpc::db::hash_table::unit_test_request &req);
+  int32_t on_kv_insert(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kv_inc_field(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kl_get_all(const rpc::db::hash_table::unit_test_request &req);
   int32_t on_kl_get_by_indexs(const rpc::db::hash_table::unit_test_request &req);

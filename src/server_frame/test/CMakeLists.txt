@@ -17,6 +17,7 @@ project_add_rpc_unit_test(
   COMPONENT server-frame
   CATEGORY sdk
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_db_login_auth.cpp"
+          "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_db_script_contract.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_cs_session.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_resource.cpp"
   FEATURES SS DB CS RESOURCE

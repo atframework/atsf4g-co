@@ -45,21 +45,42 @@ exposes `kill_all`, so a hard timeout cannot claim to reclaim just one task).
 
 ## mock_db golden contract (mirrors Redis commands + embedded Lua)
 
-The in-memory backend must reproduce the dispatcher-layer error mapping itself because the hash-table hook bypasses
-`db_msg_dispatcher::dispatch`:
+The authoritative write contract is the Lua script set embedded in
+`src/server_frame/dispatcher/db_msg_dispatcher.cpp` (`kCompareAndSetHashTable`, `kInsertHashTable`,
+`kAddListIndexHashTable`). Their **observable behavior** (not the script text) is pinned by
+`src/server_frame/test/server_frame_test_db_script_contract.cpp` (server_frame level, through the `rpc::db::hash_table`
+primitives) and `src/tools/rpc-unit-test/test/rpc_unit_test_db.cpp` (engine selftest level): read/write version
+consistency, version-0 forced overwrite, insert-only rejection, field merge and KL eviction. When a script changes,
+re-verify the new semantics against those cases and update the mock together. The in-memory backend must also
+reproduce the dispatcher-layer error mapping itself because the hash-table hook bypasses `db_msg_dispatcher::dispatch`
+(the hook seam sits inside the `rpc::db::hash_table` entry, so caller-side reply mappings such as insert's
+`CAS_FAILED` → `EN_DB_KEY_EXISTS` conversion are part of the mock's contract):
 
 - `EXPIRE`/`PERSIST` (`set_ttl`/`remove_ttl`) on a **missing key is a successful no-op** — production maps the plain
   integer reply (`0`) through `unpack_nothing` → `EN_SUCCESS`. Do NOT return not-found for these two ops.
-- CAS: `real_version == 0` (missing or never-versioned record) accepts any expected version and writes version 1; an
-  existing versioned record only accepts an equal version (success → `real_version + 1`), otherwise returns
-  `CAS_FAILED|<real_version>` mapped to `EN_DB_OLD_VERSION` **and writes the current version back** to the caller.
-- KV `set` (with or without CAS) merges only the caller message's **present fields** — `HSET` semantics, never replaces
-  the whole hash. `partly_get`/`HMGET` depend on field presence; the backend must be presence-aware.
+- CAS (`kv_set` with a version pointer → `kCompareAndSetHashTable`): accepted when the stored version is 0 (missing or
+  never-versioned record), when the expected version equals the stored one, **or when the expected version is 0
+  (ignore the CAS check and force the overwrite)**. On success the stored version becomes `real_version + 1` (never
+  `expected + 1`) and is written back; a mismatched non-zero expected version returns `CAS_FAILED|<real_version>`
+  mapped to `EN_DB_OLD_VERSION` **and writes the current version back** to the caller without touching the record.
+- Insert (`kv_insert` → `kInsertHashTable`): accepted only when the stored version is 0 — including a record that only
+  carries unversioned HSET data (no `CAS_VERSION` field in the hash). An already-versioned record returns
+  `EN_DB_KEY_EXISTS` (caller-mapped `CAS_FAILED`) with the stored version written back; on success the version starts
+  at 1.
+- KV writes (`set` with or without CAS, `insert`) merge only the caller message's **present fields** — `HSET`
+  semantics (`rpc::db::pack_message` HSETs `ListFields` output), never replacing the whole hash; the mock implements
+  this with `mock_db::merge_stored_data`. A versionless `set` never touches the stored CAS version. `partly_get`/
+  `HMGET` depend on field presence; the backend must be presence-aware.
 - `inc_field` follows `HINCRBY`: missing key/field starts from 0; field descriptor/numeric validation happens before the
-  hook.
-- KL index is monotonically increasing and **never reused**; trimming drops the smallest index once fields reach
-  `max_len + 1`. `get_by_indexs`/`HMGET` keep request order and a one-to-one result slot (missing entries are not
-  collapsed); `update_by_index` may upsert a field but must not touch `index_number`.
+  hook; the CAS version is never touched and the caller message is swapped to hold only the incremented field.
+- KL index comes from `HINCRBY` on the counter field: 1-based, monotonically increasing and **never reused**. The
+  counter field name in `kAddListIndexHashTable` must stay equal to `REDIS_LIST_INDEX_FIELD` (`"__index_number"`) —
+  the unpack path skips that field, and any other name leaks the counter as a data entry with a non-`'&'` value and
+  fails every KL read. The script counts every hash field (counter included), so an add at capacity
+  (`entries >= max_list_length`, also for `max_list_length == 0`) evicts exactly one entry — the **smallest index**,
+  which after `update_by_index`/`remove_by_index` is not necessarily the oldest insertion position — before appending
+  the next monotonic index. `get_by_indexs`/`HMGET` keep request order and a one-to-one result slot (missing entries
+  are not collapsed); `update_by_index` may upsert a field but must not touch the counter.
 - Writing (add_index/update_by_index) to a lazily-expired key starts a **fresh record without the stale TTL** — purge
   expired records via `find_live_*` before indexing the record map (matches the KV paths).
 

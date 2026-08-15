@@ -48,9 +48,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     value_type data_object;
     uint64_t saving_sequence;
     uint64_t saved_sequence;
+    // 被 remove_cache 显式移除后置位，禁止旧缓存句柄再保存（防止删除后记录被晚到的保存复活）
+    bool removed;
 
     explicit value_cache_type(const key_type &k)
-        : data_key(k), data_version(0), last_visit_timepoint(0), saving_sequence(0), saved_sequence(0) {}
+        : data_key(k), data_version(0), last_visit_timepoint(0), saving_sequence(0), saved_sequence(0), removed(false) {}
     value_cache_type(const value_cache_type &) = default;
     value_cache_type(value_cache_type &&) = default;
 
@@ -108,12 +110,17 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
   inline typename lru_map_type::value_type &back() { return pool_.back(); }
   inline void pop_front() { return pool_.pop_front(); }
   inline void pop_back() { return pool_.pop_back(); }
+  inline iterator erase(iterator pos) { return pool_.erase(pos); }
   inline size_type size() const { return pool_.size(); }
   inline void reserve(size_type s) { pool_.reserve(s); }
 
   bool remove_cache(const key_type &key) {
     auto iter = pool_.find(key);
     if (iter != pool_.end()) {
+      if (iter->second) {
+        // 标记失效，持有旧缓存指针的任务不允许再通过 await_save 写回
+        iter->second->removed = true;
+      }
       pool_.erase(iter);
       return true;
     }
@@ -165,6 +172,26 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
             RPC_RETURN_CODE(res);
           }
           task_type_trait::reset_task(out->pulling_task);
+        }
+        continue;
+      }
+
+      // 如果正在保存，则排到保存任务后面，避免读取到尚未持久化成功的临时状态。
+      // 保存失败后缓存会被淘汰，continue 后会重新从 DB 拉取。
+      if (!task_type_trait::empty(out->saving_task)) {
+        if (task_type_trait::is_exiting(out->saving_task)) {
+          // fallback, clear data, 理论上不会走到这个流程，前面就是reset掉
+          task_type_trait::reset_task(out->saving_task);
+        } else {
+          if (task_type_trait::get_task_id(out->saving_task) == ctx.get_task_context().task_id) {
+            break;
+          }
+          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, out->saving_task));
+          if (res < 0) {
+            out.reset();
+            RPC_RETURN_CODE(res);
+          }
+          task_type_trait::reset_task(out->saving_task);
         }
         continue;
       }
@@ -258,6 +285,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     }
 
+    if (inout->removed) {
+      // 缓存已被显式移除（记录已删除或被淘汰），禁止旧句柄再写回
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    }
+
     if (!fn) {
       FWLOGERROR("{} must be called with rpc function", "rpc_lru_cache_map<KEY,ALUE>.await_save");
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -269,6 +301,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     // 如果有其他任务正在保存，则需要等待那个任务完成。
     // 因为可能叠加很多任务，所以不能直接用拉取接口里得重试次数
     while (true) {
+      if (inout->removed) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+      }
+
       // 如果其他得任务得保存已经覆盖了自己得版本，直接成功返回
       if (inout->saved_sequence >= this_saving_seq) {
         RPC_RETURN_CODE(0);

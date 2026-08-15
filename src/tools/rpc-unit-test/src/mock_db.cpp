@@ -20,6 +20,12 @@
 
 #include <rpc/unit_test/mock_engine_bridge.h>
 
+// windows.h (pulled in through the dispatcher/uv headers) defines GetMessage as a macro, which
+// breaks the protobuf Reflection accessor below.
+#if defined(GetMessage)
+#  undef GetMessage
+#endif
+
 #include <algorithm>
 #include <memory>
 #include <string>
@@ -75,6 +81,47 @@ void set_integer_field(google::protobuf::Message &msg, const google::protobuf::F
       break;
     default:
       break;
+  }
+}
+
+// Overwrite in `dst` exactly the fields present in `src` (the field set rpc::db::pack_message would
+// HSET). Repeated fields cannot cross the pack path and are skipped, mirroring it.
+void copy_present_fields(google::protobuf::Message &dst, const google::protobuf::Message &src) {
+  const google::protobuf::Reflection *reflect = src.GetReflection();
+  std::vector<const google::protobuf::FieldDescriptor *> fds;
+  reflect->ListFields(src, &fds);
+  for (const google::protobuf::FieldDescriptor *fd : fds) {
+    if (fd->is_repeated()) {
+      continue;
+    }
+    switch (fd->cpp_type()) {
+      case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
+        reflect->SetInt32(&dst, fd, reflect->GetInt32(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
+        reflect->SetInt64(&dst, fd, reflect->GetInt64(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
+        reflect->SetUInt32(&dst, fd, reflect->GetUInt32(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
+        reflect->SetUInt64(&dst, fd, reflect->GetUInt64(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_ENUM:
+        reflect->SetEnumValue(&dst, fd, reflect->GetEnumValue(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_BOOL:
+        reflect->SetBool(&dst, fd, reflect->GetBool(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
+        reflect->SetString(&dst, fd, reflect->GetString(src, fd));
+        break;
+      case google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE:
+        reflect->MutableMessage(&dst, fd)->CopyFrom(reflect->GetMessage(src, fd));
+        break;
+      default:
+        break;
+    }
   }
 }
 }  // namespace
@@ -440,6 +487,9 @@ bool mock_db::handle(const rpc::db::hash_table::unit_test_request &req, int32_t 
     case op_type::kv_set:
       res = on_kv_set(req);
       break;
+    case op_type::kv_insert:
+      res = on_kv_insert(req);
+      break;
     case op_type::kv_inc_field:
       res = on_kv_inc_field(req);
       break;
@@ -615,21 +665,38 @@ int32_t mock_db::filter_partly_fields(const rpc::db::hash_table::unit_test_reque
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
+bool mock_db::merge_stored_data(const kv_record *record, const google::protobuf::Message &store,
+                                std::string &output) const {
+  if (nullptr != record && !record->data.empty()) {
+    std::unique_ptr<google::protobuf::Message> merged{store.New()};
+    if (merged->ParseFromString(record->data)) {
+      copy_present_fields(*merged, store);
+      if (merged->SerializeToString(&output)) {
+        return true;
+      }
+      return false;
+    }
+    // Stored bytes of another message type (or unparseable): fall back to a fresh record value.
+  }
+
+  return store.SerializeToString(&output);
+}
+
 int32_t mock_db::on_kv_set(const rpc::db::hash_table::unit_test_request &req) {
   if (nullptr == req.store) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  std::string data;
-  if (!req.store->SerializeToString(&data)) {
-    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
-  }
   const absl::string_view store_full_name = req.store->GetDescriptor()->full_name();
   const std::string type_name{store_full_name.data(), store_full_name.size()};
-
   kv_record *record = find_live_kv(req.key);
+
   if (nullptr == req.version) {
-    // Unconditional HSET: keep the CAS version untouched.
+    // Plain HSET: merge the present fields and keep the CAS version untouched.
+    std::string data;
+    if (!merge_stored_data(record, *req.store, data)) {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+    }
     uint64_t old_version = nullptr == record ? 0 : record->version;
     kv_record &target = kv_records_[std::string{req.key}];
     target.type_name = type_name;
@@ -638,21 +705,60 @@ int32_t mock_db::on_kv_set(const rpc::db::hash_table::unit_test_request &req) {
     return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   }
 
-  // CAS script semantics: a record with no CAS_VERSION (absent, or written only by unversioned
-  // HSET) accepts any expected version; otherwise the stored CAS_VERSION must match. On success the
-  // stored version is bumped (real_version + 1), not the expected one.
+  // kCompareAndSetHashTable: the write is accepted when the record carries no CAS version yet, when
+  // the expected version matches, or when the expected version is 0 (ignore the CAS check and force
+  // the overwrite). The stored version is always bumped from the real one (real_version + 1), never
+  // from the expected one; a conflict writes the stored version back without touching the record.
   uint64_t current_version = nullptr == record ? 0 : record->version;
-  if (current_version != 0 && current_version != *req.version) {
+  if (current_version != 0 && *req.version != 0 && current_version != *req.version) {
     *req.version = current_version;
     return PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION;
   }
 
-  kv_record &target = kv_records_[std::string{req.key}];
+  std::string data;
+  if (!merge_stored_data(record, *req.store, data)) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
   bool has_expire = nullptr == record ? false : record->has_expire;
   clock::time_point expire_at = nullptr == record ? clock::time_point{} : record->expire_at;
+  kv_record &target = kv_records_[std::string{req.key}];
   target.type_name = type_name;
   target.data = std::move(data);
   target.version = current_version + 1;
+  target.has_expire = has_expire;
+  target.expire_at = expire_at;
+  *req.version = target.version;
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+int32_t mock_db::on_kv_insert(const rpc::db::hash_table::unit_test_request &req) {
+  if (nullptr == req.store || nullptr == req.version) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
+  // kInsertHashTable: only a record without a CAS version can be inserted. An already-versioned
+  // record is rejected like the caller maps CAS_FAILED (EN_DB_KEY_EXISTS with the stored version
+  // written back) and left untouched; a record that only carries unversioned data (no CAS_VERSION
+  // field in the hash) still counts as absent for the script and is inserted into.
+  kv_record *record = find_live_kv(req.key);
+  uint64_t current_version = nullptr == record ? 0 : record->version;
+  if (current_version != 0) {
+    *req.version = current_version;
+    return PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS;
+  }
+
+  const absl::string_view store_full_name = req.store->GetDescriptor()->full_name();
+  const std::string type_name{store_full_name.data(), store_full_name.size()};
+  std::string data;
+  if (!merge_stored_data(record, *req.store, data)) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
+  }
+  bool has_expire = nullptr == record ? false : record->has_expire;
+  clock::time_point expire_at = nullptr == record ? clock::time_point{} : record->expire_at;
+  kv_record &target = kv_records_[std::string{req.key}];
+  target.type_name = type_name;
+  target.data = std::move(data);
+  target.version = current_version + 1;  // real_version is 0 here, so the version starts at 1
   target.has_expire = has_expire;
   target.expire_at = expire_at;
   *req.version = target.version;
@@ -803,13 +909,19 @@ int32_t mock_db::on_kl_add_index(const rpc::db::hash_table::unit_test_request &r
   // starts a fresh record without the stale TTL.
   (void)find_live_kl(req.key);
   kl_record &record = kl_records_[std::string{req.key}];
+  // kAddListIndexHashTable counts every hash field including the monotonic counter, so eviction runs
+  // when the data entries reach max_list_length (entries >= max, even for max 0: one entry is kept)
+  // and removes exactly one entry before the new index is allocated — the entry with the smallest
+  // index, which is not necessarily the oldest insertion position after update/remove operations.
+  if (!record.entries.empty() && record.entries.size() >= req.max_list_length) {
+    auto min_iter = std::min_element(record.entries.begin(), record.entries.end(),
+                                     [](const kl_entry &l, const kl_entry &r) { return l.index < r.index; });
+    record.entries.erase(min_iter);
+  }
   const absl::string_view store_full_name = req.store->GetDescriptor()->full_name();
   record.entries.push_back(
       kl_entry{record.next_index, std::string{store_full_name.data(), store_full_name.size()}, std::move(data)});
   ++record.next_index;
-  while (req.max_list_length > 0 && record.entries.size() > req.max_list_length) {
-    record.entries.pop_front();
-  }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 

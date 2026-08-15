@@ -138,10 +138,17 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
 - Delivery runs real dispatch **synchronously**; a resumed coroutine may immediately re-enter the engine
   (`inject_response`/`queue_response` `push_back` invalidates deque iterators). Never hold deque iterators across
   `trigger_event_on_forward_request`/`custom_resume`; use the two-phase `detail::drain_due_events`.
-- mock_db mirrors the Redis/Lua golden contract: `EXPIRE`/`PERSIST` on a **missing key is a successful no-op** (NOT an
-  error); CAS `real_version == 0` accepts any expected version and writes version 1; an existing record only accepts an
-  equal version (success → +1, conflict → `EN_DB_OLD_VERSION` + write back the current version); KV set merges only
-  present fields (never replaces the whole hash); KL index is monotonic and never reused; `inc_field` creates from 0.
+- mock_db mirrors the Redis/Lua golden contract (behavior pinned by
+  `src/server_frame/test/server_frame_test_db_script_contract.cpp` at the server_frame level and
+  `src/tools/rpc-unit-test/test/rpc_unit_test_db.cpp` at the engine level; when a script changes, keep the mock and the
+  mirroring cases in sync): `EXPIRE`/`PERSIST` on a **missing key is a successful no-op** (NOT an error); a
+  CAS set accepts a record without a version, an equal expected version, **or expected version 0 (ignore the CAS check
+  and force the overwrite — the stored version still bumps from the real one)**; otherwise the conflict returns
+  `EN_DB_OLD_VERSION` and writes the stored version back; insert (`op_type::kv_insert`) rejects an already-versioned
+  record with `EN_DB_KEY_EXISTS`; every write path (HSET/CAS/insert) merges only the fields present in the store
+  message (never replaces the whole hash); KL add allocates 1-based monotonic never-reused indexes and evicts exactly
+  the smallest index at `max_list_length` (0 keeps one entry); `inc_field` creates from 0 and never touches the CAS
+  version.
 - Transport barrier: an outbound record captured at generation `N` is consumable at `N+2` (one full pump between
   capture and consume), so the calling task has already registered its waiter before the mock responds.
 - Generated mock (`<service>::mock`, `<db>::mock`) is compiled into server_frame/service TUs and must **not link** the

@@ -86,16 +86,8 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
       CASE_EXPECT_TRUE(false);
     }
 
-    // Stale CAS: rejected and the stored version is reported back.
-    table->set_counter(8);
-    uint64_t stale_version = 0;
-    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
-        ctx, kTestDbChannel, "ut:kv:cas", rpc::shared_abstract_message<google::protobuf::Message>{table},
-        &stale_version));
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, res);
-    CASE_EXPECT_EQ(1, static_cast<int>(stale_version));
-
     // Matching CAS: applied and the version advances.
+    table->set_counter(8);
     uint64_t matched_version = 1;
     res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
         ctx, kTestDbChannel, "ut:kv:cas", rpc::shared_abstract_message<google::protobuf::Message>{table},
@@ -103,6 +95,18 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
     CASE_EXPECT_EQ(0, res);
     CASE_EXPECT_EQ(2, static_cast<int>(matched_version));
 
+    // Stale CAS (expected 1 while 2 is stored): rejected and the stored version is reported back.
+    // An expected version of 0 is never stale - it forces the overwrite, see below.
+    table->set_counter(9999);
+    uint64_t stale_version = 1;
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
+        ctx, kTestDbChannel, "ut:kv:cas", rpc::shared_abstract_message<google::protobuf::Message>{table},
+        &stale_version));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, res);
+    CASE_EXPECT_EQ(2, static_cast<int>(stale_version));
+
+    // The conflicting write did not land.
+    table->set_counter(8);
     res = RPC_AWAIT_CODE_RESULT(
         rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:cas", output, nullptr));
     CASE_EXPECT_EQ(0, res);
@@ -110,6 +114,26 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
     if (output->message) {
       CASE_EXPECT_EQ(
           8, static_cast<int>(static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get()).counter()));
+    }
+
+    // Expected version 0 ignores the CAS check entirely (except_version == 0 branch of the script):
+    // the versioned record is overwritten regardless of its stored version, and the stored version
+    // still bumps from the real one (2 -> 3), never from the expected one.
+    table->set_counter(9);
+    uint64_t forced_version = 0;
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
+        ctx, kTestDbChannel, "ut:kv:cas", rpc::shared_abstract_message<google::protobuf::Message>{table},
+        &forced_version));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(3, static_cast<int>(forced_version));
+
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:cas", output, nullptr));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(3, static_cast<int>(output->version));
+    if (output->message) {
+      CASE_EXPECT_EQ(
+          9, static_cast<int>(static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get()).counter()));
     }
 
     // A versionless record (only written by unversioned HSET) accepts any expected version and
@@ -137,9 +161,82 @@ CASE_TEST(rpc_unit_test, db_kv_set_get_all_and_cas_version) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  CASE_EXPECT_EQ(5, static_cast<int>(test.db().calls(op_type::kv_set)));
-  CASE_EXPECT_EQ(2, static_cast<int>(test.db().calls(op_type::kv_get_all)));
-  CASE_EXPECT_EQ(2, static_cast<int>(test.db().get_version("ut:kv:cas")));
+  CASE_EXPECT_EQ(6, static_cast<int>(test.db().calls(op_type::kv_set)));
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls(op_type::kv_get_all)));
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().get_version("ut:kv:cas")));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// kInsertHashTable contract: only a key without a stored CAS version can be inserted; a duplicate
+// fails with EN_DB_KEY_EXISTS (the caller's mapping of the script's CAS_FAILED reply) with the
+// stored version reported back; a record written only by the unversioned set still counts as
+// absent for the script and accepts the insert.
+CASE_TEST(rpc_unit_test, db_kv_insert_only_contract) {
+  atfw::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+
+  auto task = test.run_task("db_kv_insert", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+    rpc::shared_message<rpc_unit_test::RpcUnitTestTable> table{ctx};
+    table->set_name("insert-only");
+    table->set_counter(11);
+
+    uint64_t version = 0;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(
+        ctx, kTestDbChannel, "ut:kv:insert", rpc::shared_abstract_message<google::protobuf::Message>{table}, version));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(1, static_cast<int>(version));
+
+    // The record now carries a CAS version: rejected without modifying the stored data.
+    table->set_counter(12);
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(
+        ctx, kTestDbChannel, "ut:kv:insert", rpc::shared_abstract_message<google::protobuf::Message>{table}, version));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS, res);
+    CASE_EXPECT_EQ(1, static_cast<int>(version));
+
+    auto output = atfw::component::memory::stl::make_strong_rc<db_key_value_message_result_t>();
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::hash_table::key_value::get_all(ctx, kTestDbChannel, "ut:kv:insert", output, nullptr));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(1, static_cast<int>(output->version));
+    if (output->message) {
+      CASE_EXPECT_EQ(11,
+                     static_cast<int>(static_cast<const rpc_unit_test::RpcUnitTestTable &>(*output->message->get())
+                                          .counter()));
+    } else {
+      CASE_EXPECT_TRUE(false);
+    }
+
+    // No CAS_VERSION field was ever written by the unversioned HSET: the insert script still reads
+    // version 0 and accepts the insert into the existing data.
+    table->set_name("insert-unversioned");
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::set(
+        ctx, kTestDbChannel, "ut:kv:insert-unversioned", rpc::shared_abstract_message<google::protobuf::Message>{table},
+        nullptr));
+    CASE_EXPECT_EQ(0, res);
+
+    table->set_counter(21);
+    res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_value::insert(
+        ctx, kTestDbChannel, "ut:kv:insert-unversioned", rpc::shared_abstract_message<google::protobuf::Message>{table},
+        version));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(1, static_cast<int>(version));
+    RPC_RETURN_CODE(0);
+  });
+  if (task.empty()) {
+    CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_FALSE(result.hard_timed_out);
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls(op_type::kv_insert)));
+  CASE_EXPECT_EQ(1, static_cast<int>(test.db().calls(op_type::kv_set)));
   CASE_EXPECT_EQ(0, test.stop());
 }
 
@@ -373,6 +470,89 @@ CASE_TEST(rpc_unit_test, db_key_list_add_get_update_remove) {
   CASE_EXPECT_EQ(0, result.result_code);
 
   CASE_EXPECT_EQ(3, static_cast<int>(test.db().calls(op_type::kl_add_index)));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// kAddListIndexHashTable eviction contract: the script counts every hash field including the
+// monotonic counter, so an add at capacity (entries >= max_list_length, also for max 0) evicts
+// exactly one entry - the smallest index, not the oldest insertion position - before appending the
+// next monotonic index.
+CASE_TEST(rpc_unit_test, db_kl_add_index_eviction_contract) {
+  atfw::testing::runtime test;
+  if (!start_db_runtime(test)) {
+    return;
+  }
+
+  auto task =
+      test.run_task("db_kl_eviction", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
+        rpc::shared_message<rpc_unit_test::RpcUnitTestListEntry> entry{ctx};
+        std::vector<db_key_list_message_result_t> output;
+
+        for (int i = 0; i < 3; ++i) {
+          entry->set_id(100 + i);
+          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+              ctx, kTestDbChannel, "ut:kl:evict", 10, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+          CASE_EXPECT_EQ(0, res);
+        }
+
+        // Reorder so the smallest index sits at the newest insertion position: remove index 1 and
+        // re-create it through update_by_index (which appends the missing index at the back).
+        uint64_t removed[] = {1};
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::remove_by_index(
+            ctx, kTestDbChannel, "ut:kl:evict", gsl::span<uint64_t>{removed}));
+        CASE_EXPECT_EQ(0, res);
+        entry->set_payload("recreated");
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::update_by_index(
+            ctx, kTestDbChannel, "ut:kl:evict", 1, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+        CASE_EXPECT_EQ(0, res);
+
+        // At capacity the add evicts the smallest index (1) and appends a fresh monotonic one (4).
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+            ctx, kTestDbChannel, "ut:kl:evict", 3, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+        CASE_EXPECT_EQ(0, res);
+
+        uint64_t probe[] = {1, 2, 3, 4};
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::get_by_indexs(
+            ctx, kTestDbChannel, "ut:kl:evict", gsl::span<uint64_t>{probe}, output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(4, static_cast<int>(output.size()));
+        if (output.size() == 4) {
+          CASE_EXPECT_FALSE(!!output[0].message);  // index 1 was evicted
+          CASE_EXPECT_TRUE(!!output[1].message);   // index 2 survived
+          CASE_EXPECT_TRUE(!!output[2].message);   // index 3 survived
+          CASE_EXPECT_TRUE(!!output[3].message);   // index 4 was appended
+        }
+
+        // max_list_length 0 still counts the counter field: exactly one entry is kept.
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+            ctx, kTestDbChannel, "ut:kl:evict-max0", 0, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+        CASE_EXPECT_EQ(0, res);
+        res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
+            ctx, kTestDbChannel, "ut:kl:evict-max0", 0, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+        CASE_EXPECT_EQ(0, res);
+        res = RPC_AWAIT_CODE_RESULT(
+            rpc::db::hash_table::key_list::get_all(ctx, kTestDbChannel, "ut:kl:evict-max0", output, nullptr));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_EQ(1, static_cast<int>(output.size()));
+        if (output.size() == 1) {
+          // The evicted index is never reused: the survivor carries the second allocated index.
+          CASE_EXPECT_EQ(2, static_cast<int>(output[0].list_index));
+        }
+        RPC_RETURN_CODE(0);
+      });
+  if (task.empty()) {
+    CASE_MSG_INFO() << "run_task failed: " << task.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto result = test.wait(task, std::chrono::seconds{5});
+  CASE_EXPECT_FALSE(result.hard_timed_out);
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(6, static_cast<int>(test.db().calls(op_type::kl_add_index)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

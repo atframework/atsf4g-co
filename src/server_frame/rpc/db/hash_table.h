@@ -43,6 +43,9 @@ struct ATFW_UTIL_SYMBOL_VISIBLE unit_test_request {
     kv_get_all = 0,
     kv_partly_get,
     kv_set,
+    // Insert-only write (kInsertHashTable); reported separately from kv_set because the two scripts
+    // disagree on an existing record: kv_set with version 0 forces the overwrite, kv_insert fails.
+    kv_insert,
     kv_inc_field,
     kl_get_all,
     kl_get_by_indexs,

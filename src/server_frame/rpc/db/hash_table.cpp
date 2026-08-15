@@ -534,7 +534,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
   reflect->ListFields(*store, &fds);
 
   version = 0;
-  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_set, {
+  RPC_DB_UNIT_TEST_HOOK_CALL(unit_test_request::op_type::kv_insert, {
     __ut_req.store = store.get();
     __ut_req.version = &version;
   })

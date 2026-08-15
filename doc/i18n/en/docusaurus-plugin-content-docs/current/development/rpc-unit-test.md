@@ -200,11 +200,16 @@ overridden per rule (e.g. explicitly mark a stream as `fail` for negative assert
   pump generations (consistent across SS and DNS).
 - Engines deliver in **due order, not FIFO**; delivery resumes coroutines synchronously and a task may re-enter the
   engine (two-phase drain, see `src/tools/rpc-unit-test/src/detail/pending_drain.h`).
-- The DB in-memory backend aligns with the Redis/Lua golden contract: `EXPIRE`/`PERSIST` on a missing key is a
-  successful no-op (not an error); CAS with `real_version == 0` accepts any expected version and writes version 1; an
-  existing record only accepts an equal version (success → +1, conflict → `EN_DB_OLD_VERSION` and write back the
-  current version); KV set merges only present fields; KL indexes are monotonic and never reused; `inc_field` creates
-  from 0.
+- The DB in-memory backend aligns with the Redis/Lua golden contract (the behavior contract is pinned by
+  `src/server_frame/test/server_frame_test_db_script_contract.cpp` and the engine selftest): `EXPIRE`/`PERSIST` on a
+  missing key is a
+  successful no-op (not an error); a CAS set accepts a record without a version, an equal expected version, or
+  **an expected version of 0 (ignore the CAS check and force the overwrite; the stored version still bumps from the
+  real one)**, otherwise the conflict returns `EN_DB_OLD_VERSION` and writes the stored version back; insert
+  (`op_type::kv_insert`) rejects an already-versioned record with `EN_DB_KEY_EXISTS`; every write path
+  (HSET/CAS/insert) merges only the fields present in the store message; KL indexes start at 1, stay monotonic and are
+  never reused, and reaching `max_list_length` evicts the single smallest index (0 keeps one entry); `inc_field`
+  creates from 0 and never touches the CAS version.
 - Deeper invariants for modifying the engines/hook seams live in
   `.agents/skills/rpc-unit-test/references/engine-invariants.md`.
 

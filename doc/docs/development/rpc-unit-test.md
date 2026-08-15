@@ -187,9 +187,12 @@ DB 覆盖顺序：生成层 typed handler → 引擎层 per-table 回调 → 内
 - `delay_generations`：`0` 表示在观察到请求的那个 pump 完成；`N` 表示额外延迟 `N` 个完整 pump（SS/DNS 一致）。
 - 引擎投递按**到期顺序**而非 FIFO；投递会同步恢复协程，任务可重入引擎（两阶段 drain，见
   `src/tools/rpc-unit-test/src/detail/pending_drain.h`）。
-- DB 内存后端对齐 Redis/Lua golden contract：`EXPIRE`/`PERSIST` 对缺失 key 是成功 no-op（非错误）；CAS
-  `real_version == 0` 接受任意期望版本并写入版本 1；已有记录只接受相等版本（成功 +1，冲突返回
-  `EN_DB_OLD_VERSION` 并回写当前版本）；KV set 只合并 present fields；KL 索引单调不复用；`inc_field` 从 0 创建。
+- DB 内存后端对齐 Redis/Lua golden contract（脚本行为契约由 `src/server_frame/test/server_frame_test_db_script_contract.cpp`
+  与引擎 selftest 用例固化）：`EXPIRE`/`PERSIST` 对缺失 key 是成功 no-op（非错误）；CAS set 接受无版本记录、相等期望版本、或
+  **期望版本 0（忽略版本比较强制覆盖，存储版本仍按真实版本 +1 递增）**，否则冲突返回 `EN_DB_OLD_VERSION`
+  并回写存储版本；insert（`op_type::kv_insert`）拒绝已有版本的记录并返回 `EN_DB_KEY_EXISTS`；所有写路径
+  （HSET/CAS/insert）只合并 store 消息中 present 的字段；KL 索引 1 起单调不复用，达到 `max_list_length` 时
+  按最小索引淘汰一条（0 表示仅保留一条）；`inc_field` 从 0 创建且不动 CAS 版本。
 - 修改引擎/hook seam 的更深入不变量见 `.agents/skills/rpc-unit-test/references/engine-invariants.md`。
 
 ## 外部依赖离线矩阵

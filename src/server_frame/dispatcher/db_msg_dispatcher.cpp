@@ -127,6 +127,68 @@ std::string get_stable_host_id(int32_t version) {
 
   return hash;
 }
+
+// Lua scripts injected into every DB connection (SCRIPT LOAD). They are the authoritative write
+// contract of the hash-table backend: their observable behavior is pinned by
+// src/server_frame/test/server_frame_test_db_script_contract.cpp and the rpc-unit-test selftest, and
+// mock_db (the offline in-memory mirror) must follow any change here.
+constexpr const char *kDbScriptCompareAndSetHashTable = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
+local real_version = 0
+if real_version_str ~= false and real_version_str ~= nil then
+  real_version = tonumber(real_version_str)
+end
+local except_version = tonumber(ARGV[2])
+local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
+if real_version == 0 or except_version == real_version or except_version == 0 then
+  ARGV[2] = real_version + 1;
+  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
+  return  { ok = tostring(ARGV[2]) }
+else
+  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
+end)";
+
+constexpr const char *kDbScriptInsertHashTable = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
+local real_version = 0
+if real_version_str ~= false and real_version_str ~= nil then
+  real_version = tonumber(real_version_str)
+end
+local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
+if real_version == 0 then
+  ARGV[2] = real_version + 1;
+  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
+  return  { ok = tostring(ARGV[2]) }
+else
+  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
+end)";
+
+// The monotonic counter field must match REDIS_LIST_INDEX_FIELD in rpc/db/db_utils.cpp: the unpack
+// path skips that field when reading the list back.
+constexpr const char *kDbScriptAddListIndexHashTable = R"(local max_len = tonumber(ARGV[1])
+local index_field = "__index_number"
+
+local fields = redis.call('HKEYS', KEYS[1])
+local current_len = #fields
+
+if current_len >= max_len + 1 then
+    local min_idx = nil
+    for _, field in ipairs(fields) do
+        if field ~= index_field then
+            local num = tonumber(field)
+            if num ~= nil then
+                if min_idx == nil or num < min_idx then
+                    min_idx = num
+                end
+            end
+        end
+    end
+    if min_idx ~= nil then
+        redis.call('HDEL', KEYS[1], tostring(min_idx))
+    end
+end
+
+local new_idx = redis.call('HINCRBY', KEYS[1], index_field, 1)
+redis.call('HSET', KEYS[1], tostring(new_idx), ARGV[2])
+return { ok = tostring(new_idx) })";
 }  // namespace
 
 SERVER_FRAME_API db_msg_dispatcher::db_msg_dispatcher()
@@ -386,77 +448,26 @@ void db_msg_dispatcher::log_info_fn(const char *content) { WCLOGINFO(log_categor
 
 int db_msg_dispatcher::script_load(redisAsyncContext *c, script_type type) {
   // load lua script
-  int status;
-  const char *script;
+  const char *script = nullptr;
   switch (type) {
-    case script_type::kCompareAndSetHashTable: {
-      script = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
-local real_version = 0
-if real_version_str ~= false and real_version_str ~= nil then
-  real_version = tonumber(real_version_str)
-end
-local except_version = tonumber(ARGV[2])
-local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
-if real_version == 0 or except_version == real_version or except_version == 0 then
-  ARGV[2] = real_version + 1;
-  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
-  return  { ok = tostring(ARGV[2]) }
-else
-  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
-end)";
+    case script_type::kCompareAndSetHashTable:
+      script = kDbScriptCompareAndSetHashTable;
       break;
-    }
-    case script_type::kInsertHashTable: {
-      script = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
-local real_version = 0
-if real_version_str ~= false and real_version_str ~= nil then
-  real_version = tonumber(real_version_str)
-end
-local unpack_fn = table.unpack or unpack -- Lua 5.1 - 5.3
-if real_version == 0 then
-  ARGV[2] = real_version + 1;
-  redis.call('HSET', KEYS[1], unpack_fn(ARGV))
-  return  { ok = tostring(ARGV[2]) }
-else
-  return  { err = 'CAS_FAILED|' .. tostring(real_version) }
-end)";
+    case script_type::kInsertHashTable:
+      script = kDbScriptInsertHashTable;
       break;
-    }
-    case script_type::kAddListIndexHashTable: {
-      script = R"(local max_len = tonumber(ARGV[1])
-local index_field = "index_number"
-
-local fields = redis.call('HKEYS', KEYS[1])
-local current_len = #fields
-
-if current_len >= max_len + 1 then
-    local min_idx = nil
-    for _, field in ipairs(fields) do
-        if field ~= index_field then
-            local num = tonumber(field)
-            if num ~= nil then
-                if min_idx == nil or num < min_idx then
-                    min_idx = num
-                end
-            end
-        end
-    end
-    if min_idx ~= nil then
-        redis.call('HDEL', KEYS[1], tostring(min_idx))
-    end
-end
-
-local new_idx = redis.call('HINCRBY', KEYS[1], index_field, 1)
-redis.call('HSET', KEYS[1], tostring(new_idx), ARGV[2])
-return { ok = tostring(new_idx) })";
+    case script_type::kAddListIndexHashTable:
+      script = kDbScriptAddListIndexHashTable;
       break;
-    }
     default:
-      return 0;
+      break;
+  }
+  if (nullptr == script) {
+    return 0;
   }
 
-  status = redisAsyncCommand(c, script_callback, reinterpret_cast<void *>(static_cast<intptr_t>(type)),
-                             "SCRIPT LOAD %s", script);
+  int status = redisAsyncCommand(c, script_callback, reinterpret_cast<void *>(static_cast<intptr_t>(type)),
+                                 "SCRIPT LOAD %s", script);
   if (REDIS_OK != status) {
     FWLOGERROR("send db msg failed, status: {}, msg: {}", status, c->errstr);
   }
