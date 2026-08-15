@@ -20,7 +20,8 @@ project_add_rpc_unit_test(
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_db_script_contract.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_cs_session.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_resource.cpp"
-  FEATURES SS DB CS RESOURCE
+          "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_rpc_lru_cache.cpp"
+  FEATURES SS DB CS RESOURCE DNS
   LABELS fast
   TIMEOUT 120)
 

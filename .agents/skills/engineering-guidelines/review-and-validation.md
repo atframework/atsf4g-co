@@ -14,6 +14,9 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 
 - Check naming, ownership/lifetime, return-code handling, logging, include wrappers, generated-code boundaries,
   header inline/API ABI rules, and helper usage in the same pass.
+- For every `rpc::async_invoke` call, enforce the no-reference-capture lifetime rule in
+  [`cpp-style.md`](cpp-style.md); inspect both default and explicit lambda captures instead of assuming the enclosing
+  function remains alive until the spawned task completes.
 - Prefer existing helper APIs, project error codes, and local patterns over ad hoc alternatives.
 - Keep comments useful and current; remove placeholder `TODO` text when implementing the placeholder.
 - Treat unconditional touch or same-content overwrite of target-consumed code/resources as a blocking build-performance

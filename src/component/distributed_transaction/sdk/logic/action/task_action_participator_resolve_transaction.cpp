@@ -1,13 +1,17 @@
 // Copyright 2022 atframework
 // @brief Created by owent on 2022-03-01 11:45:04
 
-#include "task_action_participator_resolve_transaction.h"
+#include "logic/action/task_action_participator_resolve_transaction.h"
 
+// clang-format off
 #include <config/compiler/protobuf_prefix.h>
+// clang-format on
 
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
+// clang-format off
 #include <config/compiler/protobuf_suffix.h>
+// clang-format on
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -22,7 +26,7 @@
 #include <dispatcher/task_manager.h>
 
 #include "rpc/transaction/transaction_api.h"
-#include "transaction_participator_handle.h"
+#include "transaction_participator_handle.h"  // NOLINT(build/include_subdir)
 
 namespace atframework {
 namespace distributed_system {
@@ -58,6 +62,7 @@ task_action_participator_resolve_transaction::operator()() {
     for (auto& trans_data : param_.submmit_transactions) {
       int32_t res = 0;
       const char* operation_name = "[NO RPC]";
+      // 单次调用，失败由外层 acknowledge timer 到期后重新拉起整个 task 重试
       if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING == trans_data->metadata().status()) {
         res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_participator(
             get_shared_context(), param_.participantor->get_participator_key(), *trans_data->mutable_metadata()));
@@ -130,8 +135,9 @@ DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction
 
 DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction::on_failed() {
   if (param_.participantor) {
-    FWLOGINFO("participator {} do task_action_participator_resolve_transaction success",
-              param_.participantor->get_participator_key());
+    FWLOGINFO("participator {} do task_action_participator_resolve_transaction failed, res: {}({})",
+              param_.participantor->get_participator_key(), get_result(),
+              protobuf_mini_dumper_get_error_msg(get_result()));
   }
   return get_result();
 }

@@ -17,6 +17,7 @@
 // clanfg-format on
 
 #include <gsl/select-gsl.h>
+#include <nostd/function_ref.h>
 #include <time/time_utility.h>
 
 #include <config/server_frame_build_feature.h>
@@ -52,14 +53,16 @@ class transaction_participator_handle
   using storage_const_ptr_type = atfw::util::memory::strong_rc_ptr<const storage_type>;
 
   struct ATFW_UTIL_SYMBOL_VISIBLE vtable_type {
-    // 事务执行(Do)回调
+    // 事务执行(Do)回调。必须幂等：框架保证同一事务成功执行至多一次，但失败重试会重复调用
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)> do_event;
 
-    // 事务回滚(Undo)回调,仅仅在 force_commit=true 时才会触发
+    // 事务回滚(Undo)回调,仅仅在 force_commit=true 时才会触发。
+    // force_commit 是 best-effort 模型：没有协调者记录、参与者持久状态和定时恢复，
+    // 因此 undo_event 必须支持在未执行过 do_event 时按 no-op 成功返回，并且必须可重放（幂等）。
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
         undo_event;
 
-    // 执行预检查的回调。
+    // 执行预检查的回调。callback 内不允许修改 storage 的 transaction_uuid/时间字段。
     // 如果允许发起者重试请设置 transaction_participator_failure_reason.allow_retry = true
     // 如果是锁被抢占请 transaction_participator_failure_reason.locked_resource 设置为被抢占的资源,
     //   并且设置 transaction_participator_failure_reason.allow_retry = true
@@ -71,6 +74,8 @@ class transaction_participator_handle
 
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
         on_start_running;
+    // 事务离开 running 集合时触发（含 resolve 时协调者记录 NOTFOUND 的本地清理路径）。
+    // 注意 NOTFOUND 清理只触发本回调，不会触发 on_finished/on_rejected（事务没有全局终态）。
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
         on_finish_running;
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
@@ -110,7 +115,7 @@ class transaction_participator_handle
    *
    * @param ctx rpc context used to create new task
    * @param timepoint current timepoint
-   * @return error code or transaction count to resolve
+   * @return 0, or error code of creating/starting the auto resolve task
    */
   DISTRIBUTED_TRANSACTION_SDK_API int32_t tick(rpc::context& ctx, atfw::util::time::time_utility::raw_time_t timepoint);
 
@@ -127,7 +132,16 @@ class transaction_participator_handle
   /**
    * @brief Prepare for transaction
    * @note If force_commit = true, then vtable.do_event(...) will be called immediately
-   *   when 0 == vtable.check_prepare(...)
+   *   when 0 == vtable.check_prepare(...).
+   *   force_commit 是 best-effort 模型，不是可容灾 2PC：
+   *   - 参与者不进入 running/finished 集合，不创建 resolve timer，也没有协调者记录；
+   *   - SDK 资源锁（lock_resource/check_lock/lock）对 force_commit 事务不生效；
+   *   - 生命周期回调顺序为 on_start_running -> do_event -> on_finish_running，
+   *     仅当 do_event 成功时才追加 on_finished -> on_commited，do_event 失败时不触发 on_finished/on_rejected；
+   *   - 补偿（undo）只存在于 client 本次调用的有界重试内，client/参与者故障可能永久部分执行，
+   *     因此 force_commit 的 do_event/undo_event 都必须幂等，undo_event 必须支持 no-op 和重放。
+   *   普通模式下重复 prepare 是幂等的：running 中的事务返回现有对象，已 finished 的事务返回 finished 副本，
+   *   不会覆盖正在执行终态动作的事务，也不会重新触发生命周期事件。
    *
    * @param ctx rpc context
    * @param request RPC request
@@ -172,7 +186,9 @@ class transaction_participator_handle
    * @param preemption_transaction output current preemption transaction of this resource when return
    * EN_TRANSACTION_RESOURCE_PREEMPTED
    *
-   * @note We use Wound-Wait to resolve deadlock
+   * @note We use Wound-Wait to resolve deadlock. 被抢占（wound）的事务会被记录并禁止后续 commit。
+   *   check_lock 与后续 add_running_transcation 的自动 lock 之间允许切出（check_prepare 可 await），
+   *   调用方必须容忍 wound 在锁登记前才生效，被抢占者以 EN_TRANSACTION_RESOURCE_PREEMPTED 失败。
    * @see http://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/8-recv+serial/deadlock-compare.html
    *
    * @return 0 or error code
@@ -245,13 +261,28 @@ class transaction_participator_handle
    */
   DISTRIBUTED_TRANSACTION_SDK_API storage_ptr_type get_locker(const std::string& resource) const noexcept;
 
+  // running 事务条目：事务 storage 与其全部运行时标记同条目同生命周期，随 running 集合创建/销毁，
+  // 避免多个平行容器（wound/action-stage/inflight 标记）与 running 集合之间的隐式生命周期关联
+  struct running_transaction_entry {
+    storage_ptr_type storage;
+    // 正在执行终态流程（do_event/迁移到 finished）的方向，用于 per-transaction 序列化；
+    // CREATED 表示无在途流程（所有终态方向枚举值均大于 CREATED）
+    ::atfw::distributed_system::EnDistibutedTransactionStatus inflight_terminal_direction =
+        ::atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED;
+    // 已进入本地终态动作阶段：resolve_times 只在阶段首次进入时重置一次，阶段内的重复进入
+    // （RPC 重发/timer）不再重置，保证本地动作预算在任意驱动源下都有界
+    bool local_action_stage_entered = false;
+    // 被 Wound-Wait 抢占锁的事务，禁止其后续 commit
+    bool wounded = false;
+  };
+
   /**
    * @brief Get all running transactions
    *
    * @return running transactions
    */
-  DISTRIBUTED_TRANSACTION_SDK_API const std::unordered_map<std::string, storage_ptr_type>& get_running_transactions()
-      const noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API const std::unordered_map<std::string, running_transaction_entry>&
+  get_running_transactions() const noexcept;
 
   /**
    * @brief Get all finished transactions which are not removed yet
@@ -290,11 +321,20 @@ class transaction_participator_handle
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_finished_transaction_result(
       rpc::context& ctx, const storage_ptr_type& transaction_ptr, int32_t result);
 
+  // 统一的截止时间队列行为：running 阶段查询协调者并执行本地终态动作，finished 阶段重发 participant ack。
+  // 事务同一时刻只会处于其中一种阶段，因此同一 UUID 至多一条 timer，由 action 区分行为
+  enum class resolve_timer_action_type : int32_t {
+    query = 0,
+    acknowledge = 1,
+  };
+
   struct storage_resolve_timer_type {
-    inline explicit storage_resolve_timer_type(const storage_type& storage)
-        : timepoint{protobuf_to_system_clock(storage.resolve_timepoint())},
+    inline explicit storage_resolve_timer_type(resolve_timer_action_type act, const storage_type& storage)
+        : action(act),
+          timepoint{protobuf_to_system_clock(storage.resolve_timepoint())},
           transaction_uuid(storage.metadata().transaction_uuid()) {}
 
+    // action 不参与排序：(timepoint, uuid) 已唯一确定条目（uuid 在队列中唯一），uuid 兼作确定性 tie-break
     inline friend bool operator<(const storage_resolve_timer_type& l, const storage_resolve_timer_type& r) noexcept {
       if (l.timepoint != r.timepoint) {
         return l.timepoint < r.timepoint;
@@ -304,15 +344,39 @@ class transaction_participator_handle
     }
 
     inline friend bool operator==(const storage_resolve_timer_type& l, const storage_resolve_timer_type& r) noexcept {
-      return l.timepoint == r.timepoint && l.transaction_uuid == r.transaction_uuid;
+      return l.action == r.action && l.timepoint == r.timepoint && l.transaction_uuid == r.transaction_uuid;
     }
 
     inline friend bool operator!=(const storage_resolve_timer_type& l, const storage_resolve_timer_type& r) noexcept {
-      return l.timepoint != r.timepoint || l.transaction_uuid != r.transaction_uuid;
+      return l.action != r.action || l.timepoint != r.timepoint || l.transaction_uuid != r.transaction_uuid;
     }
 
+    resolve_timer_action_type action;
     atfw::util::time::time_utility::raw_time_t timepoint;
     std::string transaction_uuid;
+  };
+
+  // 截止时间队列：(timepoint, uuid) 有序集合 + uuid 唯一索引。insert/erase 必须同时维护两者，
+  // 封装为单一对象后不再暴露分离的容器，消除两者之间的隐式同步关系
+  struct resolve_timer_queue_type {
+    // 同一 UUID 至多一条 timer：insert 会先替换同 UUID 的旧 timer（含跨阶段残留），再按到期时间入队
+    DISTRIBUTED_TRANSACTION_SDK_API void insert_or_replace(resolve_timer_action_type action,
+                                                           const storage_type& storage);
+    DISTRIBUTED_TRANSACTION_SDK_API void erase(const std::string& transaction_uuid);
+    // 按值擦除：仅当索引中仍是同一条 timer（timepoint/action 一致）时才擦除，避免误删已替换的新 timer
+    DISTRIBUTED_TRANSACTION_SDK_API void erase(const storage_resolve_timer_type& timer);
+    DISTRIBUTED_TRANSACTION_SDK_API void clear();
+
+    inline bool empty() const noexcept { return timers_.empty(); }
+
+    // 触发所有的已到期定时器，自动移除并触发回调
+    DISTRIBUTED_TRANSACTION_SDK_API void trigger_due(
+        atfw::util::time::time_utility::raw_time_t timepoint,
+        ::atfw::util::nostd::function_ref<bool(const storage_resolve_timer_type& timer)> fn);
+
+   private:
+    std::set<storage_resolve_timer_type> timers_;
+    std::unordered_map<std::string, storage_resolve_timer_type> index_;
   };
 
   void* private_data_;
@@ -320,8 +384,8 @@ class transaction_participator_handle
 
   std::string participator_key_;
   atfw::util::memory::strong_rc_ptr<vtable_type> vtable_;
-  std::set<storage_resolve_timer_type> resolve_timers_;
-  std::unordered_map<std::string, storage_ptr_type> running_transactions_;
+  resolve_timer_queue_type resolve_timer_queue_;
+  std::unordered_map<std::string, running_transaction_entry> running_transactions_;
   std::unordered_map<std::string, storage_ptr_type> transaction_locks_;
   std::unordered_map<std::string, storage_ptr_type> finished_transactions_;
 

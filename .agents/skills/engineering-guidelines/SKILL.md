@@ -12,7 +12,7 @@ sibling section you need so unrelated rules do not bloat your context.
 
 | File                                                     | Load when                                                  |
 | -------------------------------------------------------- | ---------------------------------------------------------- |
-| [cpp-style.md](cpp-style.md)                             | C++, protobuf, header inline, template visibility, API ABI  |
+| [cpp-style.md](cpp-style.md)                             | C++, protobuf, async lambda lifetime, header/API ABI        |
 | [cmake-and-generated.md](cmake-and-generated.md)         | Editing CMake, `.proto`, templates, or generated code      |
 | [service-functions-cmake.md](service-functions-cmake.md) | Service/component/protocol/SDK CMake helpers               |
 | [code-generation.md](code-generation.md)                 | `.proto`, Mako templates, generated task/RPC code          |

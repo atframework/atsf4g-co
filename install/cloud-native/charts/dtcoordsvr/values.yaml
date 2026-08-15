@@ -29,3 +29,5 @@ dtcoordsvr:
   lru_expired_duration: 1800s # 30min for lru cache expired
   lru_max_cache_count: 30000 # max count of transaction cache
   transaction_default_timeout: 10s
+  transaction_expire_grace_duration: 5s # grace window after expire before coordinator auto-reject; DB TTL uses the same base
+  transaction_max_ttl: 30d # hard cap of transaction DB TTL window (expire + grace), no recovery-budget stacking

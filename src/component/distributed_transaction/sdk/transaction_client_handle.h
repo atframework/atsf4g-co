@@ -37,8 +37,9 @@ class context;
 namespace atframework {
 namespace distributed_system {
 
-class transaction_client_handle {
+class transaction_client_handle : public atfw::util::memory::enable_shared_rc_from_this<transaction_client_handle> {
  public:
+  using ptr_t = atfw::util::memory::strong_rc_ptr<transaction_client_handle>;
   using storage_type = atfw::distributed_system::transaction_blob_storage;
   using metadata_type = atfw::distributed_system::transaction_metadata;
   using configure_type = atfw::distributed_system::transaction_configure;
@@ -52,12 +53,16 @@ class transaction_client_handle {
                                         const participator_type&, transaction_participator_failure_reason&)>
         prepare_participator;
 
-    // This should not wait for response
+    // 终态通知回调。必须 await 并返回真实的投递/响应结果：返回码用于判定通知是否成功并驱动有界重试，
+    // 不能 fire-and-forget 后谎报成功。不同参与者的通知可能并发调用本回调，同一参与者内部保持串行。
+    // 注意：通知任务可能在 submit_transaction 返回后仍在执行（外层协程被 kill 不会终止已派发的任务），
+    // 回调内不得持有 submit 调用方的栈对象；handle 生命周期由通知任务以 strong_rc_ptr 自捕获保活。
     std::function<rpc::result_code_type(rpc::context&, transaction_client_handle&, const storage_type&,
                                         const participator_type&)>
         commit_participator;
 
-    // This should not wait for response
+    // 同 commit_participator：必须 await 并返回真实的投递/响应结果，可能与其他参与者的通知并发，
+    // 且可能在 submit_transaction 返回后才执行完毕。
     std::function<rpc::result_code_type(rpc::context&, transaction_client_handle&, const storage_type&,
                                         const participator_type&)>
         reject_participator;
@@ -69,7 +74,12 @@ class transaction_client_handle {
     uint32_t replication_total_count = 0;
     bool memory_only = false;
 
-    // 是否直接强制提交（并执行）事务。可用于实现2PC流程
+    // 是否直接强制提交（并执行）事务。
+    // 注意：force_commit 是 best-effort 模型，不是可容灾 2PC：
+    // - 不创建协调者记录，参与者不进入 running/finished，也没有定时恢复；
+    // - SDK 资源锁对 force_commit 事务不生效；
+    // - 补偿（undo）只存在于本次 submit 调用的有界重试内，client/参与者故障可能永久部分执行；
+    // - 参与者的 do_event/undo_event 必须幂等，undo_event 必须支持 no-op（未执行过时成功返回）和重放。
     bool force_commit = false;
     std::chrono::system_clock::duration timeout = std::chrono::seconds(5);
 
@@ -87,20 +97,26 @@ class transaction_client_handle {
   };
 
  private:
+  // passkey：强制所有 handle 经 create() 以 strong_rc_ptr 持有，
+  // 保证通知任务中的 shared_from_this() 自捕获永远有效
+  struct ctor_guard;
+
+ public:
+  DISTRIBUTED_TRANSACTION_SDK_API static ptr_t create(const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable);
+
   transaction_client_handle(const transaction_client_handle&) = delete;
   transaction_client_handle(transaction_client_handle&&) = delete;
   transaction_client_handle& operator=(const transaction_client_handle&) = delete;
   transaction_client_handle& operator=(transaction_client_handle&&) = delete;
 
- public:
   DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(
-      const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable);
+      ctor_guard, const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_client_handle();
 
   ATFW_UTIL_FORCEINLINE void* get_private_data() const noexcept { return private_data_; }
   ATFW_UTIL_FORCEINLINE void set_private_data(void* ptr) noexcept { private_data_ = ptr; }
   ATFW_UTIL_FORCEINLINE on_destroy_callback_type get_on_destroy_callback() const noexcept { return on_destroy_; }
-  ATFW_UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; };
+  ATFW_UTIL_FORCEINLINE void set_on_destroy_callback(on_destroy_callback_type fn) noexcept { on_destroy_ = fn; }
 
   /**
    * @brief Create a transaction object
@@ -130,7 +146,9 @@ class transaction_client_handle {
    * @param ctx RPC context
    * @param input 事务存储结构
    * @param output_prepared_participators 输出prepare阶段完成的参与者
-   * @param output_failed_participators 输出prepare阶段失败的参与者
+   * @param output_failed_participators 输出失败的参与者。仅包含 prepare 阶段失败（导致事务被拒绝）的参与者；
+   *   终态通知投递失败的参与者不在其中——该投递由参与者的 resolve 重试流程保证最终一致，
+   *   对 client 而言这些参与者的事务执行视为成功
    * @return future of 0 or error code
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type submit_transaction(

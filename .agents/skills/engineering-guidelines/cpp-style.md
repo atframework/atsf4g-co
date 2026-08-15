@@ -61,6 +61,10 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
 
 ## RPC/protobuf lifetimes
 
+- Lambdas passed to `rpc::async_invoke` must not capture by reference, including default `[&]` and explicit `[&value]`
+  captures. The callable runs in an independent task and may execute or resume after the enclosing function has
+  returned; copy or move required state into the closure and use an owning smart pointer when pointee lifetime must be
+  extended.
 - Temporary protobuf scratch messages inside task/RPC code should use the Arena-backed pattern from
   [`rpc-protobuf-arena.md`](rpc-protobuf-arena.md).
 - Do not store task-Arena messages in members, globals, caches, or delayed callbacks that may outlive the task/RPC

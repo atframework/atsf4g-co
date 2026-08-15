@@ -45,7 +45,8 @@
 
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 
-#define TRANSACTION_API_RETRY_TIMES 5
+// 本文件的接口均为单次调用，不含重试逻辑；OLD_VERSION/KEY_EXISTS 等可重试错误
+// 由外层调用方（transaction_client_handle、task_action_participator_resolve_transaction 等）按需有界重试
 
 namespace rpc {
 namespace transaction_api {
@@ -125,10 +126,11 @@ static void initialize_replication_server_ids(atfw::distributed_system::transact
   size_t current_index = hash_out[0] % sorted_nodes.size();
   metadata.mutable_replicate_node_server_id()->Reserve(static_cast<int32_t>(replication_total_count));
   metadata.set_replicate_read_count(replication_read_count);
-  for (uint32_t i = 0; i < replication_total_count || (replication_total_count <= 0 && i < 3); ++i, ++current_index) {
+  for (uint32_t i = 0; i < replication_total_count; ++i, ++current_index) {
     if (current_index >= sorted_nodes.size()) {
       current_index = 0;
     }
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     metadata.add_replicate_node_server_id(sorted_nodes[current_index]->get_discovery_info().id());
   }
 }
@@ -138,11 +140,26 @@ static bool is_replication_mode(const atfw::distributed_system::transaction_meta
          static_cast<uint32_t>(metadata.replicate_node_server_id_size()) >= metadata.replicate_read_count();
 }
 
+// replication 响应合并时，两个相反的终态（COMMITED/REJECTED）说明副本间发生了严重不一致。
+// 拒绝合并会让所有读取方永远无法收敛，因此只打印错误日志，合并仍按确定性规则（max status，COMMITED 优先）
+// 收敛到同一终态；do_event 是不可回退副作用，COMMITED 优先与“成功可能已被 Client 观察到”保持一致
+static bool is_conflicting_terminal_transaction_status(atfw::distributed_system::EnDistibutedTransactionStatus left,
+                                                       atfw::distributed_system::EnDistibutedTransactionStatus right) {
+  return left >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED &&
+         right >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED && left != right;
+}
+
 static void merge_transaction_metadata(atfw::distributed_system::transaction_metadata& output,
                                        const atfw::distributed_system::transaction_metadata& input) {
   // Merge metadata
   if (output.transaction_uuid().empty() && !input.transaction_uuid().empty()) {
     output.set_transaction_uuid(input.transaction_uuid());
+  }
+
+  if (is_conflicting_terminal_transaction_status(output.status(), input.status())) {
+    FWLOGERROR("merge conflicting terminal transaction status of transaction {}: {} vs {}, resolve to the later one",
+               output.transaction_uuid().empty() ? input.transaction_uuid() : output.transaction_uuid(),
+               static_cast<int32_t>(output.status()), static_cast<int32_t>(input.status()));
   }
 
   if (output.status() < input.status()) {
@@ -194,6 +211,12 @@ static void merge_transaction_configure(atfw::distributed_system::transaction_co
 
 static inline void merge_transaction_participator(::atfw::distributed_system::transaction_participator& output,
                                                   const ::atfw::distributed_system::transaction_participator& input) {
+  if (is_conflicting_terminal_transaction_status(output.participator_status(), input.participator_status())) {
+    FWLOGERROR("merge conflicting terminal participator status of participator {}: {} vs {}, resolve to the later one",
+               output.participator_key().empty() ? input.participator_key() : output.participator_key(),
+               static_cast<int32_t>(output.participator_status()), static_cast<int32_t>(input.participator_status()));
+  }
+
   if (output.participator_status() < input.participator_status()) {
     output.set_participator_status(input.participator_status());
   }
@@ -209,6 +232,7 @@ static void merge_transaction_participators(
   for (const auto& participator : input) {
     auto output_iter = output.find(participator.first);
     if (output_iter == output.end()) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       protobuf_copy_message(output[participator.first], participator.second);
     } else {
       merge_transaction_participator(output_iter->second, participator.second);
@@ -281,7 +305,7 @@ template <class TRequest, class TResponse, class TRpcFn>
 static rpc::result_code_type invoke_replication_rpc_call(
     rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata,
     rpc::context::message_holder<TRequest>& req_body, rpc::context::message_holder<TResponse>& rsp_body,
-    gsl::string_view action_name, TRpcFn&& rpc_fn,
+    gsl::string_view action_name, TRpcFn&& rpc_fn,  // NOLINT(cppcoreguidelines-missing-std-forward)
     std::function<bool(uint64_t, const atframework::SSMsg&)> on_receive_message_fn, bool no_wait = false) {
   std::unordered_set<dispatcher_await_options> waiters;
   std::unordered_map<uint64_t, atframework::SSMsg> received;
@@ -524,28 +548,18 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_transaction(
           return true;
         })));
   } else {
-    int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    int left_retry_times = TRANSACTION_API_RETRY_TIMES;
-    // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
-    while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout);
-      if (0 == target_server_id) {
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
-      }
-
-      res = RPC_AWAIT_CODE_RESULT(rpc::transaction::commit(ctx, target_server_id, *req_body, *rsp_body));
-      if (res < 0) {
-        if (res == PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
-          continue;
-        }
-        RPC_RETURN_CODE(res);
-      }
-
-      protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
-      break;
+    uint64_t target_server_id = calculate_server_id(inout);
+    if (0 == target_server_id) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    RPC_RETURN_CODE(res);
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction::commit(ctx, target_server_id, *req_body, *rsp_body));
+    if (res < 0) {
+      RPC_RETURN_CODE(res);
+    }
+
+    protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 }
 
@@ -572,29 +586,19 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_transaction(
           return true;
         })));
   } else {
-    int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    int left_retry_times = TRANSACTION_API_RETRY_TIMES;
-    // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
-    while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout);
-      if (0 == target_server_id) {
-        FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, inout.transaction_uuid());
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
-      }
-
-      res = RPC_AWAIT_CODE_RESULT(rpc::transaction::reject(ctx, target_server_id, *req_body, *rsp_body));
-      if (res < 0) {
-        if (res == PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
-          continue;
-        }
-        RPC_RETURN_CODE(res);
-      }
-
-      protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
-      break;
+    uint64_t target_server_id = calculate_server_id(inout);
+    if (0 == target_server_id) {
+      FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, inout.transaction_uuid());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    RPC_RETURN_CODE(res);
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction::reject(ctx, target_server_id, *req_body, *rsp_body));
+    if (res < 0) {
+      RPC_RETURN_CODE(res);
+    }
+
+    protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 }
 
@@ -642,32 +646,22 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type remove_transaction(
           return rpc::transaction::packer::unpack_remove(received_message.body_bin(), *rsp_body);
         })));
   } else {
-    int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    int left_retry_times = TRANSACTION_API_RETRY_TIMES;
-    // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
-    while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(metadata);
-      if (0 == target_server_id) {
-        FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__,
-                   metadata.transaction_uuid());
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
-      }
-
-      res = RPC_AWAIT_CODE_RESULT(rpc::transaction::remove(ctx, target_server_id, *req_body, *rsp_body));
-      if (res < 0) {
-        if (res == PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
-          continue;
-        }
-        if (res == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-        }
-        RPC_RETURN_CODE(res);
-      }
-
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    uint64_t target_server_id = calculate_server_id(metadata);
+    if (0 == target_server_id) {
+      FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, metadata.transaction_uuid());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    RPC_RETURN_CODE(res);
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction::remove(ctx, target_server_id, *req_body, *rsp_body));
+    if (res < 0) {
+      // 记录不存在视为幂等成功
+      if (res == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+      }
+      RPC_RETURN_CODE(res);
+    }
+
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 }
 
@@ -695,29 +689,19 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_participator(
           return true;
         })));
   } else {
-    int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    int left_retry_times = TRANSACTION_API_RETRY_TIMES;
-    // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
-    while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout);
-      if (0 == target_server_id) {
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
-      }
-
-      res = RPC_AWAIT_CODE_RESULT(rpc::transaction::commit_participator(ctx, target_server_id, *req_body, *rsp_body));
-
-      if (res < 0) {
-        if (res == PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
-          continue;
-        }
-        RPC_RETURN_CODE(res);
-      }
-
-      protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    uint64_t target_server_id = calculate_server_id(inout);
+    if (0 == target_server_id) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    RPC_RETURN_CODE(res);
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::transaction::commit_participator(ctx, target_server_id, *req_body, *rsp_body));
+    if (res < 0) {
+      RPC_RETURN_CODE(res);
+    }
+
+    protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 }
 
@@ -745,29 +729,20 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
           return true;
         })));
   } else {
-    int res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    int left_retry_times = TRANSACTION_API_RETRY_TIMES;
-    // 如果事务服务器返回OLD_VERSION可能是发生了故障转移或者扩缩容，可以直接重试
-    while (left_retry_times-- > 0) {
-      uint64_t target_server_id = calculate_server_id(inout);
-      if (0 == target_server_id) {
-        FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, inout.transaction_uuid());
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
-      }
-
-      res = RPC_AWAIT_CODE_RESULT(rpc::transaction::reject_participator(ctx, target_server_id, *req_body, *rsp_body));
-      if (res < 0) {
-        if (res == PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
-          continue;
-        }
-        RPC_RETURN_CODE(res);
-      }
-
-      protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
-      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    uint64_t target_server_id = calculate_server_id(inout);
+    if (0 == target_server_id) {
+      FWLOGERROR("{} can not find any available server for transaction {}", __FUNCTION__, inout.transaction_uuid());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND);
     }
 
-    RPC_RETURN_CODE(res);
+    int32_t res =
+        RPC_AWAIT_CODE_RESULT(rpc::transaction::reject_participator(ctx, target_server_id, *req_body, *rsp_body));
+    if (res < 0) {
+      RPC_RETURN_CODE(res);
+    }
+
+    protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 }
 

@@ -21,4 +21,13 @@ message dtcoordsvr_cfg {
 
   google.protobuf.Duration transaction_default_timeout = 11
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+
+  // 协调者自动 reject 的宽限时间：参与者首个 resolve timer 在 expire_timepoint 立即触发，
+  // 协调者在 expire_timepoint + 本宽限之后才自动 reject，DB TTL 也使用同一时间口径
+  google.protobuf.Duration transaction_expire_grace_duration = 12
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "0s" }];
+
+  // 事务 DB TTL 上限：不叠加恢复预算，TTL 窗口（expire_timepoint + grace 起算）不允许超过该值
+  google.protobuf.Duration transaction_max_ttl = 13
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30d" min_value: "10s" max_value: "1095" }];
 }

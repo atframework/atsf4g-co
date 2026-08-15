@@ -28,13 +28,38 @@
 
 #include <algorithm>
 #include <chrono>
-#include <limits>
 #include <string>
 #include <utility>
 
-#define TRANSACTION_RETRY_MAX_TIMES 5
-
 namespace {
+// 协调者自动 reject 宽限时间的默认值：仅在配置缺失或非法时使用，正常以
+// dtcoordsvr_cfg.transaction_expire_grace_duration 为准
+constexpr int64_t kTransactionExpireGraceSeconds = 5;
+// transaction_max_ttl 缺失或非法时的默认值；同时作为上限硬钳制，防止配置错误导致 now+max_ttl 溢出
+constexpr int64_t kDefaultTransactionMaxTtlSeconds = 3600;
+constexpr int64_t kHardMaxTransactionTtlSeconds = 30 * 24 * 3600;
+
+static const atfw::distributed_system::config::dtcoordsvr_cfg& get_dtcoordsvr_cfg() {
+  return logic_config::me()->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>();
+}
+
+static std::chrono::seconds get_transaction_expire_grace() {
+  auto grace = protobuf_to_chrono_duration(get_dtcoordsvr_cfg().transaction_expire_grace_duration());
+  if (grace < std::chrono::system_clock::duration::zero()) {
+    grace = std::chrono::seconds{kTransactionExpireGraceSeconds};
+  }
+  return std::chrono::ceil<std::chrono::seconds>(grace);
+}
+
+static std::chrono::seconds get_transaction_max_ttl() {
+  auto max_ttl = protobuf_to_chrono_duration(get_dtcoordsvr_cfg().transaction_max_ttl());
+  if (max_ttl <= std::chrono::system_clock::duration::zero()) {
+    max_ttl = std::chrono::seconds{kDefaultTransactionMaxTtlSeconds};
+  }
+  return std::min(std::chrono::ceil<std::chrono::seconds>(max_ttl),
+                  std::chrono::seconds{kHardMaxTransactionTtlSeconds});
+}
+
 static uint32_t get_transaction_zone_id(const atfw::distributed_system::transaction_metadata& metadata) {
   if (metadata.replicate_read_count() > 0 &&
       static_cast<uint32_t>(metadata.replicate_node_server_id_size()) >= metadata.replicate_read_count()) {
@@ -44,25 +69,28 @@ static uint32_t get_transaction_zone_id(const atfw::distributed_system::transact
   return 0;
 }
 
+// TTL 窗口为 expire_timepoint + grace，不允许叠加恢复预算延长用户生命周期，
+// 且不超过 transaction_max_ttl，也不允许永不过期
 static uint64_t get_transaction_ttl_seconds(const atfw::distributed_system::transaction_blob_storage& storage) {
   const auto now = atfw::util::time::time_utility::now();
-  std::chrono::system_clock::duration ttl = protobuf_to_system_clock(storage.metadata().expire_timepoint()) - now;
-  if (ttl < std::chrono::system_clock::duration::zero()) {
-    ttl = std::chrono::system_clock::duration::zero();
+  const auto expire = protobuf_to_system_clock(storage.metadata().expire_timepoint());
+  const std::chrono::seconds grace = get_transaction_expire_grace();
+  const std::chrono::seconds max_ttl = get_transaction_max_ttl();
+
+  uint64_t ttl_seconds = 0;
+  if (expire <= now) {
+    ttl_seconds = static_cast<uint64_t>(grace.count());
+  } else if (expire >= now + max_ttl) {
+    // now + max_ttl 不会溢出：max_ttl 已被硬钳制
+    ttl_seconds = static_cast<uint64_t>(max_ttl.count());
+  } else {
+    // expire - now 有界（不超过 max_ttl），不会溢出
+    ttl_seconds = static_cast<uint64_t>(std::chrono::ceil<std::chrono::seconds>(expire - now).count()) +
+                  static_cast<uint64_t>(grace.count());
+    ttl_seconds = std::min<uint64_t>(ttl_seconds, static_cast<uint64_t>(max_ttl.count()));
   }
 
-  const uint32_t resolve_times = std::max<uint32_t>(1, storage.configure().resolve_max_times());
-  auto retry_interval = protobuf_to_chrono_duration(storage.configure().resolve_retry_interval());
-  if (retry_interval > std::chrono::system_clock::duration::zero()) {
-    ttl += retry_interval * resolve_times;
-  }
-  ttl += std::chrono::seconds{5};
-
-  if (ttl >= std::chrono::system_clock::duration::max()) {
-    return std::numeric_limits<uint32_t>::max();
-  }
-
-  return std::max<uint64_t>(1, static_cast<uint64_t>(std::chrono::ceil<std::chrono::seconds>(ttl).count()));
+  return std::max<uint64_t>(1, ttl_seconds);
 }
 
 static rpc::result_code_type refresh_transaction_ttl(
@@ -79,7 +107,7 @@ int transaction_manager::tick() {
   time_t now = atfw::util::time::time_utility::get_now();
   if (last_stat_timepoint_ != now / atfw::util::time::time_utility::MINITE_SECONDS) {
     last_stat_timepoint_ = now / atfw::util::time::time_utility::MINITE_SECONDS;
-    FWLOGWARNING("[STATISTICS]: current transition cache count: {}", lru_caches_.size());
+    FWLOGINFO("[STATISTICS]: current transition cache count: {}", lru_caches_.size());
   }
 
   int ret = 0;
@@ -87,27 +115,33 @@ int transaction_manager::tick() {
     return ret;
   }
 
-  time_t timeout_duration = std::chrono::ceil<std::chrono::seconds>(
-                                protobuf_to_chrono_duration(
-                                    logic_config::me()
-                                        ->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>()
-                                        .lru_expired_duration()))
-                                .count();
-  size_t max_count = logic_config::me()
-                         ->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>()
-                         .lru_max_cache_count();
-  while (!lru_caches_.empty()) {
-    if (!lru_caches_.front().second) {
-      lru_caches_.pop_front();
+  time_t timeout_duration =
+      std::chrono::ceil<std::chrono::seconds>(protobuf_to_chrono_duration(get_dtcoordsvr_cfg().lru_expired_duration()))
+          .count();
+  size_t max_count = get_dtcoordsvr_cfg().lru_max_cache_count();
+  for (auto iter = lru_caches_.begin(); iter != lru_caches_.end();) {
+    if (!iter->second) {
+      iter = lru_caches_.erase(iter);
       ++ret;
       continue;
     }
 
-    if (lru_caches_.size() <= max_count && now <= lru_caches_.front().second->last_visit_timepoint + timeout_duration) {
+    const bool is_expired = now > iter->second->last_visit_timepoint + timeout_duration;
+    const bool is_over_capacity = lru_caches_.size() > max_count;
+    if (!is_over_capacity && !is_expired) {
+      // LRU 按访问时间排序，之后的缓存更新，都不会到期
       break;
     }
 
-    lru_caches_.pop_front();
+    // 不跳过有在途拉取/保存任务的缓存，不随意延长缓存生命周期：
+    // 置 removed 标记后淘汰，在途 IO 任务结束后缓存立即失效且不会写回或重新入缓存
+    if (is_over_capacity && !is_expired && iter->second->data_object.metadata().memory_only()) {
+      // memory_only 事务允许容量淘汰（设计如此：允许一定程度不一致，client 端会重新提交状态），但记录日志
+      FWLOGWARNING("Evict memory_only transaction {} by capacity, active transaction state will be lost",
+                   iter->second->data_key);
+    }
+    iter->second->removed = true;
+    iter = lru_caches_.erase(iter);
     ++ret;
   }
 
@@ -173,12 +207,13 @@ rpc::result_code_type transaction_manager::create_transaction(
   }
 
   auto now = atfw::util::time::time_utility::now();
-  protobuf_copy_message(*storage.mutable_metadata()->mutable_prepare_timepoint(), protobuf_from_system_clock(now));
+  // 保留 client 的 prepare_timepoint（参与者的 Wound-Wait 锁使用 client 时间口径），仅未设置时才使用协调者本地时间
+  if (storage.metadata().prepare_timepoint().seconds() == 0 && storage.metadata().prepare_timepoint().nanos() == 0) {
+    protobuf_copy_message(*storage.mutable_metadata()->mutable_prepare_timepoint(), protobuf_from_system_clock(now));
+  }
 
   if (protobuf_to_system_clock(storage.metadata().expire_timepoint()) <= now) {
-    const auto& cfg_value = logic_config::me()
-                                ->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>()
-                                .transaction_default_timeout();
+    const auto& cfg_value = get_dtcoordsvr_cfg().transaction_default_timeout();
     protobuf_copy_message(*storage.mutable_metadata()->mutable_expire_timepoint(),
                           protobuf_from_system_clock(now + protobuf_to_chrono_duration(cfg_value)));
   }
@@ -206,8 +241,9 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
+    // client 层保证 UUID 不冲突；相同 UUID 的重复 create 来自 client 重试且数据相同，
+    // 直接 replace（CAS expected_version=0 为无条件写）即可，重放天然幂等
     ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(ctx, db_data, db_version));
-
     if (ret < 0) {
       FWLOGERROR("rpc::db::distribute_transaction::replace({}) failed, res: {}({})",
                  storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
@@ -288,7 +324,8 @@ rpc::result_code_type transaction_manager::mutable_transaction(
   if (out &&
       out->data_object.metadata().status() <= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     auto now = util::time::time_utility::now();
-    if (now > protobuf_to_system_clock(out->data_object.metadata().expire_timepoint()) + std::chrono::seconds{5}) {
+    if (now >
+        protobuf_to_system_clock(out->data_object.metadata().expire_timepoint()) + get_transaction_expire_grace()) {
       out->data_object.mutable_metadata()->set_status(
           atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
       protobuf_copy_message(*out->data_object.mutable_metadata()->mutable_finish_timepoint(),
@@ -356,6 +393,18 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
     if (trans->data_object.metadata().memory_only()) {
       ret = 0;
     } else {
+      // 删除前先排空该记录所有在途 IO（拉取/保存），避免晚到的 IO 在删除后复活记录；
+      // 记录已被并发删除时继续幂等删除
+      if (lru_caches_.is_io_task_running(trans->data_object.metadata().transaction_uuid())) {
+        ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, trans->data_object.metadata().transaction_uuid()));
+      }
+      if (ret != 0) {
+        FWLOGERROR("Transaction {} commit participator {} and drain pending IO failed, res: {}({})",
+                   trans->data_object.metadata().transaction_uuid(), participator_key, ret,
+                   protobuf_mini_dumper_get_error_msg(ret));
+        RPC_RETURN_CODE(ret);
+      }
+
       ret = RPC_AWAIT_CODE_RESULT(
           rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(trans->data_object.metadata()),
                                                       trans->data_object.metadata().transaction_uuid()));
@@ -442,6 +491,18 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
     if (trans->data_object.metadata().memory_only()) {
       ret = 0;
     } else {
+      // 删除前先排空该记录所有在途 IO（拉取/保存），避免晚到的 IO 在删除后复活记录；
+      // 记录已被并发删除时继续幂等删除
+      if (lru_caches_.is_io_task_running(trans->data_object.metadata().transaction_uuid())) {
+        ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, trans->data_object.metadata().transaction_uuid()));
+      }
+      if (ret != 0) {
+        FWLOGERROR("Transaction {} reject participator {} and drain pending IO failed, res: {}({})",
+                   trans->data_object.metadata().transaction_uuid(), participator_key, ret,
+                   protobuf_mini_dumper_get_error_msg(ret));
+        RPC_RETURN_CODE(ret);
+      }
+
       ret = RPC_AWAIT_CODE_RESULT(
           rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(trans->data_object.metadata()),
                                                       trans->data_object.metadata().transaction_uuid()));
@@ -480,8 +541,8 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
   atfw::distributed_system::transaction_metadata* metadata = trans->data_object.mutable_metadata();
 
   if (metadata->status() > atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
-    FWLOGERROR("Transaction {} already has status: {}, can not commit", metadata->transaction_uuid(),
-               static_cast<int>(metadata->status()));
+    FWLOGWARNING("Transaction {} is already finished with status: {}, skip commit", metadata->transaction_uuid(),
+                 static_cast<int>(metadata->status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   metadata->set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
@@ -512,8 +573,8 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
   atfw::distributed_system::transaction_metadata* metadata = trans->data_object.mutable_metadata();
 
   if (metadata->status() > atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
-    FWLOGERROR("Transaction {} already has status: {}, can not reject", metadata->transaction_uuid(),
-               static_cast<int>(metadata->status()));
+    FWLOGWARNING("Transaction {} is already finished with status: {}, skip reject", metadata->transaction_uuid(),
+                 static_cast<int>(metadata->status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   metadata->set_status(atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
@@ -544,6 +605,17 @@ rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
 
   int ret = 0;
   if (!metadata.memory_only()) {
+    // 删除前先排空该记录所有在途 IO，避免删除后晚到的 IO 复活记录；
+    // 强制删除语义下即使排空失败也继续删除（缓存会被 remove_cache 置 removed 并禁止再写回）
+    rpc::result_code_type::value_type drain_ret = 0;
+    if (lru_caches_.is_io_task_running(metadata.transaction_uuid())) {
+      drain_ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, metadata.transaction_uuid()));
+    }
+    if (drain_ret != 0) {
+      FWLOGWARNING("Transaction {} drain pending IO before remove failed, res: {}({}), remove anyway",
+                   metadata.transaction_uuid(), drain_ret, protobuf_mini_dumper_get_error_msg(drain_ret));
+    }
+
     ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(metadata),
                                                                             metadata.transaction_uuid()));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
