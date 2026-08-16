@@ -129,9 +129,9 @@ std::string get_stable_host_id(int32_t version) {
 }
 
 // Lua scripts injected into every DB connection (SCRIPT LOAD). They are the authoritative write
-// contract of the hash-table backend: their observable behavior is pinned by
-// src/server_frame/test/server_frame_test_db_script_contract.cpp and the rpc-unit-test selftest, and
-// mock_db (the offline in-memory mirror) must follow any change here.
+// contract of the hash-table backend: the unit tests execute them in an embedded Lua interpreter
+// against a redis.call simulator (src/server_frame/test/server_frame_test_db_script_contract.cpp),
+// and mock_db (the offline in-memory mirror) must follow any change here.
 constexpr const char *kDbScriptCompareAndSetHashTable = R"(local real_version_str = redis.call('HGET', KEYS[1], ARGV[1])
 local real_version = 0
 if real_version_str ~= false and real_version_str ~= nil then
@@ -432,6 +432,19 @@ SERVER_FRAME_API void db_msg_dispatcher::set_db_script_sha1(script_type type, co
   }
 
   db_script_sha1_[static_cast<size_t>(type)].assign(str, static_cast<size_t>(len));
+}
+
+SERVER_FRAME_API const char *db_msg_dispatcher::get_db_script_source(script_type type) {
+  switch (type) {
+    case script_type::kCompareAndSetHashTable:
+      return kDbScriptCompareAndSetHashTable;
+    case script_type::kInsertHashTable:
+      return kDbScriptInsertHashTable;
+    case script_type::kAddListIndexHashTable:
+      return kDbScriptAddListIndexHashTable;
+    default:
+      return nullptr;
+  }
 }
 
 SERVER_FRAME_API void db_msg_dispatcher::set_on_connected(channel_t::type t, user_callback_t fn) {

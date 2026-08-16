@@ -191,10 +191,11 @@ test.db().register_message_type<PROJECT_NAMESPACE_ID::table_login_auth>();  // �
 ```
 
 写路径的权威契约是 `src/server_frame/dispatcher/db_msg_dispatcher.cpp` 内嵌的 Lua 脚本；
-`src/server_frame/test/server_frame_test_db_script_contract.cpp` 以行为用例固化该契约（CAS 读写版本一致、期望版本
-0 = 忽略版本比较强制覆盖且新版本仍按真实版本 +1；insert 仅接受无版本记录，冲突返回 `EN_DB_KEY_EXISTS`；
-所有写路径按 HSET 语义只合并 present 字段；KL 索引 1 起单调不复用，达到 `max_list_length` 时按最小索引淘汰
-一条，`max_list_length` 0 仅保留一条）。修改脚本时必须同步更新 mock_db 与这些用例；引擎级等价语义由
+`src/server_frame/test/server_frame_test_db_script_contract.cpp` 在嵌入式 Lua 里**真实执行这些脚本**（redis.call
+模拟器，KEYS/ARGV 按 `pack_message` 布局构造），并以行为用例固化同一契约（CAS 读写版本一致、期望版本 0 = 忽略
+版本比较强制覆盖且新版本仍按真实版本 +1；insert 仅接受无版本记录，冲突返回 `EN_DB_KEY_EXISTS`；所有写路径按
+HSET 语义只合并 present 字段；KL 索引 1 起单调不复用，达到 `max_list_length` 时按最小索引淘汰一条，
+`max_list_length` 0 仅保留一条）。修改脚本时必须同步更新 mock_db 与这些用例；引擎级等价语义由
 `test/rpc_unit_test_db.cpp` 固化。
 
 生成层 per-table typed handler（SS 风格，每个生成表接口一个注册函数）：

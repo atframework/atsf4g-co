@@ -1,18 +1,19 @@
 ---
 name: deployment-config
-description: "Use when: generating deployment configs, rendering per-instance scripts, editing Helm values, analyzing install/**/*.tpl Go templates, yaml.tpl/sh.tpl/bat.tpl files, or using atdtool deployment workflows."
+description: "Use when: editing or rendering install/**/*.tpl Go templates, Helm values, or atdtool-generated deployment configs/scripts. Do not use for runtime deployment operations alone."
 ---
 
 # Deployment configuration (atsf4g-co)
 
-This repo now uses `atdtool` to render **deployment configs + per-instance scripts** from the charts under `cloud-native/charts`.
+This repository uses `atdtool` to render deployment configs and per-instance scripts from charts under
+`cloud-native/charts`.
 
 Resolve `<BUILD_DIR>` the same way as `../build/SKILL.md`: read `.vscode/settings.json` for `cmake.buildDirectory`;
 if absent, infer from clangd `--compile-commands-dir=...` or an existing configured build tree; if no user setting is
 readable, use `build`.
 
-All paths below assume you are working inside the build output: `<BUILD_DIR>/publish` (referred to as `<PUBLISH_DIR>`).
-AI-generated scratch files, rendered diagnostics, temporary merged values, and script/log output must stay under
+Rendered output normally lives under `<BUILD_DIR>/publish` (`<PUBLISH_DIR>`). AI-generated scratch files, rendered
+diagnostics, temporary merged values, and script/log output must stay under
 `<BUILD_DIR>/_agent_tmp/...`, not the repository root.
 
 ## Template source recognition
@@ -30,71 +31,15 @@ AI-generated scratch files, rendered diagnostics, temporary merged values, and s
   standalone files; inspect their `define`, `template`, and `include` callers before editing.
 - Do not run target-language formatters or linters directly on `*.tpl` sources. Render representative output with
   `atdtool` and the relevant values first, then validate the generated YAML/script.
-- If rendered YAML contains `${VAR}`-style runtime expressions in annotated atapp config fields, also load
-  `../configure-expression/SKILL.md`.
+- If rendered YAML contains `${VAR}` expressions in a protobuf field annotated with `enable_expression`, also load
+  `../configure-expression/SKILL.md`. Do not load it for ordinary `${...}` text without confirming that annotation.
 
-## Prerequisites
+## Render and validate
 
-- `helm` in `PATH` (used to vendor chart dependencies)
-- `atdtool` from the build output: `<PUBLISH_DIR>/tools/atdtool/atdtool` (or `atdtool.exe` on Windows)
+Read [rendering and local-run workflow](references/rendering-workflow.md) only when updating chart dependencies,
+choosing values layers, rendering representative output, inspecting merged values, or running a generated local
+instance.
 
-## 1) Update chart dependencies (once, or when charts change)
-
-Run the wrapper script (recommended):
-
-- Linux/macOS: `bash <PUBLISH_DIR>/tools/script/update_dependency.sh`
-- Windows: `<PUBLISH_DIR>\tools\script\update_dependency.bat`
-
-This runs `helm dependency update` for each server chart (to make `libapp` templates available).
-
-## 2) Edit values (deployment "inputs")
-
-Default values live under:
-
-- `<PUBLISH_DIR>/cloud-native/values/default/`
-
-Common files to edit:
-
-- `global.yaml` (global knobs, endpoints, feature toggles)
-- `modules/*.yaml` (module-specific settings like redis)
-- `non_cloud_native/deploy.yaml` (process layout for local/non-K8s deploy: `world_id`, `zone_id`, `proc_desc`, etc.)
-
-Tip: you can layer overrides by providing multiple `--values/-p` paths to `atdtool` (last one wins).
-
-## 3) Render configs + scripts (atdtool)
-
-Recommended (wrapper script):
-
-- Linux/macOS: `bash <PUBLISH_DIR>/tools/script/generate_config.sh`
-- Windows: `<PUBLISH_DIR>\tools\script\generate_config.bat`
-
-Manual equivalent (adjust values/profile as needed):
-
-```bash
-cd <PUBLISH_DIR>/tools/script
-../atdtool/atdtool template ../../cloud-native/charts -o ../../ \
-  --values ../../cloud-native/values/default \
-  --set global.world_id=1
-```
-
-Output layout (generated under `<PUBLISH_DIR>`):
-
-- `<PUBLISH_DIR>/<server>/cfg/*_<bus_id>.yaml` (rendered config)
-- `<PUBLISH_DIR>/<server>/bin/start_<bus_id>.(sh|bat)` / `stop_...` / `restart_...` / `reload_...`
-
-## 4) Start/stop instances (non-K8s/local)
-
-Example:
-
-- `cd <PUBLISH_DIR>/echosvr/bin`
-- `./start_1.1.10.1.sh` (or `start_1.1.10.1.bat` on Windows)
-
-## Optional: inspect merged values
-
-Generate a single merged values file (useful for debugging precedence):
-
-```bash
-atdtool merge-values <PUBLISH_DIR>/cloud-native/charts -o <BUILD_DIR>/_agent_tmp/merged.values.yaml \
-  --values <PUBLISH_DIR>/cloud-native/values/default \
-  --set global.world_id=1
-```
+After a template edit, render representative values before validating the target YAML, shell, or batch syntax. Review
+the rendered diff as well as the template diff; a target-language linter passing on unrendered Go-template source is not
+evidence.

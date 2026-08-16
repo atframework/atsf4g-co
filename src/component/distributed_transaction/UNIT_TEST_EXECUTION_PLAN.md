@@ -173,15 +173,15 @@ LRU size/clear。生产构建必须完全裁剪，且 hook 自身先由 rpc-unit
 | Public API | 必测用例与断言 |
 | --- | --- |
 | `initialize_new_transaction` | C++ 参数为 chrono duration；UUID 非空且唯一；0 timeout 回退 10s；正/负/亚秒/跨秒 duration；CREATED；memory/force 标志；R/N 为 0、合法、N<R、节点数<N；所有 Timestamp/Duration 合法归一化 |
-| `query_transaction` | 单节点成功/notfound/无 discovery/timeout/transport error；replica R-of-N 成功、部分 error、空 body、malformed body、响应乱序；多副本字段 merge |
-| `create_transaction` | 非 PREPARED、resolve_max=0、无节点；普通成功；replica quorum；请求对象在 heap/Arena/跨 Arena 时调用后保持不变 |
-| `commit_transaction` | 成功并更新 inout metadata；`EN_DB_OLD_VERSION` 0/1/4/5 次后成功或失败；普通 error 不重试；目标 failover；已是 COMMITED 幂等；返回 REJECTED 时保留协调者真相且调用方不得通知 commit |
+| `query_transaction` | 单节点成功/notfound/无 discovery/timeout/transport error；replica R-of-N 成功、部分 error、空 body、malformed body、响应乱序；多副本字段 merge；相反终态冲突只打印错误日志并确定性收敛到较后终态（COMMITED 优先），不返回错误 |
+| `create_transaction` | 非 PREPARED、resolve_max=0、无节点；普通成功；replica quorum；单次调用不重试（`EN_DB_OLD_VERSION`/`EN_DB_KEY_EXISTS` 直接返回）；请求对象在 heap/Arena/跨 Arena 时调用后保持不变 |
+| `commit_transaction` | 成功并更新 inout metadata；单次调用：`EN_DB_OLD_VERSION` 与普通 error 都直接返回不重试；目标 failover；已是 COMMITED 幂等；返回 REJECTED 时保留协调者真相且调用方不得通知 commit |
 | `reject_transaction` | 与 commit 对称；已 REJECTED 幂等；返回 COMMITED 时保留协调者真相且调用方不得通知 reject |
 | `remove_transaction_no_wait` | 空 UUID；单节点 one-way 发送；replica 至少 R 次发送；即时 send error 的成功阈值 |
-| `remove_transaction` | notfound 幂等成功；OLD_VERSION 重试；DB/transport error；replica quorum |
-| `commit_participator` | key/metadata 打包；成功 merge；notfound；OLD_VERSION 重试；replica quorum |
+| `remove_transaction` | notfound 幂等成功；单次调用：`EN_DB_OLD_VERSION` 直接返回不重试；DB/transport error；replica quorum |
+| `commit_participator` | key/metadata 打包；成功 merge；notfound；单次调用：`EN_DB_OLD_VERSION` 直接返回不重试；replica quorum |
 | `reject_participator` | 与 commit_participator 对称 |
-| 两个 `merge_storage` | 空输出、部分输出、状态单调合并、participant union、Any 首个有效值、metadata/configure 不丢字段、缺失 key 不修改输出 |
+| 两个 `merge_storage` | 空输出、部分输出、状态单调合并、participant union、Any 首个有效值、metadata/configure 不丢字段、缺失 key 不修改输出；全局/参与者相反终态冲突打日志后仍合并为较后终态 |
 | 三个 `pack_participator_request` | prepare 完整复制 metadata/config/data；commit 只带 UUID；普通 reject 只带 UUID；force reject 带完整 Undo 数据 |
 
 生成的 7 组 `packer::{pack,unpack,get_full_name}`、node/id 两种 unicast overload 和 7 个 typed `mock` 注册接口也都是
@@ -192,11 +192,11 @@ overload 等价；不重复测试生成器已经覆盖的模板细节。
 
 | Public API / callback | 必测用例与断言 |
 | --- | --- |
-| ctor/dtor、private data、destroy callback | null/non-null vtable；set/get 指针；析构回调恰好一次；回调内不发生二次析构 |
+| ctor/dtor、private data、destroy callback | `create()` 工厂：null/non-null vtable（null 返回空指针）；handle 只能经 `create()` 以 strong_rc_ptr 持有（passkey ctor），保证通知任务内 `shared_from_this()` 自捕获恒有效；set/get 指针；析构回调恰好一次；回调内不发生二次析构 |
 | `create_transaction` | 默认 options 与所有自定义 options 精确映射；分配失败 seam；输出旧指针被替换且可释放 |
 | `set_transaction_data` | null input；CREATED 成功 PackFrom；PREPARED 及终态拒绝；失败 PackFrom 不污染旧值 |
 | `add_participator` | null、空 key、首次添加、重复 key 更新、PackFrom 失败、PREPARED 后拒绝；map key 与内部 participator_key 一致 |
-| `submit_transaction` | 0/1/N 参与者；force_commit；create 失败回滚；prepare 第 1/中间/最后失败时先持久化协调者 REJECTED；协调者 COMMITED 后无论通知如何都返回事务成功；REJECTED 后返回事务失败；commit/reject 回包丢失时有界 query，不发送相反方向；两个输出集合每次先清空 |
+| `submit_transaction` | 0/1/N 参与者；force_commit；create 失败回滚；协调者 create/commit/reject 对 `EN_DB_OLD_VERSION`（create 含 `EN_DB_KEY_EXISTS`）有界重试（上限 5 次）后成功/耗尽失败；prepare 第 1/中间/最后失败时先持久化协调者 REJECTED；协调者 COMMITED 后无论通知如何都返回事务成功；REJECTED 后返回事务失败；commit/reject 回包丢失时有界 query，不发送相反方向；两个输出集合每次先清空；`output_failed_participators` 仅含 prepare 失败参与者，终态通知投递失败（含 notify task 创建失败）不进入该集合（由参与者 resolve 流程保证最终一致） |
 | `prepare_participator` | success；普通错误；`PREEMPTED+allow_retry`；`success+allow_retry`；退避 min=max/min<max；到期前和已到期；最大重试边界 |
 | `commit_participator` / `reject_participator` | 非 force 通知方向取协调者终态且只 reject 已 prepare 参与者；每个参与者最多 `resolve_max_times` 次实际尝试并按 interval 退避；第 1/N 次成功、始终失败、超时/取消；投递失败不能覆盖全局结果；force_commit 由 Client 本地按 `prepare_complete` 决策，已 prepare 参与者有界 undo，投递不确定的 failed participant 只补发一次 undo，明确失败和其他未 prepare 参与者不通知 |
 
@@ -211,27 +211,27 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 | `load` / `dump` | 空、running、finished、锁、timer 的 round-trip；重复 UUID；冲突资源；load 覆盖旧状态而不是追加；dump 后 Any/配置完整 |
 | `check_writable` | 无 callback 默认 true；callback true/false/error；resolve task 在 false 时不消费任何队列 |
 | `prepare` | 空 UUID；check_prepare success/error/retry reason；普通模式首次/重复 prepare；首次 prepare 分别使用普通非 Arena 请求和 Arena 请求，断言 storage 不丢失；force_commit 回调顺序；每个回调失败传播规则 |
-| `commit` / `reject` | UUID 不存在幂等；正常 running 转 finished；重复/并发通知；参与者自身终态不可反向回退；Do/失败清理及 lifecycle callback 第 1/N 次成功和永久失败；最多 N 次后消费，不能永久保留 |
+| `commit` / `reject` | UUID 不存在幂等；正常 running 转 finished；重复/并发通知；参与者自身终态不可反向回退；Do/失败清理及 lifecycle callback 第 1/N 次成功和永久失败；最多 N 次后消费，不能永久保留；在途终态方向标记存于 running 条目（`inflight_terminal_direction`）且由 RAII 在所有返回路径复位，同方向重入幂等成功、反方向返回 `EN_TRANSACTION_FINISHED`；本地动作预算 `resolve_times` 只在首次进入动作阶段时重置（`local_action_stage_entered`），阶段内 RPC 重发/timer 重复进入不重置、跨驱动源累计 |
 | `check_lock` | 空 UUID、终态、无锁、同事务重入；older/younger/timestamp 相同 UUID tie-break；多资源、重复资源；preemption 输出清空且准确 |
-| `lock` | null/终态；首次单/多资源；已有锁后追加资源；抢占旧 holder；重复锁不产生重复 snapshot 项 |
+| `lock` | null/终态；首次单/多资源；已有锁后追加资源；抢占旧 holder 时其 running 条目被置 `wounded`，被抢占事务后续 commit 返回 `EN_TRANSACTION_RESOURCE_PREEMPTED`，条目销毁（remove running）后标记随之消失；重复锁不产生重复 snapshot 项 |
 | 4 个 `unlock` | ptr/UUID × 单资源/全部；holder 不匹配；不存在；调用后 storage.lock_resource 和 lock map 同时清空 |
 | `get_locker` | unlocked/running/finished/null holder 边界，不允许悬挂 strong reference |
-| `get_running_transactions` / `get_finished_transactions` | prepare、commit/reject、最终 ack 前后的集合及对象内容 |
-| `tick` | 无工作、due/not-due/equal timepoint；显式 `system_clock::time_point`；已有 auto task；task create/start 失败 seam；running query、本地终态动作、finished ack 三阶段独立有界计数/退避/耗尽消费；任务完成后可再次 tick且无 tight loop |
+| `get_running_transactions` / `get_finished_transactions` | prepare、commit/reject、最终 ack 前后的集合及对象内容；running 集合值类型为 `running_transaction_entry`，断言 `entry.storage` 及 `wounded`/`inflight_terminal_direction`/`local_action_stage_entered` 标记随条目创建默认复位、随条目销毁清理 |
+| `tick` | 无工作、due/not-due/equal timepoint；显式 `system_clock::time_point`；已有 auto task；task create/start 失败 seam；统一 resolve timer 队列（query/acknowledge 单队列按 action 分发，同 UUID 至多一条、新 timer 替换旧 timer）行为不变；running query、本地终态动作、finished ack 三阶段独立有界计数/退避/耗尽消费；resolve task 内 participant ack 单次调用不重试，失败由 acknowledge timer 到期重新拉起整个 task；任务完成后可再次 tick且无 tight loop |
 | 所有 vtable 回调 | `do_event`、`undo_event`、`check_prepare`、`check_writable`、5 个 lifecycle callback、resolve-finished 的顺序、次数、失败传播 |
 
 ### 4.4 `transaction_manager` 与 7 个协调者 RPC
 
 | Public API / RPC | 必测用例与断言 |
 | --- | --- |
-| `create_transaction` / `create` | UUID 校验；DB replace 成功/错误/CAS 冲突；memory_only；过期时间 fallback；DB version=1；LRU 可读；分配失败 |
-| `mutable_transaction` / `query` | LRU hit 不读 DB；miss 读 DB/Any unpack；notfound 映射；错误 Any；memory_only cache；超时+5s 自动 REJECTED 后执行一次 CAS save；任意 save 错误返回错误并淘汰 cache，后续 query 从 DB 重新加载；shutdown |
+| `create_transaction` / `create` | UUID 校验；DB replace（expected_version=0 无条件写）成功/错误；同 UUID 重试重放（数据相同）幂等覆盖成功；memory_only；过期时间 fallback；DB version 前进；LRU 可读；分配失败 |
+| `mutable_transaction` / `query` | LRU hit 不读 DB；miss 读 DB/Any unpack；notfound 映射；错误 Any；memory_only cache；超时+grace（`transaction_expire_grace_duration`，默认 5s）自动 REJECTED 后执行一次 CAS save；任意 save 错误返回错误并淘汰 cache，后续 query 从 DB 重新加载；shutdown |
 | `save` | null、memory_only、replace 成功、`OLD_VERSION`、`NOT_FOUND`、普通 DB 错误；版本写回；每次 save 恰好一次 replace；任意非零结果都淘汰 cache；调用层不重复 remove_cache，notfound 映射后与普通错误共用一次日志；TTL 刷新失败不覆盖成功 CAS 返回值 |
 | `try_commit` / `commit` | PREPARED -> COMMITED + finish time；重复 commit；先 reject 后 commit；CAS 冲突；response metadata |
 | `try_reject` / `reject` | 与 commit 对称 |
-| participant 两组 overload / RPC | key 不存在；首个/中间/最后参与者；重复 ack；全局 PREPARED/COMMITED/REJECTED 下分别发送两种 ack；全局状态始终不变，参与者可自主进入请求方向但自身终态不可反向回退；只有全部参与者严格同向完成时 delete；remove notfound 幂等；remove error 不得丢 cache |
-| `try_remove` / `remove` | 空 UUID；memory_only；DB 成功/notfound/OLD_VERSION/普通错误；stream/no-wait action 禁用回包；错误时记录必须仍可读取 |
-| `tick` | 空 LRU；null entry seam；duration 到期；max count；未到期不淘汰；淘汰后从 DB reload；返回准确淘汰数 |
+| participant 两组 overload / RPC | key 不存在；首个/中间/最后参与者；重复 ack；全局 PREPARED/COMMITED/REJECTED 下分别发送两种 ack；全局状态始终不变，参与者可自主进入请求方向但自身终态不可反向回退；只有全部参与者严格同向完成时 delete；delete 前用 `await_io_task()` 排空在途 IO 且不产生额外 replace；remove notfound 幂等；remove error 不得丢 cache |
+| `try_remove` / `remove` | 空 UUID；memory_only；DB 成功/notfound/OLD_VERSION/普通错误；remove 前 `await_io_task()` 排空在途 IO 且不产生额外 replace，排空失败仍继续删除；stream/no-wait action 禁用回包；错误时记录必须仍可读取 |
+| `tick` | 空 LRU；null entry seam；duration 到期；max count；未到期不淘汰；有在途 IO 的缓存照常淘汰且置 `removed`（IO 结束后不写回/不重新入缓存）；memory_only 允许容量淘汰并打印警告日志；淘汰后从 DB reload；返回准确淘汰数 |
 | `stop` | 单独 executable：stop 前可读、stop 后 fetch 返回 shutdown、重复 stop 幂等 |
 
 每个 action 至少两类测试：
@@ -302,16 +302,16 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 | DT-002 | client / `retry_exhaustion_never_fakes_commit` | 已过期和 `success+allow_retry` 永久返回两条路径；协调者/participant commit 均为 0 次；已 create 时协调者持久化 REJECTED，并按失败方向有界消费 |
 | DT-003 | api/client / `replication_counts_only_valid_success` | N=3/R=2，空 protobuf 成功响应、业务错误、malformed、timeout 乱序组合；只有有效成功数达到 R 才返回成功；少于 R 个响应合入的终态 metadata 不能让 Client 跳过 quorum query |
 | DT-004 | dtcoordsvr / `remove_propagates_db_failure` | remove_all 返回普通错误/OLD_VERSION；RPC 传播错误，LRU/DB 仍可恢复；成功/notfound 才清 cache |
-| DT-005 | participator / `terminal_action_failure_is_bounded_and_consumed` | 协调者分别固定 COMMITED/REJECTED；`do_event` 第 1/N 次成功及永久失败；方向不变，恰好 N 次，最终 ack/本地清理且有耗尽诊断；lifecycle 回调按 remove running→add finished→callback 顺序且失败只记录；force_commit 单独验证 Client 本地结果和 undo 范围 |
+| DT-005 | participator / `terminal_action_failure_is_bounded_and_consumed` | 协调者分别固定 COMMITED/REJECTED；`do_event` 第 1/N 次成功及永久失败；方向不变，恰好 N 次（动作阶段内经 RPC 重发/timer 重复进入不重置计数，预算跨驱动源累计）；最终 ack/本地清理且有耗尽诊断；lifecycle 回调按 remove running→add finished→callback 顺序且失败只记录；force_commit 单独验证 Client 本地结果和 undo 范围 |
 | DT-006 | client / `coordinator_terminal_is_only_decision` | commit/reject 已落库但响应丢失、相反终态回包、prepare 失败；有界 query 后只通知持久化方向，失败路径先持久化 REJECTED，不直接 remove |
 | DT-007 | dtcoordsvr / `memory_only_cache_is_mutable` | memory-only create 后 query/commit/reject/ack 命中 LRU 且 0 次 DB；淘汰后的 notfound 行为单独断言 |
 | DT-008 | participator / `appended_lock_is_dumped_and_released` | 同一事务依次 lock A/B，dump 含两项，unlock/终态后两个 locker 均为空且 strong pointer 回基线 |
-| DT-009 | dtcoordsvr / `terminal_record_has_bounded_lifetime` | 空参与者创建被拒绝；非空事务在参与者永久失联或 Client 消失时，DB TTL 覆盖剩余事务时间、5 秒容差和恢复窗口；正亚秒 TTL 向上取整，推进后 DB/LRU 均可清理 |
+| DT-009 | dtcoordsvr / `terminal_record_has_bounded_lifetime` | 空参与者创建被拒绝；非空事务在参与者永久失联或 Client 消失时，DB TTL = `expire_timepoint + transaction_expire_grace_duration`（默认 5s）且不超过 `transaction_max_ttl`（默认 3600s），不叠加恢复预算、不允许永不过期；正亚秒 TTL 向上取整，推进后 DB/LRU 均可清理 |
 | DT-010 | client / `duplicate_participator_update_returns_success` | 同 key 合法 Any 更新返回成功且内容替换；PackFrom 失败才返回 EN_SYS_PACK，旧值不污染 |
 | DT-011 | participator / `allow_retry_does_not_enter_running` | check_prepare 返回 0+allow_retry；response 保留 reason，但 running/lock/timer/lifecycle callback 均不变化 |
 | DT-012 | api/client/manager / `chrono_protocol_boundary_round_trip` | public C++ 参数为 chrono；0/负/亚秒/跨秒/大 duration；协议字段仍为 Timestamp/Duration；所有手写 seconds/nanos 路径被回归覆盖 |
 | DT-013 | api/participator/manager / `timestamp_exact_nanosecond_carry` | 固定 now+duration 恰为 1e9ns；initialize、manager fallback、resolve 均得到 seconds+1/nanos=0，并覆盖负/多秒归一化 |
-| DT-014 | client / `terminal_delivery_result_is_separate_and_bounded` | COMMITED/REJECTED 下通知 error→success、永久 error、多参与者乱序；事务返回只取协调者终态，通知恰好最多 N 次，两个输出集合无旧值 |
+| DT-014 | client / `terminal_delivery_result_is_separate_and_bounded` | COMMITED/REJECTED 下通知 error→success、永久 error、多参与者乱序；事务返回只取协调者终态，通知恰好最多 N 次，两个输出集合无旧值；终态通知投递失败不进入 `output_failed_participators`，仅 prepare 失败进入；notify 任务不按引用捕获 submit 栈对象，外层协程被 kill/超时后任务仍能安全执行完毕（handle 由 `shared_from_this()` 强引用自捕获保活，storage/vtable 由值捕获的智能指针保活，结果写入共享单元） |
 | DT-015 | participator / `resolve_budget_exhaustion_rejects_and_consumes` | `resolve_times == resolve_max_times` 时下一次进入直接走 reject、0 次 query；断言 running/lock/timer 转入有界 finished ack，最终本地消费且后续 tick 不再重试 |
 | DT-016 | participator / `finished_ack_failure_has_budget` | ack 第 N 次成功和永久失败；interval 未到不发送，最多 N 次；耗尽后 finished/strong pointer 释放，后续 tick 不再发送，协调者由 TTL 兜底 |
 | DT-017 | api / `chrono_duration_helper_returns_duration` | `static_assert` 返回 `google::protobuf::Duration`；0、正负亚秒、跨秒 round-trip；组件删除私有重复转换 helper |

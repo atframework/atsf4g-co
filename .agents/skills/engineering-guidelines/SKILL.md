@@ -1,12 +1,12 @@
 ---
 name: engineering-guidelines
-description: "Use when: writing or reviewing C++/CMake/Markdown code, code review, applying project engineering conventions, checking .clang-tidy/CPPLINT.cfg-backed lint issues, copyright headers, include hygiene, header inline, template visibility and exported API ABI rules, cpplint, clang-format, cmake-format, cmake-lint, markdownlint, protobuf, RPC, generated-code, service/component CMake rules."
+description: "Use when: writing or reviewing C++, CMake, protobuf, RPC, or generated-code inputs, including repo lint rules and API/ABI conventions. Do not use for docs-only, build execution, or test execution."
 ---
 
 # Engineering guidelines
 
-Use this skill before writing or reviewing code in this repository. This file is a compact router. Load only the
-sibling section you need so unrelated rules do not bloat your context.
+Use this Skill before writing or reviewing production code or generated-code inputs. It is a compact router: load only
+the sibling section needed for the current task.
 
 ## Sections
 
@@ -41,4 +41,3 @@ These cover environment, domain, or workflow knowledge rather than coding norms;
 | `../atgateway-protocol/SKILL.md`   | atgateway v2 protocol, crypto, compression, reconnection, gateway tests |
 | `../deployment-config/SKILL.md`    | Deployment configs, generated scripts, Helm values                      |
 | `../configure-expression/SKILL.md` | Env-expression-enabled config fields                                    |
-| `../orbit/SKILL.md`                | Orbit protocol notes, SDK/session routing pseudocode, flow design       |

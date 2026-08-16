@@ -138,10 +138,11 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
 - Delivery runs real dispatch **synchronously**; a resumed coroutine may immediately re-enter the engine
   (`inject_response`/`queue_response` `push_back` invalidates deque iterators). Never hold deque iterators across
   `trigger_event_on_forward_request`/`custom_resume`; use the two-phase `detail::drain_due_events`.
-- mock_db mirrors the Redis/Lua golden contract (behavior pinned by
-  `src/server_frame/test/server_frame_test_db_script_contract.cpp` at the server_frame level and
-  `src/tools/rpc-unit-test/test/rpc_unit_test_db.cpp` at the engine level; when a script changes, keep the mock and the
-  mirroring cases in sync): `EXPIRE`/`PERSIST` on a **missing key is a successful no-op** (NOT an error); a
+- mock_db mirrors the Redis/Lua golden contract (the real scripts are executed in an embedded Lua
+  interpreter against a `redis.call` simulator by `src/server_frame/test/server_frame_test_db_script_contract.cpp`;
+  the same contract is pinned at the engine level by `src/tools/rpc-unit-test/test/rpc_unit_test_db.cpp`; when a script
+  changes, keep the mock and the mirroring cases in sync): `EXPIRE`/`PERSIST` on a **missing key is a successful
+  no-op** (NOT an error); a
   CAS set accepts a record without a version, an equal expected version, **or expected version 0 (ignore the CAS check
   and force the overwrite — the stored version still bumps from the real one)**; otherwise the conflict returns
   `EN_DB_OLD_VERSION` and writes the stored version back; insert (`op_type::kv_insert`) rejects an already-versioned

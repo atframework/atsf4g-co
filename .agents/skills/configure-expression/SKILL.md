@@ -1,14 +1,13 @@
 ---
 name: configure-expression
-description: "Use when: editing enable_expression config fields, environment-variable expansion syntax, YAML deployment values, or atapp config templates."
+description: "Use when: editing or debugging enable_expression annotations and ${VAR} expansion in annotated atapp config fields. Do not use for unrelated YAML, Helm values, or templates."
 ---
 
 # Configuration Expression Expansion
 
-Protobuf fields annotated with `enable_expression: true` in the `atapp_configure_meta` extension
-(defined in `atapp_conf.proto`) support **environment-variable expression expansion** at config-load time.
-This is implemented in **libatapp** and available to all services that load configuration through the
-standard `atapp` config loaders (YAML, INI `.conf`, environment-variable files).
+Only protobuf fields annotated with `enable_expression: true` in the `atapp_configure_meta` extension participate in
+environment-expression expansion. Before editing a value, find its protobuf field and confirm the annotation; `${...}`
+text alone is not enough to activate this behavior.
 
 ## Quick Reference
 
@@ -21,7 +20,7 @@ standard `atapp` config loaders (YAML, INI `.conf`, environment-variable files).
 | `\$`              | Literal dollar sign (escape)                                            |
 | Nested            | `${OUTER_${INNER}}`, `${VAR:-${OTHER:-fallback}}`                       |
 
-## Enabling Expression Expansion
+## Add or change an annotation
 
 Add the extension annotation to your protobuf field:
 
@@ -39,33 +38,11 @@ message my_config {
 
 For `map` fields, **both key and value** are expanded.
 
-## Example: Deployment YAML
+## Verify from source
 
-```yaml
-atapp:
-  metadata:
-    label:
-      app.kubernetes.io/name: "${APP_NAME:-my-service}"
-      service_subset: "${SUBSET:-${ZONE:-default}}"
-  bus:
-    listen:
-      - "ipv4://0.0.0.0:${LISTEN_PORT:-12345}"
-  log:
-    level: "${LOG_LEVEL:-info}"
-```
-
-## Example: INI `.conf`
-
-```ini
-[atapp.metadata.label]
-app.kubernetes.io/name=${APP_NAME:-my-service}
-
-[atapp.bus]
-listen=ipv4://0.0.0.0:${LISTEN_PORT:-12345}
-```
-
-## Detailed Documentation
-
-For full syntax rules, C++ API, and integration details, see the libatapp skill:
-
-- `atframework/libatapp/.agents/skills/configure-expression/SKILL.md`
+- Read the nearest `atframework/libatapp/AGENTS.md` before changing libatapp itself.
+- `atframework/libatapp/include/atframe/atapp_conf.proto` defines the annotation.
+- `atframework/libatapp/src/atframe/atapp_conf.cpp` implements field and map expansion.
+- Search current libatapp tests for the exact syntax or edge case before changing semantics; do not treat this compact
+  table as a replacement for implementation evidence.
+- For deployment-template work, load `deployment-config` separately and validate a representative rendered config.

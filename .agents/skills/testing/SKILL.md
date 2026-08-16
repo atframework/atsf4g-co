@@ -1,11 +1,11 @@
 ---
 name: testing
-description: "Use when: running or writing unit tests, discovering/filtering private test-framework cases, or fixing Windows DLL/PATH test startup issues. For the offline mock-RPC fixture (atfw::testing::runtime, mock SS/DNS/DB engines in src/tools/rpc-unit-test) use rpc-unit-test instead."
+description: "Use when: running or writing generic unit tests, filtering private-framework cases, or fixing Windows test startup/PATH. For offline service RPC tests with atfw::testing::runtime, use rpc-unit-test."
 ---
 
 # Unit testing (atsf4g-co)
 
-This repo uses a **private unit testing framework** (shared by atframe_utils/libatbus/libatapp).
+This repository uses a private unit testing framework shared by several atframework projects.
 
 ## Discover and run tests (generic)
 
@@ -37,30 +37,14 @@ Set-Location "$buildDir\_deps\atframe_utils\test\$cfg"
 ./atframe_utils_unit_test.exe -l
 ```
 
-## Local etcd for etcd-dependent tests
+## Etcd-dependent tests
 
-Some unit tests (`atapp_etcd_cluster`, `atapp_etcd_module`) require a running etcd instance. Use the `setup-etcd` scripts in `atframework/libatapp/ci/etcd/` to download and start a local etcd:
-
-```bash
-# Linux / macOS
-bash atframework/libatapp/ci/etcd/setup-etcd.sh start
-export ATAPP_UNIT_TEST_ETCD_HOST="http://127.0.0.1:12379"
-# Run etcd-dependent tests, then:
-bash atframework/libatapp/ci/etcd/setup-etcd.sh stop
-```
-
-```powershell
-# Windows (PowerShell)
-.\atframework\libatapp\ci\etcd\setup-etcd.ps1 -Command start
-$env:ATAPP_UNIT_TEST_ETCD_HOST = "http://127.0.0.1:12379"
-# Run etcd-dependent tests, then:
-.\atframework\libatapp\ci\etcd\setup-etcd.ps1 -Command stop
-```
-
-Commands: `download`, `start`, `stop`, `cleanup` (stop + delete all), `status`. Default client port: `12379`.
-
-If `ATAPP_UNIT_TEST_ETCD_HOST` is not set, etcd-dependent tests are skipped (not failed).
+Read [local etcd tests](references/local-etcd.md) only when running `atapp_etcd_cluster`, `atapp_etcd_module`, or when
+test output says an etcd-dependent case was skipped.
 
 ## Tip: using VS Code tasks
 
 If the workspace provides CMake build tasks, prefer those to ensure UTF-8 console output and consistent build directories.
+
+Read the executable's exit status and case counts. A skipped dependency-backed case is not passing coverage; report the
+skip and the missing prerequisite explicitly.

@@ -184,6 +184,12 @@ class db_msg_dispatcher : public dispatcher_implement {
   SERVER_FRAME_API void set_db_script_sha1(script_type type, const char *str, int len);
 
   /*
+   * @brief 获取表脚本的Lua源码（单元测试在嵌入式Lua里执行脚本以验证行为契约）
+   * @return 脚本源码；无效类型返回nullptr
+   */
+  SERVER_FRAME_API static const char *get_db_script_source(script_type type);
+
+  /*
    * @brief 连接完成时调用用户的设置的回调函数
    */
   SERVER_FRAME_API void set_on_connected(channel_t::type t, user_callback_t fn);

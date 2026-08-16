@@ -1,6 +1,6 @@
 ---
 name: change-workflow
-description: "Use when: diagnosing or fixing a defect, test/build/runtime failure, or planning and implementing a nontrivial feature, behavior change, cross-module refactor, public API/ABI, data model/migration, security, or deployment change. Do not use when: only making a small documentation, formatting, comment, or routine local edit with a clear verification path."
+description: "Use when: diagnosing a defect/failure or implementing a nontrivial or high-risk behavior, API/ABI, data, security, deployment, or cross-module change. Do not use for routine local edits with an obvious check."
 ---
 
 # Change Workflow

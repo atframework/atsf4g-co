@@ -1,89 +1,41 @@
 ---
 name: atgateway-protocol
-description: "Use when: working on atgateway v2 protocol code, ECDH handshakes, encryption, compression, reconnection, FlatBuffers schema, or gateway unit tests."
+description: "Use when: changing atgateway v2 wire schema, handshake/ECDH, crypto, compression, reconnection, or protocol tests. Do not use for ordinary service routing through atgateway."
 ---
 
 # atgateway Protocol SDK
 
-The atgateway protocol provides secure client-gateway communication via a 2-message ECDH key exchange.
+Use the live schema, implementation, protocol document, and tests as the source of truth. This Skill routes the work; it
+does not restate wire behavior that can drift.
 
-## Key Files
+## Source routing
 
-- `atframework/service/atgateway/protocol/atgateway/protocol/v2/libatgw_protocol_sdk.h` — Main SDK header
-- `atframework/service/atgateway/protocol/atgateway/protocol/v2/libatgw_protocol_sdk.fbs` — FlatBuffers wire schema
-- `atframework/service/atgateway/protocol/atgateway/protocol/libatgw_protocol_api.h` — Base protocol API
-- `atframework/service/atgateway/protocol/atgateway/protocol/libatgw_server_config.proto` — Server config (Protobuf)
-- `atframework/service/atgateway/protocol/atgateway/protocol/libatgw_server_protocol.proto` — Gateway↔logic server protocol
-- `atframework/service/atgateway/protocol/PROTOCOL.md` — Full protocol documentation
+Use `<PROTOCOL_ROOT>=atframework/service/atgateway/protocol` and
+`<SDK_DIR>=<PROTOCOL_ROOT>/atgateway/protocol` below.
 
-## Architecture
+| Task | Read first |
+| --- | --- |
+| Wire messages or compatibility | `<SDK_DIR>/v2/libatgw_protocol_sdk.fbs` and `<PROTOCOL_ROOT>/PROTOCOL.md` |
+| SDK state, handshake, crypto, compression, reconnect | `<SDK_DIR>/v2/libatgw_protocol_sdk.{h,cpp}` and `<SDK_DIR>/libatgw_protocol_api.{h,cpp}` |
+| Gateway-to-logic configuration/protocol | `<SDK_DIR>/libatgw_server_config.proto` and `<SDK_DIR>/libatgw_server_protocol.proto` |
+| Unit-test behavior and helpers | `<PROTOCOL_ROOT>/test/case/libatgw_protocol_sdk_test.cpp` and `<PROTOCOL_ROOT>/test/CMakeLists.txt` |
 
-```text
-Game Client  ←─ FlatBuffers (v2) ─→  atgateway  ←─ Protobuf ─→  Logic Server
-                (libatgw_protocol_sdk)              (libatgw_server_protocol)
-```
+## Change workflow
 
-## Handshake Flow
+1. Identify the exact frame, state transition, callback, or configuration field and trace both peers through current
+   code before proposing behavior.
+2. For schema or wire changes, record compatibility with existing clients/servers and whether unknown or old messages
+   remain parseable. Regenerate FlatBuffers/protobuf outputs instead of hand-editing generated files.
+3. For crypto or authentication changes, verify negotiation failure, downgrade behavior, key/session lifetime,
+   transition-state reads, reconnect, and malformed input from current code and tests. Do not infer security behavior
+   from names or this Skill.
+4. Extend the existing loopback tests with the smallest case that proves the changed transition and its failure path.
+   Reuse current helpers from the test file rather than copying a stale example into this Skill.
+5. Load `engineering-guidelines` for C++/schema conventions, `testing` for the private test runner, and `build` only when
+   configuring/building or diagnosing the build environment.
 
-1. **Client** sends `kKeyExchangeReq` with ECDH public key + supported algorithms + access_data
-2. **Server** processes, sends `kKeyExchangeRsp` with its public key + selected algorithm + session_id + session_token
-3. **Client** sends `kConfirm` to confirm cipher switch
-4. Both sides derive shared secret via ECDH → HKDF-SHA256 → symmetric key + IV
+## Validation
 
-## Core Types
-
-- `libatgw_protocol_sdk` — per-connection protocol handler (inherits `libatgw_protocol_api`)
-- `crypto_conf_t` — configuration: key exchange, algorithms, access tokens, thresholds
-- `crypto_session_t` — per-connection crypto state: ciphers, DH context, compression
-- `crypto_shared_context_t` — shared global config (created via `create_shared_context`)
-- `proto_callbacks_t` — callback structure: write_fn, message_fn, new_session_fn, close_fn, etc.
-
-## Writing Unit Tests
-
-Tests use a loopback simulation framework. Key helpers:
-
-```cpp
-// Setup server-client pair wired back-to-back
-sim_peer_t server, client;
-libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
-setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
-
-// Client initiates handshake
-int ret = client.sdk->start_session();
-CASE_EXPECT_EQ(0, ret);
-CASE_EXPECT_EQ(0, server.handshake_status);
-
-// Send encrypted message
-client.sdk->send_post(data_span);
-CASE_EXPECT_EQ(1, server.received_messages.size());
-```
-
-## Building and Running Tests
-
-```bash
-cmake --build <build_dir> --target atgateway_protocol_unit_test
-```
-
-On Windows, add DLLs to PATH:
-
-- `publish/bin`
-- `publish/atframework/atgateway/bin`
-- `third_party/install/.../bin`
-
-## Common Patterns
-
-### Algorithm negotiation
-
-Client sends all supported algorithms; server picks the first mutually supported one. If no overlap, falls back to `kNone` (plaintext).
-
-### Key refresh (handshake_update)
-
-Re-runs ECDH exchange on live session. Session ID preserved. Server uses `handshaking_receive_cipher` during transition to handle both old and new keys until client confirms.
-
-### Reconnect
-
-Uses `kReconnectReq`/`kReconnectRsp`. Client sends old session_id + session_token. Server's `reconnect_fn` callback decides acceptance. Full ECDH re-exchange inline. Session token rotated on success.
-
-### Access token authentication
-
-HMAC-SHA256 over `"{timestamp}:{nonce1}-{nonce2}:{session_id}:{key_exchange}:{sha256(pubkey)}"`. Server verifies against all configured tokens. Multiple tokens support zero-downtime rotation.
+- Build the target resolved from the current protocol test `CMakeLists.txt`; do not rely on a hardcoded target name here.
+- Run focused protocol cases, then the protocol test executable's full suite when practical.
+- Report any algorithm/backend, platform DLL, or dependency variant that was not exercised.

@@ -200,9 +200,9 @@ overridden per rule (e.g. explicitly mark a stream as `fail` for negative assert
   pump generations (consistent across SS and DNS).
 - Engines deliver in **due order, not FIFO**; delivery resumes coroutines synchronously and a task may re-enter the
   engine (two-phase drain, see `src/tools/rpc-unit-test/src/detail/pending_drain.h`).
-- The DB in-memory backend aligns with the Redis/Lua golden contract (the behavior contract is pinned by
-  `src/server_frame/test/server_frame_test_db_script_contract.cpp` and the engine selftest): `EXPIRE`/`PERSIST` on a
-  missing key is a
+- The DB in-memory backend aligns with the Redis/Lua golden contract (`src/server_frame/test/server_frame_test_db_script_contract.cpp`
+  executes the real db_msg_dispatcher scripts in an embedded Lua interpreter to pin the behavior contract, mirrored by
+  the engine selftest): `EXPIRE`/`PERSIST` on a missing key is a
   successful no-op (not an error); a CAS set accepts a record without a version, an equal expected version, or
   **an expected version of 0 (ignore the CAS check and force the overwrite; the stored version still bumps from the
   real one)**, otherwise the conflict returns `EN_DB_OLD_VERSION` and writes the stored version back; insert

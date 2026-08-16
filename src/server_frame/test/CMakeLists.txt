@@ -12,6 +12,13 @@
 # conflicting telemetry configurations must not share a process (see the telemetry section of
 # doc/docs/development/rpc-unit-test.md).
 
+# server_frame_test_db_script_contract.cpp executes the real db_msg_dispatcher Lua scripts in an
+# embedded interpreter (redis.call simulator), so the unit-test target links the project Lua.
+if(NOT ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LUA_LINK_NAME)
+  message(FATAL_ERROR "server-frame db script contract tests require Lua "
+                      "(ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LUA_LINK_NAME is empty)")
+endif()
+
 project_add_rpc_unit_test(
   TARGET ${PROJECT_NAME}-server-frame-unit-test
   COMPONENT server-frame
@@ -21,6 +28,7 @@ project_add_rpc_unit_test(
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_cs_session.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_resource.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_rpc_lru_cache.cpp"
+  LINK_LIBRARIES ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LUA_LINK_NAME}
   FEATURES SS DB CS RESOURCE DNS
   LABELS fast
   TIMEOUT 120)

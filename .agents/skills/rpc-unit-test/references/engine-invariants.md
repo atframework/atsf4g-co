@@ -47,14 +47,19 @@ exposes `kill_all`, so a hard timeout cannot claim to reclaim just one task).
 
 The authoritative write contract is the Lua script set embedded in
 `src/server_frame/dispatcher/db_msg_dispatcher.cpp` (`kCompareAndSetHashTable`, `kInsertHashTable`,
-`kAddListIndexHashTable`). Their **observable behavior** (not the script text) is pinned by
-`src/server_frame/test/server_frame_test_db_script_contract.cpp` (server_frame level, through the `rpc::db::hash_table`
-primitives) and `src/tools/rpc-unit-test/test/rpc_unit_test_db.cpp` (engine selftest level): read/write version
-consistency, version-0 forced overwrite, insert-only rejection, field merge and KL eviction. When a script changes,
-re-verify the new semantics against those cases and update the mock together. The in-memory backend must also
-reproduce the dispatcher-layer error mapping itself because the hash-table hook bypasses `db_msg_dispatcher::dispatch`
-(the hook seam sits inside the `rpc::db::hash_table` entry, so caller-side reply mappings such as insert's
-`CAS_FAILED` → `EN_DB_KEY_EXISTS` conversion are part of the mock's contract):
+`kAddListIndexHashTable`), exposed through `db_msg_dispatcher::get_db_script_source(script_type)`. The scripts are
+**executed for real** (not text-compared) by `src/server_frame/test/server_frame_test_db_script_contract.cpp`: the test
+target links `${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LUA_LINK_NAME}` and runs each script in an embedded Lua state
+against a `redis.call` simulator (HGET/HSET/HDEL/HINCRBY/HKEYS), with KEYS/ARGV shaped like the production commands
+(`make_versioned_argv` mirrors `rpc::db::pack_message`). The same contract is pinned through the `rpc::db::hash_table`
+primitives by the `db_script_*` cases in that file and by `src/tools/rpc-unit-test/test/rpc_unit_test_db.cpp` (engine
+selftest): read/write version consistency, version-0 forced overwrite, insert-only rejection, field merge and KL
+eviction. When a script changes, re-run those cases and update the mock together. The installed third-party lua ships
+`lua.h`/`lualib.h` **without lauxlib.h**, so the harness uses only the core C API (a `lua_load` reader, a custom
+allocator, direct `luaopen_base`/`luaopen_table` with the module table stored into its global name) and must not call
+`luaL_*`. The in-memory backend must also reproduce the dispatcher-layer error mapping itself because the hash-table
+hook bypasses `db_msg_dispatcher::dispatch` (the hook seam sits inside the `rpc::db::hash_table` entry, so caller-side
+reply mappings such as insert's `CAS_FAILED` → `EN_DB_KEY_EXISTS` conversion are part of the mock's contract):
 
 - `EXPIRE`/`PERSIST` (`set_ttl`/`remove_ttl`) on a **missing key is a successful no-op** — production maps the plain
   integer reply (`0`) through `unpack_nothing` → `EN_SUCCESS`. Do NOT return not-found for these two ops.
