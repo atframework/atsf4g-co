@@ -43,6 +43,10 @@ static uint32_t get_retry_limit(const transaction_participator_storage& storage)
   return std::max<uint32_t>(1, storage.configure().resolve_max_times());
 }
 
+// 每积累 16 个 finished 事务强制启动一次刷新操作（以 5 为相位，避免与定时器边界对齐）
+constexpr size_t kFinishedTransactionAutoTickModulo = 16;
+constexpr size_t kFinishedTransactionAutoTickPhase = 5;
+
 static void set_next_retry_timepoint(transaction_participator_storage& storage,
                                      std::chrono::system_clock::time_point now) {
   auto retry_interval = protobuf_to_chrono_duration(storage.configure().resolve_retry_interval());
@@ -51,7 +55,88 @@ static void set_next_retry_timepoint(transaction_participator_storage& storage,
   }
   protobuf_copy_message(*storage.mutable_resolve_timepoint(), protobuf_from_system_clock(now + retry_interval));
 }
+
+// 在途终态方向标记的 RAII 守卫：
+// 终态流程存在多条协程返回路径，手工复位一旦漏掉会永久卡死同事务的后续终态调用（同方向静默假成功），
+// 统一交给析构复位避免两个流程的退出路径漂移；条目可能已被 remove_running_transaction 销毁，
+// 析构时按 UUID 查找，找不到即为已完成清理
+class inflight_terminal_mark_guard {
+ public:
+  inflight_terminal_mark_guard(
+      std::unordered_map<std::string, transaction_participator_handle::running_transaction_entry>& owner,
+      const std::string& transaction_uuid)
+      : owner_(owner), transaction_uuid_(transaction_uuid) {}
+  ~inflight_terminal_mark_guard() {
+    auto iter = owner_.find(transaction_uuid_);
+    if (iter != owner_.end()) {
+      iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED;
+    }
+  }
+
+  inflight_terminal_mark_guard(const inflight_terminal_mark_guard&) = delete;
+  inflight_terminal_mark_guard& operator=(const inflight_terminal_mark_guard&) = delete;
+
+ private:
+  std::unordered_map<std::string, transaction_participator_handle::running_transaction_entry>& owner_;
+  const std::string& transaction_uuid_;
+};
 }  // namespace
+
+void transaction_participator_handle::resolve_timer_queue_type::insert_or_replace(resolve_timer_action_type action,
+                                                                                  const storage_type& storage) {
+  const std::string& transaction_uuid = storage.metadata().transaction_uuid();
+  erase(transaction_uuid);
+  storage_resolve_timer_type timer{action, storage};
+  timers_.insert(timer);
+  index_.insert_or_assign(transaction_uuid, timer);
+}
+
+void transaction_participator_handle::resolve_timer_queue_type::erase(const std::string& transaction_uuid) {
+  auto iter = index_.find(transaction_uuid);
+  if (iter == index_.end()) {
+    return;
+  }
+  timers_.erase(iter->second);
+  index_.erase(iter);
+}
+
+void transaction_participator_handle::resolve_timer_queue_type::erase(const storage_resolve_timer_type& timer) {
+  auto iter = index_.find(timer.transaction_uuid);
+  if (iter == index_.end() || iter->second != timer) {
+    return;
+  }
+  timers_.erase(iter->second);
+  index_.erase(iter);
+}
+
+void transaction_participator_handle::resolve_timer_queue_type::clear() {
+  timers_.clear();
+  index_.clear();
+}
+
+void transaction_participator_handle::schedule_resolve_retry(resolve_timer_action_type action, storage_type& storage) {
+  set_next_retry_timepoint(storage, atfw::util::time::time_utility::now());
+  resolve_timer_queue_.insert_or_replace(action, storage);
+}
+
+DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::resolve_timer_queue_type::trigger_due(
+    atfw::util::time::time_utility::raw_time_t timepoint,
+    ::atfw::util::nostd::function_ref<bool(const storage_resolve_timer_type& timer)> fn) {
+  while (!timers_.empty()) {
+    auto iter = timers_.begin();
+    if (iter->timepoint > timepoint) {
+      break;
+    }
+
+    storage_resolve_timer_type timer_data = *iter;
+    timers_.erase(iter);
+    index_.erase(timer_data.transaction_uuid);
+
+    if (!fn(timer_data)) {
+      break;
+    }
+  }
+}
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::transaction_participator_handle(
     const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key)
@@ -66,29 +151,63 @@ DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::~transaction_pa
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const snapshot_type& storage) {
-  resolve_timers_.clear();
+  resolve_timer_queue_.clear();
   running_transactions_.clear();
   transaction_locks_.clear();
   finished_transactions_.clear();
+  // 注意: 在途的 auto resolve task 无法安全取消，但它只通过 resolve_transcation/handle_finished_transaction_result
+  // 按 UUID 或对象标识操作当前容器，对 load 后的新状态是幂等安全的。
 
   for (const auto& transaction : storage.running_transaction()) {
+    const std::string& transaction_uuid = transaction.metadata().transaction_uuid();
+    if (transaction_uuid.empty()) {
+      FWLOGERROR("participator {} load snapshot with empty transaction uuid, skip it", get_participator_key());
+      continue;
+    }
+    if (running_transactions_.end() != running_transactions_.find(transaction_uuid)) {
+      FWLOGERROR("participator {} load snapshot with duplicate running transaction {}, keep the first one",
+                 get_participator_key(), transaction_uuid);
+      continue;
+    }
+
     auto transaction_ptr = atfw::component::memory::stl::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
       continue;
     }
     protobuf_copy_message(*transaction_ptr, transaction);
-    running_transactions_[transaction.metadata().transaction_uuid()] = transaction_ptr;
+    running_transactions_[transaction_uuid].storage = transaction_ptr;
 
     // Restore locks
     for (const auto& lock_resource : transaction.lock_resource()) {
+      auto lock_iter = transaction_locks_.find(lock_resource);
+      if (lock_iter != transaction_locks_.end() && lock_iter->second &&
+          lock_iter->second->metadata().transaction_uuid() != transaction_uuid) {
+        FWLOGERROR(
+            "participator {} load snapshot with conflicted lock resource {} of transaction {} (held by "
+            "transaction {}), keep the first holder",
+            get_participator_key(), lock_resource, transaction_uuid, lock_iter->second->metadata().transaction_uuid());
+        continue;
+      }
       transaction_locks_[lock_resource] = transaction_ptr;
     }
 
-    resolve_timers_.insert(storage_resolve_timer_type{transaction});
+    resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kQuery, *transaction_ptr);
   }
 
   for (const auto& transaction : storage.finished_transaction()) {
+    const std::string& transaction_uuid = transaction.metadata().transaction_uuid();
+    if (transaction_uuid.empty()) {
+      FWLOGERROR("participator {} load snapshot with empty finished transaction uuid, skip it", get_participator_key());
+      continue;
+    }
+    if (running_transactions_.end() != running_transactions_.find(transaction_uuid) ||
+        finished_transactions_.end() != finished_transactions_.find(transaction_uuid)) {
+      FWLOGERROR("participator {} load snapshot with duplicate finished transaction {}, keep the first one",
+                 get_participator_key(), transaction_uuid);
+      continue;
+    }
+
     auto transaction_ptr = atfw::component::memory::stl::make_strong_rc<storage_type>();
     if (!transaction_ptr) {
       FWLOGERROR("participator {} malloc transaction storage failed", get_participator_key());
@@ -96,7 +215,8 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
     }
 
     protobuf_copy_message(*transaction_ptr, transaction);
-    finished_transactions_[transaction.metadata().transaction_uuid()] = transaction_ptr;
+    finished_transactions_[transaction_uuid] = transaction_ptr;
+    resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
   }
 }
 
@@ -110,8 +230,8 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::dump(snaps
   }
 
   for (auto& transaction : running_transactions_) {
-    if (transaction.second) {
-      protobuf_copy_message(*storage.add_running_transaction(), *transaction.second);
+    if (transaction.second.storage) {
+      protobuf_copy_message(*storage.add_running_transaction(), *transaction.second.storage);
     }
   }
 }
@@ -136,58 +256,64 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
   std::list<std::string> pending_transactions;
   std::vector<storage_ptr_type> submmit_transactions;
 
-  std::list<storage_resolve_timer_type> invalid_timers;
-  for (auto iter = resolve_timers_.begin(); iter != resolve_timers_.end(); ++iter) {
-    // 强制同步定时器
-    if ((*iter).timepoint > timepoint) {
-      break;
+  // 统一队列按 action 分发：query 查 running 集合，acknowledge 查 finished 集合，均按截止时间消费。
+  // trigger_due 在回调前移除 timer，无效条目（事务已不在对应集合）随之自动丢弃；
+  // 有效条目的恢复所有权转交本函数：任务拉起失败时必须重新武装
+  resolve_timer_queue_.trigger_due(timepoint, [&](const storage_resolve_timer_type& timer) {
+    if (timer.action == resolve_timer_action_type::kQuery) {
+      auto transaction_iter = running_transactions_.find(timer.transaction_uuid);
+      if (transaction_iter == running_transactions_.end()) {
+        return true;
+      }
+
+      if (!transaction_iter->second.storage) {
+        running_transactions_.erase(transaction_iter);
+        return true;
+      }
+
+      pending_transactions.push_back(transaction_iter->first);
+    } else {
+      auto transaction_iter = finished_transactions_.find(timer.transaction_uuid);
+      if (transaction_iter == finished_transactions_.end() || !transaction_iter->second) {
+        return true;
+      }
+
+      submmit_transactions.push_back(transaction_iter->second);
     }
-
-    auto transaction_iter = running_transactions_.find((*iter).transaction_uuid);
-
-    if (transaction_iter == running_transactions_.end()) {
-      invalid_timers.push_back(*iter);
-      continue;
-    }
-
-    if (!transaction_iter->second) {
-      running_transactions_.erase(transaction_iter);
-      invalid_timers.push_back(*iter);
-      continue;
-    }
-
-    pending_transactions.push_back(transaction_iter->first);
-  }
-
-  // Cleanup dirty timers
-  for (auto& invalid_timer : invalid_timers) {
-    resolve_timers_.erase(invalid_timer);
-  }
-
-  // submit list
-  submmit_transactions.reserve(finished_transactions_.size());
-  for (auto& transaction : finished_transactions_) {
-    // FIXME(owent):【优化】resolve_timepoint时间未到说明上次执行submit失败了
-    //               后面可以优化成放到等待队列中，以免每次tick空跑判断
-    if (transaction.second && protobuf_to_system_clock(transaction.second->resolve_timepoint()) <= timepoint) {
-      submmit_transactions.push_back(transaction.second);
-    }
-  }
+    return true;
+  });
 
   if (pending_transactions.empty() && submmit_transactions.empty()) {
     return 0;
   }
 
+  // trigger_due 已移除这些条目的 timer，任务拉起失败时按退避重新武装，
+  // 避免恢复流程永久丢失或立即到期形成 tight loop
+  auto rearm_timers = [this, &pending_transactions, &submmit_transactions]() {
+    for (const auto& transaction_uuid : pending_transactions) {
+      auto transaction_iter = running_transactions_.find(transaction_uuid);
+      if (transaction_iter != running_transactions_.end() && transaction_iter->second.storage) {
+        schedule_resolve_retry(resolve_timer_action_type::kQuery, *transaction_iter->second.storage);
+      }
+    }
+    for (const auto& transaction_ptr : submmit_transactions) {
+      if (transaction_ptr) {
+        schedule_resolve_retry(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
+      }
+    }
+  };
+
   task_action_participator_resolve_transaction::ctor_param_t params;
   params.participantor = shared_from_this();
-  params.pending_transactions.swap(pending_transactions);
-  params.submmit_transactions.swap(submmit_transactions);
+  params.pending_transactions = pending_transactions;
+  params.submmit_transactions = submmit_transactions;
 
   int32_t res = task_manager::me()->create_task<task_action_participator_resolve_transaction>(
       auto_resolve_transaction_task_, std::move(params));
   if (0 != res || task_type_trait::empty(auto_resolve_transaction_task_)) {
-    FWLOGERROR("create task_action_friend_auto_resolve_transaction failed, res: {}({})", res,
+    FWLOGERROR("create task_action_participator_resolve_transaction failed, res: {}({})", res,
                protobuf_mini_dumper_get_error_msg(res));
+    rearm_timers();
     return res;
   }
 
@@ -198,6 +324,7 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
                task_type_trait::get_task_id(auto_resolve_transaction_task_), res,
                protobuf_mini_dumper_get_error_msg(res));
     task_type_trait::reset_task(auto_resolve_transaction_task_);
+    rearm_timers();
     return res;
   }
 
@@ -298,25 +425,50 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::commit(
     rpc::context& ctx, const SSParticipatorTransactionCommitReq& request, SSParticipatorTransactionCommitRsp&) {
-  return commit_transcation(ctx, request.transaction_uuid());
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/commit"}};
+
+  rpc::context child_ctx{ctx};
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
+  child_trace_option.dispatcher = nullptr;
+  child_trace_option.is_remote = false;
+  child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  child_trace_option.attributes = trace_attributes;
+
+  child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.commit", std::move(child_trace_option));
+
+  // force_commit 时不会进入commit流程。prepare阶段就已经完成了。
+
+  RPC_RETURN_CODE(
+      child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, request.transaction_uuid())), {}}));
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_handle::reject(
     rpc::context& ctx, const SSParticipatorTransactionRejectReq& request, SSParticipatorTransactionRejectRsp&) {
+  rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
+      {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/reject"}};
+
+  rpc::context child_ctx{ctx};
+  rpc::telemetry::tracer child_tracer;
+  rpc::telemetry::trace_start_option child_trace_option;
+  child_trace_option.dispatcher = nullptr;
+  child_trace_option.is_remote = false;
+  child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
+  child_trace_option.attributes = trace_attributes;
+
+  child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.reject", std::move(child_trace_option));
+
   if (request.has_storage() && request.storage().configure().force_commit()) {
-    rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
-        {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-        {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/reject"}};
-
-    rpc::context child_ctx{ctx};
-    rpc::telemetry::tracer child_tracer;
-    rpc::telemetry::trace_start_option child_trace_option;
-    child_trace_option.dispatcher = nullptr;
-    child_trace_option.is_remote = false;
-    child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
-    child_trace_option.attributes = trace_attributes;
-
-    child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.reject", std::move(child_trace_option));
+    // 公开 RPC 可能收到畸形/伪造 payload，undo 前必须验证内外 UUID 一致
+    if (!request.storage().metadata().transaction_uuid().empty() &&
+        request.storage().metadata().transaction_uuid() != request.transaction_uuid()) {
+      FWLOGERROR("participator {} undo transaction {} but request uuid {} mismatch", get_participator_key(),
+                 request.storage().metadata().transaction_uuid(), request.transaction_uuid());
+      RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, {}}));
+    }
 
     FWLOGDEBUG("participator {} undo transaction {}", get_participator_key(),
                request.storage().metadata().transaction_uuid());
@@ -334,7 +486,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
   }
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(reject_transcation(ctx, request.transaction_uuid())));
+  RPC_RETURN_CODE(
+      child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, request.transaction_uuid())), {}}));
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_participator_handle::check_lock(
@@ -411,6 +564,16 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
 
     auto old_holder = transaction_locks_.find(resource_uuid);
     if (old_holder != transaction_locks_.end() && old_holder->second) {
+      if (old_holder->second != transaction_ptr) {
+        // Wound-Wait: 标记被抢占的事务，其资源所有权已不再完整，禁止后续 commit
+        auto wounded_iter = running_transactions_.find(old_holder->second->metadata().transaction_uuid());
+        if (wounded_iter != running_transactions_.end()) {
+          wounded_iter->second.wounded = true;
+        } else {
+          FWLOGERROR("participator {} wound transaction {} but it is not in running set", get_participator_key(),
+                     old_holder->second->metadata().transaction_uuid());
+        }
+      }
       unlock(old_holder->second, resource_uuid);
     }
     transaction_locks_[resource_uuid] = transaction_ptr;
@@ -448,12 +611,12 @@ DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
     return false;
   }
 
-  if (!transaction_iter->second) {
+  if (!transaction_iter->second.storage) {
     running_transactions_.erase(transaction_iter);
     return false;
   }
 
-  return unlock(transaction_iter->second, resource_uuid);
+  return unlock(transaction_iter->second.storage, resource_uuid);
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
@@ -484,11 +647,11 @@ DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::unlock(
     return false;
   }
 
-  if (!transaction_iter->second) {
+  if (!transaction_iter->second.storage) {
     running_transactions_.erase(transaction_iter);
     return false;
   }
-  return unlock(transaction_iter->second);
+  return unlock(transaction_iter->second.storage);
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::storage_ptr_type
@@ -502,7 +665,7 @@ transaction_participator_handle::get_locker(const std::string& resource) const n
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API const
-    std::unordered_map<std::string, transaction_participator_handle::storage_ptr_type>&
+    std::unordered_map<std::string, transaction_participator_handle::running_transaction_entry>&
     transaction_participator_handle::get_running_transactions() const noexcept {
   return running_transactions_;
 }
@@ -535,16 +698,28 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.add_running_transcation",
                          std::move(child_trace_option));
 
-  bool trigger_event = false;
-  auto& transaction_ptr = running_transactions_[storage.metadata().transaction_uuid()];
-  if (!transaction_ptr) {
-    transaction_ptr = atfw::component::memory::stl::make_strong_rc<storage_type>();
-    trigger_event = true;
-  } else {
-    // 覆盖前先移除旧 timer，保证同一事务只保留一个 resolve timer
-    resolve_timers_.erase(storage_resolve_timer_type{*transaction_ptr});
-    unlock(transaction_ptr);
+  const std::string transaction_uuid = storage.metadata().transaction_uuid();
+
+  // 已完成的事务不允许重新进入 running，防止同一 UUID 再次执行 do_event
+  auto finished_iter = finished_transactions_.find(transaction_uuid);
+  if (finished_iter != finished_transactions_.end()) {
+    FWLOGWARNING("participator {} prepare transaction {} but it is already finished, return the finished copy",
+                 get_participator_key(), transaction_uuid);
+    output = finished_iter->second;
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
   }
+
+  // 重复 prepare 幂等返回现有 running 对象：不覆盖（可能正在执行 do_event 等终态动作）、
+  // 不重建 timer/lock、不重复触发生命周期事件
+  auto running_iter = running_transactions_.find(transaction_uuid);
+  if (running_iter != running_transactions_.end() && running_iter->second.storage) {
+    output = running_iter->second.storage;
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
+  }
+
+  // 同条目复用：storage 重建但运行时标记（wound/action-stage/inflight）保持原值
+  auto& transaction_ptr = running_transactions_[transaction_uuid].storage;
+  transaction_ptr = atfw::component::memory::stl::make_strong_rc<storage_type>();
   if (!transaction_ptr) {
     RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, {}}));
   }
@@ -554,7 +729,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
 
   // Reset timer
   protobuf_copy_message(*output->mutable_resolve_timepoint(), output->metadata().expire_timepoint());
-  resolve_timers_.insert(storage_resolve_timer_type{*output});
+  resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kQuery, *output);
 
   // Auto lock resource
   if (!output->lock_resource().empty()) {
@@ -563,7 +738,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
 
   FWLOGDEBUG("participator {} start run transaction {}", get_participator_key(), output->metadata().transaction_uuid());
   // event callback
-  if (trigger_event && vtable_ && vtable_->on_start_running) {
+  if (vtable_ && vtable_->on_start_running) {
     rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(vtable_->on_start_running(child_ctx, *this, *output));
     if (res < 0) {
       FWLOGERROR("participator {} call on_start_running for transaction {} failed, error code: {}({})",
@@ -605,14 +780,13 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
   }
 
-  auto transaction_ptr = iter->second;
+  auto transaction_ptr = iter->second.storage;
   if (nullptr != output) {
     *output = transaction_ptr;
   }
 
-  if (transaction_ptr) {
-    resolve_timers_.erase(storage_resolve_timer_type{*transaction_ptr});
-  }
+  resolve_timer_queue_.erase(transaction_uuid);
+  // 条目销毁即完成全部运行时标记（wound/action-stage/inflight）的生命周期清理
   running_transactions_.erase(iter);
 
   if (transaction_ptr) {
@@ -678,6 +852,7 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
   transaction_ptr->set_resolve_times(0);
   protobuf_copy_message(*transaction_ptr->mutable_resolve_timepoint(),
                         protobuf_from_system_clock(atfw::util::time::time_utility::now()));
+  resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
 
   FWLOGDEBUG("participator {} add finished transaction {}", get_participator_key(),
              transaction_ptr->metadata().transaction_uuid());
@@ -730,6 +905,7 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
   FWLOGDEBUG("participator {} remove finished transaction {}", get_participator_key(),
              transaction_ptr->metadata().transaction_uuid());
 
+  resolve_timer_queue_.erase(transaction_ptr->metadata().transaction_uuid());
   finished_transactions_.erase(iter);
   RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
@@ -740,7 +916,7 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   {
     auto running_iter = running_transactions_.find(transaction_uuid);
     if (running_iter != running_transactions_.end()) {
-      transaction_ptr = running_iter->second;
+      transaction_ptr = running_iter->second.storage;
       if (!transaction_ptr) {
         running_transactions_.erase(running_iter);
       }
@@ -774,18 +950,14 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
-  const auto now = atfw::util::time::time_utility::now();
-
   // Reset timer
-  resolve_timers_.erase(storage_resolve_timer_type{*transaction_ptr});
-  set_next_retry_timepoint(*transaction_ptr, now);
-  resolve_timers_.insert(storage_resolve_timer_type{*transaction_ptr});
+  schedule_resolve_retry(resolve_timer_action_type::kQuery, *transaction_ptr);
 
   // retry too many times and reject it directly
   transaction_ptr->set_resolve_times(transaction_ptr->resolve_times() + 1);
-  if (transaction_ptr->resolve_times() > transaction_ptr->configure().resolve_max_times()) {
+  if (transaction_ptr->resolve_times() > get_retry_limit(*transaction_ptr)) {
     FWLOGERROR("participator {} resolve transaction {} for more than {} times, just reject it", get_participator_key(),
-               transaction_uuid, transaction_ptr->configure().resolve_max_times());
+               transaction_uuid, get_retry_limit(*transaction_ptr));
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
@@ -831,10 +1003,30 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
   if (iter == running_transactions_.end()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
-  auto transaction_ptr = iter->second;
+  auto transaction_ptr = iter->second.storage;
   if (!transaction_ptr) {
     running_transactions_.erase(iter);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // per-transaction 终态序列化：同一事务同一时刻只允许一个方向的终态流程在执行，
+  // 防止 do_event 被重复执行或 commit/reject 方向竞态互相覆盖
+  if (iter->second.inflight_terminal_direction != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED) {
+    if (iter->second.inflight_terminal_direction ==
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
+      // 同方向重复调用：在途流程会完成相同动作，幂等返回
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+    FWLOGERROR("participator {} commit transaction {} but a reject transition is in flight", get_participator_key(),
+               transaction_uuid);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
+  }
+
+  // Wound-Wait: 锁被抢占的事务资源所有权已不再完整，不允许 commit
+  if (iter->second.wounded) {
+    FWLOGERROR("participator {} commit transaction {} but its lock was preempted by a newer transaction",
+               get_participator_key(), transaction_uuid);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED);
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
@@ -852,19 +1044,30 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.commit_transcation",
                          std::move(child_trace_option));
 
+  // 进入在途标记：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
+  iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING;
+  inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid};
+
   FWLOGINFO("participator {} commit transaction {}", get_participator_key(), transaction_uuid);
   rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (transaction_ptr->metadata().status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
       vtable_ && vtable_->do_event) {
+    if (transaction_ptr->metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
+      // resolve_times 只在首次进入本地动作阶段时重置：此前 query 阶段的失败计数不应吃掉本地动作预算，
+      // 阶段内的重复进入（RPC 重发/timer）不再重置，保证动作预算在任意驱动源下都有界
+      // （此处尚未发生协程切换，iter 仍然有效）
+      if (!iter->second.local_action_stage_entered) {
+        iter->second.local_action_stage_entered = true;
+        transaction_ptr->set_resolve_times(0);
+      }
+    }
     res = RPC_AWAIT_CODE_RESULT(vtable_->do_event(child_ctx, *this, *transaction_ptr));
     if (res < 0) {
       FWLOGERROR("participator {} call do_event for transaction {} failed, error code: {}({})", get_participator_key(),
                  transaction_ptr->metadata().transaction_uuid(), res, protobuf_mini_dumper_get_error_msg(res));
-      resolve_timers_.erase(storage_resolve_timer_type{*transaction_ptr});
       transaction_ptr->set_resolve_times(transaction_ptr->resolve_times() + 1);
       if (transaction_ptr->resolve_times() < get_retry_limit(*transaction_ptr)) {
-        set_next_retry_timepoint(*transaction_ptr, atfw::util::time::time_utility::now());
-        resolve_timers_.insert(storage_resolve_timer_type{*transaction_ptr});
+        schedule_resolve_retry(resolve_timer_action_type::kQuery, *transaction_ptr);
         RPC_RETURN_CODE(child_tracer.finish({res, {}}));
       }
       FWLOGERROR(
@@ -900,8 +1103,10 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     }
   }
 
+  // 在途标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
+
   // 每16个事务强制启动一次刷新操作
-  if (5 == (finished_transactions_.size() & 15)) {
+  if (kFinishedTransactionAutoTickPhase == (finished_transactions_.size() % kFinishedTransactionAutoTickModulo)) {
     tick(child_ctx, atfw::util::time::time_utility::now());
   }
 
@@ -915,10 +1120,22 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
   if (iter == running_transactions_.end()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
-  auto transaction_ptr = iter->second;
+  auto transaction_ptr = iter->second.storage;
   if (!transaction_ptr) {
     running_transactions_.erase(iter);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // per-transaction 终态序列化：同一事务同一时刻只允许一个方向的终态流程在执行
+  if (iter->second.inflight_terminal_direction != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED) {
+    if (iter->second.inflight_terminal_direction ==
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING) {
+      // 同方向重复调用：在途流程会完成相同动作，幂等返回
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+    FWLOGERROR("participator {} reject transaction {} but a commit transition is in flight", get_participator_key(),
+               transaction_uuid);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
@@ -935,6 +1152,10 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.reject_transcation",
                          std::move(child_trace_option));
+
+  // 进入在途标记：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
+  iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
+  inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid};
 
   rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   FWLOGINFO("participator {} reject transaction {}", get_participator_key(), transaction_uuid);
@@ -962,8 +1183,10 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
     }
   }
 
+  // 在途标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
+
   // 每16个事务强制启动一次刷新操作
-  if (5 == (finished_transactions_.size() & 15)) {
+  if (kFinishedTransactionAutoTickPhase == (finished_transactions_.size() % kFinishedTransactionAutoTickModulo)) {
     tick(child_ctx, atfw::util::time::time_utility::now());
   }
   RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
@@ -989,7 +1212,7 @@ rpc::result_code_type transaction_participator_handle::handle_finished_transacti
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(remove_finished_transaction(ctx, transaction_ptr)));
   }
 
-  set_next_retry_timepoint(*transaction_ptr, atfw::util::time::time_utility::now());
+  schedule_resolve_retry(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
   RPC_RETURN_CODE(result);
 }
 

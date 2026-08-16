@@ -217,7 +217,7 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 | 4 个 `unlock` | ptr/UUID × 单资源/全部；holder 不匹配；不存在；调用后 storage.lock_resource 和 lock map 同时清空 |
 | `get_locker` | unlocked/running/finished/null holder 边界，不允许悬挂 strong reference |
 | `get_running_transactions` / `get_finished_transactions` | prepare、commit/reject、最终 ack 前后的集合及对象内容；running 集合值类型为 `running_transaction_entry`，断言 `entry.storage` 及 `wounded`/`inflight_terminal_direction`/`local_action_stage_entered` 标记随条目创建默认复位、随条目销毁清理 |
-| `tick` | 无工作、due/not-due/equal timepoint；显式 `system_clock::time_point`；已有 auto task；task create/start 失败 seam；统一 resolve timer 队列（query/acknowledge 单队列按 action 分发，同 UUID 至多一条、新 timer 替换旧 timer）行为不变；running query、本地终态动作、finished ack 三阶段独立有界计数/退避/耗尽消费；resolve task 内 participant ack 单次调用不重试，失败由 acknowledge timer 到期重新拉起整个 task；任务完成后可再次 tick且无 tight loop |
+| `tick` | 无工作、due/not-due/equal timepoint；显式 `system_clock::time_point`；已有 auto task；task create/start 失败 seam（`trigger_due` 已在回调前移除 timer，拉起失败后断言所有已收集条目经 `schedule_resolve_retry` 按 `resolve_retry_interval` 退避重新武装、不消耗 `resolve_times` 预算、下一次 tick 可再次收集且不形成 tight loop）；统一 resolve timer 队列（query/acknowledge 单队列按 action 分发，同 UUID 至多一条、新 timer 替换旧 timer、到期条目回调前自动移除）行为不变；running query、本地终态动作、finished ack 三阶段独立有界计数/退避/耗尽消费；resolve task 内 participant ack 单次调用不重试，失败由 acknowledge timer 到期重新拉起整个 task；任务完成后可再次 tick且无 tight loop |
 | 所有 vtable 回调 | `do_event`、`undo_event`、`check_prepare`、`check_writable`、5 个 lifecycle callback、resolve-finished 的顺序、次数、失败传播 |
 
 ### 4.4 `transaction_manager` 与 7 个协调者 RPC
@@ -313,7 +313,7 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 | DT-013 | api/participator/manager / `timestamp_exact_nanosecond_carry` | 固定 now+duration 恰为 1e9ns；initialize、manager fallback、resolve 均得到 seconds+1/nanos=0，并覆盖负/多秒归一化 |
 | DT-014 | client / `terminal_delivery_result_is_separate_and_bounded` | COMMITED/REJECTED 下通知 error→success、永久 error、多参与者乱序；事务返回只取协调者终态，通知恰好最多 N 次，两个输出集合无旧值；终态通知投递失败不进入 `output_failed_participators`，仅 prepare 失败进入；notify 任务不按引用捕获 submit 栈对象，外层协程被 kill/超时后任务仍能安全执行完毕（handle 由 `shared_from_this()` 强引用自捕获保活，storage/vtable 由值捕获的智能指针保活，结果写入共享单元） |
 | DT-015 | participator / `resolve_budget_exhaustion_rejects_and_consumes` | `resolve_times == resolve_max_times` 时下一次进入直接走 reject、0 次 query；断言 running/lock/timer 转入有界 finished ack，最终本地消费且后续 tick 不再重试 |
-| DT-016 | participator / `finished_ack_failure_has_budget` | ack 第 N 次成功和永久失败；interval 未到不发送，最多 N 次；耗尽后 finished/strong pointer 释放，后续 tick 不再发送，协调者由 TTL 兜底 |
+| DT-016 | participator / `finished_ack_failure_has_budget` | ack 第 N 次成功和永久失败；interval 未到不发送，最多 N 次；耗尽后 finished/strong pointer 释放，后续 tick 不再发送，协调者由 TTL 兜底；resolve task 在拉起失败、`check_writable`=false、exiting、被 kill/超时（on_failed 兜底）时，未处理条目由 `rearm_unprocessed_timers` 按退避重新武装（`resolve_timepoint` 推后一个 `resolve_retry_interval`，幂等去重，不消耗 `resolve_times` 预算），下一次 tick 按退避恢复，既不永久丢失 timer 也不形成 tight loop |
 | DT-017 | api / `chrono_duration_helper_returns_duration` | `static_assert` 返回 `google::protobuf::Duration`；0、正负亚秒、跨秒 round-trip；组件删除私有重复转换 helper |
 | DT-018 | dtcoordsvr / `participant_ack_has_independent_terminal_state` | PREPARED/COMMITED/REJECTED 全局状态下分别发送两种 ack；全局状态不变，参与者非终态可进入请求方向；REJECTED→COMMITED 和 COMMITED→REJECTED 返回 `EN_TRANSACTION_FINISHED`；混合方向不删除、全部严格同向才删除 |
 | DT-019 | dtcoordsvr / `timeout_reject_save_and_cache_invalidation` | 过期 PREPARED query 触发 REJECTED 和一次 CAS save；成功时 DB version 前进；`OLD_VERSION`、`NOT_FOUND` 和普通 DB/网络错误都返回错误并立即淘汰 cache；单次 save 不内部重试；四类调用入口只打印一次保存失败日志 |

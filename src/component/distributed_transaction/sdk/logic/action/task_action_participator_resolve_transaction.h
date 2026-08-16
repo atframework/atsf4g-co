@@ -47,7 +47,17 @@ class task_action_participator_resolve_transaction : public task_action_no_req_b
   DISTRIBUTED_TRANSACTION_SDK_API int on_failed() override;
 
  private:
+  // trigger_due 在拉起本任务前已移除所有待处理条目的 timer，恢复所有权随任务转移。
+  // 已处理条目由 resolve_transcation/handle_finished_transaction_result 自行重排或消费；
+  // 任务异常退出（不可写/exiting/被 kill/超时）时为未处理条目重新武装 timer，避免恢复流程永久丢失。
+  // 幂等（内部 rearm_done_ 去重），在 operator() 正常收尾和 on_failed 中都会调用
+  void rearm_unprocessed_timers();
+
+ private:
   ctor_param_t param_;
+  size_t submmit_processed_ = 0;
+  std::list<std::string>::iterator pending_iter_;
+  bool rearm_done_ = false;
 };
 
 }  // namespace distributed_system

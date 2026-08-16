@@ -33,7 +33,7 @@ namespace distributed_system {
 
 DISTRIBUTED_TRANSACTION_SDK_API
 task_action_participator_resolve_transaction::task_action_participator_resolve_transaction(ctor_param_t&& param)
-    : task_action_no_req_base(param), param_(param) {}
+    : task_action_no_req_base(param), param_(param), pending_iter_(param_.pending_transactions.begin()) {}
 
 DISTRIBUTED_TRANSACTION_SDK_API
 task_action_participator_resolve_transaction::~task_action_participator_resolve_transaction() {}
@@ -51,6 +51,11 @@ task_action_participator_resolve_transaction::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
+  // tick 的 trigger_due 在拉起本任务前已移除所有待处理条目的 timer，恢复所有权随任务转移。
+  // 已处理条目由 resolve_transcation/handle_finished_transaction_result 自行重排或消费；
+  // 任务异常退出（不可写/被 kill/超时）时为未处理条目重新武装（rearm_unprocessed_timers），避免恢复流程永久丢失。
+  // 进度状态保存在任务对象成员上：协程在 await 点被 kill 时协程帧随局部变量一起销毁，
+  // 成员状态仍能供 on_failed 重新武装
   do {
     bool is_writable = false;
     RPC_AWAIT_IGNORE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
@@ -59,7 +64,9 @@ task_action_participator_resolve_transaction::operator()() {
     }
 
     // 提交所有的已执行和已拒绝事务
-    for (auto& trans_data : param_.submmit_transactions) {
+    for (; submmit_processed_ < param_.submmit_transactions.size(); ++submmit_processed_) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      auto& trans_data = param_.submmit_transactions[submmit_processed_];
       int32_t res = 0;
       const char* operation_name = "[NO RPC]";
       // 单次调用，失败由外层 acknowledge timer 到期后重新拉起整个 task 重试
@@ -92,7 +99,7 @@ task_action_participator_resolve_transaction::operator()() {
     }
 
     // 检查所有的过期事务，准备resolve
-    for (auto& trans_uuid : param_.pending_transactions) {
+    for (; pending_iter_ != param_.pending_transactions.end(); ++pending_iter_) {
       is_writable = false;
       RPC_AWAIT_IGNORE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
       if (!is_writable) {
@@ -100,16 +107,20 @@ task_action_participator_resolve_transaction::operator()() {
       }
 
       // 超出同步重试次数的直接移除
-      int32_t res = RPC_AWAIT_CODE_RESULT(param_.participantor->resolve_transcation(get_shared_context(), trans_uuid));
+      int32_t res =
+          RPC_AWAIT_CODE_RESULT(param_.participantor->resolve_transcation(get_shared_context(), *pending_iter_));
       if (res < 0) {
         FWLOGERROR("participator {} resolve transaction {} failed, res: {}({})",
-                   param_.participantor->get_participator_key(), trans_uuid, res,
+                   param_.participantor->get_participator_key(), *pending_iter_, res,
                    protobuf_mini_dumper_get_error_msg(res));
       }
     }
     // 重置下一次同步时间
     // 重置定时器
   } while (false);
+
+  // 正常收尾（含不可写/exiting 提前退出）：为未处理条目重新武装 timer
+  rearm_unprocessed_timers();
 
   if (task_type_trait::get_task_id(param_.participantor->auto_resolve_transaction_task_) ==
       get_shared_context().get_task_context().task_id) {
@@ -138,8 +149,35 @@ DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction failed, res: {}({})",
               param_.participantor->get_participator_key(), get_result(),
               protobuf_mini_dumper_get_error_msg(get_result()));
+    // 任务被 kill/超时/取消时 operator() 的协程帧已销毁，此处兜底为未处理条目重新武装 timer
+    rearm_unprocessed_timers();
   }
   return get_result();
+}
+
+void task_action_participator_resolve_transaction::rearm_unprocessed_timers() {
+  if (rearm_done_ || !param_.participantor) {
+    return;
+  }
+  rearm_done_ = true;
+
+  // 按退避重新武装：不重置时间戳会导致下一次 tick 立即再次拉起，失败原因持续存在时形成 tight loop
+  for (size_t i = submmit_processed_; i < param_.submmit_transactions.size(); ++i) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    if (param_.submmit_transactions[i]) {
+      param_.participantor->schedule_resolve_retry(
+          transaction_participator_handle::resolve_timer_action_type::kAcknowledge,
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+          *param_.submmit_transactions[i]);
+    }
+  }
+  for (; pending_iter_ != param_.pending_transactions.end(); ++pending_iter_) {
+    auto transaction_iter = param_.participantor->running_transactions_.find(*pending_iter_);
+    if (transaction_iter != param_.participantor->running_transactions_.end() && transaction_iter->second.storage) {
+      param_.participantor->schedule_resolve_retry(
+          transaction_participator_handle::resolve_timer_action_type::kQuery, *transaction_iter->second.storage);
+    }
+  }
 }
 
 }  // namespace distributed_system

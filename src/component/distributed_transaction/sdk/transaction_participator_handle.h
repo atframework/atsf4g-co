@@ -324,8 +324,8 @@ class transaction_participator_handle
   // 统一的截止时间队列行为：running 阶段查询协调者并执行本地终态动作，finished 阶段重发 participant ack。
   // 事务同一时刻只会处于其中一种阶段，因此同一 UUID 至多一条 timer，由 action 区分行为
   enum class resolve_timer_action_type : int32_t {
-    query = 0,
-    acknowledge = 1,
+    kQuery = 0,
+    kAcknowledge = 1,
   };
 
   struct storage_resolve_timer_type {
@@ -369,7 +369,11 @@ class transaction_participator_handle
 
     inline bool empty() const noexcept { return timers_.empty(); }
 
-    // 触发所有的已到期定时器，自动移除并触发回调
+    // 触发所有的已到期定时器，自动移除并触发回调。
+    // 契约：timer 在回调【之前】即从队列移除（防止消费方漏移除导致重复触发），消费方取得该条目的
+    // 恢复所有权——消费失败（如任务拉起失败/任务异常退出）时必须由消费方重新 insert_or_replace；
+    // fn 返回 false 停止遍历（当前 timer 已移除，剩余 timer 保留）；
+    // fn 内不得插入已到期的 timer，否则会在本次调用中被再次触发。
     DISTRIBUTED_TRANSACTION_SDK_API void trigger_due(
         atfw::util::time::time_utility::raw_time_t timepoint,
         ::atfw::util::nostd::function_ref<bool(const storage_resolve_timer_type& timer)> fn);
@@ -378,6 +382,12 @@ class transaction_participator_handle
     std::set<storage_resolve_timer_type> timers_;
     std::unordered_map<std::string, storage_resolve_timer_type> index_;
   };
+
+  // 重新武装 resolve timer：按 resolve_retry_interval 退避后重新入队。
+  // 用于任务拉起失败/异常退出等"事务未取得处理机会"的场景：退避避免立即到期形成 tight loop；
+  // 不消耗 resolve_times 预算（预算只计真实处理尝试，基础设施故障不应误伤事务），
+  // 无限重试的最终兜底由协调者记录 TTL 承担
+  void schedule_resolve_retry(resolve_timer_action_type action, storage_type& storage);
 
   void* private_data_;
   on_destroy_callback_type on_destroy_;
