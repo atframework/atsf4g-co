@@ -21,8 +21,8 @@
   （client 的 create/commit/reject 有界重试、参与者 acknowledge timer 到期重新拉起 resolve task）处理。
 - 多副本响应合并时若出现相反终态（`COMMITED`/`REJECTED` 冲突），打印错误日志后仍按确定性规则收敛到较后终态
   （`COMMITED` 优先，与"成功可能已被 client 观察到"保持一致），不会因为拒绝合并而永远无法修正。
-- 协调者 DB TTL 为 `expire_timepoint + transaction_expire_grace_duration`（默认 5s），不叠加恢复预算，
-  且不超过 `transaction_max_ttl`（默认 3600s，硬上限 30 天），不允许永不过期。
+- 协调者 DB TTL 为绝对截止时间 `expire_timepoint + transaction_expire_grace_duration`（默认 5s），晚到保存不会
+  重新获得一整段 grace；TTL 不叠加恢复预算，且不超过 `transaction_max_ttl`（默认 30 天，硬上限 3 年）。
 - 协调者 LRU 缓存不延长生命周期：到期/超容量即淘汰（置 `removed` 标记，在途 IO 结束后立即失效且不会写回）；
   `memory_only` 事务也允许容量淘汰（设计允许一定程度不一致，client 会重新提交状态），淘汰时打印警告日志。
 - 历史命名（`commit_transcation`、`EnDistibutedTransactionStatus`、`COMMITING/COMMITED`、

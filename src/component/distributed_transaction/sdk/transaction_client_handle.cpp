@@ -24,17 +24,12 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include <dispatcher/task_type_traits.h>
-
-#include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_utils.h>
 
 #include <algorithm>
-#include <memory>
 #include <string>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 #include "rpc/transaction/transaction_api.h"
 
@@ -49,26 +44,14 @@ inline bool is_retriable_create_error(int32_t res) {
 }
 }  // namespace
 
-struct transaction_client_handle::ctor_guard {};
-
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::transaction_client_handle(
-    ctor_guard, const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable)
+    const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {}
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::~transaction_client_handle() {
   if (nullptr != on_destroy_) {
     (*on_destroy_)(this);
   }
-}
-
-DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle::ptr_t transaction_client_handle::create(
-    const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable) {
-  if (!vtable) {
-    return nullptr;
-  }
-
-  ctor_guard guard{};
-  return atfw::util::memory::make_strong_rc<transaction_client_handle>(guard, vtable);
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
@@ -134,9 +117,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   if (input->participators().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
-  // 缺少任一必要 callback 时 prepare/终态通知都会被静默跳过，会造成假成功提交，必须在入口拒绝
-  if (!vtable_ || !vtable_->prepare_participator || !vtable_->commit_participator || !vtable_->reject_participator) {
-    FWLOGERROR("transaction {} submit but vtable callbacks (prepare/commit/reject participator) are not fully set",
+  // 缺少当前模式所需 callback 时 prepare/终态通知会被静默跳过并造成假成功；force_commit 的成功路径
+  // 在 prepare 内直接执行，不使用 commit_participator，但失败路径仍需要 reject_participator 做补偿。
+  if (!vtable_ || !vtable_->prepare_participator || !vtable_->reject_participator ||
+      (!input->configure().force_commit() && !vtable_->commit_participator)) {
+    FWLOGERROR("transaction {} submit but required vtable callbacks are not fully set",
                input->metadata().transaction_uuid());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -357,16 +342,6 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
                              coordinator_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
   if ((should_commit || should_reject) && (!input->configure().force_commit() || should_reject) && vtable_) {
     const uint32_t notify_attempts = std::max<uint32_t>(1, input->configure().resolve_max_times());
-    // 按参与者并行投递终态通知，单个参与者内部保持有界重试和退避，
-    // 避免多个故障参与者形成 P * N * interval 的线性延迟累加。
-    // 通知任务是异步执行的：即使外层 wait_tasks，当前协程也可能先超时被 kill 而任务仍在执行，
-    // 因此回调不允许按引用捕获 submit 的栈对象——storage/vtable 以智能指针值捕获保活，
-    // 每个任务的结果写入独立的共享单元，外层协程消亡后任务仍可安全收尾。
-    std::vector<std::pair<std::string, task_type_trait::task_type>> notify_tasks;
-    std::vector<std::shared_ptr<rpc::result_code_type::value_type>> notify_results;
-    notify_tasks.reserve(static_cast<size_t>(input->participators().size()));
-    notify_results.reserve(static_cast<size_t>(input->participators().size()));
-
     for (const auto& participator : input->participators()) {
       const std::string participator_key = participator.second.participator_key();
       const bool is_prepared =
@@ -383,93 +358,37 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
         participator_notify_attempts = 1;
       }
 
-      auto notify_result_cell =
-          std::make_shared<rpc::result_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY);
-      auto invoke_result = rpc::async_invoke(
-          child_ctx, "transaction_client_handle.notify_participator",
-          [self = shared_from_this(), vtable = vtable_, input, participator_ptr = &participator.second,
-           participator_notify_attempts, should_commit, should_reject,
-           notify_result_cell](rpc::context& notify_ctx) -> rpc::result_code_type {
-            rpc::result_code_type::value_type notify_result = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-            for (uint32_t retry_times = 0; retry_times < participator_notify_attempts; ++retry_times) {
-              // 子任务里participators有可能被移除密钥重新查找
-              bool found_participator = false;
-              for (const auto& participator : input->participators()) {
-                if (participator_ptr == &participator.second) {
-                  found_participator = true;
-                  break;
-                }
-              }
-              if (!found_participator) {
-                FWLOGWARNING("transaction {} notify participator {} but participator is removed, skip notify",
-                             input->metadata().transaction_uuid(), participator_ptr->participator_key());
-                notify_result = PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_PARTICIPATOR_NOT_FOUND;
-                break;
-              }
-
-              if (should_commit && vtable->commit_participator) {
-                notify_result =
-                    RPC_AWAIT_CODE_RESULT(vtable->commit_participator(notify_ctx, *self, *input, *participator_ptr));
-              } else if (should_reject && vtable->reject_participator) {
-                notify_result =
-                    RPC_AWAIT_CODE_RESULT(vtable->reject_participator(notify_ctx, *self, *input, *participator_ptr));
-              } else {
-                break;
-              }
-
-              if (notify_result >= 0) {
-                break;
-              }
-              if (retry_times + 1 < participator_notify_attempts) {
-                rpc::result_code_type::value_type wait_result = RPC_AWAIT_CODE_RESULT(
-                    rpc::wait(notify_ctx, protobuf_to_chrono_duration(input->configure().resolve_retry_interval())));
-                if (wait_result < 0) {
-                  notify_result = wait_result;
-                  break;
-                }
-              }
-            }
-            *notify_result_cell = notify_result;
-            RPC_RETURN_CODE(notify_result);
-          });
-      if (invoke_result.is_error()) {
-        // 终态通知任务创建失败与投递失败同等处理：参与者处于 running 集合且带有 resolve timer，
-        // 恢复流程会查询协调者终态并执行同方向动作，对 client 而言该参与者的事务执行视为成功，
-        // 不进入 output_failed_participators
-        FWLOGERROR("transaction {} spawn notify task for participator {} failed, error code: {}({})",
-                   input->metadata().transaction_uuid(), participator_key, *invoke_result.get_error(),
-                   protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
-        continue;
-      }
-      notify_tasks.emplace_back(std::move(participator_key), *invoke_result.get_success());
-      notify_results.push_back(std::move(notify_result_cell));
-    }
-
-    if (!notify_tasks.empty()) {
-      std::vector<task_type_trait::task_type> waiting_tasks;
-      waiting_tasks.reserve(notify_tasks.size());
-      for (auto& notify_task : notify_tasks) {
-        waiting_tasks.push_back(notify_task.second);
-      }
-      rpc::result_code_type::value_type wait_all_result =
-          RPC_AWAIT_CODE_RESULT(rpc::wait_tasks(child_ctx, waiting_tasks));
-      if (wait_all_result < 0) {
-        FWLOGERROR("transaction {} wait participator notify tasks failed, error code: {}({})",
-                   input->metadata().transaction_uuid(), wait_all_result,
-                   protobuf_mini_dumper_get_error_msg(wait_all_result));
-      }
-
-      for (const auto& notify_task : notify_tasks) {
-        rpc::result_code_type::value_type notify_result = notify_task.second
-                                                              ? task_type_trait::get_result(notify_task.second)
-                                                              : PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY;
-        if (notify_result < 0) {
-          // 终态通知投递失败由参与者的 resolve 重试流程保证最终一致，对 client 而言该参与者的事务执行
-          // 视为成功，不进入 output_failed_participators
-          FWLOGWARNING("transaction {} notify {} participator {} failed, error code: {}({})",
-                       input->metadata().transaction_uuid(), should_commit ? "commit" : "reject", notify_task.first,
-                       notify_result, protobuf_mini_dumper_get_error_msg(notify_result));
+      rpc::result_code_type::value_type notify_result = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+      for (uint32_t retry_times = 0; retry_times < participator_notify_attempts; ++retry_times) {
+        if (should_commit && vtable_->commit_participator) {
+          notify_result =
+              RPC_AWAIT_CODE_RESULT(vtable_->commit_participator(child_ctx, *this, *input, participator.second));
+        } else if (should_reject && vtable_->reject_participator) {
+          notify_result =
+              RPC_AWAIT_CODE_RESULT(vtable_->reject_participator(child_ctx, *this, *input, participator.second));
+        } else {
+          break;
         }
+
+        if (notify_result >= 0) {
+          break;
+        }
+        if (retry_times + 1 < participator_notify_attempts) {
+          rpc::result_code_type::value_type wait_result = RPC_AWAIT_CODE_RESULT(
+              rpc::wait(child_ctx, protobuf_to_chrono_duration(input->configure().resolve_retry_interval())));
+          if (wait_result < 0) {
+            notify_result = wait_result;
+            break;
+          }
+        }
+      }
+
+      if (notify_result < 0) {
+        // 终态通知投递失败由参与者的 resolve 重试流程保证最终一致，对 client 而言该参与者的事务执行
+        // 视为成功，不进入 output_failed_participators。
+        FWLOGWARNING("transaction {} notify {} participator {} failed after {} attempts, error code: {}({})",
+                     input->metadata().transaction_uuid(), should_commit ? "commit" : "reject", participator_key,
+                     participator_notify_attempts, notify_result, protobuf_mini_dumper_get_error_msg(notify_result));
       }
     }
   }

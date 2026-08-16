@@ -176,7 +176,12 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
       continue;
     }
     protobuf_copy_message(*transaction_ptr, transaction);
-    running_transactions_[transaction_uuid].storage = transaction_ptr;
+    auto& running_entry = running_transactions_[transaction_uuid];
+    running_entry.storage = transaction_ptr;
+    // A running REJECTING entry is a durable local rejection intent. This is also how a wound survives
+    // snapshot reload, because the runtime-only wounded flag itself is not part of the snapshot schema.
+    running_entry.wounded =
+        transaction.metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
 
     // Restore locks
     for (const auto& lock_resource : transaction.lock_resource()) {
@@ -569,6 +574,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
         auto wounded_iter = running_transactions_.find(old_holder->second->metadata().transaction_uuid());
         if (wounded_iter != running_transactions_.end()) {
           wounded_iter->second.wounded = true;
+          old_holder->second->mutable_metadata()->set_status(
+              atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
+          // Persist the local rejection intent and ensure the resolve timer cannot be consumed without
+          // eventually moving the wounded transaction out of the running set.
+          schedule_resolve_retry(resolve_timer_action_type::kQuery, *old_holder->second);
         } else {
           FWLOGERROR("participator {} wound transaction {} but it is not in running set", get_participator_key(),
                      old_holder->second->metadata().transaction_uuid());
@@ -913,10 +923,12 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
 rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::context& ctx,
                                                                            const std::string& transaction_uuid) {
   storage_ptr_type transaction_ptr;
+  bool wounded = false;
   {
     auto running_iter = running_transactions_.find(transaction_uuid);
     if (running_iter != running_transactions_.end()) {
       transaction_ptr = running_iter->second.storage;
+      wounded = running_iter->second.wounded;
       if (!transaction_ptr) {
         running_transactions_.erase(running_iter);
       }
@@ -941,6 +953,12 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
 
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.resolve_transcation",
                          std::move(child_trace_option));
+
+  if (wounded) {
+    transaction_ptr->mutable_metadata()->set_status(
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
+    RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
+  }
 
   if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED ||
       transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
@@ -1024,7 +1042,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
 
   // Wound-Wait: 锁被抢占的事务资源所有权已不再完整，不允许 commit
   if (iter->second.wounded) {
-    FWLOGERROR("participator {} commit transaction {} but its lock was preempted by a newer transaction",
+    FWLOGERROR("participator {} commit transaction {} but its lock was preempted by an older transaction",
                get_participator_key(), transaction_uuid);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED);
   }
@@ -1052,14 +1070,13 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
   rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (transaction_ptr->metadata().status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
       vtable_ && vtable_->do_event) {
-    if (transaction_ptr->metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
-      // resolve_times 只在首次进入本地动作阶段时重置：此前 query 阶段的失败计数不应吃掉本地动作预算，
-      // 阶段内的重复进入（RPC 重发/timer）不再重置，保证动作预算在任意驱动源下都有界
-      // （此处尚未发生协程切换，iter 仍然有效）
-      if (!iter->second.local_action_stage_entered) {
-        iter->second.local_action_stage_entered = true;
-        transaction_ptr->set_resolve_times(0);
-      }
+    // resolve_times 只在首次进入本地动作阶段时重置：此前 query 阶段的失败计数不应吃掉本地动作预算，
+    // 阶段内的重复进入（RPC 重发/timer）不再重置，保证动作预算在任意驱动源下都有界。
+    // 协调者查询会先把状态推进到 COMMITED，因此不能用状态数值判断是否首次进入动作阶段。
+    // （此处尚未发生协程切换，iter 仍然有效）
+    if (!iter->second.local_action_stage_entered) {
+      iter->second.local_action_stage_entered = true;
+      transaction_ptr->set_resolve_times(0);
     }
     res = RPC_AWAIT_CODE_RESULT(vtable_->do_event(child_ctx, *this, *transaction_ptr));
     if (res < 0) {

@@ -70,15 +70,20 @@ task_action_participator_resolve_transaction::operator()() {
       int32_t res = 0;
       const char* operation_name = "[NO RPC]";
       // 单次调用，失败由外层 acknowledge timer 到期后重新拉起整个 task 重试
-      if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING == trans_data->metadata().status()) {
+      if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING == trans_data->metadata().status() ||
+          atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED == trans_data->metadata().status()) {
         res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_participator(
             get_shared_context(), param_.participantor->get_participator_key(), *trans_data->mutable_metadata()));
         operation_name = "commit";
       } else if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
-                 trans_data->metadata().status()) {
+                     trans_data->metadata().status() ||
+                 atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
+                     trans_data->metadata().status()) {
         res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_participator(
             get_shared_context(), param_.participantor->get_participator_key(), *trans_data->mutable_metadata()));
         operation_name = "reject";
+      } else {
+        res = PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
       }
 
       TASK_COMPAT_ASSIGN_CURRENT_STATUS(current_task_status);
@@ -174,8 +179,8 @@ void task_action_participator_resolve_transaction::rearm_unprocessed_timers() {
   for (; pending_iter_ != param_.pending_transactions.end(); ++pending_iter_) {
     auto transaction_iter = param_.participantor->running_transactions_.find(*pending_iter_);
     if (transaction_iter != param_.participantor->running_transactions_.end() && transaction_iter->second.storage) {
-      param_.participantor->schedule_resolve_retry(
-          transaction_participator_handle::resolve_timer_action_type::kQuery, *transaction_iter->second.storage);
+      param_.participantor->schedule_resolve_retry(transaction_participator_handle::resolve_timer_action_type::kQuery,
+                                                   *transaction_iter->second.storage);
     }
   }
 }

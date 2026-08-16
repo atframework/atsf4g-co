@@ -29,5 +29,5 @@ message dtcoordsvr_cfg {
 
   // 事务 DB TTL 上限：不叠加恢复预算，TTL 窗口（expire_timepoint + grace 起算）不允许超过该值
   google.protobuf.Duration transaction_max_ttl = 13
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30d" min_value: "10s" max_value: "1095" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30d" min_value: "10s" max_value: "1095d" }];
 }

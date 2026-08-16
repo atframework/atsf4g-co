@@ -37,7 +37,7 @@ namespace {
 constexpr int64_t kTransactionExpireGraceSeconds = 5;
 // transaction_max_ttl 缺失或非法时的默认值；同时作为上限硬钳制，防止配置错误导致 now+max_ttl 溢出
 constexpr int64_t kDefaultTransactionMaxTtlSeconds = 3600;
-constexpr int64_t kHardMaxTransactionTtlSeconds = 30 * 24 * 3600;
+constexpr int64_t kHardMaxTransactionTtlSeconds = 3 * 365 * 24 * 3600;
 
 static const atfw::distributed_system::config::dtcoordsvr_cfg& get_dtcoordsvr_cfg() {
   return logic_config::me()->get_server_instance_config<atfw::distributed_system::config::dtcoordsvr_cfg>();
@@ -76,21 +76,27 @@ static uint64_t get_transaction_ttl_seconds(const atfw::distributed_system::tran
   const auto expire = protobuf_to_system_clock(storage.metadata().expire_timepoint());
   const std::chrono::seconds grace = get_transaction_expire_grace();
   const std::chrono::seconds max_ttl = get_transaction_max_ttl();
+  const auto grace_duration = std::chrono::duration_cast<std::chrono::system_clock::duration>(grace);
+  const auto max_ttl_duration = std::chrono::duration_cast<std::chrono::system_clock::duration>(max_ttl);
 
-  uint64_t ttl_seconds = 0;
+  std::chrono::system_clock::duration ttl = std::chrono::system_clock::duration::zero();
   if (expire <= now) {
-    ttl_seconds = static_cast<uint64_t>(grace.count());
-  } else if (expire >= now + max_ttl) {
-    // now + max_ttl 不会溢出：max_ttl 已被硬钳制
-    ttl_seconds = static_cast<uint64_t>(max_ttl.count());
+    // TTL 使用绝对截止时间 expire + grace；晚到的 save 不能重新获得一整段 grace。
+    const auto overdue = now - expire;
+    if (overdue < grace_duration) {
+      ttl = grace_duration - overdue;
+    }
   } else {
-    // expire - now 有界（不超过 max_ttl），不会溢出
-    ttl_seconds = static_cast<uint64_t>(std::chrono::ceil<std::chrono::seconds>(expire - now).count()) +
-                  static_cast<uint64_t>(grace.count());
-    ttl_seconds = std::min<uint64_t>(ttl_seconds, static_cast<uint64_t>(max_ttl.count()));
+    const auto until_expire = expire - now;
+    if (until_expire >= max_ttl_duration) {
+      ttl = max_ttl_duration;
+    } else {
+      // 先限制剩余 grace，再做加法，避免 expire + grace 的 time_point 溢出。
+      ttl = until_expire + std::min(grace_duration, max_ttl_duration - until_expire);
+    }
   }
 
-  return std::max<uint64_t>(1, ttl_seconds);
+  return std::max<uint64_t>(1, static_cast<uint64_t>(std::chrono::ceil<std::chrono::seconds>(ttl).count()));
 }
 
 static rpc::result_code_type refresh_transaction_ttl(
