@@ -146,8 +146,8 @@ message table_user_instance_rank_battle_blob_data {
 
 message user_orbit_room_data {
   DOrbitRoomKey room_key = 1;
-  int64 expired_timepoint = 2;
+  int64 end_join_timepoint = 2;  // 结束加入时间点
+  int64 expired_timepoint = 3;   // 房间过期时间点
 }
 
-message user_string_mapping_data {
-}
+message user_string_mapping_data {}

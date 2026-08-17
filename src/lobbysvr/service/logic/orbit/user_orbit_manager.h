@@ -45,7 +45,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   bool is_orbit_room_exist() const;
   // Orbitsvr已经创建并塞入了User 开始真正进入Orbitsvr
   int32_t join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                       int64_t expired_timepoint);
+                       int64_t end_join_timepoint);
   // 收到结算消息
   void receive_orbit_settlement(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
   // 组装历史数据
@@ -59,7 +59,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   void on_receive_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomEventLog& event_log);
   void mark_dirty();
   int32_t create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                      int64_t expired_timepoint);
+                      int64_t end_join_timepoint, int64_t expired_timepoint);
   user* ATFW_UTIL_MACRO_NONNULL owner_;
 
   struct orbit_room_data {
@@ -77,7 +77,8 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   bool dirty_ = false;
 
   PROJECT_NAMESPACE_ID::DOrbitRoomKey room_key_;
-  int64_t orbit_room_expired_timepoint_ = 0;
+  int64_t end_join_timepoint_ = 0;
+  int64_t expired_timepoint_ = 0;
   bool subscriber_ready_ = false;
   rpc::dtmq::client_subscriber::ptr_t subscriber_;
   orbit_room_data_ptr room_data_;

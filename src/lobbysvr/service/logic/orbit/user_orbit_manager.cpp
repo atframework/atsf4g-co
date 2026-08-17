@@ -101,8 +101,22 @@ user_orbit_manager::user_orbit_manager(user& owner) : owner_(&owner) {
 
 void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
   do {
-    if (orbit_room_expired_timepoint_ > 0 &&
-        atfw::util::time::time_utility::get_now() >= orbit_room_expired_timepoint_) {
+    if (end_join_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= end_join_timepoint_) {
+      // 结束加入时间点到了
+      if (!subscriber_ready_) {
+        // 等subscriber ready
+        break;
+      }
+      // 结束加入时间点到了 但是没有收到加入消息
+      FWPLOGERROR(*owner_,
+                  "user_orbit_manager refresh_feature_limit_second orbit room end join timepoint reached but no join "
+                  "event, clear orbit room data {}",
+                  room_key_.client_id());
+      clear_orbit_room_data();
+      break;
+    }
+
+    if (expired_timepoint_ > 0 && atfw::util::time::time_utility::get_now() >= expired_timepoint_) {
       // 过期了
       if (owner_->get_user_async_jobs_manager().is_async_jobs_task_running()) {
         // 等异步任务完成
@@ -146,7 +160,7 @@ rpc::result_code_type user_orbit_manager::login_init(rpc::context& ctx) {
   subscriber_key_ = atfw::util::string::format("user:{}:{}", owner_->get_zone_id(), owner_->get_user_id());
   // 如果存在数据则创建房间
   if (is_orbit_room_exist()) {
-    int32_t ret = create_room(ctx, room_key_, orbit_room_expired_timepoint_);
+    int32_t ret = create_room(ctx, room_key_, end_join_timepoint_, expired_timepoint_);
     if (ret != 0) {
       FWLOGERROR("user_orbit_manager login_init create_room failed: {} for room: {}", ret, room_key_.client_id());
     }
@@ -168,22 +182,25 @@ void user_orbit_manager::fetch_user_data(PROJECT_NAMESPACE_ID::DOrbitRoomUserDat
 
 void user_orbit_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   room_key_ = user_table.orbit_room_data().room_key();
-  orbit_room_expired_timepoint_ = user_table.orbit_room_data().expired_timepoint();
+  end_join_timepoint_ = user_table.orbit_room_data().end_join_timepoint();
+  expired_timepoint_ = user_table.orbit_room_data().expired_timepoint();
 }
 
 int user_orbit_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
   *user_table.mutable_orbit_room_data()->mutable_room_key() = room_key_;
-  user_table.mutable_orbit_room_data()->set_expired_timepoint(orbit_room_expired_timepoint_);
+  user_table.mutable_orbit_room_data()->set_expired_timepoint(expired_timepoint_);
+  user_table.mutable_orbit_room_data()->set_end_join_timepoint(end_join_timepoint_);
   return 0;
 }
 
 bool user_orbit_manager::is_orbit_room_exist() const { return !room_key_.client_id().empty(); }
 
 int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                        int64_t expired_timepoint) {
+                                        int64_t end_join_timepoint, int64_t expired_timepoint) {
   mark_dirty();
   room_key_ = room_key;
-  orbit_room_expired_timepoint_ = expired_timepoint;
+  end_join_timepoint_ = end_join_timepoint;
+  expired_timepoint_ = expired_timepoint;
 
   // 创建subscriber并订阅频道
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
@@ -215,12 +232,14 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
 }
 
 int32_t user_orbit_manager::join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                                            int64_t expired_timepoint) {
+                                            int64_t end_join_timepoint) {
   if (is_orbit_room_exist()) {
     FWLOGERROR("user_orbit_manager already in orbit room: {}", room_key_.client_id());
     return PROJECT_NAMESPACE_ID::EN_ERR_ORBIT_ALREADY_IN_ROOM;
   }
-  int32_t ret = create_room(ctx, room_key, expired_timepoint);
+  // 容忍时间
+  end_join_timepoint += 10;
+  int32_t ret = create_room(ctx, room_key, end_join_timepoint, end_join_timepoint);
   if (ret != 0) {
     FWLOGERROR("user_orbit_manager create_room failed: {} for room: {}", ret, room_key.client_id());
     return ret;
@@ -262,12 +281,14 @@ void user_orbit_manager::receive_orbit_settlement(
   }
   // 结算不匹配 丢弃
   if (finish_data.room_key().client_id() != room_key_.client_id()) {
-    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement room key mismatch: {}", finish_data.room_key().client_id());
+    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement room key mismatch: {}",
+                finish_data.room_key().client_id());
     return;
   }
   if (!finish_data.init_success()) {
     // 没有成功直接删除
-    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}", room_key_.client_id());
+    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}",
+                room_key_.client_id());
     clear_orbit_room_data();
     return;
   }
@@ -303,7 +324,7 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
   switch (event_log.event_case()) {
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kRoomInit:
       room_data_->init_data_ = event_log.room_init();
-      orbit_room_expired_timepoint_ = event_log.room_init().expired_timepoint();
+      expired_timepoint_ = event_log.room_init().expired_timepoint();
       mark_dirty();
       break;
     case PROJECT_NAMESPACE_ID::DOrbitRoomEventLog::kReadyData:
@@ -315,6 +336,7 @@ void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
           event_log.user_init_success().init_result().user_key().user_key().zone_id() == owner_->get_zone_id()) {
         room_data_->init_result_ = event_log.user_init_success().init_result();
         room_data_->is_joined_ = true;
+        end_join_timepoint_ = 0;
         mark_dirty();
       }
       break;
@@ -337,7 +359,8 @@ void user_orbit_manager::clear_orbit_room_data() {
   room_key_.Clear();
   subscriber_ = nullptr;
   room_data_ = nullptr;
-  orbit_room_expired_timepoint_ = 0;
+  end_join_timepoint_ = 0;
+  expired_timepoint_ = 0;
   subscriber_ready_ = false;
   mark_dirty();
 }
