@@ -37,12 +37,14 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "dt_test_common.h"
+#include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 #include "rpc/transaction/transaction_api.h"
-#include "transaction_participator_handle.h"
+#include "rpc/rpc_utils.h"
+#include "transaction_participator_handle.h"  // NOLINT(build/include_subdir)
 
 namespace {
 using atframework::distributed_system::EnDistibutedTransactionStatus;
@@ -71,21 +73,21 @@ struct participator_event_recorder {
     auto vtable = atfw::component::memory::stl::make_strong_rc<handle_type::vtable_type>();
     vtable->do_event = [this](rpc::context&, handle_type&,
                               const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("do_event");
+      events.emplace_back("do_event");
       int32_t res = pop(do_event_script);
       RPC_RETURN_CODE(res);
     };
     vtable->undo_event = [this](rpc::context&, handle_type&,
                                 const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("undo_event");
+      events.emplace_back("undo_event");
       ++undo_calls;
       int32_t res = pop(undo_event_script);
       RPC_RETURN_CODE(res);
     };
-    vtable->check_prepare = [this](rpc::context&, handle_type&, handle_type::storage_type& storage,
+    vtable->check_prepare = [this](rpc::context&, handle_type&, handle_type::storage_type&,
                                    atframework::distributed_system::transaction_participator_failure_reason& reason)
                                    -> rpc::result_code_type {
-      events.push_back("check_prepare");
+      events.emplace_back("check_prepare");
       if (check_prepare_allow_retry) {
         reason.set_allow_retry(true);
       }
@@ -97,31 +99,31 @@ struct participator_event_recorder {
     };
     vtable->on_start_running = [this](rpc::context&, handle_type&,
                                       const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("on_start_running");
+      events.emplace_back("on_start_running");
       RPC_RETURN_CODE(0);
     };
     vtable->on_finish_running = [this](rpc::context&, handle_type&,
                                        const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("on_finish_running");
+      events.emplace_back("on_finish_running");
       RPC_RETURN_CODE(0);
     };
     vtable->on_commited = [this](rpc::context&, handle_type&,
                                  const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("on_commited");
+      events.emplace_back("on_commited");
       RPC_RETURN_CODE(0);
     };
     vtable->on_rejected = [this](rpc::context&, handle_type&,
                                  const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("on_rejected");
+      events.emplace_back("on_rejected");
       RPC_RETURN_CODE(0);
     };
     vtable->on_finished = [this](rpc::context&, handle_type&,
                                  const handle_type::storage_type&) -> rpc::result_code_type {
-      events.push_back("on_finished");
+      events.emplace_back("on_finished");
       RPC_RETURN_CODE(0);
     };
     vtable->on_resolve_task_finished = [this](rpc::context&, handle_type&) -> rpc::result_code_type {
-      events.push_back("on_resolve_task_finished");
+      events.emplace_back("on_resolve_task_finished");
       RPC_RETURN_CODE(0);
     };
     return vtable;
@@ -172,13 +174,13 @@ SSParticipatorTransactionPrepareReq make_prepare_request(gsl::string_view uuid, 
   auto now = std::chrono::system_clock::now();
   auto* prepare_timepoint = storage->mutable_metadata()->mutable_prepare_timepoint();
   prepare_timepoint->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-  prepare_timepoint->set_nanos(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() % 1000000000);
+  prepare_timepoint->set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() % 1000000000));
   auto expire = now + expire_in;
   auto* expire_timepoint = storage->mutable_metadata()->mutable_expire_timepoint();
   expire_timepoint->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(expire.time_since_epoch()).count());
-  expire_timepoint->set_nanos(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(expire.time_since_epoch()).count() % 1000000000);
+  expire_timepoint->set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(expire.time_since_epoch()).count() % 1000000000));
 
   storage->mutable_configure()->set_resolve_max_times(resolve_max_times);
   storage->mutable_configure()->mutable_resolve_retry_interval()->set_nanos(10000000);  // 10ms
@@ -205,12 +207,13 @@ atfw::testing::ss_rule_handle register_query_mock(atfw::testing::runtime& test, 
         if (nullptr != call_count) {
           ++*call_count;
         }
-        auto& typed_request =
+        const auto& typed_request =
             static_cast<const atfw::distributed_system::SSDistributeTransactionQueryReq&>(request.body);
         auto& typed_response = static_cast<atfw::distributed_system::SSDistributeTransactionQueryRsp&>(response);
         auto* query_storage = typed_response.mutable_storage();
         protobuf_copy_message(*query_storage->mutable_metadata(), typed_request.metadata());
         query_storage->mutable_metadata()->set_status(terminal);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         auto& mock_participator = (*query_storage->mutable_participators())[std::string{participator_key}];
         mock_participator.set_participator_key(std::string{participator_key});
         mock_participator.set_participator_status(terminal);
@@ -237,7 +240,7 @@ atfw::testing::ss_rule_handle register_participator_ack_mock(atfw::testing::runt
                       atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp::descriptor());
   return test.ss().mock(
       rpc_name, request_descriptor->full_name(), response_descriptor->full_name(),
-      [call_count, fail_script, is_commit](const atfw::testing::ss_request_view& request,
+      [call_count, fail_script](const atfw::testing::ss_request_view& request,
                                            google::protobuf::Message& response) -> rpc::result_code_type {
         if (nullptr != call_count) {
           ++*call_count;
@@ -247,15 +250,16 @@ atfw::testing::ss_rule_handle register_participator_ack_mock(atfw::testing::runt
           fail_script->erase(fail_script->begin());
           RPC_RETURN_CODE(res);
         }
-        auto& typed_request = static_cast<const google::protobuf::Message&>(request.body);
-        auto& typed_response = static_cast<google::protobuf::Message&>(response);
+        const auto& typed_request = static_cast<const google::protobuf::Message&>(request.body);
+        auto& typed_response = response;
         // Fill the metadata field of the typed response via reflection (field name "metadata").
         const auto* descriptor = typed_request.GetDescriptor();
         const auto* request_metadata_field = descriptor->FindFieldByName("metadata");
         const auto* response_metadata_field = typed_response.GetDescriptor()->FindFieldByName("metadata");
         if (nullptr != request_metadata_field && nullptr != response_metadata_field) {
           const auto& metadata = typed_request.GetReflection()->GetMessage(typed_request, request_metadata_field);
-          auto* response_metadata = typed_response.GetReflection()->MutableMessage(&typed_response, response_metadata_field);
+          auto* response_metadata = typed_response.GetReflection()->MutableMessage(&typed_response,
+              response_metadata_field);
           response_metadata->CopyFrom(metadata);
         }
         RPC_RETURN_CODE(0);
@@ -265,7 +269,8 @@ atfw::testing::ss_rule_handle register_participator_ack_mock(atfw::testing::runt
 // Drives the resolve timers of a handle until pred() is true (ticks with the real clock and pumps
 // the runtime in between).
 bool drive_handle(atfw::testing::runtime& test, const atfw::util::memory::strong_rc_ptr<handle_type>& handle,
-                  const std::function<bool()>& pred, std::chrono::milliseconds timeout = std::chrono::milliseconds{4000}) {
+                  const std::function<bool()>& pred,
+                  std::chrono::milliseconds timeout = std::chrono::milliseconds{4000}) {
   auto tick_context = atfw::testing::make_context();
   return dt_test::wait_for(
       test,
@@ -335,7 +340,8 @@ CASE_TEST(component_distributed_transaction_participator, first_prepare_non_aren
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("prepare_non_arena", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("prepare_non_arena", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-1", 3, std::chrono::milliseconds{60000}, {"lock-a", "lock-b"});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -355,7 +361,8 @@ CASE_TEST(component_distributed_transaction_participator, first_prepare_non_aren
     rpc::context::message_holder<SSParticipatorTransactionPrepareReq> arena_request(ctx);
     auto* arena_storage = arena_request->mutable_storage();
     arena_storage->mutable_metadata()->set_transaction_uuid("part-uuid-arena");
-    arena_storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+    arena_storage->mutable_metadata()->set_status(
+        EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
     arena_storage->mutable_configure()->set_resolve_max_times(2);
     arena_storage->mutable_configure()->mutable_resolve_retry_interval()->set_nanos(10000000);
     SSParticipatorTransactionPrepareRsp arena_response;
@@ -374,7 +381,8 @@ CASE_TEST(component_distributed_transaction_participator, first_prepare_non_aren
   CASE_EXPECT_EQ(0, result.result_code);
 
   // Empty UUID is rejected.
-  auto guard_task = test.run_task("prepare_empty_uuid", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto guard_task = test.run_task("prepare_empty_uuid", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     SSParticipatorTransactionPrepareReq empty_request;
     SSParticipatorTransactionPrepareRsp empty_response;
     storage_ptr_type empty_output;
@@ -410,7 +418,8 @@ CASE_TEST(component_distributed_transaction_participator, allow_retry_does_not_e
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("prepare_allow_retry", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("prepare_allow_retry", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-retry");
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -457,7 +466,8 @@ CASE_TEST(component_distributed_transaction_participator, commit_reject_lifecycl
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("commit_lifecycle", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("commit_lifecycle", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-commit", 3, std::chrono::milliseconds{60000});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -500,11 +510,13 @@ CASE_TEST(component_distributed_transaction_participator, commit_reject_lifecycl
   CASE_EXPECT_EQ(0, result.result_code);
 
   // Lifecycle order for commit: do_event -> on_finish_running -> on_finished -> on_commited.
-  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"check_prepare", "on_start_running", "do_event", "on_finish_running", "on_finished", "on_commited"}));
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"check_prepare", "on_start_running", "do_event",
+      "on_finish_running", "on_finished", "on_commited"}));
 
   // force_commit prepare path: completes inside prepare with no running/finished state.
   recorder.events.clear();
-  auto force_task = test.run_task("force_commit_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto force_task = test.run_task("force_commit_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-force", 3, std::chrono::milliseconds{60000});
     request.mutable_storage()->mutable_configure()->set_force_commit(true);
     SSParticipatorTransactionPrepareRsp response;
@@ -529,7 +541,8 @@ CASE_TEST(component_distributed_transaction_participator, commit_reject_lifecycl
   CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
   // force_commit never enters running/finished; its lifecycle is
   // on_start_running -> do_event -> on_finish_running -> on_finished -> on_commited.
-  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"check_prepare", "on_start_running", "do_event", "on_finish_running", "on_finished", "on_commited"}));
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"check_prepare", "on_start_running", "do_event",
+      "on_finish_running", "on_finished", "on_commited"}));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
@@ -551,7 +564,8 @@ CASE_TEST(component_distributed_transaction_participator, force_commit_failure_r
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("force_commit_failure", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("force_commit_failure", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-force-fail", 3, std::chrono::milliseconds{60000});
     request.mutable_storage()->mutable_configure()->set_force_commit(true);
     SSParticipatorTransactionPrepareRsp response;
@@ -600,21 +614,24 @@ CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preempt
   int reject_ack_calls = 0;
   auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
   CASE_EXPECT_TRUE(!!reject_ack_rule);
-  auto query_rule = register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+  auto query_rule = register_query_mock(test,
+      EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
   CASE_EXPECT_TRUE(!!query_rule);
 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("lock_wound", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("lock_wound", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto older_request = make_prepare_request("part-uuid-older", 2, std::chrono::milliseconds{60000});
     auto younger_request = make_prepare_request("part-uuid-younger", 2, std::chrono::milliseconds{60000});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type older_output;
     storage_ptr_type younger_output;
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(older_request), response, older_output)));
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(younger_request), response, younger_output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(younger_request), response,
+        younger_output)));
 
     // Explicit timestamps: older transaction was prepared earlier.
     set_prepare_timepoint(*handle, "part-uuid-older", 1000, 0);
@@ -679,7 +696,8 @@ CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preempt
   CASE_EXPECT_EQ(0, recorder.count("do_event"));
 
   // The wound survives the reload: a fresh handle still refuses commit for the younger transaction.
-  auto reload_task = test.run_task("wound_reload", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto reload_task = test.run_task("wound_reload", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     atframework::distributed_system::transaction_participator_snapshot snapshot;
     handle->dump(snapshot);
     auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(
@@ -733,7 +751,8 @@ CASE_TEST(component_distributed_transaction_participator, appended_lock_is_dumpe
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("appended_locks", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("appended_locks", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-locks");
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -793,7 +812,8 @@ CASE_TEST(component_distributed_transaction_participator, check_lock_tiebreak_an
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("check_lock", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("check_lock", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-holder", 2, std::chrono::milliseconds{60000}, {"res-1", "res-2"});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -869,16 +889,19 @@ CASE_TEST(component_distributed_transaction_participator, load_dump_round_trip) 
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("load_dump", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("load_dump", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     // One running (with locks) and one finished transaction.
     auto running_request = make_prepare_request("part-uuid-running", 4, std::chrono::milliseconds{60000}, {"res-1"});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type running_output;
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(running_request), response, running_output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(running_request), response,
+        running_output)));
 
     auto finished_request = make_prepare_request("part-uuid-finished", 4, std::chrono::milliseconds{60000});
     storage_ptr_type finished_output;
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(finished_request), response, finished_output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(finished_request), response,
+        finished_output)));
     SSParticipatorTransactionCommitReq commit_request;
     commit_request.set_transaction_uuid("part-uuid-finished");
     SSParticipatorTransactionCommitRsp commit_response;
@@ -895,7 +918,8 @@ CASE_TEST(component_distributed_transaction_participator, load_dump_round_trip) 
     auto stale_request = make_prepare_request("part-uuid-stale");
     SSParticipatorTransactionPrepareRsp stale_response;
     storage_ptr_type stale_output;
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(reloaded->prepare(ctx, std::move(stale_request), stale_response, stale_output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(reloaded->prepare(ctx, std::move(stale_request), stale_response,
+        stale_output)));
     CASE_EXPECT_EQ(1, reloaded->get_running_transactions().size());
 
     reloaded->load(snapshot);
@@ -909,7 +933,8 @@ CASE_TEST(component_distributed_transaction_participator, load_dump_round_trip) 
     // Duplicate running entries in one snapshot keep the first occurrence.
     auto* duplicate = snapshot.add_running_transaction();
     duplicate->mutable_metadata()->set_transaction_uuid("part-uuid-running");
-    duplicate->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+    duplicate->mutable_metadata()->set_status(
+        EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
     reloaded->load(snapshot);
     CASE_EXPECT_EQ(1, reloaded->get_running_transactions().size());
 
@@ -941,7 +966,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_committe
   int query_calls = 0;
   int commit_ack_calls = 0;
   auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, &query_calls);
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
   auto commit_ack_rule = register_participator_ack_mock(test, "commit", &commit_ack_calls);
   CASE_EXPECT_TRUE(!!query_rule && !!commit_ack_rule);
 
@@ -949,7 +975,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_committe
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("resolve_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("resolve_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-resolve-commit", 2, std::chrono::milliseconds{20});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -965,7 +992,9 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_committe
   // runs once; the finished ack delivers commit_participator (DT-021: the ack direction follows
   // the resolved terminal, not the storage status field name).
   CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle, &query_calls]() {
-    return query_calls >= 1 && handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
+    return query_calls >= 1 &&
+           handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
   }));
 
   CASE_EXPECT_GE(query_calls, 1);
@@ -1004,7 +1033,8 @@ CASE_TEST(component_distributed_transaction_participator, terminal_action_failur
   int query_calls = 0;
   int commit_ack_calls = 0;
   auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, &query_calls);
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
   auto commit_ack_rule = register_participator_ack_mock(test, "commit", &commit_ack_calls);
   CASE_EXPECT_TRUE(!!query_rule && !!commit_ack_rule);
 
@@ -1013,7 +1043,8 @@ CASE_TEST(component_distributed_transaction_participator, terminal_action_failur
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("action_failure_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("action_failure_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     // resolve_max_times = 2: exactly 2 real do_event attempts before the consumption.
     auto request = make_prepare_request("part-uuid-action-fail", 2, std::chrono::milliseconds{20});
     SSParticipatorTransactionPrepareRsp response;
@@ -1056,7 +1087,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_budget_exhaust
   int query_calls = 0;
   int reject_ack_calls = 0;
   auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED, &query_calls);
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+          &query_calls);
   auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
   CASE_EXPECT_TRUE(!!query_rule && !!reject_ack_rule);
 
@@ -1064,7 +1096,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_budget_exhaust
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("budget_exhaustion", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("budget_exhaustion", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     // resolve_times == resolve_max_times already: the next resolve entry goes straight to the
     // local reject, with zero coordinator queries.
     auto request = make_prepare_request("part-uuid-budget", 2, std::chrono::milliseconds{20}, {}, 2);
@@ -1108,7 +1141,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_notfound_clean
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("notfound_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("notfound_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-notfound", 2, std::chrono::milliseconds{20}, {"res-nf"});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -1158,7 +1192,8 @@ CASE_TEST(component_distributed_transaction_participator, finished_ack_failure_h
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("ack_budget_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("ack_budget_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-ack-fail", 2, std::chrono::milliseconds{60000});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -1211,7 +1246,8 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
 
   int query_calls = 0;
   auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, &query_calls);
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
   CASE_EXPECT_TRUE(!!query_rule);
 
   participator_event_recorder recorder;
@@ -1219,7 +1255,8 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("writable_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("writable_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     bool writable = true;
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->check_writable(ctx, writable)));
     CASE_EXPECT_FALSE(writable);
@@ -1247,7 +1284,9 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
   // Recovering writability resumes the flow.
   recorder.check_writable_result = true;
   CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle, &query_calls]() {
-    return query_calls >= 1 && handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
+    return query_calls >= 1 &&
+           handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
   }));
   CASE_EXPECT_GE(query_calls, 1);
   CASE_EXPECT_EQ(1, recorder.count("do_event"));
@@ -1271,7 +1310,8 @@ CASE_TEST(component_distributed_transaction_participator, check_prepare_error_pr
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("check_prepare_error", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("check_prepare_error", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-check-error");
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -1309,7 +1349,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_rejected
   int query_calls = 0;
   int reject_ack_calls = 0;
   auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED, &query_calls);
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+          &query_calls);
   auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
   CASE_EXPECT_TRUE(!!query_rule && !!reject_ack_rule);
 
@@ -1317,7 +1358,8 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_rejected
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("resolve_rejected_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("resolve_rejected_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     auto request = make_prepare_request("part-uuid-resolve-reject", 2, std::chrono::milliseconds{20});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
@@ -1355,14 +1397,16 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_prepared
 
   int query_calls = 0;
   auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED, &query_calls);
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+          &query_calls);
   CASE_EXPECT_TRUE(!!query_rule);
 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("resolve_prepared_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("resolve_prepared_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
     // resolve_max_times = 2: two PREPARED queries requeue the timer, the third entry exceeds the
     // budget and goes straight to the local reject without another query.
     auto request = make_prepare_request("part-uuid-resolve-prepared", 2, std::chrono::milliseconds{20});
@@ -1402,8 +1446,10 @@ CASE_TEST(component_distributed_transaction_participator, check_lock_multiple_an
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  auto task = test.run_task("check_lock_multi", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
-    auto request = make_prepare_request("part-uuid-holder-multi", 2, std::chrono::milliseconds{60000}, {"res-1", "res-2"});
+  auto task = test.run_task("check_lock_multi", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-holder-multi", 2, std::chrono::milliseconds{60000}, {"res-1",
+        "res-2"});
     SSParticipatorTransactionPrepareRsp response;
     storage_ptr_type output;
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
@@ -1448,6 +1494,194 @@ CASE_TEST(component_distributed_transaction_participator, check_lock_multiple_an
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 4.3/5.3.8: in-flight terminal direction serializes concurrent commit/reject ============
+
+CASE_TEST(component_distributed_transaction_participator, concurrent_terminal_direction_is_serialized) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  participator_event_recorder recorder;
+  // do_event parks in a wait so the commit transition is observably in flight.
+  int do_event_entered = 0;
+  auto vtable = recorder.make_vtable();
+  auto original_do_event = vtable->do_event;
+  vtable->do_event = [&do_event_entered, &original_do_event](rpc::context& ctx, handle_type& self,
+                                                             const handle_type::storage_type& storage)
+                                                             -> rpc::result_code_type {
+    ++do_event_entered;
+    RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{120}));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(original_do_event(ctx, self, storage)));
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("concurrent_terminal_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-concurrent", 3, std::chrono::milliseconds{60000});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // Task A starts commit and parks inside do_event.
+  SSParticipatorTransactionCommitReq commit_request;
+  commit_request.set_transaction_uuid("part-uuid-concurrent");
+  auto commit_task = test.run_task("concurrent_commit", std::chrono::seconds{4},
+                                   [&handle, commit_request](rpc::context& ctx) -> rpc::result_code_type {
+    SSParticipatorTransactionCommitRsp commit_response;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+    RPC_RETURN_CODE(0);
+  });
+  // Let task A reach the do_event await point.
+  for (int i = 0; i < 6; ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(1, do_event_entered);
+
+  // While the commit transition is in flight, the reverse direction is refused and the same
+  // direction is idempotent; neither runs a second business action.
+  SSParticipatorTransactionRejectReq reject_request;
+  reject_request.set_transaction_uuid("part-uuid-concurrent");
+  auto reject_task = test.run_task("concurrent_reject", std::chrono::seconds{4},
+                                   [&handle, reject_request](rpc::context& ctx) -> rpc::result_code_type {
+    SSParticipatorTransactionRejectRsp reject_response;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED,
+                   RPC_AWAIT_CODE_RESULT(handle->reject(ctx, reject_request, reject_response)));
+    RPC_RETURN_CODE(0);
+  });
+  auto commit_task2 = test.run_task("concurrent_commit_repeat", std::chrono::seconds{4},
+                                    [&handle, commit_request](rpc::context& ctx) -> rpc::result_code_type {
+    SSParticipatorTransactionCommitRsp commit_response;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+    RPC_RETURN_CODE(0);
+  });
+
+  auto reject_result = test.wait(reject_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(reject_result.task_exited);
+  CASE_EXPECT_EQ(0, reject_result.result_code);
+  auto repeat_result = test.wait(commit_task2, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(repeat_result.task_exited);
+  CASE_EXPECT_EQ(0, repeat_result.result_code);
+  CASE_EXPECT_EQ(1, do_event_entered);  // the in-flight direction is the only one running
+
+  auto commit_result = test.wait(commit_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(commit_result.task_exited);
+  CASE_EXPECT_EQ(0, commit_result.result_code);
+  CASE_EXPECT_EQ(1, do_event_entered);  // the successful business action ran exactly once
+  CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+  // The commit direction finished; the reject lifecycle never fired.
+  CASE_EXPECT_EQ(0, recorder.count("on_rejected"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 4.3: get_locker after the holder finished (locks released) ============
+
+CASE_TEST(component_distributed_transaction_participator, get_locker_released_after_finish) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("locker_edges", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-locker", 2, std::chrono::milliseconds{60000}, {"res-locker"});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    CASE_EXPECT_TRUE(!!handle->get_locker("res-locker"));
+
+    // Committing releases the resource locks together with the running entry.
+    SSParticipatorTransactionCommitReq commit_request;
+    commit_request.set_transaction_uuid("part-uuid-locker");
+    SSParticipatorTransactionCommitRsp commit_response;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+    CASE_EXPECT_FALSE(!!handle->get_locker("res-locker"));  // no dangling strong reference
+    CASE_EXPECT_FALSE(!!handle->get_locker("never-locked"));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 4.3: tick processes a timer due exactly at the given timepoint ============
+
+CASE_TEST(component_distributed_transaction_participator, tick_equal_timepoint_is_due) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+          &query_calls);
+  CASE_EXPECT_TRUE(!!query_rule);
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("equal_timepoint_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-equal", 2, std::chrono::milliseconds{60000});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // The initial resolve timer equals the transaction expire timepoint exactly; a tick before it
+  // collects nothing and a tick exactly at it collects (trigger_due uses a strict > comparison).
+  auto tick_context = atfw::testing::make_context();
+  auto running_iter = handle->get_running_transactions().find("part-uuid-equal");
+  CASE_EXPECT_TRUE(running_iter != handle->get_running_transactions().end());
+  if (running_iter == handle->get_running_transactions().end()) {
+    test.stop();
+    return;
+  }
+  auto before_expire = protobuf_to_system_clock(running_iter->second.storage->metadata().expire_timepoint()) -
+                       std::chrono::milliseconds{1};
+  handle->tick(tick_context, before_expire);
+  for (int i = 0; i < 4; ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(0, query_calls);
+
+  auto exactly_expire = protobuf_to_system_clock(running_iter->second.storage->metadata().expire_timepoint());
+  handle->tick(tick_context, exactly_expire);
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&query_calls]() { return query_calls >= 1; }));
+  CASE_EXPECT_GE(query_calls, 1);
 
   CASE_EXPECT_EQ(0, test.stop());
 }

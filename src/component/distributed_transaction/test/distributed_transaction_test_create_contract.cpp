@@ -1,9 +1,9 @@
 // Copyright 2026 atframework
 
 // Sampling contract test for the distributed transaction SDK SS consumer path (see
-// doc/docs/development/rpc-unit-test.md): rpc::transaction_api::create_transaction resolves the dtcoordsvr node by consistent hash over
-// the real discovery index and issues atframework.distributed_system.DtcoordsvrService/create; the SS
-// mock engine answers it offline.
+// doc/docs/development/rpc-unit-test.md): rpc::transaction_api::create_transaction resolves the
+// dtcoordsvr node by consistent hash over the real discovery index and issues
+// atframework.distributed_system.DtcoordsvrService/create; the SS mock engine answers it offline.
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

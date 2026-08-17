@@ -28,7 +28,7 @@
 #include <type_traits>
 #include <vector>
 
-#include "dt_test_common.h"
+#include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 #include "rpc/transaction/transaction_api.h"
 #include "utility/protobuf_mini_dumper.h"
@@ -39,6 +39,8 @@ using atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq;
 using atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp;
 using atfw::distributed_system::SSDistributeTransactionCommitReq;
 using atfw::distributed_system::SSDistributeTransactionCommitRsp;
+using atfw::distributed_system::SSDistributeTransactionCreateReq;
+using atfw::distributed_system::SSDistributeTransactionCreateRsp;
 using atfw::distributed_system::SSDistributeTransactionQueryReq;
 using atfw::distributed_system::SSDistributeTransactionQueryRsp;
 using atfw::distributed_system::SSDistributeTransactionRemoveReq;
@@ -56,7 +58,8 @@ static_assert(std::is_same<google::protobuf::Duration,
                            decltype(protobuf_from_chrono_duration(std::chrono::milliseconds{1500}))>::value,
               "protobuf_from_chrono_duration must keep the Duration return type for all input reps");
 static_assert(
-    std::is_same<std::chrono::system_clock::duration, decltype(protobuf_to_chrono_duration(google::protobuf::Duration{}))>::value,
+    std::is_same<std::chrono::system_clock::duration,
+                  decltype(protobuf_to_chrono_duration(google::protobuf::Duration{}))>::value,
     "protobuf_to_chrono_duration must default to system_clock::duration");
 
 template <class TRep, class TPeriod>
@@ -252,6 +255,7 @@ CASE_TEST(component_distributed_transaction_api, merge_storage_blob_and_particip
   input.mutable_metadata()->mutable_finish_timepoint()->set_seconds(100);
   input.mutable_configure()->set_resolve_max_times(7);
   input.mutable_configure()->mutable_lock_wait_interval_min()->set_nanos(32000000);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   transaction_participator& participator = (*input.mutable_participators())["pa"];
   participator.set_participator_key("pa");
   participator.set_participator_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
@@ -271,6 +275,7 @@ CASE_TEST(component_distributed_transaction_api, merge_storage_blob_and_particip
   later.mutable_metadata()->set_transaction_uuid("merge-uuid-1");
   later.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
   later.mutable_configure()->set_lock_retry_max_times(4);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   transaction_participator& participator_b = (*later.mutable_participators())["pb"];
   participator_b.set_participator_key("pb");
   participator_b.set_participator_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
@@ -396,14 +401,16 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_single_node_p
       rpc::transaction::packer::get_full_name_of_query(),
       SSDistributeTransactionQueryReq::descriptor()->full_name(),
       SSDistributeTransactionQueryRsp::descriptor()->full_name(),
-      [&input](const atfw::testing::ss_request_view& request, google::protobuf::Message& response) -> rpc::result_code_type {
+      [&input](const atfw::testing::ss_request_view&,
+          google::protobuf::Message& response) -> rpc::result_code_type {
         auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_storage(), input);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!success_rule);
 
-  auto task = test.run_task("api_query", std::chrono::seconds{4}, [query_metadata](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("api_query", std::chrono::seconds{4},
+      [query_metadata](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage output;
     int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, query_metadata, output));
     CASE_EXPECT_EQ(0, res);
@@ -486,7 +493,8 @@ CASE_TEST(component_distributed_transaction_api, create_transaction_param_guards
 
     // non-PREPARED status is rejected before any RPC
     invalid_storage.mutable_configure()->set_resolve_max_times(3);
-    invalid_storage.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED);
+    invalid_storage.mutable_metadata()->set_status(
+        EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED);
     res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::create_transaction(ctx, invalid_storage));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, res);
 
@@ -511,9 +519,11 @@ CASE_TEST(component_distributed_transaction_api, create_transaction_param_guards
   // layer; bounded retries belong to the client handle).
   rule.reset();
   auto conflict_rule =
-      test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(), PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION);
+      test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
+          PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION);
   CASE_EXPECT_TRUE(!!conflict_rule);
-  auto conflict_task = test.run_task("api_create_conflict", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto conflict_task = test.run_task("api_create_conflict", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage storage;
     dt_test::make_prepared_storage(storage, "api-create-conflict", {"pa"});
     int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::create_transaction(ctx, storage));
@@ -549,7 +559,8 @@ CASE_TEST(component_distributed_transaction_api, commit_reject_remove_single_sho
       [](const atfw::testing::ss_request_view&, google::protobuf::Message& response) -> rpc::result_code_type {
         auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
         typed_response.mutable_metadata()->set_transaction_uuid("api-terminal-uuid-1");
-        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!commit_rule);
@@ -562,7 +573,8 @@ CASE_TEST(component_distributed_transaction_api, commit_reject_remove_single_sho
         auto& typed_response =
             static_cast<atfw::distributed_system::SSDistributeTransactionRejectRsp&>(response);
         typed_response.mutable_metadata()->set_transaction_uuid("api-terminal-uuid-1");
-        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!reject_rule);
@@ -618,7 +630,8 @@ CASE_TEST(component_distributed_transaction_api, commit_reject_remove_single_sho
                                               PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION);
   CASE_EXPECT_TRUE(!!conflict_commit && !!conflict_reject && !!conflict_remove);
 
-  auto conflict_task = test.run_task("api_conflicts", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto conflict_task = test.run_task("api_conflicts", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("api-terminal-uuid-1");
     metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
@@ -655,7 +668,8 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_one_way) {
   metadata.set_transaction_uuid("api-remove-nowait-1");
   metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
 
-  auto task = test.run_task("api_remove_nowait", std::chrono::seconds{4}, [metadata](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("api_remove_nowait", std::chrono::seconds{4},
+      [metadata](rpc::context& ctx) -> rpc::result_code_type {
     // empty UUID is rejected without sending
     transaction_metadata empty_metadata;
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
@@ -696,7 +710,7 @@ CASE_TEST(component_distributed_transaction_api, participator_terminal_rpc_passt
       SSDistributeTransactionCommitParticipatorRsp::descriptor()->full_name(),
       [&commit_key](const atfw::testing::ss_request_view& request,
                     google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionCommitParticipatorReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionCommitParticipatorReq&>(request.body);
         commit_key = typed_request.participator_key();
         auto& typed_response = static_cast<SSDistributeTransactionCommitParticipatorRsp&>(response);
         typed_response.mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
@@ -710,7 +724,7 @@ CASE_TEST(component_distributed_transaction_api, participator_terminal_rpc_passt
       atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp::descriptor()->full_name(),
       [&reject_key](const atfw::testing::ss_request_view& request,
                     google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request =
+        const auto& typed_request =
             static_cast<const atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq&>(request.body);
         reject_key = typed_request.participator_key();
         auto& typed_response =
@@ -722,7 +736,8 @@ CASE_TEST(component_distributed_transaction_api, participator_terminal_rpc_passt
       });
   CASE_EXPECT_TRUE(!!commit_rule && !!reject_rule);
 
-  auto task = test.run_task("api_participator_terminal", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("api_participator_terminal", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("api-participator-uuid-1");
     metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
@@ -786,16 +801,19 @@ CASE_TEST(component_distributed_transaction_api, replication_counts_only_valid_s
       atfw::distributed_system::SSDistributeTransactionCommitReq::descriptor()->full_name(),
       atfw::distributed_system::SSDistributeTransactionCommitRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request, google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const atfw::distributed_system::SSDistributeTransactionCommitReq&>(request.body);
+        const auto& typed_request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionCommitReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
-        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
         RPC_RETURN_CODE(0);
       },
       node3_options);
   CASE_EXPECT_TRUE(!!node1_rule && !!node2_rule && !!node3_rule);
 
-  auto task = test.run_task("replication_quorum", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("replication_quorum", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("api-replication-uuid-1");
     metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
@@ -828,16 +846,19 @@ CASE_TEST(component_distributed_transaction_api, replication_counts_only_valid_s
       atfw::distributed_system::SSDistributeTransactionCommitReq::descriptor()->full_name(),
       atfw::distributed_system::SSDistributeTransactionCommitRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request, google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const atfw::distributed_system::SSDistributeTransactionCommitReq&>(request.body);
+        const auto& typed_request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionCommitReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
-        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
         RPC_RETURN_CODE(0);
       },
       node2_valid_options);
   CASE_EXPECT_TRUE(!!node2_valid_rule);
 
-  auto quorum_task = test.run_task("replication_quorum_met", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto quorum_task = test.run_task("replication_quorum_met", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("api-replication-uuid-1");
     metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
@@ -890,12 +911,14 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_replication_m
       SSDistributeTransactionQueryRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request,
          google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
         auto* storage = typed_response.mutable_storage();
         storage->mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
-        storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+        storage->mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
         storage->mutable_metadata()->mutable_finish_timepoint()->set_seconds(123);
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         auto& participator = (*storage->mutable_participators())["pa"];
         participator.set_participator_key("pa");
         participator.set_participator_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
@@ -910,11 +933,12 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_replication_m
       SSDistributeTransactionQueryRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request,
          google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
         auto* storage = typed_response.mutable_storage();
         storage->mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
-        storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        storage->mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
         atfw::distributed_system::transaction_participator_failure_reason sample_data;
         ATFW_EXPLICIT_UNUSED_ATTR bool packed = storage->mutable_transaction_data()->PackFrom(sample_data);
         RPC_RETURN_CODE(0);
@@ -929,7 +953,8 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_replication_m
     CASE_EXPECT_EQ(0, res);
     // Merged replica fields: the later terminal wins, node2's finish timepoint is adopted and
     // node3's transaction data lands in the same output.
-    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, output.metadata().status());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+        output.metadata().status());
     CASE_EXPECT_EQ(123, output.metadata().finish_timepoint().seconds());
     CASE_EXPECT_EQ(1, output.participators().size());
     CASE_EXPECT_TRUE(output.has_transaction_data());
@@ -951,11 +976,12 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_replication_m
       SSDistributeTransactionQueryRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request,
          google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
         auto* storage = typed_response.mutable_storage();
         storage->mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
-        storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        storage->mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
         storage->mutable_metadata()->mutable_finish_timepoint()->set_seconds(456);
         RPC_RETURN_CODE(0);
       },
@@ -967,7 +993,8 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_replication_m
     transaction_blob_storage output;
     int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, replication_metadata, output));
     CASE_EXPECT_EQ(0, res);
-    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, output.metadata().status());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+        output.metadata().status());
     CASE_EXPECT_EQ(456, output.metadata().finish_timepoint().seconds());
     RPC_RETURN_CODE(0);
   });
@@ -1044,7 +1071,8 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_replication_fano
   }
   CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002, 0x1B0003}));
 
-  auto task = test.run_task("api_remove_nowait_replication", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("api_remove_nowait_replication", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("api-remove-nowait-replication-1");
     metadata.set_replicate_read_count(2);
@@ -1087,15 +1115,17 @@ CASE_TEST(component_distributed_transaction_api, commit_reports_persisted_termin
       SSDistributeTransactionCommitRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request,
          google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
-        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!rule);
 
-  auto task = test.run_task("api_commit_persisted_terminal", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("api_commit_persisted_terminal", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("api-commit-persisted-1");
     metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
@@ -1107,6 +1137,123 @@ CASE_TEST(component_distributed_transaction_api, commit_reports_persisted_termin
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 5.1.6: full R x alive-replica matrix counts only valid successes ============
+
+CASE_TEST(component_distributed_transaction_api, replication_quorum_full_matrix) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002, 0x1B0003}));
+
+  auto register_node_rule = [&test](uint64_t node_id, bool alive) {
+    atfw::testing::ss_rule_options node_options;
+    node_options.match_node_id = node_id;
+    if (alive) {
+      return test.ss().mock(
+          rpc::transaction::packer::get_full_name_of_create(),
+          SSDistributeTransactionCreateReq::descriptor()->full_name(),
+          SSDistributeTransactionCreateRsp::descriptor()->full_name(),
+          [](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+            RPC_RETURN_CODE(0);
+          },
+          node_options);
+    }
+    return test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
+                                PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, node_options);
+  };
+
+  // Every (R, alive) combination: the create succeeds exactly when alive >= R.
+  for (uint32_t replication_read_count = 1; replication_read_count <= 3; ++replication_read_count) {
+    for (uint32_t alive_count = 1; alive_count <= 3; ++alive_count) {
+      atfw::testing::ss_rule_handle rules[3] = {register_node_rule(0x1B0001, alive_count > 0),
+                                                register_node_rule(0x1B0002, alive_count > 1),
+                                                register_node_rule(0x1B0003, alive_count > 2)};
+      CASE_EXPECT_TRUE(!!rules[0] && !!rules[1] && !!rules[2]);
+
+      auto task = test.run_task("quorum_matrix", std::chrono::seconds{6},
+                                [replication_read_count, alive_count](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_blob_storage storage;
+        storage.mutable_metadata()->set_transaction_uuid("api-quorum-matrix");
+        storage.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+        storage.mutable_metadata()->set_replicate_read_count(replication_read_count);
+        storage.mutable_metadata()->add_replicate_node_server_id(0x1B0001);
+        storage.mutable_metadata()->add_replicate_node_server_id(0x1B0002);
+        storage.mutable_metadata()->add_replicate_node_server_id(0x1B0003);
+        storage.mutable_configure()->set_resolve_max_times(3);
+        int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::create_transaction(ctx, storage));
+        if (alive_count >= replication_read_count) {
+          CASE_EXPECT_EQ(0, res);
+        } else {
+          CASE_EXPECT_TRUE(res < 0);
+        }
+        RPC_RETURN_CODE(0);
+      });
+      auto result = test.wait(task, std::chrono::seconds{12});
+      CASE_EXPECT_TRUE(result.task_exited);
+      CASE_EXPECT_EQ(0, result.result_code);
+
+      rules[0].reset();
+      rules[1].reset();
+      rules[2].reset();
+    }
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 5.1.5: the SDK falls back to a surviving replica id ============
+
+CASE_TEST(component_distributed_transaction_api, calculate_server_id_prefers_alive_replica) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  // Only the second replica exists in discovery: the first preferred id is dead after a scale-down.
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0002}));
+
+  uint64_t seen_target = 0;
+  auto rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(),
+      SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [&seen_target](const atfw::testing::ss_request_view& request,
+                     google::protobuf::Message& response) -> rpc::result_code_type {
+        seen_target = request.target_node_id;
+        const auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
+        protobuf_copy_message(*typed_response.mutable_storage()->mutable_metadata(), typed_request.metadata());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!rule);
+
+  auto task = test.run_task("failover_replica", std::chrono::seconds{4},
+      [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("api-failover-1");
+    // Non-replication routing still consults the surviving ids of the metadata first.
+    metadata.add_replicate_node_server_id(0x1B0001);  // dead: not in discovery
+    metadata.add_replicate_node_server_id(0x1B0002);  // alive
+    transaction_blob_storage output;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, metadata, output));
+    CASE_EXPECT_EQ(0, res);
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(static_cast<uint64_t>(0x1B0002), seen_target);
 
   CASE_EXPECT_EQ(0, test.stop());
 }

@@ -25,12 +25,16 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
-#include "dt_test_common.h"
+#include <memory/object_allocator.h>
+
+#include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
-#include "transaction_client_handle.h"
+#include "utility/protobuf_mini_dumper.h"
+#include "transaction_client_handle.h"  // NOLINT(build/include_subdir)
 
 namespace {
 using atframework::distributed_system::EnDistibutedTransactionStatus;
@@ -59,7 +63,7 @@ struct client_event_recorder {
   atfw::util::memory::strong_rc_ptr<transaction_client_handle::vtable_type> make_vtable() {
     auto vtable = atfw::component::memory::stl::make_strong_rc<transaction_client_handle::vtable_type>();
     vtable->prepare_participator = [this](rpc::context&, transaction_client_handle&,
-                                          const transaction_client_handle::storage_type& storage,
+                                          const transaction_client_handle::storage_type&,
                                           const transaction_client_handle::participator_type& participator,
                                           transaction_participator_failure_reason& reason) -> rpc::result_code_type {
       events.push_back("prepare:" + participator.participator_key());
@@ -76,7 +80,8 @@ struct client_event_recorder {
     };
     vtable->commit_participator = [this](rpc::context&, transaction_client_handle&,
                                          const transaction_client_handle::storage_type&,
-                                         const transaction_client_handle::participator_type& participator) -> rpc::result_code_type {
+                                         const transaction_client_handle::participator_type& participator)
+        -> rpc::result_code_type {
       events.push_back("commit:" + participator.participator_key());
       auto& script = commit_scripts[participator.participator_key()];
       int32_t res = 0;
@@ -88,7 +93,8 @@ struct client_event_recorder {
     };
     vtable->reject_participator = [this](rpc::context&, transaction_client_handle&,
                                          const transaction_client_handle::storage_type&,
-                                         const transaction_client_handle::participator_type& participator) -> rpc::result_code_type {
+                                         const transaction_client_handle::participator_type& participator)
+        -> rpc::result_code_type {
       events.push_back("reject:" + participator.participator_key());
       auto& script = reject_scripts[participator.participator_key()];
       int32_t res = 0;
@@ -116,7 +122,7 @@ atfw::testing::ss_rule_handle register_coordinator_commit_mock(atfw::testing::ru
       SSDistributeTransactionCommitRsp::descriptor()->full_name(),
       [&state](const atfw::testing::ss_request_view& request,
                google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
         typed_response.mutable_metadata()->set_status(state.terminal);
@@ -132,7 +138,7 @@ atfw::testing::ss_rule_handle register_coordinator_reject_mock(atfw::testing::ru
       SSDistributeTransactionRejectRsp::descriptor()->full_name(),
       [&state](const atfw::testing::ss_request_view& request,
                google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionRejectReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionRejectReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionRejectRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
         // reject keeps the coordinator truth: if the coordinator already decided COMMITED, the
@@ -142,7 +148,8 @@ atfw::testing::ss_rule_handle register_coordinator_reject_mock(atfw::testing::ru
       });
 }
 
-atfw::testing::ss_rule_handle register_coordinator_create_mock(atfw::testing::runtime& test, int* call_count = nullptr) {
+atfw::testing::ss_rule_handle register_coordinator_create_mock(atfw::testing::runtime& test,
+    int* call_count = nullptr) {
   return test.ss().mock(
       rpc::transaction::packer::get_full_name_of_create(),
       SSDistributeTransactionCreateReq::descriptor()->full_name(),
@@ -282,13 +289,15 @@ CASE_TEST(component_distributed_transaction_client, set_data_and_add_participato
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_mutations", std::chrono::seconds{4}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_mutations", std::chrono::seconds{4},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     sample_data_type sample_data;
     sample_data.set_allow_retry(true);
 
     // null input
     transaction_client_handle::storage_ptr_type null_storage;
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, client->set_transaction_data(ctx, null_storage, sample_data));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, client->set_transaction_data(ctx, null_storage,
+        sample_data));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
                    client->add_participator(ctx, null_storage, "pa", sample_data));
 
@@ -304,7 +313,9 @@ CASE_TEST(component_distributed_transaction_client, set_data_and_add_participato
     // first add
     CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
     CASE_EXPECT_EQ(2, storage->participators().size());
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_EQ("pa", (*storage->mutable_participators())["pa"].participator_key());
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_TRUE((*storage->mutable_participators())["pa"].has_participator_data());
 
     // DT-010: a duplicate key is a successful update that replaces the content
@@ -313,6 +324,7 @@ CASE_TEST(component_distributed_transaction_client, set_data_and_add_participato
     CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", updated_data));
     CASE_EXPECT_EQ(2, storage->participators().size());
     sample_data_type unpacked;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_TRUE((*storage->mutable_participators())["pa"].participator_data().UnpackTo(&unpacked));
     CASE_EXPECT_FALSE(unpacked.allow_retry());
 
@@ -354,7 +366,8 @@ CASE_TEST(component_distributed_transaction_client, submit_happy_path_ordered_ev
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_submit_happy", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_submit_happy", std::chrono::seconds{6},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -424,7 +437,8 @@ CASE_TEST(component_distributed_transaction_client, coordinator_terminal_is_only
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_prepare_failure", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_prepare_failure", std::chrono::seconds{6},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -471,7 +485,7 @@ CASE_TEST(component_distributed_transaction_client, coordinator_terminal_is_only
       atfw::distributed_system::SSDistributeTransactionQueryRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request,
          google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request =
+        const auto& typed_request =
             static_cast<const atfw::distributed_system::SSDistributeTransactionQueryReq&>(request.body);
         auto& typed_response = static_cast<atfw::distributed_system::SSDistributeTransactionQueryRsp&>(response);
         auto* query_storage = typed_response.mutable_storage();
@@ -483,7 +497,8 @@ CASE_TEST(component_distributed_transaction_client, coordinator_terminal_is_only
       });
   CASE_EXPECT_TRUE(!!query_rule);
 
-  auto task2 = test.run_task("client_commit_response_lost", std::chrono::seconds{8}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task2 = test.run_task("client_commit_response_lost", std::chrono::seconds{8},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -547,7 +562,8 @@ CASE_TEST(component_distributed_transaction_client, retry_exhaustion_never_fakes
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_expired_entry", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_expired_entry", std::chrono::seconds{6},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -577,7 +593,8 @@ CASE_TEST(component_distributed_transaction_client, retry_exhaustion_never_fakes
   // persists REJECTED and the submit never reports success.
   recorder.events.clear();
   recorder.prepare_allow_retry.insert("pa");
-  auto task2 = test.run_task("client_allow_retry_exhaustion", std::chrono::seconds{8}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task2 = test.run_task("client_allow_retry_exhaustion", std::chrono::seconds{8},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -641,7 +658,8 @@ CASE_TEST(component_distributed_transaction_client, terminal_delivery_result_is_
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_delivery_failure", std::chrono::seconds{8}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_delivery_failure", std::chrono::seconds{8},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -700,7 +718,8 @@ CASE_TEST(component_distributed_transaction_client, force_commit_does_not_requir
   vtable->commit_participator = nullptr;
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_force_commit", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_force_commit", std::chrono::seconds{6},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.force_commit = true;
@@ -731,7 +750,8 @@ CASE_TEST(component_distributed_transaction_client, force_commit_does_not_requir
   // Failure path: force_commit prepare fails -> bounded undo via reject_participator.
   recorder.events.clear();
   recorder.prepare_scripts["pa"] = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
-  auto task2 = test.run_task("client_force_commit_failure", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task2 = test.run_task("client_force_commit_failure", std::chrono::seconds{6},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.force_commit = true;
@@ -790,7 +810,8 @@ CASE_TEST(component_distributed_transaction_client, submit_guards_and_create_cas
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_guards", std::chrono::seconds{6}, [&client, &recorder](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_guards", std::chrono::seconds{6}, [&client,
+      &recorder](rpc::context& ctx) -> rpc::result_code_type {
     sample_data_type sample_data;
 
     // null input
@@ -820,7 +841,8 @@ CASE_TEST(component_distributed_transaction_client, submit_guards_and_create_cas
     vtable_no_commit->commit_participator = nullptr;
     auto no_commit_client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable_no_commit);
     transaction_client_handle::storage_ptr_type no_commit_storage;
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(no_commit_client->create_transaction(ctx, no_commit_storage, client_options)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(no_commit_client->create_transaction(ctx, no_commit_storage,
+        client_options)));
     CASE_EXPECT_EQ(0, no_commit_client->add_participator(ctx, no_commit_storage, "pa", sample_data));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
                    RPC_AWAIT_CODE_RESULT(no_commit_client->submit_transaction(ctx, no_commit_storage)));
@@ -877,7 +899,8 @@ CASE_TEST(component_distributed_transaction_client, create_failure_rolls_back_st
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_create_failure", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_create_failure", std::chrono::seconds{6},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};
@@ -892,7 +915,8 @@ CASE_TEST(component_distributed_transaction_client, create_failure_rolls_back_st
     // A generic create error (not OLD_VERSION/KEY_EXISTS) is not retried.
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, res);
     // The PREPARED status set at submit entry is rolled back so the storage stays reusable.
-    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED, storage->metadata().status());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED,
+        storage->metadata().status());
     CASE_EXPECT_TRUE(prepared.empty());
     RPC_RETURN_CODE(0);
   });
@@ -932,7 +956,8 @@ CASE_TEST(component_distributed_transaction_client, rejected_delivery_failure_is
   auto vtable = recorder.make_vtable();
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
 
-  auto task = test.run_task("client_rejected_delivery_failure", std::chrono::seconds{8}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("client_rejected_delivery_failure", std::chrono::seconds{8},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
     transaction_client_handle::storage_ptr_type storage;
     transaction_client_handle::transaction_options client_options;
     client_options.resolve_retry_interval = std::chrono::milliseconds{10};

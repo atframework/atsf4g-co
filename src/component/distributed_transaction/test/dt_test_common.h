@@ -3,6 +3,9 @@
 // Shared helpers for the distributed transaction unit tests: dtcoordsvr discovery injection,
 // storage builders, the client vtable event recorder and a pump-based wait helper.
 
+#ifndef SRC_COMPONENT_DISTRIBUTED_TRANSACTION_TEST_DT_TEST_COMMON_H_
+#define SRC_COMPONENT_DISTRIBUTED_TRANSACTION_TEST_DT_TEST_COMMON_H_
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -19,6 +22,8 @@
 
 #include <gsl/select-gsl.h>
 
+#include <time/time_utility.h>
+
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -28,14 +33,9 @@
 #include <utility>
 #include <vector>
 
-#include <time/time_utility.h>
-
 #include "config/extern_service_types.h"
 #include "frame/test_macros.h"
 #include "logic/logic_server_setup.h"
-
-#ifndef PROJECT_SRC_COMPONENT_DISTRIBUTED_TRANSACTION_TEST_DT_TEST_COMMON_H_
-#define PROJECT_SRC_COMPONENT_DISTRIBUTED_TRANSACTION_TEST_DT_TEST_COMMON_H_
 
 namespace dt_test {
 
@@ -178,4 +178,4 @@ inline bool expect_event_list(const std::vector<std::string>& actual, const std:
 
 }  // namespace dt_test
 
-#endif  // PROJECT_SRC_COMPONENT_DISTRIBUTED_TRANSACTION_TEST_DT_TEST_COMMON_H_
+#endif  // SRC_COMPONENT_DISTRIBUTED_TRANSACTION_TEST_DT_TEST_COMMON_H_

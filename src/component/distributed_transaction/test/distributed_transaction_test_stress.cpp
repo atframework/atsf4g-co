@@ -18,6 +18,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <memory/object_allocator.h>
+
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
 
@@ -28,11 +30,13 @@
 #include <cstdint>
 #include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
-#include "dt_test_common.h"
+#include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
-#include "transaction_client_handle.h"
+#include "utility/protobuf_mini_dumper.h"
+#include "transaction_client_handle.h"  // NOLINT(build/include_subdir)
 
 namespace {
 using atframework::distributed_system::EnDistibutedTransactionStatus;
@@ -70,10 +74,11 @@ CASE_TEST(component_distributed_transaction_stress, thousand_short_transactions)
       SSDistributeTransactionCommitRsp::descriptor()->full_name(),
       [](const atfw::testing::ss_request_view& request,
          google::protobuf::Message& response) -> rpc::result_code_type {
-        auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
+        const auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
         auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
         protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
-        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
         RPC_RETURN_CODE(0);
       });
   CASE_EXPECT_TRUE(!!create_rule && !!commit_rule);
@@ -101,7 +106,8 @@ CASE_TEST(component_distributed_transaction_stress, thousand_short_transactions)
   };
   client_vtable->reject_participator = [](rpc::context&, transaction_client_handle&,
                                           const transaction_client_handle::storage_type&,
-                                          const transaction_client_handle::participator_type&) -> rpc::result_code_type {
+                                          const transaction_client_handle::participator_type&)
+          -> rpc::result_code_type {
     RPC_RETURN_CODE(0);
   };
   auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(client_vtable);
@@ -142,7 +148,7 @@ CASE_TEST(component_distributed_transaction_stress, thousand_short_transactions)
     auto result = test.wait(task, std::chrono::seconds{90});
     if (!result.task_exited || 0 != result.result_code) {
       CASE_MSG_INFO() << "stress batch " << batch << " failed: task_exited=" << result.task_exited
-                      << " result=" << result.result_code << " diagnostic=" << result.diagnostic << std::endl;
+                      << " result=" << result.result_code << " diagnostic=" << result.diagnostic << '\n';
       batch_failed = true;
       break;
     }
@@ -150,22 +156,25 @@ CASE_TEST(component_distributed_transaction_stress, thousand_short_transactions)
     // Linear-growth invariant: every round produced exactly one prepare, one coordinator create
     // and one coordinator commit so far; nothing accumulates per round beyond that.
     const int finished_rounds = (batch + 1) * kBatchRounds;
-    if (prepare_calls != finished_rounds || notify_calls != finished_rounds ||
-        static_cast<int>(test.ss().calls(rpc::transaction::packer::get_full_name_of_create())) != finished_rounds ||
-        static_cast<int>(test.ss().calls(rpc::transaction::packer::get_full_name_of_commit())) != finished_rounds) {
+    if (static_cast<size_t>(prepare_calls) != static_cast<size_t>(finished_rounds) ||
+        static_cast<size_t>(notify_calls) != static_cast<size_t>(finished_rounds) ||
+        test.ss().calls(rpc::transaction::packer::get_full_name_of_create()) !=
+        static_cast<size_t>(finished_rounds) ||
+        test.ss().calls(rpc::transaction::packer::get_full_name_of_commit()) !=
+        static_cast<size_t>(finished_rounds)) {
       CASE_MSG_INFO() << "stress invariant failed at batch " << batch << ": prepare=" << prepare_calls
                       << " notify=" << notify_calls
                       << " create=" << test.ss().calls(rpc::transaction::packer::get_full_name_of_create())
                       << " commit=" << test.ss().calls(rpc::transaction::packer::get_full_name_of_commit())
-                      << " expected=" << finished_rounds << std::endl;
+                      << " expected=" << finished_rounds << '\n';
       batch_failed = true;
       break;
     }
   }
   CASE_EXPECT_FALSE(batch_failed);
 
-  CASE_EXPECT_EQ(kStressRounds, prepare_calls);
-  CASE_EXPECT_EQ(kStressRounds, notify_calls);
+  CASE_EXPECT_EQ(static_cast<size_t>(kStressRounds), static_cast<size_t>(prepare_calls));
+  CASE_EXPECT_EQ(static_cast<size_t>(kStressRounds), static_cast<size_t>(notify_calls));
   CASE_EXPECT_EQ(kStressRounds, static_cast<int>(test.ss().calls(rpc::transaction::packer::get_full_name_of_create())));
   CASE_EXPECT_EQ(kStressRounds, static_cast<int>(test.ss().calls(rpc::transaction::packer::get_full_name_of_commit())));
 

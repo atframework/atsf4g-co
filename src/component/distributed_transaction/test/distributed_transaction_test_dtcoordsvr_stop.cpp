@@ -22,8 +22,9 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <utility>
 
-#include "dt_test_common.h"
+#include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "logic/transaction_manager.h"
 #include "rpc/db/local_db_interface.atfw.gen.h"
 
@@ -31,7 +32,8 @@ namespace {
 void setup_dtcoordsvr_config_loader() {
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app& app_, logic_config&, logic_config::server_instance_config_ptr& to) {
-        auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
+        auto config_ptr =
+            atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
         config_ptr->set_lru_max_cache_count(8);
         app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
         to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);

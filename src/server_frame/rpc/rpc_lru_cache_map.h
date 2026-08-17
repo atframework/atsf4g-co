@@ -142,6 +142,19 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     return true;
   }
 
+  // 按 remove_cache 的语义清空全部条目：保留墓碑对象，阻止在途句柄写回复活。
+  // 仅供单元测试在用例间清理进程级单例状态使用。
+  size_type clear() {
+    size_type removed = 0;
+    for (auto iter = pool_.begin(); iter != pool_.end(); ++iter) {
+      if (iter->second && !iter->second->removed) {
+        iter->second->removed = true;
+        ++removed;
+      }
+    }
+    return removed;
+  }
+
   // ==================== 协程接口，可能切出执行上下文 ====================
   /**
    * @brief 等待并提取拉取结果

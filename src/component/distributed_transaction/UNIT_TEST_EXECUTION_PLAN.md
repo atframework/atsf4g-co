@@ -1,6 +1,6 @@
 # 分布式事务单元测试执行计划
 
-## 0. 实施状态记录（2026-08-17，实施完成后回填）
+## 0. 实施状态记录（2026-08-17 第一轮实施；2026-08-17 第二轮补齐后更新）
 
 > 本节由实施阶段维护；第 1-9 节保持编制时原样，不做回写。状态分为：✅ 已实施并有 fresh 证据、
 > ⛔ 未实施（含原因）。所有用例名保留 DT-ID，便于与本表对照。
@@ -8,17 +8,23 @@
 ### 0.1 结论
 
 - 第 3 节测试基建全部落地；第 6 节 DT-001..DT-024 全部有独立用例且全绿（其中 3 项先 RED 后修复转绿）。
-- 第 4/5 节覆盖矩阵的主要路径已实施；剩余缺口见 0.5（均标注原因，未把间接覆盖记作已覆盖）。
-- 第 7.2 节 Linux ASan+LSan 门禁与第 8 节真实依赖集成测试未执行（当前仅 Windows 环境）。
+- 第二轮补齐后，第 4/5 节矩阵仅剩 0.5 节列出的少数 ⛔ 项（均附原因）。
+- cpplint（仓库 CPPLINT.cfg，120 列）：本组件全部测试与改动的组件/框架文件 **0 error**。
+- clang-tidy（仓库 .clang-tidy）：测试文件可修告警 **0**；仅余两类框架基线告警（见 0.6）。
+- C++ 标准兼容（0.7）：本组件代码在 c++14/17 下无自身编译错误，但依赖框架（atframe_utils
+  使用 `std::iter_difference_t` 等 C++20 特性）要求 **最低 C++20**（与仓库 CMAKE_CXX_STANDARD=20 一致）；
+  c++20 与 c++latest（≈C++26 模式，clang-cl 19）全部编译通过，并顺手修复了
+  `server_frame/rpc/telemetry/rpc_trace.h` 非限定 friend 声明的 C++20 可移植性问题。
+- §7.2 Linux ASan+LSan 门禁与 §8 真实依赖集成测试仍未执行（当前仅 Windows 环境）。
 
 ### 0.2 测试基建与 fresh 基线
 
 | target | 用例数 | 标签 | 状态 |
 | --- | ---: | --- | --- |
-| `atf4g-co-component-distributed-transaction-api-unit-test` | 19 | fast | ✅ |
+| `atf4g-co-component-distributed-transaction-api-unit-test` | 21 | fast | ✅ |
 | `atf4g-co-component-distributed-transaction-client-unit-test` | 11 | fast | ✅ |
-| `atf4g-co-component-distributed-transaction-participator-unit-test` | 19 | fast | ✅ |
-| `atf4g-co-component-dtcoordsvr-unit-test` | 10 | fast | ✅ |
+| `atf4g-co-component-distributed-transaction-participator-unit-test` | 22 | fast | ✅ |
+| `atf4g-co-component-dtcoordsvr-unit-test` | 13 | fast | ✅ |
 | `atf4g-co-component-dtcoordsvr-stop-unit-test` | 1 | fast | ✅ |
 | `atf4g-co-component-distributed-transaction-stress-unit-test` | 1 | stress | ✅ |
 
@@ -26,11 +32,11 @@ fresh 命令与结果（2026-08-17，Windows Debug / Ninja）：
 
 ```
 ctest --test-dir build_jobs_cmake_tools -L distributed-transaction --output-on-failure
-100% tests passed out of 6（61 用例，约 7s）
+100% tests passed out of 6（69 用例，约 7s）
+ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test
+100% tests passed out of 17（此前 2 个 component-dtmq 失败为构建树陈旧 PCH/生成文件所致，
+重建后恢复，与本组件无关）
 ```
-
-全仓 `-L rpc-unit-test` 仅余 2 个 `component-dtmq` 失败（`app.init failed with -3`），这两个目录
-无本次改动（git status 干净），为分支存量环境问题，与本组件无关。
 
 环境注意：从 Git Bash 直接构建需先 source VS/SDK 的 `INCLUDE`/`LIB` 环境脚本
 （`build_jobs_cmake_tools/_agent_tmp/build_env.sh`），否则链接 `Bcrypt.lib`、编译标准库头失败。
@@ -67,35 +73,64 @@ ctest --test-dir build_jobs_cmake_tools -L distributed-transaction --output-on-f
 ### 0.4 实施中确认并修复的缺陷（RED→GREEN）
 
 1. `transaction_client_handle::submit_transaction`：入口未检查过期时间，已过期事务仍会 create
-   协调者记录（协调者会把过期记录按默认超时"复活"）。现入口直接返回 `EN_SYS_TIMEOUT`（第 5.2.4 节）。
+   协调者记录（协调者会把过期记录按默认超时“复活”）。现入口直接返回 `EN_SYS_TIMEOUT`（第 5.2.4 节）。
 2. `transaction_participator_handle::resolve_transcation`：query 阶段合入 COMMITED/REJECTED 时
    无条件清零 `resolve_times`，timer 驱动的每次重入都拿到全新重试次数，`do_event` 失败重试不收敛
    （DT-020）。现仅在首次进入本地动作阶段（`local_action_stage_entered`）时重置一次。
 3. `transaction_manager::mutable_transaction`：读取失败（DB 错误 / 记录 Any 类型不符）时
    `out` 残留指向未填充缓存对象，超时判定把空数据伪造成 REJECTED 并写回 DB，吞掉原始错误且返回成功
    （新增 dtcoordsvr.`mutable_transaction_bad_any_unpack` 先 RED）。现读取失败时跳过超时判定并清空输出句柄。
+4. `transaction_manager::save`：空句柄传入会在 `await_save` 内解引用崩溃，现入口返回 `EN_SYS_PARAM`
+   （dtcoordsvr.`lru_unit_test_seam` 覆盖）。
+5. `server_frame/rpc/telemetry/rpc_trace.h`：非限定 `friend class context;` 按 C++20 缺陷修复规则
+   指向当前命名空间内的新类型而非 `rpc::context`，clang C++20 模式报错（MSVC 宽容掩盖）。
+   已改为限定名 `friend class rpc::context;`。
 
 ### 0.5 未实施项（⛔，含原因）
 
-- §3.1 三类 test-only seam（`make_strong_rc`/task create/start 失败注入、LRU 跨 case 清理）未增加
-  hook：需要 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的注入点，涉及 server_frame 改动，超出本组件范围；
-  对应"分配失败/任务拉起失败/LRU size 读取"路径按计划标注 blocked。
-- 并发类：同一事务 commit/reject 在途方向竞态（inflight 反方向返回 `EN_TRANSACTION_FINISHED`）的并发用例、
-  重复/并发通知的"成功业务动作至多一次"并发断言（5.3.8 后半）：离线夹具内两路协程交错注入不可稳定构造，
-  仅有串行重复用例（幂等）覆盖。
-- api 层 `create`/`commit_participator`/`reject_participator`/`remove` 的 replication quorum 变体：
-  DT-003 已覆盖 commit 与 query 两条 replication 路径（含字段合并、冲突终态收敛、无效响应不计入），
-  其余接口的 fan-out 逻辑同一实现（`invoke_replication_rpc_call`），未逐一复制。
-- 5.1.5 协调者扩缩容 failover、5.1.6 的 R=1/2/3 × 3/3、2/3、1/3 全矩阵：需要多节点路由切换注入，未实施
-  （单节点失效已由 DT-003 的 error/timeout 副本覆盖一部分）。
-- 4.4 中 `await_io_task` 排空断言、stream remove 无回包的 raw 用例：夹具无法在删除路径稳定制造在途 IO/stream 回包路径，未实施。
-- 4.3/4.4 零星边界：`save(null)`、`get_locker` 的 finished/null 边界、tick 的 equal-timepoint 边界与
-  同 UUID timer 替换的直接断言（实现有对应代码路径，无独立用例）。
+- §3.1 中 `make_strong_rc` 分配失败、task create/start 失败两类注入 seam：需要在对象分配器与
+  task_manager 中增加 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的失败注入点，涉及面广；
+  对应错误分支均为简单返回路径。第三项（LRU 读取/清理）已通过组件级 seam 实现：
+  `transaction_manager::get_lru_size_for_unit_test()/clear_lru_for_unit_test()`（dtcoordsvr.`lru_unit_test_seam`）。
 - 4.2 中 `PackFrom` 失败分支（`set_transaction_data`/`add_participator`）：proto3 下无法稳定构造打包失败。
-- 4.2 中 prepare 第"中间/最后"个参与者失败的排列：protobuf map 迭代顺序不稳定，无法确定性地构造，
+- 4.2 中 prepare 第“中间/最后”个参与者失败的排列：protobuf map 迭代顺序不稳定，无法确定性地构造，
   已用单参与者失败 + 双参与者全部成功 + 全部失败（DT-002/DT-006/DT-014）覆盖等效语义。
 - §7.2 Linux ASan+LSan 门禁：当前环境为 Windows（MSVC checker 不接受仓库 ASan 分支），未执行。
 - §8 真实依赖集成测试：未开始（按计划在全部离线用例通过后单独安排）。
+
+第二轮已补齐（原 ⛔ 项转 ✅）：api replication 全矩阵 R∈{1,2,3}×存活∈{1,2,3}、副本 id 故障转移
+（5.1.5/5.1.6）、query 副本字段合并与冲突终态、commit_participator/reject_participator notfound 与
+OLD_VERSION 单次、remove_no_wait 副本 fan-out、create 失败回滚、DT-014 REJECTED 对称、
+check_prepare 错误传播、REJECTED/PREPARED 方向、多资源/重复资源 check_lock、并发在途终态方向互斥与
+“业务动作至多一次”（5.3.8）、get_locker 终态释放边界、tick 等值到期边界、重复 ack 与全局终态后
+反向 ack、reject→commit 反向竞态（5.1.7）、坏 Any 解包、tick 时长淘汰、参与者 ack 前排空在途 IO、
+stream remove 无回包、save(null) 守卫。
+
+### 0.6 lint 基线说明
+
+- cpplint：0 error（含全部 8 个测试文件、测试公共头、组件改动文件、`rpc_lru_cache_map.h`）。
+- clang-tidy（仓库 .clang-tidy，clang-tidy 19，`--header-filter` 限定本组件路径）：
+  测试文件可修告警 0。以下两类为框架基线告警，非测试代码可修：
+  1. `CASE_TEST` 宏展开生成的静态注册对象（non-const global / anonymous namespace / throwing static
+     initialization）——来自 atframe_utils 私有测试框架，仓库全部存量测试同样携带；
+  2. `cppcoreguidelines-init-variables` 对 `int32_t res = RPC_AWAIT_CODE_RESULT(...)` 的误报
+     （co_await 初始化器未被识别）——rpc-unit-test selftest 同样携带（rpc_unit_test_db.cpp 10 处）。
+- 组件/框架文件经 tidy 检查仅余 1 条位于 **生成** 的 `distributed_transaction.pb.h` 内的
+  analyzer 告警（EnumCastOutOfRange，codegen 产物，按仓库规则不手改生成文件）。
+
+### 0.7 C++ 标准兼容矩阵（clang-cl 19 `-fsyntax-only`）
+
+| 标准 | 本组件自身代码 | 整体编译 | 说明 |
+| --- | --- | --- | --- |
+| C++14 | 0 error | ✗（20 处均在 vendored atframe_utils/libatapp 头，如 `std::iter_difference_t`） | 依赖要求 C++20，14/15/17/18/19 不可用 |
+| C++17 | 0 error | ✗（同上） | 同上 |
+| C++20 | 0 error | ✅ 全部 TU | 项目当前标准（CMAKE_CXX_STANDARD=20） |
+| C++latest（≈26 模式） | 0 error | ✅ 全部 TU | 含修复后的 rpc_trace.h |
+
+结论：组件与测试代码自身对 C++14→26 语法兼容；实际可用下限由依赖框架决定为 **C++20**，
+与仓库构建配置一致。round-2 修复：`rpc_trace.h` 非限定 friend（0.4 第 5 条）；
+测试 TU 显式补齐原先依赖 PCH 传递的头（`utility/protobuf_mini_dumper.h`、`memory/object_allocator.h`），
+脱离 PCH 也可独立编译。
 
 ## 1. 文档状态与证据边界
 

@@ -1,7 +1,7 @@
 // Copyright 2022 atframework
 // Created by owentou, on 2022-02-28
 
-#include "transaction_participator_handle.h"
+#include "transaction_participator_handle.h"  // NOLINT(build/include_subdir)
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

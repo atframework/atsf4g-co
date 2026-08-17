@@ -110,7 +110,9 @@ class tracer {
   SERVER_FRAME_API static const tracer::span_ptr_type& get_shared_noop_trace_span();
 
  private:
-  friend class context;
+  // 必须限定名：非限定的 friend class 声明按 C++20 缺陷修复后的规则会声明当前命名空间内的新
+  // 类型而非引用外层命名空间的 rpc::context，clang 在 C++20 模式下按错误处理
+  friend class rpc::context;
   std::chrono::system_clock::time_point start_system_timepoint_;
   std::chrono::steady_clock::time_point start_steady_timepoint_;
   span_ptr_type trace_span_;

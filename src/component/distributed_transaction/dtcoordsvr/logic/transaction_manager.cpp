@@ -155,7 +155,11 @@ int transaction_manager::tick() {
 }
 
 rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_ptr_type& data) {
-  if (data && data->data_object.metadata().memory_only()) {
+  if (!data) {
+    // Passing a null handle to the LRU save would dereference it inside await_save; reject early.
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  if (data->data_object.metadata().memory_only()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -646,3 +650,18 @@ rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
 
   RPC_RETURN_CODE(ret);
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+size_t transaction_manager::get_lru_size_for_unit_test() noexcept {
+  // 只统计未被 remove_cache/clear 置为墓碑的条目，与 get_cache 的可见性口径一致。
+  size_t active = 0;
+  for (auto iter = lru_caches_.begin(); iter != lru_caches_.end(); ++iter) {
+    if (iter->second && !iter->second->removed) {
+      ++active;
+    }
+  }
+  return active;
+}
+
+void transaction_manager::clear_lru_for_unit_test() noexcept { lru_caches_.clear(); }
+#endif

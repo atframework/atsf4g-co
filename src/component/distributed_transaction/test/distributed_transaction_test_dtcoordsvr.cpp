@@ -30,8 +30,9 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <utility>
 
-#include "dt_test_common.h"
+#include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "app/handle_ss_rpc_dtcoordsvrservice.atfw.gen.h"
 #include "logic/action/task_action_commit.h"
 #include "logic/action/task_action_commit_participator.h"
@@ -44,6 +45,7 @@
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 #include "rpc/db/local_db_interface.atfw.gen.h"
 #include "rpc/rpc_shared_message.h"
+#include "rpc/rpc_utils.h"
 #include "utility/protobuf_mini_dumper.h"
 
 namespace {
@@ -62,7 +64,8 @@ constexpr uint32_t kTestZoneId = 0;  // non-replication transactions live in zon
 void setup_dtcoordsvr_config_loader() {
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app& app_, logic_config&, logic_config::server_instance_config_ptr& to) {
-        auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
+        auto config_ptr =
+            atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
         config_ptr->set_lru_max_cache_count(2);
         // 2s so manager_tick_evicts_by_duration can wait it out; every other case touches its
         // entries well within the window.
@@ -81,7 +84,8 @@ void register_dtcoordsvr_handles() {
 rpc::result_code_type db_read_record(rpc::context& ctx, const std::string& uuid, table_type& output,
                                      uint64_t& version) {
   rpc::shared_message<table_type> storage{ctx};
-  int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get_all(ctx, kTestZoneId, uuid, *storage, version));
+  int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::get_all(ctx, kTestZoneId, uuid, *storage,
+      version));
   if (res >= 0) {
     protobuf_copy_message(output, *storage);
   }
@@ -133,14 +137,16 @@ CASE_TEST(component_dtcoordsvr, manager_create_query_ttl_and_eviction) {
       });
   CASE_EXPECT_TRUE(!!ttl_rule);
 
-  auto task = test.run_task("manager_lifecycle", std::chrono::seconds{10}, [&test](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("manager_lifecycle", std::chrono::seconds{10},
+      [&test](rpc::context& ctx) -> rpc::result_code_type {
     // --- parameter guards: empty uuid / no participators never touch the DB or LRU
     size_t db_ops_before = test.db().calls("distribute_transaction");
 
     transaction_blob_storage invalid_storage;
     dt_test::make_prepared_storage(invalid_storage, "", {"pa"});
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
-                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(invalid_storage))));
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx,
+                       std::move(invalid_storage))));
 
     transaction_blob_storage no_participator_storage;
     dt_test::make_prepared_storage(no_participator_storage, "mgr-empty-participators", {});
@@ -204,7 +210,8 @@ CASE_TEST(component_dtcoordsvr, manager_create_query_ttl_and_eviction) {
   // Second phase: capacity eviction + DB reload + TTL clamp values. mgr-b is created FIRST so the
   // later trio makes it the least recently used live entry; the tick after that must evict it.
   ttl_values.clear();
-  auto task2 = test.run_task("manager_ttl_eviction", std::chrono::seconds{10}, [&test](rpc::context& ctx) -> rpc::result_code_type {
+  auto task2 = test.run_task("manager_ttl_eviction", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage storage_b;
     dt_test::make_prepared_storage(storage_b, "mgr-b", {"pa"});
     CASE_EXPECT_EQ(0,
@@ -261,16 +268,21 @@ CASE_TEST(component_dtcoordsvr, manager_create_query_ttl_and_eviction) {
   // (only create/save do).
   CASE_EXPECT_GE(ttl_values.size(), static_cast<size_t>(4));
   if (ttl_values.size() >= 4) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_EQ(35, ttl_values[0]);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_EQ(2592000, ttl_values[1]);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_EQ(6, ttl_values[2]);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     CASE_EXPECT_EQ(15, ttl_values[3]);
   }
 
   ttl_rule.reset();
 
   // --- DT-007: memory_only keeps everything in the LRU without a single DB operation.
-  auto task3 = test.run_task("manager_memory_only_dt007", std::chrono::seconds{10}, [&test](rpc::context& ctx) -> rpc::result_code_type {
+  auto task3 = test.run_task("manager_memory_only_dt007", std::chrono::seconds{10},
+      [&test](rpc::context& ctx) -> rpc::result_code_type {
     size_t db_ops_before = test.db().calls("distribute_transaction");
 
     transaction_blob_storage storage_m1;
@@ -339,7 +351,8 @@ CASE_TEST(component_dtcoordsvr, manager_timeout_reject_save_and_cache_invalidati
   test.db().register_message_type<table_type>();
 
   // Success path: the auto-reject decision is CAS-saved and survives a full cache loss.
-  auto task = test.run_task("timeout_reject_success", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("timeout_reject_success", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage expired_storage;
     dt_test::make_prepared_storage(expired_storage, "mgr-expired-1", {"pa"}, false, std::chrono::seconds{-10});
     uint64_t version = 0;
@@ -373,7 +386,8 @@ CASE_TEST(component_dtcoordsvr, manager_timeout_reject_save_and_cache_invalidati
 
   // Failure path: seed the second expired record BEFORE arming the replace mock (the typed mock
   // intercepts the interface entry, so the seeding itself must run against the plain backend).
-  auto seed_task = test.run_task("timeout_reject_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto seed_task = test.run_task("timeout_reject_seed", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage expired_storage;
     dt_test::make_prepared_storage(expired_storage, "mgr-expired-2", {"pa"}, false, std::chrono::seconds{-10});
     uint64_t version = 0;
@@ -392,7 +406,8 @@ CASE_TEST(component_dtcoordsvr, manager_timeout_reject_save_and_cache_invalidati
       });
   CASE_EXPECT_TRUE(!!fail_rule);
 
-  auto task2 = test.run_task("timeout_reject_save_failure", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task2 = test.run_task("timeout_reject_save_failure", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("mgr-expired-2");
     transaction_manager::transaction_ptr_type trans;
@@ -440,7 +455,8 @@ CASE_TEST(component_dtcoordsvr, manager_terminal_and_participator_acks_dt018) {
   }
   test.db().register_message_type<table_type>();
 
-  auto task = test.run_task("global_terminal_race", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("global_terminal_race", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     // Global commit is idempotent and sticky: the reverse decision cannot flip it.
     transaction_blob_storage storage;
     dt_test::make_prepared_storage(storage, "mgr-race-1", {"pa"});
@@ -489,6 +505,7 @@ CASE_TEST(component_dtcoordsvr, manager_terminal_and_participator_acks_dt018) {
     // pa commits: the participant status advances while the global status stays PREPARED.
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, mixed_trans, "pa")));
     CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                    (*mixed_trans->data_object.mutable_participators())["pa"].participator_status());
     CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
                    mixed_trans->data_object.metadata().status());
@@ -501,6 +518,7 @@ CASE_TEST(component_dtcoordsvr, manager_terminal_and_participator_acks_dt018) {
     // pb rejects: mixed directions keep the record.
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(ctx, mixed_trans, "pb")));
     CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                    (*mixed_trans->data_object.mutable_participators())["pb"].participator_status());
 
     // Reverse ack on pb fails the same way.
@@ -554,7 +572,8 @@ CASE_TEST(component_dtcoordsvr, manager_terminal_and_participator_acks_dt018) {
       });
   CASE_EXPECT_TRUE(!!remove_fail_rule);
 
-  auto task3 = test.run_task("remove_failure_dt004", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task3 = test.run_task("remove_failure_dt004", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage storage;
     dt_test::make_prepared_storage(storage, "mgr-remove-1", {"pa"});
     CASE_EXPECT_EQ(0,
@@ -579,7 +598,8 @@ CASE_TEST(component_dtcoordsvr, manager_terminal_and_participator_acks_dt018) {
 
   remove_fail_rule.reset();
 
-  auto task4 = test.run_task("remove_recovers", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task4 = test.run_task("remove_recovers", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
     metadata.set_transaction_uuid("mgr-remove-1");
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_remove(ctx, metadata)));
@@ -630,7 +650,8 @@ CASE_TEST(component_dtcoordsvr, actions_via_invoke_ss_action) {
     transaction_blob_storage storage;
     dt_test::make_prepared_storage(storage, "act-create-1", {"pa", "pb"});
     protobuf_copy_message(*request.mutable_storage(), storage);
-    int32_t res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_create>(ctx, request, invoke_options));
+    int32_t res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_create>(ctx, request,
+        invoke_options));
     CASE_EXPECT_EQ(0, res);
 
     table_type record;
@@ -657,7 +678,8 @@ CASE_TEST(component_dtcoordsvr, actions_via_invoke_ss_action) {
     commit_request.mutable_metadata()->set_transaction_uuid("act-create-1");
     atfw::testing::ss_action_invoke_options commit_options{rpc::transaction::packer::get_full_name_of_commit()};
     commit_options.source.node_id = 0x130001;
-    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_commit>(ctx, commit_request, commit_options));
+    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_commit>(ctx, commit_request,
+        commit_options));
     CASE_EXPECT_EQ(0, res);
 
     table_type committed_record;
@@ -675,7 +697,8 @@ CASE_TEST(component_dtcoordsvr, actions_via_invoke_ss_action) {
     atfw::testing::ss_action_invoke_options ack_options{
         rpc::transaction::packer::get_full_name_of_commit_participator()};
     ack_options.source.node_id = 0x130001;
-    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_commit_participator>(ctx, ack_pa, ack_options));
+    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_commit_participator>(ctx, ack_pa,
+        ack_options));
     CASE_EXPECT_EQ(0, res);
 
     table_type intermediate_record;
@@ -686,7 +709,8 @@ CASE_TEST(component_dtcoordsvr, actions_via_invoke_ss_action) {
     atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq ack_pb;
     ack_pb.mutable_metadata()->set_transaction_uuid("act-create-1");
     ack_pb.set_participator_key("pb");
-    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_commit_participator>(ctx, ack_pb, ack_options));
+    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_commit_participator>(ctx, ack_pb,
+        ack_options));
     CASE_EXPECT_EQ(0, res);
 
     table_type gone_record;
@@ -707,7 +731,8 @@ CASE_TEST(component_dtcoordsvr, actions_via_invoke_ss_action) {
     reject_request.mutable_metadata()->set_transaction_uuid("act-reject-1");
     atfw::testing::ss_action_invoke_options reject_options{rpc::transaction::packer::get_full_name_of_reject()};
     reject_options.source.node_id = 0x130001;
-    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_reject>(ctx, reject_request, reject_options));
+    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_reject>(ctx, reject_request,
+        reject_options));
     CASE_EXPECT_EQ(0, res);
 
     atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq reject_ack;
@@ -738,7 +763,8 @@ CASE_TEST(component_dtcoordsvr, actions_via_invoke_ss_action) {
     remove_request.mutable_metadata()->set_transaction_uuid("act-remove-1");
     atfw::testing::ss_action_invoke_options remove_options{rpc::transaction::packer::get_full_name_of_remove()};
     remove_options.source.node_id = 0x130001;
-    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_remove>(ctx, remove_request, remove_options));
+    res = RPC_AWAIT_CODE_RESULT(atfw::testing::invoke_ss_action<task_action_remove>(ctx, remove_request,
+        remove_options));
     CASE_EXPECT_EQ(0, res);
 
     table_type remove_gone_record;
@@ -910,13 +936,15 @@ CASE_TEST(component_dtcoordsvr, participator_ack_repeated_and_after_global_termi
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
     table_type record_after_first;
     uint64_t version_after_first = 0;
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", record_after_first, version_after_first)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", record_after_first,
+        version_after_first)));
 
     // The repeated ack is an idempotent success and does not write again.
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
     table_type record_after_repeat;
     uint64_t version_after_repeat = 0;
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", record_after_repeat, version_after_repeat)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", record_after_repeat,
+        version_after_repeat)));
     CASE_EXPECT_EQ(version_after_first, version_after_repeat);
 
     // Global commit after a partial participant ack.
@@ -928,6 +956,7 @@ CASE_TEST(component_dtcoordsvr, participator_ack_repeated_and_after_global_termi
     // status, but the global status stays COMMITED and the mixed-direction record is kept.
     CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(ctx, trans, "pb")));
     CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                    (*trans->data_object.mutable_participators())["pb"].participator_status());
     CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
                    trans->data_object.metadata().status());
@@ -991,7 +1020,8 @@ CASE_TEST(component_dtcoordsvr, manager_tick_evicts_by_duration) {
   }
   test.db().register_message_type<table_type>();
 
-  auto task = test.run_task("duration_eviction_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task("duration_eviction_seed", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_blob_storage storage;
     dt_test::make_prepared_storage(storage, "mgr-duration-1", {"pa"});
     CASE_EXPECT_EQ(0,
@@ -1101,6 +1131,234 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_malformed_payloads) {
       CASE_EXPECT_NE(0, response_msg.head().error_code());
     }
   }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ section 3.1 seam: LRU size read + clear between cases ============
+
+CASE_TEST(component_dtcoordsvr, lru_unit_test_seam) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto task = test.run_task("lru_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-seam-1", {"pa"});
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_GE(transaction_manager::me()->get_lru_size_for_unit_test(), 1);
+
+  // clear_lru_for_unit_test marks every entry as removed; a later fetch re-reads the DB and the
+  // in-flight old handle can no longer write back through save (tombstone semantics).
+  transaction_manager::me()->clear_lru_for_unit_test();
+  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  auto reload_task = test.run_task("lru_reload_after_clear", std::chrono::seconds{10},
+                                   [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-seam-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+    CASE_EXPECT_EQ("mgr-seam-1", trans->data_object.metadata().transaction_uuid());
+    CASE_EXPECT_GE(transaction_manager::me()->get_lru_size_for_unit_test(), 1);
+    RPC_RETURN_CODE(0);
+  });
+  auto reload_result = test.wait(reload_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(reload_result.task_exited);
+  CASE_EXPECT_EQ(0, reload_result.result_code);
+
+  // save(null) is rejected instead of dereferencing the handle (4.4 save row).
+  auto guard_task = test.run_task("save_null_guard", std::chrono::seconds{10},
+                                  [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_manager::transaction_ptr_type null_trans;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->save(ctx, null_trans)));
+    RPC_RETURN_CODE(0);
+  });
+  auto guard_result = test.wait(guard_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(guard_result.task_exited);
+  CASE_EXPECT_EQ(0, guard_result.result_code);
+
+  // Leave the singleton clean for later cases in this executable.
+  transaction_manager::me()->clear_lru_for_unit_test();
+  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 4.4: participant ack drains in-flight IO before deleting ============
+
+CASE_TEST(component_dtcoordsvr, participant_ack_drains_inflight_io_before_delete) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  // The first get_all sleeps so the LRU fetch is still in flight when the ack arrives.
+  bool slow_get_consumed = false;
+  auto slow_get_rule = rpc::db::distribute_transaction::mock::get_all(
+      [&slow_get_consumed](rpc::context& subctx, const table_type& input, table_type& output,
+                           rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
+        if (!slow_get_consumed) {
+          slow_get_consumed = true;
+          RPC_AWAIT_CODE_RESULT(rpc::wait(subctx, std::chrono::milliseconds{150}));
+        }
+        output.set_zone_id(input.zone_id());
+        output.set_transaction_uuid(input.transaction_uuid());
+        transaction_blob_storage storage;
+        dt_test::make_prepared_storage(storage, "mgr-drain-1", {"pa", "pb"});
+        ATFW_EXPLICIT_UNUSED_ATTR bool packed = output.mutable_blob_data()->PackFrom(storage);
+        meta.version = 1;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!slow_get_rule);
+
+  // Task A starts mutable_transaction and parks inside the slow fetch.
+  auto fetch_task = test.run_task("drain_fetch", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-drain-1");
+    transaction_manager::transaction_ptr_type trans;
+    int32_t res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_TRUE(!!trans);
+    RPC_RETURN_CODE(0);
+  });
+  // Give task A a few pumps so its fetch is genuinely in flight.
+  for (int i = 0; i < 6; ++i) {
+    test.pump_once();
+  }
+
+  // Task B acks both participants; the record is only deleted after the in-flight fetch finished.
+  auto ack_task = test.run_task("drain_ack", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-drain-1");
+    transaction_manager::transaction_ptr_type trans;
+    int32_t res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_TRUE(!!trans);
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
+    res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pb"));
+    CASE_EXPECT_EQ(0, res);
+    RPC_RETURN_CODE(0);
+  });
+  auto fetch_result = test.wait(fetch_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(fetch_result.task_exited);
+  CASE_EXPECT_EQ(0, fetch_result.result_code);
+  auto ack_result = test.wait(ack_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(ack_result.task_exited);
+  CASE_EXPECT_EQ(0, ack_result.result_code);
+
+  // The typed get_all mock must be off before the verification read below.
+  slow_get_rule.reset();
+
+  auto check_task = test.run_task("drain_check", std::chrono::seconds{10},
+      [](rpc::context& ctx) -> rpc::result_code_type {
+    table_type gone_record;
+    uint64_t gone_version = 0;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND,
+                   RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-drain-1", gone_record, gone_version)));
+    RPC_RETURN_CODE(0);
+  });
+  auto check_result = test.wait(check_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(check_result.task_exited);
+  CASE_EXPECT_EQ(0, check_result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 4.4: stream remove answers without a response message ============
+
+CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_stream_remove_no_response) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto sender = test.discovery().add_node(dt_test::make_coordinator_node(0x1300F3, 1));
+  CASE_EXPECT_TRUE(!!sender);
+  if (!sender) {
+    test.stop();
+    return;
+  }
+
+  // Seed one record so the remove action has real work to do.
+  auto seed_task = test.run_task("stream_remove_seed", std::chrono::seconds{10},
+                                 [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-stream-remove-1", {"pa"});
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    RPC_RETURN_CODE(0);
+  });
+  auto seed_result = test.wait(seed_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(seed_result.task_exited);
+  CASE_EXPECT_EQ(0, seed_result.result_code);
+
+  // Inject a one-way stream envelope (rpc_stream instead of rpc_request): the remove action must
+  // run and delete the record but never answer the sender.
+  atframework::SSMsg msg;
+  auto* head = msg.mutable_head();
+  head->set_node_id(0x1300F3);
+  head->set_node_name("unit-test-raw-stream");
+  head->set_source_task_id(90);
+  head->set_sequence(2201);
+  auto* rpc_stream = head->mutable_rpc_stream();
+  rpc_stream->set_rpc_name(rpc::transaction::packer::get_full_name_of_remove());
+  rpc_stream->set_type_url(atfw::distributed_system::SSDistributeTransactionRemoveReq::descriptor()->full_name());
+  atfw::distributed_system::SSDistributeTransactionRemoveReq remove_request;
+  remove_request.mutable_metadata()->set_transaction_uuid("mgr-stream-remove-1");
+  CASE_EXPECT_TRUE(remove_request.SerializeToString(msg.mutable_body_bin()));
+  std::string payload;
+  CASE_EXPECT_TRUE(msg.SerializeToString(&payload));
+  CASE_EXPECT_EQ(0, test.transport().inject_inbound(
+                        sender, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
+                        gsl::span<const unsigned char>{reinterpret_cast<const unsigned char*>(payload.data()),
+                                                       payload.size()},
+                        2201));
+  for (int i = 0; i < 8; ++i) {
+    test.pump_once();
+  }
+
+  // The record is gone and no outbound response carries the stream sequence.
+  auto check_task = test.run_task("stream_remove_check", std::chrono::seconds{10},
+                                  [](rpc::context& ctx) -> rpc::result_code_type {
+    table_type gone_record;
+    uint64_t gone_version = 0;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND,
+                   RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-stream-remove-1", gone_record, gone_version)));
+    RPC_RETURN_CODE(0);
+  });
+  auto check_result = test.wait(check_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(check_result.task_exited);
+  CASE_EXPECT_EQ(0, check_result.result_code);
+
+  bool has_response = false;
+  for (size_t i = 0; i < test.transport().outbound_count(); ++i) {
+    const atfw::testing::outbound_message* record = test.transport().outbound_at(i);
+    if (record != nullptr && record->target_node_id == 0x1300F3 && record->sequence == 2201) {
+      has_response = true;
+    }
+  }
+  CASE_EXPECT_FALSE(has_response);
 
   CASE_EXPECT_EQ(0, test.stop());
 }

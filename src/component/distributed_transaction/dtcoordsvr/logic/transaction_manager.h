@@ -54,6 +54,15 @@ class transaction_manager : public atfw::util::design_pattern::singleton<transac
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_remove(
       rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata);
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // Test-only seam (UNIT_TEST_EXECUTION_PLAN.md section 3.1): the manager is a process-lifetime
+  // singleton, so tests need to read the LRU size and clear leftover entries between cases. Fully
+  // stripped from production builds.
+  size_t get_lru_size_for_unit_test() noexcept;
+
+  void clear_lru_for_unit_test() noexcept;
+#endif
+
  private:
   bool is_exiting_;
   time_t last_stat_timepoint_;
