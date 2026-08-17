@@ -53,8 +53,11 @@ class PrometheusFileExporter : public ::opentelemetry::sdk::metrics::PushMetricE
   /**
    * Force flush the exporter.
    */
+  // NOLINTBEGIN(readability-redundant-parentheses)
   SERVER_FRAME_API bool ForceFlush(
+      // 括号防止 windows.h 的 max 宏破坏 std::chrono::microseconds::max()
       std::chrono::microseconds timeout = (std::chrono::microseconds::max)()) noexcept override;
+  // NOLINTEND(readability-redundant-parentheses)
 
   /**
    * Shuts down the exporter and does cleanup.

@@ -17,7 +17,6 @@
 #include <opentelemetry/nostd/string_view.h>
 #include <opentelemetry/sdk/common/global_log_handler.h>
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -28,8 +27,8 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
-#include <ostream>
 #include <string>
+#include <utility>
 #include <vector>
 #if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
 #  include <exception>
@@ -81,23 +80,10 @@
 
 #endif
 
-#include "rpc/telemetry/exporter/prometheus_utility.h"
+#include "rpc/telemetry/exporter/prometheus_utility.h"  // IWYU pragma: keep
 
 #ifdef _MSC_VER
 #  define strcasecmp _stricmp
-#endif
-
-#if (defined(_MSC_VER) && _MSC_VER >= 1600) || (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || \
-    defined(__STDC_LIB_EXT1__)
-#  ifdef _MSC_VER
-#    define PROMETHEUS_FILE_SNPRINTF(buffer, bufsz, ...) sprintf_s(buffer, static_cast<size_t>(bufsz), __VA_ARGS__)
-#  else
-#    define PROMETHEUS_FILE_SNPRINTF(buffer, bufsz, fmt, args...) \
-      snprintf_s(buffer, static_cast<rsize_t>(bufsz), fmt, ##args)
-#  endif
-#else
-#  define PROMETHEUS_FILE_SNPRINTF(buffer, bufsz, fmt, args...) \
-    snprintf(buffer, static_cast<size_t>(bufsz), fmt, ##args)
 #endif
 
 namespace rpc {
@@ -110,21 +96,52 @@ namespace {
 static std::tm GetLocalTime() {
   std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 #if defined(_MSC_VER) && _MSC_VER >= 1300
-  std::tm ret;
+  std::tm ret{};
   localtime_s(&ret, &now);
 #elif (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L) || defined(__STDC_LIB_EXT1__)
-  std::tm ret;
+  std::tm ret{};
   localtime_s(&now, &ret);
 #elif defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_SVID_SOURCE) || defined(_POSIX_SOURCE)
-  std::tm ret;
+  std::tm ret{};
   localtime_r(&now, &ret);
 #else
-  std::tm ret = *localtime(&now);
+  std::tm ret = *localtime(&now);  // NOLINT(runtime/threadsafe_fn)
 #endif
   return ret;
 }
 
-static std::size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::string_view fmt,
+// 两位十进制数字查表：格式化日期时间数字时用一次查表取代两次除法/取模
+struct TwoDigitsTable {
+  char values[100][2];
+
+  constexpr TwoDigitsTable() : values{} {
+    for (int i = 0; i < 100; ++i) {
+      const int tens = i / 10;
+      const int ones = i % 10;
+      values[i][0] = static_cast<char>('0' + tens);
+      values[i][1] = static_cast<char>('0' + ones);
+    }
+  }
+};
+constexpr TwoDigitsTable kTwoDigitsLUT{};
+
+// 调用方保证：buff 自 cursor 起至少有 2 字节可写空间，且 value 小于 100
+static std::size_t AppendTwoDigits(char *buff, std::size_t cursor, unsigned int value) noexcept {
+  const char *digits = kTwoDigitsLUT.values[value];
+  buff[cursor] = digits[0];
+  buff[cursor + 1] = digits[1];
+  return cursor + 2;
+}
+
+// 调用方保证：buff 自 cursor 起至少有 4 字节可写空间，且 value 小于 10000
+static std::size_t AppendFourDigits(char *buff, std::size_t cursor, unsigned int value) noexcept {
+  const unsigned int high = value / 100U;
+  const unsigned int low = value % 100U;
+  cursor = AppendTwoDigits(buff, cursor, high);
+  return AppendTwoDigits(buff, cursor, low);
+}
+
+static std::size_t FormatPath(char *buff, std::size_t bufz, opentelemetry::nostd::string_view fmt,
                               std::size_t rotate_index) {
   if (nullptr == buff || 0 == bufz) {
     return 0;
@@ -135,185 +152,181 @@ static std::size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::str
     return 0;
   }
 
-  bool need_parse = false;
+  // 用原始指针扫描格式串：省去 string_view::operator[] 的边界安全检查，也避免编译器因 buff(char*) 可能与 fmt
+  // 别名而反复重新加载格式字符
+  const char *fmt_end = fmt.data() + fmt.size();
+  std::tm tm_cache{};
+  const std::tm *tm_cached = nullptr;
+  // 仅在存在日期时间占位符时才解析本地时间，纯 rotate index 模式不需要 localtime 调用
+  auto lazy_tm = [&tm_cache, &tm_cached]() noexcept -> const std::tm & {
+    if (nullptr == tm_cached) {
+      tm_cache = GetLocalTime();
+      tm_cached = &tm_cache;
+    }
+    return *tm_cached;
+  };
+
+  std::size_t cursor = 0;
   bool running = true;
-  std::size_t ret = 0;
-  std::tm tm_obj_cache;
-  std::tm *tm_obj_ptr = nullptr;
-
-#define LOG_FMT_FN_TM_MEM(VAR, EXPRESS) \
-                                        \
-  int VAR;                              \
-                                        \
-  if (nullptr == tm_obj_ptr) {          \
-    tm_obj_cache = GetLocalTime();      \
-    tm_obj_ptr = &tm_obj_cache;         \
-    VAR = tm_obj_ptr->EXPRESS;          \
-                                        \
-  } else {                              \
-    VAR = tm_obj_ptr->EXPRESS;          \
-  }
-
-  for (size_t i = 0; i < fmt.size() && ret < bufz && running; ++i) {
-    if (!need_parse) {
-      if ('%' == fmt[i]) {
-        need_parse = true;
-      } else {
-        buff[ret++] = fmt[i];
-      }
+  for (const char *it = fmt.data(); running && it != fmt_end && cursor < bufz; ++it) {
+    const char current = *it;
+    if ('%' != current) {
+      buff[cursor++] = current;
       continue;
     }
 
-    need_parse = false;
-    switch (fmt[i]) {
+    ++it;
+    if (fmt_end == it) {
+      // 末尾孤立 '%' 与原实现一致，丢弃
+      break;
+    }
+    const char directive = *it;
+    switch (directive) {
       // =================== datetime ===================
       case 'Y': {
-        if (bufz - ret < 4) {
+        if (bufz - cursor < 4) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(year, tm_year + 1900);
-          buff[ret++] = static_cast<char>(year / 1000 + '0');
-          buff[ret++] = static_cast<char>((year / 100) % 10 + '0');
-          buff[ret++] = static_cast<char>((year / 10) % 10 + '0');
-          buff[ret++] = static_cast<char>(year % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int year = static_cast<unsigned int>(tmv.tm_year) + 1900U;
+          cursor = AppendFourDigits(buff, cursor, year);
         }
         break;
       }
       case 'y': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(year, tm_year + 1900);
-          buff[ret++] = static_cast<char>((year / 10) % 10 + '0');
-          buff[ret++] = static_cast<char>(year % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int year = static_cast<unsigned int>(tmv.tm_year) + 1900U;
+          cursor = AppendTwoDigits(buff, cursor, year % 100U);
         }
         break;
       }
       case 'm': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(mon, tm_mon + 1);
-          buff[ret++] = static_cast<char>(mon / 10 + '0');
-          buff[ret++] = static_cast<char>(mon % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int mon = static_cast<unsigned int>(tmv.tm_mon) + 1U;
+          cursor = AppendTwoDigits(buff, cursor, mon);
         }
         break;
       }
       case 'j': {
-        if (bufz - ret < 3) {
+        if (bufz - cursor < 3) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(yday, tm_yday);
-          buff[ret++] = static_cast<char>(yday / 100 + '0');
-          buff[ret++] = static_cast<char>((yday / 10) % 10 + '0');
-          buff[ret++] = static_cast<char>(yday % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int yday = static_cast<unsigned int>(tmv.tm_yday) + 1U;  // tm_yday 0 基，%j 输出 [001,366]
+          const unsigned int yday_hundreds = yday / 100U;
+          buff[cursor] = static_cast<char>('0' + yday_hundreds);
+          cursor = AppendTwoDigits(buff, cursor + 1, yday % 100U);
         }
         break;
       }
       case 'd': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(mday, tm_mday);
-          buff[ret++] = static_cast<char>(mday / 10 + '0');
-          buff[ret++] = static_cast<char>(mday % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int mday = static_cast<unsigned int>(tmv.tm_mday);
+          cursor = AppendTwoDigits(buff, cursor, mday);
         }
         break;
       }
       case 'w': {
-        LOG_FMT_FN_TM_MEM(wday, tm_wday);
-        buff[ret++] = static_cast<char>(wday + '0');
+        const std::tm &tmv = lazy_tm();
+        const unsigned int wday = static_cast<unsigned int>(tmv.tm_wday) % 10U;
+        buff[cursor] = static_cast<char>('0' + wday);
+        ++cursor;
         break;
       }
       case 'H': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(hour, tm_hour);
-          buff[ret++] = static_cast<char>(hour / 10 + '0');
-          buff[ret++] = static_cast<char>(hour % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int hour = static_cast<unsigned int>(tmv.tm_hour);
+          cursor = AppendTwoDigits(buff, cursor, hour);
         }
         break;
       }
       case 'I': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(hour, tm_hour % 12 + 1);
-          buff[ret++] = static_cast<char>(hour / 10 + '0');
-          buff[ret++] = static_cast<char>(hour % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          unsigned int hour12 = static_cast<unsigned int>(tmv.tm_hour) % 12U;
+          if (0 == hour12) {
+            hour12 = 12;
+          }
+          cursor = AppendTwoDigits(buff, cursor, hour12);
         }
         break;
       }
       case 'M': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(minite, tm_min);
-          buff[ret++] = static_cast<char>(minite / 10 + '0');
-          buff[ret++] = static_cast<char>(minite % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int minute = static_cast<unsigned int>(tmv.tm_min);
+          cursor = AppendTwoDigits(buff, cursor, minute);
         }
         break;
       }
       case 'S': {
-        if (bufz - ret < 2) {
+        if (bufz - cursor < 2) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(sec, tm_sec);
-          buff[ret++] = static_cast<char>(sec / 10 + '0');
-          buff[ret++] = static_cast<char>(sec % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int second = static_cast<unsigned int>(tmv.tm_sec);
+          cursor = AppendTwoDigits(buff, cursor, second);
         }
         break;
       }
       case 'F': {
-        if (bufz - ret < 10) {
+        if (bufz - cursor < 10) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(year, tm_year + 1900);
-          LOG_FMT_FN_TM_MEM(mon, tm_mon + 1);
-          LOG_FMT_FN_TM_MEM(mday, tm_mday);
-          buff[ret++] = static_cast<char>(year / 1000 + '0');
-          buff[ret++] = static_cast<char>((year / 100) % 10 + '0');
-          buff[ret++] = static_cast<char>((year / 10) % 10 + '0');
-          buff[ret++] = static_cast<char>(year % 10 + '0');
-          buff[ret++] = '-';
-          buff[ret++] = static_cast<char>(mon / 10 + '0');
-          buff[ret++] = static_cast<char>(mon % 10 + '0');
-          buff[ret++] = '-';
-          buff[ret++] = static_cast<char>(mday / 10 + '0');
-          buff[ret++] = static_cast<char>(mday % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int year = static_cast<unsigned int>(tmv.tm_year) + 1900U;
+          const unsigned int mon = static_cast<unsigned int>(tmv.tm_mon) + 1U;
+          const unsigned int mday = static_cast<unsigned int>(tmv.tm_mday);
+          cursor = AppendFourDigits(buff, cursor, year);
+          buff[cursor++] = '-';
+          cursor = AppendTwoDigits(buff, cursor, mon);
+          buff[cursor++] = '-';
+          cursor = AppendTwoDigits(buff, cursor, mday);
         }
         break;
       }
       case 'T': {
-        if (bufz - ret < 8) {
+        if (bufz - cursor < 8) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(hour, tm_hour);
-          LOG_FMT_FN_TM_MEM(minite, tm_min);
-          LOG_FMT_FN_TM_MEM(sec, tm_sec);
-          buff[ret++] = static_cast<char>(hour / 10 + '0');
-          buff[ret++] = static_cast<char>(hour % 10 + '0');
-          buff[ret++] = ':';
-          buff[ret++] = static_cast<char>(minite / 10 + '0');
-          buff[ret++] = static_cast<char>(minite % 10 + '0');
-          buff[ret++] = ':';
-          buff[ret++] = static_cast<char>(sec / 10 + '0');
-          buff[ret++] = static_cast<char>(sec % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int hour = static_cast<unsigned int>(tmv.tm_hour);
+          const unsigned int minute = static_cast<unsigned int>(tmv.tm_min);
+          const unsigned int second = static_cast<unsigned int>(tmv.tm_sec);
+          cursor = AppendTwoDigits(buff, cursor, hour);
+          buff[cursor++] = ':';
+          cursor = AppendTwoDigits(buff, cursor, minute);
+          buff[cursor++] = ':';
+          cursor = AppendTwoDigits(buff, cursor, second);
         }
         break;
       }
       case 'R': {
-        if (bufz - ret < 5) {
+        if (bufz - cursor < 5) {
           running = false;
         } else {
-          LOG_FMT_FN_TM_MEM(hour, tm_hour);
-          LOG_FMT_FN_TM_MEM(minite, tm_min);
-          buff[ret++] = static_cast<char>(hour / 10 + '0');
-          buff[ret++] = static_cast<char>(hour % 10 + '0');
-          buff[ret++] = ':';
-          buff[ret++] = static_cast<char>(minite / 10 + '0');
-          buff[ret++] = static_cast<char>(minite % 10 + '0');
+          const std::tm &tmv = lazy_tm();
+          const unsigned int hour = static_cast<unsigned int>(tmv.tm_hour);
+          const unsigned int minute = static_cast<unsigned int>(tmv.tm_min);
+          cursor = AppendTwoDigits(buff, cursor, hour);
+          buff[cursor++] = ':';
+          cursor = AppendTwoDigits(buff, cursor, minute);
         }
         break;
       }
@@ -321,32 +334,42 @@ static std::size_t FormatPath(char *buff, size_t bufz, opentelemetry::nostd::str
       // =================== rotate index ===================
       case 'n':
       case 'N': {
-        std::size_t value = fmt[i] == 'n' ? rotate_index + 1 : rotate_index;
-        auto res = PROMETHEUS_FILE_SNPRINTF(&buff[ret], bufz - ret, "%llu", static_cast<unsigned long long>(value));
-        if (res < 0) {
+        std::size_t value = 'n' == directive ? rotate_index + 1 : rotate_index;
+        // 64 位无符号整数最多 20 个十进制位，逆序生成后拷贝回 buff
+        char digits[20];
+        std::size_t digits_size = 0;
+        do {
+          const unsigned int digit = static_cast<unsigned int>(value % 10);
+          digits[digits_size++] = static_cast<char>('0' + digit);
+          value /= 10;
+        } while (value > 0);
+
+        // 与 snprintf 的截断行为一致，预留 1 字节写字符串终止符
+        if (bufz - cursor <= digits_size) {
           running = false;
         } else {
-          ret += static_cast<std::size_t>(res);
+          while (digits_size > 0) {
+            --digits_size;
+            buff[cursor++] = digits[digits_size];
+          }
         }
         break;
       }
 
       // =================== unknown ===================
       default: {
-        buff[ret++] = fmt[i];
+        buff[cursor++] = directive;
         break;
       }
     }
   }
 
-#undef LOG_FMT_FN_TM_MEM
-
-  if (ret < bufz) {
-    buff[ret] = '\0';
+  if (cursor < bufz) {
+    buff[cursor] = '\0';
   } else {
     buff[bufz - 1] = '\0';
   }
-  return ret;
+  return cursor;
 }
 
 class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
@@ -386,9 +409,8 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
 
     if (size > 0) {
       return static_cast<std::size_t>(size);
-    } else {
-      return 0;
     }
+    return 0;
   }
 
   static std::string DirName(opentelemetry::nostd::string_view file_path, int depth = 1) {
@@ -396,14 +418,15 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
       return "";
     }
 
+    const char *path_data = file_path.data();
     std::size_t sz = file_path.size() - 1;
 
-    while (sz > 0 && ('/' == file_path[sz] || '\\' == file_path[sz])) {
+    while (sz > 0 && ('/' == path_data[sz] || '\\' == path_data[sz])) {
       --sz;
     }
 
     while (sz > 0 && depth > 0) {
-      if ('/' == file_path[sz] || '\\' == file_path[sz]) {
+      if ('/' == path_data[sz] || '\\' == path_data[sz]) {
         --depth;
       }
 
@@ -424,7 +447,7 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
     std::string path_buffer = static_cast<std::string>(path);
 
     char *saveptr = nullptr;
-    char *token = SAFE_STRTOK_S(&path_buffer[0], "\\/", &saveptr);
+    char *token = SAFE_STRTOK_S(path_buffer.data(), "\\/", &saveptr);
     while (nullptr != token) {
       if (0 != strlen(token)) {
         if (normalize) {
@@ -433,13 +456,13 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
             if (!out.empty() && out.back() != "..") {
               out.pop_back();
             } else {
-              out.push_back(token);
+              out.emplace_back(token);
             }
           } else if (0 != strcmp(".", token)) {
-            out.push_back(token);
+            out.emplace_back(token);
           }
         } else {
-          out.push_back(token);
+          out.emplace_back(token);
         }
       }
       token = SAFE_STRTOK_S(nullptr, "\\/", &saveptr);
@@ -476,8 +499,8 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
       }
     }
 
-    for (size_t i = 0; i < path_segs.size(); ++i) {
-      current_path += path_segs[i];
+    for (const std::string &segment : path_segs) {
+      current_path += segment;
 
       if (false == IsExist(current_path.c_str())) {
         if (0 != FS_MKDIR(current_path.c_str(), static_cast<mode_t>(mode))) {
@@ -531,13 +554,13 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
       }
 
       return static_cast<int>(GetLastError());
-    } else {
-      if (CreateHardLink(VC_TEXT(newpath), VC_TEXT(oldpath), nullptr)) {
-        return 0;
-      }
-
-      return static_cast<int>(GetLastError());
     }
+
+    if (CreateHardLink(VC_TEXT(newpath), VC_TEXT(oldpath), nullptr)) {
+      return 0;
+    }
+
+    return static_cast<int>(GetLastError());
 
 #  else
     int opts = 0;
@@ -558,6 +581,15 @@ class ATFW_UTIL_SYMBOL_LOCAL FileSystemUtil {
 };
 }  // namespace
 
+namespace {
+// C++14 兼容：std::scoped_lock 需要 C++17 及以上；本文件内均为单锁场景，低版本降级为 std::lock_guard 语义等价
+#if ((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
+using scoped_mutex_lock = std::scoped_lock<std::mutex>;
+#else
+using scoped_mutex_lock = std::lock_guard<std::mutex>;
+#endif
+}  // namespace
+
 class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
  public:
   /**
@@ -566,24 +598,21 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
    * This constructor initializes the collection for metrics to export
    * in this class with default capacity
    */
-  explicit PrometheusFileBackend(const PrometheusFileExporterOptions &options)
-      : options_(options), is_initialized_{false}, check_file_path_interval_{0} {
+  explicit PrometheusFileBackend(PrometheusFileExporterOptions options)
+      : options_(std::move(options)), is_initialized_{false}, check_file_path_interval_{0} {
     file_ = atfw::memory::stl::make_shared<FileStats>();
-    file_->is_shutdown.store(false);
-    file_->rotate_index = 0;
-    file_->written_size = 0;
-    file_->left_flush_metrics = 0;
-    file_->last_checkpoint = 0;
-    file_->metric_family_count.store(0);
-    file_->flushed_metric_family_count.store(0);
   }
 
   ~PrometheusFileBackend() {
     if (file_) {
+      {
+        scoped_mutex_lock waker_guard{file_->background_thread_waker_lock};
+        file_->is_shutdown.store(true, std::memory_order_release);
+      }
       file_->background_thread_waker_cv.notify_all();
       std::unique_ptr<std::thread> background_flush_thread;
       {
-        std::lock_guard<std::mutex> lock_guard{file_->background_thread_lock};
+        scoped_mutex_lock lock_guard{file_->background_thread_lock};
         file_->background_flush_thread.swap(background_flush_thread);
       }
       if (background_flush_thread && background_flush_thread->joinable()) {
@@ -607,7 +636,10 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
         ::opentelemetry::exporter::metrics::PrometheusExporterUtils::TranslateToPrometheus(
             data, options_.populate_target_info, options_.without_otel_scope);
 
-    if (file_->written_size > 0 && file_->written_size >= options_.file_size) {
+    // written_size 是触发轮转的近似阈值，relaxed 读取即可（最坏情况晚一轮导出触发轮转），
+    // 文件内容的精确同步仍由 file_lock 保证
+    std::size_t written_size = file_->written_size.load(std::memory_order_relaxed);
+    if (written_size > 0 && written_size >= options_.file_size) {
       RotateLog();
     }
     CheckUpdate();
@@ -618,16 +650,16 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     }
 
     {
-      std::lock_guard<std::mutex> lock_guard{file_->file_lock};
+      scoped_mutex_lock lock_guard{file_->file_lock};
 
       serializer_.Serialize(*out, translated);
 
       file_->metric_family_count += translated.size();
 
       // Pipe file size always returns 0, we ignore the size limit of it.
-      auto written_size = out->tellp();
-      if (written_size >= 0) {
-        file_->written_size = static_cast<std::size_t>(written_size);
+      auto file_position = out->tellp();
+      if (file_position >= 0) {
+        file_->written_size.store(static_cast<std::size_t>(file_position), std::memory_order_relaxed);
       }
 
       if (options_.flush_count > 0) {
@@ -666,7 +698,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       std::chrono::system_clock::time_point begin_time = std::chrono::system_clock::now();
       // Notify background thread to flush immediately
       {
-        std::lock_guard<std::mutex> lock_guard{file_->background_thread_lock};
+        scoped_mutex_lock lock_guard{file_->background_thread_lock};
         if (!file_->background_flush_thread) {
           break;
         }
@@ -706,7 +738,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     // Double check
     std::string file_pattern;
     {
-      std::lock_guard<std::mutex> lock_guard{file_->file_lock};
+      scoped_mutex_lock lock_guard{file_->file_lock};
       if (is_initialized_.load(std::memory_order_acquire)) {
         return;
       }
@@ -751,9 +783,10 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
 
     {
       check_file_path_interval_ = 0;
+      const char *pattern_data = file_pattern.data();
       for (std::size_t i = 0; i + 1 < file_pattern.size(); ++i) {
-        if (file_pattern[i] == '%') {
-          int checked = static_cast<int>(file_pattern[i + 1]);  // NOLINT(bugprone-signed-char-misuse)
+        if ('%' == pattern_data[i]) {
+          int checked = static_cast<int>(pattern_data[i + 1]);  // NOLINT(bugprone-signed-char-misuse)
           if (checked > 0 && checked < 128 && check_interval[checked] > 0) {
             if (0 == check_file_path_interval_ || check_interval[checked] < check_file_path_interval_) {
               check_file_path_interval_ = check_interval[checked];
@@ -767,7 +800,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
   }
 
   std::shared_ptr<std::ofstream> OpenLogFile(bool destroy_content) {
-    std::lock_guard<std::mutex> lock_guard{file_->file_lock};
+    scoped_mutex_lock lock_guard{file_->file_lock};
 
     if (file_->current_file && file_->current_file->good()) {
       return file_->current_file;
@@ -781,7 +814,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     if (file_path_size <= 0) {
       OTEL_INTERNAL_LOG_ERROR("[Prometheus File] Generate file path from pattern " << options_.file_pattern
                                                                                    << " failed");
-      return std::shared_ptr<std::ofstream>();
+      return {};
     }
     file_path[file_path_size] = 0;
 
@@ -797,7 +830,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
       if (!of->is_open()) {
         OTEL_INTERNAL_LOG_ERROR("[Prometheus File] Open " << static_cast<const char *>(file_path)
                                                           << " failed: " << options_.file_pattern);
-        return std::shared_ptr<std::ofstream>();
+        return {};
       }
       of->close();
     }
@@ -806,14 +839,15 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     if (!of->is_open()) {
       OTEL_INTERNAL_LOG_ERROR("[Prometheus File] Open " << static_cast<const char *>(file_path)
                                                         << " failed: " << options_.file_pattern);
-      return std::shared_ptr<std::ofstream>();
+      return {};
     }
 
     of->seekp(0, std::ios_base::end);
-    file_->written_size = static_cast<size_t>(of->tellp());
+    file_->written_size.store(static_cast<std::size_t>(of->tellp()), std::memory_order_relaxed);
 
     file_->current_file = of;
-    file_->last_checkpoint = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    file_->last_checkpoint.store(std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()),
+                                 std::memory_order_relaxed);
     file_->file_path.assign(file_path, file_path_size);
 
     // 硬链接别名
@@ -862,7 +896,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
   }
 
   void RotateLog() {
-    std::lock_guard<std::mutex> lock_guard{file_->file_lock};
+    scoped_mutex_lock lock_guard{file_->file_lock};
     if (options_.rotate_size > 0) {
       file_->rotate_index = (file_->rotate_index + 1) % options_.rotate_size;
     } else {
@@ -877,11 +911,13 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     }
 
     std::time_t current_checkpoint = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    if (current_checkpoint / check_file_path_interval_ == file_->last_checkpoint / check_file_path_interval_) {
+    // last_checkpoint 仅控制复查节奏，并发读写最坏导致多检查一次或少检查一个间隔，relaxed 足够
+    std::time_t last_checkpoint = file_->last_checkpoint.load(std::memory_order_relaxed);
+    if (current_checkpoint / check_file_path_interval_ == last_checkpoint / check_file_path_interval_) {
       return;
     }
     // Refresh checkpoint
-    file_->last_checkpoint = current_checkpoint;
+    file_->last_checkpoint.store(current_checkpoint, std::memory_order_relaxed);
 
     char file_path[FileSystemUtil::kMaxPathSize + 1];
     size_t file_path_len = FormatPath(file_path, sizeof(file_path) - 1, options_.file_pattern, file_->rotate_index);
@@ -895,7 +931,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
 
     {
       // Lock for a short time
-      std::lock_guard<std::mutex> lock_guard{file_->file_lock};
+      scoped_mutex_lock lock_guard{file_->file_lock};
       old_file_path = file_->file_path;
 
       if (new_file_path == old_file_path) {
@@ -919,8 +955,8 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     // ResetLogFile is called in lock, do not lock again
 
     file_->current_file.reset();
-    file_->last_checkpoint = 0;
-    file_->written_size = 0;
+    file_->last_checkpoint.store(0, std::memory_order_relaxed);
+    file_->written_size.store(0, std::memory_order_relaxed);
   }
 
   void SpawnBackgroundWorkThread() {
@@ -936,14 +972,14 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
     try {
 #endif
 
-      std::lock_guard<std::mutex> lock_guard_caller{file_->background_thread_lock};
+      scoped_mutex_lock lock_guard_caller{file_->background_thread_lock};
       if (file_->background_flush_thread) {
         return;
       }
 
       std::shared_ptr<FileStats> concurrency_file = file_;
       std::chrono::microseconds flush_interval = options_.flush_interval;
-      file_->background_flush_thread.reset(new std::thread([concurrency_file, flush_interval]() {
+      file_->background_flush_thread = std::make_unique<std::thread>([concurrency_file, flush_interval]() {
         std::chrono::system_clock::time_point last_free_job_timepoint = std::chrono::system_clock::now();
         std::size_t last_metric_family_count = 0;
 
@@ -966,7 +1002,7 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
           {
             std::size_t current_metric_family_count =
                 concurrency_file->metric_family_count.load(std::memory_order_acquire);
-            std::lock_guard<std::mutex> lock_guard{concurrency_file->file_lock};
+            scoped_mutex_lock lock_guard{concurrency_file->file_lock};
             if (current_metric_family_count != last_metric_family_count) {
               last_metric_family_count = current_metric_family_count;
               last_free_job_timepoint = std::chrono::system_clock::now();
@@ -985,13 +1021,13 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
         // Detach running thread because it will exit soon
         std::unique_ptr<std::thread> background_flush_thread;
         {
-          std::lock_guard<std::mutex> lock_guard_inner{concurrency_file->background_thread_lock};
+          scoped_mutex_lock lock_guard_inner{concurrency_file->background_thread_lock};
           background_flush_thread.swap(concurrency_file->background_flush_thread);
         }
         if (background_flush_thread && background_flush_thread->joinable()) {
           background_flush_thread->detach();
         }
-      }));
+      });
 #if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
     } catch (std::exception &e) {
       FWLOGERROR("SpawnBackgroundWorkThread for PrometheusFileExporter but got exception: {}", e.what());
@@ -1006,16 +1042,18 @@ class ATFW_UTIL_SYMBOL_LOCAL PrometheusFileBackend {
   ::prometheus::TextSerializer serializer_;
 
   struct FileStats {
-    std::atomic<bool> is_shutdown;
-    std::size_t rotate_index;
-    std::size_t written_size;
-    std::size_t left_flush_metrics;
+    std::atomic<bool> is_shutdown{false};
+    std::size_t rotate_index = 0;
+    // written_size 与 last_checkpoint 在 AddMetricData/CheckUpdate 中存在不持 file_lock 的读写，必须为原子量；
+    // 两者仅作轮转阈值与复查节奏的近似提示，不承担 synchronizes-with 语义，relaxed 足够
+    std::atomic<std::size_t> written_size{0};
+    std::size_t left_flush_metrics = 0;
     std::shared_ptr<std::ofstream> current_file;
     std::mutex file_lock;
-    std::time_t last_checkpoint;
+    std::atomic<std::time_t> last_checkpoint{0};
     std::string file_path;
-    std::atomic<std::size_t> metric_family_count;
-    std::atomic<std::size_t> flushed_metric_family_count;
+    std::atomic<std::size_t> metric_family_count{0};
+    std::atomic<std::size_t> flushed_metric_family_count{0};
 
     std::unique_ptr<std::thread> background_flush_thread;
     std::mutex background_thread_lock;
@@ -1048,8 +1086,18 @@ SERVER_FRAME_API ::opentelemetry::sdk::common::ExportResult PrometheusFileExport
   }
 
   if (backend_) {
-    backend_->AddMetricData(data);
-    return ::opentelemetry::sdk::common::ExportResult::kSuccess;
+#if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
+    try {
+#endif
+      backend_->AddMetricData(data);
+      return ::opentelemetry::sdk::common::ExportResult::kSuccess;
+#if ATFRAMEWORK_UTILS_ENABLE_EXCEPTION
+    } catch (const std::exception &e) {
+      FWLOGERROR("PrometheusFileExporter::Export but got exception: {}", e.what());
+    } catch (...) {
+      FWLOGERROR("{}", "PrometheusFileExporter::Export but got unknown exception");
+    }
+#endif
   }
 
   return ::opentelemetry::sdk::common::ExportResult::kFailure;

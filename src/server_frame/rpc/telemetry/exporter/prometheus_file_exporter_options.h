@@ -49,7 +49,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE PrometheusFileExporterOptions {
   // Populating otel_scope_name/otel_scope_labels attributes
   bool without_otel_scope = false;
 
-  inline PrometheusFileExporterOptions() noexcept {}
+  inline PrometheusFileExporterOptions() {}
 };
 
 }  // namespace metrics
