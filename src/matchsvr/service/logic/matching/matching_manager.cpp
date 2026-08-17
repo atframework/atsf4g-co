@@ -437,6 +437,22 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
 rpc::result_code_type matching_manager::orbit_room_ready(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq& request,
     PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp& response, uint64_t source_server_id) {
+  if (request.start_success() != true) {
+    // ds启动失败房间直接解散
+    int result = PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_START_FAILED;
+    auto room_iter = rooms_.find(request.matching_id());
+    if (room_iter != rooms_.end() && room_iter->second) {
+      auto room = room_iter->second;
+      unindex_all_units(*room);
+      room->mark_failed(result, atfw::util::time::time_utility::get_now());
+      PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
+      event_log.set_failed(result);
+      room->publish(ctx, std::move(event_log));
+    }
+    response.set_result(result);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
   response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   auto room_iter = rooms_.find(request.matching_id());
   if (room_iter == rooms_.end() || !room_iter->second) {
