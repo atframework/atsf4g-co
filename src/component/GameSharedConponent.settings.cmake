@@ -20,7 +20,8 @@ function(project_game_shared_component_declare_sdk TARGET_NAME SDK_ROOT_DIR)
   project_component_declare_sdk("${TARGET_NAME}" "${SDK_ROOT_DIR}" ${__append_args} ${ARGN})
 
   target_compile_definitions("${${__game_shared_component_name_var}}"
-                             PRIVATE ${PROJECT_GAME_SHARED_COMPONENT_PRIVATE_DEFINITIONS})
+                             PRIVATE "PROJECT_PROTOCOL_NAMESPACE_ID=${PROJECT_NAMESPACE}"
+                             PUBLIC GAME_SHARED_COMPONENT_SERVER_MODE=1)
   if(__declare_sdk_OUTPUT_TARGET_NAME)
     set(${__declare_sdk_OUTPUT_TARGET_NAME}
         "${TARGET_FULL_NAME}"
