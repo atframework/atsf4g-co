@@ -46,7 +46,7 @@
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
 
 // 本文件的接口均为单次调用，不含重试逻辑；OLD_VERSION/KEY_EXISTS 等可重试错误
-// 由外层调用方（transaction_client_handle、task_action_participator_resolve_transaction 等）按需有界重试
+// 由外层调用方（transaction_client_handle、task_action_participator_resolve_transaction 等）按需做有限次重试
 
 namespace rpc {
 namespace transaction_api {
@@ -140,9 +140,9 @@ static bool is_replication_mode(const atfw::distributed_system::transaction_meta
          static_cast<uint32_t>(metadata.replicate_node_server_id_size()) >= metadata.replicate_read_count();
 }
 
-// replication 响应合并时，两个相反的终态（COMMITED/REJECTED）说明副本间发生了严重不一致。
+// replication 响应合并时，两个相反的最终状态（COMMITED/REJECTED）说明副本间发生了严重不一致。
 // 拒绝合并会让所有读取方永远无法收敛，因此只打印错误日志，合并仍按确定性规则（max status，COMMITED 优先）
-// 收敛到同一终态；do_event 是不可回退副作用，COMMITED 优先与“成功可能已被 Client 观察到”保持一致
+// 收敛到同一最终状态；do_event 是不可回退副作用，COMMITED 优先与“成功可能已被 Client 观察到”保持一致
 static bool is_conflicting_terminal_transaction_status(atfw::distributed_system::EnDistibutedTransactionStatus left,
                                                        atfw::distributed_system::EnDistibutedTransactionStatus right) {
   return left >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED &&

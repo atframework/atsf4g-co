@@ -43,7 +43,7 @@ static uint32_t get_retry_limit(const transaction_participator_storage& storage)
   return std::max<uint32_t>(1, storage.configure().resolve_max_times());
 }
 
-// 每积累 16 个 finished 事务强制启动一次刷新操作（以 5 为相位，避免与定时器边界对齐）
+// 每积累 16 个 finished 事务强制启动一次刷新操作（偏移量取 5，避免与定时器边界对齐）
 constexpr size_t kFinishedTransactionAutoTickModulo = 16;
 constexpr size_t kFinishedTransactionAutoTickPhase = 5;
 
@@ -56,9 +56,9 @@ static void set_next_retry_timepoint(transaction_participator_storage& storage,
   protobuf_copy_message(*storage.mutable_resolve_timepoint(), protobuf_from_system_clock(now + retry_interval));
 }
 
-// 在途终态方向标记的 RAII 守卫：
-// 终态流程存在多条协程返回路径，手工复位一旦漏掉会永久卡死同事务的后续终态调用（同方向静默假成功），
-// 统一交给析构复位避免两个流程的退出路径漂移；条目可能已被 remove_running_transaction 销毁，
+// 正在执行的最终状态方向标记的 RAII 守卫：
+// 最终状态流程存在多条协程返回路径，手工复位一旦漏掉会永久卡死同事务的后续最终状态调用（同方向静默假成功），
+// 统一交给析构复位，避免两条退出路径行为不一致；条目可能已被 remove_running_transaction 销毁，
 // 析构时按 UUID 查找，找不到即为已完成清理
 class inflight_terminal_mark_guard {
  public:
@@ -155,7 +155,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   running_transactions_.clear();
   transaction_locks_.clear();
   finished_transactions_.clear();
-  // 注意: 在途的 auto resolve task 无法安全取消，但它只通过 resolve_transcation/handle_finished_transaction_result
+  // 注意: 尚未结束的 auto resolve task 无法安全取消，但它只通过 resolve_transcation/handle_finished_transaction_result
   // 按 UUID 或对象标识操作当前容器，对 load 后的新状态是幂等安全的。
 
   for (const auto& transaction : storage.running_transaction()) {
@@ -261,9 +261,9 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
   std::list<std::string> pending_transactions;
   std::vector<storage_ptr_type> submmit_transactions;
 
-  // 统一队列按 action 分发：query 查 running 集合，acknowledge 查 finished 集合，均按截止时间消费。
+  // 统一队列按 action 分发：query 查 running 集合，acknowledge 查 finished 集合，均按截止时间处理。
   // trigger_due 在回调前移除 timer，无效条目（事务已不在对应集合）随之自动丢弃；
-  // 有效条目的恢复所有权转交本函数：任务拉起失败时必须重新武装
+  // 有效条目的恢复所有权转交本函数：任务拉起失败时必须重新排期
   resolve_timer_queue_.trigger_due(timepoint, [&](const storage_resolve_timer_type& timer) {
     if (timer.action == resolve_timer_action_type::kQuery) {
       auto transaction_iter = running_transactions_.find(timer.transaction_uuid);
@@ -292,8 +292,8 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
     return 0;
   }
 
-  // trigger_due 已移除这些条目的 timer，任务拉起失败时按退避重新武装，
-  // 避免恢复流程永久丢失或立即到期形成 tight loop
+  // trigger_due 已移除这些条目的 timer，任务拉起失败时按退避间隔重新排期，
+  // 避免恢复流程永久丢失或立即到期形成空转循环
   auto rearm_timers = [this, &pending_transactions, &submmit_transactions]() {
     for (const auto& transaction_uuid : pending_transactions) {
       auto transaction_iter = running_transactions_.find(transaction_uuid);
@@ -719,7 +719,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
     RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
   }
 
-  // 重复 prepare 幂等返回现有 running 对象：不覆盖（可能正在执行 do_event 等终态动作）、
+  // 重复 prepare 幂等返回现有 running 对象：不覆盖（可能正在执行 do_event 等最终状态动作）、
   // 不重建 timer/lock、不重复触发生命周期事件
   auto running_iter = running_transactions_.find(transaction_uuid);
   if (running_iter != running_transactions_.end() && running_iter->second.storage) {
@@ -1000,14 +1000,15 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
 
   rpc::transaction_api::merge_storage(get_participator_key(), *transaction_ptr, *trans_data);
 
+  // 进入本地最终状态动作阶段时不再重置 resolve_times：重试次数的重置只由 commit_transcation 的
+  // local_action_stage_entered 首次进入逻辑负责。这里清零会让 timer 驱动的每次重入都拿到
+  // 全新的重试次数，do_event 的失败重试变成无限重试（DT-020）。
   if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED == transaction_ptr->metadata().status()) {
-    transaction_ptr->set_resolve_times(0);
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid)), {}}));
   } else if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
              transaction_ptr->metadata().status()) {
     transaction_ptr->mutable_metadata()->set_status(
         atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
-    transaction_ptr->set_resolve_times(0);
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
@@ -1027,12 +1028,12 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // per-transaction 终态序列化：同一事务同一时刻只允许一个方向的终态流程在执行，
+  // 同一事务的最终状态流程互斥：同一事务同一时刻只允许一个方向的流程在执行，
   // 防止 do_event 被重复执行或 commit/reject 方向竞态互相覆盖
   if (iter->second.inflight_terminal_direction != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED) {
     if (iter->second.inflight_terminal_direction ==
         atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
-      // 同方向重复调用：在途流程会完成相同动作，幂等返回
+      // 同方向重复调用：正在执行的流程会完成相同动作，幂等返回
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
     FWLOGERROR("participator {} commit transaction {} but a reject transition is in flight", get_participator_key(),
@@ -1062,7 +1063,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.commit_transcation",
                          std::move(child_trace_option));
 
-  // 进入在途标记：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
+  // 标记为执行中：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
   iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING;
   inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid};
 
@@ -1070,8 +1071,8 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
   rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (transaction_ptr->metadata().status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
       vtable_ && vtable_->do_event) {
-    // resolve_times 只在首次进入本地动作阶段时重置：此前 query 阶段的失败计数不应吃掉本地动作预算，
-    // 阶段内的重复进入（RPC 重发/timer）不再重置，保证动作预算在任意驱动源下都有界。
+    // resolve_times 只在首次进入本地动作阶段时重置：此前 query 阶段的失败计数不应吃掉本地动作的重试次数，
+    // 阶段内的重复进入（RPC 重发/timer）不再重置，保证动作重试次数在任意触发来源下都有限。
     // 协调者查询会先把状态推进到 COMMITED，因此不能用状态数值判断是否首次进入动作阶段。
     // （此处尚未发生协程切换，iter 仍然有效）
     if (!iter->second.local_action_stage_entered) {
@@ -1120,7 +1121,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     }
   }
 
-  // 在途标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
+  // 执行中标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
 
   // 每16个事务强制启动一次刷新操作
   if (kFinishedTransactionAutoTickPhase == (finished_transactions_.size() % kFinishedTransactionAutoTickModulo)) {
@@ -1143,11 +1144,11 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // per-transaction 终态序列化：同一事务同一时刻只允许一个方向的终态流程在执行
+  // 同一事务的最终状态流程互斥：同一事务同一时刻只允许一个方向的流程在执行
   if (iter->second.inflight_terminal_direction != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED) {
     if (iter->second.inflight_terminal_direction ==
         atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING) {
-      // 同方向重复调用：在途流程会完成相同动作，幂等返回
+      // 同方向重复调用：正在执行的流程会完成相同动作，幂等返回
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
     FWLOGERROR("participator {} reject transaction {} but a commit transition is in flight", get_participator_key(),
@@ -1170,7 +1171,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.reject_transcation",
                          std::move(child_trace_option));
 
-  // 进入在途标记：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
+  // 标记为执行中：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
   iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
   inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid};
 
@@ -1200,7 +1201,7 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
     }
   }
 
-  // 在途标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
+  // 执行中标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
 
   // 每16个事务强制启动一次刷新操作
   if (kFinishedTransactionAutoTickPhase == (finished_transactions_.size() % kFinishedTransactionAutoTickModulo)) {

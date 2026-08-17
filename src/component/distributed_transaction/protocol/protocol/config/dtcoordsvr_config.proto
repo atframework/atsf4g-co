@@ -27,7 +27,7 @@ message dtcoordsvr_cfg {
   google.protobuf.Duration transaction_expire_grace_duration = 12
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "0s" }];
 
-  // 事务 DB TTL 上限：不叠加恢复预算，TTL 窗口（expire_timepoint + grace 起算）不允许超过该值
+  // 事务 DB TTL 上限：不叠加恢复流程的重试等待时间，TTL 窗口（expire_timepoint + grace 起算）不允许超过该值
   google.protobuf.Duration transaction_max_ttl = 13
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30d" min_value: "10s" max_value: "1095d" }];
 }

@@ -69,7 +69,7 @@ static uint32_t get_transaction_zone_id(const atfw::distributed_system::transact
   return 0;
 }
 
-// TTL 窗口为 expire_timepoint + grace，不允许叠加恢复预算延长用户生命周期，
+// TTL 窗口为 expire_timepoint + grace，不允许通过叠加恢复流程的重试等待时间来延长事务生命周期，
 // 且不超过 transaction_max_ttl，也不允许永不过期
 static uint64_t get_transaction_ttl_seconds(const atfw::distributed_system::transaction_blob_storage& storage) {
   const auto now = atfw::util::time::time_utility::now();
@@ -139,8 +139,8 @@ int transaction_manager::tick() {
       break;
     }
 
-    // 不跳过有在途拉取/保存任务的缓存，不随意延长缓存生命周期：
-    // 置 removed 标记后淘汰，在途 IO 任务结束后缓存立即失效且不会写回或重新入缓存
+    // 不跳过有仍在执行的拉取/保存任务的缓存，不随意延长缓存生命周期：
+    // 置 removed 标记后淘汰，未完成的 IO 任务结束后缓存立即失效且不会写回或重新入缓存
     if (is_over_capacity && !is_expired && iter->second->data_object.metadata().memory_only()) {
       // memory_only 事务允许容量淘汰（设计如此：允许一定程度不一致，client 端会重新提交状态），但记录日志
       FWLOGWARNING("Evict memory_only transaction {} by capacity, active transaction state will be lost",
@@ -399,7 +399,7 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
     if (trans->data_object.metadata().memory_only()) {
       ret = 0;
     } else {
-      // 删除前先排空该记录所有在途 IO（拉取/保存），避免晚到的 IO 在删除后复活记录；
+      // 删除前先等待该记录所有未完成的 IO（拉取/保存）结束，避免晚到的 IO 在删除后复活记录；
       // 记录已被并发删除时继续幂等删除
       if (lru_caches_.is_io_task_running(trans->data_object.metadata().transaction_uuid())) {
         ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, trans->data_object.metadata().transaction_uuid()));
@@ -497,7 +497,7 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
     if (trans->data_object.metadata().memory_only()) {
       ret = 0;
     } else {
-      // 删除前先排空该记录所有在途 IO（拉取/保存），避免晚到的 IO 在删除后复活记录；
+      // 删除前先等待该记录所有未完成的 IO（拉取/保存）结束，避免晚到的 IO 在删除后复活记录；
       // 记录已被并发删除时继续幂等删除
       if (lru_caches_.is_io_task_running(trans->data_object.metadata().transaction_uuid())) {
         ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, trans->data_object.metadata().transaction_uuid()));
@@ -611,8 +611,8 @@ rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
 
   int ret = 0;
   if (!metadata.memory_only()) {
-    // 删除前先排空该记录所有在途 IO，避免删除后晚到的 IO 复活记录；
-    // 强制删除语义下即使排空失败也继续删除（缓存会被 remove_cache 置 removed 并禁止再写回）
+    // 删除前先等待该记录所有未完成的 IO 结束，避免删除后晚到的 IO 复活记录；
+    // 强制删除语义下即使等待 IO 结束失败也继续删除（缓存会被 remove_cache 置 removed 并禁止再写回）
     rpc::result_code_type::value_type drain_ret = 0;
     if (lru_caches_.is_io_task_running(metadata.transaction_uuid())) {
       drain_ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, metadata.transaction_uuid()));

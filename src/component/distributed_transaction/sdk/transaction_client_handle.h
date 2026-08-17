@@ -52,8 +52,8 @@ class transaction_client_handle {
                                         const participator_type&, transaction_participator_failure_reason&)>
         prepare_participator;
 
-    // 终态通知回调。必须 await 并返回真实的投递/响应结果：返回码用于判定通知是否成功并驱动有界重试，
-    // 不能 fire-and-forget 后谎报成功。不同参与者按顺序通知，同一参与者内部保持有界重试。
+    // 最终状态通知回调。必须 await 并返回真实的投递/响应结果：返回码用于判定通知是否成功并驱动有限次重试，
+    // 不能 fire-and-forget 后谎报成功。不同参与者按顺序通知，同一参与者内部保持有限次重试。
     std::function<rpc::result_code_type(rpc::context&, transaction_client_handle&, const storage_type&,
                                         const participator_type&)>
         commit_participator;
@@ -74,7 +74,7 @@ class transaction_client_handle {
     // 注意：force_commit 是 best-effort 模型，不是可容灾 2PC：
     // - 不创建协调者记录，参与者不进入 running/finished，也没有定时恢复；
     // - SDK 资源锁对 force_commit 事务不生效；
-    // - 补偿（undo）只存在于本次 submit 调用的有界重试内，client/参与者故障可能永久部分执行；
+    // - 补偿（undo）只存在于本次 submit 调用的有限次重试内，client/参与者故障可能永久部分执行；
     // - 参与者的 do_event/undo_event 必须幂等，undo_event 必须支持 no-op（未执行过时成功返回）和重放。
     bool force_commit = false;
     std::chrono::system_clock::duration timeout = std::chrono::seconds(5);
@@ -136,7 +136,7 @@ class transaction_client_handle {
    * @param input 事务存储结构
    * @param output_prepared_participators 输出prepare阶段完成的参与者
    * @param output_failed_participators 输出失败的参与者。仅包含 prepare 阶段失败（导致事务被拒绝）的参与者；
-   *   终态通知投递失败的参与者不在其中——该投递由参与者的 resolve 重试流程保证最终一致，
+   *   最终状态通知投递失败的参与者不在其中——该投递由参与者的 resolve 重试流程保证最终一致，
    *   对 client 而言这些参与者的事务执行视为成功
    * @return future of 0 or error code
    */

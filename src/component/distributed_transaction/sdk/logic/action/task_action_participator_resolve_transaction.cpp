@@ -52,10 +52,10 @@ task_action_participator_resolve_transaction::operator()() {
   }
 
   // tick 的 trigger_due 在拉起本任务前已移除所有待处理条目的 timer，恢复所有权随任务转移。
-  // 已处理条目由 resolve_transcation/handle_finished_transaction_result 自行重排或消费；
-  // 任务异常退出（不可写/被 kill/超时）时为未处理条目重新武装（rearm_unprocessed_timers），避免恢复流程永久丢失。
+  // 已处理条目由 resolve_transcation/handle_finished_transaction_result 自行重新排期或完成清理；
+  // 任务异常退出（不可写/被 kill/超时）时为未处理条目重新排期（rearm_unprocessed_timers），避免恢复流程永久丢失。
   // 进度状态保存在任务对象成员上：协程在 await 点被 kill 时协程帧随局部变量一起销毁，
-  // 成员状态仍能供 on_failed 重新武装
+  // 成员状态仍能供 on_failed 重新排期
   do {
     bool is_writable = false;
     RPC_AWAIT_IGNORE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
@@ -124,7 +124,7 @@ task_action_participator_resolve_transaction::operator()() {
     // 重置定时器
   } while (false);
 
-  // 正常收尾（含不可写/exiting 提前退出）：为未处理条目重新武装 timer
+  // 正常收尾（含不可写/exiting 提前退出）：为未处理条目重新排期定时器
   rearm_unprocessed_timers();
 
   if (task_type_trait::get_task_id(param_.participantor->auto_resolve_transaction_task_) ==
@@ -154,7 +154,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction failed, res: {}({})",
               param_.participantor->get_participator_key(), get_result(),
               protobuf_mini_dumper_get_error_msg(get_result()));
-    // 任务被 kill/超时/取消时 operator() 的协程帧已销毁，此处兜底为未处理条目重新武装 timer
+    // 任务被 kill/超时/取消时 operator() 的协程帧已销毁，此处兜底为未处理条目重新排期定时器
     rearm_unprocessed_timers();
   }
   return get_result();
@@ -166,7 +166,7 @@ void task_action_participator_resolve_transaction::rearm_unprocessed_timers() {
   }
   rearm_done_ = true;
 
-  // 按退避重新武装：不重置时间戳会导致下一次 tick 立即再次拉起，失败原因持续存在时形成 tight loop
+  // 按退避间隔重新排期：不重置时间戳会导致下一次 tick 立即再次拉起，失败原因持续存在时形成空转循环
   for (size_t i = submmit_processed_; i < param_.submmit_transactions.size(); ++i) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (param_.submmit_transactions[i]) {

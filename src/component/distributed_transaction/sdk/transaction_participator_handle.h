@@ -75,7 +75,7 @@ class transaction_participator_handle
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
         on_start_running;
     // 事务离开 running 集合时触发（含 resolve 时协调者记录 NOTFOUND 的本地清理路径）。
-    // 注意 NOTFOUND 清理只触发本回调，不会触发 on_finished/on_rejected（事务没有全局终态）。
+    // 注意 NOTFOUND 清理只触发本回调，不会触发 on_finished/on_rejected（事务没有全局最终状态）。
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
         on_finish_running;
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
@@ -138,10 +138,10 @@ class transaction_participator_handle
    *   - SDK 资源锁（lock_resource/check_lock/lock）对 force_commit 事务不生效；
    *   - 生命周期回调顺序为 on_start_running -> do_event -> on_finish_running，
    *     仅当 do_event 成功时才追加 on_finished -> on_commited，do_event 失败时不触发 on_finished/on_rejected；
-   *   - 补偿（undo）只存在于 client 本次调用的有界重试内，client/参与者故障可能永久部分执行，
+   *   - 补偿（undo）只存在于 client 本次调用的有限次重试内，client/参与者故障可能永久部分执行，
    *     因此 force_commit 的 do_event/undo_event 都必须幂等，undo_event 必须支持 no-op 和重放。
    *   普通模式下重复 prepare 是幂等的：running 中的事务返回现有对象，已 finished 的事务返回 finished 副本，
-   *   不会覆盖正在执行终态动作的事务，也不会重新触发生命周期事件。
+   *   不会覆盖正在执行最终状态动作的事务，也不会重新触发生命周期事件。
    *
    * @param ctx rpc context
    * @param request RPC request
@@ -265,12 +265,12 @@ class transaction_participator_handle
   // 避免多个平行容器（wound/action-stage/inflight 标记）与 running 集合之间的隐式生命周期关联
   struct running_transaction_entry {
     storage_ptr_type storage;
-    // 正在执行终态流程（do_event/迁移到 finished）的方向，用于 per-transaction 序列化；
-    // CREATED 表示无在途流程（所有终态方向枚举值均大于 CREATED）
+    // 正在执行的最终状态流程（do_event/迁移到 finished）方向，用于同一事务内的流程互斥；
+    // CREATED 表示当前没有正在执行的流程（所有最终状态方向的枚举值均大于 CREATED）
     ::atfw::distributed_system::EnDistibutedTransactionStatus inflight_terminal_direction =
         ::atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED;
-    // 已进入本地终态动作阶段：resolve_times 只在阶段首次进入时重置一次，阶段内的重复进入
-    // （RPC 重发/timer）不再重置，保证本地动作预算在任意驱动源下都有界
+    // 已进入本地最终状态动作阶段：resolve_times 只在阶段首次进入时重置一次，阶段内的重复进入
+    // （RPC 重发/timer）不再重置，保证本地动作的重试次数在任意触发来源下都有限
     bool local_action_stage_entered = false;
     // 被 Wound-Wait 抢占锁的事务，禁止其后续 commit
     bool wounded = false;
@@ -321,7 +321,7 @@ class transaction_participator_handle
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_finished_transaction_result(
       rpc::context& ctx, const storage_ptr_type& transaction_ptr, int32_t result);
 
-  // 统一的截止时间队列行为：running 阶段查询协调者并执行本地终态动作，finished 阶段重发 participant ack。
+  // 统一的截止时间队列行为：running 阶段查询协调者并执行本地最终状态动作，finished 阶段重发 participant ack。
   // 事务同一时刻只会处于其中一种阶段，因此同一 UUID 至多一条 timer，由 action 区分行为
   enum class resolve_timer_action_type : int32_t {
     kQuery = 0,
@@ -370,8 +370,8 @@ class transaction_participator_handle
     inline bool empty() const noexcept { return timers_.empty(); }
 
     // 触发所有的已到期定时器，自动移除并触发回调。
-    // 契约：timer 在回调【之前】即从队列移除（防止消费方漏移除导致重复触发），消费方取得该条目的
-    // 恢复所有权——消费失败（如任务拉起失败/任务异常退出）时必须由消费方重新 insert_or_replace；
+    // 契约：timer 在回调【之前】即从队列移除（防止处理方漏移除导致重复触发），处理方取得该条目的
+    // 恢复所有权——处理失败（如任务拉起失败/任务异常退出）时必须由处理方重新 insert_or_replace；
     // fn 返回 false 停止遍历（当前 timer 已移除，剩余 timer 保留）；
     // fn 内不得插入已到期的 timer，否则会在本次调用中被再次触发。
     DISTRIBUTED_TRANSACTION_SDK_API void trigger_due(
@@ -383,9 +383,9 @@ class transaction_participator_handle
     std::unordered_map<std::string, storage_resolve_timer_type> index_;
   };
 
-  // 重新武装 resolve timer：按 resolve_retry_interval 退避后重新入队。
-  // 用于任务拉起失败/异常退出等"事务未取得处理机会"的场景：退避避免立即到期形成 tight loop；
-  // 不消耗 resolve_times 预算（预算只计真实处理尝试，基础设施故障不应误伤事务），
+  // 重新排期重试定时器：按 resolve_retry_interval 退避后重新入队。
+  // 用于任务拉起失败/异常退出等"事务未取得处理机会"的场景：退避避免立即到期形成空转循环；
+  // 不消耗 resolve_times 重试次数（重试次数只计真实处理尝试，基础设施故障不应误伤事务），
   // 无限重试的最终兜底由协调者记录 TTL 承担
   void schedule_resolve_retry(resolve_timer_action_type action, storage_type& storage);
 

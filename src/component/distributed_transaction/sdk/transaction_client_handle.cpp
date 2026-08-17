@@ -36,7 +36,7 @@
 namespace atframework {
 namespace distributed_system {
 namespace {
-// 协调者 CAS 冲突/故障转移/扩缩容时的有界重试次数
+// 协调者 CAS 冲突/故障转移/扩缩容时的重试次数上限
 constexpr int32_t kCoordinatorRpcRetryTimes = 5;
 
 inline bool is_retriable_create_error(int32_t res) {
@@ -117,13 +117,22 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   if (input->participators().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
-  // 缺少当前模式所需 callback 时 prepare/终态通知会被静默跳过并造成假成功；force_commit 的成功路径
+  // 缺少当前模式所需 callback 时 prepare/最终状态通知会被静默跳过并造成假成功；force_commit 的成功路径
   // 在 prepare 内直接执行，不使用 commit_participator，但失败路径仍需要 reject_participator 做补偿。
   if (!vtable_ || !vtable_->prepare_participator || !vtable_->reject_participator ||
       (!input->configure().force_commit() && !vtable_->commit_participator)) {
     FWLOGERROR("transaction {} submit but required vtable callbacks are not fully set",
                input->metadata().transaction_uuid());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  // An already-expired transaction must not create a coordinator record, commit or notify any
+  // participant: the coordinator create would otherwise extend the expired deadline and resurrect
+  // the transaction.
+  auto expired_time = protobuf_to_system_clock(input->metadata().expire_timepoint());
+  if (atfw::util::time::time_utility::now() >= expired_time) {
+    FWLOGERROR("transaction {} submit but already expired", input->metadata().transaction_uuid());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
@@ -144,7 +153,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   // 创建事务,强制自动提交的事务不需要创建协调者事务对象
-  // 协调者对相同内容的 create 幂等成功，CAS 冲突(OLD_VERSION/KEY_EXISTS)时有界重试，
+  // 协调者对相同内容的 create 幂等成功，CAS 冲突(OLD_VERSION/KEY_EXISTS)时做有限次重试，
   // 使晚到的 create 重放和落后的副本也有满足 R 的机会
   if (!input->configure().force_commit()) {
     for (int32_t left_retry_times = kCoordinatorRpcRetryTimes; left_retry_times-- > 0;) {
@@ -158,8 +167,6 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       RPC_RETURN_CODE(child_tracer.finish({ret, {}}));
     }
   }
-
-  auto expired_time = protobuf_to_system_clock(input->metadata().expire_timepoint());
 
   std::unordered_set<std::string> prepared_participators;
   if (nullptr == output_prepared_participators) {
@@ -262,7 +269,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
                                               ? atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
                                               : atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
   } else if (prepare_complete) {
-    // 协调者终态写是幂等的；OLD_VERSION 说明缓存版本落后(故障转移/扩缩容)，有界重试后可按幂等终态返回
+    // 协调者的最终状态写入是幂等的；OLD_VERSION 说明缓存版本落后(故障转移/扩缩容)，有限次重试后可按幂等的最终状态返回
     for (int32_t left_retry_times = kCoordinatorRpcRetryTimes; left_retry_times-- > 0;) {
       ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(child_ctx, *input->mutable_metadata()));
       if (ret != PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
@@ -384,7 +391,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       }
 
       if (notify_result < 0) {
-        // 终态通知投递失败由参与者的 resolve 重试流程保证最终一致，对 client 而言该参与者的事务执行
+        // 最终状态通知投递失败由参与者的 resolve 重试流程保证最终一致，对 client 而言该参与者的事务执行
         // 视为成功，不进入 output_failed_participators。
         FWLOGWARNING("transaction {} notify {} participator {} failed after {} attempts, error code: {}({})",
                      input->metadata().transaction_uuid(), should_commit ? "commit" : "reject", participator_key,
