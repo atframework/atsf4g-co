@@ -592,14 +592,14 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
       FWLOGWARNING(
           "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().cpu_used(), expected_cpu, cpu_capacity_);
-      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
     if (memory_capacity_mb_ > 0.0 && load_record_.agent().memory_used_mb() + expected_memory_mb > memory_capacity_mb_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (mem overload): mem_used={:.2f} + expected={:.2f} > capacity={:.2f}",
           load_record_.agent().memory_used_mb(), expected_memory_mb, memory_capacity_mb_);
-      need_update_load_json_ = true;                                        // 负载记录有变更需要更新JSON以同步到etcd
+      need_update_load_json_ = true;  // 负载记录有变更需要更新JSON以同步到etcd
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
     }
   }
@@ -622,7 +622,7 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     }
   } else {
     // 普通模式
-    int spawn_result = spawn_client_process(client_record, configured_client_command_line_);
+    int spawn_result = spawn_client_process(client_record, configured_client_command_line_, false);
     if (spawn_result < 0) {
       delete_client(client_record);
       RPC_RETURN_CODE(spawn_result);
@@ -957,7 +957,7 @@ int orbit_agent_manager::startup_seed_client() {
   set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
   record->client_addr.clear();
 
-  return spawn_client_process(record, seed_client_command_line_);
+  return spawn_client_process(record, seed_client_command_line_, true);
 }
 
 orbit_agent_client_record_ptr orbit_agent_manager::find_client(const std::string& client_id) noexcept {
@@ -1092,15 +1092,16 @@ void orbit_agent_manager::worker_exit_callback(const atfw::atapp::worker_context
   }
 }
 
-int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line) {
+int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line,
+                                                bool detached) {
   auto worker_pool = (nullptr != owner_app_) ? owner_app_->get_worker_pool_module() : nullptr;
   if (!worker_pool) {
     FWLOGERROR("orbit agent spawn client {} failed: worker pool module is not available", client_id);
     return atfw::atapp::EN_ATAPP_ERR_WORKER_POOL_CLOSED;
   }
 
-  auto spawn_func = [client_id_copy = client_id, launch_arguments = std::move(command_line),
-                     worker_pool](const atfw::atapp::worker_context& worker_ctx) mutable {
+  auto spawn_func = [client_id_copy = client_id, launch_arguments = std::move(command_line), worker_pool,
+                     detached](const atfw::atapp::worker_context& worker_ctx) mutable {
     uint64_t worker_unique_id = worker_ctx.worker_unique_id;
     uv_loop_t* loop_ = nullptr;
     tbb::concurrent_hash_map<uint64_t, uv_loop_t*>::accessor accessor;
@@ -1142,6 +1143,9 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
     options.file = launch_argv[0];
     options.args = launch_argv.data();
     options.exit_cb = on_uv_process_exit_callback;
+    if (detached) {
+      options.flags = UV_PROCESS_DETACHED;
+    }
 
     FWLOGINFO("orbit agent spawning client {} by command {}", client_id_copy, command_line_str);
     int uv_result = uv_spawn(loop_, process_handle, &options);
@@ -1170,7 +1174,7 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
 }
 
 int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_ptr& record,
-                                              const std::vector<std::string>& command_line) {
+                                              const std::vector<std::string>& command_line, bool seed_client) {
   std::vector<std::string> launch_arguments;
 
   // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
@@ -1183,7 +1187,7 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
 
   build_client_launch_arguments(record, render_values, command_line, launch_arguments);
 
-  int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments));
+  int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments), !seed_client);
   if (spawn_result < 0) {
     FWLOGERROR("orbit agent submit spawn client {} to worker pool failed, res: {}({})", record->client_id, spawn_result,
                protobuf_mini_dumper_get_error_msg(spawn_result));

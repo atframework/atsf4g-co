@@ -137,7 +137,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
                                         std::vector<std::string>& output) const;
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
-  int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line);
+  int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line,
+                           bool seed_client);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(rpc::context& ctx,
                                                                           orbit_agent_client_record_ptr record);
   void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
@@ -195,7 +196,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void process_exit_action(const process_exit_action_t& action);
   static void worker_exit_callback(const atfw::atapp::worker_context& worker_ctx);
   static void worker_tick_callback(const atfw::atapp::worker_context& worker_ctx);
-  int32_t spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line);
+  int32_t spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line, bool detached);
 
  private:
   bool stoped_ = false;
