@@ -236,6 +236,10 @@ class user : public user_cache {
                                void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
   get_get_info_handle();
 
+ public:
+  // 便捷接口
+  bool user_in_orbit() const;
+
  private:
   mutable std::bitset<internal_flag::EN_IFT_MAX> internal_flags_;
 

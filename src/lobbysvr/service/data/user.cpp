@@ -618,3 +618,8 @@ std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() const,
 user::get_get_info_handle() {
   return g_get_info_handle_list;
 }
+
+bool user::user_in_orbit() const {
+  // 是否在Orbit流程中
+  return user_orbit_manager_->is_orbit_room_exist();
+}
