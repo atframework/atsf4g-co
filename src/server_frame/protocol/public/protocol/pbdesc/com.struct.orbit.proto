@@ -131,7 +131,8 @@ message DOrbitRoomEventLog {
     DOrbitRoomInit room_init = 100;          // 房间创建
     DOrbitRoomReady ready_data = 101;        // 房间准备就绪
     DOrbitUserInit user_init_success = 102;  // 用户初始化成功
-    DOrbitClientExit client_exit = 103;      // Client退出
+    DOrbitUserFinish user_finish = 103;      // 用户完成
+    DOrbitClientExit client_exit = 104;      // Client退出
   }
 }
 

@@ -589,6 +589,11 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
     }
   } else {
     user_ptr->settlement_finish_ = true;
+    PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
+    event_log.set_orbit_room_status(room_status_);
+    *event_log.mutable_room_key() = room_key_;
+    *event_log.mutable_user_finish()->mutable_user_key() = user_ptr->user_key_;
+    add_event_log(ctx, std::move(event_log));
   }
   RPC_RETURN_CODE(ret);
 }

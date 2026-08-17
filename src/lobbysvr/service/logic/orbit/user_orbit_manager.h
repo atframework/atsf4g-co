@@ -64,6 +64,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
 
   struct orbit_room_data {
     bool is_joined_ = false;
+    bool finish_event_ = false;
     PROJECT_NAMESPACE_ID::EnOrbitRoomStatus room_status_;
 
     PROJECT_NAMESPACE_ID::DOrbitRoomInit init_data_;          // room_init
@@ -77,6 +78,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
 
   PROJECT_NAMESPACE_ID::DOrbitRoomKey room_key_;
   int64_t orbit_room_expired_timepoint_ = 0;
+  bool subscriber_ready_ = false;
   rpc::dtmq::client_subscriber::ptr_t subscriber_;
   orbit_room_data_ptr room_data_;
 };
