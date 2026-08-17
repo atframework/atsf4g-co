@@ -69,7 +69,7 @@ class RPC_UNIT_TEST_API mock_client {
   // kAddSession: creates the real session through session_manager.
   int32_t add(gsl::string_view client_ip = "127.0.0.1", uint32_t client_port = 0) const;
   // kPost: packs and injects a typed CSMsg upstream.
-  int32_t post(const atframework::CSMsg &msg) const;
+  int32_t post(const atfw::CSMsg &msg) const;
   // kRemoveSession: closes the session through the real remove path (including the logout task).
   int32_t remove() const;
   // kSetRouterRsp: completes a set-router request/response chain.

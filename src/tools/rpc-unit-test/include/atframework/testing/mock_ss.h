@@ -55,7 +55,7 @@ class mock_ss;
 // coroutine context of the task driving the handler; use it to await nested RPC calls.
 struct ATFW_UTIL_SYMBOL_VISIBLE ss_request_view {
   const google::protobuf::Message &body;
-  const atframework::SSMsgHead &head;
+  const atfw::SSMsgHead &head;
   uint64_t target_node_id = 0;
   std::string target_node_name;
   rpc::context *context = nullptr;
@@ -85,8 +85,7 @@ struct ss_rule_state {
   std::string response_type_url;
   ss_rule_options options;
   // (context, request SSMsg, response SSMsg) -> result_code_type. May be empty for record-only rules.
-  std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &, uint64_t,
-                                      gsl::string_view)>
+  std::function<rpc::result_code_type(rpc::context &, const atfw::SSMsg &, atfw::SSMsg &, uint64_t, gsl::string_view)>
       invoker;
   // Explicit error response without calling any handler (0 = use invoker).
   int32_t forced_error_code = 0;
@@ -132,7 +131,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ss_call_record {
   bool is_stream = false;
   bool matched_rule = false;
   std::string request_type_url;
-  atframework::SSMsgHead head;
+  atfw::SSMsgHead head;
 };
 
 // Expectation registered on the engine, verified by verify_expectations() (runtime::stop calls it).
@@ -183,7 +182,7 @@ class RPC_UNIT_TEST_API mock_ss {
   // the body types). Same coroutine contract as mock().
   ss_rule_handle mock_untyped(
       gsl::string_view full_rpc_name,
-      std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &)> handler,
+      std::function<rpc::result_code_type(rpc::context &, const atfw::SSMsg &, atfw::SSMsg &)> handler,
       const ss_rule_options &options = ss_rule_options{});
 
   // Register an immediate error response for a (normally unmatched) RPC.
@@ -219,12 +218,12 @@ class RPC_UNIT_TEST_API mock_ss {
 
   ss_rule_handle mock_typed(gsl::string_view full_rpc_name, gsl::string_view request_type_url,
                             gsl::string_view response_type_url,
-                            std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &,
-                                                                atframework::SSMsg &, uint64_t, gsl::string_view)>
+                            std::function<rpc::result_code_type(rpc::context &, const atfw::SSMsg &, atfw::SSMsg &,
+                                                                uint64_t, gsl::string_view)>
                                 invoker,
                             const ss_rule_options &options);
 
-  void inject_response(const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg, int32_t error_code,
+  void inject_response(const atfw::SSMsg &request_msg, atfw::SSMsg &response_msg, int32_t error_code,
                        uint64_t target_node_id, gsl::string_view target_node_name, const ss_rule_options *options);
 
   struct pending_response {

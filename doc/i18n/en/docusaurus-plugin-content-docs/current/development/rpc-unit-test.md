@@ -182,7 +182,9 @@ Rule options (`ss_rule_options`): `match_node_id`, `times` (FIFO script), `delay
   pool cache persists across cases, so do not assert absolute id values); `generate_standard_uuid*`/
   `generate_short_uuid` are pure local functions needing no mock. `feature::uuid` currently adds no runtime wiring.
 - **resource**: `test.resource()` provides a path→bytes/version/version_error in-memory loader, and `reload()` drives
-  the real manager through a full reload/index pass.
+  the real manager through a full reload/index pass. `bind()` automatically snapshots every `*.bytes` from the real
+  generated excel bindir, so a test only uses `set_file()` to override the tables it cares about and `remove_file()`
+  to simulate a missing file; adding or removing excel tables never requires touching existing tests.
 - **CS**: `test.cs()` / `mock_client` simulate a gateway client (add/post/remove/set-router-rsp); upstream goes through
   the real dispatch/action, and downstream data/kick/set-router/broadcast are all captured, without atbus.
 - **raw transport**: `test.transport()` exposes rules and call history across id/name/discovery/consistent-hash/

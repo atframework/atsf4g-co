@@ -326,7 +326,15 @@ rpc::result_code_type transaction_manager::mutable_transaction(
     ret = out ? PROJECT_NAMESPACE_ID::err::EN_SUCCESS : PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
-  // 超时且未提交的视为事务失败
+  // 读取失败时清空输出句柄：await_fetch 的出错路径可能留下指向未填充缓存对象的强引用，
+  // 调用方不应在错误返回时拿到可用的伪记录。
+  if (0 != ret) {
+    out.reset();
+  }
+
+  // 超时且未提交的视为事务失败。
+  // 只在读取成功时执行：读取失败（DB 错误、记录损坏、Any 类型不符等）时 out 可能仍指向
+  // 未填充的缓存对象，对其做超时判定会把空数据伪造成 REJECTED 并写回 DB，吞掉原始错误。
   if (out &&
       out->data_object.metadata().status() <= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     auto now = util::time::time_utility::now();

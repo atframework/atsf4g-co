@@ -69,13 +69,6 @@ using subscriber_ptr = rpc::dtmq::client_subscriber::ptr_t;
 // dtmq-proxysvr node used as the heartbeat/send_message target (consistent-hash resolution).
 constexpr uint64_t kDtmqProxyNodeId = 0x1C0001;
 
-// Build an empty xresloader datablocks table (mandatory tables with no rows).
-std::string make_empty_table_bytes() {
-  org::xresloader::pb::xresloader_datablocks blocks;
-  blocks.mutable_header()->set_hash_code("rpc-unit-test");
-  return blocks.SerializeAsString();
-}
-
 // Build a populated dtmq_channel_type.bytes with a channel_type=0 row carrying a DChannelConfigure.
 std::string make_dtmq_channel_type_bytes() {
   org::xresloader::pb::xresloader_datablocks blocks;
@@ -93,18 +86,11 @@ std::string make_dtmq_channel_type_bytes() {
   return blocks.SerializeAsString();
 }
 
-// Seed all mandatory excel tables so reload_all() succeeds; dtmq_channel_type is populated. All tables
-// loaded at startup are mandatory: a missing file fails load_all() of its table and therefore reload_all()
-// (see src/server_frame/test/server_frame_test_resource.cpp).
+// Override dtmq_channel_type with the test row; every other table comes from the mock's automatic
+// snapshot of the real generated bindir (see mock_resource::bind()), so excel table set changes never
+// require touching this fixture.
 void seed_resource_tables(atframework::testing::mock_resource& resource) {
-  resource.set_file("const.bytes", make_empty_table_bytes());
   resource.set_file("dtmq_channel_type.bytes", make_dtmq_channel_type_bytes());
-  resource.set_file("item_type.bytes", make_empty_table_bytes());
-  resource.set_file("orbit_client_template.bytes", make_empty_table_bytes());
-  resource.set_file("rank_define.bytes", make_empty_table_bytes());
-  resource.set_file("rank_period_reward_pool.bytes", make_empty_table_bytes());
-  resource.set_file("rank_rule.bytes", make_empty_table_bytes());
-  resource.set_file("UeSource_Inventory.bytes", make_empty_table_bytes());
 }
 
 // Inject the dtmq-proxysvr discovery node and replay it into the common-module discovery index.

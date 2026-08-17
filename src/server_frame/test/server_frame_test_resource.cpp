@@ -22,12 +22,6 @@
 // clang-format on
 
 namespace {
-std::string make_empty_table_bytes() {
-  org::xresloader::pb::xresloader_datablocks blocks;
-  blocks.mutable_header()->set_hash_code("rpc-unit-test");
-  return blocks.SerializeAsString();
-}
-
 std::string make_const_table_bytes(int32_t fake_key, int32_t mail_max_count) {
   org::xresloader::pb::xresloader_datablocks blocks;
   blocks.mutable_header()->set_hash_code("rpc-unit-test");
@@ -38,16 +32,12 @@ std::string make_const_table_bytes(int32_t fake_key, int32_t mail_max_count) {
   return blocks.SerializeAsString();
 }
 
-// All tables loaded at startup are mandatory: a missing file fails load_all() of its table and therefore reload_all().
-void seed_all_tables(atfw::testing::mock_resource &resource, int32_t fake_key, int32_t mail_max_count) {
+// Override const.bytes with the test row; every other table comes from the mock's automatic snapshot of
+// the real generated bindir (see mock_resource::bind()), so excel table set changes never require touching
+// this fixture. A mandatory table removed via remove_file() still fails load_all() and therefore
+// reload_all().
+void seed_const_table(atfw::testing::mock_resource &resource, int32_t fake_key, int32_t mail_max_count) {
   resource.set_file("const.bytes", make_const_table_bytes(fake_key, mail_max_count));
-  resource.set_file("dtmq_channel_type.bytes", make_empty_table_bytes());
-  resource.set_file("item_type.bytes", make_empty_table_bytes());
-  resource.set_file("orbit_client_template.bytes", make_empty_table_bytes());
-  resource.set_file("rank_define.bytes", make_empty_table_bytes());
-  resource.set_file("rank_period_reward_pool.bytes", make_empty_table_bytes());
-  resource.set_file("rank_rule.bytes", make_empty_table_bytes());
-  resource.set_file("UeSource_Inventory.bytes", make_empty_table_bytes());
 }
 
 int32_t get_mail_max_count_by_fake_key(int32_t fake_key) {
@@ -71,7 +61,7 @@ CASE_TEST(server_frame_unit_test, resource_provider_parse_index_and_reload) {
   atfw::testing::runtime_options options;
   options.features = {atfw::testing::feature::resource};
   options.setup_callback = [](atfw::testing::runtime &rt) {
-    seed_all_tables(rt.resource(), 123, 11);
+    seed_const_table(rt.resource(), 123, 11);
     rt.resource().set_version("0.0.0.1");
     return 0;
   };
@@ -105,7 +95,7 @@ CASE_TEST(server_frame_unit_test, resource_provider_missing_file_fails_reload) {
   atfw::testing::runtime_options options;
   options.features = {atfw::testing::feature::resource};
   options.setup_callback = [](atfw::testing::runtime &rt) {
-    seed_all_tables(rt.resource(), 456, 44);
+    seed_const_table(rt.resource(), 456, 44);
     rt.resource().set_version("0.0.0.3");
     return 0;
   };
@@ -131,7 +121,7 @@ CASE_TEST(server_frame_unit_test, resource_provider_isolated_between_fixtures) {
     atfw::testing::runtime_options options;
     options.features = {atfw::testing::feature::resource};
     options.setup_callback = [](atfw::testing::runtime &rt) {
-      seed_all_tables(rt.resource(), 789, 77);
+      seed_const_table(rt.resource(), 789, 77);
       rt.resource().set_version("0.0.0.6");
       return 0;
     };
@@ -150,7 +140,7 @@ CASE_TEST(server_frame_unit_test, resource_provider_isolated_between_fixtures) {
     atfw::testing::runtime_options options;
     options.features = {atfw::testing::feature::resource};
     options.setup_callback = [](atfw::testing::runtime &rt) {
-      seed_all_tables(rt.resource(), 789, 88);
+      seed_const_table(rt.resource(), 789, 88);
       rt.resource().set_version("0.0.1.0");
       return 0;
     };

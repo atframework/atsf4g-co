@@ -82,13 +82,6 @@ constexpr uint32_t kTestChannelType = 0;
 // used by cases that exercise the real DB save/load path.
 constexpr uint32_t kTestDbBackedChannelType = 1;
 
-// Build an empty xresloader datablocks table (mandatory tables with no rows).
-inline std::string make_empty_table_bytes() {
-  org::xresloader::pb::xresloader_datablocks blocks;
-  blocks.mutable_header()->set_hash_code("rpc-unit-test");
-  return blocks.SerializeAsString();
-}
-
 // Append one dtmq_channel_type row to blocks. memory_only controls whether writable_init hits
 // the DB or short-circuits to upgrade_to_writable(). readonly_replicate_count drives the replica slots.
 inline void add_dtmq_channel_type_row(org::xresloader::pb::xresloader_datablocks& blocks, uint32_t channel_type,
@@ -121,19 +114,14 @@ inline std::string make_dtmq_channel_type_bytes(uint32_t channel_type, bool memo
   return blocks.SerializeAsString();
 }
 
-// Seed all mandatory excel tables so reload_all() succeeds; dtmq_channel_type is populated with one row.
-// memory_only controls whether the test channel_type is memory-only (skips DB load) or DB-backed.
+// Override dtmq_channel_type with the test rows; every other table comes from the mock's automatic
+// snapshot of the real generated bindir (see mock_resource::bind()), so excel table set changes never
+// require touching this fixture. memory_only controls whether the test channel_type is memory-only
+// (skips DB load) or DB-backed.
 inline void seed_resource_tables(atframework::testing::mock_resource& resource, uint32_t channel_type, bool memory_only,
                                  uint32_t readonly_replicate_count) {
-  resource.set_file("const.bytes", make_empty_table_bytes());
   resource.set_file("dtmq_channel_type.bytes",
                     make_dtmq_channel_type_bytes(channel_type, memory_only, readonly_replicate_count));
-  resource.set_file("item_type.bytes", make_empty_table_bytes());
-  resource.set_file("orbit_client_template.bytes", make_empty_table_bytes());
-  resource.set_file("rank_define.bytes", make_empty_table_bytes());
-  resource.set_file("rank_period_reward_pool.bytes", make_empty_table_bytes());
-  resource.set_file("rank_rule.bytes", make_empty_table_bytes());
-  resource.set_file("UeSource_Inventory.bytes", make_empty_table_bytes());
 }
 
 // Inject a single dtmq-proxysvr discovery node and replay it into the common-module discovery index.

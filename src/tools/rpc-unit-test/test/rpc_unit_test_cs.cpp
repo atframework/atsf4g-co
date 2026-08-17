@@ -59,7 +59,7 @@ CASE_TEST(rpc_unit_test, cs_session_lifecycle_and_unknown_rpc_error_response) {
   CASE_EXPECT_TRUE(session_exists(kGatewayNodeId, kSessionId));
 
   // Posting an unregistered RPC produces a downstream error response through the real send path.
-  atframework::CSMsg request;
+  atfw::CSMsg request;
   request.mutable_head()->mutable_rpc_request()->set_rpc_name("unit_test.unknown_rpc");
   request.mutable_head()->set_client_sequence(7);
   int32_t res = client.post(request);
@@ -75,7 +75,7 @@ CASE_TEST(rpc_unit_test, cs_session_lifecycle_and_unknown_rpc_error_response) {
   CASE_EXPECT_TRUE(nullptr != record);
   if (nullptr != record) {
     CASE_EXPECT_EQ(static_cast<int>(kSessionId), static_cast<int>(record->session_id));
-    atframework::CSMsg response;
+    atfw::CSMsg response;
     CASE_EXPECT_TRUE(response.ParseFromString(record->message.body().post().content()));
     CASE_EXPECT_TRUE(response.head().error_code() < 0);
     CASE_EXPECT_EQ(7, static_cast<int>(response.head().client_sequence()));
@@ -187,7 +187,7 @@ CASE_TEST(rpc_unit_test, cs_send_error_injection_and_session_not_found_kickoff) 
 
   // Posting without a session triggers the real session-not-found kickoff.
   auto client = test.cs().create_client(kGatewayNodeId, kSessionId);
-  atframework::CSMsg request;
+  atfw::CSMsg request;
   request.mutable_head()->mutable_rpc_request()->set_rpc_name("unit_test.unknown_rpc");
   int32_t res = client.post(request);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, res);

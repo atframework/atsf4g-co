@@ -41,28 +41,7 @@
 #include "rpc/rpc_async_invoke.h"
 #include "rpc/rpc_context.h"
 
-#if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
-namespace {
-// Mirror the deployment bindir layout (install/cloud-native/charts/libapp/templates/_atapp.logic.yaml.tpl):
-// class-filtered tables live in the ServerOnly/ and Both/ sub-directories, which take precedence over the
-// root directory (e.g. orbit_client_template.bytes is generated into Both/).
-std::vector<std::string> rpc_unit_test_get_excel_resource_bindirs() {
-  std::vector<std::string> ret;
-  const std::string root_dir = RPC_UNIT_TEST_EXCEL_RESOURCE_DIR;
-  for (const char* sub_dir : {"ServerOnly", "Both", ""}) {
-    std::string dir = root_dir;
-    if (sub_dir[0] != '\0') {
-      dir += "/";
-      dir += sub_dir;
-    }
-    if (atfw::util::file_system::is_exist(dir.c_str())) {
-      ret.push_back(std::move(dir));
-    }
-  }
-  return ret;
-}
-}  // namespace
-#endif
+#include "detail/excel_resource_dirs.h"
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 namespace {
@@ -77,16 +56,16 @@ namespace {
 // NOTE: CASE_TEST_EVENT_ON_START is not usable here because its empty __VA_ARGS__ expansion does not
 // compile under /Zc:preprocessor, so the same registration is done directly.
 void rpc_unit_test_event_on_start_excel_config_loader() {
-#if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
-  auto bindirs = rpc_unit_test_get_excel_resource_bindirs();
+#  if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
+  auto bindirs = atfw::testing::detail::get_excel_resource_bindirs();
   if (!bindirs.empty()) {
-    auto* excel_cfg = logic_config::me()->mutable_logic_cfg()->mutable_excel();
+    auto *excel_cfg = logic_config::me()->mutable_logic_cfg()->mutable_excel();
     excel_cfg->set_enable(true);
-    for (const auto& dir : bindirs) {
+    for (const auto &dir : bindirs) {
       excel_cfg->add_bindir(dir);
     }
   }
-#endif
+#  endif
   excel_config_wrapper_reload_all(true);
 }
 
@@ -168,10 +147,10 @@ static bool runtime_generate_config(const atfw::testing::runtime_options &option
   // layout) so lazily loaded tables resolve from the generated resource tree without requiring
   // feature::resource (mock provider) injection.
   {
-    auto bindirs = rpc_unit_test_get_excel_resource_bindirs();
+    auto bindirs = atfw::testing::detail::get_excel_resource_bindirs();
     if (!bindirs.empty()) {
       ss << "    bindir:\n";
-      for (const auto& dir : bindirs) {
+      for (const auto &dir : bindirs) {
         ss << "      - \"" << dir << "\"\n";
       }
     }

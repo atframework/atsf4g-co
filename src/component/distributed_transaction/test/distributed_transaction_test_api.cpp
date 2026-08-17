@@ -856,3 +856,257 @@ CASE_TEST(component_distributed_transaction_api, replication_counts_only_valid_s
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ replication: query merges replica fields (4.1 query row) ============
+
+CASE_TEST(component_distributed_transaction_api, query_transaction_replication_merge) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002, 0x1B0003}));
+
+  transaction_metadata replication_metadata;
+  replication_metadata.set_transaction_uuid("api-replication-query-1");
+  replication_metadata.set_replicate_read_count(2);
+  replication_metadata.add_replicate_node_server_id(0x1B0001);
+  replication_metadata.add_replicate_node_server_id(0x1B0002);
+  replication_metadata.add_replicate_node_server_id(0x1B0003);
+
+  // node1: business error; node2: PREPARED with a finish timepoint and participator pa;
+  // node3: COMMITED with transaction data. Two valid responses satisfy R=2 and the fields merge.
+  atfw::testing::ss_rule_options error_options;
+  error_options.match_node_id = 0x1B0001;
+  auto error_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_query(),
+                                         PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, error_options);
+  atfw::testing::ss_rule_options node2_options;
+  node2_options.match_node_id = 0x1B0002;
+  auto node2_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(),
+      SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view& request,
+         google::protobuf::Message& response) -> rpc::result_code_type {
+        auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
+        auto* storage = typed_response.mutable_storage();
+        storage->mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
+        storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+        storage->mutable_metadata()->mutable_finish_timepoint()->set_seconds(123);
+        auto& participator = (*storage->mutable_participators())["pa"];
+        participator.set_participator_key("pa");
+        participator.set_participator_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+        RPC_RETURN_CODE(0);
+      },
+      node2_options);
+  atfw::testing::ss_rule_options node3_options;
+  node3_options.match_node_id = 0x1B0003;
+  auto node3_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(),
+      SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view& request,
+         google::protobuf::Message& response) -> rpc::result_code_type {
+        auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
+        auto* storage = typed_response.mutable_storage();
+        storage->mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
+        storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        atfw::distributed_system::transaction_participator_failure_reason sample_data;
+        ATFW_EXPLICIT_UNUSED_ATTR bool packed = storage->mutable_transaction_data()->PackFrom(sample_data);
+        RPC_RETURN_CODE(0);
+      },
+      node3_options);
+  CASE_EXPECT_TRUE(!!error_rule && !!node2_rule && !!node3_rule);
+
+  auto task = test.run_task("api_query_replication_merge", std::chrono::seconds{6},
+                            [&replication_metadata](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage output;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, replication_metadata, output));
+    CASE_EXPECT_EQ(0, res);
+    // Merged replica fields: the later terminal wins, node2's finish timepoint is adopted and
+    // node3's transaction data lands in the same output.
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, output.metadata().status());
+    CASE_EXPECT_EQ(123, output.metadata().finish_timepoint().seconds());
+    CASE_EXPECT_EQ(1, output.participators().size());
+    CASE_EXPECT_TRUE(output.has_transaction_data());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{12});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(3, test.ss().calls(rpc::transaction::packer::get_full_name_of_query()));
+
+  // Conflicting replica terminals (REJECTED vs COMMITED) still merge deterministically to the
+  // later one (COMMITED) without returning an error.
+  node2_rule.reset();
+  atfw::testing::ss_rule_options node2_rejected_options;
+  node2_rejected_options.match_node_id = 0x1B0002;
+  auto node2_rejected_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(),
+      SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view& request,
+         google::protobuf::Message& response) -> rpc::result_code_type {
+        auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
+        auto* storage = typed_response.mutable_storage();
+        storage->mutable_metadata()->set_transaction_uuid(typed_request.metadata().transaction_uuid());
+        storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        storage->mutable_metadata()->mutable_finish_timepoint()->set_seconds(456);
+        RPC_RETURN_CODE(0);
+      },
+      node2_rejected_options);
+  CASE_EXPECT_TRUE(!!node2_rejected_rule);
+
+  auto conflict_task = test.run_task("api_query_replication_conflict", std::chrono::seconds{6},
+                                     [&replication_metadata](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage output;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, replication_metadata, output));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED, output.metadata().status());
+    CASE_EXPECT_EQ(456, output.metadata().finish_timepoint().seconds());
+    RPC_RETURN_CODE(0);
+  });
+  auto conflict_result = test.wait(conflict_task, std::chrono::seconds{12});
+  CASE_EXPECT_TRUE(conflict_result.task_exited);
+  CASE_EXPECT_EQ(0, conflict_result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ participator terminal RPC error paths (4.1 rows) ============
+
+CASE_TEST(component_distributed_transaction_api, participator_terminal_error_paths) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  transaction_metadata metadata;
+  metadata.set_transaction_uuid("api-participator-errors-1");
+  metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
+
+  // notfound propagates as-is for both directions.
+  auto notfound_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_commit_participator(),
+                                            PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  CASE_EXPECT_TRUE(!!notfound_rule);
+  auto task = test.run_task("api_participator_notfound", std::chrono::seconds{4},
+                            [&metadata](rpc::context& ctx) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND,
+                   RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_participator(ctx, "pa", metadata)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // OLD_VERSION is a single call for both participant directions (no internal retry).
+  notfound_rule.reset();
+  auto commit_conflict = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_commit_participator(),
+                                              PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION);
+  auto reject_conflict = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_reject_participator(),
+                                              PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION);
+  CASE_EXPECT_TRUE(!!commit_conflict && !!reject_conflict);
+  auto conflict_task = test.run_task("api_participator_conflicts", std::chrono::seconds{4},
+                                     [&metadata](rpc::context& ctx) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION,
+                   RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_participator(ctx, "pa", metadata)));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION,
+                   RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_participator(ctx, "pa", metadata)));
+    RPC_RETURN_CODE(0);
+  });
+  auto conflict_result = test.wait(conflict_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(conflict_result.task_exited);
+  CASE_EXPECT_EQ(0, conflict_result.result_code);
+  CASE_EXPECT_EQ(2, test.ss().calls(rpc::transaction::packer::get_full_name_of_commit_participator()));
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject_participator()));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ remove_no_wait: replication fans out to every replica (4.1 row) ============
+
+CASE_TEST(component_distributed_transaction_api, remove_no_wait_replication_fanout) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002, 0x1B0003}));
+
+  auto task = test.run_task("api_remove_nowait_replication", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("api-remove-nowait-replication-1");
+    metadata.set_replicate_read_count(2);
+    metadata.add_replicate_node_server_id(0x1B0001);
+    metadata.add_replicate_node_server_id(0x1B0002);
+    metadata.add_replicate_node_server_id(0x1B0003);
+    // Unmatched one-way sends are recorded and dropped with success.
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::transaction_api::remove_transaction_no_wait(ctx, metadata)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  for (int i = 0; i < 4; ++i) {
+    test.pump_once();
+  }
+  // The one-way remove is sent to every replica (N=3), not only R=2 of them.
+  CASE_EXPECT_EQ(3, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ commit reports the persisted terminal, never the requested direction ============
+
+CASE_TEST(component_distributed_transaction_api, commit_reports_persisted_terminal) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  // The coordinator already decided REJECTED: the commit response carries the persisted terminal
+  // and the merged inout must not look commit-confirmed to the caller.
+  auto rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_commit(),
+      SSDistributeTransactionCommitReq::descriptor()->full_name(),
+      SSDistributeTransactionCommitRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view& request,
+         google::protobuf::Message& response) -> rpc::result_code_type {
+        auto& typed_request = static_cast<const SSDistributeTransactionCommitReq&>(request.body);
+        auto& typed_response = static_cast<SSDistributeTransactionCommitRsp&>(response);
+        protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
+        typed_response.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!rule);
+
+  auto task = test.run_task("api_commit_persisted_terminal", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("api-commit-persisted-1");
+    metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(ctx, metadata));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED, metadata.status());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

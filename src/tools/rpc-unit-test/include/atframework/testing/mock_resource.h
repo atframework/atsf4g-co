@@ -28,9 +28,11 @@ struct ATFW_UTIL_SYMBOL_VISIBLE resource_access_record {
 };
 
 // In-memory resource provider bound to the excel_config_wrapper scoped provider seam. It supplies
-// path -> bytes and one version string, never touches the filesystem, and keeps an access history.
-// The real generated config manager still parses the bytes and builds indexes; this class never
-// bypasses the real load/reload path.
+// path -> bytes and one version string and keeps an access history. bind() seeds a snapshot of the real
+// generated excel tables (when RPC_UNIT_TEST_EXCEL_RESOURCE_DIR is available) so fixtures only override
+// the tables they care about via set_file()/remove_file(); adding or removing generated tables never
+// requires touching existing tests. The real generated config manager still parses the bytes and builds
+// indexes; this class never bypasses the real load/reload path.
 class RPC_UNIT_TEST_API mock_resource {
  public:
   mock_resource();

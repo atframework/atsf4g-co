@@ -54,12 +54,11 @@ target_compile_definitions(${PROJECT_NAME}-rpc-unit-test PRIVATE RPC_UNIT_TEST_N
 target_compile_definitions(${PROJECT_NAME}-rpc-unit-test
                            PRIVATE "RPC_UNIT_TEST_DEFAULT_WORKDIR=\"${CMAKE_BINARY_DIR}/rpc-unit-test-workdir\"")
 # Real excel resource directory so the excel config manager (lazy default file loader) reads the actual generated tables
-# instead of requiring mock resource injection. Empty when the resource pipeline did not produce the directory yet (the
-# runtime simply skips the bindir entry then).
-if(EXISTS "${PROJECT_INSTALL_RES_DIR}/excel")
-  target_compile_definitions(${PROJECT_NAME}-rpc-unit-test
-                             PRIVATE "RPC_UNIT_TEST_EXCEL_RESOURCE_DIR=\"${PROJECT_INSTALL_RES_DIR}/excel\"")
-endif()
+# instead of requiring mock resource injection, and so mock_resource can seed a snapshot of the real tables at bind().
+# Defined unconditionally: the runtime checks directory existence and simply skips missing entries when the resource
+# pipeline has not produced the directory yet.
+target_compile_definitions(${PROJECT_NAME}-rpc-unit-test
+                           PRIVATE "RPC_UNIT_TEST_EXCEL_RESOURCE_DIR=\"${PROJECT_INSTALL_RES_DIR}/excel\"")
 target_compile_options(${PROJECT_NAME}-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
 if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
   target_link_options(${PROJECT_NAME}-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})

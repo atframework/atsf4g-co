@@ -845,3 +845,125 @@ CASE_TEST(component_distributed_transaction_client, submit_guards_and_create_cas
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ create failure rolls the status back (4.2 submit row) ============
+
+CASE_TEST(component_distributed_transaction_client, create_failure_rolls_back_status) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int create_calls = 0;
+  auto create_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
+                                          PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+  CASE_EXPECT_TRUE(!!create_rule);
+  create_rule.reset();
+  auto counting_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_create(),
+      SSDistributeTransactionCreateReq::descriptor()->full_name(),
+      SSDistributeTransactionCreateRsp::descriptor()->full_name(),
+      [&create_calls](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        ++create_calls;
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+      });
+  CASE_EXPECT_TRUE(!!counting_rule);
+
+  client_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+
+  auto task = test.run_task("client_create_failure", std::chrono::seconds{6}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_client_handle::storage_ptr_type storage;
+    transaction_client_handle::transaction_options client_options;
+    client_options.resolve_retry_interval = std::chrono::milliseconds{10};
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage, client_options)));
+
+    sample_data_type sample_data;
+    CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+    std::unordered_set<std::string> prepared;
+    std::unordered_set<std::string> failed;
+    int32_t res = RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed));
+    // A generic create error (not OLD_VERSION/KEY_EXISTS) is not retried.
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, res);
+    // The PREPARED status set at submit entry is rolled back so the storage stays reusable.
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED, storage->metadata().status());
+    CASE_EXPECT_TRUE(prepared.empty());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{12});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(1, create_calls);  // generic errors break the retry loop immediately
+  CASE_EXPECT_TRUE(recorder.events.empty());  // no participant was ever contacted
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ DT-014 symmetric: REJECTED decision with failing reject notifications ============
+
+CASE_TEST(component_distributed_transaction_client, rejected_delivery_failure_is_bounded_dt014_symmetric) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  // The coordinator answers commit with the already-persisted REJECTED terminal: the client must
+  // follow that direction and only send reject notifications.
+  coordinator_mock_state coord_state;
+  coord_state.terminal = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+  auto create_rule = register_coordinator_create_mock(test);
+  auto commit_rule = register_coordinator_commit_mock(test, coord_state);
+  auto reject_rule = register_coordinator_reject_mock(test, coord_state);
+  CASE_EXPECT_TRUE(!!create_rule && !!commit_rule && !!reject_rule);
+
+  client_event_recorder recorder;
+  recorder.reject_scripts["pa"] = {-1, -1, -1, -1, -1, -1, -1, -1};
+  recorder.reject_scripts["pb"] = {-1, -1, -1, -1, -1, -1, -1, -1};
+  auto vtable = recorder.make_vtable();
+  auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+
+  auto task = test.run_task("client_rejected_delivery_failure", std::chrono::seconds{8}, [&client](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_client_handle::storage_ptr_type storage;
+    transaction_client_handle::transaction_options client_options;
+    client_options.resolve_retry_interval = std::chrono::milliseconds{10};
+    client_options.resolve_max_times = 3;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage, client_options)));
+
+    sample_data_type sample_data;
+    CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+    CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pb", sample_data));
+
+    std::unordered_set<std::string> prepared;
+    std::unordered_set<std::string> failed;
+    int32_t res = RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed));
+    // The coordinator rejected although every participant prepared.
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED, res);
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   storage->metadata().status());
+    CASE_EXPECT_EQ(2, prepared.size());
+    // Delivery failures never enter output_failed_participators.
+    CASE_EXPECT_TRUE(failed.empty());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{16});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // Both participants were notified in the reject direction exactly 3 times (resolve_max_times).
+  CASE_EXPECT_TRUE(dt_test::expect_event_multiset(recorder.events,
+                                                  {"prepare:pa", "prepare:pb", "reject:pa", "reject:pa", "reject:pa",
+                                                   "reject:pb", "reject:pb", "reject:pb"}));
+  CASE_EXPECT_TRUE(dt_test::expect_all_before(recorder.events, "prepare:", "reject:"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

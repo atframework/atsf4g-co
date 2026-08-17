@@ -171,7 +171,8 @@ SS handler 返回 `rpc::result_code_type`，可以是协程并用 `RPC_AWAIT_COD
   （号段缓存跨 case 延续，不要断言绝对 id 值）；`generate_standard_uuid*`/`generate_short_uuid` 是纯本地函数、
   无需 mock。`feature::uuid` 当前不做额外 runtime 装配。
 - **resource**：`test.resource()` 提供 path→bytes/version/version_error 内存 loader，`reload()` 驱动真实
-  manager 完整 reload/index。
+  manager 完整 reload/index。`bind()` 时自动快照真实生成的 excel bindir 全部 `*.bytes`，测试只需用
+  `set_file()` 覆盖自己关心的表、`remove_file()` 制造缺失；excel 表集合新增/删除都不需要改动既有测试。
 - **CS**：`test.cs()` / `mock_client` 模拟 gateway 客户端（add/post/remove/set-router-rsp），上行走真实
   dispatch/action，下行 data/kick/set-router/broadcast 全部可捕获，无 atbus。
 - **raw transport**：`test.transport()` 提供 id/name/discovery/consistent-hash/random/round-robin/metadata/

@@ -147,7 +147,7 @@ int32_t mock_client::add(gsl::string_view client_ip, uint32_t client_port) const
   return dispatch_message(msg);
 }
 
-int32_t mock_client::post(const atframework::CSMsg &cs_msg) const {
+int32_t mock_client::post(const atfw::CSMsg &cs_msg) const {
   std::string content;
   if (!cs_msg.SerializeToString(&content)) {
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;

@@ -64,6 +64,9 @@ void setup_dtcoordsvr_config_loader() {
       [](atfw::atapp::app& app_, logic_config&, logic_config::server_instance_config_ptr& to) {
         auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
         config_ptr->set_lru_max_cache_count(2);
+        // 2s so manager_tick_evicts_by_duration can wait it out; every other case touches its
+        // entries well within the window.
+        config_ptr->mutable_lru_expired_duration()->set_seconds(2);
         app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
         to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
       });
@@ -829,6 +832,275 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_envelope) {
     }
   }
   CASE_EXPECT_TRUE(has_unknown_response);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 5.1.7 reverse race: reject first, then commit keeps REJECTED ============
+
+CASE_TEST(component_dtcoordsvr, manager_reverse_reject_then_commit) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto task = test.run_task("reverse_race", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-reverse-1", {"pa"});
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-reverse-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(ctx, trans)));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   trans->data_object.metadata().status());
+
+    // The late commit cannot flip the persisted REJECTED terminal.
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans)));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   trans->data_object.metadata().status());
+
+    table_type record;
+    uint64_t version = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-reverse-1", record, version)));
+    transaction_blob_storage reloaded;
+    CASE_EXPECT_TRUE(record.blob_data().UnpackTo(&reloaded));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   reloaded.metadata().status());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ DT-018 extension: repeated acks and acks after the global terminal ============
+
+CASE_TEST(component_dtcoordsvr, participator_ack_repeated_and_after_global_terminal_dt018) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto task = test.run_task("ack_repeated_and_late", std::chrono::seconds{10},
+                            [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-ack-late-1", {"pa", "pb"});
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-ack-late-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+
+    // First ack stores pa COMMITED.
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
+    table_type record_after_first;
+    uint64_t version_after_first = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", record_after_first, version_after_first)));
+
+    // The repeated ack is an idempotent success and does not write again.
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
+    table_type record_after_repeat;
+    uint64_t version_after_repeat = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", record_after_repeat, version_after_repeat)));
+    CASE_EXPECT_EQ(version_after_first, version_after_repeat);
+
+    // Global commit after a partial participant ack.
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans)));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   trans->data_object.metadata().status());
+
+    // A reject ack arriving after the global terminal may still advance pb's own (non-terminal)
+    // status, but the global status stays COMMITED and the mixed-direction record is kept.
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(ctx, trans, "pb")));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   (*trans->data_object.mutable_participators())["pb"].participator_status());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   trans->data_object.metadata().status());
+
+    table_type kept_record;
+    uint64_t kept_version = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ack-late-1", kept_record, kept_version)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ mutable: a wrong blob type unpacks to an error (4.4 mutable row) ============
+
+CASE_TEST(component_dtcoordsvr, mutable_transaction_bad_any_unpack) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto task = test.run_task("bad_any", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+    // Seed a record whose blob is a valid protobuf message of the wrong type.
+    rpc::shared_message<table_type> db_data{ctx};
+    db_data->set_zone_id(kTestZoneId);
+    db_data->set_transaction_uuid("mgr-bad-any-1");
+    atfw::distributed_system::config::dtcoordsvr_cfg wrong_payload;
+    CASE_EXPECT_TRUE(db_data->mutable_blob_data()->PackFrom(wrong_payload));
+    uint64_t version = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(ctx, db_data, version)));
+
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-bad-any-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_FALSE(!!trans);
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 4.4 tick: duration-based eviction reloads from the DB ============
+
+CASE_TEST(component_dtcoordsvr, manager_tick_evicts_by_duration) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto task = test.run_task("duration_eviction_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-duration-1", {"pa"});
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-duration-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // Burn past lru_expired_duration (2s in the test loader) while keeping the loop pumping.
+  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{2300}));
+  int evicted = transaction_manager::me()->tick();
+  CASE_EXPECT_GE(evicted, 1);
+
+  auto reload_task = test.run_task("duration_eviction_reload", std::chrono::seconds{10},
+                                   [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-duration-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+    CASE_EXPECT_EQ("mgr-duration-1", trans->data_object.metadata().transaction_uuid());
+    CASE_EXPECT_EQ(1, trans->data_version);  // reloaded from the DB, same CAS version
+    RPC_RETURN_CODE(0);
+  });
+  auto reload_result = test.wait(reload_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(reload_result.task_exited);
+  CASE_EXPECT_EQ(0, reload_result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ raw dispatcher: malformed body and wrong type URL are rejected ============
+
+CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_malformed_payloads) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto sender = test.discovery().add_node(dt_test::make_coordinator_node(0x1300F2, 1));
+  CASE_EXPECT_TRUE(!!sender);
+  if (!sender) {
+    test.stop();
+    return;
+  }
+
+  auto inject_raw = [&test, &sender](gsl::string_view rpc_name, gsl::string_view type_url,
+                                     const std::string& body, uint64_t sequence) {
+    atframework::SSMsg msg;
+    auto* head = msg.mutable_head();
+    head->set_node_id(0x1300F2);
+    head->set_node_name("unit-test-raw-malformed");
+    head->set_source_task_id(89);
+    head->set_sequence(sequence);
+    auto* rpc_request = head->mutable_rpc_request();
+    rpc_request->set_rpc_name(rpc_name.data(), rpc_name.size());
+    rpc_request->set_type_url(type_url.data(), type_url.size());
+    msg.mutable_body_bin()->assign(body);
+    std::string payload;
+    CASE_EXPECT_TRUE(msg.SerializeToString(&payload));
+    CASE_EXPECT_EQ(0, test.transport().inject_inbound(
+                          sender, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
+                          gsl::span<const unsigned char>{reinterpret_cast<const unsigned char*>(payload.data()),
+                                                         payload.size()},
+                          sequence));
+    for (int i = 0; i < 6; ++i) {
+      test.pump_once();
+    }
+  };
+
+  // Unparsable body bytes under the correct type URL.
+  inject_raw(rpc::transaction::packer::get_full_name_of_query(),
+             atfw::distributed_system::SSDistributeTransactionQueryReq::descriptor()->full_name(),
+             std::string{"\xff\xff\xff\xff"}, 2101);
+  // A well-formed body advertised with the wrong type URL.
+  atfw::distributed_system::SSDistributeTransactionQueryReq valid_body;
+  valid_body.mutable_metadata()->set_transaction_uuid("raw-wrong-type");
+  inject_raw(rpc::transaction::packer::get_full_name_of_query(),
+             atfw::distributed_system::SSDistributeTransactionCommitReq::descriptor()->full_name(),
+             valid_body.SerializeAsString(), 2102);
+
+  for (uint64_t sequence = 2101; sequence <= 2102; ++sequence) {
+    const atfw::testing::outbound_message* response_record = nullptr;
+    for (size_t i = 0; i < test.transport().outbound_count(); ++i) {
+      const atfw::testing::outbound_message* record = test.transport().outbound_at(i);
+      if (record != nullptr && record->target_node_id == 0x1300F2 && record->sequence == sequence) {
+        response_record = record;
+      }
+    }
+    CASE_EXPECT_TRUE(response_record != nullptr);
+    if (response_record != nullptr) {
+      atframework::SSMsg response_msg;
+      CASE_EXPECT_TRUE(response_msg.ParseFromArray(response_record->payload.data(),
+                                                   static_cast<int>(response_record->payload.size())));
+      CASE_EXPECT_NE(0, response_msg.head().error_code());
+    }
+  }
 
   CASE_EXPECT_EQ(0, test.stop());
 }

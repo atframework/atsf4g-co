@@ -105,7 +105,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type invo
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  atframework::SSMsg input_message;
+  atfw::SSMsg input_message;
   auto* head = input_message.mutable_head();
   head->set_node_id(options.source.node_id);
   head->set_node_name(options.source.node_name);
@@ -124,7 +124,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE rpc::result_code_type invo
   }
 
   // unpacked_message must stay in this coroutine frame until the nested action exits because raw_message points to it.
-  atframework::SSMsg unpacked_message;
+  atfw::SSMsg unpacked_message;
   dispatcher_raw_message raw_message = dispatcher_make_default<dispatcher_raw_message>();
   int32_t result = ss_msg_dispatcher::me()->unpack_protobuf_msg(unpacked_message, raw_message,
                                                                 serialized_message.data(), serialized_message.size());

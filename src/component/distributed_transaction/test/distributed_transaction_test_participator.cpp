@@ -1254,3 +1254,200 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ check_prepare errors propagate without entering running (4.3 prepare row) ============
+
+CASE_TEST(component_distributed_transaction_participator, check_prepare_error_propagates) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  participator_event_recorder recorder;
+  recorder.check_prepare_script = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("check_prepare_error", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-check-error");
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    int32_t res = RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, res);
+    CASE_EXPECT_FALSE(!!output);
+    CASE_EXPECT_FALSE(response.reason().allow_retry());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // A definitive check_prepare error leaves no state behind and starts no lifecycle.
+  CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+  CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+  CASE_EXPECT_EQ(1, recorder.count("check_prepare"));
+  CASE_EXPECT_EQ(0, recorder.count("on_start_running"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 5.3.1: coordinator REJECTED drives the local reject direction ============
+
+CASE_TEST(component_distributed_transaction_participator, resolve_query_rejected_runs_reject_direction) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  int reject_ack_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED, &query_calls);
+  auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
+  CASE_EXPECT_TRUE(!!query_rule && !!reject_ack_rule);
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("resolve_rejected_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-resolve-reject", 2, std::chrono::milliseconds{20});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle, &reject_ack_calls]() {
+    return reject_ack_calls >= 1 && handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
+  }));
+  CASE_EXPECT_GE(query_calls, 1);
+  CASE_EXPECT_GE(reject_ack_calls, 1);
+  // The reject direction never runs do_event and fires the reject lifecycle.
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  CASE_EXPECT_GE(recorder.count("on_rejected"), 1);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 5.3.2 prelude: PREPARED answers only requeue the timer ============
+
+CASE_TEST(component_distributed_transaction_participator, resolve_query_prepared_only_requeues) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED, &query_calls);
+  CASE_EXPECT_TRUE(!!query_rule);
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("resolve_prepared_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    // resolve_max_times = 2: two PREPARED queries requeue the timer, the third entry exceeds the
+    // budget and goes straight to the local reject without another query.
+    auto request = make_prepare_request("part-uuid-resolve-prepared", 2, std::chrono::milliseconds{20});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle]() {
+    return handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
+  }));
+  // Exactly resolve_max_times queries happened; every PREPARED answer only requeued the timer, so
+  // no business action ran before the budget-exceeded local reject.
+  CASE_EXPECT_EQ(2, query_calls);
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  CASE_EXPECT_GE(recorder.count("on_rejected"), 1);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ check_lock with multiple and duplicate resources (4.3 row) ============
+
+CASE_TEST(component_distributed_transaction_participator, check_lock_multiple_and_duplicate_resources) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("check_lock_multi", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-holder-multi", 2, std::chrono::milliseconds{60000}, {"res-1", "res-2"});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    set_prepare_timepoint(*handle, "part-uuid-holder-multi", 1000, 0);
+
+    // A younger foreign transaction gets preempted by the older holder of res-1/res-2.
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("part-uuid-younger-multi");
+    metadata.mutable_prepare_timepoint()->set_seconds(2000);
+    metadata.set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+    std::list<handle_type::storage_const_ptr_type> preemption;
+
+    // Mixed held/free resources: only the actually held one is reported, once per mention.
+    std::vector<std::string> mixed = {"res-1", "res-free"};
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                   handle->check_lock(metadata, mixed, preemption));
+    CASE_EXPECT_EQ(1, preemption.size());
+
+    // Duplicate held resources are reported once per mention.
+    std::vector<std::string> duplicated = {"res-1", "res-1"};
+    preemption.clear();
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                   handle->check_lock(metadata, duplicated, preemption));
+    CASE_EXPECT_EQ(2, preemption.size());
+
+    // Multiple free resources succeed with an empty list.
+    std::vector<std::string> free_resources = {"res-free", "res-free-2"};
+    preemption.clear();
+    CASE_EXPECT_EQ(0, handle->check_lock(metadata, free_resources, preemption));
+    CASE_EXPECT_TRUE(preemption.empty());
+
+    // The holder itself reentering across multiple held resources succeeds.
+    transaction_metadata own_metadata;
+    own_metadata.set_transaction_uuid("part-uuid-holder-multi");
+    own_metadata.mutable_prepare_timepoint()->set_seconds(1000);
+    std::vector<std::string> own = {"res-1", "res-2"};
+    preemption.clear();
+    CASE_EXPECT_EQ(0, handle->check_lock(own_metadata, own, preemption));
+    CASE_EXPECT_TRUE(preemption.empty());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

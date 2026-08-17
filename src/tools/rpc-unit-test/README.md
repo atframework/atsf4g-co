@@ -225,7 +225,9 @@ handler 首参 `rpc::context &`（可等待嵌套 RPC），末参统一为可扩
   `generate_short_uuid` 是纯本地函数，不触网、无需 mock。`feature::uuid` 当前不做额外 runtime 装配，
   仅作为 feature 标签保留。
 - resource：`test.resource()` 提供 path→bytes/version/version_error 内存 loader，`reload()` 驱动真实
-  manager 完整 reload/index 流程。
+  manager 完整 reload/index 流程。`bind()` 时自动快照真实生成的 excel bindir 全部 `*.bytes`
+  （`RPC_UNIT_TEST_EXCEL_RESOURCE_DIR` 可用时），测试只需用 `set_file()` 覆盖自己关心的表、
+  `remove_file()` 制造缺失；excel 表集合新增/删除都不需要改动既有测试。
 - CS：`test.cs()` / `mock_client` 模拟 gateway 客户端（add/post/remove/set-router-rsp），上行走真实
   dispatch/action，下行 data/kick/set-router/broadcast 全部可捕获，无 atbus。
 

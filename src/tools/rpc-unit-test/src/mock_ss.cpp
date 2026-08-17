@@ -103,10 +103,10 @@ bool mock_ss::is_active() const noexcept { return nullptr != owner_; }
 
 ss_rule_handle mock_ss::mock_untyped(
     gsl::string_view full_rpc_name,
-    std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &)> handler,
+    std::function<rpc::result_code_type(rpc::context &, const atfw::SSMsg &, atfw::SSMsg &)> handler,
     const ss_rule_options &options) {
-  auto invoker = [handler = std::move(handler)](rpc::context &ctx, const atframework::SSMsg &request_msg,
-                                                atframework::SSMsg &response_msg, uint64_t,
+  auto invoker = [handler = std::move(handler)](rpc::context &ctx, const atfw::SSMsg &request_msg,
+                                                atfw::SSMsg &response_msg, uint64_t,
                                                 gsl::string_view) -> rpc::result_code_type {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handler(ctx, request_msg, response_msg)));
   };
@@ -135,7 +135,7 @@ ss_rule_handle mock_ss::mock(
   }
 
   auto invoker = [handler = std::move(handler), request_desc, response_desc](
-                     rpc::context &ctx, const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg,
+                     rpc::context &ctx, const atfw::SSMsg &request_msg, atfw::SSMsg &response_msg,
                      uint64_t target_node_id, gsl::string_view target_node_name) -> rpc::result_code_type {
     const auto *request_proto = google::protobuf::MessageFactory::generated_factory()->GetPrototype(request_desc);
     const auto *response_proto = google::protobuf::MessageFactory::generated_factory()->GetPrototype(response_desc);
@@ -308,7 +308,7 @@ void mock_ss::deliver_pending() {
       continue;
     }
 
-    atframework::SSMsg request_msg;
+    atfw::SSMsg request_msg;
     if (!request_msg.ParseFromArray(record->payload.data(), static_cast<int>(record->payload.size()))) {
       FWLOGERROR("mock_ss failed to parse outbound SSMsg to {:#x}({}), {} bytes", record->target_node_id,
                  record->target_node_name, record->payload.size());
@@ -368,7 +368,7 @@ void mock_ss::deliver_pending() {
             FWLOGERROR("  rule: {} (node: {:#x})", rule->rpc_name, rule->options.match_node_id);
           }
         }
-        atframework::SSMsg response_msg;
+        atfw::SSMsg response_msg;
         inject_response(request_msg, response_msg, PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, record->target_node_id,
                         record->target_node_name, nullptr);
       }
@@ -388,7 +388,7 @@ void mock_ss::deliver_pending() {
     const int32_t forced_error_code = matched_rule->forced_error_code;
     if (0 != forced_error_code || !matched_rule->invoker) {
       if (needs_response) {
-        atframework::SSMsg response_msg;
+        atfw::SSMsg response_msg;
         inject_response(request_msg, response_msg, forced_error_code, record->target_node_id, record->target_node_name,
                         &matched_rule->options);
       }
@@ -403,7 +403,7 @@ void mock_ss::deliver_pending() {
         [this, lifecycle = std::move(lifecycle), matched_rule, request_msg, needs_response,
          target_node_id = record->target_node_id,
          target_node_name = record->target_node_name](rpc::context &ctx) mutable -> rpc::result_code_type {
-          atframework::SSMsg response_msg;
+          atfw::SSMsg response_msg;
           int32_t res = RPC_AWAIT_CODE_RESULT(
               matched_rule->invoker(ctx, request_msg, response_msg, target_node_id, target_node_name));
           if (needs_response && !lifecycle.expired() && is_active()) {
@@ -420,7 +420,7 @@ void mock_ss::deliver_pending() {
       if (needs_response) {
         FWLOGERROR("mock_ss failed to start the handler task for rpc {}, fail with an immediate error response",
                    rpc_name);
-        atframework::SSMsg response_msg;
+        atfw::SSMsg response_msg;
         inject_response(request_msg, response_msg, PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY,
                         record->target_node_id, record->target_node_name, &matched_rule->options);
       }
@@ -461,8 +461,7 @@ void mock_ss::deliver_pending() {
 
 ss_rule_handle mock_ss::mock_typed(
     gsl::string_view full_rpc_name, gsl::string_view request_type_url, gsl::string_view response_type_url,
-    std::function<rpc::result_code_type(rpc::context &, const atframework::SSMsg &, atframework::SSMsg &, uint64_t,
-                                        gsl::string_view)>
+    std::function<rpc::result_code_type(rpc::context &, const atfw::SSMsg &, atfw::SSMsg &, uint64_t, gsl::string_view)>
         invoker,
     const ss_rule_options &options) {
   // Validate "<ServiceFullName>/<MethodName>" against the generated pool.
@@ -511,14 +510,14 @@ ss_rule_handle mock_ss::mock_typed(
   return ss_rule_handle{std::move(rule)};
 }
 
-void mock_ss::inject_response(const atframework::SSMsg &request_msg, atframework::SSMsg &response_msg,
-                              int32_t error_code, uint64_t target_node_id, gsl::string_view target_node_name,
+void mock_ss::inject_response(const atfw::SSMsg &request_msg, atfw::SSMsg &response_msg, int32_t error_code,
+                              uint64_t target_node_id, gsl::string_view target_node_name,
                               const ss_rule_options *options) {
   if (!is_active() || nullptr == transport_) {
     return;
   }
 
-  atframework::SSMsgHead *head = response_msg.mutable_head();
+  atfw::SSMsgHead *head = response_msg.mutable_head();
   if (nullptr == head) {
     return;
   }

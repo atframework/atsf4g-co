@@ -1,5 +1,102 @@
 # 分布式事务单元测试执行计划
 
+## 0. 实施状态记录（2026-08-17，实施完成后回填）
+
+> 本节由实施阶段维护；第 1-9 节保持编制时原样，不做回写。状态分为：✅ 已实施并有 fresh 证据、
+> ⛔ 未实施（含原因）。所有用例名保留 DT-ID，便于与本表对照。
+
+### 0.1 结论
+
+- 第 3 节测试基建全部落地；第 6 节 DT-001..DT-024 全部有独立用例且全绿（其中 3 项先 RED 后修复转绿）。
+- 第 4/5 节覆盖矩阵的主要路径已实施；剩余缺口见 0.5（均标注原因，未把间接覆盖记作已覆盖）。
+- 第 7.2 节 Linux ASan+LSan 门禁与第 8 节真实依赖集成测试未执行（当前仅 Windows 环境）。
+
+### 0.2 测试基建与 fresh 基线
+
+| target | 用例数 | 标签 | 状态 |
+| --- | ---: | --- | --- |
+| `atf4g-co-component-distributed-transaction-api-unit-test` | 19 | fast | ✅ |
+| `atf4g-co-component-distributed-transaction-client-unit-test` | 11 | fast | ✅ |
+| `atf4g-co-component-distributed-transaction-participator-unit-test` | 19 | fast | ✅ |
+| `atf4g-co-component-dtcoordsvr-unit-test` | 10 | fast | ✅ |
+| `atf4g-co-component-dtcoordsvr-stop-unit-test` | 1 | fast | ✅ |
+| `atf4g-co-component-distributed-transaction-stress-unit-test` | 1 | stress | ✅ |
+
+fresh 命令与结果（2026-08-17，Windows Debug / Ninja）：
+
+```
+ctest --test-dir build_jobs_cmake_tools -L distributed-transaction --output-on-failure
+100% tests passed out of 6（61 用例，约 7s）
+```
+
+全仓 `-L rpc-unit-test` 仅余 2 个 `component-dtmq` 失败（`app.init failed with -3`），这两个目录
+无本次改动（git status 干净），为分支存量环境问题，与本组件无关。
+
+环境注意：从 Git Bash 直接构建需先 source VS/SDK 的 `INCLUDE`/`LIB` 环境脚本
+（`build_jobs_cmake_tools/_agent_tmp/build_env.sh`），否则链接 `Bcrypt.lib`、编译标准库头失败。
+
+### 0.3 DT-001..DT-024 回归矩阵状态（全部 ✅）
+
+| ID | 用例（target 前缀省略） |
+| --- | --- |
+| DT-001 | participator.`first_prepare_non_arena_preserves_storage_dt001` |
+| DT-002 | client.`retry_exhaustion_never_fakes_commit_dt002`（RED→修复①→GREEN） |
+| DT-003 | api.`replication_counts_only_valid_success_dt003` |
+| DT-004 | dtcoordsvr.`manager_terminal_and_participator_acks_dt018`（remove 失败段） |
+| DT-005 | participator.`terminal_action_failure_is_bounded_dt005_dt020` |
+| DT-006 | client.`coordinator_terminal_is_only_decision_dt006` |
+| DT-007 | dtcoordsvr.`manager_create_query_ttl_and_eviction`（memory_only 段） |
+| DT-008 | participator.`appended_lock_is_dumped_and_released_dt008` |
+| DT-009 | dtcoordsvr.`manager_create_query_ttl_and_eviction`（TTL 段：35/6/15/30d 钳制） |
+| DT-010 | client.`set_data_and_add_participator_dt010` |
+| DT-011 | participator.`allow_retry_does_not_enter_running_dt011` |
+| DT-012 | api.`initialize_new_transaction_defaults_dt012` + `_custom_options_dt012` + `_replication_nodes` |
+| DT-013 | api.`timestamp_exact_nanosecond_carry_dt013` |
+| DT-014 | client.`terminal_delivery_result_is_separate_and_bounded_dt014` + `_dt014_symmetric`（REJECTED 对称） |
+| DT-015 | participator.`resolve_budget_exhaustion_rejects_dt015` |
+| DT-016 | participator.`finished_ack_failure_has_budget_dt016` |
+| DT-017 | api.`chrono_duration_helper_returns_duration_dt017` |
+| DT-018 | dtcoordsvr.`manager_terminal_and_participator_acks_dt018` + `participator_ack_repeated_and_after_global_terminal_dt018` |
+| DT-019 | dtcoordsvr.`manager_timeout_reject_save_and_cache_invalidation_dt019` |
+| DT-020 | participator.`terminal_action_failure_is_bounded_dt005_dt020`（RED→修复②→GREEN） |
+| DT-021 | participator.`resolve_query_committed_dt005_dt021` |
+| DT-022 | participator.`lock_wound_and_preemption_dt022` |
+| DT-023 | client.`force_commit_does_not_require_commit_callback_dt023` |
+| DT-024 | client.`legacy_constructor_and_layout_compatibility_dt024` |
+
+### 0.4 实施中确认并修复的缺陷（RED→GREEN）
+
+1. `transaction_client_handle::submit_transaction`：入口未检查过期时间，已过期事务仍会 create
+   协调者记录（协调者会把过期记录按默认超时"复活"）。现入口直接返回 `EN_SYS_TIMEOUT`（第 5.2.4 节）。
+2. `transaction_participator_handle::resolve_transcation`：query 阶段合入 COMMITED/REJECTED 时
+   无条件清零 `resolve_times`，timer 驱动的每次重入都拿到全新重试次数，`do_event` 失败重试不收敛
+   （DT-020）。现仅在首次进入本地动作阶段（`local_action_stage_entered`）时重置一次。
+3. `transaction_manager::mutable_transaction`：读取失败（DB 错误 / 记录 Any 类型不符）时
+   `out` 残留指向未填充缓存对象，超时判定把空数据伪造成 REJECTED 并写回 DB，吞掉原始错误且返回成功
+   （新增 dtcoordsvr.`mutable_transaction_bad_any_unpack` 先 RED）。现读取失败时跳过超时判定并清空输出句柄。
+
+### 0.5 未实施项（⛔，含原因）
+
+- §3.1 三类 test-only seam（`make_strong_rc`/task create/start 失败注入、LRU 跨 case 清理）未增加
+  hook：需要 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的注入点，涉及 server_frame 改动，超出本组件范围；
+  对应"分配失败/任务拉起失败/LRU size 读取"路径按计划标注 blocked。
+- 并发类：同一事务 commit/reject 在途方向竞态（inflight 反方向返回 `EN_TRANSACTION_FINISHED`）的并发用例、
+  重复/并发通知的"成功业务动作至多一次"并发断言（5.3.8 后半）：离线夹具内两路协程交错注入不可稳定构造，
+  仅有串行重复用例（幂等）覆盖。
+- api 层 `create`/`commit_participator`/`reject_participator`/`remove` 的 replication quorum 变体：
+  DT-003 已覆盖 commit 与 query 两条 replication 路径（含字段合并、冲突终态收敛、无效响应不计入），
+  其余接口的 fan-out 逻辑同一实现（`invoke_replication_rpc_call`），未逐一复制。
+- 5.1.5 协调者扩缩容 failover、5.1.6 的 R=1/2/3 × 3/3、2/3、1/3 全矩阵：需要多节点路由切换注入，未实施
+  （单节点失效已由 DT-003 的 error/timeout 副本覆盖一部分）。
+- 4.4 中 `await_io_task` 排空断言、stream remove 无回包的 raw 用例：夹具无法在删除路径稳定制造在途 IO/stream 回包路径，未实施。
+- 4.3/4.4 零星边界：`save(null)`、`get_locker` 的 finished/null 边界、tick 的 equal-timepoint 边界与
+  同 UUID timer 替换的直接断言（实现有对应代码路径，无独立用例）。
+- 4.2 中 `PackFrom` 失败分支（`set_transaction_data`/`add_participator`）：proto3 下无法稳定构造打包失败。
+- 4.2 中 prepare 第"中间/最后"个参与者失败的排列：protobuf map 迭代顺序不稳定，无法确定性地构造，
+  已用单参与者失败 + 双参与者全部成功 + 全部失败（DT-002/DT-006/DT-014）覆盖等效语义。
+- §7.2 Linux ASan+LSan 门禁：当前环境为 Windows（MSVC checker 不接受仓库 ASan 分支），未执行。
+- §8 真实依赖集成测试：未开始（按计划在全部离线用例通过后单独安排）。
+
 ## 1. 文档状态与证据边界
 
 - 编制日期：2026-08-14。

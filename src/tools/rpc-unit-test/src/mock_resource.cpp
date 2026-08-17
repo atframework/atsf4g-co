@@ -4,12 +4,51 @@
 
 #include <config/excel_config_wrapper.h>
 
+#include <common/file_system.h>
+
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
+#include "detail/excel_resource_dirs.h"
+
 namespace atframework {
 namespace testing {
+
+#if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
+namespace {
+// Seed the mock with a snapshot of the real generated tables so a fixture only overrides the tables it
+// cares about: adding or removing excel tables never requires touching existing test code. Directories are
+// applied in precedence order and the first one containing a table wins; explicit set_file()/remove_file()
+// calls after bind() always override the snapshot.
+void preload_bindir_snapshot(std::unordered_map<std::string, std::string> &files) {
+  for (const auto &dir : detail::get_excel_resource_bindirs()) {
+    std::error_code ec;
+    std::filesystem::directory_iterator iter(dir, ec);
+    if (ec) {
+      continue;
+    }
+    for (const auto &entry : iter) {
+      std::error_code type_ec;
+      if (!entry.is_regular_file(type_ec) || entry.path().extension() != ".bytes") {
+        continue;
+      }
+      std::string name = entry.path().filename().string();
+      if (files.find(name) != files.end()) {
+        continue;
+      }
+      std::string content;
+      const std::string full_path = entry.path().string();
+      if (atfw::util::file_system::get_file_content(content, full_path.c_str(), true)) {
+        files[std::move(name)] = std::move(content);
+      }
+    }
+  }
+}
+}  // namespace
+#endif
 
 mock_resource::mock_resource() = default;
 mock_resource::~mock_resource() { unbind(); }
@@ -24,6 +63,9 @@ void mock_resource::bind() {
   provider.get_buffer = [this](std::string &out, const char *path) { return on_get_buffer(out, path); };
   provider.get_version = [this](std::string &out) { return on_get_version(out); };
   set_excel_resource_provider_for_unit_test(provider);
+#endif
+#if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
+  preload_bindir_snapshot(files_);
 #endif
 }
 
