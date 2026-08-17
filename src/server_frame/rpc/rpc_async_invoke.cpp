@@ -18,7 +18,9 @@
 
 #include <logic/action/task_action_async_invoke.h>
 
-#include "rpc/rpc_utils.h"
+#include <utility>
+
+#include "rpc/rpc_utils.h"  // IWYU pragma: keep
 
 namespace rpc {
 SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view name,
@@ -33,7 +35,7 @@ SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view
   params.caller_context = &ctx;
   params.callable = std::move(fn);
   params.name = atfw::util::log::format("rpc.async_invoke:{}", name);
-  int res;
+  int res = 0;
   if (timeout > std::chrono::system_clock::duration::zero()) {
     res = task_manager::me()->create_task_with_timeout<task_action_async_invoke>(task_inst, timeout, std::move(params));
   } else {
@@ -78,7 +80,7 @@ SERVER_FRAME_API result_code_type wait_tasks(context &ctx, gsl::span<const task_
     }
 
     const task_type_trait::task_type *last_task = nullptr;
-    for (auto &task : tasks) {
+    for (const auto &task : tasks) {
       if (task_type_trait::empty(task) || task_type_trait::get_task_id(task) == ctx.get_task_context().task_id) {
         continue;
       }
@@ -197,8 +199,9 @@ SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name,
 }
 
 SERVER_FRAME_API void async_then_start_task(context &ctx, gsl::string_view name, task_type_trait::task_type waiting,
+                                            // NOLINTNEXTLINE(performance-unnecessary-value-param)
                                             task_type_trait::task_type then_task) {
-  async_then_start_task(ctx, name, waiting, task_type_trait::get_task_id(then_task));
+  async_then_start_task(ctx, name, std::move(waiting), task_type_trait::get_task_id(then_task));
 }
 
 }  // namespace rpc

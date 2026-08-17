@@ -1158,8 +1158,9 @@ CASE_TEST(component_dtcoordsvr, lru_unit_test_seam) {
   CASE_EXPECT_EQ(0, result.result_code);
   CASE_EXPECT_GE(transaction_manager::me()->get_lru_size_for_unit_test(), 1);
 
-  // clear_lru_for_unit_test marks every entry as removed; a later fetch re-reads the DB and the
-  // in-flight old handle can no longer write back through save (tombstone semantics).
+  // clear_lru_for_unit_test erases every entry from the pool (old handles are still marked removed
+  // and can no longer write back through save); a later fetch creates a fresh cache object and
+  // re-reads the DB instead of reviving the removed entry.
   transaction_manager::me()->clear_lru_for_unit_test();
   CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
 

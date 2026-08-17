@@ -179,13 +179,13 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
           FWLOGERROR("Serialize transaction_blob_storage failed, {}", storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
-        int ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
+        int sub_ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
         if (nullptr != out_version) {
           *out_version = static_cast<int64_t>(data_version);
         }
 
-        if (ret < 0) {
-          RPC_RETURN_CODE(ret);
+        if (sub_ret < 0) {
+          RPC_RETURN_CODE(sub_ret);
         }
 
         // TTL 刷新失败不影响已持久化的数据，创建时已保证设置过 TTL，这里仅记录日志
@@ -194,7 +194,7 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
           FWLOGERROR("Refresh transaction {} TTL failed after save, res: {}({})", in.metadata().transaction_uuid(),
                      ttl_ret, protobuf_mini_dumper_get_error_msg(ttl_ret));
         }
-        RPC_RETURN_CODE(ret);
+        RPC_RETURN_CODE(sub_ret);
       }));
 
   if (ret != 0 && saved_data) {
@@ -624,7 +624,7 @@ rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
   int ret = 0;
   if (!metadata.memory_only()) {
     // 删除前先等待该记录所有未完成的 IO 结束，避免删除后晚到的 IO 复活记录；
-    // 强制删除语义下即使等待 IO 结束失败也继续删除（缓存会被 remove_cache 置 removed 并禁止再写回）
+    // 强制删除语义下即使等待 IO 结束失败也继续删除（缓存会被 remove_cache 置 removed 并移出池，旧句柄禁止再写回）
     rpc::result_code_type::value_type drain_ret = 0;
     if (lru_caches_.is_io_task_running(metadata.transaction_uuid())) {
       drain_ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, metadata.transaction_uuid()));
@@ -653,14 +653,8 @@ rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 size_t transaction_manager::get_lru_size_for_unit_test() noexcept {
-  // 只统计未被 remove_cache/clear 置为墓碑的条目，与 get_cache 的可见性口径一致。
-  size_t active = 0;
-  for (auto iter = lru_caches_.begin(); iter != lru_caches_.end(); ++iter) {
-    if (iter->second && !iter->second->removed) {
-      ++active;
-    }
-  }
-  return active;
+  // remove_cache/clear 会把条目真正移出池，池内不存在 removed 条目，可见条目数即池大小
+  return lru_caches_.size();
 }
 
 void transaction_manager::clear_lru_for_unit_test() noexcept { lru_caches_.clear(); }

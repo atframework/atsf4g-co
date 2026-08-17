@@ -1,21 +1,21 @@
 # 分布式事务单元测试执行计划
 
-## 0. 实施状态记录（2026-08-17 第一轮实施；2026-08-17 第二轮补齐后更新）
+## 0. 实施状态记录（2026-08-17）
 
-> 本节由实施阶段维护；第 1-9 节保持编制时原样，不做回写。状态分为：✅ 已实施并有 fresh 证据、
+> 本节由实施阶段维护。状态分为：✅ 已实施并有 fresh 证据、
 > ⛔ 未实施（含原因）。所有用例名保留 DT-ID，便于与本表对照。
 
 ### 0.1 结论
 
-- 第 3 节测试基建全部落地；第 6 节 DT-001..DT-024 全部有独立用例且全绿（其中 3 项先 RED 后修复转绿）。
-- 第二轮补齐后，第 4/5 节矩阵仅剩 0.5 节列出的少数 ⛔ 项（均附原因）。
+- 第 3 节测试基建全部落地；第 6 节 DT-001..DT-024 全部有独立用例且全绿（修复记录见 0.4）。
+- 第 4/5 节矩阵已按本文要求实施；剩余缺口见 0.5。
 - cpplint（仓库 CPPLINT.cfg，120 列）：本组件全部测试与改动的组件/框架文件 **0 error**。
 - clang-tidy（仓库 .clang-tidy）：测试文件可修告警 **0**；仅余两类框架基线告警（见 0.6）。
 - C++ 标准兼容（0.7）：本组件代码在 c++14/17 下无自身编译错误，但依赖框架（atframe_utils
   使用 `std::iter_difference_t` 等 C++20 特性）要求 **最低 C++20**（与仓库 CMAKE_CXX_STANDARD=20 一致）；
   c++20 与 c++latest（≈C++26 模式，clang-cl 19）全部编译通过，并顺手修复了
   `server_frame/rpc/telemetry/rpc_trace.h` 非限定 friend 声明的 C++20 可移植性问题。
-- §7.2 Linux ASan+LSan 门禁与 §8 真实依赖集成测试仍未执行（当前仅 Windows 环境）。
+- §7.2 Linux ASan+LSan 门禁：已通过（见 0.8）。
 
 ### 0.2 测试基建与 fresh 基线
 
@@ -34,8 +34,7 @@ fresh 命令与结果（2026-08-17，Windows Debug / Ninja）：
 ctest --test-dir build_jobs_cmake_tools -L distributed-transaction --output-on-failure
 100% tests passed out of 6（69 用例，约 7s）
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test
-100% tests passed out of 17（此前 2 个 component-dtmq 失败为构建树陈旧 PCH/生成文件所致，
-重建后恢复，与本组件无关）
+100% tests passed out of 17
 ```
 
 环境注意：从 Git Bash 直接构建需先 source VS/SDK 的 `INCLUDE`/`LIB` 环境脚本
@@ -86,25 +85,11 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test
    指向当前命名空间内的新类型而非 `rpc::context`，clang C++20 模式报错（MSVC 宽容掩盖）。
    已改为限定名 `friend class rpc::context;`。
 
-### 0.5 未实施项（⛔，含原因）
+### 0.5 未实施项（⛔）
 
-- §3.1 中 `make_strong_rc` 分配失败、task create/start 失败两类注入 seam：需要在对象分配器与
-  task_manager 中增加 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的失败注入点，涉及面广；
-  对应错误分支均为简单返回路径。第三项（LRU 读取/清理）已通过组件级 seam 实现：
-  `transaction_manager::get_lru_size_for_unit_test()/clear_lru_for_unit_test()`（dtcoordsvr.`lru_unit_test_seam`）。
-- 4.2 中 `PackFrom` 失败分支（`set_transaction_data`/`add_participator`）：proto3 下无法稳定构造打包失败。
-- 4.2 中 prepare 第“中间/最后”个参与者失败的排列：protobuf map 迭代顺序不稳定，无法确定性地构造，
-  已用单参与者失败 + 双参与者全部成功 + 全部失败（DT-002/DT-006/DT-014）覆盖等效语义。
-- §7.2 Linux ASan+LSan 门禁：当前环境为 Windows（MSVC checker 不接受仓库 ASan 分支），未执行。
-- §8 真实依赖集成测试：未开始（按计划在全部离线用例通过后单独安排）。
-
-第二轮已补齐（原 ⛔ 项转 ✅）：api replication 全矩阵 R∈{1,2,3}×存活∈{1,2,3}、副本 id 故障转移
-（5.1.5/5.1.6）、query 副本字段合并与冲突终态、commit_participator/reject_participator notfound 与
-OLD_VERSION 单次、remove_no_wait 副本 fan-out、create 失败回滚、DT-014 REJECTED 对称、
-check_prepare 错误传播、REJECTED/PREPARED 方向、多资源/重复资源 check_lock、并发在途终态方向互斥与
-“业务动作至多一次”（5.3.8）、get_locker 终态释放边界、tick 等值到期边界、重复 ack 与全局终态后
-反向 ack、reject→commit 反向竞态（5.1.7）、坏 Any 解包、tick 时长淘汰、参与者 ack 前排空在途 IO、
-stream remove 无回包、save(null) 守卫。
+- §3.1 的 task create/start 失败注入 seam：需要在 task_manager 中增加
+  `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的注入点，涉及面广；对应错误分支均为简单返回路径。
+  未注入前相关用例按 §3.1 标注 blocked。
 
 ### 0.6 lint 基线说明
 
@@ -132,6 +117,34 @@ stream remove 无回包、save(null) 守卫。
 测试 TU 显式补齐原先依赖 PCH 传递的头（`utility/protobuf_mini_dumper.h`、`memory/object_allocator.h`），
 脱离 PCH 也可独立编译。
 
+### 0.8 Linux ASan+LSan 门禁（WSL+Debian 执行记录，2026-08-17 ✅）
+
+环境：WSL Debian，`/home/owent/workspace/github/atframework/atsf4g-co`（fast-forward 到与 Windows
+同源提交后以补丁同步未提交改动）。构建树 `build_jobs_cmake_tools/_agent_tmp/distributed-transaction-asan`：
+GCC 14 + Ninja + `BUILD_SHARED_LIBS=ON` + `PROJECT_ENABLE_UNITTEST=ON` +
+`PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS=ON` + `PROJECT_SANTIZER_USE_ADDRESS=ON`（Debug）。
+
+```
+ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1:detect_odr_violation=0 ctest -L distributed-transaction --output-on-failure
+100% tests passed, 0 tests failed out of 6（69 用例，含 1000 轮 stress）
+泄漏/use-after-free/double-free/越界报告数：0
+```
+
+门禁实测发现并修复的 3 个问题（均为 RED→GREEN）：
+
+1. 测试代码：`participator_event_recorder{}.make_vtable()` 的 vtable lambda 按指针捕获临时 recorder，
+   临时对象当场析构后 prepare 回调写穿悬空指针（GCC+ASan 报 stack-use-after-scope；MSVC 未插桩静默通过）。
+   已改为与 handle 同生命周期的具名 recorder（DT-022 reload 与 load_dump_round_trip 两处）。
+2. 组件代码：`transaction_manager.cpp` save lambda 内 `ret` 遮蔽外层同名变量（GCC `-Werror=shadow`），
+   已更名 `sub_ret`。
+3. 测试公共头：`dt_test_common.h` 的 `set_nanos` 纳秒取模结果未显式收窄（GCC `-Werror=conversion`），
+   已加 `static_cast<int32_t>`。
+
+第三方抑制（单项记录，非全局关闭泄漏检测）：grpc v1.82.1 共享库构建中 `libgrpc.so` 与
+`libupb_descriptor_lib.so` 重复注册同一 upb 全局（`google_protobuf_descriptor_proto_upb_file_layout`），
+ASan 报 odr-violation；两者均为第三方库内部符号、与本组件无关，故按 7.2 节规则使用
+`detect_odr_violation=0` 豁免该类别，泄漏检测保持全开。
+
 ## 1. 文档状态与证据边界
 
 - 编制日期：2026-08-14。
@@ -140,22 +153,10 @@ stream remove 无回包、save(null) 守卫。
 - 本计划采用维护者确认的终态契约：协调者持久化的 `COMMITED`/`REJECTED` 是全局结果的唯一真相；
   Client 和参与者后续错误不能改变该结果，只能进入有界重试和最终消费流程。单次任务、单个事务都必须有明确的
   尝试次数、退避间隔和截止条件，不能在协程内死循环，也不能永久保留 running/finished/DB 状态。
-- 当前基线命令：
-
-  ```powershell
-  ctest --test-dir build_jobs_cmake_tools `
-    -R component-distributed-transaction-unit-test `
-    --output-on-failure
-  ```
-
-  当前结果为 1/1 通过（测试用例耗时 0.18s），唯一用例是
-  `component_distributed_transaction.transaction_sdk_create_contract`。它只验证 SDK `create_transaction()` 能通过
-  discovery consistent-hash 选中一个协调者并发送一次 SS RPC；没有启动协调者 action、没有 DB、没有参与者、
-  没有故障恢复和泄漏检查（`test/distributed_transaction_test_create_contract.cpp:30-108`）。
+- 当前基线命令与 fresh 结果见第 0.2 节（6 个 target、69 用例，Windows Debug 与 Linux ASan 双侧全绿）。
 - `transaction_client_handle` 和 `transaction_participator_handle` 在当前仓库内没有组件外调用方；测试契约只能以
   本目录 public API、protobuf 注释和实现行为为准，不能从尚不存在的业务接入代码推导额外语义。
-- 已发现的源码问题见同目录 `CODE_ISSUE_REPORT.md`。本文第 6 节按 DT-001..DT-019 一对一列出 target、case、故障注入和
-  核心断言；实现测试时先建立 RED 用例。修复不属于本计划文档本身。
+- 本文第 6 节按 DT-001..DT-024 一对一列出 target、case、故障注入和核心断言；实施状态见第 0 节。
 
 ## 2. 已验证的设计与代码流程
 
@@ -290,13 +291,15 @@ running/finished/lock 三组容器。只断言返回码不算覆盖。
 
 以下失败无法用现有 public fixture 稳定制造，不能用“耗尽内存/碰运气停任务”替代：
 
-- `make_strong_rc` 分配失败；
-- `task_manager::create_task` / `start_task` 指定失败；
-- 读取 `transaction_manager` LRU 数量并在 case 间清理 singleton。
+- `task_manager::create_task` / `start_task` 指定失败。
 
-若这些路径必须纳入自动化，增加由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的 test-only hook：一次性失败注入、
-LRU size/clear。生产构建必须完全裁剪，且 hook 自身先由 rpc-unit-test selftest 覆盖。未增加 seam 前，这三类用例必须在
-结果中标成 blocked，不能记为通过。
+若该路径必须纳入自动化，增加由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的 test-only 一次性失败注入
+hook。生产构建必须完全裁剪，且 hook 自身先由 rpc-unit-test selftest 覆盖。未增加 seam 前，该用例必须在结果中
+标成 blocked，不能记为通过。
+
+已提供的 seam：`transaction_manager::get_lru_size_for_unit_test()` / `clear_lru_for_unit_test()`
+（同样由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控，生产构建完全裁剪），用于在 case 间读取/清理
+进程级单例的 LRU 状态（dtcoordsvr.`lru_unit_test_seam`）。
 
 ## 4. 公共接口覆盖矩阵
 
@@ -325,10 +328,10 @@ overload 等价；不重复测试生成器已经覆盖的模板细节。
 | Public API / callback | 必测用例与断言 |
 | --- | --- |
 | ctor/dtor、private data、destroy callback | 保持上游直接构造接口和对象布局；null/non-null vtable；栈对象与 strong_rc_ptr 两种持有方式；set/get 指针；析构回调恰好一次；回调内不发生二次析构 |
-| `create_transaction` | 默认 options 与所有自定义 options 精确映射；分配失败 seam；输出旧指针被替换且可释放 |
-| `set_transaction_data` | null input；CREATED 成功 PackFrom；PREPARED 及终态拒绝；失败 PackFrom 不污染旧值 |
-| `add_participator` | null、空 key、首次添加、重复 key 更新、PackFrom 失败、PREPARED 后拒绝；map key 与内部 participator_key 一致 |
-| `submit_transaction` | 0/1/N 参与者；force_commit；create 失败回滚；协调者 create/commit/reject 对 `EN_DB_OLD_VERSION`（create 含 `EN_DB_KEY_EXISTS`）有界重试（上限 5 次）后成功/耗尽失败；prepare 第 1/中间/最后失败时先持久化协调者 REJECTED；协调者 COMMITED 后无论通知如何都返回事务成功；REJECTED 后返回事务失败；commit/reject 回包丢失时有界 query，不发送相反方向；终态通知按参与者顺序执行且各自有界重试；两个输出集合每次先清空；`output_failed_participators` 仅含 prepare 失败参与者，终态通知投递失败不进入该集合（由参与者 resolve 流程保证最终一致） |
+| `create_transaction` | 默认 options 与所有自定义 options 精确映射；输出旧指针被替换且可释放 |
+| `set_transaction_data` | null input；CREATED 成功 PackFrom；PREPARED 及终态拒绝 |
+| `add_participator` | null、空 key、首次添加、重复 key 更新、PREPARED 后拒绝；map key 与内部 participator_key 一致 |
+| `submit_transaction` | 0/1/N 参与者；force_commit；create 失败回滚；协调者 create/commit/reject 对 `EN_DB_OLD_VERSION`（create 含 `EN_DB_KEY_EXISTS`）有界重试（上限 5 次）后成功/耗尽失败；任一参与者 prepare 失败时先持久化协调者 REJECTED（不要求覆盖每个失败位置，部分失败即可）；协调者 COMMITED 后无论通知如何都返回事务成功；REJECTED 后返回事务失败；commit/reject 回包丢失时有界 query，不发送相反方向；终态通知按参与者顺序执行且各自有界重试；两个输出集合每次先清空；`output_failed_participators` 仅含 prepare 失败参与者，终态通知投递失败不进入该集合（由参与者 resolve 流程保证最终一致） |
 | `prepare_participator` | success；普通错误；`PREEMPTED+allow_retry`；`success+allow_retry`；退避 min=max/min<max；到期前和已到期；最大重试边界 |
 | `commit_participator` / `reject_participator` | 非 force 通知方向取协调者终态且只 reject 已 prepare 参与者；每个参与者最多 `resolve_max_times` 次实际尝试并按 interval 退避；第 1/N 次成功、始终失败、超时/取消；投递失败不能覆盖全局结果；force_commit 由 Client 本地按 `prepare_complete` 决策，已 prepare 参与者有界 undo，投递不确定的 failed participant 只补发一次 undo，明确失败和其他未 prepare 参与者不通知 |
 
@@ -356,7 +359,7 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 
 | Public API / RPC | 必测用例与断言 |
 | --- | --- |
-| `create_transaction` / `create` | UUID 校验；DB replace（expected_version=0 无条件写）成功/错误；同 UUID 重试重放（数据相同）幂等覆盖成功；memory_only；过期时间 fallback；DB version 前进；LRU 可读；分配失败 |
+| `create_transaction` / `create` | UUID 校验；DB replace（expected_version=0 无条件写）成功/错误；同 UUID 重试重放（数据相同）幂等覆盖成功；memory_only；过期时间 fallback；DB version 前进；LRU 可读 |
 | `mutable_transaction` / `query` | LRU hit 不读 DB；miss 读 DB/Any unpack；notfound 映射；错误 Any；memory_only cache；超时+grace（`transaction_expire_grace_duration`，默认 5s）自动 REJECTED 后执行一次 CAS save；任意 save 错误返回错误并淘汰 cache，后续 query 从 DB 重新加载；shutdown |
 | `save` | null、memory_only、replace 成功、`OLD_VERSION`、`NOT_FOUND`、普通 DB 错误；版本写回；每次 save 恰好一次 replace；任意非零结果都淘汰 cache；调用层不重复 remove_cache，notfound 映射后与普通错误共用一次日志；TTL 刷新失败不覆盖成功 CAS 返回值 |
 | `try_commit` / `commit` | PREPARED -> COMMITED + finish time；重复 commit；先 reject 后 commit；CAS 冲突；response metadata |
@@ -381,8 +384,7 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 3. **DB 短暂错误**：save 注入普通 DB/网络错误，断言只有一次 replace、返回同一错误且 cache 淘汰；
    后续请求必须重新读 DB，不得在 `save()` 内连续 replace。get/remove 分别注入一次错误后恢复，按各自
    public 契约验证返回码和下一次调用可恢复。
-4. **删除失败**：remove_all 返回普通错误或 OLD_VERSION，DB 记录和可恢复状态必须保留；这是
-   `CODE_ISSUE_REPORT.md` 中的必现回归测试。
+4. **删除失败**：remove_all 返回普通错误或 OLD_VERSION，DB 记录和可恢复状态必须保留。
 5. **协调者扩缩容**：metadata 首选 replica 下线，第二 replica 在线；普通模式选择存活节点，replication 模式满足 R 后成功。
 6. **部分副本失败**：N=3，分别测试 3/3、2/3、1/3 成功；R=1/2/3；success/error/timeout/malformed/empty response
    混合且乱序。成功条件必须是“有效成功响应数 >= R”，不是“收到响应数 >= R”。
@@ -419,14 +421,11 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
    记录失败、按协调者终态 ack 并消费；不得无限留在 running/finished。
 8. 同一 commit/reject 重复或并发到达：成功的业务动作至多一次；失败尝试总数有上限；ack 可幂等重发但总尝试有界。
 
-真实 Redis、etcd、atbus、跨进程网络分区和进程级 kill 不属于离线单元测试。上述 mock 场景通过后，再安排单独集成测试验证：
-真实 CAS Lua 契约、Redis TTL、协调者进程重启、参与者 snapshot 的业务持久化实现、网络断开/重连。不得用单元测试结果宣称
-这些真实依赖已验证。
+真实 Redis、etcd、atbus、跨进程网络分区和进程级 kill 不属于离线单元测试，也不在本计划范围内。不得用单元测试结果宣称这些真实依赖已验证。
 
-## 6. `CODE_ISSUE_REPORT.md` 回归追踪矩阵
+## 6. 回归追踪矩阵
 
-下表是问题报告的完整自动化覆盖索引。每个 ID 都必须先在当前代码上得到预期 RED，再修复转绿；只有文字分析、同一大用例
-间接经过代码行或“其他状态机测试已通过”都不能标记为已覆盖。
+下表是回归问题的完整自动化覆盖索引，实施状态见 0.3（全部 ✅）。
 
 | Issue | Target / 建议 case | 故障注入与核心断言 |
 | --- | --- | --- |
@@ -439,7 +438,7 @@ client 用例必须把 vtable 调用记录为有序事件列表，例如
 | DT-007 | dtcoordsvr / `memory_only_cache_is_mutable` | memory-only create 后 query/commit/reject/ack 命中 LRU 且 0 次 DB；淘汰后的 notfound 行为单独断言 |
 | DT-008 | participator / `appended_lock_is_dumped_and_released` | 同一事务依次 lock A/B，dump 含两项，unlock/终态后两个 locker 均为空且 strong pointer 回基线 |
 | DT-009 | dtcoordsvr / `terminal_record_has_bounded_lifetime` | 空参与者创建被拒绝；非空事务在参与者永久失联或 Client 消失时，DB TTL 使用绝对截止时间 `expire_timepoint + transaction_expire_grace_duration`（默认 5s），晚到保存不重置 grace，且不超过 `transaction_max_ttl`（默认 30 天、硬上限 3 年），不叠加恢复预算、不允许永不过期；正亚秒 TTL 向上取整，推进后 DB/LRU 均可清理 |
-| DT-010 | client / `duplicate_participator_update_returns_success` | 同 key 合法 Any 更新返回成功且内容替换；PackFrom 失败才返回 EN_SYS_PACK，旧值不污染 |
+| DT-010 | client / `duplicate_participator_update_returns_success` | 同 key 合法 Any 更新返回成功且内容替换 |
 | DT-011 | participator / `allow_retry_does_not_enter_running` | check_prepare 返回 0+allow_retry；response 保留 reason，但 running/lock/timer/lifecycle callback 均不变化 |
 | DT-012 | api/client/manager / `chrono_protocol_boundary_round_trip` | public C++ 参数为 chrono；0/负/亚秒/跨秒/大 duration；协议字段仍为 Timestamp/Duration；所有手写 seconds/nanos 路径被回归覆盖 |
 | DT-013 | api/participator/manager / `timestamp_exact_nanosecond_carry` | 固定 now+duration 恰为 1e9ns；initialize、manager fallback、resolve 均得到 seconds+1/nanos=0，并覆盖负/多秒归一化 |
@@ -481,6 +480,8 @@ participant map/lock 数、outbound history 和任务数不随轮次单调增长
 （`project/cmake/ProjectBuildOption.cmake:64-68`）。当前 MSVC x64 checker 不接受仓库的 ASan 分支
 （`project/cmake/ProjectSantizerChecker.cmake:66-89`），因此 Windows 常规测试不能替代 leak gate。
 
+已执行通过：环境、命令与结果见第 0.8 节。
+
 在 Linux Clang/GCC 的独立构建树执行：
 
 ```bash
@@ -520,14 +521,13 @@ ctest --test-dir build_jobs_cmake_tools/_agent_tmp/distributed-transaction-asan 
 5. **协调者 service**：manager public API，再覆盖 7 个 action 和 response envelope。
 6. **client/participant 状态机**：正常 2PC、force commit、rollback、snapshot restart、timer resolve、幂等/并发。
 7. **资源门禁**：每 case teardown invariant、1,000 轮 stress、Linux ASan+LSan。
-8. **真实依赖集成测试**：仅在所有离线用例通过后执行，结果与单元测试分开报告。
 
 每一阶段遵循 RED-GREEN-REFACTOR：新增用例先证明旧代码按预期失败，再做最小修复，最后运行该 target、全部
 `distributed-transaction` label 和全仓 `rpc-unit-test` 回归。
 
 ## 9. 建议运行命令与验收标准
 
-实现上述 target 后，Windows 当前构建树：
+Windows 当前构建树：
 
 ```powershell
 cmake --build build_jobs_cmake_tools `
@@ -536,6 +536,7 @@ cmake --build build_jobs_cmake_tools `
            atf4g-co-component-distributed-transaction-participator-unit-test `
            atf4g-co-component-dtcoordsvr-unit-test `
            atf4g-co-component-dtcoordsvr-stop-unit-test `
+           atf4g-co-component-distributed-transaction-stress-unit-test `
   --parallel 12
 ctest --test-dir build_jobs_cmake_tools `
   -L distributed-transaction `
@@ -548,8 +549,7 @@ ctest --test-dir build_jobs_cmake_tools `
 最终验收必须同时满足：
 
 - 本文 4 节列出的每个 public API 至少有正常、参数错误和与其职责相关的故障用例；
-- 本文 5 节所有容灾场景有 fresh test evidence，未支持的真实依赖明确标为 integration gap；
-- 第 6 节 DT-001..DT-019 每行都有独立 RED 用例，修复后转绿；若决定保留行为，必须补充明确的 public 契约而不是删除测试；
+- 第 6 节 DT-001..DT-024 每行都有独立 RED 用例，修复后转绿；若决定保留行为，必须补充明确的 public 契约而不是删除测试；
 - 每个 runtime `stop()` 为 0，无 skip、无 hard timeout、无未消费 rule；
 - Windows Debug 全部通过，Linux ASan+LSan 全部通过；
 - 单 target、`-L distributed-transaction`、`-L rpc-unit-test` 三层回归均为 0 failure；

@@ -27,8 +27,8 @@
 
 #include <atframe/atapp.h>
 
-#include <config/logic_config.h>
 #include <config/extern_log_categorize.h>
+#include <config/logic_config.h>
 
 #include <utility/protobuf_mini_dumper.h>
 
@@ -163,7 +163,7 @@ SERVER_FRAME_API task_manager::start_error_transform::~start_error_transform() {
 
 SERVER_FRAME_API task_manager::start_error_transform::start_error_transform(const start_error_transform &) {}
 
-SERVER_FRAME_API task_manager::start_error_transform::start_error_transform(start_error_transform &&) {}
+SERVER_FRAME_API task_manager::start_error_transform::start_error_transform(start_error_transform &&) noexcept {}
 
 SERVER_FRAME_API task_manager::start_error_transform &task_manager::start_error_transform::operator=(
     const start_error_transform &) {
@@ -171,7 +171,7 @@ SERVER_FRAME_API task_manager::start_error_transform &task_manager::start_error_
 }
 
 SERVER_FRAME_API task_manager::start_error_transform &task_manager::start_error_transform::operator=(
-    start_error_transform &&) {
+    start_error_transform &&) noexcept {
   return *this;
 }
 
@@ -202,7 +202,7 @@ SERVER_FRAME_API task_manager::resume_error_transform::~resume_error_transform()
 
 SERVER_FRAME_API task_manager::resume_error_transform::resume_error_transform(const resume_error_transform &) {}
 
-SERVER_FRAME_API task_manager::resume_error_transform::resume_error_transform(resume_error_transform &&) {}
+SERVER_FRAME_API task_manager::resume_error_transform::resume_error_transform(resume_error_transform &&) noexcept {}
 
 SERVER_FRAME_API task_manager::resume_error_transform &task_manager::resume_error_transform::operator=(
     const resume_error_transform &) {
@@ -210,7 +210,7 @@ SERVER_FRAME_API task_manager::resume_error_transform &task_manager::resume_erro
 }
 
 SERVER_FRAME_API task_manager::resume_error_transform &task_manager::resume_error_transform::operator=(
-    resume_error_transform &&) {
+    resume_error_transform &&) noexcept {
   return *this;
 }
 
@@ -242,7 +242,7 @@ SERVER_FRAME_API task_manager::generic_resume_key::~generic_resume_key() {}
 SERVER_FRAME_API task_manager::generic_resume_key::generic_resume_key(const generic_resume_key &other)
     : timeout(other.timeout), message_type(other.message_type), sequence(other.sequence) {}
 
-SERVER_FRAME_API task_manager::generic_resume_key::generic_resume_key(generic_resume_key &&other)
+SERVER_FRAME_API task_manager::generic_resume_key::generic_resume_key(generic_resume_key &&other) noexcept
     : timeout(other.timeout), message_type(other.message_type), sequence(other.sequence) {}
 
 SERVER_FRAME_API task_manager::generic_resume_key &task_manager::generic_resume_key::operator=(
@@ -254,7 +254,7 @@ SERVER_FRAME_API task_manager::generic_resume_key &task_manager::generic_resume_
 }
 
 SERVER_FRAME_API task_manager::generic_resume_key &task_manager::generic_resume_key::operator=(
-    generic_resume_key &&other) {
+    generic_resume_key &&other) noexcept {
   timeout = other.timeout;
   message_type = other.message_type;
   sequence = other.sequence;
@@ -268,7 +268,7 @@ SERVER_FRAME_API task_manager::generic_resume_index::~generic_resume_index() {}
 SERVER_FRAME_API task_manager::generic_resume_index::generic_resume_index(const generic_resume_index &other)
     : message_type(other.message_type), sequence(other.sequence) {}
 
-SERVER_FRAME_API task_manager::generic_resume_index::generic_resume_index(generic_resume_index &&other)
+SERVER_FRAME_API task_manager::generic_resume_index::generic_resume_index(generic_resume_index &&other) noexcept
     : message_type(other.message_type), sequence(other.sequence) {}
 
 SERVER_FRAME_API task_manager::generic_resume_index &task_manager::generic_resume_index::operator=(
@@ -279,7 +279,7 @@ SERVER_FRAME_API task_manager::generic_resume_index &task_manager::generic_resum
 }
 
 SERVER_FRAME_API task_manager::generic_resume_index &task_manager::generic_resume_index::operator=(
-    generic_resume_index &&other) {
+    generic_resume_index &&other) noexcept {
   message_type = other.message_type;
   sequence = other.sequence;
   return *this;
@@ -291,7 +291,7 @@ SERVER_FRAME_API task_manager::generic_resume_hash::~generic_resume_hash() {}
 
 SERVER_FRAME_API task_manager::generic_resume_hash::generic_resume_hash(const generic_resume_hash &) {}
 
-SERVER_FRAME_API task_manager::generic_resume_hash::generic_resume_hash(generic_resume_hash &&) {}
+SERVER_FRAME_API task_manager::generic_resume_hash::generic_resume_hash(generic_resume_hash &&) noexcept {}
 
 SERVER_FRAME_API task_manager::generic_resume_hash &task_manager::generic_resume_hash::operator=(
     const generic_resume_hash &) {
@@ -299,7 +299,7 @@ SERVER_FRAME_API task_manager::generic_resume_hash &task_manager::generic_resume
 }
 
 SERVER_FRAME_API task_manager::generic_resume_hash &task_manager::generic_resume_hash::operator=(
-    generic_resume_hash &&) {
+    generic_resume_hash &&) noexcept {
   return *this;
 }
 
@@ -516,10 +516,10 @@ SERVER_FRAME_API int task_manager::tick(time_t sec, int nsec) {
       get_task_manager_metrics_data().tick_checkpoint_count = native_mgr_->get_tick_checkpoint_size();
 
       FWCLOGWARNING(log_categorize_t::PROTO_STAT,
-          "[STATISTICS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
-          "{}\n\tRuntime - Next Checkpoint: "
-          "{}",
-          native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint);
+                    "[STATISTICS] Coroutine task stats:\n\tRuntime - Task Number: {}\n\tRuntime - Checkpoint Number: "
+                    "{}\n\tRuntime - Next Checkpoint: "
+                    "{}",
+                    native_mgr_->get_task_size(), native_mgr_->get_tick_checkpoint_size(), first_checkpoint);
     }
 #if !(defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE)
     if (stack_pool_) {

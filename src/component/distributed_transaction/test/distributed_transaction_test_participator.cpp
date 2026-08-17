@@ -700,8 +700,9 @@ CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preempt
       [&handle](rpc::context& ctx) -> rpc::result_code_type {
     atframework::distributed_system::transaction_participator_snapshot snapshot;
     handle->dump(snapshot);
-    auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(
-        participator_event_recorder{}.make_vtable(), "p2");
+    // vtable 的 lambda 按 this 捕获 recorder，recorder 必须与 handle 同生命周期（临时对象会悬空）
+    participator_event_recorder reload_recorder;
+    auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(reload_recorder.make_vtable(), "p2");
     reloaded->load(snapshot);
     CASE_EXPECT_EQ(2, reloaded->get_running_transactions().size());
 
@@ -913,8 +914,8 @@ CASE_TEST(component_distributed_transaction_participator, load_dump_round_trip) 
     CASE_EXPECT_EQ(1, snapshot.finished_transaction_size());
 
     // load replaces the state instead of appending.
-    auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(
-        participator_event_recorder{}.make_vtable(), "p2");
+    participator_event_recorder reload_recorder;
+    auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(reload_recorder.make_vtable(), "p2");
     auto stale_request = make_prepare_request("part-uuid-stale");
     SSParticipatorTransactionPrepareRsp stale_response;
     storage_ptr_type stale_output;

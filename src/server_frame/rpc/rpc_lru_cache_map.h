@@ -47,9 +47,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     value_type data_object;
     uint64_t saving_sequence;
     uint64_t saved_sequence;
-    // 被 remove_cache 显式移除后置位：条目保留在池中作为墓碑，get_cache 对外不可见、await_save 拒绝写回、
-    // set_cache 拒绝重新入池，防止已删除的记录被晚到的保存或完成回调复活。
-    // 后续对同一 key 的 await_fetch 属于显式重新获取（先删除又获取的流程），会清除本标记并复用原对象。
+    // 条目被 remove_cache/clear 从池中删除时置位（先置位再删除）：此后对象仅可能被在途/旧句柄持有，
+    // await_save 拒绝写回、set_cache 拒绝重新入池，防止已删除的记录被晚到的保存或完成回调复活。
+    // 本标记是永久置毒，不会被清除：删除后重新拉取会得到一个新对象，旧句柄不会复活。
+    // 池内不存在 removed 条目：remove_cache/clear 在置位的同时把条目移出池。
     // 注意 LRU 淘汰（pop_front/pop_back/erase）不置位：淘汰不是删除，重新拉取后允许重建缓存。
     bool removed;
 
@@ -78,15 +79,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
  public:
   cache_ptr_type get_cache(const key_type &key, bool update_visit = true) {
     auto iter = pool_.find(key, false);
-    if (iter == pool_.end() || !iter->second || iter->second->removed) {
-      // 不存在，或已被 remove_cache 移除（墓碑条目对外不可见）
+    if (iter == pool_.end() || !iter->second) {
+      // 不存在（remove_cache/clear 会把条目真正移出池，池内没有已移除条目）
       return nullptr;
     }
 
     cache_ptr_type ret = iter->second;
     if (update_visit) {
       ret->last_visit_timepoint = atfw::util::time::time_utility::get_now();
-      // 刷新 LRU 访问序（移到 back）。墓碑条目不做提升，让其自然沉到最久未访问端优先被淘汰
+      // 刷新 LRU 访问序（移到 back）
       pool_.find(key, true);
     }
     return ret;
@@ -98,7 +99,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     }
 
     if (cache->removed) {
-      // 已被 remove_cache 显式移除的缓存不允许重新入池，防止已删除的记录被旧句柄复活
+      // 已从池中删除（remove_cache/clear）的缓存不允许重新入池，防止已删除的记录被旧句柄复活
       return;
     }
 
@@ -136,14 +137,18 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
       return false;
     }
 
-    // 标记失效并保留为墓碑条目：get_cache 对外不可见，旧句柄不允许再通过 await_save 写回；
-    // 后续 await_fetch 显式重新获取同一 key 时会清除标记并复用原对象（先删除又获取的流程）
+    // 先置位 removed 阻止在途/旧句柄写回复活，再把条目真正从池中删除：
+    // 保留已移除条目会让已删除的 key 永久占用池容量（泄漏），且没有任何接口会把它们清出去。
+    // 删除后同一 key 的 await_fetch 会创建新对象，不再复用旧对象。
     iter->second->removed = true;
+    pool_.erase(iter);
     return true;
   }
 
-  // 按 remove_cache 的语义清空全部条目：保留墓碑对象，阻止在途句柄写回复活。
+  // 清空全部条目：先将仍处于活跃状态的条目标记 removed（在途/旧句柄依旧被拒绝写回复活），
+  // 再把所有条目从池中真正移除，而不是仅置 removed 标记。
   // 仅供单元测试在用例间清理进程级单例状态使用。
+  // @return 本次被标记 removed 的活跃条目数
   size_type clear() {
     size_type removed = 0;
     for (auto iter = pool_.begin(); iter != pool_.end(); ++iter) {
@@ -152,6 +157,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
         ++removed;
       }
     }
+    pool_.clear();
     return removed;
   }
 
@@ -180,23 +186,9 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     while (true) {
       out = get_cache(key);
 
-      // 没有可用缓存时探测 remove_cache 留下的墓碑条目：
-      // 显式的重新获取表示记录重新有效，允许复用原对象并清除 removed 标记（先删除又获取的流程）
       if (nullptr == out) {
-        auto tombstone_iter = pool_.find(key, false);
-        if (tombstone_iter != pool_.end() && tombstone_iter->second) {
-          out = tombstone_iter->second;
-        }
-
-        if (nullptr == out) {
-          // 没有条目，本任务就是拉取任务
-          break;
-        }
-
-        if (out->removed && task_type_trait::empty(out->io_task)) {
-          // 空闲墓碑：本任务成为拉取任务，并在下方复用对象
-          break;
-        }
+        // 没有条目（remove_cache/clear 会把条目真正移出池，不存在可复用的已移除条目），本任务就是拉取任务
+        break;
       }
 
       // 如果有在途 IO（拉取或保存），则排到它后面，避免读取到尚未持久化成功的临时状态。
@@ -228,20 +220,14 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
       RPC_RETURN_CODE(0);
     }
 
-    if (nullptr == out) {
-      // 尝试拉取，成功的话放进缓存
-      auto res = pool_.insert_key_value(key, value_cache_type(key));
-      if (!res.second) {
-        out.reset();
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-      }
-
-      out = res.first->second;
-    } else {
-      // 复用 remove_cache 留下的墓碑对象：先删除又获取 → 清除 removed 标记，原对象继续可用。
-      // data_object 不在此清空：可能有在途保存任务仍持有其引用，拉取成功后由 fn 覆盖
-      out->removed = false;
+    // 尝试拉取，成功的话放进缓存；被 remove_cache/clear 删除过的 key 在这里得到的是全新对象
+    auto res = pool_.insert_key_value(key, value_cache_type(key));
+    if (!res.second) {
+      out.reset();
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }
+
+    out = res.first->second;
     out->data_version = 0;
     out->last_visit_timepoint = atfw::util::time::time_utility::get_now();
 
@@ -319,8 +305,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE rpc_lru_cache_map {
     }
 
     if (inout->removed) {
-      // 缓存已被 remove_cache 显式移除（记录已删除），禁止旧句柄再写回；
-      // await_fetch 显式重新获取后 removed 标记会被清除，届时可继续保存
+      // 缓存已被 remove_cache/clear 从池中删除（记录已删除），removed 是永久置毒：
+      // 禁止旧句柄再写回；对同一 key 的 await_fetch 得到的是新对象，旧句柄不会因此恢复可用
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
     }
 

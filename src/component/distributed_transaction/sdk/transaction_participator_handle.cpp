@@ -731,6 +731,7 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
   auto& transaction_ptr = running_transactions_[transaction_uuid].storage;
   transaction_ptr = atfw::component::memory::stl::make_strong_rc<storage_type>();
   if (!transaction_ptr) {
+    running_transactions_.erase(transaction_uuid);
     RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, {}}));
   }
   output = transaction_ptr;

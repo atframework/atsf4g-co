@@ -50,9 +50,9 @@ class task_manager {
     SERVER_FRAME_API ~start_error_transform();
 
     SERVER_FRAME_API start_error_transform(const start_error_transform &);
-    SERVER_FRAME_API start_error_transform(start_error_transform &&);
+    SERVER_FRAME_API start_error_transform(start_error_transform &&) noexcept;
     SERVER_FRAME_API start_error_transform &operator=(const start_error_transform &);
-    SERVER_FRAME_API start_error_transform &operator=(start_error_transform &&);
+    SERVER_FRAME_API start_error_transform &operator=(start_error_transform &&) noexcept;
 
     SERVER_FRAME_API std::pair<int32_t, dispatcher_start_data_type *> operator()(
         copp::promise_status in) const noexcept;
@@ -63,9 +63,9 @@ class task_manager {
     SERVER_FRAME_API ~resume_error_transform();
 
     SERVER_FRAME_API resume_error_transform(const resume_error_transform &);
-    SERVER_FRAME_API resume_error_transform(resume_error_transform &&);
+    SERVER_FRAME_API resume_error_transform(resume_error_transform &&) noexcept;
     SERVER_FRAME_API resume_error_transform &operator=(const resume_error_transform &);
-    SERVER_FRAME_API resume_error_transform &operator=(resume_error_transform &&);
+    SERVER_FRAME_API resume_error_transform &operator=(resume_error_transform &&) noexcept;
 
     SERVER_FRAME_API std::pair<int32_t, dispatcher_resume_data_type *> operator()(
         copp::promise_status in) const noexcept;
@@ -85,9 +85,9 @@ class task_manager {
     SERVER_FRAME_API ~generic_resume_key();
 
     SERVER_FRAME_API generic_resume_key(const generic_resume_key &);
-    SERVER_FRAME_API generic_resume_key(generic_resume_key &&);
+    SERVER_FRAME_API generic_resume_key(generic_resume_key &&) noexcept;
     SERVER_FRAME_API generic_resume_key &operator=(const generic_resume_key &);
-    SERVER_FRAME_API generic_resume_key &operator=(generic_resume_key &&);
+    SERVER_FRAME_API generic_resume_key &operator=(generic_resume_key &&) noexcept;
 
     ATFW_UTIL_FORCEINLINE explicit generic_resume_key(std::chrono::system_clock::time_point t, uintptr_t m,
                                                       uint64_t s) noexcept
@@ -182,9 +182,9 @@ class task_manager {
     SERVER_FRAME_API ~generic_resume_index();
 
     SERVER_FRAME_API generic_resume_index(const generic_resume_index &);
-    SERVER_FRAME_API generic_resume_index(generic_resume_index &&);
+    SERVER_FRAME_API generic_resume_index(generic_resume_index &&) noexcept;
     SERVER_FRAME_API generic_resume_index &operator=(const generic_resume_index &);
-    SERVER_FRAME_API generic_resume_index &operator=(generic_resume_index &&);
+    SERVER_FRAME_API generic_resume_index &operator=(generic_resume_index &&) noexcept;
 
     ATFW_UTIL_FORCEINLINE explicit generic_resume_index(uintptr_t m, uint64_t s) noexcept
         : message_type(m), sequence(s) {}
@@ -255,9 +255,9 @@ class task_manager {
     SERVER_FRAME_API ~generic_resume_hash();
 
     SERVER_FRAME_API generic_resume_hash(const generic_resume_hash &);
-    SERVER_FRAME_API generic_resume_hash(generic_resume_hash &&);
+    SERVER_FRAME_API generic_resume_hash(generic_resume_hash &&) noexcept;
     SERVER_FRAME_API generic_resume_hash &operator=(const generic_resume_hash &);
-    SERVER_FRAME_API generic_resume_hash &operator=(generic_resume_hash &&);
+    SERVER_FRAME_API generic_resume_hash &operator=(generic_resume_hash &&) noexcept;
 
     template <typename T>
     ATFW_UTIL_FORCEINLINE static void _hash_combine(size_t &seed, const T &val) noexcept {
@@ -345,14 +345,14 @@ class task_manager {
         auto timeout = make_timeout_duration(options.timeout());
         timeout += make_timeout_duration(options.timeout_offset());
         return task_manager::me()->create_task_with_timeout<TAction>(task_inst, timeout, std::move(ctor_param));
-      } else {
-        auto timeout = get_default_timeout();
-        if (options.timeout_default_multiple() > 0) {
-          timeout *= options.timeout_default_multiple();
-        }
-        timeout += make_timeout_duration(options.timeout_offset());
-        return task_manager::me()->create_task_with_timeout<TAction>(task_inst, timeout, std::move(ctor_param));
       }
+
+      auto timeout = get_default_timeout();
+      if (options.timeout_default_multiple() > 0) {
+        timeout *= options.timeout_default_multiple();
+      }
+      timeout += make_timeout_duration(options.timeout_offset());
+      return task_manager::me()->create_task_with_timeout<TAction>(task_inst, timeout, std::move(ctor_param));
     };
   };
 

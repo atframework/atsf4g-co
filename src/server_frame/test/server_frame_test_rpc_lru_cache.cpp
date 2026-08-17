@@ -86,7 +86,7 @@ void expect_task_done(const atfw::testing::wait_result &result, int32_t expected
   CASE_EXPECT_EQ(expected_code, result.result_code);
 }
 
-// 清空池（含 remove_cache 留下的墓碑条目），用于泄漏断言前释放全部缓存对象。
+// 清空池，用于泄漏断言前释放全部缓存对象。
 void drain_pool(test_map_type &caches) {
   while (!caches.empty()) {
     caches.pop_front();
@@ -136,20 +136,19 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_sync_api_order_and_eviction) {
   CASE_EXPECT_EQ(std::string("b"), caches.front().first);
   CASE_EXPECT_EQ(std::string("a"), caches.back().first);
 
-  // remove_cache 只生效一次；条目标记 removed 并保留为墓碑（对外不可见但占池容量）。
+  // remove_cache 只生效一次；条目被真正从池中删除（不再占池容量），旧句柄置 removed 防止复活。
+  // 此前访问序为 c,a,b（a、b 先后被 get_cache 挪到 back），删除 b 后余 c,a。
   evicted = caches.get_cache("b");
   CASE_EXPECT_TRUE(caches.remove_cache("b"));
   CASE_EXPECT_FALSE(caches.remove_cache("b"));
-  CASE_EXPECT_EQ(3, static_cast<int>(caches.size()));
+  CASE_EXPECT_EQ(2, static_cast<int>(caches.size()));
   CASE_EXPECT_TRUE(nullptr == caches.get_cache("b"));
   CASE_EXPECT_TRUE(nullptr != evicted && evicted->removed);
 
-  // 淘汰（pop_front/pop_back）不置 removed：淘汰不是删除；墓碑条目可被正常淘汰。
+  // 淘汰（pop_front/pop_back）不置 removed：淘汰不是删除。
   caches.pop_front();  // evicts "c"
-  CASE_EXPECT_EQ(2, static_cast<int>(caches.size()));
-  CASE_EXPECT_EQ(std::string("a"), caches.front().first);
-  caches.pop_back();  // evicts tombstone "b"
   CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
+  CASE_EXPECT_EQ(std::string("a"), caches.front().first);
   caches.pop_back();  // evicts "a"
   CASE_EXPECT_TRUE(caches.empty());
   CASE_EXPECT_EQ(3, fetch_calls);
@@ -572,11 +571,12 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_removed_rejects_save_and_reinser
     CASE_EXPECT_TRUE(nullptr != stale_ptr);
   }
 
-  // 显式移除：条目变为墓碑（对外不可见、不可再入池），旧句柄 removed 置位。
+  // 显式移除：条目被真正从池中删除，旧句柄 removed 置位且不可再入池。
   CASE_EXPECT_TRUE(caches.remove_cache("k1"));
   CASE_EXPECT_TRUE(stale_ptr->removed);
+  CASE_EXPECT_EQ(0, static_cast<int>(caches.size()));
   caches.set_cache(stale_ptr);
-  CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
+  CASE_EXPECT_EQ(0, static_cast<int>(caches.size()));
   CASE_EXPECT_TRUE(nullptr == caches.get_cache("k1"));
 
   {
@@ -600,13 +600,14 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_removed_rejects_save_and_reinser
               [](rpc::context &, const counted_object &, int64_t *) -> rpc::result_code_type { RPC_RETURN_CODE(0); }));
           CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, null_ptr_res);
 
-          // 重新拉取：先删除又获取的流程 → 清除 removed 标记并复用原对象。
+          // 重新拉取：删除后池中无可复用对象，创建全新缓存对象（旧句柄保持置毒）。
           test_cache_ptr fresh;
           int32_t res =
               RPC_AWAIT_CODE_RESULT(caches.await_fetch(ctx, "k1", fresh, make_immediate_fetch_fn(fetch_calls)));
           CASE_EXPECT_EQ(0, res);
-          CASE_EXPECT_TRUE(nullptr != fresh && fresh == stale_ptr);
+          CASE_EXPECT_TRUE(nullptr != fresh && fresh != stale_ptr);
           CASE_EXPECT_FALSE(fresh->removed);
+          CASE_EXPECT_TRUE(stale_ptr->removed);
           empty_fn_res = RPC_AWAIT_CODE_RESULT(caches.await_save(ctx, fresh, nullptr));
           CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, empty_fn_res);
           RPC_RETURN_CODE(0);
@@ -624,9 +625,120 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_removed_rejects_save_and_reinser
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM, empty_fn_res);
   CASE_EXPECT_EQ(2, fetch_calls);
   CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
-  CASE_EXPECT_TRUE(caches.get_cache("k1") == stale_ptr);
+  CASE_EXPECT_TRUE(nullptr != caches.get_cache("k1") && caches.get_cache("k1") != stale_ptr);
+  CASE_EXPECT_TRUE(stale_ptr->removed);
 
   stale_ptr.reset();
+  caches.remove_cache("k1");
+  drain_pool(caches);
+  pump_until(test, []() { return 0 == counted_object::live_instances; });
+  CASE_EXPECT_EQ(0, counted_object::live_instances);
+
+  test.stop();
+}
+
+// clear：真正清空全部条目（size 归零），旧句柄仍被置 removed、拒绝写回与重新入池；
+// 之后对同一 key 的 await_fetch 创建新对象而不是复用旧对象。
+CASE_TEST(server_frame_unit_test, rpc_lru_cache_clear_erases_all_entries) {
+  CASE_EXPECT_EQ(0, counted_object::live_instances);
+  atfw::testing::runtime test;
+  if (0 != start_test_runtime(test)) {
+    return;
+  }
+
+  test_map_type caches;
+  int fetch_calls = 0;
+  int save_calls = 0;
+  test_cache_ptr ptr_a;
+  test_cache_ptr ptr_b;
+  test_cache_ptr refetch_ptr;
+  int32_t stale_save_res = 0;
+  int32_t refetch_res = -1;
+
+  // 空池 clear 是空操作。
+  CASE_EXPECT_EQ(0, static_cast<int>(caches.clear()));
+  CASE_EXPECT_TRUE(caches.empty());
+
+  {
+    auto seed = test.run_task(
+        "lru_clear_seed", std::chrono::seconds{5},
+        [&caches, &fetch_calls, &ptr_a, &ptr_b](rpc::context &ctx) -> rpc::result_code_type {
+          int32_t res =
+              RPC_AWAIT_CODE_RESULT(caches.await_fetch(ctx, "k1", ptr_a, make_immediate_fetch_fn(fetch_calls)));
+          CASE_EXPECT_EQ(0, res);
+          res = RPC_AWAIT_CODE_RESULT(caches.await_fetch(ctx, "k2", ptr_b, make_immediate_fetch_fn(fetch_calls)));
+          CASE_EXPECT_EQ(0, res);
+          RPC_RETURN_CODE(0);
+        });
+    if (seed.empty()) {
+      test.stop();
+      return;
+    }
+    expect_task_done(test.wait(seed, std::chrono::seconds{10}), 0);
+  }
+  CASE_EXPECT_TRUE(nullptr != ptr_a && nullptr != ptr_b);
+  CASE_EXPECT_EQ(2, static_cast<int>(caches.size()));
+
+  // remove_cache 直接删除 k2：旧句柄置毒，池内不留已移除条目。
+  CASE_EXPECT_TRUE(caches.remove_cache("k2"));
+  CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
+  CASE_EXPECT_TRUE(ptr_b->removed);
+
+  // clear 返回被标记 removed 的活跃条目数（仅 k1），并把全部条目真正移出池。
+  CASE_EXPECT_EQ(1, static_cast<int>(caches.clear()));
+  CASE_EXPECT_TRUE(caches.empty());
+  CASE_EXPECT_EQ(0, static_cast<int>(caches.size()));
+  CASE_EXPECT_TRUE(ptr_a->removed);
+  CASE_EXPECT_TRUE(ptr_b->removed);
+  CASE_EXPECT_TRUE(nullptr == caches.get_cache("k1"));
+  CASE_EXPECT_TRUE(nullptr == caches.get_cache("k2"));
+
+  // 旧句柄不可重新入池。
+  caches.set_cache(ptr_a);
+  caches.set_cache(ptr_b);
+  CASE_EXPECT_TRUE(caches.empty());
+
+  // 对已清空的池重复 clear 幂等。
+  CASE_EXPECT_EQ(0, static_cast<int>(caches.clear()));
+
+  {
+    auto task = test.run_task(
+        "lru_clear_checks", std::chrono::seconds{5},
+        [&caches, &fetch_calls, &save_calls, &ptr_a, &refetch_ptr, &stale_save_res,
+         &refetch_res](rpc::context &ctx) -> rpc::result_code_type {
+          // 旧句柄保存被拒绝且不触发 fn。
+          stale_save_res = RPC_AWAIT_CODE_RESULT(caches.await_save(
+              ctx, ptr_a, [&save_calls](rpc::context &, const counted_object &, int64_t *) -> rpc::result_code_type {
+                ++save_calls;
+                RPC_RETURN_CODE(0);
+              }));
+          CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, stale_save_res);
+
+          // 重新拉取：池中没有已移除可复用，创建新缓存对象。
+          refetch_res =
+              RPC_AWAIT_CODE_RESULT(caches.await_fetch(ctx, "k1", refetch_ptr, make_immediate_fetch_fn(fetch_calls)));
+          CASE_EXPECT_EQ(0, refetch_res);
+          CASE_EXPECT_TRUE(nullptr != refetch_ptr && refetch_ptr != ptr_a);
+          CASE_EXPECT_FALSE(refetch_ptr->removed);
+          RPC_RETURN_CODE(0);
+        });
+    if (task.empty()) {
+      test.stop();
+      return;
+    }
+    expect_task_done(test.wait(task, std::chrono::seconds{10}), 0);
+  }
+
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, stale_save_res);
+  CASE_EXPECT_EQ(0, save_calls);
+  CASE_EXPECT_EQ(0, refetch_res);
+  CASE_EXPECT_EQ(3, fetch_calls);
+  CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
+  CASE_EXPECT_TRUE(caches.get_cache("k1") == refetch_ptr);
+
+  ptr_a.reset();
+  ptr_b.reset();
+  refetch_ptr.reset();
   caches.remove_cache("k1");
   drain_pool(caches);
   pump_until(test, []() { return 0 == counted_object::live_instances; });
@@ -869,9 +981,9 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_eviction_allows_refetch_reinsert
   test.stop();
 }
 
-// 先删除又获取（空闲墓碑）：remove_cache 后对同一 key 的 await_fetch 清除 removed 标记并复用原对象，
-// 复活后旧句柄可继续 await_save。
-CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object) {
+// 先删除又获取：remove_cache 把条目真正移出池，对同一 key 的 await_fetch 创建全新对象（不复用旧对象）；
+// 旧句柄的 removed 置毒是永久的，即使记录被重新拉取，旧句柄的 await_save 依旧被拒绝。
+CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_creates_new_object) {
   CASE_EXPECT_EQ(0, counted_object::live_instances);
   atfw::testing::runtime test;
   if (0 != start_test_runtime(test)) {
@@ -882,10 +994,12 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
   int fetch_calls = 0;
   int save_calls = 0;
   test_cache_ptr ptr;
+  test_cache_ptr fresh_ptr;
   int32_t poisoned_save_res = 0;
+  int32_t poisoned_after_refetch_res = 0;
   {
     auto seed = test.run_task(
-        "lru_revive_seed", std::chrono::seconds{5},
+        "lru_recreate_seed", std::chrono::seconds{5},
         [&caches, &fetch_calls, &ptr](rpc::context &ctx) -> rpc::result_code_type {
           int32_t res = RPC_AWAIT_CODE_RESULT(caches.await_fetch(ctx, "k1", ptr, make_immediate_fetch_fn(fetch_calls)));
           RPC_RETURN_CODE(res);
@@ -899,13 +1013,14 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
     CASE_EXPECT_EQ(1, ptr->data_object.payload);
   }
 
-  // 删除：对象变为墓碑，旧句柄保存被拒绝。
+  // 删除：条目被真正移出池，旧句柄保存被拒绝。
   CASE_EXPECT_TRUE(caches.remove_cache("k1"));
   CASE_EXPECT_TRUE(ptr->removed);
   CASE_EXPECT_TRUE(nullptr == caches.get_cache("k1"));
+  CASE_EXPECT_EQ(0, static_cast<int>(caches.size()));
   {
     auto poisoned = test.run_task(
-        "lru_revive_poisoned_save", std::chrono::seconds{5},
+        "lru_recreate_poisoned_save", std::chrono::seconds{5},
         [&caches, &save_calls, &ptr, &poisoned_save_res](rpc::context &ctx) -> rpc::result_code_type {
           poisoned_save_res = RPC_AWAIT_CODE_RESULT(caches.await_save(
               ctx, ptr, [&save_calls](rpc::context &, const counted_object &, int64_t *) -> rpc::result_code_type {
@@ -923,13 +1038,12 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, poisoned_save_res);
   CASE_EXPECT_EQ(0, save_calls);
 
-  // 又获取：await_fetch 复用原对象并清除 removed 标记（不是新建对象）。
+  // 又获取：await_fetch 创建全新对象（不是复用旧对象），旧句柄保持置毒。
   {
-    auto task = test.run_task("lru_revive_fetch", std::chrono::seconds{5},
-                              [&caches, &fetch_calls, &ptr](rpc::context &ctx) -> rpc::result_code_type {
-                                test_cache_ptr out;
+    auto task = test.run_task("lru_recreate_fetch", std::chrono::seconds{5},
+                              [&caches, &fetch_calls, &ptr, &fresh_ptr](rpc::context &ctx) -> rpc::result_code_type {
                                 int32_t res = RPC_AWAIT_CODE_RESULT(caches.await_fetch(
-                                    ctx, "k1", out,
+                                    ctx, "k1", fresh_ptr,
                                     [&fetch_calls](rpc::context &, const std::string &, counted_object &val_out,
                                                    int64_t *out_version) -> rpc::result_code_type {
                                       ++fetch_calls;
@@ -940,8 +1054,9 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
                                       RPC_RETURN_CODE(0);
                                     }));
                                 CASE_EXPECT_EQ(0, res);
-                                CASE_EXPECT_TRUE(ptr == out);
-                                CASE_EXPECT_FALSE(out->removed);
+                                CASE_EXPECT_TRUE(nullptr != fresh_ptr && fresh_ptr != ptr);
+                                CASE_EXPECT_FALSE(fresh_ptr->removed);
+                                CASE_EXPECT_TRUE(ptr->removed);
                                 RPC_RETURN_CODE(res);
                               });
     if (task.empty()) {
@@ -952,17 +1067,22 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
   }
   CASE_EXPECT_EQ(2, fetch_calls);
   CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
-  CASE_EXPECT_TRUE(caches.get_cache("k1") == ptr);
-  CASE_EXPECT_FALSE(ptr->removed);
-  CASE_EXPECT_EQ(77, ptr->data_object.payload);
-  CASE_EXPECT_EQ(9, static_cast<int>(ptr->data_version));
+  CASE_EXPECT_TRUE(caches.get_cache("k1") == fresh_ptr);
+  CASE_EXPECT_EQ(77, fresh_ptr->data_object.payload);
+  CASE_EXPECT_EQ(9, static_cast<int>(fresh_ptr->data_version));
 
-  // 复活后对象继续可用：旧句柄 await_save 成功。
+  // 重新拉取后旧句柄依旧被拒绝保存（置毒永久）；新句柄可正常保存。
   {
     auto task = test.run_task(
-        "lru_revive_save", std::chrono::seconds{5},
-        [&caches, &save_calls, &ptr](rpc::context &ctx) -> rpc::result_code_type {
-          test_cache_ptr save_ptr = ptr;
+        "lru_recreate_save", std::chrono::seconds{5},
+        [&caches, &save_calls, &ptr, &fresh_ptr, &poisoned_after_refetch_res](rpc::context &ctx) -> rpc::result_code_type {
+          poisoned_after_refetch_res = RPC_AWAIT_CODE_RESULT(caches.await_save(
+              ctx, ptr, [](rpc::context &, const counted_object &, int64_t *) -> rpc::result_code_type {
+                RPC_RETURN_CODE(0);
+              }));
+          CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, poisoned_after_refetch_res);
+
+          test_cache_ptr save_ptr = fresh_ptr;
           int32_t res = RPC_AWAIT_CODE_RESULT(caches.await_save(
               ctx, save_ptr,
               [&save_calls](rpc::context &, const counted_object &in, int64_t *out_version) -> rpc::result_code_type {
@@ -981,14 +1101,16 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
     }
     expect_task_done(test.wait(task, std::chrono::seconds{10}), 0);
   }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND, poisoned_after_refetch_res);
   CASE_EXPECT_EQ(1, save_calls);
-  CASE_EXPECT_EQ(10, static_cast<int>(ptr->data_version));
+  CASE_EXPECT_EQ(10, static_cast<int>(fresh_ptr->data_version));
 
-  // 复活后的条目可再次删除。
+  // 重建后的条目可再次删除。
   CASE_EXPECT_TRUE(caches.remove_cache("k1"));
-  CASE_EXPECT_TRUE(ptr->removed);
+  CASE_EXPECT_TRUE(fresh_ptr->removed);
 
   ptr.reset();
+  fresh_ptr.reset();
   drain_pool(caches);
   pump_until(test, []() { return 0 == counted_object::live_instances; });
   CASE_EXPECT_EQ(0, counted_object::live_instances);
@@ -996,31 +1118,31 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_then_fetch_revives_object
   test.stop();
 }
 
-// 先删除又获取（在途 IO 的墓碑）：删除发生在拉取在途时，后续 await_fetch 先排空在途 IO，
-// 再清除 removed 复用原对象并重新拉取最新数据。
-CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_during_fetch_then_refetch_revives) {
+// 拉取在途时删除：remove_cache 置毒并真正移出池，后续 await_fetch 不再等待/复用在途对象，
+// 直接创建新对象重新拉取；在途拉取完成后不得复活或覆盖新缓存。
+CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_during_fetch_then_refetch_creates_new_object) {
   CASE_EXPECT_EQ(0, counted_object::live_instances);
   atfw::testing::runtime test;
   if (0 != start_test_runtime(test)) {
     return;
   }
 
-  register_delayed_gate(test, "lru-revive-gate.local", 4);
+  register_delayed_gate(test, "lru-recreate-gate.local", 4);
 
   test_map_type caches;
   int fetch_calls = 0;
   test_cache_ptr ptr_a;
   test_cache_ptr ptr_b;
   {
-    auto task_a = test.run_task("lru_revive_io_a", std::chrono::seconds{10},
+    auto task_a = test.run_task("lru_recreate_io_a", std::chrono::seconds{10},
                                 [&caches, &fetch_calls, &ptr_a](rpc::context &ctx) -> rpc::result_code_type {
                                   int32_t res = RPC_AWAIT_CODE_RESULT(caches.await_fetch(
                                       ctx, "k1", ptr_a,
                                       [&fetch_calls](rpc::context &gate_ctx, const std::string &,
                                                      counted_object &val_out, int64_t *) -> rpc::result_code_type {
                                         ++fetch_calls;
-                                        int32_t gate_res =
-                                            RPC_AWAIT_CODE_RESULT(await_dns_gate(gate_ctx, "lru-revive-gate.local"));
+                                        int32_t gate_res = RPC_AWAIT_CODE_RESULT(
+                                            await_dns_gate(gate_ctx, "lru-recreate-gate.local"));
                                         if (gate_res < 0) {
                                           RPC_RETURN_CODE(gate_res);
                                         }
@@ -1033,16 +1155,18 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_during_fetch_then_refetch
       test.stop();
       return;
     }
-    CASE_EXPECT_TRUE(pump_until(test, [&test]() { return test.dns().calls("lru-revive-gate.local") >= 1; }));
+    CASE_EXPECT_TRUE(pump_until(test, [&test]() { return test.dns().calls("lru-recreate-gate.local") >= 1; }));
     CASE_EXPECT_TRUE(caches.is_io_task_running("k1"));
 
-    // 拉取在途时删除：条目变为带在途 IO 的墓碑。
+    // 拉取在途时删除：条目被真正移出池，在途句柄被置毒。
     CASE_EXPECT_TRUE(caches.remove_cache("k1"));
     CASE_EXPECT_TRUE(nullptr == caches.get_cache("k1"));
+    CASE_EXPECT_EQ(0, static_cast<int>(caches.size()));
+    CASE_EXPECT_TRUE(nullptr != ptr_a && ptr_a->removed);
     CASE_EXPECT_FALSE(caches.is_io_task_running("k1"));
 
-    // 又获取：等待在途 IO 结束后复活原对象并重新拉取。
-    auto task_b = test.run_task("lru_revive_io_b", std::chrono::seconds{10},
+    // 又获取：池中无可复用对象，直接成为拉取任务并创建新对象（不等待在途 IO）。
+    auto task_b = test.run_task("lru_recreate_io_b", std::chrono::seconds{10},
                                 [&caches, &fetch_calls, &ptr_b](rpc::context &ctx) -> rpc::result_code_type {
                                   int32_t res = RPC_AWAIT_CODE_RESULT(caches.await_fetch(
                                       ctx, "k1", ptr_b,
@@ -1066,14 +1190,18 @@ CASE_TEST(server_frame_unit_test, rpc_lru_cache_remove_during_fetch_then_refetch
     expect_task_done(test.wait(task_b, std::chrono::seconds{20}), 0);
   }
 
+  // 在途拉取（A）正常完成自己的对象但保持置毒、不入池；新拉取（B）的对象占据缓存。
   CASE_EXPECT_EQ(2, fetch_calls);
-  CASE_EXPECT_TRUE(nullptr != ptr_a && ptr_a == ptr_b);
-  CASE_EXPECT_FALSE(ptr_a->removed);
-  CASE_EXPECT_EQ(99, ptr_a->data_object.payload);
-  CASE_EXPECT_EQ(5, static_cast<int>(ptr_a->data_version));
-  CASE_EXPECT_TRUE(caches.get_cache("k1") == ptr_a);
+  CASE_EXPECT_TRUE(nullptr != ptr_a && nullptr != ptr_b && ptr_a != ptr_b);
+  CASE_EXPECT_TRUE(ptr_a->removed);
+  CASE_EXPECT_EQ(11, ptr_a->data_object.payload);
+  CASE_EXPECT_FALSE(ptr_b->removed);
+  CASE_EXPECT_EQ(99, ptr_b->data_object.payload);
+  CASE_EXPECT_EQ(5, static_cast<int>(ptr_b->data_version));
+  CASE_EXPECT_TRUE(caches.get_cache("k1") == ptr_b);
   CASE_EXPECT_FALSE(caches.is_io_task_running("k1"));
   CASE_EXPECT_TRUE(task_type_trait::empty(ptr_a->io_task));
+  CASE_EXPECT_TRUE(task_type_trait::empty(ptr_b->io_task));
   CASE_EXPECT_EQ(1, static_cast<int>(caches.size()));
 
   ptr_a.reset();

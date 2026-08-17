@@ -81,12 +81,14 @@ inline void make_prepared_storage(atfw::distributed_system::transaction_blob_sto
   auto* prepare_timepoint = out.mutable_metadata()->mutable_prepare_timepoint();
   prepare_timepoint->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
   prepare_timepoint->set_nanos(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() % 1000000000);
+      static_cast<int32_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() % 1000000000));
   auto* expire_timepoint = out.mutable_metadata()->mutable_expire_timepoint();
   auto expire = now + timeout;
   expire_timepoint->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(expire.time_since_epoch()).count());
   expire_timepoint->set_nanos(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(expire.time_since_epoch()).count() % 1000000000);
+      static_cast<int32_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(expire.time_since_epoch()).count() % 1000000000));
   out.mutable_configure()->set_resolve_max_times(3);
   out.mutable_configure()->set_lock_retry_max_times(3);
   out.mutable_configure()->mutable_resolve_retry_interval()->set_seconds(0);
