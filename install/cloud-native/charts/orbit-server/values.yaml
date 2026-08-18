@@ -30,4 +30,7 @@ external_discovery:
     keepalive:
       enabled: false
 
+redis:
+  enable: true
+
 enable_excel_config: true

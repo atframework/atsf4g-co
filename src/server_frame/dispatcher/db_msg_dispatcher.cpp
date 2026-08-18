@@ -252,6 +252,12 @@ SERVER_FRAME_API int32_t db_msg_dispatcher::init() {
     return res;
   }
 
+  if (logic_config::me()->get_cfg_db().cluster().gateways().size() == 0 &&
+      logic_config::me()->get_cfg_db().raw().gateways().size() == 0) {
+    FWLOGERROR("db cluster and raw both empty, no db server to connect");
+    return -10;
+  }
+
   if (!logic_config::me()->get_cfg_db().record_prefix().empty()) {
     record_prefix_ = logic_config::me()->get_cfg_db().record_prefix();
   } else if (logic_config::me()->get_cfg_db().random_prefix()) {

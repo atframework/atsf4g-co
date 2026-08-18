@@ -315,10 +315,12 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     return -3;
   }
 
-  configured_client_command_line_.emplace_back(kOrbitEnabledArg);
-
+  configured_client_command_line_append_.emplace_back(kOrbitEnabledArg);
   // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
   for (const auto& arg : configured_client_command_line_) {
+    FWLOGINFO("orbit agent launch command argument: {}", arg);
+  }
+  for (const auto& arg : configured_client_command_line_append_) {
     FWLOGINFO("orbit agent launch command argument: {}", arg);
   }
 
@@ -334,11 +336,14 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
       return -5;
     }
 
-    seed_client_command_line_.emplace_back(kOrbitEnabledArg);
-    seed_client_command_line_.emplace_back("--seed_mode");
+    seed_client_command_line_append_.emplace_back(kOrbitEnabledArg);
+    seed_client_command_line_append_.emplace_back("--seed_mode");
 
     // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
     for (const auto& arg : seed_client_command_line_) {
+      FWLOGINFO("orbit agent launch seed client command argument: {}", arg);
+    }
+    for (const auto& arg : seed_client_command_line_append_) {
       FWLOGINFO("orbit agent launch seed client command argument: {}", arg);
     }
   }
@@ -622,7 +627,8 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     }
   } else {
     // 普通模式
-    int spawn_result = spawn_client_process(client_record, configured_client_command_line_, false);
+    int spawn_result = spawn_client_process(client_record, configured_client_command_line_,
+                                            configured_client_command_line_append_, false);
     if (spawn_result < 0) {
       delete_client(client_record);
       RPC_RETURN_CODE(spawn_result);
@@ -957,7 +963,7 @@ int orbit_agent_manager::startup_seed_client() {
   set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
   record->client_addr.clear();
 
-  return spawn_client_process(record, seed_client_command_line_, true);
+  return spawn_client_process(record, seed_client_command_line_, seed_client_command_line_append_, true);
 }
 
 orbit_agent_client_record_ptr orbit_agent_manager::find_client(const std::string& client_id) noexcept {
@@ -1063,10 +1069,10 @@ void orbit_agent_manager::fill_client_identity(atfw::orbit::DClientIdentity& out
 
 void orbit_agent_manager::build_client_launch_arguments(
     const orbit_agent_client_record_ptr& record, const std::unordered_map<std::string, std::string>& render_values,
-    const std::vector<std::string>& command_line, std::vector<std::string>& output) {
+    const std::vector<std::string>& command_line, const std::vector<std::string>& command_line_append,
+    std::vector<std::string>& output) {
   uint64_t app_id = ++sequence_allocator_;
   output.clear();
-  output.reserve(command_line.size() + static_cast<size_t>(record->custom_args.size()) + 6);
 
   // 渲染启动参数中的 ${field} 占位符，用 render_values 中的实际值替换
   for (const std::string& arg : command_line) {
@@ -1075,7 +1081,9 @@ void orbit_agent_manager::build_client_launch_arguments(
   for (const std::string& custom_arg : record->custom_args) {
     output.emplace_back(render_string_template(custom_arg, render_values));
   }
-
+  for (const auto& arg : command_line_append) {
+    output.emplace_back(render_string_template(arg, render_values));
+  }
   fill_normal_client_start_command(*record, app_id, output);
 }
 
@@ -1174,7 +1182,8 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
 }
 
 int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_ptr& record,
-                                              const std::vector<std::string>& command_line, bool seed_client) {
+                                              const std::vector<std::string>& command_line,
+                                              const std::vector<std::string>& command_line_append, bool seed_client) {
   std::vector<std::string> launch_arguments;
 
   // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
@@ -1185,7 +1194,7 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
   std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
   render_values.emplace("time", buf);
 
-  build_client_launch_arguments(record, render_values, command_line, launch_arguments);
+  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments);
 
   int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments), !seed_client);
   if (spawn_result < 0) {
