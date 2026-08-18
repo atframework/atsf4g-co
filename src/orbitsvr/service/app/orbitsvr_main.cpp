@@ -15,6 +15,7 @@
 #include <config/atframe_service_types.h>
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
+#include <dispatcher/db_msg_dispatcher.h>
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_action_no_req_base.h>
 #include <dispatcher/task_action_ss_req_base.h>
@@ -173,9 +174,9 @@ int main(int argc, char *argv[]) {
     return -1;
   }
 
-  app.add_module(ss_msg_dispatcher::me());
-  app.add_module(orbit_msg_dispatcher::me());
   app.add_module(atfw::memory::stl::make_shared<main_service_module>());
+  app.add_module(ss_msg_dispatcher::me());
+  app.add_module(db_msg_dispatcher::me());
 
   app.get_command_manager()
       ->bind_cmd("orbit-start-client", &main_service_module::cmd_start_client)
