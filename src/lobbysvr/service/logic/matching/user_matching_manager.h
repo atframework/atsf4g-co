@@ -38,6 +38,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
   bool is_dirty() const;
   void clear_dirty();
+  // 玩家持有有效 matching_id 且房间处于搜索、确认或创建战斗阶段。
+  bool is_in_matching() const;
 
   // CS 匹配操作。操作者身份和 lobbysvr 订阅路由只由服务端填写。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_matching(

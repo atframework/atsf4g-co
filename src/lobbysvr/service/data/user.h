@@ -238,7 +238,7 @@ class user : public user_cache {
 
  public:
   // 便捷接口
-  bool user_in_orbit() const;
+  bool is_in_orbit() const;
 
  private:
   mutable std::bitset<internal_flag::EN_IFT_MAX> internal_flags_;

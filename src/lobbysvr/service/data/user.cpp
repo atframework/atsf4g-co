@@ -619,7 +619,11 @@ user::get_get_info_handle() {
   return g_get_info_handle_list;
 }
 
-bool user::user_in_orbit() const {
+bool user::is_in_orbit() const {
+  // 是否在匹配
+  if (user_matching_manager_->is_in_matching()) {
+    return false;
+  }
   // 是否在Orbit流程中
   return user_orbit_manager_->is_orbit_room_exist();
 }

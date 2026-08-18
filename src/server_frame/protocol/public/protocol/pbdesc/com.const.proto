@@ -330,6 +330,8 @@ enum EnErrorCode {
                                            [(error_code.description) = "匹配池配置未找到"];
   EN_MATCHING_RESULT_START_FAILED = -909
                                            [(error_code.description) = "匹配ds启动失败"];
+  EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING = -910
+                                           [(error_code.description) = "用户已经在匹配中"];
   // 关卡模块[1001-1100]
   EN_LEVEL_CFG_NOT_FOUND = -1001
                                         [(error_code.description) = "关卡配置未找到"];

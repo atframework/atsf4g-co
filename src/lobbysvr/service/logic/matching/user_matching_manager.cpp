@@ -42,12 +42,6 @@ void erase_unit(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot, uint64_t 
   }
 }
 
-bool is_terminal_status(PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status) {
-  return status == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED ||
-         status == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED ||
-         status == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT ||
-         status == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED;
-}
 }  // namespace
 
 user_matching_manager::user_matching_manager(user& owner) : owner_(&owner), dirty_(false) {}
@@ -61,7 +55,7 @@ void user_matching_manager::create_init(rpc::context&) {
 }
 
 rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
-  if (data_.snapshot().matching_id().empty() || is_terminal_status(data_.snapshot().status())) {
+  if (!is_in_matching()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -89,6 +83,13 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
 
   int32_t result = RPC_AWAIT_CODE_RESULT(check_matching(ctx, *request, *response));
   if (result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND) {
+    // 如何玩家离线前处于匹配，并且已经confirm了匹配，重登后不知道是否已经进入了对局，直接转交给orbit确认
+    if (data_.snapshot().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
+      FWPLOGINFO(*owner_, "login_init matching not found, but status is creating battle, matching_id={}",
+                 data_.snapshot().matching_id());
+      time_t now = atfw::util::time::time_utility::get_now();
+      owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.snapshot().orbit_room_key(), now);
+    }
     data_.Clear();
     dirty_ = true;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -114,12 +115,33 @@ bool user_matching_manager::is_dirty() const { return dirty_; }
 
 void user_matching_manager::clear_dirty() { dirty_ = false; }
 
+bool user_matching_manager::is_in_matching() const {
+  if (data_.snapshot().matching_id().empty()) {
+    return false;
+  }
+
+  switch (data_.snapshot().status()) {
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING:
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING:
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE:
+      return true;
+    default:
+      return false;
+  }
+}
+
 rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
                                                             const PROJECT_NAMESPACE_ID::CSMatchingStartReq& request,
                                                             PROJECT_NAMESPACE_ID::SCMatchingStartRsp& response) {
-  if (!data_.snapshot().matching_id().empty() && !is_terminal_status(data_.snapshot().status())) {
+  if (is_in_matching()) {
     FWPLOGERROR(*owner_, "start matching rejected by active matching, matching_id={}, status={}",
                 data_.snapshot().matching_id(), static_cast<int>(data_.snapshot().status()));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING);
+  }
+
+  if (owner_->is_in_orbit()) {
+    FWPLOGERROR(*owner_, "start matching rejected by orbit, matching_id={}, status={}", data_.snapshot().matching_id(),
+                static_cast<int>(data_.snapshot().status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);
   }
 
@@ -342,8 +364,7 @@ void user_matching_manager::acknowledge_matching_sync(rpc::context& ctx,
   const std::string previous_matching_id = data_.snapshot().matching_id();
   const bool is_switch =
       previous_matching_id != sync.matching_id() && pending_switch_matching_id_ == sync.matching_id();
-  if (!previous_matching_id.empty() && previous_matching_id != sync.matching_id() && !is_switch &&
-      !is_terminal_status(data_.snapshot().status())) {
+  if (!previous_matching_id.empty() && previous_matching_id != sync.matching_id() && !is_switch && is_in_matching()) {
     FWPLOGERROR(*owner_,
                 "ignore matching event sync from unexpected room, local_matching_id={}, sync_matching_id={}, "
                 "pending_switch_matching_id={}, local_status={}",
@@ -394,12 +415,14 @@ const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& user_matching_manager::get_sn
 int64_t user_matching_manager::get_last_event_id() const { return data_.last_event_id(); }
 
 void user_matching_manager::update_snapshot(const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot) {
-  if (data_.snapshot().matching_id() != snapshot.matching_id() || snapshot.last_event_id() >= data_.last_event_id()) {
-    if (data_.snapshot().matching_id() != snapshot.matching_id()) {
+  const bool matching_id_changed = data_.snapshot().matching_id() != snapshot.matching_id();
+  if (matching_id_changed || snapshot.last_event_id() >= data_.last_event_id()) {
+    if (matching_id_changed) {
       data_.set_client_acknowledge_event_id(0);
     }
     protobuf_copy_message(*data_.mutable_snapshot(), snapshot);
-    data_.set_last_event_id(std::max(data_.last_event_id(), snapshot.last_event_id()));
+    data_.set_last_event_id(matching_id_changed ? snapshot.last_event_id()
+                                                : std::max(data_.last_event_id(), snapshot.last_event_id()));
     dirty_ = true;
   }
 }
@@ -530,7 +553,9 @@ void user_matching_manager::send_log_sync(rpc::context& ctx, const PROJECT_NAMES
   output->set_matching_id(sync.matching_id());
   output->set_is_switch(is_switch);
   protobuf_copy_message(*output->mutable_event_logs(), sync.event_logs());
-  protobuf_copy_message(*output->mutable_snapshot(), sync.room_snapshot());
+  if (sync.has_room_snapshot()) {
+    protobuf_copy_message(*output->mutable_snapshot(), sync.room_snapshot());
+  }
   FWPLOGDEBUG(*owner_, "send matching log sync to client, matching_id={}, is_switch={}, event_count={}, snapshot={}",
               sync.matching_id(), is_switch, sync.event_logs_size(), sync.has_room_snapshot());
   rpc::lobbysvrclientservice::send_matching_log_sync(ctx, *output, *session);
