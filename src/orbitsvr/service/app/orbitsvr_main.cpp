@@ -177,6 +177,7 @@ int main(int argc, char *argv[]) {
   app.add_module(atfw::memory::stl::make_shared<main_service_module>());
   app.add_module(ss_msg_dispatcher::me());
   app.add_module(db_msg_dispatcher::me());
+  app.add_module(orbit_msg_dispatcher::me());
 
   app.get_command_manager()
       ->bind_cmd("orbit-start-client", &main_service_module::cmd_start_client)
