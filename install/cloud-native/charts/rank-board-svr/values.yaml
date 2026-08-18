@@ -5,7 +5,7 @@
 proc_name: rank-board-svrd
 
 # 服务唯一ID标识
-type_id: 15
+type_id: 17
 type_name: "rank-board-svr"
 
 image:
