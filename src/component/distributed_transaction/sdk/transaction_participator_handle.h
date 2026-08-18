@@ -401,6 +401,7 @@ class transaction_participator_handle
     // 裸函数指针 + 显式传入 handle，避免 lambda 捕获和 std::function 分配
     // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
     void (*on_change)(transaction_participator_handle*) = nullptr;
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
     transaction_participator_handle* on_change_handle = nullptr;
 
    private:

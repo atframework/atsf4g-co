@@ -137,6 +137,9 @@ task_action_participator_resolve_transaction::operator()() {
     RPC_AWAIT_IGNORE_RESULT(vtable->on_resolve_task_finished(get_shared_context(), *param_.participantor));
   }
 
+  // 本任务执行期间的tick被跳过了。这里立即触发下一段 tick，避免恢复流程永久丢失或立即到期形成空转循环
+  param_.participantor->tick(get_shared_context(), atfw::util::time::time_utility::now());
+
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -156,6 +159,10 @@ DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction
               protobuf_mini_dumper_get_error_msg(get_result()));
     // 任务被 kill/超时/取消时 operator() 的协程帧已销毁，此处兜底为未处理条目重新排期定时器
     rearm_unprocessed_timers();
+    // 与 operator() 收尾同理补齐驱动者：kill 发生在批处理全部成功之后时 rearm 不产生队列变更，
+    // 运行期间被跳过的到期条目需要重新武装定时器。此处不直接拉起新任务（任务收尾/析构阶段），
+    // 到期条目由定时器在下一事件循环触发 tick() 处理（此时本任务已退出，tick 不再被跳过）。
+    param_.participantor->refresh_resolve_custom_timer();
   }
   return get_result();
 }

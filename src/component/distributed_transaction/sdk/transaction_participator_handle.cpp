@@ -353,6 +353,7 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t
 transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_utility::raw_time_t timepoint) {
   if (!task_type_trait::empty(auto_resolve_transaction_task_) &&
       !task_type_trait::is_exiting(auto_resolve_transaction_task_)) {
+    // task_action_participator_resolve_transaction） 会 兜底 tick()/refresh 恢复定时器
     return 0;
   }
 

@@ -1955,6 +1955,89 @@ CASE_TEST(component_distributed_transaction_participator, custom_timer_points_at
   CASE_EXPECT_EQ(0, test.stop());
 }
 
+// 回归：运行中的 resolve task 处理纯 acknowledge 批次且全部成功时不产生任何队列变更；
+// 若此时另一事务的 resolve 定时器到期，on_resolve_custom_timer_fired 消费定时器后 tick() 因任务在途
+// 提前返回、不重排定时器，队列中的 B 将永久失去驱动者（参与者没有外部周期 tick 兜底）。
+// 任务收尾必须兜底重驱动队列，恢复“队列非空 ⇒ 存在驱动者（定时器或运行中的任务）”的不变量。
+CASE_TEST(component_distributed_transaction_participator, custom_timer_redriven_when_fired_during_running_task) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  int commit_ack_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
+  auto commit_ack_rule = register_participator_ack_mock(test, "commit", &commit_ack_calls);
+  CASE_EXPECT_TRUE(!!query_rule && !!commit_ack_rule);
+
+  // 首个 resolve task（ack A）拉起后停在 check_writable 闸门上，保证 B 的定时器在任务在途期间到期
+  bool release_resolve_task = false;
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  vtable->check_writable = [&release_resolve_task](rpc::context& ctx, handle_type&,
+                                                   bool& writable) -> rpc::result_code_type {
+    // 有界等待：stop/kill 等异常路径下不得形成空转循环
+    for (int i = 0; i < 2000 && !release_resolve_task; ++i) {
+      RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{2}));
+    }
+    writable = true;
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  // A：60s 后才自然到期，先经协调者 commit 通知转入 finished，产生一条立即到期的 acknowledge 条目；
+  // B：250ms 后到期（kQuery）。ack A 的定时器先触发并拉起 resolve task。
+  auto task = test.run_task("redrive_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request_a = make_prepare_request("part-uuid-redrive-a", 2, std::chrono::milliseconds{60000});
+    auto request_b = make_prepare_request("part-uuid-redrive-b", 2, std::chrono::milliseconds{250});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_a), response, output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_b), response, output)));
+
+    SSParticipatorTransactionCommitReq commit_request;
+    commit_request.set_transaction_uuid("part-uuid-redrive-a");
+    SSParticipatorTransactionCommitRsp commit_response;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+    CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+
+  // 仅 pump：ack A 到期拉起 resolve task（停在闸门上）；B 的定时器在任务在途期间到期并被消费，
+  // tick() 提前返回后不重排 —— 到达“定时器已丢”状态。
+  CASE_EXPECT_TRUE(
+      dt_test::wait_for(test, [&handle]() { return !handle->has_resolve_custom_timer_for_unit_test(); }));
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().count("part-uuid-redrive-b"));
+  CASE_EXPECT_EQ(1, handle->get_finished_transactions().count("part-uuid-redrive-a"));
+
+  // 放行 resolve task：ack A 成功（remove_finished 的队列 erase 为空操作，不产生队列变更，
+  // 不会重新武装定时器）；任务收尾的兜底重驱动必须接管 B，全程不调用任何 handle->tick()
+  release_resolve_task = true;
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle]() {
+    return handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
+  }));
+
+  // B 被收尾重驱动完整消费：query -> COMMITED -> do_event -> ack；A 与 B 的 ack 均已送达
+  CASE_EXPECT_GE(query_calls, 1);
+  CASE_EXPECT_GE(commit_ack_calls, 2);
+  CASE_EXPECT_EQ(2, recorder.count("do_event"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 // 安全性：handle 在定时器等待期间销毁时撤销定时器，之后不会有任何回调/任务/悬空访问
 CASE_TEST(component_distributed_transaction_participator, custom_timer_cancelled_on_destroy) {
   atfw::testing::runtime test;
