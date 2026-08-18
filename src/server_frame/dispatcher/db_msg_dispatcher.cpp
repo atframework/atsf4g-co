@@ -26,6 +26,7 @@
 #include <config/compiler_features.h>
 #include <config/extern_log_categorize.h>
 #include <log/log_wrapper.h>
+#include <rpc/db/db_utils.h>
 #include <time/time_utility.h>
 
 #include <utility/random_engine.h>
@@ -592,6 +593,10 @@ int db_msg_dispatcher::cluster_init(const PROJECT_NAMESPACE_ID::config::db_group
   // 启动cluster
   if (conn->start() >= 0) {
     db_channel_type_ = static_cast<channel_t::type>(index);
+    rpc::db::redis_args args(1);
+    args.push("PING");
+    conn->exec(nullptr, 0, nullptr, nullptr, static_cast<int>(args.size()), args.get_args_values(),
+               args.get_args_lengths());
     return 0;
   }
 
@@ -751,6 +756,9 @@ int db_msg_dispatcher::raw_init(const PROJECT_NAMESPACE_ID::config::db_group_cfg
   // 启动raw
   if (conn->start() >= 0) {
     db_channel_type_ = static_cast<channel_t::type>(index);
+    rpc::db::redis_args args(1);
+    args.push("PING");
+    conn->exec(nullptr, nullptr, static_cast<int>(args.size()), args.get_args_values(), args.get_args_lengths());
     return 0;
   }
 

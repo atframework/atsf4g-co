@@ -885,6 +885,8 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   }
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to update data by index {}", key, list_index);
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to update index content: {}", key,
+              protobuf_mini_dumper_get_readable(*store));
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,
@@ -965,6 +967,8 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to add index, max_list_length: {}", key,
              max_list_length);
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list start to add index content: {}", key,
+              protobuf_mini_dumper_get_readable(*store));
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
       static_cast<db_msg_dispatcher::channel_t::type>(channel), key.data(), key.size(), ctx.get_task_context().task_id,

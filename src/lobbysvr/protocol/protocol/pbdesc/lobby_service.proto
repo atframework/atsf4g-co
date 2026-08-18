@@ -27,7 +27,9 @@ message SSUserKickOffReq {
 
 message SSUserKickOffRsp {}
 
-message SSUserAsyncJobsSync {}
+message SSUserAsyncJobsSync {
+  int32 job_type = 1;  // 异步任务类型 如果非0则强制尝试拉取 适用于立刻通知
+}
 /////////////////////////////////////////////////////
 ////  登入相关协议到此结束
 /////////////////////////////////////////////////////

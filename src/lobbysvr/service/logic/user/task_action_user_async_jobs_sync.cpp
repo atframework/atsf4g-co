@@ -36,6 +36,7 @@ const char* task_action_user_async_jobs_sync::name() const { return "task_action
 
 task_action_user_async_jobs_sync::result_type task_action_user_async_jobs_sync::operator()() {
   msg_cref_type req_msg = get_request();
+  const rpc_request_type& req_body = get_request_body();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
@@ -44,6 +45,9 @@ task_action_user_async_jobs_sync::result_type task_action_user_async_jobs_sync::
 
   auto user_inst = user_manager::me()->find_as<user>(user_id, zone_id);
   if (user_inst) {
+    if (req_body.job_type() != 0) {
+      user_inst->get_user_async_jobs_manager().force_async_job(req_body.job_type());
+    }
     user_inst->get_user_async_jobs_manager().try_async_jobs(get_shared_context());
   }
 

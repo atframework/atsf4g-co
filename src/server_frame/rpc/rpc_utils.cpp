@@ -376,6 +376,7 @@ SERVER_FRAME_API result_code_type wait(context &ctx, db_message_t &msg, const di
         db_message_t *src_msg = reinterpret_cast<db_message_t *>(resume_data->message.msg_addr);
         stack_msg->head_message.Swap(&src_msg->head_message);
         stack_msg->body_message.swap(src_msg->body_message);
+        stack_msg->body_message_list.swap(src_msg->body_message_list);
       },
       reinterpret_cast<void *>(&msg)));
   if (0 != ret) {

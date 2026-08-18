@@ -66,8 +66,9 @@ static int32_t unpack_${message_name}(rpc::context *ctx, db_message_t &msg, cons
 
   return rpc::db::unpack_list_message(ctx, reply, msg.body_message_list,
                                       [](rpc::context *sub_ctx) -> atfw::util::memory::strong_rc_ptr<shared_abstract_message<google::protobuf::Message>> {
+                                        shared_message<PROJECT_NAMESPACE_ID::${message_name}> message {*sub_ctx};
                                         return atfw::component::memory::stl::make_strong_rc<shared_abstract_message<google::protobuf::Message>>(
-                                            shared_message<PROJECT_NAMESPACE_ID::${message_name}>{*sub_ctx});
+                                            message);
                                       });
 }
 static int32_t unpack_${message_name}_indexs(rpc::context *ctx,
@@ -80,8 +81,9 @@ static int32_t unpack_${message_name}_indexs(rpc::context *ctx,
   return rpc::db::unpack_list_message_with_index(ctx, reply,
                                                  msg.body_message_list,
                                                  [](rpc::context *sub_ctx) -> atfw::util::memory::strong_rc_ptr<shared_abstract_message<google::protobuf::Message>> {
+                                                   shared_message<PROJECT_NAMESPACE_ID::${message_name}> message {*sub_ctx};
                                                    return atfw::component::memory::stl::make_strong_rc<shared_abstract_message<google::protobuf::Message>>(
-                                                       shared_message<PROJECT_NAMESPACE_ID::${message_name}>{*sub_ctx});
+                                                       message);
                                                  });
 }
 } // namespace detail

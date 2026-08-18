@@ -160,7 +160,7 @@ LOBBY_RPC_API ::rpc::db::result_type add_jobs(rpc::context& ctx, int32_t jobs_ty
     // 不走路由系统，异步任务允许任意节点发送，但是有些服务不需要拉缓存对象
     shared_message<PROJECT_NAMESPACE_ID::table_login_lock> login_table{ctx};
     shared_message<PROJECT_NAMESPACE_ID::SSUserAsyncJobsSync> req_body{ctx};
-
+    req_body->set_job_type(jobs_type);
     auto res =
         RPC_AWAIT_CODE_RESULT(detail::fetch_user_login_cache(ctx, user_id, login_table, options.ignore_router_cache));
     if (res < 0) {
