@@ -1257,3 +1257,61 @@ CASE_TEST(component_distributed_transaction_api, calculate_server_id_prefers_ali
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ §4.5 补充：remove_no_wait 按 N 个副本扇出，发送失败按 R 阈值判定 ============
+CASE_TEST(component_distributed_transaction_api, remove_no_wait_send_failure_threshold) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  // 发现中只注入两个节点；元数据列出的第三个节点（0x1B0BAD）路由不到，
+  // router 在消息到达 mock SS 引擎之前即以 EN_ROUTER_NOT_FOUND 失败
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002}));
+
+  // Leg 1: R=2，3 个副本中 1 个发送失败 —— 成功数 2 达到阈值，整体返回 0
+  auto task_ok = test.run_task("remove_nowait_threshold_ok", std::chrono::seconds{4},
+                               [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("api-remove-nowait-threshold-ok");
+    metadata.set_replicate_read_count(2);
+    metadata.add_replicate_node_server_id(0x1B0001);
+    metadata.add_replicate_node_server_id(0x1B0002);
+    metadata.add_replicate_node_server_id(0x1B0BAD);  // 未知节点：发送立即失败
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::transaction_api::remove_transaction_no_wait(ctx, metadata)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result_ok = test.wait(task_ok, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result_ok.task_exited);
+  CASE_EXPECT_EQ(0, result_ok.result_code);
+  for (int i = 0; i < 4; ++i) {
+    test.pump_once();
+  }
+  // 失败的发送从未到达 SS 引擎：只有两个存活节点产生了引擎侧调用
+  CASE_EXPECT_EQ(2, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
+
+  // Leg 2: R=3，同样的 1 个发送失败使成功数 2 < 3 —— 返回最近一次失败错误码
+  auto task_fail = test.run_task("remove_nowait_threshold_fail", std::chrono::seconds{4},
+                                 [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("api-remove-nowait-threshold-fail");
+    metadata.set_replicate_read_count(3);
+    metadata.add_replicate_node_server_id(0x1B0001);
+    metadata.add_replicate_node_server_id(0x1B0002);
+    metadata.add_replicate_node_server_id(0x1B0BAD);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND,
+                   RPC_AWAIT_CODE_RESULT(rpc::transaction_api::remove_transaction_no_wait(ctx, metadata)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result_fail = test.wait(task_fail, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result_fail.task_exited);
+  CASE_EXPECT_EQ(0, result_fail.result_code);
+  for (int i = 0; i < 4; ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(4, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

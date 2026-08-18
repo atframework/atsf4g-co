@@ -30,6 +30,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <utility/protobuf_mini_dumper.h>
+
 #include <algorithm>
 #include <string>
 #include <utility>
@@ -69,7 +71,10 @@ team_room* get_team_room_from_subscriber(const rpc::dtmq::client_subscriber::ptr
     FWLOGERROR("team_room {} callback missing local_private_data", callback_name);
     return nullptr;
   }
-  return reinterpret_cast<team_room*>(local_private_data[0]);
+
+  static_assert(sizeof(team_room*) == sizeof(*local_private_data.data()), "team_room* size mismatch");
+  // NOLINTNEXTLINE(performance-no-int-to-ptr)
+  return reinterpret_cast<team_room*>(*local_private_data.data());
 }
 
 rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_team_room_channel_event_callback_set() {
@@ -248,7 +253,7 @@ rpc::result_code_type team_room::send_member_action(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
   }
 
-  int64_t now = atfw::util::time::time_utility::get_now();
+  std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
   const auto& cfg = get_teamsvr_room_cfg();
   auto normalized = rpc::make_shared_message<atframework::team::DTeamMemberAction>(ctx);
   normalized->CopyFrom(action);
@@ -260,10 +265,11 @@ rpc::result_code_type team_room::send_member_action(rpc::context& ctx,
       }
       invitation->mutable_team_key()->set_team_id(team_id_);
       if (0 == invitation->start_timepoint().seconds()) {
-        invitation->mutable_start_timepoint()->set_seconds(now);
+        *invitation->mutable_start_timepoint() = protobuf_from_system_clock(now);
       }
       if (0 == invitation->expired_timepoint().seconds()) {
-        invitation->mutable_expired_timepoint()->set_seconds(now + cfg.invitation_expire_sec());
+        *invitation->mutable_expired_timepoint() =
+            protobuf_from_system_clock(now + protobuf_to_system_clock(cfg.invitation_expire()));
       }
       break;
     }
@@ -274,7 +280,8 @@ rpc::result_code_type team_room::send_member_action(rpc::context& ctx,
       }
       apply->mutable_team_key()->set_team_id(team_id_);
       if (0 == apply->expired_timepoint().seconds()) {
-        apply->mutable_expired_timepoint()->set_seconds(now + cfg.join_request_expire_sec());
+        *apply->mutable_expired_timepoint() =
+            protobuf_from_system_clock(now + protobuf_to_system_clock(cfg.join_request_expire()));
       }
       break;
     }
@@ -328,8 +335,8 @@ rpc::result_code_type team_room::heartbeat(rpc::context& ctx, const atframework:
   // 在线簿记(LRU 更新最近访问成员，随 private_data 仅在主控节点间同步，不下发给成员)。
   // 心跳只会推迟离线过期时间点，不会提前任何定时器事件，因此此处无需重设定时器。
   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-  auto& runtime = member_heartbeats_[req.user_key()];
-  runtime.last_heartbeat_timepoint = atfw::util::time::time_utility::get_now();
+  auto& runtime = member_[req.user_key()];
+  runtime.last_heartbeat_timepoint = atfw::util::time::time_utility::now();
   runtime.user_router_server_id = req.user_router_server_id();
   RPC_RETURN_CODE(0);
 }
@@ -339,7 +346,7 @@ void team_room::restore_snapshot(rpc::context& ctx, const rpc::dtmq::client_subs
     return;
   }
   snapshot_restored_ = true;
-  restore_timepoint_ = atfw::util::time::time_utility::get_now();
+  restore_timepoint_ = atfw::util::time::time_utility::now();
 
   // 从 custom_data 恢复队伍状态(成员清单、加入请求和加入邀请列表)
   const auto& custom_data = subscriber->get_custom_data_content();
@@ -357,21 +364,21 @@ void team_room::restore_snapshot(rpc::context& ctx, const rpc::dtmq::client_subs
   // 先把所有成员插入 LRU 前部(无心跳簿记者视为最久未访问)，再按 private_data 顺序(心跳由旧到新)恢复簿记
   for (const auto& member : storage_.member()) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    member_heartbeats_[member.user_key()];
+    member_[member.user_key()];
   }
   const auto& private_data = subscriber->get_private_data_content();
   if (!private_data.type_url().empty()) {
     atframework::team::DTeamRoomPrivateData private_storage;
     if (private_data.UnpackTo(&private_storage)) {
       last_compact_sequence_ = private_storage.last_compact_sequence();
-      last_compact_timepoint_ = private_storage.last_compact_timepoint().seconds();
+      last_compact_timepoint_ = protobuf_to_system_clock(private_storage.last_compact_timepoint());
       for (const auto& runtime : private_storage.member_runtime()) {
         if (find_member(runtime.user_key()) == nullptr) {
           continue;
         }
-        auto iter = member_heartbeats_.find(runtime.user_key());
-        if (iter != member_heartbeats_.end() && iter->second) {
-          iter->second->last_heartbeat_timepoint = runtime.last_heartbeat_timepoint().seconds();
+        auto iter = member_.find(runtime.user_key());
+        if (iter != member_.end() && iter->second) {
+          iter->second->last_heartbeat_timepoint = protobuf_to_system_clock(runtime.last_heartbeat_timepoint());
           iter->second->user_router_server_id = runtime.user_router_server_id();
         }
       }
@@ -395,9 +402,9 @@ void team_room::restore_snapshot(rpc::context& ctx, const rpc::dtmq::client_subs
   current_lock_ = subscriber->get_lock();
   lock_acquired_ = !current_lock_.lock_holder().empty() && current_lock_.lock_holder() == lock_holder_;
 
-  next_compact_timepoint_ = restore_timepoint_ + get_teamsvr_room_cfg().compact_interval_sec();
+  next_compact_timepoint_ = restore_timepoint_ + protobuf_to_system_clock(get_teamsvr_room_cfg().compact_interval());
   if (lock_acquired_) {
-    next_renew_lock_timepoint_ = restore_timepoint_ + get_lock_renew_interval_sec();
+    next_renew_lock_timepoint_ = restore_timepoint_ + get_lock_renew_interval();
   }
   refresh_empty_tracking(restore_timepoint_);
 }
@@ -442,16 +449,18 @@ void team_room::apply_action(rpc::context& ctx, const atframework::team::DTeamAc
         auto* member = storage_.add_member();
         member->CopyFrom(action.add_member());
         if (0 == member->joined_timepoint().seconds()) {
-          member->mutable_joined_timepoint()->set_seconds(atfw::util::time::time_utility::get_now());
+          *member->mutable_joined_timepoint() = protobuf_from_system_clock(atfw::util::time::time_utility::now());
         }
         // 新成员进入 LRU(尚无心跳簿记，视为最久未访问)
         // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-        member_heartbeats_[member->user_key()];
+        member_[member->user_key()];
         // 首位成员成为队长
         if (!storage_.has_captain_user_key() || 0 == storage_.captain_user_key().user_id()) {
           *storage_.mutable_captain_user_key() = member->user_key();
+          // 队长一定是owner
+          member->set_role(atframework::team::EN_TEAM_MEMBER_ROLE_OWNER);
         }
-        refresh_empty_tracking(atfw::util::time::time_utility::get_now());
+        refresh_empty_tracking(atfw::util::time::time_utility::now());
         schedule_next_timer();
       } else {
         auto joined_timepoint = exist->joined_timepoint();
@@ -561,7 +570,7 @@ void team_room::apply_member_action(rpc::context& ctx, const atframework::team::
       *member->mutable_user_key() = invitation.invitee();
       *member->mutable_team_source_data() = invitation.team_source_data();
       member->set_team_source_type(invitation.team_source_type());
-      member->mutable_joined_timepoint()->set_seconds(atfw::util::time::time_utility::get_now());
+      *member->mutable_joined_timepoint() = protobuf_from_system_clock(atfw::util::time::time_utility::now());
       apply_action(ctx, add_action, sequence, hash_code);
       break;
     }
@@ -573,10 +582,10 @@ void team_room::apply_member_action(rpc::context& ctx, const atframework::team::
           storage_.mutable_member()->DeleteSubrange(i, 1);
         }
       }
-      member_heartbeats_.erase(user_key);
+      member_.erase(user_key);
       // 踢出的成员如果是队长则自动触发换队长(确定性选主，后续可扩展竞选流程)
       elect_captain_after_remove(user_key);
-      refresh_empty_tracking(atfw::util::time::time_utility::get_now());
+      refresh_empty_tracking(atfw::util::time::time_utility::now());
       schedule_next_timer();
       break;
     }
@@ -599,6 +608,8 @@ void team_room::elect_captain_after_remove(const PROJECT_NAMESPACE_ID::DUserIDKe
   }
   // 确定性地选出加入时间最早的成员作为新队长
   int captain_index = 0;
+  // TODO(owent): member数据不应该放在storage_里，应该放在 member_ 里以便Key-Value查找，
+  //              load的时候转移数据，dump的时候不全数据 storage_.member() 应该保持空
   for (int i = 1; i < storage_.member_size(); ++i) {
     const auto& lhs = storage_.member(i).joined_timepoint();
     const auto& rhs = storage_.member(captain_index).joined_timepoint();
@@ -607,28 +618,32 @@ void team_room::elect_captain_after_remove(const PROJECT_NAMESPACE_ID::DUserIDKe
     }
   }
   *storage_.mutable_captain_user_key() = storage_.member(captain_index).user_key();
+  // 队长一定是owner
+  storage_.mutable_member(captain_index)->set_role(atframework::team::EN_TEAM_MEMBER_ROLE_OWNER);
 }
 
-int64_t team_room::get_member_offline_deadline(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
-  int64_t baseline = restore_timepoint_;
-  auto iter = member_heartbeats_.find(user_key, false);
-  if (iter != member_heartbeats_.end() && iter->second && iter->second->last_heartbeat_timepoint > baseline) {
+std::chrono::system_clock::time_point team_room::get_member_offline_deadline(
+    const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+  std::chrono::system_clock::time_point baseline = restore_timepoint_;
+  auto iter = member_.find(user_key, false);
+  if (iter != member_.end() && iter->second && iter->second->last_heartbeat_timepoint > baseline) {
     baseline = iter->second->last_heartbeat_timepoint;
   }
   const auto* member = find_member(user_key);
-  if (nullptr != member && member->joined_timepoint().seconds() > baseline) {
-    baseline = member->joined_timepoint().seconds();
+  if (nullptr != member && protobuf_to_system_clock(member->joined_timepoint()) > baseline) {
+    baseline = protobuf_to_system_clock(member->joined_timepoint());
   }
-  return baseline + get_teamsvr_room_cfg().member_offline_expire_sec();
+
+  return baseline + protobuf_to_system_clock(get_teamsvr_room_cfg().member_offline_expire());
 }
 
-void team_room::refresh_empty_tracking(int64_t now) {
+void team_room::refresh_empty_tracking(std::chrono::system_clock::time_point now) {
   if (0 == storage_.member_size()) {
-    if (0 == empty_since_timepoint_) {
+    if (empty_since_timepoint_ == std::chrono::system_clock::from_time_t(0)) {
       empty_since_timepoint_ = now;
     }
   } else {
-    empty_since_timepoint_ = 0;
+    empty_since_timepoint_ = std::chrono::system_clock::from_time_t(0);
   }
 }
 
@@ -651,26 +666,32 @@ const atframework::team::DTeamMember* team_room::find_member(const PROJECT_NAMES
   return nullptr;
 }
 
-int64_t team_room::get_lock_lease_sec() const {
-  int64_t ret = 0;
+std::chrono::system_clock::duration team_room::get_lock_lease() const {
+  std::chrono::system_clock::duration ret = std::chrono::system_clock::duration::zero();
   if (subscriber_) {
     const auto& configure = subscriber_->get_configure();
     // 租约时长不低于频道配置的订阅者心跳过期淘汰时间
-    ret = configure.subscriber_timeout().seconds();
-    if (ret <= 0) {
+    ret = protobuf_to_system_clock(configure.subscriber_timeout());
+    if (ret <= std::chrono::system_clock::duration::zero()) {
       // 配置未就绪时回退到与 normalize_dtmq_channel_configure 一致的推导: 2*心跳+重试
-      ret = configure.heartbeat_interval().seconds() + configure.heartbeat_interval().seconds() +
-            configure.heartbeat_retry_interval().seconds();
+      ret = protobuf_to_system_clock(configure.heartbeat_interval()) +
+            protobuf_to_system_clock(configure.heartbeat_interval()) +
+            protobuf_to_system_clock(configure.heartbeat_retry_interval());
     }
   }
-  if (ret <= 0) {
-    ret = 60;
+  if (ret <= std::chrono::system_clock::duration::zero()) {
+    ret = std::chrono::seconds{60};
   }
   return ret;
 }
 
-int64_t team_room::get_lock_renew_interval_sec() const {
-  return (std::max)(get_lock_lease_sec() / 2, static_cast<int64_t>(1));
+std::chrono::system_clock::duration team_room::get_lock_renew_interval() const {
+  auto ret = get_lock_lease() / 2;
+  if (ret <= std::chrono::seconds{1}) {
+    ret = std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::seconds{1});
+  }
+
+  return ret;
 }
 
 int64_t team_room::get_compact_log_count() const {
@@ -684,10 +705,10 @@ int64_t team_room::get_compact_log_count() const {
   return 30;
 }
 
-::atfw::dtmq::DChannelOptimisticLock team_room::make_self_lock(int64_t now) const {
+::atfw::dtmq::DChannelOptimisticLock team_room::make_self_lock(std::chrono::system_clock::time_point now) const {
   ::atfw::dtmq::DChannelOptimisticLock ret;
   ret.set_lock_holder(lock_holder_);
-  ret.mutable_timeout()->set_seconds(now + get_lock_lease_sec());
+  *ret.mutable_timeout() = protobuf_from_system_clock(now + get_lock_lease());
   return ret;
 }
 
@@ -706,7 +727,7 @@ rpc::result_code_type team_room::acquire_lock(rpc::context& ctx) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
   }
 
-  int64_t now = atfw::util::time::time_utility::get_now();
+  auto now = atfw::util::time::time_utility::now();
   for (int retry = 0; retry < 2 && !lock_acquired_; ++retry) {
     auto self_lock = make_self_lock(now);
     auto checker = atfw::component::memory::stl::make_strong_rc<::atfw::dtmq::channel_lock_checker>();
@@ -720,7 +741,8 @@ rpc::result_code_type team_room::acquire_lock(rpc::context& ctx) {
     if (0 == ret) {
       current_lock_ = self_lock;
       lock_acquired_ = true;
-      next_renew_lock_timepoint_ = now + get_lock_renew_interval_sec();
+      next_renew_lock_timepoint_ = now;
+      next_renew_lock_timepoint_ += get_lock_renew_interval();
       FCTXLOGINFO(ctx, "team room {} acquire optimistic lock success", team_id_);
       break;
     }
@@ -729,7 +751,8 @@ rpc::result_code_type team_room::acquire_lock(rpc::context& ctx) {
       if (current_lock_.lock_holder() == lock_holder_) {
         // 已是本节点持有(可能上次设置成功但响应丢失)
         lock_acquired_ = true;
-        next_renew_lock_timepoint_ = now + get_lock_renew_interval_sec();
+        next_renew_lock_timepoint_ = now;
+        next_renew_lock_timepoint_ += get_lock_renew_interval();
         break;
       }
     }
@@ -788,7 +811,7 @@ rpc::result_code_type team_room::send_event_with_lock(rpc::context& ctx, ::googl
   RPC_RETURN_CODE(ret);
 }
 
-team_room_timer_event team_room::get_next_timer_event(int64_t now) {
+team_room_timer_event team_room::get_next_timer_event(std::chrono::system_clock::time_point now) {
   team_room_timer_event ret;
   if (!subscriber_ || !subscriber_->is_ready() || channel_destroyed_) {
     return ret;
@@ -798,12 +821,12 @@ team_room_timer_event team_room::get_next_timer_event(int64_t now) {
   if (!lock_acquired_) {
     ret.type = team_room_timer_event_type::kAcquireLock;
     if (current_lock_.lock_holder().empty()) {
-      ret.timepoint = now;
+      ret.timeout = now;
     } else if (current_lock_.has_timeout() && current_lock_.timeout().seconds() > 0) {
-      ret.timepoint = current_lock_.timeout().seconds();
+      ret.timeout = protobuf_to_system_clock(current_lock_.timeout());
     } else {
       // 锁未设置超时则按租约周期定期检查
-      ret.timepoint = now + get_lock_lease_sec();
+      ret.timeout = now + get_lock_lease();
     }
     return ret;
   }
@@ -812,37 +835,39 @@ team_room_timer_event team_room::get_next_timer_event(int64_t now) {
   if (destroyed_) {
     if (!channel_destroy_sent_) {
       ret.type = team_room_timer_event_type::kDestroyChannel;
-      ret.timepoint = now;
+      ret.timeout = now;
     }
     return ret;
   }
 
   // 定期维护: 乐观锁续租+过期数据清理+日志压缩(不要求时间非常精确)
   ret.type = team_room_timer_event_type::kMaintenance;
-  ret.timepoint = (std::min)(next_renew_lock_timepoint_, next_compact_timepoint_);
+  ret.timeout = (std::min)(next_renew_lock_timepoint_, next_compact_timepoint_);
   // 日志数量达到频道配置阈值时立即触发压缩
   if (subscriber_->get_last_message_sequence() - last_compact_sequence_ >= get_compact_log_count()) {
-    ret.timepoint = (std::min)(ret.timepoint, now);
+    ret.timeout = (std::min)(ret.timeout, now);
   }
 
   // 剔除最久未心跳的成员(LRU front)
-  if (!member_heartbeats_.empty()) {
-    const auto& oldest = member_heartbeats_.front();
-    int64_t deadline = get_member_offline_deadline(oldest.first);
-    if (deadline < ret.timepoint) {
+  if (!member_.empty()) {
+    const auto& oldest = member_.front();
+    std::chrono::system_clock::time_point deadline = get_member_offline_deadline(oldest.first);
+    if (deadline < ret.timeout) {
       ret.type = team_room_timer_event_type::kKickOfflineMember;
-      ret.timepoint = deadline;
+      ret.timeout = deadline;
     }
   }
 
   // 空队伍保留到期后解散
-  if (0 == storage_.member_size() && empty_since_timepoint_ > 0) {
-    int64_t deadline = empty_since_timepoint_ + get_teamsvr_room_cfg().empty_room_destroy_delay_sec();
-    if (deadline < ret.timepoint) {
+  if (0 == storage_.member_size() && empty_since_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
+    std::chrono::system_clock::time_point deadline = empty_since_timepoint_;
+    deadline += protobuf_to_system_clock(get_teamsvr_room_cfg().empty_room_destroy_delay());
+    if (deadline < ret.timeout) {
       ret.type = team_room_timer_event_type::kDestroyEmptyRoom;
-      ret.timepoint = deadline;
+      ret.timeout = deadline;
     }
   }
+
   return ret;
 }
 
@@ -853,13 +878,15 @@ void team_room::schedule_next_timer() {
     return;
   }
 
-  int64_t now = atfw::util::time::time_utility::get_now();
+  std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
   auto event = get_next_timer_event(now);
   if (team_room_timer_event_type::kNone == event.type) {
     // 暂无定时事件(订阅未就绪等)，按续租周期保底重查
-    event.timepoint = now + get_lock_renew_interval_sec();
+    event.timeout = now + get_lock_renew_interval();
   }
-  team_room_manager::me()->reset_room_timer(*this, event.timepoint);
+
+  // 应该要判定定时器只能提前，不能延后，避免定时器被延迟到过期事件之后才触发
+  team_room_manager::me()->reset_room_timer(*this, event.timeout);
 }
 
 void team_room::on_timer(rpc::context& ctx) {
@@ -868,9 +895,9 @@ void team_room::on_timer(rpc::context& ctx) {
     return;
   }
 
-  int64_t now = atfw::util::time::time_utility::get_now();
+  std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
   auto event = get_next_timer_event(now);
-  if (team_room_timer_event_type::kNone == event.type || event.timepoint > now) {
+  if (team_room_timer_event_type::kNone == event.type || event.timeout > now) {
     // 事件未到期，重新调度(定时器总是指向当前最近的定时 action)
     schedule_next_timer();
     return;
@@ -878,7 +905,8 @@ void team_room::on_timer(rpc::context& ctx) {
 
   if (!task_type_trait::empty(maintenance_task_) && !task_type_trait::is_exiting(maintenance_task_)) {
     // 上一次定时 action 仍在执行，稍后重试
-    team_room_manager::me()->reset_room_timer(*this, now + 1);
+    // TODO(owent): 应该在 maintenance_task_ 里恢复定时器，这里不应该再重置定时器
+    team_room_manager::me()->reset_room_timer(*this, now + std::chrono::seconds(1));
     return;
   }
 
@@ -903,7 +931,7 @@ void team_room::on_timer(rpc::context& ctx) {
 }
 
 rpc::result_code_type team_room::execute_timer_event(rpc::context& ctx, team_room_timer_event_type event_type) {
-  int64_t now = atfw::util::time::time_utility::get_now();
+  std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
   switch (event_type) {
     case team_room_timer_event_type::kAcquireLock: {
       auto ret = RPC_AWAIT_CODE_RESULT(acquire_lock(ctx));
@@ -947,7 +975,7 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
     RPC_RETURN_CODE(0);
   }
 
-  int64_t now = atfw::util::time::time_utility::get_now();
+  std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
   const auto& cfg = get_teamsvr_room_cfg();
 
   // 过期数据清理(过期的邀请和加入请求)
@@ -982,11 +1010,11 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   auto ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_update(ctx, options, checker, rsp_checker));
   if (0 == ret) {
     current_lock_ = self_lock;
-    next_renew_lock_timepoint_ = now + get_lock_renew_interval_sec();
+    next_renew_lock_timepoint_ = now + get_lock_renew_interval();
     if (need_compact) {
       last_compact_sequence_ = storage_.saved_action_sequence();
       last_compact_timepoint_ = now;
-      next_compact_timepoint_ = now + cfg.compact_interval_sec();
+      next_compact_timepoint_ = now + protobuf_to_system_clock(cfg.compact_interval());
     }
     RPC_RETURN_CODE(0);
   }
@@ -1002,12 +1030,14 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type team_room::cleanup_expired_admissions(rpc::context& ctx, int64_t now) {
+rpc::result_code_type team_room::cleanup_expired_admissions(rpc::context& ctx,
+                                                            std::chrono::system_clock::time_point now) {
   // 清理过期邀请
   {
     std::vector<atframework::team::DTeamInvitation> expired_invitations;
     for (const auto& invitation : storage_.pending_invitation()) {
-      if (0 != invitation.expired_timepoint().seconds() && invitation.expired_timepoint().seconds() <= now) {
+      if (0 != invitation.expired_timepoint().seconds() &&
+          protobuf_to_system_clock(invitation.expired_timepoint()) <= now) {
         expired_invitations.push_back(invitation);
       }
     }
@@ -1026,7 +1056,7 @@ rpc::result_code_type team_room::cleanup_expired_admissions(rpc::context& ctx, i
   {
     std::vector<atframework::team::DTeamJoinRequest> expired_apply;
     for (const auto& apply : storage_.pending_apply()) {
-      if (0 != apply.expired_timepoint().seconds() && apply.expired_timepoint().seconds() <= now) {
+      if (0 != apply.expired_timepoint().seconds() && protobuf_to_system_clock(apply.expired_timepoint()) <= now) {
         expired_apply.push_back(apply);
       }
     }
@@ -1043,10 +1073,11 @@ rpc::result_code_type team_room::cleanup_expired_admissions(rpc::context& ctx, i
   RPC_RETURN_CODE(0);
 }
 
-rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx, int64_t now) {
+rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
+                                                          std::chrono::system_clock::time_point now) {
   // LRU front 为最久未心跳的成员，队伍规模小，全量扫描收集所有到期成员
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> offline_members;
-  for (const auto& pair : member_heartbeats_) {
+  for (const auto& pair : member_) {
     if (get_member_offline_deadline(pair.first) <= now) {
       offline_members.push_back(pair.first);
     }
@@ -1080,18 +1111,18 @@ rpc::result_code_type team_room::destroy_empty_room(rpc::context& ctx) {
 
 void team_room::dump_private_data(atframework::team::DTeamRoomPrivateData& output) const {
   // 按 LRU 顺序(心跳由旧到新)导出，恢复时可重建 LRU 访问顺序
-  for (auto iter = member_heartbeats_.cbegin(); iter != member_heartbeats_.cend(); ++iter) {
+  for (auto iter = member_.cbegin(); iter != member_.cend(); ++iter) {
     if (find_member(iter->first) == nullptr || !iter->second) {
       // 已退出成员的簿记不持久化
       continue;
     }
     auto* runtime = output.add_member_runtime();
     *runtime->mutable_user_key() = iter->first;
-    runtime->mutable_last_heartbeat_timepoint()->set_seconds(iter->second->last_heartbeat_timepoint);
+    *runtime->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(iter->second->last_heartbeat_timepoint);
     runtime->set_user_router_server_id(iter->second->user_router_server_id);
   }
   output.set_last_compact_sequence(last_compact_sequence_);
-  output.mutable_last_compact_timepoint()->set_seconds(last_compact_timepoint_);
+  *output.mutable_last_compact_timepoint() = protobuf_from_system_clock(last_compact_timepoint_);
 }
 
 void team_room::on_ready(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber) {
@@ -1121,7 +1152,7 @@ void team_room::on_update_optimistic_lock(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
   current_lock_ = to;
   if (to.lock_holder() == lock_holder_) {
     lock_acquired_ = true;
-    next_renew_lock_timepoint_ = atfw::util::time::time_utility::get_now() + get_lock_renew_interval_sec();
+    next_renew_lock_timepoint_ = atfw::util::time::time_utility::now() + get_lock_renew_interval();
   } else if (lock_acquired_) {
     // 锁已被其他节点接管，本节点退位
     lock_acquired_ = false;

@@ -13,6 +13,7 @@
 #include <rpc/rpc_context.h>
 
 #include <algorithm>
+#include <chrono>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -20,7 +21,13 @@
 
 namespace {
 // 房间定时 action 使用秒级精度时间轮
-inline time_t team_room_now_timer_tick() { return atfw::util::time::time_utility::get_now(); }
+static inline time_t team_room_get_timer_tick(std::chrono::system_clock::time_point timepoint) {
+  return static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count());
+}
+
+static inline time_t team_room_now_timer_tick() {
+  return team_room_get_timer_tick(atfw::util::time::time_utility::now());
+}
 }  // namespace
 
 team_room_manager::team_room_manager() = default;
@@ -142,7 +149,7 @@ void team_room_manager::remove_room(int64_t team_id) {
   }
 }
 
-int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) {
+int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system_clock::time_point timepoint) {
   if (!timer_running_) {
     timer_set_.init(team_room_now_timer_tick());
     timer_running_ = true;
@@ -150,7 +157,7 @@ int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) 
 
   remove_room_timer(room);
 
-  time_t timeout_tick = static_cast<time_t>((std::max)(timepoint, static_cast<int64_t>(team_room_now_timer_tick())));
+  time_t timeout_tick = (std::max)(team_room_get_timer_tick(timepoint), team_room_now_timer_tick());
   if (timeout_tick <= timer_set_.get_last_tick()) {
     timeout_tick = timer_set_.get_last_tick() + 1;
   }

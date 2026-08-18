@@ -1363,3 +1363,181 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_stream_remove_no_response
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ §4.4 G：tick 按 duration 淘汰 IO 在途的占位条目，IO 完成后不写回、不重新入缓存 ============
+CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  // 首个 get_all 挂起直至测试放行：mutable_transaction 的 LRU 占位条目在 IO 在途期间已建立
+  bool get_entered = false;
+  bool release_get = false;
+  int get_calls = 0;
+  auto gated_get_rule = rpc::db::distribute_transaction::mock::get_all(
+      [&get_entered, &release_get, &get_calls](rpc::context& subctx, const table_type& input, table_type& output,
+                                               rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
+        ++get_calls;
+        if (1 == get_calls) {
+          get_entered = true;
+          for (int i = 0; i < 2000 && !release_get; ++i) {
+            RPC_AWAIT_IGNORE_RESULT(rpc::wait(subctx, std::chrono::milliseconds{5}));
+          }
+        }
+        output.set_zone_id(input.zone_id());
+        output.set_transaction_uuid(input.transaction_uuid());
+        transaction_blob_storage storage;
+        dt_test::make_prepared_storage(storage, "mgr-inflight-1", {"pa"});
+        ATFW_EXPLICIT_UNUSED_ATTR bool packed = output.mutable_blob_data()->PackFrom(storage);
+        meta.version = 1;
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!gated_get_rule);
+
+  auto fetch_task = test.run_task("inflight_fetch", std::chrono::seconds{10},
+                                  [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-inflight-1");
+    transaction_manager::transaction_ptr_type trans;
+    int32_t res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans));
+    CASE_EXPECT_EQ(0, res);
+    CASE_EXPECT_TRUE(!!trans);
+    CASE_EXPECT_EQ(1, trans->data_version);
+    RPC_RETURN_CODE(0);
+  });
+
+  // fetch 在途：占位条目存在于 LRU
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&get_entered]() { return get_entered; }));
+  CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  // 越过 lru_expired_duration（测试 loader 配 2s）后 tick：占位条目按“置 removed 后淘汰”处理
+  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{2300}));
+  int evicted = transaction_manager::me()->tick();
+  CASE_EXPECT_GE(evicted, 1);
+  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  // 放行 IO：fetch 成功返回，但 removed 条目不写回、不重新入缓存
+  release_get = true;
+  auto fetch_result = test.wait(fetch_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(fetch_result.task_exited);
+  CASE_EXPECT_EQ(0, fetch_result.result_code);
+  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  // 第二次 fetch 重新读库；完成后正常入缓存
+  auto refetch_task = test.run_task("inflight_refetch", std::chrono::seconds{10},
+                                    [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-inflight-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+    RPC_RETURN_CODE(0);
+  });
+  auto refetch_result = test.wait(refetch_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(refetch_result.task_exited);
+  CASE_EXPECT_EQ(0, refetch_result.result_code);
+  CASE_EXPECT_EQ(2, get_calls);
+  CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ §4.4 H+I：create 阶段 TTL 失败回滚 DB 记录；save 阶段 TTL 失败仅记录日志 ============
+CASE_TEST(component_dtcoordsvr, ttl_failure_create_rolls_back_and_save_tolerates) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  bool ttl_should_fail = false;
+  int set_ttl_calls = 0;
+  auto ttl_rule = rpc::db::distribute_transaction::mock::set_ttl(
+      [&ttl_should_fail, &set_ttl_calls](rpc::context&, const table_type&, uint64_t,
+                                         rpc::unit_test::db_mock_meta&) -> rpc::result_code_type {
+        ++set_ttl_calls;
+        RPC_RETURN_CODE(ttl_should_fail ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0);
+      });
+  CASE_EXPECT_TRUE(!!ttl_rule);
+
+  // --- Phase I：create 阶段 TTL 失败 → 回滚：DB 记录删除、不入缓存、错误码透传 ---
+  ttl_should_fail = true;
+  auto create_task = test.run_task("ttl_fail_create", std::chrono::seconds{10},
+                                   [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-ttl-create", {"pa"});
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+                   RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    // 回滚：DB 记录已删除
+    table_type gone_record;
+    uint64_t gone_version = 0;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND,
+                   RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ttl-create", gone_record, gone_version)));
+    RPC_RETURN_CODE(0);
+  });
+  auto create_result = test.wait(create_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(create_result.task_exited);
+  CASE_EXPECT_EQ(0, create_result.result_code);
+  CASE_EXPECT_EQ(1, set_ttl_calls);
+  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  // --- Phase H：save 阶段 TTL 失败被容忍：replace 已持久化，commit 返回成功且缓存保留 ---
+  ttl_should_fail = false;
+  auto commit_task = test.run_task("ttl_fail_save", std::chrono::seconds{10},
+      [&ttl_should_fail](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_blob_storage storage;
+    dt_test::make_prepared_storage(storage, "mgr-ttl-save", {"pa"});
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-ttl-save");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+
+    // save（commit 写回）阶段 TTL 刷新失败：仅记录日志，结果仍成功
+    ttl_should_fail = true;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans)));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   trans->data_object.metadata().status());
+
+    // 数据已持久化：版本推进到 2，状态为 COMMITED
+    table_type record;
+    uint64_t version = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-ttl-save", record, version)));
+    CASE_EXPECT_EQ(2, version);
+    transaction_blob_storage reloaded;
+    CASE_EXPECT_TRUE(record.blob_data().UnpackTo(&reloaded));
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   reloaded.metadata().status());
+    RPC_RETURN_CODE(0);
+  });
+  auto commit_result = test.wait(commit_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(commit_result.task_exited);
+  CASE_EXPECT_EQ(0, commit_result.result_code);
+  CASE_EXPECT_EQ(3, set_ttl_calls);  // create 两次 + save 一次
+
+  // save 成功（replace OK）：缓存条目保留，后续 fetch 命中缓存不再读库
+  CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
+  const size_t db_reads_after_commit = test.db().calls("distribute_transaction", op_type::kv_get_all);
+  auto cache_hit_task = test.run_task("ttl_fail_cache_hit", std::chrono::seconds{10},
+                                      [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-ttl-save");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+    RPC_RETURN_CODE(0);
+  });
+  auto cache_hit_result = test.wait(cache_hit_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(cache_hit_result.task_exited);
+  CASE_EXPECT_EQ(0, cache_hit_result.result_code);
+  CASE_EXPECT_EQ(db_reads_after_commit, test.db().calls("distribute_transaction", op_type::kv_get_all));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

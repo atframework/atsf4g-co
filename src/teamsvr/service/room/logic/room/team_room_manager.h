@@ -7,6 +7,7 @@
 #include <rpc/rpc_common_types.h>
 #include <time/jiffies_timer.h>
 
+#include <chrono>
 #include <cstdint>
 #include <unordered_map>
 
@@ -41,7 +42,7 @@ class team_room_manager : public util::design_pattern::singleton<team_room_manag
   void remove_room(int64_t team_id);
 
   // 重设房间的唯一定时器(移除旧定时器并按新的触发时间点调度)
-  int32_t reset_room_timer(team_room& room, int64_t timepoint);
+  int32_t reset_room_timer(team_room& room, std::chrono::system_clock::time_point timepoint);
   // 移除房间的定时器(房间销毁回收前调用)
   void remove_room_timer(team_room& room);
 

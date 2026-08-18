@@ -314,6 +314,8 @@ ATFW_UTIL_SYMBOL_VISIBLE inline DurationType protobuf_to_chrono_duration(const g
          std::chrono::duration_cast<DurationType>(std::chrono::nanoseconds{dur.nanos()});
 }
 
+SERVER_FRAME_API std::chrono::system_clock::duration protobuf_to_system_clock(const google::protobuf::Duration &dur);
+
 /**
  * @brief 标准时间转Prototbuf well known 时间周期类型
  * @param dur 时间周期

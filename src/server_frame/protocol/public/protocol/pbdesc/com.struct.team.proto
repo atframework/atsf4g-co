@@ -84,20 +84,29 @@ message DTeamKey {
   int64 team_id = 1;
 }
 
+enum EnTeamPermissionRole {
+  EN_TEAM_MEMBER_ROLE_GUEST = 0;
+  EN_TEAM_MEMBER_ROLE_NORMAL = 1;
+  EN_TEAM_MEMBER_ROLE_OWNER = 2;
+  EN_TEAM_MEMBER_ROLE_ADMIN = 3;
+}
+
 message DTeamMember {
   atframework.shared.DUserIDKey user_key = 1;
   // 入队时间
   google.protobuf.Timestamp joined_timepoint = 2;
 
+  EnTeamPermissionRole role = 3;
+
   // 入队方式和额外数据
-  EnTeamSourceType team_source_type = 3;
-  google.protobuf.Any team_source_data = 4;
+  EnTeamSourceType team_source_type = 4;
+  google.protobuf.Any team_source_data = 5;
 
   // 退出原因
-  DTeamExitReason remove_member_reason = 5;
+  DTeamExitReason remove_member_reason = 6;
 
-  string client_version = 6;
-  uint64 user_router_server_id = 7;
+  string client_version = 7;
+  uint64 user_router_server_id = 8;
 
   // 最后收到的组队通道的消息sequence和hash code
   int64 acknowledge_action_sequence = 11;
@@ -153,10 +162,14 @@ message DTeamJoinRequest {
   map<int32, DTeamAnyData> member_admission_data = 14;
 }
 
+message DTeamConfigure {}
+
 message DTeamStorage {
   DTeamKey team_key = 1;
   // 当前队长
   atframework.shared.DUserIDKey captain_user_key = 2;
+
+  DTeamConfigure configure = 3;
 
   // 当前成员
   repeated DTeamMember member = 6;

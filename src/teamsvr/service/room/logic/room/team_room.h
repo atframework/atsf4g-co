@@ -29,6 +29,7 @@
 
 #include <data/user_key_hash_helper.h>
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 
@@ -52,7 +53,8 @@ enum class team_room_timer_event_type : int32_t {
 
 struct team_room_timer_event {
   team_room_timer_event_type type = team_room_timer_event_type::kNone;
-  int64_t timepoint = 0;  // 触发时间点(秒)
+  // 触发时间点
+  std::chrono::system_clock::time_point timeout = std::chrono::system_clock::from_time_t(0);
 };
 
 // 组队房间对象。每个队伍对应一个 dtmq 频道(EN_TEAM_CHANNEL_TYPE_TEAM_ROOM)，
@@ -67,7 +69,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   using timer_watcher_t = atfw::util::time::jiffies_timer<>::timer_wptr_t;
 
   struct member_runtime_data {
-    int64_t last_heartbeat_timepoint = 0;
+    std::chrono::system_clock::time_point last_heartbeat_timepoint = std::chrono::system_clock::from_time_t(0);
     uint64_t user_router_server_id = 0;
   };
   // 最近访问成员 LRU: front 为最久未心跳的成员，用于计算下一个要踢出的成员
@@ -90,7 +92,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   bool ready_to_destroy() const noexcept;
 
   // 获取下一个定时器事件(剔除长期无心跳成员、日志压缩、续租等)
-  team_room_timer_event get_next_timer_event(int64_t now);
+  team_room_timer_event get_next_timer_event(std::chrono::system_clock::time_point now);
   // 定时器回调入口，由 team_room_manager 的时间轮驱动
   void on_timer(rpc::context& ctx);
   // 重新计算下一个定时器事件并重设本房间的唯一定时器
@@ -138,15 +140,16 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 队长退出后在剩余成员中确定性地选出新队长(加入时间最早者)
   void elect_captain_after_remove(const PROJECT_NAMESPACE_ID::DUserIDKey& removed_user_key);
   // 成员离线过期时间点(无心跳簿记时回退到入队时间/快照恢复时间)
-  int64_t get_member_offline_deadline(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+  std::chrono::system_clock::time_point get_member_offline_deadline(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   // 成员清单变为空/非空时刷新空房间计时
-  void refresh_empty_tracking(int64_t now);
+  void refresh_empty_tracking(std::chrono::system_clock::time_point now);
 
   // 乐观锁: 本节点 CAS 接管频道(新节点订阅后携带老锁切换，老节点再写入时锁失败)
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type acquire_lock(rpc::context& ctx);
   void handle_lock_conflict(rpc::context& ctx, const ::atfw::dtmq::DChannelOptimisticLock& real_lock);
   void step_down();
-  ::atfw::dtmq::DChannelOptimisticLock make_self_lock(int64_t now) const;
+
+  ::atfw::dtmq::DChannelOptimisticLock make_self_lock(std::chrono::system_clock::time_point now) const;
   atfw::util::memory::strong_rc_ptr<::atfw::dtmq::channel_lock_checker> make_write_lock_checker() const;
   // 携带乐观锁检查写入频道事件，锁冲突时自动退位
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_event_with_lock(rpc::context& ctx,
@@ -158,17 +161,19 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 主控节点定期维护: 过期数据清理 + 一次 send_update(乐观锁续租 + 按需压缩日志)
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_maintenance(rpc::context& ctx);
   // 清理过期邀请和过期加入请求
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type cleanup_expired_admissions(rpc::context& ctx, int64_t now);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type cleanup_expired_admissions(
+      rpc::context& ctx, std::chrono::system_clock::time_point now);
   // 踢出所有离线过期成员(LRU 从最久未心跳的成员开始)
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type kick_due_offline_members(rpc::context& ctx, int64_t now);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type kick_due_offline_members(
+      rpc::context& ctx, std::chrono::system_clock::time_point now);
   // 解散空队伍
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy_empty_room(rpc::context& ctx);
   void dump_private_data(atframework::team::DTeamRoomPrivateData& output) const;
 
   // 乐观锁租约时长，不低于 dtmq 频道配置的订阅者心跳过期淘汰时间(subscriber_timeout)
-  int64_t get_lock_lease_sec() const;
+  std::chrono::system_clock::duration get_lock_lease() const;
   // 乐观锁续租间隔，按租约时长折半
-  int64_t get_lock_renew_interval_sec() const;
+  std::chrono::system_clock::duration get_lock_renew_interval() const;
   // 触发日志压缩的日志数量阈值，取自 dtmq 频道配置 gc_log_count
   int64_t get_compact_log_count() const;
 
@@ -182,7 +187,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
   atframework::team::DTeamStorage storage_;
   // 成员心跳等在线簿记(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
-  member_runtime_lru_map_t member_heartbeats_;
+  member_runtime_lru_map_t member_;
 
   // 本节点最近一次设置或看到的乐观锁
   ::atfw::dtmq::DChannelOptimisticLock current_lock_;
@@ -191,13 +196,13 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   bool channel_destroyed_ = false;
   bool channel_destroy_sent_ = false;
   bool snapshot_restored_ = false;
-  int64_t restore_timepoint_ = 0;
+  std::chrono::system_clock::time_point restore_timepoint_;
 
-  int64_t empty_since_timepoint_ = 0;
-  int64_t next_renew_lock_timepoint_ = 0;
-  int64_t next_compact_timepoint_ = 0;
+  std::chrono::system_clock::time_point empty_since_timepoint_;
+  std::chrono::system_clock::time_point next_renew_lock_timepoint_;
+  std::chrono::system_clock::time_point next_compact_timepoint_;
   int64_t last_compact_sequence_ = 0;
-  int64_t last_compact_timepoint_ = 0;
+  std::chrono::system_clock::time_point last_compact_timepoint_;
   task_type_trait::task_type maintenance_task_;
   // 本房间在 manager 时间轮上的唯一定时器
   timer_watcher_t timer_watcher_;

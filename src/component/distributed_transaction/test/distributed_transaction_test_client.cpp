@@ -59,6 +59,9 @@ struct client_event_recorder {
   std::unordered_map<std::string, std::vector<int32_t>> reject_scripts;
   // participator keys whose prepare response sets allow_retry=true
   std::unordered_set<std::string> prepare_allow_retry;
+  // Per-participator allow_retry FIFO scripts consumed before falling back to prepare_allow_retry;
+  // used to script mixed retry/no-retry sequences across attempts.
+  std::unordered_map<std::string, std::vector<int32_t>> prepare_allow_retry_scripts;
 
   atfw::util::memory::strong_rc_ptr<transaction_client_handle::vtable_type> make_vtable() {
     auto vtable = atfw::component::memory::stl::make_strong_rc<transaction_client_handle::vtable_type>();
@@ -73,7 +76,13 @@ struct client_event_recorder {
         res = script.front();
         script.erase(script.begin());
       }
-      if (prepare_allow_retry.count(participator.participator_key()) > 0) {
+      auto& allow_retry_script = prepare_allow_retry_scripts[participator.participator_key()];
+      if (!allow_retry_script.empty()) {
+        if (allow_retry_script.front() != 0) {
+          reason.set_allow_retry(true);
+        }
+        allow_retry_script.erase(allow_retry_script.begin());
+      } else if (prepare_allow_retry.count(participator.participator_key()) > 0) {
         reason.set_allow_retry(true);
       }
       RPC_RETURN_CODE(res);
@@ -989,6 +998,201 @@ CASE_TEST(component_distributed_transaction_client, rejected_delivery_failure_is
                                                   {"prepare:pa", "prepare:pb", "reject:pa", "reject:pa", "reject:pa",
                                                    "reject:pb", "reject:pb", "reject:pb"}));
   CASE_EXPECT_TRUE(dt_test::expect_all_before(recorder.events, "prepare:", "reject:"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ §4.2 补充：create CAS 冲突重试有界（OLD_VERSION 耗尽），KEY_EXISTS 幂等可重试 ============
+CASE_TEST(component_distributed_transaction_client, create_cas_retry_exhaustion_and_key_exists_retriable) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  coordinator_mock_state coord_state;
+  int create_calls = 0;
+  auto create_rule = register_coordinator_create_mock(test, &create_calls);
+  auto commit_rule = register_coordinator_commit_mock(test, coord_state);
+  CASE_EXPECT_TRUE(!!create_rule && !!commit_rule);
+
+  // --- Phase 1: OLD_VERSION 重试耗尽（预算 5 次）：不伪造成功，storage 回滚到 CREATED ---
+  {
+    atfw::testing::ss_rule_options conflict_options;
+    conflict_options.times = 5;  // 覆盖全部 5 次预算：永不成功
+    auto conflict_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
+                                              PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, conflict_options);
+    CASE_EXPECT_TRUE(!!conflict_rule);
+
+    client_event_recorder recorder;
+    auto vtable = recorder.make_vtable();
+    auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+    auto task = test.run_task("create_cas_exhaustion", std::chrono::seconds{6},
+                              [&client](rpc::context& ctx) -> rpc::result_code_type {
+      transaction_client_handle::storage_ptr_type storage;
+      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage)));
+      sample_data_type sample_data;
+      CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+      std::unordered_set<std::string> prepared;
+      std::unordered_set<std::string> failed;
+      int32_t res = RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed));
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, res);
+      // 回滚：storage 回到 CREATED，未进入任何 prepare/notify
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED,
+                     storage->metadata().status());
+      CASE_EXPECT_TRUE(prepared.empty());
+      CASE_EXPECT_TRUE(failed.empty());
+      RPC_RETURN_CODE(0);
+    });
+    auto result = test.wait(task, std::chrono::seconds{12});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_EQ(5, test.ss().calls(rpc::transaction::packer::get_full_name_of_create()));
+    CASE_EXPECT_EQ(0, create_calls);  // 没有任何一次进入成功 mock
+    CASE_EXPECT_TRUE(recorder.events.empty());
+  }
+
+  // --- Phase 2: KEY_EXISTS 幂等冲突可重试：2 次冲突后第 3 次成功，流程正常推进到 COMMITED ---
+  {
+    atfw::testing::ss_rule_options key_exists_options;
+    key_exists_options.times = 2;
+    auto key_exists_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
+                                                PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS, key_exists_options);
+    CASE_EXPECT_TRUE(!!key_exists_rule);
+
+    const auto create_calls_before = test.ss().calls(rpc::transaction::packer::get_full_name_of_create());
+    client_event_recorder recorder;
+    auto vtable = recorder.make_vtable();
+    auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+    auto task = test.run_task("create_key_exists_retry", std::chrono::seconds{6},
+                              [&client](rpc::context& ctx) -> rpc::result_code_type {
+      transaction_client_handle::storage_ptr_type storage;
+      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage)));
+      sample_data_type sample_data;
+      CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+      std::unordered_set<std::string> prepared;
+      std::unordered_set<std::string> failed;
+      int32_t res = RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed));
+      CASE_EXPECT_EQ(0, res);
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                     storage->metadata().status());
+      CASE_EXPECT_EQ(1, prepared.size());
+      CASE_EXPECT_TRUE(failed.empty());
+      RPC_RETURN_CODE(0);
+    });
+    auto result = test.wait(task, std::chrono::seconds{12});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_EQ(3, test.ss().calls(rpc::transaction::packer::get_full_name_of_create()) - create_calls_before);
+    CASE_EXPECT_EQ(1, create_calls);  // 仅第 3 次（成功）进入正常 mock
+    CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"prepare:pa", "commit:pa"}));
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ §4.2 补充：PREEMPTED+allow_retry 逐次重试直到成功；耗尽时不对已响应者补发 undo ============
+CASE_TEST(component_distributed_transaction_client, prepare_preempted_retry_then_success_and_exhaustion_no_undo) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  coordinator_mock_state coord_state;
+  auto create_rule = register_coordinator_create_mock(test);
+  auto commit_rule = register_coordinator_commit_mock(test, coord_state);
+  auto reject_rule = register_coordinator_reject_mock(test, coord_state);
+  CASE_EXPECT_TRUE(!!create_rule && !!commit_rule && !!reject_rule);
+
+  // --- Phase 1: 第 1 次 PREEMPTED+allow_retry，第 2 次成功：重试后正常 commit ---
+  {
+    client_event_recorder recorder;
+    recorder.prepare_scripts["pa"] = {PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED, 0};
+    recorder.prepare_allow_retry_scripts["pa"] = {1, 0};
+    auto vtable = recorder.make_vtable();
+    auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+    auto task = test.run_task("preempted_retry_success", std::chrono::seconds{6},
+                              [&client](rpc::context& ctx) -> rpc::result_code_type {
+      transaction_client_handle::storage_ptr_type storage;
+      transaction_client_handle::transaction_options client_options;
+      client_options.lock_retry_max_times = 3;
+      client_options.lock_wait_interval_min = std::chrono::milliseconds{1};
+      client_options.lock_wait_interval_max = std::chrono::milliseconds{2};
+      client_options.resolve_retry_interval = std::chrono::milliseconds{10};
+      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage, client_options)));
+      sample_data_type sample_data;
+      CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+      std::unordered_set<std::string> prepared;
+      std::unordered_set<std::string> failed;
+      int32_t res = RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed));
+      CASE_EXPECT_EQ(0, res);
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                     storage->metadata().status());
+      CASE_EXPECT_EQ(1, prepared.size());
+      CASE_EXPECT_TRUE(failed.empty());
+      RPC_RETURN_CODE(0);
+    });
+    auto result = test.wait(task, std::chrono::seconds{12});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"prepare:pa", "prepare:pa", "commit:pa"}));
+  }
+
+  // --- Phase 2: 持续 PREEMPTED+allow_retry 直至预算耗尽：协调者持久化 REJECTED，
+  //     已响应的 failed_participator 不补发 undo/reject ---
+  coord_state.terminal = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+  {
+    client_event_recorder recorder;
+    recorder.prepare_scripts["pa"] = {PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                                      PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                                      PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                                      PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED};
+    recorder.prepare_allow_retry_scripts["pa"] = {1, 1, 1, 1};
+    auto vtable = recorder.make_vtable();
+    auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+    auto task = test.run_task("preempted_retry_exhaustion", std::chrono::seconds{6},
+                              [&client](rpc::context& ctx) -> rpc::result_code_type {
+      transaction_client_handle::storage_ptr_type storage;
+      transaction_client_handle::transaction_options client_options;
+      client_options.lock_retry_max_times = 3;  // 4 次尝试
+      client_options.lock_wait_interval_min = std::chrono::milliseconds{1};
+      client_options.lock_wait_interval_max = std::chrono::milliseconds{2};
+      client_options.resolve_retry_interval = std::chrono::milliseconds{10};
+      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage, client_options)));
+      sample_data_type sample_data;
+      CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+      std::unordered_set<std::string> prepared;
+      std::unordered_set<std::string> failed;
+      int32_t res = RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed));
+      // 决策已被协调者持久化：返回真实的 prepare 失败码而非伪造结果
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED, res);
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                     storage->metadata().status());
+      CASE_EXPECT_TRUE(prepared.empty());
+      CASE_EXPECT_EQ(1, failed.count("pa"));
+      RPC_RETURN_CODE(0);
+    });
+    auto result = test.wait(task, std::chrono::seconds{12});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    // 4 次 prepare，且对已响应的 failed_participator 不补发 reject/undo
+    CASE_EXPECT_TRUE(dt_test::expect_event_list(
+        recorder.events, {"prepare:pa", "prepare:pa", "prepare:pa", "prepare:pa"}));
+    // 协调者持久化了 REJECTED 决策（1 次 reject RPC），且从未走到 commit
+    CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()));
+    CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_commit()));
+  }
 
   CASE_EXPECT_EQ(0, test.stop());
 }

@@ -170,3 +170,7 @@ SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chr
   ret.set_nanos(static_cast<int32_t>(nanos.count()));
   return ret;
 }
+
+SERVER_FRAME_API std::chrono::system_clock::duration protobuf_to_system_clock(const google::protobuf::Duration &dur) {
+  return protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dur);
+}
