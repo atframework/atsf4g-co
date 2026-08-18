@@ -142,7 +142,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
   } else {
     FWCLOGINFO(log_categorize_t::DB, "table [key={}] get all", key);
   }
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] get all result: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] get all result:\n{}", key,
               protobuf_mini_dumper_get_readable(*output->message->get()));
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
@@ -220,7 +220,8 @@ SERVER_FRAME_API result_type partly_get(rpc::context &ctx, uint32_t channel, gsl
   } else {
     FWCLOGINFO(log_categorize_t::DB, "table [key={}] partly_get", key);
   }
-  FWCLOGDEBUG(log_categorize_t::DB, "result: {}", key, protobuf_mini_dumper_get_readable(*output->message->get()));
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] partly_get result: \n{}", key,
+              protobuf_mini_dumper_get_readable(*output->message->get()));
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
 
@@ -454,7 +455,7 @@ SERVER_FRAME_API result_type set(rpc::context &ctx, uint32_t channel, gsl::strin
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data content: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data content: \n{}", key,
               protobuf_mini_dumper_get_readable(*store));
   if (version != nullptr) {
     FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to save data, expect version: {}, detail: {}", key,
@@ -561,7 +562,7 @@ SERVER_FRAME_API result_type insert(rpc::context &ctx, uint32_t channel, gsl::st
     RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
   }
 
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to insert data content: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to insert data content: \n{}", key,
               protobuf_mini_dumper_get_readable(*store));
   FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to insert data, expect version: {}, detail: {}", key, version,
               segs_debug_info.str());
@@ -674,7 +675,7 @@ SERVER_FRAME_API result_type inc_field(rpc::context &ctx, uint32_t channel, gsl:
   }
   db_message.body_message->swap(message);
 
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] inc_field result: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] inc_field result: \n{}", key,
               protobuf_mini_dumper_get_readable(*message));
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));
 }
@@ -738,7 +739,7 @@ SERVER_FRAME_API result_type get_all(rpc::context &ctx, uint32_t channel, gsl::s
 
   for (size_t i = 0; i < output.size(); ++i) {
     if (output[i].message) {
-      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list get all result[index={}]: {}", key,
+      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list get all result[index={}]: \n{}", key,
                   output[i].list_index, protobuf_mini_dumper_get_readable(*output[i].message->get()));
     }
   }
@@ -823,7 +824,7 @@ SERVER_FRAME_API result_type get_by_indexs(rpc::context &ctx, uint32_t channel, 
   }
   for (size_t i = 0; i < output.size(); ++i) {
     if (output[i].message) {
-      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list get_by_indexs result[index={}]: {}", key,
+      FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list get_by_indexs result[index={}]: \n{}", key,
                   output[i].list_index, protobuf_mini_dumper_get_readable(*output[i].message->get()));
     }
   }
@@ -885,7 +886,7 @@ SERVER_FRAME_API result_type update_by_index(rpc::context &ctx, uint32_t channel
   }
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to update data by index {}", key, list_index);
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to update index content: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] start to update index content: \n{}", key,
               protobuf_mini_dumper_get_readable(*store));
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
@@ -967,7 +968,7 @@ SERVER_FRAME_API result_type add_index(rpc::context &ctx, uint32_t channel, gsl:
 
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] key_list start to add index, max_list_length: {}", key,
              max_list_length);
-  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list start to add index content: {}", key,
+  FWCLOGDEBUG(log_categorize_t::DB, "table [key={}] key_list start to add index content: \n{}", key,
               protobuf_mini_dumper_get_readable(*store));
   uint64_t rpc_sequence = 0;
   int res = db_msg_dispatcher::me()->send_msg(
