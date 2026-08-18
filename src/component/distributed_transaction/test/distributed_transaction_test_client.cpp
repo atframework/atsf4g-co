@@ -29,7 +29,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <memory/object_allocator.h>
+#include <memory/object_allocator.h>  // NOLINT(build/include_order)
 
 #include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"

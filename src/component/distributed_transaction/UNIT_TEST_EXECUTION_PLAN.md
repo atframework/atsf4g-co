@@ -8,7 +8,7 @@
 ### 0.1 结论
 
 - 第 3 节测试基建全部落地；第 6 节 DT-001..DT-024 全部有独立用例且全绿（修复记录见 0.4）。
-- 第 4/5 节矩阵已按本文要求实施；剩余缺口见 0.5。
+- 第 4/5 节矩阵与 §3.1 全部 seam 已实施；无未实施项（0.5）。
 - cpplint（仓库 CPPLINT.cfg，120 列）：本组件全部测试与改动的组件/框架文件 **0 error**。
 - clang-tidy（仓库 .clang-tidy）：测试文件可修告警 **0**；仅余两类框架基线告警（见 0.6）。
 - C++ 标准兼容（0.7）：本组件代码在 c++14/17 下无自身编译错误，但依赖框架（atframe_utils
@@ -23,7 +23,7 @@
 | --- | ---: | --- | --- |
 | `atf4g-co-component-distributed-transaction-api-unit-test` | 21 | fast | ✅ |
 | `atf4g-co-component-distributed-transaction-client-unit-test` | 11 | fast | ✅ |
-| `atf4g-co-component-distributed-transaction-participator-unit-test` | 22 | fast | ✅ |
+| `atf4g-co-component-distributed-transaction-participator-unit-test` | 26 | fast | ✅ |
 | `atf4g-co-component-dtcoordsvr-unit-test` | 13 | fast | ✅ |
 | `atf4g-co-component-dtcoordsvr-stop-unit-test` | 1 | fast | ✅ |
 | `atf4g-co-component-distributed-transaction-stress-unit-test` | 1 | stress | ✅ |
@@ -85,11 +85,10 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test
    指向当前命名空间内的新类型而非 `rpc::context`，clang C++20 模式报错（MSVC 宽容掩盖）。
    已改为限定名 `friend class rpc::context;`。
 
-### 0.5 未实施项（⛔）
+### 0.5 未实施项
 
-- §3.1 的 task create/start 失败注入 seam：需要在 task_manager 中增加
-  `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的注入点，涉及面广；对应错误分支均为简单返回路径。
-  未注入前相关用例按 §3.1 标注 blocked。
+无。§3.1 全部 seam 已提供（task create 失败注入、async_invoke 名字失败注入、LRU 读取/清理），
+对应 hook 与恢复行为用例均已实施并通过。
 
 ### 0.6 lint 基线说明
 
@@ -117,7 +116,7 @@ ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test
 测试 TU 显式补齐原先依赖 PCH 传递的头（`utility/protobuf_mini_dumper.h`、`memory/object_allocator.h`），
 脱离 PCH 也可独立编译。
 
-### 0.8 Linux ASan+LSan 门禁（WSL+Debian 执行记录，2026-08-17 ✅）
+### 0.8 Linux ASan+LSan 门禁（WSL+Debian 执行记录，2026-08-17 ✅，含 §3.1 seam 轮次复跑）
 
 环境：WSL Debian，`/home/owent/workspace/github/atframework/atsf4g-co`（fast-forward 到与 Windows
 同源提交后以补丁同步未提交改动）。构建树 `build_jobs_cmake_tools/_agent_tmp/distributed-transaction-asan`：
@@ -126,7 +125,9 @@ GCC 14 + Ninja + `BUILD_SHARED_LIBS=ON` + `PROJECT_ENABLE_UNITTEST=ON` +
 
 ```
 ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1:detect_odr_violation=0 ctest -L distributed-transaction --output-on-failure
-100% tests passed, 0 tests failed out of 6（69 用例，含 1000 轮 stress）
+100% tests passed, 0 tests failed out of 6（73 用例，含 1000 轮 stress 与 §3.1 拉起失败用例）
+ctest -R rpc-unit-test-selftest --output-on-failure
+100% tests passed, 0 tests failed out of 1（含两个注入 seam selftest 用例）
 泄漏/use-after-free/double-free/越界报告数：0
 ```
 
@@ -139,6 +140,9 @@ ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:abort_on_error=1:detect_odr_violatio
    已更名 `sub_ret`。
 3. 测试公共头：`dt_test_common.h` 的 `set_nanos` 纳秒取模结果未显式收窄（GCC `-Werror=conversion`），
    已加 `static_cast<int32_t>`。
+
+seam 轮次顺带修复 selftest 在 GCC 下的两处既有 `-Werror=sign-conversion`（`rpc_unit_test_db.cpp` 的
+`add_index`/`set_id` 字面量收窄），selftest 此前在 Linux 无法编译。
 
 第三方抑制（单项记录，非全局关闭泄漏检测）：grpc v1.82.1 共享库构建中 `libgrpc.so` 与
 `libupb_descriptor_lib.so` 重复注册同一 upb 全局（`google_protobuf_descriptor_proto_upb_file_layout`），
@@ -287,19 +291,31 @@ running/finished/lock 三组容器。只断言返回码不算覆盖。
   `atframework::testing::invoke_ss_action<TAction>` 驱动真实序列化、task 和 action；只有 RPC 注册、非法 envelope、
   response envelope 捕获才使用 raw transport/dispatcher。
 
-### 3.1 必要的最小测试 seam
+### 3.1 必要的最小测试 seam（已全部提供，均由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控，生产构建完全裁剪）
 
-以下失败无法用现有 public fixture 稳定制造，不能用“耗尽内存/碰运气停任务”替代：
+- `task_manager::create_task_with_timeout` mock：一个词干 `mock_create_task` 派生全部接口——
+  注册 `task_manager::mock_create_task(create_task_hook_t)`（返回 RAII handle，析构自动卸载，可同时注册
+  多个）、清空 `mock_create_task_clear()`、查询 `mock_create_task_active()`、内部询问
+  `mock_create_task_check(类型名, timeout&)`。回调类型 `create_task_hook_t`：回调返回 0 或正数 =
+  不拦截，负数 = 以该错误码使 create 失败；可通过 `timeout` 引用改写任务超时（不拦截时修改依然生效）。
+  类型名经 `object_allocator_metrics_controller::parse_demangle_name` 解析并按类型缓存（每种类型只
+  计算一次，且仅在存在存活 mock 时才计算）。
+- `rpc::async_invoke` mock：同一命名约定——注册 `rpc::unit_test::mock_async_invoke(async_invoke_hook_t)` /
+  清空 `mock_async_invoke_clear()` / 内部询问 `mock_async_invoke_check(名字, timeout&)`，回调
+  `async_invoke_hook_t` 按任务名判定，语义同上。
+- LRU 读取/清理：`transaction_manager::get_lru_size_for_unit_test()` / `clear_lru_for_unit_test()`，用于在
+  case 间读取/清理进程级单例的 LRU 状态（dtcoordsvr.`lru_unit_test_seam`）。
+- 防泄漏：所有 mock 经 RAII handle 卸载；`server_frame_unit_test_reset_dispatcher_registrations()`
+  （rpc-unit-test runtime 在每次重建/teardown 时调用）额外强制 `mock_create_task_clear()` 与
+  `mock_async_invoke_clear()`，泄漏的 mock 不会跨用例存活。
 
-- `task_manager::create_task` / `start_task` 指定失败。
-
-若该路径必须纳入自动化，增加由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控的 test-only 一次性失败注入
-hook。生产构建必须完全裁剪，且 hook 自身先由 rpc-unit-test selftest 覆盖。未增加 seam 前，该用例必须在结果中
-标成 blocked，不能记为通过。
-
-已提供的 seam：`transaction_manager::get_lru_size_for_unit_test()` / `clear_lru_for_unit_test()`
-（同样由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 门控，生产构建完全裁剪），用于在 case 间读取/清理
-进程级单例的 LRU 状态（dtcoordsvr.`lru_unit_test_seam`）。
+命名约定：mock 标记“伪造行为家族”（一词干一 seam，注册/清空/查询/询问四个动词后置派生）；
+hook 是回调类型的唯一名词（`*_hook_t`），不与 mock 粘连成 `mock_hook`。前两者由 rpc-unit-test
+selftest 覆盖（`rpc_unit_test_task_failure_injection.cpp`：`task_manager_create_task_interception_hook`、
+`task_manager_create_task_hook_can_modify_timeout`、`async_invoke_interception_hook_by_name`）；§4.3 tick
+行的拉起失败用例见 participator.`tick_launch_failure_rearms_with_backoff`（拉起失败→按退避重排、不消耗
+resolve_times、无空转循环、卸载 mock 后恢复正常 resolve，用例末尾强制清空）。`start_task` 失败与 create
+失败共用同一重新武装恢复路径，不再单独注入。
 
 ## 4. 公共接口覆盖矩阵
 

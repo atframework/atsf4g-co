@@ -21,6 +21,10 @@
 
 #include "rpc/rpc_common_types.h"
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <rpc/unit_test/mock_engine_bridge.h>
+#endif
+
 namespace rpc {
 class context;
 
@@ -59,6 +63,24 @@ ATFW_EXPLICIT_NODISCARD_ATTR ATFW_UTIL_SYMBOL_VISIBLE inline async_invoke_result
   return async_invoke(caller_name, name, std::move(fn),
                       std::chrono::duration_cast<std::chrono::system_clock::duration>(timeout));
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace unit_test {
+// §3.1 test seam：async_invoke mock。命名约定与 task_manager::mock_create_task 一致：一个词干
+// mock_async_invoke 派生注册/清空/内部询问，回调类型以 hook 为唯一名词 async_invoke_hook_t。
+// 回调按任务名判定：返回 0 或正数 = 不拦截；返回负数 = 以该错误码使 async_invoke 失败。
+// 回调可通过 timeout 引用改写本次调用的超时（不拦截时修改依然生效）。返回 RAII handle，
+// 析构自动卸载；可同时注册多个。生产构建完全裁剪。与 rpc mock bridge 相同约定：非线程安全，
+// 注册与询问必须同线程（单测 pump 线程）。
+using async_invoke_hook_t =
+    std::function<int(gsl::string_view name, std::chrono::system_clock::duration &timeout)>;
+
+ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API mock_rule_handle mock_async_invoke(async_invoke_hook_t hook);
+
+// 卸载全部已注册的 mock（runtime 重建/teardown 时兜底调用，防止用例泄漏）
+SERVER_FRAME_API void mock_async_invoke_clear();
+}  // namespace unit_test
+#endif
 
 ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API result_code_type
 wait_tasks(context &ctx, gsl::span<const task_type_trait::task_type> tasks);

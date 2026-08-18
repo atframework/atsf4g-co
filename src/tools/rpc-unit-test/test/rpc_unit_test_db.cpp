@@ -490,9 +490,10 @@ CASE_TEST(rpc_unit_test, db_kl_add_index_eviction_contract) {
         std::vector<db_key_list_message_result_t> output;
 
         for (int i = 0; i < 3; ++i) {
-          entry->set_id(100 + i);
+          entry->set_id(static_cast<uint64_t>(100 + i));
           int32_t res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-              ctx, kTestDbChannel, "ut:kl:evict", 10, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+              ctx, kTestDbChannel, "ut:kl:evict", static_cast<uint64_t>(10),
+              rpc::shared_abstract_message<google::protobuf::Message>{entry}));
           CASE_EXPECT_EQ(0, res);
         }
 
@@ -526,10 +527,12 @@ CASE_TEST(rpc_unit_test, db_kl_add_index_eviction_contract) {
 
         // max_list_length 0 still counts the counter field: exactly one entry is kept.
         res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-            ctx, kTestDbChannel, "ut:kl:evict-max0", 0, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+            ctx, kTestDbChannel, "ut:kl:evict-max0", 0,
+            rpc::shared_abstract_message<google::protobuf::Message>{entry}));
         CASE_EXPECT_EQ(0, res);
         res = RPC_AWAIT_CODE_RESULT(rpc::db::hash_table::key_list::add_index(
-            ctx, kTestDbChannel, "ut:kl:evict-max0", 0, rpc::shared_abstract_message<google::protobuf::Message>{entry}));
+            ctx, kTestDbChannel, "ut:kl:evict-max0", 0,
+            rpc::shared_abstract_message<google::protobuf::Message>{entry}));
         CASE_EXPECT_EQ(0, res);
         res = RPC_AWAIT_CODE_RESULT(
             rpc::db::hash_table::key_list::get_all(ctx, kTestDbChannel, "ut:kl:evict-max0", output, nullptr));

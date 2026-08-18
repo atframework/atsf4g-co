@@ -17,12 +17,16 @@
 
 #include <log/log_wrapper.h>
 
+#include <atframe/atapp.h>
+
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
 #include <memory/object_allocator.h>
 
 #include <dispatcher/task_manager.h>
 #include <rpc/rpc_utils.h>
+
+#include <logic/logic_server_setup.h>
 
 #include <algorithm>
 #include <list>
@@ -89,6 +93,9 @@ void transaction_participator_handle::resolve_timer_queue_type::insert_or_replac
   storage_resolve_timer_type timer{action, storage};
   timers_.insert(timer);
   index_.insert_or_assign(transaction_uuid, timer);
+  if (nullptr != on_change) {
+    on_change(on_change_handle);
+  }
 }
 
 void transaction_participator_handle::resolve_timer_queue_type::erase(const std::string& transaction_uuid) {
@@ -98,6 +105,9 @@ void transaction_participator_handle::resolve_timer_queue_type::erase(const std:
   }
   timers_.erase(iter->second);
   index_.erase(iter);
+  if (nullptr != on_change) {
+    on_change(on_change_handle);
+  }
 }
 
 void transaction_participator_handle::resolve_timer_queue_type::erase(const storage_resolve_timer_type& timer) {
@@ -107,11 +117,18 @@ void transaction_participator_handle::resolve_timer_queue_type::erase(const stor
   }
   timers_.erase(iter->second);
   index_.erase(iter);
+  if (nullptr != on_change) {
+    on_change(on_change_handle);
+  }
 }
 
 void transaction_participator_handle::resolve_timer_queue_type::clear() {
+  bool had_entries = !timers_.empty();
   timers_.clear();
   index_.clear();
+  if (had_entries && nullptr != on_change) {
+    on_change(on_change_handle);
+  }
 }
 
 void transaction_participator_handle::schedule_resolve_retry(resolve_timer_action_type action, storage_type& storage) {
@@ -136,19 +153,100 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::resolve_ti
       break;
     }
   }
+
+  // 到期条目被移除后最早事件可能变化，通知维护方重排自定义定时器
+  if (nullptr != on_change) {
+    on_change(on_change_handle);
+  }
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::transaction_participator_handle(
     const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable, gsl::string_view participator_key)
     : private_data_{nullptr}, on_destroy_{nullptr}, vtable_{vtable} {
   participator_key_.assign(participator_key.data(), participator_key.size());
+  // 队列内容变化时把自定义定时器重新指向最早的到期事件（见 refresh_resolve_custom_timer）
+  resolve_timer_queue_.on_change = &transaction_participator_handle::on_resolve_timer_queue_changed;
+  resolve_timer_queue_.on_change_handle = this;
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::~transaction_participator_handle() {
+  // 撤销仍在等待的自定义定时器，防止 handle 销毁后回调访问悬空 this；
+  // 属主 app 已销毁时 watcher 已失效，remove_resolve_custom_timer 为空操作
+  remove_resolve_custom_timer();
   if (nullptr != on_destroy_) {
     (*on_destroy_)(this);
   }
 }
+
+void transaction_participator_handle::on_resolve_timer_queue_changed(transaction_participator_handle* self) {
+  if (nullptr != self) {
+    self->refresh_resolve_custom_timer();
+  }
+}
+
+void transaction_participator_handle::remove_resolve_custom_timer() noexcept {
+  // 静态 remove_timer 直接按属主时间轮摘除（与 app::remove_custom_timer 内部路径一致），
+  // 不需要经过 atapp::app::get_last_instance()
+  auto timer = resolve_custom_timer_watcher_.lock();
+  if (timer) {
+    atapp_timer_t::remove_timer(*timer);
+  }
+  resolve_custom_timer_watcher_.reset();
+  resolve_custom_timer_timepoint_ = {};
+}
+
+void transaction_participator_handle::refresh_resolve_custom_timer() {
+  const auto* earliest = resolve_timer_queue_.earliest();
+  if (nullptr == earliest) {
+    // 队列已空：撤销定时器，不再自驱动
+    remove_resolve_custom_timer();
+    return;
+  }
+
+  // 最早事件未变化且定时器仍在等待：直接复用，避免 load 等批量操作反复注销重建
+  if (!resolve_custom_timer_watcher_.expired() && resolve_custom_timer_timepoint_ == earliest->timepoint) {
+    return;
+  }
+
+  // 无 atapp 实例的嵌入场景：不注册定时器，维持原有的外部 tick() 驱动契约
+  auto* owner_app = atframework::atapp::app::get_last_instance();
+  if (nullptr == owner_app) {
+    return;
+  }
+
+  remove_resolve_custom_timer();
+  int res = owner_app->add_custom_timer_with_system_clock(
+      earliest->timepoint,
+      [this](time_t /*tick_time*/, const atapp_timer_t::timer_t&) { on_resolve_custom_timer_fired(); }, this,
+      &resolve_custom_timer_watcher_);
+  if (0 != res) {
+    // 注册失败（如超时超出时间轮上限）：保持无定时器状态，由外部 tick()/finished 计数驱动兜底
+    FWLOGERROR("participator {} register resolve custom timer failed, res: {}", get_participator_key(), res);
+    resolve_custom_timer_timepoint_ = {};
+    return;
+  }
+  resolve_custom_timer_timepoint_ = earliest->timepoint;
+}
+
+void transaction_participator_handle::on_resolve_custom_timer_fired() {
+  // 定时器已触发并从时间轮移除，watcher 随之失效；清空记录的时间点以允许按原时刻重新注册
+  resolve_custom_timer_watcher_.reset();
+  resolve_custom_timer_timepoint_ = {};
+
+  tick(logic_server_get_current_tick_context(), atframework::atapp::app::get_sys_now());
+}
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+DISTRIBUTED_TRANSACTION_SDK_API bool transaction_participator_handle::has_resolve_custom_timer_for_unit_test()
+    const noexcept {
+  return !resolve_custom_timer_watcher_.expired();
+}
+
+DISTRIBUTED_TRANSACTION_SDK_API atfw::util::time::time_utility::raw_time_t
+transaction_participator_handle::get_resolve_custom_timer_timepoint_for_unit_test() const noexcept {
+  return resolve_custom_timer_timepoint_;
+}
+#endif
 
 DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const snapshot_type& storage) {
   resolve_timer_queue_.clear();

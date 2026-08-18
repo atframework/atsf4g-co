@@ -52,6 +52,7 @@ project_add_rpc_unit_test(
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_db.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_cs.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/example_readme.cpp"
+          "${CMAKE_CURRENT_LIST_DIR}/rpc_unit_test_task_failure_injection.cpp"
           ${PROJECT_RPC_UNIT_TEST_GENERATED_SOURCES}
           ${PROJECT_RPC_UNIT_TEST_GENERATED_HEADERS}
   LINK_LIBRARIES ${PROJECT_RPC_UNIT_TEST_PROTOCOL_TARGET}

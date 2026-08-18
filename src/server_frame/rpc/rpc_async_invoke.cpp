@@ -18,17 +18,37 @@
 
 #include <logic/action/task_action_async_invoke.h>
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <functional>
+#  include <memory>
+#  include <string>
+#  include <vector>
+#endif
+
 #include <utility>
 
 #include "rpc/rpc_utils.h"  // IWYU pragma: keep
 
 namespace rpc {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace unit_test {
+// 定义见本文件末尾的 mock registry 区；hook 可通过 timeout 引用改写超时
+int mock_async_invoke_check(gsl::string_view name, std::chrono::system_clock::duration &timeout);
+}  // namespace unit_test
+#endif
+
 SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view name,
                                                   std::function<result_code_type(context &)> fn,
                                                   std::chrono::system_clock::duration timeout) {
   if (!fn) {
     return async_invoke_result::make_error(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  if (int injected_error = unit_test::mock_async_invoke_check(name, timeout); injected_error < 0) {
+    return async_invoke_result::make_error(injected_error);
+  }
+#endif
 
   task_type_trait::task_type task_inst;
   task_action_async_invoke::ctor_param_t params;
@@ -56,6 +76,62 @@ SERVER_FRAME_API async_invoke_result async_invoke(context &ctx, gsl::string_view
 
   return async_invoke_result::make_success(std::move(task_inst));
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace {
+// 与 rpc mock bridge 相同的线程模型约定：注册与探测都在单测 pump 线程，不需要加锁
+struct async_invoke_mock_record {
+  rpc::unit_test::async_invoke_hook_t hook;
+  std::weak_ptr<void> token;
+};
+
+std::vector<async_invoke_mock_record> &mutable_async_invoke_mock_records() {
+  static std::vector<async_invoke_mock_record> records;
+  return records;
+}
+
+void prune_expired_async_invoke_mock_records() {
+  auto &records = mutable_async_invoke_mock_records();
+  for (auto iter = records.begin(); iter != records.end();) {
+    if (!iter->hook || iter->token.expired()) {
+      iter = records.erase(iter);
+      continue;
+    }
+    ++iter;
+  }
+}
+}  // namespace
+
+namespace unit_test {
+int mock_async_invoke_check(gsl::string_view name, std::chrono::system_clock::duration &timeout) {
+  prune_expired_async_invoke_mock_records();
+  for (auto &record : mutable_async_invoke_mock_records()) {
+    if (!record.hook || record.token.expired()) {
+      continue;
+    }
+    // 返回 0 或正数 = 不拦截（继续询问下一个钩子）；负数 = 以该错误码拦截
+    int probe_result = record.hook(name, timeout);
+    if (probe_result < 0) {
+      return probe_result;
+    }
+  }
+  return 0;
+}
+
+mock_rule_handle mock_async_invoke(async_invoke_hook_t hook) {
+  if (!hook) {
+    return mock_rule_handle{};
+  }
+
+  prune_expired_async_invoke_mock_records();
+  auto token = std::make_shared<int>(0);
+  mutable_async_invoke_mock_records().push_back(async_invoke_mock_record{std::move(hook), token});
+  return mock_rule_handle{token};
+}
+
+void mock_async_invoke_clear() { mutable_async_invoke_mock_records().clear(); }
+}  // namespace unit_test
+#endif
 
 SERVER_FRAME_API async_invoke_result async_invoke(gsl::string_view, gsl::string_view name,
                                                   std::function<result_code_type(context &)> fn,

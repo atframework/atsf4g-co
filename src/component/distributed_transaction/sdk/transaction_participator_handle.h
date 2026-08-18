@@ -18,6 +18,7 @@
 
 #include <gsl/select-gsl.h>
 #include <nostd/function_ref.h>
+#include <time/jiffies_timer.h>
 #include <time/time_utility.h>
 
 #include <config/server_frame_build_feature.h>
@@ -292,6 +293,17 @@ class transaction_participator_handle
   DISTRIBUTED_TRANSACTION_SDK_API const std::unordered_map<std::string, storage_ptr_type>& get_finished_transactions()
       const noexcept;
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  /**
+   * @brief 单测 seam：是否注册了 resolve 自定义定时器，及其指向的到期时间点
+   * @note 仅用于单元测试验证“每个 handle 至多一个定时器、指向最先发生的事件”的不变量。
+   *       仅在启用 PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS 的构建中可用。
+   */
+  DISTRIBUTED_TRANSACTION_SDK_API bool has_resolve_custom_timer_for_unit_test() const noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API atfw::util::time::time_utility::raw_time_t
+  get_resolve_custom_timer_timepoint_for_unit_test() const noexcept;
+#endif
+
  private:
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_running_transcation(rpc::context& ctx, storage_type&& storage,
                                                                              storage_ptr_type& output);
@@ -378,6 +390,19 @@ class transaction_participator_handle
         atfw::util::time::time_utility::raw_time_t timepoint,
         ::atfw::util::nostd::function_ref<bool(const storage_resolve_timer_type& timer)> fn);
 
+    // 最早到期事件（无则返回 nullptr）：用于把 handle 的自定义定时器指向最先发生的事件。
+    // 返回指针仅在下一次队列变更前有效，调用方须立即读取。
+    inline const storage_resolve_timer_type* earliest() const noexcept {
+      return timers_.empty() ? nullptr : &*timers_.begin();
+    }
+
+    // 队列内容（最早到期事件可能）变化后的通知钩子：由 handle 构造函数设置，用于维护至多一个、
+    // 指向最早到期事件的 atapp 自定义定时器。在 insert_or_replace/erase/clear/trigger_due 完成后触发。
+    // 裸函数指针 + 显式传入 handle，避免 lambda 捕获和 std::function 分配
+    // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)
+    void (*on_change)(transaction_participator_handle*) = nullptr;
+    transaction_participator_handle* on_change_handle = nullptr;
+
    private:
     std::set<storage_resolve_timer_type> timers_;
     std::unordered_map<std::string, storage_resolve_timer_type> index_;
@@ -389,12 +414,34 @@ class transaction_participator_handle
   // 无限重试的最终兜底由协调者记录 TTL 承担
   void schedule_resolve_retry(resolve_timer_action_type action, storage_type& storage);
 
+  // 与 atapp 自定义定时器一致的时间轮类型（atframe/atapp_common_types.h 的 jiffies_timer_t）
+  using atapp_timer_t = atfw::util::time::jiffies_timer<8, 3, 9>;
+
+  // resolve_timer_queue_ 的变更钩子：队列内容变化时把自定义定时器重新指向最早的到期事件，
+  // 保证每个 handle 至多注册一个 atapp 自定义定时器；定时器到期自动驱动 tick()，
+  // finished/running 事务的恢复流程不再依赖外部周期调用 tick()。
+  // 无 atapp 实例的嵌入场景（get_last_instance() 为 nullptr）保持原有外部 tick() 驱动契约。
+  void refresh_resolve_custom_timer();
+  void on_resolve_custom_timer_fired();
+  // resolve_timer_queue_.on_change 的入口：静态成员函数保证其指针是普通函数指针，
+  // handle 由参数传入而非捕获
+  static void on_resolve_timer_queue_changed(transaction_participator_handle* self);
+  // 撤销已注册的自定义定时器（watcher 失效时为空操作）；静态 remove_timer 直接按属主时间轮摘除，
+  // 不依赖 atapp::app::get_last_instance()
+  void remove_resolve_custom_timer() noexcept;
+
   void* private_data_;
   on_destroy_callback_type on_destroy_;
 
   std::string participator_key_;
   atfw::util::memory::strong_rc_ptr<vtable_type> vtable_;
   resolve_timer_queue_type resolve_timer_queue_;
+
+  // 已注册的 atapp 自定义定时器 watcher（失效即表示无等待中的定时器）及其指向的到期时间点；
+  // 时间点用于在最早事件未变化时跳过重注册，避免 load 等批量操作反复注销重建
+  atapp_timer_t::timer_wptr_t resolve_custom_timer_watcher_;
+  atfw::util::time::time_utility::raw_time_t resolve_custom_timer_timepoint_{};
+
   std::unordered_map<std::string, running_transaction_entry> running_transactions_;
   std::unordered_map<std::string, storage_ptr_type> transaction_locks_;
   std::unordered_map<std::string, storage_ptr_type> finished_transactions_;

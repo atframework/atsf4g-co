@@ -34,7 +34,10 @@
 
 #include <assert.h>
 #include <atomic>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "dispatcher/task_action_base.h"
 #include "rpc/telemetry/opentelemetry_utility.h"
@@ -848,7 +851,7 @@ task_manager::make_resume_generator(uintptr_t message_type, const dispatcher_awa
   std::chrono::system_clock::duration timeout = await_options.timeout;
   if (timeout <= std::chrono::system_clock::duration::zero()) {
     timeout = std::chrono::duration_cast<std::chrono::system_clock::duration>(
-        std::chrono::seconds{logic_config::me()->get_cfg_task().csmsg().timeout().seconds()} +
+        std::chrono::seconds {logic_config::me()->get_cfg_task().csmsg().timeout().seconds()} +
         std::chrono::nanoseconds{logic_config::me()->get_cfg_task().csmsg().timeout().nanos()});
   }
 
@@ -947,3 +950,64 @@ void task_manager::setup_metrics() {
             result, static_cast<int64_t>(get_task_manager_metrics_data().pool_used_memory));
       });
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace {
+// 与 rpc mock bridge 相同的线程模型约定：注册与询问都在单测 pump 线程，不需要加锁
+struct create_task_mock_record {
+  task_manager::create_task_hook_t hook;
+  std::weak_ptr<void> token;
+};
+
+std::vector<create_task_mock_record> &mutable_create_task_mock_records() {
+  static std::vector<create_task_mock_record> records;
+  return records;
+}
+
+void prune_expired_create_task_mock_records() {
+  auto &records = mutable_create_task_mock_records();
+  for (auto iter = records.begin(); iter != records.end();) {
+    if (!iter->hook || iter->token.expired()) {
+      iter = records.erase(iter);
+      continue;
+    }
+    ++iter;
+  }
+}
+}  // namespace
+
+rpc::unit_test::mock_rule_handle task_manager::mock_create_task(create_task_hook_t hook) {
+  if (!hook) {
+    return rpc::unit_test::mock_rule_handle{};
+  }
+
+  prune_expired_create_task_mock_records();
+  auto token = std::make_shared<int>(0);
+  mutable_create_task_mock_records().push_back(create_task_mock_record{std::move(hook), token});
+  return rpc::unit_test::mock_rule_handle{token};
+}
+
+void task_manager::mock_create_task_clear() { mutable_create_task_mock_records().clear(); }
+
+bool task_manager::mock_create_task_active() noexcept {
+  prune_expired_create_task_mock_records();
+  return !mutable_create_task_mock_records().empty();
+}
+
+int task_manager::mock_create_task_check(gsl::string_view demangled_task_type_name,
+                                         std::chrono::system_clock::duration &timeout) {
+  auto &records = mutable_create_task_mock_records();
+  for (auto &record : records) {
+    if (!record.hook || record.token.expired()) {
+      continue;
+    }
+    // 返回 0 或正数 = 不拦截（继续询问下一个 hook）；负数 = 以该错误码拦截
+    int hook_result = record.hook(demangled_task_type_name, timeout);
+    if (hook_result < 0) {
+      return hook_result;
+    }
+  }
+  return 0;
+}
+#endif
+

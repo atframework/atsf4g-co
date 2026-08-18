@@ -129,11 +129,17 @@ void team_room_manager::remove_room(int64_t team_id) {
   if (iter == rooms_.end()) {
     return;
   }
-  if (iter->second) {
-    iter->second->on_remove();
+  auto room = iter->second;
+  if (room) {
+    room->on_remove();
   }
+
   rooms_.erase(iter);
-  // TODO(owent): 移除房间必须移除相关的定时器
+
+  if (room) {
+    // 移除房间必须移除相关的定时器
+    remove_room_timer(*room);
+  }
 }
 
 int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) {
@@ -159,6 +165,11 @@ int32_t team_room_manager::reset_room_timer(team_room& room, int64_t timepoint) 
     if (!room) {
       return;
     }
+
+    if (team_room_manager::is_instance_destroyed()) {
+      return;
+    }
+
     // 房间可能已被回收(定时器未来得及移除)，校验 manager 仍持有该房间
     if (team_room_manager::me()->get_room(team_id).get() != room.get()) {
       return;

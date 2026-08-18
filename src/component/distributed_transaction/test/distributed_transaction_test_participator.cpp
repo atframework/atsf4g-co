@@ -42,6 +42,7 @@
 
 #include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "rpc/transaction/dtcoordsvrservice.atfw.gen.h"
+#include "dispatcher/task_manager.h"
 #include "rpc/transaction/transaction_api.h"
 #include "rpc/rpc_utils.h"
 #include "transaction_participator_handle.h"  // NOLINT(build/include_subdir)
@@ -621,6 +622,9 @@ CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preempt
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  // vtable 的 lambda 按 this 捕获 recorder；自定义定时器自驱动后，reloaded handle 的 resolve 任务
+  // 可能持 strong_rc 越过协程帧结束仍在运行，reload_recorder 必须比在途任务活得更久（测试作用域）
+  participator_event_recorder reload_recorder;
 
   auto task = test.run_task("lock_wound", std::chrono::seconds{4},
       [&handle](rpc::context& ctx) -> rpc::result_code_type {
@@ -697,11 +701,10 @@ CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preempt
 
   // The wound survives the reload: a fresh handle still refuses commit for the younger transaction.
   auto reload_task = test.run_task("wound_reload", std::chrono::seconds{4},
-      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+      [&handle, &reload_recorder](rpc::context& ctx) -> rpc::result_code_type {
     atframework::distributed_system::transaction_participator_snapshot snapshot;
     handle->dump(snapshot);
-    // vtable 的 lambda 按 this 捕获 recorder，recorder 必须与 handle 同生命周期（临时对象会悬空）
-    participator_event_recorder reload_recorder;
+    // reload_recorder 已提升到测试作用域（在途 resolve 任务可能越过本协程帧仍在运行）
     auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(reload_recorder.make_vtable(), "p2");
     reloaded->load(snapshot);
     CASE_EXPECT_EQ(2, reloaded->get_running_transactions().size());
@@ -889,9 +892,12 @@ CASE_TEST(component_distributed_transaction_participator, load_dump_round_trip) 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  // reload_recorder 提升到测试作用域：自定义定时器自驱动后，reloaded handle 的 resolve 任务
+  // 可能持 strong_rc 越过协程帧结束仍在运行，recorder 必须比在途任务活得更久
+  participator_event_recorder reload_recorder;
 
   auto task = test.run_task("load_dump", std::chrono::seconds{4},
-      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+      [&handle, &reload_recorder](rpc::context& ctx) -> rpc::result_code_type {
     // One running (with locks) and one finished transaction.
     auto running_request = make_prepare_request("part-uuid-running", 4, std::chrono::milliseconds{60000}, {"res-1"});
     SSParticipatorTransactionPrepareRsp response;
@@ -914,7 +920,7 @@ CASE_TEST(component_distributed_transaction_participator, load_dump_round_trip) 
     CASE_EXPECT_EQ(1, snapshot.finished_transaction_size());
 
     // load replaces the state instead of appending.
-    participator_event_recorder reload_recorder;
+    // reload_recorder 在测试作用域声明，与在途 resolve 任务同寿
     auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(reload_recorder.make_vtable(), "p2");
     auto stale_request = make_prepare_request("part-uuid-stale");
     SSParticipatorTransactionPrepareRsp stale_response;
@@ -1683,6 +1689,317 @@ CASE_TEST(component_distributed_transaction_participator, tick_equal_timepoint_i
   handle->tick(tick_context, exactly_expire);
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&query_calls]() { return query_calls >= 1; }));
   CASE_EXPECT_GE(query_calls, 1);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ section 3.1 seam: tick task-launch failure re-arms with backoff ============
+
+CASE_TEST(component_distributed_transaction_participator, tick_launch_failure_rearms_with_backoff) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  auto query_rule = register_query_mock(test,
+                                        EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                                        &query_calls);
+  CASE_EXPECT_TRUE(!!query_rule);
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  // Two running transactions with due resolve timers (expire after 20ms, retry interval 10ms).
+  auto task = test.run_task("seam_prepare", std::chrono::seconds{4},
+                            [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request_a = make_prepare_request("part-uuid-seam-a", 3, std::chrono::milliseconds{20});
+    auto request_b = make_prepare_request("part-uuid-seam-b", 3, std::chrono::milliseconds{20});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_a), response, output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_b), response, output)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // Install an interception mock hook that fails only the resolve action; both transactions keep
+  // running afterwards. The hook is scoped (RAII) and force-cleared at the end of the case.
+  task_manager::mock_create_task_clear();  // 防御：确保用例起始无泄漏钩子
+  auto failure_hook = task_manager::mock_create_task(
+      [](gsl::string_view demangled_task_type_name, std::chrono::system_clock::duration&) -> int {
+        if (demangled_task_type_name.find("task_action_participator_resolve_transaction") != gsl::string_view::npos) {
+          return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+        }
+        return 0;
+      });
+  CASE_EXPECT_TRUE(static_cast<bool>(failure_hook));
+
+  auto tick_context = atfw::testing::make_context();
+  // Burn past the 20ms expire deadline so both resolve timers are due.
+  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{40}));
+
+  // First tick: the collected timers hand over ownership to the task launch, which fails; tick
+  // reports the injected error and everything collected must be re-armed with backoff.
+  int tick_result = handle->tick(tick_context, std::chrono::system_clock::now());
+  for (int i = 0; i < 4; ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, tick_result);
+  CASE_EXPECT_EQ(2, handle->get_running_transactions().size());
+  CASE_EXPECT_EQ(0, query_calls);  // infrastructure failure never starts the resolve flow
+  CASE_EXPECT_EQ(0, recorder.count("on_resolve_task_finished"));
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+
+  // Neither transaction consumed any retry budget: infrastructure failures do not count.
+  auto& running_map = handle->get_running_transactions();
+  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-a").storage->resolve_times());
+  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-b").storage->resolve_times());
+
+  // Ticks before the retry interval do not relaunch anything (no tight loop). The spin loop may
+  // cross the interval in wall time; a relaunch then only repeats the same bounded failure, never
+  // the resolve flow, and still consumes no retry budget.
+  for (int spin = 0; spin < 20; ++spin) {
+    handle->tick(tick_context, std::chrono::system_clock::now());
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(0, query_calls);
+  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-a").storage->resolve_times());
+
+  // After the retry interval the timers are due again; the launch fails again with the same
+  // backoff semantics and still consumes no budget.
+  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{15}));
+  tick_result = handle->tick(tick_context, std::chrono::system_clock::now());
+  for (int i = 0; i < 4; ++i) {
+    test.pump_once();
+  }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, tick_result);
+  CASE_EXPECT_EQ(0, query_calls);
+  CASE_EXPECT_EQ(2, handle->get_running_transactions().size());
+  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-a").storage->resolve_times());
+
+  // Release the hook: the next due tick launches the resolve task and both transactions
+  // recover through the normal flow (query -> COMMITED -> do_event -> ack -> consumed).
+  failure_hook.reset();
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle, &query_calls]() {
+    return query_calls >= 2 && handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
+  }));
+  CASE_EXPECT_GE(query_calls, 2);
+  CASE_EXPECT_EQ(2, recorder.count("do_event"));
+  atframework::distributed_system::transaction_participator_snapshot snapshot;
+  handle->dump(snapshot);
+  CASE_EXPECT_EQ(0, snapshot.running_transaction_size() + snapshot.finished_transaction_size());
+
+  // Hook hygiene: nothing survives the case.
+  failure_hook.reset();
+  CASE_EXPECT_FALSE(task_manager::mock_create_task_active());
+  task_manager::mock_create_task_clear();
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ atapp 自定义定时器自驱动：无需外部周期调用 tick() ============
+
+// 验收：prepare 后不调用任何 handle->tick()，仅由 atapp 自定义定时器到期驱动完整生命周期
+// （query -> COMMITED -> do_event -> ack -> 全部消费），且消费完毕后定时器被撤销。
+CASE_TEST(component_distributed_transaction_participator, custom_timer_drives_full_lifecycle_without_external_tick) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  int commit_ack_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
+  auto commit_ack_rule = register_participator_ack_mock(test, "commit", &commit_ack_calls);
+  CASE_EXPECT_TRUE(!!query_rule && !!commit_ack_rule);
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task("custom_timer_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request = make_prepare_request("part-uuid-auto-timer", 2, std::chrono::milliseconds{30});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+    CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  // 定时器已注册且指向最早事件（初始 resolve 时间点 == expire_timepoint）
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  auto running_iter = handle->get_running_transactions().find("part-uuid-auto-timer");
+  CASE_EXPECT_TRUE(running_iter != handle->get_running_transactions().end());
+  if (running_iter == handle->get_running_transactions().end()) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_TRUE(handle->get_resolve_custom_timer_timepoint_for_unit_test() ==
+                   protobuf_to_system_clock(running_iter->second.storage->resolve_timepoint()));
+
+  // 关键：不做任何 handle->tick()，仅 pump 事件循环；自定义定时器必须自行驱动完整生命周期
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle, &query_calls]() {
+    return query_calls >= 1 && handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
+  }, std::chrono::milliseconds{4000}));
+
+  CASE_EXPECT_GE(query_calls, 1);
+  CASE_EXPECT_GE(commit_ack_calls, 1);
+  CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_GE(recorder.count("on_resolve_task_finished"), 1);
+
+  // 队列消费完毕后定时器已撤销（不再自驱动，也不会空转）
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// 不变量：每个 handle 至多一个自定义定时器，且始终指向最先发生的事件；最早事件移除后重排到下一最早事件。
+CASE_TEST(component_distributed_transaction_participator, custom_timer_points_at_earliest_event) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  int commit_ack_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
+  auto commit_ack_rule = register_participator_ack_mock(test, "commit", &commit_ack_calls);
+  CASE_EXPECT_TRUE(!!query_rule && !!commit_ack_rule);
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  // A 先到期（20ms），B 后到（60s，用例内不会自然到期）
+  auto task = test.run_task("earliest_prepare", std::chrono::seconds{4},
+      [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    auto request_a = make_prepare_request("part-uuid-earliest-a", 2, std::chrono::milliseconds{20});
+    auto request_b = make_prepare_request("part-uuid-earliest-b", 2, std::chrono::milliseconds{60000});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_a), response, output)));
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_b), response, output)));
+    CASE_EXPECT_EQ(2, handle->get_running_transactions().size());
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  auto& running_map = handle->get_running_transactions();
+  auto iter_a = running_map.find("part-uuid-earliest-a");
+  auto iter_b = running_map.find("part-uuid-earliest-b");
+  CASE_EXPECT_TRUE(iter_a != running_map.end() && iter_b != running_map.end());
+  if (iter_a == running_map.end() || iter_b == running_map.end()) {
+    test.stop();
+    return;
+  }
+  auto timepoint_a = protobuf_to_system_clock(iter_a->second.storage->resolve_timepoint());
+  auto timepoint_b = protobuf_to_system_clock(iter_b->second.storage->resolve_timepoint());
+  CASE_EXPECT_TRUE(timepoint_a < timepoint_b);
+
+  // 两个事件在队列中，但只注册一个定时器且指向最早的 A
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_TRUE(handle->get_resolve_custom_timer_timepoint_for_unit_test() == timepoint_a);
+
+  // 仅 pump：A 由定时器自驱动完成全流程；期间 B 不得被提前查询
+  int query_calls_at_a_done = 0;
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle, &query_calls]() {
+    return query_calls >= 1 && handle->get_running_transactions().count("part-uuid-earliest-a") == 0 &&
+           handle->get_finished_transactions().empty();
+  }, std::chrono::milliseconds{4000}));
+  query_calls_at_a_done = query_calls;
+  CASE_EXPECT_GE(query_calls_at_a_done, 1);
+
+  // B 仍在 running，且定时器已重排到 B 的到期时间点
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().count("part-uuid-earliest-b"));
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_TRUE(handle->get_resolve_custom_timer_timepoint_for_unit_test() == timepoint_b);
+
+  // 外部 tick() 契约保留：手动推进 B 到期后全流程消费，队列清空时定时器撤销
+  auto tick_context = atfw::testing::make_context();
+  handle->tick(tick_context, timepoint_b + std::chrono::milliseconds{1});
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle, &query_calls, query_calls_at_a_done]() {
+    return query_calls > query_calls_at_a_done && handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
+  }, std::chrono::milliseconds{4000}));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(2, recorder.count("do_event"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// 安全性：handle 在定时器等待期间销毁时撤销定时器，之后不会有任何回调/任务/悬空访问
+CASE_TEST(component_distributed_transaction_participator, custom_timer_cancelled_on_destroy) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  int query_calls = 0;
+  auto query_rule =
+      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+          &query_calls);
+  CASE_EXPECT_TRUE(!!query_rule);
+
+  participator_event_recorder recorder;
+  {
+    auto vtable = recorder.make_vtable();
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+    auto task = test.run_task("destroy_prepare", std::chrono::seconds{4},
+        [&handle](rpc::context& ctx) -> rpc::result_code_type {
+      auto request = make_prepare_request("part-uuid-destroy", 2, std::chrono::milliseconds{30});
+      SSParticipatorTransactionPrepareRsp response;
+      storage_ptr_type output;
+      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+      RPC_RETURN_CODE(0);
+    });
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+
+    // 定时器仍在等待时销毁 handle：析构必须撤销定时器
+    handle.reset();
+  }
+
+  // pump 远超到期时间（30ms 到期 + 充足余量）：不得发起任何 query，也不得有任何新的 vtable 回调
+  // （无悬空访问、无泄漏任务）。prepare 本身会记录 on_start_running，故比较销毁前后计数。
+  const size_t events_at_destroy = recorder.events.size();
+  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{200}));
+  CASE_EXPECT_EQ(0, query_calls);
+  CASE_EXPECT_EQ(events_at_destroy, recorder.events.size());
 
   CASE_EXPECT_EQ(0, test.stop());
 }

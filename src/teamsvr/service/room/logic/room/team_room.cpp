@@ -327,6 +327,7 @@ rpc::result_code_type team_room::heartbeat(rpc::context& ctx, const atframework:
 
   // 在线簿记(LRU 更新最近访问成员，随 private_data 仅在主控节点间同步，不下发给成员)。
   // 心跳只会推迟离线过期时间点，不会提前任何定时器事件，因此此处无需重设定时器。
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   auto& runtime = member_heartbeats_[req.user_key()];
   runtime.last_heartbeat_timepoint = atfw::util::time::time_utility::get_now();
   runtime.user_router_server_id = req.user_router_server_id();
@@ -355,6 +356,7 @@ void team_room::restore_snapshot(rpc::context& ctx, const rpc::dtmq::client_subs
   // 从 private_data 恢复主控私有簿记。
   // 先把所有成员插入 LRU 前部(无心跳簿记者视为最久未访问)，再按 private_data 顺序(心跳由旧到新)恢复簿记
   for (const auto& member : storage_.member()) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     member_heartbeats_[member.user_key()];
   }
   const auto& private_data = subscriber->get_private_data_content();
@@ -443,6 +445,7 @@ void team_room::apply_action(rpc::context& ctx, const atframework::team::DTeamAc
           member->mutable_joined_timepoint()->set_seconds(atfw::util::time::time_utility::get_now());
         }
         // 新成员进入 LRU(尚无心跳簿记，视为最久未访问)
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         member_heartbeats_[member->user_key()];
         // 首位成员成为队长
         if (!storage_.has_captain_user_key() || 0 == storage_.captain_user_key().user_id()) {

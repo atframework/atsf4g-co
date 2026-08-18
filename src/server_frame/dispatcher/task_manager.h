@@ -26,6 +26,17 @@
 
 #include <memory/object_allocator.h>
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <memory/object_allocator_metrics.h>
+
+#  include <gsl/select-gsl.h>
+
+#  include <rpc/unit_test/mock_engine_bridge.h>
+
+#  include <functional>
+#  include <string>
+#endif
+
 #include <memory>
 #include <unordered_map>
 #include <utility>
@@ -415,6 +426,19 @@ class task_manager {
   template <typename TAction, typename TParams, typename Duration>
   ATFW_UTIL_SYMBOL_VISIBLE int create_task_with_timeout(task_type_trait::task_type &task_instance, Duration &&timeout,
                                                         TParams &&args) {
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+    // §3.1 test seam：按任务类型询问 mock_create_task hooks（生产构建完全裁剪；无 hook 时零开销快速路径）。
+    // 钩子可通过 timeout 引用改写本次任务的超时
+    std::chrono::system_clock::duration effective_timeout = make_timeout_duration(timeout);
+    if (int injected_error = mock_create_task_check<TAction>(effective_timeout); injected_error < 0) {
+#  if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
+      task_instance.reset();
+#  else
+      task_instance = nullptr;
+#  endif
+      return injected_error;
+    }
+#endif
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
     if (!native_mgr_) {
       task_instance.reset();
@@ -448,7 +472,11 @@ class task_manager {
     }
 #endif
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+    return add_task(task_instance, effective_timeout);
+#else
     return add_task(task_instance, make_timeout_duration(std::forward<Duration>(timeout)));
+#endif
   }
 
   /**
@@ -571,6 +599,43 @@ class task_manager {
                                         const dispatcher_start_data_type *start_data);
   static void internal_trigger_callback(generic_resume_generator_record &resume_record, const generic_resume_key &key,
                                         const dispatcher_resume_data_type *resume_data);
+#endif
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+
+ public:
+  // ==================== Unit-test-only create_task mock（生产构建完全裁剪） ====================
+  // 见 distributed_transaction/UNIT_TEST_EXECUTION_PLAN.md §3.1。命名约定：一个词干 mock_create_task
+  // 派生全部接口（注册 mock_create_task / 清空 mock_create_task_clear / 查询 mock_create_task_active /
+  // 内部询问 mock_create_task_check）；回调类型以 hook 为唯一名词 create_task_hook_t，不与 mock 粘连。
+  // 回调按任务类型 demangled 名字判定：返回 0 或正数 = 不拦截；返回负数 = 以该错误码使
+  // create_task_with_timeout 失败。回调可通过 timeout 引用改写本次任务的超时（不拦截时修改依然生效）。
+  // 与 rpc mock bridge 相同约定：非线程安全，注册与询问必须同线程（单测 pump 线程）。
+  using create_task_hook_t =
+      std::function<int(gsl::string_view demangled_task_type_name, std::chrono::system_clock::duration &timeout)>;
+
+  // 安装一个 create_task_hook_t；返回 RAII handle，析构自动卸载。可同时安装多个，任一返回负数即拦截
+  static SERVER_FRAME_API rpc::unit_test::mock_rule_handle mock_create_task(create_task_hook_t hook);
+  // 卸载全部已注册的 mock（runtime 重建/teardown 时兜底调用，防止用例泄漏）
+  static SERVER_FRAME_API void mock_create_task_clear();
+  // mock 是否处于激活状态（存在已注册且未卸载的 hook）；无 hook 时探测走零开销快速路径，
+  // 模板内的类型名计算不会发生
+  static SERVER_FRAME_API bool mock_create_task_active() noexcept;
+
+ private:
+  // 每种任务类型的 demangled 名字只计算一次：函数局部 static 按 TAction 实例化，
+  // 且仅在存在存活 hook 时才会触发计算
+  template <typename TAction>
+  ATFW_UTIL_SYMBOL_VISIBLE int mock_create_task_check(std::chrono::system_clock::duration &timeout) {
+    if (!mock_create_task_active()) {
+      return 0;
+    }
+    static const std::string cached_demangled_task_type_name =
+        atfw::memory::object_allocator_metrics_controller::parse_demangle_name<TAction>();
+    return mock_create_task_check(cached_demangled_task_type_name, timeout);
+  }
+  static SERVER_FRAME_API int mock_create_task_check(gsl::string_view demangled_task_type_name,
+                                                     std::chrono::system_clock::duration &timeout);
 #endif
 
  private:
