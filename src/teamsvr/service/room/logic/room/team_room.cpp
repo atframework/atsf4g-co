@@ -962,10 +962,11 @@ void team_room::on_timer(rpc::context& ctx) {
           task_type_trait::reset_task(self->maintenance_task_);
         }
 
+        // 先发送数据，再插入定时器
+        RPC_AWAIT_IGNORE_RESULT(self->flush_pending_channel_message(child_ctx));
+
         // 定时 action 完成后重设下一个定时器
         self->schedule_next_timer();
-
-        RPC_AWAIT_IGNORE_RESULT(self->flush_pending_channel_message(child_ctx));
         RPC_RETURN_CODE(0);
       });
   if (invoke_result.is_error()) {
