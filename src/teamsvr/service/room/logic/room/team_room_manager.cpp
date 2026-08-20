@@ -14,10 +14,8 @@
 
 #include <algorithm>
 #include <chrono>
-#include <string>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 
 namespace {
 // 房间定时 action 使用秒级精度时间轮
@@ -55,24 +53,6 @@ int32_t team_room_manager::tick(rpc::context& ctx) {
     }
   }
 
-  // 回收已销毁房间
-  // TODO(owent): 不要靠轮询来触发销毁，而是应该在定时器回调里触发
-  std::vector<int64_t> destroyed_rooms;
-  for (auto& pair : rooms_) {
-    if (!pair.second) {
-      continue;
-    }
-    if (pair.second->ready_to_destroy()) {
-      destroyed_rooms.push_back(pair.first);
-    }
-  }
-  for (int64_t team_id : destroyed_rooms) {
-    auto iter = rooms_.find(team_id);
-    if (iter != rooms_.end() && iter->second) {
-      iter->second->on_remove();
-    }
-    rooms_.erase(iter);
-  }
   return ret;
 }
 
@@ -100,40 +80,22 @@ team_room_manager::room_ptr_t team_room_manager::mutable_room(rpc::context& ctx,
     return exist;
   }
 
-  // 乐观锁持有者标识与服务节点名和节点ID相关，节点切换后新节点据此区分老锁
-  gsl::string_view server_name = logic_config::me()->get_local_server_name();
-
-  std::string lock_holder;
-  if (server_name.empty()) {
-    uint64_t server_id = logic_config::me()->get_local_server_id();
-    lock_holder = atfw::util::string::format("teamsvr-room:{:#x}", server_id);
-  } else {
-    lock_holder = atfw::util::string::format("teamsvr-room:{}", server_name);
-  }
-  std::string subscriber_key = atfw::util::string::format("team_room:{}", team_id);
-
-  auto room = atfw::component::memory::stl::make_strong_rc<team_room>(team_id, std::move(subscriber_key),
-                                                                      std::move(lock_holder));
+  auto room = team_room::create(ctx, team_id);
   if (!room) {
     FWLOGERROR("team_room_manager alloc room for team {} failed", team_id);
     return nullptr;
   }
-  int32_t ret = room->create(ctx);
-  if (0 != ret) {
-    FCTXLOGERROR(ctx, "team_room_manager create room for team {} failed: {}", team_id, ret);
-    return nullptr;
-  }
 
   rooms_[team_id] = room;
-  // TODO(owent): 创建房间必须伴随着设置定时器，以防泄露
+
   // 初始定时器就是GC定时器，后续由房间自己维护
   FCTXLOGINFO(ctx, "team_room_manager create room for team {} success", team_id);
   return room;
 }
 
-void team_room_manager::remove_room(int64_t team_id) {
+void team_room_manager::remove_room(int64_t team_id, const team_room* expected) {
   auto iter = rooms_.find(team_id);
-  if (iter == rooms_.end()) {
+  if (iter == rooms_.end() || (expected != nullptr && iter->second.get() != expected)) {
     return;
   }
   auto room = iter->second;
@@ -156,6 +118,12 @@ int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system
   }
 
   remove_room_timer(room);
+
+  // 检查如果房间已被移除，则不需要再附加定时器
+  auto iter = rooms_.find(room.get_team_id());
+  if (iter == rooms_.end() || iter->second.get() != &room) {
+    return 0;
+  }
 
   time_t timeout_tick = (std::max)(team_room_get_timer_tick(timepoint), team_room_now_timer_tick());
   if (timeout_tick <= timer_set_.get_last_tick()) {

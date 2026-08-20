@@ -149,6 +149,36 @@ seam 轮次顺带修复 selftest 在 GCC 下的两处既有 `-Werror=sign-conver
 ASan 报 odr-violation；两者均为第三方库内部符号、与本组件无关，故按 7.2 节规则使用
 `detect_odr_violation=0` 豁免该类别，泄漏检测保持全开。
 
+### 0.9 增补记录（2026-08-18）
+
+1. **参与者 resolve 定时器丢失分析的结论修订**（问题：`on_resolve_custom_timer_fired` 触发
+   `tick(logic_server_get_current_tick_context(), app::get_sys_now())` 是否会丢失定时器）：
+   定时器在 resolve task 在途期间触发时确实会被消费（tick 因任务槽位占用早退、队列保留条目），
+   但不会永久丢失——主恢复路径是 `operator()` 收尾的补驱动 `tick`（收编到期条目并拉起后续 task），
+   辅以 finished 计数自动 tick 与队列变更时的 `refresh_resolve_custom_timer`。
+   证据（探针 + 变异测试，Windows/MSVC/std-coroutine 构建）：
+   - libcopp `cotask` 的 `kill/cancel` 仅 CAS 状态位、不销毁也不恢复协程帧
+     （`libcotask/task.h`）；挂起的 await 由其自身截止恢复，且 task manager 会把 await 超时钳制在
+     任务剩余生命周期内，被 kill 的任务总会在超时点恢复并执行完 `operator()` 收尾；
+   - `on_failed` 由 `task_action_base` 在同一协程内、`hook_run()` 返回之后调用，必在
+     `operator()` 收尾之后执行——其内 `rearm_unprocessed_timers` + `refresh_resolve_custom_timer`
+     兜底在该框架行为下为幂等空操作（变异禁用后任何用例无差异），保留作框架行为变化时的防御层，
+     相关注释已修正（原注释“协程帧已销毁”的前提不成立）。
+2. 回归用例 `resolve_task_killed_recovers_via_on_failed_fallback` 重写并更名为
+   participator.`timer_consumed_while_task_in_flight_recovers_via_final_tick`：去掉超时 kill 注入
+   （kill 时机不可控导致用例空转/偶红），改为确定性场景——resolve task 在 `check_writable` 闸门
+   挂起期间到期定时器被消费（断言自定义定时器消失、条目仍在队列/运行集合），闸门解除后由收尾
+   补驱动 tick 驱动完整恢复链直至清空，全程无外部 `tick()`。变异验证：禁用收尾补驱动 tick 时
+   该用例 RED（条目滞留、恢复链断裂）。
+3. dtcoordsvr.`tick_removes_evicted_io_placeholder_after_completion` 重写为容量淘汰路径：
+   `lru_expired_duration` 带 `CONFIGURE` 注解（默认 60s），测试运行时 `parse_configures_into`
+   会覆盖显式配置的 2s，duration 淘汰在该测试运行时不可达（既有同名用例实际一直走的容量路径）。
+   现用例以 `lru_max_cache_count=2` + 3 条新记录触发容量淘汰，断言占位条目被淘汰、IO 完成后不写回、
+   重取回源一次后重新入缓存命中，不再依赖时钟推进。
+4. fresh 证据（2026-08-18，Windows Debug / Ninja）：`ctest -L distributed-transaction`
+   100% passed out of 6，连续两轮；新用例单跑 3/3 通过。当前用例数：participator 30、
+   dtcoordsvr 15（其余同 0.2）。
+
 ## 1. 文档状态与证据边界
 
 - 编制日期：2026-08-14。

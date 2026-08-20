@@ -1015,9 +1015,8 @@ CASE_TEST(component_distributed_transaction_client, create_cas_retry_exhaustion_
 
   coordinator_mock_state coord_state;
   int create_calls = 0;
-  auto create_rule = register_coordinator_create_mock(test, &create_calls);
   auto commit_rule = register_coordinator_commit_mock(test, coord_state);
-  CASE_EXPECT_TRUE(!!create_rule && !!commit_rule);
+  CASE_EXPECT_TRUE(!!commit_rule);
 
   // --- Phase 1: OLD_VERSION 重试耗尽（预算 5 次）：不伪造成功，storage 回滚到 CREATED ---
   {
@@ -1026,6 +1025,10 @@ CASE_TEST(component_distributed_transaction_client, create_cas_retry_exhaustion_
     auto conflict_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
                                               PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, conflict_options);
     CASE_EXPECT_TRUE(!!conflict_rule);
+    // 引擎按注册顺序取首个仍有次数预算的活跃规则：错误规则必须先注册，成功规则随后兜底。
+    // 规则句柄是 RAII 的，离开本阶段作用域即失效，不会遮蔽下一阶段注册的规则
+    auto create_rule = register_coordinator_create_mock(test, &create_calls);
+    CASE_EXPECT_TRUE(!!create_rule);
 
     client_event_recorder recorder;
     auto vtable = recorder.make_vtable();
@@ -1063,6 +1066,9 @@ CASE_TEST(component_distributed_transaction_client, create_cas_retry_exhaustion_
     auto key_exists_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_create(),
                                                 PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS, key_exists_options);
     CASE_EXPECT_TRUE(!!key_exists_rule);
+    // 同 Phase 1：错误规则先于成功规则注册
+    auto create_rule = register_coordinator_create_mock(test, &create_calls);
+    CASE_EXPECT_TRUE(!!create_rule);
 
     const auto create_calls_before = test.ss().calls(rpc::transaction::packer::get_full_name_of_create());
     client_event_recorder recorder;
@@ -1151,6 +1157,9 @@ CASE_TEST(component_distributed_transaction_client, prepare_preempted_retry_then
   // --- Phase 2: 持续 PREEMPTED+allow_retry 直至预算耗尽：协调者持久化 REJECTED，
   //     已响应的 failed_participator 不补发 undo/reject ---
   coord_state.terminal = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+  // calls() 是整个 runtime 的累计值：用增量隔离 Phase 1 的 commit
+  const size_t reject_calls_before = test.ss().calls(rpc::transaction::packer::get_full_name_of_reject());
+  const size_t commit_calls_before = test.ss().calls(rpc::transaction::packer::get_full_name_of_commit());
   {
     client_event_recorder recorder;
     recorder.prepare_scripts["pa"] = {PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
@@ -1189,9 +1198,9 @@ CASE_TEST(component_distributed_transaction_client, prepare_preempted_retry_then
     // 4 次 prepare，且对已响应的 failed_participator 不补发 reject/undo
     CASE_EXPECT_TRUE(dt_test::expect_event_list(
         recorder.events, {"prepare:pa", "prepare:pa", "prepare:pa", "prepare:pa"}));
-    // 协调者持久化了 REJECTED 决策（1 次 reject RPC），且从未走到 commit
-    CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()));
-    CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_commit()));
+    // 协调者持久化了 REJECTED 决策（1 次 reject RPC），且本阶段从未走到 commit
+    CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()) - reject_calls_before);
+    CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_commit()) - commit_calls_before);
   }
 
   CASE_EXPECT_EQ(0, test.stop());

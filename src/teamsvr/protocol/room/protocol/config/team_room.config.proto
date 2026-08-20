@@ -17,21 +17,26 @@ package atframework.team.config;
 
 message teamsvr_room_cfg {
   // 主控节点定期压缩 dtmq 日志的时间间隔(秒)，日志数量达到频道配置 gc_log_count 时也会触发
-  google.protobuf.Duration compact_interval = 1 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "5" }];
+  google.protobuf.Duration compact_interval = 1
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "5" }];
 
   // 当前log数量超过上限的一定百分比后执行压缩
   int32 compact_log_over_percent = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "1" }];
   // 每次压缩后保留的日志百分比
   int32 compact_log_keep_percent = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
+  // 每次压缩后保留的日志百分比
+  uint32 compact_log_keep_count = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "50" min_value: "1" }];
 
   // 成员离线过期时长(秒)，超过此时长未心跳的成员会被移出队伍
-  google.protobuf.Duration member_offline_expire = 4
+  google.protobuf.Duration member_offline_expire = 5
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "30" }];
   // 空队伍保留时长(秒)，所有成员退出后保留一段时间再销毁频道
-  google.protobuf.Duration empty_room_destroy_delay = 5
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "0" }];
+  google.protobuf.Duration empty_room_destroy_delay = 6
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
   // 加入请求默认有效期(秒)，外部请求未带过期时间时使用
-  google.protobuf.Duration join_request_expire = 6 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5" }];
+  google.protobuf.Duration join_request_expire = 7
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5" }];
   // 加入邀请默认有效期(秒)，外部请求未带过期时间时使用
-  google.protobuf.Duration invitation_expire = 7 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5" }];
+  google.protobuf.Duration invitation_expire = 8
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5" }];
 }

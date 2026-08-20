@@ -17,11 +17,25 @@ option go_package = "github.com/atframework/atsf4g-co/service-teamsvr/protocol/r
 
 package atframework.team;
 
+message SSTeamRoomCreateReq {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey sender_user_key = 2;
+
+  DTeamConfigure configure = 3;
+
+  // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> shared_team_data = 14;
+}
+
+message SSTeamRoomCreateRsp {
+  int32 client_result = 1;
+}
+
 message SSTeamRoomSendMessageReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   DTeamAction action = 3;
-  DTeamMemberAction member_action = 4;
 }
 
 message SSTeamRoomSendMessageRsp {
@@ -40,9 +54,10 @@ message SSTeamRoomHeartbeatRsp {
   int32 client_result = 1;
 }
 
-// 成员运行时的私有簿记数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
+// 成员运行时的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
 message DTeamRoomMemberRuntimeData {
-  atframework.shared.DUserIDKey user_key = 1;
+  DTeamMember public_member_data = 1;
+
   // 最近一次成员心跳时间，用于离线过期清理
   google.protobuf.Timestamp last_heartbeat_timepoint = 2;
   // 成员最近一次心跳上报的路由服务ID
@@ -51,17 +66,92 @@ message DTeamRoomMemberRuntimeData {
 
 // 队伍管理用的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
 message DTeamRoomPrivateData {
-  // 成员心跳等运行时簿记
-  repeated DTeamRoomMemberRuntimeData member_runtime = 1;
+  DTeamKey team_key = 1;
+  // 当前队长
+  atframework.shared.DUserIDKey captain_user_key = 2;
+
+  DTeamConfigure configure = 3;
+
+  // 成员心跳等运行时数据
+  repeated DTeamRoomMemberRuntimeData member_runtime = 6;
+
+  // 当前待处理的申请列表
+  repeated DTeamJoinRequest pending_join_request = 7;
+
+  // 当前待处理的邀请列表
+  repeated DTeamInvitation pending_invitation = 8;
 
   // 上次压缩完成时的sequence和时间点
   int64 last_compact_sequence = 11;
   google.protobuf.Timestamp last_compact_timepoint = 12;
+
+  // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> shared_team_data = 14;
+}
+
+message SSTeamRoomAddInvitationReq {
+  DTeamInvitation invitation = 1;
+}
+
+message SSTeamRoomAddInvitationRsp {
+  int32 client_result = 1;
+}
+
+message SSTeamRoomApproveInvitationReq {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey invitee = 2;
+}
+
+message SSTeamRoomApproveInvitationRsp {
+  int32 client_result = 1;
+}
+
+message SSTeamRoomRejectInvitationReq {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey invitee = 2;
+}
+
+message SSTeamRoomRejectInvitationRsp {
+  int32 client_result = 1;
+}
+
+message SSTeamRoomAddJoinRequestReq {
+  DTeamJoinRequest join_request = 1;
+}
+
+message SSTeamRoomAddJoinRequestRsp {
+  int32 client_result = 1;
+}
+
+message SSTeamRoomApproveJoinRequestReq {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey applicant = 2;
+}
+
+message SSTeamRoomApproveJoinRequestRsp {
+  int32 client_result = 1;
+}
+
+message SSTeamRoomRejectJoinRequestReq {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey applicant = 2;
+}
+
+message SSTeamRoomRejectJoinRequestRsp {
+  int32 client_result = 1;
 }
 
 service TeamRoomService {
   option (atframework.service_options) = {
     module_name: "team"
+  };
+
+  rpc create(SSTeamRoomCreateReq) returns (SSTeamRoomCreateRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "创建队伍"
+      allow_no_wait: true
+    };
   };
 
   rpc send_message(SSTeamRoomSendMessageReq) returns (SSTeamRoomSendMessageRsp) {
@@ -74,6 +164,48 @@ service TeamRoomService {
   rpc heartbeat(SSTeamRoomHeartbeatReq) returns (SSTeamRoomHeartbeatRsp) {
     option (atframework.rpc_options) = {
       api_name: "成员心跳"
+      allow_no_wait: true
+    };
+  }
+
+  rpc add_join_request(SSTeamRoomAddJoinRequestReq) returns (SSTeamRoomAddJoinRequestRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "添加加入请求"
+      allow_no_wait: true
+    };
+  }
+
+  rpc approve_join_request(SSTeamRoomApproveJoinRequestReq) returns (SSTeamRoomApproveJoinRequestRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "批准加入请求"
+      allow_no_wait: true
+    };
+  }
+
+  rpc reject_join_request(SSTeamRoomRejectJoinRequestReq) returns (SSTeamRoomRejectJoinRequestRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拒绝加入请求"
+      allow_no_wait: true
+    };
+  }
+
+  rpc add_invitation(SSTeamRoomAddInvitationReq) returns (SSTeamRoomAddInvitationRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "添加邀请"
+      allow_no_wait: true
+    };
+  }
+
+  rpc approve_invitation(SSTeamRoomApproveInvitationReq) returns (SSTeamRoomApproveInvitationRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "批准邀请"
+      allow_no_wait: true
+    };
+  }
+
+  rpc reject_invitation(SSTeamRoomRejectInvitationReq) returns (SSTeamRoomRejectInvitationRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "拒绝邀请"
       allow_no_wait: true
     };
   }

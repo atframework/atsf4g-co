@@ -79,6 +79,8 @@ task_action_heartbeat::result_type task_action_heartbeat::operator()() {
   if (ret < 0) {
     set_response_code(ret);
   }
+
+  RPC_AWAIT_IGNORE_RESULT(room->flush_pending_channel_message(get_shared_context()));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

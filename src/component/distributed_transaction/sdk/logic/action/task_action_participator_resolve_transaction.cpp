@@ -53,9 +53,8 @@ task_action_participator_resolve_transaction::operator()() {
 
   // tick 的 trigger_due 在拉起本任务前已移除所有待处理条目的 timer，恢复所有权随任务转移。
   // 已处理条目由 resolve_transcation/handle_finished_transaction_result 自行重新排期或完成清理；
-  // 任务异常退出（不可写/被 kill/超时）时为未处理条目重新排期（rearm_unprocessed_timers），避免恢复流程永久丢失。
-  // 进度状态保存在任务对象成员上：协程在 await 点被 kill 时协程帧随局部变量一起销毁，
-  // 成员状态仍能供 on_failed 重新排期
+  // 任务异常退出（不可写/exiting 提前 break）时为未处理条目重新排期（rearm_unprocessed_timers），避免恢复流程永久丢失。
+  // 进度状态保存在任务对象成员上，供 operator() 收尾与 on_failed 兜底共用 rearm_unprocessed_timers。
   do {
     bool is_writable = false;
     RPC_AWAIT_IGNORE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
@@ -157,11 +156,11 @@ DISTRIBUTED_TRANSACTION_SDK_API int task_action_participator_resolve_transaction
     FWLOGINFO("participator {} do task_action_participator_resolve_transaction failed, res: {}({})",
               param_.participantor->get_participator_key(), get_result(),
               protobuf_mini_dumper_get_error_msg(get_result()));
-    // 任务被 kill/超时/取消时 operator() 的协程帧已销毁，此处兜底为未处理条目重新排期定时器
+    // 任务被 kill/超时/取消时的兜底防线。libcopp 的 kill/cancel 仅置状态位、不销毁协程帧，
+    // 且 task manager 会把 await 超时钳制在任务剩余生命周期内，on_failed 总是在 operator()
+    // 收尾（rearm + 补驱动 tick）之后执行，因此正常构建下这里的两个调用都是空操作；
+    // 仅在框架行为变化导致 operator() 收尾未执行时提供最后一层恢复保障。
     rearm_unprocessed_timers();
-    // 与 operator() 收尾同理补齐驱动者：kill 发生在批处理全部成功之后时 rearm 不产生队列变更，
-    // 运行期间被跳过的到期条目需要重新武装定时器。此处不直接拉起新任务（任务收尾/析构阶段），
-    // 到期条目由定时器在下一事件循环触发 tick() 处理（此时本任务已退出，tick 不再被跳过）。
     param_.participantor->refresh_resolve_custom_timer();
   }
   return get_result();

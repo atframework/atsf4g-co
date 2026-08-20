@@ -44,7 +44,7 @@ task_action_send_message::result_type task_action_send_message::operator()() {
     disable_response_message();
   }
 
-  if (!req_body.has_action() && !req_body.has_member_action()) {
+  if (!req_body.has_action()) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -79,8 +79,6 @@ task_action_send_message::result_type task_action_send_message::operator()() {
   if (0 == ret) {
     if (req_body.has_action()) {
       ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
-    } else {
-      ret = RPC_AWAIT_CODE_RESULT(room->send_member_action(get_shared_context(), req_body.member_action()));
     }
   }
 
@@ -88,6 +86,8 @@ task_action_send_message::result_type task_action_send_message::operator()() {
   if (ret < 0) {
     set_response_code(ret);
   }
+
+  RPC_AWAIT_IGNORE_RESULT(room->flush_pending_channel_message(get_shared_context()));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

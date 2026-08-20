@@ -1364,7 +1364,7 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_stream_remove_no_response
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// ============ §4.4 G：tick 按 duration 淘汰 IO 在途的占位条目，IO 完成后不写回、不重新入缓存 ============
+// ============ §4.4 G：tick 容量淘汰 IO 在途的占位条目，IO 完成后不写回、不重新入缓存 ============
 CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
   atfw::testing::runtime test;
   atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
@@ -1373,6 +1373,8 @@ CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
     return;
   }
   test.db().register_message_type<table_type>();
+  // 协调者 manager 是进程级单例，LRU 跨用例存活：显式清空以保证用例间独立
+  transaction_manager::me()->clear_lru_for_unit_test();
 
   // 首个 get_all 挂起直至测试放行：mutable_transaction 的 LRU 占位条目在 IO 在途期间已建立
   bool get_entered = false;
@@ -1414,20 +1416,37 @@ CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&get_entered]() { return get_entered; }));
   CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
 
-  // 越过 lru_expired_duration（测试 loader 配 2s）后 tick：占位条目按“置 removed 后淘汰”处理
-  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{2300}));
-  int evicted = transaction_manager::me()->tick();
-  CASE_EXPECT_GE(evicted, 1);
-  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+  // 用容量淘汰驱逐占位条目（lru_max_cache_count=2，占位条目最旧）：新建 3 条记录使池大小到 4，
+  // tick 从头部淘汰 2 条。不使用 duration 过期：lru_expired_duration 带 CONFIGURE 注解，
+  // parse_configures_into 会把有效值重置为注解默认 60s，烧时等待不可靠
+  auto seed_task = test.run_task("inflight_capacity_seed", std::chrono::seconds{10},
+                                 [](rpc::context& ctx) -> rpc::result_code_type {
+    for (const char* uuid : {"mgr-inflight-c1", "mgr-inflight-c2", "mgr-inflight-c3"}) {
+      transaction_blob_storage storage;
+      dt_test::make_prepared_storage(storage, uuid, {"pa"});
+      CASE_EXPECT_EQ(0,
+                     RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+    }
+    RPC_RETURN_CODE(0);
+  });
+  auto seed_result = test.wait(seed_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(seed_result.task_exited);
+  CASE_EXPECT_EQ(0, seed_result.result_code);
+  CASE_EXPECT_EQ(4, transaction_manager::me()->get_lru_size_for_unit_test());
 
-  // 放行 IO：fetch 成功返回，但 removed 条目不写回、不重新入缓存
+  // tick 不跳过有在途 IO 的条目：置 removed 后淘汰，占位条目（最旧）与 c1 被移出池
+  int evicted = transaction_manager::me()->tick();
+  CASE_EXPECT_GE(evicted, 2);
+  CASE_EXPECT_EQ(2, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  // 放行 IO：fetch 成功返回，但 removed 条目被 set_cache 拒绝：不写回、不重新入缓存
   release_get = true;
   auto fetch_result = test.wait(fetch_task, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(fetch_result.task_exited);
   CASE_EXPECT_EQ(0, fetch_result.result_code);
-  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+  CASE_EXPECT_EQ(2, transaction_manager::me()->get_lru_size_for_unit_test());
 
-  // 第二次 fetch 重新读库；完成后正常入缓存
+  // 第二次 fetch 重新读库；完成后正常入缓存（第三次 fetch 命中缓存，不再读库）
   auto refetch_task = test.run_task("inflight_refetch", std::chrono::seconds{10},
                                     [](rpc::context& ctx) -> rpc::result_code_type {
     transaction_metadata metadata;
@@ -1441,7 +1460,20 @@ CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
   CASE_EXPECT_TRUE(refetch_result.task_exited);
   CASE_EXPECT_EQ(0, refetch_result.result_code);
   CASE_EXPECT_EQ(2, get_calls);
-  CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  auto cache_hit_task = test.run_task("inflight_cache_hit", std::chrono::seconds{10},
+                                      [](rpc::context& ctx) -> rpc::result_code_type {
+    transaction_metadata metadata;
+    metadata.set_transaction_uuid("mgr-inflight-1");
+    transaction_manager::transaction_ptr_type trans;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+    CASE_EXPECT_TRUE(!!trans);
+    RPC_RETURN_CODE(0);
+  });
+  auto cache_hit_result = test.wait(cache_hit_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(cache_hit_result.task_exited);
+  CASE_EXPECT_EQ(0, cache_hit_result.result_code);
+  CASE_EXPECT_EQ(2, get_calls);
 
   CASE_EXPECT_EQ(0, test.stop());
 }
@@ -1455,6 +1487,8 @@ CASE_TEST(component_dtcoordsvr, ttl_failure_create_rolls_back_and_save_tolerates
     return;
   }
   test.db().register_message_type<table_type>();
+  // 协调者 manager 是进程级单例，LRU 跨用例存活：显式清空以保证用例间独立
+  transaction_manager::me()->clear_lru_for_unit_test();
 
   bool ttl_should_fail = false;
   int set_ttl_calls = 0;

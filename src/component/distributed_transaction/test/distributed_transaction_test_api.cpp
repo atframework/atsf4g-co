@@ -1268,7 +1268,7 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_send_failure_thr
     return;
   }
   // 发现中只注入两个节点；元数据列出的第三个节点（0x1B0BAD）路由不到，
-  // router 在消息到达 mock SS 引擎之前即以 EN_ROUTER_NOT_FOUND 失败
+  // router 在消息到达 mock SS 引擎之前即以 EN_ATBUS_ERR_ATNODE_INVALID_ID 失败
   CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002}));
 
   // Leg 1: R=2，3 个副本中 1 个发送失败 —— 成功数 2 达到阈值，整体返回 0
@@ -1301,7 +1301,7 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_send_failure_thr
     metadata.add_replicate_node_server_id(0x1B0001);
     metadata.add_replicate_node_server_id(0x1B0002);
     metadata.add_replicate_node_server_id(0x1B0BAD);
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND,
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_INVALID_ID,
                    RPC_AWAIT_CODE_RESULT(rpc::transaction_api::remove_transaction_no_wait(ctx, metadata)));
     RPC_RETURN_CODE(0);
   });

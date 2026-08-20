@@ -9,6 +9,7 @@ option cc_enable_arenas = true;
 import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
+import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -21,7 +22,7 @@ enum EnTeamChannelType {
   EN_TEAM_CHANNEL_TYPE_TEAM_ROOM = 11;  // 组队房间
 }
 
-enum DTeamExitReason {
+enum EnTeamExitReason {
   EN_TEAM_EXIT_REASON_DEFAULT = 0;
   EN_TEAM_EXIT_REASON_LOGOUT = 1;
   EN_TEAM_EXIT_REASON_EXPIRED = 2;
@@ -93,24 +94,38 @@ enum EnTeamPermissionRole {
 
 message DTeamMember {
   atframework.shared.DUserIDKey user_key = 1;
-  // 入队时间
-  google.protobuf.Timestamp joined_timepoint = 2;
+  atframework.dtmq.DChannelIdKey user_channel = 2;
 
-  EnTeamPermissionRole role = 3;
+  // 入队时间
+  google.protobuf.Timestamp joined_timepoint = 3;
+
+  EnTeamPermissionRole role = 4;
 
   // 入队方式和额外数据
-  EnTeamSourceType team_source_type = 4;
-  google.protobuf.Any team_source_data = 5;
+  EnTeamSourceType team_source_type = 5;
+  google.protobuf.Any team_source_data = 6;
 
   // 退出原因
-  DTeamExitReason remove_member_reason = 6;
+  EnTeamExitReason remove_member_reason = 7;
 
-  string client_version = 7;
-  uint64 user_router_server_id = 8;
+  string client_version = 8;
+  uint64 user_router_server_id = 9;
 
   // 最后收到的组队通道的消息sequence和hash code
   int64 acknowledge_action_sequence = 11;
   uint64 acknowledge_action_hash_code = 12;
+
+  // 共享的成员数据，通常是阵容信息、状态信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> shared_member_data = 13;
+}
+
+message DTeamMemberUpdateData {
+  atframework.shared.DUserIDKey user_key = 1;
+  atframework.dtmq.DChannelIdKey user_channel = 2;
+
+  string client_version = 7;
+  uint64 user_router_server_id = 8;
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
@@ -129,10 +144,11 @@ message DTeamAdmissionResult {
 message DTeamInvitation {
   atframework.shared.DUserIDKey inviter = 1;
   atframework.shared.DUserIDKey invitee = 2;
-  DTeamKey team_key = 3;
+  atframework.dtmq.DChannelIdKey invitee_private_channel = 3;
+  DTeamKey team_key = 4;
 
-  EnTeamSourceType team_source_type = 4;
-  google.protobuf.Any team_source_data = 5;
+  EnTeamSourceType team_source_type = 6;
+  google.protobuf.Any team_source_data = 7;
 
   // 开始事件
   google.protobuf.Timestamp start_timepoint = 8;
@@ -146,10 +162,11 @@ message DTeamInvitation {
 
 message DTeamJoinRequest {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey user_key = 2;
+  atframework.shared.DUserIDKey requester = 2;
+  atframework.dtmq.DChannelIdKey requester_private_channel = 3;
 
-  EnTeamSourceType team_source_type = 3;
-  google.protobuf.Any team_source_data = 4;
+  EnTeamSourceType team_source_type = 4;
+  google.protobuf.Any team_source_data = 5;
 
   string client_version = 6;
   uint64 user_router_server_id = 7;
@@ -175,7 +192,7 @@ message DTeamStorage {
   repeated DTeamMember member = 6;
 
   // 当前待处理的申请列表
-  repeated DTeamJoinRequest pending_apply = 7;
+  repeated DTeamJoinRequest pending_join_request = 7;
 
   // 当前待处理的邀请列表
   repeated DTeamInvitation pending_invitation = 8;
@@ -194,12 +211,19 @@ message DTeamStorage {
 message DTeamAction {
   oneof action {
     DTeamKey destroy_team = 1;  // 有这个消息或者订阅失败则视为小队已解散
-    // DTeamHeartBeatInfo heartbeat = 2;  // 定期ping包，防止聊天频道过期销毁
-    DTeamMember add_member = 3;
-    DTeamMember remove_member = 4;
-    DTeamMember member_confirm = 5;  // 队员准备
-    // DTeamMember cancel_wait = 6;                    // 取消等待，直接进入队伍房间
-    DTeamMember election_captain = 7;  // 重新选出的队长
+    DTeamMember add_member = 2;
+    DTeamMember remove_member = 3;
+    // 队员更新共享数据(准备、取消准备、变更角色、变更装备等都可以通过修改内部 shared_member_data 来实现)
+    DTeamMemberUpdateData member_update = 4;
+    DTeamMember election_captain = 5;  // 重新选出的队长
+
+    DTeamInvitation add_invitation = 21;
+    DTeamInvitation approve_invitation = 22;
+    DTeamInvitation reject_invitation = 23;
+
+    DTeamJoinRequest add_join_request = 24;
+    DTeamJoinRequest approve_join_request = 25;
+    DTeamJoinRequest reject_join_request = 26;
   }
 }
 

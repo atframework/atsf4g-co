@@ -31,7 +31,10 @@
 
 #include <chrono>
 #include <cstdint>
+#include <list>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 namespace rpc {
 class context;
@@ -71,25 +74,48 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   struct member_runtime_data {
     std::chrono::system_clock::time_point last_heartbeat_timepoint = std::chrono::system_clock::from_time_t(0);
     uint64_t user_router_server_id = 0;
-  };
-  // 最近访问成员 LRU: front 为最久未心跳的成员，用于计算下一个要踢出的成员
-  using member_runtime_lru_map_t = atfw::util::mempool::lru_map<PROJECT_NAMESPACE_ID::DUserIDKey, member_runtime_data,
-                                                                user_key_hash_t, user_key_equal_t>;
 
-  team_room(int64_t team_id, std::string&& subscriber_key, std::string&& lock_holder);
+    atfw::team::DTeamMember member_data;
+  };
+  using member_ptr_t = atfw::util::memory::strong_rc_ptr<member_runtime_data>;
+  using member_const_ptr_t = atfw::util::memory::strong_rc_ptr<const member_runtime_data>;
+  // 最近访问成员 LRU: front 为最久未心跳的成员，用于计算下一个要踢出的成员
+  using member_runtime_lru_map_t =
+      atfw::util::mempool::lru_map<PROJECT_NAMESPACE_ID::DUserIDKey, member_ptr_t, user_key_hash_t, user_key_equal_t>;
+
+  using invitation_ptr_t = atfw::util::memory::strong_rc_ptr<atfw::team::DTeamInvitation>;
+  using invitation_map_t =
+      std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, invitation_ptr_t, user_key_hash_t, user_key_equal_t>;
+
+  using join_request_ptr_t = atfw::util::memory::strong_rc_ptr<atfw::team::DTeamJoinRequest>;
+  using join_request_map_t =
+      std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, join_request_ptr_t, user_key_hash_t, user_key_equal_t>;
+
+  using pending_team_member_message_t = std::pair<atfw::dtmq::DChannelIdKey, atfw::team::DTeamMemberAction>;
+  using pending_team_member_channel_t =
+      std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, std::list<pending_team_member_message_t>, user_key_hash_t,
+                         user_key_equal_t>;
+
+ private:
+  struct ctor_guard {};
+
+ public:
+  team_room(ctor_guard&, int64_t team_id, const atfw::dtmq::DChannelIdKey& channel_key, std::string&& subscriber_key,
+            std::string&& lock_holder, atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& subscriber);
+  team_room(const team_room&) = delete;
+  team_room& operator=(const team_room&) = delete;
+  team_room(team_room&&) = delete;
+  team_room& operator=(team_room&&) = delete;
 
   // 创建频道订阅者并设置回调
-  int32_t create(rpc::context& ctx);
+  static team_room::ptr_t create(rpc::context& ctx, int64_t team_id);
 
   int64_t get_team_id() const noexcept;
   const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept;
   // 频道订阅已就绪(首轮数据已同步)
   bool is_subscriber_ready() const noexcept;
   // 本节点是否持有乐观锁(为队伍主控节点)
-  bool is_master() const noexcept;
-  bool is_destroyed() const noexcept;
-  // 房间对象是否可以回收
-  bool ready_to_destroy() const noexcept;
+  bool is_lock_holder() const noexcept;
 
   // 获取下一个定时器事件(剔除长期无心跳成员、日志压缩、续租等)
   team_room_timer_event get_next_timer_event(std::chrono::system_clock::time_point now);
@@ -103,12 +129,13 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   // 提交组队操作(协程内调用)，来自外部服务的写请求统一经由此处写入频道日志
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
-                                                                 const atframework::team::DTeamAction& action);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_member_action(
-      rpc::context& ctx, const atframework::team::DTeamMemberAction& action);
+                                                                 const atfw::team::DTeamAction& action);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_member_action(rpc::context& ctx,
+                                                                        const atfw::dtmq::DChannelIdKey& channel_key,
+                                                                        const atfw::team::DTeamMemberAction& action);
   // 成员心跳，更新成员确认位点和在线簿记(协程内调用)
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type heartbeat(rpc::context& ctx,
-                                                               const atframework::team::SSTeamRoomHeartbeatReq& req);
+                                                               const atfw::team::SSTeamRoomHeartbeatReq& req);
 
   // 频道销毁通知后由 manager 回收前调用
   void on_remove();
@@ -122,23 +149,30 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
                                  const ::atfw::dtmq::DChannelOptimisticLock& to);
   void on_destroyed(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber);
 
+  static std::chrono::system_clock::duration get_room_destroy_delay() noexcept;
+
+  void change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_captain_key);
+
+  rpc::result_code_type flush_pending_channel_message(rpc::context& ctx);
+
  private:
   friend class team_room_manager;
 
   // 从订阅数据恢复队伍快照(custom_data + 增量日志 + private_data)
-  void restore_snapshot(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber);
+  void restore_snapshot(rpc::context& ctx);
   // 应用频道事件到本地状态，所有应用操作必须幂等
-  void apply_action(rpc::context& ctx, const atframework::team::DTeamAction& action, int64_t sequence,
-                    uint64_t hash_code);
-  void apply_member_action(rpc::context& ctx, const atframework::team::DTeamMemberAction& action, int64_t sequence,
-                           uint64_t hash_code);
+  void apply_action(rpc::context& ctx, const atfw::team::DTeamAction& action, int64_t sequence, uint64_t hash_code);
   void apply_event_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& message);
   void update_acknowledge(int64_t sequence, uint64_t hash_code);
 
-  atframework::team::DTeamMember* mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
-  const atframework::team::DTeamMember* find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const;
+  member_ptr_t mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+  member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
+  bool remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                     atfw::team::EnTeamExitReason reason, bool with_notify);
+  void foreach_member(atfw::util::nostd::function_ref<bool(atfw::util::nostd::nonnull<const member_ptr_t>&)> fn);
+
   // 队长退出后在剩余成员中确定性地选出新队长(加入时间最早者)
-  void elect_captain_after_remove(const PROJECT_NAMESPACE_ID::DUserIDKey& removed_user_key);
+  void elect_captain_after_remove();
   // 成员离线过期时间点(无心跳簿记时回退到入队时间/快照恢复时间)
   std::chrono::system_clock::time_point get_member_offline_deadline(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   // 成员清单变为空/非空时刷新空房间计时
@@ -168,7 +202,10 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
       rpc::context& ctx, std::chrono::system_clock::time_point now);
   // 解散空队伍
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy_empty_room(rpc::context& ctx);
-  void dump_private_data(atframework::team::DTeamRoomPrivateData& output) const;
+
+  void dump_team_key(atfw::team::DTeamKey& output) const;
+  void dump_private_data(atfw::team::DTeamRoomPrivateData& output);
+  void dump_public_data(atfw::team::DTeamStorage& output);
 
   // 乐观锁租约时长，不低于 dtmq 频道配置的订阅者心跳过期淘汰时间(subscriber_timeout)
   std::chrono::system_clock::duration get_lock_lease() const;
@@ -177,23 +214,30 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 触发日志压缩的日志数量阈值，取自 dtmq 频道配置 gc_log_count
   int64_t get_compact_log_count() const;
 
+ private:
   int64_t team_id_;
   atfw::dtmq::DChannelIdKey channel_key_;
   std::string subscriber_key_;
   // 本节点乐观锁持有者标识，与服务节点名和节点ID相关
   std::string lock_holder_;
-  rpc::dtmq::client_subscriber::ptr_t subscriber_;
+  atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> subscriber_;
 
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
-  atframework::team::DTeamStorage storage_;
+  atfw::team::DTeamStorage storage_;
   // 成员心跳等在线簿记(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
   member_runtime_lru_map_t member_;
+  struct iterating_member_protect_t;
+  iterating_member_protect_t* iterating_member_protect_ = nullptr;
+
+  invitation_map_t pending_invitation_by_invitee_;
+  join_request_map_t pending_join_request_by_requester_;
+
+  pending_team_member_channel_t pending_member_channel_actions_;
 
   // 本节点最近一次设置或看到的乐观锁
   ::atfw::dtmq::DChannelOptimisticLock current_lock_;
   bool lock_acquired_ = false;
   bool destroyed_ = false;
-  bool channel_destroyed_ = false;
   bool channel_destroy_sent_ = false;
   bool snapshot_restored_ = false;
   std::chrono::system_clock::time_point restore_timepoint_;

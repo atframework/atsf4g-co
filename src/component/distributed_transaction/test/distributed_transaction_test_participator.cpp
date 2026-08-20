@@ -2180,13 +2180,16 @@ CASE_TEST(component_distributed_transaction_participator, repeated_prepare_is_id
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// ============ 回归：resolve task 被超时 kill 时，on_failed 兜底必须重新武装自定义定时器 ============
+// ============ 回归：resolve task 在途期间到期定时器被消费、随后 task 被超时 kill，恢复链不得丢失 ============
 // 场景：task#1 在批处理入口（check_writable 闸门）挂起期间，B 的到期定时器触发被跳过
-// （tick 因任务在途而早退），队列保留 B 但自定义定时器已被消费；随后 task#1 在收尾回调停放期间
-// 被超时 kill —— operator() 的收尾 tick 不再执行，rearm 又无未处理条目可排期（空操作），
-// 唯一的恢复路径是 on_failed 中的 refresh_resolve_custom_timer()。
-// （移除 on_failed 中的 refresh 调用时，下方的 wait_for(has_timer) 超时，测试 RED）
-CASE_TEST(component_distributed_transaction_participator, resolve_task_killed_recovers_via_on_failed_fallback) {
+// ============ 回归：resolve task 在途期间到期定时器被消费后不得丢失，由收尾的补驱动 tick 恢复 ============
+// 场景：task#1 在批处理入口（check_writable 闸门）挂起期间，B 的到期定时器触发被跳过
+// （tick 因任务在途而早退），队列保留 B 但自定义定时器已被消费。
+// 恢复链不依赖任何外部 tick()：task#1 完成批处理后，operator() 收尾的补驱动 tick 收编 B
+// 并拉起后续 resolve task，直到 B 的 acknowledge 完成、队列清空。
+// （历史上曾怀疑需要 on_failed 兜底，实测 libcopp 的 kill/cancel 仅置状态位、不销毁协程帧，
+// on_failed 必在 operator() 收尾之后执行，主恢复路径即收尾的补驱动 tick）
+CASE_TEST(component_distributed_transaction_participator, timer_consumed_while_task_in_flight_recovers_via_final_tick) {
   atfw::testing::runtime test;
   atfw::testing::runtime_options options;
   options.features = {atfw::testing::feature::ss};
@@ -2205,7 +2208,9 @@ CASE_TEST(component_distributed_transaction_participator, resolve_task_killed_re
 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
-  // 首个 resolve task 的批次闸门停放 250ms：task#1 挂起期间 B 的定时器到期被跳过
+  // 首个 resolve task 的批次闸门停放 400ms：task#1 挂起期间 B 的定时器到期被跳过。
+  // 注意时间轮粒度（100ms 对齐）：B 的到期时间（200ms）必须落在首个闸门停放窗口内，
+  // 否则 B 会在 task#1 拉起时一并被收集，场景不成立
   bool gate_park_consumed = false;
   vtable->check_writable = [&recorder, &gate_park_consumed](rpc::context& ctx, handle_type&,
                                                             bool& writable) -> rpc::result_code_type {
@@ -2213,49 +2218,23 @@ CASE_TEST(component_distributed_transaction_participator, resolve_task_killed_re
     writable = true;
     if (!gate_park_consumed) {
       gate_park_consumed = true;
-      RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{250}));
-    }
-    RPC_RETURN_CODE(0);
-  };
-  // task#1 在收尾回调中继续停放直至被 kill；后续 task 的收尾直接放行
-  bool park_entered = false;
-  bool release_tail = false;
-  vtable->on_resolve_task_finished = [&recorder, &park_entered, &release_tail](rpc::context& ctx,
-                                                                               handle_type&) -> rpc::result_code_type {
-    recorder.events.emplace_back("on_resolve_task_finished");
-    park_entered = true;
-    for (int i = 0; i < 2000 && !release_tail; ++i) {
-      RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{2}));
+      RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{400}));
     }
     RPC_RETURN_CODE(0);
   };
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
-  // 一次性 hook：把首个 resolve task 的超时改写为 400ms，使其在收尾回调停放期间被 kill
-  task_manager::mock_create_task_clear();
-  int hook_budget = 1;
-  auto timeout_hook = task_manager::mock_create_task(
-      [&hook_budget](gsl::string_view demangled_task_type_name, std::chrono::system_clock::duration& timeout) -> int {
-        if (hook_budget > 0 &&
-            demangled_task_type_name.find("task_action_participator_resolve_transaction") != gsl::string_view::npos) {
-          --hook_budget;
-          timeout = std::chrono::milliseconds{400};
-        }
-        return 0;
-      });
-  CASE_EXPECT_TRUE(static_cast<bool>(timeout_hook));
-
-  // A：commit 后进入 finished，立即到期的 acknowledge 拉起 task#1；B：30ms 后到期的 kQuery
+  // A：commit 后进入 finished，立即到期的 acknowledge 拉起 task#1；B：200ms 后到期的 kQuery
   auto task =
-      test.run_task("killed_task_seed", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
-        auto request_a = make_prepare_request("part-uuid-kill-a", 2, std::chrono::milliseconds{60000});
+      test.run_task("consumed_timer_seed", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request_a = make_prepare_request("part-uuid-inflight-a", 2, std::chrono::milliseconds{60000});
         SSParticipatorTransactionPrepareRsp response;
         storage_ptr_type output;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_a), response, output)));
-        auto request_b = make_prepare_request("part-uuid-kill-b", 2, std::chrono::milliseconds{30});
+        auto request_b = make_prepare_request("part-uuid-inflight-b", 2, std::chrono::milliseconds{200});
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_b), response, output)));
         SSParticipatorTransactionCommitReq commit_request;
-        commit_request.set_transaction_uuid("part-uuid-kill-a");
+        commit_request.set_transaction_uuid("part-uuid-inflight-a");
         SSParticipatorTransactionCommitRsp commit_response;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
         RPC_RETURN_CODE(0);
@@ -2264,20 +2243,17 @@ CASE_TEST(component_distributed_transaction_participator, resolve_task_killed_re
   CASE_EXPECT_TRUE(seed_result.task_exited);
   CASE_EXPECT_EQ(0, seed_result.result_code);
 
-  // task#1：处理完 A 的 acknowledge 后停放在收尾回调
-  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&park_entered]() { return park_entered; }));
-  CASE_EXPECT_EQ(1, commit_ack_calls);
-  CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
-  CASE_EXPECT_EQ(1, handle->get_running_transactions().count("part-uuid-kill-b"));
-  // B 的定时器已在 task#1 在途期间触发并被跳过：队列保留 B，但自定义定时器已被消费
-  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  // B 的到期定时器在 task#1 闸门挂起期间触发并被跳过（tick 早退）：自定义定时器被消费，
+  // 但 B 仍留在队列和运行集合中；此时 A 的 acknowledge 尚未开始（闸门 400ms 未到期），
+  // A 仍停留在 finished 集合
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle]() { return !handle->has_resolve_custom_timer_for_unit_test(); }));
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().count("part-uuid-inflight-b"));
+  CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+  CASE_EXPECT_EQ(1, handle->get_finished_transactions().count("part-uuid-inflight-a"));
+  CASE_EXPECT_EQ(0, commit_ack_calls);
 
-  // 放行后续 task 的收尾回调，然后等待 task#1 超时（400ms）被 kill：
-  // rearm 无未处理条目（空操作），on_failed 的 refresh 必须为 B 重新武装定时器
-  release_tail = true;
-  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle]() { return handle->has_resolve_custom_timer_for_unit_test(); }));
-
-  // 自驱动恢复：B 经 query → COMMITED → do_event → acknowledge 完整消费，全程无外部 tick()
+  // 闸门解除后 task#1 完成 A 的 acknowledge，operator() 收尾的补驱动 tick 收编 B：
+  // B 经 query → COMMITED → do_event → acknowledge 完整消费，全程无外部 tick()
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle]() {
     return handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
   }));
@@ -2287,9 +2263,6 @@ CASE_TEST(component_distributed_transaction_participator, resolve_task_killed_re
   CASE_EXPECT_TRUE(recorder.count("on_resolve_task_finished") >= 2);
   CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
 
-  timeout_hook.reset();
-  CASE_EXPECT_FALSE(task_manager::mock_create_task_active());
-  task_manager::mock_create_task_clear();
   CASE_EXPECT_EQ(0, test.stop());
 }
 

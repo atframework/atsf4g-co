@@ -39,7 +39,7 @@ class team_room_manager : public util::design_pattern::singleton<team_room_manag
   room_ptr_t get_room(int64_t team_id) const;
   // 查找或创建队伍房间(创建频道订阅)，来自外部服务的写请求经由此获得房间协调者
   room_ptr_t mutable_room(rpc::context& ctx, int64_t team_id);
-  void remove_room(int64_t team_id);
+  void remove_room(int64_t team_id, const team_room* expected = nullptr);
 
   // 重设房间的唯一定时器(移除旧定时器并按新的触发时间点调度)
   int32_t reset_room_timer(team_room& room, std::chrono::system_clock::time_point timepoint);
