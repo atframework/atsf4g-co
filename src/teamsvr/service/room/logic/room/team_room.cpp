@@ -282,6 +282,8 @@ rpc::result_code_type team_room::heartbeat(rpc::context& ctx, const atfw::team::
   // 服务器如果触发反订阅，这里会传0
   if (req.user_router_server_id() > 0) {
     member->last_heartbeat_timepoint = atfw::util::time::time_utility::now();
+    *member->member_data.mutable_last_heartbeat_timepoint() =
+        protobuf_from_system_clock(member->last_heartbeat_timepoint);
   }
   member->user_router_server_id = req.user_router_server_id();
   member->member_data.set_user_router_server_id(req.user_router_server_id());
@@ -297,12 +299,21 @@ void team_room::restore_snapshot(rpc::context& ctx) {
 
   // 从 custom_data 恢复队伍状态(成员清单、加入请求和加入邀请列表)
   const auto& custom_data = subscriber_->get_custom_data_content();
+  rpc::context::message_holder<atfw::team::DTeamStorage> public_data(ctx);
   if (!custom_data.type_url().empty()) {
-    if (!custom_data.UnpackTo(&storage_)) {
+    if (!custom_data.UnpackTo(&(*public_data))) {
       FCTXLOGERROR(ctx, "team room {} unpack custom_data failed", team_id_);
     }
   }
+
+  protobuf_copy_message(*storage_.mutable_team_key(), public_data->team_key());
   storage_.mutable_team_key()->set_team_id(team_id_);
+  protobuf_copy_message(*storage_.mutable_captain_user_key(), public_data->captain_user_key());
+  protobuf_copy_message(*storage_.mutable_configure(), public_data->configure());
+  storage_.set_acknowledge_action_sequence(public_data->acknowledge_action_sequence());
+  storage_.set_acknowledge_action_hash_code(public_data->acknowledge_action_hash_code());
+  storage_.set_saved_action_sequence(public_data->saved_action_sequence());
+
   if (subscriber_->is_destroyed()) {
     destroyed_ = true;
   }
@@ -322,84 +333,88 @@ void team_room::restore_snapshot(rpc::context& ctx) {
     last_compact_timepoint_ = protobuf_to_system_clock(private_storage.last_compact_timepoint());
     storage_.set_saved_action_sequence(last_compact_sequence_);
 
-    // 配置
-    protobuf_copy_message(*storage_.mutable_configure(), private_storage.configure());
-
-    // member
-    std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_member_key;
-    foreach_member([&expired_member_key](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
-      expired_member_key.insert(member->member_data.user_key());
-      return true;
-    });
-
-    for (const auto& runtime : private_storage.member_runtime()) {
-      auto member = find_member(runtime.public_member_data().user_key(), false);
-      if (!member) {
-        member = mutable_member(runtime.public_member_data().user_key());
-      }
-      if (!member) {
-        FCTXLOGERROR(ctx, "team room {} restore_snapshot member {} but allocate failed", team_id_,
-                     runtime.public_member_data().user_key().user_id());
-        continue;
-      }
-      expired_member_key.erase(member->member_data.user_key());
-
-      member->user_router_server_id = runtime.user_router_server_id();
-      member->last_heartbeat_timepoint = protobuf_to_system_clock(runtime.last_heartbeat_timepoint());
-      protobuf_copy_message(member->member_data, runtime.public_member_data());
+    private_team_data_.clear();
+    for (const auto& data : private_storage.private_team_data()) {
+      protobuf_copy_message(private_team_data_[data.first], data.second);
     }
-
-    for (const auto& removed_key : expired_member_key) {
-      remove_member(ctx, removed_key, atfw::team::EN_TEAM_EXIT_REASON_DEFAULT, false);
-    }
-
-    // invitation
-    expired_member_key.clear();
-    for (const auto& invitation : pending_invitation_by_invitee_) {
-      expired_member_key.insert(invitation.first);
-    }
-    for (const auto& invitation : private_storage.pending_invitation()) {
-      if (invitation.invitee().user_id() == 0 || invitation.invitee().zone_id() == 0) {
-        continue;
-      }
-
-      expired_member_key.erase(invitation.invitee());
-      auto& data_ptr = pending_invitation_by_invitee_[invitation.invitee()];
-      if (!data_ptr) {
-        data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>();
-      }
-      protobuf_copy_message(*data_ptr, invitation);
-    }
-    for (const auto& removed_key : expired_member_key) {
-      pending_invitation_by_invitee_.erase(removed_key);
-    }
-
-    // join_request
-    expired_member_key.clear();
-    for (const auto& invitation : pending_join_request_by_requester_) {
-      expired_member_key.insert(invitation.first);
-    }
-    for (const auto& join_request : private_storage.pending_join_request()) {
-      if (join_request.requester().user_id() == 0 || join_request.requester().zone_id() == 0) {
-        continue;
-      }
-
-      expired_member_key.erase(join_request.requester());
-      auto& data_ptr = pending_join_request_by_requester_[join_request.requester()];
-      if (!data_ptr) {
-        data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>();
-      }
-      protobuf_copy_message(*data_ptr, join_request);
-    }
-    for (const auto& removed_key : expired_member_key) {
-      pending_join_request_by_requester_.erase(removed_key);
-    }
-
-    // shared team data
-    *storage_.mutable_shared_team_data() = private_storage.shared_team_data();
-
-    change_captain(private_storage.captain_user_key());
   } while (false);
+
+  // member
+  std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_member_key;
+  foreach_member([&expired_member_key](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+    expired_member_key.insert(member->member_data.user_key());
+    return true;
+  });
+
+  for (const auto& data : public_data->member()) {
+    auto member = find_member(data.user_key(), false);
+    if (!member) {
+      member = mutable_member(data.user_key());
+    }
+    if (!member) {
+      FCTXLOGERROR(ctx, "team room {} restore_snapshot member {} but allocate failed", team_id_,
+                   data.user_key().user_id());
+      continue;
+    }
+    expired_member_key.erase(member->member_data.user_key());
+
+    member->user_router_server_id = data.user_router_server_id();
+    member->last_heartbeat_timepoint = protobuf_to_system_clock(data.last_heartbeat_timepoint());
+    *member->member_data.mutable_last_heartbeat_timepoint() =
+        protobuf_from_system_clock(member->last_heartbeat_timepoint);
+    protobuf_copy_message(member->member_data, data);
+  }
+
+  for (const auto& removed_key : expired_member_key) {
+    remove_member(ctx, removed_key, atfw::team::EN_TEAM_EXIT_REASON_DEFAULT, false);
+  }
+
+  // invitation
+  expired_member_key.clear();
+  for (const auto& invitation : pending_invitation_by_invitee_) {
+    expired_member_key.insert(invitation.first);
+  }
+  for (const auto& invitation : public_data->pending_invitation()) {
+    if (invitation.invitee().user_id() == 0 || invitation.invitee().zone_id() == 0) {
+      continue;
+    }
+
+    expired_member_key.erase(invitation.invitee());
+    auto& data_ptr = pending_invitation_by_invitee_[invitation.invitee()];
+    if (!data_ptr) {
+      data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>();
+    }
+    protobuf_copy_message(*data_ptr, invitation);
+  }
+  for (const auto& removed_key : expired_member_key) {
+    pending_invitation_by_invitee_.erase(removed_key);
+  }
+
+  // join_request
+  expired_member_key.clear();
+  for (const auto& invitation : pending_join_request_by_requester_) {
+    expired_member_key.insert(invitation.first);
+  }
+  for (const auto& join_request : public_data->pending_join_request()) {
+    if (join_request.requester().user_id() == 0 || join_request.requester().zone_id() == 0) {
+      continue;
+    }
+
+    expired_member_key.erase(join_request.requester());
+    auto& data_ptr = pending_join_request_by_requester_[join_request.requester()];
+    if (!data_ptr) {
+      data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>();
+    }
+    protobuf_copy_message(*data_ptr, join_request);
+  }
+  for (const auto& removed_key : expired_member_key) {
+    pending_join_request_by_requester_.erase(removed_key);
+  }
+
+  // shared team data
+  *storage_.mutable_shared_team_data() = public_data->shared_team_data();
+
+  change_captain(public_data->captain_user_key());
 
   // 回放压缩点之后的增量日志
   rpc::dtmq::client_subscriber::query_options options;
@@ -555,7 +570,7 @@ void team_room::elect_captain_after_remove() {
     protobuf_copy_message(*storage_.mutable_captain_user_key(), member->member_data.user_key());
     // 队长一定是owner
     member->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
-    return true;
+    return false;
   });
 }
 
@@ -605,6 +620,7 @@ team_room::member_ptr_t team_room::mutable_member(const PROJECT_NAMESPACE_ID::DU
     return ret;
   }
   ret->last_heartbeat_timepoint = atfw::util::time::time_utility::now();
+  *ret->member_data.mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(ret->last_heartbeat_timepoint);
   protobuf_copy_message(*ret->member_data.mutable_user_key(), user_key);
 
   // 防止递归期间增删member，延迟处理
@@ -1046,14 +1062,16 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
 
   rpc::dtmq::client_subscriber::update_option options;
   auto private_data = rpc::make_shared_message<atfw::team::DTeamRoomPrivateData>(ctx);
+  auto public_data = rpc::make_shared_message<atfw::team::DTeamStorage>(ctx);
   if (need_compact) {
-    // 当前状态信息存入 custom_data(成员清单、加入请求和加入邀请列表)和 private_data(主控私有簿记)
+    // 当前状态信息存入 custom_data(成员清单、加入请求和加入邀请列表)和 private_data(主控私有数据)
     storage_.set_saved_action_sequence(subscriber_->get_last_message_sequence());
+    dump_public_data(*public_data);
     dump_private_data(*private_data);
     options.save = true;
     options.compact_sequence = storage_.saved_action_sequence();
     options.stateful_sequence = storage_.saved_action_sequence();
-    options.custom_data = &storage_;
+    options.custom_data = public_data.get();
     options.private_data = private_data.get();
   }
 
@@ -1171,43 +1189,14 @@ void team_room::dump_team_key(atfw::team::DTeamKey& output) const { output.set_t
 
 void team_room::dump_private_data(atfw::team::DTeamRoomPrivateData& output) {
   dump_team_key(*output.mutable_team_key());
-  protobuf_copy_message(*output.mutable_captain_user_key(), storage_.captain_user_key());
-
-  // dump 配置
-  protobuf_copy_message(*output.mutable_configure(), storage_.configure());
-
-  // dump成员数据
-  foreach_member([&output](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
-    auto* runtime = output.add_member_runtime();
-    protobuf_copy_message(*runtime->mutable_public_member_data(), member->member_data);
-    *runtime->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(member->last_heartbeat_timepoint);
-    runtime->set_user_router_server_id(member->user_router_server_id);
-    return true;
-  });
-
-  // dump 邀请数据
-  for (const auto& invitation : pending_invitation_by_invitee_) {
-    if (!invitation.second) {
-      continue;
-    }
-
-    protobuf_copy_message(*output.add_pending_invitation(), *invitation.second);
-  }
-
-  // dump 加入请求数据
-  for (const auto& join_request : pending_join_request_by_requester_) {
-    if (!join_request.second) {
-      continue;
-    }
-
-    protobuf_copy_message(*output.add_pending_join_request(), *join_request.second);
-  }
 
   output.set_last_compact_sequence(last_compact_sequence_);
   *output.mutable_last_compact_timepoint() = protobuf_from_system_clock(last_compact_timepoint_);
 
-  // dump shared_team_data
-  *output.mutable_shared_team_data() = storage_.shared_team_data();
+  for (const auto& data : private_team_data_) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    protobuf_copy_message((*output.mutable_private_team_data())[data.first], data.second);
+  }
 }
 
 void team_room::dump_public_data(atfw::team::DTeamStorage& output) {

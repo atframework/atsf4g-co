@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 #include <protocol/pbdesc/team_room_service.pb.h>
 
@@ -23,7 +24,12 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/rpc_context.h>
+#include <rpc/team/team_common_api.h>
+
 #include <utility>
+
+#include "logic/room/team_room_manager.h"
 
 ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_add_join_request::task_action_add_join_request(
     dispatcher_start_data_type&& param)

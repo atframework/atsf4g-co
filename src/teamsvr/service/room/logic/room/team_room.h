@@ -224,6 +224,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
   atfw::team::DTeamStorage storage_;
+  std::unordered_map<int32_t, atfw::team::DTeamAnyData> private_team_data_;
   // 成员心跳等在线簿记(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
   member_runtime_lru_map_t member_;
   struct iterating_member_protect_t;

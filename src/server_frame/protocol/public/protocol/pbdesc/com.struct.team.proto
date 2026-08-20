@@ -99,17 +99,20 @@ message DTeamMember {
   // 入队时间
   google.protobuf.Timestamp joined_timepoint = 3;
 
-  EnTeamPermissionRole role = 4;
+  // 最近一次成员心跳时间，用于离线过期清理
+  google.protobuf.Timestamp last_heartbeat_timepoint = 4;
+
+  EnTeamPermissionRole role = 5;
 
   // 入队方式和额外数据
-  EnTeamSourceType team_source_type = 5;
-  google.protobuf.Any team_source_data = 6;
+  EnTeamSourceType team_source_type = 6;
+  google.protobuf.Any team_source_data = 7;
 
   // 退出原因
-  EnTeamExitReason remove_member_reason = 7;
+  EnTeamExitReason remove_member_reason = 8;
 
-  string client_version = 8;
-  uint64 user_router_server_id = 9;
+  string client_version = 9;
+  uint64 user_router_server_id = 10;
 
   // 最后收到的组队通道的消息sequence和hash code
   int64 acknowledge_action_sequence = 11;

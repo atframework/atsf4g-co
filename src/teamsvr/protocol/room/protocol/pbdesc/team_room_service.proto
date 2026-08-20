@@ -58,8 +58,6 @@ message SSTeamRoomHeartbeatRsp {
 message DTeamRoomMemberRuntimeData {
   DTeamMember public_member_data = 1;
 
-  // 最近一次成员心跳时间，用于离线过期清理
-  google.protobuf.Timestamp last_heartbeat_timepoint = 2;
   // 成员最近一次心跳上报的路由服务ID
   uint64 user_router_server_id = 3;
 }
@@ -67,19 +65,6 @@ message DTeamRoomMemberRuntimeData {
 // 队伍管理用的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
 message DTeamRoomPrivateData {
   DTeamKey team_key = 1;
-  // 当前队长
-  atframework.shared.DUserIDKey captain_user_key = 2;
-
-  DTeamConfigure configure = 3;
-
-  // 成员心跳等运行时数据
-  repeated DTeamRoomMemberRuntimeData member_runtime = 6;
-
-  // 当前待处理的申请列表
-  repeated DTeamJoinRequest pending_join_request = 7;
-
-  // 当前待处理的邀请列表
-  repeated DTeamInvitation pending_invitation = 8;
 
   // 上次压缩完成时的sequence和时间点
   int64 last_compact_sequence = 11;
@@ -87,7 +72,7 @@ message DTeamRoomPrivateData {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> shared_team_data = 14;
+  map<int32, DTeamAnyData> private_team_data = 15;
 }
 
 message SSTeamRoomAddInvitationReq {
