@@ -39,6 +39,10 @@
 #include "logic/matching/matching_logic.h"
 #include "logic/matching/matching_utility.h"
 
+#ifdef min
+#  undef min
+#endif
+
 namespace {
 constexpr int64_t kDefaultSearchTimeout = 120;
 constexpr int64_t kDefaultConfirmTimeout = 15;
@@ -220,10 +224,10 @@ int32_t matching_manager::tick() {
       break;
     }
     if (target_room && target_room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
-      const size_t target_migration_count =
-          rebalance_room(ctx, target_room, now, std::min(kMaxRebalanceMigrationsPerTarget, remaining_migration_count));
+      const size_t target_migration_count = rebalance_room(
+          ctx, target_room, now, (std::min)(kMaxRebalanceMigrationsPerTarget, remaining_migration_count));
       assert(target_migration_count <= remaining_migration_count);
-      remaining_migration_count -= std::min(target_migration_count, remaining_migration_count);
+      remaining_migration_count -= (std::min)(target_migration_count, remaining_migration_count);
     }
   }
   for (const auto& matching_id : recycle_rooms) {
