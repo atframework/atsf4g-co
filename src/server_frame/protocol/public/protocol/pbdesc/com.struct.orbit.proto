@@ -68,7 +68,7 @@ message DOrbitUserFinishResult {
 }
 
 message DOrbitRoomInitData {
-  uint32 client_template_id = 1;
+  int32 client_template_id = 1;
   string region = 2;
   string match_id = 3;
 }
@@ -99,7 +99,7 @@ message DOrbitRoomExitInfo {
 }
 
 message DOrbitRoomInit {
-  uint32 client_template_id = 1;
+  int32 client_template_id = 1;
   string region = 2;
   string match_id = 3;
   int64 create_timepoint = 4;
@@ -141,7 +141,7 @@ message DOrbitRoomUserData {
   string client_address = 2;   // Client地址
   bool init = 3;               // 是否已经初始化成功
   string token = 4;            // Client token
-  uint32 client_template_id = 5;
+  int32 client_template_id = 5;
   string region = 6;
   int64 create_timepoint = 7;
 }

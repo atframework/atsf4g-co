@@ -99,7 +99,7 @@ task_action_rank_send_settlement::result_type task_action_rank_send_settlement::
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc::context& ctx,
                                                                              logic_rank_handle_variant& /*rank_handle*/,
-                                                                             const std::string& user_openid,
+                                                                             const std::string& /*user_openid*/,
                                                                              int64_t& sub_score, int64_t& set_score,
                                                                              int32_t& score_change_type) {
   if (param_.daily_settlement_pool_id == 0) {
@@ -213,7 +213,7 @@ rpc::result_code_type task_action_rank_send_settlement::settle_daily_rewards(rpc
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 rpc::result_code_type task_action_rank_send_settlement::settle_custom_rewards(
-    rpc::context& ctx, logic_rank_handle_variant& /*rank_handle*/, const std::string& user_openid, int64_t& sub_score,
+    rpc::context& ctx, logic_rank_handle_variant& /*rank_handle*/, const std::string& /*user_openid*/, int64_t& sub_score,
     int64_t& set_score, int32_t& score_change_type) {
   // 调用RPC给用户发送排行版奖励结算通知
   if (param_.custom_settlement_pool_id == 0) {
@@ -455,11 +455,11 @@ rpc::result_code_type task_action_rank_send_settlement::save_history(rpc::contex
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type task_action_rank_send_settlement::settle_special_rule(rpc::context& ctx,
+rpc::result_code_type task_action_rank_send_settlement::settle_special_rule(rpc::context& /*ctx*/,
                                                                             logic_rank_handle_variant& /*rank_handle*/,
                                                                             const std::string& /*user_openid*/,
-                                                                            int64_t& sub_score, int64_t& /*set_score*/,
-                                                                            int32_t& score_change_type) {
+                                                                            int64_t& /*sub_score*/, int64_t& /*set_score*/,
+                                                                            int32_t& /*score_change_type*/) {
   // 判断是否是特殊清理
   if (logic_config::me()
           ->get_server_instance_config<PROJECT_NAMESPACE_ID::config::ranksvr_settlement_cfg>()

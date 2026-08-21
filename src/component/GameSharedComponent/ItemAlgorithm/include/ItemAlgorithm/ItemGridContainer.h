@@ -43,11 +43,11 @@ struct ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest {
   ItemGridOperationResult result;
   struct PerGridData {
     PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridAddCheckedRequest&& in_add_requests,
-                std::vector<size_t>&& in_original_indices)
+                std::vector<int32_t>&& in_original_indices)
         : grid(in_grid), add_requests(std::move(in_add_requests)), original_indices(std::move(in_original_indices)) {}
     item_grid_algorithm_ptr_t grid = nullptr;
     ItemGridAddCheckedRequest add_requests;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
   };
   std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
   bool apply = false;
@@ -74,11 +74,11 @@ struct ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest {
 
   struct PerGridData {
     PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridSubCheckedRequest&& in_sub_requests,
-                std::vector<size_t>&& in_original_indices)
+                std::vector<int32_t>&& in_original_indices)
         : grid(in_grid), sub_requests(std::move(in_sub_requests)), original_indices(std::move(in_original_indices)) {}
     item_grid_algorithm_ptr_t grid = nullptr;
     ItemGridSubCheckedRequest sub_requests;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
   };
   std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
   bool apply = false;
@@ -109,11 +109,11 @@ struct ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest {
   ItemGridOperationResult result;
   struct PerGridData {
     PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridMoveCheckedRequest&& in_move_request,
-                std::vector<size_t>&& in_original_indices)
+                std::vector<int32_t>&& in_original_indices)
         : grid(in_grid), move_request(std::move(in_move_request)), original_indices(std::move(in_original_indices)) {}
     item_grid_algorithm_ptr_t grid = nullptr;
     ItemGridMoveCheckedRequest move_request;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
   };
   std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
   bool apply = false;
@@ -139,13 +139,13 @@ struct ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest {
   ItemGridOperationResult result;
   struct PerGridData {
     PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridReplaceCheckedRequest&& in_replace_request,
-                std::vector<size_t>&& in_original_indices)
+                std::vector<int32_t>&& in_original_indices)
         : grid(in_grid),
           replace_requests(std::move(in_replace_request)),
           original_indices(std::move(in_original_indices)) {}
     item_grid_algorithm_ptr_t grid = nullptr;
     ItemGridReplaceCheckedRequest replace_requests;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
   };
   std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
   bool apply = false;

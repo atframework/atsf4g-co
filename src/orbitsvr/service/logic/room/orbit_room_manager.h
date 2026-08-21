@@ -55,7 +55,7 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
       rpc::context& ctx, const std::string& client_id,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results);
 
-  static bool fill_client_start_args_from_template_id(uint32_t template_id, const std::string& client_id,
+  static bool fill_client_start_args_from_template_id(int32_t template_id, const std::string& client_id,
                                                       atfw::orbit::DAgentClientStartArgs& args);
 
  private:

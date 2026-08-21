@@ -97,7 +97,7 @@ static bool init_user_orbit_manager_handle() {
 }  // namespace
 
 user_orbit_manager::user_orbit_manager(user& owner) : owner_(&owner) {
-  static bool init_handle = init_user_orbit_manager_handle();
+  ATFW_EXPLICIT_UNUSED_ATTR static bool init_handle = init_user_orbit_manager_handle();
 }
 
 void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {

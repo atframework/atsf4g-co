@@ -22,7 +22,7 @@ message ExcelOrbitClientTemplate {
     tags: "server"
   };
 
-  uint32 client_template_id = 1 [(org.xresloader.field_unique_tag) = "client_template_id"];
+  int32 client_template_id = 1 [(org.xresloader.field_unique_tag) = "client_template_id"];
   double expected_normal_cpu = 2;
   double expected_normal_memory_mb = 3;
   double expected_seed_cpu = 4;

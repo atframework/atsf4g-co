@@ -179,7 +179,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
     if (!is_item_valid(config_group, item_basic)) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: invalid item type={} count={} guid={}, error={} ({})", i,
                                      type_id, add_count, guid, result.error_code,
                                      PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -188,7 +188,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
     if (!check_item_position(item_basic.position())) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: invalid item position guid={}, error={} ({})", i, guid,
                                      result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
@@ -197,7 +197,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     if (guid != 0) {
       if (guid_index_.count(guid) > 0 || pending_guids.count(guid) > 0) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_DUPLICATE_GUID;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: duplicate guid={}, error={} ({})", i, guid,
                                        result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
@@ -207,7 +207,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: unknown item type={}, error={} ({})", i, type_id,
                                      result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
@@ -218,7 +218,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
       int32_t limit_ret = on_check_item_count_limit(type_id, current_total, add_count);
       if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
         result.error_code = limit_ret;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT(
             "check_add failed[{}]: item count limit exceeded type={} current={} add={}, "
             "error={} ({})",
@@ -233,7 +233,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
       auto position_cfg = get_item_position_cfg(config_group, item_basic);
       if (position_cfg == nullptr) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: item position cfg not found type={}, error={} ({})", i,
                                        type_id, result.error_code,
                                        PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -247,7 +247,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
       if (add_count > accumulation_limit) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT(
             "check_add failed[{}]: count={} exceeds accumulation_limit={} type={}, "
             "error={} ({})",
@@ -262,7 +262,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
         const auto& existing_basic = pos_it->second->item_instance().item_basic();
         if (guid != 0 || existing_basic.guid() != 0 || existing_basic.type_id() != type_id) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: position ({},{}) occupied, error={} ({})", i,
                                          target_pos.x, target_pos.y, result.error_code,
                                          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -272,7 +272,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
         int64_t total = existing_basic.count() + pending_existing_extra[target_pos] + add_count;
         if (total > accumulation_limit) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT(
               "check_add failed[{}]: stack overflow at ({},{}), total={} limit={}, "
               "error={} ({})",
@@ -286,7 +286,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
         if (pending_it != pending_new_slots.end()) {
           if (guid != 0 || pending_it->second.type_id != type_id) {
             result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
-            result.failed_index = i;
+            result.failed_index = static_cast<int32_t>(i);
             ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: position ({},{}) pending occupied, error={} ({})", i,
                                            target_pos.x, target_pos.y, result.error_code,
                                            PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -295,7 +295,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
           int64_t total = pending_it->second.accumulated_count + add_count;
           if (total > accumulation_limit) {
             result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
-            result.failed_index = i;
+            result.failed_index = static_cast<int32_t>(i);
             ITEM_ALGORITHM_LOG_WARNING_FMT(
                 "check_add failed[{}]: pending stack overflow at ({},{}), total={} "
                 "limit={}, error={} ({})",
@@ -310,7 +310,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
             int32_t item_col = position_cfg->column_size();
             if (item_row <= 0 || item_col <= 0) {
               result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-              result.failed_index = i;
+              result.failed_index = static_cast<int32_t>(i);
               ITEM_ALGORITHM_LOG_WARNING_FMT(
                   "check_add failed[{}]: invalid item size row={} col={} type={}, "
                   "error={} ({})",
@@ -321,7 +321,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
             if (!is_item_in_range(target_pos.x, target_pos.y, item_row, item_col)) {
               result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OUT_OF_RANGE;
-              result.failed_index = i;
+              result.failed_index = static_cast<int32_t>(i);
               ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: position ({},{}) out of range, error={} ({})", i,
                                              target_pos.x, target_pos.y, result.error_code,
                                              PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -332,7 +332,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
               for (int32_t dc = 0; dc < item_col; ++dc) {
                 if (tmp_grid_flag[static_cast<size_t>(target_pos.y + dr)][static_cast<size_t>(target_pos.x + dc)]) {
                   result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
-                  result.failed_index = i;
+                  result.failed_index = static_cast<int32_t>(i);
                   ITEM_ALGORITHM_LOG_WARNING_FMT(
                       "check_add failed[{}]: position ({},{}) occupied by area, "
                       "error={} ({})",
@@ -353,7 +353,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     int32_t extra_ret = on_check_add(checked_request.config_group, req);
     if (extra_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = extra_ret;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: on_check_add rejected type={} count={}, error={} ({})", i,
                                      type_id, add_count, result.error_code,
                                      PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -527,7 +527,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
 
     if (!is_item_valid(config_group, req)) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_ERROR_FMT("check_sub failed[{}]: invalid item type={} count={} guid={}, error={} ({})", i,
                                    type_id, sub_count, guid, result.error_code,
                                    PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -536,7 +536,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
 
     if (!check_item_position(req.position())) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_ERROR_FMT("check_sub failed[{}]: invalid item position guid={}, error={} ({})", i, guid,
                                    result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
@@ -544,7 +544,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
 
     if (sub_count <= 0) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: sub count={} must be positive, error={} ({})", i, sub_count,
                                      result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
@@ -553,7 +553,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: unknown item type={}, error={} ({})", i, type_id,
                                      result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
@@ -564,7 +564,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
       auto position_cfg = get_item_position_cfg(config_group, req);
       if (position_cfg == nullptr) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: item position cfg not found type={}, error={} ({})", i,
                                        type_id, result.error_code,
                                        PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -576,7 +576,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
       // 带GUID 跳过位置直接索引
       if (sub_count != 1) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: guid item must sub count=1, got {}, error={} ({})", i,
                                        sub_count, result.error_code,
                                        PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -586,7 +586,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
       auto guid_it = guid_index_.find(guid);
       if (guid_it == guid_index_.end()) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: guid={} not found, error={} ({})", i, guid,
                                        result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
@@ -596,7 +596,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
       if (guid_it->second->item_instance().item_basic().type_id() != type_id ||
           guid_it->second->item_instance().item_basic().count() < sub_count) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: guid={} type/count mismatch, error={} ({})", i, guid,
                                        result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
@@ -604,7 +604,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
 
       if (guid_sub.count(guid) > 0) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_DUPLICATE_GUID;
-        result.failed_index = i;
+        result.failed_index = static_cast<int32_t>(i);
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: duplicate guid={}, error={} ({})", i, guid,
                                        result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
@@ -617,7 +617,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         auto pos_it = position_index_.find(target_pos);
         if (pos_it == position_index_.end()) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: position ({},{}) empty, error={} ({})", i, target_pos.x,
                                          target_pos.y, result.error_code,
                                          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -627,7 +627,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         const auto& entry_basic = pos_it->second->item_instance().item_basic();
         if (entry_basic.type_id() != type_id) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: position ({},{}) type mismatch, error={} ({})", i,
                                          target_pos.x, target_pos.y, result.error_code,
                                          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
@@ -638,7 +638,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         int64_t already_sub = position_sub_count[target_pos];
         if (current - already_sub < sub_count) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT(
               "check_sub failed[{}]: not enough at ({},{}), current={} already_sub={} "
               "sub={}, error={} ({})",
@@ -652,7 +652,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         auto group_it = item_groups_.find(type_id);
         if (group_it == item_groups_.end()) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: type={} group empty, error={} ({})", i, type_id,
                                          result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
@@ -668,7 +668,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         int64_t already_sub = type_sub_count[type_id];
         if (total_count - already_sub < sub_count) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
-          result.failed_index = i;
+          result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT(
               "check_sub failed[{}]: not enough type={}, total={} already_sub={} sub={}, "
               "error={} ({})",
@@ -684,7 +684,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
     int32_t extra_ret = on_check_sub(config_group, req);
     if (extra_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = extra_ret;
-      result.failed_index = i;
+      result.failed_index = static_cast<int32_t>(i);
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: on_check_sub rejected type={} count={}, error={} ({})", i,
                                      type_id, sub_count, result.error_code,
                                      PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));

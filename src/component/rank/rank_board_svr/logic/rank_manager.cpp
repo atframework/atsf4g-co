@@ -287,7 +287,7 @@ rank::compare_fn_t rank_manager::get_compare_fn(PROJECT_NAMESPACE_ID::EnRankSort
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
-    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
     const PROJECT_NAMESPACE_ID::DRankUserKey& user_key, int64_t score,
     const PROJECT_NAMESPACE_ID::DRankCustomData& custom_data) {
   auto rank_iter = rank_map_.find(rank_key);
@@ -311,7 +311,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::modify_score(
 
 // 查询排行榜接口
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_one_user(
-    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
+    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key,
     const PROJECT_NAMESPACE_ID::DRankUserKey& sort_key, PROJECT_NAMESPACE_ID::DRankUserBoardData& output) {
   auto rank_iter = rank_map_.find(rank_key);
   if (rank_iter == rank_map_.end()) {
@@ -323,7 +323,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_one_user(
   RPC_RETURN_CODE(ret);
 }
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type rank_manager::query_top(
-    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t from, uint32_t count,
+    rpc::context&, const PROJECT_NAMESPACE_ID::DRankKey& rank_key, uint32_t from, uint32_t count,
     PROJECT_NAMESPACE_ID::DRankQueryRspData& output) {
   auto rank_iter = rank_map_.find(rank_key);
   if (rank_iter == rank_map_.end()) {

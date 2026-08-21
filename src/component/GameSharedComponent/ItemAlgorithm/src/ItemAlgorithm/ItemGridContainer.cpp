@@ -33,7 +33,7 @@ ItemGridContainerAddCheckedRequest ItemGridContainer::check_add(
   // 分组: Grid* -> (原始索引列表, 请求子集)
   struct GridBatch {
     item_grid_algorithm_ptr_t grid = nullptr;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
     ItemGridAddRequest add_requests;
   };
   std::unordered_map<item_grid_algorithm_ptr_t, GridBatch> batches;
@@ -43,7 +43,7 @@ ItemGridContainerAddCheckedRequest ItemGridContainer::check_add(
     item_grid_algorithm_ptr_t grid = select_grid(req.item_basic().position());
     if (grid == nullptr) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
 
@@ -126,7 +126,7 @@ ItemGridContainerSubCheckedRequest ItemGridContainer::check_sub(
 
   struct GridBatch {
     item_grid_algorithm_ptr_t grid = nullptr;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
     ItemGridSubRequest sub_requests;
   };
   std::unordered_map<item_grid_algorithm_ptr_t, GridBatch> batches;
@@ -136,7 +136,7 @@ ItemGridContainerSubCheckedRequest ItemGridContainer::check_sub(
     item_grid_algorithm_ptr_t grid = select_grid(req.position());
     if (grid == nullptr) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
 
@@ -227,7 +227,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
   struct GridBuilder {
     item_grid_algorithm_ptr_t grid = nullptr;
     ItemGridMoveRequest move_request;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
   };
   std::unordered_map<item_grid_algorithm_ptr_t, GridBuilder> builders;
 
@@ -254,7 +254,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
   };
   std::unordered_map<GridEntryKey, size_t, GridEntryKeyHash> sub_merge_index;
 
-  for (int32_t i = 0; i < requests.size(); ++i) {
+  for (size_t i = 0; i < requests.size(); ++i) {
     const auto& req = requests[i];
 
     // 容器层基本参数校验
@@ -262,7 +262,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
     int64_t move_count = req.source_item_basic.count();
     if (move_count <= 0 || type_id == 0) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
 
@@ -271,7 +271,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
 
     if (source_grid == nullptr || target_grid == nullptr) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
 
@@ -279,7 +279,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
     item_grid_entry_ptr_t source_entry = source_grid->find_entry(req.source_item_basic);
     if (!source_entry) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
 
@@ -291,7 +291,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
     }
     if (move_count > tracker.remaining) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
     bool is_whole_move = (move_count == tracker.remaining);
@@ -312,7 +312,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
       // ---- 同Grid Move: sub + add 使用同一源条目, 合并同 Entry 的 Sub ----
       auto& builder = builders[source_grid];
       builder.grid = source_grid;
-      builder.original_indices.push_back(i);
+      builder.original_indices.push_back(static_cast<int32_t>(i));
 
       // 合并同 Entry 的 Sub Request
       GridEntryKey sub_key{source_grid, source_entry.get()};
@@ -343,7 +343,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
       {
         auto& builder = builders[source_grid];
         builder.grid = source_grid;
-        builder.original_indices.push_back(i);
+        builder.original_indices.push_back(static_cast<int32_t>(i));
 
         GridEntryKey sub_key{source_grid, source_entry.get()};
         auto sub_it = sub_merge_index.find(sub_key);
@@ -368,7 +368,7 @@ ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
             atfw::util::memory::make_strong_rc<ItemGridEntry>(target_grid, std::move(move_in_instance), 0);
         auto& builder = builders[target_grid];
         builder.grid = target_grid;
-        builder.original_indices.push_back(i);
+        builder.original_indices.push_back(static_cast<int32_t>(i));
         builder.move_request.move_add_entrys.push_back({move_in_entry, req.target_position, op_count});
       }
     }
@@ -444,7 +444,7 @@ ItemGridContainerReplaceCheckedRequest ItemGridContainer::check_replace(
 
   struct GridBatch {
     item_grid_algorithm_ptr_t grid = nullptr;
-    std::vector<size_t> original_indices;
+    std::vector<int32_t> original_indices;
     ItemGridReplaceRequest replace_requests;
   };
   std::unordered_map<item_grid_algorithm_ptr_t, GridBatch> batches;
@@ -455,7 +455,7 @@ ItemGridContainerReplaceCheckedRequest ItemGridContainer::check_replace(
     item_grid_algorithm_ptr_t grid = select_grid(req.item_basic().position());
     if (grid == nullptr) {
       checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      checked_request.result.failed_index = i;
+      checked_request.result.failed_index = static_cast<int32_t>(i);
       return checked_request;
     }
 

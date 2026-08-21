@@ -167,7 +167,7 @@ rpc::result_code_type orbit_room_manager::on_user_finish(
   RPC_RETURN_CODE(room->on_user_finish(ctx, results));
 }
 
-bool orbit_room_manager::fill_client_start_args_from_template_id(uint32_t template_id, const std::string& client_id,
+bool orbit_room_manager::fill_client_start_args_from_template_id(int32_t template_id, const std::string& client_id,
                                                                  atfw::orbit::DAgentClientStartArgs& args) {
   args.mutable_client_start_args()->mutable_client_id()->set_client_id(client_id);
   auto row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(template_id);
