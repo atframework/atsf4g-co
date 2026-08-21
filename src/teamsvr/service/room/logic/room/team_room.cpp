@@ -613,7 +613,7 @@ std::chrono::system_clock::time_point team_room::get_member_offline_deadline(con
   }
 
   if (member_data.last_heartbeat_timepoint > member_baseline) {
-    member_baseline = member_data.last_heartbeat_timepoint;
+    baseline = member_data.last_heartbeat_timepoint;
   }
 
   return baseline + protobuf_to_system_clock(get_teamsvr_room_cfg().member_offline_expire());
@@ -1223,6 +1223,7 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
 
   // 重试队列计时
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> invalid_keys;
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> force_remove_keys;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> actived_retry_keys;
   actived_retry_keys.reserve(8);
   uint32_t max_retry_times = get_teamsvr_room_cfg().member_channel_notification_retry_times();
@@ -1248,6 +1249,7 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
     // 超过重试上限，移除
     if (pair.second->retry_times >= max_retry_times) {
       invalid_keys.push_back(pair.first);
+      force_remove_keys.push_back(pair.first);
       FCTXLOGWARNING(ctx, "team_room {} retry to remove member {}:{} but retry time exceeded", get_team_id(),
                      pair.first.zone_id(), pair.first.user_id());
       continue;
@@ -1270,6 +1272,11 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
 
   for (const auto& key : invalid_keys) {
     member_retry_remove_.erase(key);
+  }
+
+  // 故障强制移除
+  for (const auto& key : force_remove_keys) {
+    remove_member(ctx, key, atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED, true);
   }
 
   // LRU front 为最久未心跳的成员，队伍规模小，全量扫描收集所有到期成员
@@ -1319,6 +1326,7 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
     action.mutable_remove_member()->set_remove_member_reason(user_ptr->exit_reason);
     RPC_AWAIT_IGNORE_RESULT(send_action(ctx, action, false));
   }
+
   RPC_RETURN_CODE(0);
 }
 

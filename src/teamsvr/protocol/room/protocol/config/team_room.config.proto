@@ -25,7 +25,7 @@ message teamsvr_room_cfg {
   // 每次压缩后保留的日志百分比
   int32 compact_log_keep_percent = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
   // 每次压缩后保留的日志百分比
-  uint32 compact_log_keep_count = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "50" min_value: "1" }];
+  uint32 compact_log_keep_count = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
 
   // 成员离线过期时长(秒)，超过此时长未心跳的成员会被移出队伍
   google.protobuf.Duration member_offline_expire = 5
