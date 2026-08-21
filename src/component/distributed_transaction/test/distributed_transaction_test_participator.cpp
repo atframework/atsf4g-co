@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// transaction_participator_handle unit tests (UNIT_TEST_EXECUTION_PLAN.md section 4.3): prepare
+// transaction_participator_handle unit tests: prepare
 // storage preservation (DT-001), allow_retry without running state (DT-011), the terminal state
 // machine with in-flight direction serialization, Wound-Wait locks (DT-008/DT-022), load/dump
 // round trips and the timer-driven resolve flow with independent per-phase budgets
@@ -2225,8 +2225,8 @@ CASE_TEST(component_distributed_transaction_participator, timer_consumed_while_t
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
   // A：commit 后进入 finished，立即到期的 acknowledge 拉起 task#1；B：200ms 后到期的 kQuery
-  auto task =
-      test.run_task("consumed_timer_seed", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task(
+      "consumed_timer_seed", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
         auto request_a = make_prepare_request("part-uuid-inflight-a", 2, std::chrono::milliseconds{60000});
         SSParticipatorTransactionPrepareRsp response;
         storage_ptr_type output;

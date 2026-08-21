@@ -1,7 +1,6 @@
 // Copyright 2026 atframework
 //
-// Selftest for the unit-test-only interception hooks required by
-// distributed_transaction/UNIT_TEST_EXECUTION_PLAN.md section 3.1:
+// Selftest for the unit-test-only interception hooks:
 //   - task_manager::mock_create_task: intercept create_task_with_timeout by task
 //     type demangled name (the mock hook caches the demangled name per action type and may modify
 //     task timeout through the reference).

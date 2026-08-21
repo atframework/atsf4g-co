@@ -605,7 +605,7 @@ class task_manager {
 
  public:
   // ==================== Unit-test-only create_task mock（生产构建完全裁剪） ====================
-  // 见 distributed_transaction/UNIT_TEST_EXECUTION_PLAN.md §3.1。命名约定：一个词干 mock_create_task
+  // 命名约定：一个词干 mock_create_task
   // 派生全部接口（注册 mock_create_task / 清空 mock_create_task_clear / 查询 mock_create_task_active /
   // 内部询问 mock_create_task_check）；回调类型以 hook 为唯一名词 create_task_hook_t，不与 mock 粘连。
   // 回调按任务类型 demangled 名字判定：返回 0 或正数 = 不拦截；返回负数 = 以该错误码使

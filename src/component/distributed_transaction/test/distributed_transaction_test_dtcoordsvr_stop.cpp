@@ -1,16 +1,15 @@
 // Copyright 2026 atframework
 //
-// transaction_manager::stop() poisons mutable_transaction() for the whole process lifetime
-// (UNIT_TEST_EXECUTION_PLAN.md section 4.4, stop row). It lives in a dedicated executable so the
-// shutdown state cannot leak into any other coordinator case.
+// transaction_manager::stop() poisons mutable_transaction() for the whole process lifetime. It
+// lives in a dedicated executable so the shutdown state cannot leak into any other coordinator case.
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/config/dtcoordsvr_config.pb.h>
 #include <protocol/pbdesc/distributed_transaction.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
-#include <protocol/config/dtcoordsvr_config.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -21,8 +20,8 @@
 
 #include <chrono>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include "dt_test_common.h"  // NOLINT(build/include_subdir)
 #include "logic/transaction_manager.h"
@@ -30,14 +29,13 @@
 
 namespace {
 void setup_dtcoordsvr_config_loader() {
-  logic_config::me()->set_server_instance_config_loader(
-      [](atfw::atapp::app& app_, logic_config&, logic_config::server_instance_config_ptr& to) {
-        auto config_ptr =
-            atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
-        config_ptr->set_lru_max_cache_count(8);
-        app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
-        to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
-      });
+  logic_config::me()->set_server_instance_config_loader([](atfw::atapp::app& app_, logic_config&,
+                                                           logic_config::server_instance_config_ptr& to) {
+    auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
+    config_ptr->set_lru_max_cache_count(8);
+    app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
+    to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
+  });
 }
 }  // namespace
 
