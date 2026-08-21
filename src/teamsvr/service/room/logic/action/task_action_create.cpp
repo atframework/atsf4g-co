@@ -24,6 +24,7 @@
 
 #include <config/extern_service_types.h>
 
+#include <rpc/db/uuid.h>
 #include <rpc/rpc_context.h>
 #include <rpc/team/team_common_api.h>
 
@@ -39,10 +40,22 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::~task_action_create() {
 ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API const char* task_action_create::name() const { return "task_action_create"; }
 
 ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action_create::operator()() {
-  const rpc_request_type& req_body = get_request_body();
+  rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
+  }
+
+  if (req_body.team_key().team_id() == 0) {
+    int64_t new_team_id = RPC_AWAIT_TYPE_RESULT(
+        rpc::db::uuid::generate_global_unique_id(get_shared_context(), PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_DEFAULT,
+                                                 PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MIT_DEFAULT, 0));
+    if (new_team_id < 0) {
+      set_response_code(static_cast<int32_t>(new_team_id));
+      TASK_ACTION_RETURN_CODE(static_cast<task_action_create::result_type::value_type>(new_team_id));
+    }
+
+    req_body.mutable_team_key()->set_team_id(new_team_id);
   }
 
   // 按队伍一致性哈希路由到 teamsvr-room 节点，不在本节点则转发
@@ -73,7 +86,8 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 创建队伍(写入初始快照与频道事件) ...
+    // 创建队伍: 初始化配置与共享队伍数据，创建者作为队长(owner)入队
+    ret = RPC_AWAIT_CODE_RESULT(room->create_team(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);
@@ -82,6 +96,9 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action
   }
 
   RPC_AWAIT_IGNORE_RESULT(room->flush_pending_channel_message(get_shared_context()));
+
+  room->dump_team_key(*rsp_body.mutable_team_key());
+
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

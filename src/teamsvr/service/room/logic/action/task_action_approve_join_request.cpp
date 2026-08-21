@@ -61,8 +61,7 @@ task_action_approve_join_request::operator()() {
     bool forward_ok = false;
     auto forward_ret = RPC_AWAIT_CODE_RESULT(forward_rpc(dest_server_id, false, forward_ok));
     if (0 != forward_ret || !forward_ok) {
-      FCTXLOGERROR(get_shared_context(),
-                   "forward team {} approve_join_request to dest server {} failed! ret:{} ok:{}",
+      FCTXLOGERROR(get_shared_context(), "forward team {} approve_join_request to dest server {} failed! ret:{} ok:{}",
                    req_body.team_key().team_id(), dest_server_id, forward_ret, forward_ok ? 1 : 0);
       set_response_code(0 != forward_ret ? forward_ret : PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
@@ -78,7 +77,8 @@ task_action_approve_join_request::operator()() {
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 批准加入请求(队长或管理员批准，写入入队事件并通知申请人) ...
+    // 批准加入请求(队长或管理员批准，写入入队事件并通知申请人)
+    ret = RPC_AWAIT_CODE_RESULT(room->approve_join_request(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);

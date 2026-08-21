@@ -16,15 +16,18 @@ option go_package = "github.com/atframework/atsf4g-co/src/service-teamsvr/protoc
 package atframework.team.config;
 
 message teamsvr_room_cfg {
-  // 主控节点定期压缩 dtmq 日志的时间间隔(秒)，日志数量达到频道配置 gc_log_count 时也会触发
-  google.protobuf.Duration compact_interval = 1
+  // 最早的未压缩日志超过该时长后触发按时间维度的压缩
+  google.protobuf.Duration compact_log_start_time = 1
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "5s" }];
+  // 按时间维度压缩时保留最近该时长内的日志(较新的日志不按时间维度压缩)，为 0 时取 compact_log_start_time 的一半
+  google.protobuf.Duration compact_log_keep_time = 11
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "0s" min_value: "0s" }];
 
   // 当前log数量超过上限的一定百分比后执行压缩
   int32 compact_log_over_percent = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "1" }];
   // 每次压缩后保留的日志百分比
   int32 compact_log_keep_percent = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
-  // 每次压缩后保留的日志百分比
+  // 每次压缩后至少保留的日志数量(两种压缩方式都受限于该下限)
   uint32 compact_log_keep_count = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
 
   // 成员离线过期时长(秒)，超过此时长未心跳的成员会被移出队伍

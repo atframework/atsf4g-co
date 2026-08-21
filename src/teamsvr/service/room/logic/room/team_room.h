@@ -142,6 +142,28 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 等待订阅首轮数据就绪(协程内调用)
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_ready(rpc::context& ctx);
 
+  // 创建队伍(协程内调用): 初始化配置与共享队伍数据，创建者作为队长(owner)入队并记录其个人通知频道
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_team(rpc::context& ctx,
+                                                                 const atfw::team::SSTeamRoomCreateReq& req);
+  // 发起邀请(协程内调用): 写入 add_invitation 频道事件，事件应用后推送被邀请人个人通知频道
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_invitation(rpc::context& ctx,
+                                                                    const atfw::team::SSTeamRoomAddInvitationReq& req);
+  // 接受邀请(协程内调用): 写入 approve_invitation 频道事件，事件应用后被邀请人入队并收到通知
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type approve_invitation(
+      rpc::context& ctx, const atfw::team::SSTeamRoomApproveInvitationReq& req);
+  // 拒绝邀请(协程内调用): 写入 reject_invitation 频道事件，事件应用后移除邀请并通知邀请人
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_invitation(
+      rpc::context& ctx, const atfw::team::SSTeamRoomRejectInvitationReq& req);
+  // 发起加入请求(协程内调用): 写入 add_join_request 频道事件，事件应用后通知队长
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type add_join_request(
+      rpc::context& ctx, const atfw::team::SSTeamRoomAddJoinRequestReq& req);
+  // 批准加入请求(协程内调用): 写入 approve_join_request 频道事件，事件应用后申请人入队并收到通知
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type approve_join_request(
+      rpc::context& ctx, const atfw::team::SSTeamRoomApproveJoinRequestReq& req);
+  // 拒绝加入请求(协程内调用): 写入 reject_join_request 频道事件，事件应用后移除申请并通知申请人
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_join_request(
+      rpc::context& ctx, const atfw::team::SSTeamRoomRejectJoinRequestReq& req);
+
   // 提交组队操作(协程内调用)，来自外部服务的写请求统一经由此处写入频道日志
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
                                                                  const atfw::team::DTeamAction& action,
@@ -171,15 +193,20 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   rpc::result_code_type flush_pending_channel_message(rpc::context& ctx);
 
+  void dump_team_key(atfw::team::DTeamKey& output) const;
+
  private:
   friend class team_room_manager;
 
   // 从订阅数据恢复队伍快照(custom_data + 增量日志 + private_data)
   void restore_snapshot(rpc::context& ctx);
   // 应用频道事件到本地状态，所有应用操作必须幂等
-  void apply_action(rpc::context& ctx, const atfw::team::DTeamAction& action, int64_t sequence, uint64_t hash_code);
+  void apply_action(rpc::context& ctx, const atfw::team::DTeamAction& action, int64_t sequence, uint64_t hash_code,
+                    std::chrono::system_clock::time_point event_timepoint);
   void apply_event_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& message);
   void update_acknowledge(int64_t sequence, uint64_t hash_code);
+  // 应用成员入队(幂等): 已存在的成员保留其 key 与更早的入队时间，首位成员成为队长
+  void apply_add_member(const atfw::team::DTeamMember& member_data);
 
   member_ptr_t mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
@@ -209,6 +236,10 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_event_with_lock(rpc::context& ctx,
                                                                           ::google::protobuf::Any&& event_data,
                                                                           bool no_wait);
+  // 打包并发送 DTeamAction 频道事件(协程内调用)，不做移除成员的去重与重试队列处理
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_send_action(rpc::context& ctx,
+                                                                    const atfw::team::DTeamAction& action,
+                                                                    bool no_wait);
 
   // 定时器事件执行入口
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type execute_timer_event(rpc::context& ctx,
@@ -224,7 +255,6 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 解散空队伍
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy_empty_room(rpc::context& ctx);
 
-  void dump_team_key(atfw::team::DTeamKey& output) const;
   void dump_private_data(atfw::team::DTeamRoomPrivateData& output);
   void dump_public_data(atfw::team::DTeamStorage& output);
 
@@ -232,8 +262,12 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   std::chrono::system_clock::duration get_lock_lease() const;
   // 乐观锁续租间隔，按租约时长折半
   std::chrono::system_clock::duration get_lock_renew_interval() const;
-  // 触发日志压缩的日志数量阈值，取自 dtmq 频道配置 gc_log_count
-  int64_t get_compact_log_count() const;
+  // dtmq 频道配置的保留日志数 gc_log_count，按数量维度压缩的基准
+  int64_t get_gc_log_count() const;
+  // 按时间维度压缩时保留的日志时长，缺省取开始压缩时长的一半
+  std::chrono::system_clock::duration get_compact_log_keep_time() const;
+  // 从本地缓存刷新最早的未压缩日志时间点(用于按时间维度压缩的调度与触发)
+  void refresh_oldest_log_timepoint(rpc::context& ctx);
 
  private:
   int64_t team_id_;
@@ -268,7 +302,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   std::chrono::system_clock::time_point empty_since_timepoint_;
   std::chrono::system_clock::time_point next_renew_lock_timepoint_;
-  std::chrono::system_clock::time_point next_compact_timepoint_;
+  // 最早的未压缩日志时间点(随日志压缩推进，用于按时间维度压缩的调度与触发)
+  std::chrono::system_clock::time_point oldest_log_timepoint_;
   int64_t last_compact_sequence_ = 0;
   std::chrono::system_clock::time_point last_compact_timepoint_;
   task_type_trait::task_type maintenance_task_;

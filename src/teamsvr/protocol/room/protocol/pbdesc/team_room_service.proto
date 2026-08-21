@@ -25,6 +25,10 @@ message SSTeamRoomCreateReq {
 
   DTeamConfigure configure = 4;
 
+  // 共享的成员数据，通常是阵容信息、状态信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> shared_member_data = 13;
+
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
   map<int32, DTeamAnyData> shared_team_data = 14;
@@ -32,6 +36,7 @@ message SSTeamRoomCreateReq {
 
 message SSTeamRoomCreateRsp {
   int32 client_result = 1;
+  DTeamKey team_key = 2;
 }
 
 message SSTeamRoomSendMessageReq {

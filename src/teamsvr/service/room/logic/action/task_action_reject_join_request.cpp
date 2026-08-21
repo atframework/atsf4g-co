@@ -77,7 +77,8 @@ task_action_reject_join_request::operator()() {
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 拒绝加入请求(队长或管理员拒绝，移除申请并通知申请人) ...
+    // 拒绝加入请求(队长或管理员拒绝，移除申请并通知申请人)
+    ret = RPC_AWAIT_CODE_RESULT(room->reject_join_request(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);

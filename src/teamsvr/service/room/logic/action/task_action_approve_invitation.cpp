@@ -77,7 +77,8 @@ task_action_approve_invitation::operator()() {
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 批准邀请(被邀请人接受邀请，写入入队事件) ...
+    // 批准邀请(被邀请人接受邀请，写入入队事件)
+    ret = RPC_AWAIT_CODE_RESULT(room->approve_invitation(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);

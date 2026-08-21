@@ -77,7 +77,8 @@ task_action_reject_invitation::operator()() {
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 拒绝邀请(被邀请人拒绝，移除邀请并通知邀请人) ...
+    // 拒绝邀请(被邀请人拒绝，移除邀请并通知邀请人)
+    ret = RPC_AWAIT_CODE_RESULT(room->reject_invitation(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);

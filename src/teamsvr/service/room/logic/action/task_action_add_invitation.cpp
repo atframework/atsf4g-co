@@ -74,8 +74,7 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_add_invitation::result_type tas
   }
 
   // 本节点处理: 查找或创建房间(订阅频道并接管乐观锁)
-  auto room =
-      team_room_manager::me()->mutable_room(get_shared_context(), req_body.invitation().team_key().team_id());
+  auto room = team_room_manager::me()->mutable_room(get_shared_context(), req_body.invitation().team_key().team_id());
   if (!room) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -83,7 +82,8 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_add_invitation::result_type tas
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 添加邀请(校验权限与重复邀请，写入频道事件并推送被邀请人私有频道) ...
+    // 添加邀请(校验权限与重复邀请，写入频道事件并推送被邀请人私有频道)
+    ret = RPC_AWAIT_CODE_RESULT(room->add_invitation(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);

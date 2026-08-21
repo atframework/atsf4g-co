@@ -66,6 +66,20 @@ gsl::string_view get_timer_event_name(team_room_timer_event_type event_type) noe
   }
 }
 
+// 仅拷贝 EN_TEAM_PERMISSION_TYPE_PUBLIC 权限的数据(下发给未入队玩家时隐藏成员权限数据)
+static void copy_public_permission_data(const google::protobuf::Map<int32_t, atfw::team::DTeamAnyData>& from,
+                                        google::protobuf::Map<int32_t, atfw::team::DTeamAnyData>* output) {
+  if (nullptr == output) {
+    return;
+  }
+  for (const auto& kv : from) {
+    if (kv.second.permission() == atfw::team::EN_TEAM_PERMISSION_TYPE_PUBLIC) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      protobuf_copy_message((*output)[kv.first], kv.second);
+    }
+  }
+}
+
 team_room* get_team_room_from_subscriber(const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                                          gsl::string_view callback_name) {
   if (!subscriber) {
@@ -230,6 +244,33 @@ rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
 
+  // 移除成员: 记录移除原因并加入重试队列，等待频道事件回环后真正移除；
+  // 已在重试队列中说明移除消息在途，不再重复发送
+  if (action.has_remove_member()) {
+    const auto& user_key = action.remove_member().user_key();
+    if (member_retry_remove_.end() != member_retry_remove_.find(user_key)) {
+      RPC_RETURN_CODE(0);
+    }
+    auto member = find_member(user_key, false);
+    if (member) {
+      member->exit_reason = action.remove_member().remove_member_reason();
+
+      auto retry_data = atfw::component::memory::stl::make_strong_rc<member_retry_data>();
+      if (retry_data) {
+        retry_data->next_retry_timepoint =
+            atfw::util::time::time_utility::now() +
+            protobuf_to_system_clock(get_teamsvr_room_cfg().member_channel_notification_retry_interval());
+        member_retry_remove_.insert_key_value(user_key, std::move(retry_data));
+        schedule_next_timer();
+      }
+    }
+  }
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(do_send_action(ctx, action, no_wait)));
+}
+
+rpc::result_code_type team_room::do_send_action(rpc::context& ctx, const atfw::team::DTeamAction& action,
+                                                bool no_wait) {
   auto event_data = rpc::make_shared_message<google::protobuf::Any>(ctx);
   if (!event_data->PackFrom(action)) {
     FCTXLOGERROR(ctx, "team room {} pack DTeamAction failed", team_id_);
@@ -291,6 +332,193 @@ rpc::result_code_type team_room::heartbeat(rpc::context& ctx, const atfw::team::
   RPC_RETURN_CODE(0);
 }
 
+rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team::SSTeamRoomCreateReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+
+  // 初始化配置与共享的队伍数据(创建后随快照持久化)
+  if (req.has_configure() || !req.shared_team_data().empty()) {
+    atfw::team::DTeamAction action;
+    auto* team_update = action.mutable_team_update();
+    protobuf_copy_message(*team_update->mutable_configure(), req.configure());
+    for (const auto& kv : req.shared_team_data()) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+      protobuf_copy_message((*team_update->mutable_shared_team_data())[kv.first], kv.second);
+    }
+    auto ret = RPC_AWAIT_CODE_RESULT(send_action(ctx, action));
+    if (0 != ret) {
+      RPC_RETURN_CODE(ret);
+    }
+  }
+
+  // 创建者总是作为队长(角色 owner)，记录其个人通知频道
+  if (!find_member(req.sender_user_key(), false)) {
+    auto now = atfw::util::time::time_utility::now();
+    atfw::team::DTeamAction action;
+    auto* add_member = action.mutable_add_member();
+    protobuf_copy_message(*add_member->mutable_user_key(), req.sender_user_key());
+    protobuf_copy_message(*add_member->mutable_user_channel(), req.sender_user_channel());
+    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(now);
+    *add_member->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(now);
+    auto ret = RPC_AWAIT_CODE_RESULT(send_action(ctx, action));
+    if (0 != ret) {
+      RPC_RETURN_CODE(ret);
+    }
+  }
+  RPC_RETURN_CODE(0);
+}
+
+rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::team::SSTeamRoomAddInvitationReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+  const auto& invitation = req.invitation();
+  const auto& invitee = invitation.invitee();
+  if (invitee.user_id() == 0 || invitee.zone_id() == 0) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+  // 邀请人必须是队伍成员
+  if (!find_member(invitation.inviter(), false)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+  }
+  if (find_member(invitee, false)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ALREADY_IN_TEAM);
+  }
+  // 已存在待处理的邀请时幂等返回
+  if (pending_invitation_by_invitee_.end() != pending_invitation_by_invitee_.find(invitee)) {
+    RPC_RETURN_CODE(0);
+  }
+
+  auto now = atfw::util::time::time_utility::now();
+  atfw::team::DTeamAction action;
+  auto* add_data = action.mutable_add_invitation();
+  protobuf_copy_message(*add_data, invitation);
+  add_data->mutable_team_key()->set_team_id(team_id_);
+  if (add_data->start_timepoint().seconds() <= 0) {
+    *add_data->mutable_start_timepoint() = protobuf_from_system_clock(now);
+  }
+  if (add_data->expired_timepoint().seconds() <= 0) {
+    *add_data->mutable_expired_timepoint() =
+        protobuf_from_system_clock(now + protobuf_to_system_clock(get_teamsvr_room_cfg().invitation_expire()));
+  }
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, action)));
+}
+
+rpc::result_code_type team_room::approve_invitation(rpc::context& ctx,
+                                                    const atfw::team::SSTeamRoomApproveInvitationReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+  // 被邀请人本人才能接受邀请
+  if (req.sender_user_key().user_id() != req.invitee().user_id() ||
+      req.sender_user_key().zone_id() != req.invitee().zone_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+  }
+  auto iter = pending_invitation_by_invitee_.find(req.invitee());
+  if (iter == pending_invitation_by_invitee_.end() || !iter->second) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
+  }
+
+  atfw::team::DTeamAction action;
+  protobuf_copy_message(*action.mutable_approve_invitation(), *iter->second);
+  action.mutable_approve_invitation()->mutable_team_key()->set_team_id(team_id_);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, action)));
+}
+
+rpc::result_code_type team_room::reject_invitation(rpc::context& ctx,
+                                                   const atfw::team::SSTeamRoomRejectInvitationReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+  // 被邀请人本人才能拒绝邀请
+  if (req.sender_user_key().user_id() != req.invitee().user_id() ||
+      req.sender_user_key().zone_id() != req.invitee().zone_id()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+  }
+  auto iter = pending_invitation_by_invitee_.find(req.invitee());
+  if (iter == pending_invitation_by_invitee_.end() || !iter->second) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
+  }
+
+  atfw::team::DTeamAction action;
+  protobuf_copy_message(*action.mutable_reject_invitation(), *iter->second);
+  action.mutable_reject_invitation()->mutable_team_key()->set_team_id(team_id_);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, action)));
+}
+
+rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
+                                                  const atfw::team::SSTeamRoomAddJoinRequestReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+  const auto& join_request = req.join_request();
+  const auto& requester = join_request.requester();
+  if (requester.user_id() == 0 || requester.zone_id() == 0) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+  if (find_member(requester, false)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ALREADY_IN_TEAM);
+  }
+  // 已存在待处理的加入请求时幂等返回
+  if (pending_join_request_by_requester_.end() != pending_join_request_by_requester_.find(requester)) {
+    RPC_RETURN_CODE(0);
+  }
+
+  atfw::team::DTeamAction action;
+  auto* add_data = action.mutable_add_join_request();
+  protobuf_copy_message(*add_data, join_request);
+  add_data->mutable_team_key()->set_team_id(team_id_);
+  if (add_data->expired_timepoint().seconds() <= 0) {
+    *add_data->mutable_expired_timepoint() = protobuf_from_system_clock(
+        atfw::util::time::time_utility::now() + protobuf_to_system_clock(get_teamsvr_room_cfg().join_request_expire()));
+  }
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, action)));
+}
+
+rpc::result_code_type team_room::approve_join_request(rpc::context& ctx,
+                                                      const atfw::team::SSTeamRoomApproveJoinRequestReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+  // 队长或管理员才能审批加入请求
+  auto operator_member = find_member(req.sender_user_key(), false);
+  if (!operator_member || operator_member->member_data.role() < atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+  }
+  auto iter = pending_join_request_by_requester_.find(req.applicant());
+  if (iter == pending_join_request_by_requester_.end() || !iter->second) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND);
+  }
+
+  atfw::team::DTeamAction action;
+  protobuf_copy_message(*action.mutable_approve_join_request(), *iter->second);
+  action.mutable_approve_join_request()->mutable_team_key()->set_team_id(team_id_);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, action)));
+}
+
+rpc::result_code_type team_room::reject_join_request(rpc::context& ctx,
+                                                     const atfw::team::SSTeamRoomRejectJoinRequestReq& req) {
+  if (destroyed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
+  // 队长或管理员才能审批加入请求
+  auto operator_member = find_member(req.sender_user_key(), false);
+  if (!operator_member || operator_member->member_data.role() < atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+  }
+  auto iter = pending_join_request_by_requester_.find(req.applicant());
+  if (iter == pending_join_request_by_requester_.end() || !iter->second) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND);
+  }
+
+  atfw::team::DTeamAction action;
+  protobuf_copy_message(*action.mutable_reject_join_request(), *iter->second);
+  action.mutable_reject_join_request()->mutable_team_key()->set_team_id(team_id_);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, action)));
+}
+
 void team_room::restore_snapshot(rpc::context& ctx) {
   if (snapshot_restored_) {
     return;
@@ -332,7 +560,6 @@ void team_room::restore_snapshot(rpc::context& ctx) {
 
     last_compact_sequence_ = private_storage.last_compact_sequence();
     last_compact_timepoint_ = protobuf_to_system_clock(private_storage.last_compact_timepoint());
-    storage_.set_saved_action_sequence(last_compact_sequence_);
 
     private_team_data_.clear();
     for (const auto& data : private_storage.private_team_data()) {
@@ -450,7 +677,9 @@ void team_room::restore_snapshot(rpc::context& ctx) {
   current_lock_ = subscriber_->get_lock();
   lock_acquired_ = !current_lock_.lock_holder().empty() && current_lock_.lock_holder() == lock_holder_;
 
-  next_compact_timepoint_ = restore_timepoint_ + protobuf_to_system_clock(get_teamsvr_room_cfg().compact_interval());
+  // 恢复最早的未压缩日志时间点(用于按时间维度压缩的调度与触发)
+  refresh_oldest_log_timepoint(ctx);
+
   if (lock_acquired_) {
     next_renew_lock_timepoint_ = restore_timepoint_ + get_lock_renew_interval();
   }
@@ -467,13 +696,19 @@ void team_room::apply_event_message(rpc::context& ctx, const ::atfw::dtmq::DChan
     if (event.Is<atfw::team::DTeamAction>()) {
       atfw::team::DTeamAction action;
       if (event.UnpackTo(&action)) {
-        apply_action(ctx, action, message.sequence(), message.hash_code());
+        apply_action(ctx, action, message.sequence(), message.hash_code(),
+                     protobuf_to_system_clock(message.create_timepoint()));
       } else {
         FCTXLOGERROR(ctx, "team room {} unpack DTeamAction failed, got type_url: {}", team_id_, event.type_url());
       }
     }
   } else if (detail.has_destroy()) {
     destroyed_ = true;
+  }
+
+  // 压缩点之后的第一条日志即最早的未压缩日志
+  if (message.sequence() == last_compact_sequence_ + 1) {
+    oldest_log_timepoint_ = protobuf_to_system_clock(message.create_timepoint());
   }
   update_acknowledge(message.sequence(), message.hash_code());
 }
@@ -486,47 +721,13 @@ void team_room::update_acknowledge(int64_t sequence, uint64_t hash_code) {
 }
 
 void team_room::apply_action(rpc::context& ctx, const atfw::team::DTeamAction& action, int64_t sequence,
-                             uint64_t hash_code) {
+                             uint64_t hash_code, std::chrono::system_clock::time_point event_timepoint) {
   switch (action.action_case()) {
     case atfw::team::DTeamAction::kDestroyTeam:
       destroyed_ = true;
       break;
     case atfw::team::DTeamAction::kAddMember: {
-      auto member = find_member(action.add_member().user_key(), true);
-      bool is_new_member = false;
-      if (!member) {
-        is_new_member = true;
-        member = mutable_member(action.add_member().user_key());
-      }
-      if (!member) {
-        break;
-      }
-
-      auto joined_timepoint = member->member_data.joined_timepoint();
-      auto member_key = member->member_data.user_key();
-      protobuf_copy_message(member->member_data, action.add_member());
-      // Key不允许修改
-      protobuf_copy_message(*member->member_data.mutable_user_key(), member_key);
-      if (joined_timepoint.seconds() > member->member_data.joined_timepoint().seconds()) {
-        protobuf_copy_message(*member->member_data.mutable_joined_timepoint(), joined_timepoint);
-      }
-
-      // 首位成员成为队长
-      if (!storage_.has_captain_user_key() || 0 == storage_.captain_user_key().user_id()) {
-        protobuf_copy_message(*storage_.mutable_captain_user_key(), member->member_data.user_key());
-        // 队长一定是owner
-        member->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
-        schedule_next_timer();
-      }
-
-      if (is_new_member) {
-        refresh_empty_tracking(atfw::util::time::time_utility::now());
-        schedule_next_timer();
-      }
-
-      // 移除相关的invitation和join_request
-      pending_invitation_by_invitee_.erase(member_key);
-      pending_join_request_by_requester_.erase(member_key);
+      apply_add_member(action.add_member());
       break;
     }
     case atfw::team::DTeamAction::kRemoveMember: {
@@ -580,13 +781,202 @@ void team_room::apply_action(rpc::context& ctx, const atfw::team::DTeamAction& a
       change_captain(action.election_captain().user_key());
       break;
     }
-    case atfw::team::DTeamAction::kAddInvitation:
-    case atfw::team::DTeamAction::kApproveInvitation:
-    case atfw::team::DTeamAction::kRejectInvitation:
-    case atfw::team::DTeamAction::kAddJoinRequest:
-    case atfw::team::DTeamAction::kApproveJoinRequest:
+    case atfw::team::DTeamAction::kAddInvitation: {
+      const auto& invitation = action.add_invitation();
+      const auto& invitee = invitation.invitee();
+      if (invitee.user_id() == 0 || invitee.zone_id() == 0) {
+        break;
+      }
+      // 被邀请人已在队伍中则忽略该邀请
+      if (find_member(invitee, false)) {
+        break;
+      }
+
+      auto& data_ptr = pending_invitation_by_invitee_[invitee];
+      if (!data_ptr) {
+        data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>();
+      }
+      protobuf_copy_message(*data_ptr, invitation);
+
+      // 推送被邀请人: 仅携带 PUBLIC 权限的队伍数据和所有成员的 PUBLIC 权限数据
+      atfw::team::DTeamMemberAction notify_action;
+      auto* invited = notify_action.mutable_invited();
+      protobuf_copy_message(*invited, invitation);
+      invited->clear_team_admission_data();
+      invited->clear_member_admission_data();
+      copy_public_permission_data(storage_.shared_team_data(), invited->mutable_team_admission_data());
+      foreach_member([invited](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+        auto* member_data = invited->add_member_admission_data();
+        protobuf_copy_message(*member_data->mutable_user_key(), member->member_data.user_key());
+        copy_public_permission_data(member->member_data.shared_member_data(),
+                                    member_data->mutable_member_admission_data());
+        return true;
+      });
+
+      atfw::dtmq::DChannelIdKey channel_id = invitation.invitee_private_channel();
+      append_team_member_channel_notification(invitee, std::move(channel_id), std::move(notify_action));
+      break;
+    }
+    case atfw::team::DTeamAction::kApproveInvitation: {
+      const auto& invitation = action.approve_invitation();
+      const auto& invitee = invitation.invitee();
+      if (invitee.user_id() == 0 || invitee.zone_id() == 0) {
+        break;
+      }
+      // 幂等: 邀请不存在(已处理或已过期)则忽略
+      auto iter = pending_invitation_by_invitee_.find(invitee);
+      if (iter == pending_invitation_by_invitee_.end() || !iter->second) {
+        break;
+      }
+      pending_invitation_by_invitee_.erase(iter);
+
+      // 被邀请人入队
+      if (!find_member(invitee, false)) {
+        atfw::team::DTeamMember member_data;
+        protobuf_copy_message(*member_data.mutable_user_key(), invitee);
+        protobuf_copy_message(*member_data.mutable_user_channel(), invitation.invitee_private_channel());
+        member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+        member_data.set_team_source_type(invitation.team_source_type());
+        if (invitation.has_team_source_data()) {
+          protobuf_copy_message(*member_data.mutable_team_source_data(), invitation.team_source_data());
+        }
+        *member_data.mutable_joined_timepoint() = protobuf_from_system_clock(event_timepoint);
+        *member_data.mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(event_timepoint);
+        apply_add_member(member_data);
+      }
+
+      // 通知被邀请人已入队(除新增邀请和加入请求外的事件不携带 admission 数据)
+      atfw::team::DTeamMemberAction notify_action;
+      auto* joined = notify_action.mutable_join_in_team();
+      protobuf_copy_message(*joined, invitation);
+      joined->clear_team_admission_data();
+      joined->clear_member_admission_data();
+      atfw::dtmq::DChannelIdKey channel_id = invitation.invitee_private_channel();
+      append_team_member_channel_notification(invitee, std::move(channel_id), std::move(notify_action));
+      break;
+    }
+    case atfw::team::DTeamAction::kRejectInvitation: {
+      const auto& invitation = action.reject_invitation();
+      const auto& invitee = invitation.invitee();
+      if (invitee.user_id() == 0 || invitee.zone_id() == 0) {
+        break;
+      }
+      // 幂等: 邀请不存在(已处理或已过期)则忽略
+      auto iter = pending_invitation_by_invitee_.find(invitee);
+      if (iter == pending_invitation_by_invitee_.end() || !iter->second) {
+        break;
+      }
+      pending_invitation_by_invitee_.erase(iter);
+
+      // 通知邀请人邀请已被拒绝(邀请人的个人频道从成员数据中获取)
+      auto inviter = find_member(invitation.inviter(), false);
+      if (inviter) {
+        atfw::team::DTeamMemberAction notify_action;
+        auto* rejected = notify_action.mutable_reject_invitation();
+        protobuf_copy_message(*rejected, invitation);
+        rejected->clear_team_admission_data();
+        rejected->clear_member_admission_data();
+        atfw::dtmq::DChannelIdKey channel_id = inviter->member_data.user_channel();
+        append_team_member_channel_notification(invitation.inviter(), std::move(channel_id), std::move(notify_action));
+      }
+      break;
+    }
+    case atfw::team::DTeamAction::kAddJoinRequest: {
+      const auto& join_request = action.add_join_request();
+      const auto& requester = join_request.requester();
+      if (requester.user_id() == 0 || requester.zone_id() == 0) {
+        break;
+      }
+      // 申请人已在队伍中则忽略该请求
+      if (find_member(requester, false)) {
+        break;
+      }
+
+      auto& data_ptr = pending_join_request_by_requester_[requester];
+      if (!data_ptr) {
+        data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>();
+      }
+      protobuf_copy_message(*data_ptr, join_request);
+
+      // 通知队长审批(新增加入请求的事件携带申请人的 member_admission_data)
+      auto captain = find_member(storage_.captain_user_key(), false);
+      if (captain) {
+        atfw::team::DTeamMemberAction notify_action;
+        protobuf_copy_message(*notify_action.mutable_apply_join_request(), join_request);
+        atfw::dtmq::DChannelIdKey channel_id = captain->member_data.user_channel();
+        append_team_member_channel_notification(captain->member_data.user_key(), std::move(channel_id),
+                                                std::move(notify_action));
+      }
+      break;
+    }
+    case atfw::team::DTeamAction::kApproveJoinRequest: {
+      const auto& join_request = action.approve_join_request();
+      const auto& requester = join_request.requester();
+      if (requester.user_id() == 0 || requester.zone_id() == 0) {
+        break;
+      }
+      // 幂等: 加入请求不存在(已处理或已过期)则忽略
+      auto iter = pending_join_request_by_requester_.find(requester);
+      if (iter == pending_join_request_by_requester_.end() || !iter->second) {
+        break;
+      }
+      pending_join_request_by_requester_.erase(iter);
+
+      // 申请人入队，加入请求的 member_admission_data 合并进成员的 shared_member_data
+      if (!find_member(requester, false)) {
+        atfw::team::DTeamMember member_data;
+        protobuf_copy_message(*member_data.mutable_user_key(), requester);
+        protobuf_copy_message(*member_data.mutable_user_channel(), join_request.requester_private_channel());
+        member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+        member_data.set_team_source_type(join_request.team_source_type());
+        if (join_request.has_team_source_data()) {
+          protobuf_copy_message(*member_data.mutable_team_source_data(), join_request.team_source_data());
+        }
+        member_data.set_client_version(join_request.client_version());
+        member_data.set_user_router_server_id(join_request.user_router_server_id());
+        *member_data.mutable_joined_timepoint() = protobuf_from_system_clock(event_timepoint);
+        *member_data.mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(event_timepoint);
+        for (const auto& kv : join_request.member_admission_data()) {
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+          protobuf_copy_message((*member_data.mutable_shared_member_data())[kv.first], kv.second);
+        }
+        apply_add_member(member_data);
+      }
+
+      // 通知申请人已入队(不携带 admission 数据)
+      atfw::team::DTeamMemberAction notify_action;
+      auto* joined = notify_action.mutable_join_in_team();
+      joined->mutable_team_key()->set_team_id(team_id_);
+      protobuf_copy_message(*joined->mutable_invitee(), requester);
+      protobuf_copy_message(*joined->mutable_invitee_private_channel(), join_request.requester_private_channel());
+      joined->set_team_source_type(join_request.team_source_type());
+      if (join_request.has_team_source_data()) {
+        protobuf_copy_message(*joined->mutable_team_source_data(), join_request.team_source_data());
+      }
+      atfw::dtmq::DChannelIdKey channel_id = join_request.requester_private_channel();
+      append_team_member_channel_notification(requester, std::move(channel_id), std::move(notify_action));
+      break;
+    }
     case atfw::team::DTeamAction::kRejectJoinRequest: {
-      // TODO(owent): implement these actions
+      const auto& join_request = action.reject_join_request();
+      const auto& requester = join_request.requester();
+      if (requester.user_id() == 0 || requester.zone_id() == 0) {
+        break;
+      }
+      // 幂等: 加入请求不存在(已处理或已过期)则忽略
+      auto iter = pending_join_request_by_requester_.find(requester);
+      if (iter == pending_join_request_by_requester_.end() || !iter->second) {
+        break;
+      }
+      pending_join_request_by_requester_.erase(iter);
+
+      // 通知申请人已被拒绝(不携带 admission 数据)
+      atfw::team::DTeamMemberAction notify_action;
+      auto* rejected = notify_action.mutable_reject_join_request();
+      protobuf_copy_message(*rejected, join_request);
+      rejected->clear_member_admission_data();
+      atfw::dtmq::DChannelIdKey channel_id = join_request.requester_private_channel();
+      append_team_member_channel_notification(requester, std::move(channel_id), std::move(notify_action));
       break;
     }
 
@@ -594,6 +984,49 @@ void team_room::apply_action(rpc::context& ctx, const atfw::team::DTeamAction& a
       break;
   }
   update_acknowledge(sequence, hash_code);
+}
+
+void team_room::apply_add_member(const atfw::team::DTeamMember& member_data) {
+  auto member = find_member(member_data.user_key(), true);
+  bool is_new_member = false;
+  if (!member) {
+    is_new_member = true;
+    member = mutable_member(member_data.user_key());
+  }
+  if (!member) {
+    return;
+  }
+
+  auto joined_timepoint = member->member_data.joined_timepoint();
+  auto member_key = member->member_data.user_key();
+  protobuf_copy_message(member->member_data, member_data);
+  // Key不允许修改
+  protobuf_copy_message(*member->member_data.mutable_user_key(), member_key);
+  if (joined_timepoint.seconds() > member->member_data.joined_timepoint().seconds()) {
+    protobuf_copy_message(*member->member_data.mutable_joined_timepoint(), joined_timepoint);
+  }
+
+  // 新入队成员的心跳基线按入队时间起算
+  if (is_new_member) {
+    member->last_heartbeat_timepoint = protobuf_to_system_clock(member->member_data.joined_timepoint());
+  }
+
+  // 首位成员成为队长
+  if (!storage_.has_captain_user_key() || 0 == storage_.captain_user_key().user_id()) {
+    protobuf_copy_message(*storage_.mutable_captain_user_key(), member->member_data.user_key());
+    // 队长一定是owner
+    member->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    schedule_next_timer();
+  }
+
+  if (is_new_member) {
+    refresh_empty_tracking(atfw::util::time::time_utility::now());
+    schedule_next_timer();
+  }
+
+  // 移除相关的invitation和join_request
+  pending_invitation_by_invitee_.erase(member_key);
+  pending_join_request_by_requester_.erase(member_key);
 }
 
 void team_room::elect_captain_after_remove() {
@@ -813,7 +1246,7 @@ std::chrono::system_clock::duration team_room::get_lock_renew_interval() const {
   return ret;
 }
 
-int64_t team_room::get_compact_log_count() const {
+int64_t team_room::get_gc_log_count() const {
   if (subscriber_) {
     const auto& configure = subscriber_->get_configure();
     if (configure.gc_log_count() > 0) {
@@ -822,6 +1255,35 @@ int64_t team_room::get_compact_log_count() const {
   }
   // 与 normalize_dtmq_channel_configure 默认值一致
   return 30;
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+std::chrono::system_clock::duration team_room::get_compact_log_keep_time() const {
+  const auto& cfg = get_teamsvr_room_cfg();
+  auto start_time = protobuf_to_system_clock(cfg.compact_log_start_time());
+  auto keep_time = protobuf_to_system_clock(cfg.compact_log_keep_time());
+  if (keep_time <= std::chrono::system_clock::duration::zero()) {
+    // 缺省取开始压缩时长的一半
+    keep_time = start_time / 2;
+  }
+  // 保留窗口不能大于触发窗口，否则按时间维度永远无法压缩
+  return (std::min)(keep_time, start_time);
+}
+
+void team_room::refresh_oldest_log_timepoint(rpc::context& ctx) {
+  oldest_log_timepoint_ = std::chrono::system_clock::from_time_t(0);
+  if (!subscriber_ || !subscriber_->is_ready()) {
+    return;
+  }
+
+  int64_t oldest_sequence = (std::max)(last_compact_sequence_, subscriber_->get_last_removed_sequence()) + 1;
+  if (oldest_sequence > subscriber_->get_last_message_sequence()) {
+    return;
+  }
+
+  subscriber_->find_cached_message(ctx, oldest_sequence, [this](const ::atfw::dtmq::DChannelMessage& message) {
+    oldest_log_timepoint_ = protobuf_to_system_clock(message.create_timepoint());
+  });
 }
 
 ::atfw::dtmq::DChannelOptimisticLock team_room::make_self_lock(std::chrono::system_clock::time_point now) const {
@@ -962,10 +1424,17 @@ team_room_timer_event team_room::get_next_timer_event(std::chrono::system_clock:
   }
 
   // 定期维护: 乐观锁续租+过期数据清理+日志压缩(不要求时间非常精确)
+  const auto& cfg = get_teamsvr_room_cfg();
   ret.type = team_room_timer_event_type::kMaintenance;
-  ret.timeout = (std::min)(next_renew_lock_timepoint_, next_compact_timepoint_);
-  // 日志数量达到频道配置阈值时立即触发压缩
-  if (subscriber_->get_last_message_sequence() - last_compact_sequence_ >= get_compact_log_count()) {
+  ret.timeout = next_renew_lock_timepoint_;
+  // 按时间维度压缩: 最早的未压缩日志过了 compact_log_start_time 后触发
+  if (oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
+    ret.timeout =
+        (std::min)(ret.timeout, oldest_log_timepoint_ + protobuf_to_system_clock(cfg.compact_log_start_time()));
+  }
+  // 按数量维度压缩: 未压缩日志数量超过 gc_log_count * compact_log_over_percent / 100 时立即触发
+  if (subscriber_->get_last_message_sequence() - last_compact_sequence_ >
+      get_gc_log_count() * cfg.compact_log_over_percent() / 100) {
     ret.timeout = (std::min)(ret.timeout, now);
   }
 
@@ -1126,10 +1595,60 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
     RPC_RETURN_CODE(0);
   }
 
-  // 一次 send_update 完成乐观锁续租(reset_value)，日志数量或时间到期时同时压缩日志
-  bool need_compact = now >= next_compact_timepoint_ ||
-                      (subscriber_->get_last_message_sequence() - last_compact_sequence_) >= get_compact_log_count();
+  int64_t last_sequence = subscriber_->get_last_message_sequence();
+  int64_t gc_log_count = get_gc_log_count();
 
+  // 按数量维度压缩: 未压缩日志数量超过 gc_log_count * compact_log_over_percent / 100 时触发，
+  // 保留最近 gc_log_count * compact_log_keep_percent / 100 条日志
+  bool need_compact = false;
+  bool compact_by_count = false;
+  int64_t compact_sequence = last_compact_sequence_;
+  if (last_sequence - last_compact_sequence_ > gc_log_count * cfg.compact_log_over_percent() / 100) {
+    need_compact = true;
+    compact_by_count = true;
+    compact_sequence = last_sequence - (gc_log_count * cfg.compact_log_keep_percent()) / 100;
+  }
+
+  // 按时间维度压缩: 最早的未压缩日志过了 compact_log_start_time 后触发，
+  // 保留最近 compact_log_keep_time 内的日志(较新的日志不按时间维度压缩)
+  if (oldest_log_timepoint_ == std::chrono::system_clock::from_time_t(0) && last_sequence > last_compact_sequence_) {
+    refresh_oldest_log_timepoint(ctx);
+  }
+  if (oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0) &&
+      now >= oldest_log_timepoint_ + protobuf_to_system_clock(cfg.compact_log_start_time())) {
+    need_compact = true;
+    auto keep_deadline = now - get_compact_log_keep_time();
+    int64_t compact_sequence_by_time = last_compact_sequence_;
+    rpc::dtmq::client_subscriber::query_options query_opts;
+    query_opts.start_sequence = last_compact_sequence_ + 1;
+    // 日志按时间点有序，遇到保留窗口内的日志即停止
+    subscriber_->query_cached_message(
+        ctx,
+        [&compact_sequence_by_time, keep_deadline](const ::atfw::dtmq::DChannelMessage& message) {
+          if (protobuf_to_system_clock(message.create_timepoint()) <= keep_deadline) {
+            compact_sequence_by_time = message.sequence();
+            return true;
+          }
+          return false;
+        },
+        query_opts);
+    // 两种维度同时触发时取更保守的裁剪点，保留各自要求的日志
+    if (compact_by_count) {
+      compact_sequence = (std::min)(compact_sequence, compact_sequence_by_time);
+    } else {
+      compact_sequence = compact_sequence_by_time;
+    }
+  }
+
+  // 两种方式压缩后保留的日志数量都不能小于 compact_log_keep_count
+  if (need_compact) {
+    compact_sequence = (std::min)(compact_sequence, last_sequence - static_cast<int64_t>(cfg.compact_log_keep_count()));
+    if (compact_sequence <= last_compact_sequence_) {
+      need_compact = false;
+    }
+  }
+
+  // 一次 send_update 完成乐观锁续租(reset_value)，触发压缩时同时保存快照并裁剪日志
   auto self_lock = make_self_lock(now);
   auto checker = atfw::component::memory::stl::make_strong_rc<::atfw::dtmq::channel_lock_checker>();
   *checker->mutable_expect_value() = current_lock_;
@@ -1140,13 +1659,14 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   auto private_data = rpc::make_shared_message<atfw::team::DTeamRoomPrivateData>(ctx);
   auto public_data = rpc::make_shared_message<atfw::team::DTeamStorage>(ctx);
   if (need_compact) {
-    // 当前状态信息存入 custom_data(成员清单、加入请求和加入邀请列表)和 private_data(主控私有数据)
-    storage_.set_saved_action_sequence(subscriber_->get_last_message_sequence());
+    // 当前状态信息存入 custom_data(成员清单、加入请求和加入邀请列表)和 private_data(主控私有数据)，
+    // custom_data 状态覆盖到最新日志，裁剪点之前的日志才被压缩移除
+    storage_.set_saved_action_sequence(last_sequence);
     dump_public_data(*public_data);
     dump_private_data(*private_data);
     options.save = true;
-    options.compact_sequence = storage_.saved_action_sequence();
-    options.stateful_sequence = storage_.saved_action_sequence();
+    options.compact_sequence = compact_sequence;
+    options.stateful_sequence = compact_sequence;
     options.custom_data = public_data.get();
     options.private_data = private_data.get();
   }
@@ -1156,10 +1676,10 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
     current_lock_ = self_lock;
     next_renew_lock_timepoint_ = now + get_lock_renew_interval();
     if (need_compact) {
-      last_compact_sequence_ = storage_.saved_action_sequence();
+      last_compact_sequence_ = compact_sequence;
       last_compact_timepoint_ = now;
-      next_compact_timepoint_ = now + protobuf_to_system_clock(cfg.compact_interval());
-      storage_.set_saved_action_sequence(last_compact_sequence_);
+      // 压缩点推进后，最早的未压缩日志随之变化
+      refresh_oldest_log_timepoint(ctx);
     }
     RPC_RETURN_CODE(0);
   }
@@ -1219,12 +1739,12 @@ rpc::result_code_type team_room::cleanup_expired_admissions(rpc::context& /*ctx*
 
 rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
                                                           std::chrono::system_clock::time_point now) {
-  std::vector<member_ptr_t> offline_members;
-
-  // 重试队列计时
+  // 重试队列计时: 重发到期的移除消息
+  std::vector<member_ptr_t> retry_members;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> invalid_keys;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> force_remove_keys;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> actived_retry_keys;
+  retry_members.reserve(8);
   actived_retry_keys.reserve(8);
   uint32_t max_retry_times = get_teamsvr_room_cfg().member_channel_notification_retry_times();
   auto retry_interval = protobuf_to_system_clock(get_teamsvr_room_cfg().member_channel_notification_retry_interval());
@@ -1255,13 +1775,17 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
       continue;
     }
 
-    offline_members.push_back(member_iter->second);
+    retry_members.push_back(member_iter->second);
     actived_retry_keys.push_back(pair.first);
   }
 
   for (const auto& key : actived_retry_keys) {
     auto iter = member_retry_remove_.find(key);
-    if (iter == member_retry_remove_.end() || !iter->second) {
+    if (iter == member_retry_remove_.end()) {
+      continue;
+    }
+
+    if (!iter->second) {
       invalid_keys.push_back(key);
       continue;
     }
@@ -1279,7 +1803,16 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
     remove_member(ctx, key, atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED, true);
   }
 
+  // 重发到期的移除消息(成员已在重试队列中，绕过 send_action 的去重直接发送)
+  for (const auto& user_ptr : retry_members) {
+    atfw::team::DTeamAction action;
+    *action.mutable_remove_member()->mutable_user_key() = user_ptr->member_data.user_key();
+    action.mutable_remove_member()->set_remove_member_reason(user_ptr->exit_reason);
+    RPC_AWAIT_IGNORE_RESULT(do_send_action(ctx, action, false));
+  }
+
   // LRU front 为最久未心跳的成员，队伍规模小，全量扫描收集所有到期成员
+  std::vector<member_ptr_t> offline_members;
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> touch_keys;
   offline_members.reserve(8);
   touch_keys.reserve(member_retry_remove_.size());
@@ -1300,14 +1833,7 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
       break;
     }
 
-    if (get_member_offline_deadline(*pair.second) <= now && pair.second) {
-      offline_members.push_back(pair.second);
-      pair.second->exit_reason = atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED;
-
-      auto retry_data = atfw::component::memory::stl::make_strong_rc<member_retry_data>();
-      retry_data->next_retry_timepoint = now + retry_interval;
-      member_retry_remove_.insert_key_value(pair.first, std::move(retry_data));
-    }
+    offline_members.push_back(pair.second);
   }
 
   for (const auto& key : invalid_keys) {
@@ -1319,11 +1845,11 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
     member_.find(key);
   }
 
-  // 发送remove_member消息到team channel频道, 上面的重试机制会阻止反复发送移除消息
+  // 发送remove_member消息到team channel频道, send_action 会记录移除原因并加入重试队列
   for (const auto& user_ptr : offline_members) {
     atfw::team::DTeamAction action;
     *action.mutable_remove_member()->mutable_user_key() = user_ptr->member_data.user_key();
-    action.mutable_remove_member()->set_remove_member_reason(user_ptr->exit_reason);
+    action.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED);
     RPC_AWAIT_IGNORE_RESULT(send_action(ctx, action, false));
   }
 
@@ -1342,8 +1868,6 @@ rpc::result_code_type team_room::destroy_empty_room(rpc::context& ctx) {
   }
   RPC_RETURN_CODE(0);
 }
-
-void team_room::dump_team_key(atfw::team::DTeamKey& output) const { output.set_team_id(team_id_); }
 
 void team_room::dump_private_data(atfw::team::DTeamRoomPrivateData& output) {
   dump_team_key(*output.mutable_team_key());
@@ -1485,3 +2009,5 @@ rpc::result_code_type team_room::flush_pending_channel_message(rpc::context& ctx
 
   RPC_RETURN_CODE(0);
 }
+
+void team_room::dump_team_key(atfw::team::DTeamKey& output) const { output.set_team_id(team_id_); }

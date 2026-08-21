@@ -75,8 +75,7 @@ task_action_add_join_request::operator()() {
   }
 
   // 本节点处理: 查找或创建房间(订阅频道并接管乐观锁)
-  auto room =
-      team_room_manager::me()->mutable_room(get_shared_context(), req_body.join_request().team_key().team_id());
+  auto room = team_room_manager::me()->mutable_room(get_shared_context(), req_body.join_request().team_key().team_id());
   if (!room) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -84,7 +83,8 @@ task_action_add_join_request::operator()() {
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    // TODO: 添加加入请求(校验队伍状态与重复申请，写入频道事件并通知队长) ...
+    // 添加加入请求(校验队伍状态与重复申请，写入频道事件并通知队长)
+    ret = RPC_AWAIT_CODE_RESULT(room->add_join_request(get_shared_context(), req_body));
   }
 
   rsp_body.set_client_result(ret);
