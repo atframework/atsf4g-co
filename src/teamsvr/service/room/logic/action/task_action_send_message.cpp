@@ -25,6 +25,7 @@
 #include <config/extern_service_types.h>
 
 #include <rpc/rpc_context.h>
+#include <rpc/rpc_shared_message.h>
 #include <rpc/team/team_common_api.h>
 
 #include <utility>
@@ -38,7 +39,7 @@ task_action_send_message::~task_action_send_message() {}
 const char* task_action_send_message::name() const { return "task_action_send_message"; }
 
 task_action_send_message::result_type task_action_send_message::operator()() {
-  const rpc_request_type& req_body = get_request_body();
+  rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
@@ -81,7 +82,79 @@ task_action_send_message::result_type task_action_send_message::operator()() {
     ret = RPC_AWAIT_CODE_RESULT(room->check_action_permission(req_body.sender_user_key(), req_body.action()));
   }
   if (0 == ret) {
-    ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
+    // Admission 动作必须走专用流程，不能直接写原始 DTeamAction：
+    // approve 流程还需要补充成员事件，add 流程需要规范化过期时间和个人频道数据。
+    switch (req_body.action().action_case()) {
+      case atfw::team::DTeamAction::kAddInvitation: {
+        auto translated_req = rpc::make_shared_message<atfw::team::SSTeamRoomAddInvitationReq>(get_shared_context());
+        protobuf_move_message(*translated_req->mutable_invitation(),
+                              std::move(*req_body.mutable_action()->mutable_add_invitation()));
+        protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        ret = RPC_AWAIT_CODE_RESULT(room->add_invitation(get_shared_context(), *translated_req));
+        break;
+      }
+      case atfw::team::DTeamAction::kApproveInvitation: {
+        auto translated_req =
+            rpc::make_shared_message<atfw::team::SSTeamRoomApproveInvitationReq>(get_shared_context());
+        room->dump_team_key(*translated_req->mutable_team_key());
+        protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        auto* approve_invitation = req_body.mutable_action()->mutable_approve_invitation();
+        protobuf_move_message(*translated_req->mutable_invitee(), std::move(*approve_invitation->mutable_invitee()));
+        for (auto& member_admission : *approve_invitation->mutable_member_admission_data()) {
+          if (member_admission.user_key().zone_id() != req_body.sender_user_key().zone_id() ||
+              member_admission.user_key().user_id() != req_body.sender_user_key().user_id()) {
+            continue;
+          }
+          protobuf_move_message(*translated_req->mutable_shared_member_data(),
+                                std::move(*member_admission.mutable_member_admission_data()));
+          break;
+        }
+        ret = RPC_AWAIT_CODE_RESULT(room->approve_invitation(get_shared_context(), *translated_req));
+        break;
+      }
+      case atfw::team::DTeamAction::kRejectInvitation: {
+        auto translated_req = rpc::make_shared_message<atfw::team::SSTeamRoomRejectInvitationReq>(get_shared_context());
+        room->dump_team_key(*translated_req->mutable_team_key());
+        protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        protobuf_move_message(*translated_req->mutable_invitee(),
+                              std::move(*req_body.mutable_action()->mutable_reject_invitation()->mutable_invitee()));
+        ret = RPC_AWAIT_CODE_RESULT(room->reject_invitation(get_shared_context(), *translated_req));
+        break;
+      }
+      case atfw::team::DTeamAction::kAddJoinRequest: {
+        auto translated_req = rpc::make_shared_message<atfw::team::SSTeamRoomAddJoinRequestReq>(get_shared_context());
+        protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        protobuf_move_message(*translated_req->mutable_join_request(),
+                              std::move(*req_body.mutable_action()->mutable_add_join_request()));
+        ret = RPC_AWAIT_CODE_RESULT(room->add_join_request(get_shared_context(), *translated_req));
+        break;
+      }
+      case atfw::team::DTeamAction::kApproveJoinRequest: {
+        auto translated_req =
+            rpc::make_shared_message<atfw::team::SSTeamRoomApproveJoinRequestReq>(get_shared_context());
+        room->dump_team_key(*translated_req->mutable_team_key());
+        protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        protobuf_move_message(
+            *translated_req->mutable_applicant(),
+            std::move(*req_body.mutable_action()->mutable_approve_join_request()->mutable_requester()));
+        ret = RPC_AWAIT_CODE_RESULT(room->approve_join_request(get_shared_context(), *translated_req));
+        break;
+      }
+      case atfw::team::DTeamAction::kRejectJoinRequest: {
+        auto translated_req =
+            rpc::make_shared_message<atfw::team::SSTeamRoomRejectJoinRequestReq>(get_shared_context());
+        room->dump_team_key(*translated_req->mutable_team_key());
+        protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        protobuf_move_message(
+            *translated_req->mutable_applicant(),
+            std::move(*req_body.mutable_action()->mutable_reject_join_request()->mutable_requester()));
+        ret = RPC_AWAIT_CODE_RESULT(room->reject_join_request(get_shared_context(), *translated_req));
+        break;
+      }
+      default:
+        ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
+        break;
+    }
   }
 
   rsp_body.set_client_result(ret);

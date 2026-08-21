@@ -27,3 +27,9 @@ struct ATFW_UTIL_SYMBOL_VISIBLE user_key_equal_t {
     return l.zone_id() == r.zone_id() && l.user_id() == r.user_id();
   }
 };
+
+struct ATFW_UTIL_SYMBOL_VISIBLE user_key_less_t {
+  bool operator()(const PROJECT_NAMESPACE_ID::DUserIDKey& l, const PROJECT_NAMESPACE_ID::DUserIDKey& r) const {
+    return l.zone_id() < r.zone_id() || (l.zone_id() == r.zone_id() && l.user_id() < r.user_id());
+  }
+};

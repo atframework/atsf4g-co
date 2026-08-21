@@ -73,6 +73,9 @@ message DTeamRoomMemberRuntimeData {
 message DTeamRoomPrivateData {
   DTeamKey team_key = 1;
 
+  // 队伍是否已经完成过创建；成员清空后仍保持为 true，防止旧 team_id 被重新接管。
+  bool team_created = 10;
+
   // 上次压缩完成时的sequence和时间点
   int64 last_compact_sequence = 11;
   google.protobuf.Timestamp last_compact_timepoint = 12;

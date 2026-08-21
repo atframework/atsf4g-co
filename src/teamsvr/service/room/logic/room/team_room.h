@@ -186,7 +186,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   void on_remove();
 
   // 订阅者事件回调(经 local_private_data 回传 this，由共享回调组转发)
-  void on_ready(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber);
+  void on_receive_snapshot_finished(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                    int32_t result_code);
   void on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                         const ::atfw::dtmq::DChannelMessage& message);
   void on_update_optimistic_lock(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
@@ -208,11 +209,12 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   friend class team_room_manager;
 
   // 从订阅数据恢复队伍快照(custom_data + 增量日志 + private_data)
-  void restore_snapshot(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR bool restore_snapshot(rpc::context& ctx);
   // 应用频道事件到本地状态，所有应用操作必须幂等
   void apply_action(rpc::context& ctx, atfw::team::DTeamAction& action, int64_t sequence, uint64_t hash_code,
                     std::chrono::system_clock::time_point event_timepoint);
-  void apply_event_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& message);
+  ATFW_EXPLICIT_NODISCARD_ATTR bool apply_event_message(rpc::context& ctx,
+                                                        const ::atfw::dtmq::DChannelMessage& message);
   void update_acknowledge(int64_t sequence, uint64_t hash_code);
   // 应用成员入队(幂等): 已存在的成员保留其 key 与更早的入队时间，首位成员成为队长。
   // 入队/心跳时间缺失时以 event_timepoint(频道事件创建时间)兜底，保证各节点状态一致
@@ -237,8 +239,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
                                                atfw::dtmq::DChannelIdKey&& channel_id,
                                                atfw::team::DTeamMemberAction&& action);
 
-  // 队长退出后在剩余成员中确定性地选出新队长(加入时间最早者)
-  void elect_captain_after_remove();
+  // 队长退出后在剩余成员中确定性地选出新队长，并发送 election_captain 频道事件
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type elect_captain_after_remove(rpc::context& ctx);
   // 成员离线过期时间点(无心跳记录时回退到入队时间/快照恢复时间)
   std::chrono::system_clock::time_point get_member_offline_deadline(const member_runtime_data& member_data);
   // 成员清单变为空/非空时刷新空房间计时
@@ -274,7 +276,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 解散空队伍
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy_empty_room(rpc::context& ctx);
 
-  void dump_private_data(atfw::team::DTeamRoomPrivateData& output);
+  void dump_private_data(atfw::team::DTeamRoomPrivateData& output, int64_t compact_sequence,
+                         std::chrono::system_clock::time_point compact_timepoint);
   void dump_public_data(atfw::team::DTeamStorage& output);
 
   // 乐观锁租约时长，不低于 dtmq 频道配置的订阅者心跳过期淘汰时间(subscriber_timeout)
@@ -312,7 +315,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
   atfw::team::DTeamStorage storage_;
   std::unordered_map<int32_t, atfw::team::DTeamAnyData> private_team_data_;
-  // 成员心跳等在线状态记录(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
+  // 成员心跳等在线状态记录(LRU 维护最近访问成员)
   member_runtime_lru_map_t member_;
   // 移除成员的重试队列(如果失败则重试)
   member_retry_lru_map_t member_retry_remove_;
@@ -329,6 +332,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   bool lock_acquired_ = false;
   bool destroyed_ = false;
   bool channel_destroy_sent_ = false;
+  bool team_created_ = false;
   bool snapshot_restored_ = false;
   std::chrono::system_clock::time_point restore_timepoint_;
 

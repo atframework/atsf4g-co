@@ -62,6 +62,7 @@ void team_room_manager::clear() {
   pending_flush_rooms_.clear();
   for (auto& pair : rooms) {
     if (pair.second) {
+      remove_room_timer(*pair.second);
       pair.second->on_remove();
     }
   }
@@ -101,16 +102,12 @@ void team_room_manager::remove_room(int64_t team_id, const team_room* expected) 
   }
   auto room = iter->second;
   if (room) {
+    remove_room_timer(*room);
     room->on_remove();
   }
 
   rooms_.erase(iter);
   pending_flush_rooms_.erase(team_id);
-
-  if (room) {
-    // 移除房间必须移除相关的定时器
-    remove_room_timer(*room);
-  }
 }
 
 int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system_clock::time_point timepoint) {
