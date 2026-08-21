@@ -85,18 +85,19 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_
   return ret;
 }
 
+static bool init_user_orbit_manager_handle() {
+  user::init_get_info_handle(&PROJECT_NAMESPACE_ID::CSUserGetInfoReq::need_user_orbit_room,
+                             [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
+                               auto& orbit_mgr = user_inst.get_user_orbit_manager();
+                               orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
+                             });
+  return true;
+}
+
 }  // namespace
 
 user_orbit_manager::user_orbit_manager(user& owner) : owner_(&owner) {
-  static bool init_handle = false;
-  if (!init_handle) {
-    init_handle = true;
-    user::init_get_info_handle(&PROJECT_NAMESPACE_ID::CSUserGetInfoReq::need_user_orbit_room,
-                               [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
-                                 auto& orbit_mgr = user_inst.get_user_orbit_manager();
-                                 orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
-                               });
-  }
+  static bool init_handle = init_user_orbit_manager_handle();
 }
 
 void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
