@@ -9,6 +9,10 @@
 
 #include <memory/lru_map.h>
 
+#include <functional>
+#include <memory>
+#include <utility>
+
 ATFRAMEWORK_SERVICE_COMPONENT_NAMESPACE_BEGIN
 namespace memory {
 namespace util {

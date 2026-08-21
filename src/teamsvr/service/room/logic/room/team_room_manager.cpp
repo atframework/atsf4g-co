@@ -119,7 +119,13 @@ int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system
     timer_running_ = true;
   }
 
+  if (room.timer_timeout_ != std::chrono::system_clock::from_time_t(0) && room.timer_timeout_ <= timepoint) {
+    // 定时器只能提前，不能延后，避免定时器被延迟到过期事件之后才触发
+    return 0;
+  }
+
   remove_room_timer(room);
+  room.timer_timeout_ = std::chrono::system_clock::from_time_t(0);
 
   // 检查如果房间已被移除，则不需要再附加定时器
   auto iter = rooms_.find(room.get_team_id());
@@ -142,6 +148,7 @@ int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system
     if (!room) {
       return;
     }
+    room->timer_timeout_ = std::chrono::system_clock::from_time_t(0);
 
     if (team_room_manager::is_instance_destroyed()) {
       return;
@@ -165,6 +172,8 @@ int32_t team_room_manager::reset_room_timer(team_room& room, std::chrono::system
   if (res < 0) {
     FWLOGERROR("team_room_manager add timer for team {} failed: {}", team_id, res);
     room.timer_watcher_.reset();
+  } else {
+    room.timer_timeout_ = timepoint;
   }
   return res;
 }

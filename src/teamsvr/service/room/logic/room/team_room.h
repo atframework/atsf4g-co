@@ -8,6 +8,8 @@
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 
+#include <memory/object_atfw_memory_lru_map.h>
+
 #include <dispatcher/task_type_traits.h>
 #include <mem_pool/lru_map.h>
 #include <memory/rc_ptr.h>
@@ -76,12 +78,25 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
     uint64_t user_router_server_id = 0;
 
     atfw::team::DTeamMember member_data;
+
+    atfw::team::EnTeamExitReason exit_reason = atfw::team::EN_TEAM_EXIT_REASON_DEFAULT;
   };
+
+  struct member_retry_data {
+    std::chrono::system_clock::time_point next_retry_timepoint = std::chrono::system_clock::from_time_t(0);
+    uint32_t retry_times = 0;
+  };
+
   using member_ptr_t = atfw::util::memory::strong_rc_ptr<member_runtime_data>;
-  using member_const_ptr_t = atfw::util::memory::strong_rc_ptr<const member_runtime_data>;
   // 最近访问成员 LRU: front 为最久未心跳的成员，用于计算下一个要踢出的成员
   using member_runtime_lru_map_t =
-      atfw::util::mempool::lru_map<PROJECT_NAMESPACE_ID::DUserIDKey, member_ptr_t, user_key_hash_t, user_key_equal_t>;
+      atfw::component::memory::util::lru_map_st<PROJECT_NAMESPACE_ID::DUserIDKey, member_runtime_data, user_key_hash_t,
+                                                user_key_equal_t>;
+
+  // 重试队列LRU map
+  using member_retry_lru_map_t =
+      atfw::component::memory::util::lru_map_st<PROJECT_NAMESPACE_ID::DUserIDKey, member_retry_data, user_key_hash_t,
+                                                user_key_equal_t>;
 
   using invitation_ptr_t = atfw::util::memory::strong_rc_ptr<atfw::team::DTeamInvitation>;
   using invitation_map_t =
@@ -129,7 +144,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   // 提交组队操作(协程内调用)，来自外部服务的写请求统一经由此处写入频道日志
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
-                                                                 const atfw::team::DTeamAction& action);
+                                                                 const atfw::team::DTeamAction& action,
+                                                                 bool no_wait = false);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_member_action(rpc::context& ctx,
                                                                         const atfw::dtmq::DChannelIdKey& channel_key,
                                                                         const atfw::team::DTeamMemberAction& action);
@@ -178,7 +194,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 队长退出后在剩余成员中确定性地选出新队长(加入时间最早者)
   void elect_captain_after_remove();
   // 成员离线过期时间点(无心跳记录时回退到入队时间/快照恢复时间)
-  std::chrono::system_clock::time_point get_member_offline_deadline(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+  std::chrono::system_clock::time_point get_member_offline_deadline(const member_runtime_data& member_data);
   // 成员清单变为空/非空时刷新空房间计时
   void refresh_empty_tracking(std::chrono::system_clock::time_point now);
 
@@ -191,7 +207,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   atfw::util::memory::strong_rc_ptr<::atfw::dtmq::channel_lock_checker> make_write_lock_checker() const;
   // 携带乐观锁检查写入频道事件，锁冲突时自动退位
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_event_with_lock(rpc::context& ctx,
-                                                                          ::google::protobuf::Any&& event_data);
+                                                                          ::google::protobuf::Any&& event_data,
+                                                                          bool no_wait);
 
   // 定时器事件执行入口
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type execute_timer_event(rpc::context& ctx,
@@ -231,6 +248,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   std::unordered_map<int32_t, atfw::team::DTeamAnyData> private_team_data_;
   // 成员心跳等在线状态记录(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
   member_runtime_lru_map_t member_;
+  // 移除成员的重试队列(如果失败则重试)
+  member_retry_lru_map_t member_retry_remove_;
   struct iterating_member_protect_t;
   iterating_member_protect_t* iterating_member_protect_ = nullptr;
 
@@ -255,4 +274,5 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   task_type_trait::task_type maintenance_task_;
   // 本房间在 manager 时间轮上的唯一定时器
   timer_watcher_t timer_watcher_;
+  std::chrono::system_clock::time_point timer_timeout_ = std::chrono::system_clock::from_time_t(0);
 };

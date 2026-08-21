@@ -18,7 +18,7 @@ package atframework.team.config;
 message teamsvr_room_cfg {
   // 主控节点定期压缩 dtmq 日志的时间间隔(秒)，日志数量达到频道配置 gc_log_count 时也会触发
   google.protobuf.Duration compact_interval = 1
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "5" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "5s" }];
 
   // 当前log数量超过上限的一定百分比后执行压缩
   int32 compact_log_over_percent = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "1" }];
@@ -35,8 +35,13 @@ message teamsvr_room_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
   // 加入请求默认有效期(秒)，外部请求未带过期时间时使用
   google.protobuf.Duration join_request_expire = 7
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5s" }];
   // 加入邀请默认有效期(秒)，外部请求未带过期时间时使用
   google.protobuf.Duration invitation_expire = 8
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5s" }];
+  // 成员通知频道的重试间隔
+  google.protobuf.Duration member_channel_notification_retry_interval = 9
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3s" min_value: "1s" }];
+  uint32 member_channel_notification_retry_times = 10
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
 }

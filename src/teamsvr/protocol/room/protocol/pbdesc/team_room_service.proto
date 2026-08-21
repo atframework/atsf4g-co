@@ -10,6 +10,7 @@ option cc_generic_services = true;
 import "google/protobuf/timestamp.proto";
 
 import "protocol/extension/atframework.proto";
+import "protocol/common/com.struct.dtmq.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.team.proto";
 
@@ -20,8 +21,9 @@ package atframework.team;
 message SSTeamRoomCreateReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
+  atframework.dtmq.DChannelIdKey sender_user_channel = 3;
 
-  DTeamConfigure configure = 3;
+  DTeamConfigure configure = 4;
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开

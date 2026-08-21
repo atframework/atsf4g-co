@@ -3,6 +3,7 @@
 #include "logic/room/team_room.h"
 
 #include <log/log_wrapper.h>
+#include <nostd/nullability.h>
 #include <std/explicit_declare.h>
 #include <string/string_format.h>
 #include <time/time_utility.h>
@@ -224,7 +225,7 @@ rpc::result_code_type team_room::await_ready(rpc::context& ctx) {
   RPC_RETURN_CODE(0);
 }
 
-rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team::DTeamAction& action) {
+rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team::DTeamAction& action, bool no_wait) {
   if (!subscriber_ || !subscriber_->is_ready()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
@@ -234,7 +235,7 @@ rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team
     FCTXLOGERROR(ctx, "team room {} pack DTeamAction failed", team_id_);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
   }
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_event_with_lock(ctx, std::move(*event_data))));
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_event_with_lock(ctx, std::move(*event_data), no_wait)));
 }
 
 rpc::result_code_type team_room::send_member_action(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key,
@@ -346,7 +347,23 @@ void team_room::restore_snapshot(rpc::context& ctx) {
     return true;
   });
 
+  std::vector<const atfw::team::DTeamMember * ATFW_UTIL_MACRO_NONNULL> members_by_visit_time;
+  members_by_visit_time.reserve(static_cast<size_t>(public_data->member().size()));
   for (const auto& data : public_data->member()) {
+    members_by_visit_time.push_back(&data);
+  }
+  // 按访问时间排序，确保回复快照时，LRU map前面的member先过期
+  std::sort(members_by_visit_time.begin(), members_by_visit_time.end(),
+            [](const atfw::team::DTeamMember* ATFW_UTIL_MACRO_NONNULL l,
+               const atfw::team::DTeamMember* ATFW_UTIL_MACRO_NONNULL r) {
+              auto lv = (std::max)(protobuf_to_system_clock(l->joined_timepoint()),
+                                   protobuf_to_system_clock(l->last_heartbeat_timepoint()));
+              auto rv = (std::max)(protobuf_to_system_clock(r->joined_timepoint()),
+                                   protobuf_to_system_clock(r->last_heartbeat_timepoint()));
+              return lv < rv;
+            });
+  for (const auto* data_ptr : members_by_visit_time) {
+    const auto& data = *data_ptr;
     auto member = find_member(data.user_key(), false);
     if (!member) {
       member = mutable_member(data.user_key());
@@ -368,6 +385,8 @@ void team_room::restore_snapshot(rpc::context& ctx) {
   for (const auto& removed_key : expired_member_key) {
     remove_member(ctx, removed_key, atfw::team::EN_TEAM_EXIT_REASON_DEFAULT, false);
   }
+  // 加载快照时重置重试删除队列
+  member_retry_remove_.clear();
 
   // invitation
   expired_member_key.clear();
@@ -586,17 +605,15 @@ void team_room::elect_captain_after_remove() {
   });
 }
 
-std::chrono::system_clock::time_point team_room::get_member_offline_deadline(
-    const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+std::chrono::system_clock::time_point team_room::get_member_offline_deadline(const member_runtime_data& member_data) {
   std::chrono::system_clock::time_point baseline = restore_timepoint_;
-  auto member = find_member(user_key, false);
-  if (!member) {
-    return baseline + protobuf_to_system_clock(get_teamsvr_room_cfg().member_offline_expire());
+  auto member_baseline = protobuf_to_system_clock(member_data.member_data.joined_timepoint());
+  if (member_baseline > baseline) {
+    baseline = member_baseline;
   }
 
-  auto member_baseline = protobuf_to_system_clock(member->member_data.joined_timepoint());
-  if (nullptr != member && member_baseline > baseline) {
-    baseline = member_baseline;
+  if (member_data.last_heartbeat_timepoint > member_baseline) {
+    member_baseline = member_data.last_heartbeat_timepoint;
   }
 
   return baseline + protobuf_to_system_clock(get_teamsvr_room_cfg().member_offline_expire());
@@ -643,6 +660,9 @@ team_room::member_ptr_t team_room::mutable_member(const PROJECT_NAMESPACE_ID::DU
   }
 
   member_.insert_key_value(user_key, ret);
+
+  // 收到新的新增消息，移除删除重试队列
+  member_retry_remove_.erase(user_key);
   return ret;
 }
 
@@ -651,23 +671,27 @@ team_room::member_ptr_t team_room::find_member(const PROJECT_NAMESPACE_ID::DUser
   if (iter == member_.end()) {
     return nullptr;
   }
-  return *iter->second;
+  return iter->second;
 }
 
 bool team_room::remove_member(rpc::context& /*ctx*/, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                               atfw::team::EnTeamExitReason reason, bool with_notify) {
   auto iter = member_.find(user_key, false);
+
+  // 已经收到删除消息，移除重试队列
+  member_retry_remove_.erase(user_key);
+
   if (iter == member_.end()) {
     return false;
   }
 
   // 防止递归期间增删member，延迟处理
   if (iterating_member_protect_ != nullptr) {
-    iterating_member_protect_->pending_to_remove.insert({user_key, *iter->second});
+    iterating_member_protect_->pending_to_remove.insert({user_key, iter->second});
     iterating_member_protect_->pending_to_add.erase(user_key);
     return true;
   }
-  auto member_ptr = *iter->second;
+  auto member_ptr = iter->second;
 
   member_.erase(iter);
   // 踢出的成员如果是队长则自动触发换队长(确定性选主，后续可扩展竞选流程)
@@ -684,7 +708,8 @@ bool team_room::remove_member(rpc::context& /*ctx*/, const PROJECT_NAMESPACE_ID:
       !member_ptr->member_data.user_channel().channel_id().empty()) {
     atfw::dtmq::DChannelIdKey channel_id = member_ptr->member_data.user_channel();
     atfw::team::DTeamMemberAction action;
-    *action.mutable_remove_member()->mutable_user_key() = member_ptr->member_data.user_key();
+    action.mutable_remove_member()->mutable_team_key()->set_team_id(team_id_);
+    protobuf_copy_message(*action.mutable_remove_member()->mutable_user_key(), member_ptr->member_data.user_key());
     action.mutable_remove_member()->set_remove_member_reason(reason);
 
     append_team_member_channel_notification(member_ptr->member_data.user_key(), std::move(channel_id),
@@ -704,7 +729,7 @@ void team_room::foreach_member(
       continue;
     }
 
-    if (!fn(*iter->second)) {
+    if (!fn(iter->second)) {
       break;
     }
   }
@@ -714,6 +739,8 @@ void team_room::foreach_member(
 
     for (const auto& pair : current_protect_instance.pending_to_add) {
       member_.insert_key_value(pair.first, pair.second);
+      // 收到新的新增消息，移除删除重试队列
+      member_retry_remove_.erase(pair.first);
     }
 
     for (const auto& pair : current_protect_instance.pending_to_remove) {
@@ -723,6 +750,8 @@ void team_room::foreach_member(
         storage_.clear_captain_user_key();
         elect_captain_after_remove();
       }
+      // 收到新的新增消息，移除删除重试队列
+      member_retry_remove_.erase(pair.first);
     }
 
     if (storage_.captain_user_key().user_id() == 0 && !member_.empty()) {
@@ -877,7 +906,8 @@ void team_room::step_down() {
   schedule_next_timer();
 }
 
-rpc::result_code_type team_room::send_event_with_lock(rpc::context& ctx, ::google::protobuf::Any&& event_data) {
+rpc::result_code_type team_room::send_event_with_lock(rpc::context& ctx, ::google::protobuf::Any&& event_data,
+                                                      bool no_wait) {
   if (!lock_acquired_) {
     auto lock_ret = RPC_AWAIT_CODE_RESULT(acquire_lock(ctx));
     if (lock_ret != 0) {
@@ -887,7 +917,8 @@ rpc::result_code_type team_room::send_event_with_lock(rpc::context& ctx, ::googl
 
   auto checker = make_write_lock_checker();
   auto rsp_checker = atfw::component::memory::stl::make_strong_rc<::atfw::dtmq::channel_lock_checker>();
-  auto ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_event(ctx, std::move(event_data), checker, rsp_checker));
+  auto ret =
+      RPC_AWAIT_CODE_RESULT(subscriber_->send_event(ctx, std::move(event_data), checker, rsp_checker, true, no_wait));
   if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED == ret) {
     // 老节点锁失效: 记录真实持有者并退位
     if (rsp_checker && rsp_checker->has_real_value()) {
@@ -941,10 +972,23 @@ team_room_timer_event team_room::get_next_timer_event(std::chrono::system_clock:
   // 剔除最久未心跳的成员(LRU front)
   if (!member_.empty()) {
     const auto& oldest = member_.front();
-    std::chrono::system_clock::time_point deadline = get_member_offline_deadline(oldest.first);
-    if (deadline < ret.timeout) {
-      ret.type = team_room_timer_event_type::kKickOfflineMember;
-      ret.timeout = deadline;
+    if (oldest.second) {
+      std::chrono::system_clock::time_point deadline = get_member_offline_deadline(*oldest.second);
+      if (deadline < ret.timeout) {
+        ret.type = team_room_timer_event_type::kKickOfflineMember;
+        ret.timeout = deadline;
+      }
+    }
+  }
+  // 移除成员的重试队列(LRU front)
+  if (!member_retry_remove_.empty()) {
+    const auto& oldest = member_retry_remove_.front();
+    if (oldest.second) {
+      std::chrono::system_clock::time_point deadline = oldest.second->next_retry_timepoint;
+      if (deadline < ret.timeout) {
+        ret.type = team_room_timer_event_type::kKickOfflineMember;
+        ret.timeout = deadline;
+      }
     }
   }
 
@@ -1175,31 +1219,105 @@ rpc::result_code_type team_room::cleanup_expired_admissions(rpc::context& /*ctx*
 
 rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
                                                           std::chrono::system_clock::time_point now) {
-  // LRU front 为最久未心跳的成员，队伍规模小，全量扫描收集所有到期成员
   std::vector<member_ptr_t> offline_members;
-  for (const auto& pair : member_) {
-    if (get_member_offline_deadline(pair.first) > now) {
+
+  // 重试队列计时
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> invalid_keys;
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> actived_retry_keys;
+  actived_retry_keys.reserve(8);
+  uint32_t max_retry_times = get_teamsvr_room_cfg().member_channel_notification_retry_times();
+  auto retry_interval = protobuf_to_system_clock(get_teamsvr_room_cfg().member_channel_notification_retry_interval());
+  for (const auto& pair : member_retry_remove_) {
+    if (!pair.second) {
+      invalid_keys.push_back(pair.first);
+      continue;
+    }
+
+    // 重试时间未到
+    if (pair.second->next_retry_timepoint > now) {
       break;
     }
-    if (get_member_offline_deadline(pair.first) <= now && *pair.second) {
-      offline_members.push_back(*pair.second);
+
+    // 需要更新访问位置
+    auto member_iter = member_.find(pair.first);
+    if (member_iter == member_.end() || !member_iter->second) {
+      invalid_keys.push_back(pair.first);
+      continue;
+    }
+
+    // 超过重试上限，移除
+    if (pair.second->retry_times >= max_retry_times) {
+      invalid_keys.push_back(pair.first);
+      FCTXLOGWARNING(ctx, "team_room {} retry to remove member {}:{} but retry time exceeded", get_team_id(),
+                     pair.first.zone_id(), pair.first.user_id());
+      continue;
+    }
+
+    offline_members.push_back(member_iter->second);
+    actived_retry_keys.push_back(pair.first);
+  }
+
+  for (const auto& key : actived_retry_keys) {
+    auto iter = member_retry_remove_.find(key);
+    if (iter == member_retry_remove_.end() || !iter->second) {
+      invalid_keys.push_back(key);
+      continue;
+    }
+
+    ++iter->second->retry_times;
+    iter->second->next_retry_timepoint = now + retry_interval;
+  }
+
+  for (const auto& key : invalid_keys) {
+    member_retry_remove_.erase(key);
+  }
+
+  // LRU front 为最久未心跳的成员，队伍规模小，全量扫描收集所有到期成员
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> touch_keys;
+  offline_members.reserve(8);
+  touch_keys.reserve(member_retry_remove_.size());
+  invalid_keys.clear();
+  for (const auto& pair : member_) {
+    if (member_retry_remove_.end() != member_retry_remove_.find(pair.first)) {
+      // 正在重试删除的成员走重试队列
+      touch_keys.push_back(pair.first);
+      continue;
+    }
+
+    if (!pair.second) {
+      invalid_keys.push_back(pair.first);
+      continue;
+    }
+
+    if (get_member_offline_deadline(*pair.second) > now) {
+      break;
+    }
+
+    if (get_member_offline_deadline(*pair.second) <= now && pair.second) {
+      offline_members.push_back(pair.second);
+      pair.second->exit_reason = atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED;
+
+      auto retry_data = atfw::component::memory::stl::make_strong_rc<member_retry_data>();
+      retry_data->next_retry_timepoint = now + retry_interval;
+      member_retry_remove_.insert_key_value(pair.first, std::move(retry_data));
     }
   }
 
-  // TODO(owent): 发送remove_member消息到team channel频道,注意不要短期内发太多次
+  for (const auto& key : invalid_keys) {
+    member_.erase(key);
+  }
 
+  // 刷新member_里额外需要更新的访问位置
+  for (const auto& key : touch_keys) {
+    member_.find(key);
+  }
+
+  // 发送remove_member消息到team channel频道, 上面的重试机制会阻止反复发送移除消息
   for (const auto& user_ptr : offline_members) {
-    atfw::team::DTeamMemberAction action;
+    atfw::team::DTeamAction action;
     *action.mutable_remove_member()->mutable_user_key() = user_ptr->member_data.user_key();
-    action.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED);
-    if (user_ptr->member_data.user_channel().channel_type() != 0 &&
-        !user_ptr->member_data.user_channel().channel_id().empty()) {
-      auto ret = RPC_AWAIT_CODE_RESULT(send_member_action(ctx, user_ptr->member_data.user_channel(), action));
-      if (0 != ret) {
-        FCTXLOGERROR(ctx, "team room {} remove offline member {}/{} failed: {}", team_id_,
-                     user_ptr->member_data.user_key().zone_id(), user_ptr->member_data.user_key().user_id(), ret);
-      }
-    }
+    action.mutable_remove_member()->set_remove_member_reason(user_ptr->exit_reason);
+    RPC_AWAIT_IGNORE_RESULT(send_action(ctx, action, false));
   }
   RPC_RETURN_CODE(0);
 }

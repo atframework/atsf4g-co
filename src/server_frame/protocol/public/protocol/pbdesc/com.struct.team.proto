@@ -108,9 +108,6 @@ message DTeamMember {
   EnTeamSourceType team_source_type = 6;
   google.protobuf.Any team_source_data = 7;
 
-  // 退出原因
-  EnTeamExitReason remove_member_reason = 8;
-
   string client_version = 9;
   uint64 user_router_server_id = 10;
 
@@ -133,6 +130,14 @@ message DTeamMemberUpdateData {
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
   map<int32, DTeamAnyData> shared_member_data = 13;
+}
+
+message DTeamMemberRemoveData {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+
+  // 退出原因
+  EnTeamExitReason remove_member_reason = 8;
 }
 
 message DTeamAdmissionResult {
@@ -224,7 +229,7 @@ message DTeamAction {
     // 有这个消息或者订阅失败则视为小队已解散
     DTeamKey destroy_team = 1;
     DTeamMember add_member = 2;
-    DTeamMember remove_member = 3;
+    DTeamMemberRemoveData remove_member = 3;
     // 队员更新共享数据(准备、取消准备、变更角色、变更装备等都可以通过修改内部 shared_member_data 来实现)
     DTeamMemberUpdateData member_update = 4;
     // 重新竞选队长
@@ -253,6 +258,6 @@ message DTeamMemberAction {
     DTeamJoinRequest cancel_join_request = 6;
 
     DTeamInvitation join_in_team = 4;
-    DTeamMember remove_member = 7;
+    DTeamMemberRemoveData remove_member = 7;
   }
 }
