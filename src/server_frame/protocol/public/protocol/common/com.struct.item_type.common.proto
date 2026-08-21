@@ -41,7 +41,7 @@ enum EnItemType {
   // 装备
   EN_ITEM_TYPE_EQUIPMENT = 4 [
     (item_type_option) = {
-      item_type_range: { start_index: 700000 end_index: 900000 }
+      item_type_range: { start_index: 400000 end_index: 500000 }
       need_occupy_the_grid: true
       need_guid: true
     },

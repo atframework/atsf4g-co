@@ -12,10 +12,6 @@ ITEM_ALGORITHM_NAMESPACE_BEGIN
 
 namespace item_algorithm {
 
-// ============================================================
-// ItemGridAlgorithm
-// ============================================================
-
 ItemGridAlgorithm::ItemGridAlgorithm() = default;
 ItemGridAlgorithm::~ItemGridAlgorithm() = default;
 
@@ -52,20 +48,31 @@ void ItemGridAlgorithm::init(int32_t row_size, int32_t column_size,
       row.resize(static_cast<size_t>(column_size_), false);
     }
   }
+
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("init grid rows={} cols={} position_type={} care_item_size={}", row_size_, column_size_,
+                               static_cast<int>(position_type_), is_care_item_size());
 }
 
-ItemGridOperationResult ItemGridAlgorithm::add(const ItemGridAddCheckedRequest& checked_request) {
+ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checked_request,
+                                               ItemGridOperationReason reason) {
   if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with failed checked request, error={} ({})",
+                                 checked_request.result.error_code,
+                                 PROJECT_NAMESPACE_ID::EnErrorCode_Name(checked_request.result.error_code));
     return checked_request.result;
   }
+  if (checked_request.apply) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with apply=true, should not happen");
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  checked_request.apply = true;
 
   ItemGridOperationResult result;
 
-  const auto& requests = checked_request.requests;
-
-  for (size_t i = 0; i < requests.size(); ++i) {
-    const auto& req = requests[i];
-    const auto& item_basic = req.item_instance->item_basic();
+  auto& requests = checked_request.requests;
+  for (int32_t i = 0; i < requests.size(); ++i) {
+    auto& req = requests[i];
+    const auto& item_basic = req.item_basic();
     int32_t type_id = item_basic.type_id();
     int64_t add_count = item_basic.count();
     int64_t guid = item_basic.guid();
@@ -79,27 +86,29 @@ ItemGridOperationResult ItemGridAlgorithm::add(const ItemGridAddCheckedRequest& 
         auto group_it = item_groups_.find(type_id);
         if (group_it != item_groups_.end() && !group_it->second.empty()) {
           auto& existing = group_it->second.front();
-          int64_t old_count = existing->item_instance.item_basic().count();
-          existing->item_instance.mutable_item_basic()->set_count(old_count + add_count);
+          int64_t old_count = existing->item_instance().item_basic().count();
+          existing->mutable_item_basic().set_count(old_count + add_count);
           item_count_cache_[type_id] += add_count;
           on_item_count_changed(type_id, existing, 0, ItemGridPosition{}, old_count, old_count + add_count,
-                                item_count_cache_[type_id], ItemGridOperationReason::kAdd);
-          on_item_data_changed(existing, ItemGridOperationReason::kAdd);
+                                item_count_cache_[type_id], reason);
+          on_item_data_changed(existing, reason);
+          ITEM_ALGORITHM_LOG_DEBUG_FMT("add merge ungrid type={} count={} entry_id={} total={}", type_id, add_count,
+                                       existing->entry_id(), old_count + add_count);
           continue;
         }
       }
 
       // 需要GUID 或 首次添加: 新建entry
-      PROJECT_NAMESPACE_ID::DItemInstance new_instance = *req.item_instance;
-      item_grid_entry_ptr_t entry = make_entry(std::move(new_instance));
+      item_grid_entry_ptr_t entry = make_entry(std::move(req));
       item_groups_[type_id].push_back(entry);
       if (guid != 0) {
         guid_index_[guid] = entry;
       }
       item_count_cache_[type_id] += add_count;
-      on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, item_count_cache_[type_id],
-                            ItemGridOperationReason::kAdd);
-      on_item_data_changed(entry, ItemGridOperationReason::kAdd);
+      on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, item_count_cache_[type_id], reason);
+      on_item_data_changed(entry, reason);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("add new ungrid type={} count={} guid={} entry_id={}", type_id, add_count, guid,
+                                   entry->entry_id());
       continue;
     }
 
@@ -110,35 +119,40 @@ ItemGridOperationResult ItemGridAlgorithm::add(const ItemGridAddCheckedRequest& 
     auto pos_it = position_index_.find(target_pos);
     if (pos_it != position_index_.end()) {
       auto& existing = pos_it->second;
-      int64_t old_count = existing->item_instance.item_basic().count();
-      existing->item_instance.mutable_item_basic()->set_count(old_count + add_count);
+      int64_t old_count = existing->item_instance().item_basic().count();
+      existing->mutable_item_basic().set_count(old_count + add_count);
       item_count_cache_[type_id] += add_count;
-      on_item_count_changed(type_id, existing, existing->item_instance.item_basic().guid(), target_pos, old_count,
-                            old_count + add_count, item_count_cache_[type_id], ItemGridOperationReason::kAdd);
-      on_item_data_changed(existing, ItemGridOperationReason::kAdd);
+      on_item_count_changed(type_id, existing, existing->item_instance().item_basic().guid(), target_pos, old_count,
+                            old_count + add_count, item_count_cache_[type_id], reason);
+      on_item_data_changed(existing, reason);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("add stack grid type={} count={} at ({},{}) entry_id={} total={}", type_id,
+                                   add_count, target_pos.x, target_pos.y, existing->entry_id(), old_count + add_count);
       continue;
     }
 
     // 新建条目 — 使用 check_add 已填充的 position_cfg
-    PROJECT_NAMESPACE_ID::DItemInstance new_instance = *req.item_instance;
-    apply_position(*new_instance.mutable_item_basic()->mutable_position()->mutable_grid_position(), target_pos);
+    apply_position(*req.mutable_item_basic()->mutable_position()->mutable_grid_position(), target_pos);
 
-    item_grid_entry_ptr_t entry = make_entry(std::move(new_instance));
+    item_grid_entry_ptr_t entry = make_entry(std::move(req));
     item_groups_[type_id].push_back(entry);
-    add_entry_index(*get_item_position_cfg(checked_request.config_group, req.item_instance->item_basic()), entry);
+    add_entry_index(*get_item_position_cfg(checked_request.config_group, entry->item_instance().item_basic()), entry);
     item_count_cache_[type_id] += add_count;
-    on_item_count_changed(type_id, entry, entry->item_instance.item_basic().guid(), target_pos, 0, add_count,
-                          item_count_cache_[type_id], ItemGridOperationReason::kAdd);
-    on_item_data_changed(entry, ItemGridOperationReason::kAdd);
+    on_item_count_changed(type_id, entry, entry->item_instance().item_basic().guid(), target_pos, 0, add_count,
+                          item_count_cache_[type_id], reason);
+    on_item_data_changed(entry, reason);
+    ITEM_ALGORITHM_LOG_DEBUG_FMT("add new grid type={} count={} guid={} at ({},{}) entry_id={}", type_id, add_count,
+                                 entry->item_instance().item_basic().guid(), target_pos.x, target_pos.y,
+                                 entry->entry_id());
   }
 
+  ITEM_ALGORITHM_LOG_INFO_FMT("add success, {} requests applied", requests.size());
   return result;
 }
 
 ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    const std::vector<ItemGridAddRequest>& requests) const {
-  ItemGridAddCheckedRequest checked_request{config_group, requests};
+    ItemGridAddRequest&& in_requests) const {
+  ItemGridAddCheckedRequest checked_request{config_group, std::move(in_requests)};
   auto& result = checked_request.result;
 
   std::vector<std::vector<bool>> tmp_grid_flag;
@@ -156,29 +170,36 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
   std::unordered_map<ItemGridPosition, PendingNewSlot, ItemGridPositionHash, ItemGridPositionEqualTo> pending_new_slots;
   std::unordered_map<int32_t, int64_t> pending_type_add_count;
 
-  for (size_t i = 0; i < checked_request.requests.size(); ++i) {
-    const auto& req = checked_request.requests[i];
-    if (req.item_instance == nullptr) {
-      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = static_cast<int32_t>(i);
-      return checked_request;
-    }
-
-    const auto& item_basic = req.item_instance->item_basic();
+  for (int32_t i = 0; i < checked_request.requests.size(); ++i) {
+    auto& req = checked_request.requests[i];
+    const auto& item_basic = req.item_basic();
     int64_t guid = item_basic.guid();
     int32_t type_id = item_basic.type_id();
     int64_t add_count = item_basic.count();
 
     if (!is_item_valid(config_group, item_basic)) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: invalid item type={} count={} guid={}, error={} ({})", i,
+                                     type_id, add_count, guid, result.error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
+    if (!check_item_position(item_basic.position())) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: invalid item position guid={}, error={} ({})", i, guid,
+                                     result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
     if (guid != 0) {
       if (guid_index_.count(guid) > 0 || pending_guids.count(guid) > 0) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_DUPLICATE_GUID;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: duplicate guid={}, error={} ({})", i, guid,
+                                       result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
     }
@@ -186,16 +207,23 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: unknown item type={}, error={} ({})", i, type_id,
+                                     result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
     {
-      int64_t current_total = get_cached_item_count(type_id) + pending_type_add_count[type_id];
+      int64_t current_total = get_item_count(type_id) + pending_type_add_count[type_id];
       int32_t limit_ret = on_check_item_count_limit(type_id, current_total, add_count);
       if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
         result.error_code = limit_ret;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "check_add failed[{}]: item count limit exceeded type={} current={} add={}, "
+            "error={} ({})",
+            i, type_id, current_total, add_count, result.error_code,
+            PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
       pending_type_add_count[type_id] += add_count;
@@ -205,7 +233,10 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
       auto position_cfg = get_item_position_cfg(config_group, item_basic);
       if (position_cfg == nullptr) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: item position cfg not found type={}, error={} ({})", i,
+                                       type_id, result.error_code,
+                                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
 
@@ -216,24 +247,37 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
       if (add_count > accumulation_limit) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "check_add failed[{}]: count={} exceeds accumulation_limit={} type={}, "
+            "error={} ({})",
+            i, add_count, accumulation_limit, type_id, result.error_code,
+            PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
 
       ItemGridPosition target_pos = extract_position(item_basic.position().grid_position());
       auto pos_it = position_index_.find(target_pos);
       if (pos_it != position_index_.end()) {
-        const auto& existing_basic = pos_it->second->item_instance.item_basic();
+        const auto& existing_basic = pos_it->second->item_instance().item_basic();
         if (guid != 0 || existing_basic.guid() != 0 || existing_basic.type_id() != type_id) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: position ({},{}) occupied, error={} ({})", i,
+                                         target_pos.x, target_pos.y, result.error_code,
+                                         PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
 
         int64_t total = existing_basic.count() + pending_existing_extra[target_pos] + add_count;
         if (total > accumulation_limit) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT(
+              "check_add failed[{}]: stack overflow at ({},{}), total={} limit={}, "
+              "error={} ({})",
+              i, target_pos.x, target_pos.y, total, accumulation_limit, result.error_code,
+              PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
         pending_existing_extra[target_pos] += add_count;
@@ -242,13 +286,21 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
         if (pending_it != pending_new_slots.end()) {
           if (guid != 0 || pending_it->second.type_id != type_id) {
             result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
-            result.failed_index = static_cast<int32_t>(i);
+            result.failed_index = i;
+            ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: position ({},{}) pending occupied, error={} ({})", i,
+                                           target_pos.x, target_pos.y, result.error_code,
+                                           PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
             return checked_request;
           }
           int64_t total = pending_it->second.accumulated_count + add_count;
           if (total > accumulation_limit) {
             result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
-            result.failed_index = static_cast<int32_t>(i);
+            result.failed_index = i;
+            ITEM_ALGORITHM_LOG_WARNING_FMT(
+                "check_add failed[{}]: pending stack overflow at ({},{}), total={} "
+                "limit={}, error={} ({})",
+                i, target_pos.x, target_pos.y, total, accumulation_limit, result.error_code,
+                PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
             return checked_request;
           }
           pending_it->second.accumulated_count = total;
@@ -258,13 +310,21 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
             int32_t item_col = position_cfg->column_size();
             if (item_row <= 0 || item_col <= 0) {
               result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-              result.failed_index = static_cast<int32_t>(i);
+              result.failed_index = i;
+              ITEM_ALGORITHM_LOG_WARNING_FMT(
+                  "check_add failed[{}]: invalid item size row={} col={} type={}, "
+                  "error={} ({})",
+                  i, item_row, item_col, type_id, result.error_code,
+                  PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
               return checked_request;
             }
 
             if (!is_item_in_range(target_pos.x, target_pos.y, item_row, item_col)) {
               result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OUT_OF_RANGE;
-              result.failed_index = static_cast<int32_t>(i);
+              result.failed_index = i;
+              ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: position ({},{}) out of range, error={} ({})", i,
+                                             target_pos.x, target_pos.y, result.error_code,
+                                             PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
               return checked_request;
             }
 
@@ -272,7 +332,12 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
               for (int32_t dc = 0; dc < item_col; ++dc) {
                 if (tmp_grid_flag[static_cast<size_t>(target_pos.y + dr)][static_cast<size_t>(target_pos.x + dc)]) {
                   result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
-                  result.failed_index = static_cast<int32_t>(i);
+                  result.failed_index = i;
+                  ITEM_ALGORITHM_LOG_WARNING_FMT(
+                      "check_add failed[{}]: position ({},{}) occupied by area, "
+                      "error={} ({})",
+                      i, target_pos.x, target_pos.y, result.error_code,
+                      PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
                   return checked_request;
                 }
                 tmp_grid_flag[static_cast<size_t>(target_pos.y + dr)][static_cast<size_t>(target_pos.x + dc)] = true;
@@ -285,39 +350,125 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
       }
     }
 
-    int32_t extra_ret = on_check_add(config_group, req);
+    int32_t extra_ret = on_check_add(checked_request.config_group, req);
     if (extra_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = extra_ret;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: on_check_add rejected type={} count={}, error={} ({})", i,
+                                     type_id, add_count, result.error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
     if (guid != 0) {
       pending_guids.insert(guid);
     }
+    ITEM_ALGORITHM_LOG_DEBUG_FMT("check_add pass[{}]: type={} count={} guid={}", i, type_id, add_count, guid);
   }
+
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("check_add pass, {} requests checked", checked_request.requests.size());
+  return checked_request;
+}
+
+ItemGridReplaceCheckedRequest ItemGridAlgorithm::check_replace(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+    ItemGridReplaceRequest&& in_requests) const {
+  ItemGridReplaceCheckedRequest checked_request{config_group, std::move(in_requests)};
+
+  // Replace 语义 = 全部移除现有条目 + 放入新列表。
+  // 因此 check 阶段新建一个同配置的空 Grid, 直接复用 check_add 对新列表做整体校验
+  // (格子占用 / GUID 唯一 / 堆叠上限 / on_check_add 钩子 / 数量上限), 避免重复实现一套放入流程。
+  item_grid_algorithm_ptr_t tmp_grid = create_empty_clone();
+  if (!tmp_grid) {
+    checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+    checked_request.result.failed_index = -1;
+    ITEM_ALGORITHM_LOG_WARNING_FMT("check_replace failed: create empty clone grid failed, error={} ({})",
+                                   checked_request.result.error_code,
+                                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(checked_request.result.error_code));
+    return checked_request;
+  }
+
+  ItemGridAddCheckedRequest add_checked = tmp_grid->check_add(config_group, std::move(checked_request.requests));
+  checked_request.requests = std::move(add_checked.requests);
+  checked_request.result = add_checked.result;
 
   return checked_request;
 }
 
-ItemGridOperationResult ItemGridAlgorithm::sub(const ItemGridSubCheckedRequest& checked_request) {
+ItemGridOperationResult ItemGridAlgorithm::replace(ItemGridReplaceCheckedRequest& checked_request) {
   if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("replace called with failed checked request, error={} ({})",
+                                 checked_request.result.error_code,
+                                 PROJECT_NAMESPACE_ID::EnErrorCode_Name(checked_request.result.error_code));
     return checked_request.result;
   }
+  if (checked_request.apply) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("replace called with apply=true, should not happen");
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  checked_request.apply = true;
+
+  ItemGridOperationResult result;
+
+  // ============================================================
+  // Phase 1: 使用 Sub 接口清理所有现有条目 (操作原因 kReplaceSub)
+  // ============================================================
+  size_t old_entry_count = 0;
+  ItemGridSubRequest sub_requests;
+  for (const auto& group_pair : item_groups_) {
+    for (const auto& entry : group_pair.second) {
+      if (entry) {
+        old_entry_count++;
+        *sub_requests.Add() = entry->item_instance().item_basic();
+      }
+    }
+  }
+
+  if (!sub_requests.empty()) {
+    ItemGridSubCheckedRequest sub_checked{checked_request.config_group, std::move(sub_requests)};
+    sub(sub_checked, ItemGridOperationReason::kReplaceSub);
+  }
+
+  // ============================================================
+  // Phase 2: 使用 Add 接口放入新列表 (操作原因 kReplaceAdd)
+  // ============================================================
+  if (!checked_request.requests.empty()) {
+    ItemGridAddCheckedRequest add_checked{checked_request.config_group, std::move(checked_request.requests)};
+    add(add_checked, ItemGridOperationReason::kReplaceAdd);
+  }
+
+  ITEM_ALGORITHM_LOG_INFO_FMT("replace success, {} old entries removed, {} requests applied, next_entry_id={}",
+                              old_entry_count, checked_request.requests.size(), next_entry_id_);
+  return result;
+}
+
+ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubCheckedRequest& checked_request,
+                                               ItemGridOperationReason reason) {
+  if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("sub called with failed checked request, error={} ({})",
+                                 checked_request.result.error_code,
+                                 PROJECT_NAMESPACE_ID::EnErrorCode_Name(checked_request.result.error_code));
+    return checked_request.result;
+  }
+  if (checked_request.apply) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("sub called with apply=true, should not happen");
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  checked_request.apply = true;
 
   ItemGridOperationResult result;
 
   const auto& requests = checked_request.requests;
 
-  for (size_t i = 0; i < requests.size(); ++i) {
+  for (int32_t i = 0; i < requests.size(); ++i) {
     const auto& req = requests[i];
-    item_grid_entry_ptr_t entry = find_entry(*req.item_basic);
+    item_grid_entry_ptr_t entry = find_entry(req);
 
-    int64_t sub_count = req.item_basic->count();
-    int64_t current_count = entry->item_instance.item_basic().count();
-    int32_t type_id = entry->item_instance.item_basic().type_id();
-    int64_t guid = entry->item_instance.item_basic().guid();
-    ItemGridPosition entry_pos = extract_position(entry->item_instance.item_basic().position().grid_position());
+    int64_t sub_count = req.count();
+    int64_t current_count = entry->item_instance().item_basic().count();
+    int32_t type_id = entry->item_instance().item_basic().type_id();
+    int64_t guid = entry->item_instance().item_basic().guid();
+    ItemGridPosition entry_pos = extract_position(entry->item_instance().item_basic().position().grid_position());
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
 
@@ -325,7 +476,7 @@ ItemGridOperationResult ItemGridAlgorithm::sub(const ItemGridSubCheckedRequest& 
       // 完全移除
       if (item_type_config->need_occupy_the_grid) {
         // 占格: 使用 check_sub 已填充的 position_cfg
-        remove_entry_index(*get_item_position_cfg(checked_request.config_group, *req.item_basic), entry);
+        remove_entry_index(*get_item_position_cfg(checked_request.config_group, req), entry);
       } else {
         // 不占格道具: 仅移除 guid_index
         if (guid != 0) {
@@ -333,74 +484,90 @@ ItemGridOperationResult ItemGridAlgorithm::sub(const ItemGridSubCheckedRequest& 
         }
       }
       remove_entry_from_group(entry);
-      entry->item_instance.mutable_item_basic()->set_count(0);
+      entry->mutable_item_basic().set_count(0);
       item_count_cache_[type_id] -= current_count;
       if (item_count_cache_[type_id] <= 0) {
         item_count_cache_.erase(type_id);
       }
-      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, 0, get_cached_item_count(type_id),
-                            ItemGridOperationReason::kSub);
-      on_item_data_changed(entry, ItemGridOperationReason::kSub);
+      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, 0, get_item_count(type_id), reason);
+      on_item_data_changed(entry, reason);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("sub remove all type={} count={} guid={} entry_id={} at ({},{})", type_id,
+                                   current_count, guid, entry->entry_id(), entry_pos.x, entry_pos.y);
     } else {
       // 部分扣减
-      entry->item_instance.mutable_item_basic()->set_count(current_count - sub_count);
+      entry->mutable_item_basic().set_count(current_count - sub_count);
       item_count_cache_[type_id] -= sub_count;
       on_item_count_changed(type_id, entry, guid, entry_pos, current_count, current_count - sub_count,
-                            item_count_cache_[type_id], ItemGridOperationReason::kSub);
-      on_item_data_changed(entry, ItemGridOperationReason::kSub);
+                            item_count_cache_[type_id], reason);
+      on_item_data_changed(entry, reason);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("sub partial type={} count={} guid={} entry_id={} remaining={}", type_id, sub_count,
+                                   guid, entry->entry_id(), current_count - sub_count);
     }
   }
 
+  ITEM_ALGORITHM_LOG_INFO_FMT("sub success, {} requests applied", requests.size());
   return result;
 }
 
 ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    const std::vector<ItemGridSubRequest>& requests) const {
-  ItemGridSubCheckedRequest checked_request{config_group, requests};
+    ItemGridSubRequest&& in_requests) const {
+  ItemGridSubCheckedRequest checked_request{config_group, std::move(in_requests)};
   auto& result = checked_request.result;
 
   std::unordered_set<int64_t> guid_sub;
   std::unordered_map<int32_t, int64_t> type_sub_count;
   std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> position_sub_count;
 
-  for (size_t i = 0; i < checked_request.requests.size(); ++i) {
+  for (int32_t i = 0; i < checked_request.requests.size(); ++i) {
     const auto& req = checked_request.requests[i];
-    if (req.item_basic == nullptr) {
+    int64_t guid = req.guid();
+    int32_t type_id = req.type_id();
+    int64_t sub_count = req.count();
+
+    if (!is_item_valid(config_group, req)) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_ERROR_FMT("check_sub failed[{}]: invalid item type={} count={} guid={}, error={} ({})", i,
+                                   type_id, sub_count, guid, result.error_code,
+                                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
-    int64_t guid = req.item_basic->guid();
-    int32_t type_id = req.item_basic->type_id();
-    int64_t sub_count = req.item_basic->count();
-
-    if (!is_item_valid(config_group, *req.item_basic)) {
+    if (!check_item_position(req.position())) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_ERROR_FMT("check_sub failed[{}]: invalid item position guid={}, error={} ({})", i, guid,
+                                   result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
     if (sub_count <= 0) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: sub count={} must be positive, error={} ({})", i, sub_count,
+                                     result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr) {
       result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: unknown item type={}, error={} ({})", i, type_id,
+                                     result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
     // 占格道具: 查表并填充 position_cfg
     if (item_type_config->need_occupy_the_grid) {
-      auto position_cfg = get_item_position_cfg(config_group, *req.item_basic);
+      auto position_cfg = get_item_position_cfg(config_group, req);
       if (position_cfg == nullptr) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: item position cfg not found type={}, error={} ({})", i,
+                                       type_id, result.error_code,
+                                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
     }
@@ -409,46 +576,61 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
       // 带GUID 跳过位置直接索引
       if (sub_count != 1) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: guid item must sub count=1, got {}, error={} ({})", i,
+                                       sub_count, result.error_code,
+                                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
 
       auto guid_it = guid_index_.find(guid);
       if (guid_it == guid_index_.end()) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: guid={} not found, error={} ({})", i, guid,
+                                       result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
 
       // 检查数量与类型
-      if (guid_it->second->item_instance.item_basic().type_id() != type_id ||
-          guid_it->second->item_instance.item_basic().count() < sub_count) {
+      if (guid_it->second->item_instance().item_basic().type_id() != type_id ||
+          guid_it->second->item_instance().item_basic().count() < sub_count) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: guid={} type/count mismatch, error={} ({})", i, guid,
+                                       result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
 
       if (guid_sub.count(guid) > 0) {
         result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_DUPLICATE_GUID;
-        result.failed_index = static_cast<int32_t>(i);
+        result.failed_index = i;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: duplicate guid={}, error={} ({})", i, guid,
+                                       result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
         return checked_request;
       }
       guid_sub.insert(guid);
     } else {
       if (item_type_config->need_occupy_the_grid) {
         // 占格道具: 按位置预扣减, 跟踪同一位置多次扣减
-        ItemGridPosition target_pos = extract_position(req.item_basic->position().grid_position());
+        ItemGridPosition target_pos = extract_position(req.position().grid_position());
         auto pos_it = position_index_.find(target_pos);
         if (pos_it == position_index_.end()) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: position ({},{}) empty, error={} ({})", i, target_pos.x,
+                                         target_pos.y, result.error_code,
+                                         PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
 
-        const auto& entry_basic = pos_it->second->item_instance.item_basic();
+        const auto& entry_basic = pos_it->second->item_instance().item_basic();
         if (entry_basic.type_id() != type_id) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: position ({},{}) type mismatch, error={} ({})", i,
+                                         target_pos.x, target_pos.y, result.error_code,
+                                         PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
 
@@ -456,7 +638,12 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         int64_t already_sub = position_sub_count[target_pos];
         if (current - already_sub < sub_count) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT(
+              "check_sub failed[{}]: not enough at ({},{}), current={} already_sub={} "
+              "sub={}, error={} ({})",
+              i, target_pos.x, target_pos.y, current, already_sub, sub_count, result.error_code,
+              PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
         position_sub_count[target_pos] = already_sub + sub_count;
@@ -465,21 +652,28 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         auto group_it = item_groups_.find(type_id);
         if (group_it == item_groups_.end()) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: type={} group empty, error={} ({})", i, type_id,
+                                         result.error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
 
         int64_t total_count = 0;
         for (const auto& entry : group_it->second) {
           if (entry) {
-            total_count += entry->item_instance.item_basic().count();
+            total_count += entry->item_instance().item_basic().count();
           }
         }
 
         int64_t already_sub = type_sub_count[type_id];
         if (total_count - already_sub < sub_count) {
           result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
-          result.failed_index = static_cast<int32_t>(i);
+          result.failed_index = i;
+          ITEM_ALGORITHM_LOG_WARNING_FMT(
+              "check_sub failed[{}]: not enough type={}, total={} already_sub={} sub={}, "
+              "error={} ({})",
+              i, type_id, total_count, already_sub, sub_count, result.error_code,
+              PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
           return checked_request;
         }
         type_sub_count[type_id] = already_sub + sub_count;
@@ -490,18 +684,31 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
     int32_t extra_ret = on_check_sub(config_group, req);
     if (extra_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       result.error_code = extra_ret;
-      result.failed_index = static_cast<int32_t>(i);
+      result.failed_index = i;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_sub failed[{}]: on_check_sub rejected type={} count={}, error={} ({})", i,
+                                     type_id, sub_count, result.error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
+    ITEM_ALGORITHM_LOG_DEBUG_FMT("check_sub pass[{}]: type={} count={} guid={}", i, type_id, sub_count, guid);
   }
 
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("check_sub pass, {} requests checked", checked_request.requests.size());
   return checked_request;
 }
 
-ItemGridOperationResult ItemGridAlgorithm::move(const ItemGridMoveCheckedRequest& checked_request) {
-  if (checked_request.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-    return {checked_request.error_code};
+ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveCheckedRequest& checked_request) {
+  if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("move called with failed checked request, error={} ({})",
+                                 checked_request.result.error_code,
+                                 PROJECT_NAMESPACE_ID::EnErrorCode_Name(checked_request.result.error_code));
+    return {checked_request.result.error_code};
   }
+  if (checked_request.apply) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("move called with apply=true, should not happen");
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  checked_request.apply = true;
 
   ItemGridOperationResult result;
   const auto& request = checked_request.request;
@@ -510,32 +717,38 @@ ItemGridOperationResult ItemGridAlgorithm::move(const ItemGridMoveCheckedRequest
   // 执行所有 Sub 操作
   // ============================================================
   for (const auto& sub_req : request.move_sub_entrys) {
-    int64_t source_count = sub_req.entry->item_instance.item_basic().count();
-    int64_t guid = sub_req.entry->item_instance.item_basic().guid();
-    int32_t type_id = sub_req.entry->item_instance.item_basic().type_id();
+    int64_t source_count = sub_req.entry->item_instance().item_basic().count();
+    int64_t guid = sub_req.entry->item_instance().item_basic().guid();
+    int32_t type_id = sub_req.entry->item_instance().item_basic().type_id();
     bool sub_is_whole = (source_count == sub_req.op_count);
-    auto position_cfg = get_item_position_cfg(checked_request.config_group, sub_req.entry->item_instance.item_basic());
+    auto position_cfg =
+        get_item_position_cfg(checked_request.config_group, sub_req.entry->item_instance().item_basic());
 
     if (sub_is_whole) {
       // 整体移除索引
       remove_entry_index(*position_cfg, sub_req.entry);
       remove_entry_from_group(sub_req.entry);
-      sub_req.entry->item_instance.mutable_item_basic()->set_count(0);
+      sub_req.entry->mutable_item_basic().set_count(0);
       item_count_cache_[type_id] -= source_count;
       if (item_count_cache_[type_id] <= 0) {
         item_count_cache_.erase(type_id);
       }
-      on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count, 0,
-                            get_cached_item_count(type_id), ItemGridOperationReason::kMoveSub);
+      on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count, 0, get_item_count(type_id),
+                            ItemGridOperationReason::kMoveSub);
       on_item_data_changed(sub_req.entry, ItemGridOperationReason::kMoveSub);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("move sub all type={} count={} guid={} entry_id={} from ({},{})", type_id,
+                                   source_count, guid, sub_req.entry->entry_id(), sub_req.position.x,
+                                   sub_req.position.y);
     } else {
       // 部分扣减
-      sub_req.entry->item_instance.mutable_item_basic()->set_count(source_count - sub_req.op_count);
+      sub_req.entry->mutable_item_basic().set_count(source_count - sub_req.op_count);
       item_count_cache_[type_id] -= sub_req.op_count;
       on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count,
                             source_count - sub_req.op_count, item_count_cache_[type_id],
                             ItemGridOperationReason::kMoveSub);
       on_item_data_changed(sub_req.entry, ItemGridOperationReason::kMoveSub);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("move sub partial type={} count={} guid={} entry_id={} remaining={}", type_id,
+                                   sub_req.op_count, guid, sub_req.entry->entry_id(), source_count - sub_req.op_count);
     }
   }
 
@@ -544,42 +757,51 @@ ItemGridOperationResult ItemGridAlgorithm::move(const ItemGridMoveCheckedRequest
   // ============================================================
   for (const auto& add_req : request.move_add_entrys) {
     int32_t type_id = add_req.type_id;
-    auto position_cfg = get_item_position_cfg(checked_request.config_group, add_req.entry->item_instance.item_basic());
+    auto position_cfg =
+        get_item_position_cfg(checked_request.config_group, add_req.entry->item_instance().item_basic());
 
     // 检查目标锚点位置是否有已有条目 (用于堆叠合入)
     auto target_it = position_index_.find(add_req.position);
     if (target_it != position_index_.end()) {
       // 合入已有条目 (堆叠)
       auto& target_entry = target_it->second;
-      int64_t target_old = target_entry->item_instance.item_basic().count();
-      target_entry->item_instance.mutable_item_basic()->set_count(target_old + add_req.op_count);
+      int64_t target_old = target_entry->item_instance().item_basic().count();
+      target_entry->mutable_item_basic().set_count(target_old + add_req.op_count);
       item_count_cache_[type_id] += add_req.op_count;
-      on_item_count_changed(type_id, target_entry, target_entry->item_instance.item_basic().guid(), add_req.position,
+      on_item_count_changed(type_id, target_entry, target_entry->item_instance().item_basic().guid(), add_req.position,
                             target_old, target_old + add_req.op_count, item_count_cache_[type_id],
                             ItemGridOperationReason::kMoveAdd);
       on_item_data_changed(target_entry, ItemGridOperationReason::kMoveAdd);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("move add merge type={} count={} at ({},{}) entry_id={} total={}", type_id,
+                                   add_req.op_count, add_req.position.x, add_req.position.y, target_entry->entry_id(),
+                                   target_old + add_req.op_count);
     } else {
       // 新建条目 (移入): 从 add_entry 复制数据
-      PROJECT_NAMESPACE_ID::DItemInstance new_instance = add_req.entry->item_instance;
+      PROJECT_NAMESPACE_ID::DItemInstance new_instance = add_req.entry->item_instance();
       new_instance.mutable_item_basic()->set_count(add_req.op_count);
       *new_instance.mutable_item_basic()->mutable_position() = add_req.goal_position;
       item_grid_entry_ptr_t new_entry = make_entry(std::move(new_instance));
       item_groups_[type_id].push_back(new_entry);
       add_entry_index(*position_cfg, new_entry);
       item_count_cache_[type_id] += add_req.op_count;
-      on_item_count_changed(type_id, new_entry, new_entry->item_instance.item_basic().guid(), add_req.position, 0,
+      on_item_count_changed(type_id, new_entry, new_entry->item_instance().item_basic().guid(), add_req.position, 0,
                             add_req.op_count, item_count_cache_[type_id], ItemGridOperationReason::kMoveAdd);
       on_item_data_changed(new_entry, ItemGridOperationReason::kMoveAdd);
+      ITEM_ALGORITHM_LOG_DEBUG_FMT("move add new type={} count={} guid={} at ({},{}) entry_id={}", type_id,
+                                   add_req.op_count, new_entry->item_instance().item_basic().guid(), add_req.position.x,
+                                   add_req.position.y, new_entry->entry_id());
     }
   }
 
+  ITEM_ALGORITHM_LOG_INFO_FMT("move success, {} sub ops, {} add ops", request.move_sub_entrys.size(),
+                              request.move_add_entrys.size());
   return result;
 }
 
 bool ItemGridAlgorithm::check_move_request(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    ItemGridMoveRequest& request, ItemGridMoveCheckedRequest& checked_request) const {
-  auto& error_code = checked_request.error_code;
+    ItemGridMoveCheckedRequest& checked_request) const {
+  auto& error_code = checked_request.result.error_code;
 
   // ============================================================
   // 1. 检查 Sub Entry 是否重复, op_count 合法, 填充 Helper 字段
@@ -587,34 +809,56 @@ bool ItemGridAlgorithm::check_move_request(
   std::unordered_set<const ItemGridEntry*> sub_entry_set;
   std::unordered_map<int32_t, int64_t> type_count_delta;
 
-  for (auto& sub_req : request.move_sub_entrys) {
+  for (auto& sub_req : checked_request.request.move_sub_entrys) {
     if (!sub_req.entry || sub_req.op_count <= 0) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: invalid move_sub entry/op_count, error={} ({})", error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
     if (!sub_entry_set.insert(sub_req.entry.get()).second) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;  // entry 重复
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: duplicate move_sub entry_id={}, error={} ({})",
+                                     sub_req.entry->entry_id(), error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
-    const auto& ref_basic = sub_req.entry->item_instance.item_basic();
+    if (!check_item_position(sub_req.entry->item_instance().item_basic().position())) {
+      error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_ERROR_FMT("check_move failed: invalid item position entry_id={}, error={} ({})",
+                                   sub_req.entry->entry_id(), error_code,
+                                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+      return false;
+    }
+
+    const auto& ref_basic = sub_req.entry->item_instance().item_basic();
     int32_t type_id = ref_basic.type_id();
 
     // op_count 不能超过 entry 的 count
     if (sub_req.op_count > ref_basic.count()) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+      ITEM_ALGORITHM_LOG_WARNING_FMT(
+          "check_move failed: move_sub count={} exceeds entry count={} entry_id={}, "
+          "error={} ({})",
+          sub_req.op_count, ref_basic.count(), sub_req.entry->entry_id(), error_code,
+          PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr || !item_type_config->need_occupy_the_grid) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_sub type={} must be grid item, error={} ({})", type_id,
+                                     error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
     auto position_cfg = get_item_position_cfg(config_group, ref_basic);
     if (position_cfg == nullptr) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_sub position cfg not found type={}, error={} ({})",
+                                     type_id, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
@@ -638,28 +882,45 @@ bool ItemGridAlgorithm::check_move_request(
   std::unordered_set<const ItemGridEntry*> add_entry_set;
   std::unordered_set<int64_t> pending_guids;
 
-  for (auto& add_req : request.move_add_entrys) {
+  for (auto& add_req : checked_request.request.move_add_entrys) {
     if (!add_req.entry || add_req.op_count <= 0) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: invalid move_add entry/op_count, error={} ({})", error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
     if (!add_entry_set.insert(add_req.entry.get()).second) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;  // entry 重复
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: duplicate move_add entry_id={}, error={} ({})",
+                                     add_req.entry->entry_id(), error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
-    const auto& ref_basic = add_req.entry->item_instance.item_basic();
+    if (!check_item_position(add_req.goal_position)) {
+      error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_ERROR_FMT("check_move failed: invalid item position entry_id={}, error={} ({})",
+                                   add_req.entry->entry_id(), error_code,
+                                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+      return false;
+    }
+
+    const auto& ref_basic = add_req.entry->item_instance().item_basic();
     int32_t type_id = ref_basic.type_id();
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr || !item_type_config->need_occupy_the_grid) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_add type={} must be grid item, error={} ({})", type_id,
+                                     error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
     auto position_cfg = get_item_position_cfg(config_group, ref_basic);
     if (position_cfg == nullptr) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_add position cfg not found type={}, error={} ({})",
+                                     type_id, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
@@ -685,6 +946,9 @@ bool ItemGridAlgorithm::check_move_request(
     if (is_care_item_size()) {
       if (!is_item_in_range(add_req.position.x, add_req.position.y, add_req.item_row, add_req.item_col)) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OUT_OF_RANGE;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_add position ({},{}) out of range, error={} ({})",
+                                       add_req.position.x, add_req.position.y, error_code,
+                                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return false;
       }
     }
@@ -692,6 +956,9 @@ bool ItemGridAlgorithm::check_move_request(
     // 检查 op_count 不超过 accumulation_limit
     if (add_req.op_count > accumulation_limit) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
+      ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_add count={} exceeds limit={} type={}, error={} ({})",
+                                     add_req.op_count, accumulation_limit, type_id, error_code,
+                                     PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
@@ -702,6 +969,8 @@ bool ItemGridAlgorithm::check_move_request(
       if (guid != 0) {
         if (guid_index_.count(guid) > 0 || !pending_guids.insert(guid).second) {
           error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_DUPLICATE_GUID;
+          ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: duplicate guid={} on move_add, error={} ({})", guid,
+                                         error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
           return false;
         }
       }
@@ -716,10 +985,15 @@ bool ItemGridAlgorithm::check_move_request(
   // ============================================================
   for (const auto& delta_pair : type_count_delta) {
     if (delta_pair.second > 0) {
-      int64_t current_total = get_cached_item_count(delta_pair.first);
+      int64_t current_total = get_item_count(delta_pair.first);
       int32_t limit_ret = on_check_item_count_limit(delta_pair.first, current_total, delta_pair.second);
       if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
         error_code = limit_ret;
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "check_move failed: count limit exceeded type={} current={} add={}, "
+            "error={} ({})",
+            delta_pair.first, current_total, delta_pair.second, error_code,
+            PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return false;
       }
     }
@@ -730,19 +1004,21 @@ bool ItemGridAlgorithm::check_move_request(
 
 ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    ItemGridMoveRequest& request) const {
-  ItemGridMoveCheckedRequest checked_request{config_group, request};
-  auto& error_code = checked_request.error_code;
+    ItemGridMoveRequest&& in_request) const {
+  ItemGridMoveCheckedRequest checked_request{config_group, std::move(in_request)};
+  auto& error_code = checked_request.result.error_code;
 
-  if (request.move_sub_entrys.empty() && request.move_add_entrys.empty()) {
+  if (checked_request.request.move_sub_entrys.empty() && checked_request.request.move_add_entrys.empty()) {
     error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+    ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: empty move request, error={} ({})", error_code,
+                                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
     return checked_request;
   }
 
   // ============================================================
   // Phase 0: 验证入参
   // ============================================================
-  if (!check_move_request(config_group, request, checked_request)) {
+  if (!check_move_request(config_group, checked_request)) {
     return checked_request;
   }
 
@@ -756,8 +1032,8 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
 
   position_set_type removed_anchors;
 
-  for (const auto& op : request.move_sub_entrys) {
-    if (op.entry->item_instance.item_basic().count() > op.op_count) {
+  for (const auto& op : checked_request.request.move_sub_entrys) {
+    if (op.entry->item_instance().item_basic().count() > op.op_count) {
       continue;
     }
 
@@ -787,24 +1063,34 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
   std::unordered_map<ItemGridPosition, PendingNewAnchor, ItemGridPositionHash, ItemGridPositionEqualTo>
       pending_new_anchors;
 
-  for (const auto& op : request.move_add_entrys) {
+  for (const auto& op : checked_request.request.move_add_entrys) {
     // ---- 1. 检查目标锚点是否有未被移走的已有条目 (用于合入) ----
     auto existing_it = position_index_.find(op.position);
     bool has_unmoved_existing = (existing_it != position_index_.end() && removed_anchors.count(op.position) == 0);
 
     if (has_unmoved_existing) {
       // 目标位置有未被移走的已有条目, 只能合入
-      const auto& target_basic = existing_it->second->item_instance.item_basic();
+      const auto& target_basic = existing_it->second->item_instance().item_basic();
 
       if (target_basic.guid() != 0 || target_basic.type_id() != op.type_id) {
         // 目标位置有不同类型或带GUID的条目, 无法合入
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_MOVE_TARGET_OCCUPIED;
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "check_move failed: move target ({},{}) occupied by type={} guid={}, "
+            "error={} ({})",
+            op.position.x, op.position.y, target_basic.type_id(), target_basic.guid(), error_code,
+            PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return checked_request;
       }
 
       int64_t target_total = target_basic.count() + pending_merge_extra[op.position] + op.op_count;
       if (target_total > op.accumulation_limit) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "check_move failed: merge stack overflow at ({},{}), total={} limit={}, "
+            "error={} ({})",
+            op.position.x, op.position.y, target_total, op.accumulation_limit, error_code,
+            PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return checked_request;
       }
       pending_merge_extra[op.position] += op.op_count;
@@ -816,11 +1102,19 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     if (pending_it != pending_new_anchors.end()) {
       if (pending_it->second.has_guid || pending_it->second.type_id != op.type_id) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
+        ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: pending anchor ({},{}) occupied, error={} ({})",
+                                       op.position.x, op.position.y, error_code,
+                                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return checked_request;
       }
       int64_t total = pending_it->second.count + op.op_count;
       if (total > pending_it->second.accumulation_limit) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_STACK_OVERFLOW;
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "check_move failed: pending stack overflow at ({},{}), total={} limit={}, "
+            "error={} ({})",
+            op.position.x, op.position.y, total, pending_it->second.accumulation_limit, error_code,
+            PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
         return checked_request;
       }
       pending_it->second.count = total;
@@ -833,6 +1127,10 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
         for (int32_t dc = 0; dc < op.item_col; ++dc) {
           if (tmp_grid_flag[static_cast<size_t>(op.position.y + dr)][static_cast<size_t>(op.position.x + dc)]) {
             error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
+            ITEM_ALGORITHM_LOG_WARNING_FMT(
+                "check_move failed: area ({},{}) occupied by pending placement, "
+                "error={} ({})",
+                op.position.x, op.position.y, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
             return checked_request;
           }
           tmp_grid_flag[static_cast<size_t>(op.position.y + dr)][static_cast<size_t>(op.position.x + dc)] = true;
@@ -842,20 +1140,16 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
 
     pending_new_anchors[op.position] =
         PendingNewAnchor{op.type_id, static_cast<int64_t>(op.op_count),
-                         op.entry->item_instance.item_basic().guid() != 0, op.accumulation_limit};
+                         op.entry->item_instance().item_basic().guid() != 0, op.accumulation_limit};
   }
 
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("check_move pass, {} sub ops, {} add ops", checked_request.request.move_sub_entrys.size(),
+                               checked_request.request.move_add_entrys.size());
   return checked_request;
 }
 
-// ============================================================
-// Load / Foreach
-// ============================================================
-
 bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                              const PROJECT_NAMESPACE_ID::DItemInstance& item_instance) {
-  constexpr auto kReason = ItemGridOperationReason::kLoad;
-
   const auto& item_basic = item_instance.item_basic();
   int32_t type_id = item_basic.type_id();
   int64_t add_count = item_basic.count();
@@ -863,23 +1157,29 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
 
   // 基础合法性校验
   if (!is_item_valid(config_group, item_basic)) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: invalid item type={} count={} guid={}", type_id, add_count, guid);
     return false;
   }
 
   // GUID 唯一性
   if (guid != 0 && guid_index_.count(guid) > 0) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: duplicate guid={} type={}", guid, type_id);
     return false;
   }
 
   auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
   if (item_type_config == nullptr) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: unknown item type={}", type_id);
     return false;
   }
 
   // 数量上限检查
-  int64_t current_total = get_cached_item_count(type_id);
+  int64_t current_total = get_item_count(type_id);
   int32_t limit_ret = on_check_item_count_limit(type_id, current_total, add_count);
   if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: count limit exceeded type={} current={} add={}, error={} ({})",
+                                   type_id, current_total, add_count, limit_ret,
+                                   PROJECT_NAMESPACE_ID::EnErrorCode_Name(limit_ret));
     return false;
   }
 
@@ -890,12 +1190,14 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
       auto group_it = item_groups_.find(type_id);
       if (group_it != item_groups_.end() && !group_it->second.empty()) {
         auto& existing = group_it->second.front();
-        int64_t old_count = existing->item_instance.item_basic().count();
-        existing->item_instance.mutable_item_basic()->set_count(old_count + add_count);
+        int64_t old_count = existing->item_instance().item_basic().count();
+        existing->mutable_item_basic().set_count(old_count + add_count);
         item_count_cache_[type_id] += add_count;
         on_item_count_changed(type_id, existing, 0, ItemGridPosition{}, old_count, old_count + add_count,
-                              item_count_cache_[type_id], kReason);
-        on_item_data_changed(existing, kReason);
+                              item_count_cache_[type_id], ItemGridOperationReason::kLoad);
+        on_item_data_changed(existing, ItemGridOperationReason::kLoad);
+        ITEM_ALGORITHM_LOG_INFO_FMT("load success: merge ungrid type={} count={} entry_id={} total={}", type_id,
+                                    add_count, existing->entry_id(), old_count + add_count);
         return true;
       }
     }
@@ -908,14 +1210,18 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
       guid_index_[guid] = entry;
     }
     item_count_cache_[type_id] += add_count;
-    on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, item_count_cache_[type_id], kReason);
-    on_item_data_changed(entry, kReason);
+    on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, item_count_cache_[type_id],
+                          ItemGridOperationReason::kLoad);
+    on_item_data_changed(entry, ItemGridOperationReason::kLoad);
+    ITEM_ALGORITHM_LOG_INFO_FMT("load success: new ungrid type={} count={} guid={} entry_id={}", type_id, add_count,
+                                guid, entry->entry_id());
     return true;
   }
 
   // ------ 占格道具 ------
   auto position_cfg = get_item_position_cfg(config_group, item_basic);
   if (position_cfg == nullptr) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: item position cfg not found type={}", type_id);
     return false;
   }
 
@@ -925,17 +1231,21 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
   // 堆叠到已有条目
   auto pos_it = position_index_.find(target_pos);
   if (pos_it != position_index_.end()) {
-    const auto& existing_basic = pos_it->second->item_instance.item_basic();
+    const auto& existing_basic = pos_it->second->item_instance().item_basic();
     if (guid != 0 || existing_basic.guid() != 0 || existing_basic.type_id() != type_id) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: position ({},{}) occupied, error conflict type={} guid={}",
+                                     target_pos.x, target_pos.y, type_id, guid);
       return false;
     }
     auto& existing = pos_it->second;
-    int64_t old_count = existing->item_instance.item_basic().count();
-    existing->item_instance.mutable_item_basic()->set_count(old_count + add_count);
+    int64_t old_count = existing->item_instance().item_basic().count();
+    existing->mutable_item_basic().set_count(old_count + add_count);
     item_count_cache_[type_id] += add_count;
-    on_item_count_changed(type_id, existing, existing->item_instance.item_basic().guid(), target_pos, old_count,
-                          old_count + add_count, item_count_cache_[type_id], kReason);
-    on_item_data_changed(existing, kReason);
+    on_item_count_changed(type_id, existing, existing->item_instance().item_basic().guid(), target_pos, old_count,
+                          old_count + add_count, item_count_cache_[type_id], ItemGridOperationReason::kLoad);
+    on_item_data_changed(existing, ItemGridOperationReason::kLoad);
+    ITEM_ALGORITHM_LOG_INFO_FMT("load success: stack grid type={} count={} at ({},{}) entry_id={} total={}", type_id,
+                                add_count, target_pos.x, target_pos.y, existing->entry_id(), old_count + add_count);
     return true;
   }
 
@@ -944,12 +1254,18 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
     int32_t item_row = position_cfg->row_size();
     int32_t item_col = position_cfg->column_size();
     if (item_row <= 0 || item_col <= 0) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: invalid item size row={} col={} type={}", item_row, item_col,
+                                     type_id);
       return false;
     }
     if (!is_item_in_range(target_pos.x, target_pos.y, item_row, item_col)) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: position ({},{}) out of range type={}", target_pos.x, target_pos.y,
+                                     type_id);
       return false;
     }
     if (check_collision(target_pos.x, target_pos.y, item_row, item_col)) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: position ({},{}) collision type={}", target_pos.x, target_pos.y,
+                                     type_id);
       return false;
     }
   }
@@ -962,9 +1278,12 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
   item_groups_[type_id].push_back(entry);
   add_entry_index(*position_cfg, entry);
   item_count_cache_[type_id] += add_count;
-  on_item_count_changed(type_id, entry, entry->item_instance.item_basic().guid(), target_pos, 0, add_count,
-                        item_count_cache_[type_id], kReason);
-  on_item_data_changed(entry, kReason);
+  on_item_count_changed(type_id, entry, entry->item_instance().item_basic().guid(), target_pos, 0, add_count,
+                        item_count_cache_[type_id], ItemGridOperationReason::kLoad);
+  on_item_data_changed(entry, ItemGridOperationReason::kLoad);
+  ITEM_ALGORITHM_LOG_INFO_FMT("load success: new grid type={} count={} guid={} at ({},{}) entry_id={}", type_id,
+                              add_count, entry->item_instance().item_basic().guid(), target_pos.x, target_pos.y,
+                              entry->entry_id());
   return true;
 }
 
@@ -972,7 +1291,7 @@ void ItemGridAlgorithm::foreach (std::function<bool(const PROJECT_NAMESPACE_ID::
   for (const auto& group_pair : item_groups_) {
     for (const auto& entry : group_pair.second) {
       if (entry) {
-        if (!fn(entry->item_instance)) {
+        if (!fn(entry->item_instance())) {
           return;
         }
       }
@@ -988,31 +1307,25 @@ void ItemGridAlgorithm::apply_entries(
   // Phase 1: 按 entry_id 删除
   // ============================================================
   for (uint64_t remove_id : remove_entry_ids) {
-    // 遍历所有 group 查找匹配 entry_id 的条目
-    item_grid_entry_ptr_t found;
-    for (auto& group_pair : item_groups_) {
-      for (auto& entry : group_pair.second) {
-        if (entry && entry->entry_id == remove_id) {
-          found = entry;
-          break;
-        }
-      }
-      if (found) {
-        break;
-      }
+    auto iter = entry_id_index_.find(remove_id);
+    if (iter == entry_id_index_.end()) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT("apply remove failed: entry_id={} not found", remove_id);
+      continue;
     }
+    item_grid_entry_ptr_t found = iter->second.lock();
     if (!found) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT("apply remove failed: entry_id={} expired", remove_id);
       continue;
     }
 
-    int32_t type_id = found->item_instance.item_basic().type_id();
-    int64_t old_count = found->item_instance.item_basic().count();
-    int64_t guid = found->item_instance.item_basic().guid();
-    ItemGridPosition pos = extract_position(found->item_instance.item_basic().position().grid_position());
+    int32_t type_id = found->item_instance().item_basic().type_id();
+    int64_t old_count = found->item_instance().item_basic().count();
+    int64_t guid = found->item_instance().item_basic().guid();
+    ItemGridPosition pos = extract_position(found->item_instance().item_basic().position().grid_position());
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config && item_type_config->need_occupy_the_grid) {
-      auto position_cfg = get_item_position_cfg(config_group, found->item_instance.item_basic());
+      auto position_cfg = get_item_position_cfg(config_group, found->item_instance().item_basic());
       if (position_cfg) {
         remove_entry_index(*position_cfg, found);
       }
@@ -1023,15 +1336,17 @@ void ItemGridAlgorithm::apply_entries(
     }
 
     remove_entry_from_group(found);
-    found->item_instance.mutable_item_basic()->set_count(0);
+    found->mutable_item_basic().set_count(0);
     item_count_cache_[type_id] -= old_count;
     if (item_count_cache_[type_id] <= 0) {
       item_count_cache_.erase(type_id);
     }
 
-    on_item_count_changed(type_id, found, guid, pos, old_count, 0, get_cached_item_count(type_id),
+    on_item_count_changed(type_id, found, guid, pos, old_count, 0, get_item_count(type_id),
                           ItemGridOperationReason::kApplyRemove);
     on_item_data_changed(found, ItemGridOperationReason::kApplyRemove);
+    ITEM_ALGORITHM_LOG_INFO_FMT("apply remove entry_id={} type={} count={} guid={}", remove_id, type_id, old_count,
+                                guid);
   }
 
   // ============================================================
@@ -1045,52 +1360,50 @@ void ItemGridAlgorithm::apply_entries(
 
     auto item_type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
     if (item_type_config == nullptr) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT("apply update failed: unknown item type={} entry_id={} guid={}", type_id,
+                                   update.entry_id(), guid);
+      continue;
+    }
+
+    if (update.entry_id() == 0) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT("apply update failed: entry_id=0 type={} guid={}", type_id, guid);
       continue;
     }
 
     // 查找已有 entry (按 entry_id)
     item_grid_entry_ptr_t existing;
-    if (update.entry_id() != 0) {
-      for (auto& group_pair : item_groups_) {
-        for (auto& entry : group_pair.second) {
-          if (entry && entry->entry_id == update.entry_id()) {
-            existing = entry;
-            break;
-          }
-        }
-        if (existing) {
-          break;
-        }
-      }
+    auto iter = entry_id_index_.find(update.entry_id());
+    if (iter != entry_id_index_.end()) {
+      existing = iter->second.lock();
     }
 
     if (existing) {
       // --- 更新已有 entry ---
-      int64_t old_count = existing->item_instance.item_basic().count();
-      ItemGridPosition old_pos = extract_position(existing->item_instance.item_basic().position().grid_position());
+      int64_t old_count = existing->item_instance().item_basic().count();
+      ItemGridPosition old_pos = extract_position(existing->item_instance().item_basic().position().grid_position());
       ItemGridPosition new_pos = extract_position(item_basic.position().grid_position());
 
       // 位置变化: 先移除旧索引再添加新索引
       bool position_changed = (old_pos != new_pos);
       if (position_changed && item_type_config->need_occupy_the_grid) {
-        auto position_cfg = get_item_position_cfg(config_group, existing->item_instance.item_basic());
+        auto position_cfg = get_item_position_cfg(config_group, existing->item_instance().item_basic());
         if (position_cfg) {
           remove_entry_index(*position_cfg, existing);
         }
       }
 
       // 覆盖 item_instance
-      existing->item_instance = update.instance();
+      existing->mutable_item_instance() = update.instance();
 
       if (position_changed && item_type_config->need_occupy_the_grid) {
-        auto position_cfg = get_item_position_cfg(config_group, existing->item_instance.item_basic());
+        auto position_cfg = get_item_position_cfg(config_group, existing->item_instance().item_basic());
         if (position_cfg) {
           add_entry_index(*position_cfg, existing);
         }
       }
 
       // GUID 索引刷新
-      int64_t old_guid = existing->item_instance.item_basic().guid();
+      int64_t old_guid = existing->item_instance().item_basic().guid();
       if (old_guid != guid) {
         if (old_guid != 0) guid_index_.erase(old_guid);
         if (guid != 0) guid_index_[guid] = existing;
@@ -1105,15 +1418,19 @@ void ItemGridAlgorithm::apply_entries(
         }
       }
 
-      on_item_count_changed(type_id, existing, guid, new_pos, old_count, new_count, get_cached_item_count(type_id),
+      on_item_count_changed(type_id, existing, guid, new_pos, old_count, new_count, get_item_count(type_id),
                             ItemGridOperationReason::kApplyUpdate);
       on_item_data_changed(existing, ItemGridOperationReason::kApplyUpdate);
+      ITEM_ALGORITHM_LOG_INFO_FMT("apply update entry_id={} type={} count={} guid={}", update.entry_id(), type_id,
+                                  new_count, guid);
     } else {
       // --- 新增 entry ---
-      item_grid_entry_ptr_t new_entry = make_entry(PROJECT_NAMESPACE_ID::DItemInstance(update.instance()));
-      // 如果 update 携带了 entry_id, 强制覆盖 make_entry 分配的值
+      item_grid_entry_ptr_t new_entry;
+      // 如果 update 携带了 entry_id, 直接使用
       if (update.entry_id() != 0) {
-        new_entry->entry_id = update.entry_id();
+        new_entry = make_entry(PROJECT_NAMESPACE_ID::DItemInstance(update.instance()), update.entry_id());
+      } else {
+        new_entry = make_entry(PROJECT_NAMESPACE_ID::DItemInstance(update.instance()));
       }
 
       item_groups_[type_id].push_back(new_entry);
@@ -1132,11 +1449,16 @@ void ItemGridAlgorithm::apply_entries(
       item_count_cache_[type_id] += new_count;
       ItemGridPosition pos = extract_position(item_basic.position().grid_position());
 
-      on_item_count_changed(type_id, new_entry, guid, pos, 0, new_count, get_cached_item_count(type_id),
+      on_item_count_changed(type_id, new_entry, guid, pos, 0, new_count, get_item_count(type_id),
                             ItemGridOperationReason::kApplyUpdate);
       on_item_data_changed(new_entry, ItemGridOperationReason::kApplyUpdate);
+      ITEM_ALGORITHM_LOG_INFO_FMT("apply add entry_id={} type={} count={} guid={}", update.entry_id(), type_id,
+                                  new_count, guid);
     }
   }
+
+  ITEM_ALGORITHM_LOG_INFO_FMT("apply_entries success, {} removed, {} updated/added", remove_entry_ids.size(),
+                              update_entries.size());
 }
 
 // ============================================================
@@ -1147,11 +1469,14 @@ void ItemGridAlgorithm::clear() {
   item_groups_.clear();
   position_index_.clear();
   guid_index_.clear();
+  entry_id_index_.clear();
   item_count_cache_.clear();
 
   for (auto& row : occupy_grid_flag_) {
     std::fill(row.begin(), row.end(), false);
   }
+
+  ITEM_ALGORITHM_LOG_DEBUG("clear grid");
 }
 
 item_grid_entry_ptr_t ItemGridAlgorithm::get(const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
@@ -1188,10 +1513,38 @@ int64_t ItemGridAlgorithm::get_item_count(int32_t type_id) const {
   int64_t total = 0;
   for (const auto& entry : it->second) {
     if (entry) {
-      total += entry->item_instance.item_basic().count();
+      total += entry->item_instance().item_basic().count();
     }
   }
   return total;
+}
+
+int64_t ItemGridAlgorithm::get_cached_item_count(int32_t type_id) const {
+  auto it = item_count_cache_.find(type_id);
+  return (it != item_count_cache_.end()) ? it->second : 0;
+}
+
+// ============================================================
+// 日志接口
+// ============================================================
+
+void ItemGridAlgorithm::set_log_handler(const ItemLogHandler& handler) { log_handler_ = handler; }
+
+const ItemLogHandler& ItemGridAlgorithm::get_log_handler() const { return log_handler_; }
+
+void ItemGridAlgorithm::log(ItemLogLevel level, const char* file_name, int line_number,
+                            const std::string& message) const {
+  if (!log_handler_.on_log) {
+    return;
+  }
+
+  ItemLogRecord record;
+  record.level = level;
+  record.file_name = file_name;
+  record.line_number = line_number;
+  record.category = log_handler_.category;
+  record.message = message;
+  log_handler_.on_log(record);
 }
 
 bool ItemGridAlgorithm::is_empty() const { return item_groups_.empty(); }
@@ -1246,7 +1599,8 @@ void ItemGridAlgorithm::apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& 
       break;
     }
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment: {
-      position.mutable_character_equipment()->set_slot_idx(static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(grid_pos.x));
+      position.mutable_character_equipment()->set_slot_idx(
+          static_cast<PROJECT_NAMESPACE_ID::EnEquipmentSlot>(grid_pos.x));
       break;
     }
     default:
@@ -1281,6 +1635,7 @@ bool ItemGridAlgorithm::find_positions_for_basics(
   for (const auto& basic : basics) {
     auto* item_type_cfg = ItemAlgorithmTypeOption::GetItemType(basic.type_id());
     if (!item_type_cfg) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("find_positions_for_basics failed: unknown item type={}", basic.type_id());
       return false;
     }
 
@@ -1293,6 +1648,8 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     // 获取物品尺寸配置
     auto* pos_cfg = get_item_position_cfg(config_group, basic);
     if (!pos_cfg) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("find_positions_for_basics failed: item position cfg not found type={}",
+                                     basic.type_id());
       return false;
     }
     const int32_t item_rows = is_care_item_size() ? pos_cfg->row_size() : 1;
@@ -1303,8 +1660,7 @@ bool ItemGridAlgorithm::find_positions_for_basics(
       tmp_inst.Clear();
       *tmp_inst.mutable_item_basic() = basic;
       *tmp_inst.mutable_item_basic()->mutable_position()->mutable_grid_position() = cand_pos;
-      ItemGridAddRequest check_req{&tmp_inst};
-      return on_check_add(config_group, check_req) == PROJECT_NAMESPACE_ID::EN_SUCCESS;
+      return on_check_add(config_group, tmp_inst) == PROJECT_NAMESPACE_ID::EN_SUCCESS;
     };
 
     // ---- non-care 模式（装备槽等）：完全委托给子类钩子，不做格子扫描 ----
@@ -1313,6 +1669,10 @@ bool ItemGridAlgorithm::find_positions_for_basics(
       if (on_find_position_for_non_care(config_group, basic, out_pos) && check_pos_ok(out_pos)) {
         out_positions.push_back(std::move(out_pos));
       } else {
+        ITEM_ALGORITHM_LOG_WARNING_FMT(
+            "find_positions_for_basics failed: on_find_position_for_non_care rejected "
+            "type={}",
+            basic.type_id());
         return false;  // 子类无法确定位置
       }
       continue;
@@ -1356,6 +1716,8 @@ bool ItemGridAlgorithm::find_positions_for_basics(
           out_positions.push_back(out_pos);
           mark_reserved(preferred.x, preferred.y);
           placed = true;
+          ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics: preferred type={} at ({},{})", basic.type_id(),
+                                       preferred.x, preferred.y);
         }
       }
     }
@@ -1363,7 +1725,7 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     // 策略 2：堆叠到已有的同类型无GUID条目（堆叠上限>1且剩余容量足够）
     if (!placed && basic.guid() == 0 && pos_cfg->accumulation_limit() > 1) {
       for (const auto& kv : position_index_) {
-        const auto& eb = kv.second->item_instance.item_basic();
+        const auto& eb = kv.second->item_instance().item_basic();
         if (eb.type_id() == basic.type_id() && eb.guid() == 0) {
           int64_t remaining = static_cast<int64_t>(pos_cfg->accumulation_limit()) - eb.count();
           if (remaining >= basic.count()) {
@@ -1372,6 +1734,8 @@ bool ItemGridAlgorithm::find_positions_for_basics(
             if (check_pos_ok(out_pos)) {
               out_positions.push_back(std::move(out_pos));
               placed = true;
+              ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics: stack to existing type={} at ({},{})",
+                                           basic.type_id(), kv.first.x, kv.first.y);
               break;
             }
           }
@@ -1404,6 +1768,7 @@ bool ItemGridAlgorithm::find_positions_for_basics(
               // 更新游标：下次同尺寸物品从此位置继续（该位置已标记，扫描会自然跳过）
               size_scan_cursors[size_key] = {y, x};
               placed = true;
+              ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics: scan type={} at ({},{})", basic.type_id(), x, y);
             }
           }
         }
@@ -1411,11 +1776,28 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     }
 
     if (!placed) {
+      ITEM_ALGORITHM_LOG_WARNING_FMT("find_positions_for_basics failed: no free position for type={} count={}",
+                                     basic.type_id(), basic.count());
       return false;  // 背包已满，无法放置该道具
     }
   }
 
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics pass, {} positions found", out_positions.size());
   return true;
+}
+
+// ============================================================
+// Replace check 辅助 — 默认实现
+// ============================================================
+
+item_grid_algorithm_ptr_t ItemGridAlgorithm::create_empty_clone() const {
+  auto grid = atfw::util::memory::make_strong_rc<ItemGridAlgorithm>();
+  copy_empty_config_to(*grid);
+  return grid;
+}
+
+void ItemGridAlgorithm::copy_empty_config_to(ItemGridAlgorithm& out) const {
+  out.init(row_size_, column_size_, position_type_);
 }
 
 // ============================================================
@@ -1438,13 +1820,13 @@ const PROJECT_NAMESPACE_ID::DItemPositionCfg* ItemGridAlgorithm::get_item_positi
 
 int32_t ItemGridAlgorithm::on_check_add(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& /*config_group*/,
-    const ItemGridAddRequest& /*request*/) const {
+    const PROJECT_NAMESPACE_ID::DItemInstance& /*request*/) const {
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
 int32_t ItemGridAlgorithm::on_check_sub(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& /*config_group*/,
-    const ItemGridSubRequest& /*request*/) const {
+    const PROJECT_NAMESPACE_ID::DItemBasic& /*request*/) const {
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
@@ -1456,8 +1838,7 @@ int32_t ItemGridAlgorithm::on_check_item_count_limit(int32_t /*type_id*/, int64_
 
 bool ItemGridAlgorithm::on_find_position_for_non_care(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& /*config_group*/,
-    const PROJECT_NAMESPACE_ID::DItemBasic& /*basic*/,
-    PROJECT_NAMESPACE_ID::DItemGridPosition& /*out_pos*/) const {
+    const PROJECT_NAMESPACE_ID::DItemBasic& /*basic*/, PROJECT_NAMESPACE_ID::DItemGridPosition& /*out_pos*/) const {
   // 默认无法确定位置, 子类按需覆盖 (如装备槽按 type_id 映射 slot_idx)
   return false;
 }
@@ -1474,30 +1855,26 @@ void ItemGridAlgorithm::on_item_data_changed(const item_grid_entry_ptr_t& /*entr
   // 默认空实现, 子类按需覆盖
 }
 
-int64_t ItemGridAlgorithm::get_cached_item_count(int32_t type_id) const {
-  auto it = item_count_cache_.find(type_id);
-  return (it != item_count_cache_.end()) ? it->second : 0;
+bool ItemGridAlgorithm::check_item_position(const PROJECT_NAMESPACE_ID::DItemPosition& /*position*/) const {
+  return true;  // 默认不检查, 子类按需覆盖
 }
 
-item_grid_entry_ptr_t ItemGridAlgorithm::make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance) const {
-  auto entry = ::excel::excel_config_type_traits::make_shared<ItemGridEntry>(std::move(instance));
-  entry->entry_id = next_entry_id_++;
+item_grid_entry_ptr_t ItemGridAlgorithm::make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance) {
+  auto entry =
+      atfw::util::memory::make_strong_rc<ItemGridEntry>(shared_from_this(), std::move(instance), next_entry_id_++);
+  add_entry_id_index(entry);
+  return entry;
+}
+
+item_grid_entry_ptr_t ItemGridAlgorithm::make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance, uint64_t entry_id) {
+  auto entry = atfw::util::memory::make_strong_rc<ItemGridEntry>(shared_from_this(), std::move(instance), entry_id);
+  add_entry_id_index(entry);
   return entry;
 }
 
 // ============================================================
 // 内部实现
 // ============================================================
-
-bool ItemGridAlgorithm::is_grid_position_valid(const ItemGridPosition& position) const {
-  if (position.x < 0 || position.y < 0) {
-    return false;
-  }
-  if (position.x >= column_size_ || position.y >= row_size_) {
-    return false;
-  }
-  return true;
-}
 
 bool ItemGridAlgorithm::is_item_valid(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
@@ -1612,8 +1989,8 @@ void ItemGridAlgorithm::remove_entry_index(const PROJECT_NAMESPACE_ID::DItemPosi
     return;
   }
 
-  ItemGridPosition pos = extract_position(entry->item_instance.item_basic().position().grid_position());
-  auto item_type_config = ItemAlgorithmTypeOption::GetItemType(entry->item_instance.item_basic().type_id());
+  ItemGridPosition pos = extract_position(entry->item_instance().item_basic().position().grid_position());
+  auto item_type_config = ItemAlgorithmTypeOption::GetItemType(entry->item_instance().item_basic().type_id());
   if (item_type_config && item_type_config->need_occupy_the_grid) {
     position_index_.erase(pos);
   }
@@ -1624,7 +2001,7 @@ void ItemGridAlgorithm::remove_entry_index(const PROJECT_NAMESPACE_ID::DItemPosi
     set_grid_flag(pos.x, pos.y, item_row, item_col, false);
   }
 
-  int64_t guid = entry->item_instance.item_basic().guid();
+  int64_t guid = entry->item_instance().item_basic().guid();
   if (guid != 0) {
     guid_index_.erase(guid);
   }
@@ -1635,7 +2012,7 @@ void ItemGridAlgorithm::remove_entry_from_group(const item_grid_entry_ptr_t& ent
     return;
   }
 
-  int32_t type_id = entry->item_instance.item_basic().type_id();
+  int32_t type_id = entry->item_instance().item_basic().type_id();
   auto group_it = item_groups_.find(type_id);
   if (group_it != item_groups_.end()) {
     group_it->second.remove(entry);
@@ -1651,7 +2028,7 @@ void ItemGridAlgorithm::add_entry_index(const PROJECT_NAMESPACE_ID::DItemPositio
     return;
   }
 
-  ItemGridPosition pos = extract_position(entry->item_instance.item_basic().position().grid_position());
+  ItemGridPosition pos = extract_position(entry->item_instance().item_basic().position().grid_position());
   position_index_[pos] = entry;
 
   if (is_care_item_size()) {
@@ -1660,11 +2037,28 @@ void ItemGridAlgorithm::add_entry_index(const PROJECT_NAMESPACE_ID::DItemPositio
     set_grid_flag(pos.x, pos.y, item_row, item_col, true);
   }
 
-  int64_t guid = entry->item_instance.item_basic().guid();
+  int64_t guid = entry->item_instance().item_basic().guid();
   if (guid != 0) {
     guid_index_[guid] = entry;
   }
 }
+
+item_grid_entry_ptr_t ItemGridAlgorithm::find_entry_by_id(uint64_t entry_id) const {
+  auto it = entry_id_index_.find(entry_id);
+  if (it != entry_id_index_.end()) {
+    return it->second.lock();
+  }
+  return nullptr;
+}
+
+void ItemGridAlgorithm::add_entry_id_index(const item_grid_entry_ptr_t& entry) {
+  if (!entry) {
+    return;
+  }
+  entry_id_index_[entry->entry_id()] = entry;
+}
+
+void ItemGridAlgorithm::remove_entry_id_index(uint64_t entry_id) { entry_id_index_.erase(entry_id); }
 
 }  // namespace item_algorithm
 
