@@ -193,7 +193,16 @@ message DTeamJoinRequest {
   map<int32, DTeamAnyData> member_admission_data = 14;
 }
 
-message DTeamConfigure {}
+message DTeamConfigure {
+  // 各项管理操作要求的最低成员角色，保持 GUEST(0) 时使用字段注释中的默认值。
+  // destroy_team 与无条件修改队长(election_captain)固定要求 EN_TEAM_MEMBER_ROLE_OWNER，不可配置。
+  // 所有成员都可以删除自己(视为主动退出)和 member_update 自己的数据；
+  // 所有人(包括游客)都可以同意或否决发给自己的邀请，也都可以发起加入请求。
+  EnTeamPermissionRole manage_member_role = 1;         // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
+  EnTeamPermissionRole approve_join_request_role = 2;  // 同意/拒绝其他玩家的加入请求，默认 NORMAL
+  EnTeamPermissionRole invite_role = 3;                // 发起邀请，默认 NORMAL
+  EnTeamPermissionRole update_team_data_role = 4;      // 更新队伍共享数据(team_update)，默认 NORMAL
+}
 
 message DTeamStorage {
   DTeamKey team_key = 1;

@@ -95,6 +95,13 @@ message SSTeamRoomApproveInvitationReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   atframework.shared.DUserIDKey invitee = 3;
+
+  string client_version = 6;
+  uint64 user_router_server_id = 7;
+
+  // 共享的成员数据，通常是阵容信息、状态信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> shared_member_data = 13;
 }
 
 message SSTeamRoomApproveInvitationRsp {

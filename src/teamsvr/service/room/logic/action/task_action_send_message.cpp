@@ -77,9 +77,11 @@ task_action_send_message::result_type task_action_send_message::operator()() {
 
   auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
   if (0 == ret) {
-    if (req_body.has_action()) {
-      ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
-    }
+    // 权限校验: 没权限直接返回错误，不提交 DTeamAction 到房间频道
+    ret = RPC_AWAIT_CODE_RESULT(room->check_action_permission(req_body.sender_user_key(), req_body.action()));
+  }
+  if (0 == ret) {
+    ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
   }
 
   rsp_body.set_client_result(ret);

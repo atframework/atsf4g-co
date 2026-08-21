@@ -164,6 +164,10 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_join_request(
       rpc::context& ctx, const atfw::team::SSTeamRoomRejectJoinRequestReq& req);
 
+  // 校验外部请求的操作权限(成员身份与角色门槛，见 DTeamConfigure)，通过返回 0，否则返回错误码且不提交频道事件
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_action_permission(
+      const PROJECT_NAMESPACE_ID::DUserIDKey& operator_key, const atfw::team::DTeamAction& action);
+
   // 提交组队操作(协程内调用)，来自外部服务的写请求统一经由此处写入频道日志
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
                                                                  const atfw::team::DTeamAction& action,
@@ -201,12 +205,23 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 从订阅数据恢复队伍快照(custom_data + 增量日志 + private_data)
   void restore_snapshot(rpc::context& ctx);
   // 应用频道事件到本地状态，所有应用操作必须幂等
-  void apply_action(rpc::context& ctx, const atfw::team::DTeamAction& action, int64_t sequence, uint64_t hash_code,
+  void apply_action(rpc::context& ctx, atfw::team::DTeamAction& action, int64_t sequence, uint64_t hash_code,
                     std::chrono::system_clock::time_point event_timepoint);
   void apply_event_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& message);
   void update_acknowledge(int64_t sequence, uint64_t hash_code);
-  // 应用成员入队(幂等): 已存在的成员保留其 key 与更早的入队时间，首位成员成为队长
-  void apply_add_member(const atfw::team::DTeamMember& member_data);
+  // 应用成员入队(幂等): 已存在的成员保留其 key 与更早的入队时间，首位成员成为队长。
+  // 入队/心跳时间缺失时以 event_timepoint(频道事件创建时间)兜底，保证各节点状态一致
+  void apply_add_member(atfw::team::DTeamMember&& member_data, std::chrono::system_clock::time_point event_timepoint);
+
+  // apply_action 的各事件分支处理(拆分为独立函数以降低单个函数复杂度)
+  void apply_member_update(const atfw::team::DTeamMemberUpdateData& update_data);
+  void apply_team_update(const atfw::team::DTeamUpdateData& update_data);
+  void apply_add_invitation(const atfw::team::DTeamInvitation& invitation);
+  void apply_approve_invitation(const atfw::team::DTeamInvitation& invitation);
+  void apply_reject_invitation(const atfw::team::DTeamInvitation& invitation);
+  void apply_add_join_request(const atfw::team::DTeamJoinRequest& join_request);
+  void apply_approve_join_request(const atfw::team::DTeamJoinRequest& join_request);
+  void apply_reject_join_request(const atfw::team::DTeamJoinRequest& join_request);
 
   member_ptr_t mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
@@ -266,8 +281,18 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   int64_t get_gc_log_count() const;
   // 按时间维度压缩时保留的日志时长，缺省取开始压缩时长的一半
   std::chrono::system_clock::duration get_compact_log_keep_time() const;
-  // 从本地缓存刷新最早的未压缩日志时间点(用于按时间维度压缩的调度与触发)
+  // 从本地缓存刷新最早的未压缩日志时间点(用于按时间维度压缩的调度与触发)。
+  // sequence 只保证递增不保证连续，用 query_cached_message 二分查找第一条不早于压缩点的日志
   void refresh_oldest_log_timepoint(rpc::context& ctx);
+  // 计算本次维护的日志压缩点(0 表示不可压缩)。每次 send_update 都会尝试压缩以减少快照数据量:
+  // 保留最近若干条日志(keep_percent/keep_count)，且保留 compact_log_keep_time 窗口内的日志
+  int64_t pick_compact_sequence(rpc::context& ctx, std::chrono::system_clock::time_point now);
+
+  // 操作角色门槛(DTeamConfigure 可配置，GUEST 表示使用默认值)
+  atfw::team::EnTeamPermissionRole get_manage_member_role() const;         // 默认 ADMIN
+  atfw::team::EnTeamPermissionRole get_approve_join_request_role() const;  // 默认 NORMAL
+  atfw::team::EnTeamPermissionRole get_invite_role() const;                // 默认 NORMAL
+  atfw::team::EnTeamPermissionRole get_update_team_data_role() const;      // 默认 NORMAL
 
  private:
   int64_t team_id_;
@@ -306,6 +331,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   std::chrono::system_clock::time_point oldest_log_timepoint_;
   int64_t last_compact_sequence_ = 0;
   std::chrono::system_clock::time_point last_compact_timepoint_;
+  // 压缩加速触发冷却: 上次因数量/时间加速触发执行的维护未能推进压缩点(受保留策略限制)时避免定时器空转
+  std::chrono::system_clock::time_point compact_trigger_cooldown_until_;
   task_type_trait::task_type maintenance_task_;
   // 本房间在 manager 时间轮上的唯一定时器
   timer_watcher_t timer_watcher_;
