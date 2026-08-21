@@ -364,14 +364,15 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
   }
 
+  // 先占位再让出协程，避免并发的 create_team 在 acquire_lock 挂起期间同时通过检查而重复创建
+  team_created_ = true;
   if (!lock_acquired_) {
     auto lock_ret = RPC_AWAIT_CODE_RESULT(acquire_lock(ctx));
     if (lock_ret != 0) {
+      team_created_ = false;
       RPC_RETURN_CODE(lock_ret);
     }
   }
-
-  team_created_ = true;
   auto now = atfw::util::time::time_utility::now();
   auto public_data = rpc::make_shared_message<atfw::team::DTeamStorage>(ctx);
   auto private_data = rpc::make_shared_message<atfw::team::DTeamRoomPrivateData>(ctx);
@@ -587,6 +588,10 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
   }
   if (find_member(requester, false)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ALREADY_IN_TEAM);
+  }
+  // 队伍不存在(从未创建)时直接拒绝，避免给不存在的队伍写入加入请求
+  if (!team_created_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND);
   }
   // 默认所有非成员都可以发起加入请求，可配置为禁止外部人员申请(私人小队，仅邀请加入)
   if (!is_join_request_allowed()) {
@@ -1282,7 +1287,7 @@ std::chrono::system_clock::time_point team_room::get_member_offline_deadline(con
     baseline = member_baseline;
   }
 
-  if (member_data.last_heartbeat_timepoint > member_baseline) {
+  if (member_data.last_heartbeat_timepoint > baseline) {
     baseline = member_data.last_heartbeat_timepoint;
   }
 
