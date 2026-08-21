@@ -59,6 +59,7 @@ int32_t team_room_manager::tick(rpc::context& ctx) {
 void team_room_manager::clear() {
   std::unordered_map<int64_t, room_ptr_t> rooms;
   rooms.swap(rooms_);
+  pending_flush_rooms_.clear();
   for (auto& pair : rooms) {
     if (pair.second) {
       pair.second->on_remove();
@@ -104,6 +105,7 @@ void team_room_manager::remove_room(int64_t team_id, const team_room* expected) 
   }
 
   rooms_.erase(iter);
+  pending_flush_rooms_.erase(team_id);
 
   if (room) {
     // 移除房间必须移除相关的定时器
@@ -180,3 +182,34 @@ void team_room_manager::remove_room_timer(team_room& room) {
 }
 
 size_t team_room_manager::get_room_count() const noexcept { return rooms_.size(); }
+
+void team_room_manager::mark_room_pending_flush(team_room& room) {
+  // 房间可能已被回收，仅注册 manager 仍持有的房间
+  auto iter = rooms_.find(room.get_team_id());
+  if (iter == rooms_.end() || iter->second.get() != &room) {
+    return;
+  }
+  pending_flush_rooms_[room.get_team_id()] = iter->second;
+}
+
+void team_room_manager::unmark_room_pending_flush(team_room& room) {
+  auto iter = pending_flush_rooms_.find(room.get_team_id());
+  if (iter != pending_flush_rooms_.end() && iter->second.get() == &room) {
+    pending_flush_rooms_.erase(iter);
+  }
+}
+
+rpc::result_code_type team_room_manager::flush_pending_channel_message(rpc::context& ctx) {
+  if (pending_flush_rooms_.empty()) {
+    RPC_RETURN_CODE(0);
+  }
+
+  std::unordered_map<int64_t, room_ptr_t> pending_rooms;
+  pending_rooms.swap(pending_flush_rooms_);
+  for (auto& pair : pending_rooms) {
+    if (pair.second) {
+      RPC_AWAIT_IGNORE_RESULT(pair.second->flush_pending_channel_message(ctx));
+    }
+  }
+  RPC_RETURN_CODE(0);
+}

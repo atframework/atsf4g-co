@@ -29,6 +29,8 @@
 
 #include <utility>
 
+#include "logic/room/team_room_manager.h"
+
 TEAM_SERVICE_ROOM_API task_action_channel_event_sync::task_action_channel_event_sync(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
@@ -49,6 +51,9 @@ TEAM_SERVICE_ROOM_API task_action_channel_event_sync::result_type task_action_ch
     FCTXLOGERROR(get_shared_context(), "global_receive_channel_event failed: {}({})", result,
                  protobuf_mini_dumper_get_error_msg(result));
   }
+
+  // 一组频道事件应用完后，把有变化的房间累积的待发送成员频道消息发出
+  RPC_AWAIT_IGNORE_RESULT(team_room_manager::me()->flush_pending_channel_message(get_shared_context()));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -273,7 +273,7 @@ rpc::result_code_type team_room::heartbeat(rpc::context& ctx, const atfw::team::
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND);
   }
 
-  // 更新成员确认位点(随 custom_data 下发，用于成员侧补差量)
+  // 更新成员已确认的日志序号(随 custom_data 下发，用于成员侧补差量)
   if (req.sequence() > member->member_data.acknowledge_action_sequence()) {
     member->member_data.set_acknowledge_action_sequence(req.sequence());
     member->member_data.set_acknowledge_action_hash_code(req.hash_code());
@@ -545,6 +545,18 @@ void team_room::apply_action(rpc::context& ctx, const atfw::team::DTeamAction& a
       }
       break;
     }
+    case atfw::team::DTeamAction::kTeamUpdate: {
+      const auto& update_data = action.team_update();
+      if (update_data.has_configure()) {
+        protobuf_copy_message(*storage_.mutable_configure(), update_data.configure());
+      }
+
+      for (const auto& kv : update_data.shared_team_data()) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+        protobuf_copy_message((*storage_.mutable_shared_team_data())[kv.first], kv.second);
+      }
+      break;
+    }
     case atfw::team::DTeamAction::kElectionCaptain: {
       change_captain(action.election_captain().user_key());
       break;
@@ -601,7 +613,7 @@ void team_room::refresh_empty_tracking(std::chrono::system_clock::time_point now
 }
 
 team_room::member_ptr_t team_room::mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
-  // mutable接口总是由有效的成员调用，若所以总是可以刷新LRU的最近访问时间
+  // mutable接口总是由有效的成员调用，所以总是可以刷新LRU的最近访问时间
   member_ptr_t ret = find_member(user_key, true);
   if (ret) {
     return ret;
@@ -642,7 +654,7 @@ team_room::member_ptr_t team_room::find_member(const PROJECT_NAMESPACE_ID::DUser
   return *iter->second;
 }
 
-bool team_room::remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+bool team_room::remove_member(rpc::context& /*ctx*/, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                               atfw::team::EnTeamExitReason reason, bool with_notify) {
   auto iter = member_.find(user_key, false);
   if (iter == member_.end()) {
@@ -670,13 +682,13 @@ bool team_room::remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUs
   // 主动通知私有频道
   if (with_notify && member_ptr && member_ptr->member_data.user_channel().channel_type() != 0 &&
       !member_ptr->member_data.user_channel().channel_id().empty()) {
-    auto& pending_channel = pending_member_channel_actions_[member_ptr->member_data.user_key()];
-    pending_channel.emplace_back();
-    pending_team_member_message_t& msg = pending_channel.back();
-    protobuf_copy_message(msg.first, member_ptr->member_data.user_channel());
-    rpc::context::message_holder<atfw::team::DTeamMemberAction> action{ctx};
-    *msg.second.mutable_remove_member()->mutable_user_key() = member_ptr->member_data.user_key();
-    msg.second.mutable_remove_member()->set_remove_member_reason(reason);
+    atfw::dtmq::DChannelIdKey channel_id = member_ptr->member_data.user_channel();
+    atfw::team::DTeamMemberAction action;
+    *action.mutable_remove_member()->mutable_user_key() = member_ptr->member_data.user_key();
+    action.mutable_remove_member()->set_remove_member_reason(reason);
+
+    append_team_member_channel_notification(member_ptr->member_data.user_key(), std::move(channel_id),
+                                            std::move(action));
   }
   return true;
 }
@@ -722,6 +734,26 @@ void team_room::foreach_member(
       schedule_next_timer();
     }
   }
+}
+
+void team_room::append_team_member_channel_notification(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                                        atfw::dtmq::DChannelIdKey&& channel_id,
+                                                        atfw::team::DTeamMemberAction&& action) {
+  if (channel_id.channel_type() == 0 || channel_id.channel_id().empty()) {
+    return;
+  }
+
+  if (user_key.zone_id() == 0 || user_key.user_id() == 0) {
+    return;
+  }
+
+  // 队列由空变为非空时注册到 manager，由一组事件处理完后统一发送
+  if (pending_member_channel_actions_.empty()) {
+    team_room_manager::me()->mark_room_pending_flush(*this);
+  }
+
+  auto& pending_channel = pending_member_channel_actions_[user_key];
+  pending_channel.emplace_back(std::move(channel_id), std::move(action));
 }
 
 std::chrono::system_clock::duration team_room::get_lock_lease() const {
@@ -963,7 +995,7 @@ void team_room::on_timer(rpc::context& ctx) {
   }
 
   if (!task_type_trait::empty(maintenance_task_) && !task_type_trait::is_exiting(maintenance_task_)) {
-    // 上一次定时 action 仍在执行，出现荣誉定时器，直接忽略即可
+    // 上一次定时 action 仍在执行，本次是冗余的定时器触发，直接忽略即可
     return;
   }
 
@@ -1304,6 +1336,9 @@ void team_room::change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_capta
 }
 
 rpc::result_code_type team_room::flush_pending_channel_message(rpc::context& ctx) {
+  // 队列即将被清空(或本已为空)，从 manager 注册表注销，避免遗留无意义记录
+  team_room_manager::me()->unmark_room_pending_flush(*this);
+
   if (pending_member_channel_actions_.empty()) {
     RPC_RETURN_CODE(0);
   }

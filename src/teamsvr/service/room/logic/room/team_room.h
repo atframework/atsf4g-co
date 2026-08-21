@@ -133,7 +133,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_member_action(rpc::context& ctx,
                                                                         const atfw::dtmq::DChannelIdKey& channel_key,
                                                                         const atfw::team::DTeamMemberAction& action);
-  // 成员心跳，更新成员确认位点和在线簿记(协程内调用)
+  // 成员心跳，更新成员已确认的日志序号和在线状态记录(协程内调用)
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type heartbeat(rpc::context& ctx,
                                                                const atfw::team::SSTeamRoomHeartbeatReq& req);
 
@@ -171,9 +171,13 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
                      atfw::team::EnTeamExitReason reason, bool with_notify);
   void foreach_member(atfw::util::nostd::function_ref<bool(atfw::util::nostd::nonnull<const member_ptr_t>&)> fn);
 
+  void append_team_member_channel_notification(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                               atfw::dtmq::DChannelIdKey&& channel_id,
+                                               atfw::team::DTeamMemberAction&& action);
+
   // 队长退出后在剩余成员中确定性地选出新队长(加入时间最早者)
   void elect_captain_after_remove();
-  // 成员离线过期时间点(无心跳簿记时回退到入队时间/快照恢复时间)
+  // 成员离线过期时间点(无心跳记录时回退到入队时间/快照恢复时间)
   std::chrono::system_clock::time_point get_member_offline_deadline(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   // 成员清单变为空/非空时刷新空房间计时
   void refresh_empty_tracking(std::chrono::system_clock::time_point now);
@@ -225,7 +229,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
   atfw::team::DTeamStorage storage_;
   std::unordered_map<int32_t, atfw::team::DTeamAnyData> private_team_data_;
-  // 成员心跳等在线簿记(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
+  // 成员心跳等在线状态记录(LRU 维护最近访问成员)，随 private_data 仅在主控节点间同步，不下发给成员
   member_runtime_lru_map_t member_;
   struct iterating_member_protect_t;
   iterating_member_protect_t* iterating_member_protect_ = nullptr;

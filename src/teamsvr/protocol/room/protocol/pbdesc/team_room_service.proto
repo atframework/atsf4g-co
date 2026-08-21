@@ -77,6 +77,7 @@ message DTeamRoomPrivateData {
 
 message SSTeamRoomAddInvitationReq {
   DTeamInvitation invitation = 1;
+  atframework.shared.DUserIDKey sender_user_key = 2;
 }
 
 message SSTeamRoomAddInvitationRsp {
@@ -85,7 +86,8 @@ message SSTeamRoomAddInvitationRsp {
 
 message SSTeamRoomApproveInvitationReq {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey invitee = 2;
+  atframework.shared.DUserIDKey sender_user_key = 2;
+  atframework.shared.DUserIDKey invitee = 3;
 }
 
 message SSTeamRoomApproveInvitationRsp {
@@ -94,7 +96,8 @@ message SSTeamRoomApproveInvitationRsp {
 
 message SSTeamRoomRejectInvitationReq {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey invitee = 2;
+  atframework.shared.DUserIDKey sender_user_key = 2;
+  atframework.shared.DUserIDKey invitee = 3;
 }
 
 message SSTeamRoomRejectInvitationRsp {
@@ -103,6 +106,7 @@ message SSTeamRoomRejectInvitationRsp {
 
 message SSTeamRoomAddJoinRequestReq {
   DTeamJoinRequest join_request = 1;
+  atframework.shared.DUserIDKey sender_user_key = 2;
 }
 
 message SSTeamRoomAddJoinRequestRsp {
@@ -111,7 +115,8 @@ message SSTeamRoomAddJoinRequestRsp {
 
 message SSTeamRoomApproveJoinRequestReq {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey applicant = 2;
+  atframework.shared.DUserIDKey sender_user_key = 2;
+  atframework.shared.DUserIDKey applicant = 3;
 }
 
 message SSTeamRoomApproveJoinRequestRsp {
@@ -120,7 +125,8 @@ message SSTeamRoomApproveJoinRequestRsp {
 
 message SSTeamRoomRejectJoinRequestReq {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey applicant = 2;
+  atframework.shared.DUserIDKey sender_user_key = 2;
+  atframework.shared.DUserIDKey applicant = 3;
 }
 
 message SSTeamRoomRejectJoinRequestRsp {

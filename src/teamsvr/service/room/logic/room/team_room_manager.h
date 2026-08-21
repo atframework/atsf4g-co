@@ -46,10 +46,19 @@ class team_room_manager : public util::design_pattern::singleton<team_room_manag
   // 移除房间的定时器(房间销毁回收前调用)
   void remove_room_timer(team_room& room);
 
+  // 房间有待发送的成员频道消息时注册进来，一组事件处理完后由 flush_pending_channel_message 统一发送
+  void mark_room_pending_flush(team_room& room);
+  // 房间队列已被自身 flush 清空后注销，避免注册表遗留无意义记录
+  void unmark_room_pending_flush(team_room& room);
+  // 仅对注册过的(有变化的)房间发送待发的成员频道消息，发送后清空注册表
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type flush_pending_channel_message(rpc::context& ctx);
+
   size_t get_room_count() const noexcept;
 
  private:
   std::unordered_map<int64_t, room_ptr_t> rooms_;
+  // 有待发送成员频道消息的房间注册表(避免 flush 时全量扫描所有房间)
+  std::unordered_map<int64_t, room_ptr_t> pending_flush_rooms_;
   timer_set_type timer_set_;
   bool timer_running_ = false;
 };

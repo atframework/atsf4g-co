@@ -43,14 +43,56 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API const char* task_action_add_join_request::n
 
 ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_add_join_request::result_type
 task_action_add_join_request::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
-  // rpc_response_type& rsp_body = get_response_body();
+  const rpc_request_type& req_body = get_request_body();
+  rpc_response_type& rsp_body = get_response_body();
   if (is_stream_rpc()) {
     disable_response_message();
   }
 
-  // TODO ...
+  if (!req_body.has_join_request()) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
 
+  // 按队伍一致性哈希路由到 teamsvr-room 节点，不在本节点则转发
+  uint64_t dest_server_id = rpc::team::team_api::get_teamsvr_room_server_id_of_zone(
+      req_body.join_request().requester().zone_id(), req_body.join_request().team_key().team_id());
+  if (0 == dest_server_id) {
+    FCTXLOGERROR(get_shared_context(), "no ready teamsvr-room node for team {}",
+                 req_body.join_request().team_key().team_id());
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+  if (dest_server_id != logic_config::me()->get_local_server_id()) {
+    bool forward_ok = false;
+    auto forward_ret = RPC_AWAIT_CODE_RESULT(forward_rpc(dest_server_id, false, forward_ok));
+    if (0 != forward_ret || !forward_ok) {
+      FCTXLOGERROR(get_shared_context(), "forward team {} add_join_request to dest server {} failed! ret:{} ok:{}",
+                   req_body.join_request().team_key().team_id(), dest_server_id, forward_ret, forward_ok ? 1 : 0);
+      set_response_code(0 != forward_ret ? forward_ret : PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+    }
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // 本节点处理: 查找或创建房间(订阅频道并接管乐观锁)
+  auto room =
+      team_room_manager::me()->mutable_room(get_shared_context(), req_body.join_request().team_key().team_id());
+  if (!room) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  auto ret = RPC_AWAIT_CODE_RESULT(room->await_ready(get_shared_context()));
+  if (0 == ret) {
+    // TODO: 添加加入请求(校验队伍状态与重复申请，写入频道事件并通知队长) ...
+  }
+
+  rsp_body.set_client_result(ret);
+  if (ret < 0) {
+    set_response_code(ret);
+  }
+
+  RPC_AWAIT_IGNORE_RESULT(room->flush_pending_channel_message(get_shared_context()));
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

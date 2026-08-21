@@ -87,9 +87,9 @@ message DTeamKey {
 
 enum EnTeamPermissionRole {
   EN_TEAM_MEMBER_ROLE_GUEST = 0;
-  EN_TEAM_MEMBER_ROLE_NORMAL = 1;
-  EN_TEAM_MEMBER_ROLE_OWNER = 2;
-  EN_TEAM_MEMBER_ROLE_ADMIN = 3;
+  EN_TEAM_MEMBER_ROLE_NORMAL = 100;
+  EN_TEAM_MEMBER_ROLE_ADMIN = 200;
+  EN_TEAM_MEMBER_ROLE_OWNER = 300;
 }
 
 message DTeamMember {
@@ -211,14 +211,26 @@ message DTeamStorage {
   map<int32, DTeamAnyData> shared_team_data = 14;
 }
 
+message DTeamUpdateData {
+  DTeamConfigure configure = 3;
+
+  // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  map<int32, DTeamAnyData> shared_team_data = 14;
+}
+
 message DTeamAction {
   oneof action {
-    DTeamKey destroy_team = 1;  // 有这个消息或者订阅失败则视为小队已解散
+    // 有这个消息或者订阅失败则视为小队已解散
+    DTeamKey destroy_team = 1;
     DTeamMember add_member = 2;
     DTeamMember remove_member = 3;
     // 队员更新共享数据(准备、取消准备、变更角色、变更装备等都可以通过修改内部 shared_member_data 来实现)
     DTeamMemberUpdateData member_update = 4;
-    DTeamMember election_captain = 5;  // 重新选出的队长
+    // 重新竞选队长
+    DTeamMember election_captain = 5;
+    // 更新队伍数据
+    DTeamUpdateData team_update = 6;
 
     DTeamInvitation add_invitation = 21;
     DTeamInvitation approve_invitation = 22;
