@@ -10,15 +10,19 @@ import (
 	user_data "github.com/atframework/robot-go/data"
 )
 
-func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType, levelId int32, region string, selectType public_protocol_pbdesc.EnMatchSelectSvrType) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
+func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType, preferredLevelId int32,
+	levelIds []int32, region string, selectType public_protocol_pbdesc.EnMatchSelectSvrType,
+	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
 	csBody := &public_protocol_pbdesc.CSMatchingStartReq{
 		LevelSelect: &public_protocol_pbdesc.DLevelSelect{
 			LevelType: levelType,
-			LevelId:   levelId,
+			LevelId:   preferredLevelId,
+			LevelIds:  levelIds,
 			Region:    region,
 		},
-		SelectType: selectType,
-		BattleVersion: "0.0.0.1",
+		SelectType:        selectType,
+		BattleVersion:     "0.0.0.1",
+		FactionFillPolicy: factionFillPolicy,
 	}
 	return lobbysvr_rpc_handle.SendMatchingStart(action, user, csBody, true)
 }
@@ -84,23 +88,33 @@ func MatchingStatusFromUser(user user_data.User) public_protocol_pbdesc.EnMatchi
 	return status
 }
 
-func SaveMatchingSnapshot(user user_data.User, matchingId string, unitId uint64, snapshot *public_protocol_pbdesc.DMatchingRoomSnapshot) {
+func MatchingFactionIdFromUser(user user_data.User) int32 {
+	factionId, _ := user.GetExtralData("MatchingFactionId").(int32)
+	return factionId
+}
+
+func SaveMatchingSnapshot(user user_data.User, matchingId string, unitId uint64, view *public_protocol_pbdesc.DMatchingPlayerView) {
 	if matchingId != "" {
 		user.SetExtralData("MatchingId", matchingId)
 	}
 	if unitId != 0 {
 		user.SetExtralData("UnitId", unitId)
 	}
-	if snapshot == nil {
+	if view == nil {
 		return
 	}
-	if snapshot.GetMatchingId() != "" {
-		user.SetExtralData("MatchingId", snapshot.GetMatchingId())
+	if view.GetMatchingId() != "" {
+		user.SetExtralData("MatchingId", view.GetMatchingId())
 	}
-	user.SetExtralData("AcknowledgeEventId", snapshot.GetLastEventId())
-	user.SetExtralData("MatchingStatus", snapshot.GetStatus())
-	user.Log("matching snapshot: matching_id=%s status=%s last_event_id=%d units=%d",
-		snapshot.GetMatchingId(), snapshot.GetStatus().String(), snapshot.GetLastEventId(), len(snapshot.GetUnits()))
+	if view.GetUnit().GetUnitId() != 0 {
+		user.SetExtralData("UnitId", view.GetUnit().GetUnitId())
+	}
+	user.SetExtralData("AcknowledgeEventId", view.GetLastEventId())
+	user.SetExtralData("MatchingStatus", view.GetStatus())
+	user.SetExtralData("MatchingFactionId", view.GetFactionId())
+	user.Log("matching view: matching_id=%s status=%s last_event_id=%d unit_id=%d faction_id=%d",
+		view.GetMatchingId(), view.GetStatus().String(), view.GetLastEventId(), view.GetUnit().GetUnitId(),
+		view.GetFactionId())
 }
 
 func RegisterMatchingLogSyncHandler(user user_data.User) {
@@ -108,7 +122,7 @@ func RegisterMatchingLogSyncHandler(user user_data.User) {
 		if errCode < 0 {
 			return fmt.Errorf("matching log sync failed, errCode: %d", errCode)
 		}
-		SaveMatchingSnapshot(action.User, msg.GetMatchingId(), 0, msg.GetSnapshot())
+		SaveMatchingSnapshot(action.User, msg.GetMatchingId(), 0, msg.GetView())
 		for _, event := range msg.GetEventLogs() {
 			if event != nil {
 				action.Log("matching log sync: event_id=%d room_status=%s",

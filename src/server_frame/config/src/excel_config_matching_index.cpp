@@ -23,17 +23,20 @@ EXCEL_CONFIG_LOADER_API void setup_matching_config(config_group_t& group) {
     }
 
     matching_result_template_index_t index;
-    for (const auto& entry : result_template.second->team_template()) {
+    for (const auto& entry : result_template.second->faction_template()) {
       if (entry.user_number() <= 0 || entry.count() <= 0) {
         continue;
       }
 
-      const size_t unit_size = static_cast<size_t>(entry.user_number());
-      if (index.unit_size_counts.size() <= unit_size) {
-        index.unit_size_counts.resize(unit_size + 1, 0);
+      const size_t faction_capacity = static_cast<size_t>(entry.user_number());
+      index.faction_count_by_capacity[faction_capacity] += static_cast<size_t>(entry.count());
+      if (faction_capacity > index.max_faction_capacity) {
+        index.max_faction_capacity = faction_capacity;
       }
-      index.unit_size_counts[unit_size] += static_cast<size_t>(entry.count());
-      index.total_user_count += unit_size * static_cast<size_t>(entry.count());
+      for (int32_t faction_index = 0; faction_index < entry.count(); ++faction_index) {
+        index.faction_capacities.emplace_back(faction_capacity);
+      }
+      index.total_user_count += faction_capacity * static_cast<size_t>(entry.count());
     }
     group.matching_result_template_index.emplace(
         std::get<0>(result_template.first),

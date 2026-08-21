@@ -25,7 +25,7 @@ message DMatchingRuleItem {
   repeated int32 values = 2 [(org.xresloader.field_separator) = ","];
 }
 
-message DMatchingTeamTemplate {
+message DMatchingFactionTemplate {
   int32 user_number = 1;
   int32 count = 2;
 }
@@ -46,7 +46,7 @@ message ExcelMatchingPool {
   int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
   int32 user_upper = 2;
   int32 user_lower = 3;
-  int32 team_max_size = 4;
+  int32 unit_max_size = 4;
   repeated int32 rule_group_ids = 5 [(org.xresloader.field_separator) = ","];
   int32 search_timeout_seconds = 6;
   int32 confirm_timeout_seconds = 7;
@@ -96,5 +96,5 @@ message ExcelMatchingResultTemplate {
   };
 
   int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
-  repeated DMatchingTeamTemplate team_template = 2;
+  repeated DMatchingFactionTemplate faction_template = 2;
 }

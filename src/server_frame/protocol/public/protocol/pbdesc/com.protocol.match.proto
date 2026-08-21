@@ -6,19 +6,17 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
-
 import "protocol/pbdesc/com.struct.match.proto";
 
 package atframework.shared;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-
 message CSMatchingStartReq {
   string battle_version = 1;
   DLevelSelect level_select = 2;
   int32 client_ds_ping = 3;
-  EnMatchSelectSvrType select_type = 4;
+  EnMatchingFactionFillPolicy faction_fill_policy = 5;
 }
 
 message SCMatchingStartRsp {
@@ -33,7 +31,7 @@ message CSMatchingCheckReq {
 }
 
 message SCMatchingCheckRsp {
-  DMatchingRoomSnapshot snapshot = 1;
+  DMatchingPlayerView view = 1;
 }
 
 message CSMatchingCancelReq {
@@ -42,7 +40,7 @@ message CSMatchingCancelReq {
 }
 
 message SCMatchingCancelRsp {
-  DMatchingRoomSnapshot snapshot = 1;
+  DMatchingPlayerView view = 1;
 }
 
 message CSMatchingConfirmReq {
@@ -52,14 +50,13 @@ message CSMatchingConfirmReq {
 }
 
 message SCMatchingConfirmRsp {
-  DMatchingRoomSnapshot snapshot = 1;
+  DMatchingPlayerView view = 1;
 }
 
 // matchsvr WAL 在 lobbysvr 合并后主动下发；客户端不需要订阅或退订。
 message SCMatchingLogSync {
   string matching_id = 1;
   repeated DMatchingEventLog event_logs = 2;
-  DMatchingRoomSnapshot snapshot = 3;
+  DMatchingPlayerView view = 3;
   bool is_switch = 4;
 }
-

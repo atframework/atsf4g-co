@@ -3,6 +3,7 @@ package atsf4g_go_robot_case
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
@@ -16,6 +17,7 @@ func init() {
 	robot_case.RegisterCase("matching_start", MatchingStartCase, time.Second*30)
 	robot_case.RegisterCase("matching_wait", MatchingWaitCase, time.Minute*5)
 	robot_case.RegisterCase("matching_confirm", MatchingConfirmCase, time.Second*30)
+	robot_case.RegisterCase("matching_assert_faction", MatchingAssertFactionCase, time.Second*30)
 }
 
 func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
@@ -45,13 +47,33 @@ func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.User
 		}
 		selectType = public_protocol_pbdesc.EnMatchSelectSvrType(selectTypeValue)
 	}
+	factionFillPolicy := public_protocol_pbdesc.EnMatchingFactionFillPolicy_EN_MATCHING_FACTION_FILL_POLICY_DISABLE
+	if len(args) > 4 {
+		fillPolicyValue, parseErr := strconv.ParseInt(args[4], 10, 32)
+		if parseErr != nil {
+			return parseErr
+		}
+		factionFillPolicy = public_protocol_pbdesc.EnMatchingFactionFillPolicy(fillPolicyValue)
+	}
+	levelIds := []int32{int32(levelId)}
+	if len(args) > 5 {
+		levelIds = levelIds[:0]
+		for _, value := range strings.Split(args[5], ",") {
+			parsed, parseErr := strconv.ParseInt(value, 10, 32)
+			if parseErr != nil {
+				return parseErr
+			}
+			levelIds = append(levelIds, int32(parsed))
+		}
+	}
 
 	user := holder.GetUser()
 	if user == nil {
 		return fmt.Errorf("user not initialized, run login first")
 	}
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), region, selectType)
+		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), levelIds, region, selectType,
+			factionFillPolicy)
 	}, "Matching Start Task"))
 }
 
@@ -86,7 +108,8 @@ func MatchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserH
 		}
 		status := protocol.MatchingStatusFromUser(user)
 		switch status {
-		case public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CREATING_BATTLE,
+		case public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CONFIRMING,
+			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CREATING_BATTLE,
 			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_FINISHED,
 			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CANCELLED,
 			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_TIMEOUT,
@@ -98,6 +121,30 @@ func MatchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserH
 	}
 	action.Log("matching wait timeout after %d seconds, status: %s",
 		timeoutSeconds, protocol.MatchingStatusFromUser(user).String())
+	return nil
+}
+
+func MatchingAssertFactionCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("need expected faction_id")
+	}
+	expectedFactionId, err := strconv.ParseInt(args[0], 10, 32)
+	if err != nil {
+		return err
+	}
+	user := holder.GetUser()
+	if user == nil {
+		return fmt.Errorf("user not initialized, run login first")
+	}
+	if err = action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingCheckTask, "Matching Check Task")); err != nil {
+		return err
+	}
+	actualFactionId := protocol.MatchingFactionIdFromUser(user)
+	if actualFactionId != int32(expectedFactionId) {
+		return fmt.Errorf("matching faction mismatch: expected %d, got %d, status: %s", expectedFactionId,
+			actualFactionId, protocol.MatchingStatusFromUser(user).String())
+	}
+	action.Log("matching faction assertion passed: faction_id=%d", actualFactionId)
 	return nil
 }
 

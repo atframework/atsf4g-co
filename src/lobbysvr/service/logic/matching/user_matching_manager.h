@@ -12,8 +12,12 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <cli/cmd_option_list.h>
+#include <data/user_type_define.h>
+
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace PROJECT_NAMESPACE_ID {
 class SSMatchingEventSync;
@@ -58,18 +62,18 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 合并 matchsvr 推送，并将原始日志或全量快照主动转发给在线客户端。
   void acknowledge_matching_sync(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync);
 
-  const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& get_snapshot() const;
+  const PROJECT_NAMESPACE_ID::DMatchingPlayerView& get_view() const;
   int64_t get_last_event_id() const;
 
  private:
   // 将同步 RPC 回包写入本地视图，但不把“已应用”误当作“客户端已确认”。
-  void update_snapshot(const PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& snapshot);
-  // 将一条严格递增的 WAL 日志合并到本地快照。
-  void apply_event(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingEventLog& event_log);
+  void update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view);
 
   ATFW_EXPLICIT_NODISCARD_ATTR int32_t fill_matching_scope(const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                                            const std::string& battle_version,
-                                                           PROJECT_NAMESPACE_ID::DMatchingScope& output) const;
+                                                           PROJECT_NAMESPACE_ID::DMatchingScope& output,
+                                                           std::vector<int32_t>& acceptable_level_ids,
+                                                           int32_t& preferred_level_id) const;
   // 组队未接入前，只组装包含当前登录玩家的单人 unit。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type fill_matching_unit(
       rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingUnit& output) const;
@@ -82,6 +86,11 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int64_t get_acknowledge_event_id() const;
   // 发送客户端匹配日志流；离线时只保留持久化状态。
   void send_log_sync(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync, bool is_switch);
+
+ public:
+  static void on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
+                                       std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
+                                       ::util::cli::cmd_option_list& params);
 
  private:
   user* owner_;

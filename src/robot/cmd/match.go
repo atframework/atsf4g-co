@@ -3,6 +3,7 @@ package atsf4g_go_robot_cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	task "github.com/atframework/atsf4g-co-robot/task"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
@@ -12,7 +13,7 @@ import (
 )
 
 func init() {
-	robot_cmd.RegisterUserCommand([]string{"user", "matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [select_type]", "开始匹配", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"user", "matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [select_type] [fill_policy] [level_ids_csv]", "开始匹配", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "matching", "check"}, MatchingCheckCmd, "", "查询匹配状态", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "matching", "cancel"}, MatchingCancelCmd, "", "取消匹配", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "matching", "confirm"}, MatchingConfirmCmd, "<true|false>", "确认匹配", nil, cmdDefaultTimeout)
@@ -45,9 +46,29 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 		}
 		selectType = public_protocol_pbdesc.EnMatchSelectSvrType(selectTypeValue)
 	}
+	factionFillPolicy := public_protocol_pbdesc.EnMatchingFactionFillPolicy_EN_MATCHING_FACTION_FILL_POLICY_DISABLE
+	if len(cmd) > 4 {
+		fillPolicyValue, parseErr := strconv.ParseInt(cmd[4], 10, 32)
+		if parseErr != nil {
+			return parseErr
+		}
+		factionFillPolicy = public_protocol_pbdesc.EnMatchingFactionFillPolicy(fillPolicyValue)
+	}
+	levelIds := []int32{int32(levelId)}
+	if len(cmd) > 5 {
+		levelIds = levelIds[:0]
+		for _, value := range strings.Split(cmd[5], ",") {
+			parsed, parseErr := strconv.ParseInt(value, 10, 32)
+			if parseErr != nil {
+				return parseErr
+			}
+			levelIds = append(levelIds, int32(parsed))
+		}
+	}
 
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), region, selectType)
+		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), levelIds, region, selectType,
+			factionFillPolicy)
 	}, "Matching Start Task"))
 }
 

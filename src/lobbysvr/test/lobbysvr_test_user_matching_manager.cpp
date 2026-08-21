@@ -13,6 +13,7 @@
 #include <atframework/testing/runtime.h>
 
 #include <rpc/rpc_context.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <chrono>
 #include <memory>
@@ -65,9 +66,13 @@ CASE_TEST(lobbysvr_user_matching, resets_wal_cursor_when_matching_id_changes) {
   rpc::context ctx{rpc::context::create_without_task()};
   PROJECT_NAMESPACE_ID::table_user table;
   auto* persisted_data = table.mutable_matching_data();
-  persisted_data->mutable_snapshot()->set_matching_id("finished-matching");
-  persisted_data->mutable_snapshot()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED);
-  persisted_data->mutable_snapshot()->set_last_event_id(8);
+  persisted_data->mutable_legacy_snapshot()->set_matching_id("finished-matching");
+  persisted_data->mutable_legacy_snapshot()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED);
+  persisted_data->mutable_legacy_snapshot()->set_last_event_id(8);
+  auto* persisted_unit = persisted_data->mutable_legacy_snapshot()->add_units();
+  persisted_unit->set_unit_id(1001);
+  persisted_unit->add_users()->mutable_user_key()->set_user_id(10001);
+  persisted_unit->mutable_users(0)->mutable_user_key()->set_zone_id(1);
   persisted_data->set_last_event_id(8);
   persisted_data->set_client_acknowledge_event_id(8);
 
@@ -75,20 +80,30 @@ CASE_TEST(lobbysvr_user_matching, resets_wal_cursor_when_matching_id_changes) {
   manager.init_from_table_data(ctx, table);
   CASE_EXPECT_EQ(8, manager.get_last_event_id());
   CASE_EXPECT_FALSE(manager.is_in_matching());
+  CASE_EXPECT_TRUE(manager.is_dirty());
+  PROJECT_NAMESPACE_ID::table_user migrated_table;
+  CASE_EXPECT_EQ(0, manager.dump(ctx, migrated_table));
+  CASE_EXPECT_TRUE(migrated_table.matching_data().has_view());
+  CASE_EXPECT_FALSE(migrated_table.matching_data().has_legacy_snapshot());
+  CASE_EXPECT_EQ(1001, migrated_table.matching_data().view().unit().unit_id());
 
   PROJECT_NAMESPACE_ID::SSMatchingEventSync new_matching_snapshot;
   new_matching_snapshot.set_matching_id("new-matching");
-  new_matching_snapshot.mutable_room_snapshot()->set_matching_id("new-matching");
-  new_matching_snapshot.mutable_room_snapshot()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING);
-  new_matching_snapshot.mutable_room_snapshot()->set_last_event_id(1);
+  new_matching_snapshot.mutable_player_view()->set_matching_id("new-matching");
+  new_matching_snapshot.mutable_player_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING);
+  new_matching_snapshot.mutable_player_view()->set_last_event_id(1);
+  new_matching_snapshot.mutable_player_view()->mutable_unit()->set_unit_id(1002);
   manager.acknowledge_matching_sync(ctx, new_matching_snapshot);
 
   CASE_EXPECT_EQ(1, manager.get_last_event_id());
-  CASE_EXPECT_EQ(1, manager.get_snapshot().last_event_id());
+  CASE_EXPECT_EQ(1, manager.get_view().last_event_id());
   CASE_EXPECT_TRUE(manager.is_in_matching());
 
   PROJECT_NAMESPACE_ID::SSMatchingEventSync timeout_sync;
   timeout_sync.set_matching_id("new-matching");
+  protobuf_copy_message(*timeout_sync.mutable_player_view(), manager.get_view());
+  timeout_sync.mutable_player_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT);
+  timeout_sync.mutable_player_view()->set_last_event_id(2);
   auto* timeout_event = timeout_sync.add_event_logs();
   timeout_event->set_event_id(2);
   timeout_event->set_room_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT);
@@ -96,8 +111,8 @@ CASE_TEST(lobbysvr_user_matching, resets_wal_cursor_when_matching_id_changes) {
   manager.acknowledge_matching_sync(ctx, timeout_sync);
 
   CASE_EXPECT_EQ(2, manager.get_last_event_id());
-  CASE_EXPECT_EQ(2, manager.get_snapshot().last_event_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT, manager.get_snapshot().status());
+  CASE_EXPECT_EQ(2, manager.get_view().last_event_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT, manager.get_view().status());
   CASE_EXPECT_FALSE(manager.is_in_matching());
 }
 
@@ -112,7 +127,7 @@ CASE_TEST(lobbysvr_user_matching, reports_active_matching_states) {
   auto& manager = user_inst->get_user_matching_manager();
   auto set_status = [&ctx, &manager](PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status, bool has_matching_id) {
     PROJECT_NAMESPACE_ID::table_user table;
-    auto* snapshot = table.mutable_matching_data()->mutable_snapshot();
+    auto* snapshot = table.mutable_matching_data()->mutable_view();
     if (has_matching_id) {
       snapshot->set_matching_id("matching-state");
     }
@@ -141,7 +156,7 @@ CASE_TEST(lobbysvr_user_matching, reports_active_matching_states) {
   CASE_EXPECT_FALSE(manager.is_in_matching());
 }
 
-CASE_TEST(lobbysvr_user_matching, forwards_snapshot_only_when_source_contains_one) {
+CASE_TEST(lobbysvr_user_matching, forwards_the_same_player_view_for_incremental_and_full_sync) {
   constexpr uint64_t kGatewayNodeId = 0x82000001;
   constexpr uint64_t kSessionId = 10003;
 
@@ -171,6 +186,10 @@ CASE_TEST(lobbysvr_user_matching, forwards_snapshot_only_when_source_contains_on
 
   PROJECT_NAMESPACE_ID::SSMatchingEventSync incremental_sync;
   incremental_sync.set_matching_id("matching-sync-presence");
+  incremental_sync.mutable_player_view()->set_matching_id("matching-sync-presence");
+  incremental_sync.mutable_player_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING);
+  incremental_sync.mutable_player_view()->set_last_event_id(1);
+  incremental_sync.mutable_player_view()->mutable_unit()->set_unit_id(1003);
   auto* event = incremental_sync.add_event_logs();
   event->set_event_id(1);
   event->set_room_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING);
@@ -178,9 +197,9 @@ CASE_TEST(lobbysvr_user_matching, forwards_snapshot_only_when_source_contains_on
 
   PROJECT_NAMESPACE_ID::SSMatchingEventSync snapshot_sync;
   snapshot_sync.set_matching_id("matching-sync-presence");
-  snapshot_sync.mutable_room_snapshot()->set_matching_id("matching-sync-presence");
-  snapshot_sync.mutable_room_snapshot()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING);
-  snapshot_sync.mutable_room_snapshot()->set_last_event_id(1);
+  snapshot_sync.mutable_player_view()->set_matching_id("matching-sync-presence");
+  snapshot_sync.mutable_player_view()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING);
+  snapshot_sync.mutable_player_view()->set_last_event_id(1);
 
   auto task =
       test.run_task("matching.forward_snapshot_presence", std::chrono::seconds{2},
@@ -207,9 +226,9 @@ CASE_TEST(lobbysvr_user_matching, forwards_snapshot_only_when_source_contains_on
   CASE_EXPECT_EQ(2, sync_messages.size());
   if (sync_messages.size() == 2) {
     CASE_EXPECT_EQ(1, sync_messages[0].event_logs_size());
-    CASE_EXPECT_FALSE(sync_messages[0].has_snapshot());
-    CASE_EXPECT_TRUE(sync_messages[1].has_snapshot());
-    CASE_EXPECT_EQ("matching-sync-presence", sync_messages[1].snapshot().matching_id());
+    CASE_EXPECT_TRUE(sync_messages[0].has_view());
+    CASE_EXPECT_TRUE(sync_messages[1].has_view());
+    CASE_EXPECT_EQ("matching-sync-presence", sync_messages[1].view().matching_id());
   }
 
   CASE_EXPECT_EQ(0, test.stop());

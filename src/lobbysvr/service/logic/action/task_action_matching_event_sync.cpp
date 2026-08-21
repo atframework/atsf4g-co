@@ -61,8 +61,8 @@ task_action_matching_event_sync::result_type task_action_matching_event_sync::op
   disable_response_message();
 
   FCTXLOGDEBUG(
-      get_shared_context(), "receive matching event sync, matching_id={}, users={}, snapshot={}, event_count={}",
-      req_body.matching_id(), req_body.user_keys_size(), req_body.has_room_snapshot(), req_body.event_logs_size());
+      get_shared_context(), "receive matching event sync, matching_id={}, users={}, view={}, event_count={}",
+      req_body.matching_id(), req_body.user_keys_size(), req_body.has_player_view(), req_body.event_logs_size());
 
   const bool auto_confirm = should_auto_confirm(req_body);
 

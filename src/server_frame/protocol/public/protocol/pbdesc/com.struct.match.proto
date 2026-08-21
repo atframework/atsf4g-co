@@ -39,17 +39,26 @@ enum EnMatchingConfirmStatus {
   EN_MATCHING_CONFIRM_STATUS_TIMEOUT = 3;
 }
 
+enum EnMatchingFactionFillPolicy {
+  // 必须显式选择是否允许补人；未设置属于非法请求。
+  EN_MATCHING_FACTION_FILL_POLICY_UNSPECIFIED = 0;
+  // Unit 必须独占一个同容量 faction，不允许和其他 Unit 拼成 faction。
+  EN_MATCHING_FACTION_FILL_POLICY_DISABLE = 1;
+  // Unit 只进入结果模板人数规格最大的 faction，并允许和其他同样合法的 Unit 拼成 faction。
+  // 优先补齐已有未满 faction；取消等移除操作可以留下多个未满 faction。
+  EN_MATCHING_FACTION_FILL_POLICY_ENABLE = 2;
+}
 
 enum EnMatchSelectSvrType {
   EN_MATCH_SELECT_SVR_TYPE_INVALID = 0;
   EN_MATCH_SELECT_SVR_TYPE_CLIENT = 1;
   EN_MATCH_SELECT_SVR_TYPE_USER = 2;
 }
-
-// 硬隔离维度。四个字段全部相同的房间才允许互相撮合。
+// 粗粒度匹配桶；只包含进入同一候选房间队列前必须完全相同的维度。
 message DMatchingScope {
   int32 level_type = 1;
-  int32 level_id = 2;
+  reserved 2;
+  reserved "level_id";
   string region = 3;
   string battle_version = 4;
   int32 matching_pool_id = 5;
@@ -86,6 +95,40 @@ message DMatchingUnit {
   string client_version = 6;
   string resource_version = 7;
   DUserIDKey captain_user_key = 8;  // 成员顺序不表达队长或操作权限。
+  // 未满编时是否允许和其他 Unit 组成最终 faction；人数正好等于 faction 容量时不受此字段限制。
+  EnMatchingFactionFillPolicy faction_fill_policy = 9;
+  // Unit 接受的关卡集合；同一房间全部 Unit 的集合交集必须非空。
+  repeated int32 acceptable_level_ids = 10;
+}
+
+message DMatchingFactionAssignment {
+  // 匹配阶段只维护 faction membership 和固定容量，不提前分配战斗 faction_id。
+  reserved 1;
+  reserved "faction_index";
+  // 分配到该 faction 的 Unit；Unit 只会整体出现，不会拆分成员。
+  repeated uint64 unit_ids = 2;
+  // faction 创建时锁定的玩家容量；搜索期间选择其他结果模板也不得修改。
+  uint32 user_capacity = 3;
+}
+
+// 尝试把一个完整 Unit 加入房间时的只读检查结果。
+message DMatchingUnitJoinEvaluation {
+  // true 表示加入后仍存在兼容的动态结果模板，不代表房间已经满编。
+  bool can_join = 1;
+  // 业务错误码。0 表示检查成功；can_join=false 时用于说明拒绝原因。
+  int32 result = 2;
+  // 加入后保留原有 faction、仅做增量放置的内部结果；manager 在 Unit 实际加入成功后原子提交。
+  repeated DMatchingFactionAssignment faction_assignments = 3;
+}
+
+// 检查房间当前 Unit 是否已经达到成局条件的结果。
+message DMatchingRoomReadyEvaluation {
+  // true 表示房间已经满编，可以停止搜索并进入玩家确认阶段。
+  bool ready = 1;
+  // 成局使用的结果模板 ID。
+  int32 result_template_id = 2;
+  // 业务错误码。0 表示检查成功；ready=false 不一定是错误，也可能只是人数不足。
+  int32 result = 3;
 }
 
 message DMatchingRoomSnapshot {
@@ -101,6 +144,27 @@ message DMatchingRoomSnapshot {
   int64 confirm_expire_time = 11;
   DOrbitRoomKey orbit_room_key = 12;
   int64 orbit_expired_timepoint = 13;
+  // 内部诊断快照在分队固化后可携带 membership/capacity；其中不包含最终 faction_id。
+  repeated DMatchingFactionAssignment faction_assignments = 14;
+  // 当前候选集合交集里选中的关卡；Orbit 创建房间只读取此字段对应的运行时值。
+  int32 selected_level_id = 15;
+}
+
+// 单个订阅 Unit 的匹配视图。matchsvr 内部房间快照不得通过 SS/CS 协议直接透传。
+message DMatchingPlayerView {
+  string matching_id = 1;
+  EnMatchingRoomStatus status = 2;
+  // 仅包含当前玩家订阅的 Unit；不包含房间内其他 Unit。
+  DMatchingUnit unit = 3;
+  int32 result = 4;
+  int64 expire_time = 5;
+  int64 last_event_id = 6;
+  int64 confirm_expire_time = 7;
+  DOrbitRoomKey orbit_room_key = 8;
+  int64 orbit_expired_timepoint = 9;
+  int32 selected_level_id = 10;
+  // 进入创建战斗阶段时按最终 membership 一次性生成；匹配和确认阶段不设置。
+  int32 faction_id = 11;
 }
 
 // 迁房事件携带原 unit 和目标房间。目标为空表示取消或普通移除。
@@ -127,9 +191,11 @@ message DMatchingEventLog {
 
 // lobbysvr 持久化的玩家匹配视图，用于重登录后从 WAL 游标恢复。
 message DUserMatchingData {
-  DMatchingRoomSnapshot snapshot = 1;
+  // 旧版本持久化的完整房间快照，仅用于加载迁移；新版本不再写入。
+  DMatchingRoomSnapshot legacy_snapshot = 1;
   int64 last_event_id = 2;
   int64 client_acknowledge_event_id = 3;
+  DMatchingPlayerView view = 4;
 }
 
 message DBattleLevelParameter {
@@ -141,6 +207,7 @@ message DBattleLevelParameter {
 
 message DLevelSelect {
   int32 level_type = 1;  // 匹配关卡类型(关联到 DBattleRoomData.battle_data)
-  int32 level_id = 2;    // 默认匹配关卡ID或当前的关卡ID
+  int32 level_id = 2;    // 首选关卡；非零时必须包含在 level_ids 中
   string region = 3;
+  repeated int32 level_ids = 4;  // 可接受的关卡集合，必须显式提供且非空
 }

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -26,14 +27,18 @@ class matching_room {
  public:
   using ptr_t = std::shared_ptr<matching_room>;
 
-  // 使用已确定的硬隔离范围创建一个空房间。
-  matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID::DMatchingScope& scope, int64_t now,
-                int64_t expire_time);
+  // 使用已确定的粗桶和初始关卡创建一个空房间。
+  matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID::DMatchingScope& scope, int32_t selected_level_id,
+                int64_t now, int64_t expire_time);
 
   // 返回房间的稳定 ID。
   const std::string& get_matching_id() const noexcept { return matching_id_; }
-  // 返回 level/region/version/pool 四维硬隔离范围。
+  // 返回 level_type/region/version/pool 四维粗粒度匹配桶。
   const PROJECT_NAMESPACE_ID::DMatchingScope& get_scope() const noexcept { return scope_; }
+  // 返回全部 Unit 当前仍共同接受的关卡集合。
+  const std::vector<int32_t>& get_compatible_level_ids() const noexcept { return compatible_level_ids_; }
+  // 返回房间当前从候选交集中选中的最终关卡。
+  int32_t get_selected_level_id() const noexcept { return selected_level_id_; }
   // 返回当前房间状态。
   PROJECT_NAMESPACE_ID::EnMatchingRoomStatus get_status() const noexcept { return status_; }
   // 返回房间创建时间，候选房间按它从旧到新排序。
@@ -44,14 +49,30 @@ class matching_room {
   int64_t get_terminal_time() const noexcept { return terminal_time_; }
   // 返回确认阶段截止时间；非确认阶段为 0。
   int64_t get_confirm_expire_time() const noexcept { return confirm_expire_time_; }
+  // 返回创建战斗阶段截止时间；非创建阶段为 0。
+  int64_t get_battle_create_expire_time() const noexcept { return battle_create_expire_time_; }
   // 返回房间 WAL 最近分配的事件 ID。
   int64_t get_last_event_id() const noexcept { return last_event_id_; }
-  // 返回当前匹配结果模板 ID。
+  // 返回成局时动态选中的最终结果模板 ID；搜索期间为 0。
   int32_t get_result_template_id() const noexcept { return result_template_id_; }
+  // 返回房间当前业务结果。
+  int32_t get_result() const noexcept { return result_; }
   // 返回当前所有 unit，key 为 unit_id。
   const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& get_units() const noexcept { return units_; }
+  const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& get_faction_assignments()
+      const noexcept {
+    return faction_assignments_;
+  }
+  const std::unordered_map<size_t, size_t>& get_faction_count_by_capacity() const noexcept {
+    return faction_count_by_capacity_;
+  }
+  const std::set<size_t>& get_fill_enabled_faction_capacities() const noexcept {
+    return fill_enabled_faction_capacities_;
+  }
+  size_t get_completed_faction_count() const noexcept { return completed_faction_count_; }
+  size_t get_pending_faction_user_count() const noexcept { return pending_faction_user_count_; }
 
-  PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail get_orbit_user_init_detail(
+  const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& get_orbit_user_init_detail(
       const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const;
 
   void add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
@@ -61,7 +82,7 @@ class matching_room {
 
   // 统计房间内的真实玩家数量。
   size_t get_user_count() const noexcept { return user_count_; }
-  // 返回按 Unit 人数索引的队伍数量，用于匹配模板快速判定。
+  // 返回按 Unit 人数索引的 Unit 数量，用于匹配模板快速判定。
   const std::vector<size_t>& get_unit_size_counts() const noexcept { return unit_size_counts_; }
   // 判断 unit 是否仍在本房间。
   bool has_unit(uint64_t unit_id) const noexcept;
@@ -80,15 +101,23 @@ class matching_room {
   bool are_all_users_confirmed() const noexcept;
   // 确认失败移除 Unit 后，让剩余 Unit 回到正常撮合。
   void resume_matching(int64_t expire_time) noexcept;
-  // 保存当前规则选中的结果模板。
+  // 保存成局时动态选中的最终结果模板；继续搜索时清零。
   void set_result_template_id(int32_t value) noexcept;
+  // 原子校验并保存搜索阶段的临时 faction 分配；结构不合法时返回 false 且保持原值。
+  bool set_faction_assignments(
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& value);
+  void clear_faction_assignments() noexcept;
+  // 进入创建战斗前按稳定 membership 顺序一次性生成最终 faction_id；重复调用保持原映射。
+  bool finalize_faction_ids();
+  int32_t get_unit_faction_id(uint64_t unit_id) const noexcept;
   // 有新 unit 加入时延长房间级搜索截止时间，避免迁入老房间后立即超时。
   void extend_expire_time(int64_t value) noexcept;
   // 标记正在请求 battlesvr，之后不再接受新 unit。
-  void mark_creating_battle(uint64_t orbit_server_id) noexcept;
+  void mark_creating_battle(uint64_t orbit_server_id, int64_t expire_time) noexcept;
   uint64_t get_orbit_server_id() const noexcept;
+  bool is_orbit_ready_processing() const noexcept { return orbit_ready_processing_; }
   // 锁定首次 orbitsvr ready 回调，防止重复初始化玩家。
-  bool begin_orbit_ready() noexcept;
+  bool begin_orbit_ready(uint64_t source_server_id) noexcept;
   // 标记战斗房间创建完成。
   void mark_finished(int64_t now);
   // 标记战斗请求失败。
@@ -99,6 +128,12 @@ class matching_room {
   void mark_cancelled(int64_t now) noexcept;
   // 导出不暴露内部容器的协议快照。
   void dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) const;
+  // 导出单个订阅 Unit 的玩家视图；找不到 Unit 时返回 false。
+  bool dump_player_view(uint64_t unit_id, PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const;
+  // 为刚移除但仍需接收最终事件的 Unit 导出玩家视图。
+  void dump_player_view(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
+                        PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const;
+  void set_orbit_expired_timepoint(int64_t value) noexcept { orbit_expired_timepoint_ = value; }
 
   // 为玩家创建或刷新 WAL 订阅；acknowledge_event_id 用于增量重放。
   bool subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
@@ -114,8 +149,12 @@ class matching_room {
  private:
   // 匹配房间的稳定 ID。
   std::string matching_id_;
-  // 四维硬隔离范围。
+  // 四维粗粒度匹配桶。
   PROJECT_NAMESPACE_ID::DMatchingScope scope_;
+  // 全部 Unit 可选关卡的交集，始终有序且去重。
+  std::vector<int32_t> compatible_level_ids_;
+  // 当前从 compatible_level_ids_ 中选中的关卡。
+  int32_t selected_level_id_;
   // 房间当前状态。
   PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status_;
   // unit_id 到完整组队数据的映射。
@@ -123,6 +162,15 @@ class matching_room {
   // 随 Unit 增删增量维护，避免高频成局检查重复遍历房间。
   size_t user_count_;
   std::vector<size_t> unit_size_counts_;
+  // 搜索阶段持续维护 membership/capacity；进入确认后锁定成员关系，但尚不生成 faction_id。
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> faction_assignments_;
+  std::unordered_map<size_t, size_t> faction_count_by_capacity_;
+  std::set<size_t> fill_enabled_faction_capacities_;
+  size_t completed_faction_count_;
+  size_t pending_faction_user_count_;
+  // 仅在确认完成、准备创建战斗时固化；匹配阶段不维护最终 faction_id。
+  std::unordered_map<uint64_t, int32_t> finalized_unit_faction_ids_;
+  bool faction_ids_finalized_;
 
   // 创建时间，同时作为老房间优先的排序时间。
   int64_t created_time_;
@@ -132,9 +180,11 @@ class matching_room {
   int64_t terminal_time_;
   // 确认阶段截止时间。
   int64_t confirm_expire_time_;
+  // 创建战斗阶段截止时间。
+  int64_t battle_create_expire_time_ = 0;
   // 单房间单调递增 WAL 事件 ID。
   int64_t last_event_id_;
-  // 当前规则选中的结果模板 ID。
+  // 成局时动态选中的最终结果模板 ID，搜索期间不锁定模板。
   int32_t result_template_id_;
   // 房间最终业务结果。
   int32_t result_;
@@ -145,6 +195,7 @@ class matching_room {
 
   // OrbitRoom Key
   PROJECT_NAMESPACE_ID::DOrbitRoomKey orbit_room_key_;
+  int64_t orbit_expired_timepoint_ = 0;
 
   std::unordered_map<std::string, PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail> orbit_users_init_detail_;
 

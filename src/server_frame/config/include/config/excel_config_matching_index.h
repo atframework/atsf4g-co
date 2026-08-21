@@ -15,7 +15,9 @@ namespace excel {
 struct config_group_t;
 
 struct matching_result_template_index_t {
-  std::vector<size_t> unit_size_counts;
+  std::vector<size_t> faction_capacities;
+  std::unordered_map<size_t, size_t> faction_count_by_capacity;
+  size_t max_faction_capacity = 0;
   size_t total_user_count = 0;
 };
 

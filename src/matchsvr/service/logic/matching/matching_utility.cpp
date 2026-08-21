@@ -3,6 +3,23 @@
 #include "logic/matching/matching_utility.h"
 
 #include <algorithm>
+#include <iterator>
+#include <utility>
+#include <vector>
+
+namespace {
+bool is_invalid_level_id(int32_t level_id) { return level_id <= 0; }
+
+std::vector<int32_t> copy_acceptable_level_ids(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
+  std::vector<int32_t> result(unit.acceptable_level_ids().begin(), unit.acceptable_level_ids().end());
+  if (std::any_of(result.begin(), result.end(), is_invalid_level_id)) {
+    return {};
+  }
+  std::sort(result.begin(), result.end());
+  result.erase(std::unique(result.begin(), result.end()), result.end());
+  return result;
+}
+}  // namespace
 
 namespace matching_utility {
 
@@ -19,6 +36,36 @@ bool unit_has_user(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
 bool contains_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DUserIDKey>& users,
                    const PROJECT_NAMESPACE_ID::DUserIDKey& expected) noexcept {
   return std::any_of(users.begin(), users.end(), [&expected](const auto& value) { return same_user(value, expected); });
+}
+
+bool normalize_acceptable_level_ids(PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
+  auto normalized = copy_acceptable_level_ids(unit);
+  if (normalized.empty()) {
+    return false;
+  }
+  unit.clear_acceptable_level_ids();
+  for (int32_t level_id : normalized) {
+    unit.add_acceptable_level_ids(level_id);
+  }
+  return true;
+}
+
+std::vector<int32_t> get_compatible_level_ids(const std::vector<const PROJECT_NAMESPACE_ID::DMatchingUnit*>& units) {
+  if (units.empty() || units.front() == nullptr) {
+    return {};
+  }
+  auto result = copy_acceptable_level_ids(*units.front());
+  for (size_t index = 1; !result.empty() && index < units.size(); ++index) {
+    if (units[index] == nullptr) {
+      return {};
+    }
+    const auto candidates = copy_acceptable_level_ids(*units[index]);
+    std::vector<int32_t> intersection;
+    std::set_intersection(result.begin(), result.end(), candidates.begin(), candidates.end(),
+                          std::back_inserter(intersection));
+    result = std::move(intersection);
+  }
+  return result;
 }
 
 }  // namespace matching_utility

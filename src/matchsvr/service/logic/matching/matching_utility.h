@@ -11,6 +11,9 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <cstdint>
+#include <vector>
+
 namespace matching_utility {
 
 // 比较完整的玩家路由键，避免不同区服的相同 user_id 被视为同一玩家。
@@ -23,5 +26,11 @@ bool unit_has_user(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
 // 判断用户键列表是否包含指定玩家。
 bool contains_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DUserIDKey>& users,
                    const PROJECT_NAMESPACE_ID::DUserIDKey& expected) noexcept;
+
+// 排序、去重并校验 Unit 的可选关卡；候选集合必须显式提供且非空。
+bool normalize_acceptable_level_ids(PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
+
+// 计算全部 Unit 可选关卡的有序交集；任一 Unit 没有合法候选时返回空集合。
+std::vector<int32_t> get_compatible_level_ids(const std::vector<const PROJECT_NAMESPACE_ID::DMatchingUnit*>& units);
 
 }  // namespace matching_utility
