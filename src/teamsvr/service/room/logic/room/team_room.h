@@ -168,6 +168,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_action_permission(
       const PROJECT_NAMESPACE_ID::DUserIDKey& operator_key, const atfw::team::DTeamAction& action);
 
+  // 刷新成员的 LRU 访问位置(将活跃成员移到淘汰队列末尾)，成员不存在时为空操作
+  void touch_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+
   // 提交组队操作(协程内调用)，来自外部服务的写请求统一经由此处写入频道日志
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
                                                                  const atfw::team::DTeamAction& action,
@@ -199,6 +202,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   void dump_team_key(atfw::team::DTeamKey& output) const;
 
+  member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
+
  private:
   friend class team_room_manager;
 
@@ -224,7 +229,6 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   void apply_reject_join_request(const atfw::team::DTeamJoinRequest& join_request);
 
   member_ptr_t mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
-  member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
   bool remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                      atfw::team::EnTeamExitReason reason, bool with_notify);
   void foreach_member(atfw::util::nostd::function_ref<bool(atfw::util::nostd::nonnull<const member_ptr_t>&)> fn);
@@ -293,6 +297,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   atfw::team::EnTeamPermissionRole get_approve_join_request_role() const;  // 默认 NORMAL
   atfw::team::EnTeamPermissionRole get_invite_role() const;                // 默认 NORMAL
   atfw::team::EnTeamPermissionRole get_update_team_data_role() const;      // 默认 NORMAL
+  atfw::team::EnTeamPermissionRole get_reject_invitation_role() const;     // 默认 ADMIN
+  // 是否允许非成员发起加入请求(false 即私人小队，仅通过邀请加入)，默认允许
+  bool is_join_request_allowed() const;
 
  private:
   int64_t team_id_;
@@ -331,8 +338,6 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   std::chrono::system_clock::time_point oldest_log_timepoint_;
   int64_t last_compact_sequence_ = 0;
   std::chrono::system_clock::time_point last_compact_timepoint_;
-  // 压缩加速触发冷却: 上次因数量/时间加速触发执行的维护未能推进压缩点(受保留策略限制)时避免定时器空转
-  std::chrono::system_clock::time_point compact_trigger_cooldown_until_;
   task_type_trait::task_type maintenance_task_;
   // 本房间在 manager 时间轮上的唯一定时器
   timer_watcher_t timer_watcher_;

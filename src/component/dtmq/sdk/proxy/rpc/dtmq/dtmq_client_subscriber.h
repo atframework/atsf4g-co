@@ -272,6 +272,15 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
 
   DTMQ_PROXY_SDK_API int64_t get_last_removed_sequence() const noexcept;
 
+  /**
+   * @brief 获取本地缓存中 sequence 不早于 start_sequence 的日志数量
+   * @note 日志 sequence 只保证递增不保证连续，日志数量不能用 sequence 差值估算
+   *
+   * @param start_sequence 起始 sequence(包含)，不大于 0 时返回全部缓存日志数量
+   * @return 本地缓存中满足条件的日志数量
+   */
+  DTMQ_PROXY_SDK_API size_t get_cached_log_count(int64_t start_sequence) const noexcept;
+
   DTMQ_PROXY_SDK_API bool get_option_auto_create_channel() const noexcept;
 
   DTMQ_PROXY_SDK_API bool get_option_with_private_data() const noexcept;

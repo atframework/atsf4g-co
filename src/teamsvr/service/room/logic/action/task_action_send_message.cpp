@@ -87,6 +87,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
   rsp_body.set_client_result(ret);
   if (ret < 0) {
     set_response_code(ret);
+  } else if (req_body.sender_user_key().zone_id() != 0 && req_body.sender_user_key().user_id() != 0) {
+    // 激活一下发请求者,放到LRU map的末尾
+    room->find_member(req_body.sender_user_key(), true);
   }
 
   RPC_AWAIT_IGNORE_RESULT(room->flush_pending_channel_message(get_shared_context()));

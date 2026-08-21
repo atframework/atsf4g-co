@@ -198,10 +198,13 @@ message DTeamConfigure {
   // destroy_team 与无条件修改队长(election_captain)固定要求 EN_TEAM_MEMBER_ROLE_OWNER，不可配置。
   // 所有成员都可以删除自己(视为主动退出)和 member_update 自己的数据；
   // 所有人(包括游客)都可以同意或否决发给自己的邀请，也都可以发起加入请求。
-  EnTeamPermissionRole manage_member_role = 1;         // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
+  EnTeamPermissionRole manage_member_role = 1;  // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
   EnTeamPermissionRole approve_join_request_role = 2;  // 同意/拒绝其他玩家的加入请求，默认 NORMAL
   EnTeamPermissionRole invite_role = 3;                // 发起邀请，默认 NORMAL
   EnTeamPermissionRole update_team_data_role = 4;      // 更新队伍共享数据(team_update)，默认 NORMAL
+  EnTeamPermissionRole reject_invitation_role = 5;     // 否决他人收到的邀请(撤回邀请)，默认 ADMIN；
+                                                       // 被邀请人本人总是可以否决发给自己的邀请
+  bool disable_join_request = 6;  // 禁止非成员发起加入请求(私人小队，仅通过邀请加入)，默认 false(允许)
 }
 
 message DTeamStorage {
@@ -272,7 +275,7 @@ message DTeamMemberAction {
     DTeamJoinRequest reject_join_request = 5;
     DTeamJoinRequest cancel_join_request = 6;
 
-    DTeamInvitation join_in_team = 4;
+    DTeamInvitation joined_team = 4;  // 通知新成员已入队(接受邀请或加入请求被批准)
     DTeamMemberRemoveData remove_member = 7;
   }
 }

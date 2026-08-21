@@ -58,6 +58,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <list>
 #include <memory>
@@ -334,6 +335,9 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
   int64_t get_last_message_sequence() const noexcept;
 
   int64_t get_last_removed_sequence() const noexcept;
+
+  // 获取本地缓存中 sequence 不早于 start_sequence 的日志数量(二分查找起点，O(logN))
+  size_t get_cached_log_count(int64_t start_sequence) const noexcept;
 
   mq_client_subscriber_wal_client_type::log_const_pointer get_message_by_sequence(int64_t sequence) const noexcept;
 
@@ -1769,6 +1773,10 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::find_message(rpc::co
                               internal_data_->shared_instance->get_readonly_replicate_index(), sequence, msg)));
 }
 
+DTMQ_PROXY_SDK_API size_t client_subscriber::get_cached_log_count(int64_t start_sequence) const noexcept {
+  return internal_data_->shared_instance->get_cached_log_count(start_sequence);
+}
+
 DTMQ_PROXY_SDK_API bool client_subscriber::query_cached_message(
     rpc::context& /*ctx*/, atfw::util::nostd::function_ref<bool(const atfw::dtmq::DChannelMessage&)> fn,
     query_options options) const noexcept {
@@ -2714,6 +2722,24 @@ int64_t shared_subscriber::get_last_removed_sequence() const noexcept {
   }
 
   return *last_removed_key;
+}
+
+size_t shared_subscriber::get_cached_log_count(int64_t start_sequence) const noexcept {
+  if (!wal_client_) {
+    return 0;
+  }
+
+  if (wal_client_->get_log_manager().get_all_logs().empty()) {
+    return 0;
+  }
+
+  if (start_sequence <= (*wal_client_->get_log_manager().log_begin())->sequence()) {
+    return wal_client_->get_log_manager().get_all_logs().size();
+  }
+
+  // 底层日志容器为 deque(随机访问迭代器)，distance 为 O(1)
+  auto iter = wal_client_->get_log_manager().log_lower_bound(start_sequence);
+  return static_cast<size_t>(std::distance(iter, wal_client_->get_log_manager().log_end()));
 }
 
 mq_client_subscriber_wal_client_type::log_const_pointer shared_subscriber::get_message_by_sequence(
