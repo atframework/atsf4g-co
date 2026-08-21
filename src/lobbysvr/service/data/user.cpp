@@ -26,6 +26,10 @@
 #include <logic/rank/user_rank_manager.h>
 #include <logic/team/user_team_manager.h>
 
+////////////////// 业务Manager开始 ////////////////////
+
+////////////////// 业务Manager结束 ////////////////////
+
 #include <logic/user_manager.h>
 
 #include <data/session.h>
@@ -72,7 +76,11 @@ user::user(fake_constructor &ctor)
       user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)),
       user_orbit_manager_(atfw::component::memory::stl::make_strong_rc<user_orbit_manager>(*this)),
       user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)),
-      user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this)) {
+      user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this))
+////////////////// 业务Manager开始 ////////////////////
+
+////////////////// 业务Manager结束 ////////////////////
+{
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -133,6 +141,7 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_async_jobs_manager_->create_init(ctx);
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
+////////////////// 业务Manager开始 ////////////////////
   // TODO init all interval checkpoint
 
   // TODO init items
@@ -192,6 +201,8 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
 
+  ////////////////// 业务Manager开始 ////////////////////
+
   set_inited();
   on_login(ctx);
 
@@ -240,6 +251,8 @@ void user::refresh_feature_limit(rpc::context &ctx) {
     user_cache_manager_->refresh_feature_limit_second(ctx);
     user_orbit_manager_->refresh_feature_limit_second(ctx);
     user_team_manager_->refresh_feature_limit_second(ctx);
+
+    ////////////////// 业务Manager开始 ////////////////////
   }
   if (now >= cache_data_.refresh_feature_limit_minute + atfw::util::time::time_utility::MINITE_SECONDS ||
       now < cache_data_.refresh_feature_limit_minute) {
@@ -247,12 +260,16 @@ void user::refresh_feature_limit(rpc::context &ctx) {
 
     // 每分钟仅需要执行一次的refresh_feature_limit
     user_cache_manager_->refresh_feature_limit_minute(ctx);
+
+    ////////////////// 业务Manager开始 ////////////////////
   }
   if (now >= cache_data_.refresh_feature_limit_hour + atfw::util::time::time_utility::HOUR_SECONDS ||
       now < cache_data_.refresh_feature_limit_hour) {
     cache_data_.refresh_feature_limit_hour = now - (now % atfw::util::time::time_utility::HOUR_SECONDS);
 
     // 每小时仅需要执行一次的refresh_feature_limit
+
+    ////////////////// 业务Manager开始 ////////////////////
   }
 }
 
@@ -276,6 +293,8 @@ void user::on_login(rpc::context &parent_ctx) {
 
   base_type::on_login(ctx);
 
+  ////////////////// 业务Manager开始 ////////////////////
+
   // TODO sync messages
   internal_flags_.set(internal_flag::EN_IFT_IS_LOGIN, true);
   trace.finish({0, {}});
@@ -297,6 +316,8 @@ void user::on_logout(rpc::context &parent_ctx) {
   base_type::on_logout(ctx);
 
   user_cache_manager_->on_logout(ctx);
+
+  ////////////////// 业务Manager开始 ////////////////////
 
   internal_flags_.set(internal_flag::EN_IFT_IS_LOGIN, false);
   trace.finish({0, {}});
@@ -354,6 +375,8 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_matching_manager_->init_from_table_data(ctx, tb_user);
   }
 
+  ////////////////// 业务Manager开始 ////////////////////
+
   trace.finish({0, {}});
 }
 
@@ -396,6 +419,8 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
     FWPLOGERROR(*this, "dump user_matching_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
+
+  ////////////////// 业务Manager开始 ////////////////////
 
   return trace.finish({ret, {}});
 }

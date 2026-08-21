@@ -35,6 +35,8 @@ class user_orbit_manager;
 class user_matching_manager;
 class user_team_manager;
 
+////////////////// 业务Manager开始 ////////////////////
+
 class user : public user_cache {
  private:
   static constexpr const uint32_t USER_DATA_LOGIC_VERSION = 1;
@@ -256,6 +258,8 @@ class user : public user_cache {
   REG_USER_MGR_PTR_DEF(user_orbit_manager)
   REG_USER_MGR_PTR_DEF(user_matching_manager)
   REG_USER_MGR_PTR_DEF(user_team_manager)
+
+  ////////////////// 业务Manager开始 ////////////////////
 };
 
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
