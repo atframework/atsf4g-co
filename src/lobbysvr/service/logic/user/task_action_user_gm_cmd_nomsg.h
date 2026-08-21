@@ -40,7 +40,7 @@ class task_action_user_gm_cmd_nomsg : public task_action_no_req_base {
   // 管理Manager注册GM接口
   static bool check_params_number(::util::cli::cmd_option_list& params, size_t param_num);
   static void init_gm_cmd(const std::string& cmd_name,
-                          void (*handler)(user_ptr_t user_inst,
+                          void (*handler)(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
                                           std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
                                           ::util::cli::cmd_option_list& params),
                           const std::string& help_msg = std::string());
@@ -51,11 +51,11 @@ class task_action_user_gm_cmd_nomsg : public task_action_no_req_base {
   std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> get_rsp();
   void set_async_task(task_type_trait::task_type t);
   static user_ptr_t get_user_cmd_params(::util::cli::cmd_option_list& params);
-  static std::shared_ptr<rpc::context> create_child_context(::util::cli::cmd_option_list& params);
 
-  static void on_gm_cmd_help(user_ptr_t user_inst, std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
+  static void on_gm_cmd_help(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
+                             std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
                              ::util::cli::cmd_option_list& params);
-  static void on_gm_cmd_invalid(user_ptr_t user_inst,
+  static void on_gm_cmd_invalid(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
                                 std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
                                 ::util::cli::cmd_option_list& params);
 

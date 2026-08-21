@@ -111,11 +111,6 @@ user_ptr_t task_action_user_gm_cmd_nomsg::get_user_cmd_params(::util::cli::cmd_o
   return user_inst;
 }
 
-std::shared_ptr<rpc::context> task_action_user_gm_cmd_nomsg::create_child_context(
-    ::util::cli::cmd_option_list &params) {
-  return get_self(params).get_shared_context().create_shared_child();
-}
-
 void task_action_user_gm_cmd_nomsg::create_cmd_set() {
   if (detail::task_action_user_gm_cmd_cmd_set_) {
     return;
@@ -156,7 +151,8 @@ bool task_action_user_gm_cmd_nomsg::check_params_number(::util::cli::cmd_option_
 
 void task_action_user_gm_cmd_nomsg::init_gm_cmd(
     const std::string &cmd_name,
-    void (*handler)(user_ptr_t user_inst, std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
+    void (*handler)(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
+                    std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
                     ::util::cli::cmd_option_list &params),
     const std::string &help_msg) {
   create_cmd_set();
@@ -169,14 +165,14 @@ void task_action_user_gm_cmd_nomsg::init_gm_cmd(
           FWLOGERROR("can not find user of task_action_user_gm_cmd_nomsg");
           return;
         }
-        handler(user_inst, rsp_body, params);
+        handler(self.get_shared_context().create_shared_child(), user_inst, rsp_body, params);
       });
   if (!help_msg.empty()) {
     result->set_help_msg(help_msg.c_str());
   }
 }
 
-void task_action_user_gm_cmd_nomsg::on_gm_cmd_help(user_ptr_t,
+void task_action_user_gm_cmd_nomsg::on_gm_cmd_help(std::shared_ptr<rpc::context>, user_ptr_t,
                                                    std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
                                                    ::util::cli::cmd_option_list &) {
   std::stringstream ss;
@@ -189,7 +185,7 @@ void task_action_user_gm_cmd_nomsg::on_gm_cmd_help(user_ptr_t,
 }
 
 void task_action_user_gm_cmd_nomsg::on_gm_cmd_invalid(
-    user_ptr_t, std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
+    std::shared_ptr<rpc::context>, user_ptr_t, std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
     ::util::cli::cmd_option_list &params) {
   std::stringstream ss;
   ss << "Cmd Invalid." << std::endl;
