@@ -125,12 +125,16 @@ rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_team_room_ch
         }
       });
 
-  rpc::dtmq::client_subscriber::set_event_callback_on_receive_event(
+  // 必须订阅 raw message 而不是 event: DTMQ 频道日志不止 kEvent，服务端在 update/reset_lock/send_message
+  // 携带锁检查器成功时都会追加 kResetLock 日志(见 mq_channel::set_lock append_log)，还有 kCreate/kDestroy/kText。
+  // 乐观锁每次续租都会产生一条 kResetLock 日志，若只监听 event，空队伍的 ack 和最老未压缩日志时间点都不会前进，
+  // 按时间维度的压缩加速将无法触发。common_action 保证 ready 后每种 command_case 恰好回调一次。
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_raw_message(
       *ret, [](rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                const ::atfw::dtmq::DChannelMessage& data) {
-        team_room* room = get_team_room_from_subscriber(subscriber, "on_receive_event");
+        team_room* room = get_team_room_from_subscriber(subscriber, "on_receive_raw_message");
         if (room != nullptr) {
-          room->on_receive_event(ctx, subscriber, data);
+          room->on_receive_raw_message(ctx, subscriber, data);
         }
       });
 
@@ -2365,14 +2369,21 @@ void team_room::on_receive_snapshot_finished(rpc::context& ctx, const rpc::dtmq:
   schedule_next_timer();
 }
 
-void team_room::on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
-                                 const ::atfw::dtmq::DChannelMessage& message) {
+void team_room::on_receive_raw_message(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                                       const ::atfw::dtmq::DChannelMessage& message) {
   if (subscriber != subscriber_) {
     return;
   }
+  bool has_oldest_log = oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0);
   if (!apply_event_message(ctx, message)) {
     // 保留已成功加载的快照状态，后续仍可通过 snapshot_finished 覆盖恢复。
     step_down();
+    return;
+  }
+  // 按时间维度的压缩加速依赖最早未压缩日志时间点，0->有效 迁移时立即重算定时器，
+  // 否则要等下一次定时器重估(如锁续租)才会应用加速点
+  if (!has_oldest_log && oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
+    schedule_next_timer();
   }
 }
 

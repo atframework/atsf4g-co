@@ -188,8 +188,11 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 订阅者事件回调(经 local_private_data 回传 this，由共享回调组转发)
   void on_receive_snapshot_finished(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                                     int32_t result_code);
-  void on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
-                        const ::atfw::dtmq::DChannelMessage& message);
+  // 频道消息回调(经 local_private_data 回传 this，由共享回调组转发)。
+  // 注册在 on_receive_raw_message 上，所有 command_case(event/text/create/destroy/reset_lock)都会到达，
+  // 以保证 ack 与最老未压缩日志时间点覆盖全部日志(锁续租也会产生 kResetLock 日志)
+  void on_receive_raw_message(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
+                              const ::atfw::dtmq::DChannelMessage& message);
   void on_update_optimistic_lock(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                                  const ::atfw::dtmq::DChannelOptimisticLock& from,
                                  const ::atfw::dtmq::DChannelOptimisticLock& to);
