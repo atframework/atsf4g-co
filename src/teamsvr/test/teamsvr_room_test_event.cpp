@@ -155,14 +155,14 @@ CASE_TEST(teamsvr_room_event, duplicate_add_member_keep_earliest_state) {
     }));
     auto heartbeat_after_first = member->last_heartbeat_timepoint;
     auto router_after_first = member->user_router_server_id;
+    auto joined_after_first = protobuf_to_system_clock(member->member_data.joined_timepoint());
 
-    // 迟到的重复 add_member(更晚入队时间、旧心跳、空路由)
-    env.inject_team_action(team_id, make_injected_add_member(extra, 9021, 0, -3600));
+    // 迟到的重复 add_member(显式携带更晚入队时间、更旧心跳、空路由)
+    env.inject_team_action(team_id, make_injected_add_member(extra, 9021, 3600, -3600));
     CASE_EXPECT_EQ(0, env.sync(team_id));
 
-    // 不推迟更早的入队时间
-    CASE_EXPECT_TRUE(protobuf_to_system_clock(member->member_data.joined_timepoint()) <=
-                     protobuf_to_system_clock(member->member_data.last_heartbeat_timepoint()));
+    // 不推迟更早的入队时间: 入队时间保持首次的更早值不变(若被更晚值覆盖则此断言失败)
+    CASE_EXPECT_EQ(joined_after_first, protobuf_to_system_clock(member->member_data.joined_timepoint()));
     // 不回退更新的心跳和路由状态
     CASE_EXPECT_TRUE(member->last_heartbeat_timepoint >= heartbeat_after_first);
     CASE_EXPECT_EQ(router_after_first, member->user_router_server_id);
@@ -378,19 +378,20 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
     atframework::testing::ss_action_invoke_options invoke_options{rpc::team::packer::get_full_name_of_send_message()};
     invoke_options.source.node_id = kDtmqProxyNodeId;
     invoke_options.source.node_name = "unit-test-dtmq-proxy";
-    int32_t ret = env.run("self_update", [team_id, &members, &invoke_options](rpc::context& ctx) -> rpc::result_code_type {
-      atfw::team::SSTeamRoomSendMessageReq request;
-      request.mutable_team_key()->set_team_id(team_id);
-      protobuf_copy_message(*request.mutable_sender_user_key(), members.normal);
-      auto* update = request.mutable_action()->mutable_member_update();
-      protobuf_copy_message(*update->mutable_user_key(), members.normal);
-      update->set_user_router_server_id(0x6666);
-      protobuf_copy_message(*update->mutable_user_channel(), make_personal_channel(7003));
-      update->set_client_version("v-self");
-      (*update->mutable_shared_member_data())[7].mutable_data()->set_value(std::string("self-data"));
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-          atframework::testing::invoke_ss_action<task_action_send_message>(ctx, request, invoke_options)));
-    });
+    int32_t ret =
+        env.run("self_update", [team_id, &members, &invoke_options](rpc::context& ctx) -> rpc::result_code_type {
+          atfw::team::SSTeamRoomSendMessageReq request;
+          request.mutable_team_key()->set_team_id(team_id);
+          protobuf_copy_message(*request.mutable_sender_user_key(), members.normal);
+          auto* update = request.mutable_action()->mutable_member_update();
+          protobuf_copy_message(*update->mutable_user_key(), members.normal);
+          update->set_user_router_server_id(0x6666);
+          protobuf_copy_message(*update->mutable_user_channel(), make_personal_channel(7003));
+          update->set_client_version("v-self");
+          (*update->mutable_shared_member_data())[7].mutable_data()->set_value(std::string("self-data"));
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+              atframework::testing::invoke_ss_action<task_action_send_message>(ctx, request, invoke_options)));
+        });
     CASE_EXPECT_EQ(0, ret);
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -404,17 +405,18 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
     atframework::testing::ss_action_invoke_options invoke_options{rpc::team::packer::get_full_name_of_send_message()};
     invoke_options.source.node_id = kDtmqProxyNodeId;
     invoke_options.source.node_name = "unit-test-dtmq-proxy";
-    int32_t ret = env.run("admin_update", [team_id, &members, &invoke_options](rpc::context& ctx) -> rpc::result_code_type {
-      atfw::team::SSTeamRoomSendMessageReq request;
-      request.mutable_team_key()->set_team_id(team_id);
-      protobuf_copy_message(*request.mutable_sender_user_key(), members.admin);
-      auto* update = request.mutable_action()->mutable_member_update();
-      protobuf_copy_message(*update->mutable_user_key(), members.normal);
-      update->set_user_router_server_id(0x8888);  // 伪造的他人 router，应被忽略
-      update->set_client_version("v-admin");
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-          atframework::testing::invoke_ss_action<task_action_send_message>(ctx, request, invoke_options)));
-    });
+    int32_t ret =
+        env.run("admin_update", [team_id, &members, &invoke_options](rpc::context& ctx) -> rpc::result_code_type {
+          atfw::team::SSTeamRoomSendMessageReq request;
+          request.mutable_team_key()->set_team_id(team_id);
+          protobuf_copy_message(*request.mutable_sender_user_key(), members.admin);
+          auto* update = request.mutable_action()->mutable_member_update();
+          protobuf_copy_message(*update->mutable_user_key(), members.normal);
+          update->set_user_router_server_id(0x8888);  // 伪造的他人 router，应被忽略
+          update->set_client_version("v-admin");
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+              atframework::testing::invoke_ss_action<task_action_send_message>(ctx, request, invoke_options)));
+        });
     CASE_EXPECT_EQ(0, ret);
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -603,9 +605,10 @@ CASE_TEST(teamsvr_room_event, event_sync_duplicate_batch_ignored) {
     atfw::team::DTeamAction update_action;
     protobuf_copy_message(*update_action.mutable_member_update()->mutable_user_key(), members.normal);
     update_action.mutable_member_update()->set_client_version("ut-dup-v" + std::to_string(i));
-    CASE_EXPECT_EQ(0, env.run("write_log_for_compact", [room, &update_action](rpc::context& ctx) -> rpc::result_code_type {
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, update_action)));
-    }));
+    CASE_EXPECT_EQ(0,
+                   env.run("write_log_for_compact", [room, &update_action](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, update_action)));
+                   }));
   }
   (void)env.sync(team_id);
   env.drive_timer_ticks();
@@ -753,11 +756,12 @@ CASE_TEST(teamsvr_room_event, event_sync_corrupt_any_mid_batch) {
   CASE_EXPECT_EQ(0, env.sync(team_id, true));
   CASE_EXPECT_FALSE(room->is_lock_holder());
   {
-    int32_t write_ret = env.run("write_after_bad_snapshot", [room, &members](rpc::context& ctx) -> rpc::result_code_type {
-      atfw::team::DTeamAction action;
-      protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
-    });
+    int32_t write_ret =
+        env.run("write_after_bad_snapshot", [room, &members](rpc::context& ctx) -> rpc::result_code_type {
+          atfw::team::DTeamAction action;
+          protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+        });
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE, write_ret);
   }
 
