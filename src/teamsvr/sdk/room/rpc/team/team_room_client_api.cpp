@@ -30,6 +30,7 @@ namespace {
 // EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE。CALL 为生成的 rpc::team::<method>(ctx, server_id, req, rsp, no_wait)
 template <class REQ, class RSP, class CALL>
 static rpc::result_code_type internal_call_team_room(rpc::context& ctx, uint32_t zone_id, int64_t team_id, REQ& req,
+                                                     // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
                                                      RSP& rsp, bool no_wait, CALL&& call) {
   if (0 == team_id || 0 == zone_id) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -51,10 +52,9 @@ TEAM_SDK_ROOM_API rpc::result_code_type create(rpc::context& ctx, atfw::team::SS
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.sender_user_key().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomCreateReq& inner_req,
-         atfw::team::SSTeamRoomCreateRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-            rpc::team::create(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
+         atfw::team::SSTeamRoomCreateRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
+        RPC_RETURN_CODE(
+            RPC_AWAIT_CODE_RESULT(rpc::team::create(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
   RPC_RETURN_CODE(ret);
 }
@@ -64,8 +64,7 @@ TEAM_SDK_ROOM_API rpc::result_code_type send_message(rpc::context& ctx, atfw::te
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.sender_user_key().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomSendMessageReq& inner_req,
-         atfw::team::SSTeamRoomSendMessageRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomSendMessageRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::send_message(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
@@ -77,8 +76,7 @@ TEAM_SDK_ROOM_API rpc::result_code_type heartbeat(rpc::context& ctx, atfw::team:
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.user_key().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomHeartbeatReq& inner_req,
-         atfw::team::SSTeamRoomHeartbeatRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomHeartbeatRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::heartbeat(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
@@ -90,22 +88,21 @@ TEAM_SDK_ROOM_API rpc::result_code_type add_invitation(rpc::context& ctx, atfw::
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.invitation().inviter().zone_id(), req.invitation().team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomAddInvitationReq& inner_req,
-         atfw::team::SSTeamRoomAddInvitationRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomAddInvitationRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::add_invitation(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
   RPC_RETURN_CODE(ret);
 }
 
-TEAM_SDK_ROOM_API rpc::result_code_type approve_invitation(
-    rpc::context& ctx, atfw::team::SSTeamRoomApproveInvitationReq& req,
-    atfw::team::SSTeamRoomApproveInvitationRsp& rsp, bool no_wait) {
+TEAM_SDK_ROOM_API rpc::result_code_type approve_invitation(rpc::context& ctx,
+                                                           atfw::team::SSTeamRoomApproveInvitationReq& req,
+                                                           atfw::team::SSTeamRoomApproveInvitationRsp& rsp,
+                                                           bool no_wait) {
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.invitee().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomApproveInvitationReq& inner_req,
-         atfw::team::SSTeamRoomApproveInvitationRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomApproveInvitationRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::approve_invitation(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
@@ -119,8 +116,7 @@ TEAM_SDK_ROOM_API rpc::result_code_type reject_invitation(rpc::context& ctx,
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.invitee().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomRejectInvitationReq& inner_req,
-         atfw::team::SSTeamRoomRejectInvitationRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomRejectInvitationRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::reject_invitation(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
@@ -129,41 +125,39 @@ TEAM_SDK_ROOM_API rpc::result_code_type reject_invitation(rpc::context& ctx,
 
 TEAM_SDK_ROOM_API rpc::result_code_type add_join_request(rpc::context& ctx,
                                                          atfw::team::SSTeamRoomAddJoinRequestReq& req,
-                                                         atfw::team::SSTeamRoomAddJoinRequestRsp& rsp,
-                                                         bool no_wait) {
+                                                         atfw::team::SSTeamRoomAddJoinRequestRsp& rsp, bool no_wait) {
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.join_request().requester().zone_id(), req.join_request().team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomAddJoinRequestReq& inner_req,
-         atfw::team::SSTeamRoomAddJoinRequestRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomAddJoinRequestRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::add_join_request(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
   RPC_RETURN_CODE(ret);
 }
 
-TEAM_SDK_ROOM_API rpc::result_code_type approve_join_request(
-    rpc::context& ctx, atfw::team::SSTeamRoomApproveJoinRequestReq& req,
-    atfw::team::SSTeamRoomApproveJoinRequestRsp& rsp, bool no_wait) {
+TEAM_SDK_ROOM_API rpc::result_code_type approve_join_request(rpc::context& ctx,
+                                                             atfw::team::SSTeamRoomApproveJoinRequestReq& req,
+                                                             atfw::team::SSTeamRoomApproveJoinRequestRsp& rsp,
+                                                             bool no_wait) {
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.applicant().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomApproveJoinRequestReq& inner_req,
-         atfw::team::SSTeamRoomApproveJoinRequestRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomApproveJoinRequestRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::approve_join_request(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));
   RPC_RETURN_CODE(ret);
 }
 
-TEAM_SDK_ROOM_API rpc::result_code_type reject_join_request(
-    rpc::context& ctx, atfw::team::SSTeamRoomRejectJoinRequestReq& req,
-    atfw::team::SSTeamRoomRejectJoinRequestRsp& rsp, bool no_wait) {
+TEAM_SDK_ROOM_API rpc::result_code_type reject_join_request(rpc::context& ctx,
+                                                            atfw::team::SSTeamRoomRejectJoinRequestReq& req,
+                                                            atfw::team::SSTeamRoomRejectJoinRequestRsp& rsp,
+                                                            bool no_wait) {
   auto ret = RPC_AWAIT_CODE_RESULT(internal_call_team_room(
       ctx, req.applicant().zone_id(), req.team_key().team_id(), req, rsp, no_wait,
       [](rpc::context& inner_ctx, uint64_t dest_server_id, atfw::team::SSTeamRoomRejectJoinRequestReq& inner_req,
-         atfw::team::SSTeamRoomRejectJoinRequestRsp& inner_rsp,
-         bool inner_no_wait) -> rpc::result_code_type {
+         atfw::team::SSTeamRoomRejectJoinRequestRsp& inner_rsp, bool inner_no_wait) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
             rpc::team::reject_join_request(inner_ctx, dest_server_id, inner_req, inner_rsp, inner_no_wait)));
       }));

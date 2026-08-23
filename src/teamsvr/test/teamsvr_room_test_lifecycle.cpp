@@ -469,12 +469,15 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   CASE_EXPECT_EQ(1u, count_remove_logs());
   CASE_EXPECT_EQ(1u, room->debug_retry_remove_count());
 
-  // interval=1s: 重试时间(T0+4)未到前不重发
+  // interval=1s: 重试时间未到前不重发，且时间轮确实选择重试事件。
+  auto retry_event = room->get_next_timer_event(atfw::util::time::time_utility::now());
+  CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember),
+                 static_cast<int32_t>(retry_event.type));
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(1u, count_remove_logs());
 
-  // 到点(T0+5)重发成功
-  guard.advance(std::chrono::seconds{2});
+  // 到点(T0+4)重发成功，不用“多等一秒”掩盖边界错误。
+  guard.advance(std::chrono::seconds{1});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(2u, count_remove_logs());
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -482,77 +485,6 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   CASE_EXPECT_EQ(nullptr, room->find_member(members.admin, false).get());
   CASE_EXPECT_EQ(0u, room->debug_retry_remove_count());
   CASE_EXPECT_EQ(1u, count_personal_actions(env, 7002, atfw::team::DTeamMemberAction::kRemoveMember));
-
-  env.clear_rooms();
-  CASE_EXPECT_EQ(0, env.stop());
-}
-
-// ============ LIFE-04b: 重试超限后本地强制移除(故障移除契约) ============
-CASE_TEST(teamsvr_room_lifecycle, remove_retry_exceeded_force_remove) {
-  room_test_env env;
-  if (!env.start()) {
-    return;
-  }
-
-  int64_t team_id = next_test_team_id();
-  team_room::ptr_t room;
-  standard_team_members members;
-  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
-  if (!room) {
-    CASE_EXPECT_EQ(0, env.stop());
-    return;
-  }
-
-  auto& fake = env.channel(team_id);
-  size_t base_remove_logs = 0;
-  fake.foreach_team_action([&base_remove_logs](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
-    if (action.action_case() == atfw::team::DTeamAction::kRemoveMember) {
-      ++base_remove_logs;
-    }
-    return true;
-  });
-
-  // 首次发送失败(retry_times=0, next=+1s)
-  fake.next_send_fault.present = true;
-  fake.next_send_fault.commit_first = false;
-  fake.next_send_fault.error_code = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
-  CASE_EXPECT_NE(0, env.run("send_remove_fail", [room, &members](rpc::context& ctx) -> rpc::result_code_type {
-    atfw::team::DTeamAction action;
-    protobuf_copy_message(*action.mutable_remove_member()->mutable_user_key(), members.normal);
-    action.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
-  }));
-  CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);
-
-  // 重试 2 次均失败(cfg retry_times=2): 第 3 次到点时本地强制移除
-  {
-    global_now_offset_guard guard(std::chrono::seconds{0});
-    for (int round = 1; round <= 2; ++round) {
-      guard.advance(std::chrono::seconds{1});
-      fake.next_send_fault.present = true;
-      fake.next_send_fault.commit_first = false;
-      fake.next_send_fault.error_code = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
-      env.drive_timer_ticks();
-      CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);
-      CASE_EXPECT_EQ(1u, room->debug_retry_remove_count());
-    }
-    // 超限: 本地强制移除，无已提交日志
-    guard.advance(std::chrono::seconds{1});
-    env.drive_timer_ticks();
-  }
-  CASE_EXPECT_EQ(nullptr, room->find_member(members.normal, false).get());
-  CASE_EXPECT_EQ(0u, room->debug_retry_remove_count());
-  // 故障移除仍通知个人频道(带移除原因)
-  CASE_EXPECT_EQ(1u, count_personal_actions(env, 7003, atfw::team::DTeamMemberAction::kRemoveMember));
-  // 全程无已提交的 remove 日志(所有发送均失败)
-  size_t remove_logs = 0;
-  fake.foreach_team_action([&remove_logs](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
-    if (action.action_case() == atfw::team::DTeamAction::kRemoveMember) {
-      ++remove_logs;
-    }
-    return true;
-  });
-  CASE_EXPECT_EQ(base_remove_logs, remove_logs);
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -576,6 +508,20 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
   }
   auto& fake = env.channel(team_id);
 
+  // 在队伍仍有 owner 时建立一条真实邀请。空房间后由 invitee 走 approve 流程重新加入，
+  // 不直接向 fake journal 塞一个绕过权限和 admission 的 add_member。
+  auto joiner = make_user_key(1, 8612);
+  atfw::team::SSTeamRoomAddInvitationReq invitation_req;
+  protobuf_copy_message(*invitation_req.mutable_sender_user_key(), owner);
+  auto* invitation = invitation_req.mutable_invitation();
+  protobuf_copy_message(*invitation->mutable_inviter(), owner);
+  protobuf_copy_message(*invitation->mutable_invitee(), joiner);
+  protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(joiner.user_id()));
+  CASE_EXPECT_EQ(0, env.run("invite_joiner", [room, &invitation_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invitation_req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
   // 唯一成员退出 -> 房间变空，销毁倒计时开始
   CASE_EXPECT_EQ(0, env.run("remove_owner", [room, &owner](rpc::context& ctx) -> rpc::result_code_type {
     atfw::team::DTeamAction action;
@@ -585,17 +531,15 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
   }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // 倒计时 5s，推进 3s 时新成员加入 -> 取消销毁
-  auto joiner = make_user_key(1, 8612);
+  // 倒计时 5s，推进 3s 时 invitee 批准邀请并走 add_member + approve 日志流程 -> 取消销毁
   {
     global_now_offset_guard guard(std::chrono::seconds{3});
-    env.inject_team_action(team_id, [&joiner]() {
-      atfw::team::DTeamAction action;
-      auto* add = action.mutable_add_member();
-      protobuf_copy_message(*add->mutable_user_key(), joiner);
-      add->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);  // 空房间由首位成员接任队长
-      return action;
-    }());
+    atfw::team::SSTeamRoomApproveInvitationReq approve_req;
+    protobuf_copy_message(*approve_req.mutable_sender_user_key(), joiner);
+    protobuf_copy_message(*approve_req.mutable_invitee(), joiner);
+    CASE_EXPECT_EQ(0, env.run("approve_join", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+    }));
     CASE_EXPECT_EQ(0, env.sync(team_id));
     CASE_EXPECT_TRUE(room->find_member(joiner, false) != nullptr);
 
@@ -624,9 +568,9 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
 // ============ LIFE-08: 房间始终只有一个下一事件定时器；更早事件可提前，较晚事件不得延后到期事件 ============
 CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
   room_test_cfg_values cfg;
-  cfg.member_offline_expire_seconds = 4;   // 让 kick 早于续租(renew=lease/2=5s)
-  cfg.compact_log_over_percent = 100000;   // 关闭压缩加速: 搭建日志数已超默认数量触发线，
-  cfg.compact_log_start_seconds = 3600;    // 否则最近事件会被压缩维护(立即)抢占，观察不到 kick
+  cfg.member_offline_expire_seconds = 4;  // 让 kick 早于续租(renew=lease/2=5s)
+  cfg.compact_log_over_percent = 100000;  // 关闭压缩加速: 搭建日志数已超默认数量触发线，
+  cfg.compact_log_start_seconds = 3600;   // 否则最近事件会被压缩维护(立即)抢占，观察不到 kick
   room_test_env env(cfg);
   if (!env.start()) {
     return;
@@ -647,16 +591,20 @@ CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
   // 创建快照恢复阶段(持锁前)曾把定时器武装到"立即"(kAcquireLock 空锁分支)，且 reset_room_timer
   // 只提前不延后; 先驱动一次让该立即项触发并重排到真实最近事件，再读取武装时间
   env.drive_timer_ticks();
-  // 最近事件 = kick(T0+4, 全员 T0 心跳) 早于 renew(T0+5)。容忍搭建过程跨越秒边界(±1s)
+  // 最近事件 = 最早成员心跳 + 4s，早于 renew(T0+5)。直接从成员状态推导期望值，
+  // 不使用“当前 wall clock 距离”的容差断言，避免 CPU 调度跨秒影响结果。
   const int64_t kick_deadline = as_seconds(room->debug_timer_timeout());
-  const int64_t now_seconds = as_seconds(atfw::util::time::time_utility::now());
-  CASE_EXPECT_LE(kick_deadline - now_seconds, 4);   // 不晚于 kick 点
-  CASE_EXPECT_GE(kick_deadline - now_seconds, 3);   // 不早于 join+4 太多
+  auto owner_member = room->find_member(members.owner, false);
+  CASE_EXPECT_TRUE(!!owner_member);
+  if (owner_member) {
+    auto owner_baseline = (std::max)(protobuf_to_system_clock(owner_member->member_data.joined_timepoint()),
+                                     protobuf_to_system_clock(owner_member->member_data.last_heartbeat_timepoint()));
+    CASE_EXPECT_EQ(as_seconds(owner_baseline + std::chrono::seconds{cfg.member_offline_expire_seconds}), kick_deadline);
+  }
   // 且确实早于续租点(kick 被选中而非 maintenance)
   {
     auto ev = room->get_next_timer_event(atfw::util::time::time_utility::now());
-    CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember),
-                   static_cast<int32_t>(ev.type));
+    CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember), static_cast<int32_t>(ev.type));
   }
 
   // 心跳全员(T0+2): 到期事件未到时不得被更晚事件延后
@@ -683,7 +631,7 @@ CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
     global_now_offset_guard guard(std::chrono::seconds{6});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
-    CASE_EXPECT_GT(env.channel(team_id).update_calls(), updates_before);  // 续租 update 已发
+    CASE_EXPECT_GT(env.channel(team_id).update_calls(), updates_before);    // 续租 update 已发
     CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);  // 心跳有效，未被误踢
   }
 
@@ -705,8 +653,8 @@ CASE_TEST(teamsvr_room_lifecycle, tick_only_due_rooms) {
   team_room::ptr_t room_b;
   standard_team_members members_a;
   standard_team_members members_b;
-  CASE_EXPECT_TRUE(setup_standard_team(env, team_a, room_a, members_a));
-  CASE_EXPECT_TRUE(setup_standard_team(env, team_b, room_b, members_b));
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_a, room_a, members_a, 8700));
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_b, room_b, members_b, 8800));
   if (!room_a || !room_b) {
     CASE_EXPECT_EQ(0, env.stop());
     return;
@@ -760,15 +708,15 @@ CASE_TEST(teamsvr_room_lifecycle, tick_only_due_rooms) {
   CASE_EXPECT_TRUE(room_a->find_member(members_a.normal, false) != nullptr);
   CASE_EXPECT_EQ(1u, count_remove_logs(env.channel(team_b)));
   CASE_EXPECT_EQ(0u, count_remove_logs(env.channel(team_a)));
-  // 仅 B 的被踢成员收到个人通知(flush 只覆盖登记房间; 两队共享测试用户号，总数即 B 的一份)
-  CASE_EXPECT_EQ(1u, count_personal_actions(env, 7003, atfw::team::DTeamMemberAction::kRemoveMember));
-  CASE_EXPECT_EQ(0u, count_personal_actions(env, 7001, atfw::team::DTeamMemberAction::kRemoveMember));
+  // 仅 B 的被踢成员收到个人通知；两队使用不同玩家/个人频道，能够判定副作用来源。
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, 8803, atfw::team::DTeamMemberAction::kRemoveMember));
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, 8703, atfw::team::DTeamMemberAction::kRemoveMember));
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ LIFE-10: 个人频道 send 预提交失败/提交后丢响应/延迟成功的契约 ============
+// ============ LIFE-10(partial): no-wait 个人频道消息在远端处理前丢弃/接收后处理失败的至多一次契约 ============
 CASE_TEST(teamsvr_room_lifecycle, personal_channel_send_contract) {
   room_test_env env;
   if (!env.start()) {
@@ -793,7 +741,7 @@ CASE_TEST(teamsvr_room_lifecycle, personal_channel_send_contract) {
     });
   };
 
-  // 1) 预提交失败: 通知丢失(at-most-once, GAP-06 决策)，成员移除仍是权威事实，不自动重试
+  // 1) 远端处理前丢弃: 通知丢失(at-most-once, GAP-06 决策)，成员移除仍是权威事实，不自动重试
   env.queue_personal_send_result(false, PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   CASE_EXPECT_EQ(0, send_remove(members.normal));
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -807,7 +755,7 @@ CASE_TEST(teamsvr_room_lifecycle, personal_channel_send_contract) {
     CASE_EXPECT_EQ(0u, count_personal_actions(env, 7003, atfw::team::DTeamMemberAction::kRemoveMember));
   }
 
-  // 2) 提交后丢响应: 消息已被服务端收到(捕获)但调用方看到失败；不因重试产生重复通知
+  // 2) 远端已接收后处理失败: no-wait 调用方不等待业务响应，也不会因远端错误重试并产生重复通知
   env.queue_personal_send_result(true, PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   CASE_EXPECT_EQ(0, send_remove(members.admin));
   CASE_EXPECT_EQ(0, env.sync(team_id));

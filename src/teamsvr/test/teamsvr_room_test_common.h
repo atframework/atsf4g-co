@@ -56,13 +56,13 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <deque>
 #include <vector>
 
 #include <atframe/atapp.h>
@@ -505,19 +505,6 @@ class fake_team_room_channel {
     custom_data_sequence_ = (std::max)(custom_data_sequence_, last_sequence_);
   }
 
-  // 复制另一个频道的日志与元数据(RCV 等价性用例: 构造同 journal 的恢复频道)
-  void copy_journal_from(const fake_team_room_channel& other) {
-    journal_ = other.journal_;
-    last_sequence_ = other.last_sequence_;
-    last_hash_ = other.last_hash_;
-    created_ = other.created_;
-    create_sequence_ = other.create_sequence_;
-    create_timepoint_ = other.create_timepoint_;
-    destroyed_ = other.destroyed_;
-    destroy_sequence_ = other.destroy_sequence_;
-    destroy_timepoint_ = other.destroy_timepoint_;
-  }
-
   // ---- 下发进度 ----
   bool snapshot_pushed() const noexcept { return snapshot_pushed_; }
   void mark_snapshot_pushed(int64_t pushed_sequence) {
@@ -718,10 +705,25 @@ class room_test_env {
   }
 
   int stop() {
-    if (runtime_ && runtime_->is_running()) {
-      return runtime_->stop();
+    bool has_unconsumed_fault = !personal_send_plan_.empty() || subscribe_fail_times_ > 0;
+    for (const auto& channel_pair : channels_) {
+      if (!channel_pair.second) {
+        continue;
+      }
+      const auto& channel = *channel_pair.second;
+      has_unconsumed_fault = has_unconsumed_fault || channel.next_send_fault.present ||
+                             channel.next_update_fault.present || channel.next_reset_lock_fault.present ||
+                             channel.next_destroy_fault.present;
     }
-    return 0;
+    if (has_unconsumed_fault) {
+      CASE_MSG_INFO() << "room test stopped with an unconsumed fault script\n";
+    }
+
+    int ret = 0;
+    if (runtime_ && runtime_->is_running()) {
+      ret = runtime_->stop();
+    }
+    return 0 != ret ? ret : (has_unconsumed_fault ? -1 : 0);
   }
 
   // ---- fake channel registry ----
@@ -749,9 +751,9 @@ class room_test_env {
   const std::vector<personal_message_record>& personal_messages() const noexcept { return personal_messages_; }
   size_t personal_message_count() const noexcept { return personal_messages_.size(); }
 
-  // 个人频道发送故障编排: 每次个人频道 send 弹出队首；(commit_first, error_code)。
-  // commit_first=true 表示消息已捕获(服务端已收到)但响应按 error_code 失败(提交后丢响应)；
-  // commit_first=false 表示预提交失败(消息未捕获)。队列为空时正常成功。
+  // 个人频道发送故障编排: send 使用 no-wait stream，不存在业务响应；每次发送弹出队首。
+  // commit_first=true 表示远端已接收消息，随后 handler 以 error_code 结束；false 表示处理前丢弃。
+  // 队列为空时正常接收。
   void queue_personal_send_result(bool commit_first, int32_t error_code) {
     personal_send_plan_.emplace_back(commit_first, error_code);
   }
@@ -791,7 +793,9 @@ class room_test_env {
       }
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->await_ready(ctx)));
     });
-    (void)ret;
+    if (0 != ret) {
+      room.reset();
+    }
     return room;
   }
 
@@ -834,8 +838,7 @@ class room_test_env {
     if (0 != ret) {
       return ret;
     }
-    converge_events();
-    return 0;
+    return converge_events();
   }
 
   // 推送调用方自行构造的 event_sync(EVT-10 故障批: 重复/乱序/hash 不匹配/旧 compact 点日志/中途坏 Any)，
@@ -845,25 +848,28 @@ class room_test_env {
       event_sync.add_subscriber_keys(shared_subscriber_key_for());
     }
     int32_t ret = run("sync_custom", [&event_sync, from_node_id](rpc::context& ctx) -> rpc::result_code_type {
-      RPC_RETURN_CODE(
-          RPC_AWAIT_CODE_RESULT(rpc::dtmq::client_subscriber::global_receive_channel_event(ctx, from_node_id, event_sync)));
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+          rpc::dtmq::client_subscriber::global_receive_channel_event(ctx, from_node_id, event_sync)));
     });
     if (0 != ret) {
       return ret;
     }
-    converge_events();
-    return 0;
+    return converge_events();
   }
 
   // 驱动一轮: 订阅者心跳 tick + 房间时间轮 tick；然后 pump 让定时任务完成。
   // 返回值: 本轮触发的房间定时器数量(0 表示时间轮无到期事件)。
   int32_t drive_timer_ticks(int pump_rounds = 8) {
     int32_t fired = 0;
-    (void)run("drive_ticks", [&fired](rpc::context& ctx) -> rpc::result_code_type {
+    int32_t ret = run("drive_ticks", [&fired](rpc::context& ctx) -> rpc::result_code_type {
       rpc::dtmq::client_subscriber::global_tick(ctx);
       fired = team_room_manager::me()->tick(ctx);
       RPC_RETURN_CODE(0);
     });
+    CASE_EXPECT_EQ(0, ret);
+    if (0 != ret) {
+      return std::numeric_limits<int32_t>::min();
+    }
     for (int i = 0; i < pump_rounds; ++i) {
       runtime_->pump_once();
     }
@@ -881,21 +887,27 @@ class room_test_env {
   // wal 日志的应用由 client_subscriber::global_tick 驱动(与真实 dispatcher 时序一致)。
   // tick+flush 执行两轮: 应用可能在 pump 中延后完成，第二轮收敛迟到的待发通知，
   // 保证返回后观察点(个人通知计数/成员状态)已稳定。
-  void converge_events() {
+  int32_t converge_events() {
     for (int round = 0; round < 2; ++round) {
       for (int i = 0; i < 4; ++i) {
         runtime_->pump_once();
       }
-      (void)run("sync_tick", [](rpc::context& ctx) -> rpc::result_code_type {
+      int32_t ret = run("sync_tick", [](rpc::context& ctx) -> rpc::result_code_type {
         rpc::dtmq::client_subscriber::global_tick(ctx);
         RPC_RETURN_CODE(0);
       });
+      if (0 != ret) {
+        return ret;
+      }
       for (int i = 0; i < 4; ++i) {
         runtime_->pump_once();
       }
-      (void)run("sync_flush", [this](rpc::context& ctx) -> rpc::result_code_type {
+      ret = run("sync_flush", [this](rpc::context& ctx) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team_room_manager::me()->flush_pending_channel_message(ctx)));
       });
+      if (0 != ret) {
+        return ret;
+      }
       for (int i = 0; i < 4; ++i) {
         runtime_->pump_once();
       }
@@ -904,10 +916,10 @@ class room_test_env {
     for (int i = 0; i < 8; ++i) {
       runtime_->pump_once();
     }
+    return 0;
   }
 
  public:
-
   // 构造推送事件(incremental)或快照。协程内调用。
   rpc::result_code_type push_channel_events(rpc::context& ctx, int64_t team_id, bool force_snapshot) {
     auto& fake = channel(team_id);
@@ -919,7 +931,9 @@ class room_test_env {
       event_sync.add_subscriber_keys(shared_subscriber_key_for());
       auto ret = RPC_AWAIT_CODE_RESULT(
           rpc::dtmq::client_subscriber::global_receive_channel_event(ctx, kDtmqProxyNodeId, event_sync));
-      fake.mark_snapshot_pushed(fake.last_sequence_);
+      if (0 == ret) {
+        fake.mark_snapshot_pushed(fake.last_sequence_);
+      }
       RPC_RETURN_CODE(ret);
     }
 
@@ -957,7 +971,9 @@ class room_test_env {
     event_sync.add_subscriber_keys(shared_subscriber_key_for());
     auto ret = RPC_AWAIT_CODE_RESULT(
         rpc::dtmq::client_subscriber::global_receive_channel_event(ctx, kDtmqProxyNodeId, event_sync));
-    fake.mark_pushed(fake.last_sequence_);
+    if (0 == ret) {
+      fake.mark_pushed(fake.last_sequence_);
+    }
     RPC_RETURN_CODE(ret);
   }
 
@@ -1064,7 +1080,8 @@ class room_test_env {
 
           auto* fake = self->find_channel_by_key(typed_request.channel_key());
           if (nullptr == fake) {
-            // 个人频道: 捕获成员通知(支持故障编排: 预提交失败不捕获 / 提交后丢响应先捕获再失败)
+            // 个人频道发送使用 no-wait stream，没有业务响应。这里编排的是远端处理结果:
+            // commit_first=false 表示处理前丢弃；commit_first=true 表示先接收消息、随后处理失败。
             if (!self->personal_send_plan_.empty()) {
               auto plan = self->personal_send_plan_.front();
               self->personal_send_plan_.pop_front();
@@ -1317,8 +1334,8 @@ inline size_t count_personal_actions(const room_test_env& env, uint64_t user_id,
 inline atfw::dtmq::DChannelOptimisticLock make_foreign_lock(gsl::string_view holder, int64_t expire_after_seconds) {
   atfw::dtmq::DChannelOptimisticLock ret;
   ret.set_lock_holder(std::string(holder));
-  *ret.mutable_timeout() = protobuf_from_system_clock(
-      atfw::util::time::time_utility::now() + std::chrono::seconds{expire_after_seconds});
+  *ret.mutable_timeout() =
+      protobuf_from_system_clock(atfw::util::time::time_utility::now() + std::chrono::seconds{expire_after_seconds});
   return ret;
 }
 
@@ -1335,14 +1352,14 @@ struct standard_team_members {
 };
 
 inline bool setup_standard_team(room_test_env& env, int64_t team_id, team_room::ptr_t& out_room,
-                                standard_team_members& members) {
-  members.owner = make_user_key(1, 7001);
-  members.admin = make_user_key(1, 7002);
-  members.normal = make_user_key(1, 7003);
-  members.outsider = make_user_key(1, 7004);
-  members.owner_channel = make_personal_channel(7001);
-  members.admin_channel = make_personal_channel(7002);
-  members.normal_channel = make_personal_channel(7003);
+                                standard_team_members& members, uint64_t user_id_base = 7000) {
+  members.owner = make_user_key(1, user_id_base + 1);
+  members.admin = make_user_key(1, user_id_base + 2);
+  members.normal = make_user_key(1, user_id_base + 3);
+  members.outsider = make_user_key(1, user_id_base + 4);
+  members.owner_channel = make_personal_channel(user_id_base + 1);
+  members.admin_channel = make_personal_channel(user_id_base + 2);
+  members.normal_channel = make_personal_channel(user_id_base + 3);
 
   if (0 != env.setup_created_team(team_id, members.owner, members.owner_channel, &out_room)) {
     return false;

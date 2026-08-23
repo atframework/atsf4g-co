@@ -634,13 +634,13 @@ CASE_TEST(teamsvr_room_admission, standby_node_no_personal_side_effects) {
 
   // 备用节点应用新的历史 admission 日志: 不发送任何个人通知
   auto invitee = make_user_key(1, 8081);
-  env.inject_team_action(team_id, [&members, &invitee]() {
+  env.inject_team_action(team_id, [&members, &invitee, team_id]() {
     atfw::team::DTeamAction action;
     auto* invitation = action.mutable_add_invitation();
     protobuf_copy_message(*invitation->mutable_inviter(), members.normal);
     protobuf_copy_message(*invitation->mutable_invitee(), invitee);
     protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
-    invitation->mutable_team_key()->set_team_id(0);
+    invitation->mutable_team_key()->set_team_id(team_id);
     return action;
   }());
   CASE_EXPECT_EQ(0, env.sync(team_id));
