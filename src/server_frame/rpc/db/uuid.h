@@ -88,6 +88,16 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc_result<int64_t> generate_globa
                                                                                             uint32_t major_type,
                                                                                             uint32_t minor_type = 0,
                                                                                             uint32_t patch_type = 0);
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+/**
+ * @brief 清空进程级唯一 ID 号段缓存(测试钩子)
+ * @note Only available when PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS is on. 号段缓存是进程级静态对象，
+ *       跨用例延续；需要让 generate_global_unique_id 重新访问数据库(如注入 DB 故障)的用例先调用本函数。
+ *       必须在没有任何任务运行(无并发分配)时调用。
+ */
+SERVER_FRAME_API void reset_global_unique_id_pools_for_test();
+#endif
 }  // namespace uuid
 
 }  // namespace db

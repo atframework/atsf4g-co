@@ -1606,14 +1606,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_sub
     protobuf_copy_message(*rpc_req_body->mutable_compare_and_maybe_reset_lock(), *compare_and_maybe_reset_lock_ptr);
   }
 
-  uint64_t target_server_id = get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable);
-  if (0 == target_server_id) {
-    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", get_channel_key().channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
-  }
-
-  auto ret =
-      RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
+  // 目标服务器选择内嵌在 rpc::dtmq::destroy_channel 内(从请求体 channel_key 提取)
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *rpc_req_body, *rpc_rsp_body, no_wait));
   RPC_RETURN_CODE(ret);
 }
 
@@ -1631,13 +1625,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_sub
   }
   rpc_req_body->set_auto_create_channel(auto_create_channel);
 
-  uint64_t target_server_id = get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable);
-  if (0 == target_server_id) {
-    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", get_channel_key().channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
-  }
-
-  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::reset_lock(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
+  // 目标服务器选择内嵌在 rpc::dtmq::reset_lock 内(从请求体 channel_key 提取)
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::reset_lock(ctx, *rpc_req_body, *rpc_rsp_body, no_wait));
   if (compare_and_maybe_reset_lock_rsp_ptr != nullptr && rpc_rsp_body->has_compare_and_maybe_reset_lock()) {
     protobuf_move_message(*compare_and_maybe_reset_lock_rsp_ptr,
                           std::move(*rpc_rsp_body->mutable_compare_and_maybe_reset_lock()));
@@ -1707,13 +1696,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type client_sub
   }
   rpc_req_body->set_auto_create_channel(auto_create_channel);
 
-  uint64_t target_server_id = get_target_server_id(get_channel_key(), rpc::dtmq::replicate_type::kWritable);
-  if (0 == target_server_id) {
-    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", get_channel_key().channel_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
-  }
-
-  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::update(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));
+  // 目标服务器选择内嵌在 rpc::dtmq::update 内(从请求体 channel_key 提取)
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::update(ctx, *rpc_req_body, *rpc_rsp_body, no_wait));
   if (compare_and_maybe_reset_lock_rsp_ptr != nullptr && rpc_rsp_body->has_compare_and_maybe_reset_lock()) {
     protobuf_move_message(*compare_and_maybe_reset_lock_rsp_ptr,
                           std::move(*rpc_rsp_body->mutable_compare_and_maybe_reset_lock()));

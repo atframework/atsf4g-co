@@ -185,7 +185,9 @@ DTMQ_PROXY_SDK_API void get_target_server_ids(std::vector<uint64_t>& server_ids,
   discovery_set->lower_bound_node_hash_by_consistent_hash(gsl::make_span(output), node_hash);
 
   for (size_t i = 1; i < output.size(); ++i) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (output[i].node) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       server_ids.emplace_back(output[i].node->get_discovery_info().id());
     } else {
       server_ids.emplace_back(0);
@@ -256,6 +258,57 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     RPC_RETURN_CODE(rpc_rsp_body->client_result());
   }
 
+  RPC_RETURN_CODE(ret);
+}
+
+DTMQ_PROXY_SDK_API rpc::result_code_type update(rpc::context& ctx, atfw::dtmq::SSChannelUpdateReq& req,
+                                                atfw::dtmq::SSChannelUpdateRsp& rsp, bool no_wait) {
+  const auto& channel_key = req.channel_key();
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+
+  uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+  }
+
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::update(ctx, target_server_id, req, rsp, no_wait));
+  RPC_RETURN_CODE(ret);
+}
+
+DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock(rpc::context& ctx, atfw::dtmq::SSChannelResetLockReq& req,
+                                                    atfw::dtmq::SSChannelResetLockRsp& rsp, bool no_wait) {
+  const auto& channel_key = req.channel_key();
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+
+  uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+  }
+
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::reset_lock(ctx, target_server_id, req, rsp, no_wait));
+  RPC_RETURN_CODE(ret);
+}
+
+DTMQ_PROXY_SDK_API rpc::result_code_type destroy_channel(rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req,
+                                                         google::protobuf::Empty& rsp, bool no_wait) {
+  const auto& channel_key = req.channel_key();
+  if (channel_key.channel_id().empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+
+  uint64_t target_server_id = get_target_server_id(channel_key, rpc::dtmq::replicate_type::kWritable);
+  if (0 == target_server_id) {
+    FCTXLOGDEBUG(ctx, "No server available for channel_id:({})", channel_key.channel_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+  }
+
+  auto ret = RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, target_server_id, req, rsp, no_wait));
   RPC_RETURN_CODE(ret);
 }
 

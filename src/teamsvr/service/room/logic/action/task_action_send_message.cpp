@@ -152,6 +152,14 @@ task_action_send_message::result_type task_action_send_message::operator()() {
         break;
       }
       default:
+        // GAP-05: 管理员/队长可更新他人成员数据，但请求中携带的他人 user_router_server_id 不可信
+        // (成员切换节点后会自己心跳上报)，action 层在写入前清零，apply 层只接受非零值
+        if (atfw::team::DTeamAction::kMemberUpdate == req_body.action().action_case() &&
+            req_body.action().member_update().user_router_server_id() != 0 &&
+            (req_body.action().member_update().user_key().zone_id() != req_body.sender_user_key().zone_id() ||
+             req_body.action().member_update().user_key().user_id() != req_body.sender_user_key().user_id())) {
+          req_body.mutable_action()->mutable_member_update()->set_user_router_server_id(0);
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
         break;
     }

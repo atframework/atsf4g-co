@@ -6,6 +6,7 @@
 
 #include <rpc/rpc_common_types.h>
 #include <time/jiffies_timer.h>
+#include <time/time_utility.h>
 
 #include <chrono>
 #include <cstdint>
@@ -54,6 +55,18 @@ class team_room_manager : public util::design_pattern::singleton<team_room_manag
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type flush_pending_channel_message(rpc::context& ctx);
 
   size_t get_room_count() const noexcept;
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // 测试钩子: 重建时间轮。jiffies_timer 的 init 对已初始化实例是 no-op，last_tick_ 只前进不后退；
+  // 使用时间偏移的用例会把它推到未来(后续用例的定时器被钳制到 last_tick_+1 而永不触发)，
+  // 因此每个测试环境启动时重建时间轮以隔离
+  void reset_timer_wheel_for_test() {
+    timer_set_ = timer_set_type{};
+    timer_set_.init(static_cast<time_t>(std::chrono::duration_cast<std::chrono::seconds>(
+        atfw::util::time::time_utility::now().time_since_epoch()).count()));
+    timer_running_ = true;
+  }
+#endif
 
  private:
   std::unordered_map<int64_t, room_ptr_t> rooms_;

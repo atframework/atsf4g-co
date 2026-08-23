@@ -1,8 +1,8 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-set(CURRENT_SERVICE_SOURCES rpc/team/teamroomservice.atfw.gen.cpp)
-set(CURRENT_SERVICE_HEADERS rpc/team/teamroomservice.atfw.gen.h)
+set(CURRENT_SERVICE_SOURCES rpc/team/teamroomservice.atfw.gen.cpp rpc/team/team_room_client_api.cpp)
+set(CURRENT_SERVICE_HEADERS rpc/team/teamroomservice.atfw.gen.h rpc/team/team_room_client_api.h)
 
 project_service_declare_sdk(
   "team-sdk-room"

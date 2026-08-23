@@ -385,6 +385,13 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_unique_id(rpc::context &ctx
   // POOL => 1 | 50 | 13
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(generate_global_unique_id<13>(ctx, major_type, minor_type, patch_type)));
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+SERVER_FRAME_API void reset_global_unique_id_pools_for_test() {
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> lock_guard(get_global_unique_id_pool_locker());
+  get_global_unique_id_pools().clear();
+}
+#endif
 }  // namespace uuid
 }  // namespace db
 }  // namespace rpc

@@ -1,5 +1,25 @@
 # teamsvr-room 服务分析与测试执行计划
 
+## 当前执行状态（2026-08-23）
+
+第一批自动化测试已在 `${PROJECT_NAME}-teamsvr-room-unit-test` 落地：57 个用例全部通过，CTest
+`--repeat until-fail:2` 连续两次稳定，所有用例 `test.stop()` 返回 0（无未消费 mock expectation）。按
+阶段 A～D 的 P0/P1 主体推进：
+
+- 已完成：INF/CRT/ROU 基础设施与创建路由、PERM-01～12/14 权限零写入门禁、ADM 邀请与加入全流程、
+  EVT-01～03/06～09/11 事件应用、CMP-01/03/06～08/13 压缩与快照内容、RCV-02～04/09/10 恢复、
+  LCK-01～03 锁转移、LIFE-01～03/05/06/13/14 心跳与生命周期（详见 §4 矩阵标记）。
+- 夹具采用 §3.2 的“快速业务层”方案：typed SS mock 复刻 dtmq 服务端锁 CAS、hash chain journal、
+  custom/private 快照保存与压缩边界语义，并内置 per-RPC 故障注入钩子（提交后丢响应/预提交失败）。
+- 期间调整一处角色门槛设计并修复一处生产缺陷（见 §5 FIX-05/FIX-06）：角色门槛按阶梯大小比较
+  （不高于 GUEST 视为未配置，其余自定义档位按数值生效）；`send_action` 在队伍销毁后仍接受业务写入。
+- 未完成：真实 `wal_publisher` WAL 层（§4.6）、CON 并发组与 FLT 故障脚本（§4.7）、BND 边界组
+  （§4.9）；夹具层面另有三处时序结论已记录在 `teamsvr_room_test_common.h`
+  注释中（wal 应用由 `global_tick` 驱动、跨用例虚拟时间需单调、ninja 头文件依赖失效需删 obj）。
+- 本计划范围限定为离线 mock 单元测试，不包含真实进程集成测试。
+
+用例矩阵状态标记：✅ 已实现且稳定通过；🔶 部分实现（存在子项缺口）；⬜ 未实现。
+
 ## 1. 目标与边界
 
 本文档基于当前 `src/teamsvr/service/room`、组队协议、DTMQ Client Subscriber 以及仓库现有
@@ -99,7 +119,7 @@ flowchart LR
 
 ### 2.5 权限模型
 
-`DTeamConfigure` 中角色为 `GUEST(0)` 表示使用默认门槛。
+`DTeamConfigure` 中的角色值不高于 `GUEST(0)` 时表示未配置、使用默认门槛。GUEST/NORMAL/ADMIN/OWNER 只是当前定义的档位参考点，方便以后在任意档位之间插入新角色；因此角色与门槛的比较一律按大小进行（`>=`/`<`），不做等值判断，自定义中间档位按数值直接生效。
 
 | 动作 | 默认门槛/特殊规则 |
 | --- | --- |
@@ -291,161 +311,163 @@ AND update/reset_lock/destroy 调用无非预期增量
 
 ## 4. 自动化用例矩阵
 
+状态标记：✅ 已实现且稳定通过；🔶 部分实现；⬜ 未实现。部分实现与未实现项的缺口见文首“当前执行状态”。
+
 ### 4.1 基础设施与创建/路由
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| INF-01 | P0 | fixture 启动，type 11 配置生效，subscribe heartbeat 后 ready，`with_private_data=true` |
-| INF-02 | P0 | ready snapshot 的 team id、锁、custom/private data 和增量日志能送达 room 回调 |
-| INF-03 | P0 | 每个 case 清理 manager；重复创建相同 team id 返回同一 room，不出现第二个本地定时器 |
-| INF-04 | P1 | typed `invoke_ss_action` 覆盖业务 action；另用 raw transport smoke case 验证 dispatcher 注册、RPC envelope 和非法 type URL/body |
-| CRT-01 | P0 | 显式 team id 创建成功；初始 update 为 `save=true`，创建者为 OWNER/队长，公共和私有初始数据完整 |
-| CRT-02 | P1 | team id 为 0 时 UUID 成功/失败；只在生成成功后创建 room |
-| CRT-03 | P0 | sender key 非法、重复创建、已销毁频道分别返回精确错误，且无额外权威写入 |
-| CRT-04 | P0 | 创建 update 已提交但响应丢失；重新订阅/重试从已提交快照恢复，不覆盖成第二支初始状态 |
-| ROU-01 | P1 | 本地一致性哈希目标执行本地 action；远端目标仅 forward；无 ready 节点返回 DTMQ unavailable |
-| ROU-02 | P1 | forward transport 失败和 `forward_ok=false` 均正确映射响应，不在本节点创建 room |
-| ROU-03 | P2 | team id、sender/invitee/applicant 不同 zone 的路由选择符合最终跨区契约 |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| INF-01 | ✅ | P0 | fixture 启动，type 11 配置生效，subscribe heartbeat 后 ready，`with_private_data=true` |
+| INF-02 | ✅ | P0 | ready snapshot 的 team id、锁、custom/private data 和增量日志能送达 room 回调 |
+| INF-03 | ✅ | P0 | 每个 case 清理 manager；重复创建相同 team id 返回同一 room，不出现第二个本地定时器 |
+| INF-04 | 🔶 | P1 | typed `invoke_ss_action` 覆盖业务 action；另用 raw transport smoke case 验证 dispatcher 注册、RPC envelope 和非法 type URL/body |
+| CRT-01 | ✅ | P0 | 显式 team id 创建成功；初始 update 为 `save=true`，创建者为 OWNER/队长，公共和私有初始数据完整 |
+| CRT-02 | 🔶 | P1 | team id 为 0 时 UUID 成功/失败；只在生成成功后创建 room |
+| CRT-03 | ✅ | P0 | sender key 非法、重复创建、已销毁频道分别返回精确错误，且无额外权威写入 |
+| CRT-04 | ✅ | P0 | 创建 update 已提交但响应丢失；重新订阅/重试从已提交快照恢复，不覆盖成第二支初始状态 |
+| ROU-01 | 🔶 | P1 | 本地一致性哈希目标执行本地 action；远端目标仅 forward；无 ready 节点返回 DTMQ unavailable |
+| ROU-02 | 🔶 | P1 | forward transport 失败和 `forward_ok=false` 均正确映射响应，不在本节点创建 room |
+| ROU-03 | ⬜ | P2 | team id、sender/invitee/applicant 不同 zone 的路由选择符合最终跨区契约 |
 
 ### 4.2 权限与“拒绝时零写入”
 
 下表每行至少包含：默认配置边界值、非成员（游客）、低一档角色、等于门槛、高一档角色，以及自定义
 `DTeamConfigure` 门槛。所有失败变体都应用统一零写入门禁。
 
-| ID | 优先级 | 动作 | 变体 |
-| --- | --- | --- | --- |
-| PERM-01 | P0 | `remove_member` | NORMAL 删除自己成功；游客删除自己报 not-in-team；NORMAL 删除他人失败；ADMIN 删除他人成功 |
-| PERM-02 | P0 | `add_member` | NORMAL 失败；ADMIN 成功；重复成员失败；非法 key 失败；不能授予高于操作者的角色 |
-| PERM-03 | P0 | `member_update` | 任意成员更新自己成功；NORMAL 更新他人失败；ADMIN 更新他人成功 |
-| PERM-04 | P0 | `team_update` | 默认 NORMAL 可更新；自定义 ADMIN 后 NORMAL 失败、ADMIN 成功 |
-| PERM-05 | P0 | `election_captain` | 当前队长主动转让成功；非队长 ADMIN 失败；OWNER 成功；目标非成员失败 |
-| PERM-06 | P0 | `destroy_team` | 仅 OWNER 成功；配置字段不能降低固定门槛 |
-| PERM-07 | P0 | `add_invitation` | inviter 必须等于 sender；默认任意成员可邀请；自定义 ADMIN 门槛生效；游客失败 |
-| PERM-08 | P0 | `approve_invitation` | invitee 游客本人成功；成员本人也可；任何第三方含 OWNER 都不能代为同意 |
-| PERM-09 | P0 | `reject_invitation` | invitee 游客本人成功；默认 ADMIN 可拒绝他人邀请；NORMAL 失败；自定义角色生效 |
-| PERM-10 | P0 | `add_join_request` | 非成员本人默认成功；伪造 requester 失败；现有成员 already-in-team；私人队伍禁止外部申请；未创建队伍返回 room-not-found 且零写入（专用 RPC 与 `send_message` 转换路径一致） |
-| PERM-11 | P0 | approve/reject join | 默认任意成员成功；游客失败；自定义 ADMIN 后 NORMAL 失败、ADMIN 成功 |
-| PERM-12 | P0 | action case 缺失/未知 | invalid-param，零写入 |
-| PERM-13 | P0 | 专用 RPC 对照 | invitation/join 的六个专用 RPC 与通用 `send_message` 得到相同权限结论和日志形状 |
-| PERM-14 | P1 | 非法角色配置 | GUEST 使用默认值；未知/越界 enum 数值不能意外降低门槛，最终策略需明确为拒绝或规范化 |
-| PERM-15 | P1 | 内外 team key | outer team id 与 destroy/remove/admission 内嵌 team id 不一致时拒绝或统一改写为当前 room，绝不向成员发布矛盾标识 |
+| ID | 状态 | 优先级 | 动作 | 变体 |
+| --- | --- | --- | --- | --- |
+| PERM-01 | ✅ | P0 | `remove_member` | NORMAL 删除自己成功；游客删除自己报 not-in-team；NORMAL 删除他人失败；ADMIN 删除他人成功 |
+| PERM-02 | ✅ | P0 | `add_member` | NORMAL 失败；ADMIN 成功；重复成员失败；非法 key 失败；不能授予高于操作者的角色 |
+| PERM-03 | ✅ | P0 | `member_update` | 任意成员更新自己成功；NORMAL 更新他人失败；ADMIN 更新他人成功 |
+| PERM-04 | ✅ | P0 | `team_update` | 默认 NORMAL 可更新；自定义 ADMIN 后 NORMAL 失败、ADMIN 成功 |
+| PERM-05 | ✅ | P0 | `election_captain` | 当前队长主动转让成功；非队长 ADMIN 失败；OWNER 成功；目标非成员失败 |
+| PERM-06 | ✅ | P0 | `destroy_team` | 仅 OWNER 成功；配置字段不能降低固定门槛 |
+| PERM-07 | ✅ | P0 | `add_invitation` | inviter 必须等于 sender；默认任意成员可邀请；自定义 ADMIN 门槛生效；游客失败 |
+| PERM-08 | ✅ | P0 | `approve_invitation` | invitee 游客本人成功；成员本人也可；任何第三方含 OWNER 都不能代为同意 |
+| PERM-09 | ✅ | P0 | `reject_invitation` | invitee 游客本人成功；默认 ADMIN 可拒绝他人邀请；NORMAL 失败；自定义角色生效 |
+| PERM-10 | ✅ | P0 | `add_join_request` | 非成员本人默认成功；伪造 requester 失败；现有成员 already-in-team；私人队伍禁止外部申请；未创建队伍返回 room-not-found 且零写入（专用 RPC 与 `send_message` 转换路径一致） |
+| PERM-11 | ✅ | P0 | approve/reject join | 默认任意成员成功；游客失败；自定义 ADMIN 后 NORMAL 失败、ADMIN 成功 |
+| PERM-12 | ✅ | P0 | action case 缺失/未知 | invalid-param，零写入 |
+| PERM-13 | 🔶 | P0 | 专用 RPC 对照 | invitation/join 的六个专用 RPC 与通用 `send_message` 得到相同权限结论和日志形状 |
+| PERM-14 | ✅ | P1 | 角色阶梯比较 | GUEST 及以下使用默认门槛；门槛比较一律按大小（含等于），低于 NORMAL 的自定义门槛、NORMAL/ADMIN 之间的自定义角色（如 150）与高于 OWNER 的档位（如 350）均按数值生效，验证未来插入新档位无需修改比较逻辑 |
+| PERM-15 | ⬜ | P1 | 内外 team key | outer team id 与 destroy/remove/admission 内嵌 team id 不一致时拒绝或统一改写为当前 room，绝不向成员发布矛盾标识 |
 
 ### 4.3 邀请、加入请求与个人通知
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| ADM-01 | P0 | 新邀请补齐 team id、start/expire；写一个 `add_invitation`；回环后只向 invitee 发 `invited` |
-| ADM-02 | P1 | 完全重复邀请不追加日志；频道或更晚过期时间变化时更新且不缩短有效期；source/admission 数据变化按确定契约更新或明确忽略，不能追加与旧日志完全相同的冗余 action |
-| ADM-03 | P0 | `invited` 只包含 PUBLIC 的 team/member admission data，不泄露 MEMBER 数据 |
-| ADM-04 | P0 | invitee 接受有效邀请，依次写 `add_member`、`approve_invitation`；事件回环后成员为 NORMAL 并收到 `joined_team`；通知目标频道以 room 本地记录为准，事件负载中的频道字段不被信任 |
-| ADM-05 | P0 | 接受邀请时，client version、router id、shared member data 来自 invitee 本人请求，不能由 inviter 伪造 |
-| ADM-06 | P1 | `add_member` 成功但 approve 写入失败后重试：不重复添加成员，最终清理邀请并只产生一次有效结果通知 |
-| ADM-07 | P0 | 自己拒绝、管理员撤回分别写 `reject_invitation`；成员通过 team log 感知，invitee 收个人回执 |
-| ADM-08 | P0 | 过期邀请 approve 返回 not-found；reject 幂等成功；room 清理不发送 cancel/reject 个人通知 |
-| ADM-09 | P0 | 新加入请求规范化 team id/默认过期时间，保留申请人的频道、版本、router 和 admission data |
-| ADM-10 | P1 | 完全重复加入请求不追加日志；频道或更晚过期时间变化可刷新且不缩短有效期；version/router/source/admission 数据变化按确定契约处理，不能写无变化的冗余 action |
-| ADM-11 | P0 | 批准申请依次写 `add_member`、`approve_join_request`；成员数据来自原申请；申请人收到 `joined_team` |
-| ADM-12 | P0 | 拒绝申请写 `reject_join_request`；申请人收到拒绝通知；队伍成员不额外收到个人通知 |
-| ADM-13 | P0 | 过期申请 approve 返回 not-found；reject 幂等成功；维护清理不发个人通知 |
-| ADM-14 | P0 | 备用 room 应用同一批历史 admission 日志不发送 `DTeamMemberAction`，接管后只发送新事件的副作用 |
-| ADM-15 | P1 | 多个 invitee/requester 并存时，按 user key 独立更新、批准、拒绝和清理，不串频道或数据 |
-| ADM-16 | P1 | 目标已是成员时再次 approve（双击/断线重连重试/重放）：不再写第二个 `add_member`，仍清理 admission 并只补一次 `joined_team`；`approve_invitation` 与 `approve_join_request` 两条路径行为一致 |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| ADM-01 | ✅ | P0 | 新邀请补齐 team id、start/expire；写一个 `add_invitation`；回环后只向 invitee 发 `invited` |
+| ADM-02 | ✅ | P1 | 完全重复邀请不追加日志；频道或更晚过期时间变化时更新且不缩短有效期；source/admission 数据变化按确定契约更新或明确忽略，不能追加与旧日志完全相同的冗余 action |
+| ADM-03 | ✅ | P0 | `invited` 只包含 PUBLIC 的 team/member admission data，不泄露 MEMBER 数据 |
+| ADM-04 | ✅ | P0 | invitee 接受有效邀请，依次写 `add_member`、`approve_invitation`；事件回环后成员为 NORMAL 并收到 `joined_team`；通知目标频道以 room 本地记录为准，事件负载中的频道字段不被信任 |
+| ADM-05 | ✅ | P0 | 接受邀请时，client version、router id、shared member data 来自 invitee 本人请求，不能由 inviter 伪造 |
+| ADM-06 | ✅ | P1 | `add_member` 成功但 approve 写入失败后重试：不重复添加成员，最终清理邀请并只产生一次有效结果通知 |
+| ADM-07 | ✅ | P0 | 自己拒绝、管理员撤回分别写 `reject_invitation`；成员通过 team log 感知，invitee 收个人回执 |
+| ADM-08 | ✅ | P0 | 过期邀请 approve 返回 not-found；reject 幂等成功；room 清理不发送 cancel/reject 个人通知 |
+| ADM-09 | ✅ | P0 | 新加入请求规范化 team id/默认过期时间，保留申请人的频道、版本、router 和 admission data |
+| ADM-10 | ✅ | P1 | 完全重复加入请求不追加日志；频道或更晚过期时间变化可刷新且不缩短有效期；version/router/source/admission 数据变化按确定契约处理，不能写无变化的冗余 action |
+| ADM-11 | ✅ | P0 | 批准申请依次写 `add_member`、`approve_join_request`；成员数据来自原申请；申请人收到 `joined_team` |
+| ADM-12 | ✅ | P0 | 拒绝申请写 `reject_join_request`；申请人收到拒绝通知；队伍成员不额外收到个人通知 |
+| ADM-13 | ✅ | P0 | 过期申请 approve 返回 not-found；reject 幂等成功；维护清理不发个人通知 |
+| ADM-14 | ✅ | P0 | 备用 room 应用同一批历史 admission 日志不发送 `DTeamMemberAction`，接管后只发送新事件的副作用 |
+| ADM-15 | ⬜ | P1 | 多个 invitee/requester 并存时，按 user key 独立更新、批准、拒绝和清理，不串频道或数据 |
+| ADM-16 | ✅ | P1 | 目标已是成员时再次 approve（双击/断线重连重试/重放）：不再写第二个 `add_member`，仍清理 admission 并只补一次 `joined_team`；`approve_invitation` 与 `approve_join_request` 两条路径行为一致 |
 
 ### 4.4 事件应用、成员和队长
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| EVT-01 | P0 | sequence 有缺口但递增时正常应用；ack sequence/hash 只前进不回退 |
-| EVT-02 | P0 | `add_member` 缺少入队/心跳时间时使用事件时间；首成员成为 OWNER/队长 |
-| EVT-03 | P0 | 重复 `add_member` 不改变 user key、不推迟更早入队时间、不回退更新的心跳和 router 状态 |
-| EVT-04 | P1 | `member_update` 合并字段；管理员更新他人不错误刷新心跳 LRU；自己更新可更新 router/channel；管理员携带他人 router 值按 GAP-05 处理 |
-| EVT-05 | P1 | `team_update` 合并 configure/shared data，未携带字段保持原值 |
-| EVT-06 | P0 | 队长移除后，在剩余成员中按 joined time、user key 确定性选举，并写一个 election action |
-| EVT-07 | P0 | remove 事件幂等；被移除者只收到一次有效移除通知；重放不重复副作用 |
-| EVT-08 | P0 | 损坏的 `DTeamAction Any` 使 room 退位，不应用部分状态，不继续以旧锁写入 |
-| EVT-09 | P1 | destroy 事件标记 room 已销毁，后续业务写入返回 destroyed |
-| EVT-10 | P0 | event-sync 批次含重复、乱序、hash 不匹配、旧 compact 点日志和中途坏 Any；区分 Subscriber 拒绝与 Room 应用失败，已应用前缀和 flush 行为符合明确契约 |
-| EVT-11 | P0 | 非 `DTeamAction` event、text/raw/create/destroy 等 DTMQ detail 不被误解为队伍 action；kResetLock（续租产生）、kCreate、kText 等非 event 日志同样推进 ack sequence/hash 和最老未压缩日志时间点，destroy detail 置销毁标记 |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| EVT-01 | ✅ | P0 | sequence 有缺口但递增时正常应用；ack sequence/hash 只前进不回退 |
+| EVT-02 | ✅ | P0 | `add_member` 缺少入队/心跳时间时使用事件时间；首成员成为 OWNER/队长 |
+| EVT-03 | ✅ | P0 | 重复 `add_member` 不改变 user key、不推迟更早入队时间、不回退更新的心跳和 router 状态 |
+| EVT-04 | ⬜ | P1 | `member_update` 合并字段；管理员更新他人不错误刷新心跳 LRU；自己更新可更新 router/channel；管理员携带他人 router 值按 GAP-05 处理 |
+| EVT-05 | ⬜ | P1 | `team_update` 合并 configure/shared data，未携带字段保持原值 |
+| EVT-06 | ✅ | P0 | 队长移除后，在剩余成员中按 joined time、user key 确定性选举，并写一个 election action |
+| EVT-07 | ✅ | P0 | remove 事件幂等；被移除者只收到一次有效移除通知；重放不重复副作用 |
+| EVT-08 | ✅ | P0 | 损坏的 `DTeamAction Any` 使 room 退位，不应用部分状态，不继续以旧锁写入 |
+| EVT-09 | ✅ | P1 | destroy 事件标记 room 已销毁，后续业务写入返回 destroyed |
+| EVT-10 | 🔶 | P0 | event-sync 批次含重复、乱序、hash 不匹配、旧 compact 点日志和中途坏 Any；区分 Subscriber 拒绝与 Room 应用失败，已应用前缀和 flush 行为符合明确契约 |
+| EVT-11 | ✅ | P0 | 非 `DTeamAction` event、text/raw/create/destroy 等 DTMQ detail 不被误解为队伍 action；kResetLock（续租产生）、kCreate、kText 等非 event 日志同样推进 ack sequence/hash 和最老未压缩日志时间点，destroy detail 置销毁标记 |
 
 ### 4.5 日志压缩、快照恢复和锁转移
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| CMP-00 | P0 | 枚举所有 `send_update` 调用点：初始创建无历史日志；每个后续 update 流程都调用压缩选择或证明无可压缩日志 |
-| CMP-01 | P0 | 无可压缩日志时维护仍发送一次续租 update，但不设置 compact/custom/private snapshot |
-| CMP-02 | P0 | 每次维护都重新尝试选择压缩点；未达到 over-percent/start-time 也不被这两个加速条件硬性禁止 |
-| CMP-03 | P0 | 数量策略：按真实缓存条数而非 sequence 差值；sequence 有缺口时保留条数仍准确 |
-| CMP-04 | P0 | 时间策略：只裁剪 keep-time 窗口之外日志；缺省 keep-time 为 start-time 一半且不大于 start-time |
-| CMP-05 | P0 | 数量和时间裁剪点并存时选择更保守边界；keep count/percent 边界值准确 |
-| CMP-06 | P0 | compact update 的 custom data 包含配置、队长、全部成员、邀请、申请、共享数据和最新 ack/saved sequence |
-| CMP-07 | P0 | compact update 的 private data 包含 team-created、当前 compact sequence/time 和全部私有队伍数据 |
-| CMP-08 | P0 | `saved_action_sequence` 覆盖快照所含最新状态，`last_compact_sequence` 仅表示裁剪边界，两者不混用 |
-| CMP-09 | P0 | compact 已在 DTMQ 提交但 update 响应丢失；旧主控不得以旧边界覆盖，新主控从 DTMQ snapshot/剩余日志恢复等价状态 |
-| CMP-10 | P0 | admission 先在本地过期清理，随后 update 失败/锁冲突；验证重试、退位和新主控恢复不会永久丢记录或错误批准 |
-| CMP-11 | P1 | snapshot 覆盖到 `saved_action_sequence`，但只裁到更早 `last_compact_sequence`；重叠日志重放必须幂等且不回退状态 |
-| CMP-12 | P1 | 加速触发方向：未压缩日志真实条数同时超过 `gc_log_count * compact_log_over_percent` 与保留条数时立即触发维护；最早未压缩日志超过 `compact_log_start_time` 时把维护提前到该时间点；压缩推进后最早未压缩日志时间点随缓存刷新并正确参与下一轮调度 |
-| CMP-13 | P0 | 只含 kResetLock 续租日志的空闲频道：最老未压缩日志时间点取最早一条续租日志（而非等待下一条 event），时间维度加速按该时间点触发维护并完成压缩；oldest-log 时间点 0→有效 迁移时立即重算定时器，不等下一次锁续租 |
-| RCV-01 | P0 | 只从完整快照恢复，成员、角色、队长、邀请、申请、公共/私有数据与原 room 等价；成员按 `max(入队, 心跳)` 升序进入 LRU（经 test accessor 断言），保证 failover 后最久未活跃成员最先被踢 |
-| RCV-02 | P0 | 从快照加 compact 点后增量日志恢复，结果与从头应用全量日志等价 |
-| RCV-03 | P0 | 恢复期间不发送历史个人通知；恢复结束后按当前锁决定主/备身份 |
-| RCV-04 | P0 | custom 或 private Any 类型损坏时恢复失败、room 不进入可写主控状态 |
-| RCV-05 | P0 | 快照含非法/重复成员 key 时按当前容错规则处理，且不会破坏合法成员和 captain 一致性 |
-| RCV-06 | P0 | private data 缺失、落后或与 custom data 不同代；已创建队伍不得静默丢失 private team data，兼容策略必须可判定 |
-| RCV-07 | P0 | `last_compact_sequence`、`saved_action_sequence`、snapshot last sequence/hash 和首条剩余日志边界矛盾时拒绝成为 writer并重新拉 snapshot |
-| RCV-08 | P0 | 心跳/router/成员 ack 更新后无新 team log 即发生切主；新主控不得恢复成会误踢在线成员的旧运行时状态 |
-| RCV-09 | P0 | 崩溃点分别位于 add-member 提交前后、approve 提交前后；重试后最终只有一个成员和一个已完成 admission 结果 |
-| RCV-10 | P0 | destroy-team 提交、destroy-channel 提交及各自响应丢失后重启；旧 team id 不得被重新创建或恢复成可写未销毁队伍 |
-| RCV-11 | P1 | 固定 seed 生成混合 action trace，在每个合法 compact/重启点恢复，规范化终态始终与全量日志 oracle 相同 |
-| LCK-01 | P0 | 空锁、已过期他人锁可 CAS 接管；未过期他人锁不写入并按超时时间重新调度 |
-| LCK-02 | P0 | reset/send/update 返回真实锁冲突时立即 step down；后续个人通知和权威写入停止 |
-| LCK-03 | P0 | RPC 响应丢失但真实 lock holder 已是本节点时按幂等成功处理 |
-| LCK-04 | P0 | 接管缺失队长但仍有成员的快照后，只由新主控产生确定性 election action |
-| LCK-05 | P0 | event 已应用并排队个人通知、flush 前锁转给他人；旧主控不得继续发送该副作用 |
-| LCK-06 | P0 | 两个候选同时以同一旧锁 CAS，只有一个成功；失败者即使随后收到迟到 event/response 也不能恢复 writer 身份 |
-| LCK-07 | P0 | 续租 update 与普通 send_message 并发、回包乱序；较旧响应不能回退 current lock/compact 状态 |
-| LCK-08 | P1 | writable DTMQ 节点迁移/readonly snapshot transfer 期间 Room 锁租约切换，任一 lock epoch 至多一个副作用生产者 |
-| LCK-09 | P1 | 锁租约配置契约：租约不短于频道 `subscriber_timeout`（配置缺失时按 2*心跳+重试推导），续租间隔为租约一半且不低于 1s；违反时续租必然晚于锁过期，属于必须红灯的配置错误 |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| CMP-00 | ⬜ | P0 | 枚举所有 `send_update` 调用点：初始创建无历史日志；每个后续 update 流程都调用压缩选择或证明无可压缩日志 |
+| CMP-01 | ✅ | P0 | 无可压缩日志时维护仍发送一次续租 update，但不设置 compact/custom/private snapshot |
+| CMP-02 | 🔶 | P0 | 每次维护都重新尝试选择压缩点；未达到 over-percent/start-time 也不被这两个加速条件硬性禁止 |
+| CMP-03 | ✅ | P0 | 数量策略：按真实缓存条数而非 sequence 差值；sequence 有缺口时保留条数仍准确 |
+| CMP-04 | 🔶 | P0 | 时间策略：只裁剪 keep-time 窗口之外日志；缺省 keep-time 为 start-time 一半且不大于 start-time |
+| CMP-05 | ⬜ | P0 | 数量和时间裁剪点并存时选择更保守边界；keep count/percent 边界值准确 |
+| CMP-06 | ✅ | P0 | compact update 的 custom data 包含配置、队长、全部成员、邀请、申请、共享数据和最新 ack/saved sequence |
+| CMP-07 | ✅ | P0 | compact update 的 private data 包含 team-created、当前 compact sequence/time 和全部私有队伍数据 |
+| CMP-08 | ✅ | P0 | `saved_action_sequence` 覆盖快照所含最新状态，`last_compact_sequence` 仅表示裁剪边界，两者不混用 |
+| CMP-09 | ⬜ | P0 | compact 已在 DTMQ 提交但 update 响应丢失；旧主控不得以旧边界覆盖，新主控从 DTMQ snapshot/剩余日志恢复等价状态 |
+| CMP-10 | ⬜ | P0 | admission 先在本地过期清理，随后 update 失败/锁冲突；验证重试、退位和新主控恢复不会永久丢记录或错误批准 |
+| CMP-11 | 🔶 | P1 | snapshot 覆盖到 `saved_action_sequence`，但只裁到更早 `last_compact_sequence`；重叠日志重放必须幂等且不回退状态 |
+| CMP-12 | 🔶 | P1 | 加速触发方向：未压缩日志真实条数同时超过 `gc_log_count * compact_log_over_percent` 与保留条数时立即触发维护；最早未压缩日志超过 `compact_log_start_time` 时把维护提前到该时间点；压缩推进后最早未压缩日志时间点随缓存刷新并正确参与下一轮调度 |
+| CMP-13 | ✅ | P0 | 只含 kResetLock 续租日志的空闲频道：最老未压缩日志时间点取最早一条续租日志（而非等待下一条 event），时间维度加速按该时间点触发维护并完成压缩；oldest-log 时间点 0→有效 迁移时立即重算定时器，不等下一次锁续租 |
+| RCV-01 | 🔶 | P0 | 只从完整快照恢复，成员、角色、队长、邀请、申请、公共/私有数据与原 room 等价；成员按 `max(入队, 心跳)` 升序进入 LRU（经 test accessor 断言），保证 failover 后最久未活跃成员最先被踢 |
+| RCV-02 | ✅ | P0 | 从快照加 compact 点后增量日志恢复，结果与从头应用全量日志等价 |
+| RCV-03 | ✅ | P0 | 恢复期间不发送历史个人通知；恢复结束后按当前锁决定主/备身份 |
+| RCV-04 | ✅ | P0 | custom 或 private Any 类型损坏时恢复失败、room 不进入可写主控状态 |
+| RCV-05 | ⬜ | P0 | 快照含非法/重复成员 key 时按当前容错规则处理，且不会破坏合法成员和 captain 一致性 |
+| RCV-06 | ⬜ | P0 | private data 缺失、落后或与 custom data 不同代；已创建队伍不得静默丢失 private team data，兼容策略必须可判定 |
+| RCV-07 | ⬜ | P0 | `last_compact_sequence`、`saved_action_sequence`、snapshot last sequence/hash 和首条剩余日志边界矛盾时拒绝成为 writer并重新拉 snapshot |
+| RCV-08 | ⬜ | P0 | 心跳/router/成员 ack 更新后无新 team log 即发生切主；新主控不得恢复成会误踢在线成员的旧运行时状态 |
+| RCV-09 | ✅ | P0 | 崩溃点分别位于 add-member 提交前后、approve 提交前后；重试后最终只有一个成员和一个已完成 admission 结果 |
+| RCV-10 | ✅ | P0 | destroy-team 提交、destroy-channel 提交及各自响应丢失后重启；旧 team id 不得被重新创建或恢复成可写未销毁队伍 |
+| RCV-11 | ⬜ | P1 | 固定 seed 生成混合 action trace，在每个合法 compact/重启点恢复，规范化终态始终与全量日志 oracle 相同 |
+| LCK-01 | 🔶 | P0 | 空锁、已过期他人锁可 CAS 接管；未过期他人锁不写入并按超时时间重新调度 |
+| LCK-02 | ✅ | P0 | reset/send/update 返回真实锁冲突时立即 step down；后续个人通知和权威写入停止 |
+| LCK-03 | ✅ | P0 | RPC 响应丢失但真实 lock holder 已是本节点时按幂等成功处理 |
+| LCK-04 | ⬜ | P0 | 接管缺失队长但仍有成员的快照后，只由新主控产生确定性 election action |
+| LCK-05 | ⬜ | P0 | event 已应用并排队个人通知、flush 前锁转给他人；旧主控不得继续发送该副作用 |
+| LCK-06 | ⬜ | P0 | 两个候选同时以同一旧锁 CAS，只有一个成功；失败者即使随后收到迟到 event/response 也不能恢复 writer 身份 |
+| LCK-07 | ⬜ | P0 | 续租 update 与普通 send_message 并发、回包乱序；较旧响应不能回退 current lock/compact 状态 |
+| LCK-08 | ⬜ | P1 | writable DTMQ 节点迁移/readonly snapshot transfer 期间 Room 锁租约切换，任一 lock epoch 至多一个副作用生产者 |
+| LCK-09 | ⬜ | P1 | 锁租约配置契约：租约不短于频道 `subscriber_timeout`（配置缺失时按 2*心跳+重试推导），续租间隔为租约一半且不低于 1s；违反时续租必然晚于锁过期，属于必须红灯的配置错误 |
 
 ### 4.6 真实 WAL、checkpoint 与快照契约
 
 以下用例在 room 测试目标内复用 `mq_channel` 的实际 `wal_publisher`。它们验证 Room 与 DTMQ 的接缝，不替代已有
 DTMQ component 测试。
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| WAL-01 | P0 | publisher 分配并提交混合 `DTeamAction`，真实 sequence/hash chain 经 `SSChannelEventSync` 后 Room 终态与 journal 一致 |
-| WAL-02 | P0 | subscriber checkpoint 正常时只下发后续日志；checkpoint hash 不匹配时强制 snapshot，不在错误分支继续增量 |
-| WAL-03 | P0 | 慢 subscriber 落后于 `last_removed_key` 时收到 snapshot；跟得上的成员订阅者仍只收增量，二者最终状态等价 |
-| WAL-04 | P0 | `compact_sequence` 边界的保留/删除语义与 Room `last_compact_sequence + 1` 重放起点一致，包含非连续 sequence |
-| WAL-05 | P0 | `dump_snapshot` -> 新 `mq_channel::load_snapshot` -> Room restore 往返，custom/private/lock/messages/compact 边界不丢失 |
-| WAL-06 | P0 | writable transfer snapshot 含待广播日志和 custom/private data；转移后旧 publisher 不再接受有效 Room 写入 |
-| WAL-07 | P1 | 多 subscriber 具有不同 checkpoint/心跳/超时，publisher tick、GC、snapshot fallback 不让任何成员越过未保存状态 |
-| WAL-08 | P0 | destroy/create 新 epoch 与旧日志、旧 checkpoint 交错；Room 只接受当前频道代际，旧 team id 防重建语义保持 |
-| WAL-09 | P1 | memory-only 与 DB-backed channel 各完成一次保存、进程内重载和 compact 后恢复，区分 Room 问题与 DTMQ 持久化问题 |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| WAL-01 | ⬜ | P0 | publisher 分配并提交混合 `DTeamAction`，真实 sequence/hash chain 经 `SSChannelEventSync` 后 Room 终态与 journal 一致 |
+| WAL-02 | ⬜ | P0 | subscriber checkpoint 正常时只下发后续日志；checkpoint hash 不匹配时强制 snapshot，不在错误分支继续增量 |
+| WAL-03 | ⬜ | P0 | 慢 subscriber 落后于 `last_removed_key` 时收到 snapshot；跟得上的成员订阅者仍只收增量，二者最终状态等价 |
+| WAL-04 | ⬜ | P0 | `compact_sequence` 边界的保留/删除语义与 Room `last_compact_sequence + 1` 重放起点一致，包含非连续 sequence |
+| WAL-05 | ⬜ | P0 | `dump_snapshot` -> 新 `mq_channel::load_snapshot` -> Room restore 往返，custom/private/lock/messages/compact 边界不丢失 |
+| WAL-06 | ⬜ | P0 | writable transfer snapshot 含待广播日志和 custom/private data；转移后旧 publisher 不再接受有效 Room 写入 |
+| WAL-07 | ⬜ | P1 | 多 subscriber 具有不同 checkpoint/心跳/超时，publisher tick、GC、snapshot fallback 不让任何成员越过未保存状态 |
+| WAL-08 | ⬜ | P0 | destroy/create 新 epoch 与旧日志、旧 checkpoint 交错；Room 只接受当前频道代际，旧 team id 防重建语义保持 |
+| WAL-09 | ⬜ | P1 | memory-only 与 DB-backed channel 各完成一次保存、进程内重载和 compact 后恢复，区分 Room 问题与 DTMQ 持久化问题 |
 
 ### 4.7 并发、故障窗口与崩溃点
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| CON-01 | P0 | 两个 create task 在 acquire-lock 延迟期间并发：`team_created_` 先占位，只有一个初始 update 成功，另一个返回 no-permission 且零写入；首个 create 因抢锁失败回滚占位后，重试可再次成功 |
-| CON-02 | P0 | 同一 invitee/requester 的新增、刷新、approve、reject、expiry 两两竞态；终态只能是一个合法状态，不能残留幽灵 admission |
-| CON-03 | P0 | remove-member 与 heartbeat/member-update 并发；已提交删除不可被本地 touch 复活，未提交删除不能提前消失；remove 在途时同一成员 re-add（新 add_member 事件）按日志序收敛，且该成员的删除重试状态被清除 |
-| CON-04 | P0 | 队长主动转让与队长退出/离线删除并发；最终恰有一个有效 captain 且角色变更可由日志重放复现 |
-| CON-05 | P0 | compact update 悬挂时继续收到新 action；snapshot saved/compact 边界和后续回放不遗漏新日志 |
-| CON-06 | P1 | 多 room 同时触发 timer、event-sync 和 pending flush；请求、个人频道及 timer watcher 不串 room |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| CON-01 | ⬜ | P0 | 两个 create task 在 acquire-lock 延迟期间并发：`team_created_` 先占位，只有一个初始 update 成功，另一个返回 no-permission 且零写入；首个 create 因抢锁失败回滚占位后，重试可再次成功 |
+| CON-02 | ⬜ | P0 | 同一 invitee/requester 的新增、刷新、approve、reject、expiry 两两竞态；终态只能是一个合法状态，不能残留幽灵 admission |
+| CON-03 | ⬜ | P0 | remove-member 与 heartbeat/member-update 并发；已提交删除不可被本地 touch 复活，未提交删除不能提前消失；remove 在途时同一成员 re-add（新 add_member 事件）按日志序收敛，且该成员的删除重试状态被清除 |
+| CON-04 | ⬜ | P0 | 队长主动转让与队长退出/离线删除并发；最终恰有一个有效 captain 且角色变更可由日志重放复现 |
+| CON-05 | ⬜ | P0 | compact update 悬挂时继续收到新 action；snapshot saved/compact 边界和后续回放不遗漏新日志 |
+| CON-06 | ⬜ | P1 | 多 room 同时触发 timer、event-sync 和 pending flush；请求、个人频道及 timer watcher 不串 room |
 
 外部调用点的故障覆盖不能只集中在 `send_message`：
 
-| ID | 优先级 | 调用点与故障脚本 |
-| --- | --- | --- |
-| FLT-01 | P1 | subscribe heartbeat：快速失败、延迟、无节点、恢复后重订阅、旧节点迟到响应 |
-| FLT-02 | P0 | reset-lock：CAS 冲突、提交后丢响应、malformed response、真实 holder 是自己/他人两支 |
-| FLT-03 | P0 | team-channel send：预提交失败、提交后丢响应、no-wait drop、事件先于/后于调用回包 |
-| FLT-04 | P0 | update/compact：预提交失败、提交后丢响应、锁冲突、迟到旧响应、坏 checker/custom/private response |
-| FLT-05 | P0 | personal-channel send：预提交失败、已提交丢响应、重复 retry 和失锁后迟到 flush |
-| FLT-06 | P0 | destroy-channel：预提交失败、已销毁但丢响应、锁冲突、重复 destroy 和旧 create/destroy epoch |
-| FLT-07 | P1 | forward：目标节点消失、transport error、`forward_ok=false`、迟到成功；本节点不得同时执行 |
-| FLT-08 | P0 | event-sync stream：整批失败、前缀成功后坏消息、重复批、来源节点切换；明确 ack 和 pending flush 结果 |
+| ID | 状态 | 优先级 | 调用点与故障脚本 |
+| --- | --- | --- | --- |
+| FLT-01 | ⬜ | P1 | subscribe heartbeat：快速失败、延迟、无节点、恢复后重订阅、旧节点迟到响应 |
+| FLT-02 | ⬜ | P0 | reset-lock：CAS 冲突、提交后丢响应、malformed response、真实 holder 是自己/他人两支 |
+| FLT-03 | ⬜ | P0 | team-channel send：预提交失败、提交后丢响应、no-wait drop、事件先于/后于调用回包 |
+| FLT-04 | ⬜ | P0 | update/compact：预提交失败、提交后丢响应、锁冲突、迟到旧响应、坏 checker/custom/private response |
+| FLT-05 | ⬜ | P0 | personal-channel send：预提交失败、已提交丢响应、重复 retry 和失锁后迟到 flush |
+| FLT-06 | ⬜ | P0 | destroy-channel：预提交失败、已销毁但丢响应、锁冲突、重复 destroy 和旧 create/destroy epoch |
+| FLT-07 | ⬜ | P1 | forward：目标节点消失、transport error、`forward_ok=false`、迟到成功；本节点不得同时执行 |
+| FLT-08 | ⬜ | P0 | event-sync stream：整批失败、前缀成功后坏消息、重复批、来源节点切换；明确 ack 和 pending flush 结果 |
 
 先逐调用点执行单故障，再对 P0 只做有意义的 pairwise 组合：锁转移 + 响应丢失、compact + crash、event 延迟 + 新主控接管、
 个人通知丢响应 + 重试。不要做不可复现的全笛卡尔随机故障；每个脚本记录 rule 次序和 generation。
@@ -466,34 +488,34 @@ DTMQ component 测试。
 
 ### 4.8 心跳、过期与房间生命周期
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| LIFE-01 | P1 | 成员心跳更新 router、时间和更大的 ack；较小 sequence/hash 不覆盖已有确认值 |
-| LIFE-02 | P1 | router id 为 0 不刷新在线时间；不存在成员 heartbeat 返回 member-not-found |
-| LIFE-03 | P0 | 离线到期发送 remove action，加入重试队列；事件回环后清除成员和重试状态 |
-| LIFE-04 | P1 | remove action 在途时不重复提交；重试间隔/次数准确；成功回环后不再重试 |
-| LIFE-05 | P0 | 邀请和申请到期由维护直接从 room 状态删除，不发送任何个人通知；随后 approve 失效 |
-| LIFE-06 | P1 | 成员全部离开后等待 `empty_room_destroy_delay`，写 destroy-team，再销毁 channel，最后回收 manager room |
-| LIFE-07 | P1 | 空房间延迟期间新成员加入会取消销毁计时；非空队伍不得触发 empty-room destroy |
-| LIFE-08 | P1 | room 始终只有一个下一事件定时器；更早事件可提前定时器，较晚事件不能把到期事件延后 |
-| LIFE-09 | P2 | 多 room 同一 manager tick 时只处理到期 room；pending flush 只扫描已登记 room |
-| LIFE-10 | P0 | 个人频道 send 预提交失败、提交后丢响应、延迟成功分别验证重试/去重契约；不能因 no-wait mock 默认成功而假绿 |
-| LIFE-11 | P0 | 失锁/step-down/on_destroyed 后清理或冻结维护 task、删除重试和 pending notification，迟到 timer 不再写 |
-| LIFE-12 | P1 | subscribe heartbeat 超时、暂时无 DTMQ 节点、snapshot error 后恢复服务；room 不泄漏且重新 ready 后只恢复一次 |
-| LIFE-13 | P0 | 快照恢复后的离线截止下限：快照心跳早于恢复点的成员，不得早于 `restore + member_offline_expire` 被踢（回归锁定 restore 兜底，曾经按入队时间比较导致提前踢出）；心跳晚于恢复点的成员仍按心跳 + expire 计算 |
-| LIFE-14 | P1 | 对未创建队伍发心跳/普通写：订阅 auto-create 频道并抢锁后返回 member-not-found/not-in-team；产生的幽灵空房间在 `empty_room_destroy_delay` 后写 destroy-team 并回收，不残留常驻 room |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| LIFE-01 | ✅ | P1 | 成员心跳更新 router、时间和更大的 ack；较小 sequence/hash 不覆盖已有确认值 |
+| LIFE-02 | ✅ | P1 | router id 为 0 不刷新在线时间；不存在成员 heartbeat 返回 member-not-found |
+| LIFE-03 | ✅ | P0 | 离线到期发送 remove action，加入重试队列；事件回环后清除成员和重试状态 |
+| LIFE-04 | ⬜ | P1 | remove action 在途时不重复提交；重试间隔/次数准确；成功回环后不再重试 |
+| LIFE-05 | ✅ | P0 | 邀请和申请到期由维护直接从 room 状态删除，不发送任何个人通知；随后 approve 失效 |
+| LIFE-06 | ✅ | P1 | 成员全部离开后等待 `empty_room_destroy_delay`，写 destroy-team，再销毁 channel，最后回收 manager room |
+| LIFE-07 | ⬜ | P1 | 空房间延迟期间新成员加入会取消销毁计时；非空队伍不得触发 empty-room destroy |
+| LIFE-08 | ⬜ | P1 | room 始终只有一个下一事件定时器；更早事件可提前定时器，较晚事件不能把到期事件延后 |
+| LIFE-09 | ⬜ | P2 | 多 room 同一 manager tick 时只处理到期 room；pending flush 只扫描已登记 room |
+| LIFE-10 | ⬜ | P0 | 个人频道 send 预提交失败、提交后丢响应、延迟成功分别验证重试/去重契约；不能因 no-wait mock 默认成功而假绿 |
+| LIFE-11 | ⬜ | P0 | 失锁/step-down/on_destroyed 后清理或冻结维护 task、删除重试和 pending notification，迟到 timer 不再写 |
+| LIFE-12 | ⬜ | P1 | subscribe heartbeat 超时、暂时无 DTMQ 节点、snapshot error 后恢复服务；room 不泄漏且重新 ready 后只恢复一次 |
+| LIFE-13 | ✅ | P0 | 快照恢复后的离线截止下限：快照心跳早于恢复点的成员，不得早于 `restore + member_offline_expire` 被踢（回归锁定 restore 兜底，曾经按入队时间比较导致提前踢出）；心跳晚于恢复点的成员仍按心跳 + expire 计算 |
+| LIFE-14 | ✅ | P1 | 对未创建队伍发心跳/普通写：订阅 auto-create 频道并抢锁后返回 member-not-found/not-in-team；产生的幽灵空房间在 `empty_room_destroy_delay` 后写 destroy-team 并回收，不残留常驻 room |
 
 ### 4.9 边界、模型测试与稳定性
 
-| ID | 优先级 | 场景与主要断言 |
-| --- | --- | --- |
-| BND-01 | P1 | 所有 duration/percent/count 使用配置最小值、默认值和极端大值；不能出现零间隔忙循环、负时间或整数溢出 |
-| BND-02 | P1 | 时间恰好等于 invitation/join/offline/lock/empty-room deadline，以及时钟大步前进；边界统一按当前 `<= now` 契约处理 |
-| BND-03 | P2 | zone/user/team id 的 0、最大值、跨区和大量哈希碰撞输入；非法 key 零写入，合法 key 不串状态 |
-| BND-04 | P1 | 大量成员、邀请、申请和接近 DTMQ 消息上限的 Any/map 数据执行 update/compact；超限必须明确失败且不留下部分快照 |
-| BND-05 | P2 | 千级 room 的 timer + pending flush + compact 长稳，观察 task 数、内存、WAL 体积、恢复时延和无进展重试 |
-| BND-06 | P2 | 固定 seed 的 action/model test 做数百轮混合操作并在失败时缩减 trace；CI 只跑短种子集，夜间跑长种子集 |
-| BND-07 | P2 | `apply_add_member` 大 protobuf 的 copy/move micro benchmark 仅作趋势报告；功能门禁仍以字段完整和幂等为准 |
+| ID | 状态 | 优先级 | 场景与主要断言 |
+| --- | --- | --- | --- |
+| BND-01 | ⬜ | P1 | 所有 duration/percent/count 使用配置最小值、默认值和极端大值；不能出现零间隔忙循环、负时间或整数溢出 |
+| BND-02 | ⬜ | P1 | 时间恰好等于 invitation/join/offline/lock/empty-room deadline，以及时钟大步前进；边界统一按当前 `<= now` 契约处理 |
+| BND-03 | ⬜ | P2 | zone/user/team id 的 0、最大值、跨区和大量哈希碰撞输入；非法 key 零写入，合法 key 不串状态 |
+| BND-04 | ⬜ | P1 | 大量成员、邀请、申请和接近 DTMQ 消息上限的 Any/map 数据执行 update/compact；超限必须明确失败且不留下部分快照 |
+| BND-05 | ⬜ | P2 | 千级 room 的 timer + pending flush + compact 长稳，观察 task 数、内存、WAL 体积、恢复时延和无进展重试 |
+| BND-06 | ⬜ | P2 | 固定 seed 的 action/model test 做数百轮混合操作并在失败时缩减 trace；CI 只跑短种子集，夜间跑长种子集 |
+| BND-07 | ⬜ | P2 | `apply_add_member` 大 protobuf 的 copy/move micro benchmark 仅作趋势报告；功能门禁仍以字段完整和幂等为准 |
 
 ## 5. 当前契约差距与预期红灯
 
@@ -521,10 +543,14 @@ DTMQ component 测试。
 | FIX-02 | `get_member_offline_deadline` 曾把最后心跳与入队时间（而非当前最大 baseline）比较，快照恢复后兜底失效、成员可能被提前踢出 | LIFE-13 |
 | FIX-03 | `add_join_request` 曾缺少队伍存在性校验，可对从未创建的 team id 写入无人能审批的加入请求；现在返回 room-not-found 且零写入 | PERM-10 |
 | FIX-04 | 接收回调曾注册在 `on_receive_event`（仅 kEvent 触发），续租产生的 kResetLock 等非 event 日志不推进 ack 和最老未压缩日志时间点，时间维度压缩加速失效；现改为 `on_receive_raw_message`，覆盖全部 command_case 且每条日志恰好回调一次 | EVT-11、CMP-13 |
+| FIX-05 | 五个角色门槛 getter（`get_manage_member_role` 等）原以 `== GUEST` 判定未配置，且一度按 [NORMAL, OWNER] 区间钳制越界值；按“角色是阶梯范围”的设计修订为 `resolve_permission_role`：不高于 GUEST（含非法负值）回退默认门槛，其余值（含未来插入的任意档位）按数值直接生效，门槛比较全部使用大小关系 | PERM-14 |
+| FIX-06 | `send_action` 缺少 `destroyed_` 检查，`destroy_team`/destroy 事件回环后仍可向即将销毁的频道追加业务日志；现返回 `EN_ERR_TEAM_DESTROYED` | EVT-09 |
 
 ## 6. 分阶段执行
 
 ### 阶段 A：测试基础设施
+
+> 状态：✅ 基本完成（2026-08-23）。第 3 步的 `wal_publisher` journal adapter 未做，以 §3.2 快速业务层达成同等契约；后续补 WAL 层时再按该步收窄。
 
 1. 在 `src/teamsvr/test/CMakeLists.txt` 建立单个 `${PROJECT_NAME}-teamsvr-room-unit-test` 离线 service test target（每程序/库仅一个测试可执行程序）。
 2. 完成 resource、discovery、DTMQ RPC mock、event-sync、时间偏移、规范化 oracle 和清理夹具。
@@ -535,12 +561,16 @@ DTMQ component 测试。
 
 ### 阶段 B：P0 业务与权限
 
+> 状态：✅ 主体完成（2026-08-23）。PERM-01～12、14 与邀请/申请、事件幂等、队长切换全部落地；PERM-13 仅混合路径覆盖，PERM-15 未做。
+
 1. 完成 PERM-01～13。
 2. 完成邀请/申请的成功、拒绝、部分成功重试、公共数据过滤和主备副作用隔离。
 3. 完成核心事件幂等、成员 move 语义和队长确定性切换。
 4. P0 失败即停止进入恢复阶段，先修复权限绕过或错误写入。
 
 ### 阶段 C：压缩、恢复与故障转移
+
+> 状态：🔶 部分完成（2026-08-23）。数量维度压缩与快照内容、快照恢复等价、approve 崩溃点、LCK-01～03 已落地；真实 WAL 层、时间策略精确边界、crash checkpoint 三类脚本与 LCK-04～09 未做。
 
 1. 用实际 WAL 构造含成员、邀请、申请、共享/私有数据以及非连续 sequence 的日志。
 2. 执行数量/时间两类压缩并解包 update 请求，逐字段比较快照和 publisher 的实际裁剪边界。
@@ -550,21 +580,11 @@ DTMQ component 测试。
 
 ### 阶段 D：定时与生命周期
 
+> 状态：🔶 部分完成（2026-08-23）。心跳过期、admission 过期、空房间销毁、恢复兜底（LIFE-13）与幽灵房间自洁（LIFE-14）已落地；LIFE-04、07～12 未做，GAP-03 未纳入绿色门禁。
+
 1. 用全局 now offset 驱动心跳过期、重试、admission 过期、空房间销毁和 channel 回收。
 2. 覆盖 manager 多 room 时间轮和 pending flush 注册表。
 3. 对 GAP-03 仅记录当前结果，契约未决定前不纳入绿色门禁。
-
-### 阶段 E：真实进程集成与长稳
-
-离线 mock 全绿后，再增加非每次提交必跑的集成场景：
-
-1. 启动两个 DTMQ Proxy、两个 teamsvr-room 实例和至少三个不同 checkpoint 的只读成员/个人频道订阅者。
-2. 创建含成员、邀请、申请和 private team data 的队伍，主动触发压缩；分别 kill、暂停和断网当前 lock holder。
-3. 在 WAL 写前、写后回包前、compact 后、本地通知 flush 前和 destroy 两阶段之间注入故障，等待备用实例接管。
-4. 对 DTMQ writable 节点做迁移/重启，对 Room 做滚动重启；旧实例恢复后不能用旧 epoch 写入。
-5. 在并发邀请/申请/心跳/退出下循环压缩和切主，最终状态与 DTMQ 权威日志及规范化 oracle 一致。
-6. 每个 fault case 使用固定 seed/故障点编号，并保存进程日志、最终 snapshot、剩余 WAL、lock holder 时间线、
-   team/personal 消息计数、恢复耗时；不能只以进程退出码判定成功。
 
 ## 7. 构建与运行命令
 
@@ -598,15 +618,14 @@ $env:PATH = "${PWD}/build_jobs_cmake_tools/publish/bin;${PWD}/third_party/instal
 
 ## 8. 完成标准
 
-- 所有 P0 用例已实现且在 Debug 离线目标中稳定通过，单 case 和全量各连续运行至少两次。
-- 每个权限失败用例均证明没有提交 `DTeamAction`，而不只是检查错误码。
-- compact 快照逐字段覆盖成员、邀请、申请和其他公共/私有状态；快照加增量恢复与全量日志结果等价。
-- 主备回放不重复发送 `DTeamMemberAction`，锁冲突后旧主控不能继续写或发个人通知。
-- 每个 P0 写流程至少覆盖 pre-commit failure、commit-response-loss 和一个延迟/乱序恢复脚本。
-- 真实 `wal_publisher` 的 checkpoint/hash/compaction/transfer 接缝用例通过，慢订阅者越过 GC 边界时能回落到 snapshot。
-- 固定 seed 的 model trace 能在任意已选 compact/重启点得到同一规范化终态，失败时报告 seed 和最短 action trace。
-- 过期 admission 的 room 侧清理不通知；对端自行超时用例在 GAP-02 实现后转绿。
-- FIX-01～04 的回归用例（CON-01、LIFE-13、PERM-10 未创建队伍变体、EVT-11、CMP-13）稳定通过，锁定评审修复的契约。
-- GAP-01～11 均有明确协议决定和相应测试，不以注释或人工判断代替；红灯未解决前不能宣称容灾覆盖完成。
-- 测试目标无硬超时、无未消费 mock expectation，`test.stop()` 返回 0。
-- 真实进程集成阶段至少完成一次压缩后切主恢复，并保存可追溯证据。
+- 🔶 离线 P0 主体已实现并两次稳定通过；WAL/CON/FLT 的 P0 用例未实现。
+- ✅ 每个权限失败用例均证明没有提交 `DTeamAction`，而不只是检查错误码。
+- 🔶 compact 快照逐字段覆盖成员、邀请、申请和其他公共/私有状态；快照加增量恢复与全量日志结果等价（CMP-06～08、RCV-02 已锁定；四路径 model oracle 未做）。
+- 🔶 主备回放不重复发送 `DTeamMemberAction`，锁冲突后旧主控不能继续写或发个人通知（ADM-14、LCK-02 已锁定；多候选与 writable transfer 场景未做）。
+- 🔶 每个 P0 写流程至少覆盖 pre-commit failure、commit-response-loss 和一个延迟/乱序恢复脚本（create/approve/reset-lock 的丢响应已做；pre-commit failure 与延迟乱序未系统化）。
+- ⬜ 真实 `wal_publisher` 的 checkpoint/hash/compaction/transfer 接缝用例通过，慢订阅者越过 GC 边界时能回落到 snapshot。
+- ⬜ 固定 seed 的 model trace 能在任意已选 compact/重启点得到同一规范化终态，失败时报告 seed 和最短 action trace。
+- 🔶 过期 admission 的 room 侧清理不通知（LIFE-05 已锁定）；对端自行超时用例在 GAP-02 实现后转绿。
+- 🔶 FIX 回归（LIFE-13、PERM-10、EVT-11、CMP-13 已锁定；FIX-01 的 CON-01 未实现）。
+- ⬜ GAP-01～11 均有明确协议决定和相应测试，不以注释或人工判断代替；红灯未解决前不能宣称容灾覆盖完成。
+- ✅ 测试目标无硬超时、无未消费 mock expectation，`test.stop()` 返回 0。

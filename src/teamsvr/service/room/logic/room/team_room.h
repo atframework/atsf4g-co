@@ -4,6 +4,8 @@
 
 #include <config/compile_optimize.h>
 
+#include <config/server_frame_build_feature.h>
+
 #include <gsl/select-gsl.h>
 #include <nostd/nullability.h>
 #include <std/explicit_declare.h>
@@ -37,6 +39,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace rpc {
 class context;
@@ -208,6 +211,19 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
 
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  // 测试钩子: 成员 LRU 从 front(最久未访问)到 back 的 user key 顺序(RCV-01 恢复顺序断言)
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> debug_member_lru_keys() const;
+  // 测试钩子: 本地已生效的压缩边界与快照覆盖序号(CMP 用例)
+  int64_t debug_last_compact_sequence() const noexcept;
+  int64_t debug_saved_action_sequence() const noexcept;
+  // 测试钩子: 当前定时器到期时间(0 表示无定时器，LIFE-08 定时器单调性断言)
+  std::chrono::system_clock::time_point debug_timer_timeout() const noexcept;
+  // 测试钩子: 移除重试队列与待发个人通知数量(LIFE-04/11、LCK-05 断言)
+  size_t debug_retry_remove_count() const;
+  size_t debug_pending_notification_count() const;
+#endif
+
  private:
   friend class team_room_manager;
 
@@ -256,6 +272,11 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   ::atfw::dtmq::DChannelOptimisticLock make_self_lock(std::chrono::system_clock::time_point now) const;
   atfw::util::memory::strong_rc_ptr<::atfw::dtmq::channel_lock_checker> make_write_lock_checker() const;
+  // 构建抢占写锁的 CAS 检查器(空锁/过期锁/本节点锁才接受重置); 视图中有未过期他人锁时返回
+  // EN_ERR_DTMQ_CHANNEL_LOCK_FAILED 并回带真实锁
+  ATFW_EXPLICIT_NODISCARD_ATTR int32_t
+  make_acquire_lock_checker(std::chrono::system_clock::time_point now, ::atfw::dtmq::DChannelOptimisticLock& self_lock,
+                            atfw::util::memory::strong_rc_ptr<::atfw::dtmq::channel_lock_checker>& checker);
   // 携带乐观锁检查写入频道事件，锁冲突时自动退位
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_event_with_lock(rpc::context& ctx,
                                                                           ::google::protobuf::Any&& event_data,

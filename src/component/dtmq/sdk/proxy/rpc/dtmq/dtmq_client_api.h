@@ -32,11 +32,22 @@ namespace dtmq {
 class DChannelIdKey;
 class DChannelMessage;
 class DChannelMessageDetail;
+class SSChannelDestroyChannelReq;
+class SSChannelResetLockReq;
+class SSChannelResetLockRsp;
+class SSChannelUpdateReq;
+class SSChannelUpdateRsp;
 class channel_lock_checker;
 class channel_subscriber;
 class channel_page_info;
 }  // namespace dtmq
 }  // namespace atframework
+
+namespace google {
+namespace protobuf {
+class Empty;
+}  // namespace protobuf
+}  // namespace google
 
 namespace rpc {
 class context;
@@ -103,6 +114,44 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_messa
     atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
     atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr = nullptr,
     bool auto_create_channel = false, bool no_wait = false);
+
+/**
+ * @brief 更新频道数据(Writable副本)，目标服务器选择内嵌在本接口内
+ *
+ * @param ctx RPC上下文
+ * @param req 请求体(目标服务器从其 channel_key 字段提取)
+ * @param rsp 响应体
+ * @param no_wait 是否不等待
+ * @return rpc::result_code_type 发送结果
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type update(
+    rpc::context& ctx, atfw::dtmq::SSChannelUpdateReq& req, atfw::dtmq::SSChannelUpdateRsp& rsp, bool no_wait = false);
+
+/**
+ * @brief 重置频道乐观锁(Writable副本)，目标服务器选择内嵌在本接口内
+ *
+ * @param ctx RPC上下文
+ * @param req 请求体(目标服务器从其 channel_key 字段提取)
+ * @param rsp 响应体
+ * @param no_wait 是否不等待
+ * @return rpc::result_code_type 发送结果
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type reset_lock(
+    rpc::context& ctx, atfw::dtmq::SSChannelResetLockReq& req, atfw::dtmq::SSChannelResetLockRsp& rsp,
+    bool no_wait = false);
+
+/**
+ * @brief 销毁频道(Writable副本)，目标服务器选择内嵌在本接口内
+ *
+ * @param ctx RPC上下文
+ * @param req 请求体(目标服务器从其 channel_key 字段提取)
+ * @param rsp 响应体
+ * @param no_wait 是否不等待
+ * @return rpc::result_code_type 发送结果
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type destroy_channel(
+    rpc::context& ctx, atfw::dtmq::SSChannelDestroyChannelReq& req, google::protobuf::Empty& rsp,
+    bool no_wait = false);
 
 /**
  * @brief 查找消息
