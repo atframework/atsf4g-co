@@ -57,8 +57,6 @@ enum EnMatchSelectSvrType {
 // 粗粒度匹配桶；只包含进入同一候选房间队列前必须完全相同的维度。
 message DMatchingScope {
   int32 level_type = 1;
-  reserved 2;
-  reserved "level_id";
   string region = 3;
   string battle_version = 4;
   int32 matching_pool_id = 5;
@@ -102,9 +100,6 @@ message DMatchingUnit {
 }
 
 message DMatchingFactionAssignment {
-  // 匹配阶段只维护 faction membership 和固定容量，不提前分配战斗 faction_id。
-  reserved 1;
-  reserved "faction_index";
   // 分配到该 faction 的 Unit；Unit 只会整体出现，不会拆分成员。
   repeated uint64 unit_ids = 2;
   // faction 创建时锁定的玩家容量；搜索期间选择其他结果模板也不得修改。
@@ -150,7 +145,7 @@ message DMatchingRoomSnapshot {
   int32 selected_level_id = 15;
 }
 
-// 单个订阅 Unit 的匹配视图。matchsvr 内部房间快照不得通过 SS/CS 协议直接透传。
+// 单个订阅 Unit 的匹配视图。
 message DMatchingPlayerView {
   string matching_id = 1;
   EnMatchingRoomStatus status = 2;
@@ -165,6 +160,18 @@ message DMatchingPlayerView {
   int32 selected_level_id = 10;
   // 进入创建战斗阶段时按最终 membership 一次性生成；匹配和确认阶段不设置。
   int32 faction_id = 11;
+}
+
+// lobbysvr 输出给客户端的匹配视图。matching_id 和 matchsvr WAL 游标只保留在内部玩家视图中。
+message DMatchingClientView {
+  // 一轮匹配内保持不变，迁房不变；新一轮匹配重新生成。客户端只把它当作不透明操作标识。
+  uint64 unit_id = 1;
+  // lobbysvr 为当前玩家生成的单调版本。客户端只接受 view_revision 不小于本地版本的视图。
+  uint64 view_revision = 2;
+  EnMatchingRoomStatus status = 3;
+  int32 result = 4;
+  int64 expire_time = 5;
+  int32 selected_level_id = 6;
 }
 
 // 迁房事件携带原 unit 和目标房间。目标为空表示取消或普通移除。
@@ -189,13 +196,14 @@ message DMatchingEventLog {
   }
 }
 
-// lobbysvr 持久化的玩家匹配视图，用于重登录后从 WAL 游标恢复。
+// lobbysvr 持久化的内部玩家匹配视图，用于重登录后从 WAL 游标恢复。
 message DUserMatchingData {
   // 旧版本持久化的完整房间快照，仅用于加载迁移；新版本不再写入。
   DMatchingRoomSnapshot legacy_snapshot = 1;
   int64 last_event_id = 2;
-  int64 client_acknowledge_event_id = 3;
   DMatchingPlayerView view = 4;
+  // 客户端视图版本跨迁房和匹配轮次保持单调，不得在清理当前房间状态时归零。
+  uint64 client_view_revision = 5;
 }
 
 message DBattleLevelParameter {
@@ -206,8 +214,6 @@ message DBattleLevelParameter {
 }
 
 message DLevelSelect {
-  int32 level_type = 1;  // 匹配关卡类型(关联到 DBattleRoomData.battle_data)
-  int32 level_id = 2;    // 首选关卡；非零时必须包含在 level_ids 中
   string region = 3;
   repeated int32 level_ids = 4;  // 可接受的关卡集合，必须显式提供且非空
 }

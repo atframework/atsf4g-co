@@ -11,7 +11,7 @@ import (
 )
 
 func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType, preferredLevelId int32,
-	levelIds []int32, region string, selectType public_protocol_pbdesc.EnMatchSelectSvrType,
+	levelIds []int32, region string,
 	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
 	csBody := &public_protocol_pbdesc.CSMatchingStartReq{
 		LevelSelect: &public_protocol_pbdesc.DLevelSelect{
@@ -20,7 +20,6 @@ func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType
 			LevelIds:  levelIds,
 			Region:    region,
 		},
-		SelectType:        selectType,
 		BattleVersion:     "0.0.0.1",
 		FactionFillPolicy: factionFillPolicy,
 	}
@@ -28,59 +27,28 @@ func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType
 }
 
 func MatchingCheckRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingCheckRsp], error) {
-	matchingId, err := MatchingIdFromUser(user)
-	if err != nil {
-		return 0, nil, err
-	}
-	csBody := &public_protocol_pbdesc.CSMatchingCheckReq{
-		MatchingId:         matchingId,
-		UnitId:             UnitIdFromUser(user),
-		AcknowledgeEventId: AcknowledgeEventIdFromUser(user),
-	}
+	csBody := &public_protocol_pbdesc.CSMatchingCheckReq{}
 	return lobbysvr_rpc_handle.SendMatchingCheck(action, user, csBody, true)
 }
 
 func MatchingCancelRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingCancelRsp], error) {
-	matchingId, err := MatchingIdFromUser(user)
-	if err != nil {
-		return 0, nil, err
-	}
 	csBody := &public_protocol_pbdesc.CSMatchingCancelReq{
-		MatchingId: matchingId,
-		UnitId:     UnitIdFromUser(user),
+		UnitId: UnitIdFromUser(user),
 	}
 	return lobbysvr_rpc_handle.SendMatchingCancel(action, user, csBody, true)
 }
 
 func MatchingConfirmRpc(action base.TaskActionImpl, user user_data.User, confirmed bool) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingConfirmRsp], error) {
-	matchingId, err := MatchingIdFromUser(user)
-	if err != nil {
-		return 0, nil, err
-	}
 	csBody := &public_protocol_pbdesc.CSMatchingConfirmReq{
-		MatchingId: matchingId,
-		UnitId:     UnitIdFromUser(user),
-		Confirmed:  confirmed,
+		UnitId:    UnitIdFromUser(user),
+		Confirmed: confirmed,
 	}
 	return lobbysvr_rpc_handle.SendMatchingConfirm(action, user, csBody, true)
-}
-
-func MatchingIdFromUser(user user_data.User) (string, error) {
-	matchingId, ok := user.GetExtralData("MatchingId").(string)
-	if !ok || matchingId == "" {
-		return "", fmt.Errorf("matching not started")
-	}
-	return matchingId, nil
 }
 
 func UnitIdFromUser(user user_data.User) uint64 {
 	unitId, _ := user.GetExtralData("UnitId").(uint64)
 	return unitId
-}
-
-func AcknowledgeEventIdFromUser(user user_data.User) int64 {
-	eventId, _ := user.GetExtralData("AcknowledgeEventId").(int64)
-	return eventId
 }
 
 func MatchingStatusFromUser(user user_data.User) public_protocol_pbdesc.EnMatchingRoomStatus {
@@ -93,28 +61,24 @@ func MatchingFactionIdFromUser(user user_data.User) int32 {
 	return factionId
 }
 
-func SaveMatchingSnapshot(user user_data.User, matchingId string, unitId uint64, view *public_protocol_pbdesc.DMatchingPlayerView) {
-	if matchingId != "" {
-		user.SetExtralData("MatchingId", matchingId)
-	}
-	if unitId != 0 {
-		user.SetExtralData("UnitId", unitId)
-	}
+func SaveMatchingView(user user_data.User, view *public_protocol_pbdesc.DMatchingClientView) {
 	if view == nil {
 		return
 	}
-	if view.GetMatchingId() != "" {
-		user.SetExtralData("MatchingId", view.GetMatchingId())
+	currentViewRevision, _ := user.GetExtralData("MatchingViewRevision").(uint64)
+	if view.GetViewRevision() < currentViewRevision {
+		user.Log("ignore stale matching view: view_revision=%d current_view_revision=%d", view.GetViewRevision(),
+			currentViewRevision)
+		return
 	}
-	if view.GetUnit().GetUnitId() != 0 {
-		user.SetExtralData("UnitId", view.GetUnit().GetUnitId())
+	if view.GetUnitId() != 0 {
+		user.SetExtralData("UnitId", view.GetUnitId())
 	}
-	user.SetExtralData("AcknowledgeEventId", view.GetLastEventId())
+	user.SetExtralData("MatchingViewRevision", view.GetViewRevision())
 	user.SetExtralData("MatchingStatus", view.GetStatus())
 	user.SetExtralData("MatchingFactionId", view.GetFactionId())
-	user.Log("matching view: matching_id=%s status=%s last_event_id=%d unit_id=%d faction_id=%d",
-		view.GetMatchingId(), view.GetStatus().String(), view.GetLastEventId(), view.GetUnit().GetUnitId(),
-		view.GetFactionId())
+	user.Log("matching view: view_revision=%d status=%s unit_id=%d faction_id=%d", view.GetViewRevision(),
+		view.GetStatus().String(), view.GetUnitId(), view.GetFactionId())
 }
 
 func RegisterMatchingLogSyncHandler(user user_data.User) {
@@ -122,13 +86,7 @@ func RegisterMatchingLogSyncHandler(user user_data.User) {
 		if errCode < 0 {
 			return fmt.Errorf("matching log sync failed, errCode: %d", errCode)
 		}
-		SaveMatchingSnapshot(action.User, msg.GetMatchingId(), 0, msg.GetView())
-		for _, event := range msg.GetEventLogs() {
-			if event != nil {
-				action.Log("matching log sync: event_id=%d room_status=%s",
-					event.GetEventId(), event.GetRoomStatus().String())
-			}
-		}
+		SaveMatchingView(action.User, msg.GetClientView())
 		return nil
 	})
 }

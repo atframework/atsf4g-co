@@ -21,42 +21,35 @@ message CSMatchingStartReq {
 
 message SCMatchingStartRsp {
   DLevelSelect level_parameter = 1;
-  string matching_id = 3;  // 正在执行的匹配ID
+  DMatchingClientView view = 2;
 }
 
 message CSMatchingCheckReq {
-  string matching_id = 1;
-  uint64 unit_id = 2;
-  int64 acknowledge_event_id = 3;
+  // 查询当前登录玩家的权威匹配状态，不接收客户端房间标识或 matchsvr WAL 游标。
 }
 
 message SCMatchingCheckRsp {
-  DMatchingPlayerView view = 1;
+  DMatchingClientView view = 1;
 }
 
 message CSMatchingCancelReq {
-  string matching_id = 1;
   uint64 unit_id = 2;
 }
 
 message SCMatchingCancelRsp {
-  DMatchingPlayerView view = 1;
+  DMatchingClientView view = 1;
 }
 
 message CSMatchingConfirmReq {
-  string matching_id = 1;
   uint64 unit_id = 2;
   bool confirmed = 3;
 }
 
 message SCMatchingConfirmRsp {
-  DMatchingPlayerView view = 1;
+  DMatchingClientView view = 1;
 }
 
-// matchsvr WAL 在 lobbysvr 合并后主动下发；客户端不需要订阅或退订。
+// matchsvr WAL 在 lobbysvr 合并为权威客户端视图后主动下发；客户端不感知房间或 WAL 切换。
 message SCMatchingLogSync {
-  string matching_id = 1;
-  repeated DMatchingEventLog event_logs = 2;
-  DMatchingPlayerView view = 3;
-  bool is_switch = 4;
+  DMatchingClientView client_view = 5;
 }

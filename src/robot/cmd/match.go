@@ -13,7 +13,7 @@ import (
 )
 
 func init() {
-	robot_cmd.RegisterUserCommand([]string{"user", "matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [select_type] [fill_policy] [level_ids_csv]", "开始匹配", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"user", "matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [fill_policy] [level_ids_csv]", "开始匹配", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "matching", "check"}, MatchingCheckCmd, "", "查询匹配状态", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "matching", "cancel"}, MatchingCancelCmd, "", "取消匹配", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"user", "matching", "confirm"}, MatchingConfirmCmd, "<true|false>", "确认匹配", nil, cmdDefaultTimeout)
@@ -38,26 +38,18 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 	if len(cmd) > 2 {
 		region = cmd[2]
 	}
-	selectType := public_protocol_pbdesc.EnMatchSelectSvrType_EN_MATCH_SELECT_SVR_TYPE_USER
-	if len(cmd) > 3 {
-		selectTypeValue, parseErr := strconv.ParseInt(cmd[3], 10, 32)
-		if parseErr != nil {
-			return parseErr
-		}
-		selectType = public_protocol_pbdesc.EnMatchSelectSvrType(selectTypeValue)
-	}
 	factionFillPolicy := public_protocol_pbdesc.EnMatchingFactionFillPolicy_EN_MATCHING_FACTION_FILL_POLICY_DISABLE
-	if len(cmd) > 4 {
-		fillPolicyValue, parseErr := strconv.ParseInt(cmd[4], 10, 32)
+	if len(cmd) > 3 {
+		fillPolicyValue, parseErr := strconv.ParseInt(cmd[3], 10, 32)
 		if parseErr != nil {
 			return parseErr
 		}
 		factionFillPolicy = public_protocol_pbdesc.EnMatchingFactionFillPolicy(fillPolicyValue)
 	}
 	levelIds := []int32{int32(levelId)}
-	if len(cmd) > 5 {
+	if len(cmd) > 4 {
 		levelIds = levelIds[:0]
-		for _, value := range strings.Split(cmd[5], ",") {
+		for _, value := range strings.Split(cmd[4], ",") {
 			parsed, parseErr := strconv.ParseInt(value, 10, 32)
 			if parseErr != nil {
 				return parseErr
@@ -67,7 +59,7 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 	}
 
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), levelIds, region, selectType,
+		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), levelIds, region,
 			factionFillPolicy)
 	}, "Matching Start Task"))
 }

@@ -9,10 +9,10 @@ import (
 )
 
 func MatchingStartTask(task *user_data.TaskActionUser, levelType, preferredLevelId int32, levelIds []int32,
-	region string, selectType public_protocol_pbdesc.EnMatchSelectSvrType,
+	region string,
 	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) error {
 	errCode, rspHolder, rpcErr := protocol.MatchingStartRpc(task, task.User, levelType, preferredLevelId, levelIds, region,
-		selectType, factionFillPolicy)
+		factionFillPolicy)
 	if rpcErr != nil {
 		return rpcErr
 	}
@@ -28,9 +28,10 @@ func MatchingStartTask(task *user_data.TaskActionUser, levelType, preferredLevel
 	if err != nil {
 		return fmt.Errorf("failed to get matching start response message: %v", err)
 	}
-	protocol.SaveMatchingSnapshot(task.User, rsp.GetMatchingId(), 0, nil)
+	protocol.SaveMatchingView(task.User, rsp.GetView())
 	task.User.SetExtralData("MatchingFactionId", int32(0))
-	task.Log("matching start success, matching_id: %s", rsp.GetMatchingId())
+	task.Log("matching start success, unit_id=%d view_revision=%d", rsp.GetView().GetUnitId(),
+		rsp.GetView().GetViewRevision())
 	return nil
 }
 
@@ -49,7 +50,7 @@ func MatchingCheckTask(task *user_data.TaskActionUser) error {
 	if err != nil {
 		return fmt.Errorf("failed to get matching check response message: %v", err)
 	}
-	protocol.SaveMatchingSnapshot(task.User, "", 0, rsp.GetView())
+	protocol.SaveMatchingView(task.User, rsp.GetView())
 	return nil
 }
 
@@ -68,7 +69,7 @@ func MatchingCancelTask(task *user_data.TaskActionUser) error {
 	if err != nil {
 		return fmt.Errorf("failed to get matching cancel response message: %v", err)
 	}
-	protocol.SaveMatchingSnapshot(task.User, "", 0, rsp.GetView())
+	protocol.SaveMatchingView(task.User, rsp.GetView())
 	return nil
 }
 
@@ -87,6 +88,6 @@ func MatchingConfirmTask(task *user_data.TaskActionUser, confirmed bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to get matching confirm response message: %v", err)
 	}
-	protocol.SaveMatchingSnapshot(task.User, "", 0, rsp.GetView())
+	protocol.SaveMatchingView(task.User, rsp.GetView())
 	return nil
 }

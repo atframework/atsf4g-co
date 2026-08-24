@@ -29,7 +29,7 @@ class context;
 
 class user;
 
-// 玩家级匹配流程入口。它保存本玩家的匹配快照和 WAL 游标，并负责 CS/SS 协议之间的转换。
+// 玩家级匹配流程入口。它保存本玩家的内部匹配视图和 WAL 游标，并负责生成不含房间信息的客户端视图。
 class user_matching_manager : public atfw::util::design_pattern::noncopyable {
  public:
   explicit user_matching_manager(user& owner);
@@ -42,7 +42,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
   bool is_dirty() const;
   void clear_dirty();
-  // 玩家持有有效 matching_id 且房间处于搜索、确认或创建战斗阶段。
+  // 玩家持有有效内部 matching_id 且房间处于搜索、确认或创建战斗阶段。
   bool is_in_matching() const;
 
   // CS 匹配操作。操作者身份和 lobbysvr 订阅路由只由服务端填写。
@@ -59,15 +59,18 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingConfirmReq& request,
       PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp& response);
 
-  // 合并 matchsvr 推送，并将原始日志或全量快照主动转发给在线客户端。
+  // 合并 matchsvr 推送，并将权威客户端视图主动转发给在线客户端。
   void acknowledge_matching_sync(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync);
 
   const PROJECT_NAMESPACE_ID::DMatchingPlayerView& get_view() const;
+  PROJECT_NAMESPACE_ID::DMatchingClientView get_client_view() const;
   int64_t get_last_event_id() const;
 
  private:
-  // 将同步 RPC 回包写入本地视图，但不把“已应用”误当作“客户端已确认”。
-  void update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view);
+  // 将同步 RPC 回包写入内部视图；客户端投影变化或迁房时递增 view_revision，仅 WAL 变化不递增。
+  bool update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view);
+  void clear_matching_state();
+  void dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const;
 
   ATFW_EXPLICIT_NODISCARD_ATTR int32_t fill_matching_scope(const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                                            const std::string& battle_version,
@@ -80,12 +83,12 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
 
   // 构造只能代表当前登录玩家的内部操作者身份。``
   void fill_operator_user(PROJECT_NAMESPACE_ID::DUserIDKey& output) const;
-  // 从服务端持久化快照中查找当前玩家所在 unit，绝不信任客户端提交的 unit_id。
+  // 从服务端持久化视图中查找当前玩家所在 unit。
   uint64_t get_current_unit_id() const;
-  // 当前 lobbysvr 已知的客户端确认游标，用于断点重放。
+  // 当前 lobbysvr 已应用的 matchsvr WAL 游标，用于断点重放。
   int64_t get_acknowledge_event_id() const;
-  // 发送客户端匹配日志流；离线时只保留持久化状态。
-  void send_log_sync(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync, bool is_switch);
+  // 发送客户端权威匹配视图；离线时只保留持久化状态。
+  void send_log_sync(rpc::context& ctx);
 
  public:
   static void on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,

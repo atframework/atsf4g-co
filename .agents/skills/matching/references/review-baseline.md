@@ -76,11 +76,14 @@ early return. The full executable was run with all 31 test cases entering their 
 ### Resolved 2026-08-18: Full room snapshots crossed the subscriber and CS boundary
 
 `DMatchingRoomSnapshot` is now retained as matchsvr-internal room state. Direct SS replies, WAL sync, lobbysvr
-persistence, and CS replies use a Unit-scoped `DMatchingPlayerView`. WAL subscribers are grouped by lobbysvr and
-`unit_id`; add/remove events for other Units are filtered, and matched events no longer carry the full snapshot.
-Legacy persisted snapshots are read once to locate the current player's Unit and are rewritten as player views.
-Regression coverage checks legacy migration, identical lobbysvr/CS views, own-Unit isolation, and temporary faction
-non-disclosure.
+persistence use a Unit-scoped internal `DMatchingPlayerView`. Lobby projects it to `DMatchingClientView` for CS replies
+and pushes; the client view contains a stable `unit_id` and Lobby-monotonic `view_revision`, but no `matching_id`, Matchsvr
+WAL cursor, switch metadata, or raw event logs. Lobby resolves the current room internally and rejects stale cancel or
+confirm requests by Unit before forwarding. WAL subscribers are grouped by lobbysvr and `unit_id`; add/remove events
+for other Units are filtered, and matched events no longer carry the full snapshot. Legacy persisted snapshots are read
+once to locate the current player's Unit and are rewritten as player views. Regression coverage checks legacy
+migration, monotonic client view revisions across room changes, own-Unit isolation, stale Unit rejection, and temporary
+faction non-disclosure.
 
 ### Resolved 2026-08-19: Orbit room-ready failure bypassed ownership and state checks
 
@@ -132,5 +135,8 @@ At minimum preserve cases for:
 - Confirm accept, decline, duplicate, disconnect, timeout, and late response.
 - Orbit create error, `start_success=false`, callback loss, duplicate callback, and late callback after cleanup.
 - WAL switch/remove/add delivery under reordered and duplicate records.
+- Lobby-monotonic `view_revision` advances for room migration and client-visible state changes, but not for WAL-only
+  updates; stale Unit cancel/confirm requests are rejected before Matchsvr forwarding and cannot affect a newer
+  matching attempt.
 - Runtime fixture startup failure is visible as a failed test, not a skipped-success case.
 - Generated resources retain every required pool, rule, constraint, and faction-template field.

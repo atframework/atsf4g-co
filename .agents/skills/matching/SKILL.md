@@ -100,10 +100,20 @@ WAL migration, faction assignment, Orbit room creation, and client-visible event
    the same ID. Never derive a battle ID from container iteration order or expose one before battle creation begins.
 8. Keep room state and subscriber state separate:
    - `DMatchingRoomSnapshot` is matchsvr-internal diagnostic/test state and may contain every Unit.
-   - SS RPC responses, WAL subscription sync, lobbysvr persistence, and CS responses share `DMatchingPlayerView`.
-   - A player view contains only the subscribed Unit plus room lifecycle/result, selected level, WAL cursor, Orbit
-     handoff, and, after battle creation begins, that Unit's finalized `faction_id`; temporary faction assignments never
-     cross this boundary.
+   - SS RPC responses, WAL subscription sync, and lobbysvr persistence use the internal `DMatchingPlayerView`. It owns
+     `matching_id`, the Matchsvr WAL cursor, the subscribed Unit, room lifecycle/result, selected level, Orbit handoff,
+     and, after battle creation begins, that Unit's finalized `faction_id`.
+   - CS responses and pushes use the smaller `DMatchingClientView`. It contains the stable `unit_id`, a Lobby-owned
+     monotonic `view_revision`, lifecycle/result, expiry, selected level, and finalized `faction_id`; it never contains
+     `matching_id`, Matchsvr WAL cursors, switch metadata, raw event logs, or temporary faction assignments.
+   - Keep `unit_id` stable while the Unit migrates between matching rooms and allocate a new one for a new matching
+     attempt. Cancel and confirm requests identify this stable Unit. Lobby must reject a stale Unit before forwarding a
+     destructive request and then use its current internal `matching_id` for the SS RPC. Check requires no client room
+     identifier or acknowledgement cursor.
+   - Increment `view_revision` only for accepted room migrations or changes to fields projected into
+     `DMatchingClientView`; a Matchsvr WAL cursor-only update must not advance it. Never reset it when the internal room
+     changes. Clients discard a view whose `view_revision` is lower than the locally applied version. Lobby alone
+     advances and persists the Matchsvr WAL cursor.
    - Group WAL delivery by `(lobbysvr server_id, unit_id)`, filter Unit add/remove events to that Unit, and never attach
      a full room snapshot to a client-visible matched event.
    - Keep old persisted full snapshots read-only and migrate them by locating the current player's Unit; new writes use

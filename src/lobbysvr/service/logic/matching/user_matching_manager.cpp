@@ -36,6 +36,13 @@ bool same_user(const PROJECT_NAMESPACE_ID::DUserIDKey& left, const PROJECT_NAMES
   return left.user_id() == right.user_id() && left.zone_id() == right.zone_id();
 }
 
+static bool client_view_payload_equal(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& left,
+                                      const PROJECT_NAMESPACE_ID::DMatchingPlayerView& right) {
+  return left.unit().unit_id() == right.unit().unit_id() && left.status() == right.status() &&
+         left.result() == right.result() && left.expire_time() == right.expire_time() &&
+         left.selected_level_id() == right.selected_level_id() && left.faction_id() == right.faction_id();
+}
+
 static bool init_user_matching_manager_gm_handle() {
   task_action_user_gm_cmd_nomsg::init_gm_cmd("matching_start", user_matching_manager::on_gm_cmd_start_matching,
                                              "matching_start <level_id> <region>");
@@ -63,11 +70,8 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
 
   auto request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingCheckReq>(ctx);
   auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingCheckRsp>(ctx);
-  request->set_matching_id(data_.view().matching_id());
-  request->set_unit_id(data_.view().unit().unit_id());
-  request->set_acknowledge_event_id(data_.client_acknowledge_event_id());
-  if (request->unit_id() == 0) {
-    data_.Clear();
+  if (get_current_unit_id() == 0) {
+    clear_matching_state();
     dirty_ = true;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -81,7 +85,7 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
       time_t now = atfw::util::time::time_utility::get_now();
       owner_->get_user_orbit_manager().join_orbit_room(ctx, data_.view().orbit_room_key(), now);
     }
-    data_.Clear();
+    clear_matching_state();
     dirty_ = true;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -122,6 +126,10 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
     }
     // 旧快照中的匹配期 faction 序号不是最终战斗 ID，迁移时不再推导 faction_id。
     data_.clear_legacy_snapshot();
+    migrated_legacy_snapshot = true;
+  }
+  if (data_.has_view() && data_.client_view_revision() == 0) {
+    data_.set_client_view_revision(1);
     migrated_legacy_snapshot = true;
   }
   pending_switch_matching_id_.clear();
@@ -167,10 +175,8 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);
   }
 
-  FWPLOGDEBUG(*owner_,
-              "start matching, level_type={}, preferred_level_id={}, level_count={}, battle_version={}, request={}",
-              request.level_select().level_type(), request.level_select().level_id(),
-              request.level_select().level_ids_size(), request.battle_version(), request.DebugString());
+  FWPLOGDEBUG(*owner_, "start matching, level_select={}, level_count={}, request={}",
+              request.level_select().DebugString(), request.battle_version(), request.DebugString());
 
   // TODO 通知battle锁背包
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCreateReq>(ctx);
@@ -181,15 +187,15 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   int32_t ret = fill_matching_scope(request.level_select(), request.battle_version(), *rpc_request->mutable_scope(),
                                     acceptable_level_ids, preferred_level_id);
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-    FWPLOGERROR(*owner_, "fill_matching_scope failed, ret={}, level_type={}, level_id={}, battle_version={}", ret,
-                request.level_select().level_type(), request.level_select().level_id(), request.battle_version());
+    FWPLOGERROR(*owner_, "fill_matching_scope failed, ret={}, level_select={},battle_version={}", ret,
+                request.level_select().DebugString(), request.battle_version());
     RPC_RETURN_CODE(ret);
   }
 
   ret = RPC_AWAIT_CODE_RESULT(fill_matching_unit(ctx, *rpc_request->mutable_unit()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-    FWPLOGERROR(*owner_, "fill_matching_unit failed, ret={}, level_type={}, level_id={}, battle_version={}", ret,
-                request.level_select().level_type(), request.level_select().level_id(), request.battle_version());
+    FWPLOGERROR(*owner_, "fill_matching_unit failed, ret={}, level_count={}, battle_version={}", ret,
+                request.level_select().DebugString(), request.battle_version());
     RPC_RETURN_CODE(ret);
   }
   rpc_request->set_preferred_level_id(preferred_level_id);
@@ -235,75 +241,68 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   }
   update_view(rpc_response->snapshot());
 
-  response.set_matching_id(rpc_response->snapshot().matching_id());
+  dump_client_view(*response.mutable_view());
   auto* level_parameter = response.mutable_level_parameter();
-  level_parameter->set_level_type(request.level_select().level_type());
-  level_parameter->set_level_id(preferred_level_id);
   level_parameter->set_region(request.level_select().region());
   for (int32_t level_id : acceptable_level_ids) {
     level_parameter->add_level_ids(level_id);
   }
 
-  FWPLOGDEBUG(*owner_, "start matching finish, level_type={}, level_id={}, battle_version={}, matching_id={}",
-              request.level_select().level_type(), request.level_select().level_id(), request.battle_version(),
-              response.matching_id());
+  FWPLOGDEBUG(*owner_,
+              "start matching finish, level_select={}, battle_version={}, matching_id={}, unit_id={}, "
+              "view_revision={}",
+              request.level_select().DebugString(), request.battle_version(), data_.view().matching_id(),
+              get_current_unit_id(), data_.client_view_revision());
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 rpc::result_code_type user_matching_manager::check_matching(rpc::context& ctx,
-                                                            const PROJECT_NAMESPACE_ID::CSMatchingCheckReq& request,
+                                                            const PROJECT_NAMESPACE_ID::CSMatchingCheckReq&,
                                                             PROJECT_NAMESPACE_ID::SCMatchingCheckRsp& response) {
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
 
-  FWPLOGDEBUG(*owner_, "check matching, request={}", request.DebugString());
-
-  if (request.matching_id() != data_.view().matching_id()) {
-    FWPLOGERROR(*owner_, "check matching rejected by local snapshot, request_matching_id={}, local_matching_id={}",
-                request.matching_id(), data_.view().matching_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+  if (!is_in_matching()) {
+    dump_client_view(*response.mutable_view());
+    RPC_RETURN_CODE(data_.has_view() ? PROJECT_NAMESPACE_ID::err::EN_SUCCESS
+                                     : PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   rpc_request->set_matching_id(data_.view().matching_id());
   const uint64_t unit_id = get_current_unit_id();
   if (unit_id == 0) {
-    FWPLOGERROR(*owner_, "check matching failed to find current unit, matching_id={}", request.matching_id());
+    FWPLOGERROR(*owner_, "check matching failed to find current unit, matching_id={}", data_.view().matching_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   rpc_request->set_unit_id(unit_id);
   fill_operator_user(*rpc_request->mutable_operator_user());
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
-  if (data_.view().matching_id().empty() || data_.view().matching_id() == request.matching_id()) {
-    const int64_t acknowledged_event_id =
-        std::min(std::max<int64_t>(0, request.acknowledge_event_id()), data_.last_event_id());
-    data_.set_client_acknowledge_event_id(std::max(data_.client_acknowledge_event_id(), acknowledged_event_id));
-    dirty_ = true;
-  }
   rpc_request->set_acknowledge_event_id(get_acknowledge_event_id());
 
   const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
   if (matchsvr_id == 0) {
-    FWPLOGERROR(*owner_, "check matching failed, no ready matchsvr, matching_id={}, unit_id={}", request.matching_id(),
-                unit_id);
+    FWPLOGERROR(*owner_, "check matching failed, no ready matchsvr, matching_id={}, unit_id={}",
+                data_.view().matching_id(), unit_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::check_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
   if (result < 0) {
     FWPLOGERROR(*owner_, "check matching RPC failed, matchsvr_id={:#x}, matching_id={}, unit_id={}, result={}({})",
-                matchsvr_id, request.matching_id(), unit_id, result, protobuf_mini_dumper_get_error_msg(result));
+                matchsvr_id, data_.view().matching_id(), unit_id, result, protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (rpc_response->result() != 0) {
     FWPLOGERROR(*owner_, "check matching rejected by matchsvr, matching_id={}, unit_id={}, result={}({})",
-                request.matching_id(), unit_id, rpc_response->result(),
+                data_.view().matching_id(), unit_id, rpc_response->result(),
                 protobuf_mini_dumper_get_error_msg(rpc_response->result()));
     RPC_RETURN_CODE(rpc_response->result());
   }
   update_view(rpc_response->snapshot());
-  protobuf_copy_message(*response.mutable_view(), rpc_response->snapshot());
-  FWPLOGDEBUG(*owner_, "check matching finish, matching_id={}, unit_id={}, status={}, last_event_id={}",
+  dump_client_view(*response.mutable_view());
+  FWPLOGDEBUG(*owner_,
+              "check matching finish, matching_id={}, unit_id={}, status={}, last_event_id={}, view_revision={}",
               rpc_response->snapshot().matching_id(), unit_id, static_cast<int>(rpc_response->snapshot().status()),
-              rpc_response->snapshot().last_event_id());
+              rpc_response->snapshot().last_event_id(), data_.client_view_revision());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -312,41 +311,41 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
                                                              PROJECT_NAMESPACE_ID::SCMatchingCancelRsp& response) {
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCancelReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
-  FWPLOGDEBUG(*owner_, "cancel matching, matching_id={}", request.matching_id());
-  if (request.matching_id() != data_.view().matching_id()) {
-    FWPLOGERROR(*owner_, "cancel matching rejected by local snapshot, request_matching_id={}, local_matching_id={}",
-                request.matching_id(), data_.view().matching_id());
+  const uint64_t unit_id = get_current_unit_id();
+  FWPLOGDEBUG(*owner_, "cancel matching, request_unit_id={}, current_unit_id={}, matching_id={}", request.unit_id(),
+              unit_id, data_.view().matching_id());
+  if (request.unit_id() == 0 || request.unit_id() != unit_id) {
+    dump_client_view(*response.mutable_view());
+    FWPLOGERROR(*owner_,
+                "cancel matching rejected by stale unit, request_unit_id={}, current_unit_id={}, matching_id={}",
+                request.unit_id(), unit_id, data_.view().matching_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   rpc_request->set_matching_id(data_.view().matching_id());
-  const uint64_t unit_id = get_current_unit_id();
-  if (unit_id == 0) {
-    FWPLOGERROR(*owner_, "cancel matching failed to find current unit, matching_id={}", request.matching_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
-  }
   rpc_request->set_unit_id(unit_id);
   fill_operator_user(*rpc_request->mutable_operator_user());
   const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
   if (matchsvr_id == 0) {
-    FWPLOGERROR(*owner_, "cancel matching failed, no ready matchsvr, matching_id={}, unit_id={}", request.matching_id(),
-                unit_id);
+    FWPLOGERROR(*owner_, "cancel matching failed, no ready matchsvr, matching_id={}, unit_id={}",
+                data_.view().matching_id(), unit_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::cancel_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
   if (result < 0) {
     FWPLOGERROR(*owner_, "cancel matching RPC failed, matchsvr_id={:#x}, matching_id={}, unit_id={}, result={}({})",
-                matchsvr_id, request.matching_id(), unit_id, result, protobuf_mini_dumper_get_error_msg(result));
+                matchsvr_id, data_.view().matching_id(), unit_id, result, protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (rpc_response->has_snapshot()) {
     update_view(rpc_response->snapshot());
-    protobuf_copy_message(*response.mutable_view(), rpc_response->snapshot());
   }
-  FWPLOGDEBUG(*owner_, "cancel matching finish, matching_id={}, unit_id={}, result={}({}), status={}",
-              request.matching_id(), unit_id, rpc_response->result(),
+  dump_client_view(*response.mutable_view());
+  FWPLOGDEBUG(*owner_, "cancel matching finish, matching_id={}, unit_id={}, result={}({}), status={}, view_revision={}",
+              data_.view().matching_id(), unit_id, rpc_response->result(),
               protobuf_mini_dumper_get_error_msg(rpc_response->result()),
               rpc_response->has_snapshot() ? static_cast<int>(rpc_response->snapshot().status())
-                                           : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID));
+                                           : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID),
+              data_.client_view_revision());
   RPC_RETURN_CODE(rpc_response->result());
 }
 
@@ -357,18 +356,17 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   // TODO 填充玩家的战斗数据
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingConfirmReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
-  FWPLOGDEBUG(*owner_, "confirm matching, matching_id={}, confirmed={}", request.matching_id(), request.confirmed());
-  if (request.matching_id() != data_.view().matching_id()) {
-    FWPLOGERROR(*owner_, "confirm matching rejected by local snapshot, request_matching_id={}, local_matching_id={}",
-                request.matching_id(), data_.view().matching_id());
+  const uint64_t unit_id = get_current_unit_id();
+  FWPLOGDEBUG(*owner_, "confirm matching, matching_id={}, request_unit_id={}, current_unit_id={}, confirmed={}",
+              data_.view().matching_id(), request.unit_id(), unit_id, request.confirmed());
+  if (request.unit_id() == 0 || request.unit_id() != unit_id) {
+    dump_client_view(*response.mutable_view());
+    FWPLOGERROR(*owner_,
+                "confirm matching rejected by stale unit, matching_id={}, request_unit_id={}, current_unit_id={}",
+                data_.view().matching_id(), request.unit_id(), unit_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   rpc_request->set_matching_id(data_.view().matching_id());
-  const uint64_t unit_id = get_current_unit_id();
-  if (unit_id == 0) {
-    FWPLOGERROR(*owner_, "confirm matching failed to find current unit, matching_id={}", request.matching_id());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
-  }
   rpc_request->set_unit_id(unit_id);
   rpc_request->set_confirmed(request.confirmed());
   fill_operator_user(*rpc_request->mutable_operator_user());
@@ -377,25 +375,28 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWPLOGERROR(*owner_, "confirm matching failed, no ready matchsvr, matching_id={}, unit_id={}",
-                request.matching_id(), unit_id);
+                data_.view().matching_id(), unit_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
   int32_t result =
       RPC_AWAIT_CODE_RESULT(rpc::matching::confirm_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
   if (result < 0) {
     FWPLOGERROR(*owner_, "confirm matching RPC failed, matchsvr_id={:#x}, matching_id={}, unit_id={}, result={}({})",
-                matchsvr_id, request.matching_id(), unit_id, result, protobuf_mini_dumper_get_error_msg(result));
+                matchsvr_id, data_.view().matching_id(), unit_id, result, protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (rpc_response->has_snapshot()) {
     update_view(rpc_response->snapshot());
-    protobuf_copy_message(*response.mutable_view(), rpc_response->snapshot());
   }
-  FWPLOGDEBUG(*owner_, "confirm matching finish, matching_id={}, unit_id={}, confirmed={}, result={}({}), status={}",
-              request.matching_id(), unit_id, request.confirmed(), rpc_response->result(),
+  dump_client_view(*response.mutable_view());
+  FWPLOGDEBUG(*owner_,
+              "confirm matching finish, matching_id={}, unit_id={}, confirmed={}, result={}({}), status={}, "
+              "view_revision={}",
+              data_.view().matching_id(), unit_id, request.confirmed(), rpc_response->result(),
               protobuf_mini_dumper_get_error_msg(rpc_response->result()),
               rpc_response->has_snapshot() ? static_cast<int>(rpc_response->snapshot().status())
-                                           : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID));
+                                           : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID),
+              data_.client_view_revision());
   RPC_RETURN_CODE(rpc_response->result());
 }
 
@@ -440,27 +441,64 @@ void user_matching_manager::acknowledge_matching_sync(rpc::context& ctx,
   if (is_switch) {
     pending_switch_matching_id_.clear();
   }
-  FWPLOGDEBUG(*owner_, "acknowledge matching event sync finish, matching_id={}, status={}, last_event_id={}",
-              data_.view().matching_id(), static_cast<int>(data_.view().status()), data_.last_event_id());
-  send_log_sync(ctx, sync, is_switch);
+  FWPLOGDEBUG(*owner_,
+              "acknowledge matching event sync finish, matching_id={}, status={}, last_event_id={}, "
+              "view_revision={}",
+              data_.view().matching_id(), static_cast<int>(data_.view().status()), data_.last_event_id(),
+              data_.client_view_revision());
+  send_log_sync(ctx);
 }
 
 const PROJECT_NAMESPACE_ID::DMatchingPlayerView& user_matching_manager::get_view() const { return data_.view(); }
 
+PROJECT_NAMESPACE_ID::DMatchingClientView user_matching_manager::get_client_view() const {
+  PROJECT_NAMESPACE_ID::DMatchingClientView result;
+  dump_client_view(result);
+  return result;
+}
+
 int64_t user_matching_manager::get_last_event_id() const { return data_.last_event_id(); }
 
-void user_matching_manager::update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view) {
+bool user_matching_manager::update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view) {
   const bool matching_id_changed = data_.view().matching_id() != view.matching_id();
-  if (matching_id_changed || view.last_event_id() >= data_.last_event_id()) {
-    if (matching_id_changed) {
-      data_.set_client_acknowledge_event_id(0);
-    }
-    protobuf_copy_message(*data_.mutable_view(), view);
-    data_.clear_legacy_snapshot();
-    data_.set_last_event_id(matching_id_changed ? view.last_event_id()
-                                                : std::max(data_.last_event_id(), view.last_event_id()));
-    dirty_ = true;
+  if (!matching_id_changed && view.last_event_id() < data_.last_event_id()) {
+    return false;
   }
+  if (atfw::atapp::protobuf_equal(data_.view(), view)) {
+    return false;
+  }
+  const bool client_view_changed = matching_id_changed || !client_view_payload_equal(data_.view(), view);
+
+  protobuf_copy_message(*data_.mutable_view(), view);
+  data_.clear_legacy_snapshot();
+  data_.set_last_event_id(matching_id_changed ? view.last_event_id()
+                                              : std::max(data_.last_event_id(), view.last_event_id()));
+  if (client_view_changed) {
+    data_.set_client_view_revision(data_.client_view_revision() + 1);
+  }
+  dirty_ = true;
+  return client_view_changed;
+}
+
+void user_matching_manager::clear_matching_state() {
+  const uint64_t client_view_revision = data_.client_view_revision();
+  data_.Clear();
+  data_.set_client_view_revision(client_view_revision);
+  pending_switch_matching_id_.clear();
+}
+
+void user_matching_manager::dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const {
+  output.Clear();
+  output.set_view_revision(data_.client_view_revision());
+  if (!data_.has_view()) {
+    return;
+  }
+  output.set_unit_id(data_.view().unit().unit_id());
+  output.set_status(data_.view().status());
+  output.set_result(data_.view().result());
+  output.set_expire_time(data_.view().expire_time());
+  output.set_selected_level_id(data_.view().selected_level_id());
+  // output.set_faction_id(data_.view().faction_id());
 }
 
 int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
@@ -471,7 +509,7 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   output.Clear();
   acceptable_level_ids.clear();
   preferred_level_id = 0;
-  if (level_select.level_type() <= 0) {
+  if (level_select.level_ids_size() <= 0) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
   }
 
@@ -483,12 +521,19 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   std::sort(acceptable_level_ids.begin(), acceptable_level_ids.end());
   acceptable_level_ids.erase(std::unique(acceptable_level_ids.begin(), acceptable_level_ids.end()),
                              acceptable_level_ids.end());
-  preferred_level_id = level_select.level_id() > 0 ? level_select.level_id() : acceptable_level_ids.front();
+  preferred_level_id = level_select.level_ids(0) > 0 ? level_select.level_ids(0) : acceptable_level_ids.front();
   if (!std::binary_search(acceptable_level_ids.begin(), acceptable_level_ids.end(), preferred_level_id)) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
   }
 
-  output.set_level_type(level_select.level_type());
+  auto preferred_level_cfg = excel::get_ExcelLevel_by_level_id(preferred_level_id);
+  if (!preferred_level_cfg) {
+    return PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND;
+  }
+
+  auto preferred_level_type = preferred_level_cfg->level_type();
+
+  output.set_level_type(preferred_level_type);
   output.set_region(level_select.region());
   output.set_battle_version(battle_version);
 
@@ -496,11 +541,11 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   for (int32_t level_id : acceptable_level_ids) {
     const auto level_cfg = excel::get_ExcelLevel_by_level_id(level_id);
     FWPLOGDEBUG(*owner_, "fill_matching_scope, level_type={}, level_id={}, battle_version={}, level_cfg={}",
-                level_select.level_type(), level_id, battle_version, level_cfg ? level_cfg->DebugString() : "null");
+                level_cfg->level_type(), level_id, battle_version, level_cfg ? level_cfg->DebugString() : "null");
     if (!level_cfg) {
       return PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND;
     }
-    if (level_cfg->level_type() != level_select.level_type() ||
+    if (preferred_level_type != level_cfg->level_type() ||
         (matching_pool_id > 0 && matching_pool_id != level_cfg->matching_pool_id())) {
       return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
     }
@@ -542,25 +587,19 @@ void user_matching_manager::fill_operator_user(PROJECT_NAMESPACE_ID::DUserIDKey&
 
 uint64_t user_matching_manager::get_current_unit_id() const { return data_.view().unit().unit_id(); }
 
-int64_t user_matching_manager::get_acknowledge_event_id() const { return data_.client_acknowledge_event_id(); }
+int64_t user_matching_manager::get_acknowledge_event_id() const { return data_.last_event_id(); }
 
-void user_matching_manager::send_log_sync(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync,
-                                          bool is_switch) {
+void user_matching_manager::send_log_sync(rpc::context& ctx) {
   auto session = owner_->get_session();
   if (!session) {
-    FWPLOGDEBUG(*owner_, "skip matching log sync to offline client, matching_id={}, event_count={}", sync.matching_id(),
-                sync.event_logs_size());
+    FWPLOGDEBUG(*owner_, "skip matching view sync to offline client, matching_id={}, view_revision={}",
+                data_.view().matching_id(), data_.client_view_revision());
     return;
   }
   auto output = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingLogSync>(ctx);
-  output->set_matching_id(sync.matching_id());
-  output->set_is_switch(is_switch);
-  protobuf_copy_message(*output->mutable_event_logs(), sync.event_logs());
-  if (sync.has_player_view()) {
-    protobuf_copy_message(*output->mutable_view(), sync.player_view());
-  }
-  FWPLOGDEBUG(*owner_, "send matching log sync to client, matching_id={}, is_switch={}, event_count={}, view={}",
-              sync.matching_id(), is_switch, sync.event_logs_size(), sync.has_player_view());
+  dump_client_view(*output->mutable_client_view());
+  FWPLOGDEBUG(*owner_, "send matching view sync to client, matching_id={}, unit_id={}, view_revision={}",
+              data_.view().matching_id(), output->client_view().unit_id(), output->client_view().view_revision());
   rpc::lobbysvrclientservice::send_matching_log_sync(ctx, *output, *session);
 }
 
@@ -592,13 +631,11 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
         auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingStartRsp>(child_ctx);
         rpc_request->set_battle_version("gm_test");
         auto* level_select = rpc_request->mutable_level_select();
-        level_select->set_level_id(level_id);
         auto cfg = excel::get_ExcelLevel_by_level_id(level_id);
         if (!cfg) {
           FWPLOGERROR(*user_ptr, "gm_start_matching failed to find level cfg, level_id={}", level_id);
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND);
         }
-        level_select->set_level_type(cfg->level_type());
         level_select->add_level_ids(level_id);
         level_select->set_region(region);
         const int32_t ret = RPC_AWAIT_CODE_RESULT(
