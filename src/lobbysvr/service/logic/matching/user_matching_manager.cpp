@@ -38,7 +38,7 @@ bool same_user(const PROJECT_NAMESPACE_ID::DUserIDKey& left, const PROJECT_NAMES
 
 static bool init_user_matching_manager_gm_handle() {
   task_action_user_gm_cmd_nomsg::init_gm_cmd("matching_start", user_matching_manager::on_gm_cmd_start_matching,
-                                             "matching_start <level_id> ");
+                                             "matching_start <level_id> <region>");
   return true;
 }
 
@@ -572,7 +572,7 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
     return;
   }
 
-  if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 1)) {
+  if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 2)) {
     return;
   }
 
@@ -582,11 +582,12 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
     rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND);
     return;
   }
+  std::string region = params[1]->to_string();
   auto user_ptr = user_inst->shared_from_this();
 
   auto invoke_result = rpc::async_invoke(
       *ctx, "user_matching_manager.gm_start_matching",
-      [user_ptr, rsp, level_id](rpc::context& child_ctx) -> rpc::result_code_type {
+      [user_ptr, rsp, level_id, region](rpc::context& child_ctx) -> rpc::result_code_type {
         auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingStartReq>(child_ctx);
         auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingStartRsp>(child_ctx);
         rpc_request->set_battle_version("gm_test");
@@ -599,6 +600,7 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
         }
         level_select->set_level_type(cfg->level_type());
         level_select->add_level_ids(level_id);
+        level_select->set_region(region);
         const int32_t ret = RPC_AWAIT_CODE_RESULT(
             user_ptr->get_user_matching_manager().start_matching(child_ctx, *rpc_request, *rpc_response));
         if (ret != 0) {
