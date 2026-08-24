@@ -1,11 +1,14 @@
 ---
 name: testing
-description: "Use when: running or writing generic unit tests, filtering private-framework cases, or fixing Windows test startup/PATH. For offline service RPC tests with atfw::testing::runtime, use rpc-unit-test."
+description: "Use when: designing, writing, reviewing, or running generic unit tests, filtering private-framework cases, or fixing Windows test startup/PATH. For offline service RPC tests with atfw::testing::runtime, use rpc-unit-test."
 ---
 
 # Unit testing (atsf4g-co)
 
 This repository uses a private unit testing framework shared by several atframework projects.
+
+Read [test design and acceptance](references/test-design-and-acceptance.md) when planning, writing, or reviewing cases.
+It is not needed merely to run a known test command.
 
 ## Discover and run tests (generic)
 
@@ -48,3 +51,6 @@ If the workspace provides CMake build tasks, prefer those to ensure UTF-8 consol
 
 Read the executable's exit status and case counts. A skipped dependency-backed case is not passing coverage; report the
 skip and the missing prerequisite explicitly.
+
+For a defect or behavior change, use `change-workflow` for RED-GREEN-REFACTOR and completion evidence. Use
+`engineering-guidelines` for C++/CMake naming, implementation, and lint rules; do not re-create those policies here.

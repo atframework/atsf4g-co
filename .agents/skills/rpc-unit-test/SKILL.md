@@ -1,6 +1,6 @@
 ---
 name: rpc-unit-test
-description: "Use when: authoring or running offline RPC unit tests with the atfw::testing::runtime mock fixture in src/tools/rpc-unit-test (mock SS/DNS/DB/CS/router/transport/resource/hpa engines), registering mock rules, choosing feature flags, or adding a project_add_rpc_unit_test CMake target. For generic unit-test running/filtering/DLL-PATH issues use testing; for production RPC implementation use engineering-guidelines."
+description: "Use when: designing, authoring, reviewing, or running offline RPC unit tests with the atfw::testing::runtime mock fixture in src/tools/rpc-unit-test (mock SS/DNS/DB/CS/router/transport/resource/hpa engines), registering mock rules, choosing feature flags, or adding a project_add_rpc_unit_test CMake target. For generic unit-test running/filtering/DLL-PATH issues use testing; for production RPC implementation use engineering-guidelines."
 ---
 
 # RPC unit testing (offline mock fixture)
@@ -13,6 +13,27 @@ forced OFF for production builds).
 
 Full API/feature matrix is in `src/tools/rpc-unit-test/README.md`; read it when you need exact signatures. Read
 `references/engine-invariants.md` only when **modifying** the mock engines/hook seams, not for authoring tests.
+
+## Case-quality overlay
+
+Read `../testing/references/test-design-and-acceptance.md` when designing, writing, or reviewing cases. Apply these
+fixture-specific constraints in addition:
+
+- Drive the real generated RPC/client path or the production action under test. Use the typed direct-action helper only
+  when action behavior is the subject; use transport/dispatcher entry points when registration, envelopes, unknown RPCs,
+  or malformed wire data are the subject. Do not bypass the layer named by the case.
+- Build requests, responses, discovery nodes, and DB records from current generated types and a nearby verified fixture.
+  Use the smallest contract-valid baseline plus the field under test. Extra IDs, labels, versions, readiness flags, and
+  metadata need a source-backed prerequisite; never add them only because the current test otherwise fails.
+- Enable only the runtime features crossed by the flow. Mock the external boundary with branch-specific results, then
+  assert consumer-visible results, state, outbound payloads, and cleanup. Do not encode the current internal call order.
+- A hard timeout only prevents a hung CTest run; business timeout behavior must be asserted through task/result/state.
+  `delay_generations`, fixed pump counts, and the transport barrier are valid oracles only when engine scheduling is the
+  subject of a fixture selftest, not when testing service business behavior.
+- An unmatched one-way call is recorded and dropped with success, so success alone does not prove a required notification
+  or broadcast occurred. Register an expectation or inspect captured calls/payloads and let `stop()` verify consumption.
+- Assert call count/order only when retry, routing, or delivery ordering is the contract. If faithful mock setup is more
+  complex than the real in-process component, move the scenario to the appropriate integration level.
 
 ## Canonical case pattern
 

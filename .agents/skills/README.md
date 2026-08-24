@@ -10,7 +10,7 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 | `engineering-guidelines/` | C++/CMake/protobuf conventions, lint review, API/ABI, generated code                  |
 | `change-workflow/`        | Defects and nontrivial/high-risk behavior, API, data, security, or deployment changes |
 | `build/`                  | CMake configure/build and compile, link, or configure failures                        |
-| `testing/`                | Generic unit tests, filters, and Windows test startup                                 |
+| `testing/`                | Unit-test design/review, private-framework execution, filters, and Windows startup    |
 | `rpc-unit-test/`          | Offline service RPC tests using `atfw::testing::runtime` and mock engines             |
 | `deployment-config/`      | Go deployment templates, Helm values, atdtool rendering, and generated scripts        |
 | `configure-expression/`   | `enable_expression` and environment expansion in annotated config fields              |
