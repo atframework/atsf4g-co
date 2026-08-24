@@ -132,7 +132,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> tbu{ctx};
   uint64_t tbu_version = 0;
   auto res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::user::partly_get_basic_info(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
+      rpc::db::user::get_all(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id, res);

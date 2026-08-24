@@ -544,6 +544,7 @@ int unpack_message(::google::protobuf::Message &msg, const redisReply *reply, ui
         CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_UINT64, google::protobuf::uint64,
                                   SetUInt64)
         CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_ENUM, int, SetEnumValue)
+        CASE_REDIS_DATA_TO_PB_INT(google::protobuf::FieldDescriptor::CPPTYPE_BOOL, bool, SetBool)
 
       default: {
         FWLOGERROR("message {} field {}(type={}) invalid", msg.GetDescriptor()->full_name(), fd->name(),
