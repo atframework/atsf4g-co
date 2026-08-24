@@ -253,8 +253,6 @@ int32_t orbit_room::init_user(
   for (const auto& user_init_data : user_list) {
     orbit_room_user_data_ptr_t user_data = atfw::util::memory::make_strong_rc<orbit_room_user_data>();
     user_data->init_data_ = user_init_data;
-    user_data->init_data_.mutable_user_key()->set_orbit_user_key(atfw::util::log::format(
-        "{}:{}", user_init_data.user_key().user_key().user_id(), user_init_data.user_key().user_key().zone_id()));
     user_data->user_key_ = user_init_data.user_key().user_key();
     user_data_index_[user_init_data.user_key().user_key()] = user_data;
   }
