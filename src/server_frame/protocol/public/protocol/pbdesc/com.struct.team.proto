@@ -83,6 +83,8 @@ message DTeamAnyData {
 
 message DTeamKey {
   int64 team_id = 1;
+  // 队伍所属区服；和 team_id 一起构成队伍唯一标识，路由/分片以 (zone_id, team_id) 为 key
+  uint32 zone_id = 2;
 }
 
 enum EnTeamPermissionRole {
@@ -117,7 +119,7 @@ message DTeamMember {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> shared_member_data = 13;
+  map<int64, DTeamAnyData> shared_member_data = 13;
 }
 
 message DTeamMemberUpdateData {
@@ -129,7 +131,7 @@ message DTeamMemberUpdateData {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> shared_member_data = 13;
+  map<int64, DTeamAnyData> shared_member_data = 13;
 }
 
 message DTeamMemberRemoveData {
@@ -165,11 +167,11 @@ message DTeamInvitation {
 
   // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> team_admission_data = 14;
+  map<int64, DTeamAnyData> team_admission_data = 14;
 
   message MemberAdmissionData {
     atframework.shared.DUserIDKey user_key = 1;
-    map<int32, DTeamAnyData> member_admission_data = 2;
+    map<int64, DTeamAnyData> member_admission_data = 2;
   }
   repeated MemberAdmissionData member_admission_data = 15;
 }
@@ -190,7 +192,7 @@ message DTeamJoinRequest {
 
   // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> member_admission_data = 14;
+  map<int64, DTeamAnyData> member_admission_data = 14;
 }
 
 message DTeamConfigure {
@@ -198,7 +200,7 @@ message DTeamConfigure {
   // destroy_team 与无条件修改队长(election_captain)固定要求 EN_TEAM_MEMBER_ROLE_OWNER，不可配置。
   // 所有成员都可以删除自己(视为主动退出)和 member_update 自己的数据；
   // 所有人(包括游客)都可以同意或否决发给自己的邀请，也都可以发起加入请求。
-  EnTeamPermissionRole manage_member_role = 1;  // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
+  EnTeamPermissionRole manage_member_role = 1;         // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
   EnTeamPermissionRole approve_join_request_role = 2;  // 同意/拒绝其他玩家的加入请求，默认 NORMAL
   EnTeamPermissionRole invite_role = 3;                // 发起邀请，默认 NORMAL
   EnTeamPermissionRole update_team_data_role = 4;      // 更新队伍共享数据(team_update)，默认 NORMAL
@@ -231,7 +233,7 @@ message DTeamStorage {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> shared_team_data = 14;
+  map<int64, DTeamAnyData> shared_team_data = 14;
 }
 
 message DTeamUpdateData {
@@ -239,7 +241,7 @@ message DTeamUpdateData {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int32, DTeamAnyData> shared_team_data = 14;
+  map<int64, DTeamAnyData> shared_team_data = 14;
 }
 
 message DTeamAction {
@@ -269,13 +271,11 @@ message DTeamMemberAction {
   oneof action {
     DTeamInvitation invited = 1;
     DTeamInvitation reject_invitation = 2;
-    DTeamInvitation cancel_invitation = 3;
 
-    DTeamJoinRequest apply_join_request = 8;
-    DTeamJoinRequest reject_join_request = 5;
-    DTeamJoinRequest cancel_join_request = 6;
+    DTeamJoinRequest apply_join_request = 3;
+    DTeamJoinRequest reject_join_request = 4;
 
-    DTeamInvitation joined_team = 4;  // 通知新成员已入队(接受邀请或加入请求被批准)
-    DTeamMemberRemoveData remove_member = 7;
+    DTeamStorage joined_team = 5;  // 通知新成员已入队(接受邀请或加入请求被批准)
+    DTeamMemberRemoveData remove_member = 6;
   }
 }

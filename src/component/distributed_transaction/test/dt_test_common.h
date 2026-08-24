@@ -39,6 +39,22 @@
 
 namespace dt_test {
 
+// Scoped business-clock offset; runtime/task hard timeouts keep using sys_now().
+class global_now_offset_guard {
+ public:
+  global_now_offset_guard() : previous_(atfw::util::time::time_utility::get_global_now_offset()) {}
+  explicit global_now_offset_guard(std::chrono::system_clock::duration advance_by)
+      : previous_(atfw::util::time::time_utility::get_global_now_offset()) {
+    atfw::util::time::time_utility::set_global_now_offset(previous_ + advance_by);
+  }
+  ~global_now_offset_guard() { atfw::util::time::time_utility::set_global_now_offset(previous_); }
+  global_now_offset_guard(const global_now_offset_guard&) = delete;
+  global_now_offset_guard& operator=(const global_now_offset_guard&) = delete;
+
+ private:
+  std::chrono::system_clock::duration previous_;
+};
+
 // The HPA-patched scaling_ready selector requires the hpa_scaling_ready=1 metadata label (see the
 // create-contract case and logic_hpa_controller).
 inline atfw::testing::mock_node make_coordinator_node(uint64_t node_id, uint32_t zone_id = 1) {
@@ -80,15 +96,13 @@ inline void make_prepared_storage(atfw::distributed_system::transaction_blob_sto
   auto now = atfw::util::time::time_utility::now();
   auto* prepare_timepoint = out.mutable_metadata()->mutable_prepare_timepoint();
   prepare_timepoint->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-  prepare_timepoint->set_nanos(
-      static_cast<int32_t>(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() % 1000000000));
+  prepare_timepoint->set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() % 1000000000));
   auto* expire_timepoint = out.mutable_metadata()->mutable_expire_timepoint();
   auto expire = now + timeout;
   expire_timepoint->set_seconds(std::chrono::duration_cast<std::chrono::seconds>(expire.time_since_epoch()).count());
-  expire_timepoint->set_nanos(
-      static_cast<int32_t>(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(expire.time_since_epoch()).count() % 1000000000));
+  expire_timepoint->set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(expire.time_since_epoch()).count() % 1000000000));
   out.mutable_configure()->set_resolve_max_times(3);
   out.mutable_configure()->set_lock_retry_max_times(3);
   out.mutable_configure()->mutable_resolve_retry_interval()->set_seconds(0);
@@ -115,7 +129,7 @@ inline bool wait_for(atfw::testing::runtime& test, const std::function<bool()>& 
       return false;
     }
     test.pump_once();
-    std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    std::this_thread::yield();
   }
   return true;
 }

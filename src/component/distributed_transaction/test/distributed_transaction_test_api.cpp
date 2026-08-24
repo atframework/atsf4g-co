@@ -670,10 +670,8 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_one_way) {
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
-  // The one-way send crosses the one-generation transport barrier: pump before counting history.
-  for (int i = 0; i < 4; ++i) {
-    test.pump_once();
-  }
+  CASE_EXPECT_TRUE(dt_test::wait_for(
+      test, [&test]() { return test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()) >= 1; }));
   CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
   CASE_EXPECT_EQ(1, test.transport().outbound_count_to(0x1B0001));
 
@@ -1070,9 +1068,8 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_replication_fano
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
-  for (int i = 0; i < 4; ++i) {
-    test.pump_once();
-  }
+  CASE_EXPECT_TRUE(dt_test::wait_for(
+      test, [&test]() { return test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()) >= 3; }));
   // The one-way remove is sent to every replica (N=3), not only R=2 of them.
   CASE_EXPECT_EQ(3, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
 
@@ -1268,9 +1265,8 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_send_failure_thr
   auto result_ok = test.wait(task_ok, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result_ok.task_exited);
   CASE_EXPECT_EQ(0, result_ok.result_code);
-  for (int i = 0; i < 4; ++i) {
-    test.pump_once();
-  }
+  CASE_EXPECT_TRUE(dt_test::wait_for(
+      test, [&test]() { return test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()) >= 2; }));
   // 失败的发送从未到达 SS 引擎：只有两个存活节点产生了引擎侧调用
   CASE_EXPECT_EQ(2, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
 
@@ -1290,9 +1286,8 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_send_failure_thr
   auto result_fail = test.wait(task_fail, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result_fail.task_exited);
   CASE_EXPECT_EQ(0, result_fail.result_code);
-  for (int i = 0; i < 4; ++i) {
-    test.pump_once();
-  }
+  CASE_EXPECT_TRUE(dt_test::wait_for(
+      test, [&test]() { return test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()) >= 4; }));
   CASE_EXPECT_EQ(4, test.ss().calls(rpc::transaction::packer::get_full_name_of_remove()));
 
   CASE_EXPECT_EQ(0, test.stop());

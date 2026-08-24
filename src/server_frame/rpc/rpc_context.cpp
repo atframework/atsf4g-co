@@ -397,4 +397,15 @@ SERVER_FRAME_API void context::set_current_service(atfw::atapp::app &app,
 SERVER_FRAME_API void context::set_task_context(const task_context_data &task_ctx) noexcept {
   task_context_ = task_ctx;
 }
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+SERVER_FRAME_API std::chrono::system_clock::time_point context::logical_now() const noexcept {
+  return atfw::util::time::time_utility::now();
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+SERVER_FRAME_API std::chrono::system_clock::time_point context::system_now() const noexcept {
+  return atfw::util::time::time_utility::sys_now();
+}
+
 }  // namespace rpc

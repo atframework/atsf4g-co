@@ -626,7 +626,7 @@ CASE_TEST(teamsvr_room_admission, standby_node_no_personal_side_effects) {
       protobuf_from_system_clock(atfw::util::time::time_utility::now() + std::chrono::seconds{3600});
   fake.set_lock(new_lock);
   CASE_EXPECT_EQ(0, env.run("push_lock_takeover", [&env, team_id](rpc::context& ctx) -> rpc::result_code_type {
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.push_channel_events(ctx, team_id, false)));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.push_channel_events(ctx, make_team_key(team_id), false)));
   }));
   CASE_EXPECT_FALSE(room->is_lock_holder());
 
@@ -640,7 +640,7 @@ CASE_TEST(teamsvr_room_admission, standby_node_no_personal_side_effects) {
     protobuf_copy_message(*invitation->mutable_inviter(), members.normal);
     protobuf_copy_message(*invitation->mutable_invitee(), invitee);
     protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
-    invitation->mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*invitation->mutable_team_key(), make_team_key(team_id));
     return action;
   }());
   CASE_EXPECT_EQ(0, env.sync(team_id));

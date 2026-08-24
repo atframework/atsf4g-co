@@ -68,6 +68,8 @@ project_service_declare_instance(
   "cachesvr-sdk"
   "orbitsvr-sdk"
   "matchsvr-sdk"
+  "team-common-sdk"
+  "team-sdk-room"
   USE_SERVICE_PROTOCOL
   "lobbysvr-config"
   GENERATED_FLOW_NAMES

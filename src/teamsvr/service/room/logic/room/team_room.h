@@ -32,6 +32,7 @@
 // clang-format on
 
 #include <data/user_key_hash_helper.h>
+#include <rpc/team/team_key_hash_helper.h>
 
 #include <chrono>
 #include <cstdint>
@@ -118,17 +119,18 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   struct ctor_guard {};
 
  public:
-  team_room(ctor_guard&, int64_t team_id, const atfw::dtmq::DChannelIdKey& channel_key, std::string&& subscriber_key,
-            std::string&& lock_holder, atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& subscriber);
+  team_room(ctor_guard&, const atfw::team::DTeamKey& team_key, const atfw::dtmq::DChannelIdKey& channel_key,
+            std::string&& subscriber_key, std::string&& lock_holder,
+            atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&& subscriber);
   team_room(const team_room&) = delete;
   team_room& operator=(const team_room&) = delete;
   team_room(team_room&&) = delete;
   team_room& operator=(team_room&&) = delete;
 
   // 创建频道订阅者并设置回调
-  static team_room::ptr_t create(rpc::context& ctx, int64_t team_id);
+  static team_room::ptr_t create(rpc::context& ctx, const atfw::team::DTeamKey& team_key);
 
-  int64_t get_team_id() const noexcept;
+  const atfw::team::DTeamKey& get_team_key() const noexcept;
   const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept;
   // 频道订阅已就绪(首轮数据已同步)
   bool is_subscriber_ready() const noexcept;
@@ -222,6 +224,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 测试钩子: 移除重试队列与待发个人通知数量(LIFE-04/11、LCK-05 断言)
   size_t debug_retry_remove_count() const;
   size_t debug_pending_notification_count() const;
+  bool debug_maintenance_task_running() const noexcept;
 #endif
 
  private:
@@ -329,7 +332,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   bool is_join_request_allowed() const;
 
  private:
-  int64_t team_id_;
+  atfw::team::DTeamKey team_key_;
   atfw::dtmq::DChannelIdKey channel_key_;
   std::string subscriber_key_;
   // 本节点乐观锁持有者标识，与服务节点名和节点ID相关
@@ -338,7 +341,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
   atfw::team::DTeamStorage storage_;
-  std::unordered_map<int32_t, atfw::team::DTeamAnyData> private_team_data_;
+  std::unordered_map<int64_t, atfw::team::DTeamAnyData> private_team_data_;
   // 成员心跳等在线状态记录(LRU 维护最近访问成员)
   member_runtime_lru_map_t member_;
   // 移除成员的重试队列(如果失败则重试)

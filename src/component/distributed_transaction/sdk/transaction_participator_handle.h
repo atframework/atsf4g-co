@@ -294,6 +294,8 @@ class transaction_participator_handle
       const noexcept;
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+  using resolve_custom_timer_watcher_for_unit_test_type = atfw::util::time::jiffies_timer<8, 3, 9>::timer_wptr_t;
+
   /**
    * @brief 单测 seam：是否注册了 resolve 自定义定时器，及其指向的到期时间点
    * @note 仅用于单元测试验证“每个 handle 至多一个定时器、指向最先发生的事件”的不变量。
@@ -302,6 +304,14 @@ class transaction_participator_handle
   DISTRIBUTED_TRANSACTION_SDK_API bool has_resolve_custom_timer_for_unit_test() const noexcept;
   DISTRIBUTED_TRANSACTION_SDK_API atfw::util::time::time_utility::raw_time_t
   get_resolve_custom_timer_timepoint_for_unit_test() const noexcept;
+  DISTRIBUTED_TRANSACTION_SDK_API resolve_custom_timer_watcher_for_unit_test_type
+  get_resolve_custom_timer_watcher_for_unit_test() const noexcept;
+  /**
+   * @brief 单测 seam：模拟已注册的自定义定时器在指定业务时间触发。
+   * @note 用于构造“定时器触发时 resolve task 正在运行”的确定性并发场景；会先撤销真实定时器。
+   */
+  DISTRIBUTED_TRANSACTION_SDK_API void fire_resolve_custom_timer_for_unit_test(
+      atfw::util::time::time_utility::raw_time_t timepoint);
 #endif
 
  private:

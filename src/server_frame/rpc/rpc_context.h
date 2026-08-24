@@ -22,6 +22,7 @@
 
 #include <list>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "rpc/rpc_common_types.h"  // IWYU pragma: keep
@@ -243,6 +244,10 @@ class context {
     task_context_.reference_object_zone_id = zone_id;
     task_context_.reference_object_instance_id = instance_id;
   }
+
+  SERVER_FRAME_API std::chrono::system_clock::time_point logical_now() const noexcept;
+
+  SERVER_FRAME_API std::chrono::system_clock::time_point system_now() const noexcept;
 
  private:
   std::shared_ptr<::google::protobuf::Arena> allocator_;

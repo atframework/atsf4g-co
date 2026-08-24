@@ -329,7 +329,7 @@ CASE_TEST(teamsvr_room_event, destroy_event_marks_destroyed) {
   }
 
   atfw::team::DTeamAction destroy_action;
-  destroy_action.mutable_destroy_team()->set_team_id(team_id);
+  protobuf_copy_message(*destroy_action.mutable_destroy_team(), make_team_key(team_id));
   env.inject_team_action(team_id, destroy_action);
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
@@ -381,7 +381,7 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
     int32_t ret =
         env.run("self_update", [team_id, &members, &invoke_options](rpc::context& ctx) -> rpc::result_code_type {
           atfw::team::SSTeamRoomSendMessageReq request;
-          request.mutable_team_key()->set_team_id(team_id);
+          protobuf_copy_message(*request.mutable_team_key(), make_team_key(team_id));
           protobuf_copy_message(*request.mutable_sender_user_key(), members.normal);
           auto* update = request.mutable_action()->mutable_member_update();
           protobuf_copy_message(*update->mutable_user_key(), members.normal);
@@ -408,7 +408,7 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
     int32_t ret =
         env.run("admin_update", [team_id, &members, &invoke_options](rpc::context& ctx) -> rpc::result_code_type {
           atfw::team::SSTeamRoomSendMessageReq request;
-          request.mutable_team_key()->set_team_id(team_id);
+          protobuf_copy_message(*request.mutable_team_key(), make_team_key(team_id));
           protobuf_copy_message(*request.mutable_sender_user_key(), members.admin);
           auto* update = request.mutable_action()->mutable_member_update();
           protobuf_copy_message(*update->mutable_user_key(), members.normal);
@@ -427,20 +427,18 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
   // member_update 不刷新心跳/LRU(apply 不 touch 访问位置)
   CASE_EXPECT_EQ(initial_heartbeat, normal_member->last_heartbeat_timepoint);
 
-  auto lru_before = room->debug_member_lru_keys();
-  // 心跳(携带 router)才把成员移到 LRU 末尾并刷新心跳时间
-  CASE_EXPECT_EQ(0, env.run("heartbeat_touch", [room, &members](rpc::context& ctx) -> rpc::result_code_type {
-    atfw::team::SSTeamRoomHeartbeatReq hb;
-    protobuf_copy_message(*hb.mutable_user_key(), members.normal);
-    hb.set_user_router_server_id(0x7777);
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->heartbeat(ctx, hb)));
-  }));
-  auto lru_after = room->debug_member_lru_keys();
-  CASE_EXPECT_EQ(lru_before.size(), lru_after.size());
-  if (!lru_after.empty()) {
-    CASE_EXPECT_EQ(members.normal.user_id(), lru_after.back().user_id());
-    CASE_EXPECT_TRUE(lru_before.front().user_id() == lru_after.front().user_id() || lru_before.size() <= 1);
+  // 心跳(携带 router)刷新可观察的在线状态；不把 LRU 容器物理顺序当成业务契约。
+  {
+    global_now_offset_guard guard(std::chrono::seconds{1});
+    CASE_EXPECT_EQ(0, env.run("heartbeat_touch", [room, &members](rpc::context& ctx) -> rpc::result_code_type {
+      atfw::team::SSTeamRoomHeartbeatReq hb;
+      protobuf_copy_message(*hb.mutable_user_key(), members.normal);
+      hb.set_user_router_server_id(0x7777);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->heartbeat(ctx, hb)));
+    }));
   }
+  CASE_EXPECT_EQ(0x7777u, normal_member->member_data.user_router_server_id());
+  CASE_EXPECT_GT(normal_member->last_heartbeat_timepoint, initial_heartbeat);
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

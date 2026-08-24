@@ -31,7 +31,7 @@ int32_t run_send_message_action(room_test_env& env, int64_t team_id, const PROJE
     atframework::testing::ss_action_invoke_options invoke_options{rpc::team::packer::get_full_name_of_send_message()};
     invoke_options.source.node_id = kDtmqProxyNodeId;
     atfw::team::SSTeamRoomSendMessageReq request;
-    request.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*request.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*request.mutable_sender_user_key(), sender);
     protobuf_copy_message(*request.mutable_action(), action);
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
@@ -42,9 +42,10 @@ int32_t run_send_message_action(room_test_env& env, int64_t team_id, const PROJE
 // 直接调用 check_action_permission 断言精确错误码(协程内 await 同步结果)
 int32_t check_permission(room_test_env& env, const team_room::ptr_t& room,
                          const PROJECT_NAMESPACE_ID::DUserIDKey& sender, const atfw::team::DTeamAction& action) {
-  return env.run("check_permission", [room, sender, action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(sender, action)));
-  });
+  return env.run("check_permission",
+                 [room, sender, action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(sender, action)));
+                 });
 }
 
 // 零写入门禁快照
@@ -109,7 +110,7 @@ atfw::team::DTeamAction make_election_action(const PROJECT_NAMESPACE_ID::DUserID
 
 atfw::team::DTeamAction make_destroy_action(int64_t team_id) {
   atfw::team::DTeamAction action;
-  action.mutable_destroy_team()->set_team_id(team_id);
+  protobuf_copy_message(*action.mutable_destroy_team(), make_team_key(team_id));
   return action;
 }
 
@@ -889,11 +890,12 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
   expect_no_write(fake, env, before);
 
   // check_action_permission 直接路径同样返回 invalid param
-  (void)env.run("check_direct", [room, members, empty_action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
-                   RPC_AWAIT_CODE_RESULT(room->check_action_permission(members.owner, empty_action)));
-    RPC_RETURN_CODE(0);
-  });
+  (void)env.run("check_direct",
+                [room, members, empty_action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
+                  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(members.owner, empty_action)));
+                  RPC_RETURN_CODE(0);
+                });
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

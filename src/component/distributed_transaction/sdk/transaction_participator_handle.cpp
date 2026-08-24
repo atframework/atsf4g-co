@@ -246,6 +246,17 @@ DISTRIBUTED_TRANSACTION_SDK_API atfw::util::time::time_utility::raw_time_t
 transaction_participator_handle::get_resolve_custom_timer_timepoint_for_unit_test() const noexcept {
   return resolve_custom_timer_timepoint_;
 }
+
+DISTRIBUTED_TRANSACTION_SDK_API transaction_participator_handle::resolve_custom_timer_watcher_for_unit_test_type
+transaction_participator_handle::get_resolve_custom_timer_watcher_for_unit_test() const noexcept {
+  return resolve_custom_timer_watcher_;
+}
+
+DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::fire_resolve_custom_timer_for_unit_test(
+    atfw::util::time::time_utility::raw_time_t timepoint) {
+  remove_resolve_custom_timer();
+  tick(logic_server_get_current_tick_context(), timepoint);
+}
 #endif
 
 DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const snapshot_type& storage) {

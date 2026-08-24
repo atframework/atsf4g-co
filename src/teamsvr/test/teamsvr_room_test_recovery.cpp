@@ -23,7 +23,7 @@ bool write_member_update_logs(room_test_env& env, const team_room::ptr_t& room,
       return false;
     }
   }
-  return 0 == env.sync(room->get_team_id());
+  return 0 == env.sync(room->get_team_key());
 }
 
 const atfw::dtmq::SSChannelUpdateReq* find_compact_update(const fake_team_room_channel& fake) {
@@ -495,7 +495,7 @@ CASE_TEST(teamsvr_room_compact, admission_expired_then_update_failure) {
   }
   // 清理不发送通知；房间仍是主控(非锁冲突错误不退位)
   CASE_EXPECT_EQ(1u, count_personal_actions(env, 8401, atfw::team::DTeamMemberAction::kInvited));
-  CASE_EXPECT_EQ(0u, count_personal_actions(env, 8401, atfw::team::DTeamMemberAction::kCancelInvitation));
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, 8401, atfw::team::DTeamMemberAction::kRejectInvitation));
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
   // 本地清理后 approve 立即返回 not-found(不依赖快照提交)
@@ -742,7 +742,7 @@ CASE_TEST(teamsvr_room_recovery, corrupt_custom_data_restore_fails) {
 
   // await_ready 在快照恢复失败时返回错误
   int32_t ready_ret = env.run("await_ready_corrupt", [team_id](rpc::context& ctx) -> rpc::result_code_type {
-    auto room = team_room_manager::me()->mutable_room(ctx, team_id);
+    auto room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
     if (!room) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
@@ -750,10 +750,70 @@ CASE_TEST(teamsvr_room_recovery, corrupt_custom_data_restore_fails) {
   });
   CASE_EXPECT_NE(0, ready_ret);
 
-  auto room = team_room_manager::me()->get_room(team_id);
+  auto room = team_room_manager::me()->get_room(make_team_key(team_id));
   if (room) {
     CASE_EXPECT_FALSE(room->is_lock_holder());
   }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ RCV-04/BND-03: 完整快照 key 指向其他区服时拒绝恢复，避免跨队伍状态串读 ============
+CASE_TEST(teamsvr_room_recovery, snapshot_identity_validation_rejects_cross_zone_keys) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto target_key = make_team_key(team_id, kTestZoneId + 1);
+  auto& fake = env.channel(target_key);
+  fake.ensure_created();
+
+  atfw::team::DTeamStorage wrong_storage;
+  protobuf_copy_message(*wrong_storage.mutable_team_key(), make_team_key(team_id, kTestZoneId));
+  auto* member = wrong_storage.add_member();
+  protobuf_copy_message(*member->mutable_user_key(), make_user_key(kTestZoneId, 8499));
+  member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+  fake.set_custom_data(wrong_storage);
+
+  size_t sends_before = fake.send_message_calls();
+  size_t updates_before = fake.update_calls();
+  CASE_EXPECT_FALSE(!!env.setup_ready_room(target_key));
+  CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  CASE_EXPECT_EQ(updates_before, fake.update_calls());
+
+  auto room = team_room_manager::me()->get_room(target_key);
+  if (room) {
+    CASE_EXPECT_FALSE(room->is_lock_holder());
+    CASE_EXPECT_FALSE(!!room->find_member(member->user_key(), false));
+  }
+
+  // 只携带 zone_id 不是 legacy key，而是损坏的部分身份；不能按当前 team_id 静默补齐。
+  int64_t partial_team_id = next_test_team_id();
+  auto partial_key = make_team_key(partial_team_id, kTestZoneId + 1);
+  auto& partial_fake = env.channel(partial_key);
+  partial_fake.ensure_created();
+  atfw::team::DTeamStorage partial_storage;
+  partial_storage.mutable_team_key()->set_zone_id(kTestZoneId + 1);
+  partial_fake.set_custom_data(partial_storage);
+  CASE_EXPECT_FALSE(!!env.setup_ready_room(partial_key));
+  CASE_EXPECT_EQ(0u, partial_fake.send_message_calls());
+  CASE_EXPECT_EQ(0u, partial_fake.update_calls());
+
+  // zone_id=0 是合法的全局团队身份，不能再当作“旧快照缺字段”补成分区团队。
+  int64_t global_team_id = next_test_team_id();
+  auto zoned_key = make_team_key(global_team_id, kTestZoneId + 1);
+  auto& global_fake = env.channel(zoned_key);
+  global_fake.ensure_created();
+  atfw::team::DTeamStorage global_storage;
+  protobuf_copy_message(*global_storage.mutable_team_key(), make_team_key(global_team_id, 0));
+  global_fake.set_custom_data(global_storage);
+
+  CASE_EXPECT_FALSE(!!env.setup_ready_room(zoned_key));
+  CASE_EXPECT_EQ(0u, global_fake.send_message_calls());
+  CASE_EXPECT_EQ(0u, global_fake.update_calls());
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -856,7 +916,7 @@ CASE_TEST(teamsvr_room_recovery, destroyed_team_not_recreated) {
 
   // 解散队伍并回环
   atfw::team::DTeamAction destroy_action;
-  destroy_action.mutable_destroy_team()->set_team_id(team_id);
+  protobuf_copy_message(*destroy_action.mutable_destroy_team(), make_team_key(team_id));
   CASE_EXPECT_EQ(0, env.run("destroy_team", [room, &destroy_action](rpc::context& ctx) -> rpc::result_code_type {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, destroy_action)));
   }));
@@ -872,7 +932,7 @@ CASE_TEST(teamsvr_room_recovery, destroyed_team_not_recreated) {
     // 新进程订阅会收到完整 snapshot/journal；fixture 复用 subscriber，因此显式重投。
     CASE_EXPECT_EQ(0, env.sync(team_id, true));
     atfw::team::SSTeamRoomCreateReq create_req;
-    create_req.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*create_req.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*create_req.mutable_sender_user_key(), members.owner);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED,
                    env.run("recreate_destroyed", [recovered, &create_req](rpc::context& ctx) -> rpc::result_code_type {
@@ -900,7 +960,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_lru_order) {
     auto& fake = env.channel(team_id);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*storage.mutable_captain_user_key(), key_a);
     auto now = atfw::util::time::time_utility::now();
     auto add_member_with_time = [&storage, &now](const PROJECT_NAMESPACE_ID::DUserIDKey& key, int64_t joined_ago,
@@ -958,7 +1018,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_invalid_duplicate_member_keys) {
     auto& fake = env.channel(team_id);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*storage.mutable_captain_user_key(), key_owner);
     auto now_tp = protobuf_from_system_clock(atfw::util::time::time_utility::now());
     auto add_member = [&storage, &now_tp](const PROJECT_NAMESPACE_ID::DUserIDKey& key,
@@ -1040,7 +1100,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_missing_private_data_legacy) {
     }());
 
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*storage.mutable_captain_user_key(), key_owner);
     // 快照含 add_member 时的成员(保存点 = 该日志)
     auto now_tp = protobuf_from_system_clock(atfw::util::time::time_utility::now());
@@ -1100,7 +1160,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_boundary_contradiction_rejected) {
     auto& fake = env.channel(team1);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team1);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team1));
     storage.set_saved_action_sequence(1);
     fake.set_custom_data(storage);
     atfw::team::DTeamRoomPrivateData private_data;
@@ -1114,7 +1174,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_boundary_contradiction_rejected) {
     auto& fake = env.channel(team2);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team2);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team2));
     storage.set_saved_action_sequence(1000);  // 矛盾: 频道只有 create 日志
     fake.set_custom_data(storage);
     atfw::team::DTeamRoomPrivateData private_data;
@@ -1127,7 +1187,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_boundary_contradiction_rejected) {
     size_t sends_before = fake.send_message_calls();
     size_t resets_before = fake.reset_lock_calls();
     int32_t ready_ret = env.run("await_ready_contradiction", [team_id](rpc::context& ctx) -> rpc::result_code_type {
-      auto room = team_room_manager::me()->mutable_room(ctx, team_id);
+      auto room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
       if (!room) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
       }
@@ -1135,7 +1195,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_boundary_contradiction_rejected) {
     });
     CASE_EXPECT_NE(0, ready_ret);
 
-    auto room = team_room_manager::me()->get_room(team_id);
+    auto room = team_room_manager::me()->get_room(make_team_key(team_id));
     if (room) {
       CASE_EXPECT_FALSE(room->is_lock_holder());
       // 座位带: 直接写入也被拒绝
@@ -1302,7 +1362,7 @@ CASE_TEST(teamsvr_room_lock, captainless_snapshot_takeover_election) {
     auto& fake = env.channel(team_id);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
     // 无队长
     auto now = atfw::util::time::time_utility::now();
     auto* member1 = storage.add_member();
@@ -1434,7 +1494,7 @@ CASE_TEST(teamsvr_room_lock, concurrent_cas_competitor_no_revive) {
     auto& fake = env.channel(team_id);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
     auto* member = storage.add_member();
     protobuf_copy_message(*member->mutable_user_key(), make_user_key(1, 8561));
     member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);

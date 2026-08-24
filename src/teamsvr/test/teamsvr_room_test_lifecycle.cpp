@@ -301,7 +301,7 @@ CASE_TEST(teamsvr_room_lifecycle, restore_offline_deadline_floor_precise) {
     auto& target_fake = env.channel(target_team);
     target_fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(target_team);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(target_team));
     protobuf_copy_message(*storage.mutable_captain_user_key(), owner);
     auto stale_time = protobuf_from_system_clock(atfw::util::time::time_utility::now() - std::chrono::hours{24});
     for (const auto& member_key : {owner, normal_user}) {
@@ -359,7 +359,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_on_uncreated_team) {
 
   // 订阅 auto-create 频道并抢锁后返回 member-not-found
   int32_t hb_ret = env.run("heartbeat_uncreated", [team_id](rpc::context& ctx) -> rpc::result_code_type {
-    auto room = team_room_manager::me()->mutable_room(ctx, team_id);
+    auto room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
     if (!room) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
@@ -376,7 +376,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_on_uncreated_team) {
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND, hb_ret);
 
   // 产生幽灵空房间: manager 持有该 room
-  auto room = team_room_manager::me()->get_room(team_id);
+  auto room = team_room_manager::me()->get_room(make_team_key(team_id));
   CASE_EXPECT_TRUE(!!room);
 
   // 推进 empty_room_destroy_delay 后: 写 destroy-team 并回收
@@ -500,7 +500,7 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
   int64_t team_id = next_test_team_id();
   auto owner = make_user_key(1, 8611);
   CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(8611)));
-  auto room = team_room_manager::me()->get_room(team_id);
+  auto room = team_room_manager::me()->get_room(make_team_key(team_id));
   CASE_EXPECT_TRUE(!!room);
   if (!room) {
     CASE_EXPECT_EQ(0, env.stop());
@@ -845,7 +845,7 @@ CASE_TEST(teamsvr_room_lifecycle, subscribe_failure_then_recover_once) {
     auto& fake = env.channel(team_id);
     fake.ensure_created();
     atfw::team::DTeamStorage storage;
-    storage.mutable_team_key()->set_team_id(team_id);
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
     auto owner = make_user_key(1, 8621);
     protobuf_copy_message(*storage.mutable_captain_user_key(), owner);
     auto* member = storage.add_member();
@@ -864,7 +864,7 @@ CASE_TEST(teamsvr_room_lifecycle, subscribe_failure_then_recover_once) {
   env.fail_subscribe_times(1, PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   size_t rooms_before = team_room_manager::me()->get_room_count();
   int32_t ready_ret1 = env.run("await_ready_fail", [team_id](rpc::context& ctx) -> rpc::result_code_type {
-    auto room = team_room_manager::me()->mutable_room(ctx, team_id);
+    auto room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
     if (!room) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
@@ -880,14 +880,14 @@ CASE_TEST(teamsvr_room_lifecycle, subscribe_failure_then_recover_once) {
     env.drive_timer_ticks();
   }
   int32_t ready_ret2 = env.run("await_ready_ok", [team_id](rpc::context& ctx) -> rpc::result_code_type {
-    auto room = team_room_manager::me()->get_room(team_id);
+    auto room = team_room_manager::me()->get_room(make_team_key(team_id));
     if (!room) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->await_ready(ctx)));
   });
   CASE_EXPECT_EQ(0, ready_ret2);
-  auto room = team_room_manager::me()->get_room(team_id);
+  auto room = team_room_manager::me()->get_room(make_team_key(team_id));
   CASE_EXPECT_TRUE(!!room);
   if (room) {
     CASE_EXPECT_TRUE(room->is_subscriber_ready());

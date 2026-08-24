@@ -59,6 +59,8 @@ project_add_rpc_unit_test(
   sdk::cachesvr-sdk
   sdk::matchsvr-sdk
   sdk::orbitsvr-sdk
+  sdk::team-common-sdk
+  sdk::team-sdk-room
   components::dtmq-proxy-sdk
   components::rank-logic-sdk
   protocol::lobbysvr-config

@@ -59,10 +59,9 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action
   }
 
   // 按队伍一致性哈希路由到 teamsvr-room 节点，不在本节点则转发
-  uint64_t dest_server_id = rpc::team::team_api::get_teamsvr_room_server_id_of_zone(
-      req_body.sender_user_key().zone_id(), req_body.team_key().team_id());
+  uint64_t dest_server_id = rpc::team::team_api::get_teamsvr_room_server_id_of_zone(req_body.team_key());
   if (0 == dest_server_id) {
-    FCTXLOGERROR(get_shared_context(), "no ready teamsvr-room node for team {}", req_body.team_key().team_id());
+    FCTXLOGERROR(get_shared_context(), "no ready teamsvr-room node for team {}:{}", req_body.team_key().zone_id(), req_body.team_key().team_id());
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -70,15 +69,15 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action
     bool forward_ok = false;
     auto forward_ret = RPC_AWAIT_CODE_RESULT(forward_rpc(dest_server_id, false, forward_ok));
     if (0 != forward_ret || !forward_ok) {
-      FCTXLOGERROR(get_shared_context(), "forward create team {} to dest server {} failed! ret:{} ok:{}",
-                   req_body.team_key().team_id(), dest_server_id, forward_ret, forward_ok ? 1 : 0);
+      FCTXLOGERROR(get_shared_context(), "forward create team {}:{} to dest server {} failed! ret:{} ok:{}",
+                   req_body.team_key().zone_id(), req_body.team_key().team_id(), dest_server_id, forward_ret, forward_ok ? 1 : 0);
       set_response_code(0 != forward_ret ? forward_ret : PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   // 本节点处理: 查找或创建房间(订阅频道并接管乐观锁)
-  auto room = team_room_manager::me()->mutable_room(get_shared_context(), req_body.team_key().team_id());
+  auto room = team_room_manager::me()->mutable_room(get_shared_context(), req_body.team_key());
   if (!room) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -98,6 +97,7 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action
   RPC_AWAIT_IGNORE_RESULT(room->flush_pending_channel_message(get_shared_context()));
 
   room->dump_team_key(*rsp_body.mutable_team_key());
+  *rsp_body.mutable_room_channel() = room->get_channel_key();
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

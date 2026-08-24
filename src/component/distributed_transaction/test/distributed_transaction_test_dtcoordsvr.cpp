@@ -810,9 +810,15 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_envelope) {
                sender, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
                gsl::span<const unsigned char>{reinterpret_cast<const unsigned char*>(payload.data()), payload.size()},
                sequence));
-    for (int i = 0; i < 6; ++i) {
-      test.pump_once();
-    }
+    CASE_EXPECT_TRUE(dt_test::wait_for(test, [&test, sequence]() {
+      for (size_t i = 0; i < test.transport().outbound_count(); ++i) {
+        const atfw::testing::outbound_message* record = test.transport().outbound_at(i);
+        if (record != nullptr && record->target_node_id == 0x1300F1 && record->sequence == sequence) {
+          return true;
+        }
+      }
+      return false;
+    }));
   };
 
   size_t db_ops_before = test.db().calls("distribute_transaction");
@@ -1028,10 +1034,13 @@ CASE_TEST(component_dtcoordsvr, manager_tick_evicts_by_duration) {
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  // Burn past lru_expired_duration (2s in the test loader) while keeping the loop pumping.
-  CASE_EXPECT_FALSE(dt_test::wait_for(test, []() { return false; }, std::chrono::milliseconds{2300}));
-  int evicted = transaction_manager::me()->tick();
-  CASE_EXPECT_GE(evicted, 1);
+  // Advance the business clock past lru_expired_duration (2s in the test loader). Runtime hard
+  // timeouts stay on the raw system clock, so eviction does not depend on scheduler delay.
+  {
+    dt_test::global_now_offset_guard business_clock(std::chrono::seconds{3});
+    int evicted = transaction_manager::me()->tick();
+    CASE_EXPECT_GE(evicted, 1);
+  }
 
   auto reload_task = test.run_task(
       "duration_eviction_reload", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
@@ -1088,9 +1097,15 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_malformed_payloads) {
                sender, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
                gsl::span<const unsigned char>{reinterpret_cast<const unsigned char*>(payload.data()), payload.size()},
                sequence));
-    for (int i = 0; i < 6; ++i) {
-      test.pump_once();
-    }
+    CASE_EXPECT_TRUE(dt_test::wait_for(test, [&test, sequence]() {
+      for (size_t i = 0; i < test.transport().outbound_count(); ++i) {
+        const atfw::testing::outbound_message* record = test.transport().outbound_at(i);
+        if (record != nullptr && record->target_node_id == 0x1300F2 && record->sequence == sequence) {
+          return true;
+        }
+      }
+      return false;
+    }));
   };
 
   // Unparsable body bytes under the correct type URL.
@@ -1197,14 +1212,20 @@ CASE_TEST(component_dtcoordsvr, participant_ack_drains_inflight_io_before_delete
   }
   test.db().register_message_type<table_type>();
 
-  // The first get_all sleeps so the LRU fetch is still in flight when the ack arrives.
+  // The first get_all waits behind an explicit gate so the LRU fetch is still in flight when the ack arrives.
   bool slow_get_consumed = false;
+  bool release_slow_get = false;
   auto slow_get_rule = rpc::db::distribute_transaction::mock::get_all(
-      [&slow_get_consumed](rpc::context& subctx, const table_type& input, table_type& output,
-                           rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
+      [&slow_get_consumed, &release_slow_get](rpc::context& subctx, const table_type& input, table_type& output,
+                                              rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
         if (!slow_get_consumed) {
           slow_get_consumed = true;
-          RPC_AWAIT_CODE_RESULT(rpc::wait(subctx, std::chrono::milliseconds{150}));
+          for (int i = 0; i < 5000 && !release_slow_get; ++i) {
+            RPC_AWAIT_CODE_RESULT(rpc::wait(subctx, std::chrono::milliseconds{1}));
+          }
+          if (!release_slow_get) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+          }
         }
         output.set_zone_id(input.zone_id());
         output.set_transaction_uuid(input.transaction_uuid());
@@ -1227,24 +1248,26 @@ CASE_TEST(component_dtcoordsvr, participant_ack_drains_inflight_io_before_delete
         CASE_EXPECT_TRUE(!!trans);
         RPC_RETURN_CODE(0);
       });
-  // Give task A a few pumps so its fetch is genuinely in flight.
-  for (int i = 0; i < 6; ++i) {
-    test.pump_once();
-  }
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&slow_get_consumed]() { return slow_get_consumed; }));
 
   // Task B acks both participants; the record is only deleted after the in-flight fetch finished.
-  auto ack_task = test.run_task("drain_ack", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
-    transaction_metadata metadata;
-    metadata.set_transaction_uuid("mgr-drain-1");
-    transaction_manager::transaction_ptr_type trans;
-    int32_t res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans));
-    CASE_EXPECT_EQ(0, res);
-    CASE_EXPECT_TRUE(!!trans);
-    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
-    res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pb"));
-    CASE_EXPECT_EQ(0, res);
-    RPC_RETURN_CODE(0);
-  });
+  bool ack_started = false;
+  auto ack_task =
+      test.run_task("drain_ack", std::chrono::seconds{10}, [&ack_started](rpc::context& ctx) -> rpc::result_code_type {
+        ack_started = true;
+        transaction_metadata metadata;
+        metadata.set_transaction_uuid("mgr-drain-1");
+        transaction_manager::transaction_ptr_type trans;
+        int32_t res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans));
+        CASE_EXPECT_EQ(0, res);
+        CASE_EXPECT_TRUE(!!trans);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
+        res = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pb"));
+        CASE_EXPECT_EQ(0, res);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&ack_started]() { return ack_started; }));
+  release_slow_get = true;
   auto fetch_result = test.wait(fetch_task, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(fetch_result.task_exited);
   CASE_EXPECT_EQ(0, fetch_result.result_code);
@@ -1317,14 +1340,16 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_stream_remove_no_response
   CASE_EXPECT_TRUE(remove_request.SerializeToString(msg.mutable_body_bin()));
   std::string payload;
   CASE_EXPECT_TRUE(msg.SerializeToString(&payload));
+  using db_op_type = rpc::db::hash_table::unit_test_request::op_type;
+  const size_t remove_calls_before = test.db().calls("distribute_transaction", db_op_type::remove_all);
   CASE_EXPECT_EQ(
       0, test.transport().inject_inbound(
              sender, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
              gsl::span<const unsigned char>{reinterpret_cast<const unsigned char*>(payload.data()), payload.size()},
              2201));
-  for (int i = 0; i < 8; ++i) {
-    test.pump_once();
-  }
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&test, remove_calls_before]() {
+    return test.db().calls("distribute_transaction", db_op_type::remove_all) > remove_calls_before;
+  }));
 
   // The record is gone and no outbound response carries the stream sequence.
   auto check_task =
@@ -1373,8 +1398,11 @@ CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
         ++get_calls;
         if (1 == get_calls) {
           get_entered = true;
-          for (int i = 0; i < 2000 && !release_get; ++i) {
-            RPC_AWAIT_IGNORE_RESULT(rpc::wait(subctx, std::chrono::milliseconds{5}));
+          for (int i = 0; i < 5000 && !release_get; ++i) {
+            RPC_AWAIT_CODE_RESULT(rpc::wait(subctx, std::chrono::milliseconds{1}));
+          }
+          if (!release_get) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
           }
         }
         output.set_zone_id(input.zone_id());

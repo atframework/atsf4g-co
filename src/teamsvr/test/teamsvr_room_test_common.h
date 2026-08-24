@@ -48,6 +48,7 @@
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
 #include <rpc/team/team_common_api.h>
+#include <rpc/dtmq/dtmq_algorithm.h>
 #include <string/string_format.h>
 #include <time/time_utility.h>
 
@@ -62,6 +63,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -88,6 +90,16 @@ constexpr uint64_t kLocalRoomNodeId = 0x11000001;
 constexpr uint64_t kDtmqProxyNodeId = 0x1C0001;
 
 constexpr uint32_t kTeamRoomChannelType = atfw::team::EN_TEAM_CHANNEL_TYPE_TEAM_ROOM;
+// 测试队伍的默认区服(与注入的 discovery 节点 zone_id 一致)
+constexpr uint32_t kTestZoneId = 1;
+
+// 构造测试用 DTeamKey；队伍以 (zone_id, team_id) 为唯一标识
+inline atfw::team::DTeamKey make_team_key(int64_t team_id, uint32_t zone_id = kTestZoneId) {
+  atfw::team::DTeamKey key;
+  key.set_team_id(team_id);
+  key.set_zone_id(zone_id);
+  return key;
+}
 
 // ---- Fixture-wide configure (shortest legal durations, see team_room.config.proto min_value) ----
 struct room_test_cfg_values {
@@ -115,7 +127,7 @@ inline int64_t next_test_team_id() {
   static std::atomic<int64_t> next_id{0x1000001};
   for (;;) {
     int64_t id = next_id.fetch_add(1);
-    uint64_t route = rpc::team::team_api::get_teamsvr_room_server_id_of_zone(1, id);
+    uint64_t route = rpc::team::team_api::get_teamsvr_room_server_id_of_zone(make_team_key(id));
     if (0 == route || route == kLocalRoomNodeId) {
       return id;
     }
@@ -236,12 +248,12 @@ struct update_request_record {
 // change, custom data change -> kUpdateCustomData log, private data change -> kNoop log.
 class fake_team_room_channel {
  public:
-  explicit fake_team_room_channel(int64_t team_id) : team_id_(team_id) {
-    channel_key_.set_channel_type(kTeamRoomChannelType);
-    channel_key_.set_channel_id(std::to_string(team_id));
+  explicit fake_team_room_channel(atfw::team::DTeamKey team_key) : team_key_(std::move(team_key)) {
+    channel_key_.CopyFrom(rpc::team::team_api::make_team_room_channel_key(team_key_));
   }
 
-  int64_t team_id() const noexcept { return team_id_; }
+  const atfw::team::DTeamKey& team_key() const noexcept { return team_key_; }
+  int64_t team_id() const noexcept { return team_key_.team_id(); }
   const atfw::dtmq::DChannelIdKey& channel_key() const noexcept { return channel_key_; }
 
   bool is_created() const noexcept { return created_; }
@@ -595,7 +607,7 @@ class fake_team_room_channel {
   }
 
  private:
-  int64_t team_id_ = 0;
+  atfw::team::DTeamKey team_key_;
   atfw::dtmq::DChannelIdKey channel_key_;
 
   std::vector<atfw::dtmq::DChannelMessage> journal_;
@@ -727,10 +739,14 @@ class room_test_env {
   }
 
   // ---- fake channel registry ----
-  fake_team_room_channel& channel(int64_t team_id) {
-    auto& ptr = channels_[team_id];
+  fake_team_room_channel& channel(int64_t team_id, uint32_t zone_id = kTestZoneId) {
+    return channel(make_team_key(team_id, zone_id));
+  }
+
+  fake_team_room_channel& channel(const atfw::team::DTeamKey& team_key) {
+    auto& ptr = channels_[team_key];
     if (!ptr) {
-      ptr = std::make_shared<fake_team_room_channel>(team_id);
+      ptr = std::make_shared<fake_team_room_channel>(team_key);
     }
     return *ptr;
   }
@@ -739,9 +755,27 @@ class room_test_env {
     if (key.channel_type() != kTeamRoomChannelType) {
       return nullptr;
     }
+    // 频道 ID 由 team_api::make_team_room_channel_key 生成的标准单播格式: "channel:<type>:<zone_id>:<team_id>"
     try {
-      int64_t team_id = std::stoll(key.channel_id());
-      return &channel(team_id);
+      const std::string& channel_id = key.channel_id();
+      size_t type_begin = channel_id.find(':');
+      size_t zone_begin = std::string::npos == type_begin ? type_begin : channel_id.find(':', type_begin + 1);
+      size_t team_begin = std::string::npos == zone_begin ? zone_begin : channel_id.find(':', zone_begin + 1);
+      if (std::string::npos == team_begin || channel_id.find(':', team_begin + 1) != std::string::npos ||
+          channel_id.substr(0, type_begin) != "channel") {
+        return nullptr;
+      }
+      std::string type_text = channel_id.substr(type_begin + 1, zone_begin - type_begin - 1);
+      std::string zone_text = channel_id.substr(zone_begin + 1, team_begin - zone_begin - 1);
+      std::string team_text = channel_id.substr(team_begin + 1);
+      auto channel_type = std::stoul(type_text);
+      auto zone_id = std::stoul(zone_text);
+      auto team_id = std::stoll(team_text);
+      if (type_text != std::to_string(channel_type) || zone_text != std::to_string(zone_id) ||
+          team_text != std::to_string(team_id) || channel_type != key.channel_type()) {
+        return nullptr;
+      }
+      return &channel(make_team_key(team_id, static_cast<uint32_t>(zone_id)));
     } catch (...) {
       return nullptr;
     }
@@ -784,10 +818,10 @@ class room_test_env {
   }
 
   // 创建房间并等待订阅就绪(订阅心跳期间 mock 推送就绪快照)。
-  team_room::ptr_t setup_ready_room(int64_t team_id) {
+  team_room::ptr_t setup_ready_room(const atfw::team::DTeamKey& team_key) {
     team_room::ptr_t room;
-    int32_t ret = run("setup_ready_room", [team_id, &room](rpc::context& ctx) -> rpc::result_code_type {
-      room = team_room_manager::me()->mutable_room(ctx, team_id);
+    int32_t ret = run("setup_ready_room", [&team_key, &room](rpc::context& ctx) -> rpc::result_code_type {
+      room = team_room_manager::me()->mutable_room(ctx, team_key);
       if (!room) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
       }
@@ -799,47 +833,50 @@ class room_test_env {
     return room;
   }
 
+  team_room::ptr_t setup_ready_room(int64_t team_id) { return setup_ready_room(make_team_key(team_id)); }
+
   // 创建队伍的完整流程: 就绪 -> create_team。返回 create_team 结果码；room 传出。
   int32_t setup_created_team(int64_t team_id, const PROJECT_NAMESPACE_ID::DUserIDKey& owner_key,
                              const atfw::dtmq::DChannelIdKey& owner_channel, team_room::ptr_t* out_room = nullptr,
                              const atfw::team::DTeamConfigure* configure = nullptr) {
-    return run(
-        "setup_created_team",
-        [team_id, &owner_key, &owner_channel, out_room, configure](rpc::context& ctx) -> rpc::result_code_type {
-          auto room = team_room_manager::me()->mutable_room(ctx, team_id);
-          if (!room) {
-            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
-          }
-          if (nullptr != out_room) {
-            *out_room = room;
-          }
-          int32_t ready_ret = RPC_AWAIT_CODE_RESULT(room->await_ready(ctx));
-          if (0 != ready_ret) {
-            RPC_RETURN_CODE(ready_ret);
-          }
-          atfw::team::SSTeamRoomCreateReq req;
-          req.mutable_team_key()->set_team_id(team_id);
-          protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
-          protobuf_copy_message(*req.mutable_sender_user_channel(), owner_channel);
-          if (nullptr != configure) {
-            protobuf_copy_message(*req.mutable_configure(), *configure);
-          }
-          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
-        });
+    return run("setup_created_team",
+               [team_id, &owner_key, &owner_channel, out_room, configure](rpc::context& ctx) -> rpc::result_code_type {
+                 auto room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
+                 if (!room) {
+                   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+                 }
+                 if (nullptr != out_room) {
+                   *out_room = room;
+                 }
+                 int32_t ready_ret = RPC_AWAIT_CODE_RESULT(room->await_ready(ctx));
+                 if (0 != ready_ret) {
+                   RPC_RETURN_CODE(ready_ret);
+                 }
+                 atfw::team::SSTeamRoomCreateReq req;
+                 protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
+                 protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
+                 protobuf_copy_message(*req.mutable_sender_user_channel(), owner_channel);
+                 if (nullptr != configure) {
+                   protobuf_copy_message(*req.mutable_configure(), *configure);
+                 }
+                 RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
+               });
   }
 
   // 把 journal 中未下发的新日志推送给订阅者，并执行与 task_action_channel_event_sync 相同的
   // manager flush。事件回调在泵循环中异步完成(与真实 dispatcher 时序一致)，推送后先泵几轮再 flush。
   // force_snapshot=true 时改推全量快照(恢复/重置场景)。
-  int32_t sync(int64_t team_id, bool force_snapshot = false) {
-    int32_t ret = run("sync_events", [this, team_id, force_snapshot](rpc::context& ctx) -> rpc::result_code_type {
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(push_channel_events(ctx, team_id, force_snapshot)));
+  int32_t sync(const atfw::team::DTeamKey& team_key, bool force_snapshot = false) {
+    int32_t ret = run("sync_events", [this, &team_key, force_snapshot](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(push_channel_events(ctx, team_key, force_snapshot)));
     });
     if (0 != ret) {
       return ret;
     }
     return converge_events();
   }
+
+  int32_t sync(int64_t team_id, bool force_snapshot = false) { return sync(make_team_key(team_id), force_snapshot); }
 
   // 推送调用方自行构造的 event_sync(EVT-10 故障批: 重复/乱序/hash 不匹配/旧 compact 点日志/中途坏 Any)，
   // 随后执行与 sync 相同的收敛。from_node_id 可切换来源节点(FLT-08)。
@@ -857,9 +894,9 @@ class room_test_env {
     return converge_events();
   }
 
-  // 驱动一轮: 订阅者心跳 tick + 房间时间轮 tick；然后 pump 让定时任务完成。
+  // 驱动一轮: 订阅者心跳 tick + 房间时间轮 tick；等待本轮实际启动的定时任务完成。
   // 返回值: 本轮触发的房间定时器数量(0 表示时间轮无到期事件)。
-  int32_t drive_timer_ticks(int pump_rounds = 8) {
+  int32_t drive_timer_ticks() {
     int32_t fired = 0;
     int32_t ret = run("drive_ticks", [&fired](rpc::context& ctx) -> rpc::result_code_type {
       rpc::dtmq::client_subscriber::global_tick(ctx);
@@ -870,8 +907,15 @@ class room_test_env {
     if (0 != ret) {
       return std::numeric_limits<int32_t>::min();
     }
-    for (int i = 0; i < pump_rounds; ++i) {
-      runtime_->pump_once();
+    bool completed = wait_until([]() { return !team_room_manager::me()->debug_has_running_maintenance_task(); });
+    CASE_EXPECT_TRUE(completed);
+    if (!completed) {
+      return std::numeric_limits<int32_t>::min();
+    }
+    completed = wait_for_send_message_handlers();
+    CASE_EXPECT_TRUE(completed);
+    if (!completed) {
+      return std::numeric_limits<int32_t>::min();
     }
     return fired;
   }
@@ -884,45 +928,51 @@ class room_test_env {
   }
 
  private:
-  // wal 日志的应用由 client_subscriber::global_tick 驱动(与真实 dispatcher 时序一致)。
-  // tick+flush 执行两轮: 应用可能在 pump 中延后完成，第二轮收敛迟到的待发通知，
-  // 保证返回后观察点(个人通知计数/成员状态)已稳定。
-  int32_t converge_events() {
-    for (int round = 0; round < 2; ++round) {
-      for (int i = 0; i < 4; ++i) {
-        runtime_->pump_once();
+  template <class Predicate>
+  bool wait_until(Predicate&& predicate, std::chrono::milliseconds timeout = std::chrono::seconds{5}) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!predicate()) {
+      if (std::chrono::steady_clock::now() >= deadline) {
+        return false;
       }
-      int32_t ret = run("sync_tick", [](rpc::context& ctx) -> rpc::result_code_type {
-        rpc::dtmq::client_subscriber::global_tick(ctx);
-        RPC_RETURN_CODE(0);
-      });
-      if (0 != ret) {
-        return ret;
-      }
-      for (int i = 0; i < 4; ++i) {
-        runtime_->pump_once();
-      }
-      ret = run("sync_flush", [](rpc::context& ctx) -> rpc::result_code_type {
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team_room_manager::me()->flush_pending_channel_message(ctx)));
-      });
-      if (0 != ret) {
-        return ret;
-      }
-      for (int i = 0; i < 4; ++i) {
-        runtime_->pump_once();
-      }
-    }
-    // 静默轮: 让事件循环清空残余的异步捕获，保证返回后的观察点稳定
-    for (int i = 0; i < 8; ++i) {
       runtime_->pump_once();
+      std::this_thread::yield();
+    }
+    return true;
+  }
+
+  bool wait_for_send_message_handlers() {
+    // pump_once 的公开契约会依次收集 raw transport、投递 SS mock，再运行 dispatcher；这一轮把
+    // 已提交的 no-wait 请求转换成 mock history，随后以 handler 实际进入次数等待完成。
+    if (runtime_->pump_once() < 0) {
+      return false;
+    }
+    size_t submitted = runtime_->ss().calls(rpc::dtmq::packer::get_full_name_of_send_message());
+    return wait_until([this, submitted]() { return send_message_handler_attempts_ >= submitted; });
+  }
+
+  // global_receive_channel_event 在调用栈内完成快照/WAL 应用；flush 发起 no-wait 个人频道 RPC。
+  // 以 mock history 与 handler 实际进入次数配对，超时只用于检测死锁，不参与业务正确性。
+  int32_t converge_events() {
+    int32_t ret = run("sync_flush", [](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team_room_manager::me()->flush_pending_channel_message(ctx)));
+    });
+    if (0 != ret) {
+      return ret;
+    }
+    bool completed = wait_for_send_message_handlers();
+    CASE_EXPECT_TRUE(completed);
+    if (!completed) {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
     }
     return 0;
   }
 
  public:
   // 构造推送事件(incremental)或快照。协程内调用。
-  rpc::result_code_type push_channel_events(rpc::context& ctx, int64_t team_id, bool force_snapshot) {
-    auto& fake = channel(team_id);
+  rpc::result_code_type push_channel_events(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                            bool force_snapshot) {
+    auto& fake = channel(team_key);
     fake.ensure_created();
 
     if (force_snapshot || !fake.snapshot_pushed_) {
@@ -1055,7 +1105,7 @@ class room_test_env {
             }
             fake->ensure_created();
             if (!fake->snapshot_pushed_ && nullptr != request.context) {
-              RPC_AWAIT_IGNORE_RESULT(self->push_channel_events(*request.context, fake->team_id(), true));
+              RPC_AWAIT_IGNORE_RESULT(self->push_channel_events(*request.context, fake->team_key(), true));
             }
             auto* node = typed_response.add_subscribe_node();
             node->mutable_channel_key()->CopyFrom(heartbeat.channel_key());
@@ -1075,6 +1125,7 @@ class room_test_env {
         atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
         [self](const atframework::testing::ss_request_view& request,
                google::protobuf::Message& response) -> rpc::result_code_type {
+          ++self->send_message_handler_attempts_;
           const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body);
           auto& typed_response = static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response);
 
@@ -1279,8 +1330,11 @@ class room_test_env {
  private:
   room_test_cfg_values cfg_;
   std::unique_ptr<atframework::testing::runtime> runtime_;
-  std::unordered_map<int64_t, std::shared_ptr<fake_team_room_channel>> channels_;
+  std::unordered_map<atfw::team::DTeamKey, std::shared_ptr<fake_team_room_channel>,
+                     rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
+      channels_;
   std::vector<personal_message_record> personal_messages_;
+  size_t send_message_handler_attempts_ = 0;
   std::deque<std::pair<bool, int32_t>> personal_send_plan_;
   uint32_t subscribe_fail_times_ = 0;
   int32_t subscribe_fail_code_ = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;

@@ -20,7 +20,6 @@
 #include <logic/action/task_action_create.h>
 #include <logic/action/task_action_heartbeat.h>
 
-#include <rpc/db/uuid.h>
 #include <rpc/team/team_common_api.h>
 #include <rpc/team/teamroomservice.atfw.gen.h>
 
@@ -82,7 +81,7 @@ CASE_TEST(teamsvr_room_infrastructure, ready_snapshot_delivery) {
   fake.ensure_created();
 
   atfw::team::DTeamStorage storage;
-  storage.mutable_team_key()->set_team_id(team_id);
+  protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
   auto* member = storage.add_member();
   protobuf_copy_message(*member->mutable_user_key(), make_user_key(1, 1001));
   member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
@@ -114,7 +113,7 @@ CASE_TEST(teamsvr_room_infrastructure, ready_snapshot_delivery) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ INF-03: 重复创建相同 team id 返回同一 room，不出现第二个本地定时器 ============
+// ============ INF-03/BND-03: 完整 DTeamKey 复用、跨区隔离、非法 key 拒绝与清理 ============
 CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
   room_test_env env;
   if (!env.start()) {
@@ -127,21 +126,73 @@ CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
 
   // 同一协程内再次 mutable_room 返回同一对象
   (void)env.run("reuse_room", [team_id, &room1](rpc::context& ctx) -> rpc::result_code_type {
-    auto room2 = team_room_manager::me()->mutable_room(ctx, team_id);
+    auto room2 = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
     CASE_EXPECT_TRUE(room2.get() == room1.get());
     RPC_RETURN_CODE(0);
   });
 
   CASE_EXPECT_EQ(1u, team_room_manager::me()->get_room_count());
 
+  // 相同 team_id、不同 zone_id 是不同队伍，room 与 DTMQ channel 都不能复用。
+  auto other_zone_key = make_team_key(team_id, kTestZoneId + 1);
+  team_room::ptr_t other_zone_room;
+  (void)env.run("same_id_other_zone", [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
+    other_zone_room = team_room_manager::me()->mutable_room(ctx, other_zone_key);
+    CASE_EXPECT_TRUE(!!other_zone_room);
+    RPC_RETURN_CODE(0);
+  });
+  CASE_EXPECT_TRUE(other_zone_room.get() != room1.get());
+  if (room1 && other_zone_room) {
+    CASE_EXPECT_NE(room1->get_channel_key().channel_id(), other_zone_room->get_channel_key().channel_id());
+    CASE_EXPECT_EQ(kTestZoneId + 1, other_zone_room->get_team_key().zone_id());
+    CASE_EXPECT_EQ(team_id, other_zone_room->get_team_key().team_id());
+  }
+  CASE_EXPECT_EQ(2u, team_room_manager::me()->get_room_count());
+
   // 不同 team id 得到不同 room
   int64_t other_team = next_test_team_id();
   (void)env.run("another_room", [other_team](rpc::context& ctx) -> rpc::result_code_type {
-    auto room3 = team_room_manager::me()->mutable_room(ctx, other_team);
+    auto room3 = team_room_manager::me()->mutable_room(ctx, make_team_key(other_team));
     CASE_EXPECT_TRUE(!!room3);
     RPC_RETURN_CODE(0);
   });
-  CASE_EXPECT_EQ(2u, team_room_manager::me()->get_room_count());
+  CASE_EXPECT_EQ(3u, team_room_manager::me()->get_room_count());
+
+  // team_id 为 0 非法;zone_id 为 0 是合法的不分区队伍,与 (kTestZoneId, team_id) 是不同的 room
+  team_room::ptr_t global_room;
+  (void)env.run("team_key_boundaries", [team_id, &global_room](rpc::context& ctx) -> rpc::result_code_type {
+    CASE_EXPECT_FALSE(!!team_room_manager::me()->mutable_room(ctx, make_team_key(0)));
+    global_room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id, 0));
+    CASE_EXPECT_TRUE(!!global_room);
+    RPC_RETURN_CODE(0);
+  });
+  CASE_EXPECT_TRUE(global_room.get() != room1.get());
+  if (global_room && room1) {
+    CASE_EXPECT_EQ(0u, global_room->get_team_key().zone_id());
+    CASE_EXPECT_EQ(team_id, global_room->get_team_key().team_id());
+    CASE_EXPECT_NE(room1->get_channel_key().channel_id(), global_room->get_channel_key().channel_id());
+  }
+  CASE_EXPECT_EQ(4u, team_room_manager::me()->get_room_count());
+
+  // 外层频道 key 是权威标识；携带错误完整 key 的 action 写入前必须规范化，不能产生跨区日志。
+  atfw::team::DTeamAction mismatched_action;
+  protobuf_copy_message(*mismatched_action.mutable_destroy_team(), make_team_key(other_team, kTestZoneId + 1));
+  CASE_EXPECT_EQ(0, env.run("normalize_embedded_team_key",
+                            [&room1, &mismatched_action](rpc::context& ctx) -> rpc::result_code_type {
+                              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room1->send_action(ctx, mismatched_action)));
+                            }));
+  bool found_normalized_destroy = false;
+  CASE_EXPECT_TRUE(env.channel(team_id).foreach_team_action(
+      [team_id, &found_normalized_destroy](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+        if (!action.has_destroy_team()) {
+          return true;
+        }
+        found_normalized_destroy = true;
+        CASE_EXPECT_EQ(kTestZoneId, action.destroy_team().zone_id());
+        CASE_EXPECT_EQ(team_id, action.destroy_team().team_id());
+        return false;
+      }));
+  CASE_EXPECT_TRUE(found_normalized_destroy);
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0u, team_room_manager::me()->get_room_count());
@@ -177,7 +228,7 @@ CASE_TEST(teamsvr_room_infrastructure, typed_ss_action_invoke) {
   int32_t action_ret = env.run(
       "invoke_heartbeat_action", [&invoke_options, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomHeartbeatReq request;
-        request.mutable_team_key()->set_team_id(team_id);
+        protobuf_copy_message(*request.mutable_team_key(), make_team_key(team_id));
         protobuf_copy_message(*request.mutable_user_key(), owner_key);
         request.set_user_router_server_id(0x1234);
         request.set_sequence(1);
@@ -245,6 +296,7 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
     atfw::team::DTeamStorage storage;
     CASE_EXPECT_TRUE(initial_update->custom_data().UnpackTo(&storage));
     CASE_EXPECT_EQ(team_id, storage.team_key().team_id());
+    CASE_EXPECT_EQ(kTestZoneId, storage.team_key().zone_id());
     CASE_EXPECT_EQ(1, storage.member_size());
     if (1 == storage.member_size()) {
       CASE_EXPECT_EQ(owner_key.user_id(), storage.member(0).user_key().user_id());
@@ -282,20 +334,59 @@ CASE_TEST(teamsvr_room_create, create_team_with_uuid) {
   auto owner_key = make_user_key(1, 3101);
   auto owner_channel = make_personal_channel(3101);
 
-  // mock db 下 UUID 生成可用
-  int64_t new_team_id = 0;
-  int32_t uuid_ret = env.run("uuid_generate", [&new_team_id](rpc::context& ctx) -> rpc::result_code_type {
-    new_team_id = RPC_AWAIT_TYPE_RESULT(rpc::db::uuid::generate_global_unique_id(
-        ctx, PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_DEFAULT, PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MIT_DEFAULT, 0));
-    RPC_RETURN_CODE(new_team_id < 0 ? static_cast<int32_t>(new_team_id) : 0);
-  });
-  CASE_EXPECT_EQ(0, uuid_ret);
-  CASE_EXPECT_GT(new_team_id, 0);
+  constexpr uint64_t kCreateSequence = 3101001;
+  atframework::testing::ss_action_invoke_options invoke_options{rpc::team::packer::get_full_name_of_create()};
+  invoke_options.source.node_id = kDtmqProxyNodeId;
+  invoke_options.source.node_name = "unit-test-dtmq-proxy";
+  invoke_options.source.sequence = kCreateSequence;
 
-  // UUID 成功后创建 room 成功
-  team_room::ptr_t room;
-  CASE_EXPECT_EQ(0, env.setup_created_team(new_team_id, owner_key, owner_channel, &room));
+  // 真实 action 输入 team_id=0：由 action 调 UUID，写回生成后的 team_id，再按完整 key 路由并创建房间。
+  int32_t action_ret = env.run(
+      "create_with_uuid", [&invoke_options, &owner_key, &owner_channel](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::team::SSTeamRoomCreateReq request;
+        request.mutable_team_key()->set_zone_id(kTestZoneId);
+        protobuf_copy_message(*request.mutable_sender_user_key(), owner_key);
+        protobuf_copy_message(*request.mutable_sender_user_channel(), owner_channel);
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+            atframework::testing::invoke_ss_action<task_action_create>(ctx, request, invoke_options)));
+      });
+  CASE_EXPECT_EQ(0, action_ret);
+
+  const atfw::testing::outbound_message* response_record = nullptr;
+  for (size_t i = 0; i < env.runtime().transport().outbound_count(); ++i) {
+    const auto* record = env.runtime().transport().outbound_at(i);
+    if (record != nullptr && record->target_node_id == kDtmqProxyNodeId && record->sequence == kCreateSequence) {
+      response_record = record;
+      break;
+    }
+  }
+  CASE_EXPECT_TRUE(response_record != nullptr);
+  atfw::team::DTeamKey created_key;
+  if (response_record != nullptr) {
+    atframework::SSMsg response_message;
+    CASE_EXPECT_TRUE(response_message.ParseFromArray(response_record->payload.data(),
+                                                     static_cast<int>(response_record->payload.size())));
+    CASE_EXPECT_EQ(0, response_message.head().error_code());
+    atfw::team::SSTeamRoomCreateRsp response;
+    CASE_EXPECT_TRUE(response.ParseFromString(response_message.body_bin()));
+    CASE_EXPECT_EQ(0, response.client_result());
+    protobuf_copy_message(created_key, response.team_key());
+    // CRT-02: 创建响应附带标准化房间频道(channel:<type>:<zone>:<team_id>),与房间实际订阅频道一致
+    CASE_EXPECT_EQ(kTeamRoomChannelType, response.room_channel().channel_type());
+    CASE_EXPECT_EQ(atfw::util::string::format("channel:{}:{}:{}", kTeamRoomChannelType, created_key.zone_id(),
+                                             created_key.team_id()),
+                   response.room_channel().channel_id());
+  }
+
+  CASE_EXPECT_EQ(kTestZoneId, created_key.zone_id());
+  CASE_EXPECT_GT(created_key.team_id(), 0);
+  auto room = team_room_manager::me()->get_room(created_key);
   CASE_EXPECT_TRUE(!!room);
+  if (room) {
+    CASE_EXPECT_TRUE(room->is_lock_holder());
+    const auto& fake = env.channel(created_key);
+    CASE_EXPECT_GE(fake.update_calls(), 1u);
+  }
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -329,7 +420,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
   int32_t dup_ret =
       env.run("duplicate_create", [room, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq req;
-        req.mutable_team_key()->set_team_id(team_id);
+        protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
         protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
       });
@@ -349,7 +440,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
     int32_t invalid_ret =
         env.run("invalid_sender", [other_room, other_team](rpc::context& ctx) -> rpc::result_code_type {
           atfw::team::SSTeamRoomCreateReq req;
-          req.mutable_team_key()->set_team_id(other_team);
+          protobuf_copy_message(*req.mutable_team_key(), make_team_key(other_team));
           auto bad_key = make_user_key(0, 0);
           protobuf_copy_message(*req.mutable_sender_user_key(), bad_key);
           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(other_room->create_team(ctx, req)));
@@ -360,7 +451,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
 
   // 已销毁队伍: 队长写 destroy_team -> 事件回环 -> 再 create 返回 destroyed
   atfw::team::DTeamAction destroy_action;
-  destroy_action.mutable_destroy_team()->set_team_id(team_id);
+  protobuf_copy_message(*destroy_action.mutable_destroy_team(), make_team_key(team_id));
   int32_t destroy_ret = env.run("destroy_team", [room, &destroy_action](rpc::context& ctx) -> rpc::result_code_type {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, destroy_action)));
   });
@@ -370,7 +461,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
   int32_t destroyed_ret =
       env.run("create_on_destroyed", [room, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq req;
-        req.mutable_team_key()->set_team_id(team_id);
+        protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
         protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
       });
@@ -407,7 +498,7 @@ CASE_TEST(teamsvr_room_create, create_response_loss_idempotent) {
   int32_t first_ret =
       env.run("create_lost_response", [room, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq req;
-        req.mutable_team_key()->set_team_id(team_id);
+        protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
         protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
       });
@@ -430,7 +521,7 @@ CASE_TEST(teamsvr_room_create, create_response_loss_idempotent) {
     int32_t retry_ret =
         env.run("create_retry", [recovered, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
           atfw::team::SSTeamRoomCreateReq req;
-          req.mutable_team_key()->set_team_id(team_id);
+          protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
           protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(recovered->create_team(ctx, req)));
         });
@@ -451,7 +542,7 @@ CASE_TEST(teamsvr_room_routing, local_hash_target) {
 
   // 注入的本地 teamsvr-room 节点是唯一 room 节点: 一致性哈希全部解析到本节点
   for (int64_t probe : {1LL, 42LL, 0x7FFFFFFFLL}) {
-    CASE_EXPECT_EQ(kLocalRoomNodeId, rpc::team::team_api::get_teamsvr_room_server_id_of_zone(1, probe));
+    CASE_EXPECT_EQ(kLocalRoomNodeId, rpc::team::team_api::get_teamsvr_room_server_id_of_zone(make_team_key(probe)));
   }
 
   CASE_EXPECT_EQ(0, env.stop());
@@ -484,7 +575,7 @@ CASE_TEST(teamsvr_room_routing, forward_to_remote) {
   int64_t remote_team_id = 0;
   for (int64_t i = 1; i <= 4096 && 0 == remote_team_id; ++i) {
     int64_t candidate = 0x2000000 + i;
-    if (rpc::team::team_api::get_teamsvr_room_server_id_of_zone(1, candidate) == kRemoteRoomNodeId) {
+    if (rpc::team::team_api::get_teamsvr_room_server_id_of_zone(make_team_key(candidate)) == kRemoteRoomNodeId) {
       remote_team_id = candidate;
     }
   }
@@ -502,7 +593,7 @@ CASE_TEST(teamsvr_room_routing, forward_to_remote) {
          google::protobuf::Message& response) -> rpc::result_code_type {
         const auto& typed_request = static_cast<const atfw::team::SSTeamRoomCreateReq&>(request.body);
         auto& typed_response = static_cast<atfw::team::SSTeamRoomCreateRsp&>(response);
-        typed_response.mutable_team_key()->set_team_id(typed_request.team_key().team_id());
+        protobuf_copy_message(*typed_response.mutable_team_key(), typed_request.team_key());
         typed_response.set_client_result(0);
         RPC_RETURN_CODE(0);
       },
@@ -515,7 +606,7 @@ CASE_TEST(teamsvr_room_routing, forward_to_remote) {
   int32_t action_ret =
       env.run("create_forwarded", [&invoke_options, remote_team_id](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq request;
-        request.mutable_team_key()->set_team_id(remote_team_id);
+        protobuf_copy_message(*request.mutable_team_key(), make_team_key(remote_team_id));
         auto key = make_user_key(1, 3501);
         protobuf_copy_message(*request.mutable_sender_user_key(), key);
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
@@ -524,7 +615,7 @@ CASE_TEST(teamsvr_room_routing, forward_to_remote) {
   CASE_EXPECT_EQ(0, action_ret);
 
   // 转发路径不在本节点创建 room
-  CASE_EXPECT_EQ(nullptr, team_room_manager::me()->get_room(remote_team_id).get());
+  CASE_EXPECT_EQ(nullptr, team_room_manager::me()->get_room(make_team_key(remote_team_id)).get());
 
   remote_rule.reset();
   env.clear_rooms();

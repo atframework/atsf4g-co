@@ -319,8 +319,8 @@ AND update/reset_lock/destroy 调用无非预期增量
 | ID | 状态 | 优先级 | 场景与主要断言 |
 | --- | --- | --- | --- |
 | INF-01 | ✅ | P0 | fixture 启动，type 11 配置生效，subscribe heartbeat 后 ready，`with_private_data=true` |
-| INF-02 | ✅ | P0 | ready snapshot 的 team id、锁、custom/private data 和增量日志能送达 room 回调 |
-| INF-03 | ✅ | P0 | 每个 case 清理 manager；重复创建相同 team id 返回同一 room，不出现第二个本地定时器 |
+| INF-02 | ✅ | P0 | ready snapshot 的完整 team key、锁、custom/private data 和增量日志能送达 room 回调 |
+| INF-03 | ✅ | P0 | 每个 case 清理 manager；相同完整 team key 复用 room，相同 team id 的不同 zone 隔离且不串 DTMQ channel |
 | INF-04 | 🔶 | P1 | typed `invoke_ss_action` 覆盖业务 action；另用 raw transport smoke case 验证 dispatcher 注册、RPC envelope 和非法 type URL/body |
 | CRT-01 | ✅ | P0 | 显式 team id 创建成功；初始 update 为 `save=true`，创建者为 OWNER/队长，公共和私有初始数据完整 |
 | CRT-02 | 🔶 | P1 | team id 为 0 时 UUID 成功/失败；只在生成成功后创建 room |
@@ -328,7 +328,7 @@ AND update/reset_lock/destroy 调用无非预期增量
 | CRT-04 | ✅ | P0 | 创建 update 已提交但响应丢失；重新订阅/重试从已提交快照恢复，不覆盖成第二支初始状态 |
 | ROU-01 | 🔶 | P1 | 本地一致性哈希目标执行本地 action；远端目标仅 forward；无 ready 节点返回 DTMQ unavailable |
 | ROU-02 | 🔶 | P1 | forward transport 失败和 `forward_ok=false` 均正确映射响应，不在本节点创建 room |
-| ROU-03 | ⬜ | P2 | team id、sender/invitee/applicant 不同 zone 的路由选择符合最终跨区契约 |
+| ROU-03 | 🔶 | P2 | 路由 zone 由完整 team key 决定；sender 与 team 不同 zone、目标 zone 无节点时不回退误发；invitee/applicant 跨区组合仍待补齐 |
 
 ### 4.2 权限与“拒绝时零写入”
 
@@ -512,7 +512,7 @@ DTMQ component 测试。
 | --- | --- | --- | --- |
 | BND-01 | ⬜ | P1 | 所有 duration/percent/count 使用配置最小值、默认值和极端大值；不能出现零间隔忙循环、负时间或整数溢出 |
 | BND-02 | ⬜ | P1 | 时间恰好等于 invitation/join/offline/lock/empty-room deadline，以及时钟大步前进；边界统一按当前 `<= now` 契约处理 |
-| BND-03 | ⬜ | P2 | zone/user/team id 的 0、最大值、跨区和大量哈希碰撞输入；非法 key 零写入，合法 key 不串状态 |
+| BND-03 | 🔶 | P2 | zone/team id 为 0、部分快照 key 和跨区同 team id 已覆盖；最大值、大量哈希碰撞及 user id 边界仍待补齐 |
 | BND-04 | ⬜ | P1 | 大量成员、邀请、申请和接近 DTMQ 消息上限的 Any/map 数据执行 update/compact；超限必须明确失败且不留下部分快照 |
 | BND-05 | ⬜ | P2 | 千级 room 的 timer + pending flush + compact 长稳，观察 task 数、内存、WAL 体积、恢复时延和无进展重试 |
 | BND-06 | ⬜ | P2 | 固定 seed 的 action/model test 做数百轮混合操作并在失败时缩减 trace；CI 只跑短种子集，夜间跑长种子集 |
@@ -533,8 +533,7 @@ DTMQ component 测试。
 | GAP-07 | 心跳/router/成员 ack 的容灾持久性 | heartbeat 只修改本地 member；维护仅在 `compact_sequence > 0` 时写 custom/private，长期无新日志时不会保存新心跳 | 要么有独立 runtime snapshot/update，要么把运行时字段放 private data 并周期持久化；RCV-08 防止切主后误踢在线成员 |
 | GAP-08 | admission 过期清理与 update 原子性 | maintenance 在 `send_update` 前删除本地邀请/申请；普通 update 失败时本地已变、DTMQ snapshot 未变 | 明确失败回滚/重拉/立即重试策略；CMP-10 验证旧主控和新主控不会给出相反决定 |
 | GAP-09 | 重复 admission 的可变字段策略 | 已有记录变化时实现复制旧记录，仅更新频道和更晚过期时间；source/version/router/admission data 变化可能触发一个内容未变化的日志 | 明确这些字段是 immutable、可刷新还是新请求；按决定消除冗余日志并补 ADM-02/10 |
-| GAP-10 | snapshot 代际和边界校验 | restore 接受缺失 private Any，且未显式验证 saved/compact/last sequence/hash 的相互关系 | 定义 legacy 兼容范围；不一致或私有数据不可证明完整时只能做 readonly 并请求新 snapshot |
-| GAP-11 | 外层与内嵌 team key 规范化 | 普通 action 的 outer team id 决定频道，部分 action 自带 team key，当前非 admission 路径未统一验证/改写 | 明确拒绝或规范化策略，防止成员收到属于当前频道却携带其他 team id 的日志 |
+| GAP-10 | snapshot 代际和边界校验 | restore 接受缺失 private Any；旧版频道 ID/快照没有显式代际标记，不能与合法的 `zone_id=0` 全局 team 混用 | 如需迁移旧快照，必须提供可验证的版本/迁移入口；不一致或私有数据不可证明完整时只能做 readonly 并请求新 snapshot |
 
 以下问题已在 2026-08-22 的代码评审中修复，不属于 GAP；对应用例把它们锁定为绿色契约，防止回归：
 
@@ -546,6 +545,7 @@ DTMQ component 测试。
 | FIX-04 | 接收回调曾注册在 `on_receive_event`（仅 kEvent 触发），续租产生的 kResetLock 等非 event 日志不推进 ack 和最老未压缩日志时间点，时间维度压缩加速失效；现改为 `on_receive_raw_message`，覆盖全部 command_case 且每条日志恰好回调一次 | EVT-11、CMP-13 |
 | FIX-05 | 五个角色门槛 getter（`get_manage_member_role` 等）原以 `== GUEST` 判定未配置，且一度按 [NORMAL, OWNER] 区间钳制越界值；按“角色是阶梯范围”的设计修订为 `resolve_permission_role`：不高于 GUEST（含非法负值）回退默认门槛，其余值（含未来插入的任意档位）按数值直接生效，门槛比较全部使用大小关系 | PERM-14 |
 | FIX-06 | `send_action` 缺少 `destroyed_` 检查，`destroy_team`/destroy 事件回环后仍可向即将销毁的频道追加业务日志；现返回 `EN_ERR_TEAM_DESTROYED` | EVT-09 |
+| FIX-07 | 房间、频道、路由和快照身份曾只使用 `team_id` 或静默覆盖不一致 key；现统一使用完整 `DTeamKey`，把 `zone_id=0` 视为合法的全局 team 并与分区 team 严格隔离，同时规范化 action 内嵌 key | INF-03、SDK-TEAM-01～07、RCV-04/BND-03 |
 
 ## 6. 分阶段执行
 
