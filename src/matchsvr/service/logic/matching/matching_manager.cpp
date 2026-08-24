@@ -741,7 +741,7 @@ size_t matching_manager::get_room_unit_count(const std::string& matching_id) con
 
 size_t matching_manager::get_room_faction_count(const std::string& matching_id) const noexcept {
   auto room_iter = rooms_.find(matching_id);
-  return room_iter == rooms_.end() || !room_iter->second ? 0 : room_iter->second->get_faction_assignments().size();
+  return room_iter == rooms_.end() || !room_iter->second ? 0 : static_cast<size_t>(room_iter->second->get_faction_assignments().size());
 }
 
 size_t matching_manager::get_room_count() const noexcept { return rooms_.size(); }

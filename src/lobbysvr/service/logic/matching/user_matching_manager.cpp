@@ -45,7 +45,7 @@ static bool init_user_matching_manager_gm_handle() {
 }  // namespace
 
 user_matching_manager::user_matching_manager(user& owner) : owner_(&owner), dirty_(false) {
-  static bool init_gm_handle = init_user_matching_manager_gm_handle();
+  ATFW_EXPLICIT_UNUSED_ATTR static bool init_gm_handle = init_user_matching_manager_gm_handle();
 }
 
 user_matching_manager::~user_matching_manager() = default;

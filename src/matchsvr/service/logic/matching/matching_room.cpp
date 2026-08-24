@@ -338,7 +338,7 @@ bool matching_room::finalize_faction_ids() {
     return false;
   }
   std::vector<const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment*> ordered_factions;
-  ordered_factions.reserve(faction_assignments_.size());
+  ordered_factions.reserve(static_cast<size_t>(faction_assignments_.size()));
   for (const auto& assignment : faction_assignments_) {
     if (assignment.unit_ids().empty()) {
       return false;

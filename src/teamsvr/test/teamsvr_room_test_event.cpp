@@ -22,7 +22,7 @@
 namespace {
 using namespace teamsvr_room_test;
 
-atfw::team::DTeamAction make_injected_add_member(const PROJECT_NAMESPACE_ID::DUserIDKey& key, int64_t user_id,
+atfw::team::DTeamAction make_injected_add_member(const PROJECT_NAMESPACE_ID::DUserIDKey& key, uint64_t user_id,
                                                  int64_t joined_after_seconds, int64_t heartbeat_after_seconds) {
   atfw::team::DTeamAction action;
   auto* add_member = action.mutable_add_member();

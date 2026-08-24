@@ -805,7 +805,7 @@ class room_test_env {
                              const atfw::team::DTeamConfigure* configure = nullptr) {
     return run(
         "setup_created_team",
-        [this, team_id, &owner_key, &owner_channel, out_room, configure](rpc::context& ctx) -> rpc::result_code_type {
+        [team_id, &owner_key, &owner_channel, out_room, configure](rpc::context& ctx) -> rpc::result_code_type {
           auto room = team_room_manager::me()->mutable_room(ctx, team_id);
           if (!room) {
             RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
@@ -902,7 +902,7 @@ class room_test_env {
       for (int i = 0; i < 4; ++i) {
         runtime_->pump_once();
       }
-      ret = run("sync_flush", [this](rpc::context& ctx) -> rpc::result_code_type {
+      ret = run("sync_flush", [](rpc::context& ctx) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team_room_manager::me()->flush_pending_channel_message(ctx)));
       });
       if (0 != ret) {

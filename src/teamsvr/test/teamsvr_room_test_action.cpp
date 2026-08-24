@@ -389,7 +389,7 @@ CASE_TEST(teamsvr_room_create, create_response_loss_idempotent) {
 
   int64_t team_id = next_test_team_id();
   auto owner_key = make_user_key(1, 3401);
-  auto owner_channel = make_personal_channel(3401);
+  // auto owner_channel = make_personal_channel(3401);
 
   team_room::ptr_t room = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!room);

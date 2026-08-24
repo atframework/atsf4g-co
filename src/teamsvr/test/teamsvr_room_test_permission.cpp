@@ -42,7 +42,7 @@ int32_t run_send_message_action(room_test_env& env, int64_t team_id, const PROJE
 // 直接调用 check_action_permission 断言精确错误码(协程内 await 同步结果)
 int32_t check_permission(room_test_env& env, const team_room::ptr_t& room,
                          const PROJECT_NAMESPACE_ID::DUserIDKey& sender, const atfw::team::DTeamAction& action) {
-  return env.run("check_permission", [room, sender, action](rpc::context& ctx) -> rpc::result_code_type {
+  return env.run("check_permission", [room, sender, action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(sender, action)));
   });
 }
@@ -889,7 +889,7 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
   expect_no_write(fake, env, before);
 
   // check_action_permission 直接路径同样返回 invalid param
-  (void)env.run("check_direct", [room, members, empty_action](rpc::context& ctx) -> rpc::result_code_type {
+  (void)env.run("check_direct", [room, members, empty_action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
                    RPC_AWAIT_CODE_RESULT(room->check_action_permission(members.owner, empty_action)));
     RPC_RETURN_CODE(0);

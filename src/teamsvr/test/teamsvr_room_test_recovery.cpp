@@ -1296,7 +1296,7 @@ CASE_TEST(teamsvr_room_lock, captainless_snapshot_takeover_election) {
     return;
   }
 
-  auto setup_captainless_channel = [&env](int64_t team_id, bool self_lock, int64_t& m1, int64_t& m2) {
+  auto setup_captainless_channel = [&env](int64_t team_id, bool self_lock, uint64_t& m1, uint64_t& m2) {
     m1 = 8541;
     m2 = 8542;
     auto& fake = env.channel(team_id);
@@ -1325,7 +1325,7 @@ CASE_TEST(teamsvr_room_lock, captainless_snapshot_takeover_election) {
 
   // 新主控(锁归本节点): 接管时确定性选举最早入队成员为队长
   int64_t team_a = next_test_team_id();
-  int64_t m1 = 0, m2 = 0;
+  uint64_t m1 = 0, m2 = 0;
   setup_captainless_channel(team_a, true, m1, m2);
   team_room::ptr_t room_a = env.setup_ready_room(team_a);
   CASE_EXPECT_TRUE(!!room_a);
