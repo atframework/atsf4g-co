@@ -17,6 +17,7 @@
 #include <opentelemetry/semconv/incubating/event_attributes.h>
 #include <opentelemetry/semconv/incubating/rpc_attributes.h>
 
+#include <config/extern_log_categorize.h>
 #include <gsl/select-gsl.h>
 #include <log/log_stacktrace.h>
 #include <log/log_wrapper.h>
@@ -692,8 +693,10 @@ static bool internal_add_global_metrics_observable_int64(opentelemetry_utility::
       }
     }
 
-    FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}", metrics_item->key,
-               callback, export_record_count, metrics_item->export_version.load(std::memory_order_acquire));
+    FWCLOGDEBUG(log_categorize_t::PROTO_STAT,
+                "[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
+                metrics_item->key, callback, export_record_count,
+                metrics_item->export_version.load(std::memory_order_acquire));
   };
 
   instrument->AddCallback(observer.origin_callback, reinterpret_cast<void*>(&observer));
@@ -770,9 +773,10 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
 
     size_t export_record_count = 0;
     if (metrics_item->records.empty()) {
-      FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
-                 metrics_item->key, callback, export_record_count,
-                 metrics_item->export_version.load(std::memory_order_acquire));
+      FWCLOGDEBUG(log_categorize_t::PROTO_STAT,
+                  "[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
+                  metrics_item->key, callback, export_record_count,
+                  metrics_item->export_version.load(std::memory_order_acquire));
       return;
     }
 
@@ -815,8 +819,10 @@ static bool internal_add_global_metrics_observable_double(opentelemetry_utility:
       record.reset();
     }
 
-    FWLOGDEBUG("[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}", metrics_item->key,
-               callback, export_record_count, metrics_item->export_version.load(std::memory_order_acquire));
+    FWCLOGDEBUG(log_categorize_t::PROTO_STAT,
+                "[Telemetry]: Export metric meter instrument {}(@{}) with {} record(s) to version {}",
+                metrics_item->key, callback, export_record_count,
+                metrics_item->export_version.load(std::memory_order_acquire));
   };
 
   instrument->AddCallback(observer.origin_callback, reinterpret_cast<void*>(&observer));
@@ -935,9 +941,10 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
 
     ++exporting_metric_count;
     ++exported_metric_count;
-    FWLOGDEBUG("[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
-               observable.second->key, observable.first, new_record_count - old_record_count, export_version,
-               collecting_version);
+    FWCLOGDEBUG(log_categorize_t::PROTO_STAT,
+                "[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
+                observable.second->key, observable.first, new_record_count - old_record_count, export_version,
+                collecting_version);
 
     observable.second->collect_version.store(collecting_version, std::memory_order_release);
   }
@@ -978,9 +985,10 @@ SERVER_FRAME_API int opentelemetry_utility::tick() {
 
     ++exporting_metric_count;
     ++exported_metric_count;
-    FWLOGDEBUG("[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
-               observable.second->key, observable.first, new_record_count - old_record_count, export_version,
-               collecting_version);
+    FWCLOGDEBUG(log_categorize_t::PROTO_STAT,
+                "[Telemetry]: Collect metric meter instrument {}(@{}) with {} record(s) from version {} to {}",
+                observable.second->key, observable.first, new_record_count - old_record_count, export_version,
+                collecting_version);
     observable.second->collect_version.store(collecting_version, std::memory_order_release);
   }
 
