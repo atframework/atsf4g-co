@@ -372,6 +372,7 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   fill_operator_user(*rpc_request->mutable_operator_user());
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   rpc_request->set_acknowledge_event_id(get_acknowledge_event_id());
+  rpc_request->set_user_open_id(owner_->get_open_id());
   const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWPLOGERROR(*owner_, "confirm matching failed, no ready matchsvr, matching_id={}, unit_id={}",

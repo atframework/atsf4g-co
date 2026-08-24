@@ -64,7 +64,8 @@ message SSMatchingConfirmReq {
   bool confirmed = 4;
   uint64 subscriber_server_id = 5;
   int64 acknowledge_event_id = 6;
-  DOrbitUserInitDataDetail orbit_init_data = 7; // 保底的战斗房间初始化数据，确保玩家会进入到局内
+  string user_open_id = 7; // 用户的 openid_id，lobbysvr 需要在确认战斗时传入
+  DOrbitUserInitDataDetail orbit_init_data = 8; // 保底的战斗房间初始化数据，确保玩家会进入到局内
 }
 
 message SSMatchingSnapshot {

@@ -544,7 +544,7 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
   }
   // 战斗准备数据只保存在 matchsvr，待房间就绪后定向发送给 orbitsvr；不写入房间事件日志。
   if (request.confirmed()) {
-    room->add_orbit_user_init_detail(request.operator_user(), request.orbit_init_data());
+    room->add_orbit_user_init_detail(request.operator_user(), request.orbit_init_data(), request.user_open_id());
   }
 
   room->subscribe(ctx, request.operator_user(), request.subscriber_server_id(), request.acknowledge_event_id());
@@ -658,7 +658,9 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     for (const auto& matching_user : unit_value.second.users()) {
       auto* orbit_user = init_request->add_user_list();
       protobuf_copy_message(*orbit_user->mutable_user_key()->mutable_user_key(), matching_user.user_key());
-      protobuf_copy_message(*orbit_user->mutable_data(), room->get_orbit_user_init_detail(matching_user.user_key()));
+      auto match_orbit_user_data = room->get_match_orbit_user_init_detail(matching_user.user_key());
+      orbit_user->mutable_user_key()->set_orbit_user_key(match_orbit_user_data.user_open_id());  // openid_id
+      protobuf_copy_message(*orbit_user->mutable_data(), match_orbit_user_data.orbit_init_data());
       orbit_user->set_faction_id(faction_id);
       uint64_t lobbysvr_id = 0;
       int64_t acknowledge_event_id = 0;
@@ -741,7 +743,9 @@ size_t matching_manager::get_room_unit_count(const std::string& matching_id) con
 
 size_t matching_manager::get_room_faction_count(const std::string& matching_id) const noexcept {
   auto room_iter = rooms_.find(matching_id);
-  return room_iter == rooms_.end() || !room_iter->second ? 0 : static_cast<size_t>(room_iter->second->get_faction_assignments().size());
+  return room_iter == rooms_.end() || !room_iter->second
+             ? 0
+             : static_cast<size_t>(room_iter->second->get_faction_assignments().size());
 }
 
 size_t matching_manager::get_room_count() const noexcept { return rooms_.size(); }

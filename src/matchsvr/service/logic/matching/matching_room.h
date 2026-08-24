@@ -72,11 +72,12 @@ class matching_room {
   size_t get_completed_faction_count() const noexcept { return completed_faction_count_; }
   size_t get_pending_faction_user_count() const noexcept { return pending_faction_user_count_; }
 
-  const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& get_orbit_user_init_detail(
+  const PROJECT_NAMESPACE_ID::DMatchingOrbitInitData& get_match_orbit_user_init_detail(
       const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const;
 
   void add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
-                                  const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail);
+                                  const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail,
+                                  const std::string& user_open_id);
 
   const PROJECT_NAMESPACE_ID::DOrbitRoomKey& get_orbit_room_key() const noexcept { return orbit_room_key_; }
 
@@ -197,7 +198,7 @@ class matching_room {
   PROJECT_NAMESPACE_ID::DOrbitRoomKey orbit_room_key_;
   int64_t orbit_expired_timepoint_ = 0;
 
-  std::unordered_map<std::string, PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail> orbit_users_init_detail_;
+  std::unordered_map<std::string, PROJECT_NAMESPACE_ID::DMatchingOrbitInitData> orbit_users_init_detail_;
 
   // 房间级 WAL publisher，负责日志保留、重放、快照和跨服通知。
   matching_wal_log_operator::strong_ptr<matching_wal_publisher> wal_publisher_;

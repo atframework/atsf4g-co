@@ -124,16 +124,19 @@ bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) c
   return false;
 }
 
-const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& matching_room::get_orbit_user_init_detail(
+const PROJECT_NAMESPACE_ID::DMatchingOrbitInitData& matching_room::get_match_orbit_user_init_detail(
     const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const {
-  static const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail empty_detail;
+  static const PROJECT_NAMESPACE_ID::DMatchingOrbitInitData empty_detail;
   auto iter = orbit_users_init_detail_.find(user_key.SerializeAsString());
   return iter == orbit_users_init_detail_.end() ? empty_detail : iter->second;
 }
 
 void matching_room::add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
-                                               const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail) {
-  protobuf_copy_message(orbit_users_init_detail_[user_key.SerializeAsString()], detail);
+                                               const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail,
+                                               const std::string& user_open_id) {
+  auto data = orbit_users_init_detail_[user_key.SerializeAsString()];
+  protobuf_copy_message(*data.mutable_orbit_init_data(), detail);
+  data.set_user_open_id(user_open_id);
 }
 
 bool matching_room::add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {

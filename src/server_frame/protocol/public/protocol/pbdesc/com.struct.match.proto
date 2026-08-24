@@ -217,3 +217,9 @@ message DLevelSelect {
   string region = 3;
   repeated int32 level_ids = 4;  // 可接受的关卡集合，必须显式提供且非空
 }
+
+// orbit 房间初始化时需要的数据
+message DMatchingOrbitInitData {
+ DOrbitUserInitDataDetail orbit_init_data = 1;  // 保底的战斗房间初始化数据，确保玩家会进入到局内
+ string user_open_id = 2;  // 用户的 openid_id
+}
