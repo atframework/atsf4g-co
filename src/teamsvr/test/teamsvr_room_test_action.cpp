@@ -374,7 +374,7 @@ CASE_TEST(teamsvr_room_create, create_team_with_uuid) {
     // CRT-02: 创建响应附带标准化房间频道(channel:<type>:<zone>:<team_id>),与房间实际订阅频道一致
     CASE_EXPECT_EQ(kTeamRoomChannelType, response.room_channel().channel_type());
     CASE_EXPECT_EQ(atfw::util::string::format("channel:{}:{}:{}", kTeamRoomChannelType, created_key.zone_id(),
-                                             created_key.team_id()),
+                                              created_key.team_id()),
                    response.room_channel().channel_id());
   }
 
@@ -480,7 +480,6 @@ CASE_TEST(teamsvr_room_create, create_response_loss_idempotent) {
 
   int64_t team_id = next_test_team_id();
   auto owner_key = make_user_key(1, 3401);
-  // auto owner_channel = make_personal_channel(3401);
 
   team_room::ptr_t room = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!room);

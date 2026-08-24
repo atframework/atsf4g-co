@@ -59,16 +59,14 @@ constexpr uint32_t kTestZoneId = 0;  // non-replication transactions live in zon
 
 // Register the same server-instance config loader as dtcoordsvr_main.cpp. lru_max_cache_count has
 // no CONFIGURE annotation so the explicit value (2, drives the tick eviction assertions) sticks;
-// annotated fields (grace 5s, max TTL 30d, default timeout 10s) are re-applied by
-// parse_configures_into and are the effective values asserted below.
+// annotated fields (lru_expired_duration 60s, grace 5s, max TTL 30d, default timeout 10s) are
+// re-applied by parse_configures_into from the annotation defaults and are the effective values
+// asserted below — setting them in C++ here would be silently discarded.
 void setup_dtcoordsvr_config_loader() {
   logic_config::me()->set_server_instance_config_loader([](atfw::atapp::app& app_, logic_config&,
                                                            logic_config::server_instance_config_ptr& to) {
     auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
     config_ptr->set_lru_max_cache_count(2);
-    // 2s so manager_tick_evicts_by_duration can wait it out; every other case touches its
-    // entries well within the window.
-    config_ptr->mutable_lru_expired_duration()->set_seconds(2);
     app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
     to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
   });
@@ -436,6 +434,40 @@ CASE_TEST(component_dtcoordsvr, manager_timeout_reject_save_and_cache_invalidati
   auto result3 = test.wait(task3, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(result3.task_exited);
   CASE_EXPECT_EQ(0, result3.result_code);
+
+  // Boundary: expired but still within transaction_expire_grace_duration (effective 5s) is NOT
+  // auto-rejected — the coordinator waits for the participator's own resolve first.
+  auto task4 = test.run_task(
+      "timeout_within_grace_stays_prepared", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_blob_storage grace_storage;
+        dt_test::make_prepared_storage(grace_storage, "mgr-grace-1", {"pa"}, false, std::chrono::seconds{-2});
+        uint64_t version = 0;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_write_record(ctx, "mgr-grace-1", grace_storage, version)));
+        CASE_EXPECT_EQ(1, version);
+
+        transaction_metadata metadata;
+        metadata.set_transaction_uuid("mgr-grace-1");
+        transaction_manager::transaction_ptr_type trans;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+        CASE_EXPECT_TRUE(!!trans);
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                       trans->data_object.metadata().status());
+        CASE_EXPECT_FALSE(trans->data_object.metadata().has_finish_timepoint());
+
+        // No auto-reject save happened: a fresh DB read still reports version 1 and PREPARED.
+        table_type record;
+        uint64_t reloaded_version = 0;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-grace-1", record, reloaded_version)));
+        CASE_EXPECT_EQ(1, reloaded_version);
+        transaction_blob_storage reloaded;
+        CASE_EXPECT_TRUE(record.blob_data().UnpackTo(&reloaded));
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                       reloaded.metadata().status());
+        RPC_RETURN_CODE(0);
+      });
+  auto result4 = test.wait(task4, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result4.task_exited);
+  CASE_EXPECT_EQ(0, result4.result_code);
 
   CASE_EXPECT_EQ(0, test.stop());
 }
@@ -1016,11 +1048,16 @@ CASE_TEST(component_dtcoordsvr, manager_tick_evicts_by_duration) {
     return;
   }
   test.db().register_message_type<table_type>();
+  // The LRU is a process-lifetime singleton: drop leftovers from earlier cases so this case only
+  // observes its own entry and capacity eviction cannot satisfy the assertions.
+  transaction_manager::me()->clear_lru_for_unit_test();
 
   auto task =
       test.run_task("duration_eviction_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
         transaction_blob_storage storage;
-        dt_test::make_prepared_storage(storage, "mgr-duration-1", {"pa"});
+        // The transaction expire window must outlive the eviction point: mutable_transaction
+        // auto-rejects expired records (DT-019), which must not mix into this eviction path.
+        dt_test::make_prepared_storage(storage, "mgr-duration-1", {"pa"}, false, std::chrono::seconds{3600});
         CASE_EXPECT_EQ(0,
                        RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
         transaction_metadata metadata;
@@ -1033,15 +1070,21 @@ CASE_TEST(component_dtcoordsvr, manager_tick_evicts_by_duration) {
   auto result = test.wait(task, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
 
-  // Advance the business clock past lru_expired_duration (2s in the test loader). Runtime hard
-  // timeouts stay on the raw system clock, so eviction does not depend on scheduler delay.
+  // Advance the business clock past the effective lru_expired_duration (the annotated default 60s;
+  // see setup_dtcoordsvr_config_loader). Runtime hard timeouts stay on the raw system clock, so
+  // eviction does not depend on scheduler delay.
   {
-    dt_test::global_now_offset_guard business_clock(std::chrono::seconds{3});
+    dt_test::global_now_offset_guard business_clock(std::chrono::seconds{61});
     int evicted = transaction_manager::me()->tick();
-    CASE_EXPECT_GE(evicted, 1);
+    CASE_EXPECT_EQ(1, evicted);
+    CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
   }
 
+  // The reload must actually hit the DB: a cache hit would satisfy the content assertions without
+  // proving the eviction. Count get_all through the engine.
+  size_t db_calls_before_reload = test.db().calls("distribute_transaction");
   auto reload_task = test.run_task(
       "duration_eviction_reload", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
         transaction_metadata metadata;
@@ -1056,6 +1099,7 @@ CASE_TEST(component_dtcoordsvr, manager_tick_evicts_by_duration) {
   auto reload_result = test.wait(reload_task, std::chrono::seconds{20});
   CASE_EXPECT_TRUE(reload_result.task_exited);
   CASE_EXPECT_EQ(0, reload_result.result_code);
+  CASE_EXPECT_EQ(db_calls_before_reload + 1, test.db().calls("distribute_transaction"));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

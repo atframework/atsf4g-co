@@ -283,8 +283,7 @@ bool drive_handle(atfw::testing::runtime& test, const atfw::util::memory::strong
       test,
       [&handle, &pred]() {
         if (!pred() && handle->has_resolve_custom_timer_for_unit_test()) {
-          handle->fire_resolve_custom_timer_for_unit_test(
-              handle->get_resolve_custom_timer_timepoint_for_unit_test());
+          handle->fire_resolve_custom_timer_for_unit_test(handle->get_resolve_custom_timer_timepoint_for_unit_test());
         }
         return pred();
       },
@@ -1016,12 +1015,11 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_committe
   handle->dump(snapshot);
   CASE_EXPECT_EQ(0, snapshot.running_transaction_size() + snapshot.finished_transaction_size());
 
-  // Further ticks do nothing (no tight loop).
+  // The empty queue disarmed the custom timer (no self-driving, no tight loop). A tick with a
+  // far-future timepoint still collects nothing, so do_event never runs again.
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
   auto tick_context = atfw::testing::make_context();
-  for (int i = 0; i < 8; ++i) {
-    handle->tick(tick_context, std::chrono::system_clock::now() + std::chrono::hours{1});
-    test.pump_once();
-  }
+  CASE_EXPECT_EQ(0, handle->tick(tick_context, std::chrono::system_clock::now() + std::chrono::hours{1}));
   CASE_EXPECT_EQ(1, recorder.count("do_event"));
 
   CASE_EXPECT_EQ(0, test.stop());
@@ -1297,8 +1295,13 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
 
   // Recovering writability resumes the flow.
   recorder.check_writable_result = true;
-  resolve_due = protobuf_to_system_clock(
-      handle->get_running_transactions().at("part-uuid-readonly").storage->resolve_timepoint());
+  running_iter = handle->get_running_transactions().find("part-uuid-readonly");
+  CASE_EXPECT_TRUE(running_iter != handle->get_running_transactions().end());
+  if (running_iter == handle->get_running_transactions().end()) {
+    test.stop();
+    return;
+  }
+  resolve_due = protobuf_to_system_clock(running_iter->second.storage->resolve_timepoint());
   CASE_EXPECT_EQ(0, handle->tick(tick_context, resolve_due));
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle, &query_calls]() {
     return query_calls >= 1 && handle->get_running_transactions().empty() &&
@@ -1694,7 +1697,13 @@ CASE_TEST(component_distributed_transaction_participator, tick_equal_timepoint_i
   }
   auto before_expire = protobuf_to_system_clock(running_iter->second.storage->metadata().expire_timepoint()) -
                        std::chrono::milliseconds{1};
-  handle->tick(tick_context, before_expire);
+  // Not due yet: trigger_due synchronously keeps the queue entry, so the custom timer still points
+  // at the stored resolve timepoint and no resolve task was launched (query_calls stays 0). The
+  // queue/timer state is the deterministic oracle; a delivered query would need pump generations.
+  CASE_EXPECT_EQ(0, handle->tick(tick_context, before_expire));
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_TRUE(handle->get_resolve_custom_timer_timepoint_for_unit_test() ==
+                   protobuf_to_system_clock(running_iter->second.storage->resolve_timepoint()));
   CASE_EXPECT_EQ(0, query_calls);
 
   auto exactly_expire = protobuf_to_system_clock(running_iter->second.storage->metadata().expire_timepoint());
@@ -1754,8 +1763,16 @@ CASE_TEST(component_distributed_transaction_participator, tick_launch_failure_re
   CASE_EXPECT_TRUE(static_cast<bool>(failure_hook));
 
   auto tick_context = atfw::testing::make_context();
-  auto first_due =
-      protobuf_to_system_clock(handle->get_running_transactions().at("part-uuid-seam-a").storage->resolve_timepoint());
+  auto& running_map = handle->get_running_transactions();
+  auto seam_a_iter = running_map.find("part-uuid-seam-a");
+  auto seam_b_iter = running_map.find("part-uuid-seam-b");
+  CASE_EXPECT_TRUE(seam_a_iter != running_map.end() && seam_b_iter != running_map.end());
+  if (seam_a_iter == running_map.end() || seam_b_iter == running_map.end()) {
+    task_manager::mock_create_task_clear();
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto first_due = protobuf_to_system_clock(seam_a_iter->second.storage->resolve_timepoint());
 
   // First tick: the collected timers hand over ownership to the task launch, which fails; tick
   // reports the injected error and everything collected must be re-armed with backoff.
@@ -1767,22 +1784,21 @@ CASE_TEST(component_distributed_transaction_participator, tick_launch_failure_re
   CASE_EXPECT_EQ(0, recorder.count("do_event"));
 
   // Neither transaction consumed any retry budget: infrastructure failures do not count.
-  auto& running_map = handle->get_running_transactions();
-  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-a").storage->resolve_times());
-  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-b").storage->resolve_times());
+  CASE_EXPECT_EQ(0, seam_a_iter->second.storage->resolve_times());
+  CASE_EXPECT_EQ(0, seam_b_iter->second.storage->resolve_times());
 
   // A tick immediately before the explicitly re-armed deadline does not relaunch anything.
-  auto retry_due = protobuf_to_system_clock(running_map.at("part-uuid-seam-a").storage->resolve_timepoint());
+  auto retry_due = protobuf_to_system_clock(seam_a_iter->second.storage->resolve_timepoint());
   CASE_EXPECT_EQ(0, handle->tick(tick_context, retry_due - atfw::util::time::time_utility::raw_time_t::duration{1}));
   CASE_EXPECT_EQ(0, query_calls);
-  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-a").storage->resolve_times());
+  CASE_EXPECT_EQ(0, seam_a_iter->second.storage->resolve_times());
 
   // At the stored deadline the launch fails again with the same backoff semantics and no budget use.
   tick_result = handle->tick(tick_context, retry_due);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, tick_result);
   CASE_EXPECT_EQ(0, query_calls);
   CASE_EXPECT_EQ(2, handle->get_running_transactions().size());
-  CASE_EXPECT_EQ(0, running_map.at("part-uuid-seam-a").storage->resolve_times());
+  CASE_EXPECT_EQ(0, seam_a_iter->second.storage->resolve_times());
 
   // Release the hook: the next due tick launches the resolve task and both transactions
   // recover through the normal flow (query -> COMMITED -> do_event -> ack -> consumed).
@@ -2163,8 +2179,13 @@ CASE_TEST(component_distributed_transaction_participator, repeated_prepare_is_id
   CASE_EXPECT_EQ(2, recorder.count("check_prepare"));
   // 定时器仍指向首个到期事件的到期时间点，未被重复 prepare 重置
   CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
-  const auto& running = handle->get_running_transactions().at("part-uuid-repeat");
-  CASE_EXPECT_EQ(protobuf_to_system_clock(running.storage->resolve_timepoint()),
+  auto repeat_iter = handle->get_running_transactions().find("part-uuid-repeat");
+  CASE_EXPECT_TRUE(repeat_iter != handle->get_running_transactions().end());
+  if (repeat_iter == handle->get_running_transactions().end()) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_EQ(protobuf_to_system_clock(repeat_iter->second.storage->resolve_timepoint()),
                  handle->get_resolve_custom_timer_timepoint_for_unit_test());
 
   // commit 后进入 finished；同 UUID 再次 prepare 返回 finished 副本而不重建 running 条目
@@ -2183,7 +2204,12 @@ CASE_TEST(component_distributed_transaction_participator, repeated_prepare_is_id
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_3), response, output_3)));
         CASE_EXPECT_TRUE(!!output_3);
         // 同一 finished 对象，状态保持终局，不允许重新进入 running（防止同一 UUID 再次执行 do_event）
-        CASE_EXPECT_EQ(handle->get_finished_transactions().at("part-uuid-repeat").get(), output_3.get());
+        auto finished_iter = handle->get_finished_transactions().find("part-uuid-repeat");
+        CASE_EXPECT_TRUE(finished_iter != handle->get_finished_transactions().end());
+        if (finished_iter == handle->get_finished_transactions().end()) {
+          RPC_RETURN_CODE(-1);
+        }
+        CASE_EXPECT_EQ(finished_iter->second.get(), output_3.get());
         CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
                        output_3->metadata().status());
         CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
@@ -2270,7 +2296,13 @@ CASE_TEST(component_distributed_transaction_participator, writable_loss_mid_batc
   CASE_EXPECT_EQ(0, handle->get_running_transactions().count("part-uuid-wb-a"));
   CASE_EXPECT_EQ(1, handle->get_running_transactions().count("part-uuid-wb-b"));
   // 延后不消耗 B 的 resolve 预算
-  CASE_EXPECT_EQ(0, handle->get_running_transactions().at("part-uuid-wb-b").storage->resolve_times());
+  auto wb_b_iter = handle->get_running_transactions().find("part-uuid-wb-b");
+  CASE_EXPECT_TRUE(wb_b_iter != handle->get_running_transactions().end());
+  if (wb_b_iter == handle->get_running_transactions().end()) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_EQ(0, wb_b_iter->second.storage->resolve_times());
   // 批次闸门保持不可写时，A 的 acknowledge 也一并延后
   CASE_EXPECT_EQ(1, handle->get_finished_transactions().count("part-uuid-wb-a"));
   CASE_EXPECT_EQ(1, recorder.count("do_event"));

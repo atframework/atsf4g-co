@@ -37,7 +37,10 @@
 #include <rpc/rpc_common_types.h>
 #include <rpc/rpc_utils.h>
 
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 user::internal_flag_guard_t::internal_flag_guard_t() : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
 user::internal_flag_guard_t::~internal_flag_guard_t() { reset(); }
@@ -141,7 +144,7 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_async_jobs_manager_->create_init(ctx);
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
-////////////////// 业务Manager开始 ////////////////////
+  ////////////////// 业务Manager开始 ////////////////////
   // TODO init all interval checkpoint
 
   // TODO init items
@@ -216,7 +219,7 @@ bool user::is_dirty() const {
   if (RET) {                            \
     return RET;                         \
   }                                     \
-  RET = EXPR
+  RET = EXPR  // NOLINT(bugprone-macro-parentheses)
 
   //! === manager implement === 检查是否有脏数据
   USER_CHECK_RET_DIRTY(ret, user_async_jobs_manager_->is_dirty());

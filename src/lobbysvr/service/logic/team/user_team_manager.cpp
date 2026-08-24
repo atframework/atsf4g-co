@@ -261,7 +261,7 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
       return true;
     }
 
-    return remove_pending_invitation(ctx, invitation->team_key());
+    remove_pending_invitation(ctx, invitation->team_key());
   } while (false);
 
   // 快速查找插入点，大部分情况下应该是 append 到末尾

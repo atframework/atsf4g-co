@@ -541,6 +541,122 @@ CASE_TEST(component_distributed_transaction_client, coordinator_terminal_is_only
   CASE_EXPECT_EQ(0, test.stop());
 }
 
+// ============ §4.2 补充：commit 响应 OLD_VERSION（缓存版本落后）时的有界重试 ============
+
+CASE_TEST(component_distributed_transaction_client, commit_old_version_bounded_retry) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  coordinator_mock_state coord_state;
+  auto create_rule = register_coordinator_create_mock(test);
+  auto reject_rule = register_coordinator_reject_mock(test, coord_state);
+  CASE_EXPECT_TRUE(!!create_rule && !!reject_rule);
+
+  client_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto client = atfw::component::memory::stl::make_strong_rc<transaction_client_handle>(vtable);
+
+  const auto commit_name = rpc::transaction::packer::get_full_name_of_commit();
+  const auto query_name = rpc::transaction::packer::get_full_name_of_query();
+
+  // Phase 1: the first four commits hit stale-replica CAS conflicts, the fifth succeeds — the
+  // retry budget (kCoordinatorRpcRetryTimes) is exactly 5 attempts and no query fallback runs.
+  atfw::testing::ss_rule_options conflict_options;
+  conflict_options.times = 4;
+  auto conflict_rule =
+      test.ss().mock_error(commit_name, PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION, conflict_options);
+  auto commit_rule = register_coordinator_commit_mock(test, coord_state);
+  CASE_EXPECT_TRUE(!!conflict_rule && !!commit_rule);
+
+  auto task = test.run_task(
+      "client_commit_old_version_retry", std::chrono::seconds{8},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_client_handle::storage_ptr_type storage;
+        transaction_client_handle::transaction_options client_options;
+        client_options.resolve_retry_interval = std::chrono::milliseconds{10};
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage, client_options)));
+
+        sample_data_type sample_data;
+        CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+        std::unordered_set<std::string> prepared;
+        std::unordered_set<std::string> failed;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed)));
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                       storage->metadata().status());
+        CASE_EXPECT_TRUE(failed.empty());
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{16});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  // 4 conflicts + 1 success = exactly the bounded budget; no query fallback, no reject anywhere.
+  CASE_EXPECT_EQ(5, test.ss().calls(commit_name));
+  CASE_EXPECT_EQ(0, test.ss().calls(query_name));
+  CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()));
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"prepare:pa", "commit:pa"}));
+
+  // Phase 2: every commit hits OLD_VERSION — the loop stops at the budget (no unbounded retry),
+  // then the bounded query converges to the persisted terminal instead of faking a result.
+  recorder.events.clear();
+  conflict_rule.reset();
+  commit_rule.reset();
+  auto always_conflict_rule = test.ss().mock_error(commit_name, PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION);
+  CASE_EXPECT_TRUE(!!always_conflict_rule);
+  auto query_rule = test.ss().mock(
+      query_name, atfw::distributed_system::SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view& request, google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionQueryReq&>(request.body);
+        auto& typed_response = static_cast<atfw::distributed_system::SSDistributeTransactionQueryRsp&>(response);
+        auto* query_storage = typed_response.mutable_storage();
+        protobuf_copy_message(*query_storage->mutable_metadata(), typed_request.metadata());
+        // The coordinator persisted COMMITED although every commit response reported a conflict.
+        query_storage->mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!query_rule);
+
+  const size_t commit_calls_before = test.ss().calls(commit_name);
+  auto task2 = test.run_task(
+      "client_commit_old_version_exhausted", std::chrono::seconds{8},
+      [&client](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_client_handle::storage_ptr_type storage;
+        transaction_client_handle::transaction_options client_options;
+        client_options.resolve_retry_interval = std::chrono::milliseconds{10};
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->create_transaction(ctx, storage, client_options)));
+
+        sample_data_type sample_data;
+        CASE_EXPECT_EQ(0, client->add_participator(ctx, storage, "pa", sample_data));
+
+        std::unordered_set<std::string> prepared;
+        std::unordered_set<std::string> failed;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(client->submit_transaction(ctx, storage, &prepared, &failed)));
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                       storage->metadata().status());
+        CASE_EXPECT_TRUE(failed.empty());
+        RPC_RETURN_CODE(0);
+      });
+  auto result2 = test.wait(task2, std::chrono::seconds{16});
+  CASE_EXPECT_TRUE(result2.task_exited);
+  CASE_EXPECT_EQ(0, result2.result_code);
+  // The budget is exactly kCoordinatorRpcRetryTimes commit attempts — no more, no fewer; the
+  // single successful query then converges the transaction.
+  CASE_EXPECT_EQ(5, test.ss().calls(commit_name) - commit_calls_before);
+  CASE_EXPECT_EQ(1, test.ss().calls(query_name));
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"prepare:pa", "commit:pa"}));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 // ============ DT-002: retry exhaustion never fakes commit ============
 
 CASE_TEST(component_distributed_transaction_client, retry_exhaustion_never_fakes_commit_dt002) {

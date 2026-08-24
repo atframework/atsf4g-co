@@ -62,17 +62,29 @@ CASE_TEST(teamsvr_room_event, sequence_gap_applied_and_ack_monotonic) {
   auto extra = make_user_key(1, 9001);
   env.inject_team_action(team_id, make_injected_add_member(extra, 9001, 0, 0), 1);
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_TRUE(room->find_member(extra, false) != nullptr);
+  auto extra_member = room->find_member(extra, false);
+  CASE_EXPECT_TRUE(extra_member != nullptr);
+  if (!extra_member) {
+    env.clear_rooms();
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  const auto joined_before = protobuf_to_system_clock(extra_member->member_data.joined_timepoint());
+  const size_t member_count_before = room->debug_member_lru_keys().size();
+  const int64_t saved_sequence_before = room->debug_saved_action_sequence();
 
-  auto& fake = env.channel(team_id);
-  int64_t last_sequence = fake.last_sequence();
-
-  // 重复/乱序回放(重推旧日志)不回退状态: 直接重推已存在的成员事件
-  // wal 客户端按 sequence 去重；这里通过快照重放验证幂等(RCV 组也覆盖)
-  env.inject_team_action(team_id, make_injected_add_member(extra, 9001, 0, 0));
+  // 重复/乱序回放(重推旧日志)不回退状态: 重推同一成员的 add_member，但携带不同的显式时间戳——
+  // 若被重复应用，joined_timepoint 会被覆盖成新值；幂等应用则保持首次落库的事实
+  env.inject_team_action(team_id, make_injected_add_member(extra, 9001, 100, 100));
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_TRUE(room->find_member(extra, false) != nullptr);
-  CASE_EXPECT_GE(fake.last_sequence(), last_sequence);
+  auto extra_member_after = room->find_member(extra, false);
+  CASE_EXPECT_TRUE(extra_member_after != nullptr);
+  if (extra_member_after) {
+    CASE_EXPECT_TRUE(joined_before == protobuf_to_system_clock(extra_member_after->member_data.joined_timepoint()));
+  }
+  CASE_EXPECT_EQ(member_count_before, room->debug_member_lru_keys().size());
+  // ack 只前进不回退: 本地已生效序号不重绕
+  CASE_EXPECT_GE(room->debug_saved_action_sequence(), saved_sequence_before);
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

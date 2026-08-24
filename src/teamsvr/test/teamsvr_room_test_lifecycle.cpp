@@ -71,15 +71,8 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_semantics) {
   CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
 
   // 不存在成员: member-not-found
-  (void)env.run("heartbeat_missing", [room](rpc::context& ctx) -> rpc::result_code_type {
-    atfw::team::SSTeamRoomHeartbeatReq hb;
-    auto missing = make_user_key(1, 99999);
-    protobuf_copy_message(*hb.mutable_user_key(), missing);
-    hb.set_user_router_server_id(0x1);
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->heartbeat(ctx, hb)));
-  });
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND,
-                 env.run("heartbeat_missing2", [room](rpc::context& ctx) -> rpc::result_code_type {
+                 env.run("heartbeat_missing", [room](rpc::context& ctx) -> rpc::result_code_type {
                    atfw::team::SSTeamRoomHeartbeatReq hb;
                    auto missing = make_user_key(1, 99999);
                    protobuf_copy_message(*hb.mutable_user_key(), missing);
@@ -567,10 +560,10 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
 
 // ============ LIFE-08: 房间始终只有一个下一事件定时器；更早事件可提前，较晚事件不得延后到期事件 ============
 CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
+  // 合法配置(成员离线过期协议下限 30s)下续租点(renew=lease/2=5s)先于成员到期点
   room_test_cfg_values cfg;
-  cfg.member_offline_expire_seconds = 4;  // 让 kick 早于续租(renew=lease/2=5s)
   cfg.compact_log_over_percent = 100000;  // 关闭压缩加速: 搭建日志数已超默认数量触发线，
-  cfg.compact_log_start_seconds = 3600;   // 否则最近事件会被压缩维护(立即)抢占，观察不到 kick
+  cfg.compact_log_start_seconds = 3600;   // 否则最近事件会被压缩维护(立即)抢占
   room_test_env env(cfg);
   if (!env.start()) {
     return;
@@ -585,54 +578,39 @@ CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
     return;
   }
 
-  auto as_seconds = [](std::chrono::system_clock::time_point tp) {
-    return std::chrono::duration_cast<std::chrono::seconds>(tp.time_since_epoch()).count();
-  };
   // 创建快照恢复阶段(持锁前)曾把定时器武装到"立即"(kAcquireLock 空锁分支)，且 reset_room_timer
   // 只提前不延后; 先驱动一次让该立即项触发并重排到真实最近事件，再读取武装时间
   env.drive_timer_ticks();
-  // 最近事件 = 最早成员心跳 + 4s，早于 renew(T0+5)。直接从成员状态推导期望值，
+  // 最近事件 = 续租维护(renew=lease/2=5s，成员到期在 30s 后)。期望值全部从 SUT 状态推导，
   // 不使用“当前 wall clock 距离”的容差断言，避免 CPU 调度跨秒影响结果。
-  const int64_t kick_deadline = as_seconds(room->debug_timer_timeout());
-  auto owner_member = room->find_member(members.owner, false);
-  CASE_EXPECT_TRUE(!!owner_member);
-  if (owner_member) {
-    auto owner_baseline = (std::max)(protobuf_to_system_clock(owner_member->member_data.joined_timepoint()),
-                                     protobuf_to_system_clock(owner_member->member_data.last_heartbeat_timepoint()));
-    CASE_EXPECT_EQ(as_seconds(owner_baseline + std::chrono::seconds{cfg.member_offline_expire_seconds}), kick_deadline);
-  }
-  // 且确实早于续租点(kick 被选中而非 maintenance)
-  {
-    auto ev = room->get_next_timer_event(atfw::util::time::time_utility::now());
-    CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember), static_cast<int32_t>(ev.type));
-  }
+  auto ev = room->get_next_timer_event(atfw::util::time::time_utility::now());
+  CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kMaintenance), static_cast<int32_t>(ev.type));
+  CASE_EXPECT_TRUE(ev.timeout == room->debug_timer_timeout());  // 定时器武装在最近事件上
 
-  // 心跳全员(T0+2): 到期事件未到时不得被更晚事件延后
+  // 心跳全员(T0+2, 成员到期点推到 T0+32): 更晚的事件不得延后已武装的到期定时器
+  const auto armed_before_heartbeat = room->debug_timer_timeout();
   {
     global_now_offset_guard guard(std::chrono::seconds{2});
-    for (const auto& key : {members.owner, members.admin, members.normal}) {
-      CASE_EXPECT_EQ(0, env.run("heartbeat_all", [room, &key](rpc::context& ctx) -> rpc::result_code_type {
-        atfw::team::SSTeamRoomHeartbeatReq hb;
-        protobuf_copy_message(*hb.mutable_user_key(), key);
-        hb.set_user_router_server_id(0x1234);
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->heartbeat(ctx, hb)));
-      }));
-    }
-    CASE_EXPECT_EQ(kick_deadline, as_seconds(room->debug_timer_timeout()));  // 不延后
-  }
+    send_heartbeat(env, room, members.owner, 0x1234);
+    send_heartbeat(env, room, members.admin, 0x1234);
+    send_heartbeat(env, room, members.normal, 0x1234);
+    CASE_EXPECT_TRUE(armed_before_heartbeat == room->debug_timer_timeout());  // 不延后
 
-  // 推进到续租点: 心跳后无人到期 -> 续租维护执行
-  size_t updates_before = 0;
-  {
-    auto& fake0 = env.channel(team_id);
-    updates_before = fake0.update_calls();
-  }
-  {
-    global_now_offset_guard guard(std::chrono::seconds{6});
-    env.drive_timer_ticks();
-    CASE_EXPECT_EQ(0, env.sync(team_id));
-    CASE_EXPECT_GT(env.channel(team_id).update_calls(), updates_before);    // 续租 update 已发
-    CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);  // 心跳有效，未被误踢
+    // 续租点依次到期触发维护(每次续租一个 update)，心跳有效的成员不得被误踢。
+    // 每轮推进 6s，与两侧事件边界各留秒级余量，真实耗时偏移不可能越过边界
+    size_t updates_before = env.channel(team_id).update_calls();
+    for (int round = 0; round < 5; ++round) {
+      guard.advance(std::chrono::seconds{round == 0 ? 4 : 6});  // T0+6,+12,+18,+24,+30
+      env.drive_timer_ticks();
+    }
+    CASE_EXPECT_GE(env.channel(team_id).update_calls(), updates_before + 5);
+    CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);
+
+    // 续租已推进到 T0+35 之后，成员到期点(T0+32)成为最近事件: 成员事件被正确选中且未提前触发
+    guard.advance(std::chrono::seconds{1});  // T0+31
+    ev = room->get_next_timer_event(atfw::util::time::time_utility::now());
+    CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember), static_cast<int32_t>(ev.type));
+    CASE_EXPECT_TRUE(room->find_member(members.owner, false) != nullptr);
   }
 
   env.clear_rooms();

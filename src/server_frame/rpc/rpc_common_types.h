@@ -45,6 +45,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready<void> {
   ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
 #endif
 
+  ATFW_UTIL_FORCEINLINE void unwrap() const noexcept {}
+
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
   bool await_ready() const noexcept { return true; }
@@ -65,6 +67,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready {
 #if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
   ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
 #endif
+
+  ATFW_UTIL_FORCEINLINE value_type unwrap() const noexcept { return result_data_; }
 
   ATFW_UTIL_FORCEINLINE operator value_type() const noexcept { return result_data_; }
 

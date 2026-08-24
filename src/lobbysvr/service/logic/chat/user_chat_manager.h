@@ -56,6 +56,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
 
+  inline const std::string& get_subscriber_key() const noexcept { return subscriber_key_; }
+
   void foreach_channel(
       atfw::util::nostd::function_ref<bool(const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&)>
           callback) const;
@@ -100,7 +102,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
    * @param fn 事件回调函数
    */
   template <class T, class = atfw::util::nostd::enable_if_t<std::is_base_of<::google::protobuf::Message, T>::value>>
-  static void global_setup_private_channel_event_callback(uintptr_t unique_guard, chat_channel_event_callback_t ATFW_UTIL_MACRO_NONNULL fn) {
+  static void global_setup_private_channel_event_callback(uintptr_t unique_guard,
+                                                          chat_channel_event_callback_t ATFW_UTIL_MACRO_NONNULL fn) {
     if (global_setup_private_channel_event_is_existed(unique_guard)) {
       return;
     }
