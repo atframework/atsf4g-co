@@ -37,6 +37,11 @@ DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
                                                  const atfw::dtmq::DChannelMessage& channel_log) noexcept {
   uint64_t content_hash = static_cast<uint64_t>(channel_log.detail().command_case());
   switch (channel_log.detail().command_case()) {
+    // 创建频道的包比较特殊，如果频道重建可能导致服务器数据重置，但客户端有老数据。
+    // 此时应该将previous hash_code重置为0，避免两边的hash_code不一致导致客户端数据无法被覆盖
+    case atfw::dtmq::DChannelMessageDetail::kCreate:
+      previous = 0;
+      break;
     case atfw::dtmq::DChannelMessageDetail::kText:
       content_hash = XXH64(channel_log.detail().text().data(), channel_log.detail().text().size(),
                            static_cast<XXH64_hash_t>(previous));
@@ -56,7 +61,12 @@ DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
 }
 
 DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id, uint64_t instance_id) {
-  return atfw::util::string::format("channel:{}:{}:{}", type_id, zone_id, instance_id);
+  return atfw::util::string::format("channel:{}:{}:D{}", type_id, zone_id, instance_id);
+}
+
+DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id,
+                                                        gsl::string_view instance_name) {
+  return atfw::util::string::format("channel:{}:{}:N{}", type_id, zone_id, instance_name);
 }
 
 DTMQ_COMMON_SDK_API uint32_t parse_unicast_channel_type_from_channel_id(gsl::string_view channel_id) {

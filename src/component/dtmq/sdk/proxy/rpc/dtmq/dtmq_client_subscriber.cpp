@@ -2895,12 +2895,16 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
 
         if (log_result < atfw::util::distributed_system::wal_result_code::kOk) {
           if (log_result == atfw::util::distributed_system::wal_result_code::kClientRequireSnapshot) {
-            FCTXLOGINFO(ctx, "Required snapshot first and failed to emplace log for sequence: {}, ignore rest logs",
-                        log_msg.sequence());
+            FCTXLOGINFO(
+                ctx, "Channel {} required snapshot first and failed to emplace log for sequence: {}, ignore rest logs",
+                get_channel_key().channel_id(), log_msg.sequence());
+          } else if (log_result == atfw::util::distributed_system::wal_result_code::kHashCodeMismatch) {
+            FCTXLOGWARNING(ctx, "Channel {} hash code mismatch for sequence: {}, ignore rest logs",
+                           get_channel_key().channel_id(), log_msg.sequence());
           } else {
-            FCTXLOGERROR(ctx, "Failed to emplace log for sequence: {}, result: {}, {}({})", log_msg.sequence(),
-                         static_cast<int32_t>(log_result), result_code,
-                         protobuf_mini_dumper_get_error_msg(result_code));
+            FCTXLOGERROR(ctx, "Channel {} failed to emplace log for sequence: {}, result: {}, {}({})",
+                         get_channel_key().channel_id(), log_msg.sequence(), static_cast<int32_t>(log_result),
+                         result_code, protobuf_mini_dumper_get_error_msg(result_code));
           }
 
           failure_log_sequence = log_msg.sequence();
@@ -2939,6 +2943,9 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
 
   // 如果有错误数据立即触发心跳，触发server端下发快照覆盖错误数据
   if (failure_log_sequence != 0 && !is_internal_subscriber_manager_destroyed()) {
+    // 强制重置last_message_sequence_和last_message_hash_code_，强制触发下一次快照下发。避免后续的心跳触发错误。
+    last_message_sequence_ = 0;
+    last_message_hash_code_ = 0;
     get_internal_subscriber_manager().pending_heartbeat_subscriber.insert(this);
   }
 

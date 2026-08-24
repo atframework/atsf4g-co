@@ -1209,7 +1209,7 @@ CASE_TEST(component_dtmq_subscriber, business_rpc_remote) {
 // ============ channel create -> destroy -> re-create on the same client_subscriber ============
 // The channel lifecycle is driven by destroy/create events in DChannelMessageDetail. After a destroy
 // event the SAME client_subscriber observes is_destroyed(), and a later create event with a higher
-// sequence restores it to ready (on_ready fires again) — no client_subscriber re-creation, no
+// sequence restores it to ready (on_ready fires again) - no client_subscriber re-creation, no
 // unsubscribe/re-subscribe RPC, and message delivery keeps working (no subscription loss).
 CASE_TEST(component_dtmq_subscriber, channel_destroy_and_recreate_restores_ready) {
   atframework::testing::runtime test;
@@ -1345,6 +1345,288 @@ CASE_TEST(component_dtmq_subscriber, channel_destroy_and_recreate_restores_ready
   }
   CASE_EXPECT_TRUE(got_text_after_recreate);
   CASE_EXPECT_EQ(31, subscriber->get_last_message_sequence());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ regression: stale local chain must accept a re-created channel's create log ============
+// Production incident: the server lost its cache and re-created the channel, so the new create log's
+// hash chains from 0 while the client WAL still holds the previous incarnation's tip. Incremental
+// validation rejected the create log (kHashCodeMismatch) on every heartbeat-driven resync and the
+// subscriber never healed. create logs must re-anchor the hash chain (previous is ignored), letting
+// the new incarnation link in without a snapshot.
+CASE_TEST(component_dtmq_subscriber, recreate_with_stale_local_chain_heals_via_create_event) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto subscribe_rule = mock_subscribe_ack(test);
+  CASE_EXPECT_TRUE(!!subscribe_rule);
+
+  auto channel_key = make_channel_key("chan-subscriber-recreate-reanchor");
+  auto subscriber_options = make_subscriber_options("UT:recreate-reanchor");
+  subscriber_options.event_callback_set = rpc::dtmq::client_subscriber::create_event_callback_set();
+  std::vector<std::string> received_texts;
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(
+      *subscriber_options.event_callback_set,
+      [&received_texts](rpc::context&, const subscriber_ptr&, const ::atfw::dtmq::DChannelMessage& data) {
+        received_texts.push_back(data.detail().text());
+      });
+
+  auto subscriber = rpc::dtmq::client_subscriber::create(channel_key, subscriber_options);
+  CASE_EXPECT_TRUE(!!subscriber);
+  if (!subscriber) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_TRUE(drive_heartbeat_round(test, "hb_round"));
+  std::string shared_key = shared_subscriber_key_for();
+
+  // Ready snapshot of incarnation 1 (WAL left empty, so the first log chains from 0).
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_snapshot()->CopyFrom(make_ready_snapshot(channel_key, 10));
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_ready", event_sync));
+  }
+  CASE_EXPECT_TRUE(subscriber->is_ready());
+
+  // Incarnation 1 history cached locally: text@20 chained from 0.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    atfw::dtmq::DChannelMessage msg;
+    msg.set_sequence(20);
+    msg.set_channel_type(channel_key.channel_type());
+    msg.mutable_create_timepoint()->set_seconds(2000);
+    msg.mutable_detail()->set_text("before-recreate");
+    msg.set_hash_code(rpc::dtmq::calculate_hash_code(0, msg));
+    *event_sync.add_channel_message() = msg;
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_old_text", event_sync));
+  }
+  CASE_EXPECT_EQ(20, subscriber->get_last_message_sequence());
+  CASE_EXPECT_EQ(1, static_cast<int>(received_texts.size()));
+
+  // The server lost its cache and re-created the channel: its full resend starts at the new
+  // incarnation's create log (sequence 30, hash chained from 0), followed by new business logs.
+  // The client WAL tip is still incarnation 1's text@20 - the create log must re-anchor the chain.
+  uint64_t recreate_hash = 0;
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    atfw::dtmq::DChannelMessage create_msg;
+    create_msg.set_sequence(30);
+    create_msg.set_channel_type(channel_key.channel_type());
+    create_msg.mutable_create_timepoint()->set_seconds(4000);
+    create_msg.mutable_detail()->mutable_create()->mutable_create_timepoint()->set_seconds(4000);
+    recreate_hash = rpc::dtmq::calculate_hash_code(0, create_msg);
+    create_msg.set_hash_code(recreate_hash);
+    *event_sync.add_channel_message() = create_msg;
+
+    atfw::dtmq::DChannelMessage msg;
+    msg.set_sequence(31);
+    msg.set_channel_type(channel_key.channel_type());
+    msg.mutable_create_timepoint()->set_seconds(4100);
+    msg.mutable_detail()->set_text("after-recreate-reanchor");
+    msg.set_hash_code(rpc::dtmq::calculate_hash_code(recreate_hash, msg));
+    *event_sync.add_channel_message() = msg;
+
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_recreate", event_sync));
+  }
+  // Healed purely by the incremental stream: no snapshot, no failure-driven heartbeat requeued.
+  CASE_EXPECT_TRUE(subscriber->is_ready());
+  CASE_EXPECT_EQ(30, subscriber->get_create_sequence());
+  CASE_EXPECT_EQ(31, subscriber->get_last_message_sequence());
+  CASE_EXPECT_FALSE(rpc::dtmq::client_subscriber::global_has_pending_heartbeat());
+  CASE_EXPECT_EQ(2, static_cast<int>(received_texts.size()));
+  if (received_texts.size() >= 2) {
+    CASE_EXPECT_EQ(std::string("before-recreate"), received_texts[0]);
+    CASE_EXPECT_EQ(std::string("after-recreate-reanchor"), received_texts[1]);
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ regression: hash mismatch on a non-create log resets the advertised position ============
+// When an incremental (non-create) log fails hash validation, the subscriber must stop advertising
+// the stale position: last_message_sequence_/last_message_hash_code_ are reset to 0 and a heartbeat
+// is queued immediately, so the server falls back to a full resend (or snapshot) and the channel
+// heals instead of retrying the same failing incremental sync forever.
+CASE_TEST(component_dtmq_subscriber, hash_mismatch_on_incremental_log_forces_position_reset_and_full_resync) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto channel_key = make_channel_key("chan-subscriber-hash-mismatch-resync");
+
+  // Capture every advertised heartbeat position (last_sequence, last_hash_code) of this channel
+  // while acking. The heartbeat manager is a process-wide singleton, so filter by channel id.
+  std::vector<std::pair<int64_t, uint64_t>> heartbeat_positions;
+  auto subscribe_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_subscribe(), atfw::dtmq::SSChannelSubscribeReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelSubscribeRsp::descriptor()->full_name(),
+      [&heartbeat_positions, &channel_key](const atframework::testing::ss_request_view& request,
+                                           google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSubscribeReq&>(request.body);
+        auto& typed_response = static_cast<atfw::dtmq::SSChannelSubscribeRsp&>(response);
+        for (const auto& heartbeat : typed_request.heartbeat()) {
+          if (heartbeat.channel_key().channel_id() == channel_key.channel_id()) {
+            heartbeat_positions.emplace_back(heartbeat.last_sequence(), heartbeat.last_hash_code());
+          }
+          auto* node = typed_response.add_subscribe_node();
+          node->mutable_channel_key()->CopyFrom(heartbeat.channel_key());
+          node->set_server_id(request.target_node_id);
+          node->set_readonly_index(heartbeat.readonly_index());
+        }
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!subscribe_rule);
+
+  auto subscriber_options = make_subscriber_options("UT:hash-mismatch-resync");
+  subscriber_options.event_callback_set = rpc::dtmq::client_subscriber::create_event_callback_set();
+  std::vector<std::string> received_texts;
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(
+      *subscriber_options.event_callback_set,
+      [&received_texts](rpc::context&, const subscriber_ptr&, const ::atfw::dtmq::DChannelMessage& data) {
+        received_texts.push_back(data.detail().text());
+      });
+
+  auto subscriber = rpc::dtmq::client_subscriber::create(channel_key, subscriber_options);
+  CASE_EXPECT_TRUE(!!subscriber);
+  if (!subscriber) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_TRUE(drive_heartbeat_round(test, "hb_round"));
+  std::string shared_key = shared_subscriber_key_for();
+  const size_t initial_heartbeat_count = heartbeat_positions.size();
+
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_snapshot()->CopyFrom(make_ready_snapshot(channel_key, 10));
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_ready", event_sync));
+  }
+  CASE_EXPECT_TRUE(subscriber->is_ready());
+
+  // Local chain: text@20 chained from 0.
+  uint64_t text20_hash = 0;
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    atfw::dtmq::DChannelMessage msg;
+    msg.set_sequence(20);
+    msg.set_channel_type(channel_key.channel_type());
+    msg.mutable_create_timepoint()->set_seconds(2000);
+    msg.mutable_detail()->set_text("chain-tip");
+    text20_hash = rpc::dtmq::calculate_hash_code(0, msg);
+    msg.set_hash_code(text20_hash);
+    *event_sync.add_channel_message() = msg;
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_text20", event_sync));
+  }
+  CASE_EXPECT_EQ(20, subscriber->get_last_message_sequence());
+
+  // A non-create incremental log whose hash does not link to the local tip must be rejected.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    atfw::dtmq::DChannelMessage msg;
+    msg.set_sequence(21);
+    msg.set_channel_type(channel_key.channel_type());
+    msg.mutable_create_timepoint()->set_seconds(2100);
+    msg.mutable_detail()->set_text("corrupted-incremental");
+    msg.set_hash_code(rpc::dtmq::calculate_hash_code(text20_hash, msg) ^ 0x1);  // corrupt the chain link
+    *event_sync.add_channel_message() = msg;
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_corrupted", event_sync));
+  }
+  // The bad log is neither applied nor delivered...
+  CASE_EXPECT_EQ(1, static_cast<int>(received_texts.size()));
+  // ...the advertised position is reset to force a full resync...
+  CASE_EXPECT_EQ(0, subscriber->get_last_message_sequence());
+  // ...and a heartbeat is queued immediately rather than waiting out the heartbeat interval.
+  CASE_EXPECT_TRUE(rpc::dtmq::client_subscriber::global_has_pending_heartbeat());
+
+  // The driven heartbeat advertises (0, 0): the server can no longer confuse this with a valid
+  // incremental position and must fall back to a full resend/snapshot.
+  CASE_EXPECT_TRUE(drive_heartbeat_round(test, "hb_after_mismatch"));
+  CASE_EXPECT_EQ(initial_heartbeat_count + 1, heartbeat_positions.size());
+  if (!heartbeat_positions.empty()) {
+    CASE_EXPECT_EQ(0, heartbeat_positions.back().first);
+    CASE_EXPECT_EQ(0u, heartbeat_positions.back().second);
+  }
+
+  // The server answers with a full resend from the (re-created) channel start; the subscriber heals.
+  uint64_t recreate_hash = 0;
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    atfw::dtmq::DChannelMessage create_msg;
+    create_msg.set_sequence(30);
+    create_msg.set_channel_type(channel_key.channel_type());
+    create_msg.mutable_create_timepoint()->set_seconds(4000);
+    create_msg.mutable_detail()->mutable_create()->mutable_create_timepoint()->set_seconds(4000);
+    recreate_hash = rpc::dtmq::calculate_hash_code(0, create_msg);
+    create_msg.set_hash_code(recreate_hash);
+    *event_sync.add_channel_message() = create_msg;
+
+    atfw::dtmq::DChannelMessage msg;
+    msg.set_sequence(31);
+    msg.set_channel_type(channel_key.channel_type());
+    msg.mutable_create_timepoint()->set_seconds(4100);
+    msg.mutable_detail()->set_text("after-full-resync");
+    msg.set_hash_code(rpc::dtmq::calculate_hash_code(recreate_hash, msg));
+    *event_sync.add_channel_message() = msg;
+
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_full_resync", event_sync));
+  }
+  CASE_EXPECT_TRUE(subscriber->is_ready());
+  CASE_EXPECT_EQ(30, subscriber->get_create_sequence());
+  CASE_EXPECT_EQ(31, subscriber->get_last_message_sequence());
+  CASE_EXPECT_FALSE(rpc::dtmq::client_subscriber::global_has_pending_heartbeat());
+  CASE_EXPECT_EQ(2, static_cast<int>(received_texts.size()));
+  if (received_texts.size() >= 2) {
+    CASE_EXPECT_EQ(std::string("chain-tip"), received_texts[0]);
+    CASE_EXPECT_EQ(std::string("after-full-resync"), received_texts[1]);
+  }
 
   CASE_EXPECT_EQ(0, test.stop());
 }

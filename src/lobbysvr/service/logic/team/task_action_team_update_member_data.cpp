@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
-// @brief Created by owent with mako-generator.py at 2026-08-11 21:34:28
+// @brief Created by owent with mako-generator.py at 2026-08-24 21:41:33
 
-#include "logic/team/task_action_team_set_ready.h"
+#include "logic/team/task_action_team_update_member_data.h"
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -28,14 +28,19 @@
 
 #include <utility>
 
-task_action_team_set_ready::task_action_team_set_ready(dispatcher_start_data_type&& param)
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_update_member_data::task_action_team_update_member_data(
+    dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-task_action_team_set_ready::~task_action_team_set_ready() {}
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API
+    task_action_team_update_member_data::~task_action_team_update_member_data() {}
 
-const char* task_action_team_set_ready::name() const { return "task_action_team_set_ready"; }
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_update_member_data::name() const {
+  return "task_action_team_update_member_data";
+}
 
-task_action_team_set_ready::result_type task_action_team_set_ready::operator()() {
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_update_member_data::result_type
+task_action_team_update_member_data::operator()() {
   // const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
@@ -51,6 +56,10 @@ task_action_team_set_ready::result_type task_action_team_set_ready::operator()()
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-int task_action_team_set_ready::on_success() { return get_result(); }
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API int task_action_team_update_member_data::on_success() {
+  return get_result();
+}
 
-int task_action_team_set_ready::on_failed() { return get_result(); }
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API int task_action_team_update_member_data::on_failed() {
+  return get_result();
+}

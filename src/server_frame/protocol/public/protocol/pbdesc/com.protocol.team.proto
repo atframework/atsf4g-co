@@ -33,13 +33,13 @@ message CSTeamRemoveMemberReq {}
 
 message SCTeamRemoveMemberRsp {}
 
-message CSTeamSetReadyReq {}
+message CSTeamUpdateMemberDataReq {}
 
-message SCTeamSetReadyRsp {}
+message SCTeamUpdateMemberDataRsp {}
 
-message CSTeamSetUnreadyReq {}
+message CSTeamUpdateTeamDataReq {}
 
-message SCTeamSetUnreadyRsp {}
+message SCTeamUpdateTeamDataRsp {}
 
 message CSTeamApplyJoinTeamReq {}
 

@@ -267,17 +267,19 @@ service LobbysvrClientService {
     };
   }
 
-  rpc team_set_ready(atframework.team.CSTeamSetReadyReq) returns (atframework.team.SCTeamSetReadyRsp) {
+  rpc team_update_member_data(atframework.team.CSTeamUpdateMemberDataReq)
+      returns (atframework.team.SCTeamUpdateMemberDataRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
-      api_name: "设置组队准备状态"
+      api_name: "更新组队成员数据"
     };
   }
 
-  rpc team_set_unready(atframework.team.CSTeamSetUnreadyReq) returns (atframework.team.SCTeamSetUnreadyRsp) {
+  rpc team_update_team_data(atframework.team.CSTeamUpdateTeamDataReq)
+      returns (atframework.team.SCTeamUpdateTeamDataRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
-      api_name: "设置组队未准备状态"
+      api_name: "更新组队数据"
     };
   }
 

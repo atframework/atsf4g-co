@@ -144,6 +144,17 @@ ATFW_UTIL_SYMBOL_VISIBLE inline void setup_common_vtable(typename WalObjectType:
 DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id, uint64_t instance_id);
 
 /**
+ * @brief 创建单播频道ID的标准算法
+ *
+ * @param type_id 类型ID
+ * @param zone_id 区域ID
+ * @param instance_name 实例名字
+ * @return std::string 频道ID
+ */
+DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id,
+                                                        gsl::string_view instance_name);
+
+/**
  * @brief 解析单播频道的频道类型
  *
  * @param channel_id 频道ID

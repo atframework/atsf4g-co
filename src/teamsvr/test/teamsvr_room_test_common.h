@@ -47,8 +47,8 @@
 #include <atframework/testing/mock_resource.h>
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
-#include <rpc/team/team_common_api.h>
 #include <rpc/dtmq/dtmq_algorithm.h>
+#include <rpc/team/team_common_api.h>
 #include <string/string_format.h>
 #include <time/time_utility.h>
 
@@ -755,7 +755,8 @@ class room_test_env {
     if (key.channel_type() != kTeamRoomChannelType) {
       return nullptr;
     }
-    // 频道 ID 由 team_api::make_team_room_channel_key 生成的标准单播格式: "channel:<type>:<zone_id>:<team_id>"
+    // 频道 ID 由 team_api::make_team_room_channel_key 生成的标准单播格式: "channel:<type>:<zone_id>:D<team_id>"
+    // (实例段带 D/N 前缀以区分数字/名字实例)
     try {
       const std::string& channel_id = key.channel_id();
       size_t type_begin = channel_id.find(':');
@@ -768,6 +769,9 @@ class room_test_env {
       std::string type_text = channel_id.substr(type_begin + 1, zone_begin - type_begin - 1);
       std::string zone_text = channel_id.substr(zone_begin + 1, team_begin - zone_begin - 1);
       std::string team_text = channel_id.substr(team_begin + 1);
+      if (!team_text.empty() && (team_text.front() == 'D' || team_text.front() == 'N')) {
+        team_text = team_text.substr(1);
+      }
       auto channel_type = std::stoul(type_text);
       auto zone_id = std::stoul(zone_text);
       auto team_id = std::stoll(team_text);

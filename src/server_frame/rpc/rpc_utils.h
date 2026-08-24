@@ -43,6 +43,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "utility/protobuf_mini_dumper.h"
+
 #include "dispatcher/dispatcher_type_defines.h"
 #include "dispatcher/task_type_traits.h"
 #include "rpc/rpc_context.h"
@@ -186,6 +188,9 @@ ATFW_UTIL_SYMBOL_VISIBLE void foreach_received_message(
                    rsp_body->InitializationErrorString());
       continue;
     }
+
+    FCTXLOGDEBUG(ctx, "{} got message {} from sequence: {}\n{}", rpc_name, TResponseMessage::descriptor()->full_name(),
+                 waiter.second->head().sequence(), protobuf_mini_dumper_get_readable(*rsp_body));
 
     callback(waiter.second->head(), *rsp_body);
   }
