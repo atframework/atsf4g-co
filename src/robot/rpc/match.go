@@ -15,8 +15,6 @@ func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType
 	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
 	csBody := &public_protocol_pbdesc.CSMatchingStartReq{
 		LevelSelect: &public_protocol_pbdesc.DLevelSelect{
-			LevelType: levelType,
-			LevelId:   preferredLevelId,
 			LevelIds:  levelIds,
 			Region:    region,
 		},
@@ -76,9 +74,9 @@ func SaveMatchingView(user user_data.User, view *public_protocol_pbdesc.DMatchin
 	}
 	user.SetExtralData("MatchingViewRevision", view.GetViewRevision())
 	user.SetExtralData("MatchingStatus", view.GetStatus())
-	user.SetExtralData("MatchingFactionId", view.GetFactionId())
-	user.Log("matching view: view_revision=%d status=%s unit_id=%d faction_id=%d", view.GetViewRevision(),
-		view.GetStatus().String(), view.GetUnitId(), view.GetFactionId())
+	// user.SetExtralData("MatchingFactionId", view.GetFactionId())
+	user.Log("matching view: view_revision=%d status=%s unit_id=%d", view.GetViewRevision(),
+		view.GetStatus().String(), view.GetUnitId())
 }
 
 func RegisterMatchingLogSyncHandler(user user_data.User) {
