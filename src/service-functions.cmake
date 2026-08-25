@@ -64,6 +64,7 @@ function(project_service_declare_sdk TARGET_NAME SDK_ROOT_DIR)
       project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
     endif()
 
+    project_tool_set_target_incremental_link_database(${TARGET_FULL_NAME})
     generate_for_pb_add_dependencies(${TARGET_FULL_NAME} "${project_service_declare_sdk_GENERATED_FLOW_NAMES}")
 
     if(project_service_declare_sdk_NATIVE_CODE_DECL)
