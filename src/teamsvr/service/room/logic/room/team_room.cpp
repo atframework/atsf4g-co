@@ -20,6 +20,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/dynamic_message.h>
 #include <protocol/config/team_room.config.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
@@ -39,6 +40,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -83,15 +85,97 @@ static void copy_public_permission_data(const google::protobuf::Map<int64_t, atf
   }
 }
 
+// 判断 Any 类型名是否为知名包装类型(google.protobuf.*Value)。这类消息只有单个标量字段，
+// 序列化字节是规范形式: 字节相同解包出来必然一致，直接字节比较即可，无需解包展开
+// 判断消息类型的序列化字节是否为规范形式(字节相同当且仅当语义相同)，命中时 Any 比较无需解包展开:
+// 仅有一个字段且该字段是单数标量(非 message/group、非 map、非 repeated)，
+// 知名包装类型(google.protobuf.*Value)即属此类。
+// 不适用情形: repeated 数值存在 packed/unpacked 两种合法编码；message/map 的字节与字段/条目顺序相关。
+// 注意若发送方携带本端未知的新字段(进入 unknown field set)，字节会不同而已知字段语义相同，
+// 此时按不相等处理(保守拒绝，客户端观察到最新数据后重试即可)
+static bool team_any_has_canonical_bytes(const google::protobuf::Descriptor* descriptor) {
+  if (nullptr == descriptor || descriptor->field_count() != 1) {
+    return false;
+  }
+  const auto* field = descriptor->field(0);
+  return !field->is_repeated() && field->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE;
+}
+
+// 语义比较两个 Any 的值。注意不能只做字节比较: Any.value 是内层消息的序列化字节，protobuf
+// 序列化不是规范化的(字段顺序、内层 map 条目顺序、未知字段、不同语言客户端的序列化实现
+// 都可能产生不同字节)，字节不同不代表语义不等。
+// 规范字节类型(单标量字段，见 team_any_has_canonical_bytes)直接字节比较；其余快路径字节相等
+// 直接通过，否则类型可解析时解包成消息按字段语义比较(与打包布局无关)；类型不在描述符池中
+// (未知类型)回退为字节比较；解析失败视为不相等。
+// arena 非空时解包临时对象分配在 arena 上(通常是 rpc::context 绑定的任务 arena)，减少内存碎片
+static bool team_any_value_equal(const google::protobuf::Any& l, const google::protobuf::Any& r,
+                                 google::protobuf::Arena* arena) {
+  if (l.type_url() != r.type_url()) {
+    return false;
+  }
+
+  // type_url 格式为 "<prefix>/<full.message.Name>"
+  size_t slash_pos = l.type_url().find_last_of('/');
+  gsl::string_view type_name = std::string::npos == slash_pos ? gsl::string_view(l.type_url())
+                                                              : gsl::string_view(l.type_url()).substr(slash_pos + 1);
+  const auto* descriptor =
+      google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(std::string(type_name));
+
+  // 规范字节类型: 字节比较即语义比较
+  if (team_any_has_canonical_bytes(descriptor)) {
+    return l.value() == r.value();
+  }
+  // 快路径: 字节相等必然语义相等
+  if (l.value() == r.value()) {
+    return true;
+  }
+  // 未知类型(含空 type_url)无法解包，字节不同即不相等
+  if (nullptr == descriptor) {
+    return false;
+  }
+
+  google::protobuf::DynamicMessageFactory factory;
+  const auto* prototype = factory.GetPrototype(descriptor);
+  if (nullptr == prototype) {
+    return false;
+  }
+  google::protobuf::Message* l_message = nullptr;
+  google::protobuf::Message* r_message = nullptr;
+  // 无 arena 时的堆分配兜底(arena 上的对象由 arena 统一释放，不需要 holder)
+  std::unique_ptr<google::protobuf::Message> l_holder;
+  std::unique_ptr<google::protobuf::Message> r_holder;
+  if (nullptr != arena) {
+    l_message = prototype->New(arena);
+    r_message = prototype->New(arena);
+  } else {
+    l_holder.reset(prototype->New());
+    r_holder.reset(prototype->New());
+    l_message = l_holder.get();
+    r_message = r_holder.get();
+  }
+  if (nullptr == l_message || nullptr == r_message || !l_message->ParseFromString(l.value()) ||
+      !r_message->ParseFromString(r.value())) {
+    return false;
+  }
+  return atfw::atapp::protobuf_equal(*l_message, *r_message);
+}
+
+// 语义比较 DTeamAnyData: 权限级别 + Any 数据(见 team_any_value_equal)
+static bool team_any_data_equal(const atfw::team::DTeamAnyData& l, const atfw::team::DTeamAnyData& r,
+                                google::protobuf::Arena* arena) {
+  return l.permission() == r.permission() && team_any_value_equal(l.data(), r.data(), arena);
+}
+
 // 逐元素比较 DTeamAnyData 的 map 字段(protobuf_equal 只接受 Message，不能直接比较 Map 容器)
 static bool team_any_data_map_equal(const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& l,
-                                    const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& r) {
+                                    const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& r,
+                                    google::protobuf::Arena* arena) {
   if (l.size() != r.size()) {
     return false;
   }
   for (const auto& kv : l) {
     auto it = r.find(kv.first);
-    if (it == r.end() || !atfw::atapp::protobuf_equal(kv.second, it->second)) {
+    if (it == r.end() || !team_any_data_equal(kv.second, it->second, arena)) {
       return false;
     }
   }
@@ -116,10 +200,11 @@ static inline bool team_condition_range_match(int64_t value,
 // 共享数据等值检查(与关系): expected 中的每个 key 都必须存在于 actual 且 Any 值相等；
 // actual 中额外存在的 key 不影响判定(条件只约束它列出的子集)
 static bool team_shared_data_match(const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& actual,
-                                   const google::protobuf::Map<int64_t, google::protobuf::Any>& expected) {
+                                   const google::protobuf::Map<int64_t, google::protobuf::Any>& expected,
+                                   google::protobuf::Arena* arena) {
   for (const auto& kv : expected) {
     auto it = actual.find(kv.first);
-    if (it == actual.end() || !atfw::atapp::protobuf_equal(it->second.data(), kv.second)) {
+    if (it == actual.end() || !team_any_value_equal(it->second.data(), kv.second, arena)) {
       return false;
     }
   }
@@ -128,8 +213,8 @@ static bool team_shared_data_match(const google::protobuf::Map<int64_t, atfw::te
 
 // 单个成员是否满足成员条件(与关系): 共享成员数据等值 + 角色范围
 static bool team_member_condition_match(const atfw::team::DTeamMemberConditionChecker& condition,
-                                        const team_room::member_runtime_data& member) {
-  if (!team_shared_data_match(member.member_data.shared_member_data(), condition.shared_member_data())) {
+                                        const team_room::member_runtime_data& member, google::protobuf::Arena* arena) {
+  if (!team_shared_data_match(member.member_data.shared_member_data(), condition.shared_member_data(), arena)) {
     return false;
   }
   return !condition.has_permission() ||
@@ -779,7 +864,8 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
             protobuf_to_system_clock(join_request.expired_timepoint()) &&
         atfw::atapp::protobuf_equal(existing->second->requester_private_channel(),
                                     join_request.requester_private_channel()) &&
-        team_any_data_map_equal(existing->second->member_admission_data(), join_request.member_admission_data())) {
+        team_any_data_map_equal(existing->second->member_admission_data(), join_request.member_admission_data(),
+                                ctx.get_protobuf_arena().get())) {
       RPC_RETURN_CODE(0);
     }
 
@@ -1728,23 +1814,24 @@ atfw::team::EnTeamPermissionRole team_room::get_reject_invitation_role() const {
 bool team_room::is_join_request_allowed() const { return !storage_.configure().disable_join_request(); }
 
 bool team_room::check_update_conditions(
-    const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
   // 未携带条件列表表示无附加检查(保持无条件的既有行为)
   if (conditions.empty()) {
     return true;
   }
   // checker 之间是或关系: 任一 checker 通过即整体通过
   for (const auto& checker : conditions) {
-    if (check_condition_checker(checker)) {
+    if (check_condition_checker(ctx, checker)) {
       return true;
     }
   }
   return false;
 }
 
-bool team_room::check_condition_checker(const atfw::team::DTeamConditionChecker& checker) {
+bool team_room::check_condition_checker(rpc::context& ctx, const atfw::team::DTeamConditionChecker& checker) {
   // 共享队伍数据等值检查(与关系)
-  if (!team_shared_data_match(storage_.shared_team_data(), checker.shared_team_data())) {
+  if (!team_shared_data_match(storage_.shared_team_data(), checker.shared_team_data(),
+                              ctx.get_protobuf_arena().get())) {
     return false;
   }
 
@@ -1756,26 +1843,27 @@ bool team_room::check_condition_checker(const atfw::team::DTeamConditionChecker&
 
   // 成员条件组(与关系): 所有条件组都必须满足
   for (const auto& group : checker.member_condition_group()) {
-    if (!check_member_condition_group(group)) {
+    if (!check_member_condition_group(ctx, group)) {
       return false;
     }
   }
   return true;
 }
 
-bool team_room::check_member_condition_group(const atfw::team::DTeamConditionChecker::DMemberConditionGroup& group) {
+bool team_room::check_member_condition_group(rpc::context& ctx,
+                                             const atfw::team::DTeamConditionChecker::DMemberConditionGroup& group) {
   const auto& condition = group.member_condition();
   switch (group.scope_type_case()) {
     case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kUserKey: {
       // 指定成员: 成员必须存在且满足条件
       auto member = find_member(group.user_key(), false);
-      return member && team_member_condition_match(condition, *member);
+      return member && team_member_condition_match(condition, *member, ctx.get_protobuf_arena().get());
     }
     case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kAllMembers: {
       // 所有成员都满足条件(空队伍视为 vacuously true)
       bool all_match = true;
-      foreach_member([&condition, &all_match](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
-        if (!team_member_condition_match(condition, *member)) {
+      foreach_member([&condition, &ctx, &all_match](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+        if (!team_member_condition_match(condition, *member, ctx.get_protobuf_arena().get())) {
           all_match = false;
           return false;
         }
@@ -1786,8 +1874,8 @@ bool team_room::check_member_condition_group(const atfw::team::DTeamConditionChe
     case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kAnyMembers: {
       // 任一成员满足条件即可
       bool any_match = false;
-      foreach_member([&condition, &any_match](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
-        if (team_member_condition_match(condition, *member)) {
+      foreach_member([&condition, &ctx, &any_match](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+        if (team_member_condition_match(condition, *member, ctx.get_protobuf_arena().get())) {
           any_match = true;
           return false;
         }
@@ -1840,10 +1928,10 @@ bool team_room::check_member_condition_group(const atfw::team::DTeamConditionChe
   int64_t visited_count = 0;
   bool decided = false;
   bool passed = false;
-  foreach_member([&condition, &satisfied_count, &visited_count, pass_at, fail_above, total_count, max_never_violated,
-                  &decided, &passed](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+  foreach_member([&condition, &ctx, &satisfied_count, &visited_count, pass_at, fail_above, total_count,
+                  max_never_violated, &decided, &passed](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
     ++visited_count;
-    if (team_member_condition_match(condition, *member)) {
+    if (team_member_condition_match(condition, *member, ctx.get_protobuf_arena().get())) {
       ++satisfied_count;
       // 超过 max 上限，提前拒绝
       if (satisfied_count > fail_above) {
@@ -1872,7 +1960,8 @@ bool team_room::check_member_condition_group(const atfw::team::DTeamConditionChe
   return satisfied_count >= pass_at && satisfied_count <= fail_above;
 }
 
-rpc::result_code_type team_room::check_action_permission(const PROJECT_NAMESPACE_ID::DUserIDKey& operator_key,
+rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
+                                                         const PROJECT_NAMESPACE_ID::DUserIDKey& operator_key,
                                                          const atfw::team::DTeamAction& action) {
   if (destroyed_) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
@@ -1929,14 +2018,14 @@ rpc::result_code_type team_room::check_action_permission(const PROJECT_NAMESPACE
       ret = is_self(action.member_update().user_key()) ? require_member() : require_role(get_manage_member_role());
       // 携带更新条件时还需满足至少一个 checker(或关系，内部与关系)，通过后的最终事件数据
       // 会被裁剪掉 condition 字段(见 send_action)
-      if (ret == 0 && !check_update_conditions(action.member_update().condition())) {
+      if (ret == 0 && !check_update_conditions(ctx, action.member_update().condition())) {
         ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
       }
       break;
     case atfw::team::DTeamAction::kTeamUpdate:
       ret = require_role(get_update_team_data_role());
       // 与 member_update 相同: 携带更新条件时需满足至少一个 checker
-      if (ret == 0 && !check_update_conditions(action.team_update().condition())) {
+      if (ret == 0 && !check_update_conditions(ctx, action.team_update().condition())) {
         ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
       }
       break;

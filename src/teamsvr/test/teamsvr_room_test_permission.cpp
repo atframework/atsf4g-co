@@ -1,8 +1,9 @@
 // Copyright 2026 atframework
 //
 // teamsvr-room 权限与"拒绝时零写入"用例(TEAM_ROOM_TEST_PLAN.md §4.2 PERM-01~14)。
-// COND-01~05 覆盖 member_update/team_update 的 DTeamConditionChecker 数据条件检查
-// (共享队伍/成员数据等值、成员数量范围、成员条件组 scope、checker 或关系/内部与关系)与通过后裁剪。
+// COND-01~06 覆盖 member_update/team_update 的 DTeamConditionChecker 数据条件检查
+// (共享队伍/成员数据等值含 Any 语义比较、成员数量/百分比范围、成员条件组 scope、checker 或关系/内部
+// 与关系)与通过后裁剪。
 // 所有失败断言均带统一零写入门禁: team 房间频道 send/update/reset_lock/destroy 调用数与
 // 个人频道通知数保持不变。
 
@@ -11,6 +12,8 @@
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
+
+#include <google/protobuf/wrappers.pb.h>
 
 #include <atframework/testing/ss_action.h>
 
@@ -45,8 +48,8 @@ int32_t run_send_message_action(room_test_env& env, int64_t team_id, const PROJE
 int32_t check_permission(room_test_env& env, const team_room::ptr_t& room,
                          const PROJECT_NAMESPACE_ID::DUserIDKey& sender, const atfw::team::DTeamAction& action) {
   return env.run("check_permission",
-                 [room, sender, action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(sender, action)));
+                 [room, sender, action](rpc::context& ctx) -> rpc::result_code_type {
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, sender, action)));
                  });
 }
 
@@ -931,9 +934,9 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
 
   // check_action_permission 直接路径同样返回 invalid param
   (void)env.run("check_direct",
-                [room, members, empty_action](ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) -> rpc::result_code_type {
+                [room, members, empty_action](rpc::context& ctx) -> rpc::result_code_type {
                   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
-                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(members.owner, empty_action)));
+                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, empty_action)));
                   RPC_RETURN_CODE(0);
                 });
 
@@ -1484,6 +1487,107 @@ CASE_TEST(teamsvr_room_permission, member_condition_group_percent) {
     CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
     expect_no_write(fake, env, before);
   }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+// ============ COND-06: Any 语义比较(打包字节布局不同但语义相同必须判定相等) ============
+CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  const std::string key_type_url =
+      "type.googleapis.com/" + std::string(atfw::team::DTeamKey::descriptor()->full_name());
+
+  // DTeamKey(team_id=1, zone_id=2) 的规范字节是 [field1, field2]；逆序字节语义相同但字节不同
+  atfw::team::DTeamKey key;
+  key.set_team_id(1);
+  key.set_zone_id(2);
+  const std::string canonical = key.SerializeAsString();
+  CASE_EXPECT_EQ(4u, canonical.size());
+  const std::string reversed = canonical.substr(2) + canonical.substr(0, 2);
+  CASE_EXPECT_NE(canonical, reversed);
+
+  auto write_any_data = [&env, team_id, &members](int64_t data_key, const std::string& type_url,
+                                                  const std::string& value) {
+    atfw::team::DTeamAction action;
+    auto* data = (*action.mutable_team_update()->mutable_shared_team_data())[data_key].mutable_data();
+    data->set_type_url(type_url);
+    data->set_value(value);
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  };
+
+  auto check_any_condition = [&env, &room, &members](int64_t data_key, const std::string& type_url,
+                                                    const std::string& value) {
+    atfw::team::DTeamAction action = make_team_update_data_action(60, "probe");
+    auto& expect = (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[data_key];
+    expect.set_type_url(type_url);
+    expect.set_value(value);
+    return check_permission(env, room, members.normal, action);
+  };
+
+  // 预置: [42] 存放字段逆序打包的 DTeamKey
+  write_any_data(42, key_type_url, reversed);
+
+  // 条件用规范字节序: 字节不同但语义相同 -> 通过
+  CASE_EXPECT_EQ(0, check_any_condition(42, key_type_url, canonical));
+  // 条件字节与存储一致(逆序) -> 快路径通过
+  CASE_EXPECT_EQ(0, check_any_condition(42, key_type_url, reversed));
+  // 语义不同(team_id=9): 拒绝且零写入
+  {
+    atfw::team::DTeamKey other_key;
+    other_key.set_team_id(9);
+    other_key.set_zone_id(2);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_any_condition(42, key_type_url, other_key.SerializeAsString()));
+    expect_no_write(fake, env, before);
+  }
+
+  // 未知类型(type_url 无法解析)回退字节比较: 同字节通过，不同字节拒绝
+  const std::string unknown_type_url = "type.googleapis.com/unknown.NotExist";
+  write_any_data(43, unknown_type_url, "abc");
+  CASE_EXPECT_EQ(0, check_any_condition(43, unknown_type_url, "abc"));
+  {
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_any_condition(43, unknown_type_url, "abd"));
+    expect_no_write(fake, env, before);
+  }
+
+  // 单标量字段类型(包装类型 google.protobuf.Int64Value): 字节即规范形式，直接字节比较
+  const std::string int64_type_url = "type.googleapis.com/" + std::string(google::protobuf::Int64Value::descriptor()->full_name());
+  google::protobuf::Int64Value five;
+  five.set_value(5);
+  write_any_data(44, int64_type_url, five.SerializeAsString());
+  // 字节相等 -> 通过
+  CASE_EXPECT_EQ(0, check_any_condition(44, int64_type_url, five.SerializeAsString()));
+  // 默认值 0 序列化为空字节: 与已存值 5 语义不同 -> 拒绝且零写入
+  {
+    google::protobuf::Int64Value zero;
+    CASE_EXPECT_TRUE(zero.SerializeAsString().empty());
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_any_condition(44, int64_type_url, zero.SerializeAsString()));
+    expect_no_write(fake, env, before);
+  }
+  // 存储默认值(空字节)与条件默认值(空字节)字节相等 -> 通过
+  google::protobuf::Int64Value zero;
+  write_any_data(45, int64_type_url, zero.SerializeAsString());
+  CASE_EXPECT_EQ(0, check_any_condition(45, int64_type_url, zero.SerializeAsString()));
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
