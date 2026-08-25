@@ -9,6 +9,7 @@
 // clang-format on
 
 #include <protocol/config/lobbysvr_config.pb.h>
+#include <protocol/pbdesc/team_room_service.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
