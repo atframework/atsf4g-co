@@ -189,6 +189,9 @@ message DTeamMemberJoinData {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey user_key = 2;
   atframework.dtmq.DChannelIdKey team_channel = 3;
+  EnTeamPermissionRole user_role = 4;
+
+  atframework.shared.DUserIDKey captain_user_key = 11;
 }
 
 message DTeamMemberRemoveData {

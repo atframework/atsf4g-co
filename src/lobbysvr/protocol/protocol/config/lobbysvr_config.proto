@@ -24,6 +24,10 @@ message lobbysvr_chat_cfg {
 message lobbysvr_team_cfg {
   google.protobuf.Duration exit_retry_interval = 1
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
+  google.protobuf.Duration exit_timeout = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "35s" min_value: "15s" }];
+  google.protobuf.Duration wait_add_member_timeout = 3
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
 }
 
 message lobbysvr_cfg {

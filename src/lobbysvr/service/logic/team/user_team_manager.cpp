@@ -9,6 +9,7 @@
 // clang-format on
 
 #include <protocol/pbdesc/com.struct.team.pb.h>
+#include <protocol/pbdesc/svr.const.err.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -130,7 +131,7 @@ class user_team_manager_utility {
           FCTXLOGINFO(ctx, "{} has joined team {}:{} from {}:{}", user_inst, joined_team.team_key().zone_id(),
                       joined_team.team_key().team_id(), joined_team.user_key().zone_id(),
                       joined_team.user_key().user_id());
-          team_mgr.add_team(ctx, get_team_type(joined_team), joined_team.team_key(), joined_team.team_channel());
+          team_mgr.add_team(ctx, get_team_type(joined_team), joined_team);
         }
         break;
       }
@@ -176,31 +177,91 @@ int32_t user_team_manager::login_init(rpc::context&) {
 void user_team_manager::refresh_feature_limit_second(rpc::context& ctx) {
   cleanup_expired_join_request(ctx);
   cleanup_expired_invitation(ctx);
+}
 
-  // 触发退出重试
-  for (const auto& group : team_group_) {
+void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
+  // 每分钟清理，大多数情况都会由事件触发清理。这里仅仅是一个防泄露的补充
+  std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
+      can_be_removed_keys;
+  std::unordered_set<uint32_t> empty_group_types;
+  for (auto& group : team_group_) {
+    can_be_removed_keys.clear();
+
+    // 清理移除队列
     for (const auto& exiting_team : group.second.pending_to_exit) {
       exiting_team.second->retry_send_exit_team_request(ctx);
+      if (exiting_team.second->can_be_removed(ctx)) {
+        can_be_removed_keys.emplace(exiting_team.first);
+      }
     }
+
+    for (const auto& team_key : can_be_removed_keys) {
+      group.second.pending_to_exit.erase(team_key);
+      team_index_.erase(team_key);
+    }
+
+    // 如果当前队伍长时间都检测不到在队伍中，则是数据链路出现问题，直接准备退出
+    if (group.second.current && group.second.current->wait_to_be_member_but_timeout(ctx)) {
+      FCTXLOGINFO(ctx, "{} current team {}:{} wait to be member but timeout, prepare to exit", *owner_,
+                  group.second.current->get_team_key().zone_id(), group.second.current->get_team_key().team_id());
+      remove_team(ctx, group.second.current->get_team_key(), true, atfw::team::EN_TEAM_EXIT_REASON_EXPIRED);
+    }
+
+    if (group.second.pending_to_exit.empty() && !group.second.current) {
+      empty_group_types.emplace(group.first);
+    }
+  }
+
+  for (const auto& group_type : empty_group_types) {
+    team_group_.erase(group_type);
   }
 }
 
-void user_team_manager::init_from_table_data(rpc::context& /*ctx*/,
-                                             const PROJECT_NAMESPACE_ID::table_user& user_table) {
+void user_team_manager::init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   const auto& team_data = user_table.team_data();
   processed_private_chat_channel_sequence_ = team_data.processed_private_chat_channel_sequence();
+
+  for (const auto& group_data : team_data.group()) {
+    if (group_data.has_current()) {
+      const auto& current_team_data = group_data.current();
+      add_team(ctx, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(group_data.team_type()), current_team_data);
+    }
+  }
 }
 
 int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_user& table) const {
   auto* team_data = table.mutable_team_data();
 
   team_data->set_processed_private_chat_channel_sequence(processed_private_chat_channel_sequence_);
+
+  for (const auto& group : team_group_) {
+    auto* group_data = team_data->add_group();
+    if (nullptr == group_data) {
+      return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+    }
+
+    if (group.second.current) {
+      auto* current_team_data = group_data->mutable_current();
+      if (nullptr == current_team_data) {
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      }
+      group.second.current->dump(*current_team_data);
+    }
+
+    // pending_to_exit 里的队伍理论上都尝试过发送exit消息了，如果发送失败，也可以等超时自动清理
+    // 不用再落地数据库再恢复
+  }
   return 0;
 }
 
 bool user_team_manager::is_dirty() const { return is_dirty_; }
 
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
+
+void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                    atfw::team::EnTeamExitReason exit_reason) {
+  remove_team(ctx, team_key, true, exit_reason);
+}
 
 void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequence) {
   if (processed_private_chat_channel_sequence_ == sequence) {
@@ -212,9 +273,9 @@ void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequ
 }
 
 void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType team_type,
-                                 const atfw::team::DTeamKey& team_key, const atfw::dtmq::DChannelIdKey& channel_key) {
+                                 const atfw::team::DTeamMemberJoinData& join_data) {
   // Implementation here
-  if (team_key.team_id() == 0 || channel_key.channel_id().empty()) {
+  if (join_data.team_key().team_id() == 0 || join_data.team_channel().channel_id().empty()) {
     return;
   }
 
@@ -227,6 +288,8 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
     }
   }
 
+  const auto& team_key = join_data.team_key();
+  const auto& channel_key = join_data.team_channel();
   auto iter = team_index_.find(team_key);
   if (team_index_.end() != iter && iter->second) {
     FCTXLOGINFO(ctx, "{} add_team: team {}:{} already exists, skip to add a new one", *owner_, team_key.zone_id(),
@@ -235,7 +298,7 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
     return;
   }
 
-  auto team_ptr = user_team::create(*this, static_cast<uint32_t>(team_type), team_key, channel_key);
+  auto team_ptr = user_team::create(ctx, *this, static_cast<uint32_t>(team_type), team_key, channel_key);
   if (!team_ptr) {
     FCTXLOGERROR(ctx, "{} add_team: create user_team failed for team {}:{}", *owner_, team_key.zone_id(),
                  team_key.team_id());
@@ -250,7 +313,10 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
   group.current = team_ptr;
   team_index_.emplace(team_key, team_ptr);
 
+  team_ptr->init_cached_data(join_data.captain_user_key(), join_data.user_role());
   team_ptr->make_current_actived(ctx);
+
+  team_ptr->try_load_snapshot(ctx);
 }
 
 void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, bool send_exit,
@@ -265,23 +331,39 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
     return;
   }
   auto team_ptr = iter->second;
+  if (send_exit) {
+    team_ptr->send_exit_team_request(ctx, exit_reason);
+  } else if (!team_ptr->is_exiting()) {
+    team_ptr->set_exit_team(ctx, exit_reason);
+  }
 
   auto iter_group = team_group_.find(team_ptr->get_team_type());
   if (iter_group != team_group_.end()) {
-    iter_group->second.pending_to_exit.erase(team_key);
     if (iter_group->second.current == team_ptr) {
+      // 如果是当前队伍，且已经不是成员了或退出超时，则直接移除
+      if (team_ptr->can_be_removed(ctx)) {
+        iter_group->second.pending_to_exit.erase(team_key);
+        team_index_.erase(iter);
+      } else {
+        // 如果是当前队伍，仍然是成员，移入到退出列表中，以便后续重试发送移除成员的消息
+        iter_group->second.pending_to_exit.emplace(iter_group->second.current->get_team_key(),
+                                                   iter_group->second.current);
+      }
       iter_group->second.current.reset();
+    } else {
+      // 如果已经在退出列表中，检查是否可以直接移除
+      auto iter_pending = iter_group->second.pending_to_exit.find(team_key);
+      if (iter_pending != iter_group->second.pending_to_exit.end()) {
+        if (iter_pending->second->can_be_removed(ctx)) {
+          iter_group->second.pending_to_exit.erase(iter_pending);
+          team_index_.erase(iter);
+        }
+      }
     }
 
     if (iter_group->second.pending_to_exit.empty() && !iter_group->second.current) {
       team_group_.erase(iter_group);
     }
-  }
-
-  team_index_.erase(iter);
-
-  if (send_exit) {
-    team_ptr->send_exit_team_request(ctx, exit_reason);
   }
 }
 

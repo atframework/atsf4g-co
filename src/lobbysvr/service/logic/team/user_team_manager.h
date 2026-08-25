@@ -56,6 +56,7 @@ class user_team_manager {
   ATFW_EXPLICIT_NODISCARD_ATTR int32_t login_init(rpc::context&);
 
   void refresh_feature_limit_second(rpc::context&);
+  void refresh_feature_limit_minute(rpc::context&);
 
   // 从table数据初始化
   void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
@@ -69,12 +70,13 @@ class user_team_manager {
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
 
+  void remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, atfw::team::EnTeamExitReason exit_reason);
+
  private:
   void set_processed_private_chat_channel_sequence(int64_t sequence);
 
-  void add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType team_type, const atfw::team::DTeamKey& team_key,
-                const atfw::dtmq::DChannelIdKey& channel_key);
-
+  void add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType team_type,
+                const atfw::team::DTeamMemberJoinData& join_data);
   void remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, bool send_exit,
                    atfw::team::EnTeamExitReason exit_reason);
 

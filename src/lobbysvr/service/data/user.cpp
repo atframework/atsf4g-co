@@ -264,6 +264,7 @@ void user::refresh_feature_limit(rpc::context &ctx) {
 
     // 每分钟仅需要执行一次的refresh_feature_limit
     user_cache_manager_->refresh_feature_limit_minute(ctx);
+    user_team_manager_->refresh_feature_limit_minute(ctx);
 
     ////////////////// 业务Manager开始 ////////////////////
   }

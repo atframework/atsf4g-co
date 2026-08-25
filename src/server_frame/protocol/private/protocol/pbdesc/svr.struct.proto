@@ -9,9 +9,10 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
 
+import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
-import "protocol/common/com.struct.rank.common.proto";
+import "protocol/pbdesc/com.struct.team.proto";
 
 package atframework.shared;
 
@@ -154,4 +155,12 @@ message user_string_mapping_data {}
 
 message user_team_data {
   int64 processed_private_chat_channel_sequence = 1;  // 私聊频道的全局递增发包序号
+
+  message team_group {
+    uint32 team_type = 1;                              // 队伍类型
+    atframework.team.DTeamMemberJoinData current = 2;  // 当前加入的队伍数据
+  }
+
+  // 当前的队伍组数据
+  repeated team_group group = 11;
 }

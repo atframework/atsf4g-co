@@ -46,6 +46,8 @@ lobbysvr:
     push_message_buffer_max_count: 200000
   team:
     exit_retry_interval: 10s
+    exit_timeout: 35s
+    wait_add_member_timeout: 5s
 
 enable_excel_config: true
 enable_session_manager: true

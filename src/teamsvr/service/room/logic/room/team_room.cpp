@@ -1369,6 +1369,16 @@ void team_room::apply_approve_invitation(const atfw::team::DTeamInvitation& invi
   dump_team_key(*joined_info->mutable_team_key());
   protobuf_copy_message(*joined_info->mutable_user_key(), invitee);
   protobuf_copy_message(*joined_info->mutable_team_channel(), channel_key_);
+  protobuf_copy_message(*joined_info->mutable_captain_user_key(), storage_.captain_user_key());
+  {
+    auto member_ptr = find_member(joined_info->user_key(), false);
+    if (member_ptr) {
+      joined_info->set_user_role(member_ptr->member_data.role());
+    } else {
+      joined_info->set_user_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+    }
+  }
+
   atfw::dtmq::DChannelIdKey channel_id = record->invitee_private_channel();
   append_team_member_channel_notification(invitee, std::move(channel_id), std::move(notify_action));
 }
@@ -1436,6 +1446,15 @@ void team_room::apply_approve_join_request(const atfw::team::DTeamJoinRequest& j
   dump_team_key(*joined_info->mutable_team_key());
   protobuf_copy_message(*joined_info->mutable_user_key(), requester);
   protobuf_copy_message(*joined_info->mutable_team_channel(), channel_key_);
+  protobuf_copy_message(*joined_info->mutable_captain_user_key(), storage_.captain_user_key());
+  {
+    auto member_ptr = find_member(joined_info->user_key(), false);
+    if (member_ptr) {
+      joined_info->set_user_role(member_ptr->member_data.role());
+    } else {
+      joined_info->set_user_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+    }
+  }
   atfw::dtmq::DChannelIdKey channel_id = record->requester_private_channel();
   append_team_member_channel_notification(requester, std::move(channel_id), std::move(notify_action));
 }
