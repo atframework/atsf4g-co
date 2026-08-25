@@ -90,7 +90,7 @@ SERVER_FRAME_API user_cache::user_cache(fake_constructor &)
 }
 
 SERVER_FRAME_API user_cache::~user_cache() {
-  FWPLOGDEBUG(*this, "destroyed {}", reinterpret_cast<const void *>(this));
+  FWLOGDEBUG("{} destroyed {}", *this, reinterpret_cast<const void *>(this));
 }
 
 SERVER_FRAME_API bool user_cache::can_be_writable() const {
@@ -114,8 +114,7 @@ SERVER_FRAME_API void user_cache::init(uint64_t user_id, uint32_t zone_id, const
   // ptr_t self = shared_from_this();
 }
 
-SERVER_FRAME_API user_cache::ptr_t user_cache::create(uint64_t user_id, uint32_t zone_id,
-                                                          const std::string &openid) {
+SERVER_FRAME_API user_cache::ptr_t user_cache::create(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
   fake_constructor ctorp;
   ptr_t ret = atfw::memory::stl::make_shared<user_cache>(ctorp);
   if (ret) {
@@ -182,12 +181,12 @@ SERVER_FRAME_API void user_cache::on_logout(rpc::context &) {
 SERVER_FRAME_API void user_cache::on_saved(rpc::context &) {}
 
 SERVER_FRAME_API void user_cache::on_update_session(rpc::context &, const std::shared_ptr<session> &,
-                                                      const std::shared_ptr<session> &) {}
+                                                    const std::shared_ptr<session> &) {}
 
 SERVER_FRAME_API bool user_cache::is_new_user() const { return login_info_.ref().business_login_time() == 0; }
 
 SERVER_FRAME_API void user_cache::init_from_table_data(rpc::context &,
-                                                         const PROJECT_NAMESPACE_ID::table_user &tb_user) {
+                                                       const PROJECT_NAMESPACE_ID::table_user &tb_user) {
   create_init_ = tb_user.create_init();
   const PROJECT_NAMESPACE_ID::table_user *src_tb = &tb_user;
   if (src_tb->has_account_data()) {
@@ -251,9 +250,9 @@ SERVER_FRAME_API void user_cache::send_all_syn_msg(rpc::context &) {}
 
 SERVER_FRAME_API rpc::result_code_type user_cache::await_before_logout_tasks(rpc::context &) { RPC_RETURN_CODE(0); }
 
-SERVER_FRAME_API int32_t
-user_cache::client_rpc_filter(rpc::context & /*ctx*/, task_action_cs_req_base & /*cs_task_action*/,
-                                const atframework::DispatcherOptions * /*dispatcher_options*/) {
+SERVER_FRAME_API int32_t user_cache::client_rpc_filter(rpc::context & /*ctx*/,
+                                                       task_action_cs_req_base & /*cs_task_action*/,
+                                                       const atframework::DispatcherOptions * /*dispatcher_options*/) {
   return 0;
 }
 
@@ -271,8 +270,7 @@ SERVER_FRAME_API std::shared_ptr<session> user_cache::get_session() { return ses
 
 SERVER_FRAME_API bool user_cache::has_session() const { return false == session_.expired(); }
 
-SERVER_FRAME_API void user_cache::load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg,
-                                                             uint64_t ver) {
+SERVER_FRAME_API void user_cache::load_and_move_login_lock(PROJECT_NAMESPACE_ID::table_login_lock &&lg, uint64_t ver) {
   login_lock_.Swap(&lg);
   login_lock_version_ = ver;
 }

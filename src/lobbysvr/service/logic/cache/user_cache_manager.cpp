@@ -226,8 +226,8 @@ void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx
         RPC_RETURN_CODE(res);
       });
   if (notify_task.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke task to notify user cache expired failed, res: {}({})", *notify_task.get_error(),
-                protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
+    FWLOGERROR("{} async_invoke task to notify user cache expired failed, res: {}({})", *owner_,
+               *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
   } else {
     need_notify_user_cache_expired_ = false;
   }
@@ -278,8 +278,8 @@ void user_cache_manager::async_send_update_user_basic_meta_to_cachesvr(rpc::cont
         RPC_RETURN_CODE(ret);
       });
   if (notify_task.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke task to notify user cache update meta failed, res: {}({})",
-                *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
+    FWLOGERROR("{} async_invoke task to notify user cache update meta failed, res: {}({})", *owner_,
+               *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
   } else {
     need_notify_user_meta_expired_ = false;
   }
@@ -558,8 +558,8 @@ void user_cache_manager::async_unwatch_all(rpc::context& ctx) {
         RPC_RETURN_CODE(0);
       });
   if (invoke_task.is_error()) {
-    FWPLOGERROR(*owner_, "invoke task to send watch heartbeat failed, result: {}({})", *invoke_task.get_error(),
-                protobuf_mini_dumper_get_error_msg(*invoke_task.get_error()));
+    FWLOGERROR("{} invoke task to send watch heartbeat failed, result: {}({})", *owner_, *invoke_task.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_task.get_error()));
   }
 }
 
@@ -583,8 +583,8 @@ void user_cache_manager::maybe_async_watch_heartbeat(rpc::context& ctx) {
         RPC_RETURN_CODE(0);
       });
   if (invoke_task.is_error()) {
-    FWPLOGERROR(*owner_, "invoke task to send watch heartbeat failed, result: {}({})", *invoke_task.get_error(),
-                protobuf_mini_dumper_get_error_msg(*invoke_task.get_error()));
+    FWLOGERROR("{} invoke task to send watch heartbeat failed, result: {}({})", *owner_, *invoke_task.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_task.get_error()));
   }
 }
 
@@ -745,7 +745,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
     ret = RPC_AWAIT_CODE_RESULT(
         rpc::cache_api::batch_get_cache(ctx, *watcher, std::move(*cache_pull_keys), *cache_contents));
     if (ret != 0) {
-      FWPLOGERROR(*owner_, "pull cache failed size {}, ret {}", user_map.size(), ret);
+      FWLOGERROR("{} pull cache failed size {}, ret {}", *owner_, user_map.size(), ret);
       RPC_RETURN_CODE(ret);
     }
 

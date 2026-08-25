@@ -231,7 +231,7 @@ GAMECLIENT_RPC_API task_action_login::result_type task_action_login::operator()(
 
   my_sess->set_user(user_inst);
 
-  FWPLOGDEBUG(*user_inst, "login curr data version: {}", user_inst->get_data_version());
+  FWLOGDEBUG("{} login curr data version: {}", *user_inst, user_inst->get_data_version());
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -262,8 +262,8 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
 
   // Session更换，老session要下线
   if (user_inst->get_session() != s) {
-    FWPLOGWARNING(*user_inst, "login success but session changed , remove old session {}:{}", s->get_key().node_id,
-                  s->get_key().session_id);
+    FWLOGWARNING("{} login success but session changed , remove old session {}:{}", *user_inst, s->get_key().node_id,
+                 s->get_key().session_id);
     session_manager::me()->remove(get_shared_context(), s,
                                   static_cast<int32_t>(atfw::gateway::close_reason_t::kKickoff));
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_OTHER_DEVICE);
@@ -296,8 +296,8 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
 
       int res = task_manager::me()->start_task(task_inst, start_data);
       if (res < 0) {
-        FWPLOGERROR(*user_inst, "start task_action_user_async_jobs failed, res: {}({})", res,
-                    protobuf_mini_dumper_get_error_msg(res));
+        FWLOGERROR("{} start task_action_user_async_jobs failed, res: {}({})", *user_inst, res,
+                   protobuf_mini_dumper_get_error_msg(res));
       }
     }
   }
@@ -320,8 +320,8 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
 
     // Session更换，直接老session下线即可
     if (user_inst && user_inst->get_session() != s) {
-      FWPLOGWARNING(*user_inst, "login success but session changed , remove old session {}:{}", s->get_key().node_id,
-                    s->get_key().session_id);
+      FWLOGWARNING("{} login success but session changed , remove old session {}:{}", *user_inst, s->get_key().node_id,
+                   s->get_key().session_id);
     } else if (user_inst && !user_inst->is_inited()) {
       // 如果创建了未初始化的GameUser对象，则需要移除
       user_inst->clear_dirty_cache();
@@ -362,7 +362,7 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
 }
 
 GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std::shared_ptr<user> user_inst) {
-  FWPLOGDEBUG(*user_inst, "relogin using login code: {}", get_request_body().access_token_code());
+  FWLOGDEBUG("{} relogin using login code: {}", *user_inst, get_request_body().access_token_code());
 
   // 获取当前Session
   std::shared_ptr<session> cur_sess = get_session();
@@ -401,7 +401,7 @@ GAMECLIENT_RPC_API rpc::result_code_type task_action_login::replace_session(std:
     user_inst->set_client_info(get_request_body().client_info());
   }
 
-  FWPLOGDEBUG(*user_inst, "relogin curr data version: {}", user_inst->get_data_version());
+  FWLOGDEBUG("{} relogin curr data version: {}", *user_inst, user_inst->get_data_version());
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

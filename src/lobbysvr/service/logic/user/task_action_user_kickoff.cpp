@@ -84,8 +84,8 @@ task_action_user_kickoff::result_type task_action_user_kickoff::operator()() {
 
   set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->await_before_logout_tasks(get_shared_context())));
   if (get_response_code() < 0) {
-    FWPLOGERROR(*user_inst, "kickoff failed, res: {}({})", get_response_code(),
-                protobuf_mini_dumper_get_error_msg(get_response_code()));
+    FWLOGERROR("{} kickoff failed, res: {}({})", *user_inst, get_response_code(),
+               protobuf_mini_dumper_get_error_msg(get_response_code()));
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 

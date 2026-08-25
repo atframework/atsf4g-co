@@ -197,7 +197,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   auto ret =
       RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::replace(ctx, save_login_blob_data, obj->get_login_lock_cas_version()));
   if (ret < 0) {
-    FWPLOGERROR(*obj, "save login data failed, msg:\n{}", login_blob_data.DebugString());
+    FWLOGERROR("{} save login data failed, msg:\n{}", *obj, login_blob_data.DebugString());
     // 失败则恢复路由信息
     login_blob_data.set_router_server_id(old_router_server_id);
     login_blob_data.set_router_version(old_router_ver);
@@ -228,15 +228,16 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
       res = RPC_AWAIT_CODE_RESULT(rpc::db::login_lock::get_all(ctx, get_key().object_id, *save_login_blob_data,
                                                                obj->get_login_lock_cas_version()));
       if (res < 0) {
-        FWPLOGERROR(*obj, "try load login data failed, result: {}({}).", res, protobuf_mini_dumper_get_error_msg(res));
+        FWLOGERROR("{} try load login data failed, result: {}({}).", *obj, res,
+                   protobuf_mini_dumper_get_error_msg(res));
         RPC_RETURN_CODE(res);
       }
     }
 
     if (obj->get_login_lock().router_server_id() != self_node_id) {
       // 别的地方登录成功 尝试下线
-      FWPLOGERROR(*obj, "login pd error(expected: {:#x}, real: {:#x})", self_node_id,
-                  obj->get_login_lock().router_server_id());
+      FWLOGERROR("{} login pd error(expected: {:#x}, real: {:#x})", *obj, self_node_id,
+                 obj->get_login_lock().router_server_id());
 
       // 在其他设备登入的要把这里的Session踢下线
       if (obj->get_session()) {
@@ -284,7 +285,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
         if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
           continue;
         }
-        FWPLOGERROR(*obj, "try set login data failed, result: {}({}).", res, protobuf_mini_dumper_get_error_msg(res));
+        FWLOGERROR("{} try set login data failed, result: {}({}).", *obj, res, protobuf_mini_dumper_get_error_msg(res));
         RPC_RETURN_CODE(res);
       }
       set_router_server_id(obj->get_login_lock().router_server_id(), obj->get_login_lock().router_version());
@@ -309,7 +310,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
         if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
           continue;
         }
-        FWPLOGERROR(*obj, "try set login data failed, result: {}({}).", res, protobuf_mini_dumper_get_error_msg(res));
+        FWLOGERROR("{} try set login data failed, result: {}({}).", *obj, res, protobuf_mini_dumper_get_error_msg(res));
         RPC_RETURN_CODE(res);
       }
       set_router_server_id(obj->get_login_lock().router_server_id(), obj->get_login_lock().router_version());
@@ -322,7 +323,7 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
   {
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> user_tb{ctx};
     obj->dump(ctx, *user_tb, true);
-    FWPLOGDEBUG(*obj, "save curr cas version: {}", obj->get_user_cas_version());
+    FWLOGDEBUG("{} save curr cas version: {}", *obj, obj->get_user_cas_version());
 
     // RPC save to DB
     res = RPC_AWAIT_CODE_RESULT(rpc::db::user::replace(ctx, user_tb, obj->get_user_cas_version()));
@@ -334,13 +335,13 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
   if (PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION == res) {
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> user_tb{ctx};
     obj->dump(ctx, *user_tb, true);
-    FWPLOGINFO(*obj, "force save curr cas version: {}", obj->get_user_cas_version());
+    FWLOGINFO("{} force save curr cas version: {}", *obj, obj->get_user_cas_version());
 
     res = RPC_AWAIT_CODE_RESULT(rpc::db::user::replace(ctx, user_tb, obj->get_user_cas_version()));
   }
 
   if (res < 0) {
-    FWPLOGERROR(*obj, "try save db failed. res: {}, cas version: {}", res, obj->get_user_cas_version());
+    FWLOGERROR("{} try save db failed. res: {}, cas version: {}", *obj, res, obj->get_user_cas_version());
   }
 
   if (res >= 0) {

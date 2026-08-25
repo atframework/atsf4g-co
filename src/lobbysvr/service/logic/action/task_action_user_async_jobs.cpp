@@ -56,7 +56,7 @@ task_action_user_async_jobs::result_type task_action_user_async_jobs::operator()
 
 int task_action_user_async_jobs::on_success() {
   if (param_.user_inst) {
-    FWPLOGDEBUG(*param_.user_inst, "do {} success", "task_action_user_async_jobs");
+    FWLOGDEBUG("{} do {} success", *param_.user_inst, "task_action_user_async_jobs");
 
     // 加入快速保存队列，确保用户登入成功后保存一次在线状态
     param_.user_inst->set_quick_save();
@@ -69,7 +69,7 @@ int task_action_user_async_jobs::on_success() {
 
 int task_action_user_async_jobs::on_failed() {
   if (param_.user_inst) {
-    FWPLOGERROR(*param_.user_inst, "do task_action_user_async_jobs failed, res: {}", get_result());
+    FWLOGERROR("{} do task_action_user_async_jobs failed, res: {}", *param_.user_inst, get_result());
   }
 
   param_.user_inst.reset();

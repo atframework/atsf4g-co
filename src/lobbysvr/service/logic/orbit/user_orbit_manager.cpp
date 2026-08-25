@@ -109,10 +109,10 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
         break;
       }
       // 结束加入时间点到了 但是没有收到加入消息
-      FWPLOGERROR(*owner_,
-                  "user_orbit_manager refresh_feature_limit_second orbit room end join timepoint reached but no join "
-                  "event, clear orbit room data {}",
-                  room_key_.client_id());
+      FWLOGERROR(
+          "{} user_orbit_manager refresh_feature_limit_second orbit room end join timepoint reached but no join "
+          "event, clear orbit room data {}",
+          *owner_, room_key_.client_id());
       clear_orbit_room_data();
       break;
     }
@@ -130,27 +130,27 @@ void user_orbit_manager::refresh_feature_limit_second(ATFW_EXPLICIT_UNUSED_ATTR 
       if (room_data_) {
         if (!room_data_->finish_event_) {
           // 过期但是没有结算 可能是挂了
-          FWPLOGERROR(*owner_,
-                      "user_orbit_manager refresh_feature_limit_second orbit room expired but no finish event, clear "
-                      "orbit room data {}",
-                      room_key_.client_id());
+          FWLOGERROR(
+              "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no finish event, clear "
+              "orbit room data {}",
+              *owner_, room_key_.client_id());
           clear_orbit_room_data();
           break;
         } else {
           // 存在结算 但是没有异步任务
-          FWPLOGERROR(*owner_,
-                      "user_orbit_manager refresh_feature_limit_second orbit room expired but no async jobs, clear "
-                      "orbit room data {}",
-                      room_key_.client_id());
+          FWLOGERROR(
+              "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no async jobs, clear "
+              "orbit room data {}",
+              *owner_, room_key_.client_id());
           clear_orbit_room_data();
           break;
         }
       } else {
         // 数据移除
-        FWPLOGERROR(*owner_,
-                    "user_orbit_manager refresh_feature_limit_second orbit room expired but no room data, clear orbit "
-                    "room data {}",
-                    room_key_.client_id());
+        FWLOGERROR(
+            "{} user_orbit_manager refresh_feature_limit_second orbit room expired but no room data, clear orbit "
+            "room data {}",
+            *owner_, room_key_.client_id());
         clear_orbit_room_data();
       }
     }
@@ -277,19 +277,20 @@ void user_orbit_manager::receive_orbit_settlement(
     ATFW_EXPLICIT_UNUSED_ATTR const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data) {
   // 收到结算的时候 一定存在key 否则丢弃
   if (!is_orbit_room_exist()) {
-    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement missing orbit room key {}", "");
+    FWLOGERROR("{} user_orbit_manager receive_orbit_settlement missing orbit room key {}", *owner_,
+               room_key_.client_id());
     return;
   }
   // 结算不匹配 丢弃
   if (finish_data.room_key().client_id() != room_key_.client_id()) {
-    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement room key mismatch: {}",
-                finish_data.room_key().client_id());
+    FWLOGERROR("{} user_orbit_manager receive_orbit_settlement room key mismatch: {}", *owner_,
+               finish_data.room_key().client_id());
     return;
   }
   if (!finish_data.init_success()) {
     // 没有成功直接删除
-    FWPLOGERROR(*owner_, "user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}",
-                room_key_.client_id());
+    FWLOGERROR("{} user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}", *owner_,
+               room_key_.client_id());
     clear_orbit_room_data();
     return;
   }

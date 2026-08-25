@@ -401,25 +401,26 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
   // all modules dump to DB
   ret = user_async_jobs_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWPLOGERROR(*this, "dump async_jobs_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("{} dump async_jobs_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
   ret = user_rank_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWPLOGERROR(*this, "dump user_rank_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("{} dump user_rank_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
   ret = user_orbit_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWPLOGERROR(*this, "dump user_orbit_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("{} dump user_orbit_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
   ret = user_matching_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWPLOGERROR(*this, "dump user_matching_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("{} dump user_matching_manager_ failed, res: {}({})", *this, ret,
+               protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
@@ -448,8 +449,8 @@ void user::update_heartbeat() {
 
 void user::send_all_syn_msg(rpc::context &ctx) {
   if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
-    FWPLOGERROR(*this, "can not send sync messages when when running dirty handle {}",
-                cache_data_.current_dirty_handle_name);
+    FWLOGERROR("{} can not send sync messages when when running dirty handle {}", *this,
+               cache_data_.current_dirty_handle_name);
     return;
   }
 
@@ -508,8 +509,8 @@ void user::clear_dirty_cache() {
     internal_flag_guard_t flag_guard;
     flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
     if (!flag_guard) {
-      FWPLOGERROR(*this, "can not clear dirty handles when running dirty handle {}",
-                  cache_data_.current_dirty_handle_name);
+      FWLOGERROR("{} can not clear dirty handles when running dirty handle {}", *this,
+                 cache_data_.current_dirty_handle_name);
       return;
     }
 
@@ -593,8 +594,8 @@ void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view han
   }
 
   if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
-    FWPLOGERROR(*this, "can not insert dirty handle {} when running dirty handle {}", handle_name,
-                cache_data_.current_dirty_handle_name);
+    FWLOGERROR("{} can not insert dirty handle {} when running dirty handle {}", *this, handle_name,
+               cache_data_.current_dirty_handle_name);
     return;
   }
 
@@ -613,8 +614,8 @@ void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view han
   }
 
   if (internal_flags_.test(internal_flag::EN_IFT_IN_DIRTY_CALLBACK)) {
-    FWPLOGERROR(*this, "can not insert dirty handle {} when running dirty handle {}", handle_name,
-                cache_data_.current_dirty_handle_name);
+    FWLOGERROR("{} can not insert dirty handle {} when running dirty handle {}", *this, handle_name,
+               cache_data_.current_dirty_handle_name);
     return;
   }
 

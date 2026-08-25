@@ -41,8 +41,7 @@ void user_async_jobs_manager::login_init(rpc::context&) { reset_async_jobs_prote
 
 void user_async_jobs_manager::refresh_feature_limit(rpc::context& ctx) { try_async_jobs(ctx); }
 
-void user_async_jobs_manager::init_from_table_data(rpc::context&,
-                                                   const PROJECT_NAMESPACE_ID::table_user& user_table) {
+void user_async_jobs_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   if (user_table.has_async_job_blob_data()) {
     remote_command_patch_task_next_timepoint_ =
         static_cast<time_t>(user_table.async_job_blob_data().async_jobs().next_task_active_time());
@@ -59,7 +58,8 @@ void user_async_jobs_manager::init_from_table_data(rpc::context&,
     for (int i = 0; i < user_table.async_job_blob_data().retry_jobs_size(); ++i) {
       auto& retry_job = user_table.async_job_blob_data().retry_jobs(i);
       retry_jobs_[retry_job.job_type()][retry_job.job_data().action_uuid()] =
-          atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(retry_job.job_data());
+          atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
+              retry_job.job_data());
     }
 
     std::unordered_set<int32_t> cleanup_queue;
@@ -180,7 +180,7 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
   params.caller_context = &ctx;
   params.async_job_type.swap(force_async_job_type_);
   task_manager::me()->create_task_with_timeout<task_action_user_remote_patch_jobs>(task_inst, params.timeout_duration,
-                                                                                     std::move(params));
+                                                                                   std::move(params));
 
   if (task_type_trait::empty(task_inst)) {
     FWLOGERROR("create task_action_user_remote_patch_jobs failed");
@@ -191,8 +191,8 @@ bool user_async_jobs_manager::try_async_jobs(rpc::context& ctx) {
 
     int res = task_manager::me()->start_task(task_inst, start_data);
     if (res < 0) {
-      FWPLOGERROR(*owner_, "start task_action_user_remote_patch_jobs failed, res: {}({})", res,
-                  protobuf_mini_dumper_get_error_msg(res));
+      FWLOGERROR("{} start task_action_user_remote_patch_jobs failed, res: {}({})", *owner_, res,
+                 protobuf_mini_dumper_get_error_msg(res));
       task_type_trait::reset_task(remote_command_patch_task_);
       return false;
     }

@@ -144,8 +144,8 @@ void user_rank_manager::init_from_table_data(ATFW_EXPLICIT_UNUSED_ATTR rpc::cont
     auto rank_rule_cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(data.rank_key().rank_type(),
                                                                                 data.rank_key().rank_instance_id());
     if (!rank_rule_cfg) {
-      FWPLOGERROR(*owner_, "get rank data for cfg {},{} failed, not found", data.rank_key().rank_type(),
-                  data.rank_key().rank_instance_id());
+      FWLOGERROR("{} get rank data for cfg {},{} failed, not found", *owner_, data.rank_key().rank_type(),
+                 data.rank_key().rank_instance_id());
       continue;
     }
 
@@ -156,8 +156,8 @@ void user_rank_manager::init_from_table_data(ATFW_EXPLICIT_UNUSED_ATTR rpc::cont
         rank.set_mode(PROJECT_NAMESPACE_ID::EN_RANK_CACHE_MODE_OFFLINE);
       }
     } else {
-      FWPLOGERROR(*owner_, "get rank data for cfg {},{} failed, malloc failed", data.rank_key().rank_type(),
-                  data.rank_key().rank_instance_id());
+      FWLOGERROR("{} get rank data for cfg {},{} failed, malloc failed", *owner_, data.rank_key().rank_type(),
+                 data.rank_key().rank_instance_id());
     }
   }
 }
@@ -166,7 +166,7 @@ int user_rank_manager::dump(ATFW_EXPLICIT_UNUSED_ATTR rpc::context &ctx, PROJECT
   time_t now = atfw::util::time::time_utility::get_now();
   PROJECT_NAMESPACE_ID::DRankUserData *rank_data = user.mutable_rank_data();
   if (NULL == rank_data) {
-    // FWPLOGERROR(*owner_, "user {}({}) malloc user_rank failed");
+    // FWLOGERROR("{} malloc user_rank failed", *owner_);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
@@ -260,8 +260,8 @@ void user_rank_manager::try_start_io_task(rpc::context &ctx) {
       });
 
   if (invoke_result.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke a rank io task failed.res: {}({})", *invoke_result.get_error(),
-                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FWLOGERROR("{} async_invoke a rank io task failed.res: {}({})", *owner_, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   } else {
     if (!task_type_trait::is_exiting(*invoke_result.get_success())) {
       io_task_ = std::move(*invoke_result.get_success());
@@ -277,7 +277,7 @@ rpc::result_code_type user_rank_manager::wait_for_async_task(rpc::context &ctx) 
 
     int32_t res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
     if (res < 0) {
-      FWPLOGERROR(*owner_, "await io task error, res: {}({})", res, protobuf_mini_dumper_get_error_msg(res));
+      FWLOGERROR("{} await io task error, res: {}({})", *owner_, res, protobuf_mini_dumper_get_error_msg(res));
       RPC_RETURN_CODE(res);
     }
   }
@@ -323,9 +323,9 @@ rpc::rpc_result<user_rank_manager::rank_board_cache> user_rank_manager::get_rank
 
     int32_t res = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, io_task_));
     if (res < 0) {
-      FWPLOGERROR(*owner_, "wait io task when get rank data of {},{},{},{} failed, res: {}({})", cfg.rank_type(),
-                  cfg.rank_instance_id(), cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res,
-                  protobuf_mini_dumper_get_error_msg(res));
+      FWLOGERROR("{} wait io task when get rank data of {},{},{},{} failed, res: {}({})", *owner_, cfg.rank_type(),
+                 cfg.rank_instance_id(), cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res,
+                 protobuf_mini_dumper_get_error_msg(res));
       RPC_RETURN_TYPE(rank_board_cache(0, 0));
     }
   }
@@ -344,11 +344,10 @@ rpc::rpc_result<user_rank_manager::rank_board_cache> user_rank_manager::get_rank
   RPC_RETURN_TYPE(rank_board_cache{instance_rank->last_rank_no_cache(), instance_rank->last_score_cache()});
 }
 
-rpc::result_code_type user_rank_manager::set_rank_score(rpc::context &ctx, const logic_rank_handle_key &rank_key,
-                                                        const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
-                                                        const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key,
-                                                        uint32_t score, const logic_rank_user_extend_span * ATFW_UTIL_MACRO_NULLABLE user_extend,
-                                                        bool sync_mode) {
+rpc::result_code_type user_rank_manager::set_rank_score(
+    rpc::context &ctx, const logic_rank_handle_key &rank_key, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
+    const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, uint32_t score,
+    const logic_rank_user_extend_span *ATFW_UTIL_MACRO_NULLABLE user_extend, bool sync_mode) {
   if (!check_rank_instance_key_invalid(cfg, rank_instance_key)) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_INSTANCE_KEY_INVALID);
   }
@@ -374,9 +373,9 @@ rpc::result_code_type user_rank_manager::set_rank_score(rpc::context &ctx, const
       mutable_unsubmit_data(rank_data_index(cfg, rank_key), cfg, owner_->get_zone_id(), owner_->get_user_id(),
                             rank_instance_key, nullptr == user_extend ? logic_rank_user_extend_span() : *user_extend);
   if (nullptr == unsubmit) {
-    FWPLOGERROR(*owner_, "malloc DRankUnsubmitData failed. rank key: {},{}, rank_instance_key: {}:{}",
-                rank_key.get_rank_type(), rank_key.get_instance_id(), rank_instance_key.instance_type(),
-                rank_instance_key.instance_id());
+    FWLOGERROR("{} malloc DRankUnsubmitData failed. rank key: {},{}, rank_instance_key: {}:{}", *owner_,
+               rank_key.get_rank_type(), rank_key.get_instance_id(), rank_instance_key.instance_type(),
+               rank_instance_key.instance_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
   }
 
@@ -437,9 +436,9 @@ rpc::result_code_type user_rank_manager::add_rank_score(rpc::context &ctx, const
       rank_data_index(cfg, rank_key), cfg, target_user_zone_id, target_user_id, rank_instance_key, user_extend);
 
   if (nullptr == unsubmit) {
-    FWPLOGERROR(*owner_, "malloc DRankUnsubmitData failed. rank key: {}:{}, rank_instance_key: {}:{}",
-                rank_key.get_rank_type(), rank_key.get_instance_id(), rank_instance_key.instance_type(),
-                rank_instance_key.instance_id());
+    FWLOGERROR("{} malloc DRankUnsubmitData failed. rank key: {}:{}, rank_instance_key: {}:{}", *owner_,
+               rank_key.get_rank_type(), rank_key.get_instance_id(), rank_instance_key.instance_type(),
+               rank_instance_key.instance_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
   }
 
@@ -499,9 +498,9 @@ rpc::result_code_type user_rank_manager::sub_rank_score(rpc::context &ctx, const
   PROJECT_NAMESPACE_ID::DRankUnsubmitData *unsubmit = mutable_unsubmit_data(
       rank_data_index(cfg, rank_key), cfg, target_user_zone_id, target_user_id, rank_instance_key, user_extend);
   if (nullptr == unsubmit) {
-    FWPLOGERROR(*owner_, "malloc DRankUnsubmitData failed. rank key: {}:{}, rank_instance_key: {}:{}",
-                rank_key.get_rank_type(), rank_key.get_instance_id(), rank_instance_key.instance_type(),
-                rank_instance_key.instance_id());
+    FWLOGERROR("{} malloc DRankUnsubmitData failed. rank key: {}:{}, rank_instance_key: {}:{}", *owner_,
+               rank_key.get_rank_type(), rank_key.get_instance_id(), rank_instance_key.instance_type(),
+               rank_instance_key.instance_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
   }
 
@@ -587,9 +586,9 @@ rpc::result_code_type user_rank_manager::get_top_rank(
   auto res = RPC_AWAIT_CODE_RESULT(rank_handle.get_top_rank(ctx, rank_key, from_rank_no, rank_count));
 
   if (res.api_result < 0) {
-    FWPLOGERROR(*owner_, "get_top_rank {},{},{},{} failed, res: {}({})", cfg.rank_type(), cfg.rank_instance_id(),
-                cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res.api_result,
-                protobuf_mini_dumper_get_error_msg(res.api_result));
+    FWLOGERROR("{} get_top_rank {},{},{},{} failed, res: {}({})", *owner_, cfg.rank_type(), cfg.rank_instance_id(),
+               cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res.api_result,
+               protobuf_mini_dumper_get_error_msg(res.api_result));
     RPC_RETURN_CODE(res.api_result);
   }
 
@@ -666,7 +665,7 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
   auto rank_define_cfg =
       excel::get_ExcelRankDefine_by_rank_type_rank_instance_id(cfg.rank_type(), cfg.rank_instance_id());
   if (!rank_define_cfg) {
-    FWPLOGERROR(*owner_, "get rank define cfg for {},{} failed", cfg.rank_type(), cfg.rank_instance_id());
+    FWLOGERROR("{} get rank define cfg for {},{} failed", *owner_, cfg.rank_type(), cfg.rank_instance_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_RANK_DEFINE_CFG_NOT_FOUND);
   }
 
@@ -716,9 +715,9 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
       }
       res = RPC_AWAIT_CODE_RESULT(submit(ctx, rank_data_index(cfg, rank_key), rank_key, cfg, unsubmit, now));
       if (res != 0) {
-        FWPLOGERROR(*owner_, "update cache failed for rank {},{},{} , res: {}({})", cfg.rank_type(),
-                    cfg.rank_instance_id(), rank_key.get_sub_instance_id(), res,
-                    protobuf_mini_dumper_get_error_msg(res));
+        FWLOGERROR("{} update cache failed for rank {},{},{} , res: {}({})", *owner_, cfg.rank_type(),
+                   cfg.rank_instance_id(), rank_key.get_sub_instance_id(), res,
+                   protobuf_mini_dumper_get_error_msg(res));
       }
     }
   } while (false);
@@ -731,9 +730,9 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
       rank_handle.get_special_one(ctx, target_rank_data, rank_key, target_rank_openid, up_count, down_count));
 
   if (res.api_result < 0) {
-    FWPLOGERROR(*owner_, "get_special_one {},{},{},{} failed, res: {}({})", cfg.rank_type(), cfg.rank_instance_id(),
-                cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res.api_result,
-                protobuf_mini_dumper_get_error_msg(res.api_result));
+    FWLOGERROR("{} get_special_one {},{},{},{} failed, res: {}({})", *owner_, cfg.rank_type(), cfg.rank_instance_id(),
+               cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id(), res.api_result,
+               protobuf_mini_dumper_get_error_msg(res.api_result));
     RPC_RETURN_CODE(res.api_result);
   }
 
@@ -790,8 +789,8 @@ rpc::result_code_type user_rank_manager::get_special_top_rank(
         instance_rank->set_last_rank_no_cache(0);
       }
       check_and_settlement_local_rank_data(cfg, rank_data, rank_instance_key, now);
-      FWPLOGDEBUG(*owner_, "self rank {},{},{},{} offline", cfg.rank_type(), cfg.rank_instance_id(),
-                  cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id());
+      FWLOGDEBUG("{} self rank {},{},{},{} offline", *owner_, cfg.rank_type(), cfg.rank_instance_id(),
+                 cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id());
     }
   }
 
@@ -877,20 +876,19 @@ rpc::result_code_type user_rank_manager::add_settle_reward(
   rank_data_index rank_index{*rule_cfg};
   auto rank_data = mutable_rank_data(rank_index, *rule_cfg, logic_rank_user_extend_span{});
   if (!rank_data) {
-    FWPLOGERROR(*owner_, "add_settle_reward(pool_id={}, rank={}, score={}) with invalid rank key {},{},{},{}", pool_id,
-                rank_basic.rank_no(), rank_basic.score(), rank_basic.rank_key().rank_type(),
-                rank_basic.rank_key().rank_instance_id(), rank_basic.rank_key().sub_rank_type(),
-                rank_basic.rank_key().sub_rank_instance_id());
+    FWLOGERROR("{} add_settle_reward(pool_id={}, rank={}, score={}) with invalid rank key {},{},{},{}", *owner_,
+               pool_id, rank_basic.rank_no(), rank_basic.score(), rank_basic.rank_key().rank_type(),
+               rank_basic.rank_key().rank_instance_id(), rank_basic.rank_key().sub_rank_type(),
+               rank_basic.rank_key().sub_rank_instance_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
   PROJECT_NAMESPACE_ID::DRankInstanceBoard *instance_rank =
       mutable_instance_rank_data(rank_data, rank_basic.rank_instance_key());
   if (!instance_rank) {
-    FWPLOGERROR(
-        *owner_,
-        "add_settle_reward(pool_id={}, rank={}, score={}) with invalid rank key {},{},{},{}, rank_instance {}:{}",
-        pool_id, rank_basic.rank_no(), rank_basic.score(), rank_basic.rank_key().rank_type(),
+    FWLOGERROR(
+        "{} add_settle_reward(pool_id={}, rank={}, score={}) with invalid rank key {},{},{},{}, rank_instance {}:{}",
+        *owner_, pool_id, rank_basic.rank_no(), rank_basic.score(), rank_basic.rank_key().rank_type(),
         rank_basic.rank_key().rank_instance_id(), rank_basic.rank_key().sub_rank_type(),
         rank_basic.rank_key().sub_rank_instance_id(), rank_basic.rank_instance_key().instance_type(),
         rank_basic.rank_instance_key().instance_id());
@@ -913,10 +911,10 @@ rpc::result_code_type user_rank_manager::add_settle_reward(
   auto reward_cfg =
       excel::get_current_rank_settle_rewards(pool_id, pool_type, rank_basic.settle_rank_no(), rank_basic.score());
   if (!reward_cfg) {
-    FWPLOGWARNING(*owner_, "try to reward rank({},{},{},{}) pool_id={}, rank={}, score={}, but no rewards found.",
-                  rank_basic.rank_key().rank_type(), rank_basic.rank_key().rank_instance_id(),
-                  rank_basic.rank_key().sub_rank_type(), rank_basic.rank_key().sub_rank_instance_id(), pool_id,
-                  rank_basic.settle_rank_no(), rank_basic.score());
+    FWLOGWARNING("{} try to reward rank({},{},{},{}) pool_id={}, rank={}, score={}, but no rewards found.", *owner_,
+                 rank_basic.rank_key().rank_type(), rank_basic.rank_key().rank_instance_id(),
+                 rank_basic.rank_key().sub_rank_type(), rank_basic.rank_key().sub_rank_instance_id(), pool_id,
+                 rank_basic.settle_rank_no(), rank_basic.score());
     RPC_RETURN_CODE(0);
   }
 
@@ -943,18 +941,18 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
       auto cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(update_rank_info.rank_key().rank_type(),
                                                                         update_rank_info.rank_key().rank_instance_id());
       if (!cfg) {
-        FWPLOGERROR(*owner_, "rank {},{},{},{} configure not found", update_rank_info.rank_key().rank_type(),
-                    update_rank_info.rank_key().rank_instance_id(), update_rank_info.rank_key().sub_rank_type(),
-                    update_rank_info.rank_key().sub_rank_instance_id());
+        FWLOGERROR("{} rank {},{},{},{} configure not found", *owner_, update_rank_info.rank_key().rank_type(),
+                   update_rank_info.rank_key().rank_instance_id(), update_rank_info.rank_key().sub_rank_type(),
+                   update_rank_info.rank_key().sub_rank_instance_id());
         continue;
       }
 
       if (!check_rank_instance_key_invalid(*cfg, update_rank_info.rank_instance_key())) {
-        FWPLOGERROR(*owner_, "rank {}:{}:{}:{}, instance_id {}:{}, invalid rank_instance_key",
-                    update_rank_info.rank_key().rank_type(), update_rank_info.rank_key().rank_instance_id(),
-                    update_rank_info.rank_key().sub_rank_type(), update_rank_info.rank_key().sub_rank_instance_id(),
-                    update_rank_info.rank_instance_key().instance_type(),
-                    update_rank_info.rank_instance_key().instance_id());
+        FWLOGERROR("{} rank {}:{}:{}:{}, instance_id {}:{}, invalid rank_instance_key", *owner_,
+                   update_rank_info.rank_key().rank_type(), update_rank_info.rank_key().rank_instance_id(),
+                   update_rank_info.rank_key().sub_rank_type(), update_rank_info.rank_key().sub_rank_instance_id(),
+                   update_rank_info.rank_instance_key().instance_type(),
+                   update_rank_info.rank_instance_key().instance_id());
         continue;
       }
 
@@ -966,22 +964,22 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
       // local 模式变更数据后也会追加一次数据拉取，这次要通过拉取知道是保持local模式还是切到online
       std::shared_ptr<rank_data_type> rank_data = mutable_rank_data(rank_index, *cfg, logic_rank_user_extend_span{});
       if (!rank_data) {
-        FWPLOGERROR(*owner_, "rank {}:{}:{}:{}, instance_id {}:{}, get_rank_data failed",
-                    update_rank_info.rank_key().rank_type(), update_rank_info.rank_key().rank_instance_id(),
-                    update_rank_info.rank_key().sub_rank_type(), update_rank_info.rank_key().sub_rank_instance_id(),
-                    update_rank_info.rank_instance_key().instance_type(),
-                    update_rank_info.rank_instance_key().instance_id());
+        FWLOGERROR("{} rank {}:{}:{}:{}, instance_id {}:{}, get_rank_data failed", *owner_,
+                   update_rank_info.rank_key().rank_type(), update_rank_info.rank_key().rank_instance_id(),
+                   update_rank_info.rank_key().sub_rank_type(), update_rank_info.rank_key().sub_rank_instance_id(),
+                   update_rank_info.rank_instance_key().instance_type(),
+                   update_rank_info.rank_instance_key().instance_id());
         continue;
       }
 
       PROJECT_NAMESPACE_ID::DRankInstanceBoard *instance_rank_data =
           mutable_instance_rank_data(rank_data, update_rank_info.rank_instance_key());
       if (!instance_rank_data) {
-        FWPLOGERROR(*owner_, "rank {}:{}:{}:{}, instance_id {}:{}, mutable_instance_rank_data failed",
-                    update_rank_info.rank_key().rank_type(), update_rank_info.rank_key().rank_instance_id(),
-                    update_rank_info.rank_key().sub_rank_type(), update_rank_info.rank_key().sub_rank_instance_id(),
-                    update_rank_info.rank_instance_key().instance_type(),
-                    update_rank_info.rank_instance_key().instance_id());
+        FWLOGERROR("{} rank {}:{}:{}:{}, instance_id {}:{}, mutable_instance_rank_data failed", *owner_,
+                   update_rank_info.rank_key().rank_type(), update_rank_info.rank_key().rank_instance_id(),
+                   update_rank_info.rank_key().sub_rank_type(), update_rank_info.rank_key().sub_rank_instance_id(),
+                   update_rank_info.rank_instance_key().instance_type(),
+                   update_rank_info.rank_instance_key().instance_id());
         continue;
       }
       if (instance_rank_data->mode() == PROJECT_NAMESPACE_ID::EN_RANK_CACHE_MODE_KLOCAL &&
@@ -1034,11 +1032,11 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
           continue;
         }
 
-        FWPLOGERROR(*owner_, "Try to submmit {},{},{},{} score {}({}) failed, rank cfg ({}, {}) not found.",
-                    unsubmit_type.first.get_rank_type(), unsubmit_type.first.get_instance_id(),
-                    unsubmit_type.first.get_sub_rank_type(), unsubmit_type.first.get_sub_instance_id(),
-                    unsubmit.value(), (unsubmit.is_offset() ? "(offset)" : ""), unsubmit_type.second.second.rank_type,
-                    unsubmit_type.second.second.rank_instance_id);
+        FWLOGERROR("{} Try to submmit {},{},{},{} score {}({}) failed, rank cfg ({}, {}) not found.", *owner_,
+                   unsubmit_type.first.get_rank_type(), unsubmit_type.first.get_instance_id(),
+                   unsubmit_type.first.get_sub_rank_type(), unsubmit_type.first.get_sub_instance_id(), unsubmit.value(),
+                   (unsubmit.is_offset() ? "(offset)" : ""), unsubmit_type.second.second.rank_type,
+                   unsubmit_type.second.second.rank_instance_id);
       }
       continue;
     }
@@ -1101,11 +1099,11 @@ rpc::result_code_type user_rank_manager::run_io_task(rpc::context &ctx) {
             restore_unsubmit = true;
           }
 
-          FWPLOGERROR(*owner_, "Try to submmit {},{},{},{} score {}({}) failed, res: {}({}).",
-                      unsubmit_type.first.get_rank_type(), unsubmit_type.first.get_instance_id(),
-                      unsubmit_type.first.get_sub_rank_type(), unsubmit_type.first.get_sub_instance_id(),
-                      unsubmit.value(), (unsubmit.is_offset() ? "(offset)" : ""), res,
-                      protobuf_mini_dumper_get_error_msg(res));
+          FWLOGERROR("{} Try to submmit {},{},{},{} score {}({}) failed, res: {}({}).", *owner_,
+                     unsubmit_type.first.get_rank_type(), unsubmit_type.first.get_instance_id(),
+                     unsubmit_type.first.get_sub_rank_type(), unsubmit_type.first.get_sub_instance_id(),
+                     unsubmit.value(), (unsubmit.is_offset() ? "(offset)" : ""), res,
+                     protobuf_mini_dumper_get_error_msg(res));
         }
       }
     }
@@ -1190,9 +1188,9 @@ std::shared_ptr<user_rank_manager::rank_data_type> user_rank_manager::get_rank_d
   return iter->second;
 }
 
-PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::get_instance_rank_data(
-    std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
-    const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
+PROJECT_NAMESPACE_ID::DRankInstanceBoard *ATFW_UTIL_MACRO_NULLABLE
+user_rank_manager::get_instance_rank_data(std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
+                                          const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
   for (auto &instance_rank_data : *rank_data->rank_data.mutable_rank_instance_data()) {
     if (instance_rank_data.rank_instance_key() == rank_instance_key) {
       return &instance_rank_data;
@@ -1201,9 +1199,9 @@ PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE user_rank_ma
   return nullptr;
 }
 
-PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::mutable_instance_rank_data(
-    std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
-    const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
+PROJECT_NAMESPACE_ID::DRankInstanceBoard *ATFW_UTIL_MACRO_NULLABLE
+user_rank_manager::mutable_instance_rank_data(std::shared_ptr<user_rank_manager::rank_data_type> rank_data,
+                                              const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key) {
   for (auto &instance_rank_data : *rank_data->rank_data.mutable_rank_instance_data()) {
     if (instance_rank_data.rank_instance_key() == rank_instance_key) {
       return &instance_rank_data;
@@ -1213,8 +1211,8 @@ PROJECT_NAMESPACE_ID::DRankInstanceBoard * ATFW_UTIL_MACRO_NULLABLE user_rank_ma
   if (rank_instance_key.instance_id() != 0) {
     bool is_exsit = check_custom_key_exsit(rank_instance_key.instance_id());
     if (!is_exsit) {
-      FWPLOGERROR(*owner_, "mutable_instance_rank_data error instance {}:{} delete but used",
-                  rank_instance_key.instance_type(), rank_instance_key.instance_id());
+      FWLOGERROR("{} mutable_instance_rank_data error instance {}:{} delete but used", *owner_,
+                 rank_instance_key.instance_type(), rank_instance_key.instance_id());
       return nullptr;
     }
   }
@@ -1254,9 +1252,8 @@ std::shared_ptr<user_rank_manager::rank_data_type> user_rank_manager::mutable_ra
   return rank_data;
 }
 
-PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::get_unsubmit_data(const rank_data_index &rank_index,
-                                                                              uint32_t target_user_zone_id,
-                                                                              uint64_t target_user_id) {
+PROJECT_NAMESPACE_ID::DRankUnsubmitData *ATFW_UTIL_MACRO_NULLABLE user_rank_manager::get_unsubmit_data(
+    const rank_data_index &rank_index, uint32_t target_user_zone_id, uint64_t target_user_id) {
   std::shared_ptr<rank_data_type> rank_data = get_rank_data(rank_index);
 
   for (int i = 0; i < rank_data->rank_data.unsubmit_action_size(); ++i) {
@@ -1269,7 +1266,7 @@ PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE user_rank_man
   return nullptr;
 }
 
-PROJECT_NAMESPACE_ID::DRankUnsubmitData * ATFW_UTIL_MACRO_NULLABLE user_rank_manager::mutable_unsubmit_data(
+PROJECT_NAMESPACE_ID::DRankUnsubmitData *ATFW_UTIL_MACRO_NULLABLE user_rank_manager::mutable_unsubmit_data(
     const rank_data_index &rank_index, const PROJECT_NAMESPACE_ID::config::ExcelRankRule &cfg,
     uint32_t target_user_zone_id, uint64_t target_user_id,
     const PROJECT_NAMESPACE_ID::DRankInstanceKey &rank_instance_key, logic_rank_user_extend_span user_extend) {
@@ -1476,19 +1473,19 @@ rpc::result_code_type user_rank_manager::submit(rpc::context &ctx, const rank_da
       // send_report_rank_oss_log(ctx, unsubmit, rank_key, last_score_cache, res.api_result);
 
       if (res.api_result != 0) {
-        FWPLOGERROR(*owner_,
-                    "upload_score to rank ({},{},{},{}) with user={},{}, score={} failed, res: "
-                    "{}({})",
-                    rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
-                    rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
-                    submit_value, res.api_result, protobuf_mini_dumper_get_error_msg(res.api_result));
+        FWLOGERROR(
+            "{} upload_score to rank ({},{},{},{}) with user={},{}, score={} failed, res: "
+            "{}({})",
+            *owner_, rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
+            rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(), submit_value,
+            res.api_result, protobuf_mini_dumper_get_error_msg(res.api_result));
         ret = res.api_result;
         break;
       }
-      FWPLOGDEBUG(*owner_, "upload_score to rank ({},{},{},{}) with user={},{}, score={} success",
-                  rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
-                  rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
-                  submit_value);
+      FWLOGDEBUG("{} upload_score to rank ({},{},{},{}) with user={},{}, score={} success", *owner_,
+                 rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
+                 rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
+                 submit_value);
 
     } else {
       if (unsubmit.value() > 0) {
@@ -1500,19 +1497,19 @@ rpc::result_code_type user_rank_manager::submit(rpc::context &ctx, const rank_da
             submit_value, callback_data, extend_data));
         // send_report_rank_oss_log(ctx, unsubmit, rank_key, last_score_cache, res.api_result);
         if (res.api_result != 0) {
-          FWPLOGERROR(*owner_,
-                      "increase_score to rank ({},{},{},{}) with user={},{}, score={} failed, res: "
-                      "{}({})",
-                      rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
-                      rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
-                      submit_value, res.api_result, protobuf_mini_dumper_get_error_msg(res.api_result));
+          FWLOGERROR(
+              "{} increase_score to rank ({},{},{},{}) with user={},{}, score={} failed, res: "
+              "{}({})",
+              *owner_, rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
+              rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
+              submit_value, res.api_result, protobuf_mini_dumper_get_error_msg(res.api_result));
           ret = res.api_result;
           break;
         }
-        FWPLOGDEBUG(*owner_, "increase_score to rank ({},{},{},{}) with user={},{}, score={} success",
-                    rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
-                    rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
-                    submit_value);
+        FWLOGDEBUG("{} increase_score to rank ({},{},{},{}) with user={},{}, score={} success", *owner_,
+                   rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
+                   rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
+                   submit_value);
 
       } else if (unsubmit.value() < 0) {
         uint32_t submit_value = static_cast<uint32_t>(-unsubmit.value());
@@ -1523,19 +1520,19 @@ rpc::result_code_type user_rank_manager::submit(rpc::context &ctx, const rank_da
             submit_value, callback_data, extend_data));
         // send_report_rank_oss_log(ctx, unsubmit, rank_key, last_score_cache, res.api_result);
         if (res.api_result != 0) {
-          FWPLOGERROR(*owner_,
-                      "decrease_score to rank ({},{},{},{}) with user={},{}, score={} failed, res: "
-                      "{}({})",
-                      rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
-                      rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
-                      submit_value, res.api_result, protobuf_mini_dumper_get_error_msg(res.api_result));
+          FWLOGERROR(
+              "{} decrease_score to rank ({},{},{},{}) with user={},{}, score={} failed, res: "
+              "{}({})",
+              *owner_, rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
+              rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
+              submit_value, res.api_result, protobuf_mini_dumper_get_error_msg(res.api_result));
           ret = res.api_result;
           break;
         }
-        FWPLOGDEBUG(*owner_, "decrease_score to rank ({},{},{},{}) with user={},{}, score={} success",
-                    rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
-                    rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
-                    submit_value);
+        FWLOGDEBUG("{} decrease_score to rank ({},{},{},{}) with user={},{}, score={} success", *owner_,
+                   rank_key.get_rank_type(), rank_key.get_instance_id(), rank_key.get_sub_rank_type(),
+                   rank_key.get_sub_instance_id(), unsubmit.user_key().zone_id(), unsubmit.user_key().user_id(),
+                   submit_value);
       }
     }
   } while (false);
@@ -1650,8 +1647,8 @@ void user_rank_manager::update_rank_score_cache(ATFW_EXPLICIT_UNUSED_ATTR rpc::c
   auto ext_fields = gsl::make_span(record.extend_data.ext_fields);
   protobuf_copy_message(*instance_rank->mutable_ext_fields(), ext_fields);
 
-  FWPLOGDEBUG(*owner_, "self rank {},{},{},{} online", cfg.rank_type(), cfg.rank_instance_id(),
-              cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id());
+  FWLOGDEBUG("{} self rank {},{},{},{} online", *owner_, cfg.rank_type(), cfg.rank_instance_id(),
+             cfg.content().sub_rank_type(), cfg.content().sub_rank_instance_id());
 }
 
 void user_rank_manager::patch_rank_score_action(
@@ -1767,8 +1764,8 @@ void user_rank_manager::append_pending_update(const PROJECT_NAMESPACE_ID::user_a
     auto cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(rank_job.rank_key().rank_type(),
                                                                       rank_job.rank_key().rank_instance_id());
     if (!cfg) {
-      FWPLOGWARNING(*owner_, "rank cfg {},{} not found, ignore job", rank_job.rank_key().rank_type(),
-                    rank_job.rank_key().rank_instance_id());
+      FWLOGWARNING("{} rank cfg {},{} not found, ignore job", *owner_, rank_job.rank_key().rank_type(),
+                   rank_job.rank_key().rank_instance_id());
       return;
     }
 
@@ -1826,8 +1823,8 @@ void user_rank_manager::submit_rank_score_no_wait(
           auto cfg = excel::get_ExcelRankRule_by_rank_type_rank_instance_id(unit.rank_key().rank_type(),
                                                                             unit.rank_key().rank_instance_id());
           if (cfg == nullptr) {
-            FWPLOGERROR(*user_ptr, "user update rank failed, not found rank {}:{} setting, score {}",
-                        unit.rank_key().rank_type(), unit.rank_key().rank_instance_id(), unit.value());
+            FWLOGERROR("{} user update rank failed, not found rank {}:{} setting, score {}", *user_ptr,
+                       unit.rank_key().rank_type(), unit.rank_key().rank_instance_id(), unit.value());
             continue;
           }
 
@@ -1849,8 +1846,8 @@ void user_rank_manager::submit_rank_score_no_wait(
         RPC_RETURN_CODE(ret);
       });
   if (invoke_result.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke a rank io task failed.res: {}({})", *invoke_result.get_error(),
-                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FWLOGERROR("{} async_invoke a rank io task failed.res: {}({})", *owner_, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
   return;
 }
@@ -1939,14 +1936,15 @@ void user_rank_manager::delete_instance_rank_data(const PROJECT_NAMESPACE_ID::DR
           ret = RPC_AWAIT_CODE_RESULT(
               self.clear_instance_rank(child_ctx, unit.rank_type(), unit.rank_instance_id(), rank_instance_key));
           if (ret != 0) {
-            FWPLOGERROR(*user_ptr, "clear_user_one_rank failed, rank {}:{}", unit.rank_type(), unit.rank_instance_id());
+            FWLOGERROR("{} clear_user_one_rank failed, rank {}:{}", *user_ptr, unit.rank_type(),
+                       unit.rank_instance_id());
           }
         }
         RPC_RETURN_CODE(ret);
       });
   if (invoke_result.is_error()) {
-    FWPLOGERROR(*owner_, "async_invoke a rank io task failed.res: {}({})", *invoke_result.get_error(),
-                protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+    FWLOGERROR("{} async_invoke a rank io task failed.res: {}({})", *owner_, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
   return;
 }
@@ -1975,8 +1973,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_user
   }
   int32_t ret = RPC_AWAIT_CODE_RESULT(clear_user_one_rank(ctx, *rank_cfg));
   if (ret != 0) {
-    FWPLOGERROR(*owner_, "clear_user_one_rank failed, type {}, id {}", rank_cfg->rank_type(),
-                rank_cfg->rank_instance_id());
+    FWLOGERROR("{} clear_user_one_rank failed, type {}, id {}", *owner_, rank_cfg->rank_type(),
+               rank_cfg->rank_instance_id());
   }
   RPC_RETURN_CODE(ret);
 }
@@ -2061,9 +2059,9 @@ bool user_rank_manager::check_rank_instance_key_invalid(
       return true;
     }
     default: {
-      FWPLOGERROR(*owner_, "rank instance key invalid, rank_type {}, rank_instance_id {}, instance_type {}:{}",
-                  cfg.rank_type(), cfg.rank_instance_id(), rank_instance_key.instance_type(),
-                  rank_instance_key.instance_id());
+      FWLOGERROR("{} rank instance key invalid, rank_type {}, rank_instance_id {}, instance_type {}:{}", *owner_,
+                 cfg.rank_type(), cfg.rank_instance_id(), rank_instance_key.instance_type(),
+                 rank_instance_key.instance_id());
       return false;
     }
   }

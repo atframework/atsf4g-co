@@ -22,8 +22,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include <data/user.h>
 #include <data/session.h>
+#include <data/user.h>
 #include <router/router_user_cache.h>
 #include <router/router_user_manager.h>
 
@@ -46,10 +46,9 @@ task_action_user_remote_patch_jobs::task_action_user_remote_patch_jobs(ctor_para
 
 task_action_user_remote_patch_jobs::~task_action_user_remote_patch_jobs() {}
 
-static rpc::result_code_type save_user_data(rpc::context& ctx, router_user_cache::ptr_t& cache,
-                                              size_t batch_job_number, std::vector<uint64_t>& complete_jobs_idx,
-                                              int job_type, uint64_t user_id, uint32_t zone_id,
-                                              const std::string& openid) {
+static rpc::result_code_type save_user_data(rpc::context& ctx, router_user_cache::ptr_t& cache, size_t batch_job_number,
+                                            std::vector<uint64_t>& complete_jobs_idx, int job_type, uint64_t user_id,
+                                            uint32_t zone_id, const std::string& openid) {
   if (!cache || !cache->is_writable()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
@@ -96,7 +95,7 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
   param_.user_inst->refresh_feature_limit(get_shared_context());
 
   router_user_cache::key_t key(router_user_manager::me()->get_type_id(), param_.user_inst->get_zone_id(),
-                                 param_.user_inst->get_user_id());
+                               param_.user_inst->get_user_id());
   router_user_cache::ptr_t cache = router_user_manager::me()->get_cache(key);
 
   // 缓存已被移除，当前user可能是上下文缓存，忽略patch
@@ -148,13 +147,15 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
       continue;
     }
 
-    FWPLOGDEBUG(*param_.user_inst, "task_action_user_remote_patch_jobs load from get_jobs type {}", val_desc->number());
+    FWLOGDEBUG("{} task_action_user_remote_patch_jobs load from get_jobs type {}", *param_.user_inst,
+               val_desc->number());
 
     std::vector<rpc::db::async_jobs::table_user_async_jobs_list_message> job_list;
     std::vector<uint64_t> complete_jobs_idx;
 
-    ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::get_jobs(
-        get_shared_context(), val_desc->number(), param_.user_inst->get_user_id(), param_.user_inst->get_zone_id(), job_list));
+    ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::get_jobs(get_shared_context(), val_desc->number(),
+                                                          param_.user_inst->get_user_id(),
+                                                          param_.user_inst->get_zone_id(), job_list));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       param_.user_inst->get_user_async_jobs_manager().clear_job_uuids(val_desc->number());
       ret = 0;
@@ -185,7 +186,7 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
         continue;
       }
       param_.user_inst->get_user_async_jobs_manager().add_job_uuid(val_desc->number(),
-                                                              (*job_list[i].message)->job_data().action_uuid());
+                                                                   (*job_list[i].message)->job_data().action_uuid());
 
       async_job_ptr_type job_data_ptr =
           atfw::component::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(
@@ -194,19 +195,21 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
       ++batch_job_number;
       int async_job_res = do_job(val_desc->number(), job_data_ptr);
       if (async_job_res < 0) {
-        FWPLOGERROR(*param_.user_inst, "do async action {}, msg: {} failed, res: {}({})",
-                    static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
-                    protobuf_mini_dumper_get_error_msg(async_job_res));
+        FWLOGERROR("{} do async action {}, msg: {} failed, res: {}({})", *param_.user_inst,
+                   static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
+                   protobuf_mini_dumper_get_error_msg(async_job_res));
 
         // 添加重试队列
         if (job_data_ptr->left_retry_times() > 0) {
           param_.user_inst->get_user_async_jobs_manager().add_retry_job(val_desc->number(), job_data_ptr);
         } else {
-          param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
+          param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
+                                                                           job_data_ptr->action_uuid());
         }
       } else {
         // 移除重试队列
-        param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
+        param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
+                                                                         job_data_ptr->action_uuid());
       }
 
       if (batch_job_number >= PROJECT_NAMESPACE_ID::EN_SL_USER_ASYNC_JOBS_BATCH_NUMBER) {
@@ -230,8 +233,8 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
 
         // 保存用户数据
         ret = RPC_AWAIT_CODE_RESULT(save_user_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx,
-                                                     val_desc->number(), param_.user_inst->get_user_id(),
-                                                     param_.user_inst->get_zone_id(), param_.user_inst->get_open_id()));
+                                                   val_desc->number(), param_.user_inst->get_user_id(),
+                                                   param_.user_inst->get_zone_id(), param_.user_inst->get_open_id()));
         if (ret < 0) {
           break;
         }
@@ -260,19 +263,21 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
       ++batch_job_number;
       int async_job_res = do_job(val_desc->number(), job_data_ptr);
       if (async_job_res < 0) {
-        FWPLOGERROR(*param_.user_inst, "do async action {}, msg: {} failed, res: {}({})",
-                    static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
-                    protobuf_mini_dumper_get_error_msg(async_job_res));
+        FWLOGERROR("{} do async action {}, msg: {} failed, res: {}({})", *param_.user_inst,
+                   static_cast<int>(job_data_ptr->action_case()), job_data_ptr->DebugString(), async_job_res,
+                   protobuf_mini_dumper_get_error_msg(async_job_res));
 
         // 添加重试队列
         if (job_data_ptr->left_retry_times() > 0) {
           param_.user_inst->get_user_async_jobs_manager().add_retry_job(val_desc->number(), job_data_ptr);
         } else {
-          param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
+          param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
+                                                                           job_data_ptr->action_uuid());
         }
       } else {
         // 移除重试队列
-        param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(), job_data_ptr->action_uuid());
+        param_.user_inst->get_user_async_jobs_manager().remove_retry_job(val_desc->number(),
+                                                                         job_data_ptr->action_uuid());
       }
 
       if (batch_job_number >= PROJECT_NAMESPACE_ID::EN_SL_USER_ASYNC_JOBS_BATCH_NUMBER) {
@@ -296,8 +301,8 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
 
         // 保存用户数据
         ret = RPC_AWAIT_CODE_RESULT(save_user_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx,
-                                                     val_desc->number(), param_.user_inst->get_user_id(),
-                                                     param_.user_inst->get_zone_id(), param_.user_inst->get_open_id()));
+                                                   val_desc->number(), param_.user_inst->get_user_id(),
+                                                   param_.user_inst->get_zone_id(), param_.user_inst->get_open_id()));
         if (ret < 0) {
           break;
         }
@@ -332,8 +337,8 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
 
     if (batch_job_number > 0 || !complete_jobs_idx.empty()) {
       ret = RPC_AWAIT_CODE_RESULT(save_user_data(get_shared_context(), cache, batch_job_number, complete_jobs_idx,
-                                                   val_desc->number(), param_.user_inst->get_user_id(),
-                                                   param_.user_inst->get_zone_id(), param_.user_inst->get_open_id()));
+                                                 val_desc->number(), param_.user_inst->get_user_id(),
+                                                 param_.user_inst->get_zone_id(), param_.user_inst->get_open_id()));
       if (ret < 0) {
         break;
       }
@@ -380,7 +385,7 @@ task_action_user_remote_patch_jobs::result_type task_action_user_remote_patch_jo
 
 int task_action_user_remote_patch_jobs::on_success() {
   if (param_.user_inst) {
-    FWPLOGDEBUG(*param_.user_inst, "do {} success", "task_action_user_remote_patch_jobs");
+    FWLOGDEBUG("{} do {} success", *param_.user_inst, "task_action_user_remote_patch_jobs");
   }
 
   // 尝试再启动一次，启动排队后的任务
@@ -417,7 +422,7 @@ int task_action_user_remote_patch_jobs::on_success() {
 
 int task_action_user_remote_patch_jobs::on_failed() {
   if (param_.user_inst) {
-    FWPLOGERROR(*param_.user_inst, "do task_action_user_remote_patch_jobs failed, res: {}", get_result());
+    FWLOGERROR("{} do task_action_user_remote_patch_jobs failed, res: {}", *param_.user_inst, get_result());
   }
 
   // 尝试再启动一次，启动排队后的任务
@@ -458,8 +463,8 @@ void task_action_user_remote_patch_jobs::register_callbacks(
   sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kDebugMessage)] =
       [](task_action_user_remote_patch_jobs& /*task_action_inst*/, user& user_inst, int32_t /*job_type*/,
          async_job_ptr_type job_data) -> int32_t {
-    FWPLOGINFO(user_inst, "[TODO] do async action {}, message: {}", static_cast<int32_t>(job_data->action_case()),
-               job_data->DebugString());
+    FWLOGINFO("{} [TODO] do async action {}, message: {}", user_inst, static_cast<int32_t>(job_data->action_case()),
+              job_data->DebugString());
     return 0;
   };
   sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish)] =
@@ -467,7 +472,7 @@ void task_action_user_remote_patch_jobs::register_callbacks(
          async_job_ptr_type job_data) -> int32_t {
     const PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = job_data->orbit_finish();
     user_inst.get_user_orbit_manager().receive_orbit_settlement(task_action_inst.get_shared_context(),
-                                                           orbit_finish_data.data());
+                                                                orbit_finish_data.data());
     return 0;
   };
 }
@@ -516,8 +521,8 @@ int32_t task_action_user_remote_patch_jobs::do_job(int32_t job_type, const async
     return 0;
   }
 
-  FWPLOGERROR(*param_.user_inst, "do invalid async action {}, message: {}", static_cast<int>(job_data->action_case()),
-              job_data->DebugString());
+  FWLOGERROR("{} do invalid async action {}, message: {}", *param_.user_inst, static_cast<int>(job_data->action_case()),
+             job_data->DebugString());
   return 0;
 }
 

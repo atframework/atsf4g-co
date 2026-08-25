@@ -295,48 +295,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
   std::unordered_map<const char *, std::deque<int64_t>> protocol_frequency_limit_;
 };
 
-// 用户日志输出工具
-#ifdef _MSC_VER
-#  define FWPLOGTRACE(USER, fmt, ...)                                                                         \
-    FWLOGTRACE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-               __VA_ARGS__)
-#  define FWPLOGDEBUG(USER, fmt, ...)                                                                         \
-    FWLOGDEBUG("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-               __VA_ARGS__)
-#  define FWPLOGNOTICE(USER, fmt, ...)                                                                         \
-    FWLOGNOTICE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-                __VA_ARGS__)
-#  define FWPLOGINFO(USER, fmt, ...)                                                                         \
-    FWLOGINFO("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-              __VA_ARGS__)
-#  define FWPLOGWARNING(USER, fmt, ...)                                                                         \
-    FWLOGWARNING("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-                 __VA_ARGS__)
-#  define FWPLOGERROR(USER, fmt, ...)                                                                         \
-    FWLOGERROR("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-               __VA_ARGS__)
-#  define FWPLOGFATAL(USER, fmt, ...)                                                                         \
-    FWLOGFATAL("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-               __VA_ARGS__)
-
-#else
-#  define FWPLOGTRACE(USER, fmt, args...) \
-    FWLOGTRACE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
-#  define FWPLOGDEBUG(USER, fmt, args...) \
-    FWLOGDEBUG("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
-#  define FWPLOGNOTICE(USER, fmt, args...) \
-    FWLOGNOTICE("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
-#  define FWPLOGINFO(USER, fmt, args...) \
-    FWLOGINFO("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
-#  define FWPLOGWARNING(USER, fmt, args...)                                                                     \
-    FWLOGWARNING("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), \
-                 ##args)
-#  define FWPLOGERROR(USER, fmt, args...) \
-    FWLOGERROR("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
-#  define FWPLOGFATAL(USER, fmt, args...) \
-    FWLOGFATAL("user {}({}:{}) " fmt, (USER).get_open_id(), (USER).get_zone_id(), (USER).get_user_id(), ##args)
-#endif
-
 ATFRAMEWORK_UTILS_STRING_FWAPI_NAMESPACE_BEGIN
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE formatter<user_cache, CharT> : formatter<basic_string_view<CharT>, CharT> {
