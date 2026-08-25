@@ -677,10 +677,10 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_agent_manager::handle_server_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
-                                                                   const atfw::orbit::CTAServerHeartbeatReq& request) {
+int32_t orbit_agent_manager::handle_server_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
+                                                     const atfw::orbit::CTAServerHeartbeatReq& request) {
   server_heartbeat(request.server_identity());
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(agent_heartbeat(ctx, controller_server_id, request.server_identity())));
+  return agent_heartbeat(ctx, controller_server_id, request.server_identity());
 }
 
 void orbit_agent_manager::server_heartbeat(const atfw::orbit::DServerIdentity& server_identity) {
@@ -698,12 +698,12 @@ void orbit_agent_manager::server_heartbeat(const atfw::orbit::DServerIdentity& s
   server_identity_timeout_queue_.push_back({server_unique_id, expire_timepoint});
 }
 
-rpc::result_code_type orbit_agent_manager::agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
-                                                           const atfw::orbit::DServerIdentity& server_identity) {
+int32_t orbit_agent_manager::agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
+                                             const atfw::orbit::DServerIdentity& server_identity) {
   // 找到这个server_identity对应的client_record 发送心跳
   auto iter = server_unique_id_to_client_ids_.find(server_identity.unique_id());
   if (iter == server_unique_id_to_client_ids_.end() || iter->second.empty()) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);  // 没有相关Client，不需要发送心跳
+    return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;  // 没有相关Client，不需要发送心跳
   }
 
   auto heartbeat_request = rpc::make_shared_message<atfw::orbit::ATCAgentHeartbeatReq>(ctx);
@@ -714,14 +714,13 @@ rpc::result_code_type orbit_agent_manager::agent_heartbeat(rpc::context& ctx, ui
     heartbeat_request->add_client_ids()->set_client_id(client_id);
   }
 
-  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-      rpc::agenttocontrollerservice::agent_heartbeat(ctx, controller_server_id, *heartbeat_request));
+  int32_t rpc_result =
+      rpc::agenttocontrollerservice::agent_heartbeat(ctx, controller_server_id, *heartbeat_request).unwrap();
   if (rpc_result < 0) {
     FWLOGERROR("orbit agent agent_heartbeat failed server:{} to controller {:#x}, res: {}", server_identity.unique_id(),
                controller_server_id, rpc_result);
-    RPC_RETURN_CODE(rpc_result);
   }
-  RPC_RETURN_CODE(0);
+  return rpc_result;
 }
 
 atfw::orbit::DServerIdentity* orbit_agent_manager::find_server_identity(uint64_t server_unique_id) {
@@ -1344,19 +1343,16 @@ void orbit_agent_manager::stop_client_process(const orbit_agent_client_record_pt
     FWLOGWARNING("orbit agent stop_client_process failed for {}: client_server_id is 0", client_record->client_id);
     return;
   }
-  auto invoke_result = rpc::async_invoke(
-      logic_server_get_current_tick_context(), "async stop_client_process",
-      [client_server_id = client_record->client_server_id,
-       exit_reason](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
-        auto notify_request = rpc::make_shared_message<atfw::orbit::ATDStopClientReq>(sub_ctx);
-        notify_request->set_reason(exit_reason);
-        RPC_RETURN_CODE(
-            RPC_AWAIT_CODE_RESULT(rpc::agenttoclientservice::stop_client(sub_ctx, client_server_id, *notify_request)));
-      });
-  if (!invoke_result.is_success()) {
-    FWLOGERROR("orbit agent failed to spawn async stop_client_process task for {}, res: {}({})",
-               client_record->client_id, *invoke_result.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+
+  auto notify_request =
+      rpc::make_shared_message<atfw::orbit::ATDStopClientReq>(logic_server_get_current_tick_context());
+  notify_request->set_reason(exit_reason);
+  int32_t result = rpc::agenttoclientservice::stop_client(logic_server_get_current_tick_context(),
+                                                          client_record->client_server_id, *notify_request)
+                       .unwrap();
+  if (result < 0) {
+    FWLOGERROR("orbit agent stop_client_process failed for {}: client_server_id {:#x}, res: {}",
+               client_record->client_id, client_record->client_server_id, result);
   }
 }
 

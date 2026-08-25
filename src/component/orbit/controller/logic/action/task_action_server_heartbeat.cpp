@@ -38,8 +38,7 @@ task_action_server_heartbeat::result_type task_action_server_heartbeat::operator
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(orbit_controller_manager::me()->handle_server_heartbeat(get_shared_context(), req_body));
+  int32_t rpc_result = orbit_controller_manager::me()->handle_server_heartbeat(get_shared_context(), req_body);
   TASK_ACTION_RETURN_CODE(rpc_result);
 }
 

@@ -248,25 +248,15 @@ void orbit_server_manager::server_heartbeat() {
       continue;
     }
 
-    auto invoke_task = rpc::async_invoke(
-        logic_server_get_current_tick_context(), "orbit_server_manager::server_heartbeat",
-        [this, controller_server_id,
-         agent_id_set = std::move(iter.second)](rpc::context& child_ctx) -> rpc::result_code_type {
-          auto req = rpc::make_shared_message<atfw::orbit::STCServerHeartbeatNotify>(child_ctx);
-          *req->mutable_server_identity() = server_identity_;
-          for (auto agent_id : agent_id_set) {
-            req->add_agent_identity()->set_agent_server_id(agent_id);
-          }
-
-          int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
-              rpc::servertocontrollerservice::server_heartbeat(child_ctx, controller_server_id, *req));
-          if (rpc_result < 0) {
-            FWLOGERROR("orbit server_heartbeat failed to controller {:#x}, res: {}", controller_server_id, rpc_result);
-          }
-          RPC_RETURN_CODE(rpc_result);
-        });
-    if (invoke_task.is_error()) {
-      FWLOGERROR("orbit_server_manager::server_heartbeat invoke_task failed");
+    auto req = rpc::make_shared_message<atfw::orbit::STCServerHeartbeatNotify>(logic_server_get_current_tick_context());
+    *req->mutable_server_identity() = server_identity_;
+    for (auto agent_id : iter.second) {
+      req->add_agent_identity()->set_agent_server_id(agent_id);
+    }
+    int32_t rpc_result =
+        rpc::servertocontrollerservice::server_heartbeat(logic_server_get_current_tick_context(), controller_server_id, *req).unwrap();
+    if (rpc_result < 0) {
+      FWLOGERROR("orbit server_heartbeat failed to controller {:#x}, res: {}", controller_server_id, rpc_result);
     }
   }
 }

@@ -61,8 +61,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
       atfw::orbit::CTANotifyClientExitRsp& response);
 
   // Agent 心跳（Agent 上报）
-  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_agent_heartbeat(
-      rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request);
+  static int32_t handle_agent_heartbeat(rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request);
 
   // Client 发送消息至 Server（Agent 转发）
   EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_forward_to_server(
@@ -80,8 +79,7 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
       rpc::context& ctx, const atfw::orbit::STCSendToClientReq& request, atfw::orbit::CTSSendToClientRsp& response);
 
   // Server 心跳
-  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_server_heartbeat(
-      rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request);
+  static int32_t handle_server_heartbeat(rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request);
 
  private:
   atfw::orbit::DAgentIdentity select_agent_for_launch(const atfw::orbit::DAgentClientStartArgsResource& resource,

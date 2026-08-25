@@ -103,8 +103,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
       rpc::context& ctx, const atfw::orbit::CTAForwardToClientReq& request,
       atfw::orbit::ATCForwardToClientRsp& response);
   // Server 心跳
-  EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_server_heartbeat(
-      rpc::context& ctx, uint64_t controller_server_id, const atfw::orbit::CTAServerHeartbeatReq& request);
+  int32_t handle_server_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
+                                  const atfw::orbit::CTAServerHeartbeatReq& request);
 
   // 来自Client
   // Client 启动
@@ -161,8 +161,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                  atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   void server_heartbeat(const atfw::orbit::DServerIdentity& server_identity);
-  rpc::result_code_type agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
-                                        const atfw::orbit::DServerIdentity& server_identity);
+  int32_t agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
+                          const atfw::orbit::DServerIdentity& server_identity);
   atfw::orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
   void on_client_process_exit(const orbit_agent_client_record_ptr& record, int64_t exit_status, int term_signal);
 

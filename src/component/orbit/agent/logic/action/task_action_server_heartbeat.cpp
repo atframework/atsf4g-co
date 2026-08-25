@@ -38,8 +38,8 @@ task_action_server_heartbeat::result_type task_action_server_heartbeat::operator
   const rpc_request_type& req_body = get_request_body();
   disable_response_message();
 
-  TASK_ACTION_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-      orbit_agent_manager::me()->handle_server_heartbeat(get_shared_context(), get_request_node_id(), req_body)));
+  TASK_ACTION_RETURN_CODE(
+      orbit_agent_manager::me()->handle_server_heartbeat(get_shared_context(), get_request_node_id(), req_body));
 }
 
 int task_action_server_heartbeat::on_success() { return get_result(); }

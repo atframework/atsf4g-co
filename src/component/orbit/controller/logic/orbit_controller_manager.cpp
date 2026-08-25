@@ -421,33 +421,30 @@ rpc::result_code_type orbit_controller_manager::handle_notify_client_exit(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_controller_manager::handle_agent_heartbeat(
-    rpc::context& ctx, const atfw::orbit::ATCAgentHeartbeatReq& request) {
+int32_t orbit_controller_manager::handle_agent_heartbeat(rpc::context& ctx,
+                                                         const atfw::orbit::ATCAgentHeartbeatReq& request) {
   // 通过请求中携带的 server_identity 路由到目标 Server
   const uint64_t target_server_unique_id = request.server_identity().unique_id();
   if (0 == target_server_unique_id) {
     FWLOGWARNING("orbit controller agent_heartbeat no server_identity in request, dropped");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
   auto server_node_id = request.server_identity().server_node_id();
   if (server_node_id == 0) {
     FWLOGWARNING("orbit controller agent_heartbeat: server session {} not found, dropped", target_server_unique_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
   }
 
   auto notify = rpc::make_shared_message<atfw::orbit::CTSClientAgentHeartbeatNotify>(ctx);
   *notify->mutable_agent_identity() = request.agent_identity();
   *notify->mutable_client_ids() = request.client_ids();
 
-  int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::client_agent_heartbeat(ctx, server_node_id, *notify));
+  int32_t rpc_result = rpc::controllertoserverservice::client_agent_heartbeat(ctx, server_node_id, *notify).unwrap();
   if (rpc_result < 0) {
     FWLOGERROR("orbit controller agent_heartbeat failed to server {:#x}, res: {}", server_node_id, rpc_result);
-    RPC_RETURN_CODE(rpc_result);
   }
-
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return rpc_result;
 }
 
 rpc::result_code_type orbit_controller_manager::handle_forward_to_server(
@@ -592,20 +589,18 @@ rpc::result_code_type orbit_controller_manager::handle_send_to_client(rpc::conte
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type orbit_controller_manager::handle_server_heartbeat(
-    rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request) {
+int32_t orbit_controller_manager::handle_server_heartbeat(rpc::context& ctx,
+                                                          const atfw::orbit::STCServerHeartbeatNotify& request) {
   auto forward_req = rpc::make_shared_message<atfw::orbit::CTAServerHeartbeatReq>(ctx);
   *forward_req->mutable_server_identity() = request.server_identity();
 
   for (const auto& agent_identity : request.agent_identity()) {
     const uint64_t agent_server_id = agent_identity.agent_server_id();
-    int32_t rpc_result =
-        RPC_AWAIT_CODE_RESULT(rpc::controllertoagentservice::server_heartbeat(ctx, agent_server_id, *forward_req));
+    int32_t rpc_result = rpc::controllertoagentservice::server_heartbeat(ctx, agent_server_id, *forward_req).unwrap();
     if (rpc_result < 0) {
       FWLOGERROR("orbit controller CTAServerHeartbeatReq failed to agent {:#x}, res: {}", agent_server_id, rpc_result);
       continue;
     }
   }
-
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
