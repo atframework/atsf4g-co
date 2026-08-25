@@ -93,6 +93,19 @@
       "group": "none"
     },
     {
+      "label": "Kill All",
+      "type": "shell",
+      "command": "./kill_all.sh",
+      "args": [],
+      "options": {
+        "cwd": "${workspaceFolder}/build/publish"
+      },
+      "windows": {
+        "command": "./kill_all.bat"
+      },
+      "group": "none"
+    },
+    {
       "label": "Cleanup Publish Logs",
       "type": "shell",
       "command": "find . -mindepth 2 -maxdepth 2 -type d -name log -exec rm -rf {} +",

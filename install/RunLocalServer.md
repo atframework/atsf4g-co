@@ -8,12 +8,7 @@
    ```bat
    tools\script\start_local_test_env.bat
    ```
-2. **启动 OpenTelemetry Collector**
-
-   ```bat
-   otelcol\bin\start.bat
-   ```
-3. **启动所有服务**
+2. **启动所有服务**
 
    ```bat
    start_all.bat
@@ -26,9 +21,11 @@
    ```bat
    stop_all.bat
    ```
-2. **关闭 otelcol 终端**
+2. **强制停止所有服务（必要时使用）**
 
-   * 手动关闭运行 `otelcol` 的命令行窗口。
+   ```bat
+   kill_all.bat
+   ```
 3. **停止本地测试环境**
 
    ```bat
