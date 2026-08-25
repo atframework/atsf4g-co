@@ -138,7 +138,7 @@ faction_join_progress get_faction_join_progress(const matching_room& room,
   return result;
 }
 
-uint64_t get_orbitsvr_server_id() {
+uint64_t get_orbitsvr_server_id(const std::string& match_id) {
   auto* module = logic_server_last_common_module();
   if (module == nullptr) {
     return 0;
@@ -148,8 +148,12 @@ uint64_t get_orbitsvr_server_id() {
   if (!discovery) {
     return 0;
   }
-  const auto& nodes = discovery->get_sorted_nodes();
-  return nodes.empty() || !nodes.front() ? 0 : nodes.front()->get_discovery_info().id();
+
+  auto selected = discovery->get_node_by_consistent_hash(match_id);
+  if (!selected) {
+    return 0;
+  }
+  return selected->get_discovery_info().id();
 }
 }  // namespace
 
@@ -1232,7 +1236,7 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
     return;
   }
   unindex_room(*room);
-  const uint64_t orbit_server_id = get_orbitsvr_server_id();
+  const uint64_t orbit_server_id = get_orbitsvr_server_id(room->get_matching_id());
   if (orbit_server_id == 0) {
     unindex_all_units(*room);
     room->mark_failed(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_BATTLE_START_FAILED, now);
