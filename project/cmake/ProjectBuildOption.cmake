@@ -185,7 +185,14 @@ include(EchoWithColor)
 # option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" OFF)
 cmake_dependent_option(PROJECT_SERVER_FRAME_USE_STD_COROUTINE "Using C++20 Coroutine" ON
                        "COMPILER_OPTIONS_TEST_STD_COROUTINE" OFF)
-option(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT "Enable await checker for legacy coroutine" ON)
+
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+  option(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT "Enable await checker for legacy coroutine" ON)
+  option(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT "Enable await checker for modern coroutine" ON)
+else()
+  option(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT "Enable await checker for legacy coroutine" OFF)
+  option(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT "Enable await checker for modern coroutine" OFF)
+endif()
 
 # Unit test hook seams (see src/tools/rpc-unit-test). Default aligns with the CTest gate of this project: ON when
 # BUILD_TESTING or PROJECT_ENABLE_UNITTEST is enabled, otherwise forced OFF so production builds carry no test registry,

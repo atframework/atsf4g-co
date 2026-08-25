@@ -15,7 +15,9 @@
 
 #include <std/explicit_declare.h>
 
-#if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
 #  include <cassert>
 #endif
 #include <cstdint>
@@ -40,18 +42,40 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready<void> {
 
  public:
   always_ready() {}
-
-#if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
+  ~always_ready() {
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
+    assert(awaited_);
 #endif
+  }
 
-  ATFW_UTIL_FORCEINLINE void unwrap() const noexcept {}
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept { awaited_ = true; }
+  ATFW_UTIL_FORCEINLINE void unwrap() noexcept { _internal_set_awaited(); }
+#else
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
+  ATFW_UTIL_FORCEINLINE void unwrap() noexcept {}
+#endif
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-  bool await_ready() const noexcept { return true; }
+  bool await_ready() noexcept {
+    _internal_set_awaited();
+    return true;
+  }
   void await_suspend(LIBCOPP_MACRO_STD_COROUTINE_NAMESPACE coroutine_handle<>) const noexcept {}
-  void await_resume() const noexcept {}
+  void await_resume() noexcept { _internal_set_awaited(); }
+#endif
+
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
+
+ private:
+  bool awaited_ = false;
 #endif
 };
 
@@ -64,22 +88,48 @@ class ATFW_UTIL_SYMBOL_VISIBLE always_ready {
   always_ready(value_type&& input)  // NOLINT: runtime/explicit
       : result_data_(std::move(input)) {}
 
-#if defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT
-  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
+  ~always_ready() {
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
+    assert(awaited_);
 #endif
+  }
 
-  ATFW_UTIL_FORCEINLINE value_type unwrap() const noexcept { return result_data_; }
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept { awaited_ = true; }
+  ATFW_UTIL_FORCEINLINE value_type unwrap() noexcept {
+    _internal_set_awaited();
+    return result_data_;
+  }
+#else
+  ATFW_UTIL_FORCEINLINE void _internal_set_awaited() noexcept {}
+  ATFW_UTIL_FORCEINLINE value_type unwrap() noexcept { return result_data_; }
+#endif
 
   ATFW_UTIL_FORCEINLINE operator value_type() const noexcept { return result_data_; }
 
 #if defined(PROJECT_SERVER_FRAME_USE_STD_COROUTINE) && PROJECT_SERVER_FRAME_USE_STD_COROUTINE
-  bool await_ready() const noexcept { return true; }
+  bool await_ready() noexcept {
+    _internal_set_awaited();
+    return true;
+  }
   void await_suspend(LIBCOPP_MACRO_STD_COROUTINE_NAMESPACE coroutine_handle<>) const noexcept {}
-  value_type await_resume() const noexcept { return result_data_; }
+  value_type await_resume() noexcept {
+    _internal_set_awaited();
+    return result_data_;
+  }
 #endif
 
  private:
   value_type result_data_;
+#if (defined(PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) && \
+     PROJECT_SERVER_FRAME_LEGACY_COROUTINE_CHECK_AWAIT) ||         \
+    (defined(PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT) && PROJECT_SERVER_FRAME_MODERN_COROUTINE_CHECK_AWAIT)
+  bool awaited_ = false;
+#endif
 };
 
 using always_ready_code_type = always_ready<int32_t>;
