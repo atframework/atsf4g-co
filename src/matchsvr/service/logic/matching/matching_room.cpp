@@ -134,7 +134,7 @@ const PROJECT_NAMESPACE_ID::DMatchingOrbitInitData& matching_room::get_match_orb
 void matching_room::add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                                                const PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& detail,
                                                const std::string& user_open_id) {
-  auto data = orbit_users_init_detail_[user_key.SerializeAsString()];
+  auto& data = orbit_users_init_detail_[user_key.SerializeAsString()];
   protobuf_copy_message(*data.mutable_orbit_init_data(), detail);
   data.set_user_open_id(user_open_id);
 }
