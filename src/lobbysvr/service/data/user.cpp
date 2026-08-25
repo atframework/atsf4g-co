@@ -431,7 +431,7 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
 
   ret = user_team_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWPLOGERROR(*this, "dump user_team_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("{} dump user_team_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
