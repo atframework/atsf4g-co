@@ -9,6 +9,7 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <data/user_key_hash_helper.h>
 #include <cstdint>
 #include <memory>
 #include <set>
@@ -198,8 +199,9 @@ class matching_room {
   PROJECT_NAMESPACE_ID::DOrbitRoomKey orbit_room_key_;
   int64_t orbit_expired_timepoint_ = 0;
 
-  std::unordered_map<std::string, PROJECT_NAMESPACE_ID::DMatchingOrbitInitData> orbit_users_init_detail_;
-
+  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, PROJECT_NAMESPACE_ID::DMatchingOrbitInitData, user_key_hash_t,
+                     user_key_equal_t>
+      orbit_users_init_detail_;
   // 房间级 WAL publisher，负责日志保留、重放、快照和跨服通知。
   matching_wal_log_operator::strong_ptr<matching_wal_publisher> wal_publisher_;
 };

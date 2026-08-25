@@ -158,13 +158,11 @@ service RankBoardService {
   rpc rank_get_special(SSRankGetSpecifyRankReq) returns (SSRankGetSpecifyRankRsp) {
     option (atframework.rpc_options) = {
       api_name: "获取指定排行榜数据"
-      allow_no_wait: true
     };
   };
   rpc rank_set_score(SSRankSetScoreReq) returns (SSRankSetScoreRsp) {
     option (atframework.rpc_options) = {
       api_name: "更新用户排行榜数据"
-      allow_no_wait: true
     };
   };
 
@@ -178,58 +176,49 @@ service RankBoardService {
   rpc rank_del_one_user(SSRankDelUserReq) returns (SSRankDelUserRsp) {
     option (atframework.rpc_options) = {
       api_name: "删除单个用户数据"
-      allow_no_wait: true
     };
   };
 
   rpc rank_get_top(SSRankGetTopReq) returns (SSRankGetTopRsp) {
     option (atframework.rpc_options) = {
       api_name: "获取连续榜单数据"
-      allow_no_wait: true
     };
   };
 
   rpc rank_clear(SSRankClearReq) returns (SSRankClearRsp) {
     option (atframework.rpc_options) = {
       api_name: "清理榜单"
-      allow_no_wait: true
     };
   };
 
   rpc rank_load_main(SSRankLoadMainReq) returns (SSRankLoadMainRsp) {
     option (atframework.rpc_options) = {
       api_name: "主节点加载排行榜信息"
-      allow_no_wait: true
     };
   };
   rpc rank_check_slave(SSRankCheckSlaveReq) returns (SSRankCheckSlaveRsp) {
     option (atframework.rpc_options) = {
       api_name: "查询是否是从节点并返回数据版本信息"
-      allow_no_wait: true
     };
   };
   rpc rank_event_sync(stream SSRankEventSync) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "主从节点信息同步"
-      allow_no_wait: true
     };
   };
   rpc rank_heartbeat(SSRankHeartbeatReq) returns (SSRankHeartbeatRsp) {
     option (atframework.rpc_options) = {
       api_name: "主从心跳"
-      allow_no_wait: true
     };
   };
   rpc rank_switch_to_slave(SSRankSwitchToSlaveReq) returns (SSRankSwitchToSlaveRsp) {
     option (atframework.rpc_options) = {
       api_name: "切换到从节点"
-      allow_no_wait: true
     };
   };
   rpc rank_get_special_one_front_back(SSRankGetUserFrontBackReq) returns (SSRankGetUserFrontBackRsp) {
     option (atframework.rpc_options) = {
       api_name: "获取用户前后排名count的排行榜数据"
-      allow_no_wait: true
     };
   };
   rpc rank_make_new_mirror(SSRankMakeNewMirrorReq) returns (SSRankMakeNewMirrorRsp) {
@@ -241,7 +230,6 @@ service RankBoardService {
   rpc rank_check_mirror_dump_finish(SSRankCheckMirrorDumpFinishReq) returns (SSRankCheckMirrorDumpFinishRsp) {
     option (atframework.rpc_options) = {
       api_name: "检查镜像是否生成完成"
-      allow_no_wait: true
     };
   };
 }
