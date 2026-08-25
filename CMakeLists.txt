@@ -148,6 +148,20 @@ if(PROJECT_ENABLE_SAMPLE)
   add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/sample")
 endif()
 
+function(project_apply_incremental_link_database DIRECTORY_NAME)
+  get_property(PROJECT_DIRECTORY_TARGETS DIRECTORY "${DIRECTORY_NAME}" PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(PROJECT_TARGET_NAME IN LISTS PROJECT_DIRECTORY_TARGETS)
+    project_tool_set_target_incremental_link_database("${PROJECT_TARGET_NAME}")
+  endforeach()
+
+  get_property(PROJECT_SUBDIRECTORIES DIRECTORY "${DIRECTORY_NAME}" PROPERTY SUBDIRECTORIES)
+  foreach(PROJECT_SUBDIRECTORY IN LISTS PROJECT_SUBDIRECTORIES)
+    project_apply_incremental_link_database("${PROJECT_SUBDIRECTORY}")
+  endforeach()
+endfunction()
+
+project_apply_incremental_link_database("${CMAKE_CURRENT_SOURCE_DIR}")
+
 # Copy 资源和执行清理流程
 file(
   GLOB PROJECT_INSTALL_DST_LIST

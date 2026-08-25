@@ -379,7 +379,21 @@ function(project_tool_split_target_debug_sybmol)
   endif()
 endfunction()
 
-function(project_tool_set_target_runtime_output_directory OUTPUT_DIR)
+function(project_tool_set_target_incremental_link_database TARGET_NAME)
+  if(MSVC)
+    get_target_property(PROJECT_TARGET_TYPE "${TARGET_NAME}" TYPE)
+    if(PROJECT_TARGET_TYPE STREQUAL "EXECUTABLE"
+       OR PROJECT_TARGET_TYPE STREQUAL "SHARED_LIBRARY"
+       OR PROJECT_TARGET_TYPE STREQUAL "MODULE_LIBRARY")
+      target_link_options(
+        ${TARGET_NAME}
+        PRIVATE
+        "LINKER:/ILK:${PROJECT_MSVC_INCREMENTAL_LINK_DATABASE_DIRECTORY}/$<TARGET_FILE_BASE_NAME:${TARGET_NAME}>.ilk")
+    endif()
+  endif()
+endfunction()
+
+function(project_tool_set_target_runtime_output_directory OUTPUT_DIR TARGET_NAME)
   file(RELATIVE_PATH TARGET_OUTPUT_RELATIVE_PATH "${OUTPUT_DIR}" "${PROJECT_INSTALL_BAS_DIR}")
   cmake_parse_arguments(project_tool_set_target_runtime_output_directory "WITH_TARGET_RPATH;WITH_ARCHIVE_RPATH" "" ""
                         ${ARGN})
@@ -448,6 +462,7 @@ function(project_tool_set_target_runtime_output_directory OUTPUT_DIR)
       string(TOUPPER "${PROJECT_OUTPUT_CONFIG}" PROJECT_OUTPUT_CONFIG_UPPER)
       set_property(TARGET ${TARGET_NAME} PROPERTY "PDB_OUTPUT_DIRECTORY_${PROJECT_OUTPUT_CONFIG_UPPER}" "${OUTPUT_DIR}")
     endforeach()
+    project_tool_set_target_incremental_link_database(${TARGET_NAME})
   endif()
   set_property(
     TARGET ${TARGET_NAME}

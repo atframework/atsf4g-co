@@ -428,6 +428,7 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
     project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_BASH)
     project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_STATIC_LIBRARY_PWSH)
   endif()
+  project_tool_set_target_incremental_link_database(${TARGET_FULL_NAME})
   add_dependencies(${TARGET_FULL_NAME} ${TARGET_CODEGEN_NAME})
   # 记录自己的 pb 文件路径 以及使用的组件的 pb 文件路径
   unset(__PBFILE)
@@ -604,6 +605,7 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
   source_group(TREE ${SERVICE_ROOT_DIR} FILES ${project_service_declare_instance_HEADERS}
                                               ${project_service_declare_instance_SOURCES})
   add_executable(${TARGET_NAME} ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES})
+  project_tool_set_target_incremental_link_database(${TARGET_NAME})
 
   project_tool_split_target_debug_sybmol(${TARGET_NAME})
   generate_for_pb_add_dependencies(${TARGET_NAME} "${project_service_declare_instance_GENERATED_FLOW_NAMES}")
