@@ -87,11 +87,59 @@ message DTeamKey {
   uint32 zone_id = 2;
 }
 
+// 注意必须低于 1000
 enum EnTeamPermissionRole {
   EN_TEAM_MEMBER_ROLE_GUEST = 0;
   EN_TEAM_MEMBER_ROLE_NORMAL = 100;
   EN_TEAM_MEMBER_ROLE_ADMIN = 200;
   EN_TEAM_MEMBER_ROLE_OWNER = 300;
+}
+
+// 队伍数据检查器
+// 由于Client端接收到的队伍数据可能有一定延迟，为了解决一致性未提，这里提供简单的数据操作冲突机制
+
+message DTeamConditionMinMaxValue {
+  int64 min_value = 1;  // 最小值(0为不限制)
+  int64 max_value = 2;  // 最大值(0为不限制)
+}
+
+message DTeamMemberConditionChecker {
+  // 共享的成员数据检查，所有的值必须相等（即与关系）
+  // shared_member_data 中的 value
+  // 对应DTeamMember.shared_member_data里的DTeamAnyData的data字段，permission字段不参与检查
+  map<int64, google.protobuf.Any> shared_member_data = 1;
+
+  // 权限检查
+  DTeamConditionMinMaxValue permission = 2;
+}
+
+message DTeamConditionChecker {
+  // 共享的队伍数据检查，所有的值必须相等（即与关系）
+  // shared_team_data 中的 value 对应DTeamStorage.shared_team_data里的DTeamAnyData的data字段，permission字段不参与检查
+  map<int64, google.protobuf.Any> shared_team_data = 1;
+
+  // 队伍成员数量
+  DTeamConditionMinMaxValue members_count = 2;
+
+  message DMemberConditionGroup {
+    oneof scope_type {
+      // 指定成员
+      atframework.shared.DUserIDKey user_key = 1;
+      // 所有成员
+      bool all_members = 2;
+      // 任意成员
+      bool any_members = 3;
+            // 满足条件的成员数量限制
+      DTeamConditionMinMaxValue members_count = 4;
+      // 满足条件的成员数量百分比限制
+      DTeamConditionMinMaxValue members_percent = 5;
+
+    }
+
+    DTeamMemberConditionChecker member_condition = 11;
+  }
+  // 成员的条件组，所有的值必须相等（即与关系）
+  repeated DMemberConditionGroup member_condition_group = 11;
 }
 
 message DTeamMember {
@@ -125,6 +173,10 @@ message DTeamMember {
 message DTeamMemberUpdateData {
   atframework.shared.DUserIDKey user_key = 1;
   atframework.dtmq.DChannelIdKey user_channel = 2;
+
+  // 更新条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果通过，最终的Event数据会被裁剪掉
+  repeated DTeamConditionChecker condition = 5;
 
   string client_version = 7;
   uint64 user_router_server_id = 8;
@@ -238,6 +290,10 @@ message DTeamStorage {
 
 message DTeamUpdateData {
   DTeamConfigure configure = 3;
+
+  // 更新条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果通过，最终的Event数据会被裁剪掉
+  repeated DTeamConditionChecker condition = 5;
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开

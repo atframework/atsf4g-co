@@ -169,12 +169,11 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_join_request(
       rpc::context& ctx, const atfw::team::SSTeamRoomRejectJoinRequestReq& req);
 
-  // 校验外部请求的操作权限(成员身份与角色门槛，见 DTeamConfigure)，通过返回 0，否则返回错误码且不提交频道事件
+  // 校验外部请求的操作权限(成员身份与角色门槛，见 DTeamConfigure；member_update/team_update 还需通过
+  // 其携带的 DTeamConditionChecker 数据条件检查，未通过返回 EN_ERR_TEAM_CONDITION_NOT_MATCH)，
+  // 通过返回 0，否则返回错误码且不提交频道事件
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_action_permission(
       const PROJECT_NAMESPACE_ID::DUserIDKey& operator_key, const atfw::team::DTeamAction& action);
-
-  // 刷新成员的 LRU 访问位置(将活跃成员移到淘汰队列末尾)，成员不存在时为空操作
-  void touch_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
 
   // 提交组队操作(协程内调用)，来自外部服务的写请求统一经由此处写入频道日志
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
@@ -330,6 +329,14 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   atfw::team::EnTeamPermissionRole get_reject_invitation_role() const;     // 默认 ADMIN
   // 是否允许非成员发起加入请求(false 即私人小队，仅通过邀请加入)，默认允许
   bool is_join_request_allowed() const;
+
+  // 更新条件检查(DTeamMemberUpdateData/DTeamUpdateData.condition): 列表为空表示无附加条件(直接通过)；
+  // 各 checker 之间是或关系(任一通过即通过)，checker 内部各项数据是与关系
+  bool check_update_conditions(const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions);
+  // 单个 checker(与关系): 共享队伍数据等值 + 成员数量范围 + 全部成员条件组
+  bool check_condition_checker(const atfw::team::DTeamConditionChecker& checker);
+  // 成员条件组: 按 scope(指定成员/全部/任意/数量/百分比门槛)统计满足 member_condition 的成员并判定
+  bool check_member_condition_group(const atfw::team::DTeamConditionChecker::DMemberConditionGroup& group);
 
  private:
   atfw::team::DTeamKey team_key_;

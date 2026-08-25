@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+package atframework.shared;
+
+// 本文件用于存放和业务内容有关的组队共享数据定义，而 com.struct.team.proto 是和业务内容无关的定义
+
+enum EnTeamType {
+  EN_TEAM_TYPE_INVALID = 0;  // 无效类型
+  EN_TEAM_TYPE_NORMAL = 1;   // 普通组队
+}
+
+// 用于 DTeamStorage.shared_team_data 和 DTeamMember.shared_member_data 的Key定义
+// 注意按不同的业务模块划分的Key不同
+// 实际生效的Key是 EnTeamSharedModuleType 和 EnTeamSharedData<业务模块>/EnTeamMemberSharedData<业务模块> 的组合
+// Key的算法:
+// - 0-15位: EnTeamSharedData<业务模块>/EnTeamMemberSharedData<业务模块> 的值
+// - 16-31位: 模块内数据ID
+enum EnTeamSharedModuleType {
+  EN_TEAM_SHARED_MODULE_TYPE_INVALID = 0;
+  EN_TEAM_SHARED_MODULE_TYPE_USER = 1;       // 用户模块数据
+  EN_TEAM_SHARED_MODULE_TYPE_CHARACTER = 2;  // 用户角色数据
+  EN_TEAM_SHARED_MODULE_TYPE_BATTLE = 3;     // 战斗模块数据
+}
+
+// ================================================ 队伍数据定义 ================================================
+// 用于 DTeamStorage.shared_team_data 的Key定义，注意按不同的业务模块划分Key的范围
+// - 类型的命名规范是 EnTeamSharedData<业务模块>，例如 EnTeamSharedDataTeam
+// - 值的命名规范是 EN_TEAM_SHARED_DATA_<业务模块>_<具体类型>，例如 EN_TEAM_SHARED_DATA_TEAM_BASIC_PROFILE
+// ------------------------------------------------ 队伍数据定义 ------------------------------------------------
+
+enum EnTeamSharedDataBattle {
+  EN_TEAM_SHARED_DATA_BATTLE_INVALID = 0;   // 无效类型
+  EN_TEAM_SHARED_DATA_BATTLE_MATCHING = 1;  // 匹配中: bool
+}
+
+// ================================================ 队伍成员数据定义 ================================================
+// 用于 DTeamMember.shared_member_data 的Key定义，注意按不同的业务模块划分Key的范围
+// - 类型的命名规范是 EnTeamMemberSharedData<业务模块>，例如 EnTeamMemberSharedDataUser
+// - 值的命名规范是 EN_TEAM_MEMBER_SHARED_DATA_<业务模块>_<具体类型>，例如 EN_TEAM_MEMBER_SHARED_DATA_USER_BASIC_PROFILE
+// ------------------------------------------------ 队伍成员数据定义 ------------------------------------------------
+
+enum EnTeamMemberSharedDataUser {
+  // 对应 EnTeamSharedModuleType 类型: EN_TEAM_SHARED_MODULE_TYPE_USER
+  EN_TEAM_MEMBER_SHARED_DATA_USER_INVALID = 0;        // 无效类型
+  EN_TEAM_MEMBER_SHARED_DATA_USER_BASIC_PROFILE = 1;  // 玩家基础数据: DUserBasicData
+}
+
+enum EnTeamMemberSharedDataCharacter {
+  // 对应 EnTeamSharedModuleType 类型: EN_TEAM_SHARED_MODULE_TYPE_CHARACTER
+  EN_TEAM_MEMBER_SHARED_DATA_CHARACTER_INVALID = 0;  // 无效类型
+  EN_TEAM_MEMBER_SHARED_DATA_CHARACTER_READY = 1;    // 是否准备就绪: bool
+}

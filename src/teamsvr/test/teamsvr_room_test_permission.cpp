@@ -1,6 +1,8 @@
 // Copyright 2026 atframework
 //
 // teamsvr-room 权限与"拒绝时零写入"用例(TEAM_ROOM_TEST_PLAN.md §4.2 PERM-01~14)。
+// COND-01~05 覆盖 member_update/team_update 的 DTeamConditionChecker 数据条件检查
+// (共享队伍/成员数据等值、成员数量范围、成员条件组 scope、checker 或关系/内部与关系)与通过后裁剪。
 // 所有失败断言均带统一零写入门禁: team 房间频道 send/update/reset_lock/destroy 调用数与
 // 个人频道通知数保持不变。
 
@@ -100,6 +102,44 @@ atfw::team::DTeamAction make_team_update_action() {
   auto* data = (*action.mutable_team_update()->mutable_shared_team_data())[42].mutable_data();
   data->set_value(std::string("ut-team-data"));
   return action;
+}
+// member_update 并写入一条共享成员数据(Any 只设置 value，与 make_team_update_action 的写法一致)
+atfw::team::DTeamAction make_member_update_data_action(const PROJECT_NAMESPACE_ID::DUserIDKey& key, int64_t data_key,
+                                                       const std::string& value) {
+  atfw::team::DTeamAction action;
+  auto* update = action.mutable_member_update();
+  protobuf_copy_message(*update->mutable_user_key(), key);
+  (*update->mutable_shared_member_data())[data_key].mutable_data()->set_value(value);
+  return action;
+}
+
+// team_update 并写入一条共享队伍数据
+atfw::team::DTeamAction make_team_update_data_action(int64_t data_key, const std::string& value) {
+  atfw::team::DTeamAction action;
+  (*action.mutable_team_update()->mutable_shared_team_data())[data_key].mutable_data()->set_value(value);
+  return action;
+}
+
+// 断言 fake journal 最后一条 kEvent 日志中的 member_update/team_update 不含 condition(通过后按协议裁剪)
+void expect_last_event_condition_trimmed(const fake_team_room_channel& fake) {
+  const atfw::dtmq::DChannelMessage* last_event = nullptr;
+  for (const auto& message : fake.journal()) {
+    if (message.detail().command_case() == atfw::dtmq::DChannelMessageDetail::kEvent) {
+      last_event = &message;
+    }
+  }
+  CASE_EXPECT_TRUE(nullptr != last_event);
+  if (nullptr == last_event) {
+    return;
+  }
+  atfw::team::DTeamAction action;
+  CASE_EXPECT_TRUE(last_event->detail().event().UnpackTo(&action));
+  if (action.has_member_update()) {
+    CASE_EXPECT_EQ(0, action.member_update().condition_size());
+  }
+  if (action.has_team_update()) {
+    CASE_EXPECT_EQ(0, action.team_update().condition_size());
+  }
 }
 
 atfw::team::DTeamAction make_election_action(const PROJECT_NAMESPACE_ID::DUserIDKey& key) {
@@ -985,6 +1025,465 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, super, make_remove_action(vip)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(vip, false).get());
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+// ============ COND-01: member_update 成员共享数据条件(指定成员 scope + 通过后裁剪 condition) ============
+CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 预置成员共享数据 [7]="ready"(不带条件)
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal,
+                                            make_member_update_data_action(members.normal, 7, "ready")));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto member = room->find_member(members.normal, false);
+    CASE_EXPECT_TRUE(!!member);
+    if (member) {
+      auto it = member->member_data.shared_member_data().find(7);
+      CASE_EXPECT_TRUE(it != member->member_data.shared_member_data().end());
+      if (it != member->member_data.shared_member_data().end()) {
+        CASE_EXPECT_EQ(std::string("ready"), it->second.data().value());
+      }
+    }
+  }
+
+  // 条件: 指定成员(normal)的 shared_member_data[7] == 期望值
+  auto make_conditioned_update = [&members](const std::string& expected) {
+    atfw::team::DTeamAction action = make_member_update_data_action(members.normal, 8, "lv2");
+    auto* group = action.mutable_member_update()->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group->mutable_user_key(), members.normal);
+    (*group->mutable_member_condition()->mutable_shared_member_data())[7].set_value(expected);
+    return action;
+  };
+
+  // 条件匹配: 通过并应用更新，最终事件数据裁剪掉 condition
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, make_conditioned_update("ready")));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_conditioned_update("ready")));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  expect_last_event_condition_trimmed(fake);
+  {
+    auto member = room->find_member(members.normal, false);
+    CASE_EXPECT_TRUE(!!member);
+    if (member) {
+      auto it = member->member_data.shared_member_data().find(8);
+      CASE_EXPECT_TRUE(it != member->member_data.shared_member_data().end());
+      if (it != member->member_data.shared_member_data().end()) {
+        CASE_EXPECT_EQ(std::string("lv2"), it->second.data().value());
+      }
+    }
+  }
+
+  // 条件值不匹配: 拒绝且零写入
+  auto before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                 check_permission(env, room, members.normal, make_conditioned_update("not-ready")));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_conditioned_update("not-ready")));
+  expect_no_write(fake, env, before);
+
+  // 条件 key 不存在: 拒绝且零写入
+  {
+    atfw::team::DTeamAction missing_key_action = make_member_update_data_action(members.normal, 8, "lv3");
+    auto* group = missing_key_action.mutable_member_update()->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group->mutable_user_key(), members.normal);
+    (*group->mutable_member_condition()->mutable_shared_member_data())[99].set_value("x");
+    before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, missing_key_action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, missing_key_action));
+    expect_no_write(fake, env, before);
+  }
+
+  // 指定成员不存在: 拒绝且零写入
+  {
+    atfw::team::DTeamAction no_member_action = make_member_update_data_action(members.normal, 8, "lv3");
+    auto* group = no_member_action.mutable_member_update()->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group->mutable_user_key(), members.outsider);
+    before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, no_member_action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, no_member_action));
+    expect_no_write(fake, env, before);
+  }
+
+  // ADMIN 更新他人数据(manage_member_role 路径)同样执行条件检查
+  {
+    before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.admin, make_conditioned_update("not-ready")));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin, make_conditioned_update("not-ready")));
+    expect_no_write(fake, env, before);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.admin, make_conditioned_update("ready")));
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ COND-02: team_update 队伍共享数据条件(等值/缺失 key + 通过后裁剪 condition) ============
+CASE_TEST(teamsvr_room_permission, team_update_condition_team_data) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 预置队伍共享数据 [42]="ut-team-data"(不带条件)
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_team_update_action()));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // 条件匹配([42]=="ut-team-data") + 写入 [43]="v2": 通过并应用，最终事件数据裁剪掉 condition
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(43, "v2");
+    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[42].set_value("ut-team-data");
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    expect_last_event_condition_trimmed(fake);
+  }
+
+  // 应用生效验证: 以新值 [43]=="v2" 为条件可通过(证明上一次 team_update 已应用)
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(44, "v3");
+    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[43].set_value("v2");
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, action));
+  }
+
+  // 条件值不匹配: 拒绝且零写入
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(44, "v3");
+    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[42].set_value("v2");
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    expect_no_write(fake, env, before);
+  }
+
+  // 条件 key 不存在: 拒绝且零写入
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(44, "v3");
+    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[99].set_value("x");
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    expect_no_write(fake, env, before);
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ COND-03: 成员数量范围 + checker 内部与关系/checker 之间或关系 ============
+CASE_TEST(teamsvr_room_permission, team_update_condition_count_and_or) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 标准队伍 3 名成员(owner/admin/normal)
+  auto count_condition_action = [](int64_t min_value, int64_t max_value) {
+    atfw::team::DTeamAction action = make_team_update_data_action(50, "x");
+    auto* range = action.mutable_team_update()->add_condition()->mutable_members_count();
+    range->set_min_value(min_value);
+    range->set_max_value(max_value);
+    return action;
+  };
+
+  // 数量范围内: min=2 / max=3 通过; 0 表示该方向不限制
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, count_condition_action(2, 0)));
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, count_condition_action(0, 3)));
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, count_condition_action(0, 0)));
+
+  // 数量范围外: min=4 / max=2 拒绝且零写入
+  auto before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                 check_permission(env, room, members.normal, count_condition_action(4, 0)));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, count_condition_action(4, 0)));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                 check_permission(env, room, members.normal, count_condition_action(0, 2)));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, count_condition_action(0, 2)));
+  expect_no_write(fake, env, before);
+
+  // checker 内部与关系: 共享队伍数据匹配但成员数量不满足 -> 整体拒绝
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_team_update_data_action(60, "and")));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(61, "y");
+    auto* checker = action.mutable_team_update()->add_condition();
+    (*checker->mutable_shared_team_data())[60].set_value("and");
+    checker->mutable_members_count()->set_min_value(4);
+    before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    expect_no_write(fake, env, before);
+  }
+
+  // checker 之间或关系: [数量不满足, 数量满足] -> 通过
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(62, "z");
+    action.mutable_team_update()->add_condition()->mutable_members_count()->set_min_value(4);
+    action.mutable_team_update()->add_condition()->mutable_members_count()->set_min_value(2);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, action));
+  }
+  // 或关系全部失败: [min=4, max=2] -> 拒绝且零写入
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(62, "z");
+    action.mutable_team_update()->add_condition()->mutable_members_count()->set_min_value(4);
+    action.mutable_team_update()->add_condition()->mutable_members_count()->set_max_value(2);
+    before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    expect_no_write(fake, env, before);
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ COND-04: 成员条件组 scope(全员/任意/指定成员/数量门槛)与角色范围 ============
+CASE_TEST(teamsvr_room_permission, member_condition_group_scopes) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  // 角色: owner=OWNER(300), admin=ADMIN(200), normal=NORMAL(100)
+  const int64_t kNormal = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL;
+  const int64_t kAdmin = atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN;
+  const int64_t kOwner = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER;
+
+  auto make_group_action = []() { return make_team_update_data_action(51, "s"); };
+
+  // all_members: 全员角色 >= NORMAL 通过; >= ADMIN 拒绝(normal 只有 100)
+  {
+    atfw::team::DTeamAction pass_action = make_group_action();
+    auto* group = pass_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->set_all_members(true);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, pass_action));
+
+    atfw::team::DTeamAction fail_action = make_group_action();
+    group = fail_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->set_all_members(true);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kAdmin);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, fail_action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, fail_action));
+    expect_no_write(fake, env, before);
+  }
+
+  // any_members: 存在 OWNER 通过; 不存在角色 >= 400 的成员则拒绝
+  {
+    atfw::team::DTeamAction pass_action = make_group_action();
+    auto* group = pass_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->set_any_members(true);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kOwner);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, pass_action));
+
+    atfw::team::DTeamAction fail_action = make_group_action();
+    group = fail_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->set_any_members(true);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(400);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, fail_action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, fail_action));
+    expect_no_write(fake, env, before);
+  }
+
+  // 数量门槛: 角色 >= NORMAL 满足全部 3 人
+  // members_count.min=2 通过; min=4 拒绝
+  {
+    atfw::team::DTeamAction pass_action = make_group_action();
+    auto* group = pass_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->mutable_members_count()->set_min_value(2);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, pass_action));
+
+    atfw::team::DTeamAction fail_action = make_group_action();
+    group = fail_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->mutable_members_count()->set_min_value(4);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, fail_action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, fail_action));
+    expect_no_write(fake, env, before);
+  }
+
+  // members_count.max: 满足 3 人 <= 3 通过; <= 2 拒绝; 无人满足(>=400)时 <=1 通过
+  {
+    atfw::team::DTeamAction pass_action = make_group_action();
+    auto* group = pass_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->mutable_members_count()->set_max_value(3);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, pass_action));
+
+    atfw::team::DTeamAction fail_action = make_group_action();
+    group = fail_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->mutable_members_count()->set_max_value(2);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, fail_action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, fail_action));
+    expect_no_write(fake, env, before);
+
+    atfw::team::DTeamAction zero_pass_action = make_group_action();
+    group = zero_pass_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    // DTeamConditionMinMaxValue 语义: max=0 表示不限制(无人满足时 <=1 也通过)
+    group->mutable_members_count()->set_max_value(1);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(400);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, zero_pass_action));
+
+    // max=0 不限制: 全员满足也通过
+    atfw::team::DTeamAction unlimited_action = make_group_action();
+    group = unlimited_action.mutable_team_update()->add_condition()->add_member_condition_group();
+    group->mutable_members_count()->set_max_value(0);
+    group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, unlimited_action));
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ COND-05: 百分比 scope、多条件组与关系、空 scope 失败关闭 ============
+CASE_TEST(teamsvr_room_permission, member_condition_group_percent) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  const int64_t kNormal = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL;
+  const int64_t kAdmin = atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN;
+
+  auto percent_action = [](uint32_t percent, bool is_min, int64_t min_role) {
+    atfw::team::DTeamAction action = make_team_update_data_action(52, "p");
+    auto* group = action.mutable_team_update()->add_condition()->add_member_condition_group();
+    if (is_min) {
+      group->mutable_members_percent()->set_min_value(percent);
+    } else {
+      group->mutable_members_percent()->set_max_value(percent);
+    }
+    group->mutable_member_condition()->mutable_permission()->set_min_value(min_role);
+    return action;
+  };
+
+  // 3 名成员中角色 >= ADMIN 满足 2 人(66.67%): min=66 -> 2*100 >= 3*66 通过; min=67 -> 拒绝
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, percent_action(66, true, kAdmin)));
+  {
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, percent_action(67, true, kAdmin)));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, percent_action(67, true, kAdmin)));
+    expect_no_write(fake, env, before);
+  }
+
+  // max=67 -> 2*100 <= 3*67 通过; max=66 -> 拒绝; 全员满足时 max=0 -> 拒绝
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, percent_action(67, false, kAdmin)));
+  {
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, percent_action(66, false, kAdmin)));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, percent_action(66, false, kAdmin)));
+    // max=33 -> 上限 floor(3*33/100)=0，全员满足时 3 > 0 拒绝
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, percent_action(33, false, kNormal)));
+    expect_no_write(fake, env, before);
+  }
+
+  // DTeamConditionMinMaxValue 语义: percent max=0 表示不限制，全员满足也通过
+  CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, percent_action(0, false, kNormal)));
+
+  // 多条件组与关系: [全员 >= NORMAL 通过] + [指定 normal >= ADMIN 拒绝] -> 整体拒绝
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(53, "m");
+    auto* checker = action.mutable_team_update()->add_condition();
+    auto* pass_group = checker->add_member_condition_group();
+    pass_group->set_all_members(true);
+    pass_group->mutable_member_condition()->mutable_permission()->set_min_value(kNormal);
+    auto* fail_group = checker->add_member_condition_group();
+    protobuf_copy_message(*fail_group->mutable_user_key(), members.normal);
+    fail_group->mutable_member_condition()->mutable_permission()->set_min_value(kAdmin);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    expect_no_write(fake, env, before);
+  }
+
+  // 未设置 scope 的空条件组: 失败关闭，拒绝且零写入
+  {
+    atfw::team::DTeamAction action = make_team_update_data_action(54, "e");
+    action.mutable_team_update()->add_condition()->add_member_condition_group();
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_permission(env, room, members.normal, action));
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
+    expect_no_write(fake, env, before);
+  }
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

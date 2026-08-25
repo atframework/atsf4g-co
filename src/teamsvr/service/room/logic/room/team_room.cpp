@@ -38,6 +38,7 @@
 #include <rpc/team/team_common_api.h>
 
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -95,6 +96,44 @@ static bool team_any_data_map_equal(const google::protobuf::Map<int64_t, atfw::t
     }
   }
   return true;
+}
+// 百分比条件计算基准: 用整数交叉相乘(satisfied * kTeamConditionPercentBase 与 total * percent)
+// 代替浮点除法，避免精度问题
+constexpr const int64_t kTeamConditionPercentBase = 100;
+
+// 最小/最大值范围检查: 0 表示该方向不限制
+static inline bool team_condition_range_match(int64_t value,
+                                              const atfw::team::DTeamConditionMinMaxValue& range) noexcept {
+  if (range.min_value() != 0 && value < range.min_value()) {
+    return false;
+  }
+  if (range.max_value() != 0 && value > range.max_value()) {
+    return false;
+  }
+  return true;
+}
+
+// 共享数据等值检查(与关系): expected 中的每个 key 都必须存在于 actual 且 Any 值相等；
+// actual 中额外存在的 key 不影响判定(条件只约束它列出的子集)
+static bool team_shared_data_match(const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& actual,
+                                   const google::protobuf::Map<int64_t, google::protobuf::Any>& expected) {
+  for (const auto& kv : expected) {
+    auto it = actual.find(kv.first);
+    if (it == actual.end() || !atfw::atapp::protobuf_equal(it->second.data(), kv.second)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// 单个成员是否满足成员条件(与关系): 共享成员数据等值 + 角色范围
+static bool team_member_condition_match(const atfw::team::DTeamMemberConditionChecker& condition,
+                                        const team_room::member_runtime_data& member) {
+  if (!team_shared_data_match(member.member_data.shared_member_data(), condition.shared_member_data())) {
+    return false;
+  }
+  return !condition.has_permission() ||
+         team_condition_range_match(static_cast<int64_t>(member.member_data.role()), condition.permission());
 }
 
 // 角色门槛解析: GUEST/NORMAL/ADMIN/OWNER 只是当前定义的档位参考点，方便以后在任意档位之间按需
@@ -353,10 +392,32 @@ rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team
   // 频道由外层 team key 决定，事件日志绝不能携带指向其他队伍的矛盾标识
   rpc::context::message_holder<atfw::team::DTeamAction> normalized_action(ctx);
   const atfw::team::DTeamAction* action_ptr = &action;
+  auto mutable_action = [&normalized_action, &action_ptr, &action]() -> atfw::team::DTeamAction& {
+    if (action_ptr == &action) {
+      normalized_action->CopyFrom(action);
+      action_ptr = &(*normalized_action);
+    }
+    return *normalized_action;
+  };
   if (action_team_key_mismatch(action, team_key_)) {
-    normalized_action->CopyFrom(action);
-    normalize_action_team_key(*normalized_action, team_key_);
-    action_ptr = &(*normalized_action);
+    normalize_action_team_key(mutable_action(), team_key_);
+  }
+
+  // 更新条件仅作提交前的数据一致性检查(见 check_action_permission)，
+  // 检查通过后按协议约定从最终事件数据中裁剪掉，不写入频道日志
+  switch (action_ptr->action_case()) {
+    case atfw::team::DTeamAction::kMemberUpdate:
+      if (action_ptr->member_update().condition_size() > 0) {
+        mutable_action().mutable_member_update()->clear_condition();
+      }
+      break;
+    case atfw::team::DTeamAction::kTeamUpdate:
+      if (action_ptr->team_update().condition_size() > 0) {
+        mutable_action().mutable_team_update()->clear_condition();
+      }
+      break;
+    default:
+      break;
   }
 
   // 移除成员: 记录移除原因并加入重试队列，等待频道事件回环后真正移除；
@@ -841,7 +902,7 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
   // zone_id=0 是合法的全局团队身份，不是“缺少分区字段”。非空快照身份必须与频道的完整
   // DTeamKey 完全一致，不能把全局或其他分区的同 ID 团队静默改名后加载到当前房间。
   if ((public_data->team_key().team_id() != 0 || public_data->team_key().zone_id() != 0) &&
-      !rpc::team::team_api::team_key_equal_t{}(public_data->team_key(), team_key_)) {
+      !rpc::team::team_api::team_key_equal_t()(public_data->team_key(), team_key_)) {
     FCTXLOGERROR(ctx, "team room {}:{} reject snapshot for team {}:{}", team_key_.zone_id(), team_key_.team_id(),
                  public_data->team_key().zone_id(), public_data->team_key().team_id());
     return false;
@@ -1666,7 +1727,150 @@ atfw::team::EnTeamPermissionRole team_room::get_reject_invitation_role() const {
 
 bool team_room::is_join_request_allowed() const { return !storage_.configure().disable_join_request(); }
 
-void team_room::touch_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) { find_member(user_key, true); }
+bool team_room::check_update_conditions(
+    const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
+  // 未携带条件列表表示无附加检查(保持无条件的既有行为)
+  if (conditions.empty()) {
+    return true;
+  }
+  // checker 之间是或关系: 任一 checker 通过即整体通过
+  for (const auto& checker : conditions) {
+    if (check_condition_checker(checker)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool team_room::check_condition_checker(const atfw::team::DTeamConditionChecker& checker) {
+  // 共享队伍数据等值检查(与关系)
+  if (!team_shared_data_match(storage_.shared_team_data(), checker.shared_team_data())) {
+    return false;
+  }
+
+  // 队伍成员数量范围
+  if (checker.has_members_count() &&
+      !team_condition_range_match(static_cast<int64_t>(member_.size()), checker.members_count())) {
+    return false;
+  }
+
+  // 成员条件组(与关系): 所有条件组都必须满足
+  for (const auto& group : checker.member_condition_group()) {
+    if (!check_member_condition_group(group)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool team_room::check_member_condition_group(const atfw::team::DTeamConditionChecker::DMemberConditionGroup& group) {
+  const auto& condition = group.member_condition();
+  switch (group.scope_type_case()) {
+    case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kUserKey: {
+      // 指定成员: 成员必须存在且满足条件
+      auto member = find_member(group.user_key(), false);
+      return member && team_member_condition_match(condition, *member);
+    }
+    case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kAllMembers: {
+      // 所有成员都满足条件(空队伍视为 vacuously true)
+      bool all_match = true;
+      foreach_member([&condition, &all_match](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+        if (!team_member_condition_match(condition, *member)) {
+          all_match = false;
+          return false;
+        }
+        return true;
+      });
+      return all_match;
+    }
+    case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kAnyMembers: {
+      // 任一成员满足条件即可
+      bool any_match = false;
+      foreach_member([&condition, &any_match](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+        if (team_member_condition_match(condition, *member)) {
+          any_match = true;
+          return false;
+        }
+        return true;
+      });
+      return any_match;
+    }
+    default:
+      break;
+  }
+
+  // 数量/百分比维度: 遍历前把限制统一换算成绝对数量门槛(只计算一次)，遍历中不再做 scope 分支与
+  // 百分比换算，只剩整数比较。百分比换算: satisfied * kTeamConditionPercentBase >= total * percent
+  // 等价于 satisfied >= ceil(total * percent / kTeamConditionPercentBase)，max 侧取 floor
+  const int64_t total_count = static_cast<int64_t>(member_.size());
+  int64_t pass_at = 0;                                         // 满足数达到该值即通过 min 维度
+  int64_t fail_above = (std::numeric_limits<int64_t>::max)();  // 满足数超过该值即违反 max 维度(默认不限制)
+  switch (group.scope_type_case()) {
+    case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kMembersCount: {
+      pass_at = group.members_count().min_value();
+      if (group.members_count().max_value() != 0) {
+        fail_above = group.members_count().max_value();
+      }
+      break;
+    }
+    case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kMembersPercent: {
+      // min_percent 超过 100 恒不可满足、max_percent 达到 100 即等效不限制；
+      // 先钳制百分比避免 total_count * percent 溢出 int64(恶意超大值)
+      const int64_t min_percent = (std::min)(group.members_percent().min_value(), kTeamConditionPercentBase + 1);
+      const int64_t max_percent = (std::min)(group.members_percent().max_value(), kTeamConditionPercentBase);
+      if (min_percent != 0) {
+        pass_at = ((total_count * min_percent) + kTeamConditionPercentBase - 1) / kTeamConditionPercentBase;
+      }
+      if (max_percent != 0) {
+        fail_above = (total_count * max_percent) / kTeamConditionPercentBase;
+      }
+      break;
+    }
+    default:
+      // 未设置 scope 的条件组视为无效，按不满足处理(失败关闭，空条件组不应被当成永真)
+      return false;
+  }
+
+  // max 上限不低于成员总数时永不可能被违反: min 达到即可提前通过；无条件限制时遍历前直接通过
+  const bool max_never_violated = fail_above >= total_count;
+  if (pass_at <= 0 && max_never_violated) {
+    return true;
+  }
+  int64_t satisfied_count = 0;
+  int64_t visited_count = 0;
+  bool decided = false;
+  bool passed = false;
+  foreach_member([&condition, &satisfied_count, &visited_count, pass_at, fail_above, total_count, max_never_violated,
+                  &decided, &passed](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
+    ++visited_count;
+    if (team_member_condition_match(condition, *member)) {
+      ++satisfied_count;
+      // 超过 max 上限，提前拒绝
+      if (satisfied_count > fail_above) {
+        passed = false;
+        decided = true;
+        return false;
+      }
+      // 达到 min 门槛且 max 不可能被违反，提前通过
+      if (max_never_violated && satisfied_count >= pass_at) {
+        passed = true;
+        decided = true;
+        return false;
+      }
+    }
+    // 剩余成员全部满足也不足以达到 min 门槛，提前拒绝
+    if (satisfied_count + (total_count - visited_count) < pass_at) {
+      passed = false;
+      decided = true;
+      return false;
+    }
+    return true;
+  });
+  if (decided) {
+    return passed;
+  }
+  return satisfied_count >= pass_at && satisfied_count <= fail_above;
+}
 
 rpc::result_code_type team_room::check_action_permission(const PROJECT_NAMESPACE_ID::DUserIDKey& operator_key,
                                                          const atfw::team::DTeamAction& action) {
@@ -1723,9 +1927,18 @@ rpc::result_code_type team_room::check_action_permission(const PROJECT_NAMESPACE
     case atfw::team::DTeamAction::kMemberUpdate:
       // 所有成员都可以 member_update 自己的数据，更新他人的信息需要 manage_member_role(默认 ADMIN)
       ret = is_self(action.member_update().user_key()) ? require_member() : require_role(get_manage_member_role());
+      // 携带更新条件时还需满足至少一个 checker(或关系，内部与关系)，通过后的最终事件数据
+      // 会被裁剪掉 condition 字段(见 send_action)
+      if (ret == 0 && !check_update_conditions(action.member_update().condition())) {
+        ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
+      }
       break;
     case atfw::team::DTeamAction::kTeamUpdate:
       ret = require_role(get_update_team_data_role());
+      // 与 member_update 相同: 携带更新条件时需满足至少一个 checker
+      if (ret == 0 && !check_update_conditions(action.team_update().condition())) {
+        ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
+      }
       break;
     case atfw::team::DTeamAction::kElectionCaptain:
       // 当前队长可以主动转让；其他操作者无条件修改队长固定要求 OWNER。
