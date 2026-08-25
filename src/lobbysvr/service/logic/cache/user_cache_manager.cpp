@@ -183,9 +183,9 @@ void user_cache_manager::refresh_feature_limit_minute(rpc::context& ctx) {
 }
 
 void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx) {
+  need_notify_user_cache_expired_ = false;
   auto zone_id = owner_->get_zone_id();
   auto user_id = owner_->get_user_id();
-  auto user_ptr = owner_->shared_from_this();
 
   // 通知cachesvr，缓存过期
   PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync* sync_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync>();
@@ -197,7 +197,6 @@ void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx
 
   uint64_t server_inst_id = rpc::cache_api::get_cachesvr_server_id(*cache_key);
   if (0 == server_inst_id) {
-    need_notify_user_cache_expired_ = false;
     return;
   }
 
