@@ -1365,7 +1365,10 @@ void team_room::apply_approve_invitation(const atfw::team::DTeamInvitation& invi
 
   // 通知被邀请人已入队(除新增邀请外的事件不携带 admission 数据)
   atfw::team::DTeamMemberAction notify_action;
-  dump_public_data(*notify_action.mutable_joined_team());
+  auto* joined_info = notify_action.mutable_joined_team();
+  dump_team_key(*joined_info->mutable_team_key());
+  protobuf_copy_message(*joined_info->mutable_user_key(), invitee);
+  protobuf_copy_message(*joined_info->mutable_team_channel(), channel_key_);
   atfw::dtmq::DChannelIdKey channel_id = record->invitee_private_channel();
   append_team_member_channel_notification(invitee, std::move(channel_id), std::move(notify_action));
 }
@@ -1429,7 +1432,10 @@ void team_room::apply_approve_join_request(const atfw::team::DTeamJoinRequest& j
 
   // 通知申请人已入队(不携带 admission 数据)
   atfw::team::DTeamMemberAction notify_action;
-  dump_public_data(*notify_action.mutable_joined_team());
+  auto* joined_info = notify_action.mutable_joined_team();
+  dump_team_key(*joined_info->mutable_team_key());
+  protobuf_copy_message(*joined_info->mutable_user_key(), requester);
+  protobuf_copy_message(*joined_info->mutable_team_channel(), channel_key_);
   atfw::dtmq::DChannelIdKey channel_id = record->requester_private_channel();
   append_team_member_channel_notification(requester, std::move(channel_id), std::move(notify_action));
 }

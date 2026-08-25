@@ -18,6 +18,8 @@
 
 #include <rpc/rpc_context.h>
 
+#include <data/user_key_hash_helper.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
 #include <unordered_set>
@@ -27,6 +29,10 @@
 
 class user_team_manager_utility {
  public:
+  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamMemberJoinData&) noexcept {
+    return PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL;
+  }
+
   static void dispatch_team_member_event(rpc::context& ctx, user& user_inst,
                                          const ::atfw::dtmq::DChannelMessage& data) {
     auto& team_mgr = user_inst.get_user_team_manager();
@@ -35,7 +41,7 @@ class user_team_manager_utility {
     }
     team_mgr.processed_private_chat_channel_sequence_ = data.sequence();
 
-    // TODO(owent): 处理队伍成员事件
+    // 处理队伍成员事件
     rpc::context::message_holder<atfw::team::DTeamMemberAction> action(ctx);
     if (!data.detail().event().Is<atfw::team::DTeamMemberAction>()) {
       FCTXLOGERROR(ctx, "dispatch_team_member_event: event type mismatch, expect DTeamMemberAction, but got {}",
@@ -52,43 +58,95 @@ class user_team_manager_utility {
     switch (action->action_case()) {
       case atfw::team::DTeamMemberAction::kInvited: {
         const auto& invited = action->invited();
-        FCTXLOGINFO(ctx, "{} receive an invitation to team {}:{} from {}:{}", user_inst, invited.team_key().zone_id(),
-                    invited.team_key().team_id(), invited.inviter().zone_id(), invited.inviter().user_id());
-        user_inst.get_user_team_manager().add_pending_invitation(
-            ctx, atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>(invited));
+        if (user_inst.get_user_id() != invited.invitee().user_id() ||
+            user_inst.get_zone_id() != invited.invitee().zone_id()) {
+          FCTXLOGERROR(ctx, "{} receive an invitation to team {}:{} for {}:{}, but the invitee is not me", user_inst,
+                       invited.team_key().zone_id(), invited.team_key().team_id(), invited.invitee().zone_id(),
+                       invited.invitee().user_id());
+
+        } else {
+          FCTXLOGINFO(ctx, "{} receive an invitation to team {}:{} from {}:{}", user_inst, invited.team_key().zone_id(),
+                      invited.team_key().team_id(), invited.inviter().zone_id(), invited.inviter().user_id());
+          team_mgr.add_pending_invitation(
+              ctx, atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>(invited));
+        }
         break;
       }
       case atfw::team::DTeamMemberAction::kRejectInvitation: {
         const auto& reject_invitation = action->reject_invitation();
-        FCTXLOGINFO(ctx, "{} receive a rejection for invitation to team {}:{} from {}:{}", user_inst,
-                    reject_invitation.team_key().zone_id(), reject_invitation.team_key().team_id(),
-                    reject_invitation.inviter().zone_id(), reject_invitation.inviter().user_id());
-        user_inst.get_user_team_manager().remove_pending_invitation(ctx, reject_invitation.team_key());
+        if (user_inst.get_user_id() != reject_invitation.invitee().user_id() ||
+            user_inst.get_zone_id() != reject_invitation.invitee().zone_id()) {
+          FCTXLOGERROR(ctx, "{} receive a rejection for invitation to team {}:{} for {}:{}, but the invitee is not me",
+                       user_inst, reject_invitation.team_key().zone_id(), reject_invitation.team_key().team_id(),
+                       reject_invitation.invitee().zone_id(), reject_invitation.invitee().user_id());
+        } else {
+          FCTXLOGINFO(ctx, "{} receive a rejection for invitation to team {}:{} from {}:{}", user_inst,
+                      reject_invitation.team_key().zone_id(), reject_invitation.team_key().team_id(),
+                      reject_invitation.inviter().zone_id(), reject_invitation.inviter().user_id());
+          team_mgr.remove_pending_invitation(ctx, reject_invitation.team_key());
+        }
         break;
       }
       case atfw::team::DTeamMemberAction::kApplyJoinRequest: {
         const auto& apply_join_request = action->apply_join_request();
-        FCTXLOGINFO(ctx, "{} receive an application to join team {}:{} from {}:{}", user_inst,
-                    apply_join_request.team_key().zone_id(), apply_join_request.team_key().team_id(),
-                    apply_join_request.requester().zone_id(), apply_join_request.requester().user_id());
-        user_inst.get_user_team_manager().add_pending_join_request(
-            ctx, atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>(apply_join_request));
+        if (user_inst.get_user_id() != apply_join_request.requester().user_id() ||
+            user_inst.get_zone_id() != apply_join_request.requester().zone_id()) {
+          FCTXLOGERROR(ctx, "{} receive an application to join team {}:{} from {}:{}, but the requester is not me",
+                       user_inst, apply_join_request.team_key().zone_id(), apply_join_request.team_key().team_id(),
+                       apply_join_request.requester().zone_id(), apply_join_request.requester().user_id());
+        } else {
+          FCTXLOGINFO(ctx, "{} receive an application to join team {}:{} from {}:{}", user_inst,
+                      apply_join_request.team_key().zone_id(), apply_join_request.team_key().team_id(),
+                      apply_join_request.requester().zone_id(), apply_join_request.requester().user_id());
+          team_mgr.add_pending_join_request(
+              ctx, atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>(apply_join_request));
+        }
         break;
       }
       case atfw::team::DTeamMemberAction::kRejectJoinRequest: {
         const auto& reject_join_request = action->reject_join_request();
-        FCTXLOGINFO(ctx, "{} receive a rejection for join request to team {}:{} from {}:{}", user_inst,
-                    reject_join_request.team_key().zone_id(), reject_join_request.team_key().team_id(),
-                    reject_join_request.requester().zone_id(), reject_join_request.requester().user_id());
-        user_inst.get_user_team_manager().remove_pending_join_request(ctx, reject_join_request.team_key());
+        if (user_inst.get_user_id() != reject_join_request.requester().user_id() ||
+            user_inst.get_zone_id() != reject_join_request.requester().zone_id()) {
+          FCTXLOGERROR(ctx,
+                       "{} receive a rejection for join request to team {}:{} from {}:{}, but the requester is not me",
+                       user_inst, reject_join_request.team_key().zone_id(), reject_join_request.team_key().team_id(),
+                       reject_join_request.requester().zone_id(), reject_join_request.requester().user_id());
+        } else {
+          FCTXLOGINFO(ctx, "{} receive a rejection for join request to team {}:{} from {}:{}", user_inst,
+                      reject_join_request.team_key().zone_id(), reject_join_request.team_key().team_id(),
+                      reject_join_request.requester().zone_id(), reject_join_request.requester().user_id());
+          team_mgr.remove_pending_join_request(ctx, reject_join_request.team_key());
+        }
         break;
       }
       case atfw::team::DTeamMemberAction::kJoinedTeam: {
-        // const auto& joined_team = action->joined_team();
-        // FCTXLOGINFO(ctx, "{} has joined team {}:{} from {}:{}", user_inst,
-        //             joined_team.team_key().zone_id(), joined_team.team_key().team_id(),
-        //             joined_team.requester().zone_id(), joined_team.requester().user_id());
-        // user_inst.get_user_team_manager().remove_pending_join_request(ctx, joined_team.team_key());
+        const auto& joined_team = action->joined_team();
+        if (user_inst.get_user_id() != joined_team.user_key().user_id() ||
+            user_inst.get_zone_id() != joined_team.user_key().zone_id()) {
+          FCTXLOGERROR(ctx, "{} has joined team {}:{} from {}:{}, but the user is not me", user_inst,
+                       joined_team.team_key().zone_id(), joined_team.team_key().team_id(),
+                       joined_team.user_key().zone_id(), joined_team.user_key().user_id());
+        } else {
+          FCTXLOGINFO(ctx, "{} has joined team {}:{} from {}:{}", user_inst, joined_team.team_key().zone_id(),
+                      joined_team.team_key().team_id(), joined_team.user_key().zone_id(),
+                      joined_team.user_key().user_id());
+          team_mgr.add_team(ctx, get_team_type(joined_team), joined_team.team_key(), joined_team.team_channel());
+        }
+        break;
+      }
+      case atfw::team::DTeamMemberAction::kRemoveMember: {
+        const auto& remove_member = action->remove_member();
+        if (user_inst.get_user_id() != remove_member.user_key().user_id() ||
+            user_inst.get_zone_id() != remove_member.user_key().zone_id()) {
+          FCTXLOGERROR(ctx, "{} has been removed from team {}:{} by {}:{}, but the user is not me", user_inst,
+                       remove_member.team_key().zone_id(), remove_member.team_key().team_id(),
+                       remove_member.user_key().zone_id(), remove_member.user_key().user_id());
+        } else {
+          FCTXLOGINFO(ctx, "{} has been removed from team {}:{} by {}:{}", user_inst,
+                      remove_member.team_key().zone_id(), remove_member.team_key().team_id(),
+                      remove_member.user_key().zone_id(), remove_member.user_key().user_id());
+          team_mgr.remove_team(ctx, remove_member.team_key(), false, atfw::team::EN_TEAM_EXIT_REASON_DEFAULT);
+        }
         break;
       }
       default:
@@ -118,12 +176,27 @@ int32_t user_team_manager::login_init(rpc::context&) {
 void user_team_manager::refresh_feature_limit_second(rpc::context& ctx) {
   cleanup_expired_join_request(ctx);
   cleanup_expired_invitation(ctx);
+
+  // 触发退出重试
+  for (const auto& group : team_group_) {
+    for (const auto& exiting_team : group.second.pending_to_exit) {
+      exiting_team.second->retry_send_exit_team_request(ctx);
+    }
+  }
 }
 
 void user_team_manager::init_from_table_data(rpc::context& /*ctx*/,
-                                             const PROJECT_NAMESPACE_ID::table_user& /*user_table*/) {}
+                                             const PROJECT_NAMESPACE_ID::table_user& user_table) {
+  const auto& team_data = user_table.team_data();
+  processed_private_chat_channel_sequence_ = team_data.processed_private_chat_channel_sequence();
+}
 
-int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_user& /*table*/) const { return 0; }
+int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_user& table) const {
+  auto* team_data = table.mutable_team_data();
+
+  team_data->set_processed_private_chat_channel_sequence(processed_private_chat_channel_sequence_);
+  return 0;
+}
 
 bool user_team_manager::is_dirty() const { return is_dirty_; }
 
@@ -136,6 +209,80 @@ void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequ
 
   processed_private_chat_channel_sequence_ = sequence;
   is_dirty_ = true;
+}
+
+void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType team_type,
+                                 const atfw::team::DTeamKey& team_key, const atfw::dtmq::DChannelIdKey& channel_key) {
+  // Implementation here
+  if (team_key.team_id() == 0 || channel_key.channel_id().empty()) {
+    return;
+  }
+
+  switch (team_type) {
+    case PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL:
+      break;
+    default: {
+      FCTXLOGERROR(ctx, "{} add_team: unknown team type {}", *owner_, static_cast<int32_t>(team_type));
+      return;
+    }
+  }
+
+  auto iter = team_index_.find(team_key);
+  if (team_index_.end() != iter && iter->second) {
+    FCTXLOGINFO(ctx, "{} add_team: team {}:{} already exists, skip to add a new one", *owner_, team_key.zone_id(),
+                team_key.team_id());
+    iter->second->make_current_actived(ctx);
+    return;
+  }
+
+  auto team_ptr = user_team::create(*this, static_cast<uint32_t>(team_type), team_key, channel_key);
+  if (!team_ptr) {
+    FCTXLOGERROR(ctx, "{} add_team: create user_team failed for team {}:{}", *owner_, team_key.zone_id(),
+                 team_key.team_id());
+    return;
+  }
+
+  team_group& group = team_group_[team_ptr->get_team_type()];
+  if (group.current) {
+    group.pending_to_exit.emplace(group.current->get_team_key(), group.current);
+    group.current->send_exit_team_request(ctx, atfw::team::EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM);
+  }
+  group.current = team_ptr;
+  team_index_.emplace(team_key, team_ptr);
+
+  team_ptr->make_current_actived(ctx);
+}
+
+void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, bool send_exit,
+                                    atfw::team::EnTeamExitReason exit_reason) {
+  auto iter = team_index_.find(team_key);
+  if (iter == team_index_.end()) {
+    return;
+  }
+
+  if (!iter->second) {
+    team_index_.erase(iter);
+    return;
+  }
+  auto team_ptr = iter->second;
+
+  auto iter_group = team_group_.find(team_ptr->get_team_type());
+  if (iter_group != team_group_.end()) {
+    iter_group->second.pending_to_exit.erase(team_key);
+    if (iter_group->second.current == team_ptr) {
+      iter_group->second.current.reset();
+    }
+
+    if (iter_group->second.pending_to_exit.empty() && !iter_group->second.current) {
+      team_group_.erase(iter_group);
+    }
+  }
+
+  team_index_.erase(iter);
+
+  if (send_exit) {
+    team_ptr->send_exit_team_request(ctx, exit_reason);
+  }
 }
 
 size_t user_team_manager::cleanup_expired_join_request(rpc::context& ctx) {

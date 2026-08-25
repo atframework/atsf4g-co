@@ -129,11 +129,10 @@ message DTeamConditionChecker {
       bool all_members = 2;
       // 任意成员
       bool any_members = 3;
-            // 满足条件的成员数量限制
+      // 满足条件的成员数量限制
       DTeamConditionMinMaxValue members_count = 4;
       // 满足条件的成员数量百分比限制
       DTeamConditionMinMaxValue members_percent = 5;
-
     }
 
     DTeamMemberConditionChecker member_condition = 11;
@@ -184,6 +183,12 @@ message DTeamMemberUpdateData {
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
   map<int64, DTeamAnyData> shared_member_data = 13;
+}
+
+message DTeamMemberJoinData {
+  DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+  atframework.dtmq.DChannelIdKey team_channel = 3;
 }
 
 message DTeamMemberRemoveData {
@@ -331,7 +336,8 @@ message DTeamMemberAction {
     DTeamJoinRequest apply_join_request = 3;
     DTeamJoinRequest reject_join_request = 4;
 
-    DTeamStorage joined_team = 5;  // 通知新成员已入队(接受邀请或加入请求被批准)
+    // 通知新成员已入队(接受邀请或加入请求被批准)
+    DTeamMemberJoinData joined_team = 5;
     DTeamMemberRemoveData remove_member = 6;
   }
 }

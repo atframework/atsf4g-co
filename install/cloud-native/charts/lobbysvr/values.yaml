@@ -44,6 +44,8 @@ lobbysvr:
   chat:
     push_message_per_second: 3000
     push_message_buffer_max_count: 200000
+  team:
+    exit_retry_interval: 10s
 
 enable_excel_config: true
 enable_session_manager: true
