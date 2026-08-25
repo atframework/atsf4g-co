@@ -182,6 +182,7 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(OrbitClientRuntime);
 
 ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
     : app_(),
+      enabled_(false),
       callbacks_(),
       options_(),
       configured_(false),
