@@ -23,7 +23,7 @@ add_subdirectory(server_frame)
 
 # RPC unit test support library and CMake helper (project_add_rpc_unit_test). Must be parsed before `component` so
 # components can call the helper from their own CMakeLists.txt. CMake functions are not hoisted.
-if((BUILD_TESTING OR PROJECT_ENABLE_UNITTEST) AND PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
+if(PROJECT_ENABLE_UNITTEST AND PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
   add_subdirectory(tools/rpc-unit-test)
   # Generated <service>::mock helpers (gated by PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) reference the rpc-unit-test
   # SS rule engine types. Propagate the tool's public headers through the server_frame link interface so every service

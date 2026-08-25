@@ -2,7 +2,7 @@
 // Created by owent on 2016/9/29.
 //
 
-#include "session_manager.h"
+#include "session_manager.h"  // NOLINT: build/include_subdir
 
 #include <uv.h>
 
@@ -225,8 +225,8 @@ int session_manager::reset() {
   actived_sessions_.clear();
 
   {
-    session_timeout_map_t first_idles = first_idle_;
-    for (session_timeout_map_t::iterator iter = first_idles.begin(); iter != first_idles.end(); ++iter) {
+    session_ptr_timeout_map_t first_idles = first_idle_;
+    for (session_ptr_timeout_map_t::iterator iter = first_idles.begin(); iter != first_idles.end(); ++iter) {
       if (iter->second && iter->second->sess) {
         iter->second->sess->close(static_cast<int>(close_reason_t::kServerClosed), 0, "server closed");
       }
@@ -782,15 +782,13 @@ void session_manager::assign_default_router(session &sess) const {
   }
 }
 
-void session_manager::remove_session_first_idle(session::id_t sess_id, const session *check_ptr) {
-  session_timeout_map_t::iterator iter = first_idle_.find(sess_id, false);
-  if (iter == first_idle_.end()) {
+void session_manager::remove_session_first_idle(const session *check_ptr) {
+  if (nullptr == check_ptr) {
     return;
   }
 
-  if (check_ptr != nullptr && iter->second && iter->second->sess.get() != check_ptr) {
-    FWLOGDEBUG("session {} remove first idle timeout, but session ptr not match, maybe old timeout data, ignore",
-               sess_id);
+  session_ptr_timeout_map_t::iterator iter = first_idle_.find(check_ptr, false);
+  if (iter == first_idle_.end()) {
     return;
   }
   first_idle_.erase(iter);
@@ -896,7 +894,7 @@ void session_manager::on_evt_accept_tcp(uv_stream_t *server, int status) {
   }
 
   // first idle timeout
-  auto &sess_timer_data = mgr->first_idle_[sess->get_id()];
+  auto &sess_timer_data = mgr->first_idle_[sess.get()];
   sess_timer_data.sess = sess;
   sess_timer_data.timeout =
       atfw::util::time::time_utility::now() +
@@ -970,7 +968,7 @@ void session_manager::on_evt_accept_pipe(uv_stream_t *server, int status) {
   }
 
   // first idle timeout
-  auto &sess_timer_data = mgr->first_idle_[sess->get_id()];
+  auto &sess_timer_data = mgr->first_idle_[sess.get()];
   sess_timer_data.sess = sess;
   sess_timer_data.timeout = atfw::util::time::time_utility::now();
   sess_timer_data.timeout +=

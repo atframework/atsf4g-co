@@ -16,7 +16,7 @@ atsf4g-co 的 RPC 单元测试支持库：在普通进程内启动一个最小 a
 ## Hook 构建开关与生产开销
 
 单元测试 seam 由 `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS` 整体门控（默认跟随
-`BUILD_TESTING OR PROJECT_ENABLE_UNITTEST`）。hooks-off 的生产构建中：无测试状态、无热路径分支、无
+`PROJECT_ENABLE_UNITTEST`）。hooks-off 的生产构建中：无测试状态、无热路径分支、无
 `mock` 符号、无测试库依赖。所有 `mock` 子命名空间接口（生成 SS/DB mock、HPA 功能 mock）同样被宏
 整体裁剪。
 

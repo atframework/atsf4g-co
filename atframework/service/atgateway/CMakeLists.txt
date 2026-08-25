@@ -27,3 +27,10 @@ atframework_add_executable(
   ${ATSF4G_APP_SOURCE_LIST})
 
 set_target_properties(${ATSF4G_APP_NAME} PROPERTIES OUTPUT_NAME "atgatewayd")
+
+# ============ unit tests ============
+if(PROJECT_ENABLE_UNITTEST)
+  atframework_atframe_utils_populate()
+  include("${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/test/test.utils-macro.cmake")
+  add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/test")
+endif()

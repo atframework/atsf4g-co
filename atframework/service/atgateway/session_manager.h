@@ -24,8 +24,10 @@
 #include <chrono>
 #include <functional>
 #include <list>
+#include <string>
+#include <utility>
 
-#include "session.h"
+#include "session.h"  // NOLINT: build/include_subdir
 
 namespace atframework {
 namespace gateway {
@@ -47,6 +49,7 @@ class session_manager {
   };
   using session_map_t = atfw::util::memory::lru_map<session::id_t, session>;
   using session_timeout_map_t = atfw::util::memory::lru_map<session::id_t, session_with_timeout_t>;
+  using session_ptr_timeout_map_t = atfw::util::memory::lru_map<const session *, session_with_timeout_t>;
   using create_proto_fn_t = std::function<std::unique_ptr< ::atframework::gateway::libatgw_protocol_api>()>;
   using on_create_session_fn_t = std::function<int(session *, uv_stream_t *)>;
 
@@ -99,7 +102,7 @@ class session_manager {
 
   void assign_default_router(session &sess) const;
 
-  void remove_session_first_idle(session::id_t sess_id, const session *check_ptr);
+  void remove_session_first_idle(const session *check_ptr);
 
   void remove_force_closed_session(const session *check_ptr);
 
@@ -128,8 +131,9 @@ class session_manager {
   std::list<listen_handle_ptr_t> listen_handles_;
   session_map_t actived_sessions_;
   session_map_t reconnect_cache_;
-  atfw::util::memory::lru_map<const session *, session_with_timeout_t> force_closed_sessions_;
-  session_timeout_map_t first_idle_;
+  session_ptr_timeout_map_t force_closed_sessions_;
+  // 握手完成前 session id 为 0，断线重连的 id 也要握手后才确定，所以 first_idle_ 按 session 指针索引
+  session_ptr_timeout_map_t first_idle_;
   session_timeout_map_t reconnect_timeout_;
   time_t last_tick_time_;
 

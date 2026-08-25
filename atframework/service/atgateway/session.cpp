@@ -223,7 +223,7 @@ int session::send_new_session() {
       FWLOGINFO("{} ignore new session notification for echo server", *this);
 
       if (owner_ != nullptr) {
-        owner_->remove_session_first_idle(get_id(), this);
+        owner_->remove_session_first_idle(this);
       }
       return 0;
     }
@@ -238,7 +238,7 @@ int session::send_new_session() {
     FWLOGWARNING("{} send register notify to {}({}) success", *this, router_node_id_, router_node_name_);
 
     if (owner_ != nullptr) {
-      owner_->remove_session_first_idle(get_id(), this);
+      owner_->remove_session_first_idle(this);
     }
   } else {
     FWLOGERROR("{} send register notify to {}({}) failed, res: {}", *this, router_node_id_, router_node_name_, ret);
