@@ -194,6 +194,7 @@ function(project_server_frame_create_protocol_target TARGET_NAME SANDBOX_PATH OU
     project_build_tools_patch_protobuf_sources(${HEADERS} ${SOURCES})
     # project_build_tools_optimize_sources(${HEADERS} ${SOURCES})
   endif()
+  project_tool_set_target_incremental_link_database("${PROJECT_SERVER_FRAME_LIB_LINK}-${TARGET_NAME}")
 
   list(LENGTH SOURCES __SOURCES_LENGTH)
   if(PROJECT_ENABLE_UNITY_BUILD AND __SOURCES_LENGTH GREATER PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)

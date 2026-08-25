@@ -346,6 +346,7 @@ function(project_server_frame_add_config_target)
     target_include_directories("${PROJECT_SERVER_FRAME_LIB_LINK}-config"
                                PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
   endif()
+  project_tool_set_target_incremental_link_database(${PROJECT_SERVER_FRAME_LIB_LINK}-config)
 
   list(LENGTH PROJECT_SERVER_FRAME_CONFIG_SOURCE_LIST __PROJECT_SERVER_FRAME_CONFIG_SOURCE_LIST_LENGTH)
   list(LENGTH PROJECT_SERVER_FRAME_CONFIG_SET_GENERATED_SOURCE_LIST
