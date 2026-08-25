@@ -19,6 +19,8 @@ set(PROJECT_RPC_UNIT_TEST_CMAKE_INCLUDED TRUE)
 # (e.g. src/server_frame/test), not just from src/tools/rpc-unit-test itself.
 set(PROJECT_RPC_UNIT_TEST_FRAME_DIR "${ATFRAMEWORK_ATFRAME_UTILS_REPO_DIR}/test" CACHE INTERNAL
     "atframe_utils private test framework directory")
+set(PROJECT_RPC_UNIT_TEST_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/test" CACHE PATH
+  "Directory for RPC unit test executables and runtime files")
 
 # Centralized support targets: the private framework main and frame implementation are compiled once and reused by
 # every test executable via $<TARGET_OBJECTS:...>, so components do not repeatedly compile the same frame sources.
@@ -93,6 +95,8 @@ function(project_add_rpc_unit_test)
     target_link_libraries(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_NAME}::rpc-unit-test-orbit)
   endif()
   target_compile_options(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  project_tool_set_target_runtime_output_directory("${PROJECT_RPC_UNIT_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+                                                  "${PROJECT_RPC_UNIT_TEST_TARGET}")
 
   # Reuse PCH from dependencies. The support library reuses the server_frame PCH, so it resolves to
   # the same pch interface target; linked component SDK/protocol targets are candidates as well and
@@ -168,7 +172,7 @@ function(project_add_rpc_unit_test)
     set_property(
       TEST ${PROJECT_RPC_UNIT_TEST_TARGET}.unit APPEND
       PROPERTY ENVIRONMENT_MODIFICATION
-               "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY};PATH=path_list_prepend:${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin")
+               "PATH=path_list_prepend:${PROJECT_RPC_UNIT_TEST_RUNTIME_OUTPUT_DIRECTORY};PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY};PATH=path_list_prepend:${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin")
   endif()
 
   # Per-target working directory for the runtime (preserves per-fixture isolation when ctest runs targets
