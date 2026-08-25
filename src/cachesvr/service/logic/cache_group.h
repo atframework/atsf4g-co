@@ -58,9 +58,8 @@ class cache_object_base {
   void visit_update();
 
   void cleanup_all_watchers(bool notify = true);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type set_cache_expired(rpc::context &ctx);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type notify_update_meta(
-      rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_meta &input);
+  int32_t set_cache_expired(rpc::context &ctx);
+  int32_t notify_update_meta(rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_meta &input);
 
   inline bool has_watcher() const noexcept { return !watchers_.empty(); }
   inline int64_t get_cachesvr_version() const noexcept { return cachesvr_version_; }
@@ -130,9 +129,8 @@ class cache_group_base {
   virtual std::shared_ptr<cache_object_base> get_cache(const PROJECT_NAMESPACE_ID::object_cache_key &cache_key) = 0;
   virtual std::shared_ptr<cache_object_base> mutable_cache(const PROJECT_NAMESPACE_ID::object_cache_key &cache_key) = 0;
 
-  ATFW_EXPLICIT_NODISCARD_ATTR virtual rpc::result_code_type update_meta(
-      rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_key &cache_key,
-      const PROJECT_NAMESPACE_ID::object_cache_meta &meta) = 0;
+  virtual int32_t update_meta(rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_key &cache_key,
+                              const PROJECT_NAMESPACE_ID::object_cache_meta &meta) = 0;
 
   inline cache_group_manager *get_manager() const { return owner_; }
 
@@ -199,7 +197,7 @@ class cache_group : public cache_group_base {
         // 拉取期间处于保护时间内，不移除缓存
         if (!(*iter).second->has_watcher() && now > (*iter).second->get_remove_protect_time() &&
             ((gc_count > 0 && data_.size() > gc_count) ||  // 数量达到开始主动GC的边界，且无watcher则主动GC
-             !(*iter).second->is_cache_valid())) {         // 无watcher且数据已失效，缓存里没有任何有效数据，可以淘汰
+             !(*iter).second->is_cache_valid())) {  // 无watcher且数据已失效，缓存里没有任何有效数据，可以淘汰
           need_remove = true;
           break;
         }
@@ -385,25 +383,24 @@ class cache_group : public cache_group_base {
     return std::static_pointer_cast<cache_object_base>(mutable_data(cache_key));
   }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type update_meta(
-      rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_key &cache_key,
-      const PROJECT_NAMESPACE_ID::object_cache_meta &meta) override {
+  int32_t update_meta(rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_key &cache_key,
+                      const PROJECT_NAMESPACE_ID::object_cache_meta &meta) override {
     std::shared_ptr<value_type> cache_data = get_data(cache_key);
     if (!cache_data) {
       // 无缓存的话也没有订阅者，直接忽略即可
-      RPC_RETURN_CODE(0);
+      return 0;
     }
 
     if (meta.data_version() > 0 && meta.data_version() < cache_data->get_data_version()) {
       // 如果设置了要要验证版本号切过老，也直接忽略即可。
-      RPC_RETURN_CODE(0);
+      return 0;
     }
 
     if (update_meta_fn_) {
       update_meta_fn_(ctx, meta, cache_data->get_data());
     }
 
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(cache_data->notify_update_meta(ctx, meta)));
+    return cache_data->notify_update_meta(ctx, meta);
   }
 
   bool remove_data(const PROJECT_NAMESPACE_ID::object_cache_key &cache_key, bool notify_watcher = true,

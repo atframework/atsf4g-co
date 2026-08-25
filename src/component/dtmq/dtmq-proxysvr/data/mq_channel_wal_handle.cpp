@@ -382,8 +382,7 @@ static wal_result_code publisher_send_snapshot(
             notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
           }
 
-          rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-              rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+          int32_t res = rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg).unwrap();
           if (0 != res) {
             if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
                 PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {
@@ -500,8 +499,7 @@ static wal_result_code publisher_send_logs(
             notify_msg->add_subscriber_keys(key->get_private_data().subscriber_key());
           }
 
-          rpc::result_code_type::value_type res = static_cast<rpc::result_code_type::value_type>(
-              rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg));
+          int32_t res = rpc::dtmq::channel_event_sync(param.context, target.first, *notify_msg).unwrap();
           if (0 != res) {
             if (PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND == res ||
                 PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND == res) {

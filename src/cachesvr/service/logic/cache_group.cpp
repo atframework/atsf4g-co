@@ -180,14 +180,14 @@ void cache_object_base::cleanup_all_watchers(bool /*notify*/) {
   watchers.clear();
 }
 
-rpc::result_code_type cache_object_base::set_cache_expired(rpc::context &ctx) {
+int32_t cache_object_base::set_cache_expired(rpc::context &ctx) {
   visit_update();
 
   data_version_ = 0;
 
   // 通知所有的watcher缓存失效
   if (watchers_.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   std::unordered_map<uint64_t, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_watcher> >
@@ -216,7 +216,7 @@ rpc::result_code_type cache_object_base::set_cache_expired(rpc::context &ctx) {
   }
 
   if (object_cache_key_watcher.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   // 批量通知缓存过期
@@ -254,7 +254,7 @@ rpc::result_code_type cache_object_base::set_cache_expired(rpc::context &ctx) {
     protobuf_copy_message(*req_body->mutable_expired_key(), get_key());
     protobuf_move_message(*req_body->mutable_watchers(), std::move(keys_on_server.second));
 
-    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::lobby::object_cache_expired_sync(ctx, keys_on_server.first, *req_body));
+    int32_t res = rpc::lobby::object_cache_expired_sync(ctx, keys_on_server.first, *req_body).unwrap();
     if (res < 0) {
       FWLOGERROR("send cache {}:{}:{} expired to {} watchers on server {:#x}",
                  static_cast<uint32_t>(get_key().cache_type()), get_key().zone_id(), get_key().instance_id(),
@@ -267,16 +267,15 @@ rpc::result_code_type cache_object_base::set_cache_expired(rpc::context &ctx) {
     }
   }
 
-  RPC_RETURN_CODE(ret);
+  return ret;
 }
 
-rpc::result_code_type cache_object_base::notify_update_meta(rpc::context &ctx,
-                                                            const PROJECT_NAMESPACE_ID::object_cache_meta &input) {
+int32_t cache_object_base::notify_update_meta(rpc::context &ctx, const PROJECT_NAMESPACE_ID::object_cache_meta &input) {
   visit_update();
 
   // 通知所有的watcher meta刷新
   if (watchers_.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   std::unordered_map<uint64_t, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_watcher> >
@@ -305,7 +304,7 @@ rpc::result_code_type cache_object_base::notify_update_meta(rpc::context &ctx,
   }
 
   if (object_cache_key_watcher.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   // 批量通知缓存过期
@@ -344,7 +343,7 @@ rpc::result_code_type cache_object_base::notify_update_meta(rpc::context &ctx,
     protobuf_copy_message(*req_body->mutable_update_meta(), input);
     protobuf_move_message(*req_body->mutable_watchers(), std::move(keys_on_server.second));
 
-    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::lobby::object_cache_meta_sync(ctx, keys_on_server.first, *req_body));
+    int32_t res = rpc::lobby::object_cache_meta_sync(ctx, keys_on_server.first, *req_body).unwrap();
     if (res < 0) {
       FWLOGERROR("send cache {}:{}:{} update meta to {} watchers on server {:#x}",
                  static_cast<uint32_t>(get_key().cache_type()), get_key().zone_id(), get_key().instance_id(),
@@ -357,7 +356,7 @@ rpc::result_code_type cache_object_base::notify_update_meta(rpc::context &ctx,
     }
   }
 
-  RPC_RETURN_CODE(ret);
+  return ret;
 }
 
 void cache_object_base::update_cachesvr_version(int64_t cachesvr_version) noexcept {

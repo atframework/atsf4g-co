@@ -53,7 +53,7 @@ task_action_set_expired::result_type task_action_set_expired::operator()() {
       continue;
     }
 
-    RPC_AWAIT_IGNORE_RESULT(cache_object->set_cache_expired(get_shared_context()));
+    cache_object->set_cache_expired(get_shared_context());
   }
 
   TASK_ACTION_RETURN_CODE(ret);

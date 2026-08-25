@@ -32,9 +32,7 @@ task_action_cache_api_unwatch::task_action_cache_api_unwatch(dispatcher_start_da
 
 task_action_cache_api_unwatch::~task_action_cache_api_unwatch() {}
 
-const char* task_action_cache_api_unwatch::name() const {
-  return "task_action_cache_api_unwatch";
-}
+const char* task_action_cache_api_unwatch::name() const { return "task_action_cache_api_unwatch"; }
 
 task_action_cache_api_unwatch::result_type task_action_cache_api_unwatch::operator()() {
   const rpc_request_type& req_body = get_request_body();
@@ -47,8 +45,8 @@ task_action_cache_api_unwatch::result_type task_action_cache_api_unwatch::operat
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_cache_manager().unwatch_cache_keys(
-      get_shared_context(), req_body.cache_type(), req_body.keys())));
+  set_response_code(user_inst->get_user_cache_manager().unwatch_cache_keys(get_shared_context(), req_body.cache_type(),
+                                                                           req_body.keys()));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -202,7 +202,7 @@ CASE_TEST(rpc_unit_test, ss_stream_record_only) {
   auto task = test.run_task("ss_stream", std::chrono::seconds{2}, [](rpc::context &ctx) -> rpc::result_code_type {
     PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync req_body;
     req_body.set_global_now_offset(12345);
-    int32_t res = rpc::logic::set_server_time(ctx, 0x130031, req_body);
+    int32_t res = rpc::logic::set_server_time(ctx, 0x130031, req_body).unwrap();
     RPC_RETURN_CODE(res);
   });
   if (task.empty()) {
@@ -252,7 +252,7 @@ CASE_TEST(rpc_unit_test, ss_broadcast_to_all_nodes) {
     PROJECT_NAMESPACE_ID::SSGlobalLogicSetServerTimeSync req_body;
     req_body.set_global_now_offset(6789);
     // Empty index selects the whole global discovery set.
-    int32_t res = rpc::logic::broadcast::set_server_time(ctx, req_body, ss_msg_logic_index{});
+    int32_t res = rpc::logic::broadcast::set_server_time(ctx, req_body, ss_msg_logic_index{}).unwrap();
     RPC_RETURN_CODE(res);
   });
   if (task.empty()) {

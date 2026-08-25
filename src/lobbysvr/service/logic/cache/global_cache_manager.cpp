@@ -233,7 +233,7 @@ void global_cache_manager::hot_data_watch() {
     sync_body->mutable_watcher()->set_instance_id(logic_config::me()->get_local_server_id());
     sync_body->mutable_watcher()->set_server_subscribe(true);
     protobuf_move_message(*sync_body->mutable_watch_keys(), std::move(*watch_msg.second));
-    int res = rpc::cache::watch(ctx, watch_msg.first, *sync_body);
+    int res = rpc::cache::watch(ctx, watch_msg.first, *sync_body).unwrap();
     if (res < 0) {
       ret = res;
       FWLOGERROR("call rpc::cache::watch to server {:#x} with {} keys failed, res: {}({})", watch_msg.first,

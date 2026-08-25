@@ -869,7 +869,7 @@ SERVER_FRAME_API rpc::result_code_type task_action_ss_req_base::filter_router_ms
     }
 
     // 只通知直接来源
-    RPC_AWAIT_IGNORE_RESULT(rpc::router::router_update_sync(get_shared_context(), get_request_node_id(), *sync_msg));
+    rpc::router::router_update_sync(get_shared_context(), get_request_node_id(), *sync_msg).unwrap();
   }
 
   // 失败则要回发转发失败

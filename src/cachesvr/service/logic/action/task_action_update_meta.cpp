@@ -55,7 +55,7 @@ task_action_update_meta::result_type task_action_update_meta::operator()() {
       continue;
     }
 
-    RPC_AWAIT_IGNORE_RESULT(group->update_meta(get_shared_context(), key, meta));
+    group->update_meta(get_shared_context(), key, meta);
   }
 
   TASK_ACTION_RETURN_CODE(ret);

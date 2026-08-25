@@ -46,8 +46,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR CACHE_RPC_API rpc::result_code_type batch_get_cache
 CACHE_RPC_API void pick_key_from_meta(::rpc::context &ctx, PROJECT_NAMESPACE_ID::object_cache_key &output,
                                       const ::google::protobuf::Any &input);
 
-ATFW_EXPLICIT_NODISCARD_ATTR CACHE_RPC_API rpc::result_void_type set_cache_expired(
-    ::rpc::context &ctx, PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type, uint32_t zone_id, uint64_t instance_id);
+CACHE_RPC_API void set_cache_expired(::rpc::context &ctx, PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
+                                     uint32_t zone_id, uint64_t instance_id);
 
 }  // namespace cache_api
 }  // namespace rpc

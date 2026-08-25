@@ -186,66 +186,35 @@ void user_cache_manager::send_cache_expired_notify_to_cachesvr(rpc::context& ctx
   auto zone_id = owner_->get_zone_id();
   auto user_id = owner_->get_user_id();
   auto user_ptr = owner_->shared_from_this();
-  auto notify_task = rpc::async_invoke(
-      ctx, "user_cache_manager.send_cache_expired_notify_to_cachesvr",
-      [user_ptr, zone_id, user_id](rpc::context& subctx) -> rpc::result_code_type {
-        // 通知cachesvr，缓存过期
-        PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync* sync_body =
-            subctx.create<PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync>();
-        if (nullptr == sync_body) {
-          FWLOGERROR("malloc SSCacheSetExpiredSync failed");
-          user_ptr->get_user_cache_manager().need_notify_user_cache_expired_ = true;
-          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-        }
 
-        PROJECT_NAMESPACE_ID::object_cache_key* cache_key = sync_body->add_expired_keys();
-        if (nullptr == cache_key) {
-          FWLOGERROR("malloc object_cache_key failed");
-          user_ptr->get_user_cache_manager().need_notify_user_cache_expired_ = true;
-          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-        }
+  // 通知cachesvr，缓存过期
+  PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync* sync_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync>();
+  PROJECT_NAMESPACE_ID::object_cache_key* cache_key = sync_body->add_expired_keys();
 
-        cache_key->set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
-        cache_key->set_zone_id(zone_id);
-        cache_key->set_instance_id(user_id);
+  cache_key->set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
+  cache_key->set_zone_id(zone_id);
+  cache_key->set_instance_id(user_id);
 
-        uint64_t server_inst_id = rpc::cache_api::get_cachesvr_server_id(*cache_key);
-        if (0 == server_inst_id) {
-          RPC_RETURN_CODE(0);
-        }
-
-        int res = RPC_AWAIT_CODE_RESULT(rpc::cache::set_expired(subctx, server_inst_id, *sync_body));
-        if (res < 0) {
-          FWLOGERROR("call rpc::cache::set_expired to server {:#x} with key {}:{}:{} failed, res: {}({})",
-                     server_inst_id, static_cast<uint32_t>(cache_key->cache_type()), cache_key->zone_id(),
-                     cache_key->instance_id(), res, protobuf_mini_dumper_get_error_msg(res));
-          // 任务失败，恢复脏标记以供后续重试
-          user_ptr->get_user_cache_manager().need_notify_user_cache_expired_ = true;
-        }
-
-        RPC_RETURN_CODE(res);
-      });
-  if (notify_task.is_error()) {
-    FWLOGERROR("{} async_invoke task to notify user cache expired failed, res: {}({})", *owner_,
-               *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
-  } else {
+  uint64_t server_inst_id = rpc::cache_api::get_cachesvr_server_id(*cache_key);
+  if (0 == server_inst_id) {
     need_notify_user_cache_expired_ = false;
+    return;
+  }
+
+  int res = rpc::cache::set_expired(ctx, server_inst_id, *sync_body).unwrap();
+  if (res < 0) {
+    FWLOGERROR("call rpc::cache::set_expired to server {:#x} with key {}:{}:{} failed, res: {}({})", server_inst_id,
+               static_cast<uint32_t>(cache_key->cache_type()), cache_key->zone_id(), cache_key->instance_id(), res,
+               protobuf_mini_dumper_get_error_msg(res));
+    // 任务失败，恢复脏标记以供后续重试
+    need_notify_user_cache_expired_ = true;
   }
 }
 
-rpc::result_code_type user_cache_manager::send_update_user_basic_meta_to_cachesvr(rpc::context& ctx) {
+int32_t user_cache_manager::send_update_user_basic_meta_to_cachesvr(rpc::context& ctx) {
   // 通知cachesvr，缓存过期
   PROJECT_NAMESPACE_ID::SSCacheUpdateMetaSync* sync_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheUpdateMetaSync>();
-  if (nullptr == sync_body) {
-    FWLOGERROR("malloc SSCacheUpdateMetaSync failed");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-  }
-
   PROJECT_NAMESPACE_ID::object_cache_meta* cache_meta = sync_body->add_object_metas();
-  if (nullptr == cache_meta) {
-    FWLOGERROR("malloc object_cache_meta failed");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-  }
 
   pack_user_meta_data(ctx, *cache_meta);
   PROJECT_NAMESPACE_ID::object_cache_watch_key watch_key;
@@ -256,32 +225,26 @@ rpc::result_code_type user_cache_manager::send_update_user_basic_meta_to_cachesv
 
   uint64_t server_inst_id = rpc::cache_api::get_cachesvr_server_id(watch_key);
   if (0 == server_inst_id) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
-  int res = RPC_AWAIT_CODE_RESULT(rpc::cache::update_meta(ctx, server_inst_id, *sync_body));
+  int res = rpc::cache::update_meta(ctx, server_inst_id, *sync_body).unwrap();
   if (res < 0) {
     FWLOGERROR("call rpc::cache::update_meta to server {:#x} with key {}:{}:{} failed, res: {}({})", server_inst_id,
                static_cast<uint32_t>(watch_key.cache_type()), watch_key.zone_id(), watch_key.instance_id(), res,
                protobuf_mini_dumper_get_error_msg(res));
   }
-  RPC_RETURN_CODE(res);
+  return res;
 }
 
 void user_cache_manager::async_send_update_user_basic_meta_to_cachesvr(rpc::context& ctx) {
-  auto user_ptr = owner_->shared_from_this();
-  auto notify_task = rpc::async_invoke(
-      ctx, "user_cache_manager.async_send_update_user_basic_meta_to_cachesvr",
-      [user_ptr](rpc::context& subctx) -> rpc::result_code_type {
-        int32_t ret =
-            RPC_AWAIT_CODE_RESULT(user_ptr->get_user_cache_manager().send_update_user_basic_meta_to_cachesvr(subctx));
-        RPC_RETURN_CODE(ret);
-      });
-  if (notify_task.is_error()) {
-    FWLOGERROR("{} async_invoke task to notify user cache update meta failed, res: {}({})", *owner_,
-               *notify_task.get_error(), protobuf_mini_dumper_get_error_msg(*notify_task.get_error()));
-  } else {
-    need_notify_user_meta_expired_ = false;
+  need_notify_user_meta_expired_ = false;
+  int32_t res = send_update_user_basic_meta_to_cachesvr(ctx);
+  if (res < 0) {
+    FWLOGERROR("{} send_update_user_basic_meta_to_cachesvr failed, res: {}({})", *owner_, res,
+               protobuf_mini_dumper_get_error_msg(res));
+    need_notify_user_meta_expired_ = true;
+    return;
   }
 }
 
@@ -353,22 +316,22 @@ rpc::result_code_type user_cache_manager::send_update_meta_to_client(
   RPC_RETURN_CODE(0);
 }
 
-rpc::result_code_type user_cache_manager::unwatch_cache_keys(
+int32_t user_cache_manager::unwatch_cache_keys(
     rpc::context& ctx, PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
     const ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DCacheApiObjectKey>& keys) {
   if (keys.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   if (!rpc::cache_api::has_cachesvr()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>* cache_keys =
       ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>>();
   if (nullptr == cache_keys) {
     FWLOGERROR("malloc RepeatedPtrField<PROJECT_NAMESPACE_ID::DUserIDKey> failed");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
   }
 
   for (int i = 0; i < keys.size(); ++i) {
@@ -383,13 +346,13 @@ rpc::result_code_type user_cache_manager::unwatch_cache_keys(
     cache_key->set_instance_id(keys.Get(i).instance_id());
   }
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(unwatch_cache_keys(ctx, std::move(*cache_keys))));
+  return unwatch_cache_keys(ctx, std::move(*cache_keys));
 }
 
-rpc::result_code_type user_cache_manager::unwatch_cache_keys(
+int32_t user_cache_manager::unwatch_cache_keys(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>&& cache_keys) {
   if (cache_keys.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   if (!rpc::cache_api::has_cachesvr()) {
@@ -397,7 +360,7 @@ rpc::result_code_type user_cache_manager::unwatch_cache_keys(
     for (int i = 0; i < cache_keys.size(); ++i) {
       watch_data_.erase(cache_keys.Get(i));
     }
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   // 所有缓存反订阅
@@ -439,7 +402,7 @@ rpc::result_code_type user_cache_manager::unwatch_cache_keys(
   }
 
   if (watch_keys_by_server_id.empty()) {
-    RPC_RETURN_CODE(0);
+    return 0;
   }
 
   for (auto& unwatch_msg : watch_keys_by_server_id) {
@@ -450,14 +413,14 @@ rpc::result_code_type user_cache_manager::unwatch_cache_keys(
     }
 
     protobuf_move_message(*sync_body->mutable_unwatch_keys(), std::move(*unwatch_msg.second));
-    int res = RPC_AWAIT_CODE_RESULT(rpc::cache::unwatch(ctx, unwatch_msg.first, *sync_body));
+    int res = rpc::cache::unwatch(ctx, unwatch_msg.first, *sync_body).unwrap();
     if (res < 0) {
       FWLOGERROR("call rpc::cache::unwatch to server {:#x} with {} keys failed, res: {}({})", unwatch_msg.first,
                  sync_body->unwatch_keys_size(), res, protobuf_mini_dumper_get_error_msg(res));
     }
   }
 
-  RPC_RETURN_CODE(0);
+  return 0;
 }
 
 void user_cache_manager::fill_self_basic_data(PROJECT_NAMESPACE_ID::DUserBasicData& output) {
@@ -497,69 +460,59 @@ void user_cache_manager::async_unwatch_all(rpc::context& ctx) {
     return;
   }
 
-  auto user_ptr = owner_->shared_from_this();
-  auto invoke_task = rpc::async_invoke(
-      ctx, "user_cache_manager.unwatch_all", [user_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        auto& self = user_ptr->get_user_cache_manager();
-        std::unordered_map<uint64_t, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>*>
-            watch_keys_by_server_id;
-        for (auto& watch_data : self.watch_data_) {
-          uint64_t server_inst_id = rpc::cache_api::get_cachesvr_server_id(watch_data.first);
-          if (0 == server_inst_id) {
-            continue;
-          }
+  {
+    std::unordered_map<uint64_t, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>*>
+        watch_keys_by_server_id;
+    for (auto& watch_data : watch_data_) {
+      uint64_t server_inst_id = rpc::cache_api::get_cachesvr_server_id(watch_data.first);
+      if (0 == server_inst_id) {
+        continue;
+      }
 
-          PROJECT_NAMESPACE_ID::object_cache_key* watch_key = nullptr;
-          auto iter = watch_keys_by_server_id.find(server_inst_id);
-          if (iter == watch_keys_by_server_id.end()) {
-            ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>* keys =
-                child_ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>>();
-            if (nullptr != keys) {
-              keys->Reserve(static_cast<int>(self.watch_data_.size()));
-              watch_key = keys->Add();
+      PROJECT_NAMESPACE_ID::object_cache_key* watch_key = nullptr;
+      auto iter = watch_keys_by_server_id.find(server_inst_id);
+      if (iter == watch_keys_by_server_id.end()) {
+        ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>* keys =
+            ctx.create<::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_key>>();
+        if (nullptr != keys) {
+          keys->Reserve(static_cast<int>(watch_data_.size()));
+          watch_key = keys->Add();
 
-              watch_keys_by_server_id[server_inst_id] = keys;
-            }
-          } else {
-            watch_key = iter->second->Add();
-          }
-
-          if (nullptr == watch_key) {
-            break;
-          }
-
-          protobuf_copy_message(*watch_key, watch_data.first);
+          watch_keys_by_server_id[server_inst_id] = keys;
         }
-        self.watch_data_.clear();
+      } else {
+        watch_key = iter->second->Add();
+      }
 
-        if (watch_keys_by_server_id.empty()) {
-          RPC_RETURN_CODE(0);
-        }
+      if (nullptr == watch_key) {
+        break;
+      }
 
-        for (auto& unwatch_msg : watch_keys_by_server_id) {
-          PROJECT_NAMESPACE_ID::SSCacheUnwatchSync* sync_body =
-              child_ctx.create<PROJECT_NAMESPACE_ID::SSCacheUnwatchSync>();
-          if (nullptr == sync_body) {
-            FWLOGERROR("malloc SSCacheUnwatchSync failed");
-            break;
-          }
+      protobuf_copy_message(*watch_key, watch_data.first);
+    }
+    watch_data_.clear();
 
-          sync_body->mutable_watcher()->set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
-          sync_body->mutable_watcher()->set_zone_id(user_ptr->get_zone_id());
-          sync_body->mutable_watcher()->set_instance_id(user_ptr->get_user_id());
-          protobuf_move_message(*sync_body->mutable_unwatch_keys(), std::move(*unwatch_msg.second));
-          int32_t res = RPC_AWAIT_CODE_RESULT(rpc::cache::unwatch(child_ctx, unwatch_msg.first, *sync_body));
-          if (res < 0) {
-            FWLOGERROR("call rpc::cache::unwatch to server {:#x} with {} keys failed, res: {}({})", unwatch_msg.first,
-                       sync_body->unwatch_keys_size(), res, protobuf_mini_dumper_get_error_msg(res));
-          }
-        }
+    if (watch_keys_by_server_id.empty()) {
+      return;
+    }
 
-        RPC_RETURN_CODE(0);
-      });
-  if (invoke_task.is_error()) {
-    FWLOGERROR("{} invoke task to send watch heartbeat failed, result: {}({})", *owner_, *invoke_task.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_task.get_error()));
+    for (auto& unwatch_msg : watch_keys_by_server_id) {
+      PROJECT_NAMESPACE_ID::SSCacheUnwatchSync* sync_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheUnwatchSync>();
+      if (nullptr == sync_body) {
+        FWLOGERROR("malloc SSCacheUnwatchSync failed");
+        break;
+      }
+
+      sync_body->mutable_watcher()->set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
+      sync_body->mutable_watcher()->set_zone_id(owner_->get_zone_id());
+      sync_body->mutable_watcher()->set_instance_id(owner_->get_user_id());
+      protobuf_move_message(*sync_body->mutable_unwatch_keys(), std::move(*unwatch_msg.second));
+      int32_t res = rpc::cache::unwatch(ctx, unwatch_msg.first, *sync_body).unwrap();
+      if (res < 0) {
+        FWLOGERROR("call rpc::cache::unwatch to server {:#x} with {} keys failed, res: {}({})", unwatch_msg.first,
+                   sync_body->unwatch_keys_size(), res, protobuf_mini_dumper_get_error_msg(res));
+      }
+    }
   }
 }
 
@@ -576,21 +529,12 @@ void user_cache_manager::maybe_async_watch_heartbeat(rpc::context& ctx) {
     return;
   }
 
-  auto user_ptr = owner_->shared_from_this();
-  auto invoke_task = rpc::async_invoke(
-      ctx, "user_cache_manager.watch_heartbeat", [user_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        RPC_AWAIT_IGNORE_VOID(user_ptr->get_user_cache_manager().watch_heartbeat(child_ctx));
-        RPC_RETURN_CODE(0);
-      });
-  if (invoke_task.is_error()) {
-    FWLOGERROR("{} invoke task to send watch heartbeat failed, result: {}({})", *owner_, *invoke_task.get_error(),
-               protobuf_mini_dumper_get_error_msg(*invoke_task.get_error()));
-  }
+  watch_heartbeat(ctx);
 }
 
-rpc::result_void_type user_cache_manager::watch_heartbeat(rpc::context& ctx) {
+void user_cache_manager::watch_heartbeat(rpc::context& ctx) {
   if (watch_heartbeat_timepoint_ > atfw::util::time::time_utility::get_now()) {
-    RPC_RETURN_VOID;
+    return;
   }
 
   time_t heartbeat_interval = logic_config::me()->get_logic_cfg().cache().watcher().heartbeat_interval().seconds();
@@ -600,7 +544,7 @@ rpc::result_void_type user_cache_manager::watch_heartbeat(rpc::context& ctx) {
   watch_heartbeat_timepoint_ = atfw::util::time::time_utility::get_now() + heartbeat_interval;
 
   if (!rpc::cache_api::has_cachesvr()) {
-    RPC_RETURN_VOID;
+    return;
   }
 
   // 所有缓存反订阅
@@ -638,7 +582,7 @@ rpc::result_void_type user_cache_manager::watch_heartbeat(rpc::context& ctx) {
   }
 
   if (watch_keys_by_server_id.empty()) {
-    RPC_RETURN_VOID;
+    return;
   }
 
   for (auto& watch_msg : watch_keys_by_server_id) {
@@ -652,14 +596,14 @@ rpc::result_void_type user_cache_manager::watch_heartbeat(rpc::context& ctx) {
     sync_body->mutable_watcher()->set_zone_id(owner_->get_zone_id());
     sync_body->mutable_watcher()->set_instance_id(owner_->get_user_id());
     protobuf_move_message(*sync_body->mutable_watch_keys(), std::move(*watch_msg.second));
-    int res = RPC_AWAIT_CODE_RESULT(rpc::cache::watch(ctx, watch_msg.first, *sync_body));
+    int res = rpc::cache::watch(ctx, watch_msg.first, *sync_body).unwrap();
     if (res < 0) {
       FWLOGERROR("call rpc::cache::watch to server {:#x} with {} keys failed, res: {}({})", watch_msg.first,
                  sync_body->watch_keys_size(), res, protobuf_mini_dumper_get_error_msg(res));
     }
   }
 
-  RPC_RETURN_VOID;
+  return;
 }
 
 void user_cache_manager::pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_meta& cache_meta) {

@@ -94,7 +94,7 @@ void send_to_subscribers(matching_wal_publisher& publisher, const subscriber_gro
         output_event->mutable_matched()->Clear();
       }
     }
-    const int32_t result = rpc::matching::matching_event_sync(param.context.get(), group.first.first, *group_message);
+    const int32_t result = rpc::matching::matching_event_sync(param.context.get(), group.first.first, *group_message).unwrap();
     if (result != 0) {
       FCTXLOGERROR(param.context.get(), "matching {} send WAL to lobbysvr {:#x} failed, result: {}({})",
                    room->get_matching_id(), group.first.first, result, protobuf_mini_dumper_get_error_msg(result));

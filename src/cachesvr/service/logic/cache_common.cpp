@@ -134,7 +134,7 @@ void cache_watcher_t::notify_cache_expired(::rpc::context &ctx,
   protobuf_copy_message(*req_body->add_watchers(), get_key());
   protobuf_copy_message(*req_body->mutable_expired_key(), cache_key);
 
-  int32_t res = rpc::lobby::object_cache_expired_sync(ctx, server_inst_id_, *req_body);
+  int32_t res = rpc::lobby::object_cache_expired_sync(ctx, server_inst_id_, *req_body).unwrap();
   if (res < 0) {
     FWLOGERROR("send cache {}:{}:{} expired to watcher {}:{}:{} on server {:#x}",
                static_cast<int>(cache_key.cache_type()), cache_key.zone_id(), cache_key.instance_id(),

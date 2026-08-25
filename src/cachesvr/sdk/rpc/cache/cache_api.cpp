@@ -251,30 +251,29 @@ CACHE_RPC_API void pick_key_from_meta(::rpc::context &ctx, PROJECT_NAMESPACE_ID:
   pick_key_from_meta(ctx, output, *unpack_message);
 }
 
-CACHE_RPC_API rpc::result_void_type set_cache_expired(::rpc::context &ctx,
-                                                      PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
-                                                      uint32_t zone_id, uint64_t instance_id) {
+CACHE_RPC_API void set_cache_expired(::rpc::context &ctx, PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type,
+                                     uint32_t zone_id, uint64_t instance_id) {
   PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync *request_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheSetExpiredSync>();
   if (nullptr == request_body) {
     FWLOGERROR("malloc SSCacheSetExpiredSync failed");
-    RPC_RETURN_VOID;
+    return;
   }
 
   auto *key = request_body->mutable_expired_keys()->Add();
   if (nullptr == key) {
     FWLOGERROR("malloc object_cache_key failed");
-    RPC_RETURN_VOID;
+    return;
   }
   key->set_cache_type(cache_type);
   key->set_zone_id(zone_id);
   key->set_instance_id(instance_id);
-  auto ret = RPC_AWAIT_CODE_RESULT(
-      rpc::cache::set_expired(ctx, get_cachesvr_server_id(cache_type, zone_id, instance_id), *request_body));
+  auto ret =
+      rpc::cache::set_expired(ctx, get_cachesvr_server_id(cache_type, zone_id, instance_id), *request_body).unwrap();
   if (ret != 0) {
     FWLOGERROR("set key(type:{}, zone_id:{}, instance_id:{}) expired failed, ret {}", static_cast<int>(cache_type),
                zone_id, instance_id, ret);
   }
-  RPC_RETURN_VOID;
+  return;
 }
 
 }  // namespace cache_api

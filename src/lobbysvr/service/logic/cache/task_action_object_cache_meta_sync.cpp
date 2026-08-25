@@ -33,15 +33,12 @@
 #include <logic/cache/user_cache_manager.h>
 #include <logic/user_manager.h>
 
-task_action_object_cache_meta_sync::task_action_object_cache_meta_sync(
-    dispatcher_start_data_type&& param)
+task_action_object_cache_meta_sync::task_action_object_cache_meta_sync(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 task_action_object_cache_meta_sync::~task_action_object_cache_meta_sync() {}
 
-const char* task_action_object_cache_meta_sync::name() const {
-  return "task_action_object_cache_meta_sync";
-}
+const char* task_action_object_cache_meta_sync::name() const { return "task_action_object_cache_meta_sync"; }
 
 task_action_object_cache_meta_sync::result_type task_action_object_cache_meta_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
@@ -112,7 +109,7 @@ task_action_object_cache_meta_sync::result_type task_action_object_cache_meta_sy
       protobuf_copy_message(*sync_body->mutable_watcher(), watcher_key);
       protobuf_copy_message(*sync_body->add_unwatch_keys(), key);
 
-      int res = RPC_AWAIT_CODE_RESULT(rpc::cache::unwatch(get_shared_context(), get_request_node_id(), *sync_body));
+      int res = rpc::cache::unwatch(get_shared_context(), get_request_node_id(), *sync_body).unwrap();
       if (res < 0) {
         FCTXLOGERROR(get_shared_context(), "Watcher {}:{}:{} try to unwatch {}:{}:{} failed, res: {}({})",
                      static_cast<uint32_t>(watcher_key.cache_type()), watcher_key.zone_id(), watcher_key.instance_id(),
