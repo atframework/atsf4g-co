@@ -151,3 +151,7 @@ message user_orbit_room_data {
 }
 
 message user_string_mapping_data {}
+
+message user_team_data {
+  int64 processed_private_chat_channel_sequence = 1;  // 私聊频道的全局递增发包序号
+}

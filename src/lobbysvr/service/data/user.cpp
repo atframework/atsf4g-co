@@ -144,6 +144,7 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_async_jobs_manager_->create_init(ctx);
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
+  user_team_manager_->create_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
   // TODO init all interval checkpoint
 
@@ -378,6 +379,10 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_matching_manager_->init_from_table_data(ctx, tb_user);
   }
 
+  if (tb_user.has_team_data()) {
+    user_team_manager_->init_from_table_data(ctx, tb_user);
+  }
+
   ////////////////// 业务Manager开始 ////////////////////
 
   trace.finish({0, {}});
@@ -421,6 +426,12 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
   if (ret < 0) {
     FWLOGERROR("{} dump user_matching_manager_ failed, res: {}({})", *this, ret,
                protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_team_manager_->dump(ctx, table);
+  if (ret < 0) {
+    FWPLOGERROR(*this, "dump user_team_manager_ failed, res: {}({})", ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 

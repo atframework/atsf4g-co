@@ -29,6 +29,12 @@ class user_team_manager_utility {
  public:
   static void dispatch_team_member_event(rpc::context& ctx, user& user_inst,
                                          const ::atfw::dtmq::DChannelMessage& data) {
+    auto& team_mgr = user_inst.get_user_team_manager();
+    if (team_mgr.processed_private_chat_channel_sequence_ >= data.sequence()) {
+      return;
+    }
+    team_mgr.processed_private_chat_channel_sequence_ = data.sequence();
+
     // TODO(owent): 处理队伍成员事件
     rpc::context::message_holder<atfw::team::DTeamMemberAction> action(ctx);
     if (!data.detail().event().Is<atfw::team::DTeamMemberAction>()) {
@@ -93,20 +99,43 @@ class user_team_manager_utility {
   }
 };
 
-user_team_manager::user_team_manager(user& owner) : owner_(&owner) {}
+user_team_manager::user_team_manager(user& owner)
+    : owner_(&owner), is_dirty_(false), processed_private_chat_channel_sequence_(0) {}
 
 user_team_manager::~user_team_manager() {}
+
+void user_team_manager::create_init(rpc::context& /*ctx*/) { processed_private_chat_channel_sequence_ = 0; }
 
 int32_t user_team_manager::login_init(rpc::context&) {
   user_chat_manager::global_setup_private_channel_event_callback<::atfw::team::DTeamMemberAction>(
       reinterpret_cast<uintptr_t>(user_team_manager_utility::dispatch_team_member_event),
       user_team_manager_utility::dispatch_team_member_event);
+
+  is_dirty_ = false;
   return 0;
 }
 
 void user_team_manager::refresh_feature_limit_second(rpc::context& ctx) {
   cleanup_expired_join_request(ctx);
   cleanup_expired_invitation(ctx);
+}
+
+void user_team_manager::init_from_table_data(rpc::context& /*ctx*/,
+                                             const PROJECT_NAMESPACE_ID::table_user& /*user_table*/) {}
+
+int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_user& /*table*/) const { return 0; }
+
+bool user_team_manager::is_dirty() const { return is_dirty_; }
+
+void user_team_manager::clear_dirty() { is_dirty_ = false; }
+
+void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequence) {
+  if (processed_private_chat_channel_sequence_ == sequence) {
+    return;
+  }
+
+  processed_private_chat_channel_sequence_ = sequence;
+  is_dirty_ = true;
 }
 
 size_t user_team_manager::cleanup_expired_join_request(rpc::context& ctx) {

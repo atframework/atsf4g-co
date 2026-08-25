@@ -130,6 +130,7 @@ message table_user {
   DRankUserData rank_data = 201;                       // 用户排行榜数据
   user_orbit_room_data orbit_room_data = 202;          // 用户房间数据
   DUserMatchingData matching_data = 203;               // 匹配临时数据
+  user_team_data team_data = 204;                      // 队伍数据
 }
 
 message table_string_mapping {
