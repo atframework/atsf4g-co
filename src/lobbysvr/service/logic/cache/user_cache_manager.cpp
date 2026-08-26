@@ -110,7 +110,7 @@ void user_cache_manager::on_update_session(rpc::context& ctx) {
 
     // 下发给客户端缓存过期
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SCCacheApiAllExpiredSync> msg{ctx};
-    rpc::lobbysvrclientservice::send_cache_api_all_expired(ctx, *msg, *sess);
+    rpc::lobbysvrclientservice::send_cache_api_all_expired(ctx, *msg, *sess).unwrap();
 
     for (auto& watch_data : watch_data_) {
       watch_data.second.data_version = 0;
@@ -175,7 +175,7 @@ void user_cache_manager::refresh_feature_limit_minute(rpc::context& ctx) {
 
     // 下发给客户端缓存过期
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SCCacheApiAllExpiredSync> msg{ctx};
-    rpc::lobbysvrclientservice::send_cache_api_all_expired(ctx, *msg, *sess);
+    rpc::lobbysvrclientservice::send_cache_api_all_expired(ctx, *msg, *sess).unwrap();
   } while (false);
 
   // 监听缓存变化的心跳

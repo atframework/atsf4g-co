@@ -199,6 +199,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
     return static_cast<unsigned long long>(get_user_id());
   }
 
+  ATFW_UTIL_FORCEINLINE bool is(const PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const noexcept {
+    return get_user_id() == user_key.user_id() && get_zone_id() == user_key.zone_id();
+  }
+
   ATFW_UTIL_FORCEINLINE uint64_t get_user_cas_version() const { return user_cas_version_; }
   ATFW_UTIL_FORCEINLINE uint64_t &get_user_cas_version() { return user_cas_version_; }
   ATFW_UTIL_FORCEINLINE void set_user_cas_version(uint64_t version) { user_cas_version_ = version; }

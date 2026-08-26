@@ -295,21 +295,21 @@ service LobbysvrClientService {
     };
   }
 
-  rpc team_apply_join_team(CSTeamApplyJoinTeamReq) returns (SCTeamApplyJoinTeamRsp) {
+  rpc team_send_join_request(CSTeamSendJoinRequestReq) returns (SCTeamSendJoinRequestRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "申请加入组队"
     };
   }
 
-  rpc team_accept_apply(CSTeamAcceptApplyReq) returns (SCTeamAcceptApplyRsp) {
+  rpc team_accept_join_request(CSTeamAcceptJoinRequestReq) returns (SCTeamAcceptJoinRequestRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "同意加入组队申请"
     };
   }
 
-  rpc team_reject_apply(CSTeamRejectApplyReq) returns (SCTeamRejectApplyRsp) {
+  rpc team_reject_join_request(CSTeamRejectJoinRequestReq) returns (SCTeamRejectJoinRequestRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "拒绝加入组队申请"

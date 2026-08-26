@@ -108,7 +108,7 @@ class user_team_utility {
                  std::chrono::system_clock::time_point /*destroy_time*/) {
           user_team* team_ptr = get_user_team(subscriber, "on_destroyed");
           // 可能先删除频道，而后重新创建的流程。所以要忽略之前的频道销毁通知
-          if (team_ptr != nullptr && log_sequence > team_ptr->channel_create_sequence_) {
+          if (team_ptr != nullptr && log_sequence >= team_ptr->channel_create_sequence_) {
             auto hold_lifetime = team_ptr->shared_from_this();
             hold_lifetime->is_member_ = false;
             FCTXLOGDEBUG(ctx, "{} channel for team {}:{} destroyed, sequence:{}", hold_lifetime->owner_->get_owner(),
@@ -227,6 +227,10 @@ const atfw::dtmq::DChannelIdKey& user_team::get_channel_key() const noexcept {
   return channel_subscriber_->get_channel_key();
 }
 
+bool user_team::check_permission(atfw::team::EnTeamPermissionRole checked) const noexcept {
+  return cached_permission_role_ >= checked;
+}
+
 void user_team::make_current_actived(rpc::context& ctx) {
   last_exit_team_request_timepoint_ = std::chrono::system_clock::from_time_t(0);
   actived_timepoint_ = ctx.logical_now();
@@ -302,6 +306,7 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
   channel_saved_sequence_ = team_snapshot->saved_action_sequence();
   cached_captain_user_key_ = team_snapshot->captain_user_key();
   cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
+  cached_configure_ = team_snapshot->configure();
 
   is_member_ = false;
   for (const auto& member : team_snapshot->member()) {
@@ -350,15 +355,25 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       // }
       break;
     }
-    // case atfw::team::DTeamAction::kMemberSetRole: {
-    //   break;
-    // }
+    case atfw::team::DTeamAction::kMemberSetRole: {
+      const auto& set_role = action.member_set_role();
+      if (set_role.user_key().zone_id() == owner_->get_owner().get_zone_id() &&
+          set_role.user_key().user_id() == owner_->get_owner().get_user_id()) {
+        cached_permission_role_ = set_role.role();
+      }
+      break;
+    }
     case atfw::team::DTeamAction::kElectionCaptain: {
       cached_captain_user_key_ = action.election_captain().user_key();
       break;
     }
     case atfw::team::DTeamAction::kTeamUpdate: {
-      // 处理成员变更
+      if (action.team_update().has_configure()) {
+        cached_configure_ = action.team_update().configure();
+      }
+
+      // TODO(owent): 处理EN_TEAM_SHARED_MODULE_TYPE_BATTLE+EN_TEAM_SHARED_DATA_BATTLE_MATCHING
+      // 如果转移成正在matching则要发起匹配的启动/恢复流程
       break;
     }
     case atfw::team::DTeamAction::kAddInvitation:

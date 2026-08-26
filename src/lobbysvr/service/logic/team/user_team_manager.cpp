@@ -181,8 +181,10 @@ void user_team_manager::refresh_feature_limit_second(rpc::context& ctx) {
 
 void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
   // 每分钟清理，大多数情况都会由事件触发清理。这里仅仅是一个防泄露的补充
-  std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
-      can_be_removed_keys;
+  using team_key_set_t = std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t,
+                                            rpc::team::team_api::team_key_equal_t>;
+  team_key_set_t can_be_removed_keys;
+  team_key_set_t wait_member_timeout_team_keys;
   std::unordered_set<uint32_t> empty_group_types;
   for (auto& group : team_group_) {
     can_be_removed_keys.clear();
@@ -204,12 +206,17 @@ void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
     if (group.second.current && group.second.current->wait_to_be_member_but_timeout(ctx)) {
       FCTXLOGINFO(ctx, "{} current team {}:{} wait to be member but timeout, prepare to exit", *owner_,
                   group.second.current->get_team_key().zone_id(), group.second.current->get_team_key().team_id());
-      remove_team(ctx, group.second.current->get_team_key(), true, atfw::team::EN_TEAM_EXIT_REASON_EXPIRED);
+      // remove_team 可能会移除当前正在迭代的分组，必须等遍历结束后再执行
+      wait_member_timeout_team_keys.emplace(group.second.current->get_team_key());
     }
 
     if (group.second.pending_to_exit.empty() && !group.second.current) {
       empty_group_types.emplace(group.first);
     }
+  }
+
+  for (const auto& team_key : wait_member_timeout_team_keys) {
+    remove_team(ctx, team_key, true, atfw::team::EN_TEAM_EXIT_REASON_EXPIRED);
   }
 
   for (const auto& group_type : empty_group_types) {
@@ -309,9 +316,25 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
   const auto& channel_key = join_data.team_channel();
   auto iter = team_index_.find(team_key);
   if (team_index_.end() != iter && iter->second) {
-    FCTXLOGINFO(ctx, "{} add_team: team {}:{} already exists, skip to add a new one", *owner_, team_key.zone_id(),
-                team_key.team_id());
-    iter->second->make_current_actived(ctx);
+    auto exists_team = iter->second;
+    auto iter_group = team_group_.find(exists_team->get_team_type());
+    if (iter_group != team_group_.end() && iter_group->second.current != exists_team) {
+      // 之前还处于退出流程中的队伍又重新加入了：从退出队列移出并恢复为当前队伍，原当前队伍转入退出队列
+      iter_group->second.pending_to_exit.erase(team_key);
+      if (iter_group->second.current) {
+        iter_group->second.pending_to_exit.emplace(iter_group->second.current->get_team_key(),
+                                                   iter_group->second.current);
+        iter_group->second.current->send_exit_team_request(ctx, atfw::team::EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM);
+      }
+      iter_group->second.current = exists_team;
+      exists_team->init_cached_data(join_data.captain_user_key(), join_data.user_role());
+      FCTXLOGINFO(ctx, "{} add_team: team {}:{} is still in exit queue, restore it to current", *owner_,
+                  team_key.zone_id(), team_key.team_id());
+    } else {
+      FCTXLOGINFO(ctx, "{} add_team: team {}:{} already exists, skip to add a new one", *owner_, team_key.zone_id(),
+                  team_key.team_id());
+    }
+    exists_team->make_current_actived(ctx);
     return;
   }
 

@@ -232,6 +232,24 @@ static inline atfw::team::EnTeamPermissionRole resolve_permission_role(
   return role;
 }
 
+// 修订配置中的角色门槛默认值: 未配置(不高于 GUEST)的门槛就地改写为各字段默认值。
+// storage_.configure 每次被修改后都必须重新修订(create_team/restore_snapshot/apply_team_update)，
+// 且 team_update 事件在写入频道日志前同样修订(send_action)，保证随快照和增量事件下发给
+// member 订阅者的始终是修订后的完整配置，订阅者无需再自行补默认值。
+static inline void revise_configure_default_permission(atfw::team::DTeamConfigure& configure) {
+  configure.set_manage_member_role(
+      resolve_permission_role(configure.manage_member_role(), atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN));
+  configure.set_approve_join_request_role(
+      resolve_permission_role(configure.approve_join_request_role(), atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+  configure.set_invite_role(resolve_permission_role(configure.invite_role(), atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+  configure.set_update_team_data_role(
+      resolve_permission_role(configure.update_team_data_role(), atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+  configure.set_reject_invitation_role(
+      resolve_permission_role(configure.reject_invitation_role(), atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN));
+  configure.set_set_member_role_role(
+      resolve_permission_role(configure.set_member_role_role(), atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN));
+}
+
 // GAP-11: 检查 action 内嵌 team key 是否与当前房间不一致(含未设置)。只有携带内嵌 team 标识的
 // action 种类需要判定(destroy_team/remove_member/invitation/join_request，见 com.struct.team.proto)
 static inline bool action_team_key_mismatch(const atfw::team::DTeamAction& action,
@@ -500,6 +518,10 @@ rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team
       if (action_ptr->team_update().condition_size() > 0) {
         mutable_action().mutable_team_update()->clear_condition();
       }
+      // 配置变更写入频道日志前修订默认门槛，保证订阅者收到的增量事件携带完整配置
+      if (action_ptr->team_update().has_configure()) {
+        revise_configure_default_permission(*mutable_action().mutable_team_update()->mutable_configure());
+      }
       break;
     default:
       break;
@@ -625,6 +647,8 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   dump_team_key(*public_data->mutable_team_key());
   protobuf_copy_message(*public_data->mutable_captain_user_key(), req.sender_user_key());
   protobuf_copy_message(*public_data->mutable_configure(), req.configure());
+  // 修订默认值后再写入频道快照与 storage_，保证下发给订阅者的配置总是完整门槛
+  revise_configure_default_permission(*public_data->mutable_configure());
   for (const auto& kv : req.shared_team_data()) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     protobuf_copy_message((*public_data->mutable_shared_team_data())[kv.first], kv.second);
@@ -1025,6 +1049,8 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
   protobuf_copy_message(*storage_.mutable_team_key(), team_key_);
   protobuf_copy_message(*storage_.mutable_captain_user_key(), public_data->captain_user_key());
   protobuf_copy_message(*storage_.mutable_configure(), public_data->configure());
+  // 旧快照可能携带未修订的配置(GUEST 表示默认)，恢复后重新修订
+  revise_configure_default_permission(*storage_.mutable_configure());
   storage_.set_acknowledge_action_sequence(public_data->acknowledge_action_sequence());
   storage_.set_acknowledge_action_hash_code(public_data->acknowledge_action_hash_code());
   storage_.set_saved_action_sequence(public_data->saved_action_sequence());
@@ -1245,6 +1271,9 @@ void team_room::apply_action(rpc::context& ctx, atfw::team::DTeamAction& action,
     case atfw::team::DTeamAction::kTeamUpdate:
       apply_team_update(action.team_update());
       break;
+    case atfw::team::DTeamAction::kMemberSetRole:
+      apply_member_set_role(action.member_set_role());
+      break;
     case atfw::team::DTeamAction::kElectionCaptain:
       change_captain(action.election_captain().user_key());
       break;
@@ -1306,12 +1335,23 @@ void team_room::apply_member_update(const atfw::team::DTeamMemberUpdateData& upd
 void team_room::apply_team_update(const atfw::team::DTeamUpdateData& update_data) {
   if (update_data.has_configure()) {
     protobuf_copy_message(*storage_.mutable_configure(), update_data.configure());
+    // 修订默认门槛(新事件已在 send_action 写入前修订，此处兜底旧世代日志回放)，
+    // 保证 storage_ 中的配置与后续快照下发总是完整门槛
+    revise_configure_default_permission(*storage_.mutable_configure());
   }
 
   for (const auto& kv : update_data.shared_team_data()) {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     protobuf_copy_message((*storage_.mutable_shared_team_data())[kv.first], kv.second);
   }
+}
+
+void team_room::apply_member_set_role(const atfw::team::DTeamMemberSetRole& set_role) {
+  auto member = find_member(set_role.user_key(), false);
+  if (!member) {
+    return;
+  }
+  member->member_data.set_role(set_role.role());
 }
 
 void team_room::apply_add_invitation(const atfw::team::DTeamInvitation& invitation) {
@@ -1836,6 +1876,10 @@ atfw::team::EnTeamPermissionRole team_room::get_reject_invitation_role() const {
   return resolve_permission_role(storage_.configure().reject_invitation_role(), atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
 }
 
+atfw::team::EnTeamPermissionRole team_room::get_set_member_role_role() const {
+  return resolve_permission_role(storage_.configure().set_member_role_role(), atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+}
+
 bool team_room::is_join_request_allowed() const { return !storage_.configure().disable_join_request(); }
 
 bool team_room::check_update_conditions(
@@ -2052,6 +2096,24 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
       // 与 member_update 相同: 携带更新条件时需满足至少一个 checker
       if (ret == 0 && !check_update_conditions(ctx, action.team_update().condition())) {
         ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
+      }
+      break;
+    case atfw::team::DTeamAction::kMemberSetRole:
+      // 设置成员角色需要 set_member_role_role(默认 ADMIN)；目标必须是成员，
+      // 且不能授予高于操作者自身的角色(与 add_member 的授权上限一致)
+      ret = require_role(get_set_member_role_role());
+      if (ret == 0) {
+        const auto& set_role = action.member_set_role();
+        if (set_role.role() <= atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+          ret = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+        } else if (!find_member(set_role.user_key(), false)) {
+          ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
+        } else {
+          auto operator_member = find_member(operator_key, false);
+          if (!operator_member || set_role.role() > operator_member->member_data.role()) {
+            ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+          }
+        }
       }
       break;
     case atfw::team::DTeamAction::kElectionCaptain:

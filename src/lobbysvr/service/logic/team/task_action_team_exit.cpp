@@ -28,6 +28,8 @@
 
 #include <utility>
 
+#include "logic/team/user_team_manager.h"
+
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_exit::task_action_team_exit(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -39,7 +41,7 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_exit::
 }
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_exit::result_type task_action_team_exit::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
@@ -49,7 +51,15 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_exit::result_type 
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(req_body.team_key());
+  if (!team_ptr) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // 玩家主动退队
+  user_inst->get_user_team_manager().remove_team(get_shared_context(), req_body.team_key(),
+                                                 atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM);
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

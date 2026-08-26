@@ -352,6 +352,9 @@ AND update/reset_lock/destroy 调用无非预期增量
 | PERM-13 | 🔶 | P0 | 专用 RPC 对照 | invitation/join 的六个专用 RPC 与通用 `send_message` 得到相同权限结论和日志形状 |
 | PERM-14 | ✅ | P1 | 角色阶梯比较 | GUEST 及以下使用默认门槛；门槛比较一律按大小（含等于），低于 NORMAL 的自定义门槛、NORMAL/ADMIN 之间的自定义角色（如 150）与高于 OWNER 的档位（如 350）均按数值生效，验证未来插入新档位无需修改比较逻辑 |
 | PERM-15 | ⬜ | P1 | 内外 team key | outer team id 与 destroy/remove/admission 内嵌 team id 不一致时拒绝或统一改写为当前 room，绝不向成员发布矛盾标识 |
+| PERM-16 | ✅ | P0 | `member_set_role` | 非成员操作者 not-in-team；目标非成员 member-not-found；目标角色不高于 GUEST 报 invalid-param；NORMAL 低于默认门槛(ADMIN)失败；ADMIN 授予高于自身的 OWNER 失败；ADMIN 授予同级 ADMIN 成功；OWNER 降级他人成功 |
+| PERM-17 | ✅ | P0 | `member_set_role` 自定义门槛 | 配置 set_member_role_role=NORMAL 后 NORMAL 可授予不高于自身的角色；授予高于自身的角色仍失败（自定义门槛不改变授权上限） |
+| PERM-18 | ✅ | P1 | 配置默认门槛修订下发 | create 快照 custom_data 与 team_update 增量事件中的 configure 均携带修订后的完整门槛（revise_configure_default_permission），不允许出现 GUEST 占位，订阅者无需自行补默认值 |
 
 ### 4.3 邀请、加入请求与个人通知
 

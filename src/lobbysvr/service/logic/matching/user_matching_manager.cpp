@@ -599,7 +599,7 @@ void user_matching_manager::send_log_sync(rpc::context& ctx) {
   dump_client_view(*output->mutable_client_view());
   FWLOGDEBUG("{} send matching view sync to client, matching_id={}, unit_id={}, view_revision={}", *owner_,
              data_.view().matching_id(), output->client_view().unit_id(), output->client_view().view_revision());
-  rpc::lobbysvrclientservice::send_matching_log_sync(ctx, *output, *session);
+  rpc::lobbysvrclientservice::send_matching_log_sync(ctx, *output, *session).unwrap();
 }
 
 void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,

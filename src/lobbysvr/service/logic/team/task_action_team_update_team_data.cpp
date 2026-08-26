@@ -28,6 +28,9 @@
 
 #include <utility>
 
+#include "logic/team/user_team_algorithm.h"
+#include "logic/team/user_team_manager.h"
+
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_update_team_data::task_action_team_update_team_data(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -40,7 +43,7 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_update
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_update_team_data::result_type
 task_action_team_update_team_data::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
@@ -50,7 +53,21 @@ task_action_team_update_team_data::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(req_body.team_key());
+  if (!team_ptr) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  if (!user_team_algorithm::allow_client_update_team_shared_data(req_body.module_type(), req_body.module_data_id())) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // TODO(owent): 各类数据更新的操作
+  // - matching状态（condition）:
+  //   - 如果更新为true，则所有队伍成员的ready必须都是true
+  //   - 如果更新为false，则必须先去掉matching，成功后才能发送数据更新
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

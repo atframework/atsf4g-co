@@ -2030,7 +2030,8 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_rank_manager::clear_inst
 
 rpc::result_void_type user_rank_manager::set_client_rank_cache_expired(rpc::context &ctx) {
   rpc::context::message_holder<PROJECT_NAMESPACE_ID::SCRankCacheExpiredSync> sync_body{ctx};
-  rpc::lobbysvrclientservice::send_rank_cache_expired_sync(ctx, *sync_body, *owner_->get_session());
+  RPC_AWAIT_IGNORE_RESULT(
+      rpc::lobbysvrclientservice::send_rank_cache_expired_sync(ctx, *sync_body, *owner_->get_session()));
   RPC_RETURN_VOID;
 }
 

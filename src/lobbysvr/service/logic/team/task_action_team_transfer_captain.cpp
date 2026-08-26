@@ -28,6 +28,8 @@
 
 #include <utility>
 
+#include "logic/team/user_team_manager.h"
+
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_transfer_captain::task_action_team_transfer_captain(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -40,7 +42,7 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_transf
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_transfer_captain::result_type
 task_action_team_transfer_captain::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
@@ -50,7 +52,20 @@ task_action_team_transfer_captain::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO ...
+  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(req_body.team_key());
+  if (!team_ptr) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // 自己是队长总是允许转移，否则只有owner有权限强制改队长
+  if (user_inst->is(team_ptr->get_cached_captain_user_key()) ||
+      team_ptr->check_permission(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // TODO(owent): 发送转移队长
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -202,6 +202,14 @@ message DTeamMemberRemoveData {
   EnTeamExitReason remove_member_reason = 8;
 }
 
+// 设置成员角色
+message DTeamMemberSetRole {
+  atframework.shared.DUserIDKey user_key = 1;
+
+  // 目标角色，必须高于 GUEST 且不能高于操作者自身的角色
+  EnTeamPermissionRole role = 2;
+}
+
 message DTeamAdmissionResult {
   atframework.shared.DUserIDKey inviter = 1;
   atframework.shared.DUserIDKey invitee = 2;
@@ -267,6 +275,8 @@ message DTeamConfigure {
   EnTeamPermissionRole reject_invitation_role = 5;     // 否决他人收到的邀请(撤回邀请)，默认 ADMIN；
                                                        // 被邀请人本人总是可以否决发给自己的邀请
   bool disable_join_request = 6;  // 禁止非成员发起加入请求(私人小队，仅通过邀请加入)，默认 false(允许)
+  EnTeamPermissionRole set_member_role_role = 7;  // 设置成员角色(member_set_role)，默认 ADMIN；
+                                                  // 无论配置如何都不能授予高于操作者自身的角色
 }
 
 message DTeamStorage {
@@ -320,6 +330,8 @@ message DTeamAction {
     DTeamMember election_captain = 5;
     // 更新队伍数据
     DTeamUpdateData team_update = 6;
+    // 设置成员角色(需要 configure.set_member_role_role 权限，默认 ADMIN；不能授予高于操作者自身的角色)
+    DTeamMemberSetRole member_set_role = 7;
 
     DTeamInvitation add_invitation = 21;
     DTeamInvitation approve_invitation = 22;

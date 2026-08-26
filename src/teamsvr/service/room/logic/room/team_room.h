@@ -245,6 +245,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // apply_action 的各事件分支处理(拆分为独立函数以降低单个函数复杂度)
   void apply_member_update(const atfw::team::DTeamMemberUpdateData& update_data);
   void apply_team_update(const atfw::team::DTeamUpdateData& update_data);
+  void apply_member_set_role(const atfw::team::DTeamMemberSetRole& set_role);
   void apply_add_invitation(const atfw::team::DTeamInvitation& invitation);
   void apply_approve_invitation(const atfw::team::DTeamInvitation& invitation);
   void apply_reject_invitation(const atfw::team::DTeamInvitation& invitation);
@@ -328,6 +329,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   atfw::team::EnTeamPermissionRole get_invite_role() const;                // 默认 NORMAL
   atfw::team::EnTeamPermissionRole get_update_team_data_role() const;      // 默认 NORMAL
   atfw::team::EnTeamPermissionRole get_reject_invitation_role() const;     // 默认 ADMIN
+  atfw::team::EnTeamPermissionRole get_set_member_role_role() const;       // 默认 ADMIN
   // 是否允许非成员发起加入请求(false 即私人小队，仅通过邀请加入)，默认允许
   bool is_join_request_allowed() const;
 

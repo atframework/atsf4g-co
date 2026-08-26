@@ -80,25 +80,25 @@ message CSTeamUpdateTeamDataReq {
 
 message SCTeamUpdateTeamDataRsp {}
 
-message CSTeamApplyJoinTeamReq {
+message CSTeamSendJoinRequestReq {
   atframework.team.DTeamKey team_key = 1;
 }
 
-message SCTeamApplyJoinTeamRsp {}
+message SCTeamSendJoinRequestRsp {}
 
-message CSTeamAcceptApplyReq {
+message CSTeamAcceptJoinRequestReq {
     atframework.team.DTeamKey team_key = 1;
   atframework.shared.DUserIDKey user_key = 2;
 }
 
-message SCTeamAcceptApplyRsp {}
+message SCTeamAcceptJoinRequestRsp {}
 
-message CSTeamRejectApplyReq {
+message CSTeamRejectJoinRequestReq {
   atframework.team.DTeamKey team_key = 1;
   atframework.shared.DUserIDKey user_key = 2;
 }
 
-message SCTeamRejectApplyRsp {}
+message SCTeamRejectJoinRequestRsp {}
 
 message CSTeamTransferCaptainReq {
   atframework.team.DTeamKey team_key = 1;

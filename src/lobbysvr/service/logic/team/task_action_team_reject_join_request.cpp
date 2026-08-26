@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
-// @brief Created by owent with mako-generator.py at 2026-08-26 17:38:31
+// @brief Created by owent with mako-generator.py at 2026-08-26 18:45:23
 
-#include "logic/team/task_action_team_remove_member.h"
+#include "logic/team/task_action_team_reject_join_request.h"
 
 #include <log/log_wrapper.h>
 #include <std/explicit_declare.h>
@@ -30,18 +30,19 @@
 
 #include "logic/team/user_team_manager.h"
 
-ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_remove_member::task_action_team_remove_member(
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_reject_join_request::task_action_team_reject_join_request(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
-ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_remove_member::~task_action_team_remove_member() {}
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API
+task_action_team_reject_join_request::~task_action_team_reject_join_request() {}
 
-ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_remove_member::name() const {
-  return "task_action_team_remove_member";
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_reject_join_request::name() const {
+  return "task_action_team_reject_join_request";
 }
 
-ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_remove_member::result_type
-task_action_team_remove_member::operator()() {
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_reject_join_request::result_type
+task_action_team_reject_join_request::operator()() {
   const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
@@ -58,14 +59,7 @@ task_action_team_remove_member::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // 玩家主动退队
-  if (user_inst->is(req_body.user_key())) {
-    user_inst->get_user_team_manager().remove_team(get_shared_context(), req_body.team_key(),
-                                                   atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-
-  if (team_ptr->check_permission(team_ptr->get_configure().manage_member_role())) {
+  if (team_ptr->check_permission(team_ptr->get_configure().approve_join_request_role())) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -75,6 +69,10 @@ task_action_team_remove_member::operator()() {
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API int task_action_team_remove_member::on_success() { return get_result(); }
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API int task_action_team_reject_join_request::on_success() {
+  return get_result();
+}
 
-ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API int task_action_team_remove_member::on_failed() { return get_result(); }
+ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API int task_action_team_reject_join_request::on_failed() {
+  return get_result();
+}

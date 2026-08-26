@@ -2106,10 +2106,12 @@ CASE_TEST(component_dtmq_subscriber, non_auto_create_destroyed_on_server_not_fou
   CASE_EXPECT_TRUE(saw_auto_create_heartbeat);
 
   // The non-auto_create subscriber was destroyed by the not_found response even though it never
-  // became ready; the destroy sequence is the subscriber's last known message sequence (0 for a
-  // channel it never saw).
+  // became ready; the destroy sequence is the subscriber's last known message sequence, or 1 when
+  // it never saw one, so that it is always > 0 (never destroyed / no data yet) and is_destroyed()
+  // becomes observable for stale restored channels.
   CASE_EXPECT_EQ(1u, no_create_destroyed_calls);
-  CASE_EXPECT_EQ(0, no_create_destroyed_sequence);
+  CASE_EXPECT_EQ(1, no_create_destroyed_sequence);
+  CASE_EXPECT_TRUE(no_create_subscriber->is_destroyed());
   CASE_EXPECT_FALSE(no_create_ready_called);
   CASE_EXPECT_FALSE(no_create_subscriber->is_ready());
 

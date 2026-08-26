@@ -2043,8 +2043,11 @@ static int32_t internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) 
                   // 虚拟删除事件通知，以便触发监听者的销毁回调
                   // 非 auto_create 的订阅即使从未 ready 也要触发一次（服务器明确回复频道不存在，
                   // 例如恢复一个已经失效的频道），auto_create 的订阅保持原有行为等待服务器创建
-                  iter->second->set_destroyed(child_ctx, iter->second->get_last_message_sequence(),
-                                              std::chrono::system_clock::now(),
+                  int64_t fake_destroy_sequence = iter->second->get_last_message_sequence();
+                  if (fake_destroy_sequence <= 0) {
+                    fake_destroy_sequence = 1;
+                  }
+                  iter->second->set_destroyed(child_ctx, fake_destroy_sequence, std::chrono::system_clock::now(),
                                               !iter->second->should_auto_create_channel());
                 }
               });

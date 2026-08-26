@@ -68,6 +68,10 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
     return cached_permission_role_;
   }
 
+  inline const atfw::team::DTeamConfigure& get_configure() const noexcept { return cached_configure_; }
+
+  bool check_permission(atfw::team::EnTeamPermissionRole checked) const noexcept;
+
   void make_current_actived(rpc::context& ctx);
 
   void send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason);
@@ -104,4 +108,5 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   PROJECT_NAMESPACE_ID::DUserIDKey cached_captain_user_key_;
   atfw::team::EnTeamPermissionRole cached_permission_role_;
+  atfw::team::DTeamConfigure cached_configure_;
 };

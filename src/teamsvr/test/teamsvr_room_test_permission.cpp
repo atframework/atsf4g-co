@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 权限与"拒绝时零写入"用例(TEAM_ROOM_TEST_PLAN.md §4.2 PERM-01~14)。
+// teamsvr-room 权限与"拒绝时零写入"用例(TEAM_ROOM_TEST_PLAN.md §4.2 PERM-01~14、16~18)。
 // COND-01~06 覆盖 member_update/team_update 的 DTeamConditionChecker 数据条件检查
 // (共享队伍/成员数据等值含 Any 语义比较、成员数量/百分比范围、成员条件组 scope、checker 或关系/内部
 // 与关系)与通过后裁剪。
@@ -47,10 +47,9 @@ int32_t run_send_message_action(room_test_env& env, int64_t team_id, const PROJE
 // 直接调用 check_action_permission 断言精确错误码(协程内 await 同步结果)
 int32_t check_permission(room_test_env& env, const team_room::ptr_t& room,
                          const PROJECT_NAMESPACE_ID::DUserIDKey& sender, const atfw::team::DTeamAction& action) {
-  return env.run("check_permission",
-                 [room, sender, action](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, sender, action)));
-                 });
+  return env.run("check_permission", [room, sender, action](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, sender, action)));
+  });
 }
 
 // 零写入门禁快照
@@ -149,6 +148,39 @@ atfw::team::DTeamAction make_election_action(const PROJECT_NAMESPACE_ID::DUserID
   atfw::team::DTeamAction action;
   protobuf_copy_message(*action.mutable_election_captain()->mutable_user_key(), key);
   return action;
+}
+
+atfw::team::DTeamAction make_member_set_role_action(const PROJECT_NAMESPACE_ID::DUserIDKey& key,
+                                                    atfw::team::EnTeamPermissionRole role) {
+  atfw::team::DTeamAction action;
+  protobuf_copy_message(*action.mutable_member_set_role()->mutable_user_key(), key);
+  action.mutable_member_set_role()->set_role(role);
+  return action;
+}
+
+// team_update 仅携带配置变更
+atfw::team::DTeamAction make_team_update_configure_action(const atfw::team::DTeamConfigure& configure) {
+  atfw::team::DTeamAction action;
+  protobuf_copy_message(*action.mutable_team_update()->mutable_configure(), configure);
+  return action;
+}
+
+// 查找 fake journal 最后一条携带配置变更的 team_update 事件(用于断言下发给订阅者的配置载荷)
+bool find_last_team_update_configure(const fake_team_room_channel& fake, atfw::team::DTeamConfigure& out) {
+  for (auto it = fake.journal().rbegin(); it != fake.journal().rend(); ++it) {
+    if (it->detail().command_case() != atfw::dtmq::DChannelMessageDetail::kEvent) {
+      continue;
+    }
+    atfw::team::DTeamAction action;
+    if (!it->detail().event().UnpackTo(&action)) {
+      continue;
+    }
+    if (action.has_team_update() && action.team_update().has_configure()) {
+      out = action.team_update().configure();
+      return true;
+    }
+  }
+  return false;
 }
 
 atfw::team::DTeamAction make_destroy_action(int64_t team_id) {
@@ -933,12 +965,11 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
   expect_no_write(fake, env, before);
 
   // check_action_permission 直接路径同样返回 invalid param
-  (void)env.run("check_direct",
-                [room, members, empty_action](rpc::context& ctx) -> rpc::result_code_type {
-                  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
-                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, empty_action)));
-                  RPC_RETURN_CODE(0);
-                });
+  (void)env.run("check_direct", [room, members, empty_action](rpc::context& ctx) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                   RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, empty_action)));
+    RPC_RETURN_CODE(0);
+  });
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1028,6 +1059,208 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, super, make_remove_action(vip)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(vip, false).get());
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ PERM-16: member_set_role 默认门槛与授权上限 ============
+// 默认门槛 ADMIN；目标必须是成员；不能授予 GUEST(无效)或高于操作者自身的角色。
+CASE_TEST(teamsvr_room_permission, member_set_role_default_gates) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 非成员操作者: not in team
+  auto before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM,
+                 check_permission(env, room, members.outsider,
+                                  make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.outsider,
+                                 make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  expect_no_write(fake, env, before);
+
+  // 目标不是成员: member not found
+  before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(
+      PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND,
+      check_permission(env, room, members.admin,
+                       make_member_set_role_action(members.outsider, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  CASE_EXPECT_EQ(0, run_send_message_action(
+                        env, team_id, members.admin,
+                        make_member_set_role_action(members.outsider, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  expect_no_write(fake, env, before);
+
+  // 目标角色不高于 GUEST: invalid param(GUEST 是"未配置/非成员"语义，不是合法的成员角色)
+  before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                 check_permission(env, room, members.admin,
+                                  make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_GUEST)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.admin,
+                                 make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_GUEST)));
+  expect_no_write(fake, env, before);
+
+  // NORMAL 操作者低于默认门槛(ADMIN): no permission
+  before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                 check_permission(env, room, members.normal,
+                                  make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.normal,
+                                 make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  expect_no_write(fake, env, before);
+
+  // ADMIN 授予高于自身的角色(OWNER): no permission
+  before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                 check_permission(env, room, members.admin,
+                                  make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.admin,
+                                 make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+  expect_no_write(fake, env, before);
+
+  // ADMIN 授予与自身同级的角色(ADMIN)成功: normal -> ADMIN
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.admin,
+                                 make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto member = room->find_member(members.normal, false);
+    CASE_EXPECT_TRUE(!!member);
+    if (member) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, member->member_data.role());
+    }
+  }
+
+  // OWNER 将其降回 NORMAL 成功
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.owner,
+                                 make_member_set_role_action(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto member = room->find_member(members.normal, false);
+    CASE_EXPECT_TRUE(!!member);
+    if (member) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, member->member_data.role());
+    }
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ PERM-17: member_set_role 自定义门槛 ============
+CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  // 自定义门槛 NORMAL: NORMAL 成员也可设置角色(授予上限仍不能高于自身)
+  atfw::team::DTeamConfigure configure;
+  configure.set_set_member_role_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner, make_team_update_configure_action(configure)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // NORMAL 操作者授予不高于自身的角色(NORMAL): 降级 admin -> NORMAL 成功
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.normal,
+                                 make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto member = room->find_member(members.admin, false);
+    CASE_EXPECT_TRUE(!!member);
+    if (member) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, member->member_data.role());
+    }
+  }
+
+  // 授予高于自身的角色仍被拒绝(自定义门槛不改变授权上限)
+  auto& fake = env.channel(team_id);
+  auto before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                 check_permission(env, room, members.normal,
+                                  make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.normal,
+                                 make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+  expect_no_write(fake, env, before);
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ PERM-18: 配置默认门槛修订后随快照/事件下发 ============
+// storage_.configure 在 create_team/apply_team_update 时被就地修订(见 revise_configure_default_permission)，
+// 订阅者收到的快照 custom_data 与 team_update 增量事件都必须携带完整门槛(不允许出现 GUEST 占位)。
+CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // create 路径: 未配置任何门槛时，快照 custom_data 下发全部默认门槛
+  {
+    atfw::team::DTeamStorage snapshot;
+    CASE_EXPECT_TRUE(fake.custom_data().UnpackTo(&snapshot));
+    const auto& configure = snapshot.configure();
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, configure.manage_member_role());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, configure.approve_join_request_role());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, configure.invite_role());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, configure.update_team_data_role());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, configure.reject_invitation_role());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, configure.set_member_role_role());
+  }
+
+  // team_update 路径: 只自定义一个门槛，WAL 事件中的配置必须包含全部修订后的门槛
+  atfw::team::DTeamConfigure configure;
+  configure.set_set_member_role_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner, make_team_update_configure_action(configure)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  atfw::team::DTeamConfigure published;
+  CASE_EXPECT_TRUE(find_last_team_update_configure(fake, published));
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, published.set_member_role_role());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, published.manage_member_role());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, published.approve_join_request_role());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, published.invite_role());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, published.update_team_data_role());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, published.reject_invitation_role());
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1531,7 +1764,7 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
   };
 
   auto check_any_condition = [&env, &room, &members](int64_t data_key, const std::string& type_url,
-                                                    const std::string& value) {
+                                                     const std::string& value) {
     atfw::team::DTeamAction action = make_team_update_data_action(60, "probe");
     auto& expect = (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[data_key];
     expect.set_type_url(type_url);
@@ -1569,7 +1802,8 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
   }
 
   // 单标量字段类型(包装类型 google.protobuf.Int64Value): 字节即规范形式，直接字节比较
-  const std::string int64_type_url = "type.googleapis.com/" + std::string(google::protobuf::Int64Value::descriptor()->full_name());
+  const std::string int64_type_url =
+      "type.googleapis.com/" + std::string(google::protobuf::Int64Value::descriptor()->full_name());
   google::protobuf::Int64Value five;
   five.set_value(5);
   write_any_data(44, int64_type_url, five.SerializeAsString());
