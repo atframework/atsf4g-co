@@ -149,12 +149,18 @@ if(PROJECT_ENABLE_SAMPLE)
 endif()
 
 function(project_apply_incremental_link_database DIRECTORY_NAME)
-  get_property(PROJECT_DIRECTORY_TARGETS DIRECTORY "${DIRECTORY_NAME}" PROPERTY BUILDSYSTEM_TARGETS)
+  get_property(
+    PROJECT_DIRECTORY_TARGETS
+    DIRECTORY "${DIRECTORY_NAME}"
+    PROPERTY BUILDSYSTEM_TARGETS)
   foreach(PROJECT_TARGET_NAME IN LISTS PROJECT_DIRECTORY_TARGETS)
     project_tool_set_target_incremental_link_database("${PROJECT_TARGET_NAME}")
   endforeach()
 
-  get_property(PROJECT_SUBDIRECTORIES DIRECTORY "${DIRECTORY_NAME}" PROPERTY SUBDIRECTORIES)
+  get_property(
+    PROJECT_SUBDIRECTORIES
+    DIRECTORY "${DIRECTORY_NAME}"
+    PROPERTY SUBDIRECTORIES)
   foreach(PROJECT_SUBDIRECTORY IN LISTS PROJECT_SUBDIRECTORIES)
     project_apply_incremental_link_database("${PROJECT_SUBDIRECTORY}")
   endforeach()
@@ -190,8 +196,8 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.bat.in" "${PROJ
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/kill_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.sh"
                ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/kill_all.bat.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.bat" ESCAPE_QUOTES @ONLY)
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/kill_all.bat.in" "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.bat"
+               ESCAPE_QUOTES @ONLY)
 
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.conf.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/start_all.conf" ESCAPE_QUOTES @ONLY)

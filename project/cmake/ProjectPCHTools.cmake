@@ -364,7 +364,25 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
       target_link_libraries("${_interface_target_name}" PRIVATE "${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}")
       set_target_properties("${_interface_target_name}" PROPERTIES C_VISIBILITY_PRESET "hidden" CXX_VISIBILITY_PRESET
                                                                                                 "hidden")
-      target_compile_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+
+      set(__project_pch_tool_compile_options "${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS}")
+      list(
+        REMOVE_ITEM
+        __project_pch_tool_compile_options
+        "/Zi"
+        "/Z7"
+        "/ZI"
+        "-Zi"
+        "-Z7"
+        "-ZI")
+      # Force to use /Zi, or cmake script will not generate .pdb file and make target_precompile_headers(... REUSE_FROM
+      # ...) keep waiting for nothing
+      if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.25.0")
+        set_target_properties("${_interface_target_name}" PROPERTIES MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase")
+      else()
+        list(APPEND __project_pch_tool_compile_options "/Zi")
+      endif()
+      target_compile_options("${_interface_target_name}" PRIVATE ${__project_pch_tool_compile_options})
       if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
         target_link_options("${_interface_target_name}" PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
       endif()
