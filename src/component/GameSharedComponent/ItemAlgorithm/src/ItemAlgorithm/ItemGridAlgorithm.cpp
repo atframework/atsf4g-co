@@ -1259,7 +1259,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
 bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                              const PROJECT_NAMESPACE_ID::DItemInstance& item_instance) {
   if (!init_) {
-    ITEM_ALGORITHM_LOG_ERROR_FMT("check_move called before init, container_guid={} operate_id={}", container_guid_,
+    ITEM_ALGORITHM_LOG_ERROR_FMT("load called before init, container_guid={} operate_id={}", container_guid_,
                                  operate_id_);
     return false;
   }
@@ -1750,7 +1750,7 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
     std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition>& out_positions) const {
   if (!init_) {
-    ITEM_ALGORITHM_LOG_ERROR_FMT("apply_entries called before init, container_guid={} operate_id={}", container_guid_,
+    ITEM_ALGORITHM_LOG_ERROR_FMT("find_positions_for_basics called before init, container_guid={} operate_id={}", container_guid_,
                                  operate_id_);
     return false;
   }
