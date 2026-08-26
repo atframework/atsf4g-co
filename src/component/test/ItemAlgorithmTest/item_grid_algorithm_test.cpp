@@ -317,7 +317,8 @@ static void register_test_log_handler(ItemGridAlgorithm& grid) {
 /// @brief 初始化测试 Grid 算法 (inventory 类型, 默认 10x10)
 static void init_test_grid(TestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10,
                            int64_t container_guid = 0) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, container_guid);
+  grid.init(ItemGridAlgorithmMode::kFiniteGrid, row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory,
+            container_guid);
   // 注册配置
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
@@ -354,17 +355,6 @@ static std::vector<PROJECT_NAMESPACE_ID::DItemInstance> dump_grid_items(const Te
     return true;
   });
   return items;
-}
-
-/// @brief 在 Dump 结果中按 type_id 查找条目 (不占格道具)
-static const PROJECT_NAMESPACE_ID::DItemInstance* find_dumped_by_type(
-    const std::vector<PROJECT_NAMESPACE_ID::DItemInstance>& items, int32_t type_id) {
-  for (const auto& inst : items) {
-    if (inst.item_basic().type_id() == type_id) {
-      return &inst;
-    }
-  }
-  return nullptr;
 }
 
 /// @brief 在 Dump 结果中按 type_id + 位置查找条目 (占格道具)
@@ -544,7 +534,7 @@ static void call_apply_entries(
 
 /// @brief 初始化 ServerTestItemGridAlgorithm (与 init_test_grid 相同配置)
 static void init_server_grid(ServerTestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+  grid.init(ItemGridAlgorithmMode::kFiniteGrid, row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
   // 注册测试日志处理器 (默认只输出 Info 及以上)
@@ -673,7 +663,8 @@ class TestItemGridContainer : public ItemGridContainer {
 
   TestItemGridContainer(int32_t row = 10, int32_t col = 10) {
     grid = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid->init(ItemGridAlgorithmMode::kFiniteGrid, row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory,
+               0);
     grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
     // 注册测试日志处理器 (默认只输出 Info 及以上)
@@ -697,13 +688,15 @@ class DualGridContainer : public ItemGridContainer {
 
   DualGridContainer(int32_t row = 10, int32_t col = 10) {
     inventory_grid = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    inventory_grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    inventory_grid->init(ItemGridAlgorithmMode::kFiniteGrid, row, col,
+                         PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     inventory_grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     inventory_grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
     ::register_test_log_handler(*inventory_grid);
 
     backpack_grid = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    backpack_grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory, 0);
+    backpack_grid->init(ItemGridAlgorithmMode::kFiniteGrid, row, col,
+                        PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory, 0);
     backpack_grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     backpack_grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
     ::register_test_log_handler(*backpack_grid);
@@ -734,13 +727,13 @@ ITEM_ALGORITHM_NAMESPACE_END
 // ============================================================
 // 用户游玩模拟 — 完整生命周期大测试
 //
-// 覆盖操作: check_add / add (货币/虚拟/1x1/2x2/装备GUID),
-//           add 合并 / stack overflow / position occupied / out of range,
+// 覆盖操作: check_add / add (1x1/2x2/装备GUID),
+//           有位置 Grid 对无位置道具的拒绝 / stack overflow / position occupied / out of range,
 //           check_sub / sub (部分/全部/按位置/按GUID/不足失败),
 //           check_move / move (整体/部分拆分/目标占用失败),
-//           load (占格/不占格/装备), foreach, clear,
+//           load (占格/装备), foreach, clear,
 //           entry_id (自增/独立/拆分产生新条目),
-//           apply_entries (删除/更新/新增/位置变更/装备GUID/货币),
+//           apply_entries (删除/更新/新增/位置变更/装备GUID),
 //           Container (单Grid/双Grid跨Grid Move/大物品与小物品交换),
 //           服务器→客户端同步验证
 // ============================================================
@@ -760,17 +753,13 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   auto config = make_test_config_group();
 
   // ----------------------------------------------------------------
-  // Step 1: 新手奖励 — 添加货币 500, 虚拟道具 10, 初始装备 (guid=1001)
+  // Step 1: 新手奖励 — 添加初始装备 (guid=1001)
   // 验证: check_add 通过, add 成功, Dump/Sync 正确
   // ----------------------------------------------------------------
   CASE_MSG_INFO() << "=== Step 1: 新手奖励 ===\n";
   {
-    auto coin = make_ungrid_item(kCoinTypeId, 500);
-    auto virtual_item = make_ungrid_item(kVirtualTypeId, 10);
     auto equip = make_equip_item(1001, 0, 0);
     ItemGridAddRequest reqs;
-    *reqs.Add() = coin;
-    *reqs.Add() = virtual_item;
     *reqs.Add() = equip;
 
     auto checked = server.check_add(config, std::move(reqs));
@@ -778,33 +767,22 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     auto result = server.add(checked);
     CASE_EXPECT_EQ(result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   }
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 500);
-  verify_item_count_consistency(server, kCoinTypeId);
-  CASE_EXPECT_EQ(server.get_item_count(kVirtualTypeId), 10);
-  verify_item_count_consistency(server, kVirtualTypeId);
   CASE_EXPECT_EQ(server.get_item_count(kEquipmentTypeId), 1);
   verify_item_count_consistency(server, kEquipmentTypeId);
   CASE_EXPECT_TRUE(server.get_by_guid(1001) != nullptr);
   CASE_EXPECT_FALSE(server.is_empty());
-  // entry_id 应从 1 开始自增, 三个条目 entry_id 分别为 1, 2, 3
-  CASE_EXPECT_EQ(server.peek_next_entry_id(), static_cast<uint64_t>(4));
+  // entry_id 应从 1 开始自增
+  CASE_EXPECT_EQ(server.peek_next_entry_id(), static_cast<uint64_t>(2));
   {
     auto dumped = dump_grid_items(server);
-    CASE_EXPECT_EQ(dumped.size(), static_cast<size_t>(3));
-    auto* coin_d = find_dumped_by_type(dumped, kCoinTypeId);
-    CASE_EXPECT_TRUE(coin_d != nullptr);
-    if (coin_d) CASE_EXPECT_EQ(coin_d->item_basic().count(), static_cast<int64_t>(500));
+    CASE_EXPECT_EQ(dumped.size(), static_cast<size_t>(1));
     auto* equip_d = find_dumped_by_position(dumped, kEquipmentTypeId, 0, 0);
     CASE_EXPECT_TRUE(equip_d != nullptr);
     if (equip_d) CASE_EXPECT_EQ(equip_d->item_basic().guid(), static_cast<int64_t>(1001));
   }
-  // find_entry_by_id 校验: 三个新条目都应能通过 entry_id 找到 (entry_id 依次为 1, 2, 3)
+  // find_entry_by_id 校验: 初始装备可通过 entry_id 找到
   {
-    uint64_t coin_eid = server.get_group(kCoinTypeId)->front()->entry_id();
-    uint64_t virtual_eid = server.get_group(kVirtualTypeId)->front()->entry_id();
     uint64_t equip_eid = server.get_by_guid(1001)->entry_id();
-    verify_find_entry_by_id(server, coin_eid, kCoinTypeId, 500, 0);
-    verify_find_entry_by_id(server, virtual_eid, kVirtualTypeId, 10, 0);
     verify_find_entry_by_id(server, equip_eid, kEquipmentTypeId, 1, 1001);
     // 不存在的 entry_id 应找不到
     verify_not_find_entry_by_id(server, 0);
@@ -843,35 +821,20 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   sync_and_verify(server, client, config, "Step 2: 拾取材料");
 
   // ----------------------------------------------------------------
-  // Step 3: 货币合并追加 — 再获得 200 金币 (合并到已有条目)
-  // 验证: 不占格道具合并, entry_id 不变
+  // Step 3: 有位置 Grid 不允许添加无位置道具
+  // 验证: 新模式约束拒绝普通道具，现有占格数据不变
   // ----------------------------------------------------------------
-  CASE_MSG_INFO() << "=== Step 3: 货币合并追加 ===\n";
-  uint64_t coin_entry_id;
+  CASE_MSG_INFO() << "=== Step 3: 有位置 Grid 拒绝无位置道具 ===\n";
   {
-    const auto* coin_group = server.get_group(kCoinTypeId);
-    CASE_EXPECT_TRUE(coin_group != nullptr && !coin_group->empty());
-    coin_entry_id = coin_group->front()->entry_id();
-  }
-  {
-    auto coin2 = make_ungrid_item(kCoinTypeId, 200);
     ItemGridAddRequest reqs;
-    *reqs.Add() = coin2;
-    auto result = server.check_add(config, std::move(reqs));
-    server.add(result);
+    *reqs.Add() = make_ungrid_item(kCoinTypeId, 200);
+    auto checked = server.check_add(config, std::move(reqs));
+    CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    CASE_EXPECT_EQ(server.add(checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 700);
-  verify_item_count_consistency(server, kCoinTypeId);
-  // 合并后 entry_id 不变
-  {
-    const auto* coin_group = server.get_group(kCoinTypeId);
-    CASE_EXPECT_TRUE(coin_group != nullptr && !coin_group->empty());
-    CASE_EXPECT_EQ(coin_group->front()->entry_id(), coin_entry_id);
-  }
-  // 合并后 find_entry_by_id 仍能找到该货币条目, count 已更新为 700
-  verify_find_entry_by_id(server, coin_entry_id, kCoinTypeId, 700, 0);
+  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 0);
   verify_grid_dump(server);
-  sync_and_verify(server, client, config, "Step 3: 货币合并追加");
+  sync_and_verify(server, client, config, "Step 3: 有位置 Grid 拒绝无位置道具");
 
   // ----------------------------------------------------------------
   // Step 4: 1x1 堆叠追加 — 在 (1,0) 追加 60 个 (已有 30, 合计 90, 上限 99)
@@ -935,8 +898,6 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   // 数据应不变
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 140);
   verify_item_count_consistency(server, kItemTypeId_1x1);
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 700);
-  verify_item_count_consistency(server, kCoinTypeId);
   verify_grid_dump(server);
 
   // ----------------------------------------------------------------
@@ -1357,33 +1318,9 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   sync_and_verify(server, client, config, "Step 16: Move 装备");
 
   // ----------------------------------------------------------------
-  // Step 17: 花费货币 — 扣减全部 700 金币
-  // 验证: 不占格道具完全移除
-  // ----------------------------------------------------------------
-  CASE_MSG_INFO() << "=== Step 17: 花费所有货币 ===\n";
-  uint64_t coin_entry_id_17 = 0;
-  {
-    const auto* coin_group = server.get_group(kCoinTypeId);
-    CASE_EXPECT_TRUE(coin_group != nullptr && !coin_group->empty());
-    coin_entry_id_17 = coin_group->front()->entry_id();
-  }
-  {
-    auto sub = make_sub_basic(kCoinTypeId, 700);
-    ItemGridSubRequest reqs;
-    *reqs.Add() = sub;
-    auto result = server.check_sub(config, std::move(reqs));
-    server.sub(result);
-  }
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 0);
-  verify_item_count_consistency(server, kCoinTypeId);
-  // 货币完全扣除后, 应无法通过 find_entry_by_id 找到
-  verify_not_find_entry_by_id(server, coin_entry_id_17);
-  verify_grid_dump(server);
-  sync_and_verify(server, client, config, "Step 17: 花费所有货币");
-
   // ----------------------------------------------------------------
   // Step 18: Load 接口 — 模拟从数据库加载存档
-  // 新建一个独立的 server/client Grid, Load 各种道具, 验证同步
+  // 新建一个独立的 server/client Grid, Load 占格道具与装备, 验证同步
   // ----------------------------------------------------------------
   CASE_MSG_INFO() << "=== Step 18: Load 从数据库恢复 ===\n";
   {
@@ -1397,10 +1334,6 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     auto& load_client = *load_client_ptr;
     init_test_grid(load_client);
     load_client.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
-
-    // Load 货币
-    auto coin = make_ungrid_item(kCoinTypeId, 999);
-    CASE_EXPECT_TRUE(load_server.load(config, coin));
 
     // Load 1x1 在 (0,0)
     auto item = make_grid_item(kItemTypeId_1x1, 55, 0, 0);
@@ -1418,8 +1351,6 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     auto equip_dup = make_equip_item(2001, 2, 2);
     CASE_EXPECT_FALSE(load_server.load(config, equip_dup));
 
-    CASE_EXPECT_EQ(load_server.get_item_count(kCoinTypeId), 999);
-    verify_item_count_consistency(load_server, kCoinTypeId);
     CASE_EXPECT_EQ(load_server.get_item_count(kItemTypeId_1x1), 65);  // 55+10 堆叠
     verify_item_count_consistency(load_server, kItemTypeId_1x1);
     CASE_EXPECT_EQ(load_server.get_item_count(kEquipmentTypeId), 1);
@@ -1427,10 +1358,8 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     CASE_EXPECT_TRUE(load_server.get_by_guid(2001) != nullptr);
     // find_entry_by_id 校验: Load 的条目都应能按 entry_id 找到
     {
-      uint64_t coin_eid = load_server.get_group(kCoinTypeId)->front()->entry_id();
       uint64_t item_eid = load_server.get_group(kItemTypeId_1x1)->front()->entry_id();
       uint64_t equip_eid = load_server.get_by_guid(2001)->entry_id();
-      verify_find_entry_by_id(load_server, coin_eid, kCoinTypeId, 999, 0);
       verify_find_entry_by_id(load_server, item_eid, kItemTypeId_1x1, 65, 0);
       verify_find_entry_by_id(load_server, equip_eid, kEquipmentTypeId, 1, 2001);
     }
@@ -1452,16 +1381,14 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     // 添加若干道具
     auto item1 = make_grid_item(kItemTypeId_1x1, 10, 0, 0);
     auto item2 = make_grid_item(kItemTypeId_1x1, 20, 1, 0);
-    auto coin = make_ungrid_item(kCoinTypeId, 100);
     ItemGridAddRequest reqs;
     *reqs.Add() = item1;
     *reqs.Add() = item2;
-    *reqs.Add() = coin;
     auto checked = temp.check_add(config, std::move(reqs));
     temp.add(checked);
 
     // 记录添加的 entry_id, 用于后续 find_entry_by_id 校验
-    uint64_t temp_eid1 = 0, temp_eid2 = 0, temp_coin_eid = 0;
+    uint64_t temp_eid1 = 0, temp_eid2 = 0;
     {
       PROJECT_NAMESPACE_ID::DItemGridPosition g00, g10;
       g00.mutable_user_inventory()->set_x(0);
@@ -1474,13 +1401,9 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
       CASE_EXPECT_TRUE(e2 != nullptr);
       if (e1) temp_eid1 = e1->entry_id();
       if (e2) temp_eid2 = e2->entry_id();
-      const auto* coin_group = temp.get_group(kCoinTypeId);
-      CASE_EXPECT_TRUE(coin_group != nullptr && !coin_group->empty());
-      if (coin_group && !coin_group->empty()) temp_coin_eid = coin_group->front()->entry_id();
       // clear 前, 各 entry 都应能找到
       verify_find_entry_by_id(temp, temp_eid1, kItemTypeId_1x1, 10, 0);
       verify_find_entry_by_id(temp, temp_eid2, kItemTypeId_1x1, 20, 0);
-      verify_find_entry_by_id(temp, temp_coin_eid, kCoinTypeId, 100, 0);
     }
 
     // foreach 计数
@@ -1489,19 +1412,16 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
       ++count;
       return true;
     });
-    CASE_EXPECT_EQ(count, 3);
+    CASE_EXPECT_EQ(count, 2);
 
     // clear
     temp.clear();
     CASE_EXPECT_TRUE(temp.is_empty());
     CASE_EXPECT_EQ(temp.get_item_count(kItemTypeId_1x1), 0);
     verify_item_count_consistency(temp, kItemTypeId_1x1);
-    CASE_EXPECT_EQ(temp.get_item_count(kCoinTypeId), 0);
-    verify_item_count_consistency(temp, kCoinTypeId);
     // clear 后, 所有 entry 都应无法通过 find_entry_by_id 找到
     verify_not_find_entry_by_id(temp, temp_eid1);
     verify_not_find_entry_by_id(temp, temp_eid2);
-    verify_not_find_entry_by_id(temp, temp_coin_eid);
     // 占格标记应全部清除
     for (const auto& row : temp.get_occupy_grid_flag()) {
       for (bool cell : row) {
@@ -1567,13 +1487,11 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     auto item2 = make_grid_item(kItemTypeId_1x1, 20, 1, 0);
     auto item3 = make_grid_item(kItemTypeId_1x1, 30, 2, 0);
     auto equip = make_equip_item(3001, 3, 0);
-    auto coin = make_ungrid_item(kCoinTypeId, 100);
     ItemGridAddRequest reqs;
     *reqs.Add() = item1;
     *reqs.Add() = item2;
     *reqs.Add() = item3;
     *reqs.Add() = equip;
-    *reqs.Add() = coin;
     auto result = grid.check_add(config, std::move(reqs));
     grid.add(result);
 
@@ -1591,7 +1509,6 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     uint64_t eid2 = grid.get(gpos10)->entry_id();
     uint64_t eid3 = grid.get(gpos20)->entry_id();
     uint64_t eid_eq = grid.get(gpos30)->entry_id();
-    uint64_t eid_coin = grid.get_group(kCoinTypeId)->front()->entry_id();
 
     // 21a: 删除 item1 和 item3
     {
@@ -1678,27 +1595,6 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     // 21f: 被删除的装备应找不到, 新装备应能找到
     verify_not_find_entry_by_id(grid, eid_eq);
     verify_find_entry_by_id(grid, 777, kEquipmentTypeId, 1, 3002);
-
-    // 21g: 货币更新 + 删除
-    {
-      std::vector<uint64_t> rm;
-      std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::DItemInstance>> upd = {
-          {eid_coin, make_ungrid_item(kCoinTypeId, 500)}};
-      call_apply_entries(grid, config, rm, upd);
-    }
-    CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 500);
-    verify_item_count_consistency(grid, kCoinTypeId);
-    // 21g: 货币更新后应能找到, count=500
-    verify_find_entry_by_id(grid, eid_coin, kCoinTypeId, 500, 0);
-    {
-      std::vector<uint64_t> rm = {eid_coin};
-      std::vector<std::pair<uint64_t, PROJECT_NAMESPACE_ID::DItemInstance>> upd;
-      call_apply_entries(grid, config, rm, upd);
-    }
-    CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 0);
-    verify_item_count_consistency(grid, kCoinTypeId);
-    // 21g: 货币删除后应找不到
-    verify_not_find_entry_by_id(grid, eid_coin);
 
     verify_grid_dump(grid);
   }
@@ -1956,23 +1852,19 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   }
 
   // ----------------------------------------------------------------
-  // Step 26: 继续主线 — 回到主 server/client, 再获得一波奖励后验证整体状态
+  // Step 26: 继续主线 — 回到主 server/client, 再获得一波占格奖励后验证整体状态
   // ----------------------------------------------------------------
   CASE_MSG_INFO() << "=== Step 26: 继续主线 — 最终奖励 ===\n";
   {
-    auto new_coin = make_ungrid_item(kCoinTypeId, 1000);
     auto new_item = make_grid_item(kItemTypeId_1x1, 50, 1, 0);  // (1,0) 已空
     auto new_equip = make_equip_item(1004, 6, 0);
     ItemGridAddRequest reqs;
-    *reqs.Add() = new_coin;
     *reqs.Add() = new_item;
     *reqs.Add() = new_equip;
     auto checked = server.check_add(config, std::move(reqs));
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
     server.add(checked);
   }
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 1000);
-  verify_item_count_consistency(server, kCoinTypeId);
   CASE_EXPECT_EQ(server.get_item_count(kItemTypeId_1x1), 140);  // 50(2,0) + 40(5,0) + 50(1,0)
   verify_item_count_consistency(server, kItemTypeId_1x1);
   CASE_EXPECT_EQ(server.get_item_count(kEquipmentTypeId), 3);  // 1001, 1003, 1004
@@ -2028,15 +1920,11 @@ CASE_TEST(ItemGridAlgorithm, replace) {
 
   auto config = make_test_config_group();
 
-  // ---- 准备: 通过 add 放入旧数据 (货币/虚拟/占格x2/装备GUID) ----
-  auto coin = make_ungrid_item(kCoinTypeId, 500);
-  auto virtual_item = make_ungrid_item(kVirtualTypeId, 100);
+  // ---- 准备: 通过 add 放入旧数据 (占格x2/装备GUID) ----
   auto item_a = make_grid_item(kItemTypeId_1x1, 10, 0, 0);
   auto item_b = make_grid_item(kItemTypeId_1x1, 20, 1, 0);
   auto equip = make_equip_item(777, 2, 0);
   ItemGridAddRequest add_reqs;
-  *add_reqs.Add() = coin;
-  *add_reqs.Add() = virtual_item;
   *add_reqs.Add() = item_a;
   *add_reqs.Add() = item_b;
   *add_reqs.Add() = equip;
@@ -2073,11 +1961,9 @@ CASE_TEST(ItemGridAlgorithm, replace) {
   uint64_t next_id_before = server.peek_next_entry_id();
 
   // ---- 整体替换: 换成全新列表 (数量/位置/GUID 全变) ----
-  auto new_coin = make_ungrid_item(kCoinTypeId, 999);
   auto new_item = make_grid_item(kItemTypeId_1x1, 7, 3, 3);
   auto new_equip = make_equip_item(888, 5, 0);
   ItemGridReplaceRequest rep_reqs;
-  *rep_reqs.Add() = new_coin;
   *rep_reqs.Add() = new_item;
   *rep_reqs.Add() = new_equip;
   ItemGridReplaceRequest restore_reqs = rep_reqs;
@@ -2094,10 +1980,6 @@ CASE_TEST(ItemGridAlgorithm, replace) {
   CASE_EXPECT_TRUE(server.get_by_guid(777) == nullptr);
 
   // 新条目应存在且数据正确
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 999);
-  verify_item_count_consistency(server, kCoinTypeId);
-  CASE_EXPECT_EQ(server.get_item_count(kVirtualTypeId), 0);  // 已整体移除
-
   PROJECT_NAMESPACE_ID::DItemGridPosition gpos_new;
   gpos_new.mutable_user_inventory()->set_x(3);
   gpos_new.mutable_user_inventory()->set_y(3);
@@ -2135,21 +2017,19 @@ CASE_TEST(ItemGridAlgorithm, replace) {
     verify_not_find_entry_by_id(server, new_entry_id);
   }
   CASE_EXPECT_TRUE(server.get_by_guid(888) == nullptr);
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 0);
   sync_and_verify(server, client, config, "replace 清空后同步");
 
   // ---- check_replace 失败用例: 只检查不修改, Grid 数据保持基准不变 ----
   // 先放回一组数据作为基准
   auto checkede = server.check_replace(config, std::move(restore_reqs));
   server.replace(checkede);
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 999);
   CASE_EXPECT_TRUE(server.get_by_guid(888) != nullptr);
 
   // 1. 空实例
   {
     PROJECT_NAMESPACE_ID::DItemInstance invalid_item;
     ItemGridReplaceRequest reqs;
-    *reqs.Add() = new_coin;
+    *reqs.Add() = new_item;
     *reqs.Add() = invalid_item;
     auto checked = server.check_replace(config, std::move(reqs));
     CASE_EXPECT_EQ(checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -2193,7 +2073,6 @@ CASE_TEST(ItemGridAlgorithm, replace) {
   }
 
   // 所有失败用例后 Grid 数据保持基准不变
-  CASE_EXPECT_EQ(server.get_item_count(kCoinTypeId), 999);
   CASE_EXPECT_TRUE(server.get_by_guid(888) != nullptr);
   verify_grid_dump(server);
 }
@@ -2319,7 +2198,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2342,7 +2221,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(3, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 3, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2378,7 +2257,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2399,7 +2278,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     // accumulation_limit=1: 已有条目无剩余容量，策略2不会命中，确保走策略3扫描
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
 
@@ -2435,7 +2314,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     // 先 load 一件到 (x=0, y=0), count=50，堆叠上限99
@@ -2467,7 +2346,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(2, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 2, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 堆叠上限=1，不可堆叠
 
     for (int32_t y = 0; y < 2; ++y) {
@@ -2494,7 +2373,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2523,7 +2402,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
@@ -2553,7 +2432,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 不可堆叠
 
     // 填满 x=0,1,2，留 x=3 空闲
@@ -2606,7 +2485,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2629,21 +2508,22 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   }
 
   // ============================================================
-  // Case 11: on_find_position_for_non_care 钩子被调用
+  // Case 11: on_find_position_for_infinite 钩子被调用
   //          默认实现返回 false -> find_positions_for_basics 返回 false
   // ============================================================
   CASE_MSG_INFO() << "Case 11: non-care 走钩子，默认钩子返回 false\n";
   {
-    // 用 kCharacterEquipment 初始化（is_care_item_size=false）
+    // 用 kCharacterEquipment 初始化
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(1, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment, 0);
+    grid.init(ItemGridAlgorithmMode::kInfiniteGrid, 1, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment,
+              0);
     grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kEquipmentTypeId, 1)};
     std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    // 默认 on_find_position_for_non_care 返回 false -> 整体返回 false
+    // 默认 on_find_position_for_infinite 返回 false -> 整体返回 false
     CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, basics, out));
   }
 
@@ -2668,7 +2548,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<RejectFirstColGrid>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
@@ -2740,6 +2620,151 @@ CASE_TEST(ItemGridAlgorithm, checked_request_validation) {
   CASE_EXPECT_EQ(latest_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
   CASE_EXPECT_EQ(primary_grid.get_item_count(kItemTypeId_1x1), 2);
   verify_grid_dump(primary_grid);
+}
+
+CASE_TEST(ItemGridAlgorithm, no_position_ungrid_lifecycle) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+  register_test_log_handler(grid);
+  auto config = make_test_config_group();
+
+  CASE_EXPECT_TRUE(grid.get_occupy_grid_flag().empty());
+
+  ItemGridAddRequest add_requests;
+  *add_requests.Add() = make_ungrid_item(kCoinTypeId, 10);
+  auto add_checked = grid.check_add(config, std::move(add_requests));
+  CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 10);
+  verify_item_count_consistency(grid, kCoinTypeId);
+
+  ItemGridSubRequest sub_requests;
+  *sub_requests.Add() = make_sub_basic(kCoinTypeId, 4);
+  auto sub_checked = grid.check_sub(config, std::move(sub_requests));
+  CASE_EXPECT_EQ(sub_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.sub(sub_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 6);
+  verify_item_count_consistency(grid, kCoinTypeId);
+
+  // check_replace 必须在 clone 后仍保留无位置模式。
+  ItemGridReplaceRequest replace_requests;
+  *replace_requests.Add() = make_ungrid_item(kVirtualTypeId, 8);
+  auto replace_checked = grid.check_replace(config, std::move(replace_requests));
+  CASE_EXPECT_EQ(replace_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.replace(replace_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 0);
+  CASE_EXPECT_EQ(grid.get_item_count(kVirtualTypeId), 8);
+  verify_item_count_consistency(grid, kVirtualTypeId);
+
+  CASE_EXPECT_TRUE(grid.load(config, make_ungrid_item(kVirtualTypeId, 3)));
+  CASE_EXPECT_EQ(grid.get_item_count(kVirtualTypeId), 11);
+  verify_item_count_consistency(grid, kVirtualTypeId);
+
+  const auto* virtual_group = grid.get_group(kVirtualTypeId);
+  CASE_EXPECT_TRUE(virtual_group != nullptr && !virtual_group->empty());
+  if (!virtual_group || virtual_group->empty()) {
+    return;
+  }
+  uint64_t virtual_entry_id = virtual_group->front()->entry_id();
+
+  // 客户端增量同步也必须在无位置模式中维护普通道具的 entry_id 与数量。
+  call_apply_entries(grid, config, {}, {{virtual_entry_id, make_ungrid_item(kVirtualTypeId, 12)}});
+  CASE_EXPECT_EQ(grid.get_item_count(kVirtualTypeId), 12);
+  verify_item_count_consistency(grid, kVirtualTypeId);
+  verify_find_entry_by_id(grid, virtual_entry_id, kVirtualTypeId, 12, 0);
+
+  call_apply_entries(grid, config, {virtual_entry_id}, {});
+  CASE_EXPECT_EQ(grid.get_item_count(kVirtualTypeId), 0);
+  verify_item_count_consistency(grid, kVirtualTypeId);
+  verify_not_find_entry_by_id(grid, virtual_entry_id);
+
+  std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kCoinTypeId, 1),
+                                                            make_sub_basic(kVirtualTypeId, 1)};
+  std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
+  CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, positions));
+  CASE_EXPECT_EQ(positions.size(), static_cast<size_t>(2));
+  if (positions.size() == 2) {
+    CASE_EXPECT_FALSE(positions[0].has_user_inventory());
+    CASE_EXPECT_FALSE(positions[1].has_user_inventory());
+  }
+}
+
+CASE_TEST(ItemGridAlgorithm, no_position_rejects_positional_items) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+  grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+  grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+  register_test_log_handler(grid);
+  auto config = make_test_config_group();
+
+  ItemGridAddRequest setup_requests;
+  *setup_requests.Add() = make_ungrid_item(kCoinTypeId, 5);
+  auto setup_checked = grid.check_add(config, std::move(setup_requests));
+  CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  ItemGridAddRequest grid_item_requests;
+  *grid_item_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 3, 4);
+  auto grid_item_checked = grid.check_add(config, std::move(grid_item_requests));
+  CASE_EXPECT_EQ(grid_item_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.add(grid_item_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 5);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 0);
+
+  ItemGridAddRequest equipment_requests;
+  *equipment_requests.Add() = make_equip_item(10001, 1, 2);
+  auto equipment_checked = grid.check_add(config, std::move(equipment_requests));
+  CASE_EXPECT_EQ(equipment_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.add(equipment_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_TRUE(grid.get_by_guid(10001) == nullptr);
+
+  // replace 经由空 clone 复用 check_add，不能在 clone 中重新允许占格物品。
+  ItemGridReplaceRequest replace_requests;
+  *replace_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  auto replace_checked = grid.check_replace(config, std::move(replace_requests));
+  CASE_EXPECT_EQ(replace_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.replace(replace_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 5);
+
+  CASE_EXPECT_FALSE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 0, 0)));
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 5);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 0);
+}
+
+CASE_TEST(ItemGridAlgorithm, no_position_rejects_position_operations) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+  grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+  register_test_log_handler(grid);
+  auto config = make_test_config_group();
+
+  ItemGridAddRequest setup_requests;
+  *setup_requests.Add() = make_ungrid_item(kCoinTypeId, 5);
+  auto setup_checked = grid.check_add(config, std::move(setup_requests));
+  CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  const auto* coin_group = grid.get_group(kCoinTypeId);
+  CASE_EXPECT_TRUE(coin_group != nullptr && !coin_group->empty());
+  if (!coin_group || coin_group->empty()) {
+    return;
+  }
+
+  ItemGridMoveRequest move_requests;
+  move_requests.move_sub_entrys.push_back({coin_group->front(), 1});
+  auto move_checked = grid.check_move(config, std::move(move_requests));
+  CASE_EXPECT_EQ(move_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.move(move_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_EQ(grid.get_item_count(kCoinTypeId), 5);
+  verify_item_count_consistency(grid, kCoinTypeId);
+
+  std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kItemTypeId_1x1, 1)};
+  std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
+  CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, basics, positions));
+  CASE_EXPECT_TRUE(positions.empty());
 }
 
 CASE_TEST(ItemGridAlgorithm, check_item_position_hook) {

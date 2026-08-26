@@ -25,6 +25,12 @@ ITEM_ALGORITHM_NAMESPACE_BEGIN
 
 namespace item_algorithm {
 
+enum class ItemGridAlgorithmMode : int32_t {
+  kFiniteGrid = 0,    ///< 有限格子模式
+  kInfiniteGrid = 1,  ///< 无限格子模式
+  kNoPosition = 2,    ///< 无位置模式
+};
+
 class ItemGridAlgorithm;
 using item_grid_algorithm_ptr_t = atfw::util::memory::strong_rc_ptr<ItemGridAlgorithm>;
 
@@ -34,9 +40,10 @@ using item_grid_algorithm_ptr_t = atfw::util::memory::strong_rc_ptr<ItemGridAlgo
 ///   - 格子大小(行列数), 是否关心物品XY大小
 ///   - apply_position(position, grid_pos): 将运行时坐标写回 protobuf
 ///
-/// 支持两种背包模式:
+/// 支持三种背包模式:
 ///   1. 有限大小背包: 行列有限, 物品占据多个格子, 需要检查碰撞和边界
 ///   2. 无限大小背包: 不关心物品XY大小, 只记录位置, 仅检查位置是否被占用
+//    3. 无位置模式:   不关心物品XY大小, 也不关心位置, 仅记录物品列表, 不检查位置是否被占用
 class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_shared_rc_from_this<ItemGridAlgorithm> {
   friend struct ItemGridEntry;
 
@@ -58,8 +65,8 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   ItemGridAlgorithm& operator=(ItemGridAlgorithm&&) = delete;
 
  public:
-  // 初始化
-  virtual void init(int32_t row_size, int32_t column_size,
+  // 初始化 FiniteGrid 关心row_size, column_size
+  virtual void init(ItemGridAlgorithmMode mode, int32_t row_size, int32_t column_size,
                     PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
 
  public:
@@ -76,6 +83,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
       ItemGridSubRequest&& requests) const;
 
+  // 无位置模式 不允许使用move
   ItemGridOperationResult move(ItemGridMoveCheckedRequest& checked_request);
   ItemGridMoveCheckedRequest check_move(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
@@ -170,16 +178,16 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   /// @brief 道具数量上限检查钩子
   virtual int32_t on_check_item_count_limit(int32_t type_id, int64_t current_count, int64_t add_count) const;
 
-  /// @brief 非格子寻位钩子 (is_care_item_size=false 时由 find_positions_for_basics 调用)
+  /// @brief 无限格子寻位钩子 (有限格子 find_positions_for_basics 调用)
   ///
-  /// 子类覆盖此函数以实现装备槽等无格子尺寸模式的自动寻位逻辑。
+  /// 子类覆盖此函数以实现装备槽等无限格子模式的自动寻位逻辑。
   /// 默认实现返回 false（无法自动确定位置）。
   ///
   /// @param config_group 配置组
   /// @param basic         待放置道具 (含首选位置 hint)
   /// @param out_pos       [out] 找到的目标位置 (返回 true 时有效)
   /// @return true 表示成功找到位置, false 表示无法放置
-  virtual bool on_find_position_for_non_care(
+  virtual bool on_find_position_for_infinite(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
       const PROJECT_NAMESPACE_ID::DItemBasic& basic, PROJECT_NAMESPACE_ID::DItemGridPosition& out_pos) const;
 
@@ -206,14 +214,15 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   virtual void on_item_data_changed(const item_grid_entry_ptr_t& entry, ItemGridOperationReason reason);
 
   /// @brief 检查道具额外字段是否合法 container_guid 底层已经判断
-  /// @param position 道具位置
+  /// @param position 道具位置 用于检查额外字段
   virtual bool check_item_position(const PROJECT_NAMESPACE_ID::DItemPosition& position) const;
 
  private:
   item_grid_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance);
   item_grid_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance, uint64_t entry_id);
 
-  bool is_care_item_size() const { return is_care_item_size_; }
+  bool is_occupy_flag() const;
+  bool is_ignore_position() const;
 
   bool check_move_request(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                           ItemGridMoveCheckedRequest& checked_request) const;
@@ -235,10 +244,10 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   void remove_entry_id_index(uint64_t entry_id);
 
  private:
+  ItemGridAlgorithmMode mode_;
   int64_t container_guid_ = 0;
   int32_t row_size_ = 0;
   int32_t column_size_ = 0;
-  bool is_care_item_size_ = true;  // 是否关心物品占格, 影响算法逻辑
   PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_;
 
   std::unordered_map<uint64_t, item_grid_entry_weak_ptr_t> entry_id_index_;

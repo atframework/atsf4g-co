@@ -15,34 +15,25 @@ namespace item_algorithm {
 ItemGridAlgorithm::ItemGridAlgorithm() = default;
 ItemGridAlgorithm::~ItemGridAlgorithm() = default;
 
-void ItemGridAlgorithm::init(int32_t row_size, int32_t column_size,
+void ItemGridAlgorithm::init(ItemGridAlgorithmMode mode, int32_t row_size, int32_t column_size,
                              PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
                              int64_t container_guid) {
-  row_size_ = row_size;
-  column_size_ = column_size;
+  mode_ = mode;
+  if (mode == ItemGridAlgorithmMode::kFiniteGrid) {
+    row_size_ = row_size;
+    column_size_ = column_size;
+  }
   position_type_ = position_type;
   container_guid_ = container_guid;
-
-  switch (position_type) {
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory: {
-      is_care_item_size_ = true;
-      break;
-    }
-    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment: {
-      is_care_item_size_ = false;
-      break;
-    }
-    default:
-      break;
-  }
   clear();
 
-  if (is_care_item_size()) {
+  if (is_occupy_flag()) {
     if (row_size_ <= 0) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT("init called with invalid row_size={}, reset to 1", row_size_);
       row_size_ = 1;
     }
     if (column_size_ <= 0) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT("init called with invalid column_size={}, reset to 1", column_size_);
       column_size_ = 1;
     }
     occupy_grid_flag_.resize(static_cast<size_t>(row_size_));
@@ -51,9 +42,12 @@ void ItemGridAlgorithm::init(int32_t row_size, int32_t column_size,
     }
   }
 
-  ITEM_ALGORITHM_LOG_DEBUG_FMT("init grid rows={} cols={} position_type={} care_item_size={}", row_size_, column_size_,
-                               static_cast<int>(position_type_), is_care_item_size());
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("init grid rows={} cols={} position_type={} mode={}", row_size_, column_size_,
+                               static_cast<int>(position_type_), static_cast<int>(mode_));
 }
+
+bool ItemGridAlgorithm::is_occupy_flag() const { return mode_ == ItemGridAlgorithmMode::kFiniteGrid; }
+bool ItemGridAlgorithm::is_ignore_position() const { return mode_ == ItemGridAlgorithmMode::kNoPosition; }
 
 ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checked_request,
                                                ItemGridOperationReason reason) {
@@ -168,7 +162,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
   auto& result = checked_request.result;
 
   std::vector<std::vector<bool>> tmp_grid_flag;
-  if (is_care_item_size()) {
+  if (is_occupy_flag()) {
     tmp_grid_flag = occupy_grid_flag_;
   }
 
@@ -328,7 +322,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
           }
           pending_it->second.accumulated_count = total;
         } else {
-          if (is_care_item_size()) {
+          if (is_occupy_flag()) {
             int32_t item_row = position_cfg->row_size();
             int32_t item_col = position_cfg->column_size();
             if (item_row <= 0 || item_col <= 0) {
@@ -939,8 +933,8 @@ bool ItemGridAlgorithm::check_move_request(
 
     // 填充 Helper 字段
     sub_req.position = extract_position(ref_basic.position().grid_position());
-    sub_req.item_row = is_care_item_size() ? position_cfg->row_size() : 1;
-    sub_req.item_col = is_care_item_size() ? position_cfg->column_size() : 1;
+    sub_req.item_row = is_occupy_flag() ? position_cfg->row_size() : 1;
+    sub_req.item_col = is_occupy_flag() ? position_cfg->column_size() : 1;
     if (sub_req.item_row <= 0) {
       sub_req.item_row = 1;
     }
@@ -1016,8 +1010,8 @@ bool ItemGridAlgorithm::check_move_request(
     // 填充 Helper 字段
     add_req.type_id = type_id;
     add_req.position = extract_position(add_req.goal_position.grid_position());
-    add_req.item_row = is_care_item_size() ? position_cfg->row_size() : 1;
-    add_req.item_col = is_care_item_size() ? position_cfg->column_size() : 1;
+    add_req.item_row = is_occupy_flag() ? position_cfg->row_size() : 1;
+    add_req.item_col = is_occupy_flag() ? position_cfg->column_size() : 1;
     if (add_req.item_row <= 0) {
       add_req.item_row = 1;
     }
@@ -1027,7 +1021,7 @@ bool ItemGridAlgorithm::check_move_request(
     add_req.accumulation_limit = accumulation_limit;
 
     // 检查 Add is_item_in_range
-    if (is_care_item_size()) {
+    if (is_occupy_flag()) {
       if (!is_item_in_range(add_req.position.x, add_req.position.y, add_req.item_row, add_req.item_col)) {
         error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OUT_OF_RANGE;
         ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: move_add position ({},{}) out of range, error={} ({})",
@@ -1099,6 +1093,14 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     return checked_request;
   }
 
+  if (is_ignore_position()) {
+    // 无位置模式不能Move
+    error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_move failed: no position mode, error={} ({})", error_code,
+                                 PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+    return checked_request;
+  }
+
   // ============================================================
   // Phase 0: 验证入参
   // ============================================================
@@ -1110,7 +1112,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
   // Phase 1 (Sub): 虚拟移除所有整体 Sub 的条目, 生成临时格子蒙版
   // ============================================================
   std::vector<std::vector<bool>> tmp_grid_flag;
-  if (is_care_item_size()) {
+  if (is_occupy_flag()) {
     tmp_grid_flag = occupy_grid_flag_;
   }
 
@@ -1122,7 +1124,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     }
 
     removed_anchors.insert(op.position);
-    if (is_care_item_size()) {
+    if (is_occupy_flag()) {
       for (int32_t dr = 0; dr < op.item_row; ++dr) {
         for (int32_t dc = 0; dc < op.item_col; ++dc) {
           int32_t r = op.position.y + dr;
@@ -1206,7 +1208,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     }
 
     // ---- 3. 全新位置 — 检查放置可行性 ----
-    if (is_care_item_size()) {
+    if (is_occupy_flag()) {
       for (int32_t dr = 0; dr < op.item_row; ++dr) {
         for (int32_t dc = 0; dc < op.item_col; ++dc) {
           if (tmp_grid_flag[static_cast<size_t>(op.position.y + dr)][static_cast<size_t>(op.position.x + dc)]) {
@@ -1346,8 +1348,8 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
     return true;
   }
 
-  // 新建条目: 检查格子占用 (is_care_item_size 模式)
-  if (is_care_item_size()) {
+  // 新建条目: 检查格子占用 (is_occupy_flag 模式)
+  if (is_occupy_flag()) {
     int32_t item_row = position_cfg->row_size();
     int32_t item_col = position_cfg->column_size();
     if (item_row <= 0 || item_col <= 0) {
@@ -1577,6 +1579,9 @@ void ItemGridAlgorithm::clear() {
 }
 
 item_grid_entry_ptr_t ItemGridAlgorithm::get(const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
+  if (is_ignore_position()) {
+    return nullptr;
+  }
   ItemGridPosition grid_pos = extract_position(position);
   auto it = position_index_.find(grid_pos);
   if (it != position_index_.end()) {
@@ -1716,7 +1721,7 @@ bool ItemGridAlgorithm::find_positions_for_basics(
 
   // 批次内格子预留副本 (care_item_size 模式)：记录已分配格子，避免批次内冲突，不修改实际背包数据
   std::vector<std::vector<bool>> reserved;
-  if (is_care_item_size()) {
+  if (is_occupy_flag()) {
     reserved = occupy_grid_flag_;
   }
 
@@ -1742,6 +1747,11 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     if (!item_type_cfg->need_occupy_the_grid) {
       out_positions.push_back(PROJECT_NAMESPACE_ID::DItemGridPosition{});
       continue;
+    } else if (is_ignore_position()) {
+      // 占格道具 不允许寻找位置
+      ITEM_ALGORITHM_LOG_WARNING_FMT("find_positions_for_basics failed: ignore_position mode, type={}",
+                                     basic.type_id());
+      return false;
     }
 
     // 获取物品尺寸配置
@@ -1751,8 +1761,8 @@ bool ItemGridAlgorithm::find_positions_for_basics(
                                      basic.type_id());
       return false;
     }
-    const int32_t item_rows = is_care_item_size() ? pos_cfg->row_size() : 1;
-    const int32_t item_cols = is_care_item_size() ? pos_cfg->column_size() : 1;
+    const int32_t item_rows = is_occupy_flag() ? pos_cfg->row_size() : 1;
+    const int32_t item_cols = is_occupy_flag() ? pos_cfg->column_size() : 1;
 
     // 辅助：构造含候选位置的临时请求并通过 on_check_add 做额外校验
     auto check_pos_ok = [&](const PROJECT_NAMESPACE_ID::DItemGridPosition& cand_pos) -> bool {
@@ -1762,14 +1772,14 @@ bool ItemGridAlgorithm::find_positions_for_basics(
       return on_check_add(config_group, tmp_inst) == PROJECT_NAMESPACE_ID::EN_SUCCESS;
     };
 
-    // ---- non-care 模式（装备槽等）：完全委托给子类钩子，不做格子扫描 ----
-    if (!is_care_item_size()) {
+    // ---- 不占格模式（装备槽等）：完全委托给子类钩子，不做格子扫描 ----
+    if (!is_occupy_flag()) {
       PROJECT_NAMESPACE_ID::DItemGridPosition out_pos;
-      if (on_find_position_for_non_care(config_group, basic, out_pos) && check_pos_ok(out_pos)) {
+      if (on_find_position_for_infinite(config_group, basic, out_pos) && check_pos_ok(out_pos)) {
         out_positions.push_back(std::move(out_pos));
       } else {
         ITEM_ALGORITHM_LOG_WARNING_FMT(
-            "find_positions_for_basics failed: on_find_position_for_non_care rejected "
+            "find_positions_for_basics failed: on_find_position_for_infinite rejected "
             "type={}",
             basic.type_id());
         return false;  // 子类无法确定位置
@@ -1896,7 +1906,7 @@ item_grid_algorithm_ptr_t ItemGridAlgorithm::create_empty_clone() const {
 }
 
 void ItemGridAlgorithm::copy_empty_config_to(ItemGridAlgorithm& out) const {
-  out.init(row_size_, column_size_, position_type_, container_guid_);
+  out.init(mode_, row_size_, column_size_, position_type_, container_guid_);
 }
 
 // ============================================================
@@ -1935,7 +1945,7 @@ int32_t ItemGridAlgorithm::on_check_item_count_limit(int32_t /*type_id*/, int64_
   return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
-bool ItemGridAlgorithm::on_find_position_for_non_care(
+bool ItemGridAlgorithm::on_find_position_for_infinite(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& /*config_group*/,
     const PROJECT_NAMESPACE_ID::DItemBasic& /*basic*/, PROJECT_NAMESPACE_ID::DItemGridPosition& /*out_pos*/) const {
   // 默认无法确定位置, 子类按需覆盖 (如装备槽按 type_id 映射 slot_idx)
@@ -1988,13 +1998,26 @@ bool ItemGridAlgorithm::is_item_valid(
   }
 
   if (item_type_config->need_occupy_the_grid) {
+    // 无位置模式不能占格子
+    if (is_ignore_position()) {
+      return false;
+    }
     auto position_cfg = get_item_position_cfg(config_group, basic);
     if (position_cfg == nullptr) {
+      return false;
+    }
+  } else {
+    // 不占格道具 必须放再无位置模式里
+    if (!is_ignore_position()) {
       return false;
     }
   }
 
   if (item_type_config->need_guid) {
+    // 没有位置不允许有guid
+    if (is_ignore_position()) {
+      return false;
+    }
     if (basic.guid() == 0) {
       return false;
     }
@@ -2007,14 +2030,17 @@ bool ItemGridAlgorithm::is_item_valid(
 }
 
 bool ItemGridAlgorithm::is_item_in_range(int32_t x, int32_t y, int32_t item_row_size, int32_t item_col_size) const {
-  if (!is_care_item_size()) {
+  if (!is_occupy_flag()) {
     return true;
   }
   return x >= 0 && y >= 0 && x + item_col_size <= column_size_ && y + item_row_size <= row_size_;
 }
 
 bool ItemGridAlgorithm::check_collision(int32_t x, int32_t y, int32_t item_row_size, int32_t item_col_size) const {
-  if (!is_care_item_size()) {
+  if (!is_occupy_flag()) {
+    if (is_ignore_position()) {
+      return false;
+    }
     ItemGridPosition pos{x, y};
     auto it = position_index_.find(pos);
     return it != position_index_.end();
@@ -2037,7 +2063,7 @@ bool ItemGridAlgorithm::check_collision(int32_t x, int32_t y, int32_t item_row_s
 
 void ItemGridAlgorithm::set_grid_flag(int32_t x, int32_t y, int32_t item_row_size, int32_t item_col_size,
                                       bool occupied) {
-  if (!is_care_item_size()) {
+  if (!is_occupy_flag()) {
     return;
   }
 
@@ -2094,7 +2120,7 @@ void ItemGridAlgorithm::remove_entry_index(const PROJECT_NAMESPACE_ID::DItemPosi
     position_index_.erase(pos);
   }
 
-  if (is_care_item_size() && item_type_config->need_occupy_the_grid) {
+  if (is_occupy_flag() && item_type_config->need_occupy_the_grid) {
     int32_t item_row = position_cfg.row_size();
     int32_t item_col = position_cfg.column_size();
     set_grid_flag(pos.x, pos.y, item_row, item_col, false);
@@ -2128,9 +2154,12 @@ void ItemGridAlgorithm::add_entry_index(const PROJECT_NAMESPACE_ID::DItemPositio
   }
 
   ItemGridPosition pos = extract_position(entry->item_instance().item_basic().position().grid_position());
-  position_index_[pos] = entry;
+  auto item_type_config = ItemAlgorithmTypeOption::GetItemType(entry->item_instance().item_basic().type_id());
+  if (item_type_config && item_type_config->need_occupy_the_grid) {
+    position_index_[pos] = entry;
+  }
 
-  if (is_care_item_size()) {
+  if (is_occupy_flag()) {
     int32_t item_row = position_cfg.row_size();
     int32_t item_col = position_cfg.column_size();
     set_grid_flag(pos.x, pos.y, item_row, item_col, true);

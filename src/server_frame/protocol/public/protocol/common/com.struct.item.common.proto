@@ -44,6 +44,8 @@ message DItemGridPosition {
     DItemBoxPosition character_inventory = 2;
     // 角色装备位置
     DItemSlotPosition character_equipment = 3;
+    // 虚拟背包 bool没有实际意义
+    bool virtual_inventory = 4;
   }
 }
 
