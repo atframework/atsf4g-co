@@ -59,7 +59,7 @@ task_action_team_transfer_captain::operator()() {
   }
 
   // 自己是队长总是允许转移，否则只有owner有权限强制改队长
-  if (user_inst->is(team_ptr->get_cached_captain_user_key()) ||
+  if (!user_inst->is(team_ptr->get_cached_captain_user_key()) &&
       !team_ptr->check_permission(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
