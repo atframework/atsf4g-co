@@ -59,7 +59,7 @@ task_action_team_reject_join_request::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (team_ptr->check_permission(team_ptr->get_configure().approve_join_request_role())) {
+  if (!team_ptr->check_permission(team_ptr->get_configure().approve_join_request_role())) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
