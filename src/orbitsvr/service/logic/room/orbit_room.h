@@ -36,7 +36,7 @@ class context;
 struct orbit_room_user_data {
   PROJECT_NAMESPACE_ID::DOrbitUserInitData init_data_;
   PROJECT_NAMESPACE_ID::DOrbitUserInitResult init_result_;
-  PROJECT_NAMESPACE_ID::DOrbitUserFinishResult finish_result_;
+  PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull finish_result_;
   PROJECT_NAMESPACE_ID::DUserIDKey user_key_;
   bool init_ = false;
   int32_t init_retry_count_ = 0;
@@ -68,7 +68,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
 
   int32_t on_user_finish(
       rpc::context& ctx,
-      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results);
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);
   int32_t on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   bool ready_to_destroy() const;

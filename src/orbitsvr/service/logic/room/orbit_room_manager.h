@@ -53,7 +53,7 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
                                       atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
   rpc::result_code_type on_user_finish(
       rpc::context& ctx, const std::string& client_id,
-      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results);
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);
 
   static bool fill_client_start_args_from_template_id(int32_t template_id, const std::string& client_id,
                                                       atfw::orbit::DAgentClientStartArgs& args);

@@ -59,7 +59,7 @@ message OrbitClientUserInitRsp {
 }
 
 message OrbitServerUserFinishReq {
-  repeated DOrbitUserFinishResult results = 1;
+  repeated DOrbitUserFinishResultFull results = 1;
 }
 
 message OrbitServerUserFinishRsp {}

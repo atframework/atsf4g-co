@@ -157,7 +157,7 @@ rpc::result_code_type orbit_room_manager::on_client_end(rpc::context& ctx, const
 
 rpc::result_code_type orbit_room_manager::on_user_finish(
     rpc::context& ctx, const std::string& client_id,
-    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results) {
+    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results) {
   FWLOGINFO("orbit_room_manager on_user_finish, client_id: {}, result size: {}", client_id, results.size());
   auto room = get_room(client_id);
   if (!room) {

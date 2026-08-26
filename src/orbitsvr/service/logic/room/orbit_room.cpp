@@ -359,30 +359,32 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
 
 int32_t orbit_room::on_user_finish(
     rpc::context& ctx,
-    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResult>& results) {
+    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results) {
   if (results.empty()) {
     FWLOGWARNING("orbit_room {} on_user_finish with empty results, room will exit directly", get_client_id());
     return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_FINISH_RESULT_EMPTY;
   }
 
   for (const auto& result : results) {
-    auto user_iter = user_data_index_.find(result.user_key().user_key());
+    auto user_iter = user_data_index_.find(result.common_data().user_key().user_key());
     if (user_iter == user_data_index_.end()) {
       FWLOGERROR("orbit_room {} on_user_finish failed, user not found, user_key: {}:{}", get_client_id(),
-                 result.user_key().user_key().user_id(), result.user_key().user_key().zone_id());
+                 result.common_data().user_key().user_key().user_id(),
+                 result.common_data().user_key().user_key().zone_id());
       continue;
     }
     auto user_ptr = user_iter->second;
     if (user_ptr->finish_) {
       FWLOGERROR("orbit_room {} on_user_finish failed, user already finish, user_key: {}:{}", get_client_id(),
-                 result.user_key().user_key().user_id(), result.user_key().user_key().zone_id());
+                 result.common_data().user_key().user_key().user_id(),
+                 result.common_data().user_key().user_key().zone_id());
       continue;
     }
 
     user_ptr->finish_result_ = result;
     user_ptr->finish_ = true;
     user_ptr->finish_timepoint_ = util::time::time_utility::get_now();
-    finish_user_list_.push_back(result.user_key().user_key());
+    finish_user_list_.push_back(result.common_data().user_key().user_key());
     async_user_settlement(ctx, user_ptr);
   }
   return 0;
@@ -566,7 +568,11 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
                    user_key.user_id(), user_key.zone_id());
         continue;
       }
-      *async_data.add_user_finish_results() = user_iter->second->finish_result_;
+      if (!self_find) {
+        *async_data.mutable_user_finish_result_self() = user_iter->second->finish_result_;
+      } else {
+        *async_data.add_user_finish_results() = user_iter->second->finish_result_.common_data();
+      }
     }
   }
 
