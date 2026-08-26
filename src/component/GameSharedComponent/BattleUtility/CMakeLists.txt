@@ -10,6 +10,7 @@ project_game_shared_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/include"
   DLLEXPORT_DECL
   BATTLE_UTILITY_API
+  INSTALL_NO_PREBUILT
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/include/BattleUtility/BattleUtilityConfig.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/Random/Random.h"
