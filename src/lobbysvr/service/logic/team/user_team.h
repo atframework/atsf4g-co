@@ -76,6 +76,18 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason);
 
+  // 以下操作转发到 teamsvr-room(按队伍一致性哈希路由)，业务结果经 client_result 透传返回
+  rpc::result_code_type accept_join_request(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+
+  rpc::result_code_type reject_join_request(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+
+  rpc::result_code_type remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+
+  rpc::result_code_type transfer_captain(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+
+  rpc::result_code_type update_member_role(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                           atfw::team::EnTeamPermissionRole role);
+
   void set_exit_team(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason);
 
   void retry_send_exit_team_request(rpc::context& ctx);
@@ -83,6 +95,9 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void try_load_snapshot(rpc::context& ctx);
 
  private:
+  // 打包队伍事件并按 team_key 一致性哈希路由发送到 teamsvr-room，返回透传的业务结果
+  rpc::result_code_type send_action(rpc::context& ctx, atfw::team::DTeamAction&& action);
+
   bool load_dtmq_custom_data(rpc::context& ctx, const ::google::protobuf::Any& custom_data);
 
   bool load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action);

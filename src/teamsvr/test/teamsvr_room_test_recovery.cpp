@@ -1402,11 +1402,20 @@ CASE_TEST(teamsvr_room_lock, captainless_snapshot_takeover_election) {
     if (action.action_case() == atfw::team::DTeamAction::kElectionCaptain) {
       ++election_count;
       CASE_EXPECT_EQ(m1, action.election_captain().user_key().user_id());  // 最早入队
-      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, action.election_captain().role());
     }
     return true;
   });
   CASE_EXPECT_EQ(1u, election_count);
+  // 选举事件由恢复流程的延迟 flush 写入，需再同步一轮回环应用后新队长才晋升 OWNER
+  // (角色由 apply 侧 change_captain 维护，事件只携带 user_key)
+  CASE_EXPECT_EQ(0, env.sync(team_a));
+  {
+    auto elected = room_a->find_member(make_user_key(1, m1), false);
+    CASE_EXPECT_TRUE(!!elected);
+    if (elected) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, elected->member_data.role());
+    }
+  }
 
   // 备用节点(他人持锁): 恢复同一份无队长快照时不产生选举写入
   int64_t team_b = next_test_team_id();

@@ -8,6 +8,8 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <rpc/rpc_common_types.h>
+
 #include <rpc/team/team_key_hash_helper.h>
 
 // clang-format off
@@ -70,11 +72,33 @@ class user_team_manager {
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
 
+  team_join_request_ptr_t get_pending_join_request(const atfw::team::DTeamKey& team_key) const noexcept;
+
+  team_invitation_ptr_t get_pending_invitation(const atfw::team::DTeamKey& team_key) const noexcept;
+
+  // 同意收到的邀请(协程内调用): 打包 SSTeamRoomApproveInvitationReq 并转发到 teamsvr-room(按队伍一致性哈希路由)，
+  // 成员数据(客户端版本/路由)由被邀请人在同意时上报，业务结果经 client_result 透传
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type approve_invitation(rpc::context& ctx,
+                                                                        const team_invitation_ptr_t& invitation);
+
+  // 拒绝收到的邀请(协程内调用): 打包 SSTeamRoomRejectInvitationReq 并转发到 teamsvr-room(按队伍一致性哈希路由)，
+  // 业务结果经 client_result 透传
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type reject_invitation(rpc::context& ctx,
+                                                                       const team_invitation_ptr_t& invitation);
+
+  // 发起加入请求(协程内调用): 打包 SSTeamRoomAddJoinRequestReq 并转发到 teamsvr-room(按队伍一致性哈希路由)，
+  // 申请人的版本/路由/私有频道由本人上报，业务结果经 client_result 透传
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_join_request(rpc::context& ctx,
+                                                                       const atfw::team::DTeamKey& team_key);
+
   user_team::ptr_t get_team_by_team_key(const atfw::team::DTeamKey& team_key) const noexcept;
 
   user_team::ptr_t get_team_by_team_type(PROJECT_NAMESPACE_ID::EnTeamType type) const noexcept;
 
   void remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, atfw::team::EnTeamExitReason exit_reason);
+
+  void pack_team_member_shared_data(PROJECT_NAMESPACE_ID::EnTeamType type,
+                                    ::google::protobuf::Map<::int64_t, ::atfw::team::DTeamAnyData>& output);
 
  private:
   void set_processed_private_chat_channel_sequence(int64_t sequence);

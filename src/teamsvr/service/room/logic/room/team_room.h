@@ -205,7 +205,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   static std::chrono::system_clock::duration get_room_destroy_delay() noexcept;
 
-  void change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_captain_key);
+  void change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_captain_key,
+                      atfw::team::EnTeamPermissionRole set_role);
 
   rpc::result_code_type flush_pending_channel_message(rpc::context& ctx);
 

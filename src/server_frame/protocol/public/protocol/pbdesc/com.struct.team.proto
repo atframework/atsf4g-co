@@ -203,6 +203,13 @@ message DTeamMemberRemoveData {
 }
 
 // 设置成员角色
+message DTeamMemberElectionCaptain {
+  atframework.shared.DUserIDKey user_key = 1;
+
+  // 重置队长角色
+  EnTeamPermissionRole role = 2;
+}
+
 message DTeamMemberSetRole {
   atframework.shared.DUserIDKey user_key = 1;
 
@@ -327,7 +334,7 @@ message DTeamAction {
     // 队员更新共享数据(准备、取消准备、变更角色、变更装备等都可以通过修改内部 shared_member_data 来实现)
     DTeamMemberUpdateData member_update = 4;
     // 重新竞选队长
-    DTeamMember election_captain = 5;
+    DTeamMemberElectionCaptain election_captain = 5;
     // 更新队伍数据
     DTeamUpdateData team_update = 6;
     // 设置成员角色(需要 configure.set_member_role_role 权限，默认 ADMIN；不能授予高于操作者自身的角色)

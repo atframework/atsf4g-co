@@ -8,6 +8,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.struct.team.pb.h>
 #include <protocol/pbdesc/com.struct.team.shared.pb.h>
 
 // clang-format off
@@ -18,6 +19,10 @@
 
 class user_team_algorithm {
  public:
+  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamMemberJoinData&) noexcept;
+  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamJoinRequest&) noexcept;
+  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamInvitation&) noexcept;
+
   static int64_t make_team_shared_data_key(PROJECT_NAMESPACE_ID::EnTeamSharedModuleType module_type,
                                            int32_t module_data_id);
 

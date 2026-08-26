@@ -33,6 +33,7 @@
 
 #include <config/extern_service_types.h>
 
+#include <data/user_key_hash_helper.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/dtmq/dtmq_client_api.h>
@@ -1095,6 +1096,9 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
               return lv < rv || (lv == rv && user_key_less_t()(l->user_key(), r->user_key()));
             });
   bool member_restore_succeeded = true;
+  auto captain_role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER;
+  user_key_equal_t user_key_eq;
+
   for (const auto* data_ptr : members_by_visit_time) {
     const auto& data = *data_ptr;
     auto member = find_member(data.user_key(), false);
@@ -1108,6 +1112,9 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
       continue;
     }
     expired_member_key.erase(member->member_data.user_key());
+    if (user_key_eq(data.user_key(), public_data->captain_user_key())) {
+      captain_role = member->member_data.role();
+    }
 
     member->user_router_server_id = data.user_router_server_id();
     member->last_heartbeat_timepoint = protobuf_to_system_clock(data.last_heartbeat_timepoint());
@@ -1173,7 +1180,7 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
   // shared team data
   *storage_.mutable_shared_team_data() = public_data->shared_team_data();
 
-  change_captain(public_data->captain_user_key());
+  change_captain(public_data->captain_user_key(), captain_role);
 
   // 回放压缩点之后的增量日志
   rpc::dtmq::client_subscriber::query_options options;
@@ -1275,7 +1282,7 @@ void team_room::apply_action(rpc::context& ctx, atfw::team::DTeamAction& action,
       apply_member_set_role(action.member_set_role());
       break;
     case atfw::team::DTeamAction::kElectionCaptain:
-      change_captain(action.election_captain().user_key());
+      change_captain(action.election_captain().user_key(), action.election_captain().role());
       break;
     case atfw::team::DTeamAction::kAddInvitation:
       apply_add_invitation(action.add_invitation());
@@ -1614,8 +1621,7 @@ rpc::result_code_type team_room::elect_captain_after_remove(rpc::context& ctx) {
 
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
   auto* election_captain = action->mutable_election_captain();
-  protobuf_copy_message(*election_captain, next_captain->member_data);
-  election_captain->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+  protobuf_copy_message(*election_captain->mutable_user_key(), next_captain->member_data.user_key());
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, *action, true)));
 }
 
@@ -2039,6 +2045,11 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
   auto is_self = [&operator_key](const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
     return operator_key.user_id() == user_key.user_id() && operator_key.zone_id() == user_key.zone_id();
   };
+  // 队长(恒为 OWNER)的角色不能被移除或修改，转让须走 election_captain
+  auto is_captain = [this](const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+    return 0 != storage_.captain_user_key().user_id() && storage_.captain_user_key().user_id() == user_key.user_id() &&
+           storage_.captain_user_key().zone_id() == user_key.zone_id();
+  };
   // 要求操作者是队伍成员且角色不低于 role_limit
   auto require_role = [this, &operator_key](atfw::team::EnTeamPermissionRole role_limit) -> int32_t {
     auto operator_member = find_member(operator_key, false);
@@ -2060,10 +2071,23 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
 
   int32_t ret = 0;
   switch (action.action_case()) {
-    case atfw::team::DTeamAction::kRemoveMember:
+    case atfw::team::DTeamAction::kRemoveMember: {
       // 所有成员都可以删除自己(视为主动退出)，直接删除其他成员需要 manage_member_role(默认 ADMIN)
       ret = is_self(action.remove_member().user_key()) ? require_member() : require_role(get_manage_member_role());
+      if (0 == ret && !is_self(action.remove_member().user_key())) {
+        // 目标成员的当前角色必须严格低于或等于操作者，队长可以被移除，移除后自动选新队长
+        auto target_member = find_member(action.remove_member().user_key(), false);
+        if (!target_member) {
+          ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
+        } else {
+          auto operator_member = find_member(operator_key, false);
+          if (!operator_member || target_member->member_data.role() > operator_member->member_data.role()) {
+            ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+          }
+        }
+      }
       break;
+    }
     case atfw::team::DTeamAction::kAddMember:
       // 直接添加成员需要 manage_member_role(默认 ADMIN)，邀请/加入请求流程的入队不经由此处。
       // 已存在成员不能通过重放完整 DTeamMember 改写自身角色；也不能授予高于操作者的角色。
@@ -2100,18 +2124,23 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
       break;
     case atfw::team::DTeamAction::kMemberSetRole:
       // 设置成员角色需要 set_member_role_role(默认 ADMIN)；目标必须是成员，
-      // 且不能授予高于操作者自身的角色(与 add_member 的授权上限一致)
+      // 且不能授予高于操作者自身的角色(与 add_member 的授权上限一致)。
+      // 目标成员的当前角色必须严格低于操作者，且不能修改队长(队长恒为 OWNER，转让须走 election_captain)
       ret = require_role(get_set_member_role_role());
       if (ret == 0) {
         const auto& set_role = action.member_set_role();
         if (set_role.role() <= atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
           ret = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-        } else if (!find_member(set_role.user_key(), false)) {
-          ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
         } else {
-          auto operator_member = find_member(operator_key, false);
-          if (!operator_member || set_role.role() > operator_member->member_data.role()) {
-            ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+          auto target_member = find_member(set_role.user_key(), false);
+          if (!target_member) {
+            ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
+          } else {
+            auto operator_member = find_member(operator_key, false);
+            if (!operator_member || set_role.role() > operator_member->member_data.role() ||
+                target_member->member_data.role() >= operator_member->member_data.role()) {
+              ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+            }
           }
         }
       }
@@ -2120,8 +2149,14 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
       // 当前队长可以主动转让；其他操作者无条件修改队长固定要求 OWNER。
       ret =
           is_self(storage_.captain_user_key()) ? require_member() : require_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
-      if (ret == 0 && !find_member(action.election_captain().user_key(), false)) {
-        ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
+      if (ret == 0) {
+        auto member_ptr = find_member(action.election_captain().user_key(), false);
+        if (!member_ptr) {
+          ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
+        } else if (action.election_captain().role() > member_ptr->member_data.role()) {
+          // 选队长不能提权
+          ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+        }
       }
       break;
     case atfw::team::DTeamAction::kDestroyTeam:
@@ -2968,7 +3003,8 @@ std::chrono::system_clock::duration team_room::get_room_destroy_delay() noexcept
   return timeout;
 }
 
-void team_room::change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_captain_key) {
+void team_room::change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_captain_key,
+                               atfw::team::EnTeamPermissionRole set_role) {
   auto old_captain = find_member(storage_.captain_user_key(), false);
   auto new_captain = find_member(new_captain_key, false);
   if (old_captain == new_captain) {
@@ -2980,7 +3016,11 @@ void team_room::change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_capta
   }
 
   protobuf_copy_message(*storage_.mutable_captain_user_key(), new_captain->member_data.user_key());
-  new_captain->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+  if (set_role > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+    new_captain->member_data.set_role(set_role);
+  } else {
+    new_captain->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+  }
   if (old_captain) {
     old_captain->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
   }

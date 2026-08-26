@@ -64,7 +64,9 @@ task_action_team_reject_join_request::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO(owent): 真正的逻辑实现
+  int32_t response_code =
+      RPC_AWAIT_CODE_RESULT(team_ptr->reject_join_request(get_shared_context(), req_body.user_key()));
+  set_response_code(response_code);
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

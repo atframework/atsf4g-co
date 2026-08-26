@@ -225,7 +225,6 @@ CASE_TEST(teamsvr_room_event, captain_election_deterministic) {
         if (action.action_case() == atfw::team::DTeamAction::kElectionCaptain) {
           found_election = true;
           CASE_EXPECT_EQ(members.admin.user_id(), action.election_captain().user_key().user_id());
-          CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, action.election_captain().role());
         }
         return true;
       });

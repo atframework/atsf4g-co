@@ -269,6 +269,72 @@ void user_team::send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExit
   }
 }
 
+rpc::result_code_type user_team::send_action(rpc::context& ctx, atfw::team::DTeamAction&& action) {
+  rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageReq> req_body{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageRsp> rsp_body{ctx};
+  protobuf_copy_message(*req_body->mutable_team_key(), team_key_);
+  req_body->mutable_sender_user_key()->set_zone_id(owner_->get_owner().get_zone_id());
+  req_body->mutable_sender_user_key()->set_user_id(owner_->get_owner().get_user_id());
+  *req_body->mutable_action() = std::move(action);
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::send_message(ctx, *req_body, *rsp_body));
+  if (0 == ret) {
+    ret = rsp_body->client_result();
+  }
+  if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
+    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为已不在队伍中
+    ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
+  }
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type user_team::accept_join_request(rpc::context& ctx,
+                                                     const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+  rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
+  auto* join_request = action->mutable_approve_join_request();
+  protobuf_copy_message(*join_request->mutable_team_key(), team_key_);
+  protobuf_copy_message(*join_request->mutable_requester(), user_key);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+}
+
+rpc::result_code_type user_team::reject_join_request(rpc::context& ctx,
+                                                     const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+  rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
+  auto* join_request = action->mutable_reject_join_request();
+  protobuf_copy_message(*join_request->mutable_team_key(), team_key_);
+  protobuf_copy_message(*join_request->mutable_requester(), user_key);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+}
+
+rpc::result_code_type user_team::remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+  rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
+  auto* remove_data = action->mutable_remove_member();
+  protobuf_copy_message(*remove_data->mutable_team_key(), team_key_);
+  protobuf_copy_message(*remove_data->mutable_user_key(), user_key);
+  remove_data->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+}
+
+rpc::result_code_type user_team::transfer_captain(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+  rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
+  protobuf_copy_message(*action->mutable_election_captain()->mutable_user_key(), user_key);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+}
+
+rpc::result_code_type user_team::update_member_role(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                                    atfw::team::EnTeamPermissionRole role) {
+  rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
+  auto* set_role = action->mutable_member_set_role();
+  protobuf_copy_message(*set_role->mutable_user_key(), user_key);
+  set_role->set_role(role);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+}
+
 void user_team::set_exit_team(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason) {
   last_exit_team_reason_ = exit_reason;
   last_exit_team_request_timepoint_ = ctx.logical_now();
@@ -365,6 +431,10 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
     }
     case atfw::team::DTeamAction::kElectionCaptain: {
       cached_captain_user_key_ = action.election_captain().user_key();
+      if (owner_->get_owner().is(cached_captain_user_key_) &&
+          action.election_captain().role() > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+        cached_permission_role_ = action.election_captain().role();
+      }
       break;
     }
     case atfw::team::DTeamAction::kTeamUpdate: {

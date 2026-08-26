@@ -13,7 +13,6 @@
 
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
-#include <protocol/pbdesc/team_room_service.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -24,8 +23,6 @@
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/rpc_context.h>
-#include <rpc/rpc_shared_message.h>
-#include <rpc/team/team_room_client_api.h>
 
 #include <data/user.h>
 
@@ -74,21 +71,8 @@ task_action_team_update_member_role::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // 转发 member_set_role 到 teamsvr-room(按队伍一致性哈希路由)，业务结果经 client_result 透传
-  rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageReq> ss_req{get_shared_context()};
-  rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageRsp> ss_rsp{get_shared_context()};
-  protobuf_copy_message(*ss_req->mutable_team_key(), req_body.team_key());
-  ss_req->mutable_sender_user_key()->set_zone_id(user_inst->get_zone_id());
-  ss_req->mutable_sender_user_key()->set_user_id(user_inst->get_user_id());
-  auto* set_role_action = ss_req->mutable_action()->mutable_member_set_role();
-  protobuf_copy_message(*set_role_action->mutable_user_key(), req_body.user_key());
-  set_role_action->set_role(req_body.role());
-
   int32_t response_code =
-      RPC_AWAIT_CODE_RESULT(rpc::team::team_api::send_message(get_shared_context(), *ss_req, *ss_rsp));
-  if (0 == response_code) {
-    response_code = ss_rsp->client_result();
-  }
+      RPC_AWAIT_CODE_RESULT(team_ptr->update_member_role(get_shared_context(), req_body.user_key(), req_body.role()));
   set_response_code(response_code);
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

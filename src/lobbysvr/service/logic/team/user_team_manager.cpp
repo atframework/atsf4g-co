@@ -8,16 +8,22 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.struct.chat.pb.h>
 #include <protocol/pbdesc/com.struct.team.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
+#include <protocol/pbdesc/team_room_service.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/logic_config.h>
+
 #include <memory/object_allocator.h>
 
+#include <rpc/dtmq/dtmq_algorithm.h>
 #include <rpc/rpc_context.h>
+#include <rpc/team/team_room_client_api.h>
 
 #include <data/user_key_hash_helper.h>
 
@@ -27,13 +33,10 @@
 
 #include "data/user.h"
 #include "logic/chat/user_chat_manager.h"
+#include "logic/team/user_team_algorithm.h"
 
 class user_team_manager_utility {
  public:
-  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamMemberJoinData&) noexcept {
-    return PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL;
-  }
-
   static void dispatch_team_member_event(rpc::context& ctx, user& user_inst,
                                          const ::atfw::dtmq::DChannelMessage& data) {
     auto& team_mgr = user_inst.get_user_team_manager();
@@ -131,7 +134,7 @@ class user_team_manager_utility {
           FCTXLOGINFO(ctx, "{} has joined team {}:{} from {}:{}", user_inst, joined_team.team_key().zone_id(),
                       joined_team.team_key().team_id(), joined_team.user_key().zone_id(),
                       joined_team.user_key().user_id());
-          team_mgr.add_team(ctx, get_team_type(joined_team), joined_team);
+          team_mgr.add_team(ctx, user_team_algorithm::get_team_type(joined_team), joined_team);
         }
         break;
       }
@@ -265,6 +268,119 @@ bool user_team_manager::is_dirty() const { return is_dirty_; }
 
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
 
+user_team_manager::team_join_request_ptr_t user_team_manager::get_pending_join_request(
+    const atfw::team::DTeamKey& team_key) const noexcept {
+  auto iter = pending_join_request_by_team_id_.find(team_key);
+  if (iter != pending_join_request_by_team_id_.end() && *iter->second) {
+    return *iter->second;
+  }
+  return nullptr;
+}
+
+user_team_manager::team_invitation_ptr_t user_team_manager::get_pending_invitation(
+    const atfw::team::DTeamKey& team_key) const noexcept {
+  auto iter = pending_invitation_by_team_id_.find(team_key);
+  if (iter != pending_invitation_by_team_id_.end() && *iter->second) {
+    return *iter->second;
+  }
+  return nullptr;
+}
+
+rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
+                                                            const team_invitation_ptr_t& invitation) {
+  if (!invitation) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
+  }
+
+  // 被邀请人本人接受邀请: 版本/路由等成员数据由被邀请人在同意时上报
+  rpc::context::message_holder<atfw::team::SSTeamRoomApproveInvitationReq> ss_req{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomApproveInvitationRsp> ss_rsp{ctx};
+  protobuf_copy_message(*ss_req->mutable_team_key(), invitation->team_key());
+  ss_req->mutable_sender_user_key()->set_zone_id(owner_->get_zone_id());
+  ss_req->mutable_sender_user_key()->set_user_id(owner_->get_user_id());
+  protobuf_copy_message(*ss_req->mutable_invitee(), invitation->invitee());
+  ss_req->set_client_version(owner_->get_client_info().client_version());
+  // 成员通知路由到当前持有会话的 lobbysvr 节点
+  ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
+
+  // 填充 shared_member_data
+  pack_team_member_shared_data(user_team_algorithm::get_team_type(*invitation), *ss_req->mutable_shared_member_data());
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::approve_invitation(ctx, *ss_req, *ss_rsp));
+  if (0 == ret) {
+    ret = ss_rsp->client_result();
+  }
+
+  if (0 == ret) {
+    // 接受后房间只向被邀请人发 joined_team 通知，这里直接移除本地待处理邀请
+    remove_pending_invitation(ctx, invitation->team_key());
+  } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
+    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为邀请不存在
+    ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND;
+  }
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type user_team_manager::reject_invitation(rpc::context& ctx, const team_invitation_ptr_t& invitation) {
+  if (!invitation) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
+  }
+
+  // 被邀请人本人拒绝邀请
+  rpc::context::message_holder<atfw::team::SSTeamRoomRejectInvitationReq> ss_req{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomRejectInvitationRsp> ss_rsp{ctx};
+  protobuf_copy_message(*ss_req->mutable_team_key(), invitation->team_key());
+  ss_req->mutable_sender_user_key()->set_zone_id(owner_->get_zone_id());
+  ss_req->mutable_sender_user_key()->set_user_id(owner_->get_user_id());
+  protobuf_copy_message(*ss_req->mutable_invitee(), invitation->invitee());
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::reject_invitation(ctx, *ss_req, *ss_rsp));
+  if (0 == ret) {
+    ret = ss_rsp->client_result();
+  }
+
+  if (0 == ret) {
+    // 拒绝成功后即使房间的回执事件丢失，也不再需要保留本地记录
+    remove_pending_invitation(ctx, invitation->team_key());
+  } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
+    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为邀请不存在
+    ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND;
+  }
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, const atfw::team::DTeamKey& team_key) {
+  // 申请人的版本/路由/私有频道由本人上报
+  rpc::context::message_holder<atfw::team::SSTeamRoomAddJoinRequestReq> ss_req{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomAddJoinRequestRsp> ss_rsp{ctx};
+  auto* join_request = ss_req->mutable_join_request();
+  protobuf_copy_message(*join_request->mutable_team_key(), team_key);
+  join_request->mutable_requester()->set_zone_id(owner_->get_zone_id());
+  join_request->mutable_requester()->set_user_id(owner_->get_user_id());
+  auto* requester_channel = join_request->mutable_requester_private_channel();
+  requester_channel->set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+  requester_channel->set_channel_id(rpc::dtmq::make_unicast_channel_id(requester_channel->channel_type(),
+                                                                       owner_->get_zone_id(), owner_->get_user_id()));
+  join_request->set_client_version(owner_->get_client_info().client_version());
+  // 成员通知路由到当前持有会话的 lobbysvr 节点
+  join_request->set_user_router_server_id(logic_config::me()->get_local_server_id());
+
+  // 填充 member_admission_data
+  pack_team_member_shared_data(user_team_algorithm::get_team_type(*join_request),
+                               *join_request->mutable_member_admission_data());
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::add_join_request(ctx, *ss_req, *ss_rsp));
+  if (0 == ret) {
+    ret = ss_rsp->client_result();
+  }
+
+  if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
+    // 目标频道已不存在(队伍从未创建或已解散)，对客户端表现为队伍不存在
+    ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND;
+  }
+  RPC_RETURN_CODE(ret);
+}
+
 user_team::ptr_t user_team_manager::get_team_by_team_key(const atfw::team::DTeamKey& team_key) const noexcept {
   auto iter = team_index_.find(team_key);
   if (iter != team_index_.end() && iter->second) {
@@ -285,6 +401,12 @@ user_team::ptr_t user_team_manager::get_team_by_team_type(PROJECT_NAMESPACE_ID::
 void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
                                     atfw::team::EnTeamExitReason exit_reason) {
   remove_team(ctx, team_key, true, exit_reason);
+}
+
+void user_team_manager::pack_team_member_shared_data(
+    PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
+    ::google::protobuf::Map<::int64_t, ::atfw::team::DTeamAnyData>& /*output*/) {
+  // TODO(owent): 默认的成员共享数据，加入队伍时使用
 }
 
 void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequence) {

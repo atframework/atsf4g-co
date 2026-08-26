@@ -348,15 +348,18 @@ enum EnErrorCode {
                                  [(error_code.description) = "队伍成员不存在"];
   EN_ERR_TEAM_DESTROYED = -1204
                           [(error_code.description) = "队伍已解散"];
-  EN_ERR_TEAM_ALREADY_IN_TEAM = -12065
+  EN_ERR_TEAM_ALREADY_IN_TEAM = -1205
                                 [(error_code.description) = "已在队伍中"];
   EN_ERR_TEAM_INVITATION_NOT_FOUND = -1206
                                      [(error_code.description) = "组队邀请不存在"];
   EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND = -1207
-                                       [(error_code.description) = "组队加入请求不存在"];
+                                        [(error_code.description) = "组队加入请求不存在"];
   EN_ERR_TEAM_NO_PERMISSION = -1208
                               [(error_code.description) = "没有组队操作权限"];
   EN_ERR_TEAM_CONDITION_NOT_MATCH = -1209
                                      [(error_code.description) = "组队数据条件检查未通过"];
+  // 新错误码只能追加在已发布值之后，不能改动已有数值(客户端按值解释错误码)
+  EN_ERR_TEAM_JOIN_REQUEST_ALREADY_EXISTS = -1210
+                                       [(error_code.description) = "组队加入请求已存在"];
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

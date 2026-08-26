@@ -28,6 +28,8 @@
 
 #include <utility>
 
+#include "logic/team/user_team_manager.h"
+
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_send_join_request::task_action_team_send_join_request(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
@@ -41,7 +43,7 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_send_j
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_send_join_request::result_type
 task_action_team_send_join_request::operator()() {
-  // const rpc_request_type& req_body = get_request_body();
+  const rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
@@ -51,7 +53,22 @@ task_action_team_send_join_request::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO(owent): 发送加入请求（注意如果目标频道Not Found，要转换错误码）
+  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(req_body.team_key());
+  if (team_ptr) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ALREADY_IN_TEAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  auto join_request_ptr = user_inst->get_user_team_manager().get_pending_join_request(req_body.team_key());
+  if (join_request_ptr &&
+      protobuf_to_system_clock(join_request_ptr->expired_timepoint()) > get_shared_context().logical_now()) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_ALREADY_EXISTS);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  // 转发 add_join_request 到 teamsvr-room(按队伍一致性哈希路由)，SS消息打包在 user_team_manager 中，业务结果透传
+  set_response_code(RPC_AWAIT_CODE_RESULT(
+      user_inst->get_user_team_manager().send_join_request(get_shared_context(), req_body.team_key())));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

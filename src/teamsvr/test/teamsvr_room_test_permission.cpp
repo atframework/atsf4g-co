@@ -247,6 +247,13 @@ CASE_TEST(teamsvr_room_permission, remove_member_default_roles) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(members.normal, false).get());
 
+  // ADMIN 删除队长(owner)被拒绝: 队长不能被移除(恒为 OWNER)，转让须走 election_captain
+  before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                 check_permission(env, room, members.admin, make_remove_action(members.owner)));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin, make_remove_action(members.owner)));
+  expect_no_write(fake, env, before);
+
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
@@ -1011,16 +1018,16 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_remove_action(members.admin)));
   expect_no_write(fake, env, before);
 
-  // 低于 NORMAL 的自定义门槛 50 按大小生效: NORMAL(100) >= 50 可以删除他人
+  // 低于 NORMAL 的自定义门槛 50 按大小生效: NORMAL(100) >= 50 可以删除当前角色严格低于自己的成员
   write_configure(static_cast<atfw::team::EnTeamPermissionRole>(50));
-  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_remove_action(members.admin)));
-  CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_EQ(nullptr, room->find_member(members.admin, false).get());
-  // 加回 admin 供后续断言
+  auto junior = make_user_key(1, 7107);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
-                                            make_add_member_action(members.admin, members.admin_channel,
-                                                                   atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+                                            make_add_member_action(junior, make_personal_channel(7107),
+                                                                   static_cast<atfw::team::EnTeamPermissionRole>(50))));
   CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_remove_action(junior)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(nullptr, room->find_member(junior, false).get());
 
   // 档位间自定义角色 150(介于 NORMAL 与 ADMIN): 阈值比较按大小，不需要 == 命中某个已定义档位
   auto vip = make_user_key(1, 7105);
@@ -1160,6 +1167,16 @@ CASE_TEST(teamsvr_room_permission, member_set_role_default_gates) {
     }
   }
 
+  // ADMIN 修改队长(owner)角色被拒绝: 队长恒为 OWNER，转让须走 election_captain
+  before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                 check_permission(env, room, members.admin,
+                                  make_member_set_role_action(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.admin,
+                                 make_member_set_role_action(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
+  expect_no_write(fake, env, before);
+
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
@@ -1180,28 +1197,26 @@ CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
     return;
   }
 
-  // 自定义门槛 NORMAL: NORMAL 成员也可设置角色(授予上限仍不能高于自身)
+  // 自定义门槛 NORMAL: 授予上限与目标角色约束不随门槛降低(目标当前角色必须严格低于操作者)
   atfw::team::DTeamConfigure configure;
   configure.set_set_member_role_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner, make_team_update_configure_action(configure)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // NORMAL 操作者授予不高于自身的角色(NORMAL): 降级 admin -> NORMAL 成功
+  auto& fake = env.channel(team_id);
+
+  // NORMAL 操作者降级更高角色目标(admin -> NORMAL): 目标当前角色不低于操作者，拒绝
+  auto before = snapshot_counters(env, fake);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                 check_permission(env, room, members.normal,
+                                  make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
   CASE_EXPECT_EQ(
       0, run_send_message_action(env, team_id, members.normal,
                                  make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
-  CASE_EXPECT_EQ(0, env.sync(team_id));
-  {
-    auto member = room->find_member(members.admin, false);
-    CASE_EXPECT_TRUE(!!member);
-    if (member) {
-      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, member->member_data.role());
-    }
-  }
+  expect_no_write(fake, env, before);
 
   // 授予高于自身的角色仍被拒绝(自定义门槛不改变授权上限)
-  auto& fake = env.channel(team_id);
-  auto before = snapshot_counters(env, fake);
+  before = snapshot_counters(env, fake);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
                  check_permission(env, room, members.normal,
                                   make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
