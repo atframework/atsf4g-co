@@ -60,7 +60,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
  public:
   // 初始化
   virtual void init(int32_t row_size, int32_t column_size,
-                    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type);
+                    PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
 
  public:
   // 操作接口
@@ -126,6 +126,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   const std::vector<std::vector<bool>>& get_occupy_grid_flag() const;
   int32_t get_row_size() const;
   int32_t get_column_size() const;
+  int64_t get_container_guid() const;
 
   // 通过Basic提取数据
   item_grid_entry_ptr_t find_entry(const PROJECT_NAMESPACE_ID::DItemBasic& basic) const;
@@ -204,7 +205,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   /// @param reason 操作原因
   virtual void on_item_data_changed(const item_grid_entry_ptr_t& entry, ItemGridOperationReason reason);
 
-  /// @brief 检查道具位置额外字段是否合法
+  /// @brief 检查道具额外字段是否合法 container_guid 底层已经判断
   /// @param position 道具位置
   virtual bool check_item_position(const PROJECT_NAMESPACE_ID::DItemPosition& position) const;
 
@@ -234,6 +235,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   void remove_entry_id_index(uint64_t entry_id);
 
  private:
+  int64_t container_guid_ = 0;
   int32_t row_size_ = 0;
   int32_t column_size_ = 0;
   bool is_care_item_size_ = true;  // 是否关心物品占格, 影响算法逻辑
@@ -247,6 +249,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   std::unordered_map<int32_t, int64_t> item_count_cache_;
   ItemLogHandler log_handler_;
   mutable uint64_t next_entry_id_ = 1;
+  mutable int64_t operate_id_ = 0;  // 操作流水号
 };
 
 }  // namespace item_algorithm

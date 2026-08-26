@@ -15,6 +15,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -37,6 +38,8 @@ static constexpr int32_t kVirtualTypeId = 10001;
 // EN_ITEM_TYPE_ITEM: [100000, 400000) — 占格, 默认不需要GUID (由 proto 配置 need_guid=false)
 static constexpr int32_t kItemTypeId_1x1 = 100001;  // 1x1 大小, accumulation_limit = 99
 static constexpr int32_t kItemTypeId_2x2 = 100002;  // 2x2 大小, accumulation_limit = 1
+
+static constexpr int32_t kHookRejectedError = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
 
 // ============================================================
 // 测试用 ItemGridAlgorithm — Hook get_item_position_cfg
@@ -77,6 +80,86 @@ class TestItemGridAlgorithm : public ItemGridAlgorithm {
 
  private:
   std::unordered_map<int32_t, PROJECT_NAMESPACE_ID::DItemPositionCfg> position_cfg_map_;
+};
+
+struct ItemGridHookTestState {
+  bool reject_all_add = false;
+  bool reject_sub = false;
+  bool reject_count_limit = false;
+  int32_t rejected_position_x = -1;
+  int32_t rejected_add_position_x = -1;
+  int32_t check_item_position_calls = 0;
+  int32_t on_check_add_calls = 0;
+  int32_t on_check_sub_calls = 0;
+  int32_t on_check_item_count_limit_calls = 0;
+
+  void reset_call_counts() {
+    check_item_position_calls = 0;
+    on_check_add_calls = 0;
+    on_check_sub_calls = 0;
+    on_check_item_count_limit_calls = 0;
+  }
+};
+
+class HookTestItemGridAlgorithm : public TestItemGridAlgorithm {
+ public:
+  HookTestItemGridAlgorithm() : state_(std::make_shared<ItemGridHookTestState>()) {}
+  explicit HookTestItemGridAlgorithm(std::shared_ptr<ItemGridHookTestState> state) : state_(std::move(state)) {}
+
+  ItemGridHookTestState& hook_state() { return *state_; }
+
+ protected:
+  item_algorithm::item_grid_algorithm_ptr_t create_empty_clone() const override {
+    auto grid = atfw::util::memory::make_strong_rc<HookTestItemGridAlgorithm>(state_);
+    copy_empty_config_to(*grid);
+    grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+    grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
+    return grid;
+  }
+
+  int32_t on_check_add(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+                       const PROJECT_NAMESPACE_ID::DItemInstance& request) const override {
+    ++state_->on_check_add_calls;
+    if (state_->reject_all_add ||
+        (state_->rejected_add_position_x >= 0 &&
+         get_inventory_x(request.item_basic().position()) == state_->rejected_add_position_x)) {
+      return kHookRejectedError;
+    }
+    return TestItemGridAlgorithm::on_check_add(config_group, request);
+  }
+
+  int32_t on_check_sub(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+                       const PROJECT_NAMESPACE_ID::DItemBasic& request) const override {
+    ++state_->on_check_sub_calls;
+    if (state_->reject_sub) {
+      return kHookRejectedError;
+    }
+    return TestItemGridAlgorithm::on_check_sub(config_group, request);
+  }
+
+  int32_t on_check_item_count_limit(int32_t type_id, int64_t current_count, int64_t add_count) const override {
+    ++state_->on_check_item_count_limit_calls;
+    if (state_->reject_count_limit) {
+      return kHookRejectedError;
+    }
+    return TestItemGridAlgorithm::on_check_item_count_limit(type_id, current_count, add_count);
+  }
+
+  bool check_item_position(const PROJECT_NAMESPACE_ID::DItemPosition& position) const override {
+    ++state_->check_item_position_calls;
+    return state_->rejected_position_x < 0 || get_inventory_x(position) != state_->rejected_position_x;
+  }
+
+ private:
+  static int32_t get_inventory_x(const PROJECT_NAMESPACE_ID::DItemPosition& position) {
+    if (position.grid_position().has_user_inventory()) {
+      return position.grid_position().user_inventory().x();
+    }
+    return -1;
+  }
+
+ private:
+  std::shared_ptr<ItemGridHookTestState> state_;
 };
 
 /// @brief 服务器端测试子类 — 在 on_item_data_changed 中只记录 entry_id
@@ -232,8 +315,9 @@ static void register_test_log_handler(ItemGridAlgorithm& grid) {
 }
 
 /// @brief 初始化测试 Grid 算法 (inventory 类型, 默认 10x10)
-static void init_test_grid(TestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+static void init_test_grid(TestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10,
+                           int64_t container_guid = 0) {
+  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, container_guid);
   // 注册配置
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
@@ -460,7 +544,7 @@ static void call_apply_entries(
 
 /// @brief 初始化 ServerTestItemGridAlgorithm (与 init_test_grid 相同配置)
 static void init_server_grid(ServerTestItemGridAlgorithm& grid, int32_t row = 10, int32_t col = 10) {
-  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+  grid.init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
   grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
   grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
   // 注册测试日志处理器 (默认只输出 Info 及以上)
@@ -589,7 +673,7 @@ class TestItemGridContainer : public ItemGridContainer {
 
   TestItemGridContainer(int32_t row = 10, int32_t col = 10) {
     grid = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
     // 注册测试日志处理器 (默认只输出 Info 及以上)
@@ -613,13 +697,13 @@ class DualGridContainer : public ItemGridContainer {
 
   DualGridContainer(int32_t row = 10, int32_t col = 10) {
     inventory_grid = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    inventory_grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    inventory_grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     inventory_grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     inventory_grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
     ::register_test_log_handler(*inventory_grid);
 
     backpack_grid = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    backpack_grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory);
+    backpack_grid->init(row, col, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory, 0);
     backpack_grid->register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     backpack_grid->register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
     ::register_test_log_handler(*backpack_grid);
@@ -2235,7 +2319,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2258,7 +2342,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(3, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(3, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2294,7 +2378,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2315,7 +2399,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     // accumulation_limit=1: 已有条目无剩余容量，策略2不会命中，确保走策略3扫描
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
 
@@ -2351,7 +2435,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     // 先 load 一件到 (x=0, y=0), count=50，堆叠上限99
@@ -2383,7 +2467,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(2, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(2, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 堆叠上限=1，不可堆叠
 
     for (int32_t y = 0; y < 2; ++y) {
@@ -2410,7 +2494,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2439,7 +2523,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
     grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);
 
@@ -2469,7 +2553,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 不可堆叠
 
     // 填满 x=0,1,2，留 x=3 空闲
@@ -2522,7 +2606,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2554,7 +2638,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(1, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment);
+    grid.init(1, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment, 0);
     grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kEquipmentTypeId, 1)};
@@ -2584,7 +2668,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<RejectFirstColGrid>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory);
+    grid.init(4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
@@ -2598,4 +2682,273 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   }
 
   CASE_MSG_INFO() << "=== find_positions_for_basics 测试完成 ===\n";
+}
+
+CASE_TEST(ItemGridAlgorithm, checked_request_validation) {
+  constexpr int64_t kPrimaryContainerGuid = 10001;
+  constexpr int64_t kSecondaryContainerGuid = 10002;
+
+  auto primary_grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+  auto& primary_grid = *primary_grid_ptr;
+  init_test_grid(primary_grid, 10, 10, kPrimaryContainerGuid);
+
+  auto secondary_grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+  auto& secondary_grid = *secondary_grid_ptr;
+  init_test_grid(secondary_grid, 10, 10, kSecondaryContainerGuid);
+
+  auto config = make_test_config_group();
+
+  // 使用错误 Grid 执行已检查请求必须被 container_guid 拒绝，且请求和两个 Grid 均保持未修改。
+  auto first_item = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  first_item.mutable_item_basic()->mutable_position()->set_container_guid(kPrimaryContainerGuid);
+  ItemGridAddRequest first_requests;
+  *first_requests.Add() = first_item;
+  auto checked_for_primary = primary_grid.check_add(config, std::move(first_requests));
+  CASE_EXPECT_EQ(checked_for_primary.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  auto wrong_grid_result = secondary_grid.add(checked_for_primary);
+  CASE_EXPECT_EQ(wrong_grid_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_FALSE(checked_for_primary.apply);
+  CASE_EXPECT_EQ(primary_grid.get_item_count(kItemTypeId_1x1), 0);
+  CASE_EXPECT_EQ(secondary_grid.get_item_count(kItemTypeId_1x1), 0);
+
+  auto primary_result = primary_grid.add(checked_for_primary);
+  CASE_EXPECT_EQ(primary_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(primary_grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // 第二次 check 会使第一次结果的 operate_id 失效，只有最新结果能够执行。
+  auto stale_item = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
+  stale_item.mutable_item_basic()->mutable_position()->set_container_guid(kPrimaryContainerGuid);
+  ItemGridAddRequest stale_requests;
+  *stale_requests.Add() = stale_item;
+  auto stale_checked = primary_grid.check_add(config, std::move(stale_requests));
+  CASE_EXPECT_EQ(stale_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  auto latest_item = make_grid_item(kItemTypeId_1x1, 1, 2, 0);
+  latest_item.mutable_item_basic()->mutable_position()->set_container_guid(kPrimaryContainerGuid);
+  ItemGridAddRequest latest_requests;
+  *latest_requests.Add() = latest_item;
+  auto latest_checked = primary_grid.check_add(config, std::move(latest_requests));
+  CASE_EXPECT_EQ(latest_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  auto stale_result = primary_grid.add(stale_checked);
+  CASE_EXPECT_EQ(stale_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  CASE_EXPECT_FALSE(stale_checked.apply);
+  CASE_EXPECT_EQ(primary_grid.get_item_count(kItemTypeId_1x1), 1);
+
+  auto latest_result = primary_grid.add(latest_checked);
+  CASE_EXPECT_EQ(latest_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(primary_grid.get_item_count(kItemTypeId_1x1), 2);
+  verify_grid_dump(primary_grid);
+}
+
+CASE_TEST(ItemGridAlgorithm, check_item_position_hook) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  init_test_grid(grid);
+  auto config = make_test_config_group();
+  auto& state = grid.hook_state();
+
+  // 准备一个合法条目，供 sub、move 和 replace 状态不变断言使用。
+  ItemGridAddRequest setup_requests;
+  *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  auto setup_checked = grid.check_add(config, std::move(setup_requests));
+  CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  // check_add
+  state.rejected_position_x = 1;
+  state.reset_call_counts();
+  ItemGridAddRequest add_requests;
+  *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
+  auto add_checked = grid.check_add(config, std::move(add_requests));
+  CASE_EXPECT_EQ(add_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.check_item_position_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // check_sub
+  state.rejected_position_x = 0;
+  state.reset_call_counts();
+  ItemGridSubRequest sub_requests;
+  *sub_requests.Add() = make_sub_basic(kItemTypeId_1x1, 1, 0, 0);
+  auto sub_checked = grid.check_sub(config, std::move(sub_requests));
+  CASE_EXPECT_EQ(sub_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.check_item_position_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  PROJECT_NAMESPACE_ID::DItemGridPosition source_position;
+  source_position.mutable_user_inventory()->set_x(0);
+  source_position.mutable_user_inventory()->set_y(0);
+  auto source_entry = grid.get(source_position);
+  CASE_EXPECT_TRUE(source_entry != nullptr);
+  if (!source_entry) {
+    return;
+  }
+
+  // check_move 的源位置
+  state.rejected_position_x = 0;
+  state.reset_call_counts();
+  ItemGridMoveRequest source_move;
+  source_move.move_sub_entrys.push_back({source_entry, 1});
+  source_move.move_add_entrys.push_back({source_entry, make_inventory_target(1, 0), 1});
+  auto source_move_checked = grid.check_move(config, std::move(source_move));
+  CASE_EXPECT_EQ(source_move_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.check_item_position_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // check_move 的目标位置
+  state.rejected_position_x = 1;
+  state.reset_call_counts();
+  ItemGridMoveRequest target_move;
+  target_move.move_sub_entrys.push_back({source_entry, 1});
+  target_move.move_add_entrys.push_back({source_entry, make_inventory_target(1, 0), 1});
+  auto target_move_checked = grid.check_move(config, std::move(target_move));
+  CASE_EXPECT_EQ(target_move_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.check_item_position_calls, 2);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // check_replace 经由 clone 的 check_add 也必须保留位置钩子。
+  state.rejected_position_x = 2;
+  state.reset_call_counts();
+  ItemGridReplaceRequest replace_requests;
+  *replace_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 2, 0);
+  auto replace_checked = grid.check_replace(config, std::move(replace_requests));
+  CASE_EXPECT_EQ(replace_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.check_item_position_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // load
+  state.rejected_position_x = 3;
+  state.reset_call_counts();
+  CASE_EXPECT_FALSE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 3, 0)));
+  CASE_EXPECT_EQ(state.check_item_position_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+}
+
+CASE_TEST(ItemGridAlgorithm, on_check_add_hook) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  init_test_grid(grid);
+  auto config = make_test_config_group();
+  auto& state = grid.hook_state();
+
+  // check_add
+  state.reject_all_add = true;
+  ItemGridAddRequest add_requests;
+  *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  auto add_checked = grid.check_add(config, std::move(add_requests));
+  CASE_EXPECT_EQ(add_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.on_check_add_calls, 1);
+  CASE_EXPECT_TRUE(grid.is_empty());
+
+  // check_replace 经由 clone 调用 on_check_add。
+  state.reset_call_counts();
+  ItemGridReplaceRequest replace_requests;
+  *replace_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  auto replace_checked = grid.check_replace(config, std::move(replace_requests));
+  CASE_EXPECT_EQ(replace_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.on_check_add_calls, 1);
+  CASE_EXPECT_TRUE(grid.is_empty());
+
+  // find_positions_for_basics 使用 on_check_add 过滤候选位置并继续扫描。
+  state.reject_all_add = false;
+  state.rejected_add_position_x = 0;
+  state.reset_call_counts();
+  std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kItemTypeId_1x1, 1)};
+  std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
+  CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, positions));
+  CASE_EXPECT_EQ(positions.size(), static_cast<size_t>(1));
+  CASE_EXPECT_EQ(positions[0].user_inventory().x(), 1);
+  CASE_EXPECT_TRUE(state.on_check_add_calls >= 2);
+}
+
+CASE_TEST(ItemGridAlgorithm, on_check_sub_hook) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  init_test_grid(grid);
+  auto config = make_test_config_group();
+  auto& state = grid.hook_state();
+
+  ItemGridAddRequest setup_requests;
+  *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 2, 0, 0);
+  auto setup_checked = grid.check_add(config, std::move(setup_requests));
+  CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  state.reject_sub = true;
+  state.reset_call_counts();
+  ItemGridSubRequest sub_requests;
+  *sub_requests.Add() = make_sub_basic(kItemTypeId_1x1, 1, 0, 0);
+  auto sub_checked = grid.check_sub(config, std::move(sub_requests));
+  CASE_EXPECT_EQ(sub_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.on_check_sub_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 2);
+}
+
+CASE_TEST(ItemGridAlgorithm, on_check_item_count_limit_hook) {
+  auto grid_ptr = atfw::util::memory::make_strong_rc<HookTestItemGridAlgorithm>();
+  auto& grid = *grid_ptr;
+  init_test_grid(grid);
+  auto config = make_test_config_group();
+  auto& state = grid.hook_state();
+
+  ItemGridAddRequest setup_requests;
+  *setup_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  auto setup_checked = grid.check_add(config, std::move(setup_requests));
+  CASE_EXPECT_EQ(setup_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(grid.add(setup_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  state.reject_count_limit = true;
+
+  // check_add
+  state.reset_call_counts();
+  ItemGridAddRequest add_requests;
+  *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 1, 0);
+  auto add_checked = grid.check_add(config, std::move(add_requests));
+  CASE_EXPECT_EQ(add_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // check_replace 经由 clone 调用数量上限钩子。
+  state.reset_call_counts();
+  ItemGridReplaceRequest replace_requests;
+  *replace_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 2, 0);
+  auto replace_checked = grid.check_replace(config, std::move(replace_requests));
+  CASE_EXPECT_EQ(replace_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // load
+  state.reset_call_counts();
+  CASE_EXPECT_FALSE(grid.load(config, make_grid_item(kItemTypeId_1x1, 1, 3, 0)));
+  CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+
+  // check_move 的 add-only 路径代表外部 Grid 移入，必须执行数量上限钩子。
+  auto source_grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+  auto& source_grid = *source_grid_ptr;
+  init_test_grid(source_grid);
+  ItemGridAddRequest source_requests;
+  *source_requests.Add() = make_grid_item(kItemTypeId_1x1, 1, 0, 0);
+  auto source_checked = source_grid.check_add(config, std::move(source_requests));
+  CASE_EXPECT_EQ(source_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(source_grid.add(source_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  PROJECT_NAMESPACE_ID::DItemGridPosition source_position;
+  source_position.mutable_user_inventory()->set_x(0);
+  source_position.mutable_user_inventory()->set_y(0);
+  auto source_entry = source_grid.get(source_position);
+  CASE_EXPECT_TRUE(source_entry != nullptr);
+  if (!source_entry) {
+    return;
+  }
+
+  state.reset_call_counts();
+  ItemGridMoveRequest move_requests;
+  move_requests.move_add_entrys.push_back({source_entry, make_inventory_target(1, 0), 1});
+  auto move_checked = grid.check_move(config, std::move(move_requests));
+  CASE_EXPECT_EQ(move_checked.result.error_code, kHookRejectedError);
+  CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
+  CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
+  CASE_EXPECT_EQ(source_grid.get_item_count(kItemTypeId_1x1), 1);
 }

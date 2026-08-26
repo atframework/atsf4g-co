@@ -16,10 +16,12 @@ ItemGridAlgorithm::ItemGridAlgorithm() = default;
 ItemGridAlgorithm::~ItemGridAlgorithm() = default;
 
 void ItemGridAlgorithm::init(int32_t row_size, int32_t column_size,
-                             PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type) {
+                             PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
+                             int64_t container_guid) {
   row_size_ = row_size;
   column_size_ = column_size;
   position_type_ = position_type;
+  container_guid_ = container_guid;
 
   switch (position_type) {
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
@@ -63,6 +65,16 @@ ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checke
   }
   if (checked_request.apply) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("add called with apply=true, should not happen");
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  if (checked_request.container_guid != container_guid_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with container_guid={} but grid container_guid={} mismatch",
+                                 checked_request.container_guid, container_guid_);
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  if (checked_request.operate_id != operate_id_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with operate_id={} but grid operate_id={} mismatch",
+                                 checked_request.operate_id, operate_id_);
     return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
   }
   checked_request.apply = true;
@@ -152,7 +164,7 @@ ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checke
 ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     ItemGridAddRequest&& in_requests) const {
-  ItemGridAddCheckedRequest checked_request{config_group, std::move(in_requests)};
+  ItemGridAddCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
   auto& result = checked_request.result;
 
   std::vector<std::vector<bool>> tmp_grid_flag;
@@ -183,6 +195,17 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_add failed[{}]: invalid item type={} count={} guid={}, error={} ({})", i,
                                      type_id, add_count, guid, result.error_code,
                                      PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
+    if (item_basic.position().container_guid() != container_guid_) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_index = static_cast<int32_t>(i);
+      ITEM_ALGORITHM_LOG_WARNING_FMT(
+          "check_add failed[{}]: container guid mismatch, expected={} actual={} type={} count={} guid={}, "
+          "error={} ({})",
+          i, container_guid_, item_basic.position().container_guid(), type_id, add_count, guid, result.error_code,
+          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
@@ -373,7 +396,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 ItemGridReplaceCheckedRequest ItemGridAlgorithm::check_replace(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     ItemGridReplaceRequest&& in_requests) const {
-  ItemGridReplaceCheckedRequest checked_request{config_group, std::move(in_requests)};
+  ItemGridReplaceCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
 
   // Replace 语义 = 全部移除现有条目 + 放入新列表。
   // 因此 check 阶段新建一个同配置的空 Grid, 直接复用 check_add 对新列表做整体校验
@@ -406,6 +429,16 @@ ItemGridOperationResult ItemGridAlgorithm::replace(ItemGridReplaceCheckedRequest
     ITEM_ALGORITHM_LOG_ERROR_FMT("replace called with apply=true, should not happen");
     return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
   }
+  if (checked_request.container_guid != container_guid_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with container_guid={} but grid container_guid={} mismatch",
+                                 checked_request.container_guid, container_guid_);
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  if (checked_request.operate_id != operate_id_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with operate_id={} but grid operate_id={} mismatch",
+                                 checked_request.operate_id, operate_id_);
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
   checked_request.apply = true;
 
   ItemGridOperationResult result;
@@ -425,7 +458,8 @@ ItemGridOperationResult ItemGridAlgorithm::replace(ItemGridReplaceCheckedRequest
   }
 
   if (!sub_requests.empty()) {
-    ItemGridSubCheckedRequest sub_checked{checked_request.config_group, std::move(sub_requests)};
+    ItemGridSubCheckedRequest sub_checked{checked_request.config_group, std::move(sub_requests), container_guid_,
+                                          operate_id_};
     sub(sub_checked, ItemGridOperationReason::kReplaceSub);
   }
 
@@ -433,7 +467,8 @@ ItemGridOperationResult ItemGridAlgorithm::replace(ItemGridReplaceCheckedRequest
   // Phase 2: 使用 Add 接口放入新列表 (操作原因 kReplaceAdd)
   // ============================================================
   if (!checked_request.requests.empty()) {
-    ItemGridAddCheckedRequest add_checked{checked_request.config_group, std::move(checked_request.requests)};
+    ItemGridAddCheckedRequest add_checked{checked_request.config_group, std::move(checked_request.requests),
+                                          container_guid_, operate_id_};
     add(add_checked, ItemGridOperationReason::kReplaceAdd);
   }
 
@@ -452,6 +487,16 @@ ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubCheckedRequest& checke
   }
   if (checked_request.apply) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("sub called with apply=true, should not happen");
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  if (checked_request.container_guid != container_guid_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with container_guid={} but grid container_guid={} mismatch",
+                                 checked_request.container_guid, container_guid_);
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  if (checked_request.operate_id != operate_id_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with operate_id={} but grid operate_id={} mismatch",
+                                 checked_request.operate_id, operate_id_);
     return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
   }
   checked_request.apply = true;
@@ -512,7 +557,7 @@ ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubCheckedRequest& checke
 ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     ItemGridSubRequest&& in_requests) const {
-  ItemGridSubCheckedRequest checked_request{config_group, std::move(in_requests)};
+  ItemGridSubCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
   auto& result = checked_request.result;
 
   std::unordered_set<int64_t> guid_sub;
@@ -531,6 +576,17 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
       ITEM_ALGORITHM_LOG_ERROR_FMT("check_sub failed[{}]: invalid item type={} count={} guid={}, error={} ({})", i,
                                    type_id, sub_count, guid, result.error_code,
                                    PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+      return checked_request;
+    }
+
+    if (req.position().container_guid() != container_guid_) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_index = static_cast<int32_t>(i);
+      ITEM_ALGORITHM_LOG_WARNING_FMT(
+          "check_sub failed[{}]: container guid mismatch, expected={} actual={} type={} count={} guid={}, "
+          "error={} ({})",
+          i, container_guid_, req.position().container_guid(), type_id, sub_count, guid, result.error_code,
+          PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
       return checked_request;
     }
 
@@ -708,6 +764,16 @@ ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveCheckedRequest& chec
     ITEM_ALGORITHM_LOG_ERROR_FMT("move called with apply=true, should not happen");
     return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
   }
+  if (checked_request.container_guid != container_guid_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with container_guid={} but grid container_guid={} mismatch",
+                                 checked_request.container_guid, container_guid_);
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
+  if (checked_request.operate_id != operate_id_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("add called with operate_id={} but grid operate_id={} mismatch",
+                                 checked_request.operate_id, operate_id_);
+    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM};
+  }
   checked_request.apply = true;
 
   ItemGridOperationResult result;
@@ -824,6 +890,15 @@ bool ItemGridAlgorithm::check_move_request(
       return false;
     }
 
+    if (sub_req.entry->item_instance().item_basic().position().container_guid() != container_guid_) {
+      error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_WARNING_FMT(
+          "check_move failed: source container guid mismatch, expected={} actual={} entry_id={}, error={} ({})",
+          container_guid_, sub_req.entry->item_instance().item_basic().position().container_guid(),
+          sub_req.entry->entry_id(), error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+      return false;
+    }
+
     if (!check_item_position(sub_req.entry->item_instance().item_basic().position())) {
       error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
       ITEM_ALGORITHM_LOG_ERROR_FMT("check_move failed: invalid item position entry_id={}, error={} ({})",
@@ -894,6 +969,15 @@ bool ItemGridAlgorithm::check_move_request(
       ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: duplicate move_add entry_id={}, error={} ({})",
                                      add_req.entry->entry_id(), error_code,
                                      PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
+      return false;
+    }
+
+    if (add_req.goal_position.container_guid() != container_guid_) {
+      error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      ITEM_ALGORITHM_LOG_WARNING_FMT(
+          "check_move failed: container guid mismatch, expected={} actual={} entry_id={}, error={} ({})",
+          container_guid_, add_req.goal_position.container_guid(), add_req.entry->entry_id(), error_code,
+          PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
       return false;
     }
 
@@ -1005,7 +1089,7 @@ bool ItemGridAlgorithm::check_move_request(
 ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     ItemGridMoveRequest&& in_request) const {
-  ItemGridMoveCheckedRequest checked_request{config_group, std::move(in_request)};
+  ItemGridMoveCheckedRequest checked_request{config_group, std::move(in_request), container_guid_, ++operate_id_};
   auto& error_code = checked_request.result.error_code;
 
   if (checked_request.request.move_sub_entrys.empty() && checked_request.request.move_add_entrys.empty()) {
@@ -1143,7 +1227,8 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
                          op.entry->item_instance().item_basic().guid() != 0, op.accumulation_limit};
   }
 
-  ITEM_ALGORITHM_LOG_DEBUG_FMT("check_move pass, {} sub ops, {} add ops", checked_request.request.move_sub_entrys.size(),
+  ITEM_ALGORITHM_LOG_DEBUG_FMT("check_move pass, {} sub ops, {} add ops",
+                               checked_request.request.move_sub_entrys.size(),
                                checked_request.request.move_add_entrys.size());
   return checked_request;
 }
@@ -1158,6 +1243,18 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
   // 基础合法性校验
   if (!is_item_valid(config_group, item_basic)) {
     ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: invalid item type={} count={} guid={}", type_id, add_count, guid);
+    return false;
+  }
+
+  if (item_basic.position().container_guid() != container_guid_) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: invalid item position container_guid={} type={} count={} guid={}",
+                                   item_basic.position().container_guid(), type_id, add_count, guid);
+    return false;
+  }
+
+  if (!check_item_position(item_basic.position())) {
+    ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: invalid item position type={} count={} guid={}", type_id, add_count,
+                                   guid);
     return false;
   }
 
@@ -1557,6 +1654,8 @@ int32_t ItemGridAlgorithm::get_row_size() const { return row_size_; }
 
 int32_t ItemGridAlgorithm::get_column_size() const { return column_size_; }
 
+int64_t ItemGridAlgorithm::get_container_guid() const { return container_guid_; }
+
 // ============================================================
 // 位置转换辅助
 // ============================================================
@@ -1797,7 +1896,7 @@ item_grid_algorithm_ptr_t ItemGridAlgorithm::create_empty_clone() const {
 }
 
 void ItemGridAlgorithm::copy_empty_config_to(ItemGridAlgorithm& out) const {
-  out.init(row_size_, column_size_, position_type_);
+  out.init(row_size_, column_size_, position_type_, container_guid_);
 }
 
 // ============================================================

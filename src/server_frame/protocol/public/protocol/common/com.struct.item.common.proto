@@ -51,6 +51,8 @@ message DItemPosition {
   // Container guid
   int64 container_guid = 1;
   DItemGridPosition grid_position = 2;
+  // 所属沙箱Scope（赛季信息等）
+  DIsolationScope scope = 3;
 }
 
 message DItemBasic {
@@ -58,8 +60,6 @@ message DItemBasic {
   int64 count = 2;
   int64 guid = 3;  // 唯一ID(如果有)
   DItemPosition position = 4;
-  // 所属沙箱Scope（赛季信息等）
-  DIsolationScope scope = 5;
 }
 
 message DItemData {}

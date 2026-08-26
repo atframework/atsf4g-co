@@ -146,11 +146,16 @@ struct ITEM_ALGORITHM_API ItemGridAddCheckedRequest {
   ItemGridAddRequest requests;
   ItemGridOperationResult result;
   bool apply = false;
+  int64_t container_guid = 0;
+  int64_t operate_id = 0;
 
   ItemGridAddCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridAddRequest&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
+      ItemGridAddRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id)
+      : config_group(in_config_group),
+        requests(std::move(in_requests)),
+        container_guid(in_container_guid),
+        operate_id(in_operate_id) {}
   ItemGridAddCheckedRequest(const ItemGridAddCheckedRequest&) = delete;
   ItemGridAddCheckedRequest& operator=(const ItemGridAddCheckedRequest&) = delete;
   ItemGridAddCheckedRequest(ItemGridAddCheckedRequest&&) = default;
@@ -162,11 +167,16 @@ struct ITEM_ALGORITHM_API ItemGridSubCheckedRequest {
   ItemGridSubRequest requests;
   ItemGridOperationResult result;
   bool apply = false;
+  int64_t container_guid = 0;
+  int64_t operate_id = 0;
 
   ItemGridSubCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridSubRequest&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
+      ItemGridSubRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id)
+      : config_group(in_config_group),
+        requests(std::move(in_requests)),
+        container_guid(in_container_guid),
+        operate_id(in_operate_id) {}
   ItemGridSubCheckedRequest(const ItemGridSubCheckedRequest&) = delete;
   ItemGridSubCheckedRequest& operator=(const ItemGridSubCheckedRequest&) = delete;
   ItemGridSubCheckedRequest(ItemGridSubCheckedRequest&&) = default;
@@ -178,11 +188,16 @@ struct ITEM_ALGORITHM_API ItemGridMoveCheckedRequest {
   ItemGridMoveRequest request;
   ItemGridOperationResult result;
   bool apply = false;
+  int64_t container_guid = 0;
+  int64_t operate_id = 0;
 
   ItemGridMoveCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridMoveRequest&& in_request)
-      : config_group(in_config_group), request(std::move(in_request)) {}
+      ItemGridMoveRequest&& in_request, int64_t in_container_guid, int64_t in_operate_id)
+      : config_group(in_config_group),
+        request(std::move(in_request)),
+        container_guid(in_container_guid),
+        operate_id(in_operate_id) {}
   ItemGridMoveCheckedRequest(const ItemGridMoveCheckedRequest&) = delete;
   ItemGridMoveCheckedRequest& operator=(const ItemGridMoveCheckedRequest&) = delete;
   ItemGridMoveCheckedRequest(ItemGridMoveCheckedRequest&&) = default;
@@ -194,11 +209,16 @@ struct ITEM_ALGORITHM_API ItemGridReplaceCheckedRequest {
   ItemGridReplaceRequest requests;
   ItemGridOperationResult result;
   bool apply = false;
+  int64_t container_guid = 0;
+  int64_t operate_id = 0;
 
   ItemGridReplaceCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridReplaceRequest&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
+      ItemGridReplaceRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id)
+      : config_group(in_config_group),
+        requests(std::move(in_requests)),
+        container_guid(in_container_guid),
+        operate_id(in_operate_id) {}
   ItemGridReplaceCheckedRequest(const ItemGridReplaceCheckedRequest&) = delete;
   ItemGridReplaceCheckedRequest& operator=(const ItemGridReplaceCheckedRequest&) = delete;
   ItemGridReplaceCheckedRequest(ItemGridReplaceCheckedRequest&&) = default;
