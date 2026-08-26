@@ -18,6 +18,7 @@ ItemGridAlgorithm::~ItemGridAlgorithm() = default;
 void ItemGridAlgorithm::init(ItemGridAlgorithmMode mode, int32_t row_size, int32_t column_size,
                              PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
                              int64_t container_guid) {
+  init_ = true;
   mode_ = mode;
   if (mode == ItemGridAlgorithmMode::kFiniteGrid) {
     row_size_ = row_size;
@@ -160,7 +161,12 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     ItemGridAddRequest&& in_requests) const {
   ItemGridAddCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
   auto& result = checked_request.result;
-
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_add called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
+    return checked_request;
+  }
   std::vector<std::vector<bool>> tmp_grid_flag;
   if (is_occupy_flag()) {
     tmp_grid_flag = occupy_grid_flag_;
@@ -391,7 +397,12 @@ ItemGridReplaceCheckedRequest ItemGridAlgorithm::check_replace(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     ItemGridReplaceRequest&& in_requests) const {
   ItemGridReplaceCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
-
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_replace called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
+    return checked_request;
+  }
   // Replace 语义 = 全部移除现有条目 + 放入新列表。
   // 因此 check 阶段新建一个同配置的空 Grid, 直接复用 check_add 对新列表做整体校验
   // (格子占用 / GUID 唯一 / 堆叠上限 / on_check_add 钩子 / 数量上限), 避免重复实现一套放入流程。
@@ -553,7 +564,12 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
     ItemGridSubRequest&& in_requests) const {
   ItemGridSubCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
   auto& result = checked_request.result;
-
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_sub called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
+    return checked_request;
+  }
   std::unordered_set<int64_t> guid_sub;
   std::unordered_map<int32_t, int64_t> type_sub_count;
   std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> position_sub_count;
@@ -1085,7 +1101,12 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     ItemGridMoveRequest&& in_request) const {
   ItemGridMoveCheckedRequest checked_request{config_group, std::move(in_request), container_guid_, ++operate_id_};
   auto& error_code = checked_request.result.error_code;
-
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_move called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
+    return checked_request;
+  }
   if (checked_request.request.move_sub_entrys.empty() && checked_request.request.move_add_entrys.empty()) {
     error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
     ITEM_ALGORITHM_LOG_WARNING_FMT("check_move failed: empty move request, error={} ({})", error_code,
@@ -1237,6 +1258,12 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
 
 bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                              const PROJECT_NAMESPACE_ID::DItemInstance& item_instance) {
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_move called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    return false;
+  }
+
   const auto& item_basic = item_instance.item_basic();
   int32_t type_id = item_basic.type_id();
   int64_t add_count = item_basic.count();
@@ -1402,6 +1429,12 @@ void ItemGridAlgorithm::apply_entries(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     const ::google::protobuf::RepeatedField<uint64_t>& remove_entry_ids,
     const ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstanceEntry>& update_entries) {
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("apply_entries called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    return;
+  }
+
   // ============================================================
   // Phase 1: 按 entry_id 删除
   // ============================================================
@@ -1716,6 +1749,12 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
     const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
     std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition>& out_positions) const {
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("apply_entries called before init, container_guid={} operate_id={}", container_guid_,
+                                 operate_id_);
+    return false;
+  }
+
   out_positions.clear();
   out_positions.reserve(basics.size());
 

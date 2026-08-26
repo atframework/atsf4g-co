@@ -244,6 +244,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   void remove_entry_id_index(uint64_t entry_id);
 
  private:
+  bool init_ = false;
   ItemGridAlgorithmMode mode_;
   int64_t container_guid_ = 0;
   int32_t row_size_ = 0;
