@@ -568,7 +568,7 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
                    user_key.user_id(), user_key.zone_id());
         continue;
       }
-      if (!self_find) {
+      if (self_find) {
         *async_data.mutable_user_finish_result_self() = user_iter->second->finish_result_;
       } else {
         *async_data.add_user_finish_results() = user_iter->second->finish_result_.common_data();
