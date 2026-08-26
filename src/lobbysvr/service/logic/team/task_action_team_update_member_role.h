@@ -11,11 +11,12 @@
 #  define ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API ATFW_UTIL_SYMBOL_VISIBLE
 #endif
 
-class task_action_team_apply_join_team : public task_action_cs_rpc_base<atframework::shared::CSTeamApplyJoinTeamReq,
-                                                                        atframework::shared::SCTeamApplyJoinTeamRsp> {
+class task_action_team_update_member_role
+    : public task_action_cs_rpc_base<atframework::shared::CSTeamUpdateMemberRoleReq,
+                                     atframework::shared::SCTeamUpdateMemberRoleRsp> {
  public:
-  using base_type =
-      task_action_cs_rpc_base<atframework::shared::CSTeamApplyJoinTeamReq, atframework::shared::SCTeamApplyJoinTeamRsp>;
+  using base_type = task_action_cs_rpc_base<atframework::shared::CSTeamUpdateMemberRoleReq,
+                                            atframework::shared::SCTeamUpdateMemberRoleRsp>;
   using message_type = base_type::message_type;
   using msg_ref_type = base_type::msg_ref_type;
   using msg_cref_type = base_type::msg_cref_type;
@@ -25,9 +26,9 @@ class task_action_team_apply_join_team : public task_action_cs_rpc_base<atframew
   using task_action_cs_req_base::operator();
 
  public:
-  ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API explicit task_action_team_apply_join_team(
+  ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API explicit task_action_team_update_member_role(
       dispatcher_start_data_type&& param);
-  ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API ~task_action_team_apply_join_team() override;
+  ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API ~task_action_team_update_member_role() override;
 
   ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* name() const override;
 

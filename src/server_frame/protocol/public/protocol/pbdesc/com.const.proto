@@ -344,21 +344,19 @@ enum EnErrorCode {
                             [(error_code.description) = "不在队伍中"];
   EN_ERR_TEAM_ROOM_NOT_FOUND = -1202
                                [(error_code.description) = "队伍不存在"];
-  EN_ERR_TEAM_NOT_MASTER = -1203
-                           [(error_code.description) = "当前节点不是队伍主控节点"];
-  EN_ERR_TEAM_MEMBER_NOT_FOUND = -1204
+  EN_ERR_TEAM_MEMBER_NOT_FOUND = -1203
                                  [(error_code.description) = "队伍成员不存在"];
-  EN_ERR_TEAM_DESTROYED = -1205
+  EN_ERR_TEAM_DESTROYED = -1204
                           [(error_code.description) = "队伍已解散"];
-  EN_ERR_TEAM_ALREADY_IN_TEAM = -1206
+  EN_ERR_TEAM_ALREADY_IN_TEAM = -12065
                                 [(error_code.description) = "已在队伍中"];
-  EN_ERR_TEAM_INVITATION_NOT_FOUND = -1207
+  EN_ERR_TEAM_INVITATION_NOT_FOUND = -1206
                                      [(error_code.description) = "组队邀请不存在"];
-  EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND = -1208
+  EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND = -1207
                                        [(error_code.description) = "组队加入请求不存在"];
-  EN_ERR_TEAM_NO_PERMISSION = -1209
+  EN_ERR_TEAM_NO_PERMISSION = -1208
                               [(error_code.description) = "没有组队操作权限"];
-  EN_ERR_TEAM_CONDITION_NOT_MATCH = -1210
+  EN_ERR_TEAM_CONDITION_NOT_MATCH = -1209
                                      [(error_code.description) = "组队数据条件检查未通过"];
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

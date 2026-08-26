@@ -258,6 +258,23 @@ bool user_team_manager::is_dirty() const { return is_dirty_; }
 
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
 
+user_team::ptr_t user_team_manager::get_team_by_team_key(const atfw::team::DTeamKey& team_key) const noexcept {
+  auto iter = team_index_.find(team_key);
+  if (iter != team_index_.end() && iter->second) {
+    return iter->second;
+  }
+
+  return nullptr;
+}
+
+user_team::ptr_t user_team_manager::get_team_by_team_type(PROJECT_NAMESPACE_ID::EnTeamType type) const noexcept {
+  auto iter = team_group_.find(static_cast<uint32_t>(type));
+  if (iter != team_group_.end() && iter->second.current) {
+    return iter->second.current;
+  }
+  return nullptr;
+}
+
 void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
                                     atfw::team::EnTeamExitReason exit_reason) {
   remove_team(ctx, team_key, true, exit_reason);

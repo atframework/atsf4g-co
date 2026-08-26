@@ -70,6 +70,10 @@ class user_team_manager {
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
 
+  user_team::ptr_t get_team_by_team_key(const atfw::team::DTeamKey& team_key) const noexcept;
+
+  user_team::ptr_t get_team_by_team_type(PROJECT_NAMESPACE_ID::EnTeamType type) const noexcept;
+
   void remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, atfw::team::EnTeamExitReason exit_reason);
 
  private:

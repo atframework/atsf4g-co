@@ -229,83 +229,87 @@ service LobbysvrClientService {
   };
 
   // ================ 组队RPC ================
-  rpc team_send_invitation(atframework.team.CSTeamSendInvitationReq)
-      returns (atframework.team.SCTeamSendInvitationRsp) {
+  rpc team_send_invitation(CSTeamSendInvitationReq) returns (SCTeamSendInvitationRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "发送组队邀请"
     };
   }
 
-  rpc team_approve_invitation(atframework.team.CSTeamApproveInvitationReq)
-      returns (atframework.team.SCTeamApproveInvitationRsp) {
+  rpc team_approve_invitation(CSTeamApproveInvitationReq) returns (SCTeamApproveInvitationRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "同意组队邀请"
     };
   }
 
-  rpc team_reject_invitation(atframework.team.CSTeamRejectInvitationReq)
-      returns (atframework.team.SCTeamRejectInvitationRsp) {
+  rpc team_reject_invitation(CSTeamRejectInvitationReq) returns (SCTeamRejectInvitationRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "拒绝组队邀请"
     };
   }
 
-  rpc team_exit(atframework.team.CSTeamExitReq) returns (atframework.team.SCTeamExitRsp) {
+  rpc team_exit(CSTeamExitReq) returns (SCTeamExitRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "退出组队"
     };
   }
 
-  rpc team_remove_member(atframework.team.CSTeamRemoveMemberReq) returns (atframework.team.SCTeamRemoveMemberRsp) {
+  rpc team_remove_member(CSTeamRemoveMemberReq) returns (SCTeamRemoveMemberRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "移除组队成员"
     };
   }
 
-  rpc team_update_member_data(atframework.team.CSTeamUpdateMemberDataReq)
-      returns (atframework.team.SCTeamUpdateMemberDataRsp) {
+  rpc team_update_member_data(CSTeamUpdateMemberDataReq)
+      returns (SCTeamUpdateMemberDataRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "更新组队成员数据"
     };
   }
 
-  rpc team_update_team_data(atframework.team.CSTeamUpdateTeamDataReq)
-      returns (atframework.team.SCTeamUpdateTeamDataRsp) {
+  rpc team_update_member_role(CSTeamUpdateMemberRoleReq) returns (SCTeamUpdateMemberRoleRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "team"
+      api_name: "更新组队成员角色"
+    };
+  }
+
+  rpc team_update_team_data(CSTeamUpdateTeamDataReq)
+      returns (SCTeamUpdateTeamDataRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "更新组队数据"
     };
   }
 
-  rpc team_transfer_captain(atframework.team.CSTeamTransferCaptainReq)
-      returns (atframework.team.SCTeamTransferCaptainRsp) {
+  rpc team_transfer_captain(CSTeamTransferCaptainReq)
+      returns (SCTeamTransferCaptainRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "转移组队队长"
     };
   }
 
-  rpc team_apply_join_team(atframework.team.CSTeamApplyJoinTeamReq) returns (atframework.team.SCTeamApplyJoinTeamRsp) {
+  rpc team_apply_join_team(CSTeamApplyJoinTeamReq) returns (SCTeamApplyJoinTeamRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "申请加入组队"
     };
   }
 
-  rpc team_accept_apply(atframework.team.CSTeamAcceptApplyReq) returns (atframework.team.SCTeamAcceptApplyRsp) {
+  rpc team_accept_apply(CSTeamAcceptApplyReq) returns (SCTeamAcceptApplyRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "同意加入组队申请"
     };
   }
 
-  rpc team_reject_apply(atframework.team.CSTeamRejectApplyReq) returns (atframework.team.SCTeamRejectApplyRsp) {
+  rpc team_reject_apply(CSTeamRejectApplyReq) returns (SCTeamRejectApplyRsp) {
     option (atframework.rpc_options) = {
       module_name: "team"
       api_name: "拒绝加入组队申请"

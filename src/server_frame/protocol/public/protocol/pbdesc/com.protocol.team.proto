@@ -61,6 +61,15 @@ message CSTeamUpdateMemberDataReq {
 
 message SCTeamUpdateMemberDataRsp {}
 
+message CSTeamUpdateMemberRoleReq {
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+
+  atframework.team.EnTeamPermissionRole role = 4;
+}
+
+message SCTeamUpdateMemberRoleRsp {}
+
 message CSTeamUpdateTeamDataReq {
   atframework.team.DTeamKey team_key = 1;
   EnTeamSharedModuleType module_type = 2;
