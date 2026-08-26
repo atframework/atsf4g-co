@@ -495,7 +495,7 @@ bool mq_channel::clear_private_data() noexcept {
 
 void mq_channel::reset_private_data_sequence() noexcept { private_data_sequence_ = get_last_message_sequence(); }
 
-rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
+rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_create) {
   if (is_io_task_running()) {
     auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
     if (ret != 0) {
@@ -508,6 +508,11 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
   }
 
   if (configure_.memory_only()) {
+    // 非 auto_create 的纯内存频道不允许隐式创建：本地未创建即不存在，返回 not found 由调用方决定如何上报
+    if (!auto_create) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
+
     upgrade_to_writable();
 
     if (nullptr == get_shared_wal_object()->get_last_removed_key()) {
@@ -518,11 +523,11 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
 
   // Writable节点从DB拉取
   auto self_ptr = shared_from_this();
-  auto invoke_result =
-      rpc::async_invoke(ctx, "mq_channel.writable_init", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
+  auto invoke_result = rpc::async_invoke(
+      ctx, "mq_channel.writable_init", [self_ptr, auto_create](rpc::context& child_ctx) -> rpc::result_code_type {
         FCTXLOGINFO(child_ctx, "create_init mq channel {}", self_ptr->get_channel_id());
 
-        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx));
+        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->load_from_db(child_ctx, auto_create));
 
         if (task_type_trait::get_task_id(self_ptr->io_task_) == child_ctx.get_task_context().task_id) {
           task_type_trait::reset_task(self_ptr->io_task_);
@@ -565,7 +570,7 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx) {
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t readonly_server_index) {
+rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t readonly_server_index, bool auto_create) {
   if (is_io_task_running()) {
     auto ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx));
     if (ret != 0) {
@@ -597,9 +602,9 @@ rpc::result_code_type mq_channel::readonly_init(rpc::context& ctx, uint64_t read
                                              dtmq_proxysvr_cfg.channel_initialize_subscribe_timepoint());
 
   auto self_ptr = shared_from_this();
-  auto invoke_result =
-      rpc::async_invoke(ctx, "mq_channel.readonly_init", [self_ptr](rpc::context& child_ctx) -> rpc::result_code_type {
-        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->send_subscribe_to_writable(child_ctx));
+  auto invoke_result = rpc::async_invoke(
+      ctx, "mq_channel.readonly_init", [self_ptr, auto_create](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto ret = RPC_AWAIT_CODE_RESULT(self_ptr->send_subscribe_to_writable(child_ctx, auto_create));
 
         self_ptr->last_result_code_ = ret;
 
@@ -1050,7 +1055,8 @@ bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChann
   return false;
 }
 
-bool mq_channel::should_be_readonly(const replicate_index_set* ATFW_UTIL_MACRO_NULLABLE& readonly_replicate_index_set) {
+bool mq_channel::should_be_readonly(const replicate_index_set * ATFW_UTIL_MACRO_NULLABLE &
+                                    readonly_replicate_index_set) {
   if (server_distribution_etcd_revision_ < mq_channel_manager::me()->get_latest_server_etcd_revision()) {
     recalculate_etcd_cache();
   }
@@ -1667,11 +1673,15 @@ void mq_channel::ensure_recreate_after_destroyed(rpc::context& ctx) {
   }
 }
 
-rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
+rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx, bool auto_create) {
   auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, get_channel_id(), *record));
   if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
     FCTXLOGINFO(ctx, "rpc::db::dtmq_channel_record::get_all mq channel:{} record not found", get_channel_id());
+    // 非 auto_create 不允许隐式创建新频道，记录不存在即频道不存在
+    if (!auto_create) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
     ret = 0;
   }
 
@@ -1679,6 +1689,10 @@ rpc::result_code_type mq_channel::load_from_db(rpc::context& ctx) {
   if (record->channel_metadata().destroy_timepoint().seconds() > 0 &&
       atfw::util::time::time_utility::now() >=
           protobuf_to_system_clock(record->channel_metadata().destroy_timepoint())) {
+    // 非 auto_create 不允许隐式重新创建：已销毁且已过期的频道视为不存在
+    if (!auto_create) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
     // 失效重新创建的话需要清除掉TTL，不然会导致被删除
     need_remove_ttl_ = true;
     record->Clear();
@@ -1785,7 +1799,7 @@ rpc::result_code_type mq_channel::await_send_subscribe_to_writable(rpc::context&
   RPC_RETURN_CODE(0);
 }
 
-rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) {
+rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx, bool auto_create) {
   uint64_t dtmq_proxysvr_id = get_ready_distribution_writable_server_id();
   if (dtmq_proxysvr_id == 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
@@ -1800,6 +1814,8 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   }
 
   protobuf_copy_message(*channel_data->mutable_channel_key(), channel_key_);
+  // 透传创建许可：非 auto_create 的订阅不允许 writable 节点隐式创建频道
+  channel_data->set_auto_create_channel(auto_create);
 
   if (is_writable()) {
     RPC_RETURN_CODE(0);
@@ -1849,6 +1865,15 @@ rpc::result_code_type mq_channel::send_subscribe_to_writable(rpc::context& ctx) 
   // 不需要再模拟删除了，删除频道的消息和其他消息并无不同会正常下发
   if (ret >= 0) {
     update_last_writable_notify_time();
+
+    // writable 节点明确回复频道不存在（非 auto_create 不允许隐式创建），直接向上传播 not found
+    for (const auto& not_found_channel_id : rsp_body->not_found_channel_ids()) {
+      if (not_found_channel_id == channel_key_.channel_id()) {
+        FCTXLOGINFO(ctx, "send_subscribe_to_writable {} : channel not found on writable node {:#x}",
+                    channel_key_.channel_id(), dtmq_proxysvr_id);
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+      }
+    }
   }
   RPC_RETURN_CODE(ret);
 }

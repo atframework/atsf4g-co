@@ -197,6 +197,7 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
     kRecentlyHeartbeatFailure = 4,
     kInCallbackReceiveEvent = 5,
     kInCallbackLoadSnapshot = 6,
+    kDestroyNotified = 7,
     kMax,
   };
 
@@ -358,7 +359,10 @@ class ATFW_UTIL_SYMBOL_LOCAL shared_subscriber
 
   void set_ready(rpc::context& ctx);
 
-  void set_destroyed(rpc::context& ctx, int64_t log_sequence, std::chrono::system_clock::time_point destroy_time);
+  // force_notify: 服务器回复找不到频道的虚拟删除事件时使用。非 auto_create 的订阅即使从未 ready
+  // 也要触发一次销毁回调，以便监听者清理本地数据（例如恢复一个已经失效的频道）
+  void set_destroyed(rpc::context& ctx, int64_t log_sequence, std::chrono::system_clock::time_point destroy_time,
+                     bool force_notify = false);
 
   void update_custom_data(rpc::context& ctx, int64_t sequence, const google::protobuf::Any& custom_data);
 
@@ -2037,8 +2041,11 @@ static int32_t internal_subscriber_manager_do_send_heartbeat(rpc::context& ctx) 
                     continue;
                   }
                   // 虚拟删除事件通知，以便触发监听者的销毁回调
+                  // 非 auto_create 的订阅即使从未 ready 也要触发一次（服务器明确回复频道不存在，
+                  // 例如恢复一个已经失效的频道），auto_create 的订阅保持原有行为等待服务器创建
                   iter->second->set_destroyed(child_ctx, iter->second->get_last_message_sequence(),
-                                              std::chrono::system_clock::now());
+                                              std::chrono::system_clock::now(),
+                                              !iter->second->should_auto_create_channel());
                 }
               });
         } while (false);
@@ -3081,6 +3088,8 @@ void shared_subscriber::set_ready(rpc::context& ctx) {
     return;
   }
   set_flag(subscriber_flag::kReady, true);
+  // ready 后允许下一次销毁事件再次通知
+  set_flag(subscriber_flag::kDestroyNotified, false);
 
   foreach_registered_client_subscriber([&ctx](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_ready();
@@ -3091,7 +3100,7 @@ void shared_subscriber::set_ready(rpc::context& ctx) {
 }
 
 void shared_subscriber::set_destroyed(rpc::context& ctx, int64_t log_sequence,
-                                      std::chrono::system_clock::time_point destroy_time) {
+                                      std::chrono::system_clock::time_point destroy_time, bool force_notify) {
   // 合并销毁事件，取最新的。传入的 log_sequence
   // 有可能是本地占位生成的，如果后续收到同sequence的真实销毁事件，destroy_time 也要更新
   if (log_sequence >= destroy_sequence_) {
@@ -3099,10 +3108,24 @@ void shared_subscriber::set_destroyed(rpc::context& ctx, int64_t log_sequence,
     destroy_timepoint_ = destroy_time;
   }
 
-  if (!is_ready()) {
+  if (is_ready()) {
+    set_flag(subscriber_flag::kReady, false);
+    set_flag(subscriber_flag::kDestroyNotified, true);
+
+    foreach_registered_client_subscriber([&ctx, this](client_subscriber& client) {
+      const auto& fn = client.get_event_callback_on_destroyed();
+      if (fn) {
+        fn(ctx, client.shared_from_this(), destroy_sequence_, destroy_timepoint_);
+      }
+    });
     return;
   }
-  set_flag(subscriber_flag::kReady, false);
+
+  // 未 ready 的订阅者只在虚拟删除事件（服务器找不到频道）时通知一次，避免每次心跳回包重复触发
+  if (!force_notify || check_flag(subscriber_flag::kDestroyNotified)) {
+    return;
+  }
+  set_flag(subscriber_flag::kDestroyNotified, true);
 
   foreach_registered_client_subscriber([&ctx, this](client_subscriber& client) {
     const auto& fn = client.get_event_callback_on_destroyed();

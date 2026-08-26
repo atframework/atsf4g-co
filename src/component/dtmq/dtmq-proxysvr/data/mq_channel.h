@@ -118,8 +118,11 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept { return lock_; }
   inline int64_t get_compact_stateful_sequence() const noexcept { return compact_stateful_sequence_; }
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type readonly_init(rpc::context& ctx, uint64_t readonly_server_index);
+  // auto_create=false 时不允许创建新频道：纯内存频道本地未创建或 DB 中无记录时返回
+  // EN_ERR_DTMQ_CHANNEL_NOT_FOUND，频道对象保留为临时缓存等待过期清理
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type writable_init(rpc::context& ctx, bool auto_create = true);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type readonly_init(rpc::context& ctx, uint64_t readonly_server_index,
+                                                                   bool auto_create = true);
 
   void merge_subscriber(
       rpc::context& ctx,
@@ -154,7 +157,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   inline atfw::util::memory::strong_rc_ptr<mq_channel_wal_client_type> get_wal_client() { return wal_client_; }
 
   static bool should_be_writable_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
-                                                  uint64_t& writable_server_id, mq_channel* ATFW_UTIL_MACRO_NULLABLE channel = nullptr);
+                                                  uint64_t& writable_server_id,
+                                                  mq_channel* ATFW_UTIL_MACRO_NULLABLE channel = nullptr);
   bool should_be_writable();
 
   static bool should_be_readonly_or_get_server_id(const atfw::dtmq::DChannelIdKey& channel_key,
@@ -193,7 +197,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   bool need_save_db() const noexcept;
 
   bool is_io_task_running() const noexcept;
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx, int32_t* ATFW_UTIL_MACRO_NULLABLE task_result = nullptr);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(
+      rpc::context& ctx, int32_t* ATFW_UTIL_MACRO_NULLABLE task_result = nullptr);
 
   bool is_io_task_too_many_continue_failed() const noexcept;
 
@@ -213,11 +218,12 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
    */
   void ensure_recreate_after_destroyed(rpc::context& ctx);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type load_from_db(rpc::context& ctx, bool auto_create = true);
 
   int32_t async_send_subscribe_to_writable(rpc::context& ctx);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_send_subscribe_to_writable(rpc::context& ctx);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_subscribe_to_writable(rpc::context& ctx,
+                                                                                bool auto_create = true);
   void set_destroyed(rpc::context& ctx, std::chrono::system_clock::time_point destroy_timepoint,
                      int64_t destroy_sequence);
 

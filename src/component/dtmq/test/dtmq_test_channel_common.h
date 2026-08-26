@@ -204,6 +204,16 @@ inline void register_dtmq_db_message_type(atframework::testing::runtime& test) {
   test.db().register_message_type<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>();
 }
 
+// Behavior switch for the writable-side subscribe mock below. kApplySnapshot mirrors production (the writable
+// node holds the channel and pushes a snapshot); kNotFound mirrors a writable node that has never created the
+// channel and answers not_found_channel_ids (see task_action_subscribe's non-auto_create handling).
+enum class readonly_subscribe_mock_mode : uint8_t { kApplySnapshot, kNotFound };
+
+inline std::atomic<readonly_subscribe_mock_mode>& mutable_readonly_subscribe_mock_mode() {
+  static std::atomic<readonly_subscribe_mock_mode> mode{readonly_subscribe_mock_mode::kApplySnapshot};
+  return mode;
+}
+
 // Register the writable-side subscribe mock used by readonly_init(). In production the writable node
 // sends a snapshot asynchronously after accepting the subscription. The offline fixture has no second
 // dtmq-proxysvr process, so the typed handler applies an equivalent snapshot to the local readonly object.
@@ -213,6 +223,11 @@ inline bool register_readonly_subscribe_mock() {
   subscribe_rule = rpc::dtmq::mock::subscribe([](rpc::context& ctx, const atfw::dtmq::SSChannelSubscribeReq& request,
                                                  atfw::dtmq::SSChannelSubscribeRsp& response) -> rpc::result_code_type {
     for (const auto& heartbeat : request.heartbeat()) {
+      if (mutable_readonly_subscribe_mock_mode().load() == readonly_subscribe_mock_mode::kNotFound) {
+        response.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+        continue;
+      }
+
       auto channel = mq_channel_manager::me()->get_channel(heartbeat.channel_key().channel_id());
       if (!channel) {
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
@@ -277,6 +292,7 @@ inline bool start_dtmq_proxysvr_runtime(atframework::testing::runtime& test, uin
 
   reload_discovery();
   register_dtmq_db_message_type(test);
+  mutable_readonly_subscribe_mock_mode().store(readonly_subscribe_mock_mode::kApplySnapshot);
   if (!register_readonly_subscribe_mock()) {
     CASE_MSG_INFO() << "subscribe mock registration failed: " << test.ss().get_diagnostic() << '\n';
     return false;

@@ -422,7 +422,7 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
   forward_server_id = 0;
   // 如果有到channel，但是不是writable，需要提升为writable
   if (!channel_ptr->is_writable()) {
-    result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx));
+    result = RPC_AWAIT_CODE_RESULT(channel_ptr->writable_init(ctx, auto_create));
     if (result < 0) {
       if (auto_create || result != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND) {
         FCTXLOGERROR(ctx, "channel {} writable init failed with result {}({}).", channel_key.channel_id(), result,
@@ -542,7 +542,7 @@ rpc::result_code_type mq_channel_manager::make_readable_channel(rpc::context& ct
   }
 
   // 尝试提升为可读
-  result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx, readonly_replicate_index));
+  result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx, readonly_replicate_index, auto_create));
   if (result < 0) {
     FCTXLOGERROR(ctx, "channel {} readonly init failed with result {}({}).", channel_key.channel_id(), result,
                  protobuf_mini_dumper_get_error_msg(result));
@@ -652,7 +652,7 @@ rpc::result_code_type mq_channel_manager::make_readable_channel_with_replicate_i
   }
 
   // 尝试提升为可读
-  result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx, replicate_index));
+  result = RPC_AWAIT_CODE_RESULT(channel_ptr->readonly_init(ctx, replicate_index, auto_create));
   if (result < 0) {
     FCTXLOGERROR(ctx, "channel {} readonly init failed with result {}({}).", channel_key.channel_id(), result,
                  protobuf_mini_dumper_get_error_msg(result));

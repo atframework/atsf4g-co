@@ -11,6 +11,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -36,8 +37,7 @@
 #include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
 
-task_action_subscribe::task_action_subscribe(dispatcher_start_data_type&& param)
-    : base_type(std::move(param)) {}
+task_action_subscribe::task_action_subscribe(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 
 task_action_subscribe::~task_action_subscribe() {}
 
@@ -60,6 +60,11 @@ task_action_subscribe::result_type task_action_subscribe::operator()() {
         get_shared_context(), channel, forward_server_id, heartbeat.readonly_index(), heartbeat.channel_key(),
         heartbeat.auto_create_channel()));
     if (res < 0) {
+      // 非 auto_create 的订阅不允许隐式创建频道：本地未创建时下发 not_found，由 client 端走销毁流程
+      if (!heartbeat.auto_create_channel() && res == PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND) {
+        rsp_body.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+        continue;
+      }
       set_response_code(res);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }

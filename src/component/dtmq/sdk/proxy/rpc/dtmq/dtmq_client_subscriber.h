@@ -59,7 +59,7 @@ namespace dtmq {
 
 /**
  * @brief 分布式消息队列客户端订阅者接口包装类
- * @note 注意：由于底层有共享层IO优化，所以被类型的所有接口都只允许在统一线程下执行，非线程安全
+ * @note 注意：由于底层有共享层IO优化，所以此类型的所有接口都只允许在同一线程下执行，非线程安全
  */
 class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<client_subscriber> {
  public:
@@ -92,6 +92,9 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
     event_callback_set_ptr_t event_callback_set;
   };
 
+  /**
+   * @brief 查询本地缓存消息的选项
+   */
   struct ATFW_UTIL_SYMBOL_VISIBLE query_options {
     int64_t start_sequence = 0;  // include
     int64_t end_sequence = 0;    // exclude,0表示不限制
@@ -105,34 +108,46 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
     ATFW_UTIL_FORCEINLINE query_options& operator=(query_options&&) = default;
   };
 
+  /// 订阅者就绪事件回调：首次同步到频道数据(快照加载完成)后触发
   using event_callback_on_ready_t = std::function<void(rpc::context& ctx, const ptr_t& subscriber)>;
 
+  /// 频道销毁事件回调：收到服务器下发的销毁通知时触发；另外当 auto_create_channel=false 且服务器心跳
+  /// 返回频道不存在(not_found)时，即使订阅者从未就绪也会触发一次。log_sequence 为订阅者本地已知的
+  /// 最后一条消息 sequence(从未同步到数据时为0)，destroy_time 为销毁时间点
   using event_callback_on_destroy_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence,
                          std::chrono::system_clock::time_point destroy_time)>;
 
+  /// 频道自定义数据(custom_data)更新事件回调
   using event_callback_on_update_custom_data_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
+  /// 订阅者私有数据(private_data)更新事件回调，仅在 with_private_data=true 时才会收到下发
   using event_callback_on_update_private_data_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, int64_t log_sequence, const ::google::protobuf::Any& data)>;
 
+  /// 频道乐观锁变更事件回调，from 为变更前的锁，to 为变更后的锁
   using event_callback_on_update_optimistic_lock_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelOptimisticLock& from,
                          const ::atfw::dtmq::DChannelOptimisticLock& to)>;
 
+  /// 日志压缩事件回调：服务器压缩移除日志后触发，compact_log_sequence 为被压缩移除到的 sequence
   using event_callback_on_compact_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, int64_t compact_log_sequence)>;
 
+  /// 文本消息接收回调：收到文本消息时触发(仅就绪后触发，就绪前的消息通过快照事件处理)
   using event_callback_on_receive_text_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
+  /// 事件消息接收回调：收到事件消息时触发(仅就绪后触发)；与按 type_url 注册的回调不互斥，都会触发
   using event_callback_on_receive_event_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
+  /// 原始消息接收回调：每条原始日志(含文本/事件等所有类型)都会先触发(仅就绪后触发)
   using event_callback_on_receive_raw_message_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
+  /// 快照接收回调：分别在开始加载快照和快照加载完成时触发；完成回调的 result_code 为加载结果(0表示成功)
   using event_callback_on_receive_snapshot_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelSnapshot& data, int32_t result_code)>;
 
@@ -238,38 +253,129 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    */
   DTMQ_PROXY_SDK_API int64_t get_last_heartbeat_sequence() const noexcept;
 
+  /**
+   * @brief 获取频道自定义数据(custom_data)当前已同步的 sequence
+   *
+   * @return custom_data 的 sequence，未同步过时为0
+   */
   DTMQ_PROXY_SDK_API int64_t get_custom_data_sequence() const noexcept;
 
+  /**
+   * @brief 获取频道自定义数据(custom_data)当前已同步的内容
+   *
+   * @return custom_data 内容，未同步过时为默认实例
+   */
   DTMQ_PROXY_SDK_API const ::google::protobuf::Any& get_custom_data_content() const noexcept;
 
+  /**
+   * @brief 获取订阅者私有数据(private_data)当前已同步的 sequence
+   * @note 仅在创建时 with_private_data=true 才会订阅私有数据，否则恒返回0
+   *
+   * @return private_data 的 sequence，未同步过或未订阅时为0
+   */
   DTMQ_PROXY_SDK_API int64_t get_private_data_sequence() const noexcept;
 
+  /**
+   * @brief 获取订阅者私有数据(private_data)当前已同步的内容
+   * @note 仅在创建时 with_private_data=true 才会订阅私有数据，否则恒返回默认实例
+   *
+   * @return private_data 内容，未同步过或未订阅时为默认实例
+   */
   DTMQ_PROXY_SDK_API const ::google::protobuf::Any& get_private_data_content() const noexcept;
 
+  /**
+   * @brief 获取当前频道配置(随服务器下发同步更新)
+   *
+   * @return 频道配置
+   */
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelConfigure& get_configure() const noexcept;
 
+  /**
+   * @brief 获取当前频道乐观锁
+   *
+   * @return 乐观锁
+   */
   DTMQ_PROXY_SDK_API const atfw::dtmq::DChannelOptimisticLock& get_lock() const noexcept;
 
+  /**
+   * @brief 是否已就绪(已同步到频道数据)
+   * @note 创建成功后若此接口已返回true，则不会再触发 on_ready 事件
+   *
+   * @return 是否已就绪
+   */
   DTMQ_PROXY_SDK_API bool is_ready() const noexcept;
 
+  /**
+   * @brief 频道是否已销毁(destroy_sequence > 0 且不早于 create_sequence)
+   *
+   * @return 频道是否已销毁
+   */
   DTMQ_PROXY_SDK_API bool is_destroyed() const noexcept;
 
+  /**
+   * @brief 获取本地私有数据槽位
+   * @note 仅保存在本进程内存中，不参与网络同步；可用于上层业务挂载任意本地上下文
+   *
+   * @return 本地私有数据槽位
+   */
   DTMQ_PROXY_SDK_API gsl::span<const uintptr_t> get_local_private_data() const noexcept;
 
+  /**
+   * @brief 整体覆盖设置本地私有数据槽位
+   * @note 仅保存在本进程内存中，不参与网络同步
+   *
+   * @param local_private_data 新的槽位内容
+   */
   DTMQ_PROXY_SDK_API void set_local_private_data(gsl::span<uintptr_t> local_private_data);
 
+  /**
+   * @brief 追加一个本地私有数据槽位
+   * @note 仅保存在本进程内存中，不参与网络同步
+   *
+   * @param local_private_data 要追加的值
+   */
   DTMQ_PROXY_SDK_API void append_local_private_data(uintptr_t local_private_data);
 
+  /**
+   * @brief 获取频道创建时的 sequence(首个WAL日志的 sequence)
+   *
+   * @return 创建 sequence，尚未创建时为0
+   */
   DTMQ_PROXY_SDK_API int64_t get_create_sequence() const noexcept;
 
+  /**
+   * @brief 获取频道创建时间点
+   *
+   * @return 创建时间点，尚未创建时为零值
+   */
   DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_create_timepoint() const noexcept;
 
+  /**
+   * @brief 获取频道销毁时的 sequence
+   *
+   * @return 销毁 sequence，未销毁时为0
+   */
   DTMQ_PROXY_SDK_API int64_t get_destroy_sequence() const noexcept;
 
+  /**
+   * @brief 获取频道销毁时间点
+   *
+   * @return 销毁时间点，未销毁时为零值
+   */
   DTMQ_PROXY_SDK_API std::chrono::system_clock::time_point get_destroy_timepoint() const noexcept;
 
+  /**
+   * @brief 获取本地已同步的最后一条消息(日志)的 sequence
+   *
+   * @return 最后一条消息的 sequence，未同步过时为0
+   */
   DTMQ_PROXY_SDK_API int64_t get_last_message_sequence() const noexcept;
 
+  /**
+   * @brief 获取本地已被移除(压缩/GC)的最大日志 sequence
+   *
+   * @return 已移除的最大 sequence，未移除过时为0
+   */
   DTMQ_PROXY_SDK_API int64_t get_last_removed_sequence() const noexcept;
 
   /**
@@ -281,8 +387,19 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    */
   DTMQ_PROXY_SDK_API size_t get_cached_log_count(int64_t start_sequence) const noexcept;
 
+  /**
+   * @brief 获取创建订阅者时传入的 auto_create_channel 选项
+   * @note auto_create_channel=false 时，若服务器确认频道不存在(心跳返回not_found)，会触发 on_destroyed 回调
+   *
+   * @return auto_create_channel 选项值
+   */
   DTMQ_PROXY_SDK_API bool get_option_auto_create_channel() const noexcept;
 
+  /**
+   * @brief 获取创建订阅者时传入的 with_private_data 选项
+   *
+   * @return with_private_data 选项值
+   */
   DTMQ_PROXY_SDK_API bool get_option_with_private_data() const noexcept;
 
   /**
@@ -356,6 +473,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_ready_t& get_event_callback_on_ready(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取频道销毁事件回调
+   * @note 触发时机见 event_callback_on_destroy_t 的说明；static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(event_callback_on_destroy_t&& on_destroy);
   DTMQ_PROXY_SDK_API void set_event_callback_on_destroyed(const event_callback_on_destroy_t& on_destroy);
   DTMQ_PROXY_SDK_API const event_callback_on_destroy_t& get_event_callback_on_destroyed() const noexcept;
@@ -366,6 +487,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_destroy_t& get_event_callback_on_destroyed(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取频道自定义数据(custom_data)更新事件回调
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
       event_callback_on_update_custom_data_t&& on_update_custom_data);
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_custom_data(
@@ -379,6 +504,11 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_update_custom_data_t& get_event_callback_on_update_custom_data(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取订阅者私有数据(private_data)更新事件回调
+   * @note 仅在创建时 with_private_data=true 才会收到私有数据下发；static 重载用于直接操作共享的
+   *       event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
       event_callback_on_update_private_data_t&& on_update_private_data);
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_private_data(
@@ -392,6 +522,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_update_private_data_t& get_event_callback_on_update_private_data(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取频道乐观锁变更事件回调
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
       event_callback_on_update_optimistic_lock_t&& on_update_optimistic_lock);
   DTMQ_PROXY_SDK_API void set_event_callback_on_update_optimistic_lock(
@@ -406,6 +540,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_update_optimistic_lock_t&
   get_event_callback_on_update_optimistic_lock(const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取日志压缩事件回调(服务器压缩移除日志后触发)
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(event_callback_on_compact_t&& on_compact);
   DTMQ_PROXY_SDK_API void set_event_callback_on_compact(const event_callback_on_compact_t& on_compact);
   DTMQ_PROXY_SDK_API const event_callback_on_compact_t& get_event_callback_on_compact() const noexcept;
@@ -416,6 +554,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_compact_t& get_event_callback_on_compact(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取文本消息接收回调(仅就绪后触发)
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(event_callback_on_receive_text_t&& on_receive_text);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_text(const event_callback_on_receive_text_t& on_receive_text);
   DTMQ_PROXY_SDK_API const event_callback_on_receive_text_t& get_event_callback_on_receive_text() const noexcept;
@@ -426,6 +568,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_text_t& get_event_callback_on_receive_text(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取事件消息接收回调(仅就绪后触发；与按 type_url 注册的回调不互斥，都会触发)
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(event_callback_on_receive_event_t&& on_receive_event);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event(
       const event_callback_on_receive_event_t& on_receive_event);
@@ -437,6 +583,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 按消息类型注册事件回调，收到该类型(protobuf Message)的事件消息时触发
+   *
+   * @tparam T 事件消息的 protobuf 类型
+   * @param on_receive_event 事件回调
+   * @note 与 set_event_callback_on_receive_event 设置的通用回调不互斥，都会触发
+   */
   template <class T, class FuncType,
             class = atfw::util::nostd::enable_if_t<std::is_base_of<::google::protobuf::Message, T>::value>>
   ATFW_UTIL_SYMBOL_VISIBLE void set_event_callback_on_receive_event_by_message_type(FuncType&& on_receive_event) {
@@ -448,6 +601,14 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
                                                            std::forward<FuncType>(on_receive_event));
   }
 
+  /**
+   * @brief 按 Any type_url 注册/获取事件回调，收到该 type_url 的事件消息时触发
+   *
+   * @param type_url 事件消息 Any 的 type_url
+   * @param on_receive_event 事件回调
+   * @note 与 set_event_callback_on_receive_event 设置的通用回调不互斥，都会触发；static 重载用于直接操作共享的
+   *       event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
       const std::string& type_url, event_callback_on_receive_event_t&& on_receive_event);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_event_by_type_url(
@@ -455,6 +616,13 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event_by_type_url(
       const std::string& type_url) const noexcept;
 
+  /**
+   * @brief 按消息类型注册事件回调的共享集版本(直接操作共享的 event_callback_set)
+   *
+   * @tparam T 事件消息的 protobuf 类型
+   * @param event_callback_set 共享的回调函数组
+   * @param on_receive_event 事件回调
+   */
   template <class T, class FuncType,
             class = atfw::util::nostd::enable_if_t<std::is_base_of<::google::protobuf::Message, T>::value>>
   static ATFW_UTIL_SYMBOL_VISIBLE void set_event_callback_on_receive_event_by_message_type(
@@ -477,6 +645,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event_by_type_url(
       const event_callback_set_t& event_callback_set, const std::string& type_url) noexcept;
 
+  /**
+   * @brief 设置/获取原始消息接收回调：每条原始日志(含文本/事件等所有类型)都会先触发(仅就绪后触发)
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
       event_callback_on_receive_raw_message_t&& on_receive_raw_message);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_raw_message(
@@ -490,6 +662,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_raw_message_t& get_event_callback_on_receive_raw_message(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取快照开始加载事件回调(收到服务器下发的频道快照、尚未写入本地缓存前触发)
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
       event_callback_on_receive_snapshot_t&& on_receive_snapshot_start);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_start(
@@ -503,6 +679,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_snapshot_t& get_event_callback_on_receive_snapshot_start(
       const event_callback_set_t& event_callback_set) noexcept;
 
+  /**
+   * @brief 设置/获取快照加载完成事件回调(快照写入本地缓存完成后触发，result_code 为加载结果，0表示成功)
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
       event_callback_on_receive_snapshot_t&& on_receive_snapshot_finished);
   DTMQ_PROXY_SDK_API void set_event_callback_on_receive_snapshot_finished(
@@ -645,6 +825,7 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    * @brief 查找本地消息缓存
    *
    * @param ctx RPC上下文
+   * @param sequence 消息序列号
    * @param fn 如果查找到消息，则会调用此回调函数，传入消息对象
    * @return 如果查找到消息，返回 true， 否则返回 false
    */

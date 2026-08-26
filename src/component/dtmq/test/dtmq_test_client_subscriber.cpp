@@ -1997,3 +1997,126 @@ CASE_TEST(component_dtmq_subscriber, send_destroy_reset_lock_and_update) {
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ server not_found (non-auto_create pairing with task_action_subscribe) ============
+// A subscriber created with auto_create_channel=false whose heartbeat is answered with
+// not_found_channel_ids must reliably fire set_event_callback_on_destroyed, even though it never
+// became ready (the channel was never created anywhere). An auto_create subscriber receiving the
+// same response keeps the old behavior (no destroy callback while not ready): the server is expected
+// to create the channel, and a not_found for it is an anomaly that must not tear down local state.
+CASE_TEST(component_dtmq_subscriber, non_auto_create_destroyed_on_server_not_found) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  // Subscribe mock answering every heartbeat channel with not_found_channel_ids, recording the
+  // per-heartbeat auto_create flag so the test can verify it propagates from subscriber options.
+  std::vector<atfw::dtmq::DChannelSyncPoint> seen_heartbeats;
+  auto subscribe_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_subscribe(), atfw::dtmq::SSChannelSubscribeReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelSubscribeRsp::descriptor()->full_name(),
+      [&seen_heartbeats](const atframework::testing::ss_request_view& request,
+                         google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSubscribeReq&>(request.body);
+        auto& typed_response = static_cast<atfw::dtmq::SSChannelSubscribeRsp&>(response);
+        for (const auto& heartbeat : typed_request.heartbeat()) {
+          seen_heartbeats.push_back(heartbeat);
+          typed_response.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+        }
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!subscribe_rule);
+  if (!subscribe_rule) {
+    test.stop();
+    return;
+  }
+
+  auto no_create_key = make_channel_key("chan-subscriber-nocreate-nf");
+  auto no_create_options = make_subscriber_options("UT:nf-no-create", false, false);
+  no_create_options.event_callback_set = rpc::dtmq::client_subscriber::create_event_callback_set();
+  size_t no_create_destroyed_calls = 0;
+  int64_t no_create_destroyed_sequence = -1;
+  bool no_create_ready_called = false;
+  rpc::dtmq::client_subscriber::set_event_callback_on_destroyed(
+      *no_create_options.event_callback_set,
+      [&no_create_destroyed_calls, &no_create_destroyed_sequence](
+          rpc::context&, const subscriber_ptr&, int64_t log_sequence, std::chrono::system_clock::time_point) {
+        ++no_create_destroyed_calls;
+        no_create_destroyed_sequence = log_sequence;
+      });
+  rpc::dtmq::client_subscriber::set_event_callback_on_ready(
+      *no_create_options.event_callback_set,
+      [&no_create_ready_called](rpc::context&, const subscriber_ptr&) { no_create_ready_called = true; });
+
+  auto auto_create_key = make_channel_key("chan-subscriber-autocreate-nf");
+  auto auto_create_options = make_subscriber_options("UT:nf-auto-create", true, false);
+  auto_create_options.event_callback_set = rpc::dtmq::client_subscriber::create_event_callback_set();
+  size_t auto_create_destroyed_calls = 0;
+  rpc::dtmq::client_subscriber::set_event_callback_on_destroyed(
+      *auto_create_options.event_callback_set,
+      [&auto_create_destroyed_calls](rpc::context&, const subscriber_ptr&, int64_t,
+                                     std::chrono::system_clock::time_point) {
+        // Increment the count of destroyed calls for the auto_create subscriber.
+        ++auto_create_destroyed_calls;
+      });
+
+  auto no_create_subscriber = rpc::dtmq::client_subscriber::create(no_create_key, no_create_options);
+  auto auto_create_subscriber = rpc::dtmq::client_subscriber::create(auto_create_key, auto_create_options);
+  CASE_EXPECT_TRUE(!!no_create_subscriber);
+  CASE_EXPECT_TRUE(!!auto_create_subscriber);
+  if (!no_create_subscriber || !auto_create_subscriber) {
+    test.stop();
+    return;
+  }
+
+  // Both subscribers were just created, so both are queued for the same heartbeat round.
+  CASE_EXPECT_TRUE(rpc::dtmq::client_subscriber::global_has_pending_heartbeat());
+  CASE_EXPECT_TRUE(drive_heartbeat_round(test, "heartbeat_not_found_round"));
+
+  // The heartbeat carried each subscriber's auto_create setting.
+  bool saw_no_create_heartbeat = false;
+  bool saw_auto_create_heartbeat = false;
+  for (const auto& heartbeat : seen_heartbeats) {
+    if (heartbeat.channel_key().channel_id() == no_create_key.channel_id()) {
+      saw_no_create_heartbeat = true;
+      CASE_EXPECT_FALSE(heartbeat.auto_create_channel());
+    }
+    if (heartbeat.channel_key().channel_id() == auto_create_key.channel_id()) {
+      saw_auto_create_heartbeat = true;
+      CASE_EXPECT_TRUE(heartbeat.auto_create_channel());
+    }
+  }
+  CASE_EXPECT_TRUE(saw_no_create_heartbeat);
+  CASE_EXPECT_TRUE(saw_auto_create_heartbeat);
+
+  // The non-auto_create subscriber was destroyed by the not_found response even though it never
+  // became ready; the destroy sequence is the subscriber's last known message sequence (0 for a
+  // channel it never saw).
+  CASE_EXPECT_EQ(1u, no_create_destroyed_calls);
+  CASE_EXPECT_EQ(0, no_create_destroyed_sequence);
+  CASE_EXPECT_FALSE(no_create_ready_called);
+  CASE_EXPECT_FALSE(no_create_subscriber->is_ready());
+
+  // The auto_create subscriber keeps waiting for the server to create the channel: no destroy
+  // callback while not ready.
+  CASE_EXPECT_EQ(0u, auto_create_destroyed_calls);
+  CASE_EXPECT_FALSE(auto_create_subscriber->is_ready());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

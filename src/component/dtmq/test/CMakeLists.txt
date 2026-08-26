@@ -57,11 +57,13 @@ set(DTMQ_PROXYSVR_INTERNAL_TEST_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../dtmq-proxysvr/logic/action/task_action_pull.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../dtmq-proxysvr/logic/action/task_action_reset_lock.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../dtmq-proxysvr/logic/action/task_action_send_message.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../dtmq-proxysvr/logic/action/task_action_subscribe.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../dtmq-proxysvr/logic/action/task_action_update.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../dtmq-proxysvr/logic/mq_channel_manager.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_channel_manager.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_channel.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_task_forward.cpp")
+    "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_task_forward.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_task_subscribe.cpp")
 
 project_add_rpc_unit_test(
   TARGET
