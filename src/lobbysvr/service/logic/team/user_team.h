@@ -79,6 +79,10 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void try_load_snapshot(rpc::context& ctx);
 
  private:
+  bool load_dtmq_custom_data(rpc::context& ctx, const ::google::protobuf::Any& custom_data);
+
+  bool load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action);
+
   void load_snapshot(rpc::context& ctx);
 
   void on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data);
@@ -92,6 +96,7 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> channel_subscriber_;
   bool is_member_;
   int64_t channel_create_sequence_;
+  int64_t channel_saved_sequence_;
 
   std::chrono::system_clock::time_point actived_timepoint_;
   std::chrono::system_clock::time_point last_exit_team_request_timepoint_;

@@ -23,6 +23,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <data/user_key_hash_helper.h>
+
 #include <chrono>
 #include <utility>
 
@@ -86,7 +88,8 @@ class user_team_utility {
                  const ::atfw::dtmq::DChannelSnapshot& /*snapshot*/, int32_t result_code) {
           user_team* team_ptr = get_user_team(subscriber, "on_receive_snapshot_finished");
           if (team_ptr != nullptr && result_code >= 0) {
-            team_ptr->load_snapshot(ctx);
+            auto hold_lifetime = team_ptr->shared_from_this();
+            hold_lifetime->load_snapshot(ctx);
           }
         });
 
@@ -95,7 +98,8 @@ class user_team_utility {
                  const ::atfw::dtmq::DChannelMessage& data) {
           user_team* team_ptr = get_user_team(subscriber, "on_receive_raw_message");
           if (team_ptr != nullptr) {
-            team_ptr->on_receive_raw_message(ctx, data);
+            auto hold_lifetime = team_ptr->shared_from_this();
+            hold_lifetime->on_receive_raw_message(ctx, data);
           }
         });
 
@@ -105,10 +109,12 @@ class user_team_utility {
           user_team* team_ptr = get_user_team(subscriber, "on_destroyed");
           // 可能先删除频道，而后重新创建的流程。所以要忽略之前的频道销毁通知
           if (team_ptr != nullptr && log_sequence > team_ptr->channel_create_sequence_) {
-            team_ptr->is_member_ = false;
-            FCTXLOGDEBUG(ctx, "{} channel for team {}:{} destroyed, sequence:{}", team_ptr->owner_->get_owner(),
-                         team_ptr->team_key_.zone_id(), team_ptr->team_key_.team_id(), log_sequence);
-            team_ptr->owner_->remove_team(ctx, team_ptr->get_team_key(), atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+            auto hold_lifetime = team_ptr->shared_from_this();
+            hold_lifetime->is_member_ = false;
+            FCTXLOGDEBUG(ctx, "{} channel for team {}:{} destroyed, sequence:{}", hold_lifetime->owner_->get_owner(),
+                         hold_lifetime->team_key_.zone_id(), hold_lifetime->team_key_.team_id(), log_sequence);
+            hold_lifetime->owner_->remove_team(ctx, hold_lifetime->get_team_key(),
+                                               atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
           }
         });
 
@@ -135,6 +141,7 @@ user_team::user_team(ctor_guard_t&, rpc::context& /*ctx*/, user_team_manager& ow
       channel_subscriber_(channel_subscriber),
       is_member_(false),
       channel_create_sequence_(0),
+      channel_saved_sequence_(0),
       last_exit_team_request_timepoint_(std::chrono::system_clock::from_time_t(0)),
       last_exit_team_reason_(atfw::team::EN_TEAM_EXIT_REASON_DEFAULT),
       cached_permission_role_(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
@@ -149,7 +156,9 @@ user_team::ptr_t user_team::create(rpc::context& ctx, user_team_manager& owner, 
   ctor_guard_t guard;
   rpc::dtmq::client_subscriber::subscriber_options options{
       owner.get_owner().get_user_chat_manager().get_subscriber_key()};
-  options.auto_create_channel = true;
+
+  // auto_create_channel 设为false，如果是恢复已经失效的频道，后续会通过 on_destroyed 回调移除
+  options.auto_create_channel = false;
   options.event_callback_set = user_team_utility::get_event_callback_set();
   auto channel_subscriber = rpc::dtmq::client_subscriber::create(channel_key, options);
   if (!channel_subscriber) {
@@ -226,6 +235,11 @@ void user_team::make_current_actived(rpc::context& ctx) {
 void user_team::send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason) {
   set_exit_team(ctx, exit_reason);
 
+  // 如果频道已销毁，则不用再发送退出
+  if (channel_subscriber_->is_destroyed()) {
+    return;
+  }
+
   auto self = shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "user_team.send_exit_team_request", [self, exit_reason](rpc::context& child_ctx) -> rpc::result_code_type {
@@ -276,13 +290,102 @@ void user_team::try_load_snapshot(rpc::context& ctx) {
   load_snapshot(ctx);
 }
 
+bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobuf::Any& custom_data) {
+  rpc::context::message_holder<atfw::team::DTeamStorage> team_snapshot{ctx};
+  if (!custom_data.UnpackTo(&(*team_snapshot))) {
+    FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, unpack snapshot failed, type_url: {}, error message: {}",
+                 owner_->get_owner(), team_key_.zone_id(), team_key_.team_id(), custom_data.type_url(),
+                 team_snapshot->InitializationErrorString());
+    return false;
+  }
+
+  channel_saved_sequence_ = team_snapshot->saved_action_sequence();
+  cached_captain_user_key_ = team_snapshot->captain_user_key();
+  cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
+
+  is_member_ = false;
+  for (const auto& member : team_snapshot->member()) {
+    if (member.user_key().zone_id() == owner_->get_owner().get_zone_id() &&
+        member.user_key().user_id() == owner_->get_owner().get_user_id()) {
+      is_member_ = true;
+      cached_permission_role_ = member.role();
+      break;
+    }
+  }
+
+  return true;
+}
+
+bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
+  switch (action.action_case()) {
+    case atfw::team::DTeamAction::kDestroyTeam: {
+      is_member_ = false;
+      cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
+      owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+      break;
+    }
+    case atfw::team::DTeamAction::kAddMember: {
+      const auto& member_data = action.add_member();
+      if (member_data.user_key().zone_id() == owner_->get_owner().get_zone_id() &&
+          member_data.user_key().user_id() == owner_->get_owner().get_user_id()) {
+        is_member_ = true;
+        cached_permission_role_ = member_data.role();
+      }
+      break;
+    }
+    case atfw::team::DTeamAction::kRemoveMember: {
+      const auto& member_data = action.remove_member();
+      if (member_data.user_key().zone_id() == owner_->get_owner().get_zone_id() &&
+          member_data.user_key().user_id() == owner_->get_owner().get_user_id()) {
+        is_member_ = false;
+        cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
+      }
+      break;
+    }
+    case atfw::team::DTeamAction::kMemberUpdate: {
+      // const auto& member_update = action.member_update();
+      // if (member_update.user_key().zone_id() == owner_->get_owner().get_zone_id() &&
+      //     member_update.user_key().user_id() == owner_->get_owner().get_user_id()) {
+      //   // cached_permission_role_ = member_update;
+      // }
+      break;
+    }
+    // case atfw::team::DTeamAction::kMemberSetRole: {
+    //   break;
+    // }
+    case atfw::team::DTeamAction::kElectionCaptain: {
+      cached_captain_user_key_ = action.election_captain().user_key();
+      break;
+    }
+    case atfw::team::DTeamAction::kTeamUpdate: {
+      // 处理成员变更
+      break;
+    }
+    case atfw::team::DTeamAction::kAddInvitation:
+    case atfw::team::DTeamAction::kApproveInvitation:
+    case atfw::team::DTeamAction::kRejectInvitation:
+    case atfw::team::DTeamAction::kAddJoinRequest:
+    case atfw::team::DTeamAction::kApproveJoinRequest:
+    case atfw::team::DTeamAction::kRejectJoinRequest: {
+      // 队伍内的邀请和加入请求本地暂不用记录
+      break;
+    }
+    default:
+      break;
+  }
+  return true;
+}
+
 void user_team::load_snapshot(rpc::context& ctx) {
   FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, load a snapshot, last sequence:{}", owner_->get_owner(),
                team_key_.zone_id(), team_key_.team_id(), channel_subscriber_->get_last_message_sequence());
 
   channel_create_sequence_ = channel_subscriber_->get_create_sequence();
 
-  // TODO(owent): 加载快照
+  // 加载快照
+  if (!load_dtmq_custom_data(ctx, channel_subscriber_->get_custom_data_content())) {
+    return;
+  }
 
   // 回放压缩点之后的增量日志
   rpc::dtmq::client_subscriber::query_options options;
@@ -308,9 +411,43 @@ void user_team::load_snapshot(rpc::context& ctx) {
 }
 
 void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data) {
+  if (data.sequence() <= channel_saved_sequence_) {
+    // 已经处理过，直接忽略
+    return;
+  }
+
   FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, receive a raw message, sequence:{}", owner_->get_owner(),
                team_key_.zone_id(), team_key_.team_id(), data.sequence());
 
-  // TODO(owent): 针对自己的成员变更、权限变更
-  // TODO(owent): 队长变更
+  switch (data.detail().command_case()) {
+    case atfw::dtmq::DChannelMessageDetail::kCreate: {
+      if (data.sequence() > channel_create_sequence_) {
+        channel_create_sequence_ = data.sequence();
+      }
+      break;
+    }
+    case atfw::dtmq::DChannelMessageDetail::kDestroy: {
+      is_member_ = false;
+      owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+      break;
+    }
+    case atfw::dtmq::DChannelMessageDetail::kEvent: {
+      rpc::context::message_holder<atfw::team::DTeamAction> team_action{ctx};
+      if (!data.detail().event().UnpackTo(&(*team_action))) {
+        FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, unpack event failed, type_url: {}, error message: {}",
+                     owner_->get_owner(), team_key_.zone_id(), team_key_.team_id(), data.detail().event().type_url(),
+                     team_action->InitializationErrorString());
+        break;
+      }
+
+      load_team_action(ctx, *team_action);
+      break;
+    }
+    case atfw::dtmq::DChannelMessageDetail::kUpdateCustomData: {
+      load_dtmq_custom_data(ctx, channel_subscriber_->get_custom_data_content());
+      break;
+    }
+    default:
+      break;
+  }
 }

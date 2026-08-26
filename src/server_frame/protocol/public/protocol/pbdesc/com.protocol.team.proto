@@ -5,54 +5,95 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
+import "google/protobuf/any.proto";
+
 import "protocol/pbdesc/com.struct.team.proto";
+import "protocol/pbdesc/com.struct.team.shared.proto";
 import "protocol/pbdesc/com.struct.proto";
 
-package atframework.team;
+package atframework.shared;
 
 // Placeholder definitions for team protocol messages referenced by com.protocol.proto.
 // These exist so proto generation succeeds; real definitions should be added here.
 
-message CSTeamSendInvitationReq {}
+message CSTeamSendInvitationReq {
+  // 不指定team_key时，表示邀请用户加入当前玩家所在的默认队伍，如果默认队伍不存在，会先创建一个
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamSendInvitationRsp {}
 
-message CSTeamApproveInvitationReq {}
+message CSTeamApproveInvitationReq {
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamApproveInvitationRsp {}
 
-message CSTeamRejectInvitationReq {}
+message CSTeamRejectInvitationReq {
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamRejectInvitationRsp {}
 
-message CSTeamExitReq {}
+message CSTeamExitReq {
+  atframework.team.DTeamKey team_key = 1;
+}
 
 message SCTeamExitRsp {}
 
-message CSTeamRemoveMemberReq {}
+message CSTeamRemoveMemberReq {
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamRemoveMemberRsp {}
 
-message CSTeamUpdateMemberDataReq {}
+message CSTeamUpdateMemberDataReq {
+  atframework.team.DTeamKey team_key = 1;
+  EnTeamSharedModuleType module_type = 2;
+  int32 module_data_id = 3;
+
+  google.protobuf.Any data_value = 4;
+}
 
 message SCTeamUpdateMemberDataRsp {}
 
-message CSTeamUpdateTeamDataReq {}
+message CSTeamUpdateTeamDataReq {
+  atframework.team.DTeamKey team_key = 1;
+  EnTeamSharedModuleType module_type = 2;
+  int32 module_data_id = 3;
+
+  google.protobuf.Any data_value = 4;
+}
 
 message SCTeamUpdateTeamDataRsp {}
 
-message CSTeamApplyJoinTeamReq {}
+message CSTeamApplyJoinTeamReq {
+  atframework.team.DTeamKey team_key = 1;
+}
 
 message SCTeamApplyJoinTeamRsp {}
 
-message CSTeamAcceptApplyReq {}
+message CSTeamAcceptApplyReq {
+    atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamAcceptApplyRsp {}
 
-message CSTeamRejectApplyReq {}
+message CSTeamRejectApplyReq {
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamRejectApplyRsp {}
 
-message CSTeamTransferCaptainReq {}
+message CSTeamTransferCaptainReq {
+  atframework.team.DTeamKey team_key = 1;
+  atframework.shared.DUserIDKey user_key = 2;
+}
 
 message SCTeamTransferCaptainRsp {}

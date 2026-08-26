@@ -72,8 +72,8 @@ enum EnTeamSourceType {
 }
 
 enum EnTeamPermissionType {
-  EN_TEAM_PERMISSION_TYPE_PUBLIC = 0;
-  EN_TEAM_PERMISSION_TYPE_MEMBER = 1;
+  EN_TEAM_PERMISSION_TYPE_MEMBER = 0;
+  EN_TEAM_PERMISSION_TYPE_PUBLIC = 1;
 }
 
 message DTeamAnyData {
