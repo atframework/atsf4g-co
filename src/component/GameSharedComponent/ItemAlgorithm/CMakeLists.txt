@@ -10,7 +10,6 @@ project_game_shared_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/include"
   DLLEXPORT_DECL
   ITEM_ALGORITHM_API
-  INSTALL_NO_PREBUILT
   USE_PROTOCOLS
   "Config"
   "Network"
