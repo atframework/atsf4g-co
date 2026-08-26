@@ -291,8 +291,8 @@ CASE_TEST(atgateway_session_manager, first_idle_accept_overlap) {
   CASE_EXPECT_EQ(0, client1->connect_status);
 
   // client1 is accepted and still waiting for its first handshake packet when client2 arrives.
-  CASE_MSG_INFO() << "after client1 accepted: id=" << captured.ids[0]
-                  << ", use_count=" << captured.weak[0].use_count() << std::endl;
+  CASE_MSG_INFO() << "after client1 accepted: id=" << (captured.ids.size() > 0 ? captured.ids[0] : 0)
+                  << ", use_count=" << (captured.weak.size() > 0 ? captured.weak[0].use_count() : 0) << std::endl;
   test_client_t *client2 = test_start_client(loop, port);
   bool client2_accepted = test_pump_until(loop, [&captured] { return captured.raw.size() >= 2; });
   CASE_EXPECT_TRUE(client2_accepted);
@@ -301,7 +301,7 @@ CASE_TEST(atgateway_session_manager, first_idle_accept_overlap) {
   // ============ assert: both pre-handshake sessions coexist ============
   CASE_MSG_INFO() << "after client2 accepted: ids: " << (captured.ids.size() > 0 ? captured.ids[0] : 0) << ", "
                   << (captured.ids.size() > 1 ? captured.ids[1] : 0)
-                  << ", use_counts: " << captured.weak[0].use_count() << ", "
+                  << ", use_counts: " << (captured.weak.size() > 0 ? captured.weak[0].use_count() : 0) << ", "
                   << (captured.weak.size() > 1 ? captured.weak[1].use_count() : 0) << std::endl;
   CASE_EXPECT_EQ(static_cast<size_t>(2), captured.raw.size());
   if (captured.raw.size() >= 2) {
