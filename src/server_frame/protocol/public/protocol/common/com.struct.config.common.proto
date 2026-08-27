@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+import "protocol/extension/v3/xresloader.proto";
+
+package atframework.shared;
+
+message DConfigValueExchangeRule {
+  oneof rule {
+    option (org.xresloader.oneof_separator) = "|";
+    int32 multiplication = 1 [(org.xresloader.field_alias) = "乘"];
+    int32 division = 2 [(org.xresloader.field_alias) = "除"];
+  }
+}

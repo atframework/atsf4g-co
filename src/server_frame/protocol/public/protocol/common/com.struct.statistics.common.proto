@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "protocol/extension/v3/xresloader.proto";
+import "protocol/common/com.struct.extension.common.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
+
+package atframework.shared;
+
+enum EnStatisticsType {
+  EN_STATISTICS_TYPE_INVALID = 0;
+}
+
+message DStatisticsData {
+  EnStatisticsType type = 1;
+  int64 id = 2;
+  int64 value = 3;
+}

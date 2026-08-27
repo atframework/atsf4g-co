@@ -104,17 +104,15 @@ message DItemUseAction {
 
 enum EnItemRarity {
   option (ue_enum_conversion) = {
-    UeEnumAlias: "EHelloInventoryRarity"
-    DefaultPbEnum: "EN_ITEM_RARITY_NONE"
-    DefaultUeEnum: "None"
+    rule: { UeEnumAlias: "EPrxInventoryRarity" DefaultPbEnum: "EN_ITEM_RARITY_NONE" DefaultUeEnum: "None" }
   };
-  EN_ITEM_RARITY_NONE = 0 [(ue_enum_alias) = "None"];
-  EN_ITEM_RARITY_NORMAL = 20 [(ue_enum_alias) = "Normal", (org.xresloader.enum_alias) = "Normal"];
-  EN_ITEM_RARITY_UNCOMMON = 40 [(ue_enum_alias) = "Uncommon", (org.xresloader.enum_alias) = "Uncommon"];
-  EN_ITEM_RARITY_RARE = 60 [(ue_enum_alias) = "Rare", (org.xresloader.enum_alias) = "Rare"];
-  EN_ITEM_RARITY_EPIC = 80 [(ue_enum_alias) = "Epic", (org.xresloader.enum_alias) = "Epic"];
-  EN_ITEM_RARITY_LEGENDARY = 100 [(ue_enum_alias) = "Legendary", (org.xresloader.enum_alias) = "Legendary"];
-  EN_ITEM_RARITY_UNIQUE = 120 [(ue_enum_alias) = "Unique", (org.xresloader.enum_alias) = "Unique"];
+  EN_ITEM_RARITY_NONE = 0 [(ue_enum_alias) = { UeEnumName: "None" }];
+  EN_ITEM_RARITY_NORMAL = 20 [(ue_enum_alias) = { UeEnumName: "Normal" }, (org.xresloader.enum_alias) = "Normal"];
+  EN_ITEM_RARITY_UNCOMMON = 40 [(ue_enum_alias) = { UeEnumName: "Uncommon" }, (org.xresloader.enum_alias) = "Uncommon"];
+  EN_ITEM_RARITY_RARE = 60 [(ue_enum_alias) = { UeEnumName: "Rare" }, (org.xresloader.enum_alias) = "Rare"];
+  EN_ITEM_RARITY_EPIC = 80 [(ue_enum_alias) = { UeEnumName: "Epic" }, (org.xresloader.enum_alias) = "Epic"];
+  EN_ITEM_RARITY_LEGENDARY = 100 [(ue_enum_alias) = { UeEnumName: "Legendary" }, (org.xresloader.enum_alias) = "Legendary"];
+  EN_ITEM_RARITY_UNIQUE = 120 [(ue_enum_alias) = { UeEnumName: "Unique" }, (org.xresloader.enum_alias) = "Unique"];
 }
 
 enum EnItemFlowReasonMajorType {

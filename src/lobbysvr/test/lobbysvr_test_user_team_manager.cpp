@@ -11,6 +11,7 @@
 
 #include <protocol/pbdesc/com.struct.team.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
+#include <protocol/pbdesc/dtmq_proxy.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 

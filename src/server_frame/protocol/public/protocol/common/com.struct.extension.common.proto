@@ -18,8 +18,12 @@ message UeEnumConversion {
   string DefaultPbEnum = 3;
 }
 
+message UeEnumConversions {
+  repeated UeEnumConversion rule = 1;
+}
+
 extend google.protobuf.EnumOptions {
-  UeEnumConversion ue_enum_conversion = 2001;
+  UeEnumConversions ue_enum_conversion = 2001;
 }
 
 message ItemTypeRangeOption {
@@ -34,7 +38,12 @@ message ItemTypeOption {
   bool need_occupy_the_grid = 3;  // 是否占格子
 }
 
+message UeEnumField {
+  string UeEnumAlias = 1;
+  string UeEnumName = 2;
+}
+
 extend google.protobuf.EnumValueOptions {
-  string ue_enum_alias = 2003;
+  UeEnumField ue_enum_alias = 2003;
   ItemTypeOption item_type_option = 2004;
 }
