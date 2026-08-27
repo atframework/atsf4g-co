@@ -405,7 +405,7 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
 
 void user_team_manager::pack_team_member_shared_data(
     PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
-    ::google::protobuf::Map<::int64_t, ::atfw::team::DTeamAnyData>& /*output*/) {
+    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& /*output*/) {
   // TODO(owent): 默认的成员共享数据，加入队伍时使用
 }
 

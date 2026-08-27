@@ -101,6 +101,26 @@ inline atfw::team::DTeamKey make_team_key(int64_t team_id, uint32_t zone_id = kT
   return key;
 }
 
+// 向 repeated 共享数据字段追加一条 key-value(Any 仅设置 value 字节)；
+// 返回 entry 便于调用方继续设置 permission/type_url
+inline atfw::team::DTeamAnyDataWithKey* add_team_any_data_entry(
+    google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>* field, int64_t key, const std::string& value) {
+  auto* entry = field->Add();
+  entry->set_key(key);
+  entry->mutable_value()->mutable_data()->set_value(value);
+  return entry;
+}
+
+// 向 repeated 条件数据字段追加一条 key-value(DTeamAnyValueWithKey 的 Any 仅设置 value 字节)
+inline atfw::team::DTeamAnyValueWithKey* add_team_any_value_entry(
+    google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyValueWithKey>* field, int64_t key,
+    const std::string& value) {
+  auto* entry = field->Add();
+  entry->set_key(key);
+  entry->mutable_value()->set_value(value);
+  return entry;
+}
+
 // ---- Fixture-wide configure (shortest legal durations, see team_room.config.proto min_value) ----
 struct room_test_cfg_values {
   // 乐观锁租约与频道 subscriber_timeout 一致(见下方 excel seed)，续租间隔 = 租约/2

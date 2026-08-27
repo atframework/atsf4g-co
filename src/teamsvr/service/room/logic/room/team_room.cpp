@@ -72,16 +72,41 @@ static gsl::string_view get_timer_event_name(team_room_timer_event_type event_ty
   }
 }
 
+// 用 repeated 的 key-value 元素整体替换 unordered_map(同 key 后写覆盖先写)，并清空源字段。
+// 内存中共享数据统一以 unordered_map 维护 key-value 关系，proto 的 repeated 字段仅用于线上协议与快照
+static void move_team_any_data_to_map(std::unordered_map<int64_t, atfw::team::DTeamAnyData>& output,
+                                      google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& from) {
+  output.clear();
+  for (auto& kv : from) {
+    protobuf_move_message(output[kv.key()], std::move(*kv.mutable_value()));
+  }
+  from.Clear();
+}
+
+// 将 unordered_map 中的共享数据回填到 repeated 字段(dump 快照/构建下发事件时使用)
+static void dump_team_any_data_from_map(google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>* output,
+                                        const std::unordered_map<int64_t, atfw::team::DTeamAnyData>& from) {
+  if (nullptr == output) {
+    return;
+  }
+  for (const auto& kv : from) {
+    auto* entry = output->Add();
+    entry->set_key(kv.first);
+    protobuf_copy_message(*entry->mutable_value(), kv.second);
+  }
+}
+
 // 仅拷贝 EN_TEAM_PERMISSION_TYPE_PUBLIC 权限的数据(下发给未入队玩家时隐藏成员权限数据)
-static void copy_public_permission_data(const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& from,
-                                        google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>* output) {
+static void copy_public_permission_data(const std::unordered_map<int64_t, atfw::team::DTeamAnyData>& from,
+                                        google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>* output) {
   if (nullptr == output) {
     return;
   }
   for (const auto& kv : from) {
     if (kv.second.permission() == atfw::team::EN_TEAM_PERMISSION_TYPE_PUBLIC) {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      protobuf_copy_message((*output)[kv.first], kv.second);
+      auto* entry = output->Add();
+      entry->set_key(kv.first);
+      protobuf_copy_message(*entry->mutable_value(), kv.second);
     }
   }
 }
@@ -117,10 +142,13 @@ static bool team_any_value_equal(const google::protobuf::Any& l, const google::p
 
   // type_url 格式为 "<prefix>/<full.message.Name>"
   size_t slash_pos = l.type_url().find_last_of('/');
-  gsl::string_view type_name = std::string::npos == slash_pos ? gsl::string_view(l.type_url())
-                                                              : gsl::string_view(l.type_url()).substr(slash_pos + 1);
-  const auto* descriptor =
-      google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(std::string(type_name));
+  const google::protobuf::Descriptor* descriptor = nullptr;
+  if (std::string::npos == slash_pos) {
+    descriptor = google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(l.type_url());
+  } else {
+    descriptor = google::protobuf::DescriptorPool::generated_pool()->FindMessageTypeByName(
+        {l.type_url().data() + slash_pos + 1, l.type_url().size() - slash_pos - 1});
+  }
 
   // 规范字节类型: 字节比较即语义比较
   if (team_any_has_canonical_bytes(descriptor)) {
@@ -167,16 +195,29 @@ static bool team_any_data_equal(const atfw::team::DTeamAnyData& l, const atfw::t
   return l.permission() == r.permission() && team_any_value_equal(l.data(), r.data(), arena);
 }
 
-// 逐元素比较 DTeamAnyData 的 map 字段(protobuf_equal 只接受 Message，不能直接比较 Map 容器)
-static bool team_any_data_map_equal(const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& l,
-                                    const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& r,
+// 逐元素比较 DTeamAnyDataWithKey 的 repeated 字段(protobuf_equal 只接受 Message，不能直接比较容器)。
+// 只对 r 侧按 key 排序，l 侧逐项二分查找匹配，确保比较结果不受 key 在 repeated 里的存放顺序影响
+static bool team_any_data_map_equal(const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& l,
+                                    const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& r,
                                     google::protobuf::Arena* arena) {
   if (l.size() != r.size()) {
     return false;
   }
-  for (const auto& kv : l) {
-    auto it = r.find(kv.first);
-    if (it == r.end() || !team_any_data_equal(kv.second, it->second, arena)) {
+  std::vector<const atfw::team::DTeamAnyDataWithKey*> r_sorted;
+  r_sorted.reserve(static_cast<size_t>(r.size()));
+  for (const auto& item : r) {
+    r_sorted.push_back(&item);
+  }
+  std::sort(r_sorted.begin(), r_sorted.end(),
+            [](const atfw::team::DTeamAnyDataWithKey* lhs, const atfw::team::DTeamAnyDataWithKey* rhs) {
+              return lhs->key() < rhs->key();
+            });
+  for (const auto& item : l) {
+    auto it =
+        std::lower_bound(r_sorted.begin(), r_sorted.end(), item.key(),
+                         [](const atfw::team::DTeamAnyDataWithKey* lhs, int64_t key) { return lhs->key() < key; });
+    if (it == r_sorted.end() || (*it)->key() != item.key() ||
+        !team_any_data_equal(item.value(), (*it)->value(), arena)) {
       return false;
     }
   }
@@ -200,12 +241,12 @@ static inline bool team_condition_range_match(int64_t value,
 
 // 共享数据等值检查(与关系): expected 中的每个 key 都必须存在于 actual 且 Any 值相等；
 // actual 中额外存在的 key 不影响判定(条件只约束它列出的子集)
-static bool team_shared_data_match(const google::protobuf::Map<int64_t, atfw::team::DTeamAnyData>& actual,
-                                   const google::protobuf::Map<int64_t, google::protobuf::Any>& expected,
+static bool team_shared_data_match(const std::unordered_map<int64_t, atfw::team::DTeamAnyData>& actual,
+                                   const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyValueWithKey>& expected,
                                    google::protobuf::Arena* arena) {
   for (const auto& kv : expected) {
-    auto it = actual.find(kv.first);
-    if (it == actual.end() || !team_any_value_equal(it->second.data(), kv.second, arena)) {
+    auto it = actual.find(kv.key());
+    if (it == actual.end() || !team_any_value_equal(it->second.data(), kv.value(), arena)) {
       return false;
     }
   }
@@ -215,7 +256,7 @@ static bool team_shared_data_match(const google::protobuf::Map<int64_t, atfw::te
 // 单个成员是否满足成员条件(与关系): 共享成员数据等值 + 角色范围
 static bool team_member_condition_match(const atfw::team::DTeamMemberConditionChecker& condition,
                                         const team_room::member_runtime_data& member, google::protobuf::Arena* arena) {
-  if (!team_shared_data_match(member.member_data.shared_member_data(), condition.shared_member_data(), arena)) {
+  if (!team_shared_data_match(member.shared_member_data, condition.shared_member_data(), arena)) {
     return false;
   }
   return !condition.has_permission() ||
@@ -432,6 +473,7 @@ team_room::ptr_t team_room::create(rpc::context& ctx, const atfw::team::DTeamKey
     room->subscriber_->set_shared_event_callback_set(get_shared_team_room_channel_event_callback_set());
   }
   // 已就绪(共享层复用)则不会再触发 snapshot_finished，直接恢复当前缓存快照
+  // NOLINTNEXTLINE(readability-redundant-nested-if)
   if (room->subscriber_->is_ready()) {
     if (!room->restore_snapshot(ctx)) {
       FCTXLOGERROR(ctx, "team room {}:{} restore reused subscriber snapshot failed", team_key.zone_id(),
@@ -470,6 +512,8 @@ rpc::result_code_type team_room::await_ready(rpc::context& ctx) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
     }
   }
+
+  // NOLINTNEXTLINE(readability-redundant-nested-if)
   if (!snapshot_restored_) {
     if (!restore_snapshot(ctx)) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BAD_PACKAGE);
@@ -650,10 +694,7 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   protobuf_copy_message(*public_data->mutable_configure(), req.configure());
   // 修订默认值后再写入频道快照与 storage_，保证下发给订阅者的配置总是完整门槛
   revise_configure_default_permission(*public_data->mutable_configure());
-  for (const auto& kv : req.shared_team_data()) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    protobuf_copy_message((*public_data->mutable_shared_team_data())[kv.first], kv.second);
-  }
+  protobuf_copy_message(*public_data->mutable_shared_team_data(), req.shared_team_data());
 
   auto* member_data = public_data->add_member();
   protobuf_copy_message(*member_data->mutable_user_key(), req.sender_user_key());
@@ -661,10 +702,7 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   member_data->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
   *member_data->mutable_joined_timepoint() = protobuf_from_system_clock(now);
   *member_data->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(now);
-  for (const auto& kv : req.shared_member_data()) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    protobuf_copy_message((*member_data->mutable_shared_member_data())[kv.first], kv.second);
-  }
+  protobuf_copy_message(*member_data->mutable_shared_member_data(), req.shared_member_data());
 
   private_data->set_team_created(true);
 
@@ -687,7 +725,7 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   }
   if (!lock_acquired_) {
     // 合并的锁 CAS 已随 update 生效，登记本节点锁状态(与 acquire_lock 成功路径一致)
-    current_lock_ = self_lock;
+    current_lock_ = std::move(self_lock);
     lock_acquired_ = true;
     next_renew_lock_timepoint_ = now;
     next_renew_lock_timepoint_ += get_lock_renew_interval();
@@ -696,7 +734,7 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   protobuf_copy_message(*storage_.mutable_team_key(), public_data->team_key());
   protobuf_copy_message(*storage_.mutable_captain_user_key(), public_data->captain_user_key());
   protobuf_copy_message(*storage_.mutable_configure(), public_data->configure());
-  *storage_.mutable_shared_team_data() = public_data->shared_team_data();
+  move_team_any_data_to_map(shared_team_data_, *public_data->mutable_shared_team_data());
   apply_add_member(std::move(*public_data->mutable_member(0)), now);
   RPC_RETURN_CODE(0);
 }
@@ -803,10 +841,7 @@ rpc::result_code_type team_room::approve_invitation(rpc::context& ctx,
     add_member->set_user_router_server_id(req.user_router_server_id());
     *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(now);
     *add_member->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(now);
-    for (const auto& kv : req.shared_member_data()) {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      protobuf_copy_message((*add_member->mutable_shared_member_data())[kv.first], kv.second);
-    }
+    protobuf_copy_message(*add_member->mutable_shared_member_data(), req.shared_member_data());
     auto ret = RPC_AWAIT_CODE_RESULT(send_action(ctx, *add_action));
     if (0 != ret) {
       RPC_RETURN_CODE(ret);
@@ -954,10 +989,7 @@ rpc::result_code_type team_room::approve_join_request(rpc::context& ctx,
     *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(now);
     *add_member->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(now);
     // 加入请求携带的 member_admission_data 包含申请人的 shared_member_data 数据
-    for (const auto& kv : join_request.member_admission_data()) {
-      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-      protobuf_copy_message((*add_member->mutable_shared_member_data())[kv.first], kv.second);
-    }
+    protobuf_copy_message(*add_member->mutable_shared_member_data(), join_request.member_admission_data());
     auto ret = RPC_AWAIT_CODE_RESULT(send_action(ctx, *add_action));
     if (0 != ret) {
       RPC_RETURN_CODE(ret);
@@ -1066,7 +1098,7 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
 
   private_team_data_.clear();
   for (const auto& data : private_storage->private_team_data()) {
-    protobuf_copy_message(private_team_data_[data.first], data.second);
+    protobuf_copy_message(private_team_data_[data.key()], data.value());
   }
 
   std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> expired_member_key;
@@ -1119,6 +1151,8 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
     member->user_router_server_id = data.user_router_server_id();
     member->last_heartbeat_timepoint = protobuf_to_system_clock(data.last_heartbeat_timepoint());
     protobuf_copy_message(member->member_data, data);
+    // 成员共享数据移入内存的 key-value 索引，proto 字段在内存中保持为空
+    move_team_any_data_to_map(member->shared_member_data, *member->member_data.mutable_shared_member_data());
     member->member_data.set_user_router_server_id(member->user_router_server_id);
     *member->member_data.mutable_last_heartbeat_timepoint() =
         protobuf_from_system_clock(member->last_heartbeat_timepoint);
@@ -1178,7 +1212,11 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
   }
 
   // shared team data
-  *storage_.mutable_shared_team_data() = public_data->shared_team_data();
+  shared_team_data_.clear();
+  for (const auto& kv : public_data->shared_team_data()) {
+    protobuf_copy_message(shared_team_data_[kv.key()], kv.value());
+  }
+  storage_.clear_shared_team_data();
 
   change_captain(public_data->captain_user_key(), captain_role);
 
@@ -1334,8 +1372,7 @@ void team_room::apply_member_update(const atfw::team::DTeamMemberUpdateData& upd
   }
 
   for (const auto& kv : update_data.shared_member_data()) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    protobuf_copy_message((*member->member_data.mutable_shared_member_data())[kv.first], kv.second);
+    protobuf_copy_message(member->shared_member_data[kv.key()], kv.value());
   }
 }
 
@@ -1348,8 +1385,7 @@ void team_room::apply_team_update(const atfw::team::DTeamUpdateData& update_data
   }
 
   for (const auto& kv : update_data.shared_team_data()) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    protobuf_copy_message((*storage_.mutable_shared_team_data())[kv.first], kv.second);
+    protobuf_copy_message(shared_team_data_[kv.key()], kv.value());
   }
 }
 
@@ -1383,11 +1419,11 @@ void team_room::apply_add_invitation(const atfw::team::DTeamInvitation& invitati
   protobuf_copy_message(*invited, invitation);
   invited->clear_team_admission_data();
   invited->clear_member_admission_data();
-  copy_public_permission_data(storage_.shared_team_data(), invited->mutable_team_admission_data());
+  copy_public_permission_data(shared_team_data_, invited->mutable_team_admission_data());
   foreach_member([invited](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
     auto* member_data = invited->add_member_admission_data();
     protobuf_copy_message(*member_data->mutable_user_key(), member->member_data.user_key());
-    copy_public_permission_data(member->member_data.shared_member_data(), member_data->mutable_member_admission_data());
+    copy_public_permission_data(member->shared_member_data, member_data->mutable_member_admission_data());
     return true;
   });
 
@@ -1559,6 +1595,8 @@ void team_room::apply_add_member(atfw::team::DTeamMember&& member_data,
   uint64_t previous_user_router_server_id = member->user_router_server_id;
   auto member_key = member->member_data.user_key();
   member->member_data = std::move(member_data);
+  // 成员共享数据移入内存的 key-value 索引，proto 字段在内存中保持为空
+  move_team_any_data_to_map(member->shared_member_data, *member->member_data.mutable_shared_member_data());
   // Key不允许修改
   protobuf_copy_message(*member->member_data.mutable_user_key(), member_key);
   // 重复 add_member 只保留更早的入队时间，不能因重试改变成员加入顺序。
@@ -1905,8 +1943,7 @@ bool team_room::check_update_conditions(
 
 bool team_room::check_condition_checker(rpc::context& ctx, const atfw::team::DTeamConditionChecker& checker) {
   // 共享队伍数据等值检查(与关系)
-  if (!team_shared_data_match(storage_.shared_team_data(), checker.shared_team_data(),
-                              ctx.get_protobuf_arena().get())) {
+  if (!team_shared_data_match(shared_team_data_, checker.shared_team_data(), ctx.get_protobuf_arena().get())) {
     return false;
   }
 
@@ -1966,7 +2003,8 @@ bool team_room::check_member_condition_group(rpc::context& ctx,
   // 百分比换算，只剩整数比较。百分比换算: satisfied * kTeamConditionPercentBase >= total * percent
   // 等价于 satisfied >= ceil(total * percent / kTeamConditionPercentBase)，max 侧取 floor
   const int64_t total_count = static_cast<int64_t>(member_.size());
-  int64_t pass_at = 0;                                         // 满足数达到该值即通过 min 维度
+  int64_t pass_at = 0;  // 满足数达到该值即通过 min 维度
+  // NOLINTNEXTLINE(readability-redundant-parentheses)
   int64_t fail_above = (std::numeric_limits<int64_t>::max)();  // 满足数超过该值即违反 max 维度(默认不限制)
   switch (group.scope_type_case()) {
     case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kMembersCount: {
@@ -2045,11 +2083,7 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
   auto is_self = [&operator_key](const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
     return operator_key.user_id() == user_key.user_id() && operator_key.zone_id() == user_key.zone_id();
   };
-  // 队长(恒为 OWNER)的角色不能被移除或修改，转让须走 election_captain
-  auto is_captain = [this](const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
-    return 0 != storage_.captain_user_key().user_id() && storage_.captain_user_key().user_id() == user_key.user_id() &&
-           storage_.captain_user_key().zone_id() == user_key.zone_id();
-  };
+
   // 要求操作者是队伍成员且角色不低于 role_limit
   auto require_role = [this, &operator_key](atfw::team::EnTeamPermissionRole role_limit) -> int32_t {
     auto operator_member = find_member(operator_key, false);
@@ -2362,7 +2396,7 @@ rpc::result_code_type team_room::acquire_lock(rpc::context& ctx) {
 
     auto ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_reset_lock(ctx, checker, rsp_checker));
     if (0 == ret) {
-      current_lock_ = self_lock;
+      current_lock_ = std::move(self_lock);
       lock_acquired_ = true;
       next_renew_lock_timepoint_ = now;
       next_renew_lock_timepoint_ += get_lock_renew_interval();
@@ -2685,7 +2719,7 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
 
   auto ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_update(ctx, options, checker, rsp_checker));
   if (0 == ret) {
-    current_lock_ = self_lock;
+    current_lock_ = std::move(self_lock);
     next_renew_lock_timepoint_ = now + get_lock_renew_interval();
     if (compact_sequence > 0) {
       storage_.set_saved_action_sequence(last_sequence);
@@ -2891,19 +2925,21 @@ void team_room::dump_private_data(atfw::team::DTeamRoomPrivateData& output, int6
   *output.mutable_last_compact_timepoint() = protobuf_from_system_clock(compact_timepoint);
   output.set_team_created(team_created_);
 
-  for (const auto& data : private_team_data_) {
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    protobuf_copy_message((*output.mutable_private_team_data())[data.first], data.second);
-  }
+  dump_team_any_data_from_map(output.mutable_private_team_data(), private_team_data_);
 }
 
 void team_room::dump_public_data(atfw::team::DTeamStorage& output) {
   protobuf_copy_message(output, storage_);
   dump_team_key(*output.mutable_team_key());
 
+  // dump 队伍共享数据(内存中 storage_.shared_team_data 恒为空，按 key 回填)
+  dump_team_any_data_from_map(output.mutable_shared_team_data(), shared_team_data_);
+
   // dump成员数据
   foreach_member([&output](atfw::util::nostd::nonnull<const member_ptr_t>& member) {
-    protobuf_copy_message(*output.add_member(), member->member_data);
+    auto* member_data = output.add_member();
+    protobuf_copy_message(*member_data, member->member_data);
+    dump_team_any_data_from_map(member_data->mutable_shared_member_data(), member->shared_member_data);
     return true;
   });
 

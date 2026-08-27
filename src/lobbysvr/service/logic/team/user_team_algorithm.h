@@ -23,15 +23,12 @@ class user_team_algorithm {
   static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamJoinRequest&) noexcept;
   static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamInvitation&) noexcept;
 
-  static int64_t make_team_shared_data_key(PROJECT_NAMESPACE_ID::EnTeamSharedModuleType module_type,
-                                           int32_t module_data_id);
+  static int64_t make_team_shared_data_key(const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data);
 
-  static PROJECT_NAMESPACE_ID::EnTeamSharedModuleType parse_team_shared_data_module_type(int64_t key);
-  static int32_t parse_team_shared_data_module_data_id(int64_t key);
+  static int64_t make_team_member_shared_data_key(const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data);
 
-  static bool allow_client_update_team_shared_data(PROJECT_NAMESPACE_ID::EnTeamSharedModuleType module_type,
-                                                   int32_t module_data_id);
+  static bool allow_client_update_team_shared_data(const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data);
 
-  static bool allow_client_update_team_member_shared_data(PROJECT_NAMESPACE_ID::EnTeamSharedModuleType module_type,
-                                                          int32_t module_data_id);
+  static bool allow_client_update_team_member_shared_data(
+      const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data);
 };

@@ -442,7 +442,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
         cached_configure_ = action.team_update().configure();
       }
 
-      // TODO(owent): 处理EN_TEAM_SHARED_MODULE_TYPE_BATTLE+EN_TEAM_SHARED_DATA_BATTLE_MATCHING
+      // TODO(owent): 处理 DTeamSharedDataModule.battle.matching(DTeamSharedDataTypeBattle 的 matching 字段)
       // 如果转移成正在matching则要发起匹配的启动/恢复流程
       break;
     }

@@ -82,6 +82,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
     uint64_t user_router_server_id = 0;
 
     atfw::team::DTeamMember member_data;
+    // 成员共享数据的 key-value 索引(内存中以 unordered_map 维护；member_data.shared_member_data 字段
+    // 在内存中恒为空，仅在 dump 快照/构建频道事件时按 key 回填)
+    std::unordered_map<int64_t, atfw::team::DTeamAnyData> shared_member_data;
 
     atfw::team::EnTeamExitReason exit_reason = atfw::team::EN_TEAM_EXIT_REASON_DEFAULT;
   };
@@ -353,7 +356,11 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> subscriber_;
 
   // 权威队伍状态，随 custom_data 同步给所有订阅者(成员清单、加入请求和加入邀请列表)
+  // 注意: storage_.shared_team_data 字段在内存中恒为空，共享队伍数据由 shared_team_data_ 维护，
+  // dump 快照时按 key 回填
   atfw::team::DTeamStorage storage_;
+  // 队伍共享数据的 key-value 索引(内存中以 unordered_map 维护)
+  std::unordered_map<int64_t, atfw::team::DTeamAnyData> shared_team_data_;
   std::unordered_map<int64_t, atfw::team::DTeamAnyData> private_team_data_;
   // 成员心跳等在线状态记录(LRU 维护最近访问成员)
   member_runtime_lru_map_t member_;

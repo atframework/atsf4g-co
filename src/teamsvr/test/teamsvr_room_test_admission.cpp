@@ -179,11 +179,13 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
   CASE_EXPECT_EQ(0, env.run("setup_data", [room, &members](rpc::context& ctx) -> rpc::result_code_type {
     {
       atfw::team::DTeamAction action;
-      auto& shared = *action.mutable_team_update()->mutable_shared_team_data();
-      shared[1].set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_PUBLIC);
-      shared[1].mutable_data()->set_value(std::string("public-team-data"));
-      shared[2].set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-      shared[2].mutable_data()->set_value(std::string("member-team-data"));
+      auto* team_update = action.mutable_team_update();
+      add_team_any_data_entry(team_update->mutable_shared_team_data(), 1, "public-team-data")
+          ->mutable_value()
+          ->set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_PUBLIC);
+      add_team_any_data_entry(team_update->mutable_shared_team_data(), 2, "member-team-data")
+          ->mutable_value()
+          ->set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
       int32_t ret = RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action));
       if (0 != ret) {
         RPC_RETURN_CODE(ret);
@@ -191,11 +193,13 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
     }
     {
       atfw::team::DTeamAction action;
-      auto& shared = *action.mutable_member_update()->mutable_shared_member_data();
-      shared[3].set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_PUBLIC);
-      shared[3].mutable_data()->set_value(std::string("public-member-data"));
-      shared[4].set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-      shared[4].mutable_data()->set_value(std::string("secret-member-data"));
+      auto* member_update = action.mutable_member_update();
+      add_team_any_data_entry(member_update->mutable_shared_member_data(), 3, "public-member-data")
+          ->mutable_value()
+          ->set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_PUBLIC);
+      add_team_any_data_entry(member_update->mutable_shared_member_data(), 4, "secret-member-data")
+          ->mutable_value()
+          ->set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
       protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }
@@ -215,7 +219,8 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
     // PUBLIC 的队伍数据保留
     CASE_EXPECT_EQ(1, invited.team_admission_data_size());
     if (1 == invited.team_admission_data_size()) {
-      CASE_EXPECT_EQ("public-team-data", invited.team_admission_data().at(1).data().value());
+      CASE_EXPECT_EQ(1, invited.team_admission_data(0).key());
+      CASE_EXPECT_EQ("public-team-data", invited.team_admission_data(0).value().data().value());
     }
     // 每个成员仅 PUBLIC 数据下发；secret 数据不泄露
     bool found_member_entry = false;
@@ -224,11 +229,12 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
         found_member_entry = true;
         CASE_EXPECT_EQ(1, member_data.member_admission_data_size());
         if (1 == member_data.member_admission_data_size()) {
-          CASE_EXPECT_EQ("public-member-data", member_data.member_admission_data().at(3).data().value());
+          CASE_EXPECT_EQ(3, member_data.member_admission_data(0).key());
+          CASE_EXPECT_EQ("public-member-data", member_data.member_admission_data(0).value().data().value());
         }
       }
       for (const auto& kv : member_data.member_admission_data()) {
-        CASE_EXPECT_NE("secret-member-data", kv.second.data().value());
+        CASE_EXPECT_NE("secret-member-data", kv.value().data().value());
       }
     }
     CASE_EXPECT_TRUE(found_member_entry);
@@ -268,7 +274,7 @@ CASE_TEST(teamsvr_room_admission, approve_invitation_writes_and_notifies) {
   protobuf_copy_message(*approve_req.mutable_invitee(), invitee);
   approve_req.set_client_version("invitee-version-1.0");
   approve_req.set_user_router_server_id(0x11223344);
-  (*approve_req.mutable_shared_member_data())[7].mutable_data()->set_value(std::string("invitee-own-data"));
+  add_team_any_data_entry(approve_req.mutable_shared_member_data(), 7, "invitee-own-data");
 
   auto& fake = env.channel(team_id);
   size_t sends_before = fake.send_message_calls();
@@ -288,7 +294,13 @@ CASE_TEST(teamsvr_room_admission, approve_invitation_writes_and_notifies) {
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, action.add_member().role());
       CASE_EXPECT_EQ("invitee-version-1.0", action.add_member().client_version());
       CASE_EXPECT_EQ(0x11223344u, action.add_member().user_router_server_id());
-      CASE_EXPECT_EQ("invitee-own-data", action.add_member().shared_member_data().at(7).data().value());
+      const auto& shared_data = action.add_member().shared_member_data();
+      auto data_it = std::find_if(shared_data.begin(), shared_data.end(),
+                                  [](const atfw::team::DTeamAnyDataWithKey& entry) { return entry.key() == 7; });
+      CASE_EXPECT_TRUE(data_it != shared_data.end());
+      if (data_it != shared_data.end()) {
+        CASE_EXPECT_EQ("invitee-own-data", data_it->value().data().value());
+      }
     } else if (action.action_case() == atfw::team::DTeamAction::kApproveInvitation) {
       approve_index = visit_index;
     }

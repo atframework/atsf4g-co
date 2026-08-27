@@ -27,11 +27,11 @@ message SSTeamRoomCreateReq {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_member_data = 13;
+  repeated DTeamAnyDataWithKey shared_member_data = 13;
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_team_data = 14;
+  repeated DTeamAnyDataWithKey shared_team_data = 14;
 }
 
 message SSTeamRoomCreateRsp {
@@ -84,7 +84,7 @@ message DTeamRoomPrivateData {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> private_team_data = 15;
+  repeated DTeamAnyDataWithKey private_team_data = 15;
 }
 
 message SSTeamRoomAddInvitationReq {
@@ -106,7 +106,7 @@ message SSTeamRoomApproveInvitationReq {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_member_data = 13;
+  repeated DTeamAnyDataWithKey shared_member_data = 13;
 }
 
 message SSTeamRoomApproveInvitationRsp {

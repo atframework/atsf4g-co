@@ -399,7 +399,7 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
           update->set_user_router_server_id(0x6666);
           protobuf_copy_message(*update->mutable_user_channel(), make_personal_channel(7003));
           update->set_client_version("v-self");
-          (*update->mutable_shared_member_data())[7].mutable_data()->set_value(std::string("self-data"));
+          add_team_any_data_entry(update->mutable_shared_member_data(), 7, "self-data");
           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
               atframework::testing::invoke_ss_action<task_action_send_message>(ctx, request, invoke_options)));
         });
@@ -409,7 +409,7 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
 
   CASE_EXPECT_EQ(0x6666u, normal_member->member_data.user_router_server_id());
   CASE_EXPECT_EQ("v-self", normal_member->member_data.client_version());
-  CASE_EXPECT_EQ(1, normal_member->member_data.shared_member_data().count(7));
+  CASE_EXPECT_EQ(1, normal_member->shared_member_data.count(7));
 
   // 管理员(经 send_message RPC)更新他人: client_version 合并生效，但携带的 router 被 action 层清零(GAP-05)
   {
@@ -475,7 +475,7 @@ CASE_TEST(teamsvr_room_event, team_update_merge_semantics) {
   {
     atfw::team::DTeamAction action;
     action.mutable_team_update()->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
-    (*action.mutable_team_update()->mutable_shared_team_data())[1].mutable_data()->set_value(std::string("one"));
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 1, "one");
     CASE_EXPECT_EQ(0, env.run("team_update1", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }));
@@ -500,7 +500,7 @@ CASE_TEST(teamsvr_room_event, team_update_merge_semantics) {
   // 第二次: 只携带 shared[2]，不携带 configure -> configure 保留
   {
     atfw::team::DTeamAction action;
-    (*action.mutable_team_update()->mutable_shared_team_data())[2].mutable_data()->set_value(std::string("two"));
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 2, "two");
     CASE_EXPECT_EQ(0, env.run("team_update2", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }));

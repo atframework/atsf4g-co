@@ -59,9 +59,17 @@ task_action_team_update_team_data::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (!user_team_algorithm::allow_client_update_team_shared_data(req_body.module_type(), req_body.module_data_id())) {
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+  // 显式拒绝空数据，避免 schema 不匹配的请求(如旧草案协议)被解析为空后静默返回成功
+  if (req_body.data().empty()) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  for (const auto& checked_data : req_body.data()) {
+    if (!user_team_algorithm::allow_client_update_team_shared_data(checked_data)) {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
   }
 
   // TODO(owent): 各类数据更新的操作

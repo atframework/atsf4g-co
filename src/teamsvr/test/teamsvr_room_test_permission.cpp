@@ -101,8 +101,7 @@ atfw::team::DTeamAction make_member_update_action(const PROJECT_NAMESPACE_ID::DU
 
 atfw::team::DTeamAction make_team_update_action() {
   atfw::team::DTeamAction action;
-  auto* data = (*action.mutable_team_update()->mutable_shared_team_data())[42].mutable_data();
-  data->set_value(std::string("ut-team-data"));
+  add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 42, "ut-team-data");
   return action;
 }
 // member_update 并写入一条共享成员数据(Any 只设置 value，与 make_team_update_action 的写法一致)
@@ -111,14 +110,14 @@ atfw::team::DTeamAction make_member_update_data_action(const PROJECT_NAMESPACE_I
   atfw::team::DTeamAction action;
   auto* update = action.mutable_member_update();
   protobuf_copy_message(*update->mutable_user_key(), key);
-  (*update->mutable_shared_member_data())[data_key].mutable_data()->set_value(value);
+  add_team_any_data_entry(update->mutable_shared_member_data(), data_key, value);
   return action;
 }
 
 // team_update 并写入一条共享队伍数据
 atfw::team::DTeamAction make_team_update_data_action(int64_t data_key, const std::string& value) {
   atfw::team::DTeamAction action;
-  (*action.mutable_team_update()->mutable_shared_team_data())[data_key].mutable_data()->set_value(value);
+  add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), data_key, value);
   return action;
 }
 
@@ -1306,9 +1305,9 @@ CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
     auto member = room->find_member(members.normal, false);
     CASE_EXPECT_TRUE(!!member);
     if (member) {
-      auto it = member->member_data.shared_member_data().find(7);
-      CASE_EXPECT_TRUE(it != member->member_data.shared_member_data().end());
-      if (it != member->member_data.shared_member_data().end()) {
+      auto it = member->shared_member_data.find(7);
+      CASE_EXPECT_TRUE(it != member->shared_member_data.end());
+      if (it != member->shared_member_data.end()) {
         CASE_EXPECT_EQ(std::string("ready"), it->second.data().value());
       }
     }
@@ -1319,7 +1318,7 @@ CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
     atfw::team::DTeamAction action = make_member_update_data_action(members.normal, 8, "lv2");
     auto* group = action.mutable_member_update()->add_condition()->add_member_condition_group();
     protobuf_copy_message(*group->mutable_user_key(), members.normal);
-    (*group->mutable_member_condition()->mutable_shared_member_data())[7].set_value(expected);
+    add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), 7, expected);
     return action;
   };
 
@@ -1332,9 +1331,9 @@ CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
     auto member = room->find_member(members.normal, false);
     CASE_EXPECT_TRUE(!!member);
     if (member) {
-      auto it = member->member_data.shared_member_data().find(8);
-      CASE_EXPECT_TRUE(it != member->member_data.shared_member_data().end());
-      if (it != member->member_data.shared_member_data().end()) {
+      auto it = member->shared_member_data.find(8);
+      CASE_EXPECT_TRUE(it != member->shared_member_data.end());
+      if (it != member->shared_member_data.end()) {
         CASE_EXPECT_EQ(std::string("lv2"), it->second.data().value());
       }
     }
@@ -1352,7 +1351,7 @@ CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
     atfw::team::DTeamAction missing_key_action = make_member_update_data_action(members.normal, 8, "lv3");
     auto* group = missing_key_action.mutable_member_update()->add_condition()->add_member_condition_group();
     protobuf_copy_message(*group->mutable_user_key(), members.normal);
-    (*group->mutable_member_condition()->mutable_shared_member_data())[99].set_value("x");
+    add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), 99, "x");
     before = snapshot_counters(env, fake);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
                    check_permission(env, room, members.normal, missing_key_action));
@@ -1411,7 +1410,8 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_team_data) {
   // 条件匹配([42]=="ut-team-data") + 写入 [43]="v2": 通过并应用，最终事件数据裁剪掉 condition
   {
     atfw::team::DTeamAction action = make_team_update_data_action(43, "v2");
-    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[42].set_value("ut-team-data");
+    add_team_any_value_entry(action.mutable_team_update()->add_condition()->mutable_shared_team_data(), 42,
+                             "ut-team-data");
     CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, action));
     CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
     CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -1421,14 +1421,14 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_team_data) {
   // 应用生效验证: 以新值 [43]=="v2" 为条件可通过(证明上一次 team_update 已应用)
   {
     atfw::team::DTeamAction action = make_team_update_data_action(44, "v3");
-    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[43].set_value("v2");
+    add_team_any_value_entry(action.mutable_team_update()->add_condition()->mutable_shared_team_data(), 43, "v2");
     CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, action));
   }
 
   // 条件值不匹配: 拒绝且零写入
   {
     atfw::team::DTeamAction action = make_team_update_data_action(44, "v3");
-    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[42].set_value("v2");
+    add_team_any_value_entry(action.mutable_team_update()->add_condition()->mutable_shared_team_data(), 42, "v2");
     auto before = snapshot_counters(env, fake);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
                    check_permission(env, room, members.normal, action));
@@ -1439,7 +1439,7 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_team_data) {
   // 条件 key 不存在: 拒绝且零写入
   {
     atfw::team::DTeamAction action = make_team_update_data_action(44, "v3");
-    (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[99].set_value("x");
+    add_team_any_value_entry(action.mutable_team_update()->add_condition()->mutable_shared_team_data(), 99, "x");
     auto before = snapshot_counters(env, fake);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
                    check_permission(env, room, members.normal, action));
@@ -1499,7 +1499,7 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_count_and_or) {
   {
     atfw::team::DTeamAction action = make_team_update_data_action(61, "y");
     auto* checker = action.mutable_team_update()->add_condition();
-    (*checker->mutable_shared_team_data())[60].set_value("and");
+    add_team_any_value_entry(checker->mutable_shared_team_data(), 60, "and");
     checker->mutable_members_count()->set_min_value(4);
     before = snapshot_counters(env, fake);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
@@ -1771,9 +1771,8 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
   auto write_any_data = [&env, team_id, &members](int64_t data_key, const std::string& type_url,
                                                   const std::string& value) {
     atfw::team::DTeamAction action;
-    auto* data = (*action.mutable_team_update()->mutable_shared_team_data())[data_key].mutable_data();
-    data->set_type_url(type_url);
-    data->set_value(value);
+    auto* entry = add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), data_key, value);
+    entry->mutable_value()->mutable_data()->set_type_url(type_url);
     CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, action));
     CASE_EXPECT_EQ(0, env.sync(team_id));
   };
@@ -1781,9 +1780,10 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
   auto check_any_condition = [&env, &room, &members](int64_t data_key, const std::string& type_url,
                                                      const std::string& value) {
     atfw::team::DTeamAction action = make_team_update_data_action(60, "probe");
-    auto& expect = (*action.mutable_team_update()->add_condition()->mutable_shared_team_data())[data_key];
-    expect.set_type_url(type_url);
-    expect.set_value(value);
+    auto* expect = add_team_any_value_entry(action.mutable_team_update()->add_condition()->mutable_shared_team_data(),
+                                            data_key, value)
+                       ->mutable_value();
+    expect->set_type_url(type_url);
     return check_permission(env, room, members.normal, action);
   };
 

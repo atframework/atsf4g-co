@@ -81,6 +81,20 @@ message DTeamAnyData {
   google.protobuf.Any data = 2;
 }
 
+// 按 abseil-cpp 最佳实践，不使用 proto map 字段，统一用带 key 的 repeated 元素表达 key-value 关系。
+// 注意: 同一字段内 key 不允许重复，写入方合并时后写的覆盖先写的
+message DTeamAnyDataWithKey {
+  int64 key = 1;
+  DTeamAnyData value = 2;
+}
+
+// 与 DTeamAnyDataWithKey 类似，但 value 直接是 google.protobuf.Any(即 DTeamAnyData.data)，
+// 用于条件检查器等不涉及权限级别的场景。注意: 同一字段内 key 不允许重复
+message DTeamAnyValueWithKey {
+  int64 key = 1;
+  google.protobuf.Any value = 2;
+}
+
 message DTeamKey {
   int64 team_id = 1;
   // 队伍所属区服；和 team_id 一起构成队伍唯一标识，路由/分片以 (zone_id, team_id) 为 key
@@ -107,7 +121,7 @@ message DTeamMemberConditionChecker {
   // 共享的成员数据检查，所有的值必须相等（即与关系）
   // shared_member_data 中的 value
   // 对应DTeamMember.shared_member_data里的DTeamAnyData的data字段，permission字段不参与检查
-  map<int64, google.protobuf.Any> shared_member_data = 1;
+  repeated DTeamAnyValueWithKey shared_member_data = 1;
 
   // 权限检查
   DTeamConditionMinMaxValue permission = 2;
@@ -116,7 +130,7 @@ message DTeamMemberConditionChecker {
 message DTeamConditionChecker {
   // 共享的队伍数据检查，所有的值必须相等（即与关系）
   // shared_team_data 中的 value 对应DTeamStorage.shared_team_data里的DTeamAnyData的data字段，permission字段不参与检查
-  map<int64, google.protobuf.Any> shared_team_data = 1;
+  repeated DTeamAnyValueWithKey shared_team_data = 1;
 
   // 队伍成员数量
   DTeamConditionMinMaxValue members_count = 2;
@@ -166,7 +180,7 @@ message DTeamMember {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_member_data = 13;
+  repeated DTeamAnyDataWithKey shared_member_data = 13;
 }
 
 message DTeamMemberUpdateData {
@@ -182,7 +196,7 @@ message DTeamMemberUpdateData {
 
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_member_data = 13;
+  repeated DTeamAnyDataWithKey shared_member_data = 13;
 }
 
 message DTeamMemberJoinData {
@@ -242,11 +256,11 @@ message DTeamInvitation {
 
   // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> team_admission_data = 14;
+  repeated DTeamAnyDataWithKey team_admission_data = 14;
 
   message MemberAdmissionData {
     atframework.shared.DUserIDKey user_key = 1;
-    map<int64, DTeamAnyData> member_admission_data = 2;
+    repeated DTeamAnyDataWithKey member_admission_data = 2;
   }
   repeated MemberAdmissionData member_admission_data = 15;
 }
@@ -267,7 +281,7 @@ message DTeamJoinRequest {
 
   // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> member_admission_data = 14;
+  repeated DTeamAnyDataWithKey member_admission_data = 14;
 }
 
 message DTeamConfigure {
@@ -281,7 +295,7 @@ message DTeamConfigure {
   EnTeamPermissionRole update_team_data_role = 4;      // 更新队伍共享数据(team_update)，默认 NORMAL
   EnTeamPermissionRole reject_invitation_role = 5;     // 否决他人收到的邀请(撤回邀请)，默认 ADMIN；
                                                        // 被邀请人本人总是可以否决发给自己的邀请
-  bool disable_join_request = 6;  // 禁止非成员发起加入请求(私人小队，仅通过邀请加入)，默认 false(允许)
+  bool disable_join_request = 6;                  // 禁止非成员发起加入请求(私人小队，仅通过邀请加入)，默认 false(允许)
   EnTeamPermissionRole set_member_role_role = 7;  // 设置成员角色(member_set_role)，默认 ADMIN；
                                                   // 无论配置如何都不能授予高于操作者自身的角色
 }
@@ -310,7 +324,7 @@ message DTeamStorage {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_team_data = 14;
+  repeated DTeamAnyDataWithKey shared_team_data = 14;
 }
 
 message DTeamUpdateData {
@@ -322,7 +336,7 @@ message DTeamUpdateData {
 
   // 共享的队伍数据，通常是当前关卡、模式、匹配信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
-  map<int64, DTeamAnyData> shared_team_data = 14;
+  repeated DTeamAnyDataWithKey shared_team_data = 14;
 }
 
 message DTeamAction {

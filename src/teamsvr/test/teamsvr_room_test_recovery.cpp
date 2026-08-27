@@ -629,7 +629,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
 
   {
     atfw::team::DTeamAction action;
-    (*action.mutable_team_update()->mutable_shared_team_data())[100].mutable_data()->set_value(std::string("shared-1"));
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 100, "shared-1");
     action.mutable_team_update()->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
     CASE_EXPECT_EQ(0, env.run("team_update", [source_room, &action](rpc::context& ctx) -> rpc::result_code_type {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(source_room->send_action(ctx, action)));
