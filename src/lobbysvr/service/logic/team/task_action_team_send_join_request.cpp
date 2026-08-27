@@ -67,8 +67,8 @@ task_action_team_send_join_request::operator()() {
   }
 
   // 转发 add_join_request 到 teamsvr-room(按队伍一致性哈希路由)，SS消息打包在 user_team_manager 中，业务结果透传
-  set_response_code(RPC_AWAIT_CODE_RESULT(
-      user_inst->get_user_team_manager().send_join_request(get_shared_context(), req_body.team_key())));
+  set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_team_manager().send_join_request(
+      get_shared_context(), req_body.team_key(), req_body.team_source_type(), req_body.team_source_data())));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

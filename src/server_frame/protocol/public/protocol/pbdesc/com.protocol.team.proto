@@ -20,6 +20,9 @@ message CSTeamSendInvitationReq {
   // 不指定team_key时，表示邀请用户加入当前玩家所在的默认队伍，如果默认队伍不存在，会先创建一个
   atframework.team.DTeamKey team_key = 1;
   atframework.shared.DUserIDKey user_key = 2;
+
+  atframework.team.EnTeamSourceType team_source_type = 6;
+  google.protobuf.Any team_source_data = 7;
 }
 
 message SCTeamSendInvitationRsp {}
@@ -78,6 +81,9 @@ message SCTeamUpdateTeamDataRsp {}
 
 message CSTeamSendJoinRequestReq {
   atframework.team.DTeamKey team_key = 1;
+
+  atframework.team.EnTeamSourceType team_source_type = 6;
+  google.protobuf.Any team_source_data = 7;
 }
 
 message SCTeamSendJoinRequestRsp {}

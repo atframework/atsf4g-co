@@ -89,7 +89,24 @@ class user_team_manager {
   // 发起加入请求(协程内调用): 打包 SSTeamRoomAddJoinRequestReq 并转发到 teamsvr-room(按队伍一致性哈希路由)，
   // 申请人的版本/路由/私有频道由本人上报，业务结果经 client_result 透传
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_join_request(rpc::context& ctx,
-                                                                       const atfw::team::DTeamKey& team_key);
+                                                                       const atfw::team::DTeamKey& team_key,
+                                                                       atfw::team::EnTeamSourceType team_source_type,
+                                                                       const ::google::protobuf::Any& team_source_data);
+
+  // 创建队伍(协程内调用): 打包 SSTeamRoomCreateReq 并转发到 teamsvr-room(team_id 由服务端分配)，
+  // 创建者作为队长(OWNER)入队，初始 shared_team_data/shared_member_data 随请求上报；
+  // 成功后直接按响应在本地注册队伍(create 不会回发 joined_team 通知)并输出 team_key，业务结果经 client_result 透传
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_team(rpc::context& ctx,
+                                                                 PROJECT_NAMESPACE_ID::EnTeamType type,
+                                                                 atfw::team::DTeamKey& output_team_key);
+
+  // 发起邀请(协程内调用): 打包 SSTeamRoomAddInvitationReq 并转发到 teamsvr-room(按队伍一致性哈希路由)，
+  // 被邀请人的私有通知频道由其 user_key 派生，业务结果经 client_result 透传
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_invitation(rpc::context& ctx,
+                                                                     const atfw::team::DTeamKey& team_key,
+                                                                     const PROJECT_NAMESPACE_ID::DUserIDKey& invitee,
+                                                                     atfw::team::EnTeamSourceType team_source_type,
+                                                                     const ::google::protobuf::Any& team_source_data);
 
   user_team::ptr_t get_team_by_team_key(const atfw::team::DTeamKey& team_key) const noexcept;
 

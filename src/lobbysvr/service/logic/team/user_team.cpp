@@ -674,6 +674,8 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
         member.user_key().user_id() == owner_->get_owner().get_user_id()) {
       is_member_ = true;
       cached_permission_role_ = member.role();
+
+      do_member_shared_data(ctx, member.user_key(), member.shared_member_data());
       break;
     }
 

@@ -350,7 +350,9 @@ rpc::result_code_type user_team_manager::reject_invitation(rpc::context& ctx, co
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, const atfw::team::DTeamKey& team_key) {
+rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                                           atfw::team::EnTeamSourceType team_source_type,
+                                                           const ::google::protobuf::Any& team_source_data) {
   // 申请人的版本/路由/私有频道由本人上报
   rpc::context::message_holder<atfw::team::SSTeamRoomAddJoinRequestReq> ss_req{ctx};
   rpc::context::message_holder<atfw::team::SSTeamRoomAddJoinRequestRsp> ss_rsp{ctx};
@@ -364,6 +366,9 @@ rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, co
   // 成员通知路由到当前持有会话的 lobbysvr 节点
   join_request->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
+  join_request->set_team_source_type(team_source_type);
+  protobuf_copy_message(*join_request->mutable_team_source_data(), team_source_data);
+
   // 填充 member_admission_data
   pack_team_member_shared_data(ctx, user_team_algorithm::get_team_type(*join_request),
                                *join_request->mutable_member_admission_data());
@@ -376,6 +381,74 @@ rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, co
   if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
     // 目标频道已不存在(队伍从未创建或已解散)，对客户端表现为队伍不存在
     ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND;
+  }
+  RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type user_team_manager::create_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType type,
+                                                     atfw::team::DTeamKey& output_team_key) {
+  rpc::context::message_holder<atfw::team::SSTeamRoomCreateReq> ss_req{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomCreateRsp> ss_rsp{ctx};
+  // team_id 置 0 由 teamsvr-room 分配，zone_id 参与按队伍一致性哈希的路由
+  ss_req->mutable_team_key()->set_zone_id(owner_->get_zone_id());
+  owner_->dump_user_key(*ss_req->mutable_sender_user_key());
+  protobuf_copy_message(*ss_req->mutable_sender_user_channel(),
+                        owner_->get_user_chat_manager().get_private_chat_channel_key());
+
+  // 填充初始的共享数据(队伍的和成员的)，各模块按 key 区分自己的数据
+  pack_team_shared_data(ctx, type, *ss_req->mutable_shared_team_data());
+  pack_team_member_shared_data(ctx, type, *ss_req->mutable_shared_member_data());
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::create(ctx, *ss_req, *ss_rsp));
+  if (0 == ret) {
+    ret = ss_rsp->client_result();
+  }
+  if (0 != ret) {
+    RPC_RETURN_CODE(ret);
+  }
+
+  // create 不会回发 joined_team 通知，这里直接按响应注册本地队伍(创建者即队长)
+  atfw::team::DTeamMemberJoinData join_data;
+  protobuf_copy_message(*join_data.mutable_team_key(), ss_rsp->team_key());
+  protobuf_copy_message(*join_data.mutable_user_key(), ss_req->sender_user_key());
+  protobuf_copy_message(*join_data.mutable_team_channel(), ss_rsp->room_channel());
+  join_data.set_user_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+  protobuf_copy_message(*join_data.mutable_captain_user_key(), ss_req->sender_user_key());
+  add_team(ctx, type, join_data);
+
+  protobuf_copy_message(output_team_key, ss_rsp->team_key());
+  RPC_RETURN_CODE(0);
+}
+
+rpc::result_code_type user_team_manager::send_invitation(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                                         const PROJECT_NAMESPACE_ID::DUserIDKey& invitee,
+                                                         atfw::team::EnTeamSourceType team_source_type,
+                                                         const ::google::protobuf::Any& team_source_data) {
+  rpc::context::message_holder<atfw::team::SSTeamRoomAddInvitationReq> ss_req{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomAddInvitationRsp> ss_rsp{ctx};
+  auto* invitation = ss_req->mutable_invitation();
+  protobuf_copy_message(*invitation->mutable_team_key(), team_key);
+  owner_->dump_user_key(*invitation->mutable_inviter());
+  protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+  // 被邀请人的私有通知频道由其 user_key 按标准单播格式派生(与 user_chat_manager 的私有频道一致)
+  auto* invitee_channel = invitation->mutable_invitee_private_channel();
+  invitee_channel->set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+  invitee_channel->set_channel_id(
+      rpc::dtmq::make_unicast_channel_id(invitee_channel->channel_type(), invitee.zone_id(), invitee.user_id()));
+  // 开始/过期时间由 teamsvr-room 填充
+  owner_->dump_user_key(*ss_req->mutable_sender_user_key());
+
+  invitation->set_team_source_type(team_source_type);
+  protobuf_copy_message(*invitation->mutable_team_source_data(), team_source_data);
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::add_invitation(ctx, *ss_req, *ss_rsp));
+  if (0 == ret) {
+    ret = ss_rsp->client_result();
+  }
+
+  if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
+    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为已不在队伍中
+    ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
   }
   RPC_RETURN_CODE(ret);
 }

@@ -52,21 +52,53 @@ task_action_team_send_invitation::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  // TODO(owent): 如果没有队伍，先创建一个
-  // TODO(owent): 创建时注意填充初始的shared_data数据(包含角色的和队伍的)
-
-  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(req_body.team_key());
-  if (!team_ptr) {
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+  const auto& invitee = req_body.user_key();
+  if (invitee.user_id() == 0 || invitee.zone_id() == 0) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (!team_ptr->check_permission(team_ptr->get_configure().invite_role())) {
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  user_team::ptr_t team_ptr;
+
+  if (req_body.team_key().team_id() != 0) {
+    team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(req_body.team_key());
+    if (!team_ptr) {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+
+    if (!team_ptr->check_permission(team_ptr->get_configure().invite_role())) {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
   }
 
-  // TODO(owent): 发送邀请
+  atfw::team::DTeamKey team_key;
+  do {
+    if (team_ptr) {
+      protobuf_copy_message(team_key, team_ptr->get_team_key());
+      break;
+    }
+
+    // 先尝试使用已存在的队伍
+    team_ptr = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
+    if (team_ptr) {
+      protobuf_copy_message(team_key, team_ptr->get_team_key());
+      break;
+    }
+
+    // 如果没有队伍，先创建一个(创建者即队长，初始 shared_data 由 user_team_manager 填充)
+    int32_t create_ret = RPC_AWAIT_CODE_RESULT(user_inst->get_user_team_manager().create_team(
+        get_shared_context(), PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL, team_key));
+    if (0 != create_ret) {
+      set_response_code(create_ret);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+  } while (false);
+
+  // 发送邀请(SS消息打包在 user_team_manager 中，业务结果透传)
+  set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_team_manager().send_invitation(
+      get_shared_context(), team_key, invitee, req_body.team_source_type(), req_body.team_source_data())));
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

@@ -627,6 +627,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(source_room->add_join_request(ctx, join_req)));
   }));
 
+  auto& source_fake = env.channel(source_team);
   {
     atfw::team::DTeamAction action;
     add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 100, "shared-1");
@@ -634,17 +635,29 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
     CASE_EXPECT_EQ(0, env.run("team_update", [source_room, &action](rpc::context& ctx) -> rpc::result_code_type {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(source_room->send_action(ctx, action)));
     }));
+
+    // 成员共享数据同样先于快照写入，恢复后的可见性由下方 condition 校验覆盖
+    atfw::team::DTeamAction member_action;
+    auto* member_update = member_action.mutable_member_update();
+    protobuf_copy_message(*member_update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(member_update->mutable_shared_member_data(), 7, "member-shared-1");
+    CASE_EXPECT_EQ(0, env.run("member_update_shared_data",
+                              [source_room, &member_action](rpc::context& ctx) -> rpc::result_code_type {
+                                RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(source_room->send_action(ctx, member_action)));
+                              }));
   }
   CASE_EXPECT_EQ(0, env.sync(source_team));
+  // 共享数据事件日志的落点: 之后的压缩必须把它们裁剪进快照，使恢复只能来自 custom_data 的
+  // dump/restore 回填，而不是 journal 重放
+  int64_t shared_data_sequence = source_fake.last_sequence();
 
   // 通过真实 room maintenance 生成 custom/private 快照和 compact 边界；不能手工拼一个宣称
   // 覆盖最新 sequence 却缺失 admission 的快照，也不能把 A 队 journal 复制到 B 队频道。
-  auto& source_fake = env.channel(source_team);
   CASE_EXPECT_TRUE(write_member_update_logs(env, source_room, members.normal, 8));
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(0, env.sync(source_team));
   CASE_EXPECT_TRUE(nullptr != find_compact_update(source_fake));
-  CASE_EXPECT_GT(source_fake.last_removed_sequence(), 0);
+  CASE_EXPECT_GE(source_fake.last_removed_sequence(), shared_data_sequence);
 
   // 快照之后再追加一条增量，恢复必须同时读取权威快照和剩余 journal。
   atfw::team::DTeamAction post_snapshot_update;
@@ -695,6 +708,52 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
       env.run("invite_after_restore", [restored_room, &denied_invite_req](rpc::context& ctx) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored_room->add_invitation(ctx, denied_invite_req)));
       }));
+
+  // 快照前写入的共享队伍/成员数据经 dump_public_data -> restore_snapshot 的 map<->repeated 转换链回填后
+  // 仍然存在: 与 task_action 层同入口(check_action_permission)，以携带等值 condition 的 update 验证，
+  // 不依赖内部 map accessor。条件值不匹配时被拒绝，证明判定确实基于恢复后的数据而非空条件放行。
+  auto check_restored_permission = [&env, &restored_room, &members](const atfw::team::DTeamAction& action) {
+    return env.run("check_shared_data_after_restore",
+                   [restored_room, &members, &action](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(
+                         RPC_AWAIT_CODE_RESULT(restored_room->check_action_permission(ctx, members.normal, action)));
+                   });
+  };
+  {
+    // 队伍级: 恢复后的 shared_team_data[100] == "shared-1" 才允许写入
+    atfw::team::DTeamAction team_action;
+    add_team_any_data_entry(team_action.mutable_team_update()->mutable_shared_team_data(), 101, "post-restore");
+    add_team_any_value_entry(team_action.mutable_team_update()->add_condition()->mutable_shared_team_data(), 100,
+                             "shared-1");
+    CASE_EXPECT_EQ(0, check_restored_permission(team_action));
+
+    atfw::team::DTeamAction team_mismatch;
+    add_team_any_data_entry(team_mismatch.mutable_team_update()->mutable_shared_team_data(), 101, "post-restore");
+    add_team_any_value_entry(team_mismatch.mutable_team_update()->add_condition()->mutable_shared_team_data(), 100,
+                             "shared-other");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, check_restored_permission(team_mismatch));
+  }
+  {
+    // 成员级: 恢复后的 normal 成员 shared_member_data[7] == "member-shared-1"
+    atfw::team::DTeamAction member_action;
+    auto* update = member_action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update->mutable_shared_member_data(), 8, "post-restore-member");
+    auto* group = update->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group->mutable_user_key(), members.normal);
+    add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), 7, "member-shared-1");
+    CASE_EXPECT_EQ(0, check_restored_permission(member_action));
+
+    atfw::team::DTeamAction member_mismatch;
+    auto* mismatch_update = member_mismatch.mutable_member_update();
+    protobuf_copy_message(*mismatch_update->mutable_user_key(), members.normal);
+    auto* mismatch_group = mismatch_update->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*mismatch_group->mutable_user_key(), members.normal);
+    add_team_any_value_entry(mismatch_group->mutable_member_condition()->mutable_shared_member_data(), 7,
+                             "member-shared-other");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_restored_permission(member_mismatch));
+  }
 
   // invitation/join request 来自真实快照；通过各自后续业务流程验证，不依赖内部 map accessor。
   size_t personal_before = env.personal_message_count();
