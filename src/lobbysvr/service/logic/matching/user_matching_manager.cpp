@@ -169,7 +169,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING);
   }
 
-  if (owner_->is_in_orbit()) {
+  if (!is_in_matching() && owner_->get_user_orbit_manager().is_orbit_room_exist()) {
     FWLOGERROR("{} start matching rejected by orbit, matching_id={}, status={}", *owner_, data_.view().matching_id(),
                static_cast<int>(data_.view().status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT);

@@ -86,7 +86,8 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_
 }
 
 static bool init_user_orbit_manager_handle() {
-  user::init_get_info_handle(&PROJECT_NAMESPACE_ID::CSUserGetInfoReq::need_user_orbit_room,
+  user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+                                 PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserOrbitRoomFieldNumber),
                              [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
                                auto& orbit_mgr = user_inst.get_user_orbit_manager();
                                orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
@@ -372,7 +373,7 @@ void user_orbit_manager::mark_dirty() {
   owner_->insert_dirty_handle_if_not_exists(
       reinterpret_cast<uintptr_t>(this), "user.user_orbit_manager.mark_dirty", [](gsl::string_view, user&) {
         user::dirty_sync_handle_t handle;
-        handle.build_fn = [](user& user_inst, user::dirty_message_container& output) {
+        handle.build_fn = [](rpc::context&, user& user_inst, user::dirty_message_container& output) {
           if (!user_inst.get_user_orbit_manager().dirty_) {
             return;
           }
@@ -382,7 +383,7 @@ void user_orbit_manager::mark_dirty() {
           auto& orbit_mgr = user_inst.get_user_orbit_manager();
           orbit_mgr.fetch_user_data(*output.user_dirty->mutable_dirty_orbit_rooms()->mutable_data());
         };
-        handle.clear_fn = [](user& user_inst) { user_inst.get_user_orbit_manager().dirty_ = false; };
+        handle.clear_fn = [](rpc::context&, user& user_inst) { user_inst.get_user_orbit_manager().dirty_ = false; };
         return handle;
       });
 }

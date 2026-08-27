@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 #define REG_USER_MGR_PTR_DEF(mgr)                         \
  private:                                                 \
@@ -86,8 +87,8 @@ class user : public user_cache {
     std::unique_ptr<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> user_dirty;
   };
 
-  using build_dirty_message_fn_t = std::function<void(user &, dirty_message_container &)>;
-  using clear_dirty_cache_fn_t = std::function<void(user &)>;
+  using build_dirty_message_fn_t = std::function<void(rpc::context &, user &, dirty_message_container &)>;
+  using clear_dirty_cache_fn_t = std::function<void(rpc::context &, user &)>;
   struct dirty_sync_handle_t {
     build_dirty_message_fn_t build_fn;
     clear_dirty_cache_fn_t clear_fn;
@@ -205,7 +206,7 @@ class user : public user_cache {
    */
   void send_all_syn_msg(rpc::context &ctx) override;
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
-  void clear_dirty_cache();
+  void clear_dirty_cache(rpc::context &);
 
   PROJECT_NAMESPACE_ID::DItemInstance &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in);
 
@@ -232,15 +233,11 @@ class user : public user_cache {
   void insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name, build_dirty_message_fn_t build_fn,
                                          clear_dirty_cache_fn_t clear_fn);
 
-  static void init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*check_need_fn)() const,
+  static bool init_get_info_handle(const ::google::protobuf::FieldDescriptor *fds,
                                    void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &));
-  static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() const,
-                               void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
+  static const std::vector<std::pair<const ::google::protobuf::FieldDescriptor *,
+                                     void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>> &
   get_get_info_handle();
-
- public:
-  // 便捷接口
-  bool is_in_orbit() const;
 
  private:
   mutable std::bitset<internal_flag::EN_IFT_MAX> internal_flags_;

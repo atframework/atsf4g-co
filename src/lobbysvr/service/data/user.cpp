@@ -42,6 +42,17 @@
 #include <utility>
 #include <vector>
 
+namespace {
+static std::vector<std::pair<const ::google::protobuf::FieldDescriptor *,
+                             void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>> &
+get_info_handle_list() {
+  static std::vector<std::pair<const ::google::protobuf::FieldDescriptor *,
+                               void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
+      ret;
+  return ret;
+}
+}  // namespace
+
 user::internal_flag_guard_t::internal_flag_guard_t() : flag_(internal_flag::EN_IFT_FEATURE_INVALID), owner_(nullptr) {}
 user::internal_flag_guard_t::~internal_flag_guard_t() { reset(); }
 
@@ -91,8 +102,6 @@ user::user(fake_constructor &ctor)
   cache_data_.refresh_feature_limit_second = 0;
   cache_data_.refresh_feature_limit_minute = 0;
   cache_data_.refresh_feature_limit_hour = 0;
-
-  clear_dirty_cache();
 }
 
 user::~user() {}
@@ -479,7 +488,7 @@ void user::send_all_syn_msg(rpc::context &ctx) {
       for (auto &handle : cache_data_.dirty_handles) {
         if (handle.second.build_fn) {
           cache_data_.current_dirty_handle_name = handle.second.name;
-          handle.second.build_fn(*this, dirty_msg);
+          handle.second.build_fn(ctx, *this, dirty_msg);
         }
       }
       cache_data_.current_dirty_handle_name = gsl::string_view{};
@@ -493,7 +502,7 @@ void user::send_all_syn_msg(rpc::context &ctx) {
   // 缓存过期更新
   user_cache_manager_->update_user_cache_info(ctx);
 
-  clear_dirty_cache();
+  clear_dirty_cache(ctx);
 }
 
 rpc::result_code_type user::await_before_logout_tasks(rpc::context &ctx) {
@@ -516,7 +525,7 @@ rpc::result_code_type user::await_before_logout_tasks(rpc::context &ctx) {
   RPC_RETURN_CODE(ret);
 }
 
-void user::clear_dirty_cache() {
+void user::clear_dirty_cache(rpc::context &ctx) {
   {
     internal_flag_guard_t flag_guard;
     flag_guard.setup(*this, internal_flag::EN_IFT_IN_DIRTY_CALLBACK);
@@ -530,7 +539,7 @@ void user::clear_dirty_cache() {
     for (auto &handle : cache_data_.dirty_handles) {
       if (handle.second.clear_fn) {
         cache_data_.current_dirty_handle_name = handle.second.name;
-        handle.second.clear_fn(*this);
+        handle.second.clear_fn(ctx, *this);
       }
     }
     cache_data_.current_dirty_handle_name = gsl::string_view{};
@@ -546,7 +555,7 @@ static user::dirty_sync_handle_t _user_generate_dirty_handle(
     gsl::string_view /*handle_name*/, TMSG *(PROJECT_NAMESPACE_ID::SCUserDirtyChgSync::*add_fn)(),
     TCONTAINER user::cache_t::*get_mem) {
   user::dirty_sync_handle_t handle;
-  handle.build_fn = [add_fn, get_mem](user &user_inst, user::dirty_message_container &output) {
+  handle.build_fn = [add_fn, get_mem](rpc::context &, user &user_inst, user::dirty_message_container &output) {
     if (!get_mem) {
       return;
     }
@@ -574,7 +583,7 @@ static user::dirty_sync_handle_t _user_generate_dirty_handle(
     }
   };
 
-  handle.clear_fn = [get_mem](user &user_inst) {
+  handle.clear_fn = [get_mem](rpc::context &, user &user_inst) {
     if (get_mem) {
       (user_inst.get_cache_data().*get_mem).clear();
     }
@@ -641,30 +650,41 @@ void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view han
   handle.name = handle_name;
 }
 
-static std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() const,
-                             void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
-    g_get_info_handle_list;
-
-void user::init_get_info_handle(bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*check_need_fn)() const,
+bool user::init_get_info_handle(const ::google::protobuf::FieldDescriptor *fds,
                                 void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)) {
-  if (check_need_fn == nullptr || dump_fn == nullptr) {
-    FWLOGERROR("init_get_info_handle failed, check_need_fn or dump_fn is nullptr");
-    return;
-  }
-  g_get_info_handle_list.emplace_back(check_need_fn, dump_fn);
-}
-
-std::vector<std::pair<bool (PROJECT_NAMESPACE_ID::CSUserGetInfoReq::*)() const,
-                      void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
-user::get_get_info_handle() {
-  return g_get_info_handle_list;
-}
-
-bool user::is_in_orbit() const {
-  // 是否在匹配
-  if (user_matching_manager_->is_in_matching()) {
+  if (fds == nullptr || dump_fn == nullptr) {
+    FWLOGERROR("init_get_info_handle failed, fds or dump_fn is nullptr");
     return false;
   }
-  // 是否在Orbit流程中
-  return user_orbit_manager_->is_orbit_room_exist();
+
+  if (fds->message_type() != PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()) {
+    FWLOGERROR("init_get_info_handle failed, fds {} is not of type CSUserGetInfoReq", fds->full_name());
+    return false;
+  }
+
+  if (fds->cpp_type() != ::google::protobuf::FieldDescriptor::CPPTYPE_BOOL) {
+    FWLOGERROR("init_get_info_handle failed, fds {} is not of cpp_type BOOL", fds->full_name());
+    return false;
+  }
+
+  if (fds->is_repeated()) {
+    FWLOGERROR("init_get_info_handle failed, fds {} is repeated, expected non-repeated BOOL", fds->full_name());
+    return false;
+  }
+
+  for (const auto &kv : get_info_handle_list()) {
+    if (kv.first == fds) {
+      FWLOGERROR("init_get_info_handle failed, {} already exists", fds->full_name());
+      return false;
+    }
+  }
+
+  get_info_handle_list().emplace_back(fds, dump_fn);
+  return true;
+}
+
+const std::vector<std::pair<const ::google::protobuf::FieldDescriptor *,
+                            void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>> &
+user::get_get_info_handle() {
+  return get_info_handle_list();
 }

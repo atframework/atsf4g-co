@@ -809,29 +809,29 @@ rpc::dtmq::client_subscriber::ptr_t user_chat_manager::get_channel_by_key(
     case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PUBLIC):
       if (world_chat_channel_ && world_chat_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
         return world_chat_channel_;
-      } else {
-        return nullptr;
       }
+
+      return nullptr;
     case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE):
       if (private_chat_channel_ && private_chat_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
         return private_chat_channel_;
-      } else {
-        return nullptr;
       }
+
+      return nullptr;
     case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_NOTIFICATION):
       if (sys_notification_channel_ &&
           sys_notification_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
         return sys_notification_channel_;
-      } else {
-        return nullptr;
       }
+
+      return nullptr;
     case static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_SYS_ANNOUNCEMENT):
       if (sys_announcement_channel_ &&
           sys_announcement_channel_->get_channel_key().channel_id() == channel_key.channel_id()) {
         return sys_announcement_channel_;
-      } else {
-        return nullptr;
       }
+
+      return nullptr;
     default:
       return nullptr;
   }

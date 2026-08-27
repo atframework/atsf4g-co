@@ -162,7 +162,18 @@ class user_team_manager_utility {
 };
 
 user_team_manager::user_team_manager(user& owner)
-    : owner_(&owner), is_dirty_(false), processed_private_chat_channel_sequence_(0) {}
+    : owner_(&owner), is_dirty_(false), processed_private_chat_channel_sequence_(0) {
+  ATFW_EXPLICIT_UNUSED_ATTR static auto _init_get_info_handle = user::init_get_info_handle(
+      PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+          PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber),
+      [](rpc::context& ctx, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
+        auto& team_mgr = user_inst.get_user_team_manager();
+        team_mgr.foreach_running_team(
+            [&ctx, &rsp](uint32_t /*group_type*/, const atfw::util::nostd::nonnull<user_team::ptr_t>& team) {
+              team->dump(ctx, *rsp.add_user_team());
+            });
+      });
+}
 
 user_team_manager::~user_team_manager() {}
 
@@ -267,6 +278,15 @@ int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_u
 bool user_team_manager::is_dirty() const { return is_dirty_; }
 
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
+
+void user_team_manager::foreach_running_team(
+    atfw::util::nostd::function_ref<void(uint32_t, const atfw::util::nostd::nonnull<user_team::ptr_t>&)> fn) const {
+  for (const auto& group : team_group_) {
+    if (group.second.current && !group.second.current->is_exiting() && !group.second.current->is_destroyed()) {
+      fn(group.first, group.second.current);
+    }
+  }
+}
 
 user_team_manager::team_join_request_ptr_t user_team_manager::get_pending_join_request(
     const atfw::team::DTeamKey& team_key) const noexcept {

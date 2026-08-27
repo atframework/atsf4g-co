@@ -6,6 +6,9 @@
 
 #include <memory/rc_ptr.h>
 
+#include <nostd/function_ref.h>
+#include <nostd/nullability.h>
+
 #include <config/server_frame_build_feature.h>
 
 #include <rpc/rpc_common_types.h>
@@ -71,6 +74,9 @@ class user_team_manager {
 
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
+
+  void foreach_running_team(
+      atfw::util::nostd::function_ref<void(uint32_t, const atfw::util::nostd::nonnull<user_team::ptr_t>&)>) const;
 
   team_join_request_ptr_t get_pending_join_request(const atfw::team::DTeamKey& team_key) const noexcept;
 

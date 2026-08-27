@@ -279,7 +279,7 @@ GAMECLIENT_RPC_API int task_action_login::on_success() {
 
   // login success and try to restore tick limit
   user_inst->refresh_feature_limit(get_shared_context());
-  user_inst->clear_dirty_cache();
+  user_inst->clear_dirty_cache(get_shared_context());
 
   // 自动启动异步任务
   {
@@ -324,7 +324,7 @@ GAMECLIENT_RPC_API int task_action_login::on_failed() {
                    s->get_key().session_id);
     } else if (user_inst && !user_inst->is_inited()) {
       // 如果创建了未初始化的GameUser对象，则需要移除
-      user_inst->clear_dirty_cache();
+      user_inst->clear_dirty_cache(get_shared_context());
       user_manager::me()->async_remove(get_shared_context(), user_inst, true);
     }
   }

@@ -74,7 +74,8 @@ message DUserTeamDirty {
   }
 
   message Increase {
-    repeated atframework.team.DTeamAction actions = 1;
+    atframework.team.DTeamKey team_key = 1;
+    repeated OneAction actions = 2;
   }
 
   oneof dirty_type {

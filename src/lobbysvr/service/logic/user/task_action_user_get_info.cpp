@@ -19,6 +19,8 @@
 
 #include <data/user.h>
 
+#include <utility>
+
 task_action_user_get_info::task_action_user_get_info(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 task_action_user_get_info::~task_action_user_get_info() {}
@@ -37,8 +39,9 @@ task_action_user_get_info::result_type task_action_user_get_info::operator()() {
   }
 
   const auto& handle_list = user::get_get_info_handle();
+  const auto* reflect = rpc_request_type::GetReflection();
   for (const auto& handle : handle_list) {
-    if ((req_body.*(handle.first))()) {
+    if (reflect->GetBool(req_body, handle.first)) {
       (handle.second)(get_shared_context(), rsp_body, *user_inst);
     }
   }

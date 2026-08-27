@@ -26,6 +26,7 @@
 #include <data/user_key_hash_helper.h>
 
 #include <chrono>
+#include <list>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -274,6 +275,7 @@ user_team::user_team(ctor_guard_t&, rpc::context& /*ctx*/, user_team_manager& ow
                      // NOLINTNEXTLINE(modernize-pass-by-value)
                      uint32_t team_type, const atfw::team::DTeamKey& team_key)
     : owner_(&owner),
+      pending_dirty_snapshot_(false),
       team_type_(team_type),
       team_key_(team_key),
       channel_subscriber_(channel_subscriber),
@@ -323,6 +325,11 @@ void user_team::dump(atfw::team::DTeamMemberJoinData& join_data) const {
   join_data.set_user_role(cached_permission_role_);
 }
 
+void user_team::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::DUserTeamSnapshot& /*output*/) const {
+  // output.snapshot.shared_team_data 不用导出（本地也不存）。
+  // 而是直接转出成 output.shared_team_data
+}
+
 bool user_team::can_be_removed(rpc::context& ctx) const noexcept {
   // 频道已销毁，可以直接移除
   if (channel_subscriber_->is_destroyed()) {
@@ -360,6 +367,8 @@ bool user_team::wait_to_be_member_but_timeout(rpc::context& ctx) const noexcept 
 bool user_team::is_exiting() const noexcept {
   return last_exit_team_request_timepoint_ > std::chrono::system_clock::from_time_t(0);
 }
+
+bool user_team::is_destroyed() const noexcept { return channel_subscriber_->is_destroyed(); }
 
 const atfw::dtmq::DChannelIdKey& user_team::get_channel_key() const noexcept {
   return channel_subscriber_->get_channel_key();
@@ -682,10 +691,15 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
     do_member_shared_data(ctx, member.user_key(), member.shared_member_data());
   }
 
+  insert_dirty_snapshot_handle();
   return true;
 }
 
 bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
+  if (!pending_dirty_snapshot_) {
+    insert_dirty_action_handle();
+  }
+
   switch (action.action_case()) {
     case atfw::team::DTeamAction::kDestroyTeam: {
       is_member_ = false;
@@ -761,6 +775,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
     default:
       break;
   }
+
   return true;
 }
 
@@ -927,4 +942,76 @@ void user_team::do_member_shared_data(
     }
     iter->second.do_update(ctx, *this, user_key, *unpacked);
   }
+}
+
+void user_team::insert_dirty_snapshot_handle() {
+  if (pending_dirty_snapshot_) {
+    return;
+  }
+  pending_dirty_snapshot_ = true;
+  pending_dirty_actions_.clear();
+
+  auto self_weak = weak_from_this();
+  owner_->get_owner().insert_dirty_handle_if_not_exists(
+      reinterpret_cast<uintptr_t>(&pending_dirty_snapshot_), "user.user_team.insert_dirty_snapshot_handle",
+      [self_weak](rpc::context& ctx, user&, user::dirty_message_container& output) {
+        auto self = self_weak.lock();
+        if (!self) {
+          return;
+        }
+        self->pending_dirty_snapshot_ = false;
+
+        if (!output.user_dirty) {
+          output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
+        }
+
+        self->dump(ctx, *output.user_dirty->add_dirty_team()->mutable_snapshot());
+      },
+      [self_weak](rpc::context&, user&) {
+        auto self = self_weak.lock();
+        if (!self) {
+          return;
+        }
+        self->pending_dirty_snapshot_ = false;
+      });
+}
+
+void user_team::insert_dirty_action_handle() {
+  if (pending_dirty_snapshot_) {
+    return;
+  }
+
+  auto self_weak = weak_from_this();
+  owner_->get_owner().insert_dirty_handle_if_not_exists(
+      reinterpret_cast<uintptr_t>(&pending_dirty_actions_), "user.user_team.insert_dirty_action_handle",
+      [self_weak](rpc::context&, user&, user::dirty_message_container& output) {
+        auto self = self_weak.lock();
+        if (!self) {
+          return;
+        }
+
+        if (self->pending_dirty_actions_.empty()) {
+          return;
+        }
+
+        if (!output.user_dirty) {
+          output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
+        }
+        auto* dump_team_actions = output.user_dirty->add_dirty_team()->mutable_increase();
+        protobuf_copy_message(*dump_team_actions->mutable_team_key(), self->get_team_key());
+
+        std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction> actions;
+        actions.swap(self->pending_dirty_actions_);
+        for (auto& action : actions) {
+          auto* one_action = dump_team_actions->add_actions();
+          protobuf_move_message(*one_action, std::move(action));
+        }
+      },
+      [self_weak](rpc::context&, user&) {
+        auto self = self_weak.lock();
+        if (!self) {
+          return;
+        }
+        self->pending_dirty_actions_.clear();
+      });
 }

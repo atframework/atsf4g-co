@@ -23,6 +23,7 @@
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 
 #include <chrono>
+#include <list>
 
 class user;
 class user_team_manager;
@@ -49,11 +50,15 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void dump(atfw::team::DTeamMemberJoinData& join_data) const;
 
+  void dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamSnapshot& output) const;
+
   bool can_be_removed(rpc::context& ctx) const noexcept;
 
   bool wait_to_be_member_but_timeout(rpc::context& ctx) const noexcept;
 
   bool is_exiting() const noexcept;
+
+  bool is_destroyed() const noexcept;
 
   inline uint32_t get_team_type() const noexcept { return team_type_; }
 
@@ -123,10 +128,17 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void do_member_shared_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                              const ::google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& data);
 
+  void insert_dirty_snapshot_handle();
+  void insert_dirty_action_handle();
+
  private:
   friend class user_team_utility;
 
   user_team_manager* ATFW_UTIL_MACRO_NONNULL owner_;
+
+  bool pending_dirty_snapshot_;
+  std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction> pending_dirty_actions_;
+
   uint32_t team_type_;
   atfw::team::DTeamKey team_key_;
   atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> channel_subscriber_;

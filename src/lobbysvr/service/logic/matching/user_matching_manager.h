@@ -3,6 +3,7 @@
 #pragma once
 
 #include <design_pattern/noncopyable.h>
+#include <nostd/nullability.h>
 #include <rpc/rpc_common_types.h>
 
 #include <config/compiler/protobuf_prefix.h>
@@ -96,7 +97,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
                                        ::util::cli::cmd_option_list& params);
 
  private:
-  user* owner_;
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
   PROJECT_NAMESPACE_ID::DUserMatchingData data_;
   std::string pending_switch_matching_id_;
   bool dirty_;
