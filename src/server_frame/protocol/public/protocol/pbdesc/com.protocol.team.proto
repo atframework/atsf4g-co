@@ -54,9 +54,6 @@ message SCTeamRemoveMemberRsp {}
 message CSTeamUpdateMemberDataReq {
   atframework.team.DTeamKey team_key = 1;
 
-  // 早期草案的 module_type=2(enum)/module_data_id=3/data_value=4 线类型与 repeated 不兼容，
-  // 保留字段号防止再次被复用导致混版本静默解析失败
-  reserved 2 to 4;
   repeated DTeamMemberSharedDataModule data = 5;
 }
 
@@ -74,9 +71,6 @@ message SCTeamUpdateMemberRoleRsp {}
 message CSTeamUpdateTeamDataReq {
   atframework.team.DTeamKey team_key = 1;
 
-  // 早期草案的 module_type=2(enum)/module_data_id=3/data_value=4 线类型与 repeated 不兼容，
-  // 保留字段号防止再次被复用导致混版本静默解析失败
-  reserved 2 to 4;
   repeated DTeamSharedDataModule data = 5;
 }
 

@@ -65,6 +65,12 @@ task_action_team_update_team_data::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
+  // 队伍权限检查
+  if (!team_ptr->check_permission(team_ptr->get_configure().update_team_data_role())) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
   for (const auto& checked_data : req_body.data()) {
     if (!user_team_algorithm::allow_client_update_team_shared_data(checked_data)) {
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);

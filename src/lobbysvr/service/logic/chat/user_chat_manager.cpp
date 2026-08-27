@@ -486,16 +486,15 @@ int32_t user_chat_manager::login_init(rpc::context& ctx) {
 
   if (!private_chat_channel_) {
     rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
-    atfw::dtmq::DChannelIdKey channel_key;
-    channel_key.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
-    channel_key.set_channel_id(
-        rpc::dtmq::make_unicast_channel_id(channel_key.channel_type(), owner_->get_zone_id(), owner_->get_user_id()));
-    private_chat_channel_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
+    private_chat_channel_key_.set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
+    private_chat_channel_key_.set_channel_id(rpc::dtmq::make_unicast_channel_id(
+        private_chat_channel_key_.channel_type(), owner_->get_zone_id(), owner_->get_user_id()));
+    private_chat_channel_ = rpc::dtmq::client_subscriber::create(private_chat_channel_key_, subscribe_options);
     if (private_chat_channel_) {
       private_chat_channel_->set_local_private_data(local_private_data);
     } else {
       FCTXLOGERROR(ctx, "Failed to create private chat channel {}:{}, maybe configure is missing.",
-                   channel_key.channel_type(), channel_key.channel_id());
+                   private_chat_channel_key_.channel_type(), private_chat_channel_key_.channel_id());
     }
   }
 

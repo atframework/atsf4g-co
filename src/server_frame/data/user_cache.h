@@ -166,6 +166,11 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
    */
   SERVER_FRAME_API virtual int dump(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_user &user_inst, bool always);
 
+  ATFW_UTIL_FORCEINLINE void dump_user_key(PROJECT_NAMESPACE_ID::DUserIDKey &user_key) const noexcept {
+    user_key.set_zone_id(zone_id_);
+    user_key.set_user_id(user_id_);
+  }
+
   /**
    * @brief 下发同步消息
    */

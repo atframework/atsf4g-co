@@ -58,6 +58,10 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
 
   inline const std::string& get_subscriber_key() const noexcept { return subscriber_key_; }
 
+  inline const atfw::dtmq::DChannelIdKey& get_private_chat_channel_key() const noexcept {
+    return private_chat_channel_key_;
+  }
+
   void foreach_channel(
       atfw::util::nostd::function_ref<bool(const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&)>
           callback) const;
@@ -129,6 +133,8 @@ class user_chat_manager : public atfw::util::design_pattern::noncopyable {
   std::string subscriber_key_;
 
   rpc::dtmq::client_subscriber::ptr_t world_chat_channel_;
+
+  atfw::dtmq::DChannelIdKey private_chat_channel_key_;
   rpc::dtmq::client_subscriber::ptr_t private_chat_channel_;
 
   rpc::dtmq::client_subscriber::ptr_t sys_notification_channel_;

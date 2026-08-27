@@ -12,6 +12,7 @@
 
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/com.struct.team.pb.h>
+#include <protocol/pbdesc/com.struct.team.shared.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -88,11 +89,19 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   rpc::result_code_type update_member_role(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                                            atfw::team::EnTeamPermissionRole role);
 
+  rpc::result_code_type update_team_shared_data(
+      rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DTeamSharedDataModule>& data);
+
+  rpc::result_code_type update_member_shared_data(
+      rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule>& data);
+
   void set_exit_team(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason);
 
   void retry_send_exit_team_request(rpc::context& ctx);
 
   void try_load_snapshot(rpc::context& ctx);
+
+  void async_flush_all_member_shared_data(rpc::context& ctx);
 
  private:
   // 打包队伍事件并按 team_key 一致性哈希路由发送到 teamsvr-room，返回透传的业务结果
@@ -106,6 +115,14 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data);
 
+  void set_matching(rpc::context& ctx, bool value);
+
+  void do_team_shared_data(rpc::context& ctx,
+                           const ::google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& data);
+
+  void do_member_shared_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                             const ::google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& data);
+
  private:
   friend class user_team_utility;
 
@@ -114,6 +131,7 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   atfw::team::DTeamKey team_key_;
   atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t> channel_subscriber_;
   bool is_member_;
+  bool is_matching_;
   int64_t channel_create_sequence_;
   int64_t channel_saved_sequence_;
 

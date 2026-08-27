@@ -304,7 +304,8 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
   ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充 shared_member_data
-  pack_team_member_shared_data(user_team_algorithm::get_team_type(*invitation), *ss_req->mutable_shared_member_data());
+  pack_team_member_shared_data(ctx, user_team_algorithm::get_team_type(*invitation),
+                               *ss_req->mutable_shared_member_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::approve_invitation(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -358,15 +359,13 @@ rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, co
   join_request->mutable_requester()->set_zone_id(owner_->get_zone_id());
   join_request->mutable_requester()->set_user_id(owner_->get_user_id());
   auto* requester_channel = join_request->mutable_requester_private_channel();
-  requester_channel->set_channel_type(static_cast<uint32_t>(atfw::chat::EN_CHAT_CHANNEL_TYPE_PRIVATE));
-  requester_channel->set_channel_id(rpc::dtmq::make_unicast_channel_id(requester_channel->channel_type(),
-                                                                       owner_->get_zone_id(), owner_->get_user_id()));
+  protobuf_copy_message(*requester_channel, owner_->get_user_chat_manager().get_private_chat_channel_key());
   join_request->set_client_version(owner_->get_client_info().client_version());
   // 成员通知路由到当前持有会话的 lobbysvr 节点
   join_request->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充 member_admission_data
-  pack_team_member_shared_data(user_team_algorithm::get_team_type(*join_request),
+  pack_team_member_shared_data(ctx, user_team_algorithm::get_team_type(*join_request),
                                *join_request->mutable_member_admission_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::add_join_request(ctx, *ss_req, *ss_rsp));
@@ -403,10 +402,40 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
   remove_team(ctx, team_key, true, exit_reason);
 }
 
+void user_team_manager::pack_team_shared_data(
+    rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
+    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
+  // 战斗模块
+  {
+    rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
+    wrapper->mutable_battle()->set_matching(false);
+
+    auto* output_field = output.Add();
+    output_field->set_key(user_team_algorithm::make_team_shared_data_key(*wrapper));
+    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
+      FCTXLOGERROR(ctx, "{} pack_team_shared_data: failed to pack team shared data", *owner_);
+      output.RemoveLast();
+    }
+  }
+}
+
 void user_team_manager::pack_team_member_shared_data(
-    PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
-    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& /*output*/) {
-  // TODO(owent): 默认的成员共享数据，加入队伍时使用
+    rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
+    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
+  // 战斗模块
+  {
+    rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> wrapper{ctx};
+    wrapper->mutable_battle()->set_ready(false);
+
+    auto* output_field = output.Add();
+    output_field->set_key(user_team_algorithm::make_team_member_shared_data_key(*wrapper));
+    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
+      FCTXLOGERROR(ctx, "{} pack_team_member_shared_data: failed to pack team member shared data", *owner_);
+      output.RemoveLast();
+    }
+  }
 }
 
 void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequence) {

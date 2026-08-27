@@ -9,6 +9,7 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.team.proto";
 
 package atframework.shared;
 
@@ -52,5 +53,32 @@ message DTeamMemberSharedDataTypeBattle {
 message DTeamMemberSharedDataModule {
   oneof module_type {
     DTeamMemberSharedDataTypeBattle battle = 1;
+  }
+}
+
+
+// ======================== 队伍脏数据下发数据 ========================
+message DUserTeamSnapshot {
+  atframework.team.DTeamStorage snapshot = 1;
+
+  // snapshot里的队伍共享数据（解包后）
+  repeated DTeamSharedDataModule shared_team_data = 2;
+}
+
+message DUserTeamDirty {
+  message OneAction {
+    atframework.team.DTeamAction actions = 1;
+
+    // actions里的队伍成员共享数据（如果有，解包后）
+    repeated DTeamMemberSharedDataModule shared_member_data = 2;
+  }
+
+  message Increase {
+    repeated atframework.team.DTeamAction actions = 1;
+  }
+
+  oneof dirty_type {
+    DUserTeamSnapshot snapshot = 1;
+    Increase increase = 2;
   }
 }
