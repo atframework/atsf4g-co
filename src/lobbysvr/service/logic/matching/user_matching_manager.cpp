@@ -269,8 +269,8 @@ rpc::result_code_type user_matching_manager::check_matching(rpc::context& ctx,
 
   if (!is_in_matching()) {
     dump_client_view(*response.mutable_view());
-    RPC_RETURN_CODE(data_.has_view() ? PROJECT_NAMESPACE_ID::err::EN_SUCCESS
-                                     : PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+    RPC_RETURN_CODE(data_.has_view() ? static_cast<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SUCCESS)
+                                     : static_cast<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND));
   }
   rpc_request->set_matching_id(data_.view().matching_id());
   const uint64_t unit_id = get_current_unit_id();

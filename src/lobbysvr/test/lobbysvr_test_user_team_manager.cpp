@@ -11,8 +11,8 @@
 
 #include <protocol/pbdesc/com.struct.team.pb.h>
 #include <protocol/pbdesc/com.struct.team.shared.pb.h>
-#include <protocol/pbdesc/svr.local.table.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
+#include <protocol/pbdesc/svr.local.table.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -693,42 +693,12 @@ namespace {
 
 constexpr uint64_t kGatewayNodeId = 0x82000001;
 
-// Find the latest downstream post record addressed to the session whose CSMsg head matches the rpc name (response
-// or stream). Multiple pushes of the same rpc name are distinguished by taking the last match.
-const atfw::testing::cs_downstream_record *find_downstream_by_rpc_name(atfw::testing::runtime &test,
-                                                                       uint64_t session_id,
-                                                                       gsl::string_view rpc_full_name,
-                                                                       atframework::CSMsg &out_msg) {
-  const atfw::testing::cs_downstream_record *ret = nullptr;
-  for (size_t i = 0; i < test.cs().call_count(); ++i) {
-    const auto *record = test.cs().call_at(i);
-    if (nullptr == record || atfw::testing::cs_downstream_record::op_type::post != record->op ||
-        record->session_id != session_id) {
-      continue;
-    }
-    atframework::CSMsg cs_msg;
-    if (!cs_msg.ParseFromString(record->message.body().post().content())) {
-      continue;
-    }
-    if (cs_msg.head().has_rpc_response() && rpc_full_name == cs_msg.head().rpc_response().rpc_name()) {
-      out_msg = std::move(cs_msg);
-      ret = record;
-      continue;
-    }
-    if (cs_msg.head().has_rpc_stream() && rpc_full_name == cs_msg.head().rpc_stream().rpc_name()) {
-      out_msg = std::move(cs_msg);
-      ret = record;
-    }
-  }
-  return ret;
-}
-
 // Collect every downstream user_dirty_chg_sync push addressed to the session.
-std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_pushes(atfw::testing::runtime &test,
+std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_pushes(atfw::testing::runtime& test,
                                                                                 uint64_t session_id) {
   std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> ret;
   for (size_t i = 0; i < test.cs().call_count(); ++i) {
-    const auto *record = test.cs().call_at(i);
+    const auto* record = test.cs().call_at(i);
     if (nullptr == record || atfw::testing::cs_downstream_record::op_type::post != record->op ||
         record->session_id != session_id) {
       continue;
@@ -806,7 +776,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
     user::ptr_t user_ptr = user_inst;
     std::shared_ptr<session> sess_ptr = sess;
     CASE_EXPECT_TRUE(
-        run_sync_task(test, "team.bind_session", [&user_ptr, &sess_ptr](rpc::context &ctx) -> rpc::result_code_type {
+        run_sync_task(test, "team.bind_session", [&user_ptr, &sess_ptr](rpc::context& ctx) -> rpc::result_code_type {
           sess_ptr->set_user(user_ptr);
           user_ptr->set_session(ctx, sess_ptr);
           RPC_RETURN_CODE(0);
@@ -843,7 +813,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
 
   int64_t event_sequence = 0;
   uint64_t previous_hash = 0;
-  auto send_team_action_event = [&](const atfw::team::DTeamAction &team_action) {
+  auto send_team_action_event = [&](const atfw::team::DTeamAction& team_action) {
     std::vector<atframework::dtmq::DChannelMessage> msgs{make_event_message(++event_sequence, team_action)};
     previous_hash = chain_message_hashes(msgs, previous_hash);
     return receive_channel_event(test, make_incremental_event(team_channel_key, event_sequence, msgs));
@@ -854,7 +824,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 1. add_join_request: 进入待处理加入请求缓存(携带内部字段验证剥除)
   {
     atfw::team::DTeamAction team_action;
-    auto *join_request = team_action.mutable_add_join_request();
+    auto* join_request = team_action.mutable_add_join_request();
     join_request->mutable_requester()->set_zone_id(kZoneId);
     join_request->mutable_requester()->set_user_id(kJoinRequesterId);
     *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(300));
@@ -866,7 +836,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 1b. 有效期更短的加入请求: 排序后必须排在更长有效期的条目之前
   {
     atfw::team::DTeamAction team_action;
-    auto *join_request = team_action.mutable_add_join_request();
+    auto* join_request = team_action.mutable_add_join_request();
     join_request->mutable_requester()->set_zone_id(kZoneId);
     join_request->mutable_requester()->set_user_id(kShortJoinRequesterId);
     *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(120));
@@ -876,7 +846,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 1c. 两个不同有效期的邀请
   {
     atfw::team::DTeamAction team_action;
-    auto *invitation = team_action.mutable_add_invitation();
+    auto* invitation = team_action.mutable_add_invitation();
     invitation->mutable_invitee()->set_zone_id(kZoneId);
     invitation->mutable_invitee()->set_user_id(kLongInviteeId);
     *invitation->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(600));
@@ -884,7 +854,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   }
   {
     atfw::team::DTeamAction team_action;
-    auto *invitation = team_action.mutable_add_invitation();
+    auto* invitation = team_action.mutable_add_invitation();
     invitation->mutable_invitee()->set_zone_id(kZoneId);
     invitation->mutable_invitee()->set_user_id(kShortInviteeId);
     *invitation->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(60));
@@ -896,7 +866,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   matching_module.mutable_battle()->set_matching(true);
   {
     atfw::team::DTeamAction team_action;
-    auto *shared_data = team_action.mutable_team_update()->add_shared_team_data();
+    auto* shared_data = team_action.mutable_team_update()->add_shared_team_data();
     shared_data->set_key(user_team_algorithm::make_team_shared_data_key(matching_module));
     CASE_EXPECT_TRUE(shared_data->mutable_value()->mutable_data()->PackFrom(matching_module));
     CASE_EXPECT_TRUE(send_team_action_event(team_action));
@@ -907,12 +877,12 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   ready_module.mutable_battle()->set_ready(true);
   {
     atfw::team::DTeamAction team_action;
-    auto *member = team_action.mutable_add_member();
+    auto* member = team_action.mutable_add_member();
     member->mutable_user_key()->set_zone_id(kZoneId);
     member->mutable_user_key()->set_user_id(kMemberUserId);
     member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
     *member->mutable_joined_timepoint() = protobuf_from_system_clock(now);
-    auto *member_data = member->add_shared_member_data();
+    auto* member_data = member->add_shared_member_data();
     member_data->set_key(user_team_algorithm::make_team_member_shared_data_key(ready_module));
     CASE_EXPECT_TRUE(member_data->mutable_value()->mutable_data()->PackFrom(ready_module));
     member->mutable_user_channel()->set_channel_id("polluted-member-channel");
@@ -923,7 +893,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 4. member_set_role: 新成员提升为 ADMIN
   {
     atfw::team::DTeamAction team_action;
-    auto *set_role = team_action.mutable_member_set_role();
+    auto* set_role = team_action.mutable_member_set_role();
     set_role->mutable_user_key()->set_zone_id(kZoneId);
     set_role->mutable_user_key()->set_user_id(kMemberUserId);
     set_role->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
@@ -933,7 +903,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 5. election_captain 选自己再选回原队长: 自己的角色 OWNER -> NORMAL，对方 NORMAL -> OWNER
   {
     atfw::team::DTeamAction team_action;
-    auto *election = team_action.mutable_election_captain();
+    auto* election = team_action.mutable_election_captain();
     election->mutable_user_key()->set_zone_id(kZoneId);
     election->mutable_user_key()->set_user_id(kUserId);
     election->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
@@ -941,7 +911,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   }
   {
     atfw::team::DTeamAction team_action;
-    auto *election = team_action.mutable_election_captain();
+    auto* election = team_action.mutable_election_captain();
     election->mutable_user_key()->set_zone_id(kZoneId);
     election->mutable_user_key()->set_user_id(kCaptainUserId);
     election->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
@@ -950,7 +920,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 6. 同 key 同过期时间的重复 add_join_request: 原位覆盖(内容更新但不新增条目、不改变顺序)
   {
     atfw::team::DTeamAction team_action;
-    auto *join_request = team_action.mutable_add_join_request();
+    auto* join_request = team_action.mutable_add_join_request();
     join_request->mutable_requester()->set_zone_id(kZoneId);
     join_request->mutable_requester()->set_user_id(kJoinRequesterId);
     *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(300));
@@ -969,16 +939,16 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
     size_t total_actions = 0;
     bool checked_add_member = false;
     bool checked_add_join_request = false;
-    for (const auto &push : pushes) {
+    for (const auto& push : pushes) {
       CASE_EXPECT_EQ(1, push.dirty_team_size());
       if (0 == push.dirty_team_size()) {
         continue;
       }
-      const auto &increase = push.dirty_team(0).increase();
+      const auto& increase = push.dirty_team(0).increase();
       CASE_EXPECT_EQ(kTeamId, increase.team_key().team_id());
-      total_actions += increase.actions_size();
-      for (const auto &one_action : increase.actions()) {
-        const auto &action = one_action.actions();
+      total_actions += static_cast<size_t>(increase.actions_size());
+      for (const auto& one_action : increase.actions()) {
+        const auto& action = one_action.actions();
         if (action.has_add_member()) {
           checked_add_member = true;
           CASE_EXPECT_TRUE(action.add_member().user_channel().channel_id().empty());
@@ -1009,8 +979,8 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
     current->dump(ctx, snapshot);
 
     CASE_EXPECT_EQ(3, snapshot.snapshot().member_size());
-    const atfw::team::DTeamMember *new_member = nullptr;
-    for (const auto &member : snapshot.snapshot().member()) {
+    const atfw::team::DTeamMember* new_member = nullptr;
+    for (const auto& member : snapshot.snapshot().member()) {
       if (member.user_key().user_id() == kMemberUserId) {
         new_member = &member;
       }

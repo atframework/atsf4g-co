@@ -373,9 +373,9 @@ CASE_TEST(teamsvr_room_create, create_team_with_uuid) {
     protobuf_copy_message(created_key, response.team_key());
     // CRT-02: 创建响应附带标准化房间频道(make_unicast_channel_id 标准单播格式),与房间实际订阅频道一致
     CASE_EXPECT_EQ(kTeamRoomChannelType, response.room_channel().channel_type());
-    CASE_EXPECT_EQ(
-        rpc::dtmq::make_unicast_channel_id(kTeamRoomChannelType, created_key.zone_id(), created_key.team_id()),
-        response.room_channel().channel_id());
+    CASE_EXPECT_EQ(rpc::dtmq::make_unicast_channel_id(kTeamRoomChannelType, created_key.zone_id(),
+                                                      static_cast<uint64_t>(created_key.team_id())),
+                   response.room_channel().channel_id());
   }
 
   CASE_EXPECT_EQ(kTestZoneId, created_key.zone_id());
