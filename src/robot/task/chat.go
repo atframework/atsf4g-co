@@ -1,6 +1,7 @@
 package atsf4g_go_robot_task
 
 import (
+	"errors"
 	"fmt"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
@@ -36,6 +37,9 @@ func ChatAutoSubscribeTask(task *user_data.TaskActionUser) error {
 		task.User.Log("[chat] no available channel")
 		return nil
 	}
+	// 服务端仅在频道首次快照拉取时安装推送回调，单个频道失败不能中止循环，
+	// 否则排在后面的频道整个会话期间都收不到 SCChatChannelSync 推送。
+	var subscribeErrs error
 	for _, meta := range metas {
 		key := meta.GetChannelKey()
 		channelId := key.GetChannelId()
@@ -44,10 +48,12 @@ func ChatAutoSubscribeTask(task *user_data.TaskActionUser) error {
 		}
 		task.User.Log("[chat] subscribe channel_id=%s, type=%d", channelId, key.GetChannelType())
 		if err := ChatGetChannelSnapshotTask(task, channelId); err != nil {
-			return err
+			task.User.Log("[chat] subscribe channel_id=%s failed: %v", channelId, err)
+			subscribeErrs = errors.Join(subscribeErrs, err)
+			continue
 		}
 	}
-	return nil
+	return subscribeErrs
 }
 
 // ChatGetChannelSnapshotTask 拉取指定频道的快照。首次拉取后服务端才会开始向该客户端推送频道通知。
