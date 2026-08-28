@@ -147,6 +147,10 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
   using event_callback_on_receive_raw_message_t =
       std::function<void(rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelMessage& data)>;
 
+  /// 批量接收消息后回调：在一次接收完一批消息后触发
+  using event_callback_on_receive_batch_message_finished_t = std::function<void(
+      rpc::context& ctx, const ptr_t& subscriber, int64_t first_log_sequence, int64_t last_log_sequence)>;
+
   /// 快照接收回调：分别在开始加载快照和快照加载完成时触发；完成回调的 result_code 为加载结果(0表示成功)
   using event_callback_on_receive_snapshot_t = std::function<void(
       rpc::context& ctx, const ptr_t& subscriber, const ::atfw::dtmq::DChannelSnapshot& data, int32_t result_code)>;
@@ -644,6 +648,25 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       const event_callback_on_receive_event_t& on_receive_event);
   static DTMQ_PROXY_SDK_API const event_callback_on_receive_event_t& get_event_callback_on_receive_event_by_type_url(
       const event_callback_set_t& event_callback_set, const std::string& type_url) noexcept;
+
+  /**
+   * @brief 设置/获取批量接收消息回调：每条一批消息接收完之后触发一次
+   * @note static 重载用于直接操作共享的 event_callback_set
+   */
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_batch_message_finished(
+      event_callback_on_receive_batch_message_finished_t&& on_receive_batch_message_finished);
+  DTMQ_PROXY_SDK_API void set_event_callback_on_receive_batch_message_finished(
+      const event_callback_on_receive_batch_message_finished_t& on_receive_batch_message_finished);
+  DTMQ_PROXY_SDK_API const event_callback_on_receive_batch_message_finished_t&
+  get_event_callback_on_receive_batch_message_finished() const noexcept;
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_batch_message_finished(
+      event_callback_set_t& event_callback_set,
+      event_callback_on_receive_batch_message_finished_t&& on_receive_batch_message_finished);
+  static DTMQ_PROXY_SDK_API void set_event_callback_on_receive_batch_message_finished(
+      event_callback_set_t& event_callback_set,
+      const event_callback_on_receive_batch_message_finished_t& on_receive_batch_message_finished);
+  static DTMQ_PROXY_SDK_API const event_callback_on_receive_batch_message_finished_t&
+  get_event_callback_on_receive_batch_message_finished(const event_callback_set_t& event_callback_set) noexcept;
 
   /**
    * @brief 设置/获取原始消息接收回调：每条原始日志(含文本/事件等所有类型)都会先触发(仅就绪后触发)

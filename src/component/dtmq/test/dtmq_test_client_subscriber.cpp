@@ -8,7 +8,7 @@
 //   - heartbeat + ready (global_tick/global_has_pending_heartbeat/global_is_sending_heartbeat/
 //     global_await_pending_heartbeat, on_ready, subscribe RPC mock)
 //   - receive messages + events (global_receive_channel_event driving text/event/raw/custom data/
-//     optimistic lock/private data/compact callbacks)
+//     optimistic lock/private data/compact/batch-finished callbacks)
 //   - destroy flow (on_destroyed via destroy message + snapshot with destroy metadata,
 //     on_receive_snapshot_start/finished, is_destroyed)
 //   - business RPC + local cache (send_message/find_message/find_cached_message/query_cached_message/
@@ -394,6 +394,7 @@ CASE_TEST(component_dtmq_subscriber, callback_setters_and_getters) {
   CASE_EXPECT_FALSE(static_cast<bool>(subscriber->get_event_callback_on_receive_text()));
   CASE_EXPECT_FALSE(static_cast<bool>(subscriber->get_event_callback_on_receive_event()));
   CASE_EXPECT_FALSE(static_cast<bool>(subscriber->get_event_callback_on_receive_raw_message()));
+  CASE_EXPECT_FALSE(static_cast<bool>(subscriber->get_event_callback_on_receive_batch_message_finished()));
   CASE_EXPECT_FALSE(static_cast<bool>(subscriber->get_event_callback_on_receive_snapshot_start()));
   CASE_EXPECT_FALSE(static_cast<bool>(subscriber->get_event_callback_on_receive_snapshot_finished()));
 
@@ -404,17 +405,24 @@ CASE_TEST(component_dtmq_subscriber, callback_setters_and_getters) {
       [](rpc::context&, const subscriber_ptr&, int64_t, std::chrono::system_clock::time_point) {};
   rpc::dtmq::client_subscriber::event_callback_on_receive_text_t shared_text =
       [](rpc::context&, const subscriber_ptr&, const ::atfw::dtmq::DChannelMessage&) {};
+  rpc::dtmq::client_subscriber::event_callback_on_receive_batch_message_finished_t shared_batch =
+      [](rpc::context&, const subscriber_ptr&, int64_t, int64_t) {};
   rpc::dtmq::client_subscriber::set_event_callback_on_ready(*shared_set, shared_ready);
   rpc::dtmq::client_subscriber::set_event_callback_on_destroyed(*shared_set, shared_destroy);
   rpc::dtmq::client_subscriber::set_event_callback_on_receive_text(*shared_set, shared_text);
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_batch_message_finished(*shared_set, shared_batch);
   subscriber->set_shared_event_callback_set(shared_set);
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_ready()));
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_destroyed()));
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_text()));
+  CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_batch_message_finished()));
   // Static getters read directly from the set.
   CASE_EXPECT_TRUE(static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_ready(*shared_set)));
   CASE_EXPECT_TRUE(static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_destroyed(*shared_set)));
   CASE_EXPECT_TRUE(static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_receive_text(*shared_set)));
+  CASE_EXPECT_TRUE(
+      static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_receive_batch_message_finished(
+          *shared_set)));
 
   // --- Private set takes precedence over the shared set. ---
   // Setting a private on_ready installs a non-empty callable returned by the getter. The actual
@@ -450,6 +458,12 @@ CASE_TEST(component_dtmq_subscriber, callback_setters_and_getters) {
   subscriber->set_event_callback_on_receive_raw_message(
       rpc::dtmq::client_subscriber::event_callback_on_receive_raw_message_t{
           [](rpc::context&, const subscriber_ptr&, const atfw::dtmq::DChannelMessage&) {}});
+  subscriber->set_event_callback_on_receive_batch_message_finished(
+      rpc::dtmq::client_subscriber::event_callback_on_receive_batch_message_finished_t{
+          [](rpc::context&, const subscriber_ptr&, int64_t, int64_t) {}});
+  subscriber->set_event_callback_on_receive_batch_message_finished(
+      rpc::dtmq::client_subscriber::event_callback_on_receive_batch_message_finished_t{
+          [](rpc::context&, const subscriber_ptr&, int64_t, int64_t) {}});  // re-set
   subscriber->set_event_callback_on_receive_snapshot_start(
       rpc::dtmq::client_subscriber::event_callback_on_receive_snapshot_t{
           [](rpc::context&, const subscriber_ptr&, const atfw::dtmq::DChannelSnapshot&, int32_t) {}});
@@ -462,6 +476,7 @@ CASE_TEST(component_dtmq_subscriber, callback_setters_and_getters) {
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_compact()));
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_event()));
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_raw_message()));
+  CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_batch_message_finished()));
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_snapshot_start()));
   CASE_EXPECT_TRUE(static_cast<bool>(subscriber->get_event_callback_on_receive_snapshot_finished()));
 
@@ -665,6 +680,11 @@ CASE_TEST(component_dtmq_subscriber, receive_messages_and_events) {
         got_compact = true;
         compacted_sequence = compact_log_sequence;
       });
+  std::vector<std::pair<int64_t, int64_t>> batch_ranges;
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_batch_message_finished(
+      *subscriber_options.event_callback_set,
+      [&batch_ranges](rpc::context&, const subscriber_ptr&, int64_t first_log_sequence,
+                      int64_t last_log_sequence) { batch_ranges.emplace_back(first_log_sequence, last_log_sequence); });
 
   auto nullable = rpc::dtmq::client_subscriber::create(channel_key, subscriber_options);
   CASE_EXPECT_TRUE(!!nullable);
@@ -693,6 +713,8 @@ CASE_TEST(component_dtmq_subscriber, receive_messages_and_events) {
     CASE_EXPECT_EQ(0, result.result_code);
   }
   CASE_EXPECT_TRUE(subscriber->is_ready());
+  // Snapshot delivery (load_snapshot) is not an incremental batch: no batch-finished event.
+  CASE_EXPECT_TRUE(batch_ranges.empty());
 
   // Step 2: push incremental messages. Each DChannelMessage carries a distinct command_case so the
   // wal delegate routes it to the matching callback. custom_data/private_data are attached to the
@@ -760,6 +782,13 @@ CASE_TEST(component_dtmq_subscriber, receive_messages_and_events) {
   CASE_EXPECT_TRUE(got_private_data);
   CASE_EXPECT_TRUE(got_lock);
 
+  // The single batch of messages 11..13 fired the batch-finished event once with the applied range.
+  CASE_EXPECT_EQ(1u, batch_ranges.size());
+  if (!batch_ranges.empty()) {
+    CASE_EXPECT_EQ(11, batch_ranges[0].first);
+    CASE_EXPECT_EQ(13, batch_ranges[0].second);
+  }
+
   // Last message sequence advanced to the highest received sequence.
   CASE_EXPECT_EQ(13, subscriber->get_last_message_sequence());
   // custom/private data sequences are now pinned.
@@ -792,10 +821,166 @@ CASE_TEST(component_dtmq_subscriber, receive_messages_and_events) {
   // The last removed key tracks the dropped log (11), not the requested boundary (12).
   CASE_EXPECT_EQ(11, compacted_sequence);
   CASE_EXPECT_EQ(11, subscriber->get_last_removed_sequence());
+  // A metadata-only sync (compact boundary, no channel_message) does not fire the batch event.
+  CASE_EXPECT_EQ(1u, batch_ranges.size());
   // The compacted message is gone from the local cache while later messages stay cached.
   auto cache_ctx = atframework::testing::make_context();
   CASE_EXPECT_FALSE(subscriber->find_cached_message(cache_ctx, 11, [](const atfw::dtmq::DChannelMessage&) {}));
   CASE_EXPECT_TRUE(subscriber->find_cached_message(cache_ctx, 12, [](const atfw::dtmq::DChannelMessage&) {}));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ on_receive_batch_message_finished boundaries ============
+// The batch-finished event fires exactly once per event_sync that applies TWO OR MORE new sequences,
+// carrying (first, last) of the newly applied range. It must NOT fire for: a single-message batch,
+// a stale-only batch (every log at-or-below the local tip, answered kIgnore by
+// wal_client::receive_log), or a mixed batch's stale prefix (the range covers only the new logs).
+CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+  auto subscribe_rule = mock_subscribe_ack(test);
+  CASE_EXPECT_TRUE(!!subscribe_rule);
+
+  auto channel_key = make_channel_key("chan-subscriber-batch-finished");
+  auto subscriber_options = make_subscriber_options("UT:batch");
+  subscriber_options.event_callback_set = rpc::dtmq::client_subscriber::create_event_callback_set();
+  std::vector<std::pair<int64_t, int64_t>> batch_ranges;
+  rpc::dtmq::client_subscriber* batch_event_subscriber = nullptr;
+  rpc::dtmq::client_subscriber::set_event_callback_on_receive_batch_message_finished(
+      *subscriber_options.event_callback_set,
+      [&batch_ranges, &batch_event_subscriber](rpc::context&, const subscriber_ptr& subscriber, int64_t first,
+                                               int64_t last) {
+        batch_ranges.emplace_back(first, last);
+        batch_event_subscriber = subscriber.get();
+      });
+
+  auto nullable = rpc::dtmq::client_subscriber::create(channel_key, subscriber_options);
+  CASE_EXPECT_TRUE(!!nullable);
+  if (!nullable) {
+    test.stop();
+    return;
+  }
+  subscriber_ptr subscriber = nullable;  // nullable<ptr_t> == ptr_t
+
+  std::string shared_key = shared_subscriber_key_for();
+
+  // Deterministic text message so the hash chain can be recomputed bit-for-bit for the stale re-push.
+  auto make_text_msg = [&channel_key](int64_t seq) {
+    atfw::dtmq::DChannelMessage msg;
+    msg.set_sequence(seq);
+    msg.set_channel_type(channel_key.channel_type());
+    msg.mutable_create_timepoint()->set_seconds(2000);
+    msg.mutable_detail()->set_text("batch-" + std::to_string(seq));
+    return msg;
+  };
+
+  // Step 1: ready snapshot (no messages) -> ready via load_snapshot, which never fires the batch event.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_snapshot()->CopyFrom(make_ready_snapshot(channel_key, 10));
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_ready", event_sync));
+  }
+  CASE_EXPECT_TRUE(subscriber->is_ready());
+  CASE_EXPECT_TRUE(batch_ranges.empty());
+
+  // Step 2: single-message batch -> the event requires at least two new sequences, nothing fires.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    auto msg = make_text_msg(11);
+    msg.set_hash_code(rpc::dtmq::calculate_hash_code(0, msg));
+    *event_sync.add_channel_message() = msg;
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_single", event_sync));
+  }
+  CASE_EXPECT_TRUE(batch_ranges.empty());
+  CASE_EXPECT_EQ(11, subscriber->get_last_message_sequence());
+
+  // Step 3: batch of three new messages (12..14) -> fires once with the full newly-applied range and
+  // passes this very client_subscriber to the callback.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    uint64_t previous_hash = rpc::dtmq::calculate_hash_code(0, make_text_msg(11));
+    for (int64_t seq = 12; seq <= 14; ++seq) {
+      auto msg = make_text_msg(seq);
+      previous_hash = rpc::dtmq::calculate_hash_code(previous_hash, msg);
+      msg.set_hash_code(previous_hash);
+      *event_sync.add_channel_message() = msg;
+    }
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_multi", event_sync));
+  }
+  CASE_EXPECT_EQ(1u, batch_ranges.size());
+  if (!batch_ranges.empty()) {
+    CASE_EXPECT_EQ(12, batch_ranges[0].first);
+    CASE_EXPECT_EQ(14, batch_ranges[0].second);
+  }
+  CASE_EXPECT_EQ(batch_event_subscriber, subscriber.get());
+  CASE_EXPECT_EQ(14, subscriber->get_last_message_sequence());
+
+  // Step 4: stale-only batch (12, 13 re-pushed with their original chain hashes; their keys are
+  // at-or-below the finished tip so wal_client::receive_log answers kIgnore) -> no event.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    uint64_t previous_hash = rpc::dtmq::calculate_hash_code(0, make_text_msg(11));
+    for (int64_t seq = 12; seq <= 13; ++seq) {
+      auto msg = make_text_msg(seq);
+      previous_hash = rpc::dtmq::calculate_hash_code(previous_hash, msg);
+      msg.set_hash_code(previous_hash);
+      *event_sync.add_channel_message() = msg;
+    }
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_stale", event_sync));
+  }
+  CASE_EXPECT_EQ(1u, batch_ranges.size());
+  CASE_EXPECT_EQ(14, subscriber->get_last_message_sequence());
+
+  // Step 5: mixed batch (stale prefix 13, 14 then new 15, 16) -> fires again, and the reported range
+  // covers only the newly applied logs (15, 16), not the stale prefix.
+  {
+    atfw::dtmq::SSChannelEventSync event_sync;
+    event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
+    uint64_t previous_hash = rpc::dtmq::calculate_hash_code(0, make_text_msg(11));
+    for (int64_t seq = 12; seq <= 16; ++seq) {
+      auto msg = make_text_msg(seq);
+      previous_hash = rpc::dtmq::calculate_hash_code(previous_hash, msg);
+      msg.set_hash_code(previous_hash);
+      if (seq >= 13) {
+        *event_sync.add_channel_message() = msg;
+      }
+    }
+    event_sync.add_subscriber_keys(shared_key);
+    CASE_EXPECT_TRUE(push_channel_event(test, "push_mixed", event_sync));
+  }
+  CASE_EXPECT_EQ(2u, batch_ranges.size());
+  if (batch_ranges.size() >= 2) {
+    CASE_EXPECT_EQ(15, batch_ranges[1].first);
+    CASE_EXPECT_EQ(16, batch_ranges[1].second);
+  }
+  CASE_EXPECT_EQ(16, subscriber->get_last_message_sequence());
+  // Every log was accepted or cleanly ignored: no failure-driven heartbeat was queued.
+  CASE_EXPECT_FALSE(rpc::dtmq::client_subscriber::global_has_pending_heartbeat());
 
   CASE_EXPECT_EQ(0, test.stop());
 }

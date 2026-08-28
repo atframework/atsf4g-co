@@ -550,6 +550,7 @@ struct client_subscriber::event_callback_set_t {
   client_subscriber::event_callback_on_receive_event_t on_receive_event;
   std::unordered_map<std::string, client_subscriber::event_callback_on_receive_event_t> on_receive_event_by_type_url;
   client_subscriber::event_callback_on_receive_raw_message_t on_receive_raw_message;
+  client_subscriber::event_callback_on_receive_batch_message_finished_t on_receive_batch_message_finished;
   client_subscriber::event_callback_on_receive_snapshot_t on_receive_snapshot_start;
   client_subscriber::event_callback_on_receive_snapshot_t on_receive_snapshot_finished;
 };
@@ -1429,6 +1430,57 @@ client_subscriber::get_event_callback_on_receive_event_by_type_url(const event_c
   }
 
   return get_default_event_callback_set().on_receive_event;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_batch_message_finished(
+    event_callback_on_receive_batch_message_finished_t&& on_receive_batch_message_finished) {
+  if (!internal_data_->private_event_handler) {
+    internal_data_->private_event_handler = client_subscriber::create_event_callback_set();
+  }
+
+  internal_data_->private_event_handler->on_receive_batch_message_finished =
+      std::move(on_receive_batch_message_finished);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_batch_message_finished(
+    const event_callback_on_receive_batch_message_finished_t& on_receive_batch_message_finished) {
+  if (!internal_data_->private_event_handler) {
+    internal_data_->private_event_handler = client_subscriber::create_event_callback_set();
+  }
+
+  internal_data_->private_event_handler->on_receive_batch_message_finished = on_receive_batch_message_finished;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_batch_message_finished_t&
+client_subscriber::get_event_callback_on_receive_batch_message_finished() const noexcept {
+  if (internal_data_->private_event_handler &&
+      internal_data_->private_event_handler->on_receive_batch_message_finished) {
+    return internal_data_->private_event_handler->on_receive_batch_message_finished;
+  }
+
+  if (internal_data_->shared_event_handler) {
+    return internal_data_->shared_event_handler->on_receive_batch_message_finished;
+  }
+
+  return get_default_event_callback_set().on_receive_batch_message_finished;
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_batch_message_finished(
+    event_callback_set_t& event_callback_set,
+    event_callback_on_receive_batch_message_finished_t&& on_receive_batch_message_finished) {
+  event_callback_set.on_receive_batch_message_finished = std::move(on_receive_batch_message_finished);
+}
+
+DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_batch_message_finished(
+    event_callback_set_t& event_callback_set,
+    const event_callback_on_receive_batch_message_finished_t& on_receive_batch_message_finished) {
+  event_callback_set.on_receive_batch_message_finished = on_receive_batch_message_finished;
+}
+
+DTMQ_PROXY_SDK_API const client_subscriber::event_callback_on_receive_batch_message_finished_t&
+client_subscriber::get_event_callback_on_receive_batch_message_finished(
+    const event_callback_set_t& event_callback_set) noexcept {
+  return event_callback_set.on_receive_batch_message_finished;
 }
 
 DTMQ_PROXY_SDK_API void client_subscriber::set_event_callback_on_receive_raw_message(
@@ -2887,6 +2939,8 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
   int32_t result_code = 0;
   mq_client_subscriber_wal_object_context param{ctx, result_code};
   int64_t failure_log_sequence = 0;
+  int64_t first_success_log_sequence = 0;
+  int64_t last_success_log_sequence = 0;
   for (const auto& log_msg : event_sync.channel_message()) {
     if (log_msg.sequence() < start_sequence) {
       continue;
@@ -2931,6 +2985,11 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
         if (last_message_sequence_ < log_msg.sequence()) {
           last_message_sequence_ = log_msg.sequence();
           last_message_hash_code_ = log_msg.hash_code();
+
+          last_success_log_sequence = last_message_sequence_;
+          if (first_success_log_sequence == 0) {
+            first_success_log_sequence = last_message_sequence_;
+          }
         }
       } else {
         FCTXLOGERROR(ctx, "Failed to allocate log for sequence: {}", log_msg.sequence());
@@ -2982,6 +3041,17 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
         fn(ctx, client.shared_from_this(), after_compact_sequence);
       }
     });
+  }
+
+  // 批量消息的后置事件触发(单条消息也是一批，不能漏触发，否则逐条下发的实时事件永远等不到后置事件)
+  if (first_success_log_sequence > 0 && last_success_log_sequence >= first_success_log_sequence) {
+    foreach_registered_client_subscriber(
+        [&ctx, first_success_log_sequence, last_success_log_sequence](client_subscriber& client) {
+          const auto& fn = client.get_event_callback_on_receive_batch_message_finished();
+          if (fn) {
+            fn(ctx, client.shared_from_this(), first_success_log_sequence, last_success_log_sequence);
+          }
+        });
   }
 }
 
