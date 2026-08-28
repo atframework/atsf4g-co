@@ -1,3 +1,18 @@
+# Copyright 2026 atframework
+# PowerShell script to download, start, stop, and manage redis for unit testing.
+# Works on Windows PowerShell 5.1 and pwsh 7+ on Windows/Linux/macOS.
+#   - Windows: downloads the tporadowski redis port (same as before).
+#   - Linux/macOS: redis has no official binary release, so the Docker Official
+#     Image is used through a local container engine (docker, podman or nerdctl,
+#     auto-detected in this order). No root or system packages are required.
+# Usage: redis.ps1 -Command <download|start|stop|cleanup|status>
+#   -WorkDir DIR          Working directory (default: <temp dir>/redis-unit-test)
+#   -ClientPort PORT      Listening port (default: 6379)
+#   -RedisVersion VER     Image tag to use on Linux/macOS (default: 7.2.16,
+#                         the last BSD-3-Clause release line; ignored on Windows)
+#   -ContainerEngine ENG  Container engine to use on Linux/macOS
+#                         (docker|podman|nerdctl; default: auto-detect)
+
 param(
   [Parameter(Mandatory = $true)]
   [ValidateSet("download", "start", "stop", "cleanup", "status")]
@@ -7,33 +22,123 @@ param(
 
   [int]$ClientPort = 6379,
 
-  [string]$RedisVersion = "latest"
+  [string]$RedisVersion = "latest",
+
+  [string]$ContainerEngine = ""
 )
 
-$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'
+$PSDefaultParameterValues['*:Encoding'] = 'UTF8'
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 $ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrEmpty($WorkDir)) {
-  $WorkDir = Join-Path $env:TEMP "redis-unit-test"
+# $IsWindows/$IsMacOS only exist on PowerShell 7; $env:OS is 'Windows_NT' on every Windows
+# host (5.1 and 7+), so it is used as the 5.1 compatible probe.
+$IsWindowsHost = ($env:OS -eq 'Windows_NT')
+$HostOs = "linux"
+if ($IsWindowsHost) {
+  $HostOs = "windows"
+}
+elseif ($IsMacOS) {
+  $HostOs = "darwin"
 }
 
-$REDIS_SERVER_EXE = Join-Path $WorkDir "redis-server.exe"
-$REDIS_CLI_EXE    = Join-Path $WorkDir "redis-cli.exe"
+if ([string]::IsNullOrEmpty($WorkDir)) {
+  # [System.IO.Path]::GetTempPath() resolves $env:TEMP on Windows and TMPDIR (or /tmp) on
+  # Linux/macOS; $env:TEMP does not exist on Unix hosts.
+  $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) "redis-unit-test"
+}
+
+# Windows (native) paths
+$ExeSuffix = ""
+if ($IsWindowsHost) {
+  $ExeSuffix = ".exe"
+}
+$REDIS_SERVER_EXE = Join-Path $WorkDir "redis-server$ExeSuffix"
+$REDIS_CLI_EXE    = Join-Path $WorkDir "redis-cli$ExeSuffix"
 $REDIS_CONF       = Join-Path $WorkDir "redis.windows.conf"
 $PID_FILE         = Join-Path $WorkDir "redis.pid"
 $LOG_FILE         = Join-Path $WorkDir "redis.log"
 
-function Invoke-Download {
-  if ((Test-Path $REDIS_SERVER_EXE) -and (Test-Path $REDIS_CLI_EXE)) {
-    Write-Host "Redis binaries already exist at $WorkDir, skipping download."
-    Write-Host "Use 'cleanup' command first if you want to re-download."
-    return
+# Unix (container) state
+# 7.2.x is the last BSD-3-Clause licensed release line and resolves "latest".
+$ImageTag = $RedisVersion
+if ($ImageTag -eq "latest") {
+  $ImageTag = "7.2.16"
+}
+$REDIS_IMAGE    = "redis:$ImageTag"
+$CONTAINER_NAME = "atsf4g-redis-unit-test"
+$CID_FILE       = Join-Path $WorkDir "redis.cid"
+
+function Get-RunningProcess {
+  # Returns the process for the given PID text, or $null when the text is not a number or
+  # the process is gone. Reading a corrupt/partially written PID file must not blow up
+  # with a parameter binding error under $ErrorActionPreference = 'Stop'.
+  param([string]$PidText)
+
+  $pidInt = $PidText -as [int]
+  if ($null -eq $pidInt) {
+    return $null
   }
+  $proc = Get-Process -Id $pidInt -ErrorAction SilentlyContinue
+  if ($null -eq $proc -or $proc.HasExited) {
+    return $null
+  }
+  return $proc
+}
 
-  New-Item -Path $WorkDir -ItemType Directory -Force | Out-Null
+function Find-ContainerEngine {
+  # Returns the engine command name, or $null when none is available.
+  if (-not [string]::IsNullOrEmpty($ContainerEngine)) {
+    if ($null -ne (Get-Command -Name $ContainerEngine -ErrorAction SilentlyContinue)) {
+      return $ContainerEngine
+    }
+    Write-Error "Container engine '$ContainerEngine' was requested but not found in PATH."
+    exit 1
+  }
+  foreach ($engine in @("docker", "podman", "nerdctl")) {
+    if ($null -ne (Get-Command -Name $engine -ErrorAction SilentlyContinue)) {
+      return $engine
+    }
+  }
+  return $null
+}
 
-  # 清理带有 'v' 的标签字符以匹配 zip 包命名 (例如 v5.0.14.1 -> 5.0.14.1)
+function Get-ContainerEngine {
+  $engine = Find-ContainerEngine
+  if ($null -eq $engine) {
+    Write-Error ("No container engine found. redis runs in a container on Linux/macOS; " +
+      "install docker or podman first " +
+      "(macOS: 'brew install podman; podman machine init; podman machine start' or Docker Desktop; " +
+      "Debian/Ubuntu: 'apt-get install docker.io' or 'apt-get install podman').")
+    exit 1
+  }
+  return $engine
+}
+
+function Assert-ContainerEngineReady {
+  param([string]$Engine)
+  & $Engine info 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error ("Container engine '$Engine' is installed but its daemon is not reachable. " +
+      "Start it first (Docker Desktop on macOS, 'podman machine start', or the docker/containerd service).")
+    exit 1
+  }
+}
+
+function Test-ContainerExists {
+  param([string]$Engine)
+  & $Engine inspect $CONTAINER_NAME 2>$null | Out-Null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Test-ContainerRunning {
+  param([string]$Engine)
+  $state = & $Engine inspect -f '{{.State.Running}}' $CONTAINER_NAME 2>$null
+  return ($state -eq "true")
+}
+
+function Invoke-DownloadWindows {
+  # Strip the leading 'v' from the tag to match the zip name (e.g. v5.0.14.1 -> 5.0.14.1)
   $downloadUrl = "https://github.com/tporadowski/redis/releases/download/v5.0.14.1/Redis-x64-5.0.14.1.zip"
   $zipFile = Join-Path $WorkDir "redis.zip"
 
@@ -50,59 +155,98 @@ function Invoke-Download {
 
   Write-Host "Extracting..."
   $extractDir = Join-Path $WorkDir "redis-extract"
-  if (Test-Path $extractDir) {
+  if (Test-Path -LiteralPath $extractDir) {
     Remove-Item -Recurse -Force $extractDir
   }
   Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
 
-  # 复制核心执行文件及默认配置文件
+  # Copy the core executables and the default configuration file
   Copy-Item -Path (Join-Path $extractDir "redis-server.exe") -Destination $REDIS_SERVER_EXE -Force
   Copy-Item -Path (Join-Path $extractDir "redis-cli.exe") -Destination $REDIS_CLI_EXE -Force
-  if (Test-Path (Join-Path $extractDir "redis.windows.conf")) {
+  if (Test-Path -LiteralPath (Join-Path $extractDir "redis.windows.conf")) {
     Copy-Item -Path (Join-Path $extractDir "redis.windows.conf") -Destination $REDIS_CONF -Force
   }
 
-  # 清理临时文件
+  # Cleanup temp files
   Remove-Item -Recurse -Force $extractDir
   Remove-Item -Force $zipFile
 
   Write-Host "Redis downloaded successfully to $WorkDir"
 }
 
-function Invoke-Start {
-  if (!(Test-Path $REDIS_SERVER_EXE)) {
-    Write-Host "Redis binary not found. Downloading first..."
-    Invoke-Download
+function Invoke-DownloadUnix {
+  $engine = Get-ContainerEngine
+  Assert-ContainerEngineReady $engine
+
+  & $engine image inspect $REDIS_IMAGE 2>$null | Out-Null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "Redis image $REDIS_IMAGE already exists, skipping pull."
+    Write-Host "Use 'cleanup' command first if you want to re-pull."
+    return
   }
 
-  # 检查是否已有实例运行
-  if (Test-Path $PID_FILE) {
+  Write-Host "Pulling $REDIS_IMAGE ..."
+  & $engine pull $REDIS_IMAGE
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to pull $REDIS_IMAGE"
+    exit 1
+  }
+
+  Write-Host "Redis image pulled successfully."
+}
+
+function Invoke-Download {
+  if ($IsWindowsHost) {
+    if ((Test-Path -LiteralPath $REDIS_SERVER_EXE) -and (Test-Path -LiteralPath $REDIS_CLI_EXE)) {
+      Write-Host "Redis binaries already exist at $WorkDir, skipping download."
+      Write-Host "Use 'cleanup' command first if you want to re-download."
+      return
+    }
+    New-Item -Path $WorkDir -ItemType Directory -Force | Out-Null
+    Invoke-DownloadWindows
+  }
+  else {
+    Invoke-DownloadUnix
+  }
+}
+
+function Invoke-StartWindows {
+  if (!(Test-Path -LiteralPath $REDIS_SERVER_EXE)) {
+    Write-Host "Redis binary not found. Downloading first..."
+    Invoke-DownloadWindows
+  }
+
+  # Check whether an instance is already running
+  if (Test-Path -LiteralPath $PID_FILE) {
     $existingPid = Get-Content $PID_FILE -ErrorAction SilentlyContinue
     if ($existingPid) {
-      $proc = Get-Process -Id $existingPid -ErrorAction SilentlyContinue
-      if ($null -ne $proc -and !$proc.HasExited) {
+      $proc = Get-RunningProcess "$existingPid"
+      if ($null -ne $proc) {
         Write-Host "Redis is already running (PID: $existingPid). Stopping first..."
-        Invoke-Stop
+        Invoke-StopWindows
       }
     }
   }
 
+  New-Item -Path $WorkDir -ItemType Directory -Force | Out-Null
+
   Write-Host "Starting Redis on port $ClientPort..."
 
-  # 动态组装启动参数
+  # Build the argument list dynamically; --dir keeps rdb/aof files inside WorkDir
   $redisArgs = @()
-  if (Test-Path $REDIS_CONF) {
+  if (Test-Path -LiteralPath $REDIS_CONF) {
     $redisArgs += $REDIS_CONF
   }
-  $redisArgs += @("--port", $ClientPort, "--logfile", $LOG_FILE)
+  $redisArgs += @("--port", "$ClientPort", "--dir", $WorkDir, "--logfile", $LOG_FILE)
 
-  # 后台静默启动进程
-  $proc = Start-Process -FilePath $REDIS_SERVER_EXE -ArgumentList $redisArgs -PassThru -NoNewWindow -RedirectStandardError (Join-Path $WorkDir "redis-stderr.log")
+  $proc = Start-Process -FilePath $REDIS_SERVER_EXE -ArgumentList $redisArgs -PassThru -NoNewWindow `
+    -RedirectStandardOutput (Join-Path $WorkDir "redis-stdout.log") `
+    -RedirectStandardError (Join-Path $WorkDir "redis-stderr.log")
 
   Set-Content -Path $PID_FILE -Value $proc.Id
   Write-Host "Redis started with PID: $($proc.Id)"
 
-  # 连通性健康检查
+  # Health check
   $maxRetries = 15
   $retryCount = 0
   $healthy = $false
@@ -113,18 +257,18 @@ function Invoke-Start {
     $retryCount++
 
     try {
-      # 使用 redis-cli 发送 PING，若返回 PONG 则代表正常响应
+      # Send PING via redis-cli; a PONG reply means the server is ready
       $result = & $REDIS_CLI_EXE -p $ClientPort PING 2>&1
-      if ($result -eq "PONG") {
+      if ("$result" -eq "PONG") {
         $healthy = $true
         break
       }
     }
     catch {
-      # 忽略启动中的连接报错
+      # Ignore connection errors while the server is still starting
     }
 
-    # 检查进程中途是否崩溃
+    # Check whether the process crashed during startup
     $checkProc = Get-Process -Id $proc.Id -ErrorAction SilentlyContinue
     if ($null -eq $checkProc -or $checkProc.HasExited) {
       Write-Error "Redis process died during startup. Check $LOG_FILE for details."
@@ -137,13 +281,91 @@ function Invoke-Start {
   }
   else {
     Write-Error "Redis failed to respond to PING within ${maxRetries}s. Check $LOG_FILE for details."
-    Invoke-Stop
+    Invoke-StopWindows
     exit 1
   }
 }
 
-function Invoke-Stop {
-  if (!(Test-Path $PID_FILE)) {
+function Invoke-StartUnix {
+  $engine = Get-ContainerEngine
+  Assert-ContainerEngineReady $engine
+
+  & $engine image inspect $REDIS_IMAGE 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "Redis image not found. Pulling first..."
+    Write-Host "Pulling $REDIS_IMAGE ..."
+    & $engine pull $REDIS_IMAGE
+    if ($LASTEXITCODE -ne 0) {
+      Write-Error "Failed to pull $REDIS_IMAGE"
+      exit 1
+    }
+  }
+
+  if (Test-ContainerExists $engine) {
+    if (Test-ContainerRunning $engine) {
+      Write-Host "Redis container $CONTAINER_NAME is already running. Stopping first..."
+      Invoke-StopUnix
+    }
+    else {
+      & $engine rm $CONTAINER_NAME 2>$null | Out-Null
+    }
+  }
+
+  New-Item -Path $WorkDir -ItemType Directory -Force | Out-Null
+
+  Write-Host "Starting Redis container $CONTAINER_NAME on port $ClientPort..."
+
+  $cid = & $engine run -d --name $CONTAINER_NAME -p "127.0.0.1:${ClientPort}:6379" $REDIS_IMAGE
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to start Redis container."
+    exit 1
+  }
+  Set-Content -Path $CID_FILE -Value "$cid"
+  Write-Host "Redis container started (ID: $cid)"
+
+  # Health check; redis-cli is available inside the official image
+  $maxRetries = 15
+  $retryCount = 0
+  $healthy = $false
+
+  Write-Host "Waiting for Redis to respond to PING..."
+  while ($retryCount -lt $maxRetries) {
+    Start-Sleep -Seconds 1
+    $retryCount++
+
+    $result = & $engine exec $CONTAINER_NAME redis-cli PING 2>$null
+    if ("$result" -eq "PONG") {
+      $healthy = $true
+      break
+    }
+
+    if (-not (Test-ContainerRunning $engine)) {
+      Write-Error "Redis container died during startup. Check '$engine logs $CONTAINER_NAME' for details."
+      exit 1
+    }
+  }
+
+  if ($healthy) {
+    Write-Host "Redis is healthy and ready on 127.0.0.1:${ClientPort}"
+  }
+  else {
+    Write-Error "Redis failed to respond to PING within ${maxRetries}s. Check '$engine logs $CONTAINER_NAME' for details."
+    Invoke-StopUnix
+    exit 1
+  }
+}
+
+function Invoke-Start {
+  if ($IsWindowsHost) {
+    Invoke-StartWindows
+  }
+  else {
+    Invoke-StartUnix
+  }
+}
+
+function Invoke-StopWindows {
+  if (!(Test-Path -LiteralPath $PID_FILE)) {
     Write-Host "No PID file found. Redis may not be running."
     return
   }
@@ -155,21 +377,26 @@ function Invoke-Stop {
     return
   }
 
-  $proc = Get-Process -Id $redisPid -ErrorAction SilentlyContinue
-  if ($null -eq $proc -or $proc.HasExited) {
+  $proc = Get-RunningProcess $redisPid
+  if ($null -eq $proc) {
     Write-Host "Redis process (PID: $redisPid) is not running."
     Remove-Item -Force $PID_FILE -ErrorAction SilentlyContinue
     return
   }
 
   Write-Host "Stopping Redis (PID: $redisPid)..."
-  
-  # 优先尝试优雅关闭客户端
-  if (Test-Path $REDIS_CLI_EXE) {
-    & $REDIS_CLI_EXE -p $ClientPort shutdown 2>&1 | Out-Null
+
+  # Try a graceful shutdown through redis-cli first
+  if (Test-Path -LiteralPath $REDIS_CLI_EXE) {
+    try {
+      & $REDIS_CLI_EXE -p $ClientPort shutdown 2>&1 | Out-Null
+    }
+    catch {
+      # The server may already be gone; fall through to the wait/kill logic.
+    }
   }
 
-  # 等待进程退出 (最多 5 秒)
+  # Wait for the process to exit (up to 5 seconds)
   $waited = 0
   while ($waited -lt 5) {
     Start-Sleep -Seconds 1
@@ -180,7 +407,7 @@ function Invoke-Stop {
     }
   }
 
-  # 如果进程依然存活，强制杀进程
+  # Force kill if the process is still alive
   $checkProc = Get-Process -Id $redisPid -ErrorAction SilentlyContinue
   if ($null -ne $checkProc -and !$checkProc.HasExited) {
     Write-Host "Force killing Redis (PID: $redisPid)..."
@@ -191,24 +418,104 @@ function Invoke-Stop {
   Write-Host "Redis stopped."
 }
 
-function Invoke-Cleanup {
-  Invoke-Stop
-
-  Write-Host "Cleaning up $WorkDir..."
-  $filesToRemove = @($REDIS_SERVER_EXE, $REDIS_CLI_EXE, $REDIS_CONF, $LOG_FILE, (Join-Path $WorkDir "redis-stderr.log"))
-
-  foreach ($file in $filesToRemove) {
-    if (Test-Path $file) { Remove-Item -Force $file }
+function Invoke-StopUnix {
+  $engine = Find-ContainerEngine
+  if ($null -eq $engine) {
+    if (Test-Path -LiteralPath $CID_FILE) {
+      Write-Error "No container engine available to stop $CONTAINER_NAME (state file: $CID_FILE)."
+      exit 1
+    }
+    Write-Host "No container state found. Redis may not be running."
+    return
   }
 
-  # 清理本地默认持久化文件 (rdb/aof)
-  Get-ChildItem -Path $WorkDir -Include "*.rdb","*.aof" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
+  if (-not (Test-ContainerExists $engine)) {
+    Write-Host "Redis container $CONTAINER_NAME does not exist."
+    Remove-Item -Force $CID_FILE -ErrorAction SilentlyContinue
+    return
+  }
+
+  if (Test-ContainerRunning $engine) {
+    Write-Host "Stopping Redis container $CONTAINER_NAME..."
+    & $engine stop $CONTAINER_NAME 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+      Write-Error "Failed to stop Redis container $CONTAINER_NAME."
+      exit 1
+    }
+  }
+
+  & $engine rm $CONTAINER_NAME 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to remove Redis container $CONTAINER_NAME."
+    exit 1
+  }
+
+  Remove-Item -Force $CID_FILE -ErrorAction SilentlyContinue
+  Write-Host "Redis stopped."
+}
+
+function Invoke-Stop {
+  if ($IsWindowsHost) {
+    Invoke-StopWindows
+  }
+  else {
+    Invoke-StopUnix
+  }
+}
+
+function Invoke-CleanupWindows {
+  Invoke-StopWindows
+
+  Write-Host "Cleaning up $WorkDir..."
+  $filesToRemove = @($REDIS_SERVER_EXE, $REDIS_CLI_EXE, $REDIS_CONF, $LOG_FILE,
+    (Join-Path $WorkDir "redis-stderr.log"), (Join-Path $WorkDir "redis-stdout.log"))
+
+  foreach ($file in $filesToRemove) {
+    if (Test-Path -LiteralPath $file) {
+      Remove-Item -Force $file
+    }
+  }
+
+  # Cleanup local persistence files (rdb/aof)
+  Get-ChildItem -Path $WorkDir -Filter "*.rdb" -File -ErrorAction SilentlyContinue | Remove-Item -Force
+  Get-ChildItem -Path $WorkDir -Filter "*.aof" -File -ErrorAction SilentlyContinue | Remove-Item -Force
 
   Write-Host "Cleanup complete."
 }
 
-function Invoke-Status {
-  if (!(Test-Path $PID_FILE)) {
+function Invoke-CleanupUnix {
+  Invoke-StopUnix
+
+  Write-Host "Cleaning up $WorkDir..."
+  if (Test-Path -LiteralPath $WorkDir) {
+    Remove-Item -Recurse -Force $WorkDir -ErrorAction SilentlyContinue
+  }
+
+  $engine = Find-ContainerEngine
+  if ($null -ne $engine) {
+    & $engine image inspect $REDIS_IMAGE 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+      & $engine rmi $REDIS_IMAGE 2>$null | Out-Null
+      if ($LASTEXITCODE -ne 0) {
+        Write-Host "Warning: failed to remove image $REDIS_IMAGE (it may be used elsewhere)."
+      }
+    }
+  }
+
+  Write-Host "Cleanup complete."
+}
+
+function Invoke-Cleanup {
+  if ($IsWindowsHost) {
+    Invoke-CleanupWindows
+  }
+  else {
+    Invoke-CleanupUnix
+  }
+}
+
+function Invoke-StatusWindows {
+  if (!(Test-Path -LiteralPath $PID_FILE)) {
     Write-Host "Redis is not running (no PID file)."
     return
   }
@@ -219,15 +526,15 @@ function Invoke-Status {
     return
   }
 
-  $proc = Get-Process -Id $redisPid -ErrorAction SilentlyContinue
-  if ($null -eq $proc -or $proc.HasExited) {
+  $proc = Get-RunningProcess $redisPid
+  if ($null -eq $proc) {
     Write-Host "Redis is not running (PID: $redisPid not found)."
     return
   }
 
   Write-Host "Redis is running (PID: $redisPid)."
 
-  if (Test-Path $REDIS_CLI_EXE) {
+  if (Test-Path -LiteralPath $REDIS_CLI_EXE) {
     try {
       $result = & $REDIS_CLI_EXE -p $ClientPort PING 2>&1
       Write-Host "Ping Response: $result"
@@ -235,6 +542,47 @@ function Invoke-Status {
     catch {
       Write-Host "Ping check failed: $_"
     }
+  }
+}
+
+function Invoke-StatusUnix {
+  if (!(Test-Path -LiteralPath $CID_FILE)) {
+    Write-Host "Redis is not running (no container state file)."
+    return
+  }
+
+  $engine = Find-ContainerEngine
+  if ($null -eq $engine) {
+    Write-Host "Container state file exists ($CID_FILE) but no container engine is available."
+    return
+  }
+
+  if (-not (Test-ContainerExists $engine)) {
+    Write-Host "Redis is not running (container $CONTAINER_NAME not found)."
+    return
+  }
+
+  if (-not (Test-ContainerRunning $engine)) {
+    Write-Host "Redis container $CONTAINER_NAME exists but is not running."
+    return
+  }
+
+  Write-Host "Redis is running (container $CONTAINER_NAME)."
+  $result = & $engine exec $CONTAINER_NAME redis-cli PING 2>$null
+  if ("$result" -eq "PONG") {
+    Write-Host "Ping Response: $result"
+  }
+  else {
+    Write-Host "Ping check failed."
+  }
+}
+
+function Invoke-Status {
+  if ($IsWindowsHost) {
+    Invoke-StatusWindows
+  }
+  else {
+    Invoke-StatusUnix
   }
 }
 

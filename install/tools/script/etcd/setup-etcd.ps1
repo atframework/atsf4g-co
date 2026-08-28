@@ -1,7 +1,8 @@
 # Copyright 2026 atframework
 # PowerShell script to download, start, stop, and manage etcd for unit testing.
+# Works on Windows PowerShell 5.1 and pwsh 7+ on Windows/Linux/macOS.
 # Usage: setup-etcd.ps1 -Command <download|start|stop|cleanup|status>
-#   -WorkDir DIR          Working directory (default: $env:TEMP\etcd-unit-test)
+#   -WorkDir DIR          Working directory (default: <temp dir>/etcd-unit-test)
 #   -ClientPort PORT      Client port (default: 12379)
 #   -PeerPort PORT        Peer port (default: 12380)
 #   -EtcdVersion VER      Specify version tag (default: latest)
@@ -20,19 +21,54 @@ param(
   [string]$EtcdVersion = "latest"
 )
 
-$PSDefaultParameterValues['*:Encoding'] = 'UTF-8'
+$PSDefaultParameterValues['*:Encoding'] = 'UTF8'
 $OutputEncoding = [System.Text.UTF8Encoding]::new()
 $ErrorActionPreference = "Stop"
 
-if ([string]::IsNullOrEmpty($WorkDir)) {
-  $WorkDir = Join-Path $env:TEMP "etcd-unit-test"
+# $IsWindows/$IsMacOS only exist on PowerShell 7; $env:OS is 'Windows_NT' on every Windows
+# host (5.1 and 7+), so it is used as the 5.1 compatible probe.
+$IsWindowsHost = ($env:OS -eq 'Windows_NT')
+$HostOs = "linux"
+if ($IsWindowsHost) {
+  $HostOs = "windows"
+}
+elseif ($IsMacOS) {
+  $HostOs = "darwin"
 }
 
-$ETCD_EXE = Join-Path $WorkDir "etcd.exe"
-$ETCDCTL_EXE = Join-Path $WorkDir "etcdctl.exe"
+if ([string]::IsNullOrEmpty($WorkDir)) {
+  # [System.IO.Path]::GetTempPath() resolves $env:TEMP on Windows and TMPDIR (or /tmp) on
+  # Linux/macOS; $env:TEMP does not exist on Unix hosts.
+  $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) "etcd-unit-test"
+}
+
+$ExeSuffix = ""
+if ($IsWindowsHost) {
+  $ExeSuffix = ".exe"
+}
+
+$ETCD_EXE = Join-Path $WorkDir "etcd$ExeSuffix"
+$ETCDCTL_EXE = Join-Path $WorkDir "etcdctl$ExeSuffix"
 $PID_FILE = Join-Path $WorkDir "etcd.pid"
 $LOG_FILE = Join-Path $WorkDir "etcd.log"
 $DATA_DIR = Join-Path $WorkDir "data"
+
+function Get-RunningProcess {
+  # Returns the process for the given PID text, or $null when the text is not a number or
+  # the process is gone. Reading a corrupt/partially written PID file must not blow up
+  # with a parameter binding error under $ErrorActionPreference = 'Stop'.
+  param([string]$PidText)
+
+  $pidInt = $PidText -as [int]
+  if ($null -eq $pidInt) {
+    return $null
+  }
+  $proc = Get-Process -Id $pidInt -ErrorAction SilentlyContinue
+  if ($null -eq $proc -or $proc.HasExited) {
+    return $null
+  }
+  return $proc
+}
 
 function Get-EtcdVersion {
   if ($EtcdVersion -ne "latest") {
@@ -55,7 +91,7 @@ function Get-EtcdVersion {
 function Invoke-Download {
   $tag = Get-EtcdVersion
 
-  if ((Test-Path $ETCD_EXE) -and (Test-Path $ETCDCTL_EXE)) {
+  if ((Test-Path -LiteralPath $ETCD_EXE) -and (Test-Path -LiteralPath $ETCDCTL_EXE)) {
     Write-Host "etcd binaries already exist at $WorkDir, skipping download."
     Write-Host "Use 'cleanup' command first if you want to re-download."
     return
@@ -63,19 +99,36 @@ function Invoke-Download {
 
   New-Item -Path $WorkDir -ItemType Directory -Force | Out-Null
 
+  # $env:PROCESSOR_ARCHITECTURE is Windows only; on Unix hosts use
+  # System.Runtime.InteropServices.RuntimeInformation (with a fallback for Windows
+  # PowerShell 5.1 running on old .NET Framework builds).
   $arch = "amd64"
-  if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
-    $arch = "arm64"
+  try {
+    if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq
+        [System.Runtime.InteropServices.Architecture]::Arm64) {
+      $arch = "arm64"
+    }
+  }
+  catch {
+    if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") {
+      $arch = "arm64"
+    }
   }
 
-  $downloadUrl = "https://github.com/etcd-io/etcd/releases/download/${tag}/etcd-${tag}-windows-${arch}.zip"
-  $zipFile = Join-Path $WorkDir "etcd.zip"
+  $platform = "${HostOs}-${arch}"
+  $archiveExt = ".zip"
+  if ($HostOs -eq "linux") {
+    $archiveExt = ".tar.gz"
+  }
 
-  Write-Host "Downloading etcd ${tag} for windows-${arch}..."
+  $downloadUrl = "https://github.com/etcd-io/etcd/releases/download/${tag}/etcd-${tag}-${platform}${archiveExt}"
+  $archiveFile = Join-Path $WorkDir "etcd$archiveExt"
+
+  Write-Host "Downloading etcd ${tag} for ${platform}..."
   Write-Host "URL: $downloadUrl"
 
   try {
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $zipFile -UseBasicParsing
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $archiveFile -UseBasicParsing
   }
   catch {
     Write-Error "Failed to download etcd: $_"
@@ -84,36 +137,58 @@ function Invoke-Download {
 
   Write-Host "Extracting..."
   $extractDir = Join-Path $WorkDir "etcd-extract"
-  if (Test-Path $extractDir) {
+  if (Test-Path -LiteralPath $extractDir) {
     Remove-Item -Recurse -Force $extractDir
   }
-  Expand-Archive -Path $zipFile -DestinationPath $extractDir -Force
+  if ($archiveExt -eq ".zip") {
+    Expand-Archive -Path $archiveFile -DestinationPath $extractDir -Force
+  }
+  else {
+    & tar -xzf $archiveFile -C $extractDir
+    if ($LASTEXITCODE -ne 0) {
+      Write-Error "Failed to extract etcd archive: $archiveFile"
+      exit 1
+    }
+  }
 
-  # Find the extracted directory (etcd-vX.Y.Z-windows-amd64/)
+  # Find the extracted directory (etcd-vX.Y.Z-<os>-<arch>/)
   $innerDir = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+  if ($null -eq $innerDir) {
+    Write-Error "Unexpected etcd archive layout: no inner directory found in $extractDir"
+    exit 1
+  }
 
-  Copy-Item -Path (Join-Path $innerDir.FullName "etcd.exe") -Destination $ETCD_EXE -Force
-  Copy-Item -Path (Join-Path $innerDir.FullName "etcdctl.exe") -Destination $ETCDCTL_EXE -Force
+  Copy-Item -Path (Join-Path $innerDir.FullName "etcd$ExeSuffix") -Destination $ETCD_EXE -Force
+  Copy-Item -Path (Join-Path $innerDir.FullName "etcdctl$ExeSuffix") -Destination $ETCDCTL_EXE -Force
+
+  if (-not $IsWindowsHost) {
+    # Archive extraction may not preserve the executable permission on Unix.
+    & chmod +x $ETCD_EXE $ETCDCTL_EXE
+    if ($LASTEXITCODE -ne 0) {
+      Write-Error "Failed to set executable permission on etcd binaries."
+      exit 1
+    }
+  }
 
   # Cleanup temporary files
   Remove-Item -Recurse -Force $extractDir
-  Remove-Item -Force $zipFile
+  Remove-Item -Force $archiveFile
 
   Write-Host "etcd downloaded successfully to $WorkDir"
 }
 
 function Invoke-Start {
-  if (!(Test-Path $ETCD_EXE)) {
+  if (!(Test-Path -LiteralPath $ETCD_EXE)) {
     Write-Host "etcd binary not found. Downloading first..."
     Invoke-Download
   }
 
   # Check if already running
-  if (Test-Path $PID_FILE) {
+  if (Test-Path -LiteralPath $PID_FILE) {
     $existingPid = Get-Content $PID_FILE -ErrorAction SilentlyContinue
     if ($existingPid) {
-      $proc = Get-Process -Id $existingPid -ErrorAction SilentlyContinue
-      if ($null -ne $proc -and !$proc.HasExited) {
+      $proc = Get-RunningProcess "$existingPid"
+      if ($null -ne $proc) {
         Write-Host "etcd is already running (PID: $existingPid). Stopping first..."
         Invoke-Stop
       }
@@ -134,7 +209,11 @@ function Invoke-Start {
     "--log-outputs", $LOG_FILE
   )
 
-  $proc = Start-Process -FilePath $ETCD_EXE -ArgumentList $etcdArgs -PassThru -NoNewWindow -RedirectStandardError (Join-Path $WorkDir "etcd-stderr.log")
+  # Redirect both stdout and stderr: Start-Process on Unix hosts requires the streams to be
+  # consumed when the child outlives the caller.
+  $proc = Start-Process -FilePath $ETCD_EXE -ArgumentList $etcdArgs -PassThru -NoNewWindow `
+    -RedirectStandardOutput (Join-Path $WorkDir "etcd-stdout.log") `
+    -RedirectStandardError (Join-Path $WorkDir "etcd-stderr.log")
 
   Set-Content -Path $PID_FILE -Value $proc.Id
 
@@ -180,7 +259,7 @@ function Invoke-Start {
 }
 
 function Invoke-Stop {
-  if (!(Test-Path $PID_FILE)) {
+  if (!(Test-Path -LiteralPath $PID_FILE)) {
     Write-Host "No PID file found. etcd may not be running."
     return
   }
@@ -192,14 +271,15 @@ function Invoke-Stop {
     return
   }
 
-  $proc = Get-Process -Id $etcdPid -ErrorAction SilentlyContinue
-  if ($null -eq $proc -or $proc.HasExited) {
+  $proc = Get-RunningProcess $etcdPid
+  if ($null -eq $proc) {
     Write-Host "etcd process (PID: $etcdPid) is not running."
     Remove-Item -Force $PID_FILE -ErrorAction SilentlyContinue
     return
   }
 
   Write-Host "Stopping etcd (PID: $etcdPid)..."
+  # Stop-Process -Force terminates via TerminateProcess on Windows and SIGKILL on Unix.
   Stop-Process -Id $etcdPid -Force -ErrorAction SilentlyContinue
 
   # Wait for process to exit (up to 5 seconds)
@@ -228,28 +308,21 @@ function Invoke-Cleanup {
   Invoke-Stop
 
   Write-Host "Cleaning up $WorkDir..."
-  if (Test-Path $DATA_DIR) {
+  if (Test-Path -LiteralPath $DATA_DIR) {
     Remove-Item -Recurse -Force $DATA_DIR
   }
-  if (Test-Path $ETCD_EXE) {
-    Remove-Item -Force $ETCD_EXE
-  }
-  if (Test-Path $ETCDCTL_EXE) {
-    Remove-Item -Force $ETCDCTL_EXE
-  }
-  if (Test-Path $LOG_FILE) {
-    Remove-Item -Force $LOG_FILE
-  }
-  $stderrLog = Join-Path $WorkDir "etcd-stderr.log"
-  if (Test-Path $stderrLog) {
-    Remove-Item -Force $stderrLog
+  foreach ($file in @($ETCD_EXE, $ETCDCTL_EXE, $LOG_FILE,
+      (Join-Path $WorkDir "etcd-stderr.log"), (Join-Path $WorkDir "etcd-stdout.log"))) {
+    if (Test-Path -LiteralPath $file) {
+      Remove-Item -Force $file
+    }
   }
 
   Write-Host "Cleanup complete."
 }
 
 function Invoke-Status {
-  if (!(Test-Path $PID_FILE)) {
+  if (!(Test-Path -LiteralPath $PID_FILE)) {
     Write-Host "etcd is not running (no PID file)."
     return
   }
@@ -260,15 +333,15 @@ function Invoke-Status {
     return
   }
 
-  $proc = Get-Process -Id $etcdPid -ErrorAction SilentlyContinue
-  if ($null -eq $proc -or $proc.HasExited) {
+  $proc = Get-RunningProcess $etcdPid
+  if ($null -eq $proc) {
     Write-Host "etcd is not running (PID: $etcdPid not found)."
     return
   }
 
   Write-Host "etcd is running (PID: $etcdPid)."
 
-  if (Test-Path $ETCDCTL_EXE) {
+  if (Test-Path -LiteralPath $ETCDCTL_EXE) {
     try {
       $result = & $ETCDCTL_EXE --endpoints="http://127.0.0.1:${ClientPort}" endpoint health 2>&1
       Write-Host "Health: $result"

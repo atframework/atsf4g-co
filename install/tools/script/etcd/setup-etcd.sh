@@ -1,13 +1,14 @@
-#!/bin/bash
+#!/bin/sh
 # Copyright 2026 atframework
-# Bash script to download, start, stop, and manage etcd for unit testing.
+# POSIX shell script to download, start, stop, and manage etcd for unit testing.
+# Works with /bin/sh on Linux (dash, bash, busybox) and macOS.
 # Usage: setup-etcd.sh <command> [options]
 #   --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)
 #   --client-port PORT    Client port (default: 12379)
 #   --peer-port PORT      Peer port (default: 12380)
 #   --etcd-version VER    Specify version tag (default: latest)
 
-set -e
+set -eu
 
 WORK_DIR="/tmp/etcd-unit-test"
 CLIENT_PORT=12379
@@ -16,10 +17,12 @@ ETCD_VERSION="latest"
 
 # Parse command
 COMMAND="${1:-}"
-shift || true
+if [ $# -gt 0 ]; then
+  shift
+fi
 
 # Parse options
-while [[ $# -gt 0 ]]; do
+while [ $# -gt 0 ]; do
   case "$1" in
     --work-dir)
       WORK_DIR="$2"
@@ -38,7 +41,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     *)
-      echo "Unknown option: $1"
+      echo "Unknown option: $1" >&2
       exit 1
       ;;
   esac
@@ -48,6 +51,7 @@ ETCD_BIN="${WORK_DIR}/etcd"
 ETCDCTL_BIN="${WORK_DIR}/etcdctl"
 PID_FILE="${WORK_DIR}/etcd.pid"
 LOG_FILE="${WORK_DIR}/etcd.log"
+STDERR_LOG_FILE="${WORK_DIR}/etcd-stderr.log"
 DATA_DIR="${WORK_DIR}/data"
 
 get_etcd_version() {
@@ -92,7 +96,7 @@ detect_platform() {
 }
 
 do_download() {
-  local tag platform download_url archive_file
+  local tag platform download_url archive_file os_name
 
   if [ -f "$ETCD_BIN" ] && [ -f "$ETCDCTL_BIN" ]; then
     echo "etcd binaries already exist at $WORK_DIR, skipping download."
@@ -104,7 +108,6 @@ do_download() {
   platform=$(detect_platform)
   mkdir -p "$WORK_DIR"
 
-  local os_name
   os_name=$(uname -s | tr '[:upper:]' '[:lower:]')
 
   if [ "$os_name" = "darwin" ]; then
@@ -133,7 +136,7 @@ do_download() {
 
   # Find the inner directory
   local inner_dir
-  inner_dir=$(find "$extract_dir" -maxdepth 1 -mindepth 1 -type d | head -1)
+  inner_dir=$(find "$extract_dir" -maxdepth 1 -mindepth 1 -type d | head -n 1)
 
   cp "${inner_dir}/etcd" "$ETCD_BIN"
   cp "${inner_dir}/etcdctl" "$ETCDCTL_BIN"
@@ -174,7 +177,7 @@ do_start() {
     --initial-advertise-peer-urls "http://127.0.0.1:${PEER_PORT}" \
     --initial-cluster "default=http://127.0.0.1:${PEER_PORT}" \
     --log-outputs "$LOG_FILE" \
-    > /dev/null 2>&1 &
+    >"$STDERR_LOG_FILE" 2>&1 &
 
   local etcd_pid=$!
   echo "$etcd_pid" > "$PID_FILE"
@@ -191,14 +194,14 @@ do_start() {
     sleep 1
     retry_count=$((retry_count + 1))
 
-    if "$ETCDCTL_BIN" --endpoints="http://127.0.0.1:${CLIENT_PORT}" endpoint health 2>/dev/null; then
+    if "$ETCDCTL_BIN" --endpoints="http://127.0.0.1:${CLIENT_PORT}" endpoint health >/dev/null 2>&1; then
       healthy=true
       break
     fi
 
     # Check if process is still alive
     if ! kill -0 "$etcd_pid" 2>/dev/null; then
-      echo "etcd process died during startup. Check $LOG_FILE for details."
+      echo "etcd process died during startup. Check $LOG_FILE for details." >&2
       exit 1
     fi
   done
@@ -206,7 +209,7 @@ do_start() {
   if [ "$healthy" = true ]; then
     echo "etcd is healthy and ready on http://127.0.0.1:${CLIENT_PORT}"
   else
-    echo "etcd failed to become healthy within ${max_retries}s. Check $LOG_FILE for details."
+    echo "etcd failed to become healthy within ${max_retries}s. Check $LOG_FILE for details." >&2
     do_stop
     exit 1
   fi
@@ -263,6 +266,7 @@ do_cleanup() {
   rm -f "$ETCD_BIN"
   rm -f "$ETCDCTL_BIN"
   rm -f "$LOG_FILE"
+  rm -f "$STDERR_LOG_FILE"
 
   echo "Cleanup complete."
 }
@@ -299,13 +303,13 @@ case "$COMMAND" in
   cleanup) do_cleanup ;;
   status) do_status ;;
   *)
-    echo "Usage: $0 <download|start|stop|cleanup|status> [options]"
-    echo ""
-    echo "Options:"
-    echo "  --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)"
-    echo "  --client-port PORT    Client port (default: 12379)"
-    echo "  --peer-port PORT      Peer port (default: 12380)"
-    echo "  --etcd-version VER    Specify version tag (default: latest)"
+    echo "Usage: $0 <download|start|stop|cleanup|status> [options]" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  --work-dir DIR        Working directory (default: /tmp/etcd-unit-test)" >&2
+    echo "  --client-port PORT    Client port (default: 12379)" >&2
+    echo "  --peer-port PORT      Peer port (default: 12380)" >&2
+    echo "  --etcd-version VER    Specify version tag (default: latest)" >&2
     exit 1
     ;;
 esac
