@@ -34,8 +34,7 @@
 #include "data/mq_channel.h"
 #include "logic/mq_channel_manager.h"
 
-task_action_send_message::task_action_send_message(dispatcher_start_data_type&& param)
-    : base_type(std::move(param)) {}
+task_action_send_message::task_action_send_message(dispatcher_start_data_type&& param) : base_type(std::move(param)) {}
 
 task_action_send_message::~task_action_send_message() {}
 
@@ -85,30 +84,34 @@ task_action_send_message::result_type task_action_send_message::operator()() {
   int32_t result = 0;
   mq_channel_wal_object_context param{get_shared_context(), result};
 
-  // 正常发送接口只允许追加，不允许插入消息
-  req_body.mutable_message_content()->set_sequence(0);
-
-  auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
-                                                           req_body.message_content().detail().command_case(), param,
-                                                           req_body.message_content());
+  rsp_body.mutable_message_sequence()->Reserve(req_body.message_content_size());
   result_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-  if (message) {
-    message->set_channel_type(channel->get_channel_key().channel_type());
-    FCTXLOGDEBUG(get_shared_context(), "channel {} receive message {}.", req_body.channel_key().channel_id(),
-                 message->sequence());
-    rsp_body.set_message_sequence(message->sequence());
-    channel->get_wal_publisher().emplace_back_log(std::move(message), param);
-    channel->tick(get_shared_context());
-  } else {
-    FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed", req_body.channel_key().channel_id());
-    ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-    result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
-  }
+  // 同一请求内的消息按顺序追加，正常发送接口只允许追加，不允许插入消息(sequence=0 -> 分配真实递增序号)
+  for (auto& message_content : *req_body.mutable_message_content()) {
+    message_content.set_sequence(0);
 
-  // Allow to update subscriber
-  if (req_body.has_subscriber() && req_body.subscriber().subscriber_server_id() != 0) {
-    channel->subscribe(get_shared_context(), req_body.subscriber(), req_body.subscriber_last_sequence(),
-                       req_body.subscriber_last_hash_code(), false);
+    auto message = channel->get_wal_publisher().allocate_log(
+        atfw::util::time::time_utility::now(), message_content.detail().command_case(), param, message_content);
+    if (message) {
+      message->set_channel_type(channel->get_channel_key().channel_type());
+      FCTXLOGDEBUG(get_shared_context(), "channel {} receive message {}.", req_body.channel_key().channel_id(),
+                   message->sequence());
+      rsp_body.add_message_sequence(message->sequence());
+      channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+    } else {
+      FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed",
+                   req_body.channel_key().channel_id());
+      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
+      break;
+    }
+  }
+  if (req_body.message_content().empty()) {
+    FCTXLOGERROR(get_shared_context(), "mq channel {} receive empty message list", req_body.channel_key().channel_id());
+    ret = PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+    result = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+  } else {
+    channel->tick(get_shared_context());
   }
 
   rsp_body.set_client_result(result);

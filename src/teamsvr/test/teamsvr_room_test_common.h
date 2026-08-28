@@ -1357,24 +1357,28 @@ class room_test_env {
               if (!plan.first) {
                 RPC_RETURN_CODE(plan.second);
               }
-              personal_message_record record;
-              record.channel.CopyFrom(typed_request.channel_key());
-              if (typed_request.message_content().detail().has_event()) {
-                (void)typed_request.message_content().detail().event().UnpackTo(&record.action);
+              for (const auto& message_content : typed_request.message_content()) {
+                personal_message_record record;
+                record.channel.CopyFrom(typed_request.channel_key());
+                if (message_content.detail().has_event()) {
+                  (void)message_content.detail().event().UnpackTo(&record.action);
+                }
+                self->personal_messages_.push_back(std::move(record));
               }
-              self->personal_messages_.push_back(std::move(record));
               if (plan.second != 0) {
                 RPC_RETURN_CODE(plan.second);
               }
               typed_response.set_client_result(0);
               RPC_RETURN_CODE(0);
             }
-            personal_message_record record;
-            record.channel.CopyFrom(typed_request.channel_key());
-            if (typed_request.message_content().detail().has_event()) {
-              (void)typed_request.message_content().detail().event().UnpackTo(&record.action);
+            for (const auto& message_content : typed_request.message_content()) {
+              personal_message_record record;
+              record.channel.CopyFrom(typed_request.channel_key());
+              if (message_content.detail().has_event()) {
+                (void)message_content.detail().event().UnpackTo(&record.action);
+              }
+              self->personal_messages_.push_back(std::move(record));
             }
-            self->personal_messages_.push_back(std::move(record));
             typed_response.set_client_result(0);
             RPC_RETURN_CODE(0);
           }
@@ -1399,17 +1403,21 @@ class room_test_env {
 
           if (fault.present /* && fault.commit_first */) {
             // 已提交但响应丢失: 先落 journal 再以错误响应
-            (void)fake->append_log([&typed_request](atfw::dtmq::DChannelMessageDetail& detail) {
-              protobuf_copy_message(detail, typed_request.message_content().detail());
-            });
+            for (const auto& message_content : typed_request.message_content()) {
+              (void)fake->append_log([&message_content](atfw::dtmq::DChannelMessageDetail& detail) {
+                protobuf_copy_message(detail, message_content.detail());
+              });
+            }
             RPC_RETURN_CODE(fault.error_code);
           }
 
-          auto* message = fake->append_log([&typed_request](atfw::dtmq::DChannelMessageDetail& detail) {
-            protobuf_copy_message(detail, typed_request.message_content().detail());
-          });
+          for (const auto& message_content : typed_request.message_content()) {
+            auto* message = fake->append_log([&message_content](atfw::dtmq::DChannelMessageDetail& detail) {
+              protobuf_copy_message(detail, message_content.detail());
+            });
+            typed_response.add_message_sequence(message->sequence());
+          }
           typed_response.set_client_result(0);
-          typed_response.set_message_sequence(message->sequence());
           typed_response.set_last_sequence(fake->last_sequence_);
           typed_response.set_last_hash_code(fake->last_hash_);
           RPC_RETURN_CODE(0);
@@ -1724,26 +1732,33 @@ class room_test_env {
     mq_channel_wal_object_context param{ctx, result};
 
     // 正常发送接口只允许追加(sequence=0 -> allocate_log_key 分配真实递增序号)
-    atfw::dtmq::DChannelMessage content = req.message_content();
-    content.set_sequence(0);
-    auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
-                                                             content.detail().command_case(), param,
-                                                             std::move(content));
     rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-    if (message) {
-      message->set_channel_type(req.channel_key().channel_type());
-      rsp.set_message_sequence(message->sequence());
-      channel->get_wal_publisher().emplace_back_log(std::move(message), param);
-      channel->tick(ctx);
+    for (const auto& request_message : req.message_content()) {
+      atfw::dtmq::DChannelMessage content = request_message;
+      content.set_sequence(0);
+      auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                               content.detail().command_case(), param,
+                                                               std::move(content));
+      if (message) {
+        message->set_channel_type(req.channel_key().channel_type());
+        rsp.add_message_sequence(message->sequence());
+        channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+      } else {
+        ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+        result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
+        break;
+      }
+    }
+    if (req.message_content().empty()) {
+      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+      result = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
     } else {
-      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
-      result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
+      channel->tick(ctx);
     }
 
-    if (req.has_subscriber() && req.subscriber().subscriber_server_id() != 0) {
-      channel->subscribe(ctx, wal_redirect_subscriber(req.subscriber()), req.subscriber_last_sequence(),
-                         req.subscriber_last_hash_code(), false);
-    }
+    // 与 task_action_send_message 保持一致: 发送接口不再自动订阅
+    // (client_subscriber::send_message 携带的是发送方自己的 subscriber_key，底层复用 shared_subscriber，
+    // 自动订阅会创建冗余订阅项；仅发送不订阅的客户端也不应被隐式订阅)
 
     rsp.set_client_result(result);
     rsp.set_last_sequence(channel->get_last_message_sequence());

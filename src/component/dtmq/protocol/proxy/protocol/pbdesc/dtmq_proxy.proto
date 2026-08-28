@@ -68,7 +68,8 @@ message SSChannelSendMessageReq {
   channel_lock_checker compare_and_maybe_reset_lock = 4;
 
   DChannelIdKey channel_key = 11;
-  DChannelMessage message_content = 12;
+  // 支持一次发送多条消息(同一请求内的消息按顺序追加，sequence 由服务端分配)
+  repeated DChannelMessage message_content = 12;
 
   channel_subscriber subscriber = 21;
   int64 subscriber_last_sequence = 22;
@@ -79,7 +80,8 @@ message SSChannelSendMessageRsp {
   int32 client_result = 1;
   channel_lock_checker compare_and_maybe_reset_lock = 2;
 
-  int64 message_sequence = 3;
+  // 本次请求追加的所有消息的sequence(按追加顺序)
+  repeated int64 message_sequence = 3;
   int64 last_sequence = 4;
   uint64 last_hash_code = 5;
 }

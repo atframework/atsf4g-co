@@ -282,8 +282,8 @@ CASE_TEST(teamsvr_room_admission, approve_invitation_writes_and_notifies) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
   }));
 
-  // 依次写 add_member 和 approve_invitation 两个事件
-  CASE_EXPECT_EQ(sends_before + 2, fake.send_message_calls());
+  // add_member 和 approve_invitation 两个事件合并为一次请求写入，日志按顺序追加
+  CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
   int add_member_index = -1;
   int approve_index = -1;
   int visit_index = 0;
@@ -474,7 +474,8 @@ CASE_TEST(teamsvr_room_admission, approve_and_reject_join_request) {
       CASE_EXPECT_EQ(0, env.run("approve_join", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
       }));
-      CASE_EXPECT_EQ(sends_before + 2, fake.send_message_calls());
+      // add_member + approve_join_request 两个事件合并为一次请求写入，日志按顺序追加
+      CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
 
       // add_member 数据来自原申请(client_version/router)
       bool found_add = false;

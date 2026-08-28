@@ -220,7 +220,24 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
     atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
     atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
     bool auto_create_channel, bool no_wait) {
-  if (channel_key.channel_id().empty()) {
+  auto* details = ctx.create<google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessageDetail>>();
+  if (nullptr == details) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+  }
+  protobuf_move_message(*details->Add(), std::move(detail));
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      send_message(ctx, std::move(sender_info), channel_key, std::move(*details), compare_and_maybe_reset_lock_ptr,
+                   compare_and_maybe_reset_lock_rsp_ptr, auto_create_channel, no_wait)));
+}
+
+DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
+    rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
+    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessageDetail>&& details,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr,
+    bool auto_create_channel, bool no_wait) {
+  if (channel_key.channel_id().empty() || details.empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
@@ -239,12 +256,16 @@ DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
   rpc_req_body->set_auto_create_channel(auto_create_channel);
 
   protobuf_copy_message(*rpc_req_body->mutable_channel_key(), channel_key);
-  protobuf_move_message(*rpc_req_body->mutable_message_content()->mutable_detail(), std::move(detail));
-  *rpc_req_body->mutable_message_content()->mutable_sender_key() = sender_info.subscriber_key();
+  rpc_req_body->mutable_message_content()->Reserve(details.size());
+  for (auto& detail : details) {
+    auto* message_content = rpc_req_body->add_message_content();
+    protobuf_move_message(*message_content->mutable_detail(), std::move(detail));
+    *message_content->mutable_sender_key() = sender_info.subscriber_key();
+    message_content->set_channel_type(channel_key.channel_type());
+  }
   rpc_req_body->set_subscriber_last_hash_code(sender_info.last_heartbeat_hash_code());
   rpc_req_body->set_subscriber_last_sequence(sender_info.last_heartbeat_sequence());
   protobuf_move_message(*rpc_req_body->mutable_subscriber(), std::move(sender_info));
-  rpc_req_body->mutable_message_content()->set_channel_type(channel_key.channel_type());
 
   auto ret =
       RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(ctx, target_server_id, *rpc_req_body, *rpc_rsp_body, no_wait));

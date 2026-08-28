@@ -184,9 +184,9 @@ dtmq_proxy_rules mock_dtmq_proxy(atfw::testing::runtime &test, dtmq_proxy_captur
                        ++capture.send_message_count;
                        auto &rsp = static_cast<atframework::dtmq::SSChannelSendMessageRsp &>(response);
                        rsp.set_client_result(0);
-                       rsp.set_message_sequence(req.message_content().sequence());
-                       rsp.set_last_sequence(req.message_content().sequence());
-                       rsp.set_last_hash_code(req.message_content().hash_code());
+                       rsp.add_message_sequence(req.message_content(0).sequence());
+                       rsp.set_last_sequence(req.message_content(0).sequence());
+                       rsp.set_last_hash_code(req.message_content(0).hash_code());
                        RPC_RETURN_CODE(0);
                      });
 
@@ -629,8 +629,8 @@ CASE_TEST(lobbysvr_user_chat, world_channel_snapshot_and_incremental_flow) {
   CASE_EXPECT_EQ(1, capture.send_message_count);
   CASE_EXPECT_EQ(world_channel_id, capture.last_send_message_req.channel_key().channel_id());
   CASE_EXPECT_EQ(world_channel_type, capture.last_send_message_req.channel_key().channel_type());
-  CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content().sender_key());
-  CASE_EXPECT_EQ("hello world from u1", capture.last_send_message_req.message_content().detail().text());
+  CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content(0).sender_key());
+  CASE_EXPECT_EQ("hello world from u1", capture.last_send_message_req.message_content(0).detail().text());
 
   // The dtmq proxy broadcasts two incremental messages. Before the flush tick nothing is pushed downstream.
   const int64_t msg1_seq = base_sequence + 1;
@@ -765,8 +765,8 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
     CASE_EXPECT_EQ(0, send_rsp_msg.head().error_code());
   }
   CASE_EXPECT_EQ(user2_private_channel_id, capture.last_send_message_req.channel_key().channel_id());
-  CASE_EXPECT_EQ("user:1:10002", capture.last_send_message_req.message_content().sender_key());
-  CASE_EXPECT_EQ("secret-u2", capture.last_send_message_req.message_content().detail().text());
+  CASE_EXPECT_EQ("user:1:10002", capture.last_send_message_req.message_content(0).sender_key());
+  CASE_EXPECT_EQ("secret-u2", capture.last_send_message_req.message_content(0).detail().text());
 
   // The private channel event is only delivered to user2's session; user1's session receives nothing.
   const int64_t msg1_seq = private_base_sequence + 1;
@@ -811,7 +811,7 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   if (nullptr != cross_rsp_record) {
     CASE_EXPECT_EQ(0, cross_rsp_msg.head().error_code());
   }
-  CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content().sender_key());
+  CASE_EXPECT_EQ("user:1:10001", capture.last_send_message_req.message_content(0).sender_key());
 
   // System channels reject writes at the manager ACL (they are not addressable from the CS chat API at all).
   const auto sys_notification_key = make_sys_notification_channel_key();
@@ -846,10 +846,10 @@ CASE_TEST(lobbysvr_user_chat, private_channel_isolation_and_access_check) {
   if (nullptr != event_rsp_record) {
     CASE_EXPECT_EQ(0, event_rsp_msg.head().error_code());
   }
-  CASE_EXPECT_TRUE(capture.last_send_message_req.message_content().detail().has_event());
+  CASE_EXPECT_TRUE(capture.last_send_message_req.message_content(0).detail().has_event());
   const std::string expected_type_url =
       "type.googleapis.com/" + std::string(atframework::dtmq::DChannelSyncPoint::descriptor()->full_name());
-  CASE_EXPECT_EQ(expected_type_url, capture.last_send_message_req.message_content().detail().event().type_url());
+  CASE_EXPECT_EQ(expected_type_url, capture.last_send_message_req.message_content(0).detail().event().type_url());
 
   flush_pending_chat_messages(test);
   CASE_EXPECT_EQ(0, test.stop());

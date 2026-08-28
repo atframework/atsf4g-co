@@ -1337,7 +1337,7 @@ CASE_TEST(component_dtmq_subscriber, send_message_sender_info_group) {
         snapshot.subscriber_key = typed_request.subscriber().subscriber_key();
         snapshot.subscriber_server_id = typed_request.subscriber().subscriber_server_id();
         snapshot.with_private_data = typed_request.subscriber().with_private_data();
-        snapshot.message_sender_key = typed_request.message_content().sender_key();
+        snapshot.message_sender_key = typed_request.message_content(0).sender_key();
         captured_senders.push_back(std::move(snapshot));
         typed_response.set_client_result(0);
         RPC_RETURN_CODE(0);
@@ -2106,8 +2106,9 @@ CASE_TEST(component_dtmq_subscriber, send_text_and_send_event) {
   // kept in both subscriber and message_content.sender_key, and the lock checker is copied into the
   // request.
   const auto& text_req = received_requests.at(0);
-  CASE_EXPECT_EQ("hello-send-text", text_req.message_content().detail().text());
-  CASE_EXPECT_EQ("UT:send-text", text_req.message_content().sender_key());
+  CASE_EXPECT_EQ(1, text_req.message_content_size());
+  CASE_EXPECT_EQ("hello-send-text", text_req.message_content(0).detail().text());
+  CASE_EXPECT_EQ("UT:send-text", text_req.message_content(0).sender_key());
   CASE_EXPECT_EQ("UT:send-text", text_req.subscriber().subscriber_key());
   CASE_EXPECT_EQ(channel_key.channel_id(), text_req.channel_key().channel_id());
   CASE_EXPECT_TRUE(text_req.auto_create_channel());
@@ -2117,10 +2118,11 @@ CASE_TEST(component_dtmq_subscriber, send_text_and_send_event) {
   // send_event: the Any payload is moved into message_content.detail.event; defaults are no lock and
   // no auto-create.
   const auto& event_req = received_requests.at(1);
-  CASE_EXPECT_EQ("type.googleapis.com/UnitTestSendEvent", event_req.message_content().detail().event().type_url());
-  CASE_EXPECT_EQ("event-value", event_req.message_content().detail().event().value());
+  CASE_EXPECT_EQ(1, event_req.message_content_size());
+  CASE_EXPECT_EQ("type.googleapis.com/UnitTestSendEvent", event_req.message_content(0).detail().event().type_url());
+  CASE_EXPECT_EQ("event-value", event_req.message_content(0).detail().event().value());
   CASE_EXPECT_EQ("UT:send-text", event_req.subscriber().subscriber_key());
-  CASE_EXPECT_EQ("UT:send-text", event_req.message_content().sender_key());
+  CASE_EXPECT_EQ("UT:send-text", event_req.message_content(0).sender_key());
   CASE_EXPECT_FALSE(event_req.auto_create_channel());
   CASE_EXPECT_FALSE(event_req.has_compare_and_maybe_reset_lock());
 

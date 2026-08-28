@@ -739,6 +739,24 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
       bool auto_create_channel = false, bool no_wait = false);
 
   /**
+   * @brief 批量发送文本消息(一次请求按顺序追加多条消息)
+   *
+   * @param ctx RPC上下文
+   * @param texts 消息内容列表(不能为空)
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_text(
+      rpc::context& ctx, gsl::span<const gsl::string_view> texts,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  /**
    * @brief 发送事件消息
    *
    * @param ctx RPC上下文
@@ -751,6 +769,24 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_event(
       rpc::context& ctx, ::google::protobuf::Any&& event_data,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  /**
+   * @brief 批量发送事件消息(一次请求按顺序追加多条消息)
+   *
+   * @param ctx RPC上下文
+   * @param events 消息内容列表(不能为空)
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_event(
+      rpc::context& ctx, google::protobuf::RepeatedPtrField<::google::protobuf::Any>&& events,
       atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
       atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
           nullptr,
@@ -839,6 +875,24 @@ class client_subscriber : public atfw::util::memory::enable_shared_rc_from_this<
    */
   ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
       rpc::context& ctx, atfw::dtmq::DChannelMessageDetail&& detail,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+      atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
+          nullptr,
+      bool auto_create_channel = false, bool no_wait = false);
+
+  /**
+   * @brief 批量发送原始消息(一次请求按顺序追加多条消息)
+   *
+   * @param ctx RPC上下文
+   * @param details 原始消息详情列表(不能为空)
+   * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+   * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+   * @param auto_create_channel 是否自动创建频道
+   * @param no_wait 是否不等待
+   * @return rpc::result_code_type 发送结果
+   */
+  ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
+      rpc::context& ctx, google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessageDetail>&& details,
       atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
       atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr =
           nullptr,

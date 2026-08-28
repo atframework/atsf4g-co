@@ -70,7 +70,8 @@ CASE_TEST(component_dtmq, dtmq_client_send_message_contract) {
         const auto &typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq &>(request.body);
         CASE_EXPECT_EQ(0x1C0001, static_cast<int64_t>(request.target_node_id));
         CASE_EXPECT_EQ("chan-unit-test", typed_request.channel_key().channel_id());
-        CASE_EXPECT_EQ("hello-dtmq", typed_request.message_content().detail().text());
+        CASE_EXPECT_EQ(1, typed_request.message_content_size());
+        CASE_EXPECT_EQ("hello-dtmq", typed_request.message_content(0).detail().text());
         CASE_EXPECT_EQ("U:1:10001", typed_request.subscriber().subscriber_key());
         CASE_EXPECT_TRUE(typed_request.auto_create_channel());
         static_cast<atfw::dtmq::SSChannelSendMessageRsp &>(response).set_client_result(0);

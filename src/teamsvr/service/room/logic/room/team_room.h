@@ -183,9 +183,16 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_action(rpc::context& ctx,
                                                                  const atfw::team::DTeamAction& action,
                                                                  bool no_wait = false);
+  // 批量提交组队操作(协程内调用): 同一流程的多条事件合并为一次频道写入，日志按列表顺序追加
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_actions(
+      rpc::context& ctx, gsl::span<const atfw::team::DTeamAction* const> actions, bool no_wait = false);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_member_action(rpc::context& ctx,
                                                                         const atfw::dtmq::DChannelIdKey& channel_key,
                                                                         const atfw::team::DTeamMemberAction& action);
+  // 批量向成员个人通知频道发送消息(协程内调用): 同一频道的多条通知合并为一次发送
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_member_actions(
+      rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key,
+      gsl::span<const atfw::team::DTeamMemberAction* const> actions);
   // 成员心跳，更新成员已确认的日志序号和在线状态记录(协程内调用)
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type heartbeat(rpc::context& ctx,
                                                                const atfw::team::SSTeamRoomHeartbeatReq& req);
@@ -289,10 +296,16 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_event_with_lock(rpc::context& ctx,
                                                                           ::google::protobuf::Any&& event_data,
                                                                           bool no_wait);
+  // 携带乐观锁检查批量写入频道事件(一次请求追加多条)，锁冲突时自动退位
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type send_events_with_lock(
+      rpc::context& ctx, google::protobuf::RepeatedPtrField<::google::protobuf::Any>&& events, bool no_wait);
   // 打包并发送 DTeamAction 频道事件(协程内调用)，不做移除成员的去重与重试队列处理
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_send_action(rpc::context& ctx,
                                                                     const atfw::team::DTeamAction& action,
                                                                     bool no_wait);
+  // 打包并批量发送 DTeamAction 频道事件(协程内调用)，不做移除成员的去重与重试队列处理
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type do_send_actions(
+      rpc::context& ctx, gsl::span<const atfw::team::DTeamAction* const> actions, bool no_wait);
 
   // 定时器事件执行入口
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type execute_timer_event(rpc::context& ctx,

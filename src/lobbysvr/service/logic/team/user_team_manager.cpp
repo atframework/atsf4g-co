@@ -426,6 +426,9 @@ rpc::result_code_type user_team_manager::create_team(rpc::context& ctx, PROJECT_
   owner_->dump_user_key(*ss_req->mutable_sender_user_key());
   protobuf_copy_message(*ss_req->mutable_sender_user_channel(),
                         owner_->get_user_chat_manager().get_private_chat_channel_key());
+  // 创建者(首任队长)上报客户端版本与成员通知路由，入队后其他成员才能在快照里看到队长的版本信息
+  ss_req->set_client_version(owner_->get_client_info().client_version());
+  ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充初始的共享数据(队伍的和成员的)，各模块按 key 区分自己的数据
   pack_team_shared_data(ctx, type, *ss_req->mutable_shared_team_data());

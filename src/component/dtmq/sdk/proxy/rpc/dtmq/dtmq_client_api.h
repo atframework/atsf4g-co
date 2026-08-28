@@ -116,6 +116,26 @@ ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_messa
     bool auto_create_channel = false, bool no_wait = false);
 
 /**
+ * @brief 批量发送消息(一次请求按顺序追加多条消息)
+ *
+ * @param ctx RPC上下文
+ * @param sender_info 发送者信息
+ * @param channel_key 频道键
+ * @param details 消息详情列表(不能为空)
+ * @param compare_and_maybe_reset_lock_ptr 锁检查器指针
+ * @param compare_and_maybe_reset_lock_rsp_ptr 锁检查器响应指针
+ * @param auto_create_channel 是否自动创建频道
+ * @param no_wait 是否不等待
+ * @return rpc::result_code_type 发送结果
+ */
+ATFW_EXPLICIT_NODISCARD_ATTR DTMQ_PROXY_SDK_API rpc::result_code_type send_message(
+    rpc::context& ctx, atfw::dtmq::channel_subscriber&& sender_info, const atfw::dtmq::DChannelIdKey& channel_key,
+    google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessageDetail>&& details,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_ptr = nullptr,
+    atfw::util::memory::strong_rc_ptr<atfw::dtmq::channel_lock_checker> compare_and_maybe_reset_lock_rsp_ptr = nullptr,
+    bool auto_create_channel = false, bool no_wait = false);
+
+/**
  * @brief 更新频道数据(Writable副本)，目标服务器选择内嵌在本接口内
  *
  * @param ctx RPC上下文

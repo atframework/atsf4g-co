@@ -25,6 +25,10 @@ message SSTeamRoomCreateReq {
 
   DTeamConfigure configure = 4;
 
+  // 创建者(首任队长)上报的客户端版本与成员通知路由，与 SSTeamRoomApproveInvitationReq 同义
+  string client_version = 6;
+  uint64 user_router_server_id = 7;
+
   // 共享的成员数据，通常是阵容信息、状态信息等。
   // 数据按key-value形式下发，注意各个模块使用时key要区分开
   repeated DTeamAnyDataWithKey shared_member_data = 13;

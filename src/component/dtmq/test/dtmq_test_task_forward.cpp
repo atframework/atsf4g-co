@@ -89,7 +89,7 @@ CASE_TEST(component_dtmq_task_forward, all_forward_rpc_actions_preserve_request_
   auto send_message_rule =
       rpc::dtmq::mock::send_message(make_handler(1, [](const atfw::dtmq::SSChannelSendMessageReq& request) {
         CASE_EXPECT_TRUE(request.auto_create_channel());
-        CASE_EXPECT_EQ("forward-send", request.message_content().detail().text());
+        CASE_EXPECT_EQ("forward-send", request.message_content(0).detail().text());
       }));
   auto update_rule = rpc::dtmq::mock::update(make_handler(2, [](const atfw::dtmq::SSChannelUpdateReq& request) {
     CASE_EXPECT_TRUE(request.auto_create_channel());
@@ -136,7 +136,7 @@ CASE_TEST(component_dtmq_task_forward, all_forward_rpc_actions_preserve_request_
       "dtmq_forward_actions", std::chrono::seconds{6}, [channel_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::dtmq::SSChannelSendMessageReq send_message_request;
         set_forward_channel(send_message_request, channel_key);
-        send_message_request.mutable_message_content()->mutable_detail()->set_text("forward-send");
+        send_message_request.add_message_content()->mutable_detail()->set_text("forward-send");
         int32_t result = RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<task_action_send_message>(
             ctx, send_message_request,
             make_forward_action_options(rpc::dtmq::packer::get_full_name_of_send_message())));

@@ -981,7 +981,7 @@ CASE_TEST(teamsvr_room_recovery, approve_crash_checkpoint_retry) {
   }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // 第一次 approve 的首个写入是 add_member；编排其提交成功但回包失败，因此函数在写 approve 前退出。
+  // 第一次 approve 的 add_member+approve 合并为一次频道写入；编排其提交成功但回包失败。
   auto& fake = env.channel(team_id);
   fake.next_send_fault.present = true;
   fake.next_send_fault.commit_first = true;
@@ -995,23 +995,17 @@ CASE_TEST(teamsvr_room_recovery, approve_crash_checkpoint_retry) {
   });
   CASE_EXPECT_NE(0, first_ret);
 
-  // add_member 已提交: 事件回环后成员存在，但 approve 尚未写入、邀请尚未清理。
+  // 合并写入已整体提交: 事件回环后成员存在，approve 一并生效、邀请已清理
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_TRUE(room->find_member(invitee, false) != nullptr);
 
-  // 重试 approve: 不再写第二个 add_member，只写 approve 事件
+  // 重试 approve: 邀请已清理，返回 not-found 且不再追加任何事件(不重复添加成员)
   size_t sends_before = fake.send_message_calls();
-  CASE_EXPECT_EQ(0, env.run("approve_retry", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
-  }));
-  CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
-
-  // 最终只有一个成员，邀请已清理(重试 approve 返回 not-found)
-  CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
-                 env.run("approve_after_cleanup", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                 env.run("approve_retry", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
                    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
                  }));
+  CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
 
   // 日志中 invitee 的 add_member 只出现一次
   size_t add_count = 0;
