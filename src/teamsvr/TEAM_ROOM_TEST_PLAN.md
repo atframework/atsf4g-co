@@ -2,28 +2,44 @@
 
 ## 当前执行状态（2026-08-28）
 
-自动化测试已在 `${PROJECT_NAME}-teamsvr-room-unit-test` 落地。当前测试程序 `-l` 确认注册 107 个 case；本轮在
+自动化测试已在 `${PROJECT_NAME}-teamsvr-room-unit-test` 落地。当前测试程序 `-l` 确认注册 112 个 case；本轮在
 现有 Ninja/Debug/MSVC x64 构建树完成最新增量构建后，精确匹配 CTest 注册名的全量运行通过，随后
-`--repeat until-fail:2` 连续两次通过。CTest 注册的是 1 个串行 executable，107 是该 executable 内部的
-case 数；二者不能混为 CTest 的 test 数。申请受理回执的 `lobbysvr` 消费者也已由其独立 CTest suite 验证；
-真实个人频道跨进程交付仍属于集成测试边界。后续变更仍须以 §7 的新鲜构建和执行结果为准。
+`--repeat until-fail:2` 连续两次通过(另做了 8 轮重复全部绿色)。CTest 注册的是 1 个串行 executable，
+112 是该 executable 内部的 case 数；二者不能混为 CTest 的 test 数。申请受理回执的 `lobbysvr` 消费者也已由
+其独立 CTest suite 验证；真实个人频道跨进程交付仍属于集成测试边界。后续变更仍须以 §7 的新鲜构建和执行
+结果为准。
 
 - 已完成：INF/CRT 基础设施与创建、SDK-DTMQ/SDK-TEAM 路由封装、PERM-01～12/14/16～18 权限零写入门禁、
   COND-01～06 条件更新、ADM 主流程、EVT 核心事件应用、CMP 数量/时间压缩与快照内容、RCV 快照加增量恢复、
-  LCK 基础接管/fencing，以及 LIFE 心跳、时间轮和房间生命周期主体。完整与部分覆盖边界以 §4 矩阵为准。
+  LCK 基础接管/fencing、LIFE 心跳、时间轮和房间生命周期主体，以及阶段 A 第 3 步的 WAL journal 层
+  compile/start smoke 与 WAL-01～04(112 case)。完整与部分覆盖边界以 §4 矩阵为准。
+- WAL journal 层（§3.2“WAL/恢复层”）已在同一测试目标内落地：直接编译 `mq_channel.cpp`、
+  `mq_channel_wal_handle.cpp`、`mq_channel_manager.cpp`，五个 dtmq RPC mock 的 team-room 分支镜像
+  `task_action_*` 的服务端行为操作真实频道，日志下发走真实 wal_publisher vtable
+  (`publisher_send_snapshot`/`publisher_send_logs`) -> `rpc::dtmq::channel_event_sync` -> mock 规则 ->
+  真实 `client_subscriber::global_receive_channel_event`。进程保持 `teamsvr_room_cfg`，
+  `dtmq_proxysvr_cfg` 读取默认实例（已核验默认值安全：`remove_ttl=0` 在 mq_channel 内回退 21 天、
+  `max_events_per_tick=0` 在 `wal_publisher::tick` 中按无限处理）。分布归属与转发不镜像，继续由
+  component-dtmq-proxysvr 测试覆盖。WAL 模式下事件下发地址改写为 dtmq-proxy 节点
+  （`wal_redirect_subscriber`）：本进程内 room 节点即本地 app id，atapp 自发自送走 self endpoint
+  本地环回、不经过 mock 引擎出站拦截；订阅者 key 保持不变，仅改事件下发目标地址。
+  生产契约观察：未订阅过的 client 首次以 checkpoint 0 上来触发快照下发（新 memory_only 频道
+  `last_removed_sequence` 初始化为 1）；WAL 模式 `setup_ready_room` 在首次 await_ready 因订阅未就绪
+  失败时泵空事件批再重试一次，等价于生产调用方的重试语义。
 - 最新数据设计已由 protobuf `map` 切换为带 key 的 `repeated` 元素；room 内部使用 `unordered_map`，仅在
   请求、事件和快照边界执行 keyed repeated 与 map 的转换。现有用例覆盖更新合并、PUBLIC 过滤及压缩后恢复，
   但重复 key 和旧 wire fixture 兼容仍是 GAP-11。
 - 夹具采用 §3.2 的“快速业务层”方案：typed SS mock 复刻 DTMQ 服务端锁 CAS、hash-chain journal、
   custom/private 快照保存与压缩边界语义，并内置 per-RPC 故障注入钩子。timer 驱动会等待维护 task 明确退出，
   不以固定 sleep、网络抖动、CPU 调度或固定 pump 次数作为业务正确性证据。
-- 未完成：真实 `wal_publisher` WAL 层（§4.6）、系统化 CON/FLT 故障矩阵（§4.7）、BND 边界/模型/长稳组
-  （§4.9），以及 PERM-13/15、ADM-15、GAP-11/12 等协议边界。未消费 fault script、runtime task 失败、
-  event-sync 失败或 `test.stop()` 非零都必须使 case 失败。
+- 未完成：WAL-05～09（快照 dump/load 往返、transfer、多订阅者 checkpoint/心跳/超时、destroy/create 新
+  代际与 DB-backed channel）、系统化 CON/FLT 故障矩阵（§4.7）、BND 边界/模型/长稳组（§4.9），以及
+  PERM-13/15、ADM-15、GAP-11/12 等协议边界。未消费 fault script、runtime task 失败、event-sync 失败或
+  `test.stop()` 非零都必须使 case 失败。
 - 本计划范围限定为离线 mock 单元测试；真实 DTMQ 进程、DB 持久化和跨进程网络属于集成测试，不得以本目标
   的绿色结果代替。
 
-用例矩阵状态标记：✅ 已实现且在本轮 107-case suite 中通过；🔶 已有部分用例但仍存在明确子项缺口；
+用例矩阵状态标记：✅ 已实现且在本轮 112-case suite 中通过；🔶 已有部分用例但仍存在明确子项缺口；
 ⬜ 未实现。没有执行证据的项目不得仅凭源码审阅标为 ✅。
 
 ## 1. 目标与边界
@@ -256,7 +272,7 @@ src/teamsvr/test/teamsvr_room_test_event.cpp
 src/teamsvr/test/teamsvr_room_test_recovery.cpp
 src/teamsvr/test/teamsvr_room_test_lifecycle.cpp
 src/teamsvr/test/teamsvr_room_test_sdk_api.cpp
-src/teamsvr/test/teamsvr_room_test_wal.cpp        # 待新增：真实 publisher/mq_channel 层
+src/teamsvr/test/teamsvr_room_test_wal.cpp         # 真实 publisher/mq_channel 层(WAL journal 模式)
 ```
 
 `teamsvr_room_test_common.h` 只放无状态构造器、RAII 和共享夹具，避免每个文件复制 DTMQ mock。夹具至少提供：
@@ -282,10 +298,34 @@ src/teamsvr/test/teamsvr_room_test_wal.cpp        # 待新增：真实 publisher
 
 - 快速业务层：用 SS typed mock 保存请求，在 handler 内更新轻量 journal，再通过 `SSChannelEventSync` 回推；适合权限和
   action 用例。
-- WAL/恢复层：直接复用 DTMQ server test 已使用的 `mq_channel` 和实际
-  `atfw::util::distributed_system::wal_publisher`（真实命名空间是 `atfw::util`），调用
-  `allocate_log`/`emplace_back_log`、`dump_snapshot`、`load_snapshot`、`compact_stateful_sequence` 和
-  `compact_sequence`。把 publisher 产生的 snapshot/log 适配成 `SSChannelEventSync` 喂给 Room Subscriber。
+- WAL/恢复层（已落地，`wal_journal_mode`）：直接编译 `mq_channel`/`mq_channel_wal_handle`/`mq_channel_manager`
+  并使用实际 `atfw::util` `wal_publisher`，调用 `allocate_log`/`emplace_back_log`、`compact_stateful_sequence` 和
+  `compact_sequence`（`dump_snapshot`/`load_snapshot` 是 `mq_channel` 的封装）。五个 dtmq RPC mock 的 team-room
+  分支镜像 `task_action_subscribe/send_message/update/reset_lock/destroy_channel` 的服务端行为操作直连频道
+  （memory_only，绕过 DB 与分布归属），日志下发由真实 vtable 产生的 `channel_event_sync` 经 mock 规则转投给
+  真实 `client_subscriber::global_receive_channel_event`。已知实现约束（均已验证）：
+  - 双 server-instance config 冲突按“进程保持 `teamsvr_room_cfg`”解决：`get_server_instance_config` 对类型不匹配
+    返回默认实例，`dtmq_proxysvr_cfg` 默认值在 WAL 路径安全（`remove_ttl=0` 回退 21 天、`max_events_per_tick=0`
+    视为无限、`cache_expire_timeout=0` 仅影响不可用频道 GC）。
+  - atapp 自发自送（room 节点即本地 app id）走 self endpoint 本地环回、不经过 mock 引擎出站拦截；WAL 模式以
+    `wal_redirect_subscriber` 把订阅者事件下发地址改写到 dtmq-proxy 节点，订阅者 key 不变。
+  - 未订阅过的 client 首次以 checkpoint 0 上来触发快照下发（新 memory_only 频道 `last_removed_sequence` 初始
+    为 1）；WAL 模式 `setup_ready_room` 在订阅未就绪失败时泵空事件批后重试一次。
+  - 真实频道首条日志 sequence 由 `alloc_message_sequence` 以微秒时间戳播种，断言只能做相对比较。
+  - 真实 `mq_channel::compact_sequence` 的裁剪是开区间(`sequence < compact_sequence` 移除、`== 边界`保留)，
+    与 fake journal 的闭区间(`<= last_removed` 移除)不同；WAL-04 锁定真实契约。此外 `wal_object::remove_before`
+    以 `back().timepoint < now`(严格小于)为移除门禁——维护 handler 内“追加通知日志→压缩”在冻结的虚拟时钟下
+    可能落在同一微秒导致物理裁剪被跳过(生产中两次调用之间真实时间总是推进，偶发同微秒时下一轮维护会重试)；
+    WAL update handler 在压缩前推进 1ms 虚拟时间做等价模拟。
+  - WAL 模式下事件经真实 vtable 异步送达，房间维护的数量加速调度时机不可依赖；需要触发维护的用例按 CMP
+    时间类用例的方式推进虚拟时间越过续租点后 `drive_timer_ticks`(续租维护必然执行且每次维护都重选压缩点)。
+  - WAL-03 的双订阅者以独立 subscriber key 经 `wal_resubscribe_as` 驱动真实 publisher 决策(进程内
+    client_subscriber 共享层对同一频道只有一个实例，无法构造两个真实客户端)；批次按 `subscriber_keys`
+    过滤断言，房间真实订阅者作为状态等价性载体。WAL-02 的 hash 不匹配阶段对并发合法心跳触发的增量交付保持
+    容忍(只约束其内容不回退到 checkpoint 之前)，强制快照本身是硬断言。
+  - 本轮再次踩中 §3.1 的 ninja 头文件依赖不完整问题：对公共头的任何修改（包括仅改 handler 分支/成员）后若
+    不删除目标 `.dir` 内的 `.obj`，会出现新旧对象混链，症状包括与源码矛盾的断言失败甚至析构期段错误；
+    连续排查时务必先做干净重编再下结论。
 
 WAL integration 层只把 `mq_channel` 当进程内权威 journal，不在同一进程启动第二套 atapp runtime。这样既能使用真实
 sequence、hash、subscriber checkpoint、GC 和压缩边界，又不违反 `rpc-unit-test` 一进程一 runtime 的约束。Room 和
@@ -510,10 +550,10 @@ DTMQ component 测试。
 
 | ID | 状态 | 优先级 | 场景与主要断言 |
 | --- | --- | --- | --- |
-| WAL-01 | ⬜ | P0 | publisher 分配并提交混合 `DTeamAction`，真实 sequence/hash chain 经 `SSChannelEventSync` 后 Room 终态与 journal 一致 |
-| WAL-02 | ⬜ | P0 | subscriber checkpoint 正常时只下发后续日志；checkpoint hash 不匹配时强制 snapshot，不在错误分支继续增量 |
-| WAL-03 | ⬜ | P0 | 慢 subscriber 落后于 `last_removed_key` 时收到 snapshot；跟得上的成员订阅者仍只收增量，二者最终状态等价 |
-| WAL-04 | ⬜ | P0 | `compact_sequence` 边界的保留/删除语义与 Room `last_compact_sequence + 1` 重放起点一致，包含非连续 sequence |
+| WAL-01 | ✅ | P0 | publisher 分配并提交混合 `DTeamAction`，真实 sequence/hash chain 经 `SSChannelEventSync` 后 Room 终态与 journal 一致 |
+| WAL-02 | ✅ | P0 | subscriber checkpoint 正常时只下发后续日志；checkpoint hash 不匹配时强制 snapshot，不在错误分支继续增量 |
+| WAL-03 | ✅ | P0 | 慢 subscriber 落后于 `last_removed_key` 时收到 snapshot；跟得上的成员订阅者仍只收增量，二者最终状态等价 |
+| WAL-04 | ✅ | P0 | `compact_sequence` 边界的保留/删除语义与 Room `last_compact_sequence + 1` 重放起点一致，包含非连续 sequence |
 | WAL-05 | ⬜ | P0 | `dump_snapshot` -> 新 `mq_channel::load_snapshot` -> Room restore 往返，custom/private/lock/messages/compact 边界不丢失 |
 | WAL-06 | ⬜ | P0 | writable transfer snapshot 含待广播日志和 custom/private data；转移后旧 publisher 不再接受有效 Room 写入 |
 | WAL-07 | ⬜ | P1 | 多 subscriber 具有不同 checkpoint/心跳/超时，publisher tick、GC、snapshot fallback 不让任何成员越过未保存状态 |
@@ -632,8 +672,9 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 
 ### 阶段 A：测试基础设施
 
-> 状态：✅ 快速业务层完成（2026-08-28）。第 3 步的真实 `wal_publisher` adapter 未做；fake journal 只支撑
-> Room 业务层，不等价于 checkpoint/hash/GC/transfer 的跨层契约，WAL-01～09 仍保持 ⬜。
+> 状态：✅ 完成（2026-08-28）。第 3 步的真实 `wal_publisher` adapter 已落地（`wal_journal_mode`），
+> compile/start smoke 与 WAL-01～04(checkpoint 基线、分发决策等价性、compact 边界与重放起点)通过；
+> WAL-05～09 的 dump/load 往返、transfer/多订阅者等跨层子项仍保持 ⬜（见 §4.6）。
 
 1. 在 `src/teamsvr/test/CMakeLists.txt` 建立单个 `${PROJECT_NAME}-teamsvr-room-unit-test` 离线 service test target（每程序/库仅一个测试可执行程序）。
 2. 完成 resource、discovery、DTMQ RPC mock、event-sync、时间偏移、规范化 oracle 和清理夹具。
@@ -685,8 +726,9 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 3. 为 captain 默认/显式 role、旧队长角色、snapshot/replay 和非法提权建立一个最小有效基线；所有失败路径零写入。
 4. 收敛后先跑条件/事件/恢复/SDK focused group，再跑全量 107+ case 与连续两次 CTest。
 
-剩余工作的执行优先级为：GAP-11/12 的协议决定与 P0 用例 → WAL-01/02 compile/start 与 checkpoint 基线 →
-CON/FLT 的 P0 crash/fencing 组合 → 其余 WAL/边界/model/长稳。不得为了增加 case 数跳过前置协议决定或复制低价值变体。
+剩余工作的执行优先级为：GAP-11/12 的协议决定与 P0 用例 → WAL-05/06（dump/load 快照往返与 transfer）及
+其余 WAL P0 → CON/FLT 的 P0 crash/fencing 组合 → 其余 WAL/边界/model/长稳。不得为了增加 case 数跳过前置
+协议决定或复制低价值变体。
 
 ## 7. 构建与运行命令
 
@@ -694,17 +736,20 @@ CON/FLT 的 P0 crash/fencing 组合 → 其余 WAL/边界/model/长稳。不得�
 `--compile-commands-dir` 解析 `<BUILD_DIR>` 为 `build_jobs_cmake_tools`；生成器/配置由 settings 与
 `CMakeCache.txt` 确认为 Ninja/Debug。本轮 `--parallel 12` 是显式执行参数，不是 workspace 固定配置。
 
-本轮新鲜证据（2026-08-28，含未提交的 `apply_join_request` 受理回执生产/测试改动的最终工作树）：
+本轮新鲜证据（2026-08-28，含 WAL-03/04 的最终工作树）：
 
-- `cmake --build build_jobs_cmake_tools --target atf4g-co-teamsvr-room-unit-test --parallel 12`：增量构建
-  up-to-date，无需重编，目标链接有效。
-- 测试程序 `-l`（按上文方式设置工作目录、`RPC_UNIT_TEST_WORKDIR` 与 DLL PATH）列出 107 个注册 case，退出码 0。
+- `cmake --build build_jobs_cmake_tools --target atf4g-co-teamsvr-room-unit-test --parallel 12`：构建通过。
+  注意：在缺少 VS 环境变量的 shell（如裸 Git Bash）中直接执行会因找不到 `kernel32.lib` 等 SDK 库在链接期
+  失败（LNK1104），需先经 `vcvars64.bat` 加载 VS 环境；本轮通过 `<BUILD_DIR>/_agent_tmp/build_with_vs.cmd`
+  包装执行（该脚本同时先删除目标 `.dir` 内 `.obj` 规避 §3.1 的头文件依赖不完整问题）。
+- 测试程序 `-l`（按上文方式设置工作目录、`RPC_UNIT_TEST_WORKDIR` 与 DLL PATH）列出 112 个注册 case
+  （107 + WAL 组 5 个），退出码 0。
 - 精确注册名首次 CTest（`-R '^atf4g-co-teamsvr-room-unit-test\.unit$' --no-tests=error`）：1/1 executable 通过，
-  6.00 秒；`--repeat until-fail:2` 两次均通过，分别 6.55/6.22 秒。
-- `atf4g-co-lobbysvr-unit-test` CTest：1/1 executable 通过，1.88 秒；内部共 15 个 case，其中
-  `lobbysvr_user_team` 7 个（含 `member_events_manage_pending_admissions`）。
-  一次缺少 CTest 工作目录/环境的直接 `-r` 虽列出用例但实际执行 0 个，已明确排除，不计入通过证据。
-- 本轮未执行 `component-dtmq-proxysvr`、真实 WAL、DB-backed channel、跨进程和其他平台，不能将其写成通过。
+  约 5.9 秒；`--repeat until-fail:2` 两次均通过。修复 WAL-02 对并发心跳增量的过宽断言后，另做了 8 轮
+  `--repeat until-fail:2`（16 次全量执行）全部通过，无间歇失败。executable 内部 112 个 case 全部通过。
+- `atf4g-co-lobbysvr-unit-test` CTest 前轮已验证（1/1 executable，15 个内部 case）；本轮未改动 lobbysvr 相关
+  代码，未重复执行。`component-dtmq-proxysvr` 本轮未执行、未改动，不能将其写成新证据。
+- 本轮未执行 DB-backed channel、跨进程和其他平台，不能将其写成通过。
 
 后续建议命令：
 
@@ -744,16 +789,20 @@ Windows 下经 CTest 运行的目标已自动设置 working directory、`RPC_UNI
 
 ## 8. 完成标准
 
-- 🔶 离线 P0 主体的 107 个现有 case 已构建并连续两次通过；WAL 全组、CON 主体和 FLT 未覆盖子项仍未完成。
+- 🔶 离线 P0 主体的 112 个现有 case 已构建并通过（含 8 轮重复执行）；CON 主体和 FLT 未覆盖子项仍未完成。
 - ✅ 每个权限失败用例均证明没有提交 `DTeamAction`，而不只是检查错误码。
 - ✅ COND-01～06 已证明条件在提交前检查、失败零写入、通过后从事件裁剪；DATA-04/05 的重复 key 与旧 wire 兼容仍为 ⬜。
 - 🔶 compact 快照逐字段覆盖成员、邀请、申请、keyed shared data 和其他公共/私有状态；快照加增量恢复与全量日志结果等价（CMP-06～08、RCV-01/02 已锁定；四路径 model oracle 未做）。
 - 🔶 主备回放不重复发送 `DTeamMemberAction`，锁冲突后旧主控不能继续写或发个人通知（ADM-14、LCK-02 已锁定；多候选与 writable transfer 场景未做）。
 - 🔶 每个 P0 写流程至少覆盖 pre-commit failure、commit-response-loss 和一个延迟/乱序恢复脚本（create/approve/reset-lock 的丢响应已做；pre-commit failure 与延迟乱序未系统化）。
-- ⬜ 真实 `wal_publisher` 的 checkpoint/hash/compaction/transfer 接缝用例通过，慢订阅者越过 GC 边界时能回落到 snapshot。
+- 🔶 真实 `wal_publisher` 接缝：WAL-01～04 的 sequence/hash chain、checkpoint 增量与 hash 不匹配强制
+  snapshot、未订阅 client 首次 checkpoint 0 触发快照、慢订阅者/跟得上订阅者的分发决策与等价性、compact
+  开区间裁剪契约与非连续 sequence 重放起点均已锁定；快照 dump/load 往返（WAL-05）、transfer 与多订阅者
+  （WAL-06～08）仍未完成。
 - ⬜ 固定 seed 的 model trace 能在任意已选 compact/重启点得到同一规范化终态，失败时报告 seed 和最短 action trace。
 - ✅ Room 为新加入请求发送一次规范化受理回执、重复请求不重复发送；到期清理阶段不新增取消通知，`lobbysvr`
   消费者按过期时间自行清理（ADM-09/10、LIFE-05 与 `member_events_manage_pending_admissions` 已锁定）。
 - 🔶 FIX 回归（LIFE-13、PERM-10、EVT-04/09/11、CMP-13 已锁定；FIX-01 的 CON-01 未实现；FIX-09 不声称观察到调度竞态 RED）。
 - ⬜ GAP-01/03/04、GAP-06～12 均有明确协议决定和相应测试，不以注释或人工判断代替；开放项未解决前不能宣称容灾、通知可靠性或滚动升级覆盖完成。
-- ✅ 本轮 107 个 case 无硬超时、无未消费 fault script/mock expectation，suite 退出码为 0；CTest 首次及连续两次运行均通过。
+- ✅ 本轮 112 个 case 无硬超时、无未消费 fault script/mock expectation，suite 退出码为 0；CTest 首次及
+  连续两次运行均通过（另 8 轮重复全绿）。

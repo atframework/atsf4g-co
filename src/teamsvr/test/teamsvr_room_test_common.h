@@ -20,6 +20,17 @@
 // the same contract as production. Events are delivered back to the real client_subscriber through
 // SSChannelEventSync + global_receive_channel_event, followed by the same manager flush that
 // task_action_channel_event_sync performs in production.
+//
+// WAL journal mode (wal_journal_mode=true, set before start()) swaps the typed-SS emulated server side
+// for the real in-process mq_channel/wal_publisher layer (same sources the component-dtmq-proxysvr
+// tests compile): the five dtmq RPC mock handlers mirror the corresponding task_action_* bodies on a
+// directly held writable channel, and log delivery flows through the real wal_publisher vtable
+// (publisher_send_snapshot/publisher_send_logs -> rpc::dtmq::channel_event_sync no-wait RPC -> mock
+// rule -> client_subscriber::global_receive_channel_event). Only the distribution/forwarding layer
+// (make_*_channel + discovery ownership) is bypassed; it stays covered by component-dtmq-proxysvr
+// tests. The process keeps the teamsvr_room server-instance config, so mq_channel observes the
+// default dtmq_proxysvr_cfg instance (defaults are safe: remove_ttl falls back to 21d inside
+// mq_channel and max_events_per_tick=0 means unlimited in wal_publisher::tick).
 
 #pragma once
 
@@ -43,6 +54,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <atframework/testing/mock_db.h>
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_resource.h>
 #include <atframework/testing/mock_ss.h>
@@ -56,6 +68,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstddef>
+#include <cstdio>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -75,11 +88,32 @@
 #include "logic/logic_server_setup.h"
 #include "logic/room/team_room.h"
 #include "logic/room/team_room_manager.h"
+#include "rpc/db/local_db_interface.atfw.gen.h"     // IWYU pragma: keep
 #include "rpc/dtmq/dtmq_client_subscriber.h"
+#include "rpc/dtmq/dtmqproxysvrnotifyservice.atfw.gen.h"  // IWYU pragma: keep
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 #include "rpc/rpc_context.h"
 #include "rpc/rpc_shared_message.h"
 #include "utility/protobuf_mini_dumper.h"
+
+#include "config/excel_config_dtmq_index.h"
+#include "data/mq_channel.h"
+#include "logic/mq_channel_manager.h"
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+// Friend of mq_channel_manager(与 component-dtmq-proxysvr 测试同名但分属不同可执行程序)。
+// 这里只保留 teamsvr-room WAL 模式需要的 case 间隔离入口。
+class MqChannelManagerUnitTest {
+ public:
+  // 清空 manager 单例的频道/IO 队列状态;定时器随频道析构移除
+  static void clear_all_channels(mq_channel_manager& mgr) noexcept {
+    mgr.pending_io_channels_.clear();
+    mgr.running_io_channels_.clear();
+    mgr.reactive_io_channels_.clear();
+    mgr.channels_.clear();
+  }
+};
+#endif
 
 namespace teamsvr_room_test {
 
@@ -166,6 +200,11 @@ inline std::string make_team_room_channel_type_bytes(const room_test_cfg_values&
   configure->set_channel_type(kTeamRoomChannelType);
   configure->set_max_log_count(300);
   configure->set_gc_log_count(values.channel_gc_log_count);
+  // memory_only: WAL 模式直接以进程内 mq_channel 为权威 journal(计划 3.2 节)，不依赖 DB 持久化；
+  // fake journal 用例不读取这些服务端字段。gc_expire_duration 必须显式给值，0 会让真实
+  // wal_object::gc 把全部历史日志当过期裁剪
+  configure->set_memory_only(true);
+  configure->mutable_gc_expire_duration()->set_seconds(86400);
   configure->mutable_heartbeat_interval()->set_seconds(300);
   configure->mutable_heartbeat_retry_interval()->set_seconds(60);
   configure->mutable_subscriber_timeout()->set_seconds(values.lock_lease_seconds);
@@ -676,6 +715,7 @@ class room_test_env {
     if (!team_room_manager::is_instance_destroyed()) {
       team_room_manager::me()->clear();
     }
+    wal_cleanup_for_case();
   }
 
   room_test_env(const room_test_env&) = delete;
@@ -715,6 +755,11 @@ class room_test_env {
 
     if (!register_server_rules()) {
       CASE_MSG_INFO() << "server rule registration failed: " << runtime_->ss().get_diagnostic() << '\n';
+      return false;
+    }
+
+    if (wal_journal_mode && !setup_wal_journal()) {
+      CASE_MSG_INFO() << "wal journal setup failed: " << runtime_->ss().get_diagnostic() << '\n';
       return false;
     }
 
@@ -822,6 +867,127 @@ class room_test_env {
     subscribe_fail_code_ = error_code;
   }
 
+  // ---- WAL journal mode(真实 mq_channel/wal_publisher 层，计划 §3.2/§4.6) ----
+  // 必须在 start() 前设置。开启后五个 dtmq RPC mock 的 team-room 频道分支改由进程内真实
+  // mq_channel(wal_publisher + wal_object)执行，日志下发走真实 vtable -> channel_event_sync。
+  bool wal_journal_mode = false;
+
+  // 捕获的 SSChannelEventSync 下发批次(按到达顺序;WAL-01/02 断言快照/增量判定与内容用)
+  struct wal_event_sync_record {
+    atfw::dtmq::SSChannelEventSync batch;
+  };
+  const std::vector<wal_event_sync_record>& wal_event_batches() const noexcept { return wal_event_batches_; }
+  void wal_clear_event_batches() noexcept { wal_event_batches_.clear(); }
+
+  using wal_channel_ptr_t = mq_channel_manager::mq_channel_ptr_type;
+
+  // 查找 WAL 频道(不创建)
+  wal_channel_ptr_t wal_find_channel(const atfw::team::DTeamKey& team_key) const {
+    return wal_find_channel_by_key(rpc::team::team_api::make_team_room_channel_key(team_key));
+  }
+
+  // 协程内获取(或创建)可写频道: 直连构造 + manager::add_channel(镜像 component-dtmq 测试)，
+  // memory_only 配置下 writable_init 短路升级、无 DB;首次创建写 kCreate 日志。分布归属与转发
+  // 属于 component-dtmq-proxysvr 测试职责，这里不做
+  rpc::result_code_type wal_ensure_channel(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                           bool create_if_absent = true) {
+    auto channel_key = rpc::team::team_api::make_team_room_channel_key(team_key);
+    if (!create_if_absent && !wal_find_channel_by_key(channel_key)) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(wal_ensure_channel_by_key(ctx, channel_key)));
+  }
+
+  // 协程内直接向真实 publisher 提交一条 kEvent(DTeamAction) 日志(sequence/hash 由真实
+  // allocate_log_key/哈希链分配)并 tick 推进 broadcast。forced_sequence_gap>0 时跳号，
+  // 构造非连续 sequence(EVT-01/WAL-04 的缺口场景)
+  rpc::result_code_type wal_commit_team_action(rpc::context& ctx, const wal_channel_ptr_t& channel,
+                                               const atfw::team::DTeamAction& action,
+                                               int64_t forced_sequence_gap = 0) {
+    if (!channel || !channel->is_available()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
+    int32_t result = 0;
+    mq_channel_wal_object_context param{ctx, result};
+    auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                             atfw::dtmq::DChannelMessageDetail::kEvent, param);
+    if (!message) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    }
+    message->set_channel_type(channel->get_channel_key().channel_type());
+    if (forced_sequence_gap > 0) {
+      // allocate_log_key 对 sequence>0 的日志保留原值，跳号后哈希链仍按顺序计算
+      message->set_sequence(channel->get_last_message_sequence() + 1 + forced_sequence_gap);
+    }
+    (void)message->mutable_detail()->mutable_event()->PackFrom(action);
+    channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+    channel->tick(ctx);
+    RPC_RETURN_CODE(result < 0 ? result : 0);
+  }
+
+  // 协程内以指定 checkpoint 对真实 publisher 触发一次订阅决策(WAL-02: 正常 checkpoint 只补后续
+  // 日志、hash 不匹配强制 snapshot)。订阅者信息与 room 侧共享订阅者一致
+  rpc::result_code_type wal_resubscribe(rpc::context& ctx, const wal_channel_ptr_t& channel, int64_t last_sequence,
+                                        uint64_t last_hash_code) {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+        wal_resubscribe_as(ctx, channel, shared_subscriber_key_for(), last_sequence, last_hash_code, true)));
+  }
+
+  // wal_resubscribe 的多订阅者版本: 以指定订阅者 key 触发订阅决策(WAL-03 的落后/跟得上双订阅者)。
+  // 进程内没有该 key 对应的 client_subscriber 时批次由 global_receive_channel_event 记录并丢弃，
+  // 不影响批次内容断言。with_private_data 会更新到已存在订阅者(与 room 共享 key 时必须传 true)
+  rpc::result_code_type wal_resubscribe_as(rpc::context& ctx, const wal_channel_ptr_t& channel,
+                                           const std::string& subscriber_key, int64_t last_sequence,
+                                           uint64_t last_hash_code, bool with_private_data) {
+    if (!channel || !channel->is_available()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+    }
+    atfw::dtmq::channel_subscriber subscriber;
+    subscriber.set_subscriber_key(subscriber_key);
+    subscriber.set_with_private_data(with_private_data);
+    subscriber = wal_redirect_subscriber(subscriber);
+    channel->subscribe(ctx, subscriber, last_sequence, last_hash_code, false);
+    channel->tick(ctx);
+    RPC_RETURN_CODE(0);
+  }
+
+  // 泵空真实 vtable 下发的 channel_event_sync 并 flush 房间待发个人通知;房间写回产生的新事件
+  // 会继续入队，循环到稳定为止
+  int32_t wal_converge(size_t max_rounds = 8) {
+    const auto event_sync_name = rpc::dtmq::packer::get_full_name_of_channel_event_sync();
+    for (size_t round = 0; round < max_rounds; ++round) {
+      if (runtime_->pump_once() < 0) {
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      }
+      size_t submitted_events = runtime_->ss().calls(event_sync_name);
+      bool completed =
+          wait_until([this, submitted_events]() { return wal_event_sync_handler_attempts_ >= submitted_events; });
+      CASE_EXPECT_TRUE(completed);
+      if (!completed) {
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      }
+
+      int32_t ret = run("wal_flush", [](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team_room_manager::me()->flush_pending_channel_message(ctx)));
+      });
+      if (0 != ret) {
+        return ret;
+      }
+      completed = wait_for_send_message_handlers();
+      CASE_EXPECT_TRUE(completed);
+      if (!completed) {
+        return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      }
+
+      // 事件应用/flush 期间可能产生新的 channel_event_sync(房间写回)，未稳定则再来一轮
+      if (runtime_->ss().calls(event_sync_name) <= submitted_events) {
+        return 0;
+      }
+    }
+    CASE_MSG_INFO() << "wal_converge did not stabilize\n";
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+  }
+
   // ---- driving helpers ----
 
   // run_task + wait 封装。返回任务结果码；基础设施失败(任务未启动/硬超时)返回 INT32_MIN。
@@ -842,6 +1008,9 @@ class room_test_env {
   }
 
   // 创建房间并等待订阅就绪(订阅心跳期间 mock 推送就绪快照)。
+  // WAL journal 模式下事件批由真实 vtable 以 no-wait 异步下发，可能晚于订阅回包到达；
+  // client_subscriber 在看到 create 事件/快照前不会就绪(与生产一致)。这里在首次
+  // await_ready 因订阅未就绪失败时泵空事件批再重试一次，等价于生产调用方的重试语义
   team_room::ptr_t setup_ready_room(const atfw::team::DTeamKey& team_key) {
     team_room::ptr_t room;
     int32_t ret = run("setup_ready_room", [&team_key, &room](rpc::context& ctx) -> rpc::result_code_type {
@@ -851,6 +1020,13 @@ class room_test_env {
       }
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->await_ready(ctx)));
     });
+    if (0 != ret && wal_journal_mode && room && !room->is_subscriber_ready()) {
+      if (0 == wal_converge()) {
+        ret = run("setup_ready_room_retry", [&room](rpc::context& ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->await_ready(ctx)));
+        });
+      }
+    }
     if (0 != ret) {
       room.reset();
     }
@@ -860,22 +1036,19 @@ class room_test_env {
   team_room::ptr_t setup_ready_room(int64_t team_id) { return setup_ready_room(make_team_key(team_id)); }
 
   // 创建队伍的完整流程: 就绪 -> create_team。返回 create_team 结果码；room 传出。
+  // 就绪阶段复用 setup_ready_room(WAL 模式下事件批异步送达，需要泵空后重试一次)
   int32_t setup_created_team(int64_t team_id, const PROJECT_NAMESPACE_ID::DUserIDKey& owner_key,
                              const atfw::dtmq::DChannelIdKey& owner_channel, team_room::ptr_t* out_room = nullptr,
                              const atfw::team::DTeamConfigure* configure = nullptr) {
+    auto room = setup_ready_room(make_team_key(team_id));
+    if (!room) {
+      return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
+    }
+    if (nullptr != out_room) {
+      *out_room = room;
+    }
     return run("setup_created_team",
-               [team_id, &owner_key, &owner_channel, out_room, configure](rpc::context& ctx) -> rpc::result_code_type {
-                 auto room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
-                 if (!room) {
-                   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
-                 }
-                 if (nullptr != out_room) {
-                   *out_room = room;
-                 }
-                 int32_t ready_ret = RPC_AWAIT_CODE_RESULT(room->await_ready(ctx));
-                 if (0 != ready_ret) {
-                   RPC_RETURN_CODE(ready_ret);
-                 }
+               [room, team_id, &owner_key, &owner_channel, configure](rpc::context& ctx) -> rpc::result_code_type {
                  atfw::team::SSTeamRoomCreateReq req;
                  protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
                  protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
@@ -890,7 +1063,13 @@ class room_test_env {
   // 把 journal 中未下发的新日志推送给订阅者，并执行与 task_action_channel_event_sync 相同的
   // manager flush。事件回调在泵循环中异步完成(与真实 dispatcher 时序一致)，推送后先泵几轮再 flush。
   // force_snapshot=true 时改推全量快照(恢复/重置场景)。
+  // WAL journal 模式下事件由真实 wal_publisher vtable 主动下发，这里只负责收敛
   int32_t sync(const atfw::team::DTeamKey& team_key, bool force_snapshot = false) {
+    if (wal_journal_mode) {
+      (void)team_key;
+      (void)force_snapshot;
+      return wal_converge();
+    }
     int32_t ret = run("sync_events", [this, &team_key, force_snapshot](rpc::context& ctx) -> rpc::result_code_type {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(push_channel_events(ctx, team_key, force_snapshot)));
     });
@@ -1122,6 +1301,10 @@ class room_test_env {
           }
           const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSubscribeReq&>(request.body);
           auto& typed_response = static_cast<atfw::dtmq::SSChannelSubscribeRsp&>(response);
+          if (self->wal_journal_mode) {
+            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                self->wal_handle_subscribe(*request.context, typed_request, typed_response, request.target_node_id)));
+          }
           for (const auto& heartbeat : typed_request.heartbeat()) {
             auto* fake = self->find_channel_by_key(heartbeat.channel_key());
             if (nullptr == fake) {
@@ -1153,7 +1336,18 @@ class room_test_env {
           const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body);
           auto& typed_response = static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response);
 
-          auto* fake = self->find_channel_by_key(typed_request.channel_key());
+          fake_team_room_channel* fake = nullptr;
+          if (self->wal_journal_mode) {
+            // WAL 模式: team-room 频道走真实 mq_channel;其他频道类型继续走个人频道捕获
+            if (typed_request.channel_key().channel_type() == kTeamRoomChannelType) {
+              if (nullptr == request.context) {
+                RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+              }
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_send_message(*request.context, typed_request, typed_response)));
+            }
+          } else {
+            fake = self->find_channel_by_key(typed_request.channel_key());
+          }
           if (nullptr == fake) {
             // 个人频道发送使用 no-wait stream，没有业务响应。这里编排的是远端处理结果:
             // commit_first=false 表示处理前丢弃；commit_first=true 表示先接收消息、随后处理失败。
@@ -1233,6 +1427,17 @@ class room_test_env {
           const auto& typed_request = static_cast<const atfw::dtmq::SSChannelUpdateReq&>(request.body);
           auto& typed_response = static_cast<atfw::dtmq::SSChannelUpdateRsp&>(response);
 
+          if (self->wal_journal_mode) {
+            if (typed_request.channel_key().channel_type() == kTeamRoomChannelType) {
+              if (nullptr == request.context) {
+                RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+              }
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_update(*request.context, typed_request, typed_response)));
+            }
+            typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+            RPC_RETURN_CODE(0);
+          }
+
           auto* fake = self->find_channel_by_key(typed_request.channel_key());
           if (nullptr == fake) {
             typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
@@ -1281,6 +1486,17 @@ class room_test_env {
           const auto& typed_request = static_cast<const atfw::dtmq::SSChannelResetLockReq&>(request.body);
           auto& typed_response = static_cast<atfw::dtmq::SSChannelResetLockRsp&>(response);
 
+          if (self->wal_journal_mode) {
+            if (typed_request.channel_key().channel_type() == kTeamRoomChannelType) {
+              if (nullptr == request.context) {
+                RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+              }
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_reset_lock(*request.context, typed_request, typed_response)));
+            }
+            typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+            RPC_RETURN_CODE(0);
+          }
+
           auto* fake = self->find_channel_by_key(typed_request.channel_key());
           if (nullptr == fake) {
             typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
@@ -1325,6 +1541,16 @@ class room_test_env {
                google::protobuf::Message& /*response*/) -> rpc::result_code_type {
           const auto& typed_request = static_cast<const atfw::dtmq::SSChannelDestroyChannelReq&>(request.body);
 
+          if (self->wal_journal_mode) {
+            if (typed_request.channel_key().channel_type() == kTeamRoomChannelType) {
+              if (nullptr == request.context) {
+                RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
+              }
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_destroy(*request.context, typed_request)));
+            }
+            RPC_RETURN_CODE(0);
+          }
+
           auto* fake = self->find_channel_by_key(typed_request.channel_key());
           if (nullptr == fake) {
             RPC_RETURN_CODE(0);
@@ -1351,6 +1577,345 @@ class room_test_env {
     return !!destroy_rule_;
   }
 
+  // ---- WAL journal mode 实现(镜像 task_action_* 的服务端行为，journal 换成真实 mq_channel) ----
+
+  bool setup_wal_journal() {
+    // manager 单例进程级初始化(一次): 注册时间轮与发现回调。本进程保持 teamsvr_room 的
+    // server-instance config，mq_channel 内部读取 dtmq_proxysvr_cfg 默认实例(见文件头注释)
+    static const int manager_init_result = mq_channel_manager::me()->init();
+    if (0 != manager_init_result) {
+      CASE_MSG_INFO() << "mq_channel_manager init failed: " << manager_init_result << '\n';
+      return false;
+    }
+
+    // memory_only 频道不会触达 DB;注册消息类型仅保证任何意外路径进入 mock DB 而非崩溃
+    runtime_->db().register_message_type<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>();
+
+    room_test_env* self = this;
+    // 真实 vtable(publisher_send_snapshot/publisher_send_logs)发出的 channel_event_sync 在此
+    // 转发给真实 client_subscriber，等价于 room 侧 task_action_channel_event_sync 的接线
+    wal_event_sync_rule_ = rpc::dtmq::mock::channel_event_sync(
+        [self](rpc::context& ctx, const atfw::dtmq::SSChannelEventSync& request,
+               google::protobuf::Empty& /*response*/) -> rpc::result_code_type {
+          ++self->wal_event_sync_handler_attempts_;
+          self->wal_event_batches_.push_back(wal_event_sync_record{request});
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+              rpc::dtmq::client_subscriber::global_receive_channel_event(ctx, kDtmqProxyNodeId, request)));
+        });
+    return !!wal_event_sync_rule_;
+  }
+
+  void wal_cleanup_for_case() {
+    wal_channels_.clear();
+    wal_event_batches_.clear();
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+    if (!mq_channel_manager::is_instance_destroyed()) {
+      MqChannelManagerUnitTest::clear_all_channels(*mq_channel_manager::me());
+    }
+#endif
+  }
+
+  wal_channel_ptr_t wal_find_channel_by_key(const atfw::dtmq::DChannelIdKey& channel_key) const {
+    auto iter = wal_channels_.find(channel_key.channel_id());
+    return iter != wal_channels_.end() ? iter->second : nullptr;
+  }
+
+  rpc::result_code_type wal_ensure_channel_by_key(rpc::context& ctx, const atfw::dtmq::DChannelIdKey& channel_key) {
+    auto channel = wal_find_channel_by_key(channel_key);
+    if (!channel) {
+      auto configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
+      if (!configure) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+      }
+      channel = atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), channel_key,
+                                                                         *configure);
+      if (!channel) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+      }
+      mq_channel_manager::me()->add_channel(ctx, channel);
+      wal_channels_.emplace(channel_key.channel_id(), channel);
+    }
+
+    if (!channel->is_available()) {
+      if (!channel->is_writable()) {
+        auto init_ret = RPC_AWAIT_CODE_RESULT(channel->writable_init(ctx, true));
+        if (init_ret < 0) {
+          RPC_RETURN_CODE(init_ret);
+        }
+      }
+      if (!channel->is_available()) {
+        // writable 主节点自行分配 create_timepoint/sequence(向 journal 追加 kCreate 日志)
+        channel->set_created(ctx, atfw::util::time::time_utility::now(), 0);
+      }
+    }
+    RPC_RETURN_CODE(0);
+  }
+
+  // WAL 模式的订阅者地址改写: 真实 vtable 会向 subscriber_server_id 发送 channel_event_sync。
+  // 本进程内 room 节点就是本地 app id，atapp 的自发自送走 self endpoint 本地环回，不经过
+  // mock 引擎的出站拦截。把订阅者地址改写到已注入的远程 dtmq-proxy 节点，事件下发就会走
+  // mock SS 出站路径，由 channel_event_sync 规则转投给真实 client_subscriber。
+  // 订阅者 key(路由/幂等标识)保持不变，仅改变事件下发目标地址
+  static atfw::dtmq::channel_subscriber wal_redirect_subscriber(const atfw::dtmq::channel_subscriber& subscriber) {
+    atfw::dtmq::channel_subscriber ret = subscriber;
+    ret.set_subscriber_server_id(kDtmqProxyNodeId);
+    return ret;
+  }
+
+  // 镜像 task_action_subscribe: 逐心跳建频道/合并订阅者并 tick;分布归属与转发由
+  // component-dtmq-proxysvr 测试覆盖，这里对直连频道执行
+  rpc::result_code_type wal_handle_subscribe(rpc::context& ctx, const atfw::dtmq::SSChannelSubscribeReq& req,
+                                             atfw::dtmq::SSChannelSubscribeRsp& rsp, uint64_t target_node_id) {
+    for (const auto& heartbeat : req.heartbeat()) {
+      if (heartbeat.channel_key().channel_type() != kTeamRoomChannelType) {
+        rsp.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+        continue;
+      }
+
+      auto channel = wal_find_channel_by_key(heartbeat.channel_key());
+      if (!channel && heartbeat.auto_create_channel()) {
+        auto ensure_ret = RPC_AWAIT_CODE_RESULT(wal_ensure_channel_by_key(ctx, heartbeat.channel_key()));
+        if (ensure_ret < 0) {
+          rsp.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+          continue;
+        }
+        channel = wal_find_channel_by_key(heartbeat.channel_key());
+      }
+      if (!channel || (!channel->is_readonly() && !channel->is_writable())) {
+        rsp.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
+        continue;
+      }
+
+      if (req.has_subscriber() && req.subscriber().subscriber_server_id() != 0) {
+        channel->subscribe(ctx, wal_redirect_subscriber(req.subscriber()), heartbeat.last_sequence(),
+                           heartbeat.last_hash_code(), false);
+        auto* node = rsp.add_subscribe_node();
+        node->mutable_channel_key()->CopyFrom(heartbeat.channel_key());
+        node->set_server_id(target_node_id);
+        node->set_readonly_index(heartbeat.readonly_index());
+      }
+
+      channel->tick(ctx);
+    }
+    RPC_RETURN_CODE(0);
+  }
+
+  // 镜像 task_action_send_message
+  rpc::result_code_type wal_handle_send_message(rpc::context& ctx, const atfw::dtmq::SSChannelSendMessageReq& req,
+                                                atfw::dtmq::SSChannelSendMessageRsp& rsp) {
+    auto channel = wal_find_channel_by_key(req.channel_key());
+    if (!channel || !channel->is_available()) {
+      rsp.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+      RPC_RETURN_CODE(0);
+    }
+
+    if (req.has_compare_and_maybe_reset_lock()) {
+      atfw::dtmq::channel_lock_checker checker = req.compare_and_maybe_reset_lock();
+      if (!channel->compare_and_maybe_reset_lock(ctx, checker, true)) {
+        protobuf_copy_message(*rsp.mutable_compare_and_maybe_reset_lock(), checker);
+        rsp.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
+        rsp.set_last_sequence(channel->get_last_message_sequence());
+        rsp.set_last_hash_code(channel->get_last_hash_code());
+        RPC_RETURN_CODE(0);
+      }
+    }
+
+    int32_t result = 0;
+    mq_channel_wal_object_context param{ctx, result};
+
+    // 正常发送接口只允许追加(sequence=0 -> allocate_log_key 分配真实递增序号)
+    atfw::dtmq::DChannelMessage content = req.message_content();
+    content.set_sequence(0);
+    auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                             content.detail().command_case(), param,
+                                                             std::move(content));
+    rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+    if (message) {
+      message->set_channel_type(req.channel_key().channel_type());
+      rsp.set_message_sequence(message->sequence());
+      channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+      channel->tick(ctx);
+    } else {
+      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
+      result = PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM;
+    }
+
+    if (req.has_subscriber() && req.subscriber().subscriber_server_id() != 0) {
+      channel->subscribe(ctx, wal_redirect_subscriber(req.subscriber()), req.subscriber_last_sequence(),
+                         req.subscriber_last_hash_code(), false);
+    }
+
+    rsp.set_client_result(result);
+    rsp.set_last_sequence(channel->get_last_message_sequence());
+    rsp.set_last_hash_code(channel->get_last_hash_code());
+    RPC_RETURN_CODE(ret);
+  }
+
+  // 镜像 task_action_update
+  rpc::result_code_type wal_handle_update(rpc::context& ctx, const atfw::dtmq::SSChannelUpdateReq& req,
+                                          atfw::dtmq::SSChannelUpdateRsp& rsp) {
+    auto channel = wal_find_channel_by_key(req.channel_key());
+    if (!channel || !channel->is_available()) {
+      rsp.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+      RPC_RETURN_CODE(0);
+    }
+
+    if (req.has_compare_and_maybe_reset_lock()) {
+      atfw::dtmq::channel_lock_checker checker = req.compare_and_maybe_reset_lock();
+      if (!channel->compare_and_maybe_reset_lock(ctx, checker, true)) {
+        protobuf_copy_message(*rsp.mutable_compare_and_maybe_reset_lock(), checker);
+        rsp.set_last_sequence(channel->get_last_message_sequence());
+        rsp.set_last_hash_code(channel->get_last_hash_code());
+        rsp.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
+        RPC_RETURN_CODE(0);
+      }
+    }
+
+    bool has_changed_custom_data = false;
+    if (req.clear_custom_data_action()) {
+      has_changed_custom_data = channel->clear_custom_data();
+    } else if (req.has_custom_data()) {
+      has_changed_custom_data = channel->set_custom_data(req.custom_data());
+    }
+
+    bool has_changed_private_data = false;
+    if (req.clear_private_data_action()) {
+      has_changed_private_data = channel->clear_private_data();
+    } else if (req.has_private_data()) {
+      has_changed_private_data = channel->set_private_data(req.private_data());
+    }
+
+    int32_t result = 0;
+    if (has_changed_custom_data && !req.custom_data_skip_notify()) {
+      mq_channel_wal_object_context param{ctx, result};
+      auto message = channel->get_wal_publisher().allocate_log(
+          atfw::util::time::time_utility::now(), atfw::dtmq::DChannelMessageDetail::kUpdateCustomData, param);
+      if (message) {
+        message->mutable_detail()->set_update_custom_data(true);
+        if (req.has_subscriber()) {
+          message->set_sender_key(req.subscriber().subscriber_key());
+        }
+        channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+        channel->reset_custom_data_sequence();
+      }
+    } else if (has_changed_private_data || has_changed_custom_data) {
+      mq_channel_wal_object_context param{ctx, result};
+      auto message = channel->get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                               atfw::dtmq::DChannelMessageDetail::kNoop, param);
+      if (message) {
+        message->mutable_detail()->set_noop(true);
+        if (req.has_subscriber()) {
+          message->set_sender_key(req.subscriber().subscriber_key());
+        }
+        channel->get_wal_publisher().emplace_back_log(std::move(message), param);
+      }
+    }
+
+    if (has_changed_private_data) {
+      channel->reset_private_data_sequence();
+    }
+
+    // wal_object::remove_before 以 back().timepoint < now(严格小于)为移除门禁。本 handler 刚
+    // 追加的通知日志与压缩调用在冻结的虚拟时钟下可能落在同一微秒，物理裁剪会被跳过；生产环境
+    // 两次调用之间真实时间总是推进的(否则下一轮维护重试，见 pick_compact_sequence 的重选语义)，
+    // 这里推进 1ms 做等价模拟
+    if (req.compact_sequence() > 0) {
+      atfw::util::time::time_utility::set_global_now_offset(
+          atfw::util::time::time_utility::get_global_now_offset() + std::chrono::milliseconds{1});
+    }
+    channel->compact_stateful_sequence(req.stateful_sequence());
+    channel->compact_sequence(req.compact_sequence());
+
+    channel->tick(ctx);
+
+    if (req.has_subscriber()) {
+      if (!req.subscriber().subscriber_key().empty() && req.subscriber().last_heartbeat_timepoint().seconds() > 0) {
+        channel->subscribe(ctx, wal_redirect_subscriber(req.subscriber()), req.subscriber().last_heartbeat_sequence(),
+                           req.subscriber().last_heartbeat_hash_code(), true);
+      }
+    }
+    for (const auto& other_subscriber : req.update_others()) {
+      if (other_subscriber.last_heartbeat_timepoint().seconds() > 0) {
+        channel->subscribe(ctx, wal_redirect_subscriber(other_subscriber), other_subscriber.last_heartbeat_sequence(),
+                           other_subscriber.last_heartbeat_hash_code(), true);
+      }
+    }
+
+    if (req.save()) {
+      result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(ctx));
+      if (result < 0) {
+        result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
+      } else {
+        int32_t save_io_result = channel->async_save(ctx);
+        if (save_io_result < 0) {
+          result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
+        } else {
+          int32_t io_result = 0;
+          result = RPC_AWAIT_CODE_RESULT(channel->await_io_task(ctx, &io_result));
+          if (result >= 0 && io_result < 0) {
+            result = io_result;
+          }
+          if (result < 0) {
+            result = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_UPDATED_BUT_SAVE_FAILED;
+          }
+        }
+      }
+    }
+
+    rsp.set_client_result(result);
+    rsp.set_last_sequence(channel->get_last_message_sequence());
+    rsp.set_last_hash_code(channel->get_last_hash_code());
+    RPC_RETURN_CODE(0);
+  }
+
+  // 镜像 task_action_reset_lock
+  rpc::result_code_type wal_handle_reset_lock(rpc::context& ctx, const atfw::dtmq::SSChannelResetLockReq& req,
+                                              atfw::dtmq::SSChannelResetLockRsp& rsp) {
+    auto channel = wal_find_channel_by_key(req.channel_key());
+    if (!channel || !channel->is_available()) {
+      rsp.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
+      RPC_RETURN_CODE(0);
+    }
+
+    if (req.has_compare_and_maybe_reset_lock()) {
+      atfw::dtmq::channel_lock_checker checker = req.compare_and_maybe_reset_lock();
+      if (!channel->compare_and_maybe_reset_lock(ctx, checker, true)) {
+        protobuf_copy_message(*rsp.mutable_compare_and_maybe_reset_lock(), checker);
+        rsp.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
+        RPC_RETURN_CODE(0);
+      }
+      protobuf_copy_message(*rsp.mutable_compare_and_maybe_reset_lock(), checker);
+    }
+
+    channel->tick(ctx);
+    rsp.set_client_result(0);
+    RPC_RETURN_CODE(0);
+  }
+
+  // 镜像 task_action_destroy_channel
+  rpc::result_code_type wal_handle_destroy(rpc::context& ctx, const atfw::dtmq::SSChannelDestroyChannelReq& req) {
+    auto channel = wal_find_channel_by_key(req.channel_key());
+    // destroy 不存在的频道视为成功
+    if (!channel || !channel->is_available()) {
+      RPC_RETURN_CODE(0);
+    }
+
+    channel->tick(ctx);
+
+    if (req.has_compare_and_maybe_reset_lock()) {
+      atfw::dtmq::channel_lock_checker checker = req.compare_and_maybe_reset_lock();
+      if (!channel->compare_and_maybe_reset_lock(ctx, checker, true)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
+      }
+    }
+
+    if (channel->is_destroyed()) {
+      RPC_RETURN_CODE(0);
+    }
+
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(channel->destroy(ctx, std::chrono::system_clock::from_time_t(0), 0)));
+  }
+
  private:
   room_test_cfg_values cfg_;
   std::unique_ptr<atframework::testing::runtime> runtime_;
@@ -1368,6 +1933,12 @@ class room_test_env {
   atframework::testing::ss_rule_handle update_rule_;
   atframework::testing::ss_rule_handle reset_lock_rule_;
   atframework::testing::ss_rule_handle destroy_rule_;
+
+  // ---- WAL journal mode 状态 ----
+  std::unordered_map<std::string, wal_channel_ptr_t> wal_channels_;
+  std::vector<wal_event_sync_record> wal_event_batches_;
+  size_t wal_event_sync_handler_attempts_ = 0;
+  rpc::unit_test::mock_rule_handle wal_event_sync_rule_;
 };
 
 // ---- 用例内常用构造器 ----
