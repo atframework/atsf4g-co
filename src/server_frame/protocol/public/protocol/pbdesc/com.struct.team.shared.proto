@@ -63,11 +63,19 @@ message DUserTeamSnapshot {
 
   // snapshot里的队伍共享数据（解包后）
   repeated DTeamSharedDataModule shared_team_data = 2;
+
+  message UnpackedMemberSharedData {
+    atframework.shared.DUserIDKey user_key = 1;
+    // 解包后的队伍成员共享数据
+    repeated DTeamMemberSharedDataModule shared_member_data = 2;
+  }
+
+  repeated UnpackedMemberSharedData unpacked_member_data = 3;
 }
 
 message DUserTeamDirty {
   message OneAction {
-    atframework.team.DTeamAction actions = 1;
+    atframework.team.DTeamAction action = 1;
 
     // actions里的队伍成员共享数据（如果有，解包后）
     repeated DTeamMemberSharedDataModule shared_member_data = 2;

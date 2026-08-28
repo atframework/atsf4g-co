@@ -13,33 +13,33 @@ import (
 )
 
 func init() {
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "invite"}, TeamInviteCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "invite"}, TeamInviteCmd,
 		"<user_id> [zone_id]", "邀请玩家入队(没有队伍时服务端先创建)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "join"}, TeamSendJoinRequestCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "join"}, TeamSendJoinRequestCmd,
 		"<team_id> [zone_id]", "向队伍发起加入申请", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "accept"}, TeamApproveInvitationCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "accept"}, TeamApproveInvitationCmd,
 		"<team_id> [zone_id]", "接受队伍邀请(作为被邀请人)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "refuse"}, TeamRejectInvitationCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "refuse"}, TeamRejectInvitationCmd,
 		"<team_id> [zone_id]", "拒绝队伍邀请(作为被邀请人)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "accept_join"}, TeamAcceptJoinRequestCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "accept_join"}, TeamAcceptJoinRequestCmd,
 		"<user_id> [team_id] [zone_id]", "批准玩家的加入申请(需要审批权限)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "reject_join"}, TeamRejectJoinRequestCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "reject_join"}, TeamRejectJoinRequestCmd,
 		"<user_id> [team_id] [zone_id]", "拒绝玩家的加入申请(需要审批权限)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "exit"}, TeamExitCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "exit"}, TeamExitCmd,
 		"[team_id] [zone_id]", "退出当前队伍", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "kick"}, TeamRemoveMemberCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "kick"}, TeamRemoveMemberCmd,
 		"<user_id> [team_id] [zone_id]", "移出成员(需要管理权限)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "transfer"}, TeamTransferCaptainCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "transfer"}, TeamTransferCaptainCmd,
 		"<user_id> [team_id] [zone_id]", "转移队长", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "set_role"}, TeamUpdateMemberRoleCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "set_role"}, TeamUpdateMemberRoleCmd,
 		"<user_id> <role> [team_id] [zone_id]", "设置成员角色(role: member/admin/owner 或 100/200/300)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "ready"}, TeamUpdateMemberDataCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "ready"}, TeamUpdateMemberDataCmd,
 		"<true|false> [team_id] [zone_id]", "更新自己的准备状态(成员共享数据)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "matching"}, TeamUpdateTeamDataCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "matching"}, TeamUpdateTeamDataCmd,
 		"<true|false> [team_id] [zone_id]", "更新队伍匹配状态(队伍共享数据)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "pull"}, TeamPullInfoCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "pull"}, TeamPullInfoCmd,
 		"", "拉取队伍快照(user_get_info need_user_team)", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "team", "show"}, TeamShowCmd,
+	robot_cmd.RegisterUserCommand([]string{"team", "show"}, TeamShowCmd,
 		"", "打印本地缓存的队伍视图", nil, cmdDefaultTimeout)
 }
 

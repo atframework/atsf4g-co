@@ -990,13 +990,13 @@ void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::tea
 
   pending_dirty_actions_.emplace_back();
   auto& one_action = pending_dirty_actions_.back();
-  protobuf_copy_message(*one_action.mutable_actions(), action);
+  protobuf_copy_message(*one_action.mutable_action(), action);
 
   // 不下发内部路由与确认字段。condition 已由 teamsvr-room 在写入频道日志前裁剪，这里无需再处理
   const ::google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>* member_shared_data = nullptr;
   switch (action.action_case()) {
     case atfw::team::DTeamAction::kAddMember: {
-      auto* mutable_action = one_action.mutable_actions()->mutable_add_member();
+      auto* mutable_action = one_action.mutable_action()->mutable_add_member();
       mutable_action->clear_user_channel();
       mutable_action->set_user_router_server_id(0);
       mutable_action->set_acknowledge_action_sequence(0);
@@ -1005,7 +1005,7 @@ void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::tea
       break;
     }
     case atfw::team::DTeamAction::kMemberUpdate: {
-      auto* mutable_action = one_action.mutable_actions()->mutable_member_update();
+      auto* mutable_action = one_action.mutable_action()->mutable_member_update();
       mutable_action->clear_user_channel();
       mutable_action->set_user_router_server_id(0);
       member_shared_data = &mutable_action->shared_member_data();
@@ -1014,7 +1014,7 @@ void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::tea
     case atfw::team::DTeamAction::kAddInvitation:
     case atfw::team::DTeamAction::kApproveInvitation:
     case atfw::team::DTeamAction::kRejectInvitation: {
-      auto* mutable_action = one_action.mutable_actions();
+      auto* mutable_action = one_action.mutable_action();
       if (action.action_case() == atfw::team::DTeamAction::kAddInvitation) {
         mutable_action->mutable_add_invitation()->clear_invitee_private_channel();
       } else if (action.action_case() == atfw::team::DTeamAction::kApproveInvitation) {
@@ -1027,7 +1027,7 @@ void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::tea
     case atfw::team::DTeamAction::kAddJoinRequest:
     case atfw::team::DTeamAction::kApproveJoinRequest:
     case atfw::team::DTeamAction::kRejectJoinRequest: {
-      auto* mutable_action = one_action.mutable_actions();
+      auto* mutable_action = one_action.mutable_action();
       atfw::team::DTeamJoinRequest* join_request = nullptr;
       if (action.action_case() == atfw::team::DTeamAction::kAddJoinRequest) {
         join_request = mutable_action->mutable_add_join_request();

@@ -558,6 +558,133 @@ CASE_TEST(teamsvr_room_event, team_update_merge_semantics) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
+// ============ EVT-06: member_update/team_update 与现有数据相同时去重(不产生频道事件)，空更新保留写入 ============
+CASE_TEST(teamsvr_room_event, update_dedup_no_change) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->is_lock_holder());
+
+  auto& fake = env.channel(team_id);
+  auto count_events = [&fake]() { return fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent); };
+
+  // 基线数据: 成员 client_version + shared[7]，队伍 configure(invite_role=ADMIN) + shared[1]
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    update->set_client_version("v-dedup");
+    add_team_any_data_entry(update->mutable_shared_member_data(), 7, "member-7");
+    CASE_EXPECT_EQ(0, env.run("member_update_init", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  {
+    atfw::team::DTeamAction action;
+    action.mutable_team_update()->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 1, "team-1");
+    CASE_EXPECT_EQ(0, env.run("team_update_init", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  size_t events_before = count_events();
+
+  // 完全相同的 member_update: 跳过，不追加事件
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    update->set_client_version("v-dedup");
+    add_team_any_data_entry(update->mutable_shared_member_data(), 7, "member-7");
+    CASE_EXPECT_EQ(0, env.run("member_update_dup", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before, count_events());
+
+  // 仅携带与现值一致的子集字段(未携带的字段不参与判定): 跳过
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    update->set_client_version("v-dedup");
+    CASE_EXPECT_EQ(0, env.run("member_update_dup_subset", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before, count_events());
+
+  // 完全相同的 team_update(configure 只写门槛字段，写入前修订后与现值相等): 跳过
+  {
+    atfw::team::DTeamAction action;
+    action.mutable_team_update()->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 1, "team-1");
+    CASE_EXPECT_EQ(0, env.run("team_update_dup", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before, count_events());
+
+  // 共享成员数据变化: 正常下发
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update->mutable_shared_member_data(), 7, "member-7-changed");
+    CASE_EXPECT_EQ(0, env.run("member_update_changed", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before + 1, count_events());
+
+  // 不携带任何可落地字段的空 member_update: 不去重(保留锁探测等既有写入行为)
+  {
+    atfw::team::DTeamAction action;
+    protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
+    CASE_EXPECT_EQ(0, env.run("member_update_empty", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before + 2, count_events());
+
+  // 目标成员不存在: 不去重，保留写入
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), make_user_key(1, 9898));
+    update->set_client_version("ghost");
+    CASE_EXPECT_EQ(0, env.run("member_update_ghost", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before + 3, count_events());
+
+  // 共享队伍数据变化: 正常下发
+  {
+    atfw::team::DTeamAction action;
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 1, "team-1-changed");
+    CASE_EXPECT_EQ(0, env.run("team_update_changed", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(events_before + 4, count_events());
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
 // ============ EVT-10a: 重复批次/compact 点之前日志被订阅层忽略，不产生重复应用 ============
 CASE_TEST(teamsvr_room_event, event_sync_duplicate_batch_ignored) {
   room_test_env env;

@@ -223,6 +223,64 @@ static bool team_any_data_map_equal(const google::protobuf::RepeatedPtrField<atf
   }
   return true;
 }
+
+// member_update 事件的空操作判定: 逐字段对照 apply_member_update 的应用语义
+// (仅非空 client_version、非 0 user_router_server_id、已设置的 user_channel 会落地，
+// 共享数据按 key 覆盖)；所有会落地的字段都与现有值相等时，写入频道日志不产生任何状态变化。
+// 不携带任何可落地字段的空更新不判定为空操作(保留事件以维持锁探测等既有行为)，
+// 成员不存在时同样不判定为空操作
+static bool team_member_update_no_change(const atfw::team::DTeamMemberUpdateData& update_data,
+                                         const team_room::member_runtime_data& member, google::protobuf::Arena* arena) {
+  bool has_applicable_field = false;
+  if (!update_data.client_version().empty()) {
+    has_applicable_field = true;
+    if (update_data.client_version() != member.member_data.client_version()) {
+      return false;
+    }
+  }
+  if (update_data.user_router_server_id() != 0) {
+    has_applicable_field = true;
+    if (update_data.user_router_server_id() != member.member_data.user_router_server_id()) {
+      return false;
+    }
+  }
+  if (update_data.has_user_channel()) {
+    has_applicable_field = true;
+    if (!atfw::atapp::protobuf_equal(update_data.user_channel(), member.member_data.user_channel())) {
+      return false;
+    }
+  }
+  for (const auto& kv : update_data.shared_member_data()) {
+    has_applicable_field = true;
+    auto it = member.shared_member_data.find(kv.key());
+    if (it == member.shared_member_data.end() || !team_any_data_equal(it->second, kv.value(), arena)) {
+      return false;
+    }
+  }
+  return has_applicable_field;
+}
+
+// team_update 事件的空操作判定: 对照 apply_team_update 的应用语义(configure 整体覆盖、
+// 共享数据按 key 覆盖)。configure 要求双方均已完成默认门槛修订后再比较(send_action 写入前
+// 修订事件载荷，storage_ 中的配置在 create_team/restore_snapshot/apply_team_update 后修订)。
+// 与 member_update 相同，不携带任何可落地字段的空更新不判定为空操作
+static bool team_update_no_change(const atfw::team::DTeamUpdateData& update_data,
+                                  const atfw::team::DTeamConfigure& current_configure,
+                                  const std::unordered_map<int64_t, atfw::team::DTeamAnyData>& current_shared_data,
+                                  google::protobuf::Arena* arena) {
+  bool has_applicable_field = update_data.has_configure();
+  if (update_data.has_configure() && !atfw::atapp::protobuf_equal(update_data.configure(), current_configure)) {
+    return false;
+  }
+  for (const auto& kv : update_data.shared_team_data()) {
+    has_applicable_field = true;
+    auto it = current_shared_data.find(kv.key());
+    if (it == current_shared_data.end() || !team_any_data_equal(it->second, kv.value(), arena)) {
+      return false;
+    }
+  }
+  return has_applicable_field;
+}
 // 百分比条件计算基准: 用整数交叉相乘(satisfied * kTeamConditionPercentBase 与 total * percent)
 // 代替浮点除法，避免精度问题
 constexpr const int64_t kTeamConditionPercentBase = 100;
@@ -570,6 +628,33 @@ rpc::result_code_type team_room::send_action(rpc::context& ctx, const atfw::team
       break;
     default:
       break;
+  }
+
+  // member_update/team_update 去重: 事件载荷应用到当前状态不产生任何变化时直接跳过，
+  // 避免周期性全量刷新等重复上报造成无效的频道日志增长与广播(判定口径见
+  // team_member_update_no_change/team_update_no_change，与 apply 语义逐字段对应)。
+  // 仅持锁者去重: 非持锁者保留原写入路径的乐观锁检查/CAS 接管语义(写入冲突退位、
+  // 空更新作锁探测等)，去重只是持锁者写入路径上的纯优化
+  if (is_lock_holder()) {
+    switch (action_ptr->action_case()) {
+      case atfw::team::DTeamAction::kMemberUpdate: {
+        auto member = find_member(action_ptr->member_update().user_key(), false);
+        if (member &&
+            team_member_update_no_change(action_ptr->member_update(), *member, ctx.get_protobuf_arena().get())) {
+          RPC_RETURN_CODE(0);
+        }
+        break;
+      }
+      case atfw::team::DTeamAction::kTeamUpdate:
+        // 此处的 configure 已在上方完成默认门槛修订，可与 storage_ 中的修订后配置直接比较
+        if (team_update_no_change(action_ptr->team_update(), storage_.configure(), shared_team_data_,
+                                  ctx.get_protobuf_arena().get())) {
+          RPC_RETURN_CODE(0);
+        }
+        break;
+      default:
+        break;
+    }
   }
 
   // 移除成员: 记录移除原因并加入重试队列，等待频道事件回环后真正移除；
