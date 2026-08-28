@@ -60,6 +60,8 @@ message SCUserDirtyChgSync {
   repeated DItemInstance dirty_items = 1;
   DOrbitRoomDirty dirty_orbit_rooms = 2;
   repeated DUserTeamDirty dirty_team = 3;
+
+  // 业务ditry开始
 }
 
 // 心跳包，上行包
@@ -74,6 +76,8 @@ message CSUserGetInfoReq {
   bool need_user_options = 2;      // 标记为true 回包才有会有用户选项数据
   bool need_user_orbit_room = 3;   // 标记为true 回包才有会有用户orbit房间数据
   bool need_user_team = 4;         // 标记为true 回包才有会有用户team数据
+
+  // 业务数据开始
 }
 
 // 用户数据返回
@@ -82,6 +86,8 @@ message SCUserGetInfoRsp {
   DUserOptions user_options = 2;            // 用户自定义选项
   DOrbitRoomUserData user_orbit_room = 3;   // 用户orbit房间数据
   repeated DUserTeamSnapshot user_team = 4; // 用户team数据
+
+  // 业务数据开始
 }
 
 message CSUserGMCommandReq {
