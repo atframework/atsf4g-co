@@ -43,7 +43,8 @@ class user_team_manager_utility {
     if (team_mgr.processed_private_chat_channel_sequence_ >= data.sequence()) {
       return;
     }
-    team_mgr.processed_private_chat_channel_sequence_ = data.sequence();
+    // 走 setter 保持脏标记语义(与落地字段 processed_private_chat_channel_sequence 的写入契约一致)
+    team_mgr.set_processed_private_chat_channel_sequence(data.sequence());
 
     // 处理队伍成员事件
     rpc::context::message_holder<atfw::team::DTeamMemberAction> action(ctx);
@@ -269,6 +270,8 @@ int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_u
     if (nullptr == group_data) {
       return PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC;
     }
+    // init_from_table_data 依赖 team_type 恢复分组(非法类型会被 add_team 丢弃)，必须落地
+    group_data->set_team_type(group.first);
 
     if (group.second.current) {
       auto* current_team_data = group_data->mutable_current();

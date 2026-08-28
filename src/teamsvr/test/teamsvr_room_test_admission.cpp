@@ -418,16 +418,27 @@ CASE_TEST(teamsvr_room_admission, join_request_normalization_and_duplicate) {
   });
   CASE_EXPECT_TRUE(found);
 
-  // 加入请求不产生个人通知(成员通过队伍频道感知)
+  // 申请人收到一次 apply_join_request 受理回执(携带房间规范化后的过期时间，对端以此维护本地待处理列表);
+  // 队伍成员不额外收个人通知(通过队伍频道日志感知)
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_EQ(0u, env.personal_message_count());
+  CASE_EXPECT_EQ(1u, env.personal_message_count());
+  if (1 == env.personal_message_count()) {
+    const auto& record = env.personal_messages()[0];
+    CASE_EXPECT_EQ(atfw::team::DTeamMemberAction::kApplyJoinRequest, record.action.action_case());
+    CASE_EXPECT_EQ(make_personal_channel(8051).channel_id(), record.channel.channel_id());
+    CASE_EXPECT_EQ(applicant.user_id(), record.action.apply_join_request().requester().user_id());
+    CASE_EXPECT_EQ(team_id, record.action.apply_join_request().team_key().team_id());
+    CASE_EXPECT_GT(record.action.apply_join_request().expired_timepoint().seconds(), 0);
+  }
 
-  // 完全重复的加入请求不追加日志
+  // 完全重复的加入请求不追加日志，也不重复发送受理回执
   size_t sends_after_first = fake.send_message_calls();
   CASE_EXPECT_EQ(0, env.run("add_join_2", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
   }));
   CASE_EXPECT_EQ(sends_after_first, fake.send_message_calls());
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(1u, env.personal_message_count());
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

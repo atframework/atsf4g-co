@@ -1506,6 +1506,13 @@ void team_room::apply_add_join_request(const atfw::team::DTeamJoinRequest& join_
   }
   protobuf_copy_message(*data_ptr, join_request);
   // 不需要额外通知队长审批，队长会通过队伍的频道获取到数据
+
+  // 通知申请人申请已受理(作为其操作回执; 携带房间规范化后的过期时间，
+  // 对端以此维护本地待处理列表并在被拒绝/入队/过期时清理)
+  atfw::team::DTeamMemberAction notify_action;
+  protobuf_copy_message(*notify_action.mutable_apply_join_request(), join_request);
+  atfw::dtmq::DChannelIdKey channel_id = join_request.requester_private_channel();
+  append_team_member_channel_notification(requester, std::move(channel_id), std::move(notify_action));
 }
 
 void team_room::apply_approve_join_request(const atfw::team::DTeamJoinRequest& join_request) {

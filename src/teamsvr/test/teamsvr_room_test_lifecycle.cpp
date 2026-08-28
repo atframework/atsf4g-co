@@ -184,9 +184,9 @@ CASE_TEST(teamsvr_room_lifecycle, admission_expiry_cleanup_no_notify) {
   }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // 邀请产生 invited 通知(1)，申请不通知(0)
+  // 邀请产生 invited 通知(1)，申请产生 apply_join_request 受理回执(1)
   size_t personal_before_cleanup = env.personal_message_count();
-  CASE_EXPECT_EQ(1u, personal_before_cleanup);
+  CASE_EXPECT_EQ(2u, personal_before_cleanup);
 
   // 推进过期时间 + 分轮驱动维护；断言在偏移时间内完成(过期判定依赖推进后的时钟)
   {

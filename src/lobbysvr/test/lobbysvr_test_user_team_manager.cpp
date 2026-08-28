@@ -329,6 +329,8 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_restores_current) {
   if (dumped_table.team_data().group_size() > 0) {
     CASE_EXPECT_TRUE(dumped_table.team_data().group(0).has_current());
     CASE_EXPECT_EQ(kFirstTeamId, dumped_table.team_data().group(0).current().team_key().team_id());
+    // team_type 必须落地: init_from_table_data 依赖它恢复分组，缺失会被 add_team 当作非法类型丢弃
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL, dumped_table.team_data().group(0).team_type());
   }
 
   CASE_EXPECT_EQ(0, test.stop());
@@ -1085,6 +1087,119 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   }
   atfw::util::time::time_utility::reset_global_now_offset();
   atfw::util::time::time_utility::update();
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// The personal-channel receipt events drive the manager-level pending admission lists:
+// invited/apply_join_request populate them (expired entries filtered), reject_invitation/reject_join_request
+// remove them. apply_join_request is sent by teamsvr-room apply_add_join_request as the requester's receipt.
+CASE_TEST(lobbysvr_user_team, member_events_manage_pending_admissions) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::cs};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  constexpr uint64_t kUserId = 31001;
+  constexpr int64_t kInviteTeamId = 8101;
+  constexpr int64_t kJoinTeamId = 8102;
+  constexpr int64_t kExpiredTeamId = 8103;
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+
+  auto self_key = [kUserId]() {
+    PROJECT_NAMESPACE_ID::DUserIDKey key;
+    key.set_zone_id(kZoneId);
+    key.set_user_id(kUserId);
+    return key;
+  };
+
+  int64_t event_sequence = 0;
+  uint64_t previous_hash = 0;
+  auto send_member_event = [&](const atfw::team::DTeamMemberAction& action) {
+    std::vector<atframework::dtmq::DChannelMessage> msgs{make_event_message(++event_sequence, action)};
+    previous_hash = chain_message_hashes(msgs, previous_hash);
+    return receive_channel_event(test, make_incremental_event(private_channel_key, event_sequence, msgs));
+  };
+
+  auto valid_expiry = []() {
+    return protobuf_from_system_clock(std::chrono::system_clock::now() + std::chrono::seconds{60});
+  };
+
+  // invited -> 待处理邀请入列
+  {
+    atfw::team::DTeamMemberAction action;
+    auto* invited = action.mutable_invited();
+    protobuf_copy_message(*invited->mutable_team_key(), make_team_key(kInviteTeamId));
+    invited->mutable_inviter()->set_zone_id(kZoneId);
+    invited->mutable_inviter()->set_user_id(kCaptainUserId);
+    protobuf_copy_message(*invited->mutable_invitee(), self_key());
+    *invited->mutable_expired_timepoint() = valid_expiry();
+    CASE_EXPECT_TRUE(send_member_event(action));
+    pump_rounds(test, 4);
+  }
+  auto invitation = user_inst->get_user_team_manager().get_pending_invitation(make_team_key(kInviteTeamId));
+  CASE_EXPECT_TRUE(!!invitation);
+  if (invitation) {
+    CASE_EXPECT_EQ(kUserId, invitation->invitee().user_id());
+    CASE_EXPECT_GT(invitation->expired_timepoint().seconds(), 0);
+  }
+
+  // apply_join_request -> 待处理加入请求入列(房间受理回执)
+  {
+    atfw::team::DTeamMemberAction action;
+    auto* applied = action.mutable_apply_join_request();
+    protobuf_copy_message(*applied->mutable_team_key(), make_team_key(kJoinTeamId));
+    protobuf_copy_message(*applied->mutable_requester(), self_key());
+    *applied->mutable_expired_timepoint() = valid_expiry();
+    CASE_EXPECT_TRUE(send_member_event(action));
+    pump_rounds(test, 4);
+  }
+  CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_join_request(make_team_key(kJoinTeamId)));
+
+  // 已过期的申请回执直接过滤，不入列
+  {
+    atfw::team::DTeamMemberAction action;
+    auto* applied = action.mutable_apply_join_request();
+    protobuf_copy_message(*applied->mutable_team_key(), make_team_key(kExpiredTeamId));
+    protobuf_copy_message(*applied->mutable_requester(), self_key());
+    *applied->mutable_expired_timepoint() =
+        protobuf_from_system_clock(std::chrono::system_clock::now() - std::chrono::seconds{1});
+    CASE_EXPECT_TRUE(send_member_event(action));
+    pump_rounds(test, 4);
+  }
+  CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_join_request(make_team_key(kExpiredTeamId)));
+
+  // reject_invitation -> 待处理邀请出列
+  {
+    atfw::team::DTeamMemberAction action;
+    auto* rejected = action.mutable_reject_invitation();
+    protobuf_copy_message(*rejected->mutable_team_key(), make_team_key(kInviteTeamId));
+    protobuf_copy_message(*rejected->mutable_invitee(), self_key());
+    CASE_EXPECT_TRUE(send_member_event(action));
+    pump_rounds(test, 4);
+  }
+  CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_invitation(make_team_key(kInviteTeamId)));
+
+  // reject_join_request -> 待处理加入请求出列
+  {
+    atfw::team::DTeamMemberAction action;
+    auto* rejected = action.mutable_reject_join_request();
+    protobuf_copy_message(*rejected->mutable_team_key(), make_team_key(kJoinTeamId));
+    protobuf_copy_message(*rejected->mutable_requester(), self_key());
+    CASE_EXPECT_TRUE(send_member_event(action));
+    pump_rounds(test, 4);
+  }
+  CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_join_request(make_team_key(kJoinTeamId)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
