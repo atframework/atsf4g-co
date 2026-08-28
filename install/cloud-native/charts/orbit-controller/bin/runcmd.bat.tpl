@@ -1,1 +1,0 @@
-{{ include "atapp.runcmd.bat" . }}

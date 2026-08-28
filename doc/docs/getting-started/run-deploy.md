@@ -11,12 +11,12 @@ title: 运行与部署
 
 ```bash
 cd <BUILD_DIR>/publish/tools/script
-bash generate_config.sh   # Windows 用 generate_config.bat
+bash generate_config.sh   # Windows 用 generate_config.ps1
 ```
 
 `generate_config.sh` 内部调用 `atdtool template` 渲染 `cloud-native/charts`（叠加
 `values/default,dev,personal` 三个 profile），在 publish 根目录为每个服务实例生成
-`<server>/cfg/*_<bus_id>.yaml` 配置与 `<server>/bin/start_<bus_id>.(sh|bat)` 启动脚本。
+`<server>/cfg/*_<bus_id>.yaml` 配置与 `<server>/bin/start_<bus_id>.(sh|ps1)` 启动脚本。
 `tools/script/` 下还有 `start_local_test_env` / `stop_local_test_env`、`update_dependency` 等辅助脚本。
 
 ## atdtool 部署（install/ 模板）
@@ -31,8 +31,8 @@ atdtool template install/cloud-native/charts/<server> \
   --set global.world_id=1
 ```
 
-渲染结果为每个实例生成 `<server>/cfg/*_<bus_id>.yaml` 配置与 `<server>/bin/start_<bus_id>.(sh|bat)`
-脚本。模板约定：`.yaml.tpl` → YAML、`.sh.tpl` → shell、`.bat.tpl` → Windows 批处理，裸 `.tpl` 为共享
+渲染结果为每个实例生成 `<server>/cfg/*_<bus_id>.yaml` 配置与 `<server>/bin/start_<bus_id>.(sh|ps1)`
+脚本。模板约定：`.yaml.tpl` → YAML、`.sh.tpl` → shell、`.ps1.tpl` → PowerShell 脚本，裸 `.tpl` 为共享
 partial（如 `libapp` chart 的 `_atapp.*.tpl`）。
 
 ### 部署形态
@@ -41,7 +41,7 @@ partial（如 `libapp` chart 的 `_atapp.*.tpl`）。
 | --- | --- |
 | Kubernetes | Helm chart（statefulset / hpa / Gateway API httproute / vector 日志），`install/cloud-native/charts/` |
 | Docker 镜像 | `install/cloud-native/images/server/`（Dockerfile + entrypoint.sh） |
-| 裸机/本地 | `values/default/non_cloud_native/deploy.yaml` 定义进程布局（world_id/zone_id/proc_desc）+ sh/bat 脚本 |
+| 裸机/本地 | `values/default/non_cloud_native/deploy.yaml` 定义进程布局（world_id/zone_id/proc_desc）+ sh/ps1 脚本 |
 
 四套 values profile（`default` / `dev` / `enable_direct_connection` / `personal`）可叠加覆盖：
 

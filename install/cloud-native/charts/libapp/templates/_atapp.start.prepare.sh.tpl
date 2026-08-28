@@ -14,7 +14,12 @@ source "$PROJECT_INSTALL_DIR/tools/script/common/common.sh"
 if [[ -e "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" ]] && [[ -e "$SCRIPT_DIR/package-version.txt" ]]; then
   CURRENT_PREPARE_PACKAGE_SHOR_SHA="$(cat "$SCRIPT_DIR/package-version.txt" | grep vcs_short_sha | awk '{print $NF}')"
   find "$PROJECT_INSTALL_DIR/tools/script" -mindepth 1 -maxdepth 1 -name "prepare-package.*.lock" | grep -v -F "$CURRENT_PREPARE_PACKAGE_SHOR_SHA" | xargs -r rm -f
-  flock -x -w 20 "$PROJECT_INSTALL_DIR/tools/script/prepare-package.$CURRENT_PREPARE_PACKAGE_SHOR_SHA.lock" bash "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" "$PROJECT_INSTALL_DIR" "$CURRENT_PREPARE_PACKAGE_SHOR_SHA"
+  if command -v flock >/dev/null 2>&1; then
+    flock -x -w 20 "$PROJECT_INSTALL_DIR/tools/script/prepare-package.$CURRENT_PREPARE_PACKAGE_SHOR_SHA.lock" bash "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" "$PROJECT_INSTALL_DIR" "$CURRENT_PREPARE_PACKAGE_SHOR_SHA"
+  else
+    # Git Bash on Windows has no flock; run without the advisory lock.
+    bash "$PROJECT_INSTALL_DIR/tools/script/prepare-dependency-dll.sh" "$PROJECT_INSTALL_DIR" "$CURRENT_PREPARE_PACKAGE_SHOR_SHA"
+  fi
 fi
 
 SERVER_PID_FILE_NAME="{{ .Values.type_name }}_{{ $bus_addr }}.pid"
@@ -33,10 +38,12 @@ if [[ $PROC_PID -gt 0 ]]  && [[ 0 -eq $(CheckPidAndExePath "$SCRIPT_DIR/{{ .Valu
 fi
 
 exec 256<> "${SERVER_PID_FILE_NAME}.start.lock"
-flock -x -w 30 256
+if command -v flock >/dev/null 2>&1; then
+  flock -x -w 30 256
 
-if [[ $? -ne 0 ]]; then
-  ErrorMsg "[$(date -u '+%F %T')]: lock ${SERVER_PID_FILE_NAME}.start.lock failed.";
+  if [[ $? -ne 0 ]]; then
+    ErrorMsg "[$(date -u '+%F %T')]: lock ${SERVER_PID_FILE_NAME}.start.lock failed.";
+  fi
 fi
 
 if [[ -e "$SERVER_PID_FILE_NAME" ]]; then

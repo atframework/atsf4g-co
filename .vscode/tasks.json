@@ -9,21 +9,43 @@
       "options": {
         "cwd": "${workspaceFolder}/build/publish/tools/script"
       },
+      "linux": {
+        "command": "bash",
+        "args": ["./update_dependency.sh"]
+      },
       "windows": {
-        "command": "./update_dependency.bat"
+        "command": "pwsh",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "./update_dependency.ps1"
+        ]
       },
       "group": "none"
     },
     {
       "label": "Deploy-GenerateServiceConfig",
       "type": "shell",
-      "command": "generate_config.sh",
+      "command": "./generate_config.sh",
       "args": [],
       "options": {
         "cwd": "${workspaceFolder}/build/publish/tools/script"
       },
+      "linux": {
+        "command": "bash",
+        "args": ["./generate_config.sh"]
+      },
       "windows": {
-        "command": "./generate_config.bat"
+        "command": "pwsh",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "./generate_config.ps1"
+        ]
       },
       "group": "none"
     },
@@ -69,26 +91,48 @@
     {
       "label": "Start All",
       "type": "shell",
-      "command": "start_all.bat",
+      "command": "./start_all.sh",
       "args": [],
       "options": {
         "cwd": "${workspaceFolder}/build/publish"
       },
+      "linux": {
+        "command": "bash",
+        "args": ["./start_all.sh"]
+      },
       "windows": {
-        "command": "./start_all.bat"
+        "command": "pwsh",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "./start_all.ps1"
+        ]
       },
       "group": "none"
     },
     {
       "label": "Stop All",
       "type": "shell",
-      "command": "stop_all.bat",
+      "command": "./stop_all.sh",
       "args": [],
       "options": {
         "cwd": "${workspaceFolder}/build/publish"
       },
+      "linux": {
+        "command": "bash",
+        "args": ["./stop_all.sh"]
+      },
       "windows": {
-        "command": "./stop_all.bat"
+        "command": "pwsh",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "./stop_all.ps1"
+        ]
       },
       "group": "none"
     },
@@ -100,8 +144,19 @@
       "options": {
         "cwd": "${workspaceFolder}/build/publish"
       },
+      "linux": {
+        "command": "bash",
+        "args": ["./kill_all.sh"]
+      },
       "windows": {
-        "command": "./kill_all.bat"
+        "command": "pwsh",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "./kill_all.ps1"
+        ]
       },
       "group": "none"
     },

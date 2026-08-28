@@ -8,7 +8,7 @@ Use `helm` from `PATH` and `atdtool` from `<PUBLISH_DIR>/tools/atdtool/atdtool` 
 ## Prepare dependencies and values
 
 - Update chart dependencies with `<PUBLISH_DIR>/tools/script/update_dependency.sh` on Unix-like systems or
-  `update_dependency.bat` on Windows.
+  `update_dependency.ps1` on Windows.
 - Default values are under `<PUBLISH_DIR>/cloud-native/values/default/`: `global.yaml`, `modules/*.yaml`, and
   `non_cloud_native/deploy.yaml` are common inputs.
 - Multiple `--values`/`-p` inputs layer in order; later values win. Preserve explicitly supplied paths and `--set`
@@ -16,7 +16,7 @@ Use `helm` from `PATH` and `atdtool` from `<PUBLISH_DIR>/tools/atdtool/atdtool` 
 
 ## Render
 
-Prefer `<PUBLISH_DIR>/tools/script/generate_config.sh` or `generate_config.bat`. For focused diagnostics, the equivalent
+Prefer `<PUBLISH_DIR>/tools/script/generate_config.sh` or `generate_config.ps1`. For focused diagnostics, the equivalent
 shape is:
 
 ```bash

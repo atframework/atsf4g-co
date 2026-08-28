@@ -199,7 +199,7 @@ Diagnostics:
     3. atgateway: gateway server, used to manage client connections
 + doc: documents
 + install: deployment resources and Go-template configure templates (`*.yaml.tpl` -> YAML, `*.sh.tpl` -> shell,
-  `*.bat.tpl` -> Windows batch)
+  `*.ps1.tpl` -> PowerShell script)
 + project: project script, used to detect build environment and generate build scripts
 + sample: sample codes to show usage of some libraries
 + src: all real projects

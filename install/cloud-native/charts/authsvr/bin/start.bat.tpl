@@ -1,1 +1,0 @@
-{{ include "atapp.start.bat" . }}

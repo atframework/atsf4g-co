@@ -25,8 +25,8 @@ diagnostics, temporary merged values, and script/log output must stay under
 - The renderer provides project/Helm-style helper functions used by existing templates, such as `include`, `required`,
   `toYaml`, `nindent`, and `dig`; verify function behavior from generator code or nearby templates before changing it.
 - When a second suffix exists before `.tpl`, it is the rendered target syntax: `.yaml.tpl` -> YAML, `.sh.tpl` -> POSIX
-  shell, `.bat.tpl` -> Windows batch. Analyze both layers: template logic inside `{{ ... }}` and target-language text
-  outside actions or in rendered output.
+  shell, `.ps1.tpl` -> PowerShell script. Analyze both layers: template logic inside `{{ ... }}` and target-language
+  text outside actions or in rendered output.
 - Bare `.tpl` files such as `_helpers.tpl` and `_util.tpl` are usually helper/partial templates and may not render as
   standalone files; inspect their `define`, `template`, and `include` callers before editing.
 - Do not run target-language formatters or linters directly on `*.tpl` sources. Render representative output with
@@ -40,6 +40,6 @@ Read [rendering and local-run workflow](references/rendering-workflow.md) only w
 choosing values layers, rendering representative output, inspecting merged values, or running a generated local
 instance.
 
-After a template edit, render representative values before validating the target YAML, shell, or batch syntax. Review
-the rendered diff as well as the template diff; a target-language linter passing on unrendered Go-template source is not
-evidence.
+After a template edit, render representative values before validating the target YAML, shell, or PowerShell syntax.
+Review the rendered diff as well as the template diff; a target-language linter passing on unrendered Go-template
+source is not evidence.

@@ -11,12 +11,12 @@ deployment helper scripts (`publish/tools/script/`). To generate configs and per
 
 ```bash
 cd <BUILD_DIR>/publish/tools/script
-bash generate_config.sh   # on Windows use generate_config.bat
+bash generate_config.sh   # on Windows use generate_config.ps1
 ```
 
 `generate_config.sh` internally runs `atdtool template` over `cloud-native/charts` (layering the
 `values/default,dev,personal` profiles), producing `<server>/cfg/*_<bus_id>.yaml` configs and
-`<server>/bin/start_<bus_id>.(sh|bat)` startup scripts for each instance under the publish root.
+`<server>/bin/start_<bus_id>.(sh|ps1)` startup scripts for each instance under the publish root.
 `tools/script/` also ships `start_local_test_env` / `stop_local_test_env`, `update_dependency`, and other helpers.
 
 ## atdtool Deployment (install/ templates)
@@ -32,8 +32,8 @@ atdtool template install/cloud-native/charts/<server> \
 ```
 
 The rendered output generates, for each instance, a `<server>/cfg/*_<bus_id>.yaml` config and a
-`<server>/bin/start_<bus_id>.(sh|bat)` script. Template convention: `.yaml.tpl` → YAML, `.sh.tpl` → shell,
-`.bat.tpl` → Windows batch; bare `.tpl` files are shared partials (such as the `_atapp.*.tpl` files of the
+`<server>/bin/start_<bus_id>.(sh|ps1)` script. Template convention: `.yaml.tpl` → YAML, `.sh.tpl` → shell,
+`.ps1.tpl` → PowerShell script; bare `.tpl` files are shared partials (such as the `_atapp.*.tpl` files of the
 `libapp` chart).
 
 ### Deployment Forms
@@ -42,7 +42,7 @@ The rendered output generates, for each instance, a `<server>/cfg/*_<bus_id>.yam
 | --- | --- |
 | Kubernetes | Helm chart (statefulset / hpa / Gateway API httproute / vector logging), `install/cloud-native/charts/` |
 | Docker image | `install/cloud-native/images/server/` (Dockerfile + entrypoint.sh) |
-| Bare metal / local | `values/default/non_cloud_native/deploy.yaml` defines the process layout (world_id/zone_id/proc_desc) + sh/bat scripts |
+| Bare metal / local | `values/default/non_cloud_native/deploy.yaml` defines the process layout (world_id/zone_id/proc_desc) + sh/ps1 scripts |
 
 Four values profiles (`default` / `dev` / `enable_direct_connection` / `personal`) can be stacked and overridden:
 

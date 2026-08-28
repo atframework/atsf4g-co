@@ -172,15 +172,11 @@ function WaitForMS() {
     return 0
   fi
 
-  which python3 >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python3 -c "import time; time.sleep($WAITTIME_MS / 1000.0)"
-    return 0
-  fi
-
-  which python >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python -c "import time; time.sleep($WAITTIME_MS / 1000.0)"
+  # Prefer GNU sleep with fractional seconds. Do not rely on Python here so that
+  # environments without a real Python (e.g. Windows Git Bash with the Microsoft
+  # Store python alias stub) keep working.
+  SLEEP_SEC="$(awk -v ms="$WAITTIME_MS" 'BEGIN { printf "%.3f", ms / 1000.0 }' 2>/dev/null)"
+  if [[ "x$SLEEP_SEC" != "x" ]] && sleep "$SLEEP_SEC" 2>/dev/null; then
     return 0
   fi
 
@@ -199,88 +195,28 @@ function Message() {
 }
 
 function AlertMsg() {
-  which python3 >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python3 "$COMMON_LIB_DIR/print_color.py" -c green "{0}" "Alert: $*"
-    echo ""
-    return 0
-  fi
-
-  which python >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python "$COMMON_LIB_DIR/print_color.py" -c green "{0}" "Alert: $*"
-    echo ""
-    return 0
-  fi
-  echo "Alert: $*"
+  echo -e "\\033[32mAlert: $*\\033[39;49;0m"
+  echo ""
 }
 
 function NoticeMsg() {
-  which python3 >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python3 "$COMMON_LIB_DIR/print_color.py" -c yellow -B "{0}" "Notice: $*"
-    echo ""
-    return 0
-  fi
-
-  which python >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python "$COMMON_LIB_DIR/print_color.py" -c yellow -B "{0}" "Notice: $*"
-    echo ""
-    return 0
-  fi
-  echo "Notice: $*"
+  echo -e "\\033[1;33mNotice: $*\\033[39;49;0m"
+  echo ""
 }
 
 function ErrorMsg() {
-  which python3 >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python3 "$COMMON_LIB_DIR/print_color.py" -c red -B "{0}" "Error: $*"
-    echo ""
-    return 0
-  fi
-
-  which python >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python "$COMMON_LIB_DIR/print_color.py" -c red -B "{0}" "Error: $*"
-    echo ""
-    return 0
-  fi
-  echo "Error: $*"
+  echo -e "\\033[1;31mError: $*\\033[39;49;0m"
+  echo ""
 }
 
 function WarningMsg() {
-  which python3 >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python3 "$COMMON_LIB_DIR/print_color.py" -c magenta -B "{0}" "Warning: $*"
-    echo ""
-    return 0
-  fi
-
-  which python >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python "$COMMON_LIB_DIR/print_color.py" -c magenta -B "{0}" "Warning: $*"
-    echo ""
-    return 0
-  fi
-  echo "Warning: $*"
+  echo -e "\\033[1;35mWarning: $*\\033[39;49;0m"
+  echo ""
 }
 
 function StatusMsg() {
-  which python3 >/dev/null 2>&1
-  if [[ 0 -eq $? ]]; then
-    python3 "$COMMON_LIB_DIR/print_color.py" -c cyan "{0}" "Status: $*"
-    echo ""
-    return 0
-  fi
-
-  which python >/dev/null 2>&1
-  if [ 0 -eq $? ]; then
-    python "$COMMON_LIB_DIR/print_color.py" -c cyan "{0}" "Status: $*"
-    echo ""
-    return 0
-  fi
-  echo "Status: $*"
+  echo -e "\\033[36mStatus: $*\\033[39;49;0m"
+  echo ""
 }
 
 function CheckProcessRunning() {

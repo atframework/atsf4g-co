@@ -1,0 +1,158 @@
+<#
+.SYNOPSIS
+    Stop all service batches configured in start_all.conf.
+.DESCRIPTION
+    Each non-empty config line is one batch; batches stop in reverse order and entries
+    in the same line stop in parallel. The script fails fast when any entry fails.
+.PARAMETER Help
+    Print help message and exit.
+.PARAMETER DeployBaseDirectory
+    Deploy base directory. Defaults to the directory containing this script.
+.PARAMETER ConfigFile
+    Startup batches configuration file. Defaults to <deploy base directory>\start_all.conf.
+.EXAMPLE
+    .\stop_all.ps1
+    pwsh -File .\stop_all.ps1 -d <deploy_base_dir> -c <config_file>
+    Get-Help .\stop_all.ps1 -detailed
+    Get-Help .\stop_all.ps1 -full
+#>
+
+[CmdletBinding()]
+param (
+    [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+    [switch]$Help,
+
+    [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+    [Alias('d')]
+    [string]$DeployBaseDirectory = (Split-Path -Parent $PSCommandPath),
+
+    [Parameter(ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+    [Alias('c')]
+    [string]$ConfigFile = ''
+)
+
+$ErrorActionPreference = 'Stop'
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+
+function Show-Help {
+    Write-Host ('usage: {0} [-d deploy_base_dir] [-c config_file]' -f (Split-Path -Leaf $PSCommandPath))
+    Write-Host 'Each non-empty config line is one batch; batches stop in reverse order and entries in the same line stop in parallel.'
+}
+
+function Get-ScriptHostExecutable {
+    $PwshCommand = Get-Command 'pwsh' -ErrorAction SilentlyContinue
+    if ($null -ne $PwshCommand) {
+        return $PwshCommand.Source
+    }
+    return (Get-Command 'powershell' -ErrorAction Stop).Source
+}
+
+function Get-ConfiguredBatches {
+    param ([string]$Path)
+
+    $Batches = @()
+    foreach ($Line in (Get-Content -LiteralPath $Path)) {
+        # Drop comments after '#' and treat ',' as separators, like the shell version.
+        $Normalized = (($Line -split '#', 2)[0] -replace ',', ' ').Trim()
+        if ([string]::IsNullOrWhiteSpace($Normalized)) {
+            continue
+        }
+        $Batches += , @($Normalized -split '\s+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    }
+    return , $Batches
+}
+
+function Invoke-ScriptsInParallel {
+    param (
+        [string[]]$ScriptPaths,
+        [string]$ActionLabel
+    )
+
+    if ($ScriptPaths.Count -eq 0) {
+        Write-Host '[ERROR] Batch does not contain any script.'
+        return $false
+    }
+
+    $ScriptHostExecutable = Get-ScriptHostExecutable
+    $Jobs = @()
+    foreach ($ScriptPath in $ScriptPaths) {
+        Write-Host ('[INFO] {0} {1}' -f $ActionLabel, $ScriptPath)
+        $Process = Start-Process -FilePath $ScriptHostExecutable `
+            -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ScriptPath) `
+            -WorkingDirectory (Split-Path -Parent $ScriptPath) -PassThru -NoNewWindow
+        if ($null -eq $Process) {
+            Write-Host ('[ERROR] Failed to start {0}.' -f $ScriptPath)
+            return $false
+        }
+        $Jobs += [pscustomobject]@{ Script = $ScriptPath; Process = $Process }
+    }
+
+    $Failed = $false
+    foreach ($Job in $Jobs) {
+        $Job.Process.WaitForExit()
+        if ($Job.Process.ExitCode -ne 0) {
+            Write-Host ('[ERROR] Failed: {0} (exit {1})' -f $Job.Script, $Job.Process.ExitCode)
+            $Failed = $true
+        }
+        else {
+            Write-Host ('[INFO] Completed: {0}' -f $Job.Script)
+        }
+    }
+    return -not $Failed
+}
+
+if ($Help) {
+    Show-Help
+    exit 0
+}
+
+if (-not (Test-Path -LiteralPath $DeployBaseDirectory -PathType Container)) {
+    Write-Host ('[ERROR] Deploy base directory does not exist: "{0}"' -f $DeployBaseDirectory)
+    exit 1
+}
+$DeployBaseDirectory = (Resolve-Path -LiteralPath $DeployBaseDirectory).ProviderPath
+
+if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
+    $ConfigFile = Join-Path $DeployBaseDirectory 'start_all.conf'
+}
+if (-not (Test-Path -LiteralPath $ConfigFile -PathType Leaf)) {
+    Write-Host ('[ERROR] Config file does not exist: "{0}"' -f $ConfigFile)
+    exit 1
+}
+
+$ConfiguredBatches = Get-ConfiguredBatches -Path $ConfigFile
+if ($ConfiguredBatches.Count -eq 0) {
+    Write-Host ('[ERROR] No stop batches configured in "{0}".' -f $ConfigFile)
+    exit 1
+}
+
+$BatchIndex = $ConfiguredBatches.Count
+for ($Index = $ConfiguredBatches.Count - 1; $Index -ge 0; --$Index) {
+    $Batch = $ConfiguredBatches[$Index]
+
+    $ScriptPaths = @()
+    foreach ($ServiceName in $Batch) {
+        $BinDir = Join-Path (Join-Path $DeployBaseDirectory $ServiceName) 'bin'
+        if (-not (Test-Path -LiteralPath $BinDir -PathType Container)) {
+            Write-Host ('[ERROR] Missing bin directory: "{0}"' -f $BinDir)
+            exit 1
+        }
+
+        $FoundScripts = @(Get-ChildItem -LiteralPath $BinDir -File -Filter 'stop_*.ps1' |
+            Sort-Object -Property Name)
+        if ($FoundScripts.Count -eq 0) {
+            Write-Host ('[ERROR] No stop_*.ps1 found in "{0}"' -f $BinDir)
+            exit 1
+        }
+        $ScriptPaths += ($FoundScripts | ForEach-Object { $_.FullName })
+    }
+
+    Write-Host ('[INFO] Batch {0}: {1}' -f $BatchIndex, ($Batch -join ' '))
+    --$BatchIndex
+    if (-not (Invoke-ScriptsInParallel -ScriptPaths $ScriptPaths -ActionLabel 'Stopping')) {
+        exit 1
+    }
+}
+
+Write-Host '[INFO] All batches completed successfully.'
+exit 0

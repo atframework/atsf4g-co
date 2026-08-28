@@ -1,1 +1,0 @@
-otelcol-contrib.exe --config=../cfg/config.yaml
