@@ -46,6 +46,9 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 玩家持有有效内部 matching_id 且房间处于搜索、确认或创建战斗阶段。
   bool is_in_matching() const;
 
+  // 是否在流程中
+  bool is_in_orbit_or_matching() const;
+
   // CS 匹配操作。操作者身份和 lobbysvr 订阅路由只由服务端填写。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_matching(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingStartReq& request,
