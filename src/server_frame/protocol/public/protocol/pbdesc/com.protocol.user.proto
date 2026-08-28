@@ -83,9 +83,10 @@ message CSUserGetInfoReq {
 // 用户数据返回
 message SCUserGetInfoRsp {
   DUserInformation user_information = 1;    // 用户数据
-  DUserOptions user_options = 2;            // 用户自定义选项
-  DOrbitRoomUserData user_orbit_room = 3;   // 用户orbit房间数据
-  repeated DUserTeamSnapshot user_team = 4; // 用户team数据
+  DUserOptions user_private_options = 2;            // 用户自定义选项
+  DUserSharedOptions user_shared_options = 3;
+  DOrbitRoomUserData user_orbit_room = 4;   // 用户orbit房间数据
+  repeated DUserTeamSnapshot user_team = 5; // 用户team数据
 
   // 业务数据开始
 }

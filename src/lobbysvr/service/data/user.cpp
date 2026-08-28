@@ -37,6 +37,7 @@
 #include <rpc/rpc_common_types.h>
 #include <rpc/rpc_utils.h>
 
+#include <cassert>
 #include <memory>
 #include <string>
 #include <utility>
@@ -50,6 +51,30 @@ get_info_handle_list() {
                                void (*)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)>>
       ret;
   return ret;
+}
+
+static bool build_user_cache_get_info_handles() {
+  user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+                                 PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserInformationFieldNumber),
+                             [](rpc::context & /*ctx*/, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &rsp, user &user_inst) {
+                               protobuf_copy_message(*rsp.mutable_user_information()->mutable_profile(),
+                                                     user_inst.get_account_info().profile());
+                               rsp.mutable_user_information()->set_user_level(user_inst.get_user_data().user_level());
+                               auto *user_statistics = rsp.mutable_user_information()->mutable_user_statistics();
+                               user_statistics->set_last_login_time(user_inst.get_login_info().business_login_time());
+                               user_statistics->set_register_time(user_inst.get_login_info().business_register_time());
+                             });
+
+  user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+                                 PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserOptionsFieldNumber),
+                             [](rpc::context & /*ctx*/, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &rsp, user &user_inst) {
+                               protobuf_copy_message(*rsp.mutable_user_private_options(),
+                                                     user_inst.get_user_option_private_data().custom_options());
+                               protobuf_copy_message(*rsp.mutable_user_shared_options(),
+                                                     user_inst.get_user_option_public_data().custom_options());
+                             });
+
+  return true;
 }
 }  // namespace
 
@@ -102,6 +127,8 @@ user::user(fake_constructor &ctor)
   cache_data_.refresh_feature_limit_second = 0;
   cache_data_.refresh_feature_limit_minute = 0;
   cache_data_.refresh_feature_limit_hour = 0;
+
+  ATFW_EXPLICIT_UNUSED_ATTR static auto _init_get_info_handle = build_user_cache_get_info_handles();
 }
 
 user::~user() {}
@@ -661,27 +688,32 @@ bool user::init_get_info_handle(const ::google::protobuf::FieldDescriptor *fds,
                                 void (*dump_fn)(rpc::context &, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &, user &)) {
   if (fds == nullptr || dump_fn == nullptr) {
     FWLOGERROR("init_get_info_handle failed, fds or dump_fn is nullptr");
+    assert(false);
     return false;
   }
 
   if (fds->containing_type() != PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()) {
     FWLOGERROR("init_get_info_handle failed, fds {} is not of type CSUserGetInfoReq", fds->full_name());
+    assert(false);
     return false;
   }
 
   if (fds->cpp_type() != ::google::protobuf::FieldDescriptor::CPPTYPE_BOOL) {
     FWLOGERROR("init_get_info_handle failed, fds {} is not of cpp_type BOOL", fds->full_name());
+    assert(false);
     return false;
   }
 
   if (fds->is_repeated()) {
     FWLOGERROR("init_get_info_handle failed, fds {} is repeated, expected non-repeated BOOL", fds->full_name());
+    assert(false);
     return false;
   }
 
   for (const auto &kv : get_info_handle_list()) {
     if (kv.first == fds) {
       FWLOGERROR("init_get_info_handle failed, {} already exists", fds->full_name());
+      assert(false);
       return false;
     }
   }
