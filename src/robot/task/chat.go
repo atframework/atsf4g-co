@@ -25,6 +25,31 @@ func ChatGetAllChannelTask(task *user_data.TaskActionUser) ([]*public_protocol_p
 	return rsp.GetChannelMetadata(), nil
 }
 
+// ChatAutoSubscribeTask 登入成功后的自动聊天流程：
+// 先拉取所有可用频道，再逐个频道发起一次快照拉取，触发服务端后续的订阅推送(SCChatChannelSync)。
+func ChatAutoSubscribeTask(task *user_data.TaskActionUser) error {
+	metas, err := ChatGetAllChannelTask(task)
+	if err != nil {
+		return err
+	}
+	if len(metas) == 0 {
+		task.User.Log("[chat] no available channel")
+		return nil
+	}
+	for _, meta := range metas {
+		key := meta.GetChannelKey()
+		channelId := key.GetChannelId()
+		if channelId == "" {
+			continue
+		}
+		task.User.Log("[chat] subscribe channel_id=%s, type=%d", channelId, key.GetChannelType())
+		if err := ChatGetChannelSnapshotTask(task, channelId); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ChatGetChannelSnapshotTask 拉取指定频道的快照。首次拉取后服务端才会开始向该客户端推送频道通知。
 func ChatGetChannelSnapshotTask(task *user_data.TaskActionUser, channelId string) error {
 	errCode, rspHolder, rpcErr := protocol.ChatGetChannelSnapshotRpc(task, task.User, channelId)

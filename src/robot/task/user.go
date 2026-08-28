@@ -64,6 +64,13 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 
 	// 创建Ping流程
 	user.InitHeartbeatFunc(PingTask)
+
+	// 登入成功后的自动聊天流程：注册频道推送处理器，拉取所有可用频道并逐个拉取一次快照以触发订阅推送。
+	// 聊天流程失败不回滚已成功的登入，仅记录日志。
+	protocol.RegisterChatChannelSyncPushHandler(user)
+	if subscribeErr := ChatAutoSubscribeTask(task); subscribeErr != nil {
+		task.Log("[chat] auto subscribe failed: %v", subscribeErr)
+	}
 	return
 }
 

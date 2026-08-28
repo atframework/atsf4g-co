@@ -26,6 +26,7 @@ func LoginCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, 
 	}
 	if user.IsLogin() {
 		protocol.RegisterMatchingLogSyncHandler(user)
+		protocol.RegisterChatChannelSyncPushHandler(user)
 		return nil
 	}
 	err := action.AwaitTask(user.RunTaskDefaultTimeout(task.LoginTask, "Login Task"))
