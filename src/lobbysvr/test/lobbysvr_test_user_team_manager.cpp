@@ -1073,7 +1073,7 @@ CASE_TEST(lobbysvr_user_team, member_events_manage_pending_admissions) {
     return;
   }
 
-  constexpr uint64_t kUserId = 31001;
+  uint64_t kUserId = 31001;
   constexpr int64_t kInviteTeamId = 8101;
   constexpr int64_t kJoinTeamId = 8102;
   constexpr int64_t kExpiredTeamId = 8103;
