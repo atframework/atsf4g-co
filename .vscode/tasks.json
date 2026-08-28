@@ -76,19 +76,6 @@
       "group": "none"
     },
     {
-      "label": "Start Otel",
-      "type": "shell",
-      "command": "./otelcol-contrib.exe",
-      "args": ["--config=../cfg/config.yaml"],
-      "options": {
-        "cwd": "${workspaceFolder}/build/publish/otelcol/bin"
-      },
-      "windows": {
-        "command": "./otelcol-contrib.exe"
-      },
-      "group": "none"
-    },
-    {
       "label": "Start All",
       "type": "shell",
       "command": "./start_all.sh",

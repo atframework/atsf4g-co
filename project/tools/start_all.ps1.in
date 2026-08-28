@@ -4,6 +4,7 @@
 .DESCRIPTION
     Each non-empty config line is one batch; entries in the same line start in parallel.
     Batches run in configured order, and the script fails fast when any entry fails.
+    The OpenTelemetry collector (otelcol/bin) is started first when present.
 .PARAMETER Help
     Print help message and exit.
 .PARAMETER DeployBaseDirectory
@@ -101,6 +102,39 @@ function Invoke-ScriptsInParallel {
     return -not $Failed
 }
 
+function Start-OtelCollector {
+    param ([string]$DeployBaseDirectory)
+
+    $OtelBinDir = Join-Path $DeployBaseDirectory 'otelcol\bin'
+    $OtelExecutable = Join-Path $OtelBinDir 'otelcol-contrib.exe'
+    if (-not (Test-Path -LiteralPath $OtelExecutable -PathType Leaf)) {
+        Write-Host '[INFO] Otel collector not found, skipped.'
+        return
+    }
+
+    if ($null -ne (Get-Process -Name 'otelcol-contrib' -ErrorAction SilentlyContinue)) {
+        Write-Host '[INFO] Otel collector already started, skipped.'
+        return
+    }
+
+    $OtelLogDir = Join-Path $DeployBaseDirectory 'otelcol\log'
+    if (-not (Test-Path -LiteralPath $OtelLogDir -PathType Container)) {
+        New-Item -ItemType Directory -Path $OtelLogDir -Force | Out-Null
+    }
+
+    Write-Host ('[INFO] Starting otel collector: {0}' -f $OtelExecutable)
+    $Process = Start-Process -FilePath $OtelExecutable -ArgumentList @('--config=..\cfg\config.yaml') `
+        -WorkingDirectory $OtelBinDir -WindowStyle Hidden `
+        -RedirectStandardOutput (Join-Path $OtelLogDir 'otelcol.log') `
+        -RedirectStandardError (Join-Path $OtelLogDir 'otelcol.err.log') -PassThru
+    if ($null -eq $Process) {
+        Write-Host '[WARNING] Failed to start otel collector.'
+    }
+    else {
+        Write-Host ('[INFO] Otel collector started (pid {0}).' -f $Process.Id)
+    }
+}
+
 if ($Help) {
     Show-Help
     exit 0
@@ -111,6 +145,8 @@ if (-not (Test-Path -LiteralPath $DeployBaseDirectory -PathType Container)) {
     exit 1
 }
 $DeployBaseDirectory = (Resolve-Path -LiteralPath $DeployBaseDirectory).ProviderPath
+
+Start-OtelCollector -DeployBaseDirectory $DeployBaseDirectory
 
 if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
     $ConfigFile = Join-Path $DeployBaseDirectory 'start_all.conf'

@@ -80,26 +80,4 @@ $script:PwshExecutable = Get-PwshExecutable
 Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'etcd/setup-etcd.ps1') -Command 'start'
 Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'redis/redis.ps1') -Command 'start'
 
-# $env:OS is 'Windows_NT' on every Windows host (5.1 and 7+); the $IsWindows automatic
-# variable only exists on PowerShell 7.
-$IsWindowsHost = ($env:OS -eq 'Windows_NT')
-
-$OtelBinDir = Join-Path $PSScriptRoot '../../otelcol/bin'
-$OtelExecutableName = 'otelcol-contrib'
-if ($IsWindowsHost) {
-    $OtelExecutableName = 'otelcol-contrib.exe'
-}
-$OtelExecutable = Join-Path $OtelBinDir $OtelExecutableName
-if (-not (Test-Path -LiteralPath $OtelExecutable -PathType Leaf)) {
-    Write-Host ('[ERROR] Otel collector executable does not exist: "{0}"' -f $OtelExecutableName)
-    exit 1
-}
-
-$LogDir = Join-Path $OtelBinDir '../log'
-if (-not (Test-Path -LiteralPath $LogDir -PathType Container)) {
-    New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
-}
-
-Set-Location -LiteralPath $OtelBinDir
-& $OtelExecutable '--config=../cfg/config.yaml'
 exit $LASTEXITCODE

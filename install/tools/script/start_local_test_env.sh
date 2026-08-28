@@ -36,9 +36,3 @@ if [ ! -f "../cfg/config.yaml" ]; then
   echo "        Run install/tools/script/generate_config.sh first." >&2
   exit 1
 fi
-
-mkdir -p ../log
-
-# Run in the foreground like the Windows version; stop it with Ctrl+C or by running
-# stop_local_test_env.sh. exec makes the collector receive signals directly.
-exec ./otelcol-contrib --config=../cfg/config.yaml

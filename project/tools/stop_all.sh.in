@@ -15,6 +15,35 @@ trim_line() {
   printf '%s' "$line"
 }
 
+stop_otel_collector() {
+  local otel_bin_dir="${DEPLOY_BASE_DIR}/otelcol/bin"
+  if [[ ! -d "$otel_bin_dir" ]]; then
+    echo "[INFO] Otel collector not found, skipped."
+    return 0
+  fi
+
+  if ! pgrep -x otelcol-contrib >/dev/null 2>&1; then
+    echo "[INFO] Otel collector not running, skipped."
+    return 0
+  fi
+
+  echo "[INFO] Stopping otel collector."
+  pkill -x otelcol-contrib 2>/dev/null
+
+  local wait_count=0
+  while pgrep -x otelcol-contrib >/dev/null 2>&1; do
+    if [[ $wait_count -ge 50 ]]; then
+      echo "[WARNING] Otel collector still running after waiting." >&2
+      return 1
+    fi
+    sleep 0.1
+    wait_count=$((wait_count + 1))
+  done
+
+  echo "[INFO] Otel collector stopped."
+  return 0
+}
+
 run_batch() {
   local batch_index="$1"
   local group_line="$2"
@@ -146,5 +175,7 @@ for ((batch_index=configured_batch_count; batch_index>=1; --batch_index)); do
     exit 1
   fi
 done
+
+stop_otel_collector
 
 echo "[INFO] All batches completed successfully."

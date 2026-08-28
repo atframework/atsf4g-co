@@ -4,6 +4,7 @@
 .DESCRIPTION
     Each non-empty config line is one batch; batches stop in reverse order and entries
     in the same line stop in parallel. The script fails fast when any entry fails.
+    The OpenTelemetry collector (otelcol/bin) is stopped last when running.
 .PARAMETER Help
     Print help message and exit.
 .PARAMETER DeployBaseDirectory
@@ -101,6 +102,28 @@ function Invoke-ScriptsInParallel {
     return -not $Failed
 }
 
+function Stop-OtelCollector {
+    param ([string]$DeployBaseDirectory)
+
+    $OtelBinDir = Join-Path $DeployBaseDirectory 'otelcol\bin'
+    if (-not (Test-Path -LiteralPath $OtelBinDir -PathType Container)) {
+        Write-Host '[INFO] Otel collector not found, skipped.'
+        return
+    }
+
+    $Processes = @(Get-Process -Name 'otelcol-contrib' -ErrorAction SilentlyContinue)
+    if ($Processes.Count -eq 0) {
+        Write-Host '[INFO] Otel collector not running, skipped.'
+        return
+    }
+
+    foreach ($Process in $Processes) {
+        Write-Host ('[INFO] Stopping otel collector (pid {0}).' -f $Process.Id)
+        Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host '[INFO] Otel collector stopped.'
+}
+
 if ($Help) {
     Show-Help
     exit 0
@@ -153,6 +176,8 @@ for ($Index = $ConfiguredBatches.Count - 1; $Index -ge 0; --$Index) {
         exit 1
     }
 }
+
+Stop-OtelCollector -DeployBaseDirectory $DeployBaseDirectory
 
 Write-Host '[INFO] All batches completed successfully.'
 exit 0

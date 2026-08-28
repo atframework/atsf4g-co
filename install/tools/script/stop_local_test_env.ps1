@@ -80,18 +80,4 @@ $script:PwshExecutable = Get-PwshExecutable
 Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'etcd/setup-etcd.ps1') -Command 'stop'
 Invoke-PwshScript -ScriptPath (Join-Path $PSScriptRoot 'redis/redis.ps1') -Command 'stop'
 
-# Stop the otel collector. Get-Process/Stop-Process work on every platform and replace
-# both `taskkill /F /IM otelcol-contrib.exe` on Windows and `pkill` on Unix (pkill/pgrep
-# may not exist on minimal systems). The collector spawns no children, so there is no
-# process tree to worry about.
-$running = Get-Process -Name 'otelcol-contrib' -ErrorAction SilentlyContinue
-if ($null -eq $running) {
-    Write-Host 'otelcol-contrib is not running.'
-}
-else {
-    $running | Stop-Process -Force -ErrorAction SilentlyContinue
-    $running | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
-    Write-Host 'otelcol-contrib stopped.'
-}
-
 exit 0

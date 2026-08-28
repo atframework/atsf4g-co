@@ -15,6 +15,32 @@ trim_line() {
   printf '%s' "$line"
 }
 
+start_otel_collector() {
+  local otel_bin_dir="${DEPLOY_BASE_DIR}/otelcol/bin"
+  local otel_exe="${otel_bin_dir}/otelcol-contrib"
+  if [[ ! -e "$otel_exe" ]]; then
+    echo "[INFO] Otel collector not found, skipped."
+    return 0
+  fi
+
+  if pgrep -x otelcol-contrib >/dev/null 2>&1; then
+    echo "[INFO] Otel collector already started, skipped."
+    return 0
+  fi
+
+  if [[ ! -d "${DEPLOY_BASE_DIR}/otelcol/log" ]]; then
+    mkdir -p "${DEPLOY_BASE_DIR}/otelcol/log"
+  fi
+
+  echo "[INFO] Starting otel collector: ${otel_exe}"
+  (
+    cd "$otel_bin_dir" || exit 1
+    nohup ./otelcol-contrib --config=../cfg/config.yaml >> ../log/otelcol.log 2>&1 &
+  )
+  echo "[INFO] Otel collector started."
+  return 0
+}
+
 run_batch() {
   local batch_index="$1"
   local group_line="$2"
@@ -109,6 +135,8 @@ shift $((OPTIND - 1))
 
 if [[ -z "$CONFIG_FILE" ]]; then
   CONFIG_FILE="${DEPLOY_BASE_DIR}/start_all.conf"
+elif [[ "$CONFIG_FILE" != /* ]]; then
+  CONFIG_FILE="${DEPLOY_BASE_DIR}/${CONFIG_FILE}"
 fi
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -117,6 +145,8 @@ if [[ ! -f "$CONFIG_FILE" ]]; then
 fi
 
 shopt -s nullglob
+
+start_otel_collector
 
 configured_batch_count=0
 while IFS= read -r current_line || [[ -n "$current_line" ]]; do
