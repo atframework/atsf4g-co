@@ -191,6 +191,15 @@ int32_t user_team_manager::login_init(rpc::context&) {
 void user_team_manager::refresh_feature_limit_second(rpc::context& ctx) {
   cleanup_expired_join_request(ctx);
   cleanup_expired_invitation(ctx);
+
+  // 队伍级缓存的过期准入数据清理(teamsvr-room 清理时不下发事件，各端自行清理)与成员心跳
+  for (auto& group : team_group_) {
+    if (!group.second.current) {
+      continue;
+    }
+    group.second.current->cleanup_expired_admissions(ctx);
+    group.second.current->maybe_send_heartbeat(ctx);
+  }
 }
 
 void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {

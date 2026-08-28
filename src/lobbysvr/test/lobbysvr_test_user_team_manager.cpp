@@ -10,11 +10,13 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/pbdesc/com.struct.team.pb.h>
+#include <protocol/pbdesc/com.struct.team.shared.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <atframework/testing/mock_cs.h>
 #include <atframework/testing/runtime.h>
 
 #include <config/logic_config.h>
@@ -29,11 +31,15 @@
 #include <string>
 #include <vector>
 
+#include "data/session.h"
 #include "data/user.h"
 #include "frame/test_macros.h"
 #include "logic/chat/user_chat_manager.h"
+#include "logic/session_manager.h"
+#include "logic/team/user_team_algorithm.h"
 #include "logic/team/user_team_manager.h"
 #include "rpc/dtmq/dtmq_client_subscriber.h"
+#include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 #include "rpc/team/team_common_api.h"
 
 namespace {
@@ -528,6 +534,557 @@ CASE_TEST(lobbysvr_user_team, member_set_role_updates_cached_data) {
     pump_rounds(test, 4);
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, current->get_configure().set_member_role_role());
   }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// user_team::dump 导出的快照必须反映频道快照建立的全部缓存状态:
+// - 成员列表回填按 key 索引的共享成员数据(打包为 DTeamAnyDataWithKey)，且不下发 user_channel/
+//   user_router_server_id/acknowledge_* 等内部路由与确认字段;
+// - 待处理邀请/加入请求中已过期的条目不下发;
+// - 队伍共享数据以解包后的模块数据写到 DUserTeamSnapshot.shared_team_data，snapshot.shared_team_data 的
+//   原始打包数据不导出。
+CASE_TEST(lobbysvr_user_team, dump_snapshot_exports_cached_state) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::cs};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  constexpr uint64_t kUserId = 30005;
+  constexpr int64_t kTeamId = 204;
+  constexpr uint64_t kValidInviteeId = 91001;
+  constexpr uint64_t kExpiredInviteeId = 91002;
+  constexpr uint64_t kJoinRequesterId = 91003;
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+
+  CASE_EXPECT_TRUE(restore_team_from_table(test, user_inst, kTeamId));
+  auto current = user_inst->get_user_team_manager().get_team_by_team_key(make_team_key(kTeamId));
+  CASE_EXPECT_TRUE(!!current);
+  if (!current) {
+    test.stop();
+    return;
+  }
+
+  auto now = std::chrono::system_clock::now();
+
+  // 队伍共享数据: 战斗模块 matching=true(打包进 DTeamAnyDataWithKey)
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule matching_module;
+  matching_module.mutable_battle()->set_matching(true);
+  const int64_t matching_key = user_team_algorithm::make_team_shared_data_key(matching_module);
+
+  // 成员共享数据: 队长的 ready=true(打包进 DTeamAnyDataWithKey)
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule ready_module;
+  ready_module.mutable_battle()->set_ready(true);
+  const int64_t ready_key = user_team_algorithm::make_team_member_shared_data_key(ready_module);
+
+  atfw::team::DTeamStorage team_storage = make_team_storage(kTeamId, true, kUserId);
+  {
+    auto* shared_data = team_storage.add_shared_team_data();
+    shared_data->set_key(matching_key);
+    CASE_EXPECT_TRUE(shared_data->mutable_value()->mutable_data()->PackFrom(matching_module));
+  }
+  {
+    // 队长的成员共享数据 + 内部字段(快照导出时必须剥掉内部字段、按 key 回填共享数据)
+    auto* captain = team_storage.mutable_member(0);
+    auto* member_data = captain->add_shared_member_data();
+    member_data->set_key(ready_key);
+    CASE_EXPECT_TRUE(member_data->mutable_value()->mutable_data()->PackFrom(ready_module));
+    captain->mutable_user_channel()->set_channel_id("polluted-captain-channel");
+    captain->set_user_router_server_id(0x5678);
+    captain->set_acknowledge_action_sequence(42);
+  }
+  {
+    // 未过期的邀请(携带内部路由字段，导出时必须剥掉)
+    auto* invitation = team_storage.add_pending_invitation();
+    invitation->mutable_invitee()->set_zone_id(kZoneId);
+    invitation->mutable_invitee()->set_user_id(kValidInviteeId);
+    *invitation->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(300));
+    invitation->mutable_invitee_private_channel()->set_channel_id("polluted-invitee-channel");
+  }
+  {
+    // 已过期的邀请: 快照加载时即被过滤，不会出现在导出中
+    auto* invitation = team_storage.add_pending_invitation();
+    invitation->mutable_invitee()->set_zone_id(kZoneId);
+    invitation->mutable_invitee()->set_user_id(kExpiredInviteeId);
+    *invitation->mutable_expired_timepoint() = protobuf_from_system_clock(now - std::chrono::seconds(60));
+  }
+  {
+    // 未过期的加入请求
+    auto* join_request = team_storage.add_pending_join_request();
+    join_request->mutable_requester()->set_zone_id(kZoneId);
+    join_request->mutable_requester()->set_user_id(kJoinRequesterId);
+    *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(300));
+    join_request->mutable_requester_private_channel()->set_channel_id("polluted-requester-channel");
+    join_request->set_user_router_server_id(0x4321);
+  }
+
+  auto team_channel_key = rpc::team::team_api::make_team_room_channel_key(make_team_key(kTeamId));
+  CASE_EXPECT_TRUE(receive_channel_event(test, make_snapshot_event(team_channel_key, 1, 0, &team_storage)));
+  pump_rounds(test, 4);
+
+  PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+  {
+    rpc::context ctx{rpc::context::create_without_task()};
+    current->dump(ctx, snapshot);
+  }
+
+  CASE_EXPECT_EQ(kTeamId, snapshot.snapshot().team_key().team_id());
+  CASE_EXPECT_EQ(kCaptainUserId, snapshot.snapshot().captain_user_key().user_id());
+
+  // 成员: 队长 + 自己。内部字段必须被剥掉，共享成员数据按 key 回填且仍是打包的 Any
+  CASE_EXPECT_EQ(2, snapshot.snapshot().member_size());
+  const atfw::team::DTeamMember* captain_member = nullptr;
+  for (const auto& member : snapshot.snapshot().member()) {
+    CASE_EXPECT_TRUE(member.user_channel().channel_id().empty());
+    CASE_EXPECT_EQ(0, member.user_router_server_id());
+    CASE_EXPECT_EQ(0, member.acknowledge_action_sequence());
+    if (member.user_key().user_id() == kCaptainUserId) {
+      captain_member = &member;
+    }
+  }
+  CASE_EXPECT_TRUE(nullptr != captain_member);
+  if (nullptr != captain_member) {
+    CASE_EXPECT_EQ(1, captain_member->shared_member_data_size());
+    if (captain_member->shared_member_data_size() > 0) {
+      CASE_EXPECT_EQ(ready_key, captain_member->shared_member_data(0).key());
+      PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule unpacked;
+      CASE_EXPECT_TRUE(captain_member->shared_member_data(0).value().data().UnpackTo(&unpacked));
+      CASE_EXPECT_TRUE(unpacked.battle().ready());
+    }
+  }
+
+  // 邀请: 只剩未过期的一个，且剥掉了内部通知频道
+  CASE_EXPECT_EQ(1, snapshot.snapshot().pending_invitation_size());
+  if (snapshot.snapshot().pending_invitation_size() > 0) {
+    CASE_EXPECT_EQ(kValidInviteeId, snapshot.snapshot().pending_invitation(0).invitee().user_id());
+    CASE_EXPECT_TRUE(snapshot.snapshot().pending_invitation(0).invitee_private_channel().channel_id().empty());
+  }
+  CASE_EXPECT_EQ(1, snapshot.snapshot().pending_join_request_size());
+  if (snapshot.snapshot().pending_join_request_size() > 0) {
+    CASE_EXPECT_EQ(kJoinRequesterId, snapshot.snapshot().pending_join_request(0).requester().user_id());
+    CASE_EXPECT_TRUE(snapshot.snapshot().pending_join_request(0).requester_private_channel().channel_id().empty());
+    CASE_EXPECT_EQ(0, snapshot.snapshot().pending_join_request(0).user_router_server_id());
+  }
+
+  // 队伍共享数据: 解包后的模块数据导出到 shared_team_data，snapshot 内不保留打包的原始数据
+  CASE_EXPECT_EQ(0, snapshot.snapshot().shared_team_data_size());
+  CASE_EXPECT_EQ(1, snapshot.shared_team_data_size());
+  if (snapshot.shared_team_data_size() > 0) {
+    CASE_EXPECT_TRUE(snapshot.shared_team_data(0).has_battle());
+    CASE_EXPECT_TRUE(snapshot.shared_team_data(0).battle().matching());
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+namespace {
+
+constexpr uint64_t kGatewayNodeId = 0x82000001;
+
+// Find the latest downstream post record addressed to the session whose CSMsg head matches the rpc name (response
+// or stream). Multiple pushes of the same rpc name are distinguished by taking the last match.
+const atfw::testing::cs_downstream_record *find_downstream_by_rpc_name(atfw::testing::runtime &test,
+                                                                       uint64_t session_id,
+                                                                       gsl::string_view rpc_full_name,
+                                                                       atframework::CSMsg &out_msg) {
+  const atfw::testing::cs_downstream_record *ret = nullptr;
+  for (size_t i = 0; i < test.cs().call_count(); ++i) {
+    const auto *record = test.cs().call_at(i);
+    if (nullptr == record || atfw::testing::cs_downstream_record::op_type::post != record->op ||
+        record->session_id != session_id) {
+      continue;
+    }
+    atframework::CSMsg cs_msg;
+    if (!cs_msg.ParseFromString(record->message.body().post().content())) {
+      continue;
+    }
+    if (cs_msg.head().has_rpc_response() && rpc_full_name == cs_msg.head().rpc_response().rpc_name()) {
+      out_msg = std::move(cs_msg);
+      ret = record;
+      continue;
+    }
+    if (cs_msg.head().has_rpc_stream() && rpc_full_name == cs_msg.head().rpc_stream().rpc_name()) {
+      out_msg = std::move(cs_msg);
+      ret = record;
+    }
+  }
+  return ret;
+}
+
+// Collect every downstream user_dirty_chg_sync push addressed to the session.
+std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_pushes(atfw::testing::runtime &test,
+                                                                                uint64_t session_id) {
+  std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> ret;
+  for (size_t i = 0; i < test.cs().call_count(); ++i) {
+    const auto *record = test.cs().call_at(i);
+    if (nullptr == record || atfw::testing::cs_downstream_record::op_type::post != record->op ||
+        record->session_id != session_id) {
+      continue;
+    }
+    atframework::CSMsg cs_msg;
+    if (!cs_msg.ParseFromString(record->message.body().post().content())) {
+      continue;
+    }
+    if (!cs_msg.head().has_rpc_stream() ||
+        cs_msg.head().rpc_stream().rpc_name() !=
+            rpc::lobbysvrclientservice::packer::get_full_name_of_user_dirty_chg_sync()) {
+      continue;
+    }
+    PROJECT_NAMESPACE_ID::SCUserDirtyChgSync body;
+    if (body.ParseFromString(cs_msg.body_bin())) {
+      ret.push_back(std::move(body));
+    }
+  }
+  return ret;
+}
+
+}  // namespace
+
+// 频道增量事件必须持续维护本地缓存并通过 SCUserDirtyChgSync 推送增量脏数据给客户端:
+// - add_join_request/team_update/add_member/member_set_role/election_captain 各自更新缓存，
+//   缓存内容可通过 user_team::dump 观察;
+// - election_captain 同步新旧队长的成员角色与自己的 cached_permission_role_;
+// - 过期准入数据由 cleanup_expired_admissions 清理且 dump 不下发;
+// - 快照加载后客户端收到 snapshot 脏数据推送; 之后的每个增量动作触发 increase 推送，
+//   内部路由字段被剥掉、成员共享数据被解包到 OneAction.shared_member_data。
+CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss, atfw::testing::feature::cs};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  constexpr uint64_t kUserId = 30006;
+  constexpr uint64_t kSessionId = 0x10006;
+  constexpr int64_t kTeamId = 205;
+  constexpr uint64_t kMemberUserId = 91011;
+  constexpr uint64_t kJoinRequesterId = 91012;
+  constexpr uint64_t kShortJoinRequesterId = 91013;
+  constexpr uint64_t kLongInviteeId = 91014;
+  constexpr uint64_t kShortInviteeId = 91015;
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+
+  // 绑定 mock 客户端会话，让脏数据推送真正下发到 CS 通道
+  auto client = test.cs().create_client(kGatewayNodeId, kSessionId);
+  CASE_EXPECT_TRUE(!!client);
+  if (!client || 0 != client.add()) {
+    CASE_MSG_INFO() << "client add failed\n";
+    test.stop();
+    return;
+  }
+  session::key_t session_key;
+  session_key.node_id = kGatewayNodeId;
+  session_key.session_id = kSessionId;
+  auto sess = session_manager::me()->find(session_key);
+  CASE_EXPECT_TRUE(!!sess);
+  if (!sess) {
+    test.stop();
+    return;
+  }
+  {
+    user::ptr_t user_ptr = user_inst;
+    std::shared_ptr<session> sess_ptr = sess;
+    CASE_EXPECT_TRUE(
+        run_sync_task(test, "team.bind_session", [&user_ptr, &sess_ptr](rpc::context &ctx) -> rpc::result_code_type {
+          sess_ptr->set_user(user_ptr);
+          user_ptr->set_session(ctx, sess_ptr);
+          RPC_RETURN_CODE(0);
+        }));
+  }
+
+  CASE_EXPECT_TRUE(restore_team_from_table(test, user_inst, kTeamId));
+  auto current = user_inst->get_user_team_manager().get_team_by_team_key(make_team_key(kTeamId));
+  CASE_EXPECT_TRUE(!!current);
+  if (!current) {
+    test.stop();
+    return;
+  }
+
+  auto team_channel_key = rpc::team::team_api::make_team_room_channel_key(make_team_key(kTeamId));
+  atfw::team::DTeamStorage team_storage = make_team_storage(kTeamId, true, kUserId);
+  CASE_EXPECT_TRUE(receive_channel_event(test, make_snapshot_event(team_channel_key, 1, 0, &team_storage)));
+  pump_rounds(test, 4);
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, current->get_cached_permission_role());
+
+  // 快照加载后客户端应收到一条携带完整快照的脏数据推送
+  {
+    auto pushes = collect_dirty_sync_pushes(test, kSessionId);
+    CASE_EXPECT_EQ(1, static_cast<int>(pushes.size()));
+    if (!pushes.empty()) {
+      CASE_EXPECT_EQ(1, pushes[0].dirty_team_size());
+      if (pushes[0].dirty_team_size() > 0) {
+        CASE_EXPECT_TRUE(pushes[0].dirty_team(0).has_snapshot());
+        CASE_EXPECT_EQ(2, pushes[0].dirty_team(0).snapshot().snapshot().member_size());
+      }
+    }
+  }
+  test.cs().clear_history();
+
+  int64_t event_sequence = 0;
+  uint64_t previous_hash = 0;
+  auto send_team_action_event = [&](const atfw::team::DTeamAction &team_action) {
+    std::vector<atframework::dtmq::DChannelMessage> msgs{make_event_message(++event_sequence, team_action)};
+    previous_hash = chain_message_hashes(msgs, previous_hash);
+    return receive_channel_event(test, make_incremental_event(team_channel_key, event_sequence, msgs));
+  };
+
+  auto now = std::chrono::system_clock::now();
+
+  // 1. add_join_request: 进入待处理加入请求缓存(携带内部字段验证剥除)
+  {
+    atfw::team::DTeamAction team_action;
+    auto *join_request = team_action.mutable_add_join_request();
+    join_request->mutable_requester()->set_zone_id(kZoneId);
+    join_request->mutable_requester()->set_user_id(kJoinRequesterId);
+    *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(300));
+    join_request->mutable_requester_private_channel()->set_channel_id("polluted-requester-channel");
+    join_request->set_user_router_server_id(0x2222);
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+
+  // 1b. 有效期更短的加入请求: 排序后必须排在更长有效期的条目之前
+  {
+    atfw::team::DTeamAction team_action;
+    auto *join_request = team_action.mutable_add_join_request();
+    join_request->mutable_requester()->set_zone_id(kZoneId);
+    join_request->mutable_requester()->set_user_id(kShortJoinRequesterId);
+    *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(120));
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+
+  // 1c. 两个不同有效期的邀请
+  {
+    atfw::team::DTeamAction team_action;
+    auto *invitation = team_action.mutable_add_invitation();
+    invitation->mutable_invitee()->set_zone_id(kZoneId);
+    invitation->mutable_invitee()->set_user_id(kLongInviteeId);
+    *invitation->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(600));
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+  {
+    atfw::team::DTeamAction team_action;
+    auto *invitation = team_action.mutable_add_invitation();
+    invitation->mutable_invitee()->set_zone_id(kZoneId);
+    invitation->mutable_invitee()->set_user_id(kShortInviteeId);
+    *invitation->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(60));
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+
+  // 2. team_update: 队伍共享数据 matching=true
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule matching_module;
+  matching_module.mutable_battle()->set_matching(true);
+  {
+    atfw::team::DTeamAction team_action;
+    auto *shared_data = team_action.mutable_team_update()->add_shared_team_data();
+    shared_data->set_key(user_team_algorithm::make_team_shared_data_key(matching_module));
+    CASE_EXPECT_TRUE(shared_data->mutable_value()->mutable_data()->PackFrom(matching_module));
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+
+  // 3. add_member: 新成员携带打包的 ready 共享数据与内部字段
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule ready_module;
+  ready_module.mutable_battle()->set_ready(true);
+  {
+    atfw::team::DTeamAction team_action;
+    auto *member = team_action.mutable_add_member();
+    member->mutable_user_key()->set_zone_id(kZoneId);
+    member->mutable_user_key()->set_user_id(kMemberUserId);
+    member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+    *member->mutable_joined_timepoint() = protobuf_from_system_clock(now);
+    auto *member_data = member->add_shared_member_data();
+    member_data->set_key(user_team_algorithm::make_team_member_shared_data_key(ready_module));
+    CASE_EXPECT_TRUE(member_data->mutable_value()->mutable_data()->PackFrom(ready_module));
+    member->mutable_user_channel()->set_channel_id("polluted-member-channel");
+    member->set_user_router_server_id(0x4444);
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+
+  // 4. member_set_role: 新成员提升为 ADMIN
+  {
+    atfw::team::DTeamAction team_action;
+    auto *set_role = team_action.mutable_member_set_role();
+    set_role->mutable_user_key()->set_zone_id(kZoneId);
+    set_role->mutable_user_key()->set_user_id(kMemberUserId);
+    set_role->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+
+  // 5. election_captain 选自己再选回原队长: 自己的角色 OWNER -> NORMAL，对方 NORMAL -> OWNER
+  {
+    atfw::team::DTeamAction team_action;
+    auto *election = team_action.mutable_election_captain();
+    election->mutable_user_key()->set_zone_id(kZoneId);
+    election->mutable_user_key()->set_user_id(kUserId);
+    election->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+  {
+    atfw::team::DTeamAction team_action;
+    auto *election = team_action.mutable_election_captain();
+    election->mutable_user_key()->set_zone_id(kZoneId);
+    election->mutable_user_key()->set_user_id(kCaptainUserId);
+    election->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+  // 6. 同 key 同过期时间的重复 add_join_request: 原位覆盖(内容更新但不新增条目、不改变顺序)
+  {
+    atfw::team::DTeamAction team_action;
+    auto *join_request = team_action.mutable_add_join_request();
+    join_request->mutable_requester()->set_zone_id(kZoneId);
+    join_request->mutable_requester()->set_user_id(kJoinRequesterId);
+    *join_request->mutable_expired_timepoint() = protobuf_from_system_clock(now + std::chrono::seconds(300));
+    join_request->set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
+    CASE_EXPECT_TRUE(send_team_action_event(team_action));
+  }
+  pump_rounds(test, 4);
+
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, current->get_cached_permission_role());
+  CASE_EXPECT_EQ(kCaptainUserId, current->get_cached_captain_user_key().user_id());
+
+  // 每个增量动作都应触发一条 increase 推送; 内部字段被剥掉，成员共享数据解包后随动作下发
+  {
+    auto pushes = collect_dirty_sync_pushes(test, kSessionId);
+    CASE_EXPECT_EQ(10, static_cast<int>(pushes.size()));
+    size_t total_actions = 0;
+    bool checked_add_member = false;
+    bool checked_add_join_request = false;
+    for (const auto &push : pushes) {
+      CASE_EXPECT_EQ(1, push.dirty_team_size());
+      if (0 == push.dirty_team_size()) {
+        continue;
+      }
+      const auto &increase = push.dirty_team(0).increase();
+      CASE_EXPECT_EQ(kTeamId, increase.team_key().team_id());
+      total_actions += increase.actions_size();
+      for (const auto &one_action : increase.actions()) {
+        const auto &action = one_action.actions();
+        if (action.has_add_member()) {
+          checked_add_member = true;
+          CASE_EXPECT_TRUE(action.add_member().user_channel().channel_id().empty());
+          CASE_EXPECT_EQ(0, action.add_member().user_router_server_id());
+          CASE_EXPECT_EQ(0, action.add_member().acknowledge_action_sequence());
+          // 打包的成员共享数据解包后随动作下发
+          CASE_EXPECT_EQ(1, one_action.shared_member_data_size());
+          if (one_action.shared_member_data_size() > 0) {
+            CASE_EXPECT_TRUE(one_action.shared_member_data(0).battle().ready());
+          }
+        }
+        if (action.has_add_join_request()) {
+          checked_add_join_request = true;
+          CASE_EXPECT_TRUE(action.add_join_request().requester_private_channel().channel_id().empty());
+          CASE_EXPECT_EQ(0, action.add_join_request().user_router_server_id());
+        }
+      }
+    }
+    CASE_EXPECT_EQ(10, static_cast<int>(total_actions));
+    CASE_EXPECT_TRUE(checked_add_member);
+    CASE_EXPECT_TRUE(checked_add_join_request);
+  }
+
+  // 缓存状态经 dump 可观察: matching、成员角色与待处理加入请求
+  {
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    rpc::context ctx{rpc::context::create_without_task()};
+    current->dump(ctx, snapshot);
+
+    CASE_EXPECT_EQ(3, snapshot.snapshot().member_size());
+    const atfw::team::DTeamMember *new_member = nullptr;
+    for (const auto &member : snapshot.snapshot().member()) {
+      if (member.user_key().user_id() == kMemberUserId) {
+        new_member = &member;
+      }
+      if (member.user_key().user_id() == kCaptainUserId) {
+        CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, member.role());
+      }
+    }
+    CASE_EXPECT_TRUE(nullptr != new_member);
+    if (nullptr != new_member) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, new_member->role());
+      CASE_EXPECT_EQ(1, new_member->shared_member_data_size());
+      if (new_member->shared_member_data_size() > 0) {
+        PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule unpacked;
+        CASE_EXPECT_TRUE(new_member->shared_member_data(0).value().data().UnpackTo(&unpacked));
+        CASE_EXPECT_TRUE(unpacked.battle().ready());
+      }
+    }
+
+    // 准入数据按过期时间升序下发: 短有效期的加入请求/邀请排在前面
+    CASE_EXPECT_EQ(2, snapshot.snapshot().pending_join_request_size());
+    if (snapshot.snapshot().pending_join_request_size() >= 2) {
+      CASE_EXPECT_EQ(kShortJoinRequesterId, snapshot.snapshot().pending_join_request(0).requester().user_id());
+      CASE_EXPECT_EQ(kJoinRequesterId, snapshot.snapshot().pending_join_request(1).requester().user_id());
+      // 同 key 同过期时间的重复 add_join_request 原位覆盖: 内容已更新为 FRIEND
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND,
+                     snapshot.snapshot().pending_join_request(1).team_source_type());
+    }
+    CASE_EXPECT_EQ(2, snapshot.snapshot().pending_invitation_size());
+    if (snapshot.snapshot().pending_invitation_size() >= 2) {
+      CASE_EXPECT_EQ(kShortInviteeId, snapshot.snapshot().pending_invitation(0).invitee().user_id());
+      CASE_EXPECT_EQ(kLongInviteeId, snapshot.snapshot().pending_invitation(1).invitee().user_id());
+    }
+    CASE_EXPECT_EQ(1, snapshot.shared_team_data_size());
+    if (snapshot.shared_team_data_size() > 0) {
+      CASE_EXPECT_TRUE(snapshot.shared_team_data(0).battle().matching());
+    }
+  }
+
+  // 部分过期清理: 只移除过期前缀(短有效期的加入请求和邀请)，遇到第一个未过期条目即停止
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds(150));
+  atfw::util::time::time_utility::update();
+  {
+    rpc::context ctx{rpc::context::create_without_task()};
+    CASE_EXPECT_EQ(2, static_cast<int>(current->cleanup_expired_admissions(ctx)));
+
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    current->dump(ctx, snapshot);
+    CASE_EXPECT_EQ(1, snapshot.snapshot().pending_join_request_size());
+    if (snapshot.snapshot().pending_join_request_size() > 0) {
+      CASE_EXPECT_EQ(kJoinRequesterId, snapshot.snapshot().pending_join_request(0).requester().user_id());
+    }
+    CASE_EXPECT_EQ(1, snapshot.snapshot().pending_invitation_size());
+    if (snapshot.snapshot().pending_invitation_size() > 0) {
+      CASE_EXPECT_EQ(kLongInviteeId, snapshot.snapshot().pending_invitation(0).invitee().user_id());
+    }
+  }
+  atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
+
+  // 继续快进到 300s 有效期的加入请求也过期: 只剩最长有效期的邀请
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds(400));
+  atfw::util::time::time_utility::update();
+  {
+    rpc::context ctx{rpc::context::create_without_task()};
+    CASE_EXPECT_EQ(1, static_cast<int>(current->cleanup_expired_admissions(ctx)));
+
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    current->dump(ctx, snapshot);
+    CASE_EXPECT_EQ(0, snapshot.snapshot().pending_join_request_size());
+    CASE_EXPECT_EQ(1, snapshot.snapshot().pending_invitation_size());
+    if (snapshot.snapshot().pending_invitation_size() > 0) {
+      CASE_EXPECT_EQ(kLongInviteeId, snapshot.snapshot().pending_invitation(0).invitee().user_id());
+    }
+  }
+  atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
 
   CASE_EXPECT_EQ(0, test.stop());
 }

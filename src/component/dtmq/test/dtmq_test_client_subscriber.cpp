@@ -832,10 +832,11 @@ CASE_TEST(component_dtmq_subscriber, receive_messages_and_events) {
 }
 
 // ============ on_receive_batch_message_finished boundaries ============
-// The batch-finished event fires exactly once per event_sync that applies TWO OR MORE new sequences,
-// carrying (first, last) of the newly applied range. It must NOT fire for: a single-message batch,
-// a stale-only batch (every log at-or-below the local tip, answered kIgnore by
-// wal_client::receive_log), or a mixed batch's stale prefix (the range covers only the new logs).
+// The batch-finished event fires exactly once per event_sync that applies ONE OR MORE new sequences
+// (a single-message batch fires too, with a degenerate first==last range), carrying (first, last) of
+// the newly applied range. It must NOT fire for: a stale-only batch (every log at-or-below the local
+// tip, answered kIgnore by wal_client::receive_log), a metadata-only sync, or a mixed batch's stale
+// prefix (the range covers only the new logs).
 CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) {
   atframework::testing::runtime test;
   atframework::testing::runtime_options options;
@@ -902,7 +903,7 @@ CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) 
   CASE_EXPECT_TRUE(subscriber->is_ready());
   CASE_EXPECT_TRUE(batch_ranges.empty());
 
-  // Step 2: single-message batch -> the event requires at least two new sequences, nothing fires.
+  // Step 2: single-message batch -> a batch of one still fires, with the degenerate range (11, 11).
   {
     atfw::dtmq::SSChannelEventSync event_sync;
     event_sync.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(channel_key);
@@ -912,7 +913,11 @@ CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) 
     event_sync.add_subscriber_keys(shared_key);
     CASE_EXPECT_TRUE(push_channel_event(test, "push_single", event_sync));
   }
-  CASE_EXPECT_TRUE(batch_ranges.empty());
+  CASE_EXPECT_EQ(1u, batch_ranges.size());
+  if (!batch_ranges.empty()) {
+    CASE_EXPECT_EQ(11, batch_ranges[0].first);
+    CASE_EXPECT_EQ(11, batch_ranges[0].second);
+  }
   CASE_EXPECT_EQ(11, subscriber->get_last_message_sequence());
 
   // Step 3: batch of three new messages (12..14) -> fires once with the full newly-applied range and
@@ -930,10 +935,10 @@ CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) 
     event_sync.add_subscriber_keys(shared_key);
     CASE_EXPECT_TRUE(push_channel_event(test, "push_multi", event_sync));
   }
-  CASE_EXPECT_EQ(1u, batch_ranges.size());
-  if (!batch_ranges.empty()) {
-    CASE_EXPECT_EQ(12, batch_ranges[0].first);
-    CASE_EXPECT_EQ(14, batch_ranges[0].second);
+  CASE_EXPECT_EQ(2u, batch_ranges.size());
+  if (batch_ranges.size() >= 2) {
+    CASE_EXPECT_EQ(12, batch_ranges[1].first);
+    CASE_EXPECT_EQ(14, batch_ranges[1].second);
   }
   CASE_EXPECT_EQ(batch_event_subscriber, subscriber.get());
   CASE_EXPECT_EQ(14, subscriber->get_last_message_sequence());
@@ -953,7 +958,7 @@ CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) 
     event_sync.add_subscriber_keys(shared_key);
     CASE_EXPECT_TRUE(push_channel_event(test, "push_stale", event_sync));
   }
-  CASE_EXPECT_EQ(1u, batch_ranges.size());
+  CASE_EXPECT_EQ(2u, batch_ranges.size());
   CASE_EXPECT_EQ(14, subscriber->get_last_message_sequence());
 
   // Step 5: mixed batch (stale prefix 13, 14 then new 15, 16) -> fires again, and the reported range
@@ -973,10 +978,10 @@ CASE_TEST(component_dtmq_subscriber, receive_batch_message_finished_boundaries) 
     event_sync.add_subscriber_keys(shared_key);
     CASE_EXPECT_TRUE(push_channel_event(test, "push_mixed", event_sync));
   }
-  CASE_EXPECT_EQ(2u, batch_ranges.size());
-  if (batch_ranges.size() >= 2) {
-    CASE_EXPECT_EQ(15, batch_ranges[1].first);
-    CASE_EXPECT_EQ(16, batch_ranges[1].second);
+  CASE_EXPECT_EQ(3u, batch_ranges.size());
+  if (batch_ranges.size() >= 3) {
+    CASE_EXPECT_EQ(15, batch_ranges[2].first);
+    CASE_EXPECT_EQ(16, batch_ranges[2].second);
   }
   CASE_EXPECT_EQ(16, subscriber->get_last_message_sequence());
   // Every log was accepted or cleanly ignored: no failure-driven heartbeat was queued.

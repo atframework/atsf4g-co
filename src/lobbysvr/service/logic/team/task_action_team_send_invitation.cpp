@@ -66,11 +66,6 @@ task_action_team_send_invitation::operator()() {
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
-
-    if (!team_ptr->check_permission(team_ptr->get_configure().invite_role())) {
-      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
-      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-    }
   }
 
   atfw::team::DTeamKey team_key;
@@ -94,7 +89,19 @@ task_action_team_send_invitation::operator()() {
       set_response_code(create_ret);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
+    // 新建队伍的创建者即队长
+    team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(team_key);
   } while (false);
+
+  // 无论队伍来自显式指定、按类型复用还是新建，都必须通过邀请权限检查(新建队伍的创建者为 OWNER，恒通过)
+  if (!team_ptr) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+  if (!team_ptr->check_permission(team_ptr->get_configure().invite_role())) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
 
   // 发送邀请(SS消息打包在 user_team_manager 中，业务结果透传)
   set_response_code(RPC_AWAIT_CODE_RESULT(user_inst->get_user_team_manager().send_invitation(

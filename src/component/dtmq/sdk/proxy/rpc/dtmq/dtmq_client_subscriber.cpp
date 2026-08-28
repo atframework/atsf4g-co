@@ -3044,7 +3044,7 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
   }
 
   // 批量消息的后置事件触发(单条消息也是一批，不能漏触发，否则逐条下发的实时事件永远等不到后置事件)
-  if (first_success_log_sequence > 0 && last_success_log_sequence >= first_success_log_sequence) {
+  if (first_success_log_sequence > 0) {
     foreach_registered_client_subscriber(
         [&ctx, first_success_log_sequence, last_success_log_sequence](client_subscriber& client) {
           const auto& fn = client.get_event_callback_on_receive_batch_message_finished();

@@ -28,6 +28,9 @@ message lobbysvr_team_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "35s" min_value: "15s" }];
   google.protobuf.Duration wait_add_member_timeout = 3
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
+  // 成员心跳间隔，需要明显低于 teamsvr-room 的 member_offline_expire(默认 300s)
+  google.protobuf.Duration heartbeat_interval = 4
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "5s" }];
 }
 
 message lobbysvr_cfg {

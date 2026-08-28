@@ -495,7 +495,14 @@ void user::send_all_syn_msg(rpc::context &ctx) {
     }
 
     if (dirty_msg.user_dirty) {
-      rpc::lobbysvrclientservice::send_user_dirty_chg_sync(ctx, *dirty_msg.user_dirty, *sess);
+      // send_user_dirty_chg_sync 返回 always_ready_code_type，必须消费(否则开启
+      // PROJECT_SERVER_FRAME_*_COROUTINE_CHECK_AWAIT 的构建会在析构时断言)
+      int32_t send_result =
+          rpc::lobbysvrclientservice::send_user_dirty_chg_sync(ctx, *dirty_msg.user_dirty, *sess).unwrap();
+      if (send_result < 0) {
+        FCTXLOGERROR(ctx, "{} send user dirty change sync failed, error={}({})", *this, send_result,
+                     protobuf_mini_dumper_get_error_msg(send_result));
+      }
     }
   }
 
