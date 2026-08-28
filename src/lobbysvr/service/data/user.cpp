@@ -664,7 +664,7 @@ bool user::init_get_info_handle(const ::google::protobuf::FieldDescriptor *fds,
     return false;
   }
 
-  if (fds->message_type() != PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()) {
+  if (fds->containing_type() != PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()) {
     FWLOGERROR("init_get_info_handle failed, fds {} is not of type CSUserGetInfoReq", fds->full_name());
     return false;
   }
