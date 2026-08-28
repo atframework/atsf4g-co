@@ -9,78 +9,88 @@ proc_desc:
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 1
 
   - chart_name: "atgateway"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
-
-  - chart_name: "echosvr"
-    world_instance: false
-    instance_count: 1
-    start_instance_id: 1
+    group: 3
 
   - chart_name: "authsvr"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 4
 
   - chart_name: "lobbysvr"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 4
 
   - chart_name: "dtcoordsvr"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "cachesvr"
     world_instance: true
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "rank-settlement-svr"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "rank-board-svr"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "teamsvr-room"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "teamsvr-match"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "dtmq-proxysvr"
     world_instance: true
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "orbit-server"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "orbit-agent"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "orbit-controller"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2
 
   - chart_name: "matchsvr"
     world_instance: false
     instance_count: 1
     start_instance_id: 1
+    group: 2

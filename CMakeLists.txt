@@ -181,26 +181,9 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.sh.in"
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.ps1.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1" ESCAPE_QUOTES @ONLY)
 
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/start_all.sh"
-               ESCAPE_QUOTES @ONLY)
-
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.ps1.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/start_all.ps1" ESCAPE_QUOTES @ONLY)
-
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.ps1.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.ps1" ESCAPE_QUOTES @ONLY)
-
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/kill_all.ps1.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.ps1" ESCAPE_QUOTES @ONLY)
-
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/kill_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.sh"
-               ESCAPE_QUOTES @ONLY)
-
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/stop_all.sh.in" "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.sh"
-               ESCAPE_QUOTES @ONLY)
-
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/start_all.conf.in"
-               "${PROJECT_GENERATED_TOOLS_DIR}/start_all.conf" ESCAPE_QUOTES @ONLY)
+# start_all/stop_all/kill_all scripts are rendered from
+# install/cloud-native/charts/tools by atdtool (install/tools/script/generate_config)
+# instead of configure_file.
 
 add_custom_target(
   "tools-cleanup-dll" ALL
@@ -208,34 +191,10 @@ add_custom_target(
           "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1" "${PROJECT_INSTALL_BAS_DIR}"
   BYPRODUCTS "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh" "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1")
 
-add_custom_target(
-  "tools-start-all" ALL
-  COMMAND
-    "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/start_all.sh"
-    "${PROJECT_GENERATED_TOOLS_DIR}/start_all.ps1" "${PROJECT_GENERATED_TOOLS_DIR}/start_all.conf"
-    "${PROJECT_INSTALL_BAS_DIR}"
-  BYPRODUCTS "${PROJECT_INSTALL_BAS_DIR}/start_all.sh" "${PROJECT_INSTALL_BAS_DIR}/start_all.ps1"
-             "${PROJECT_INSTALL_BAS_DIR}/start_all.conf")
-
-add_custom_target(
-  "tools-stop-all" ALL
-  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.sh"
-          "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.ps1" "${PROJECT_INSTALL_BAS_DIR}"
-  BYPRODUCTS "${PROJECT_INSTALL_BAS_DIR}/stop_all.sh" "${PROJECT_INSTALL_BAS_DIR}/stop_all.ps1")
-
-add_custom_target(
-  "tools-kill-all" ALL
-  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.sh"
-          "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.ps1" "${PROJECT_INSTALL_BAS_DIR}"
-  BYPRODUCTS "${PROJECT_INSTALL_BAS_DIR}/kill_all.sh" "${PROJECT_INSTALL_BAS_DIR}/kill_all.ps1")
-
 add_custom_target("run-cleanup-dll" ALL DEPENDS "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.sh"
                                                 "${PROJECT_INSTALL_BAS_DIR}/cleanup-dll.ps1")
 
 set_property(TARGET "tools-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-set_property(TARGET "tools-start-all" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-set_property(TARGET "tools-stop-all" PROPERTY FOLDER "${PROJECT_NAME}/tools")
-set_property(TARGET "tools-kill-all" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 set_property(TARGET "run-cleanup-dll" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 
 if(CYGWIN
