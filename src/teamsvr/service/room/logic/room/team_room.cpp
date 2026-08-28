@@ -281,9 +281,9 @@ static bool team_update_no_change(const atfw::team::DTeamUpdateData& update_data
   }
   return has_applicable_field;
 }
-// 百分比条件计算基准: 用整数交叉相乘(satisfied * kTeamConditionPercentBase 与 total * percent)
+// 百分比条件计算基准: 用整数交叉相乘(satisfied * kTeamPercentBase 与 total * percent)
 // 代替浮点除法，避免精度问题
-constexpr const int64_t kTeamConditionPercentBase = 100;
+constexpr const int64_t kTeamPercentBase = 100;
 
 // 最小/最大值范围检查: 0 表示该方向不限制
 static inline bool team_condition_range_match(int64_t value,
@@ -2110,8 +2110,8 @@ bool team_room::check_member_condition_group(rpc::context& ctx,
   }
 
   // 数量/百分比维度: 遍历前把限制统一换算成绝对数量门槛(只计算一次)，遍历中不再做 scope 分支与
-  // 百分比换算，只剩整数比较。百分比换算: satisfied * kTeamConditionPercentBase >= total * percent
-  // 等价于 satisfied >= ceil(total * percent / kTeamConditionPercentBase)，max 侧取 floor
+  // 百分比换算，只剩整数比较。百分比换算: satisfied * kTeamPercentBase >= total * percent
+  // 等价于 satisfied >= ceil(total * percent / kTeamPercentBase)，max 侧取 floor
   const int64_t total_count = static_cast<int64_t>(member_.size());
   int64_t pass_at = 0;  // 满足数达到该值即通过 min 维度
   // NOLINTNEXTLINE(readability-redundant-parentheses)
@@ -2127,13 +2127,13 @@ bool team_room::check_member_condition_group(rpc::context& ctx,
     case atfw::team::DTeamConditionChecker::DMemberConditionGroup::kMembersPercent: {
       // min_percent 超过 100 恒不可满足、max_percent 达到 100 即等效不限制；
       // 先钳制百分比避免 total_count * percent 溢出 int64(恶意超大值)
-      const int64_t min_percent = (std::min)(group.members_percent().min_value(), kTeamConditionPercentBase + 1);
-      const int64_t max_percent = (std::min)(group.members_percent().max_value(), kTeamConditionPercentBase);
+      const int64_t min_percent = (std::min)(group.members_percent().min_value(), kTeamPercentBase + 1);
+      const int64_t max_percent = (std::min)(group.members_percent().max_value(), kTeamPercentBase);
       if (min_percent != 0) {
-        pass_at = ((total_count * min_percent) + kTeamConditionPercentBase - 1) / kTeamConditionPercentBase;
+        pass_at = ((total_count * min_percent) + kTeamPercentBase - 1) / kTeamPercentBase;
       }
       if (max_percent != 0) {
-        fail_above = (total_count * max_percent) / kTeamConditionPercentBase;
+        fail_above = (total_count * max_percent) / kTeamPercentBase;
       }
       break;
     }
@@ -2383,7 +2383,7 @@ int64_t team_room::pick_compact_sequence(rpc::context& ctx, std::chrono::system_
 
   const auto& cfg = get_teamsvr_room_cfg();
   // 数量维度保留条数: keep_percent 与 keep_count 取较大者
-  int64_t keep_by_count = (std::max)(get_gc_log_count() * cfg.compact_log_keep_percent() / 100,
+  int64_t keep_by_count = (std::max)(get_gc_log_count() * cfg.compact_log_keep_percent() / kTeamPercentBase,
                                      static_cast<int64_t>(cfg.compact_log_keep_count()));
   auto keep_deadline = now - get_compact_log_keep_time();
 
@@ -2417,13 +2417,10 @@ int64_t team_room::pick_compact_sequence(rpc::context& ctx, std::chrono::system_
       },
       query_opts);
 
-  // 两种保留策略都要满足，取更保守(更小)的裁剪点; 某一维度不限制时取另一维度
-  int64_t compact_sequence = 0;
-  if (cutoff_by_count > 0 && cutoff_by_time > 0) {
-    compact_sequence = (std::min)(cutoff_by_count, cutoff_by_time);
-  } else {
-    compact_sequence = (std::max)(cutoff_by_count, cutoff_by_time);
-  }
+  // 两种保留策略都是硬保证: 日志只有同时不被两个维度保留(既不在最新 keep_by_count 条之内，
+  // 也超出时间保留窗口)才可被压缩，取较小裁剪点。某维度裁剪点为 0 表示该维度要保留全部
+  // 未压缩日志，整体不可压缩(不能把它当作"该维度不限制"而取另一维度)
+  int64_t compact_sequence = (std::min)(cutoff_by_count, cutoff_by_time);
   if (compact_sequence <= last_compact_sequence_) {
     return 0;
   }
@@ -2613,23 +2610,33 @@ team_room_timer_event team_room::get_next_timer_event(std::chrono::system_clock:
   const auto& cfg = get_teamsvr_room_cfg();
   ret.type = team_room_timer_event_type::kMaintenance;
   ret.timeout = next_renew_lock_timepoint_;
-  // 压缩加速触发: 仅作为因日志数量/时间因素提前触发维护的加速点。
-  // 两个触发条件都保证维护能推进压缩点(见 pick_compact_sequence)，不会因保留策略限制而空转:
-  // 按时间维度: 最早的未压缩日志过了 compact_log_start_time 后提前触发维护
-  //             (keep_time <= start_time，触发时最早的日志必然超出保留窗口)
-  if (oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
-    ret.timeout =
-        (std::min)(ret.timeout, oldest_log_timepoint_ + protobuf_to_system_clock(cfg.compact_log_start_time()));
-  }
-  // 按数量维度: 未压缩日志数量(sequence 只保证递增不保证连续，必须用真实缓存数量)超过
-  //             gc_log_count * compact_log_over_percent / 100 且超过压缩保留条数时立即触发维护
+  // 压缩加速触发: 仅作为因日志数量/时间因素提前触发维护的加速点。保留策略是双维度硬保证
+  // (见 pick_compact_sequence)，仅当两个维度当前都至少放行一条日志且自上次维护以来有显著
+  // 新增日志(>= 保留下限)时加速才有意义: 均衡态下维护自身追加的续租/快照日志抵消裁剪量，
+  // 日志数不增长，若无增量门控，加速触发点会永远停留在过去，最早事件恒为"已过期的维护"，
+  // kick/destroy 等更晚到期的定时事件会被饿死
   {
     int64_t gc_log_count = get_gc_log_count();
-    int64_t keep_by_count = (std::max)(gc_log_count * cfg.compact_log_keep_percent() / 100,
+    int64_t keep_by_count = (std::max)(gc_log_count * cfg.compact_log_keep_percent() / kTeamPercentBase,
                                        static_cast<int64_t>(cfg.compact_log_keep_count()));
-    int64_t count_trigger_line = (std::max)(gc_log_count * cfg.compact_log_over_percent() / 100, keep_by_count);
-    if (static_cast<int64_t>(subscriber_->get_cached_log_count(last_compact_sequence_ + 1)) > count_trigger_line) {
-      ret.timeout = (std::min)(ret.timeout, now);
+    int64_t uncompacted_count = static_cast<int64_t>(subscriber_->get_cached_log_count(last_compact_sequence_ + 1));
+    // 数量维度放行: 未压缩日志数超出保留条数; 时间维度放行: 最早未压缩日志超出保留窗口;
+    // 增量放行: 距上次维护有 >= keep_by_count 条新增日志(突发写入及时压缩，均衡空转不加速)
+    bool count_allows = uncompacted_count > keep_by_count;
+    bool time_allows = oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0) &&
+                       oldest_log_timepoint_ <= now - get_compact_log_keep_time();
+    bool has_growth =
+        uncompacted_count - last_maintenance_uncompacted_count_ >= (std::max)(keep_by_count, static_cast<int64_t>(1));
+    // 按时间维度: 最早的未压缩日志过了 compact_log_start_time 后提前触发维护
+    //             (keep_time <= start_time，触发时最早的日志必然超出保留窗口)
+    if (count_allows && time_allows && has_growth) {
+      ret.timeout =
+          (std::min)(ret.timeout, oldest_log_timepoint_ + protobuf_to_system_clock(cfg.compact_log_start_time()));
+      // 按数量维度: 未压缩日志数量(sequence 只保证递增不保证连续，必须用真实缓存数量)超过
+      //             gc_log_count * compact_log_over_percent / 100 且超过压缩保留条数时立即触发维护
+      if (uncompacted_count > gc_log_count * cfg.compact_log_over_percent() / kTeamPercentBase) {
+        ret.timeout = (std::min)(ret.timeout, now);
+      }
     }
   }
 
@@ -2785,6 +2792,8 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   }
 
   std::chrono::system_clock::time_point now = atfw::util::time::time_utility::now();
+  last_maintenance_uncompacted_count_ =
+      static_cast<int64_t>(subscriber_->get_cached_log_count(last_compact_sequence_ + 1));
 
   // 过期数据清理(过期的邀请和加入请求，对端有自身的超时失效机制，无需通知)
   RPC_AWAIT_CODE_RESULT(cleanup_expired_admissions(ctx, now));
@@ -3104,6 +3113,19 @@ void team_room::on_receive_raw_message(rpc::context& ctx, const rpc::dtmq::clien
   // 否则要等下一次定时器重估(如锁续租)才会应用加速点
   if (!has_oldest_log && oldest_log_timepoint_ > std::chrono::system_clock::from_time_t(0)) {
     schedule_next_timer();
+  } else if (message.detail().command_case() == ::atfw::dtmq::DChannelMessageDetail::kEvent) {
+    // 数量维度的压缩加速依赖未压缩日志数增长: 新事件使缓存数越过触发线时立即重算定时器，
+    // 突发写入不必等下一次续租才压缩(是否真正加速由 get_next_timer_event 的双维度放行+
+    // 增量门控决定，均衡态下维护自身追加的日志不会导致加速点反复提前)
+    int64_t gc_log_count = get_gc_log_count();
+    const auto& cfg = get_teamsvr_room_cfg();
+    int64_t keep_by_count = (std::max)(gc_log_count * cfg.compact_log_keep_percent() / kTeamPercentBase,
+                                       static_cast<int64_t>(cfg.compact_log_keep_count()));
+    int64_t count_trigger_line =
+        (std::max)(gc_log_count * cfg.compact_log_over_percent() / kTeamPercentBase, keep_by_count);
+    if (static_cast<int64_t>(subscriber_->get_cached_log_count(last_compact_sequence_ + 1)) > count_trigger_line) {
+      schedule_next_timer();
+    }
   }
 }
 

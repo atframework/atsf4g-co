@@ -101,9 +101,13 @@ CASE_TEST(teamsvr_room_compact, count_based_compaction_and_snapshot_content) {
 
   int64_t sequence_before_maintenance = fake.last_sequence();
 
-  // 数量维度加速: 未压缩日志超过触发线后立即触发维护(无需等到续租时间)
-  env.drive_timer_ticks();
-  CASE_EXPECT_EQ(0, env.sync(team_id));
+  // 数量维度加速: 未压缩日志超过触发线后立即触发维护(无需等到续租时间)。
+  // 双维度硬保证语义下时间维度也须放行: 推进到保留窗口(5s)之外，旧日志不再受时间维度保护
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
 
   const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(fake);
   CASE_EXPECT_TRUE(nullptr != compact_update);
@@ -149,11 +153,14 @@ CASE_TEST(teamsvr_room_compact, count_based_compaction_and_snapshot_content) {
 // ============ CMP-02: 每次维护都重新选择压缩点(不依赖 over-percent/start-time 加速条件) ============
 CASE_TEST(teamsvr_room_compact, compaction_repicked_each_maintenance) {
   // 加速条件全部关闭: over_percent 极大、start_time 极大。只有续租时间点触发维护。
+  // 双维度硬保证语义下时间维度不保留旧日志需显式给出小的保留窗口(keep_seconds=5，
+  // 与巨大的 start_time 无关; 保留窗口 <= start_time 的钳制见 get_compact_log_keep_time)
   room_test_cfg_values cfg;
   cfg.compact_log_start_seconds = 3600;
   cfg.compact_log_over_percent = 100000;
   cfg.compact_log_keep_count = 2;
   cfg.compact_log_keep_percent = 50;
+  cfg.compact_log_keep_seconds = 5;
   room_test_env env(cfg);
   if (!env.start()) {
     return;
@@ -209,9 +216,9 @@ CASE_TEST(teamsvr_room_compact, compaction_repicked_each_maintenance) {
 
 // ============ CMP-04: 时间维度精确语义(keep_time 默认 start/2；只裁剪窗口外日志；keep 不超 start) ============
 CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
-  // 数量维度关闭(keep_count 极大)，keep_time 缺省 = start/2 = 5s
+  // 数量维度关闭(keep_count/keep_percent 均为 0 -> 数量维度不保留任何日志)，keep_time 缺省 = start/2 = 5s
   room_test_cfg_values cfg;
-  cfg.compact_log_keep_count = 100000;
+  cfg.compact_log_keep_count = 0;
   cfg.compact_log_keep_percent = 0;
   cfg.compact_log_over_percent = 100000;
   cfg.compact_log_start_seconds = 10;
@@ -302,7 +309,7 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
 // ============ CMP-04b: keep_time 不允许大于 start_time(钳制)，否则按时间维度永远无法压缩 ============
 CASE_TEST(teamsvr_room_compact, time_policy_keep_time_clamped_to_start) {
   room_test_cfg_values cfg;
-  cfg.compact_log_keep_count = 100000;
+  cfg.compact_log_keep_count = 0;
   cfg.compact_log_keep_percent = 0;
   cfg.compact_log_over_percent = 100000;
   cfg.compact_log_start_seconds = 10;
@@ -537,7 +544,11 @@ CASE_TEST(teamsvr_room_compact, admission_expired_then_update_failure) {
 
 // ============ CMP-13: 只含 kResetLock 续租日志的空闲频道按时间维度压缩(FIX-04 回归) ============
 CASE_TEST(teamsvr_room_compact, reset_lock_only_channel_time_compaction) {
-  room_test_env env;
+  // 数量维度关闭(keep_count/keep_percent 均为 0 -> 数量维度不保留任何日志)，纯时间维度裁剪
+  room_test_cfg_values cfg;
+  cfg.compact_log_keep_count = 0;
+  cfg.compact_log_keep_percent = 0;
+  room_test_env env(cfg);
   if (!env.start()) {
     return;
   }
@@ -582,9 +593,66 @@ CASE_TEST(teamsvr_room_compact, reset_lock_only_channel_time_compaction) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ RCV-01/02: 从快照(+增量)恢复与全量应用等价 ============
+// ============ CMP-14: 最小保留条数是硬保证(回归): 日志全部超出时间保留窗口但不足 keep_count 时不压缩 ============
+CASE_TEST(teamsvr_room_compact, keep_count_floor_protects_old_logs) {
+  // 事故场景: keep_count=30，未压缩日志仅数条且全部超出时间保留窗口。
+  // 旧实现把"数量维度保留全部"(裁剪点 0)误判为"数量维度不限制"而取时间维度裁剪点，
+  // 导致压缩推进到最后一条日志
+  room_test_cfg_values cfg;
+  cfg.compact_log_keep_count = 30;
+  cfg.compact_log_keep_percent = 50;
+  cfg.compact_log_over_percent = 100000;  // 关闭数量加速，仅续租驱动
+  room_test_env env(cfg);
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  size_t event_logs_before = fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent);
+
+  // 推进到保留窗口(5s)之外: 全部未压缩日志都超出时间保留窗口，但总数远小于 keep_count=30
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+
+  // 数量维度要保留全部日志 -> 不压缩
+  CASE_EXPECT_TRUE(nullptr == find_compact_update(fake));
+  CASE_EXPECT_EQ(0, fake.last_removed_sequence());
+  CASE_EXPECT_EQ(event_logs_before, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
+
+  // 数量维度也放行后(日志数超过 keep_count)压缩恢复: 再写 31 条并推进时间
+  // (guard 是绝对偏移，需推进到 phase 1 之后的下一个续租点)
+  CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, 31));
+  {
+    global_now_offset_guard guard(std::chrono::seconds{12});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(fake);
+  CASE_EXPECT_TRUE(nullptr != compact_update);
+  // 压缩后未压缩日志仍不少于 keep_count(30) 条(最小保留条数是硬保证)
+  CASE_EXPECT_GE(fake.journal().size(), 30u);
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
 CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
-  room_test_env env;
+  // 准入有效期拉长: 双维度硬保证语义下压缩需推进到保留窗口(5s)之外，不能顺带让准入过期
+  room_test_cfg_values cfg;
+  cfg.invitation_expire_seconds = 3600;
+  cfg.join_request_expire_seconds = 3600;
+  room_test_env env(cfg);
   if (!env.start()) {
     return;
   }
@@ -653,9 +721,13 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
 
   // 通过真实 room maintenance 生成 custom/private 快照和 compact 边界；不能手工拼一个宣称
   // 覆盖最新 sequence 却缺失 admission 的快照，也不能把 A 队 journal 复制到 B 队频道。
+  // 双维度硬保证语义下需推进到保留窗口(5s)之外，时间维度才放行裁剪
   CASE_EXPECT_TRUE(write_member_update_logs(env, source_room, members.normal, 8));
-  env.drive_timer_ticks();
-  CASE_EXPECT_EQ(0, env.sync(source_team));
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(source_team));
+  }
   CASE_EXPECT_TRUE(nullptr != find_compact_update(source_fake));
   CASE_EXPECT_GE(source_fake.last_removed_sequence(), shared_data_sequence);
 

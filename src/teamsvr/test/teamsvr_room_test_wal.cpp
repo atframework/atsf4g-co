@@ -712,9 +712,13 @@ CASE_TEST(teamsvr_room_wal, lagging_subscriber_snapshot_caught_up_incremental) {
 // sequence < compact_sequence 的日志被物理移除、== compact_sequence 的日志保留(与 fake journal
 // 的闭区间裁剪不同)；恢复房间的压缩边界/成员/共享数据与权威频道一致
 CASE_TEST(teamsvr_room_wal, compact_boundary_and_replay_start) {
-  room_test_env env;
-  env.wal_journal_mode = true;
-  if (!env.start()) {
+  // 双维度硬保证语义下，订阅者缓存在维护时可能尚未积累到最小保留条数(WAL 事件异步送达);
+  // 数量维度关闭(keep_count/keep_percent 均为 0)使本用例聚焦时间维度裁剪契约
+  teamsvr_room_test::room_test_cfg_values cfg;
+  cfg.compact_log_keep_count = 0;
+  cfg.compact_log_keep_percent = 0;
+  room_test_env env(cfg);
+  env.wal_journal_mode = true;  if (!env.start()) {
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }

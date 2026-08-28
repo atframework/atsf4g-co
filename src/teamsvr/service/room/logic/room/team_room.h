@@ -387,6 +387,10 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   std::chrono::system_clock::time_point next_renew_lock_timepoint_;
   // 最早的未压缩日志时间点(随日志压缩推进，用于按时间维度压缩的调度与触发)
   std::chrono::system_clock::time_point oldest_log_timepoint_;
+  // 上一次维护开始时的未压缩日志数: 压缩加速触发要求自上次维护以来有显著新增日志(>= 保留下限)。
+  // 均衡态下维护自身追加的续租/快照日志抵消裁剪量，日志数不增长，加速触发不会反复置为
+  // "已过期"而饿死 kick/destroy 等更晚到期的定时事件; 突发写入带来的真实增长仍可及时触发压缩
+  int64_t last_maintenance_uncompacted_count_ = 0;
   int64_t last_compact_sequence_ = 0;
   std::chrono::system_clock::time_point last_compact_timepoint_;
   task_type_trait::task_type maintenance_task_;

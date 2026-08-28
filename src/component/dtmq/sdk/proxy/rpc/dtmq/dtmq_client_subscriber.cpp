@@ -2783,8 +2783,17 @@ size_t shared_subscriber::get_cached_log_count(int64_t start_sequence) const noe
     return 0;
   }
 
-  if (start_sequence <= (*wal_client_->get_log_manager().log_begin())->sequence()) {
+  // 快速路径（一），起始点在日志容器的起始位置之前，直接返回整个缓存的日志数量
+  auto fast_iter = wal_client_->get_log_manager().log_begin();
+  if (start_sequence <= (*fast_iter)->sequence()) {
     return wal_client_->get_log_manager().get_all_logs().size();
+  }
+
+  // 快速路径（二），有时会查询裁剪后的日志，而被裁剪的日志某些版本的实现可能会留存不删除。
+  // 此时返回的数量是 size()-1
+  ++fast_iter;
+  if (fast_iter != wal_client_->get_log_manager().log_end() && start_sequence == (*fast_iter)->sequence()) {
+    return wal_client_->get_log_manager().get_all_logs().size() - 1;
   }
 
   // 底层日志容器为 deque(随机访问迭代器)，distance 为 O(1)

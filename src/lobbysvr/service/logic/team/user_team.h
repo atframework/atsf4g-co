@@ -134,7 +134,7 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void append_pending_dirty_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action);
 
   // 全量替换/合并成员缓存(重复的 add_member 保留更早的入队时间)
-  void upsert_member_cache(const ::atfw::team::DTeamMember& member_data);
+  void upsert_member_cache(rpc::context& ctx, const ::atfw::team::DTeamMember& member_data);
 
   // 维护待处理邀请/加入请求(key 无效或已过期则忽略)。同 key 且过期时间不变时原位覆盖，避免重排
   void upsert_pending_invitation(rpc::context& ctx, const ::atfw::team::DTeamInvitation& invitation);
@@ -184,11 +184,14 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   atfw::team::EnTeamPermissionRole cached_permission_role_;
   atfw::team::DTeamConfigure cached_configure_;
 
-  // 队伍状态缓存(快照 + 频道增量事件维护)，dump 快照时按需回填，不下发内部路由字段
+  // 队伍状态缓存(快照 + 频道增量事件维护)，dump 快照时成员共享数据转出成解包后的模块数据
+  // (DUserTeamSnapshot.unpacked_member_data)，不下发内部路由字段
   struct member_cache_data {
-    // shared_member_data 字段在内存中恒为空，共享成员数据由下方的 key-value 索引维护
+    // shared_member_data 字段在内存中恒为空(upsert 时逐字段拷贝、不复制原始打包数据)，
+    // 共享成员数据由下方的 key-value 索引维护
     atfw::team::DTeamMember member_data;
-    std::unordered_map<int64_t, atfw::team::DTeamAnyData> shared_member_data;
+    // 成员共享数据(解包后的模块数据，key 算法见 user_team_algorithm::make_team_member_shared_data_key)
+    std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> shared_member_data;
   };
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, member_cache_data, user_key_hash_t, user_key_equal_t>
       cached_members_;

@@ -188,9 +188,19 @@ CASE_TEST(teamsvr_room_lifecycle, admission_expiry_cleanup_no_notify) {
   size_t personal_before_cleanup = env.personal_message_count();
   CASE_EXPECT_EQ(2u, personal_before_cleanup);
 
-  // 推进过期时间 + 分轮驱动维护；断言在偏移时间内完成(过期判定依赖推进后的时钟)
+  // 推进过期时间 + 分轮驱动维护；断言在偏移时间内完成(过期判定依赖推进后的时钟)。
+  // 推进量(31s+)已超过 member_offline_expire(30s): 全员心跳保持在线，避免维护调度恢复后
+  // 离线成员被踢产生额外的 remove_member 通知(本用例只关心准入清理的副作用)
   {
     global_now_offset_guard guard(std::chrono::seconds{31});
+    for (const auto& key : {members.owner, members.admin, members.normal}) {
+      CASE_EXPECT_EQ(0, env.run("heartbeat_keepalive", [room, &key](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::team::SSTeamRoomHeartbeatReq hb;
+        protobuf_copy_message(*hb.mutable_user_key(), key);
+        hb.set_user_router_server_id(0x1234);
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->heartbeat(ctx, hb)));
+      }));
+    }
     for (int round = 0; round < 4; ++round) {
       guard.advance(std::chrono::seconds{2});
       env.drive_timer_ticks();

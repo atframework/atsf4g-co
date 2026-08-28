@@ -747,8 +747,12 @@ CASE_TEST(teamsvr_room_event, event_sync_duplicate_batch_ignored) {
                    }));
   }
   (void)env.sync(team_id);
-  env.drive_timer_ticks();
-  CASE_EXPECT_EQ(0, env.sync(team_id));
+  // 双维度硬保证语义下需推进到保留窗口(5s)之外，时间维度才放行裁剪
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
   CASE_EXPECT_GT(fake.last_removed_sequence(), 0);
   // 重放 compact 之前的日志副本(creation 日志已被裁剪)
   atfw::dtmq::SSChannelEventSync stale_sync;
