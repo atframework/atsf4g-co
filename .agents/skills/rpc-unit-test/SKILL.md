@@ -72,6 +72,14 @@ Key rules:
 - **One active runtime per process** (app/dispatcher/task-manager singletons). CTest parallelism is across executables
   only; cases inside one executable run serially.
 - `run_task` body uses `RPC_AWAIT_*`/`RPC_RETURN_CODE`; it always creates a real task via `rpc::async_invoke`.
+- Consume every RPC return value by its type. APIs returning `rpc::always_ready_code_type`/`rpc::always_ready_void_type`
+  (SS `broadcast::*`, CS downstream `send_*`/`broadcast_*`, all fire-and-forget generated calls) must be awaited
+  or `.unwrap()`ed: the implicit `operator value_type()` does NOT mark the result
+  awaited, and `PROJECT_SERVER_FRAME_*_COROUTINE_CHECK_AWAIT` builds assert in the destructor
+  (`src/server_frame/rpc/rpc_common_types.h`). APIs returning `rpc::rpc_result<T>`/`rpc::result_code_type` must be
+  awaited; never bind them to a plain value or discard them. Await only through the dual-coroutine adapter macros
+  `RPC_AWAIT_CODE_RESULT`/`RPC_AWAIT_TYPE_RESULT`/`RPC_AWAIT_IGNORE_RESULT`/`RPC_AWAIT_IGNORE_VOID`; never write
+  `co_await`/`co_yield` directly.
 - Both timeouts exist: the **task timeout** (asserts business timeout) and `wait`'s **hard timeout** (guards CTest hang;
   on hit it kills all tasks and poisons the runtime, which then only allows `stop()`, never reuse).
 - Put assertions **after** `wait()`; pass business failure through the task's return code.

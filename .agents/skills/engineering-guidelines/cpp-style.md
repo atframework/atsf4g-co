@@ -61,6 +61,15 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
 
 ## RPC/protobuf lifetimes
 
+- Consume every RPC call's return value by its declared type. APIs returning `rpc::always_ready_code_type` /
+  `rpc::always_ready_void_type` (SS `broadcast::*`, CS downstream `send_*`/`broadcast_*`, fire-and-forget calls) must
+  be awaited or `.unwrap()`ed: the implicit `operator value_type()` does NOT mark the result awaited, and
+  `PROJECT_SERVER_FRAME_*_COROUTINE_CHECK_AWAIT` builds assert in the destructor
+  (`src/server_frame/rpc/rpc_common_types.h`). APIs returning `rpc::rpc_result<T>` / `rpc::result_code_type` must be
+  awaited; never bind them to a plain value or discard them.
+- Await only through the dual-coroutine adapter macros `RPC_AWAIT_CODE_RESULT` / `RPC_AWAIT_TYPE_RESULT` /
+  `RPC_AWAIT_IGNORE_RESULT` / `RPC_AWAIT_IGNORE_VOID` (`src/server_frame/rpc/rpc_common_types.h`), which work in both
+  C++20 and legacy stackful coroutine builds. Never write `co_await`/`co_yield` directly in project code.
 - Lambdas passed to `rpc::async_invoke` must not capture by reference, including default `[&]` and explicit `[&value]`
   captures. The callable runs in an independent task and may execute or resume after the enclosing function has
   returned; copy or move required state into the closure and use an owning smart pointer when pointee lifetime must be

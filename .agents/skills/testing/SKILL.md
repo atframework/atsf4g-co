@@ -52,5 +52,11 @@ If the workspace provides CMake build tasks, prefer those to ensure UTF-8 consol
 Read the executable's exit status and case counts. A skipped dependency-backed case is not passing coverage; report the
 skip and the missing prerequisite explicitly.
 
+When test code calls RPC interfaces (any `atfw::testing::runtime`-based fixture): consume the return value by its
+declared type — `rpc::always_ready_*` (broadcast/fire-and-forget sends) must be awaited or `.unwrap()`ed, and
+`rpc::rpc_result<T>` must be awaited; unconsumed values assert in CHECK_AWAIT builds. Await only via the adapter macros
+`RPC_AWAIT_CODE_RESULT`/`RPC_AWAIT_TYPE_RESULT`/`RPC_AWAIT_IGNORE_RESULT`/`RPC_AWAIT_IGNORE_VOID`, never direct
+`co_await`/`co_yield`. See `rpc-unit-test` for details.
+
 For a defect or behavior change, use `change-workflow` for RED-GREEN-REFACTOR and completion evidence. Use
 `engineering-guidelines` for C++/CMake naming, implementation, and lint rules; do not re-create those policies here.

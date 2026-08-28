@@ -17,6 +17,14 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 - For every `rpc::async_invoke` call, enforce the no-reference-capture lifetime rule in
   [`cpp-style.md`](cpp-style.md); inspect both default and explicit lambda captures instead of assuming the enclosing
   function remains alive until the spawned task completes.
+- For every RPC call in the diff, enforce the return-value consumption rule in
+  [`cpp-style.md`](cpp-style.md) ("RPC/protobuf lifetimes"): an `rpc::always_ready_*` result (SS `broadcast::*`, CS
+  downstream `send_*`/`broadcast_*`, fire-and-forget calls) must be awaited or `.unwrap()`ed — binding it via the
+  implicit `operator value_type()` or discarding it trips the `awaited_` destructor assert in
+  `PROJECT_SERVER_FRAME_*_COROUTINE_CHECK_AWAIT` builds; an `rpc::rpc_result<T>`/`rpc::result_code_type` result must be
+  awaited, never stored in a plain value or dropped. Every await must use the adapter macros
+  `RPC_AWAIT_CODE_RESULT`/`RPC_AWAIT_TYPE_RESULT`/`RPC_AWAIT_IGNORE_RESULT`/`RPC_AWAIT_IGNORE_VOID`; reject any direct
+  `co_await`/`co_yield` keyword in project code.
 - Prefer existing helper APIs, project error codes, and local patterns over ad hoc alternatives.
 - Keep comments useful and current; remove placeholder `TODO` text when implementing the placeholder.
 - Treat unconditional touch or same-content overwrite of target-consumed code/resources as a blocking build-performance

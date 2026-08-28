@@ -1037,9 +1037,11 @@ class room_test_env {
 
   // 创建队伍的完整流程: 就绪 -> create_team。返回 create_team 结果码；room 传出。
   // 就绪阶段复用 setup_ready_room(WAL 模式下事件批异步送达，需要泵空后重试一次)
+  // client_version/user_router_server_id 非缺省时随请求上报(与 lobbysvr create_team 的真实行为一致)
   int32_t setup_created_team(int64_t team_id, const PROJECT_NAMESPACE_ID::DUserIDKey& owner_key,
                              const atfw::dtmq::DChannelIdKey& owner_channel, team_room::ptr_t* out_room = nullptr,
-                             const atfw::team::DTeamConfigure* configure = nullptr) {
+                             const atfw::team::DTeamConfigure* configure = nullptr,
+                             const std::string* client_version = nullptr, uint64_t user_router_server_id = 0) {
     auto room = setup_ready_room(make_team_key(team_id));
     if (!room) {
       return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
@@ -1048,13 +1050,20 @@ class room_test_env {
       *out_room = room;
     }
     return run("setup_created_team",
-               [room, team_id, &owner_key, &owner_channel, configure](rpc::context& ctx) -> rpc::result_code_type {
+               [room, team_id, &owner_key, &owner_channel, configure, client_version,
+                user_router_server_id](rpc::context& ctx) -> rpc::result_code_type {
                  atfw::team::SSTeamRoomCreateReq req;
                  protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
                  protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
                  protobuf_copy_message(*req.mutable_sender_user_channel(), owner_channel);
                  if (nullptr != configure) {
                    protobuf_copy_message(*req.mutable_configure(), *configure);
+                 }
+                 if (nullptr != client_version) {
+                   req.set_client_version(*client_version);
+                 }
+                 if (0 != user_router_server_id) {
+                   req.set_user_router_server_id(user_router_server_id);
                  }
                  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
                });

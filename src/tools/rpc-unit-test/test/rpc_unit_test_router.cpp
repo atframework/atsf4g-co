@@ -298,7 +298,8 @@ CASE_TEST(rpc_unit_test, broadcast_per_target_policy) {
         rpc_unit_test::RpcUnitTestEchoReq req_body;
         req_body.set_payload("per-target");
         // Empty index selects the whole global discovery set.
-        int32_t res = rpc::unit_test::broadcast::rpc_unit_test_broadcast(ctx, req_body, ss_msg_logic_index{});
+        // broadcast 返回 always_ready(fire-and-forget)，必须 await 或 unwrap
+        int32_t res = rpc::unit_test::broadcast::rpc_unit_test_broadcast(ctx, req_body, ss_msg_logic_index{}).unwrap();
         RPC_RETURN_CODE(res);
       });
   if (task.empty()) {

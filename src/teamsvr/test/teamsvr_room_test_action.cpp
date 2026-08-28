@@ -255,8 +255,14 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
   auto owner_key = make_user_key(1, 3001);
   auto owner_channel = make_personal_channel(3001);
 
+  // 创建者(首任队长)的版本/路由随 create 上报(与 lobbysvr create_team 的真实行为一致)，
+  // 入队后其他成员才能在快照里看到队长的版本信息
+  const std::string owner_client_version = "ut-create-v1";
+  constexpr uint64_t kOwnerRouterServerId = 0x1234ABCD;
+
   team_room::ptr_t room;
-  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner_key, owner_channel, &room));
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner_key, owner_channel, &room, nullptr,
+                                           &owner_client_version, kOwnerRouterServerId));
   CASE_EXPECT_TRUE(!!room);
   if (!room) {
     CASE_EXPECT_EQ(0, env.stop());
@@ -301,6 +307,9 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
     if (1 == storage.member_size()) {
       CASE_EXPECT_EQ(owner_key.user_id(), storage.member(0).user_key().user_id());
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, storage.member(0).role());
+      // 创建者上报的版本/路由必须落入频道快照(custom_data)，订阅端才能经快照看到队长的版本信息
+      CASE_EXPECT_EQ(owner_client_version, storage.member(0).client_version());
+      CASE_EXPECT_EQ(kOwnerRouterServerId, storage.member(0).user_router_server_id());
     }
     CASE_EXPECT_EQ(owner_key.user_id(), storage.captain_user_key().user_id());
 
@@ -314,6 +323,8 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
   CASE_EXPECT_TRUE(!!owner);
   if (owner) {
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, owner->member_data.role());
+    CASE_EXPECT_EQ(owner_client_version, owner->member_data.client_version());
+    CASE_EXPECT_EQ(kOwnerRouterServerId, owner->member_data.user_router_server_id());
   }
 
   // 事件回环(初始 update 产生的 kUpdateCustomData/kNoop 日志)后房间仍为主控
