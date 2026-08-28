@@ -45,6 +45,8 @@ namespace rpc {
 namespace db {
 namespace uuid {
 namespace {
+
+constexpr static const int64_t kGlobalIncreaseIdStart = 3125;
 struct ATFW_UTIL_SYMBOL_LOCAL short_uuid_encoder {
   constexpr static const size_t kKeyLength = 36;
 
@@ -136,7 +138,7 @@ SERVER_FRAME_API rpc_result<int64_t> generate_global_increase_id(rpc::context &c
   if (ret < 0) {
     RPC_RETURN_CODE(ret);
   }
-  RPC_RETURN_CODE(static_cast<int64_t>(inc_value));
+  RPC_RETURN_CODE(static_cast<int64_t>(inc_value) + kGlobalIncreaseIdStart);
 }
 
 namespace {

@@ -764,6 +764,18 @@ rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::t
   }
 
   auto now = atfw::util::time::time_utility::now();
+  std::chrono::system_clock::time_point expired_timepoint{};
+  if (invitation.expired_timepoint().seconds() <= 0) {
+    expired_timepoint = now + protobuf_to_system_clock(get_teamsvr_room_cfg().invitation_expire());
+  } else {
+    expired_timepoint = protobuf_to_system_clock(invitation.expired_timepoint());
+  }
+  if (now >= expired_timepoint) {
+    FCTXLOGDEBUG(ctx, "team_room {}:{} received a expired invitation and ignored", team_key_.zone_id(),
+                 team_key_.team_id());
+    RPC_RETURN_CODE(0);
+  }
+
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
   auto* add_data = action->mutable_add_invitation();
   auto existing = pending_invitation_by_invitee_.find(invitee);
@@ -772,10 +784,11 @@ rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::t
     if (existing->second->team_source_type() == invitation.team_source_type() &&
         existing->second->team_source_data().type_url() == invitation.team_source_data().type_url() &&
         existing->second->team_source_data().value() == invitation.team_source_data().value() &&
-        protobuf_to_system_clock(existing->second->expired_timepoint()) >=
-            protobuf_to_system_clock(invitation.expired_timepoint()) &&
+        protobuf_to_system_clock(existing->second->expired_timepoint()) >= expired_timepoint &&
         atfw::atapp::protobuf_equal(existing->second->invitee_private_channel(),
                                     invitation.invitee_private_channel())) {
+      FCTXLOGDEBUG(ctx, "team_room {}:{} received a older invitation and ignored", team_key_.zone_id(),
+                   team_key_.team_id());
       RPC_RETURN_CODE(0);
     }
 
@@ -783,9 +796,8 @@ rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::t
     // 请求方要求更晚的过期时间时顺延(与上方跳过条件保持一致)
     protobuf_copy_message(*add_data, *existing->second);
     protobuf_copy_message(*add_data->mutable_invitee_private_channel(), invitation.invitee_private_channel());
-    if (protobuf_to_system_clock(invitation.expired_timepoint()) >
-        protobuf_to_system_clock(add_data->expired_timepoint())) {
-      protobuf_copy_message(*add_data->mutable_expired_timepoint(), invitation.expired_timepoint());
+    if (expired_timepoint > protobuf_to_system_clock(add_data->expired_timepoint())) {
+      protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
     }
     // 事件应用后会向被邀请人补发一次 DTeamMemberAction
   } else {
@@ -794,10 +806,7 @@ rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::t
     if (add_data->start_timepoint().seconds() <= 0) {
       *add_data->mutable_start_timepoint() = protobuf_from_system_clock(now);
     }
-    if (add_data->expired_timepoint().seconds() <= 0) {
-      *add_data->mutable_expired_timepoint() =
-          protobuf_from_system_clock(now + protobuf_to_system_clock(get_teamsvr_room_cfg().invitation_expire()));
-    }
+    protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
   }
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, *action)));
 }
@@ -910,6 +919,19 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
   }
 
+  auto now = atfw::util::time::time_utility::now();
+  std::chrono::system_clock::time_point expired_timepoint{};
+  if (join_request.expired_timepoint().seconds() <= 0) {
+    expired_timepoint = now + protobuf_to_system_clock(get_teamsvr_room_cfg().join_request_expire());
+  } else {
+    expired_timepoint = protobuf_to_system_clock(join_request.expired_timepoint());
+  }
+  if (now >= expired_timepoint) {
+    FCTXLOGDEBUG(ctx, "team_room {}:{} received a expired join request and ignored", team_key_.zone_id(),
+                 team_key_.team_id());
+    RPC_RETURN_CODE(0);
+  }
+
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
   auto* add_data = action->mutable_add_join_request();
   auto existing = pending_join_request_by_requester_.find(requester);
@@ -920,12 +942,13 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
         existing->second->team_source_data().value() == join_request.team_source_data().value() &&
         existing->second->client_version() == join_request.client_version() &&
         existing->second->user_router_server_id() == join_request.user_router_server_id() &&
-        protobuf_to_system_clock(existing->second->expired_timepoint()) >=
-            protobuf_to_system_clock(join_request.expired_timepoint()) &&
+        protobuf_to_system_clock(existing->second->expired_timepoint()) >= expired_timepoint &&
         atfw::atapp::protobuf_equal(existing->second->requester_private_channel(),
                                     join_request.requester_private_channel()) &&
         team_any_data_map_equal(existing->second->member_admission_data(), join_request.member_admission_data(),
                                 ctx.get_protobuf_arena().get())) {
+      FCTXLOGDEBUG(ctx, "team_room {}:{} received a older join request and ignored", team_key_.zone_id(),
+                   team_key_.team_id());
       RPC_RETURN_CODE(0);
     }
 
@@ -933,18 +956,13 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
     // 请求方要求更晚的过期时间时顺延(与上方跳过条件保持一致)
     protobuf_copy_message(*add_data, *existing->second);
     protobuf_copy_message(*add_data->mutable_requester_private_channel(), join_request.requester_private_channel());
-    if (protobuf_to_system_clock(join_request.expired_timepoint()) >
-        protobuf_to_system_clock(add_data->expired_timepoint())) {
-      protobuf_copy_message(*add_data->mutable_expired_timepoint(), join_request.expired_timepoint());
+    if (expired_timepoint > protobuf_to_system_clock(add_data->expired_timepoint())) {
+      protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
     }
   } else {
     protobuf_copy_message(*add_data, join_request);
     protobuf_copy_message(*add_data->mutable_team_key(), team_key_);
-    if (add_data->expired_timepoint().seconds() <= 0) {
-      *add_data->mutable_expired_timepoint() =
-          protobuf_from_system_clock(atfw::util::time::time_utility::now() +
-                                     protobuf_to_system_clock(get_teamsvr_room_cfg().join_request_expire()));
-    }
+    *add_data->mutable_expired_timepoint() = protobuf_from_system_clock(expired_timepoint);
   }
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, *action)));
 }
