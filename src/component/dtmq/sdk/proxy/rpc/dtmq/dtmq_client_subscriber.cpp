@@ -1774,6 +1774,10 @@ DTMQ_PROXY_SDK_API rpc::result_code_type client_subscriber::send_message(
 
   // 这里需要重新设置subscriber_key，不能用共享的subscriber_info里的subscriber_key，因为共享的subscriber_info里的subscriber_key可能是空的
   subscriber_info_holder->set_subscriber_key(get_subscriber_key());
+  // with_private_data必须和共享层心跳订阅一致：broker会按with_private_data把同一节点的订阅者拆成不同的
+  // 推送组，如果本订阅者的key被拆进不含共享key的推送组，global_receive_channel_event会把它误判为已失效的
+  // 订阅而发送反订阅
+  subscriber_info_holder->set_with_private_data(internal_data_->shared_instance->get_option_with_private_data());
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::send_message(
       ctx, std::move(*subscriber_info_holder), internal_data_->shared_instance->get_channel_key(), std::move(detail),

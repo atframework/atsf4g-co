@@ -13,6 +13,9 @@
 //     on_receive_snapshot_start/finished, is_destroyed)
 //   - business RPC + local cache (send_message/find_message/find_cached_message/query_cached_message/
 //     page_query_message)
+//   - send_message sender-info contract (subscriber keeps the client key for attribution while
+//     with_private_data mirrors the shared heartbeat subscription, so the re-subscribed entry stays in
+//     the shared key's event-sync push group)
 //   - send convenience wrappers (send_text/send_event detail packing, send_destroy/send_reset_lock/
 //     send_update request mapping, lock checker copy-in/copy-back, client_result propagation)
 //   - channel lifecycle on one client_subscriber (create -> destroy -> re-create via
@@ -1283,6 +1286,121 @@ CASE_TEST(component_dtmq_subscriber, business_rpc_and_cache) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
+// ============ send_message sender-info grouping ============
+// The proxysvr re-subscribes req.subscriber() on every send_message (task_action_send_message) and
+// splits event-sync delivery by with_private_data (mq_channel_wal_handle publisher_send_logs/
+// publisher_send_snapshot). The sender info carries the client subscriber_key for attribution, and its
+// with_private_data must mirror the node's shared heartbeat subscription; a divergent flag would land
+// the re-subscribed client key in a separate push group whose subscriber_keys lack the shared key, and
+// global_receive_channel_event would misread that sync as a stale subscription and unsubscribe the
+// still-live client key (the recurring DtmqProxysvrService/unsubscribe churn observed in teamsvr-room
+// logs).
+CASE_TEST(component_dtmq_subscriber, send_message_sender_info_group) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    CASE_MSG_INFO() << "runtime start failed: " << test.get_diagnostic() << '\n';
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    CASE_MSG_INFO() << "discovery injection failed: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+
+  auto subscribe_rule = mock_subscribe_ack(test);
+
+  struct sender_info_snapshot_t {
+    std::string subscriber_key;
+    uint64_t subscriber_server_id;
+    bool with_private_data;
+    std::string message_sender_key;
+  };
+  std::vector<sender_info_snapshot_t> captured_senders;
+  auto send_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_send_message(),
+      atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
+      [&captured_senders](const atframework::testing::ss_request_view& request,
+                          google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body);
+        auto& typed_response = static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response);
+        sender_info_snapshot_t snapshot;
+        snapshot.subscriber_key = typed_request.subscriber().subscriber_key();
+        snapshot.subscriber_server_id = typed_request.subscriber().subscriber_server_id();
+        snapshot.with_private_data = typed_request.subscriber().with_private_data();
+        snapshot.message_sender_key = typed_request.message_content().sender_key();
+        captured_senders.push_back(std::move(snapshot));
+        typed_response.set_client_result(0);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!subscribe_rule && !!send_rule);
+
+  auto send_one = [&test](subscriber_ptr& subscriber, gsl::string_view task_name) -> bool {
+    auto task = test.run_task(task_name, std::chrono::seconds{3},
+                              [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
+                                atfw::dtmq::DChannelMessageDetail detail;
+                                detail.set_text("sender-info-group");
+                                RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                                    subscriber->send_message(ctx, std::move(detail), nullptr, nullptr, true, false)));
+                              });
+    if (task.empty()) {
+      return false;
+    }
+    auto result = test.wait(task, std::chrono::seconds{6});
+    return result.task_exited && 0 == result.result_code;
+  };
+
+  // with_private_data=true client: sender info mirrors the shared subscription's private-data group.
+  auto pd_subscriber = rpc::dtmq::client_subscriber::create(make_channel_key("chan-sender-group-pd"),
+                                                            make_subscriber_options("UT:sender-pd", true, true));
+  CASE_EXPECT_TRUE(!!pd_subscriber);
+  if (!pd_subscriber) {
+    CASE_MSG_INFO() << "create returned null subscriber: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_TRUE(pd_subscriber->get_option_with_private_data());
+  CASE_EXPECT_TRUE(send_one(pd_subscriber, "send_msg_sender_pd"));
+
+  // with_private_data=false client stays in the plain group.
+  auto plain_subscriber = rpc::dtmq::client_subscriber::create(make_channel_key("chan-sender-group-plain"),
+                                                               make_subscriber_options("UT:sender-plain", true, false));
+  CASE_EXPECT_TRUE(!!plain_subscriber);
+  if (!plain_subscriber) {
+    CASE_MSG_INFO() << "create returned null subscriber: " << test.get_diagnostic() << '\n';
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_FALSE(plain_subscriber->get_option_with_private_data());
+  CASE_EXPECT_TRUE(send_one(plain_subscriber, "send_msg_sender_plain"));
+
+  // Each client sends with its own subscriber_key, but with_private_data mirrors the shared heartbeat
+  // subscription so the re-subscribed entry stays in the shared key's event-sync push group.
+  CASE_EXPECT_EQ(2, static_cast<int>(captured_senders.size()));
+  if (captured_senders.size() >= 2) {
+    CASE_EXPECT_EQ("UT:sender-pd", captured_senders[0].subscriber_key);
+    CASE_EXPECT_EQ("UT:sender-pd", captured_senders[0].message_sender_key);
+    CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), captured_senders[0].subscriber_server_id);
+    CASE_EXPECT_TRUE(captured_senders[0].with_private_data);
+
+    CASE_EXPECT_EQ("UT:sender-plain", captured_senders[1].subscriber_key);
+    CASE_EXPECT_EQ("UT:sender-plain", captured_senders[1].message_sender_key);
+    CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), captured_senders[1].subscriber_server_id);
+    CASE_EXPECT_FALSE(captured_senders[1].with_private_data);
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 // ============ business RPC (remote path, subscriber not ready) ============
 // When the subscriber has no ready snapshot, find_message/page_query_message resolve the proxysvr node
 // by consistent hash (writable or readonly replica both land on the single mock node) and go through
@@ -1984,9 +2102,9 @@ CASE_TEST(component_dtmq_subscriber, send_text_and_send_event) {
     return;
   }
 
-  // send_text: the text payload lands in message_content.detail.text, the client subscriber_key
-  // overrides the shared one in both subscriber and message_content.sender_key, and the lock
-  // checker is copied into the request.
+  // send_text: the text payload lands in message_content.detail.text, the client subscriber_key is
+  // kept in both subscriber and message_content.sender_key, and the lock checker is copied into the
+  // request.
   const auto& text_req = received_requests.at(0);
   CASE_EXPECT_EQ("hello-send-text", text_req.message_content().detail().text());
   CASE_EXPECT_EQ("UT:send-text", text_req.message_content().sender_key());
@@ -2002,6 +2120,7 @@ CASE_TEST(component_dtmq_subscriber, send_text_and_send_event) {
   CASE_EXPECT_EQ("type.googleapis.com/UnitTestSendEvent", event_req.message_content().detail().event().type_url());
   CASE_EXPECT_EQ("event-value", event_req.message_content().detail().event().value());
   CASE_EXPECT_EQ("UT:send-text", event_req.subscriber().subscriber_key());
+  CASE_EXPECT_EQ("UT:send-text", event_req.message_content().sender_key());
   CASE_EXPECT_FALSE(event_req.auto_create_channel());
   CASE_EXPECT_FALSE(event_req.has_compare_and_maybe_reset_lock());
 
