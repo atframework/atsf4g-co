@@ -1,18 +1,53 @@
 # teamsvr-room 服务分析与测试执行计划
 
-## 当前执行状态（2026-08-28）
+## 当前执行状态（2026-08-29，决策落地轮）
 
-自动化测试已在 `${PROJECT_NAME}-teamsvr-room-unit-test` 落地。当前测试程序 `-l` 确认注册 112 个 case；本轮在
-现有 Ninja/Debug/MSVC x64 构建树完成最新增量构建后，精确匹配 CTest 注册名的全量运行通过，随后
-`--repeat until-fail:2` 连续两次通过(另做了 8 轮重复全部绿色)。CTest 注册的是 1 个串行 executable，
-112 是该 executable 内部的 case 数；二者不能混为 CTest 的 test 数。申请受理回执的 `lobbysvr` 消费者也已由
-其独立 CTest suite 验证；真实个人频道跨进程交付仍属于集成测试边界。后续变更仍须以 §7 的新鲜构建和执行
-结果为准。
+admission 有效期澄清(2026-08-29 第六轮)：dump_public_data 的过期过滤去掉 expired_timepoint 判空
+(邀请/加入请求总是必须有有效期，无有效期按已过期处理)；维护清理本就先于 dump 以无判空规则移除该类记录，
+restore 保留判空兼容旧快照；`expired_admission_snapshot_filtering` 补锁定无有效期邀请经维护清理后不进入快照。
+
+GAP-12 上限澄清(2026-08-29 第五轮)：kElectionCaptain 的 role_limit 取 max(原队长角色, 操作者角色)
+(此前为存在原队长时仅取原队长)，注入场景(ADMIN 队长 + OWNER 非队长操作者转让 role=OWNER)已锁定。
+注入用例经验：客户端 update_custom_data/private_data 按 sequence 单调推进，fresh 频道注入前须
+ensure_created() 使序号>0；进程级订阅者缓存会丢弃同序号强制快照，原地改写状态须换新 team id。
+
+GAP-09 语义澄清落地(2026-08-29 第四轮，含补充)：删除标记(空 value/type_url)仅用于
+kTeamUpdate/kMemberUpdate 的共享数据(apply/去重谓词同步)，admission 刷新改为全量覆盖并删除两个 merge
+助手；admission 的 repeated 数据允许无序，add_invitation/add_join_request 的判重改为顺序无关语义比较
+(invitation/join_request_semantically_equal，按 key 归一化后整体比较)；测试 keyed-data helper 改为类型化
+条目(与生产 PackFrom 对齐)，新增 `update_shared_data_delete_marker` 用例与乱序刷新不追加日志断言，
+当前 125 case 全绿。
+
+WAL-08(P0)与 WAL-07(P1)已落地(2026-08-29 第三轮)：destroy/create 新代际与防重建、多订阅者
+checkpoint/心跳/超时与 GC 均由真实层用例锁定；当前 124 case 全绿(until-fail:2)。WAL 组仅剩
+WAL-09(DB-backed channel，P1)。生产契约观察：destroy_team 事件应用后不重排房间定时器，
+kDestroyChannel 在下一次调度点才被选中(用例按 LIFE-03 分轮推进驱动)；重建代际时 remove_before
+会推进 last_removed，旧 checkpoint 落后即触发快照兜底；进程级订阅者跨代际保留旧视图，强制
+checkpoint 0 重订阅可让其落到当前代际。
+
+协议/产品决策(2026-08-29，共 12 项)已全部落地：GAP-01/03/04/06/07/08/09/10/11/12 按决策实现；
+其中 GAP-03/06/07/08/09/11/12 各有锁定用例，GAP-01/04/10 按决策直接落地、无需新增用例
+（见 §5 GAP 表各行与 §7 证据）；writable transfer 的事件可见延迟优化记录于 `src/component/dtmq/TODO.md`；
+LCK-06/07 的"迟到不恢复 writer"确认为设计行为。本轮含生产代码变更、协议清理(删除 `DTeamRoomMemberRuntimeData` 与
+`DTeamRoomPrivateData.team_key` 字段)与 6 个新锁定用例(DATA-04、GAP-12 election role、GAP-09 admission
+刷新、GAP-08 过期快照过滤、GAP-07 心跳标脏保存、GAP-03 重试耗尽留日志)。注意：本工作树同时有另一 AI agent
+并发推进(EVT-11/LCK-06/07/ADM 刷新语义等用例与 `debug_acknowledge_action_sequence` 钩子)，该轮全量 122 case
+（含双方用例）通过；合入 WAL-07/08 两轮后当前为 124 case 全绿。
+
+前一轮（同日，WAL-05/06 轮）：测试程序 `-l` 确认注册 116 个 case；现有 Ninja/Debug/MSVC x64 构建树
+（build.ninja 为 8/24 旧态，经 CMake 自动重新生成）全量运行通过，`--repeat until-fail:2` 连续两次通过，
+另做 4 轮重复全部绿色。CTest 注册的是 1 个串行 executable，116 是该 executable 内部的 case 数；二者不能混为 CTest 的 test 数。
+申请受理回执的 `lobbysvr` 消费者也已由其独立 CTest suite 验证；真实个人频道跨进程交付仍属于集成测试边界。
+后续变更仍须以 §7 的新鲜构建和执行结果为准。
 
 - 已完成：INF/CRT 基础设施与创建、SDK-DTMQ/SDK-TEAM 路由封装、PERM-01～12/14/16～18 权限零写入门禁、
   COND-01～06 条件更新、ADM 主流程、EVT 核心事件应用、CMP 数量/时间压缩与快照内容、RCV 快照加增量恢复、
   LCK 基础接管/fencing、LIFE 心跳、时间轮和房间生命周期主体，以及阶段 A 第 3 步的 WAL journal 层
-  compile/start smoke 与 WAL-01～04(112 case)。完整与部分覆盖边界以 §4 矩阵为准。
+  compile/start smoke 与 WAL-01～08(124 case)。完整与部分覆盖边界以 §4 矩阵为准。
+- 124 的构成：WAL-01～06 轮 116 例(相对再上一轮 112 新增 WAL-05/06)，本轮新增 WAL-07/08 两例与
+  决策落地轮的 GAP 锁定用例；另有 LCK-06/07 的单 runtime 近似用例
+  (`concurrent_cas_competitor_no_revive`/`concurrent_renew_and_send_monotonic`) 已随上次提交进入工作树并在
+  本轮全量执行中通过，但其矩阵状态仍按 §4.5 的覆盖范围判断保持 🔶。
 - WAL journal 层（§3.2“WAL/恢复层”）已在同一测试目标内落地：直接编译 `mq_channel.cpp`、
   `mq_channel_wal_handle.cpp`、`mq_channel_manager.cpp`，五个 dtmq RPC mock 的 team-room 分支镜像
   `task_action_*` 的服务端行为操作真实频道，日志下发走真实 wal_publisher vtable
@@ -27,19 +62,19 @@
   `last_removed_sequence` 初始化为 1）；WAL 模式 `setup_ready_room` 在首次 await_ready 因订阅未就绪
   失败时泵空事件批再重试一次，等价于生产调用方的重试语义。
 - 最新数据设计已由 protobuf `map` 切换为带 key 的 `repeated` 元素；room 内部使用 `unordered_map`，仅在
-  请求、事件和快照边界执行 keyed repeated 与 map 的转换。现有用例覆盖更新合并、PUBLIC 过滤及压缩后恢复，
-  但重复 key 和旧 wire fixture 兼容仍是 GAP-11。
+  请求、事件和快照边界执行 keyed repeated 与 map 的转换。现有用例覆盖更新合并、PUBLIC 过滤及压缩后恢复；
+  重复 key 规则已按 GAP-11 决策落地(DATA-04)，旧 wire fixture 兼容仍待 DATA-05。
 - 夹具采用 §3.2 的“快速业务层”方案：typed SS mock 复刻 DTMQ 服务端锁 CAS、hash-chain journal、
   custom/private 快照保存与压缩边界语义，并内置 per-RPC 故障注入钩子。timer 驱动会等待维护 task 明确退出，
   不以固定 sleep、网络抖动、CPU 调度或固定 pump 次数作为业务正确性证据。
-- 未完成：WAL-05～09（快照 dump/load 往返、transfer、多订阅者 checkpoint/心跳/超时、destroy/create 新
-  代际与 DB-backed channel）、系统化 CON/FLT 故障矩阵（§4.7）、BND 边界/模型/长稳组（§4.9），以及
-  PERM-13/15、ADM-15、GAP-11/12 等协议边界。未消费 fault script、runtime task 失败、event-sync 失败或
-  `test.stop()` 非零都必须使 case 失败。
+- 未完成：WAL-09（DB-backed channel 保存/重载/压缩恢复）、系统化
+  CON/FLT 故障矩阵（§4.7）、BND 边界/模型/长稳组（§4.9），以及 PERM-13/15、ADM-15、DATA-05（冻结旧 wire
+  fixture）。GAP-01/03/04/06/07/08/09/10/11/12 已决策并落地。未消费 fault script、runtime task 失败、
+  event-sync 失败或 `test.stop()` 非零都必须使 case 失败。
 - 本计划范围限定为离线 mock 单元测试；真实 DTMQ 进程、DB 持久化和跨进程网络属于集成测试，不得以本目标
   的绿色结果代替。
 
-用例矩阵状态标记：✅ 已实现且在本轮 112-case suite 中通过；🔶 已有部分用例但仍存在明确子项缺口；
+用例矩阵状态标记：✅ 已实现且在本轮 125-case suite 中通过；🔶 已有部分用例但仍存在明确子项缺口；
 ⬜ 未实现。没有执行证据的项目不得仅凭源码审阅标为 ✅。
 
 ## 1. 目标与边界
@@ -86,10 +121,10 @@
 | 玩家个人频道 | `DTeamMemberAction` | 尚未入队或需要单独回执的玩家；不是队伍权威写入日志 |
 | room 本地运行时 | 乐观锁、成员 LRU、成员/队伍/私有共享数据 keyed map、删除重试队列、待发个人通知、维护 task、定时器、压缩调度时间 | keyed map 在 dump/restore 边界与 protobuf repeated 转换；其余运行时状态不直接作为故障恢复来源 |
 
-当前实现中，`DTeamRoomMemberRuntimeData` 仍只有协议定义，没有生产读写路径；成员的
-`last_heartbeat_timepoint` 和 `user_router_server_id` 仍由 `DTeamStorage.member` 快照携带。
-`DTeamRoomPrivateData.team_key` 也未被 `dump_private_data` 写入，恢复时不读取。现有测试只锁定当前兼容行为，
-最终隐私、代际和迁移契约仍按 GAP-01/GAP-04/GAP-10 处理。
+按 2026-08-29 决策：成员不需要私有数据，成员的 `last_heartbeat_timepoint`/`user_router_server_id`/ack 由
+`DTeamStorage.member` 公共快照携带（副本节点离线判定需要）；`DTeamRoomMemberRuntimeData` 消息已删除。
+`DTeamRoomPrivateData.team_key` 确认冗余已删除（不保留 reserved，旧快照未知字段由 protobuf 兼容忽略）。
+public/private 同代由 GAP-10 决策的结构性保证（单次 update 同写、同一快照批次同读）。
 
 ### 2.3 请求、日志与通知主流程
 
@@ -132,12 +167,15 @@ flowchart LR
   `send_action` 必须从最终 `DTeamAction` 裁掉 `condition`，避免把仅用于提交前冲突检查的数据写入 WAL。
 - keyed repeated 数据：协议使用 `DTeamAnyDataWithKey`/`DTeamAnyValueWithKey`，room 将成员、队伍和私有数据
   归一化到内存 map；更新只覆盖出现的 key，未出现的 key 保留，dump 时再回填 repeated。不能用 repeated 顺序或
-  protobuf 序列化字节作为状态等价 oracle。
+  protobuf 序列化字节作为状态等价 oracle。GAP-11 已决策：同一请求内同字段 key 重复拒绝(invalid-param 且
+  零写入)，跨请求后写覆盖(在 send_actions/create_team 统一校验)。GAP-09 澄清：member_update/team_update
+  的共享数据支持删除标记(携带 key 但 value 的 type_url 或 payload 为空即删除该 key)；邀请/加入请求/成员的
+  admission 数据为全量覆盖，不做按键合并。
 - 接受邀请或批准申请：先写 `add_member`，再写 approve 事件。第一步成功、第二步失败时，重试会跳过已存在成员并继续清理
   admission，属于必须验证的部分成功恢复场景。
 - 事件应用：更新成员、队伍、邀请/申请映射和队长；重复事件需幂等。`sequence` 只保证递增，不要求连续。
-  默认/自动 `election_captain` 以 role=GUEST 表示把新队长提升为 OWNER，旧队长回落为 NORMAL；显式正 role 的
-  最终语义仍需按 GAP-12 收敛，不能从当前实现反推长期协议。
+  默认/自动 `election_captain`(role=GUEST) 继承原队长角色(原队长缺失回退 OWNER)，旧队长回落为 NORMAL；
+  显式 role 即新队长角色，且不得高于原队长(GAP-12 已决策，队长不再恒为 OWNER)。
 - 接收路径契约：room 注册在 `on_receive_raw_message`（DTMQ 的 `common_action` 对每种 command_case 在 ready 后恰好回调一次），
   而不是只收 kEvent 的 `on_receive_event`。频道日志不止 event：服务端在 update/reset_lock/send_message 携带锁检查器成功时
   都会追加 kResetLock 日志（`mq_channel::set_lock` append_log），乐观锁每次续租就产生一条，另有 kCreate/kDestroy/kText。
@@ -165,7 +203,7 @@ flowchart LR
 | 更新其他成员数据 | `manage_member_role`，默认 ADMIN；action 层必须清零不可信的他人 router id |
 | 更新队伍共享数据 | `update_team_data_role`，默认 NORMAL |
 | 设置成员角色 | `set_member_role_role`，默认 ADMIN；目标当前角色必须严格低于操作者，目标 role 不高于 GUEST 或高于操作者均拒绝；不能修改当前队长 |
-| 当前队长主动转让 | 当前队长可转让给现有成员；默认事件令目标成为 OWNER、旧队长降为 NORMAL，显式 role 语义见 GAP-12 |
+| 当前队长主动转让 | 当前队长可转让给现有成员；默认继承原队长角色(缺失回退 OWNER)、旧队长降为 NORMAL；显式 role=新队长角色且不得高于原队长(GAP-12) |
 | 非当前队长无条件修改队长 | 固定 OWNER，不可配置 |
 | 解散队伍 | 固定 OWNER，不可配置 |
 | 发起邀请 | 邀请人必须等于操作者且达到 `invite_role`，默认 NORMAL |
@@ -196,7 +234,8 @@ flowchart LR
 - `DTeamMember.shared_member_data`、`DTeamStorage.shared_team_data`、admission 数据、private team data 和
   condition value 都是带 key 的 repeated 元素。协议注释要求同字段 key 不重复；当前内存归一化路径对重复 key
   实际表现为后写覆盖先写。测试不能在 GAP-11 决定前把二者任选其一固化为长期契约。
-- `member_update`/`team_update` 的 keyed 数据是按 key 合并，不是整个列表替换；configure 则是携带时整体替换并
+- `member_update`/`team_update` 的 keyed 数据是按 key 合并，不是整个列表替换；携带 key 但 value 的
+  type_url/payload 为空的项删除该 key(GAP-09，删除标记仅用于这两个入口)；configure 则是携带时整体替换并
   先由 `revise_configure_default_permission` 补齐默认门槛。成员本人可更新 router，管理员更新他人时 router 被裁为 0。
 - condition 比较忽略 `DTeamAnyData.permission`，只比较 `Any` 数据；可解析消息按 protobuf 字段语义比较，不能因
   字段编码顺序不同误判。未知类型或解析失败时采用保守不匹配。
@@ -323,6 +362,15 @@ src/teamsvr/test/teamsvr_room_test_wal.cpp         # 真实 publisher/mq_channel
     client_subscriber 共享层对同一频道只有一个实例，无法构造两个真实客户端)；批次按 `subscriber_keys`
     过滤断言，房间真实订阅者作为状态等价性载体。WAL-02 的 hash 不匹配阶段对并发合法心跳触发的增量交付保持
     容忍(只约束其内容不回退到 checkpoint 之前)，强制快照本身是硬断言。
+  - WAL-05/06 的 dump→load 往返以 `wal_make_replacement_channel`(空白可写频道，不落 kCreate) +
+    `load_snapshot` + `wal_swap_channel`(manager/fixture 路由原子切换，旧频道对象保活作隔离断言) 镜像
+    writable transfer；`wal_commit_team_action` 新增 `broadcast=false` 参数构造“已入 journal 未广播”的
+    待广播日志。生产契约观察：转移快照 dump 携带 metadata(custom/configure)/runtime(private/last_removed)/
+    lock/全部剩余日志/存活订阅者；load 后 `last_removed_key` 重置为剩余首条日志 sequence(边界日志保留时与源
+    一致)；load 期间合并订阅者的下发被 `is_loading_snapshot` 抑制；转移后新 publisher 的广播边界在待广播
+    日志上，checkpoint 更早的订阅者收到跳日志的增量批会被客户端哈希链校验拒绝(`kHashCodeMismatch`)，
+    必须由订阅心跳/catch-up 从 checkpoint 起连续补齐(WAL-06 以 `wal_resubscribe(room_ack)` 显式驱动，
+    等价生产中心跳到新可写节点)。
   - 本轮再次踩中 §3.1 的 ninja 头文件依赖不完整问题：对公共头的任何修改（包括仅改 handler 分支/成员）后若
     不删除目标 `.dir` 内的 `.obj`，会出现新旧对象混链，症状包括与源码矛盾的断言失败甚至析构期段错误；
     连续排查时务必先做干净重编再下结论。
@@ -418,7 +466,7 @@ task 退出、调用被消费或状态谓词成立后再断言，不能把固定
 | SDK-TEAM-02 | ✅ | P1 | 哈希到远端的 Team RPC 只发往远端节点 |
 | SDK-TEAM-03 | ✅ | P1 | add-invitation 从 `invitation.team_key`/inviter 提取路由键 |
 | SDK-TEAM-04 | ✅ | P1 | add-join-request 从 `join_request.team_key`/requester 提取路由键 |
-| SDK-TEAM-05 | ✅ | P1 | approve/reject 按 invitee/applicant 所在 zone 选择发现集，同时保持原 team key |
+| SDK-TEAM-05 | ✅ | P1 | approve/reject 按 team_key 路由到房间节点(与对方 invitee/applicant 的 zone 无关，锁定生产固定行为) |
 | SDK-TEAM-06 | ✅ | P1 | 目标 zone 无 ready 节点返回 not-available，零 RPC 且不回退其他 zone |
 | SDK-TEAM-07 | ✅ | P0 | `team_id=0` 的非 create RPC 返回 invalid-param；`zone_id=0` 作为合法全局 team 正常路由 |
 
@@ -433,7 +481,7 @@ task 退出、调用被消费或状态谓词成立后再断言，不能把固定
 | PERM-02 | ✅ | P0 | `add_member` | NORMAL 失败；ADMIN 成功；重复成员失败；非法 key 失败；不能授予高于操作者的角色 |
 | PERM-03 | ✅ | P0 | `member_update` | 任意成员更新自己成功；NORMAL 更新他人失败；ADMIN 更新他人成功 |
 | PERM-04 | ✅ | P0 | `team_update` | 默认 NORMAL 可更新；自定义 ADMIN 后 NORMAL 失败、ADMIN 成功 |
-| PERM-05 | ✅ | P0 | `election_captain` | 当前队长主动转让成功；非队长 ADMIN 失败；目标非成员失败；默认 role=GUEST 时目标成为 OWNER、旧队长降为 NORMAL（显式正 role 见 GAP-12） |
+| PERM-05 | ✅ | P0 | `election_captain` | 当前队长主动转让成功；非队长 ADMIN 失败；目标非成员失败；默认 role=GUEST 时继承原队长角色(原队长缺失回退 OWNER)、旧队长降为 NORMAL；显式 role=新队长角色且不得高于 max(原队长角色, 操作者角色)（GAP-12 已决策+澄清，`election_captain_role_semantics` 锁定） |
 | PERM-06 | ✅ | P0 | `destroy_team` | 仅 OWNER 成功；配置字段不能降低固定门槛 |
 | PERM-07 | ✅ | P0 | `add_invitation` | inviter 必须等于 sender；默认任意成员可邀请；自定义 ADMIN 门槛生效；游客失败 |
 | PERM-08 | ✅ | P0 | `approve_invitation` | invitee 游客本人成功；成员本人也可；任何第三方含 OWNER 都不能代为同意 |
@@ -464,7 +512,7 @@ condition。DATA 行复用 EVT/ADM/RCV 的真实业务路径，不以直接访�
 | DATA-01 | ✅ | P0 | member/team keyed repeated 更新按 key 合并，未出现 key 保留；管理员不能借更新他人数据伪造 router |
 | DATA-02 | ✅ | P0 | invitation 只复制 PUBLIC 的 team/member admission data，不泄露 MEMBER 数据 |
 | DATA-03 | ✅ | P0 | team/member keyed 数据经过事件、compact snapshot 和 restore 后仍可由 condition 正确观察 |
-| DATA-04 | ⬜ | P0 | 同一 repeated 字段出现重复 key 时按 GAP-11 的最终决定统一拒绝或后写覆盖；请求、事件、快照和 condition 不得各自采用不同规则 |
+| DATA-04 | ✅ | P0 | GAP-11 已决策: 单请求内同字段 key 重复返回 invalid-param 且零写入(member/team 共享数据、condition、admission 专用 RPC 均覆盖)；跨请求同 key 后写覆盖。`keyed_data_duplicate_key_rules` 锁定 |
 | DATA-05 | ⬜ | P1 | 用冻结的旧 map-schema wire fixture 验证新 keyed repeated schema 可解析成员、队伍、admission、private 和 condition 数据；不以当前新类型自序列化自解析代替兼容证据 |
 
 ### 4.3 邀请、加入请求与个人通知
@@ -472,17 +520,17 @@ condition。DATA 行复用 EVT/ADM/RCV 的真实业务路径，不以直接访�
 | ID | 状态 | 优先级 | 场景与主要断言 |
 | --- | --- | --- | --- |
 | ADM-01 | ✅ | P0 | 新邀请补齐 team id、start/expire；写一个 `add_invitation`；回环后只向 invitee 发 `invited` |
-| ADM-02 | 🔶 | P1 | 已覆盖完全重复不追加日志、频道刷新和过期时间只延后；source/team/member admission 数据变化目前可能触发“内容仍沿用旧值”的冗余日志，待 GAP-09 决定并补断言 |
+| ADM-02 | ✅ | P1 | 完全重复不追加日志、过期时间只延后；GAP-09 刷新语义(2026-08-29 澄清): admission 数据全量覆盖(以新请求列表为准，无删除标记)，内容变化写新日志并补发 `invited`，inviter/invitee/已顺延过期时间不可变 |
 | ADM-03 | ✅ | P0 | `invited` 对 keyed repeated 的 team/member admission data 只复制 PUBLIC 项，不泄露 MEMBER 数据 |
 | ADM-04 | ✅ | P0 | invitee 接受有效邀请，依次写 `add_member`、`approve_invitation`；事件回环后成员为 NORMAL 并收到 `joined_team`；通知目标频道以 room 本地记录为准，事件负载中的频道字段不被信任 |
 | ADM-05 | ✅ | P0 | 接受邀请时，client version、router id、shared member data 来自 invitee 本人请求，不能由 inviter 伪造 |
 | ADM-06 | ✅ | P1 | `add_member` 成功但 approve 写入失败后重试：不重复添加成员，最终清理邀请并只产生一次有效结果通知 |
-| ADM-07 | ✅ | P0 | 自己拒绝、管理员撤回分别写 `reject_invitation`；成员通过 team log 感知，invitee 收个人回执 |
+| ADM-07 | ✅ | P0 | 自己拒绝、管理员撤回分别写 `reject_invitation`(频道日志负载=room 本地完整邀请记录，含 admission 数据)；成员通过 team log 感知，invitee 收个人回执(裁剪 admission 数据)；否决后内存缓存清理(approve not-found、重复 reject 幂等，均零写入) |
 | ADM-08 | ✅ | P0 | 过期邀请 approve 返回 not-found；reject 幂等成功；room 清理不发送 cancel/reject 个人通知 |
 | ADM-09 | ✅ | P0 | 新加入请求规范化 team id/默认过期时间，保留申请人的频道、版本、router 和 admission data；事件回环后只向申请人发送一次含规范化过期时间的 `apply_join_request` 受理回执 |
-| ADM-10 | 🔶 | P1 | 已覆盖完全重复不追加日志且不重复发送受理回执、频道刷新和过期时间只延后；version/router/source/admission 变化会触发日志但当前仍保留旧值，待 GAP-09 决定并补断言 |
+| ADM-10 | ✅ | P1 | 完全重复不追加日志且不重复发送受理回执、过期时间只延后；GAP-09 刷新语义(2026-08-29 澄清): version 刷新、admission 全量覆盖(以新请求列表为准，无删除标记)，内容变化写新日志并补发受理回执，requester/team_key/规范化过期时间不变 |
 | ADM-11 | ✅ | P0 | 批准申请依次写 `add_member`、`approve_join_request`；成员数据来自原申请；申请人收到 `joined_team` |
-| ADM-12 | ✅ | P0 | 拒绝申请写 `reject_join_request`；申请人收到拒绝通知；队伍成员不额外收到个人通知 |
+| ADM-12 | ✅ | P0 | 拒绝申请写 `reject_join_request`(频道日志负载=room 本地完整申请记录，含 admission 数据)；申请人收到拒绝通知(裁剪 admission 数据)；队伍成员不额外收到个人通知；否决后内存缓存清理(重复 reject 幂等、approve not-found，均零写入) |
 | ADM-13 | ✅ | P0 | 过期申请 approve 返回 not-found；reject 幂等成功；初次申请已有受理回执，维护清理阶段不新增个人通知 |
 | ADM-14 | ✅ | P0 | 备用 room 应用同一批历史 admission 日志不发送 `DTeamMemberAction`，接管后只发送新事件的副作用 |
 | ADM-15 | ⬜ | P1 | 多个 invitee/requester 并存时，按 user key 独立更新、批准、拒绝和清理，不串频道或数据 |
@@ -538,7 +586,7 @@ condition。DATA 行复用 EVT/ADM/RCV 的真实业务路径，不以直接访�
 | LCK-03 | ✅ | P0 | RPC 响应丢失但真实 lock holder 已是本节点时按幂等成功处理 |
 | LCK-04 | ✅ | P0 | 接管缺失队长但仍有成员的快照后，只由新主控产生确定性 election action |
 | LCK-05 | ✅ | P0 | event 已应用并排队个人通知、flush 前锁转给他人；旧主控不得继续发送该副作用 |
-| LCK-06 | 🔶 | P0 | 两个候选同时以同一旧锁 CAS，只有一个成功；失败者即使随后收到迟到 event/response 也不能恢复 writer 身份 |
+| LCK-06 | 🔶 | P0 | 两个候选同时以同一旧锁 CAS，只有一个成功；失败者即使随后收到迟到 event/response 也不能恢复 writer 身份（2026-08-29 决策: 迟到不恢复 writer 为设计行为，维持现状） |
 | LCK-07 | 🔶 | P0 | 续租 update 与普通 send_message 并发、回包乱序；较旧响应不能回退 current lock/compact 状态 |
 | LCK-08 | ⬜ | P1 | writable DTMQ 节点迁移/readonly snapshot transfer 期间 Room 锁租约切换，任一 lock epoch 至多一个副作用生产者 |
 | LCK-09 | ⬜ | P1 | 锁租约配置契约：租约不短于频道 `subscriber_timeout`（配置缺失时按 2*心跳+重试推导），续租间隔为租约一半且不低于 1s；违反时续租必然晚于锁过期，属于必须红灯的配置错误 |
@@ -554,11 +602,11 @@ DTMQ component 测试。
 | WAL-02 | ✅ | P0 | subscriber checkpoint 正常时只下发后续日志；checkpoint hash 不匹配时强制 snapshot，不在错误分支继续增量 |
 | WAL-03 | ✅ | P0 | 慢 subscriber 落后于 `last_removed_key` 时收到 snapshot；跟得上的成员订阅者仍只收增量，二者最终状态等价 |
 | WAL-04 | ✅ | P0 | `compact_sequence` 边界的保留/删除语义与 Room `last_compact_sequence + 1` 重放起点一致，包含非连续 sequence |
-| WAL-05 | ⬜ | P0 | `dump_snapshot` -> 新 `mq_channel::load_snapshot` -> Room restore 往返，custom/private/lock/messages/compact 边界不丢失 |
-| WAL-06 | ⬜ | P0 | writable transfer snapshot 含待广播日志和 custom/private data；转移后旧 publisher 不再接受有效 Room 写入 |
-| WAL-07 | ⬜ | P1 | 多 subscriber 具有不同 checkpoint/心跳/超时，publisher tick、GC、snapshot fallback 不让任何成员越过未保存状态 |
-| WAL-08 | ⬜ | P0 | destroy/create 新 epoch 与旧日志、旧 checkpoint 交错；Room 只接受当前频道代际，旧 team id 防重建语义保持 |
-| WAL-09 | ⬜ | P1 | memory-only 与 DB-backed channel 各完成一次保存、进程内重载和 compact 后恢复，区分 Room 问题与 DTMQ 持久化问题 |
+| WAL-05 | ✅ | P0 | `dump_snapshot` -> 新 `mq_channel::load_snapshot` -> Room restore 往返，custom/private/lock/messages/compact 边界不丢失 |
+| WAL-06 | ✅ | P0 | writable transfer snapshot 含待广播日志和 custom/private data；转移后旧 publisher 不再接受有效 Room 写入(接缝层：dump/load/权威切换/补齐，真实分布迁移仍由 component-dtmq-proxysvr 覆盖) |
+| WAL-07 | ✅ | P1 | 多 subscriber 不同 checkpoint/心跳/超时并存：心跳过期订阅者不进入任何投递批次(而非收到跳日志错误增量)、被订阅者管理器按超时 GC、GC 后可增量恢复且覆盖全部剩余日志；跟得上的订阅者与房间真实订阅者持续连续增量(`multi_subscriber_checkpoint_gc_and_fallback`) |
+| WAL-08 | ✅ | P0 | destroy_team 回环冻结房间 + kDestroyChannel 真实销毁频道(kDestroy 日志)；已销毁频道上的新房间从带 destroy 元数据快照恢复销毁状态、重新 create 拒绝且零写入；重建新代际(旧日志全移除、custom/private 与 team_created 跨代际保留)后新房间恢复旧成员且 create 仍被拒；旧 checkpoint 订阅者经快照兜底落到新代际、不收到旧代际日志(`destroy_recreate_epoch_and_old_checkpoint`) |
+| WAL-09 | ⬜ | P1 | memory-only 与 DB-backed channel 各完成一次保存、进程内重载和 compact 后恢复。调研结论(2026-08-29)：DB-backed 频道的 `writable_init`/`load_from_db` 受分布属主门控(`should_be_writable`，仅一致性哈希目标 dtmq-proxy 节点加载)，单进程房间夹具注入本地兼任 proxy 节点后频道 ID 哈希归属仍不稳定，该路径应由 component-dtmq-proxysvr 的多节点用例覆盖；本目标可锁定的 save->mock DB 记录形状子项暂缓，待与 DTMQ 组件测试协调 |
 
 ### 4.7 并发、故障窗口与崩溃点
 
@@ -642,16 +690,16 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 
 | ID | 需求 | 当前证据 | 测试处理 |
 | --- | --- | --- | --- |
-| GAP-01 | 成员运行时私有数据放在合适的 private data 中 | `DTeamRoomMemberRuntimeData` 未被使用；心跳和 router 位于 public member snapshot | 先确认隐私/恢复契约；若要求私有化，增加快照布局迁移测试，不锁定当前泄露布局 |
-| GAP-03 | 删除重试耗尽后的多节点一致性 | 当前达到上限后仅本地 `remove_member`，没有成功的 team-room 日志 | 先确定是继续重试、降级写还是保留成员；不得把本地分叉写成成功标准 |
-| GAP-04 | `DTeamRoomPrivateData.team_key` 的语义 | 字段存在，但创建/压缩不写、恢复不读 | 决定删除/废弃该字段，或要求写入并校验与 channel id 一致 |
-| GAP-06 | 个人频道通知的可靠性 | 当前明确表现为 at-most-once：flush 前失锁会丢弃，远端接收前失败不重试，接收后失败调用方不可见；LCK-05 已锁定 fencing | 若产品要求可靠送达，先定义通知 ID、幂等/去重、重试和 failover 归属；当前 LIFE-10 只能证明 at-most-once，不能声称通知可靠 |
-| GAP-07 | 心跳/router/成员 ack 的容灾持久性 | heartbeat 只修改本地 member；维护仅在 `compact_sequence > 0` 时写 custom/private，长期无新日志时不会保存新心跳 | 要么有独立 runtime snapshot/update，要么把运行时字段放 private data 并周期持久化；RCV-08 防止切主后误踢在线成员 |
-| GAP-08 | admission 过期清理与 update 原子性 | maintenance 在 `send_update` 前删除本地邀请/申请；普通 update 失败时本地已变、DTMQ snapshot 未变 | 明确失败回滚/重拉/立即重试策略；CMP-10 验证旧主控和新主控不会给出相反决定 |
-| GAP-09 | 重复 admission 的可变字段策略 | invitation/join 的重复判定会观察 source/version/router/admission 等字段，但刷新分支只保留旧记录并更新频道/更晚过期时间，变化时可能追加内容未变化的日志 | 明确各字段 immutable、可刷新或代表新请求；按决定补 ADM-02/10 并断言日志 payload 确实变化 |
-| GAP-10 | snapshot 代际和边界校验 | restore 已拒绝 team key 和 sequence 边界矛盾，并兼容缺失 private data 的旧快照；但没有显式 schema/channel epoch，无法证明 private/public 同代 | 为滚动升级提供可验证版本/epoch 或只读降级入口；补 private 落后/异代、旧 create/destroy epoch 和 snapshot hash/首条剩余日志组合 |
-| GAP-11 | keyed repeated 的重复 key 与旧 wire 兼容 | 协议注释称 key 不允许重复，room 归一化实际是后写覆盖；当前无冻结旧 map-schema 二进制 fixture，也未覆盖 admission/condition 的重复 key | 统一请求、事件、快照、admission 和 condition 的拒绝/覆盖规则；完成 DATA-04/05，兼容用例必须解析旧二进制而非新类型自环 |
-| GAP-12 | `election_captain.role` 与队长角色不变量 | role=GUEST 时实现把新队长升为 OWNER；显式正 role 会直接成为新队长角色，但权限检查又禁止高于目标原角色，可能产生非 OWNER captain，与“队长恒为 OWNER”冲突 | 明确该字段是“新队长角色”“旧队长重置角色”还是应删除；补默认/显式 role、旧队长降级、快照恢复和非法提权零写入用例 |
+| GAP-01 | 成员运行时私有数据放在合适的 private data 中 | 2026-08-29 决策: 成员不需要私有数据，私有数据不下发给 team；成员心跳/router/ack 保留在公共成员快照(供副本离线判定)。`DTeamRoomMemberRuntimeData` 消息已从协议删除 | 已按决策落地，无需迁移测试 |
+| GAP-03 | 删除重试耗尽后的多节点一致性 | 2026-08-29 决策: 重试上限后本地删除并尽力而为(no-wait)补写一次 remove 日志，接受分叉、优先确保无泄露 | 已落地并由 `remove_retry_exhaustion_local_remove_with_log` 锁定 |
+| GAP-04 | `DTeamRoomPrivateData.team_key` 的语义 | 2026-08-29 决策: 确认冗余，直接删除该字段(不加 reserved)；旧快照中的未知字段由 protobuf 兼容忽略 | 已落地 |
+| GAP-06 | 个人频道通知的可靠性 | 2026-08-29 决策: 不要求可靠送达(at-most-once 即最终契约)。补救路径: 邀请/加入请求有效期短可重新发送；remove 未送达时成员经队伍频道订阅(remove 日志/快照)得知被移除 | LIFE-10 锁定的 at-most-once 即为最终契约，GAP 关闭 |
+| GAP-07 | 心跳/router/成员 ack 的容灾持久性 | 2026-08-29 决策: 新心跳不即时持久化但标记房间脏；维护发现脏标记随续租 update 保存 custom/private 快照(负载迁移转出前已持久化)，保存成功后清标记、失败恢复 | 已落地并由 `heartbeat_runtime_dirty_saved_on_maintenance` 锁定；RCV-08/LIFE-13 继续防切主误踢 |
+| GAP-08 | admission 过期清理与 update 原子性 | 2026-08-29 决策(含澄清): 邀请/加入请求总是必须有有效期，dump 过滤不判空 expired_timepoint(无有效期按已过期处理)；快照保存时不写入已过期/无有效期 admission，快照加载时直接剔除过期项(restore 保留判空以兼容旧快照) | 已落地并由 `expired_admission_snapshot_filtering` 锁定(维护仍先本地清理再 dump；无有效期记录在维护清理即移除、不进入快照)；CMP-10 继续覆盖 update 失败一致性 |
+| GAP-09 | 重复 admission 的可变字段策略(已决定并落地) | 2026-08-29 澄清: "有 key 但 value 为空或 type_url 为空则删除该 key"仅适用于 kTeamUpdate/kMemberUpdate 的共享数据；邀请/加入请求/成员的 admission 数据为全量覆盖(不做按键合并、无删除标记)。inviter/invitee/requester/team_key/start 不可变，其余字段按新请求刷新，刷新结果与记录一致时不写日志；admission 的 repeated 数据允许无序，判重忽略 team_admission_data/member_admission_data 的元素顺序(按 key 归一化后语义比较) | ADM-02/10 已补全量覆盖与乱序不追加日志断言；update 删除标记由 `update_shared_data_delete_marker` 锁定 |
+| GAP-10 | snapshot 代际和边界校验 | 2026-08-29 决策: public/private 必须同时保存、同时读取以确保同代。代码 review 确认: create_team 与维护均在单次 update 请求中同时写 custom+private，restore 从同一频道快照批次同时读两者 | 同代由“单请求同写、单批次同读”结构性保证(review 通过)，GAP 关闭；RCV-07 边界矛盾拒绝继续锁定 |
+| GAP-11 | keyed repeated 的重复 key 与旧 wire 兼容 | 2026-08-29 决策: 单个请求内 key 重复则失败拒绝(invalid-param 且零写入)，多个请求之间后写覆盖。已在 send_actions/create_team 入口统一校验(成员/队伍共享数据、condition、admission) | DATA-04 已锁定；冻结旧 map-schema wire fixture(DATA-05)仍未完成 |
+| GAP-12 | `election_captain.role` 与队长角色不变量 | 2026-08-29 决策(含同日澄清): 队长不恒为 OWNER；election_captain.role 即新队长角色，新队长权限不得高于 max(原队长角色, 操作者角色)；默认继承原队长角色(缺失回退 OWNER)；旧队长降为 NORMAL | 已落地并由 `election_captain_role_semantics` 锁定(显式/默认/越权拒绝/快照恢复保持非 OWNER 队长/max 上限注入场景) |
 
 以下问题截至 2026-08-28 已在实现中修复；表中同时区分已有绿色回归与仍待专用用例锁定的修复：
 
@@ -672,9 +720,9 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 
 ### 阶段 A：测试基础设施
 
-> 状态：✅ 完成（2026-08-28）。第 3 步的真实 `wal_publisher` adapter 已落地（`wal_journal_mode`），
-> compile/start smoke 与 WAL-01～04(checkpoint 基线、分发决策等价性、compact 边界与重放起点)通过；
-> WAL-05～09 的 dump/load 往返、transfer/多订阅者等跨层子项仍保持 ⬜（见 §4.6）。
+> 状态：✅ 完成（2026-08-29 更新）。第 3 步的真实 `wal_publisher` adapter 已落地（`wal_journal_mode`），
+> compile/start smoke 与 WAL-01～08(checkpoint 基线、分发决策等价性、compact 边界与重放起点、dump/load
+> 快照往返、transfer 权威切换、destroy/create 新代际与多订阅者心跳/超时/GC)通过；WAL-09(DB-backed)仍保持 ⬜（见 §4.6）。
 
 1. 在 `src/teamsvr/test/CMakeLists.txt` 建立单个 `${PROJECT_NAME}-teamsvr-room-unit-test` 离线 service test target（每程序/库仅一个测试可执行程序）。
 2. 完成 resource、discovery、DTMQ RPC mock、event-sync、时间偏移、规范化 oracle 和清理夹具。
@@ -685,12 +733,18 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 
 ### 阶段 B：P0 业务与权限
 
-> 状态：✅ 主体完成（2026-08-28）。PERM-01～12/14/16～18、COND-01～06、EVT-04/05 与 admission
-> 主流程已落地；PERM-13/15、ADM-15、DATA-04/05 和 GAP-09/11/12 未完成。
+> 状态：✅ 主体完成（2026-08-28；2026-08-29 复审加固）。PERM-01～12/14/16～18、COND-01～06、EVT-04/05 与 admission
+> 主流程已落地；2026-08-29 补齐 add_member 完整负载（版本号/路由/shared_member_data）、`joined_team` 全量、
+> reject 裁剪非空转与拒绝后清理、ADM-16 双路径幂等与清理断言，并落地 GAP-08 快照过期过滤与 GAP-09 admission
+> 全量刷新用例。
+> PERM-13/15、ADM-15、DATA-05 未完成；DATA-04 与 GAP-11/12 已于 2026-08-29 决策落地。
+> `heartbeat_runtime_dirty_saved_on_maintenance` 与 `remove_retry_exhaustion_local_remove_with_log`
+> （GAP-07/GAP-03 锁定用例）已在同轮修复时间驱动方式后转绿。
 
 1. 补齐 PERM-13/15，并保持所有权限/条件拒绝路径的统一零写入门禁。
 2. 完成邀请/申请的成功、拒绝、部分成功重试、公共数据过滤和主备副作用隔离。
-3. 按 GAP-09/11/12 的协议决定补重复 admission、keyed repeated 和 captain role 用例；决定前不写成绿色断言。
+3. 按 GAP-11/12 的协议决定补 keyed repeated 和 captain role 用例；决定前不写成绿色断言。(GAP-09 已决定并落地，见 ADM-02/10 与
+   `admission_refresh_updates_mutable_fields`)
 4. 保持核心事件幂等、成员 move 语义和队长确定性切换；新增 schema/角色用例必须走真实 action/event/restore 路径。
 5. P0 失败即停止进入恢复阶段，先修复权限绕过、条件误放行或错误写入。
 
@@ -710,25 +764,27 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 
 > 状态：🔶 部分完成（2026-08-28）。心跳/重试/admission 过期、申请受理回执及 lobbysvr 本地超时清理、
 > 空房间销毁与合法加入取消、单定时器、多 room tick、step-down、快速订阅失败恢复、恢复兜底和幽灵房间自洁
-> 已落地；LIFE-10～12 仍有故障子项，GAP-03 未纳入绿色门禁。
+> 已落地；GAP-03 已于 2026-08-29 决策落地并由 `remove_retry_exhaustion_local_remove_with_log` 锁定(见 §5 GAP 行)，
+> LIFE-10～12 的故障注入子项(崩溃检查点组合)仍未覆盖。
 
 1. 用全局 now offset 驱动心跳过期、重试、admission 过期、空房间销毁和 channel 回收。
 2. 覆盖 manager 多 room 时间轮和 pending flush 注册表。
-3. 对 GAP-03 仅记录当前结果，契约未决定前不纳入绿色门禁。
+3. GAP-03 契约已定(本地删除+尽力而为补写日志)，锁定用例纳入绿色门禁；故障注入组合(LIFE-10～12)落地前仍按覆盖缺口跟踪。
 
 ### 阶段 E：最新协议与兼容边界
 
-> 状态：🔶 部分完成（2026-08-28）。新 keyed repeated schema 的正常更新、过滤、compact/restore 与条件比较已绿；
-> 重复 key、冻结旧 wire fixture 和 captain role 字段语义尚未收敛。
+> 状态：🔶 部分完成（2026-08-29 更新）。新 keyed repeated schema 的正常更新、过滤、compact/restore 与条件比较已绿；
+> GAP-11(单请求重复 key 拒绝)与 GAP-12(election_captain role 语义)已决策落地并锁定；冻结旧 wire fixture
+> (DATA-05)尚未收敛。
 
-1. 先由协议所有者决定 GAP-11/12；记录“拒绝还是覆盖”“role 字段归属”及滚动升级要求，不从当前容器实现猜契约。
+1. ~~先由协议所有者决定 GAP-11/12~~(2026-08-29 已决定：拒绝+零写入；role=新队长角色且不高于原队长，默认继承)；滚动升级要求随 DATA-05 冻结 fixture 验证。
 2. 完成 DATA-04/05：对每类 keyed repeated 入口验证统一重复 key 规则，并用冻结旧 schema 二进制验证 wire 兼容。
 3. 为 captain 默认/显式 role、旧队长角色、snapshot/replay 和非法提权建立一个最小有效基线；所有失败路径零写入。
 4. 收敛后先跑条件/事件/恢复/SDK focused group，再跑全量 107+ case 与连续两次 CTest。
 
-剩余工作的执行优先级为：GAP-11/12 的协议决定与 P0 用例 → WAL-05/06（dump/load 快照往返与 transfer）及
-其余 WAL P0 → CON/FLT 的 P0 crash/fencing 组合 → 其余 WAL/边界/model/长稳。不得为了增加 case 数跳过前置
-协议决定或复制低价值变体。
+剩余工作的执行优先级为：WAL-09（DB-backed channel）→ CON/FLT 的 P0 crash/fencing 组合 →
+DATA-05（冻结旧 map-schema wire fixture）→ 其余边界/model/长稳。
+（2026-08-29：GAP 协议决定已全部完成并落地，WAL-01～08 已完成，见 §4.6 与 §5。）
 
 ## 7. 构建与运行命令
 
@@ -736,17 +792,64 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 `--compile-commands-dir` 解析 `<BUILD_DIR>` 为 `build_jobs_cmake_tools`；生成器/配置由 settings 与
 `CMakeCache.txt` 确认为 Ninja/Debug。本轮 `--parallel 12` 是显式执行参数，不是 workspace 固定配置。
 
-本轮新鲜证据（2026-08-28，含 WAL-03/04 的最终工作树）：
+本轮新鲜证据（2026-08-29 第四轮，GAP-09 澄清）：
+
+- 生产变更：删除 `merge_team_any_data_with_delete`/`merge_invitation_member_admission_data`，邀请/加入请求
+  刷新的 admission 数据全量覆盖；补充澄清：repeated 的 team_admission_data/member_admission_data 允许无序，
+  判重改用顺序无关语义比较(`invitation_semantically_equal`/`join_request_semantically_equal`，
+  在拷贝上按 key/user_key 归一化排序后 protobuf_equal，存储顺序保持请求原样)；apply_member_update/apply_team_update 与
+  member/team_update 去重谓词增加删除标记语义(命中已存在 key 才产生状态变化，仅标记的空更新按既有约定保留
+  写入作锁探测)。测试 keyed helper(`add_team_any_data_entry`/`add_team_any_value_entry`)改为类型化条目，
+  与生产 PackFrom 打包对齐，使删除标记(空 payload/空 type_url)在用例中可显式构造。
+- 用例：新增 `update_shared_data_delete_marker`(member/team 删除标记、未提及 key 保留、无效标记不改状态)；
+  ADM 刷新用例改全量覆盖断言；COND-06 的"存储空 payload 默认值"子项按新契约改为删除语义断言。
+- 全量：`-l` 125 case；CTest 1/1 executable 通过；`--repeat until-fail:2` 通过；lobbysvr 套件通过。
+
+前一轮（2026-08-29 第三轮，WAL-07/08）：
+
+- 新增 `destroy_recreate_epoch_and_old_checkpoint`(WAL-08)与
+  `multi_subscriber_checkpoint_gc_and_fallback`(WAL-07)，全部走真实 mq_channel/wal_publisher 层。中途修正
+  三处对契约的误设：销毁前的维护需 keep_count/keep_percent=0 配置才会压缩保存全量快照；destroy_team 应用
+  后定时器不重排，销毁须按 LIFE-03 分轮推进驱动(单次大步进下时间轮钳制过期定时器)；重建代际的
+  remove_before 推进 last_removed 后旧 checkpoint 走快照兜底(而非增量)。
+- 全量：`-l` 124 case；CTest 1/1 executable 通过(约 6.2s)；`--repeat until-fail:2` 通过。
+- WAL-09 尝试后回退：DB-backed 频道在房间夹具内因 `load_from_db` 的分布属主门控停留在 kNone
+  (EN_ERR_DTMQ_CHANNEL_NOT_FOUND)；注入本地兼任 proxy 节点 + 频道 ID 探测仍无法稳定取得哈希归属，
+  按计划纪律不以此姿态强行落地，用例与夹具改动已回退(见 §4.6 行内调研结论)。
+
+前一轮（2026-08-29 决策落地轮）：
+
+- 生产变更：GAP-11 单请求重复 key 校验(send_actions/create_team)、GAP-12 election 语义(check_action_permission
+  与 change_captain)、GAP-09 admission 可变字段刷新与按键合并删除(空 type_url/payload)、GAP-08 快照保存过滤与
+  恢复剔除过期 admission、GAP-07 心跳标脏+维护保存、GAP-03 重试耗尽本地删除+no-wait 补写日志；协议删除
+  `DTeamRoomMemberRuntimeData` 与 `DTeamRoomPrivateData.team_key` 字段。
+- 构建：同 wrapper(删除目标 .obj 全量重编)。中途一次段错误由并发 agent 编辑下的陈旧对象混链引起(§3.1 已知
+  问题)，干净重编后消失；一次瞬时链接失败为 exe 被并发进程占用，重试通过。
+- 全量：`-l` 122 case；CTest 精确注册名 1/1 executable 通过(122 内部 case 全绿，约 6.2s)；
+  `--repeat until-fail:2` + 3 轮独立全量运行全部通过。
+- `atf4g-co-lobbysvr-unit-test` 因协议变更重建并执行：1/1 通过(协议清理无消费者受影响)。
+- 并发协作说明：另一 AI agent 同轮落地了 ADM-02/10 刷新断言、`add_admission_data_entry` 类型化条目约定
+  (空 type_url=删除标记)与 CMP-04 开区间收紧；其 `time_policy_compaction_window` 首版断言误判压缩边界
+  (维护#1 的续租/快照通知日志同样在时间窗口外)，本轮按实际算法修正为边界=快照通知日志。
+- 时间驱动教训(记录给后续用例)：`global_now_offset_guard` 析构会回退虚拟时间，跨作用域的多个 guard 会使
+  后续定时器永不到期——多阶段时间推进必须在单一 guard 内用 `.advance()` 完成；一次性大步推进会积压多轮
+  维护且过期定时器被时间轮钳制到未来，需按 LIFE-03 的分轮推进+驱动模式，并以可观测条件
+  (重试入队/故障被消费/队列清空)作为循环退出。
+
+前一轮（2026-08-29，WAL-05/06）：
 
 - `cmake --build build_jobs_cmake_tools --target atf4g-co-teamsvr-room-unit-test --parallel 12`：构建通过。
-  注意：在缺少 VS 环境变量的 shell（如裸 Git Bash）中直接执行会因找不到 `kernel32.lib` 等 SDK 库在链接期
-  失败（LNK1104），需先经 `vcvars64.bat` 加载 VS 环境；本轮通过 `<BUILD_DIR>/_agent_tmp/build_with_vs.cmd`
-  包装执行（该脚本同时先删除目标 `.dir` 内 `.obj` 规避 §3.1 的头文件依赖不完整问题）。
-- 测试程序 `-l`（按上文方式设置工作目录、`RPC_UNIT_TEST_WORKDIR` 与 DLL PATH）列出 112 个注册 case
-  （107 + WAL 组 5 个），退出码 0。
-- 精确注册名首次 CTest（`-R '^atf4g-co-teamsvr-room-unit-test\.unit$' --no-tests=error`）：1/1 executable 通过，
-  约 5.9 秒；`--repeat until-fail:2` 两次均通过。修复 WAL-02 对并发心跳增量的过宽断言后，另做了 8 轮
-  `--repeat until-fail:2`（16 次全量执行）全部通过，无间歇失败。executable 内部 112 个 case 全部通过。
+  本轮构建树的 `build.ninja` 为 8/24 旧态（不含 WAL 测试源），构建时经 Ninja 的 RERUN_CMAKE 规则自动重新生成；
+  修改共享夹具头后按 §3.1 先删除目标 `.dir` 内 `teamsvr_room_test_*.obj` 再重编。VS 环境经
+  `<BUILD_DIR>/_agent_tmp/build_room_test_with_vs.cmd` 包装加载（vcvars64 + 删 obj + 构建）。
+- 测试程序 `-l`（按 §7 下文方式设置工作目录、`RPC_UNIT_TEST_WORKDIR` 与 DLL PATH）列出 116 个注册 case
+  （109 + WAL 组 7 个），退出码 0。
+- 精确注册名首次 CTest 全量运行暴露 WAL-06 首版的断言顺序缺陷（转移后跳日志增量批被客户端哈希链校验
+  拒绝，房间在 catch-up 前不可能应用写回事件）；按生产自愈契约修正断言顺序后：1/1 executable 通过
+  （executable 内部 116 个 case 全部通过，约 5.7 秒）；`--repeat until-fail:2` 两次均通过，另做 4 轮独立
+  全量运行全部通过，无间歇失败。
+- Git Bash 直接运行 `-r "teamsvr_room_wal.*"` 组过滤时出现过“列出 7 个 case 但 0 个执行”的假象（单 case
+  精确名过滤与 CTest 均正常）；组级执行以 CTest 为准，0-case 退出不算通过。
 - `atf4g-co-lobbysvr-unit-test` CTest 前轮已验证（1/1 executable，15 个内部 case）；本轮未改动 lobbysvr 相关
   代码，未重复执行。`component-dtmq-proxysvr` 本轮未执行、未改动，不能将其写成新证据。
 - 本轮未执行 DB-backed channel、跨进程和其他平台，不能将其写成通过。
@@ -789,20 +892,22 @@ Windows 下经 CTest 运行的目标已自动设置 working directory、`RPC_UNI
 
 ## 8. 完成标准
 
-- 🔶 离线 P0 主体的 112 个现有 case 已构建并通过（含 8 轮重复执行）；CON 主体和 FLT 未覆盖子项仍未完成。
+- 🔶 离线 P0 主体的 125 个现有 case 已构建并通过（含重复执行）；CON 主体和 FLT 未覆盖子项仍未完成。
 - ✅ 每个权限失败用例均证明没有提交 `DTeamAction`，而不只是检查错误码。
-- ✅ COND-01～06 已证明条件在提交前检查、失败零写入、通过后从事件裁剪；DATA-04/05 的重复 key 与旧 wire 兼容仍为 ⬜。
+- ✅ COND-01～06 已证明条件在提交前检查、失败零写入、通过后从事件裁剪；DATA-04(单请求重复 key 拒绝/跨请求覆盖)已按 GAP-11 决策锁定，DATA-05 冻结旧 wire fixture 仍为 ⬜。
 - 🔶 compact 快照逐字段覆盖成员、邀请、申请、keyed shared data 和其他公共/私有状态；快照加增量恢复与全量日志结果等价（CMP-06～08、RCV-01/02 已锁定；四路径 model oracle 未做）。
-- 🔶 主备回放不重复发送 `DTeamMemberAction`，锁冲突后旧主控不能继续写或发个人通知（ADM-14、LCK-02 已锁定；多候选与 writable transfer 场景未做）。
+- 🔶 主备回放不重复发送 `DTeamMemberAction`，锁冲突后旧主控不能继续写或发个人通知（ADM-14、LCK-02 已锁定；多候选场景的矩阵状态见 §4.5，writable transfer 接缝已由 WAL-06 锁定）。
 - 🔶 每个 P0 写流程至少覆盖 pre-commit failure、commit-response-loss 和一个延迟/乱序恢复脚本（create/approve/reset-lock 的丢响应已做；pre-commit failure 与延迟乱序未系统化）。
-- 🔶 真实 `wal_publisher` 接缝：WAL-01～04 的 sequence/hash chain、checkpoint 增量与 hash 不匹配强制
+- 🔶 真实 `wal_publisher` 接缝：WAL-01～06 的 sequence/hash chain、checkpoint 增量与 hash 不匹配强制
   snapshot、未订阅 client 首次 checkpoint 0 触发快照、慢订阅者/跟得上订阅者的分发决策与等价性、compact
-  开区间裁剪契约与非连续 sequence 重放起点均已锁定；快照 dump/load 往返（WAL-05）、transfer 与多订阅者
-  （WAL-06～08）仍未完成。
+  开区间裁剪契约与非连续 sequence 重放起点、dump→load 快照往返（custom/private/lock/messages/compact 边界
+  不丢失且恢复房间可继续写入）与 writable transfer 权威切换（待广播日志随快照迁移、旧 publisher 零写入、
+  catch-up 连续补齐）、destroy/create 新代际与防重建(WAL-08)、多订阅者心跳/超时/GC(WAL-07)均已锁定；
+  DB-backed channel（WAL-09）仍未完成。
 - ⬜ 固定 seed 的 model trace 能在任意已选 compact/重启点得到同一规范化终态，失败时报告 seed 和最短 action trace。
 - ✅ Room 为新加入请求发送一次规范化受理回执、重复请求不重复发送；到期清理阶段不新增取消通知，`lobbysvr`
   消费者按过期时间自行清理（ADM-09/10、LIFE-05 与 `member_events_manage_pending_admissions` 已锁定）。
 - 🔶 FIX 回归（LIFE-13、PERM-10、EVT-04/09/11、CMP-13 已锁定；FIX-01 的 CON-01 未实现；FIX-09 不声称观察到调度竞态 RED）。
-- ⬜ GAP-01/03/04、GAP-06～12 均有明确协议决定和相应测试，不以注释或人工判断代替；开放项未解决前不能宣称容灾、通知可靠性或滚动升级覆盖完成。
-- ✅ 本轮 112 个 case 无硬超时、无未消费 fault script/mock expectation，suite 退出码为 0；CTest 首次及
-  连续两次运行均通过（另 8 轮重复全绿）。
+- ✅ GAP-01/03/04/06～12 已有明确协议决定(2026-08-29)并落地实现与锁定用例(见 §5 各行)；DATA-05 冻结旧 wire fixture 与滚动升级组合仍待补。
+- ✅ 本轮 124 个 case 无硬超时、无未消费 fault script/mock expectation，suite 退出码为 0；CTest 首次及
+  连续两次运行均通过（另 3 轮重复全绿），lobbysvr 套件同步通过。

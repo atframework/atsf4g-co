@@ -8,9 +8,9 @@
 namespace {
 using namespace teamsvr_room_test;
 
-void send_heartbeat(room_test_env& env, const team_room::ptr_t& room, const PROJECT_NAMESPACE_ID::DUserIDKey& key,
+int32_t send_heartbeat(room_test_env& env, const team_room::ptr_t& room, const PROJECT_NAMESPACE_ID::DUserIDKey& key,
                     uint64_t router_id, int64_t sequence = 0, uint64_t hash_code = 0) {
-  (void)env.run("heartbeat", [room, &key, router_id, sequence, hash_code](rpc::context& ctx) -> rpc::result_code_type {
+  return env.run("heartbeat", [room, &key, router_id, sequence, hash_code](rpc::context& ctx) -> rpc::result_code_type {
     atfw::team::SSTeamRoomHeartbeatReq hb;
     protobuf_copy_message(*hb.mutable_user_key(), key);
     hb.set_user_router_server_id(router_id);
@@ -41,7 +41,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_semantics) {
   size_t sends_before = fake.send_message_calls();
 
   // 正常心跳: 更新 router 与更大的 ack
-  send_heartbeat(env, room, members.normal, 0x1111, 100, 0xAAAA);
+  CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.normal, 0x1111, 100, 0xAAAA));
   auto normal_member = room->find_member(members.normal, false);
   CASE_EXPECT_TRUE(!!normal_member);
   if (normal_member) {
@@ -52,7 +52,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_semantics) {
     CASE_EXPECT_GT(heartbeat_time, std::chrono::system_clock::from_time_t(0));
 
     // 较小 sequence 不覆盖已有确认值
-    send_heartbeat(env, room, members.normal, 0x2222, 50, 0xBBBB);
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.normal, 0x2222, 50, 0xBBBB));
     CASE_EXPECT_EQ(100, normal_member->member_data.acknowledge_action_sequence());
     CASE_EXPECT_EQ(0xAAAAu, normal_member->member_data.acknowledge_action_hash_code());
     CASE_EXPECT_EQ(0x2222u, normal_member->user_router_server_id);
@@ -61,7 +61,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_semantics) {
     auto before_no_refresh = normal_member->last_heartbeat_timepoint;
     {
       global_now_offset_guard guard(std::chrono::seconds{5});
-      send_heartbeat(env, room, members.normal, 0);
+      CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.normal, 0));
       CASE_EXPECT_EQ(before_no_refresh, normal_member->last_heartbeat_timepoint);
       CASE_EXPECT_EQ(0u, normal_member->user_router_server_id);
     }
@@ -104,7 +104,7 @@ CASE_TEST(teamsvr_room_lifecycle, offline_member_kicked) {
   // owner 保持心跳，normal 不再心跳: 推进 member_offline_expire(30s)后 normal 到期
   {
     global_now_offset_guard guard(std::chrono::seconds{31});
-    send_heartbeat(env, room, members.owner, 0x1);
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1));
     // 分轮推进+驱动: 每轮推进 2s，让"过期期限"被推到 now+1 的定时器在下一轮触发
     for (int round = 0; round < 4; ++round) {
       guard.advance(std::chrono::seconds{2});
@@ -115,17 +115,20 @@ CASE_TEST(teamsvr_room_lifecycle, offline_member_kicked) {
 
   // 离线成员被踢出: 写 remove action 并回环
   CASE_EXPECT_EQ(nullptr, room->find_member(members.normal, false).get());
-  bool found_remove = false;
-  fake.foreach_team_action([&members, &found_remove](const atfw::dtmq::DChannelMessage&,
-                                                     const atfw::team::DTeamAction& action) {
+  size_t remove_logs = 0;
+  fake.foreach_team_action([&members, &remove_logs](const atfw::dtmq::DChannelMessage&,
+                                                    const atfw::team::DTeamAction& action) {
     if (action.action_case() == atfw::team::DTeamAction::kRemoveMember &&
         action.remove_member().user_key().user_id() == members.normal.user_id()) {
-      found_remove = true;
+      ++remove_logs;
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED, action.remove_member().remove_member_reason());
     }
     return true;
   });
-  CASE_EXPECT_TRUE(found_remove);
+  // 恰好一条移除日志(重试状态若残留会在后续轮次补发重复日志)
+  CASE_EXPECT_EQ(1u, remove_logs);
+  // 重试队列已清理
+  CASE_EXPECT_EQ(0u, room->debug_retry_remove_count());
 
   // 被移除者收到一次移除通知
   size_t removed_notify = 0;
@@ -464,22 +467,30 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   CASE_EXPECT_EQ(1u, count_personal_actions(env, 7003, atfw::team::DTeamMemberAction::kRemoveMember));
 
   // 3) 重试间隔准确: 发送失败后 interval 内不重发，到点重发
+  // 续租事件可能与重试事件竞争最早到期(取决于建队后的真实耗时): 先越过续租点
+  // 驱动一次续租使其重新排期到 now+lease/2，再注入失败——最早事件判定不依赖真实耗时
+  guard.advance(std::chrono::seconds{3});
+  env.drive_timer_ticks();
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
   fake.next_send_fault.present = true;
   fake.next_send_fault.commit_first = false;
   fake.next_send_fault.error_code = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
+  const auto inject_begin = atfw::util::time::time_utility::now();
   CASE_EXPECT_NE(0, send_remove(members.admin));  // 首次发送失败 -> 进入重试队列，成员仍在
+  const auto inject_end = atfw::util::time::time_utility::now();
   CASE_EXPECT_TRUE(room->find_member(members.admin, false) != nullptr);
   CASE_EXPECT_EQ(1u, count_remove_logs());
   CASE_EXPECT_EQ(1u, room->debug_retry_remove_count());
 
-  // interval=1s: 重试时间未到前不重发，且时间轮确实选择重试事件。
+  // 时间轮最早事件为重试事件，且截止点恰为注入时刻+retry_interval(1s): 到点前不重发
   auto retry_event = room->get_next_timer_event(atfw::util::time::time_utility::now());
   CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember),
                  static_cast<int32_t>(retry_event.type));
-  env.drive_timer_ticks();
-  CASE_EXPECT_EQ(1u, count_remove_logs());
+  CASE_EXPECT_GE(retry_event.timeout, inject_begin + std::chrono::seconds{1});
+  CASE_EXPECT_LE(retry_event.timeout, inject_end + std::chrono::seconds{1});
 
-  // 到点(T0+4)重发成功，不用“多等一秒”掩盖边界错误。
+  // 到点重发成功，不用“多等一秒”掩盖边界错误。
   guard.advance(std::chrono::seconds{1});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(2u, count_remove_logs());
@@ -601,9 +612,9 @@ CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
   const auto armed_before_heartbeat = room->debug_timer_timeout();
   {
     global_now_offset_guard guard(std::chrono::seconds{2});
-    send_heartbeat(env, room, members.owner, 0x1234);
-    send_heartbeat(env, room, members.admin, 0x1234);
-    send_heartbeat(env, room, members.normal, 0x1234);
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1234));
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1234));
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.normal, 0x1234));
     CASE_EXPECT_TRUE(armed_before_heartbeat == room->debug_timer_timeout());  // 不延后
 
     // 续租点依次到期触发维护(每次续租一个 update)，心跳有效的成员不得被误踢。
@@ -888,6 +899,210 @@ CASE_TEST(teamsvr_room_lifecycle, subscribe_failure_then_recover_once) {
     CASE_EXPECT_EQ(personal_before, env.personal_message_count());
   }
   CASE_EXPECT_EQ(rooms_before + 1, team_room_manager::me()->get_room_count());
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ GAP-07: 心跳标脏运行时数据，维护随续租 update 持久化 custom/private 快照 ============
+// 决策(2026-08-29): 长期无新日志的新心跳不必即时持久化，但要记录 team_room 标脏；
+// 维护发现脏标记后随续租 update 保存快照(负载迁移转出前数据已持久化)，保存成功后清除标记。
+// 本用例配置数量/时间维度均不可压缩(compact_sequence 恒为 0)，隔离出"仅因标脏而保存"的路径
+CASE_TEST(teamsvr_room_lifecycle, heartbeat_runtime_dirty_saved_on_maintenance) {
+  room_test_cfg_values cfg;
+  cfg.compact_log_keep_count = 1000;
+  cfg.compact_log_keep_percent = 100;
+  cfg.compact_log_start_seconds = 3600;
+  cfg.compact_log_keep_seconds = 1800;
+  room_test_env env(cfg);
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  auto last_update_has_custom = [&fake]() -> bool {
+    for (auto iter = fake.update_requests().rbegin(); iter != fake.update_requests().rend(); ++iter) {
+      return iter->request.has_custom_data();
+    }
+    return false;
+  };
+
+  // 时间驱动使用单一 guard 顺序推进(guard 析构会回退虚拟时间，独立作用域会使后续定时器永不到期)
+  global_now_offset_guard time_guard(std::chrono::seconds{6});
+  // 无心跳变化时维护只续租不保存快照(CMP-01 契约)
+  env.drive_timer_ticks();
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_FALSE(last_update_has_custom());
+
+  // 心跳更新运行时数据(router/ack) -> 标脏
+  int64_t heartbeat_sequence = fake.last_sequence() + 100;
+  CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.normal, 0x2233, heartbeat_sequence, 0xCCCC));
+
+  // 下一次维护随续租保存 custom/private 快照: 快照携带刷新后的 router/ack
+  time_guard.advance(std::chrono::seconds{6});
+  env.drive_timer_ticks();
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    bool has_custom = false;
+    atfw::team::DTeamStorage storage;
+    for (auto iter = fake.update_requests().rbegin(); iter != fake.update_requests().rend(); ++iter) {
+      has_custom = iter->request.has_custom_data();
+      if (has_custom) {
+        CASE_EXPECT_TRUE(iter->request.custom_data().UnpackTo(&storage));
+      }
+      break;
+    }
+    CASE_EXPECT_TRUE(has_custom);
+    if (has_custom) {
+      const atfw::team::DTeamMember* normal_snapshot = nullptr;
+      for (const auto& member : storage.member()) {
+        if (member.user_key().user_id() == members.normal.user_id()) {
+          normal_snapshot = &member;
+        }
+      }
+      CASE_EXPECT_TRUE(nullptr != normal_snapshot);
+      if (nullptr != normal_snapshot) {
+        CASE_EXPECT_EQ(0x2233u, normal_snapshot->user_router_server_id());
+        CASE_EXPECT_EQ(heartbeat_sequence, normal_snapshot->acknowledge_action_sequence());
+      }
+    }
+  }
+
+  // 保存成功后脏标记清除: 无新心跳的下一次维护回到仅续租(不携带快照)
+  time_guard.advance(std::chrono::seconds{6});
+  env.drive_timer_ticks();
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_FALSE(last_update_has_custom());
+
+  // 运行时脏快照覆盖到了 saved_action_sequence；恢复时不得再回放更早日志，
+  // 否则旧 add_member/member_update 会把快照中的 heartbeat router/ack 回退。
+  env.clear_rooms();
+  room.reset();
+  auto restored = env.setup_ready_room(team_id);
+  CASE_EXPECT_TRUE(!!restored);
+  if (restored) {
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    auto restored_member = restored->find_member(members.normal, false);
+    CASE_EXPECT_TRUE(nullptr != restored_member);
+    if (restored_member) {
+      CASE_EXPECT_EQ(0x2233u, restored_member->member_data.user_router_server_id());
+      CASE_EXPECT_EQ(heartbeat_sequence, restored_member->member_data.acknowledge_action_sequence());
+      CASE_EXPECT_EQ(0xCCCCu, restored_member->member_data.acknowledge_action_hash_code());
+    }
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ GAP-03: 删除重试耗尽后本地删除并尽力而为补写 remove 日志 ============
+// 决策(2026-08-29): 重试上限后本地删除并留下日志(接受分叉，优先确保无泄露)。
+// 验证: 重试期间成员保留(等待事件回环)；耗尽后成员本地移除、重试队列清空，
+// 并以 no-wait 尽力而为补写一条 remove_member 日志(可被各节点幂等应用)
+CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 时间驱动使用单一 guard 顺序推进(guard 析构会回退虚拟时间，独立作用域会使后续定时器永不到期)
+  // 其他成员刷新心跳，避免与 normal 同时到期(normal 的离线截止时间为最早)
+  global_now_offset_guard time_guard(std::chrono::seconds{20});
+  CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1001));
+  CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
+
+  auto queue_remove_fault = [&fake]() {
+    fake.next_send_fault.present = true;
+    fake.next_send_fault.commit_first = false;
+    fake.next_send_fault.error_code = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+  };
+
+  // 离线到期踢出: remove 写入预提交失败(故障)，成员进入重试队列并保留
+  size_t remove_logs_before = 0;
+  fake.foreach_team_action([&remove_logs_before](const atfw::dtmq::DChannelMessage&,
+                                                 const atfw::team::DTeamAction& action) {
+    if (action.action_case() == atfw::team::DTeamAction::kRemoveMember) {
+      ++remove_logs_before;
+    }
+    return true;
+  });
+  // 分轮推进+驱动(与 LIFE-03 相同): 一次性大步推进会积压多轮续租维护且过期定时器会被
+  // 时间轮钳制到未来，必须逐轮推进让 kick 定时器真正触发;故障在 kick 前挂上，
+  // 以重试队列为循环退出条件
+  queue_remove_fault();
+  for (int round = 0; round < 24 && 0 == room->debug_retry_remove_count(); ++round) {
+    time_guard.advance(std::chrono::seconds{2});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  CASE_EXPECT_TRUE(nullptr != room->find_member(members.normal, false));
+  CASE_EXPECT_EQ(1u, room->debug_retry_remove_count());
+
+  // 两次重试均失败(达到 member_channel_notification_retry_times 上限): 每次排队故障后
+  // 分轮推进驱动，直到该故障被重试的 remove 发送消费(事件次序不确定，以故障消费为准)
+  for (int retry_round = 0; retry_round < 2; ++retry_round) {
+    // 每个重试轮次先刷新其他成员心跳：虚拟时钟=真实时钟+偏移，循环内的真实耗时同样消耗
+    // 离线期限预算；不刷新则高负载下 owner/admin 可能先于 normal 到期，误消费故障脚本
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1001));
+    CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
+    queue_remove_fault();
+    for (int round = 0; round < 8 && fake.next_send_fault.present; ++round) {
+      time_guard.advance(std::chrono::seconds{2});
+      env.drive_timer_ticks();
+      CASE_EXPECT_EQ(0, env.sync(team_id));
+    }
+    CASE_EXPECT_FALSE(fake.next_send_fault.present);
+    CASE_EXPECT_TRUE(nullptr != room->find_member(members.normal, false));
+    CASE_EXPECT_EQ(1u, room->debug_retry_remove_count());
+  }
+
+  // 重试耗尽: 本地删除(无泄露) + 尽力而为补写一条 remove 日志(无故障时成功)。
+  // 无故障分轮驱动直至重试队列清空(强制移除完成)
+  // 耗尽循环前再刷新一次其他成员心跳(同上，防止真实耗时耗尽他们的离线期限预算)
+  CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1001));
+  CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
+  for (int round = 0; round < 8 && 0 != room->debug_retry_remove_count(); ++round) {
+    time_guard.advance(std::chrono::seconds{2});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(nullptr == room->find_member(members.normal, false));
+  CASE_EXPECT_EQ(0u, room->debug_retry_remove_count());
+  CASE_EXPECT_TRUE(nullptr != room->find_member(members.owner, false));
+  CASE_EXPECT_TRUE(nullptr != room->find_member(members.admin, false));
+
+  // 补写的 remove_member 日志已入 journal(供各节点幂等应用)
+  size_t remove_logs_after = 0;
+  fake.foreach_team_action([&remove_logs_after, &members](const atfw::dtmq::DChannelMessage&,
+                                                          const atfw::team::DTeamAction& action) {
+    if (action.action_case() == atfw::team::DTeamAction::kRemoveMember &&
+        action.remove_member().user_key().user_id() == members.normal.user_id()) {
+      ++remove_logs_after;
+    }
+    return true;
+  });
+  CASE_EXPECT_EQ(remove_logs_before + 1, remove_logs_after);
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

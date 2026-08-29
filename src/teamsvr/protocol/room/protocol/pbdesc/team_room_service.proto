@@ -67,18 +67,9 @@ message SSTeamRoomHeartbeatRsp {
   int32 client_result = 1;
 }
 
-// 成员运行时的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
-message DTeamRoomMemberRuntimeData {
-  DTeamMember public_member_data = 1;
-
-  // 成员最近一次心跳上报的路由服务ID
-  uint64 user_router_server_id = 3;
-}
-
-// 队伍管理用的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员
+// 队伍管理用的私有数据，仅随 dtmq private_data 在主控节点间同步，不下发给队伍成员。
+// 成员运行时数据(心跳/路由/ack)按 GAP-01 决策保留在公共成员快照中，不引入成员级私有数据
 message DTeamRoomPrivateData {
-  DTeamKey team_key = 1;
-
   // 队伍是否已经完成过创建；成员清空后仍保持为 true，防止旧 team_id 被重新接管。
   bool team_created = 10;
 

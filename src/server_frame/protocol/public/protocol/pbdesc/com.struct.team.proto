@@ -82,14 +82,17 @@ message DTeamAnyData {
 }
 
 // 按 abseil-cpp 最佳实践，不使用 proto map 字段，统一用带 key 的 repeated 元素表达 key-value 关系。
-// 注意: 同一字段内 key 不允许重复，写入方合并时后写的覆盖先写的
+// 注意: 同一请求内同一字段的 key 不允许重复(重复请求被拒绝且零写入)；
+// 跨请求的相同 key 按后写覆盖先写合并。
+// member_update/team_update 的共享数据按 key 合并(未出现的 key 保留)，并且携带 key 但
+// value 的 type_url 或 payload 为空的项表示删除该 key；其余入口(邀请/加入请求/成员)为全量覆盖
 message DTeamAnyDataWithKey {
   int64 key = 1;
   DTeamAnyData value = 2;
 }
 
 // 与 DTeamAnyDataWithKey 类似，但 value 直接是 google.protobuf.Any(即 DTeamAnyData.data)，
-// 用于条件检查器等不涉及权限级别的场景。注意: 同一字段内 key 不允许重复
+// 用于条件检查器等不涉及权限级别的场景。注意: 同一请求内同一字段的 key 不允许重复
 message DTeamAnyValueWithKey {
   int64 key = 1;
   google.protobuf.Any value = 2;
@@ -255,13 +258,17 @@ message DTeamInvitation {
   google.protobuf.Timestamp expired_timepoint = 9;
 
   // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
-  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开。元素允许无序。
+  // 重复邀请刷新时 admission 数据全量覆盖(以新请求携带的列表为准，判重忽略元素顺序)；
+  // 邀请者/被邀请人/team_key/开始时间不可变，其余字段按新请求更新
   repeated DTeamAnyDataWithKey team_admission_data = 14;
 
   message MemberAdmissionData {
     atframework.shared.DUserIDKey user_key = 1;
     repeated DTeamAnyDataWithKey member_admission_data = 2;
   }
+  // 元素允许无序。重复邀请刷新时全量覆盖(以新请求携带的列表为准，不做按键合并，
+  // 判重按 user_key+key 归一化后比较、忽略元素顺序)
   repeated MemberAdmissionData member_admission_data = 15;
 }
 
@@ -280,7 +287,9 @@ message DTeamJoinRequest {
   google.protobuf.Timestamp expired_timepoint = 8;
 
   // 共享的发邀请或盛情加入请求的数据，通常是状态信息的子集。
-  // 数据按key-value形式下发，注意各个模块使用时key要区分开
+  // 数据按key-value形式下发，注意各个模块使用时key要区分开。元素允许无序。
+  // 重复申请刷新时 admission 数据全量覆盖(以新请求携带的列表为准，判重忽略元素顺序)；
+  // 发起请求者/team_key 不可变，其余字段按新请求更新
   repeated DTeamAnyDataWithKey member_admission_data = 14;
 }
 

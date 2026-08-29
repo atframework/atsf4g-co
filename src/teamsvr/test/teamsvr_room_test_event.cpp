@@ -71,9 +71,9 @@ CASE_TEST(teamsvr_room_event, sequence_gap_applied_and_ack_monotonic) {
   }
   const auto joined_before = protobuf_to_system_clock(extra_member->member_data.joined_timepoint());
   const size_t member_count_before = room->debug_member_lru_keys().size();
-  const int64_t saved_sequence_before = room->debug_saved_action_sequence();
+  const int64_t ack_before = room->debug_acknowledge_action_sequence();
 
-  // 重复/乱序回放(重推旧日志)不回退状态: 重推同一成员的 add_member，但携带不同的显式时间戳——
+  // 迟到的重复 add_member(以新序号追加)不回退状态: 携带不同的显式时间戳——
   // 若被重复应用，joined_timepoint 会被覆盖成新值；幂等应用则保持首次落库的事实
   env.inject_team_action(team_id, make_injected_add_member(extra, 9001, 100, 100));
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -83,8 +83,9 @@ CASE_TEST(teamsvr_room_event, sequence_gap_applied_and_ack_monotonic) {
     CASE_EXPECT_TRUE(joined_before == protobuf_to_system_clock(extra_member_after->member_data.joined_timepoint()));
   }
   CASE_EXPECT_EQ(member_count_before, room->debug_member_lru_keys().size());
-  // ack 只前进不回退: 本地已生效序号不重绕
-  CASE_EXPECT_GE(room->debug_saved_action_sequence(), saved_sequence_before);
+  // ack 只前进不回退: 重复日志被正常消费(ack 推进到最新日志序号)，已有成员状态不重绕
+  CASE_EXPECT_GT(room->debug_acknowledge_action_sequence(), ack_before);
+  CASE_EXPECT_EQ(env.channel(team_id).last_sequence(), room->debug_acknowledge_action_sequence());
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -213,22 +214,20 @@ CASE_TEST(teamsvr_room_event, captain_election_deterministic) {
   CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // election 事件在 remove 回环后的 flush 中发出
-  CASE_EXPECT_EQ(0, env.run("flush_election", [room](rpc::context& ctx) -> rpc::result_code_type {
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->flush_pending_channel_message(ctx)));
-  }));
-  CASE_EXPECT_EQ(0, env.sync(team_id));
-
-  bool found_election = false;
+  // remove 回环时 sync 内的 converge 已触发 flush: 发现队长空缺并写入 election 日志(恰好一次)
+  size_t election_count = 0;
   fake.foreach_team_action(
-      [&found_election, &members](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+      [&election_count, &members](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
         if (action.action_case() == atfw::team::DTeamAction::kElectionCaptain) {
-          found_election = true;
+          ++election_count;
           CASE_EXPECT_EQ(members.admin.user_id(), action.election_captain().user_key().user_id());
         }
         return true;
       });
-  CASE_EXPECT_TRUE(found_election);
+  CASE_EXPECT_EQ(1u, election_count);
+
+  // election 日志回环
+  CASE_EXPECT_EQ(0, env.sync(team_id));
 
   // 事件回环后 admin 成为队长
   auto admin_member = room->find_member(members.admin, false);
@@ -746,7 +745,7 @@ CASE_TEST(teamsvr_room_event, event_sync_duplicate_batch_ignored) {
                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, update_action)));
                    }));
   }
-  (void)env.sync(team_id);
+  CASE_EXPECT_EQ(0, env.sync(team_id));
   // 双维度硬保证语义下需推进到保留窗口(5s)之外，时间维度才放行裁剪
   {
     global_now_offset_guard guard(std::chrono::seconds{6});
@@ -991,10 +990,14 @@ CASE_TEST(teamsvr_room_event, non_team_action_logs_advance_ack) {
   env.inject_raw_log(team_id, [](atfw::dtmq::DChannelMessageDetail& detail) { detail.set_noop(true); });
 
   int64_t last_sequence_before = fake.last_sequence();
+  int64_t ack_before = room->debug_acknowledge_action_sequence();
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
   // 这些日志不产生队伍副作用
   CASE_EXPECT_EQ(0u, env.personal_message_count());
+  // room 侧消费进度: 未知 event/文本/noop 日志同样推进 ack 游标(不止 fixture journal)
+  CASE_EXPECT_EQ(fake.last_sequence(), room->debug_acknowledge_action_sequence());
+  CASE_EXPECT_GT(room->debug_acknowledge_action_sequence(), ack_before);
   CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);
 
   // room 仍是主控(未损坏)
@@ -1006,6 +1009,8 @@ CASE_TEST(teamsvr_room_event, non_team_action_logs_advance_ack) {
   });
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_GT(fake.last_sequence(), last_sequence_before);
+  // destroy 日志也被消费，ack 游标推进到最新日志序号
+  CASE_EXPECT_EQ(fake.last_sequence(), room->debug_acknowledge_action_sequence());
 
   // 销毁后写入被拒(频道销毁使订阅失效，返回 DTMQ unavailable 或 destroyed)
   {
@@ -1017,6 +1022,257 @@ CASE_TEST(teamsvr_room_event, non_team_action_logs_advance_ack) {
     });
     CASE_EXPECT_LT(ret, 0);
     CASE_EXPECT_EQ(sends_before_destroy, fake.send_message_calls());
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ DATA-04: 同一请求内重复 key 拒绝且零写入；跨请求同 key 后写覆盖(GAP-11) ============
+// 决策(2026-08-29): 单个请求里 keyed repeated 字段的 key 重复则失败拒绝(invalid-param 且零写入)，
+// 多个请求之间 key 重复则后面的覆盖前面的。校验覆盖成员/队伍共享数据、admission 数据与更新条件
+CASE_TEST(teamsvr_room_event, keyed_data_duplicate_key_rules) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  size_t sends_before = fake.send_message_calls();
+
+  // member_update 的 shared_member_data 单请求内重复 key -> invalid-param 且零写入
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update->mutable_shared_member_data(), 100, "dup-a");
+    add_team_any_data_entry(update->mutable_shared_member_data(), 100, "dup-b");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                   env.run("dup_member_data", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  }
+
+  // team_update 的 shared_team_data 单请求内重复 key -> invalid-param 且零写入
+  {
+    atfw::team::DTeamAction action;
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 200, "dup-a");
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 200, "dup-b");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                   env.run("dup_team_data", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  }
+
+  // 更新条件里的 keyed 数据重复 key 同样拒绝(条件在权限检查前即被校验拦截)
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    auto* checker = update->add_condition();
+    add_team_any_value_entry(checker->mutable_shared_team_data(), 300, "cond-a");
+    add_team_any_value_entry(checker->mutable_shared_team_data(), 300, "cond-b");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                   env.run("dup_condition", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  }
+
+  // 专用 admission RPC 携带重复 key -> invalid-param 且零写入、不发送受理回执
+  {
+    auto applicant = make_user_key(1, 8901);
+    size_t personal_before = env.personal_message_count();
+    atfw::team::SSTeamRoomAddJoinRequestReq req;
+    protobuf_copy_message(*req.mutable_sender_user_key(), applicant);
+    protobuf_copy_message(*req.mutable_join_request()->mutable_requester(), applicant);
+    add_team_any_data_entry(req.mutable_join_request()->mutable_member_admission_data(), 9, "dup-a");
+    add_team_any_data_entry(req.mutable_join_request()->mutable_member_admission_data(), 9, "dup-b");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                   env.run("dup_join_admission", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+    CASE_EXPECT_EQ(personal_before, env.personal_message_count());
+
+    auto invitee = make_user_key(1, 8902);
+    atfw::team::SSTeamRoomAddInvitationReq invite_req;
+    protobuf_copy_message(*invite_req.mutable_sender_user_key(), members.normal);
+    protobuf_copy_message(*invite_req.mutable_invitation()->mutable_inviter(), members.normal);
+    protobuf_copy_message(*invite_req.mutable_invitation()->mutable_invitee(), invitee);
+    add_team_any_data_entry(invite_req.mutable_invitation()->mutable_team_admission_data(), 10, "dup-a");
+    add_team_any_data_entry(invite_req.mutable_invitation()->mutable_team_admission_data(), 10, "dup-b");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
+                   env.run("dup_invitation_admission", [room, &invite_req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+    CASE_EXPECT_EQ(personal_before, env.personal_message_count());
+  }
+
+  // 跨请求同 key: 后写覆盖先写(两次合法写入各产生一条日志，最终状态以第二次为准)
+  {
+    atfw::team::DTeamAction first;
+    auto* update_first = first.mutable_member_update();
+    protobuf_copy_message(*update_first->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update_first->mutable_shared_member_data(), 400, "cross-first");
+    CASE_EXPECT_EQ(0, env.run("cross_first", [room, &first](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, first)));
+                   }));
+
+    atfw::team::DTeamAction second;
+    auto* update_second = second.mutable_member_update();
+    protobuf_copy_message(*update_second->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update_second->mutable_shared_member_data(), 400, "cross-second");
+    CASE_EXPECT_EQ(0, env.run("cross_second", [room, &second](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, second)));
+                   }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    CASE_EXPECT_EQ(sends_before + 2, fake.send_message_calls());
+
+    // 最终值以第二次为准: 等值条件 cross-second 通过、cross-first 拒绝
+    atfw::team::DTeamAction check_second;
+    auto* check_update = check_second.mutable_member_update();
+    protobuf_copy_message(*check_update->mutable_user_key(), members.normal);
+    auto* group = check_update->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group->mutable_user_key(), members.normal);
+    add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), 400, "cross-second");
+    CASE_EXPECT_EQ(0, env.run("cond_match_second", [room, &members, &check_second](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(
+                         RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, check_second)));
+                   }));
+
+    atfw::team::DTeamAction check_first;
+    auto* check_first_update = check_first.mutable_member_update();
+    protobuf_copy_message(*check_first_update->mutable_user_key(), members.normal);
+    auto* group_first = check_first_update->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group_first->mutable_user_key(), members.normal);
+    add_team_any_value_entry(group_first->mutable_member_condition()->mutable_shared_member_data(), 400, "cross-first");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("cond_match_first", [room, &members, &check_first](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(
+                         RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, check_first)));
+                   }));
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ GAP-09(2026-08-29 澄清): member_update/team_update 共享数据的删除标记语义 ============
+// 决策: "有 key 但 value 为空或 type_url 为空则删除该 key"仅适用于 kMemberUpdate/kTeamUpdate 的
+// keyed 共享数据(其余入口为全量覆盖)。验证: 删除标记命中已存在 key 时移除该 key；未出现的 key 保留；
+// 对不存在 key 的删除标记不产生状态变化(去重判定不写日志)；删除后条件观察确认数据确已移除
+CASE_TEST(teamsvr_room_event, update_shared_data_delete_marker) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto send_update = [&env, room](atfw::team::DTeamAction& action) {
+    return env.run("send_update", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    });
+  };
+  auto check_condition = [&env, room, &members](const atfw::team::DTeamAction& action) {
+    return env.run("check_condition", [room, &members, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, action)));
+    });
+  };
+  auto make_member_condition = [&members](int64_t key, const std::string& value) {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    auto* group = update->add_condition()->add_member_condition_group();
+    protobuf_copy_message(*group->mutable_user_key(), members.normal);
+    add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), key, value);
+    return action;
+  };
+  auto make_team_condition = [team_id](int64_t key, const std::string& value) {
+    atfw::team::DTeamAction action;
+    auto* checker = action.mutable_team_update()->add_condition();
+    add_team_any_value_entry(checker->mutable_shared_team_data(), key, value);
+    return action;
+  };
+
+  // 预置成员共享数据 {101: m-101, 102: m-102} 与队伍共享数据 {201: t-201, 202: t-202}
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update->mutable_shared_member_data(), 101, "m-101");
+    add_team_any_data_entry(update->mutable_shared_member_data(), 102, "m-102");
+    CASE_EXPECT_EQ(0, send_update(action));
+  }
+  {
+    atfw::team::DTeamAction action;
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 201, "t-201");
+    add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 202, "t-202");
+    CASE_EXPECT_EQ(0, send_update(action));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // 删除标记移除已存在的 key(member 101 / team 201)，未提及的 key 保留(102/202)
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update->mutable_shared_member_data(), 101, "");  // payload 为空 -> 删除标记
+    CASE_EXPECT_EQ(0, send_update(action));
+  }
+  {
+    atfw::team::DTeamAction action;
+    // 显式构造空 type_url 的删除标记(覆盖"type_url 为空"分支)
+    auto* entry = add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 201, "t-201");
+    entry->mutable_value()->mutable_data()->clear_value();
+    entry->mutable_value()->mutable_data()->clear_type_url();
+    CASE_EXPECT_EQ(0, send_update(action));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, check_condition(make_member_condition(101, "m-101")));
+  CASE_EXPECT_EQ(0, check_condition(make_member_condition(102, "m-102")));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, check_condition(make_team_condition(201, "t-201")));
+  CASE_EXPECT_EQ(0, check_condition(make_team_condition(202, "t-202")));
+
+  // 对不存在 key 的删除标记不产生状态变化: 与空更新约定一致保留写入(锁探测)，
+  // 但已存在的 key 不受影响(条件观察 102/202 仍通过，999 仍不存在)
+  {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), members.normal);
+    add_team_any_data_entry(update->mutable_shared_member_data(), 999, "");
+    CASE_EXPECT_EQ(0, send_update(action));
+
+    atfw::team::DTeamAction team_action;
+    add_team_any_data_entry(team_action.mutable_team_update()->mutable_shared_team_data(), 999, "");
+    CASE_EXPECT_EQ(0, send_update(team_action));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_condition(make_member_condition(999, "")));
+    CASE_EXPECT_EQ(0, check_condition(make_member_condition(102, "m-102")));
+    CASE_EXPECT_EQ(0, check_condition(make_team_condition(202, "t-202")));
   }
 
   env.clear_rooms();

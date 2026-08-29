@@ -135,22 +135,36 @@ inline atfw::team::DTeamKey make_team_key(int64_t team_id, uint32_t zone_id = kT
   return key;
 }
 
-// 向 repeated 共享数据字段追加一条 key-value(Any 仅设置 value 字节)；
-// 返回 entry 便于调用方继续设置 permission/type_url
+// 测试用 keyed 数据的类型标识: 与生产侧(lobbysvr 经 PackFrom 打包类型化消息)对齐，
+// 使条目携带有效数据(type_url 与 payload 均非空)；GAP-09 删除标记语义下
+// "type_url 为空或 payload 为空"的条目表示删除该 key(仅 member_update/team_update)
+inline constexpr const char* kTestTeamAnyDataTypeUrl() noexcept {
+  return "type.googleapis.com/atframework.team.ut_team_any_data";
+}
+
+// 向 repeated 共享数据字段追加一条 key-value(类型化 Any: type_url + value 字节)；
+// 返回 entry 便于调用方继续设置 permission；传入空 value 表示构造删除标记
 inline atfw::team::DTeamAnyDataWithKey* add_team_any_data_entry(
     google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>* field, int64_t key, const std::string& value) {
   auto* entry = field->Add();
   entry->set_key(key);
+  if (!value.empty()) {
+    entry->mutable_value()->mutable_data()->set_type_url(kTestTeamAnyDataTypeUrl());
+  }
   entry->mutable_value()->mutable_data()->set_value(value);
   return entry;
 }
 
-// 向 repeated 条件数据字段追加一条 key-value(DTeamAnyValueWithKey 的 Any 仅设置 value 字节)
+// 向 repeated 条件数据字段追加一条 key-value(Any 与 add_team_any_data_entry 的类型化格式一致，
+// 保证条件比较与存储数据同构)
 inline atfw::team::DTeamAnyValueWithKey* add_team_any_value_entry(
     google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyValueWithKey>* field, int64_t key,
     const std::string& value) {
   auto* entry = field->Add();
   entry->set_key(key);
+  if (!value.empty()) {
+    entry->mutable_value()->set_type_url(kTestTeamAnyDataTypeUrl());
+  }
   entry->mutable_value()->set_value(value);
   return entry;
 }
@@ -534,12 +548,13 @@ class fake_team_room_channel {
       private_data_sequence_ = last_sequence_;
     }
 
-    // compact: 小于 compact_sequence 的日志从缓存移除(哈希链继续延伸)
+    // compact: 严格小于 compact_sequence 的日志从缓存移除，边界日志保留(开区间语义，
+    // 与 mq_channel::compact_sequence / wal log_key_compare 严格小于一致);last_removed_sequence_ 记录边界值
     if (req.compact_sequence() > last_removed_sequence_) {
       last_removed_sequence_ = req.compact_sequence();
       size_t remove_count = 0;
       for (const auto& message : journal_) {
-        if (message.sequence() <= last_removed_sequence_) {
+        if (message.sequence() < last_removed_sequence_) {
           ++remove_count;
         } else {
           break;
@@ -899,11 +914,11 @@ class room_test_env {
   }
 
   // 协程内直接向真实 publisher 提交一条 kEvent(DTeamAction) 日志(sequence/hash 由真实
-  // allocate_log_key/哈希链分配)并 tick 推进 broadcast。forced_sequence_gap>0 时跳号，
-  // 构造非连续 sequence(EVT-01/WAL-04 的缺口场景)
+  // allocate_log_key/哈希链分配)。forced_sequence_gap>0 时跳号构造非连续 sequence(EVT-01/WAL-04)；
+  // broadcast=false 时不 tick，日志停留在 journal 未向订阅者广播(WAL-06 的"待广播日志"场景)
   rpc::result_code_type wal_commit_team_action(rpc::context& ctx, const wal_channel_ptr_t& channel,
                                                const atfw::team::DTeamAction& action,
-                                               int64_t forced_sequence_gap = 0) {
+                                               int64_t forced_sequence_gap = 0, bool broadcast = true) {
     if (!channel || !channel->is_available()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
     }
@@ -921,8 +936,45 @@ class room_test_env {
     }
     (void)message->mutable_detail()->mutable_event()->PackFrom(action);
     channel->get_wal_publisher().emplace_back_log(std::move(message), param);
-    channel->tick(ctx);
+    if (broadcast) {
+      channel->tick(ctx);
+    }
     RPC_RETURN_CODE(result < 0 ? result : 0);
+  }
+
+  // 协程内创建一个与现有频道同 key 的空白可写频道(WAL-05/06 的 dump->load 往返目标，镜像
+  // writable transfer 后新节点上的频道对象)。不做任何注册: 调用方 load_snapshot 后以
+  // wal_swap_channel 激活为唯一权威。空白频道不追加 kCreate 日志(日志随快照载入)
+  rpc::result_code_type wal_make_replacement_channel(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                                     wal_channel_ptr_t& output) {
+    auto channel_key = rpc::team::team_api::make_team_room_channel_key(team_key);
+    auto configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
+    if (!configure) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+    auto channel = atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), channel_key,
+                                                                           *configure);
+    if (!channel) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    }
+    // memory_only + auto_create: 仅升级为 writable(无 DB、不落 kCreate 日志)
+    auto init_ret = RPC_AWAIT_CODE_RESULT(channel->writable_init(ctx, true));
+    if (init_ret < 0) {
+      RPC_RETURN_CODE(init_ret);
+    }
+    output = std::move(channel);
+    RPC_RETURN_CODE(0);
+  }
+
+  // 把 load 完成的 replacement 激活为该 channel id 的唯一权威(镜像 transfer 完成后的注册状态):
+  // manager::add_channel 按 id 替换旧频道对象，fixture 的 RPC mock 路由同步切换到新频道。
+  // 旧频道对象由调用方持有的指针继续存活，用于"旧 publisher 不再接受有效写入"断言
+  void wal_swap_channel(rpc::context& ctx, const wal_channel_ptr_t& replacement) {
+    if (!replacement) {
+      return;
+    }
+    mq_channel_manager::me()->add_channel(ctx, replacement);
+    wal_channels_[replacement->get_channel_key().channel_id()] = replacement;
   }
 
   // 协程内以指定 checkpoint 对真实 publisher 触发一次订阅决策(WAL-02: 正常 checkpoint 只补后续
@@ -1037,11 +1089,13 @@ class room_test_env {
 
   // 创建队伍的完整流程: 就绪 -> create_team。返回 create_team 结果码；room 传出。
   // 就绪阶段复用 setup_ready_room(WAL 模式下事件批异步送达，需要泵空后重试一次)
-  // client_version/user_router_server_id 非缺省时随请求上报(与 lobbysvr create_team 的真实行为一致)
+  // client_version/user_router_server_id/shared_member_data 非缺省时随请求上报(与 lobbysvr create_team 的真实行为一致)
   int32_t setup_created_team(int64_t team_id, const PROJECT_NAMESPACE_ID::DUserIDKey& owner_key,
                              const atfw::dtmq::DChannelIdKey& owner_channel, team_room::ptr_t* out_room = nullptr,
                              const atfw::team::DTeamConfigure* configure = nullptr,
-                             const std::string* client_version = nullptr, uint64_t user_router_server_id = 0) {
+                             const std::string* client_version = nullptr, uint64_t user_router_server_id = 0,
+                             const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>*
+                                 shared_member_data = nullptr) {
     auto room = setup_ready_room(make_team_key(team_id));
     if (!room) {
       return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
@@ -1050,8 +1104,8 @@ class room_test_env {
       *out_room = room;
     }
     return run("setup_created_team",
-               [room, team_id, &owner_key, &owner_channel, configure, client_version,
-                user_router_server_id](rpc::context& ctx) -> rpc::result_code_type {
+               [room, team_id, &owner_key, &owner_channel, configure, client_version, user_router_server_id,
+                shared_member_data](rpc::context& ctx) -> rpc::result_code_type {
                  atfw::team::SSTeamRoomCreateReq req;
                  protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
                  protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
@@ -1064,6 +1118,9 @@ class room_test_env {
                  }
                  if (0 != user_router_server_id) {
                    req.set_user_router_server_id(user_router_server_id);
+                 }
+                 if (nullptr != shared_member_data) {
+                   req.mutable_shared_member_data()->CopyFrom(*shared_member_data);
                  }
                  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
                });
@@ -1684,6 +1741,8 @@ class room_test_env {
   rpc::result_code_type wal_handle_subscribe(rpc::context& ctx, const atfw::dtmq::SSChannelSubscribeReq& req,
                                              atfw::dtmq::SSChannelSubscribeRsp& rsp, uint64_t target_node_id) {
     for (const auto& heartbeat : req.heartbeat()) {
+      // fixture 范围裁剪: 本环境只承载 team-room 频道，其它类型按不存在处理
+      // (生产 task_action_subscribe 无类型过滤，分发/转发语义由 component-dtmq-proxysvr 测试覆盖)
       if (heartbeat.channel_key().channel_type() != kTeamRoomChannelType) {
         rsp.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
         continue;
@@ -1693,8 +1752,9 @@ class room_test_env {
       if (!channel && heartbeat.auto_create_channel()) {
         auto ensure_ret = RPC_AWAIT_CODE_RESULT(wal_ensure_channel_by_key(ctx, heartbeat.channel_key()));
         if (ensure_ret < 0) {
-          rsp.add_not_found_channel_ids(heartbeat.channel_key().channel_id());
-          continue;
+          // 与 task_action_subscribe 一致: auto_create 建频道失败即终止整个 RPC 并回错误码
+          // (只有非 auto_create 的 NOT_FOUND 才记入 not_found_channel_ids 继续批次)
+          RPC_RETURN_CODE(ensure_ret);
         }
         channel = wal_find_channel_by_key(heartbeat.channel_key());
       }

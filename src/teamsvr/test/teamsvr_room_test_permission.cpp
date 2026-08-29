@@ -597,6 +597,10 @@ CASE_TEST(teamsvr_room_permission, add_invitation_roles) {
   CASE_EXPECT_EQ(1u, env.personal_message_count());
   if (1 == env.personal_message_count()) {
     CASE_EXPECT_EQ(atfw::team::DTeamMemberAction::kInvited, env.personal_messages()[0].action.action_case());
+    // 通知投递到邀请时登记的 invitee 私有频道，且身份与邀请一致
+    CASE_EXPECT_EQ(make_personal_channel(invitee.user_id()).channel_id(), env.personal_messages()[0].channel.channel_id());
+    CASE_EXPECT_EQ(invitee.user_id(), env.personal_messages()[0].action.invited().invitee().user_id());
+    CASE_EXPECT_EQ(members.normal.user_id(), env.personal_messages()[0].action.invited().inviter().user_id());
   }
 
   // 自定义 ADMIN 门槛后 NORMAL 失败
@@ -971,11 +975,11 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
   expect_no_write(fake, env, before);
 
   // check_action_permission 直接路径同样返回 invalid param
-  (void)env.run("check_direct", [room, members, empty_action](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("check_direct", [room, members, empty_action](rpc::context& ctx) -> rpc::result_code_type {
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM,
                    RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, empty_action)));
     RPC_RETURN_CODE(0);
-  });
+  }));
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1833,10 +1837,174 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
                    check_any_condition(44, int64_type_url, zero.SerializeAsString()));
     expect_no_write(fake, env, before);
   }
-  // 存储默认值(空字节)与条件默认值(空字节)字节相等 -> 通过
-  google::protobuf::Int64Value zero;
-  write_any_data(45, int64_type_url, zero.SerializeAsString());
-  CASE_EXPECT_EQ(0, check_any_condition(45, int64_type_url, zero.SerializeAsString()));
+  // GAP-09(2026-08-29 澄清): 空 payload 的存储条目是删除标记，不再作为"默认值数据"存储；
+  // 此处以空 payload 更新 key 44 -> 删除该 key，随后的等值条件因 key 不存在而拒绝
+  {
+    google::protobuf::Int64Value zero;
+    CASE_EXPECT_TRUE(zero.SerializeAsString().empty());
+    write_any_data(44, int64_type_url, "");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   check_any_condition(44, int64_type_url, five.SerializeAsString()));
+  }
+
+  env.clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ GAP-12: election_captain.role 是新队长角色；上限为 max(原队长角色, 操作者角色) ============
+// 决策(2026-08-29): 队长不恒为 OWNER。转移队长时 election_captain.role 即新队长角色，
+// 且新队长权限不能高于 max(原队长角色, 操作者角色)；默认(未显式指定)继承原队长角色，
+// 原队长缺失时回退 OWNER。旧队长在转让后降为 NORMAL；非 OWNER 队长经快照恢复后角色保持
+CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+  auto make_election_with_role = [](const PROJECT_NAMESPACE_ID::DUserIDKey& key,
+                                    atfw::team::EnTeamPermissionRole role) {
+    atfw::team::DTeamAction action;
+    protobuf_copy_message(*action.mutable_election_captain()->mutable_user_key(), key);
+    action.mutable_election_captain()->set_role(role);
+    return action;
+  };
+
+  // OWNER 队长显式转让 role=OWNER 给 NORMAL 成员: 不高于原队长(OWNER)，允许；
+  // 新队长成为 OWNER，旧队长降为 NORMAL(旧实现按目标当前角色拒绝，与默认行为矛盾，已按决策修正)
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
+                                            make_election_with_role(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto captain = room->find_member(members.normal, false);
+    auto old_captain = room->find_member(members.owner, false);
+    CASE_EXPECT_TRUE(!!captain && !!old_captain);
+    if (captain) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, captain->member_data.role());
+    }
+    if (old_captain) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, old_captain->member_data.role());
+    }
+  }
+
+  // OWNER 队长(normal)显式转让 role=ADMIN 给 admin: 新队长为 ADMIN(队长不恒为 OWNER)
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal,
+                                            make_election_with_role(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto captain = room->find_member(members.admin, false);
+    CASE_EXPECT_TRUE(!!captain);
+    if (captain) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, captain->member_data.role());
+    }
+  }
+
+  // ADMIN 队长显式转让 role=OWNER: 高于原队长(ADMIN)，拒绝且零写入
+  {
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
+                   check_permission(env, room, members.admin,
+                                    make_election_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+    // RPC 路径权限失败时 transport 成功(精确错误码在 client_result，由 check_permission 断言)
+    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin,
+                                              make_election_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+    expect_no_write(fake, env, before);
+  }
+
+  // ADMIN 队长默认转让(未显式指定 role): 继承原队长角色(ADMIN)，旧队长降为 NORMAL
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin, make_election_action(members.owner)));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto captain = room->find_member(members.owner, false);
+    auto old_captain = room->find_member(members.admin, false);
+    CASE_EXPECT_TRUE(!!captain && !!old_captain);
+    if (captain) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, captain->member_data.role());
+    }
+    if (old_captain) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, old_captain->member_data.role());
+    }
+  }
+
+  // 非 OWNER 队长经压缩快照恢复后角色保持 ADMIN(GAP-12: 快照不把队长改写为 OWNER；
+  // member_set_role 不能修改现任队长的约束由 PERM-16 覆盖)
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_GT(room->debug_last_compact_sequence(), 0);
+
+  env.clear_rooms();
+  room.reset();
+  auto restored = env.setup_ready_room(team_id);
+  CASE_EXPECT_TRUE(!!restored);
+  if (restored) {
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    auto captain = restored->find_member(members.owner, false);
+    CASE_EXPECT_TRUE(!!captain);
+    if (captain) {
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, captain->member_data.role());
+    }
+  }
+
+  // max(原队长, 操作者) 上限(GAP-12 澄清): 注入 ADMIN 队长 + OWNER 非队长成员的快照，
+  // OWNER 操作者强制转让 role=OWNER 时上限取两者较大值(OWNER) -> 允许(仅按原队长 ADMIN 会错误拒绝)。
+  // 使用全新 team id: 原频道的进程级订阅者缓存会使同序号的强制快照被当重复丢弃，无法原地注入
+  {
+    int64_t inject_team_id = next_test_team_id();
+    auto& inject_fake = env.channel(inject_team_id);
+    atfw::team::DTeamStorage storage;
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(inject_team_id));
+    protobuf_copy_message(*storage.mutable_captain_user_key(), members.admin);
+    auto snapshot_now = atfw::util::time::time_utility::now();
+    auto add_member_with_role = [&storage, &snapshot_now](const PROJECT_NAMESPACE_ID::DUserIDKey& key,
+                                                          atfw::team::EnTeamPermissionRole role) {
+      auto* member = storage.add_member();
+      protobuf_copy_message(*member->mutable_user_key(), key);
+      member->set_role(role);
+      *member->mutable_joined_timepoint() = protobuf_from_system_clock(snapshot_now - std::chrono::seconds{10});
+      *member->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(snapshot_now);
+    };
+    add_member_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    add_member_with_role(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    add_member_with_role(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+    // 先 ensure_created 使 last_sequence>0: 客户端 update_custom_data 以 sequence 单调推进，
+    // 序号 0 的 custom/private 会被"不新于当前"门禁跳过
+    inject_fake.ensure_created();
+    inject_fake.set_custom_data(storage);
+    atfw::team::DTeamRoomPrivateData private_data;
+    private_data.set_team_created(true);
+    inject_fake.set_private_data(private_data);
+
+    auto injected = env.setup_ready_room(inject_team_id);
+    CASE_EXPECT_TRUE(!!injected);
+    if (injected) {
+      CASE_EXPECT_EQ(0, env.sync(inject_team_id));
+      CASE_EXPECT_EQ(0, run_send_message_action(env, inject_team_id, members.owner,
+                                                make_election_with_role(members.normal,
+                                                                        atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+      CASE_EXPECT_EQ(0, env.sync(inject_team_id));
+      auto captain = injected->find_member(members.normal, false);
+      auto old_captain = injected->find_member(members.admin, false);
+      CASE_EXPECT_TRUE(!!captain && !!old_captain);
+      if (captain) {
+        CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, captain->member_data.role());
+      }
+      if (old_captain) {
+        CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, old_captain->member_data.role());
+      }
+    }
+  }
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

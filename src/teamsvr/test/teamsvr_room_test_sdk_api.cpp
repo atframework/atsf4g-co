@@ -59,6 +59,9 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_reset_lock_routed_by_req_channel_key) {
   }));
   CASE_EXPECT_EQ(1u, fake.reset_lock_calls());
   CASE_EXPECT_EQ("sdk-test", fake.lock().lock_holder());
+  // 路由断言: 目标节点从 req.channel_key 提取(dtmq-proxy 节点)，而非仅本地处理器命中
+  CASE_EXPECT_EQ(kDtmqProxyNodeId,
+                 last_call_target(env.runtime(), rpc::dtmq::packer::get_full_name_of_reset_lock(), 0));
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -82,6 +85,7 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_update_and_destroy_routed_by_req_channel_ke
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::update(ctx, *req, *rsp)));
   }));
   CASE_EXPECT_EQ(1u, fake.update_calls());
+  CASE_EXPECT_EQ(kDtmqProxyNodeId, last_call_target(env.runtime(), rpc::dtmq::packer::get_full_name_of_update(), 0));
 
   CASE_EXPECT_EQ(0, env.run("destroy", [&fake](rpc::context& ctx) -> rpc::result_code_type {
     rpc::context::message_holder<atfw::dtmq::SSChannelDestroyChannelReq> req{ctx};
@@ -90,6 +94,8 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_update_and_destroy_routed_by_req_channel_ke
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::dtmq::destroy_channel(ctx, *req, *rsp)));
   }));
   CASE_EXPECT_EQ(1u, fake.destroy_calls());
+  CASE_EXPECT_EQ(kDtmqProxyNodeId,
+                 last_call_target(env.runtime(), rpc::dtmq::packer::get_full_name_of_destroy_channel(), 0));
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -392,8 +398,8 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_add_join_request_nested_key_routing) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ SDK-TEAM-05: approve/reject 按对方(applicant/invitee) zone 路由 ============
-CASE_TEST(teamsvr_room_sdk_api, team_api_approve_reject_route_by_counterparty_zone) {
+// ============ SDK-TEAM-05: approve/reject 按 team_key 路由(与对方 applicant/invitee 的 zone 无关) ============
+CASE_TEST(teamsvr_room_sdk_api, team_api_approve_reject_route_by_team_key) {
   room_test_env env;
   env.app_id_override = 0x11000009;
   if (!env.start()) {

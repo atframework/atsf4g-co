@@ -28,11 +28,12 @@ using namespace teamsvr_room_test;
 
 // 权限失败统一门禁: 预期错误码 + team 房间频道与个人频道零写入
 void expect_zero_write(fake_team_room_channel& fake, size_t send_before, size_t update_before, size_t reset_before,
-                       size_t destroy_before) {
+                       size_t destroy_before, const room_test_env& env, size_t personal_before) {
   CASE_EXPECT_EQ(send_before, fake.send_message_calls());
   CASE_EXPECT_EQ(update_before, fake.update_calls());
   CASE_EXPECT_EQ(reset_before, fake.reset_lock_calls());
   CASE_EXPECT_EQ(destroy_before, fake.destroy_calls());
+  CASE_EXPECT_EQ(personal_before, env.personal_message_count());
 }
 }  // namespace
 
@@ -123,24 +124,28 @@ CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
   int64_t team_id = next_test_team_id();
   auto room1 = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!room1);
+  if (!room1) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
 
   // 同一协程内再次 mutable_room 返回同一对象
-  (void)env.run("reuse_room", [team_id, &room1](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("reuse_room", [team_id, &room1](rpc::context& ctx) -> rpc::result_code_type {
     auto room2 = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id));
     CASE_EXPECT_TRUE(room2.get() == room1.get());
     RPC_RETURN_CODE(0);
-  });
+  }));
 
   CASE_EXPECT_EQ(1u, team_room_manager::me()->get_room_count());
 
   // 相同 team_id、不同 zone_id 是不同队伍，room 与 DTMQ channel 都不能复用。
   auto other_zone_key = make_team_key(team_id, kTestZoneId + 1);
   team_room::ptr_t other_zone_room;
-  (void)env.run("same_id_other_zone", [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("same_id_other_zone", [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
     other_zone_room = team_room_manager::me()->mutable_room(ctx, other_zone_key);
     CASE_EXPECT_TRUE(!!other_zone_room);
     RPC_RETURN_CODE(0);
-  });
+  }));
   CASE_EXPECT_TRUE(other_zone_room.get() != room1.get());
   if (room1 && other_zone_room) {
     CASE_EXPECT_NE(room1->get_channel_key().channel_id(), other_zone_room->get_channel_key().channel_id());
@@ -151,21 +156,21 @@ CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
 
   // 不同 team id 得到不同 room
   int64_t other_team = next_test_team_id();
-  (void)env.run("another_room", [other_team](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("another_room", [other_team](rpc::context& ctx) -> rpc::result_code_type {
     auto room3 = team_room_manager::me()->mutable_room(ctx, make_team_key(other_team));
     CASE_EXPECT_TRUE(!!room3);
     RPC_RETURN_CODE(0);
-  });
+  }));
   CASE_EXPECT_EQ(3u, team_room_manager::me()->get_room_count());
 
   // team_id 为 0 非法;zone_id 为 0 是合法的不分区队伍,与 (kTestZoneId, team_id) 是不同的 room
   team_room::ptr_t global_room;
-  (void)env.run("team_key_boundaries", [team_id, &global_room](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("team_key_boundaries", [team_id, &global_room](rpc::context& ctx) -> rpc::result_code_type {
     CASE_EXPECT_FALSE(!!team_room_manager::me()->mutable_room(ctx, make_team_key(0)));
     global_room = team_room_manager::me()->mutable_room(ctx, make_team_key(team_id, 0));
     CASE_EXPECT_TRUE(!!global_room);
     RPC_RETURN_CODE(0);
-  });
+  }));
   CASE_EXPECT_TRUE(global_room.get() != room1.get());
   if (global_room && room1) {
     CASE_EXPECT_EQ(0u, global_room->get_team_key().zone_id());
@@ -239,6 +244,13 @@ CASE_TEST(teamsvr_room_infrastructure, typed_ss_action_invoke) {
 
   // 心跳不写频道日志
   CASE_EXPECT_EQ(send_before, env.channel(team_id).send_message_calls());
+  // 心跳业务效果: 成员已确认日志序号与通知路由被更新(内存状态，不下发日志)
+  auto heartbeat_member = room->find_member(owner_key, false);
+  CASE_EXPECT_TRUE(!!heartbeat_member);
+  if (heartbeat_member) {
+    CASE_EXPECT_EQ(1, heartbeat_member->member_data.acknowledge_action_sequence());
+    CASE_EXPECT_EQ(0x1234u, heartbeat_member->member_data.user_router_server_id());
+  }
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -428,6 +440,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
   // 重复创建: no permission，且不再有权威写入
   size_t updates_before = fake.update_calls();
   size_t sends_before = fake.send_message_calls();
+  size_t personal_before = env.personal_message_count();
   int32_t dup_ret =
       env.run("duplicate_create", [room, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq req;
@@ -438,7 +451,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, dup_ret);
   CASE_EXPECT_EQ(updates_before, fake.update_calls());
   CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
-  CASE_EXPECT_EQ(0u, env.personal_message_count());
+  CASE_EXPECT_EQ(personal_before, env.personal_message_count());
 
   // 非法 sender key: invalid param(参数校验先于任何写入)
   int64_t other_team = next_test_team_id();
@@ -448,6 +461,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
     auto& other_fake = env.channel(other_team);
     size_t other_updates = other_fake.update_calls();
     size_t other_sends = other_fake.send_message_calls();
+    size_t other_personal = env.personal_message_count();
     int32_t invalid_ret =
         env.run("invalid_sender", [other_room, other_team](rpc::context& ctx) -> rpc::result_code_type {
           atfw::team::SSTeamRoomCreateReq req;
@@ -457,7 +471,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(other_room->create_team(ctx, req)));
         });
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, invalid_ret);
-    expect_zero_write(other_fake, other_sends, other_updates, 0, 0);
+    expect_zero_write(other_fake, other_sends, other_updates, 0, 0, env, other_personal);
   }
 
   // 已销毁队伍: 队长写 destroy_team -> 事件回环 -> 再 create 返回 destroyed
@@ -469,6 +483,12 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
   CASE_EXPECT_EQ(0, destroy_ret);
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
+  // 已销毁后不再有任何写入(含个人频道)
+  size_t destroyed_sends = fake.send_message_calls();
+  size_t destroyed_updates = fake.update_calls();
+  size_t destroyed_resets = fake.reset_lock_calls();
+  size_t destroyed_destroys = fake.destroy_calls();
+  size_t destroyed_personal = env.personal_message_count();
   int32_t destroyed_ret =
       env.run("create_on_destroyed", [room, team_id, &owner_key](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq req;
@@ -477,6 +497,8 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->create_team(ctx, req)));
       });
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED, destroyed_ret);
+  expect_zero_write(fake, destroyed_sends, destroyed_updates, destroyed_resets, destroyed_destroys, env,
+                    destroyed_personal);
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

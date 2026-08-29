@@ -139,12 +139,21 @@ CASE_TEST(teamsvr_room_compact, count_based_compaction_and_snapshot_content) {
   CASE_EXPECT_EQ(compact_update->compact_sequence(), private_data.last_compact_sequence());
   CASE_EXPECT_GT(private_data.last_compact_timepoint().seconds(), 0);
 
-  // 压缩后 journal 裁剪: 保留条数不超过 keep_by_count(5) + 后续新增
+  // 压缩后 journal 裁剪语义与 mq_channel::compact_sequence 一致: 边界日志保留，边界之前的日志全部移除
+  CASE_EXPECT_EQ(compact_update->compact_sequence(), fake.last_removed_sequence());
+  bool boundary_retained = false;
+  for (const auto& message : fake.journal()) {
+    CASE_EXPECT_GE(message.sequence(), fake.last_removed_sequence());
+    if (message.sequence() == fake.last_removed_sequence()) {
+      boundary_retained = true;
+    }
+  }
+  CASE_EXPECT_TRUE(boundary_retained);
+  // 保留条数不超过 keep_by_count(5) + 后续新增 + 1 条边界日志
   size_t event_logs_after = fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent);
   size_t total_logs_after = fake.journal().size();
-  CASE_EXPECT_LE(total_logs_after, 5 + 3);  // 保留窗口 + 维护自身产生的 kResetLock/kUpdateCustomData/kNoop
-  CASE_EXPECT_LE(event_logs_after, 5u);
-  (void)event_logs_after;
+  CASE_EXPECT_LE(total_logs_after, 5 + 3 + 1);  // 保留窗口 + 维护自身产生的 kResetLock/kUpdateCustomData/kNoop + 边界
+  CASE_EXPECT_LE(event_logs_after, 5u + 1u);    // 保留窗口 + 边界日志(同为 event)
 
   env.clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -278,7 +287,18 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
     guard.advance(std::chrono::seconds{3});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
-    CASE_EXPECT_EQ(0u, count_versions("w0-"));
+    // 开区间语义: 边界日志(窗口外最新的 w0- 日志)保留，其余 w0- 被裁剪;w1- 全在窗口内保留
+    int64_t retained_w0_sequence = 0;
+    fake.foreach_team_action(
+        [&retained_w0_sequence](const atfw::dtmq::DChannelMessage& message, const atfw::team::DTeamAction& action) {
+          if (action.action_case() == atfw::team::DTeamAction::kMemberUpdate &&
+              action.member_update().client_version().compare(0, 3, "w0-") == 0) {
+            retained_w0_sequence = message.sequence();
+          }
+          return true;
+        });
+    CASE_EXPECT_EQ(1u, count_versions("w0-"));
+    CASE_EXPECT_EQ(fake.last_removed_sequence(), retained_w0_sequence);
     CASE_EXPECT_EQ(3u, count_versions("w1-"));
 
     // T0+8: batch w2-(2 条)
@@ -293,13 +313,25 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
     }
     CASE_EXPECT_EQ(0, env.sync(team_id));
 
-    // T0+12: 续租维护。keep_deadline = T0+12-5 = T0+7: w1-(T0+3) 被裁剪，w2-(T0+8) 保留
+    // T0+12: 续租维护。keep_deadline = T0+12-5 = T0+7: 维护#1 在 T0+6 追加的续租/快照通知日志
+    // 同样在窗口之外，时间维度的裁剪点推进到该快照通知日志(开区间语义: 边界日志本身保留)；
+    // w0-/w1- 全部位于边界之前被裁剪，w2-(T0+8) 在窗口内保留
     guard.advance(std::chrono::seconds{4});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
     CASE_EXPECT_EQ(0u, count_versions("w0-"));
     CASE_EXPECT_EQ(0u, count_versions("w1-"));
     CASE_EXPECT_EQ(2u, count_versions("w2-"));
+    {
+      // 边界日志是维护#1 的快照通知日志(非 team action)，按开区间语义保留在 journal 首位
+      const auto& journal_logs = fake.journal();
+      CASE_EXPECT_FALSE(journal_logs.empty());
+      if (!journal_logs.empty()) {
+        CASE_EXPECT_EQ(atfw::dtmq::DChannelMessageDetail::kUpdateCustomData,
+                       journal_logs.front().detail().command_case());
+        CASE_EXPECT_EQ(fake.last_removed_sequence(), journal_logs.front().sequence());
+      }
+    }
   }
 
   env.clear_rooms();
@@ -383,8 +415,8 @@ CASE_TEST(teamsvr_room_compact, combined_policy_picks_conservative_cutoff) {
   }
   // 压缩边界停在 setup 最后一日志(时间维度下限)，不进入新批次
   CASE_EXPECT_EQ(setup_last, fake.last_removed_sequence());
-  // 新批次(6 条 member_update)全部保留
-  CASE_EXPECT_EQ(6u, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
+  // 新批次(6 条 member_update)全部保留；边界日志(setup 最后一条 add_member event)按开区间语义一并保留
+  CASE_EXPECT_EQ(7u, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
   CASE_EXPECT_TRUE(nullptr != find_compact_update(fake));
 
   env.clear_rooms();
@@ -564,8 +596,8 @@ CASE_TEST(teamsvr_room_compact, reset_lock_only_channel_time_compaction) {
 
   auto& fake = env.channel(team_id);
 
-  // 队伍创建后无任何 event 日志，但锁续租(kResetLock)会产生日志。
-  // 先推进一次触发续租，产生纯 kResetLog 频道内容
+  // 队伍创建后不再写入业务日志，仅锁续租(kResetLock)产生新日志。
+  // 先推进一次触发续租+维护(setup 日志按时间维度压缩，仅边界 event 保留)
   {
     global_now_offset_guard guard(std::chrono::seconds{6});
     env.drive_timer_ticks();
@@ -573,7 +605,18 @@ CASE_TEST(teamsvr_room_compact, reset_lock_only_channel_time_compaction) {
   }
   size_t reset_logs = fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kResetLock);
   CASE_EXPECT_GT(reset_logs, 0u);
-  CASE_EXPECT_EQ(0u, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
+  // 首次维护已按时间维度压缩: setup 的 event 日志被裁到只剩边界(开区间语义保留)
+  int64_t retained_event_sequence = 0;
+  size_t retained_events = 0;
+  for (const auto& message : fake.journal()) {
+    if (message.detail().command_case() == atfw::dtmq::DChannelMessageDetail::kEvent) {
+      ++retained_events;
+      retained_event_sequence = message.sequence();
+    }
+  }
+  CASE_EXPECT_EQ(1u, retained_events);
+  CASE_EXPECT_GT(fake.last_removed_sequence(), 0);
+  CASE_EXPECT_EQ(fake.last_removed_sequence(), retained_event_sequence);
 
   // 推进 compact_log_start_time(10s): 最老未压缩日志(含 kResetLock)超过窗口 -> 时间维度触发维护并压缩
   {
@@ -585,6 +628,8 @@ CASE_TEST(teamsvr_room_compact, reset_lock_only_channel_time_compaction) {
   // 时间维度压缩完成(keep_time=5s，所有日志都早于窗口 -> 全部裁剪，边界不早于最早日志)
   CASE_EXPECT_TRUE(nullptr != find_compact_update(fake));
   CASE_EXPECT_GT(fake.last_removed_sequence(), 0);
+  // 二次压缩后边界为续租日志: 所有 event 日志均已裁掉
+  CASE_EXPECT_EQ(0u, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
 
   // 房间仍主控且持续可写
   CASE_EXPECT_TRUE(room->is_lock_holder());
@@ -998,6 +1043,9 @@ CASE_TEST(teamsvr_room_recovery, approve_crash_checkpoint_retry) {
   // 合并写入已整体提交: 事件回环后成员存在，approve 一并生效、邀请已清理
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_TRUE(room->find_member(invitee, false) != nullptr);
+  // 已提交的一半在回环时产生恰好一次入队通知(apply 路径幂等: 邀请记录随回环清理)
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+  size_t personal_total_before = env.personal_message_count();
 
   // 重试 approve: 邀请已清理，返回 not-found 且不再追加任何事件(不重复添加成员)
   size_t sends_before = fake.send_message_calls();
@@ -1006,6 +1054,10 @@ CASE_TEST(teamsvr_room_recovery, approve_crash_checkpoint_retry) {
                    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
                  }));
   CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  // 崩溃点重试不产生第二次个人通知(通知与日志写入解耦，须独立断言)
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+  CASE_EXPECT_EQ(personal_total_before, env.personal_message_count());
 
   // 日志中 invitee 的 add_member 只出现一次
   size_t add_count = 0;

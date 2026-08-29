@@ -41,6 +41,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -195,38 +196,142 @@ static bool team_any_data_equal(const atfw::team::DTeamAnyData& l, const atfw::t
   return l.permission() == r.permission() && team_any_value_equal(l.data(), r.data(), arena);
 }
 
-// 逐元素比较 DTeamAnyDataWithKey 的 repeated 字段(protobuf_equal 只接受 Message，不能直接比较容器)。
-// 只对 r 侧按 key 排序，l 侧逐项二分查找匹配，确保比较结果不受 key 在 repeated 里的存放顺序影响
-static bool team_any_data_map_equal(const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& l,
-                                    const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& r,
-                                    google::protobuf::Arena* arena) {
-  if (l.size() != r.size()) {
-    return false;
-  }
-  std::vector<const atfw::team::DTeamAnyDataWithKey*> r_sorted;
-  r_sorted.reserve(static_cast<size_t>(r.size()));
-  for (const auto& item : r) {
-    r_sorted.push_back(&item);
-  }
-  std::sort(r_sorted.begin(), r_sorted.end(),
-            [](const atfw::team::DTeamAnyDataWithKey* lhs, const atfw::team::DTeamAnyDataWithKey* rhs) {
-              return lhs->key() < rhs->key();
-            });
-  for (const auto& item : l) {
-    auto it =
-        std::lower_bound(r_sorted.begin(), r_sorted.end(), item.key(),
-                         [](const atfw::team::DTeamAnyDataWithKey* lhs, int64_t key) { return lhs->key() < key; });
-    if (it == r_sorted.end() || (*it)->key() != item.key() ||
-        !team_any_data_equal(item.value(), (*it)->value(), arena)) {
+// GAP-11: 检查单个请求内 keyed repeated 字段的 key 唯一性。同一请求中同一字段出现重复 key
+// 属于非法请求(拒绝且零写入)；跨请求的同 key 数据由归一化路径按"后写覆盖先写"合并
+static bool team_any_data_keys_unique(const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& data) {
+  std::unordered_set<int64_t> keys;
+  keys.reserve(static_cast<size_t>(data.size()));
+  for (const auto& item : data) {
+    if (!keys.insert(item.key()).second) {
       return false;
     }
   }
   return true;
 }
 
+static bool team_any_value_keys_unique(
+    const google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyValueWithKey>& data) {
+  std::unordered_set<int64_t> keys;
+  keys.reserve(static_cast<size_t>(data.size()));
+  for (const auto& item : data) {
+    if (!keys.insert(item.key()).second) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// GAP-11: 校验一条 DTeamAction 中全部 keyed repeated 字段(成员/队伍共享数据、admission 数据、
+// 更新条件与成员条件组)。任一字段内 key 重复即整条请求非法
+static bool team_action_keyed_data_valid(const atfw::team::DTeamAction& action) {
+  switch (action.action_case()) {
+    case atfw::team::DTeamAction::kAddMember:
+      return team_any_data_keys_unique(action.add_member().shared_member_data());
+    case atfw::team::DTeamAction::kMemberUpdate: {
+      const auto& update = action.member_update();
+      if (!team_any_data_keys_unique(update.shared_member_data())) {
+        return false;
+      }
+      for (const auto& condition : update.condition()) {
+        if (!team_any_value_keys_unique(condition.shared_team_data())) {
+          return false;
+        }
+        for (const auto& group : condition.member_condition_group()) {
+          if (!team_any_value_keys_unique(group.member_condition().shared_member_data())) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+    case atfw::team::DTeamAction::kTeamUpdate: {
+      const auto& update = action.team_update();
+      if (!team_any_data_keys_unique(update.shared_team_data())) {
+        return false;
+      }
+      for (const auto& condition : update.condition()) {
+        if (!team_any_value_keys_unique(condition.shared_team_data())) {
+          return false;
+        }
+        for (const auto& group : condition.member_condition_group()) {
+          if (!team_any_value_keys_unique(group.member_condition().shared_member_data())) {
+            return false;
+          }
+        }
+      }
+      return true;
+    }
+    case atfw::team::DTeamAction::kAddInvitation: {
+      const auto& invitation = action.add_invitation();
+      if (!team_any_data_keys_unique(invitation.team_admission_data())) {
+        return false;
+      }
+      for (const auto& member_data : invitation.member_admission_data()) {
+        if (!team_any_data_keys_unique(member_data.member_admission_data())) {
+          return false;
+        }
+      }
+      return true;
+    }
+    case atfw::team::DTeamAction::kAddJoinRequest:
+      return team_any_data_keys_unique(action.add_join_request().member_admission_data());
+    default:
+      return true;
+  }
+}
+
+// GAP-09(2026-08-29 澄清): "有 key 但 value 为空或 type_url 为空则删除该 key"的删除标记语义
+// 仅适用于 kTeamUpdate/kMemberUpdate 的 keyed 共享数据(见 apply_team_update/apply_member_update)；
+// 邀请/加入请求/成员的 admission 数据为全量覆盖，不做按键合并。
+// admission 的 repeated 数据(team_admission_data/member_admission_data)允许无序: 重复判定
+// 需忽略这些字段的元素顺序，按 key 归一化为确定性顺序后复用 protobuf_equal 整体比较
+
+// 按 key 升序排序 keyed repeated 字段(在传入消息的拷贝上执行，仅用于判重归一化，不改变存储顺序)
+static void sort_team_any_data_by_key(google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& field) {
+  std::sort(field.pointer_begin(), field.pointer_end(),
+            [](const atfw::team::DTeamAnyDataWithKey* l, const atfw::team::DTeamAnyDataWithKey* r) {
+              return l->key() < r->key();
+            });
+}
+
+// 邀请的 admission 数据归一化: team_admission_data 按 key 排序；member_admission_data 按
+// user_key 排序，各成员的 member_admission_data 再按 key 排序
+static void sort_invitation_admission_data(atfw::team::DTeamInvitation& value) {
+  sort_team_any_data_by_key(*value.mutable_team_admission_data());
+  auto& members = *value.mutable_member_admission_data();
+  std::sort(members.pointer_begin(), members.pointer_end(),
+            [](const atfw::team::DTeamInvitation::MemberAdmissionData* l,
+               const atfw::team::DTeamInvitation::MemberAdmissionData* r) {
+              return user_key_less_t()(l->user_key(), r->user_key());
+            });
+  for (auto& member : members) {
+    sort_team_any_data_by_key(*member.mutable_member_admission_data());
+  }
+}
+
+// 邀请的顺序无关语义比较: 除 admission 列表顺序外逐字段相等即视为未变化
+static bool invitation_semantically_equal(const atfw::team::DTeamInvitation& l, const atfw::team::DTeamInvitation& r) {
+  atfw::team::DTeamInvitation normalized_l = l;
+  atfw::team::DTeamInvitation normalized_r = r;
+  sort_invitation_admission_data(normalized_l);
+  sort_invitation_admission_data(normalized_r);
+  return atfw::atapp::protobuf_equal(normalized_l, normalized_r);
+}
+
+// 加入请求的顺序无关语义比较: member_admission_data 按 key 归一化后整体比较
+static bool join_request_semantically_equal(const atfw::team::DTeamJoinRequest& l,
+                                            const atfw::team::DTeamJoinRequest& r) {
+  atfw::team::DTeamJoinRequest normalized_l = l;
+  atfw::team::DTeamJoinRequest normalized_r = r;
+  sort_team_any_data_by_key(*normalized_l.mutable_member_admission_data());
+  sort_team_any_data_by_key(*normalized_r.mutable_member_admission_data());
+  return atfw::atapp::protobuf_equal(normalized_l, normalized_r);
+}
+
 // member_update 事件的空操作判定: 逐字段对照 apply_member_update 的应用语义
 // (仅非空 client_version、非 0 user_router_server_id、已设置的 user_channel 会落地，
-// 共享数据按 key 覆盖)；所有会落地的字段都与现有值相等时，写入频道日志不产生任何状态变化。
+// 共享数据按 key 覆盖、空 value/type_url 项删除该 key)；所有会落地的字段都与现有值相等时，
+// 写入频道日志不产生任何状态变化。
 // 不携带任何可落地字段的空更新不判定为空操作(保留事件以维持锁探测等既有行为)，
 // 成员不存在时同样不判定为空操作
 static bool team_member_update_no_change(const atfw::team::DTeamMemberUpdateData& update_data,
@@ -251,8 +356,15 @@ static bool team_member_update_no_change(const atfw::team::DTeamMemberUpdateData
     }
   }
   for (const auto& kv : update_data.shared_member_data()) {
-    has_applicable_field = true;
     auto it = member.shared_member_data.find(kv.key());
+    // GAP-09 删除标记(value 的 type_url/payload 为空): 命中已存在的 key 才产生状态变化
+    if (kv.value().data().type_url().empty() || kv.value().data().value().empty()) {
+      if (it != member.shared_member_data.end()) {
+        return false;
+      }
+      continue;
+    }
+    has_applicable_field = true;
     if (it == member.shared_member_data.end() || !team_any_data_equal(it->second, kv.value(), arena)) {
       return false;
     }
@@ -273,8 +385,15 @@ static bool team_update_no_change(const atfw::team::DTeamUpdateData& update_data
     return false;
   }
   for (const auto& kv : update_data.shared_team_data()) {
-    has_applicable_field = true;
     auto it = current_shared_data.find(kv.key());
+    // GAP-09 删除标记(value 的 type_url/payload 为空): 命中已存在的 key 才产生状态变化
+    if (kv.value().data().type_url().empty() || kv.value().data().value().empty()) {
+      if (it != current_shared_data.end()) {
+        return false;
+      }
+      continue;
+    }
+    has_applicable_field = true;
     if (it == current_shared_data.end() || !team_any_data_equal(it->second, kv.value(), arena)) {
       return false;
     }
@@ -599,6 +718,12 @@ rpc::result_code_type team_room::send_actions(rpc::context& ctx,
   if (destroyed_) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
   }
+  // GAP-11: 同一请求内 keyed repeated 字段的 key 不允许重复，重复即拒绝且零写入
+  for (const auto* action_ptr : actions) {
+    if (nullptr != action_ptr && !team_action_keyed_data_valid(*action_ptr)) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    }
+  }
 
   auto* events = ctx.create<google::protobuf::RepeatedPtrField<google::protobuf::Any>>();
   if (nullptr == events) {
@@ -808,19 +933,35 @@ rpc::result_code_type team_room::heartbeat(rpc::context& ctx, const atfw::team::
   }
 
   // 更新成员已确认的日志序号(随 custom_data 下发，用于成员侧补差量)
+  bool runtime_data_changed = false;
   if (req.sequence() > member->member_data.acknowledge_action_sequence()) {
     member->member_data.set_acknowledge_action_sequence(req.sequence());
     member->member_data.set_acknowledge_action_hash_code(req.hash_code());
+    runtime_data_changed = true;
   }
 
   // 服务器如果触发反订阅，这里会传0
   if (req.user_router_server_id() > 0) {
-    member->last_heartbeat_timepoint = atfw::util::time::time_utility::now();
-    *member->member_data.mutable_last_heartbeat_timepoint() =
-        protobuf_from_system_clock(member->last_heartbeat_timepoint);
+    auto heartbeat_now = atfw::util::time::time_utility::now();
+    if (member->last_heartbeat_timepoint < heartbeat_now) {
+      member->last_heartbeat_timepoint = heartbeat_now;
+      *member->member_data.mutable_last_heartbeat_timepoint() =
+          protobuf_from_system_clock(member->last_heartbeat_timepoint);
+      runtime_data_changed = true;
+    }
   }
-  member->user_router_server_id = req.user_router_server_id();
-  member->member_data.set_user_router_server_id(req.user_router_server_id());
+  if (member->user_router_server_id != req.user_router_server_id()) {
+    member->user_router_server_id = req.user_router_server_id();
+    member->member_data.set_user_router_server_id(req.user_router_server_id());
+    runtime_data_changed = true;
+  } else {
+    member->member_data.set_user_router_server_id(req.user_router_server_id());
+  }
+  if (runtime_data_changed) {
+    // GAP-07: 心跳只更新本地运行时状态、不写频道日志；标脏后由下一次维护随续租 update
+    // 持久化 custom/private 快照(负载迁移转出前数据已保存)
+    runtime_data_dirty_ = true;
+  }
   RPC_RETURN_CODE(0);
 }
 
@@ -833,6 +974,10 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
   }
   if (team_created_) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
+  }
+  // GAP-11: 创建请求携带的 keyed 共享数据同样要求 key 唯一(重复即拒绝且零写入)
+  if (!team_any_data_keys_unique(req.shared_team_data())) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
   // 先占位再让出协程，避免并发的 create_team 在首个 update 挂起期间同时通过检查而重复创建
@@ -947,29 +1092,35 @@ rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::t
   auto* add_data = action->mutable_add_invitation();
   auto existing = pending_invitation_by_invitee_.find(invitee);
   if (existing != pending_invitation_by_invitee_.end() && existing->second) {
-    // 数据未变化时不重复写入频道事件(其他数据由team_room填充，不用参与判定)。
-    // 过期时间由 room 按当前时间补齐时(请求未显式指定)，补齐值随时钟漂移不视为数据变化；
-    // 显式指定时保持"不缩短有效期"判定(要求更晚的过期时间才顺延)
-    bool expired_timepoint_not_earlier =
-        invitation.expired_timepoint().seconds() <= 0 ||
-        protobuf_to_system_clock(existing->second->expired_timepoint()) >= expired_timepoint;
-    if (existing->second->team_source_type() == invitation.team_source_type() &&
-        existing->second->team_source_data().type_url() == invitation.team_source_data().type_url() &&
-        existing->second->team_source_data().value() == invitation.team_source_data().value() &&
-        expired_timepoint_not_earlier &&
-        atfw::atapp::protobuf_equal(existing->second->invitee_private_channel(),
-                                    invitation.invitee_private_channel())) {
+    // GAP-09(2026-08-29 澄清): 重复邀请按可变字段刷新。邀请者/被邀请人/team_key/开始时间不可变
+    // (保持原值)，来源/频道/过期时间按新请求更新；admission 数据全量覆盖(以新请求携带的列表为准，
+    // 不做按键合并、无删除标记语义)。
+    // 过期时间保持"不缩短有效期"判定: 仅显式指定且更晚时顺延；未显式指定时保持原值，
+    // 避免 room 补齐值随时钟漂移产生冗余日志
+    protobuf_copy_message(*add_data, *existing->second);
+    add_data->set_team_source_type(invitation.team_source_type());
+    if (invitation.team_source_data().type_url().empty()) {
+      add_data->clear_team_source_data();
+    } else {
+      protobuf_copy_message(*add_data->mutable_team_source_data(), invitation.team_source_data());
+    }
+    if (invitation.invitee_private_channel().channel_type() != 0 ||
+        !invitation.invitee_private_channel().channel_id().empty()) {
+      protobuf_copy_message(*add_data->mutable_invitee_private_channel(), invitation.invitee_private_channel());
+    }
+    protobuf_copy_message(*add_data->mutable_team_admission_data(), invitation.team_admission_data());
+    protobuf_copy_message(*add_data->mutable_member_admission_data(), invitation.member_admission_data());
+    if (invitation.expired_timepoint().seconds() > 0 &&
+        expired_timepoint > protobuf_to_system_clock(add_data->expired_timepoint())) {
+      protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
+    }
+
+    // 刷新结果与现有记录一致时不重复写入频道事件。admission 的 repeated 数据允许无序:
+    // 比较忽略 team_admission_data/member_admission_data 的元素顺序(按 key 归一化后整体比较)
+    if (invitation_semantically_equal(*add_data, *existing->second)) {
       FCTXLOGDEBUG(ctx, "team_room {}:{} received a older invitation and ignored", team_key_.zone_id(),
                    team_key_.team_id());
       RPC_RETURN_CODE(0);
-    }
-
-    // 已存在待处理的邀请: 保留原数据(开始时间等)，仅更新被邀请人的频道信息;
-    // 请求方要求更晚的过期时间时顺延(与上方跳过条件保持一致)
-    protobuf_copy_message(*add_data, *existing->second);
-    protobuf_copy_message(*add_data->mutable_invitee_private_channel(), invitation.invitee_private_channel());
-    if (expired_timepoint > protobuf_to_system_clock(add_data->expired_timepoint())) {
-      protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
     }
     // 事件应用后会向被邀请人补发一次 DTeamMemberAction
   } else {
@@ -1112,33 +1263,36 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
   auto* add_data = action->mutable_add_join_request();
   auto existing = pending_join_request_by_requester_.find(requester);
   if (existing != pending_join_request_by_requester_.end() && existing->second) {
-    // 数据未变化时不重复写入频道事件(其他数据由team_room填充，不用参与判定)。
-    // 过期时间由 room 按当前时间补齐时(请求未显式指定)，补齐值随时钟漂移不视为数据变化；
-    // 显式指定时保持"不缩短有效期"判定(要求更晚的过期时间才顺延)
-    bool expired_timepoint_not_earlier =
-        join_request.expired_timepoint().seconds() <= 0 ||
-        protobuf_to_system_clock(existing->second->expired_timepoint()) >= expired_timepoint;
-    if (existing->second->team_source_type() == join_request.team_source_type() &&
-        existing->second->team_source_data().type_url() == join_request.team_source_data().type_url() &&
-        existing->second->team_source_data().value() == join_request.team_source_data().value() &&
-        existing->second->client_version() == join_request.client_version() &&
-        existing->second->user_router_server_id() == join_request.user_router_server_id() &&
-        expired_timepoint_not_earlier &&
-        atfw::atapp::protobuf_equal(existing->second->requester_private_channel(),
-                                    join_request.requester_private_channel()) &&
-        team_any_data_map_equal(existing->second->member_admission_data(), join_request.member_admission_data(),
-                                ctx.get_protobuf_arena().get())) {
+    // GAP-09(2026-08-29 澄清): 重复加入请求按可变字段刷新。发起请求者/team_key 不可变(保持原值)，
+    // 来源/版本/路由/频道/过期时间按新请求更新；admission 数据全量覆盖(以新请求携带的列表为准，
+    // 不做按键合并、无删除标记语义)。
+    // 过期时间保持"不缩短有效期"判定: 仅显式指定且更晚时顺延；未显式指定时保持原值，
+    // 避免 room 补齐值随时钟漂移产生冗余日志
+    protobuf_copy_message(*add_data, *existing->second);
+    add_data->set_team_source_type(join_request.team_source_type());
+    if (join_request.team_source_data().type_url().empty()) {
+      add_data->clear_team_source_data();
+    } else {
+      protobuf_copy_message(*add_data->mutable_team_source_data(), join_request.team_source_data());
+    }
+    add_data->set_client_version(join_request.client_version());
+    add_data->set_user_router_server_id(join_request.user_router_server_id());
+    if (join_request.requester_private_channel().channel_type() != 0 ||
+        !join_request.requester_private_channel().channel_id().empty()) {
+      protobuf_copy_message(*add_data->mutable_requester_private_channel(), join_request.requester_private_channel());
+    }
+    protobuf_copy_message(*add_data->mutable_member_admission_data(), join_request.member_admission_data());
+    if (join_request.expired_timepoint().seconds() > 0 &&
+        expired_timepoint > protobuf_to_system_clock(add_data->expired_timepoint())) {
+      protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
+    }
+
+    // 刷新结果与现有记录一致时不重复写入频道事件、不重复发送受理回执。admission 的 repeated
+    // 数据允许无序: 比较忽略 member_admission_data 的元素顺序(按 key 归一化后整体比较)
+    if (join_request_semantically_equal(*add_data, *existing->second)) {
       FCTXLOGDEBUG(ctx, "team_room {}:{} received a older join request and ignored", team_key_.zone_id(),
                    team_key_.team_id());
       RPC_RETURN_CODE(0);
-    }
-
-    // 已存在待处理的加入请求: 保留原数据，仅更新申请人的频道信息;
-    // 请求方要求更晚的过期时间时顺延(与上方跳过条件保持一致)
-    protobuf_copy_message(*add_data, *existing->second);
-    protobuf_copy_message(*add_data->mutable_requester_private_channel(), join_request.requester_private_channel());
-    if (expired_timepoint > protobuf_to_system_clock(add_data->expired_timepoint())) {
-      protobuf_copy_message(*add_data->mutable_expired_timepoint(), protobuf_from_system_clock(expired_timepoint));
     }
   } else {
     protobuf_copy_message(*add_data, join_request);
@@ -1379,6 +1533,11 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
     if (invitation.invitee().user_id() == 0 || invitation.invitee().zone_id() == 0) {
       continue;
     }
+    // GAP-08: 快照加载时直接剔除已过期的邀请(不重建本地待处理项)
+    if (invitation.expired_timepoint().seconds() > 0 &&
+        protobuf_to_system_clock(invitation.expired_timepoint()) <= restore_timepoint_) {
+      continue;
+    }
 
     expired_member_key.erase(invitation.invitee());
     auto& data_ptr = pending_invitation_by_invitee_[invitation.invitee()];
@@ -1399,6 +1558,11 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
   }
   for (const auto& join_request : public_data->pending_join_request()) {
     if (join_request.requester().user_id() == 0 || join_request.requester().zone_id() == 0) {
+      continue;
+    }
+    // GAP-08: 快照加载时直接剔除已过期的加入请求(不重建本地待处理项)
+    if (join_request.expired_timepoint().seconds() > 0 &&
+        protobuf_to_system_clock(join_request.expired_timepoint()) <= restore_timepoint_) {
       continue;
     }
 
@@ -1423,14 +1587,17 @@ bool team_room::restore_snapshot(rpc::context& ctx) {
 
   change_captain(public_data->captain_user_key(), captain_role);
 
-  // 回放压缩点之后的增量日志
+  // public snapshot 已覆盖到 saved_action_sequence；运行时脏快照可能不推进物理压缩点，
+  // 因此恢复只能回放快照覆盖边界之后的增量日志，避免旧日志覆盖快照中的 heartbeat 等运行时数据。
+  const int64_t snapshot_replay_sequence =
+      (std::max)(last_compact_sequence_, storage_.saved_action_sequence());
   rpc::dtmq::client_subscriber::query_options options;
-  options.start_sequence = last_compact_sequence_ + 1;
+  options.start_sequence = snapshot_replay_sequence + 1;
   bool replay_succeeded = true;
   subscriber_->query_cached_message(
       ctx,
-      [this, &ctx, &replay_succeeded](const ::atfw::dtmq::DChannelMessage& message) {
-        if (message.sequence() <= last_compact_sequence_) {
+      [this, &ctx, &replay_succeeded, snapshot_replay_sequence](const ::atfw::dtmq::DChannelMessage& message) {
+        if (message.sequence() <= snapshot_replay_sequence) {
           return true;
         }
         replay_succeeded = apply_event_message(ctx, message);
@@ -1574,8 +1741,15 @@ void team_room::apply_member_update(const atfw::team::DTeamMemberUpdateData& upd
     protobuf_copy_message(*member->member_data.mutable_user_channel(), update_data.user_channel());
   }
 
+  // GAP-09(2026-08-29 澄清): 共享成员数据按 key 覆盖，未出现的 key 保留；
+  // 携带 key 但 value 的 type_url 或 payload 为空的项表示删除该 key(删除标记仅用于
+  // member_update/team_update 的共享数据，admission 等其他入口为全量覆盖)
   for (const auto& kv : update_data.shared_member_data()) {
-    protobuf_copy_message(member->shared_member_data[kv.key()], kv.value());
+    if (kv.value().data().type_url().empty() || kv.value().data().value().empty()) {
+      member->shared_member_data.erase(kv.key());
+    } else {
+      protobuf_copy_message(member->shared_member_data[kv.key()], kv.value());
+    }
   }
 }
 
@@ -1587,8 +1761,15 @@ void team_room::apply_team_update(const atfw::team::DTeamUpdateData& update_data
     revise_configure_default_permission(*storage_.mutable_configure());
   }
 
+  // GAP-09(2026-08-29 澄清): 共享队伍数据按 key 覆盖，未出现的 key 保留；
+  // 携带 key 但 value 的 type_url 或 payload 为空的项表示删除该 key(删除标记仅用于
+  // member_update/team_update 的共享数据，admission 等其他入口为全量覆盖)
   for (const auto& kv : update_data.shared_team_data()) {
-    protobuf_copy_message(shared_team_data_[kv.key()], kv.value());
+    if (kv.value().data().type_url().empty() || kv.value().data().value().empty()) {
+      shared_team_data_.erase(kv.key());
+    } else {
+      protobuf_copy_message(shared_team_data_[kv.key()], kv.value());
+    }
   }
 }
 
@@ -2369,7 +2550,7 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
     case atfw::team::DTeamAction::kMemberSetRole:
       // 设置成员角色需要 set_member_role_role(默认 ADMIN)；目标必须是成员，
       // 且不能授予高于操作者自身的角色(与 add_member 的授权上限一致)。
-      // 目标成员的当前角色必须严格低于操作者，且不能修改队长(队长恒为 OWNER，转让须走 election_captain)
+      // 目标成员的当前角色必须严格低于操作者，且不能直接修改队长角色(须走 election_captain)
       ret = require_role(get_set_member_role_role());
       if (ret == 0) {
         const auto& set_role = action.member_set_role();
@@ -2389,7 +2570,7 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
         }
       }
       break;
-    case atfw::team::DTeamAction::kElectionCaptain:
+    case atfw::team::DTeamAction::kElectionCaptain: {
       // 当前队长可以主动转让；其他操作者无条件修改队长固定要求 OWNER。
       ret =
           is_self(storage_.captain_user_key()) ? require_member() : require_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
@@ -2397,12 +2578,21 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
         auto member_ptr = find_member(action.election_captain().user_key(), false);
         if (!member_ptr) {
           ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND;
-        } else if (action.election_captain().role() > member_ptr->member_data.role()) {
-          // 选队长不能提权
-          ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+        } else {
+          // GAP-12: election_captain.role 是新队长角色，队长不再恒为 OWNER；
+          // 转移/修改队长时新队长的角色不能高于 max(原队长角色, 操作者角色)
+          auto captain_member = find_member(storage_.captain_user_key(), false);
+          auto operator_member = find_member(operator_key, false);
+          atfw::team::EnTeamPermissionRole role_limit = (std::max)(
+              captain_member ? captain_member->member_data.role() : atfw::team::EN_TEAM_MEMBER_ROLE_GUEST,
+              operator_member ? operator_member->member_data.role() : atfw::team::EN_TEAM_MEMBER_ROLE_GUEST);
+          if (action.election_captain().role() > role_limit) {
+            ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+          }
         }
       }
       break;
+    }
     case atfw::team::DTeamAction::kDestroyTeam:
       // 解散队伍固定要求 OWNER
       ret = require_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
@@ -2932,10 +3122,16 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   rpc::dtmq::client_subscriber::update_option options;
   auto private_data = rpc::make_shared_message<atfw::team::DTeamRoomPrivateData>(ctx);
   auto public_data = rpc::make_shared_message<atfw::team::DTeamStorage>(ctx);
-  if (compact_sequence > 0) {
+  // GAP-07: 长期无新日志的新心跳不必即时持久化，但运行时数据一旦变化(标脏)，
+  // 维护要随续租 update 保存 custom/private 快照，保证负载迁移转出前数据已持久化。
+  // 可压缩时同样保存(GAP-08: 已过期 admission 不写入快照)
+  bool save_for_runtime_dirty = runtime_data_dirty_;
+  if (compact_sequence > 0 || save_for_runtime_dirty) {
     // 当前状态信息存入 custom_data(成员清单、加入请求和加入邀请列表)和 private_data(主控私有数据)，
     // custom_data 状态覆盖到最新日志，裁剪点之前的日志才被压缩移除
-    dump_public_data(*public_data);
+    // 先清脏标记再 dump: dump 点之后到达的心跳会重新置脏，保存失败时恢复标记
+    runtime_data_dirty_ = false;
+    dump_public_data(*public_data, now);
     public_data->set_saved_action_sequence(last_sequence);
     // private_data 必须记录本次请求成功后的压缩边界，而不是成员变量中的上一次边界。
     dump_private_data(*private_data, compact_sequence, now);
@@ -2950,14 +3146,19 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   if (0 == ret) {
     current_lock_ = std::move(self_lock);
     next_renew_lock_timepoint_ = now + get_lock_renew_interval();
-    if (compact_sequence > 0) {
+    if (compact_sequence > 0 || save_for_runtime_dirty) {
       storage_.set_saved_action_sequence(last_sequence);
+    }
+    if (compact_sequence > 0) {
       last_compact_sequence_ = compact_sequence;
       last_compact_timepoint_ = now;
       // 压缩点推进后，最早的未压缩日志随之变化
       refresh_oldest_log_timepoint(ctx);
     }
     RPC_RETURN_CODE(0);
+  }
+  if (save_for_runtime_dirty) {
+    runtime_data_dirty_ = true;
   }
   if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED == ret) {
     if (rsp_checker && rsp_checker->has_real_value()) {
@@ -3075,9 +3276,26 @@ rpc::result_code_type team_room::kick_due_offline_members(rpc::context& ctx,
     member_retry_remove_.erase(key);
   }
 
-  // 故障强制移除
-  for (const auto& key : force_remove_keys) {
-    remove_member(ctx, key, atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED, true);
+  // 故障强制移除(GAP-03): 本地删除优先(确保无泄露)，并最后补写一次 remove 日志(no-wait
+  // 尽力而为)。重试已全部失败，接受该日志可能丢失导致的节点间分叉; 若日志最终送达，
+  // 各节点按事件幂等移除，本地已删除的成员再次应用移除事件无副作用
+  if (!force_remove_keys.empty()) {
+    std::vector<rpc::context::message_holder<atfw::team::DTeamAction>> force_actions;
+    force_actions.reserve(force_remove_keys.size());
+    for (const auto& key : force_remove_keys) {
+      remove_member(ctx, key, atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED, true);
+
+      auto& action = force_actions.emplace_back(ctx);
+      *action->mutable_remove_member()->mutable_user_key() = key;
+      action->mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_OFFLINE_EXPIRED);
+    }
+    std::vector<const atfw::team::DTeamAction*> force_action_ptrs;
+    force_action_ptrs.reserve(force_actions.size());
+    for (auto& action : force_actions) {
+      force_action_ptrs.push_back(&(*action));
+    }
+    RPC_AWAIT_IGNORE_RESULT(
+        do_send_actions(ctx, gsl::span<const atfw::team::DTeamAction* const>{force_action_ptrs}, true));
   }
 
   // 重发到期的移除消息(成员已在重试队列中，绕过 send_actions 的去重直接发送;
@@ -3176,7 +3394,7 @@ void team_room::dump_private_data(atfw::team::DTeamRoomPrivateData& output, int6
   dump_team_any_data_from_map(output.mutable_private_team_data(), private_team_data_);
 }
 
-void team_room::dump_public_data(atfw::team::DTeamStorage& output) {
+void team_room::dump_public_data(atfw::team::DTeamStorage& output, std::chrono::system_clock::time_point now) {
   protobuf_copy_message(output, storage_);
   dump_team_key(*output.mutable_team_key());
 
@@ -3191,18 +3409,25 @@ void team_room::dump_public_data(atfw::team::DTeamStorage& output) {
     return true;
   });
 
-  // dump 邀请数据
+  // dump 邀请数据(GAP-08: 已过期的邀请不写入快照)。邀请/加入请求总是必须有有效期，
+  // 不判空 expired_timepoint: 无有效期的记录按已过期处理直接过滤
   for (const auto& invitation : pending_invitation_by_invitee_) {
     if (!invitation.second) {
+      continue;
+    }
+    if (protobuf_to_system_clock(invitation.second->expired_timepoint()) <= now) {
       continue;
     }
 
     protobuf_copy_message(*output.add_pending_invitation(), *invitation.second);
   }
 
-  // dump 加入请求数据
+  // dump 加入请求数据(GAP-08: 已过期的加入请求不写入快照，无有效期同样按已过期处理)
   for (const auto& join_request : pending_join_request_by_requester_) {
     if (!join_request.second) {
+      continue;
+    }
+    if (protobuf_to_system_clock(join_request.second->expired_timepoint()) <= now) {
       continue;
     }
 
@@ -3313,8 +3538,13 @@ void team_room::change_captain(const PROJECT_NAMESPACE_ID::DUserIDKey& new_capta
   }
 
   protobuf_copy_message(*storage_.mutable_captain_user_key(), new_captain->member_data.user_key());
+  // GAP-12: election_captain.role 是新队长角色；未显式指定(不高于 GUEST)时继承原队长角色，
+  // 原队长缺失时回退 OWNER(如创建后首次选举/队长移除后的自动选举)。队长不再恒为 OWNER，
+  // 但转移不能提升权限: 新队长角色不得高于原队长(见 check_action_permission)
   if (set_role > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
     new_captain->member_data.set_role(set_role);
+  } else if (old_captain) {
+    new_captain->member_data.set_role(old_captain->member_data.role());
   } else {
     new_captain->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
   }
@@ -3408,6 +3638,7 @@ std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> team_room::debug_member_lru_keys()
 int64_t team_room::debug_last_compact_sequence() const noexcept { return last_compact_sequence_; }
 
 int64_t team_room::debug_saved_action_sequence() const noexcept { return storage_.saved_action_sequence(); }
+int64_t team_room::debug_acknowledge_action_sequence() const noexcept { return storage_.acknowledge_action_sequence(); }
 
 std::chrono::system_clock::time_point team_room::debug_timer_timeout() const noexcept { return timer_timeout_; }
 

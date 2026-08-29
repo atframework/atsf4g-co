@@ -230,6 +230,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 测试钩子: 本地已生效的压缩边界与快照覆盖序号(CMP 用例)
   int64_t debug_last_compact_sequence() const noexcept;
   int64_t debug_saved_action_sequence() const noexcept;
+  // 测试钩子: 已应用事件日志的 ack 游标(只前进不回退; EVT-01/11 消费进度断言)
+  int64_t debug_acknowledge_action_sequence() const noexcept;
   // 测试钩子: 当前定时器到期时间(0 表示无定时器，LIFE-08 定时器单调性断言)
   std::chrono::system_clock::time_point debug_timer_timeout() const noexcept;
   // 测试钩子: 移除重试队列与待发个人通知数量(LIFE-04/11、LCK-05 断言)
@@ -323,7 +325,8 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   void dump_private_data(atfw::team::DTeamRoomPrivateData& output, int64_t compact_sequence,
                          std::chrono::system_clock::time_point compact_timepoint);
-  void dump_public_data(atfw::team::DTeamStorage& output);
+  // dump 公共快照；GAP-08: 已过期的邀请/加入请求不写入快照(now 为判定基准)
+  void dump_public_data(atfw::team::DTeamStorage& output, std::chrono::system_clock::time_point now);
 
   // 乐观锁租约时长，不低于 dtmq 频道配置的订阅者心跳过期淘汰时间(subscriber_timeout)
   std::chrono::system_clock::duration get_lock_lease() const;
@@ -398,6 +401,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   std::chrono::system_clock::time_point empty_since_timepoint_;
   std::chrono::system_clock::time_point next_renew_lock_timepoint_;
+  // GAP-07: 心跳等未产生频道日志的运行时数据变化标记。长期无新日志时新心跳不必即时持久化，
+  // 但维护发现该标记后随续租 update 保存 custom/private 快照，保证负载迁移转出前数据已持久化
+  bool runtime_data_dirty_ = false;
   // 最早的未压缩日志时间点(随日志压缩推进，用于按时间维度压缩的调度与触发)
   std::chrono::system_clock::time_point oldest_log_timepoint_;
   // 上一次维护开始时的未压缩日志数: 压缩加速触发要求自上次维护以来有显著新增日志(>= 保留下限)。
