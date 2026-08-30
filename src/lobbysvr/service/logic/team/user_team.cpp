@@ -146,6 +146,8 @@ class user_team_utility {
                                                      PROJECT_NAMESPACE_ID::DTeamSharedDataModule&);
   using do_update_team_shared_data = void (*)(rpc::context&, user_team&,
                                               const PROJECT_NAMESPACE_ID::DTeamSharedDataModule&);
+  // 模块被删除(删除标记/快照覆盖/缓存重置)时复位派生本地状态; 必须幂等; key 标识被删除的模块
+  using do_delete_team_shared_data = void (*)(rpc::context&, user_team&, int64_t key);
 
   using build_member_shared_data_condition_checker =
       append_condition_checker (*)(user_team&, const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
@@ -155,12 +157,16 @@ class user_team_utility {
                                                        PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
   using do_update_member_shared_data = void (*)(rpc::context&, user_team&, const PROJECT_NAMESPACE_ID::DUserIDKey&,
                                                 const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
+  // 与 do_update 相同的本地行为 gating(仅自己的数据); key 标识被删除的成员模块
+  using do_delete_member_shared_data = void (*)(rpc::context&, user_team&, const PROJECT_NAMESPACE_ID::DUserIDKey&,
+                                                int64_t key);
 
   struct team_shared_data_update_handlers {
     build_team_shared_data_condition_checker build_append_condition = nullptr;
     allow_update_team_shared_data allow_update = nullptr;
     normalize_update_team_shared_data normalize_update = nullptr;
     do_update_team_shared_data do_update = nullptr;
+    do_delete_team_shared_data do_delete = nullptr;
   };
 
   struct member_shared_data_update_handlers {
@@ -168,6 +174,7 @@ class user_team_utility {
     allow_update_member_shared_data allow_update = nullptr;
     normalize_update_member_shared_data normalize_update = nullptr;
     do_update_member_shared_data do_update = nullptr;
+    do_delete_member_shared_data do_delete = nullptr;
   };
 
  private:
@@ -298,6 +305,8 @@ class user_team_utility {
                              const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
         team.set_matching(ctx, data.battle().matching());
       };
+
+      handles.do_delete = [](rpc::context& ctx, user_team& team, int64_t /*key*/) { team.set_matching(ctx, false); };
     }
     return handlers_map;
   }
@@ -801,13 +810,8 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
 
   is_member_ = false;
 
-  // 快照是权威状态，重建全部本地缓存
-  cached_members_.clear();
-  cached_team_shared_data_.clear();
-  pending_invitation_by_expired_time_.clear();
-  pending_invitation_by_invitee_.clear();
-  pending_join_request_by_expired_time_.clear();
-  pending_join_request_by_requester_.clear();
+  // 快照是权威状态，重建全部本地缓存(含共享数据处理器派生状态的复位)
+  reset_cached_state(ctx);
 
   do_team_shared_data(ctx, team_snapshot->shared_team_data());
 
@@ -836,13 +840,19 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
 }
 
 bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
+  // 与 teamsvr-room apply_member_update 一致: 不存在(或已被移除)的成员不产生缓存更新和客户端投影
+  if (atfw::team::DTeamAction::kMemberUpdate == action.action_case() &&
+      cached_members_.find(action.member_update().user_key()) == cached_members_.end()) {
+    return true;
+  }
+
   append_pending_dirty_action(ctx, action);
 
   switch (action.action_case()) {
     case atfw::team::DTeamAction::kDestroyTeam: {
       is_member_ = false;
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
-      reset_cached_state();
+      reset_cached_state(ctx);
       owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
       break;
     }
@@ -909,30 +919,38 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
     }
     case atfw::team::DTeamAction::kElectionCaptain: {
       const auto& election_captain = action.election_captain();
-      // 与 teamsvr-room change_captain 一致: 新队长必须是成员(否则忽略该事件)，
-      // 新队长重置角色(缺省为 OWNER)，老队长降为 NORMAL
+      // 与 teamsvr-room change_captain 一致: 新队长必须是成员(否则忽略该事件);
+      // 显式 role(>GUEST) 直接使用, 缺省时继承原队长当前角色, 原队长缺失或无有效角色时回退 OWNER;
+      // 原队长(仍是成员且不是新队长)降为 NORMAL, 同一人重复当选不自我降级
       auto old_captain_iter = cached_members_.find(cached_captain_user_key_);
       auto new_captain_iter = cached_members_.find(election_captain.user_key());
       if (new_captain_iter == cached_members_.end()) {
         break;
       }
-      // 自己是老队长且不再是新队长时，同步降低本地缓存的角色
-      if (owner_->get_owner().is(cached_captain_user_key_) && !owner_->get_owner().is(election_captain.user_key())) {
-        cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL;
+
+      atfw::team::EnTeamPermissionRole new_role = election_captain.role();
+      if (new_role <= atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+        if (old_captain_iter != cached_members_.end() &&
+            old_captain_iter->second.member_data.role() > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+          new_role = old_captain_iter->second.member_data.role();
+        } else {
+          new_role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER;
+        }
       }
+
       if (new_captain_iter != old_captain_iter) {
-        new_captain_iter->second.member_data.set_role(election_captain.role() > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST
-                                                          ? election_captain.role()
-                                                          : atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+        // 自己是老队长且不再是新队长时，同步降低本地缓存的角色
+        if (owner_->get_owner().is(cached_captain_user_key_)) {
+          cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL;
+        }
         if (old_captain_iter != cached_members_.end()) {
           old_captain_iter->second.member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
         }
       }
+      new_captain_iter->second.member_data.set_role(new_role);
       cached_captain_user_key_ = election_captain.user_key();
       if (owner_->get_owner().is(cached_captain_user_key_)) {
-        cached_permission_role_ = election_captain.role() > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST
-                                      ? election_captain.role()
-                                      : atfw::team::EN_TEAM_MEMBER_ROLE_OWNER;
+        cached_permission_role_ = new_role;
       }
       break;
     }
@@ -1187,7 +1205,32 @@ void user_team::remove_pending_join_request(const PROJECT_NAMESPACE_ID::DUserIDK
   pending_join_request_by_requester_.erase(iter);
 }
 
-void user_team::reset_cached_state() {
+void user_team::reset_cached_state(rpc::context& ctx) {
+  // 缓存整体失效时, 只对真实删除的缓存项驱动处理器复位派生本地状态(未缓存的 key 不可能产生派生状态,
+  // 不触发回调); 否则快照重建/删除后 is_matching_ 等派生状态会残留旧值
+  const auto& handle_map = user_team_utility::get_team_shared_data_update_handlers_map();
+  for (const auto& kv : cached_team_shared_data_) {
+    auto iter = handle_map.find(kv.first);
+    if (iter != handle_map.end() && iter->second.do_delete != nullptr) {
+      iter->second.do_delete(ctx, *this, kv.first);
+    }
+  }
+  // 成员侧派生状态只可能由自己的数据驱动(与 do_update 的 gating 一致), 只复位自己缓存中真实存在的项
+  const auto& member_handle_map = user_team_utility::get_member_shared_data_update_handlers_map();
+  if (!member_handle_map.empty()) {
+    PROJECT_NAMESPACE_ID::DUserIDKey self_key;
+    owner_->get_owner().dump_user_key(self_key);
+    auto self_iter = cached_members_.find(self_key);
+    if (self_iter != cached_members_.end()) {
+      for (const auto& data_kv : self_iter->second.shared_member_data) {
+        auto iter = member_handle_map.find(data_kv.first);
+        if (iter != member_handle_map.end() && iter->second.do_delete != nullptr) {
+          iter->second.do_delete(ctx, *this, self_key, data_kv.first);
+        }
+      }
+    }
+  }
+
   cached_members_.clear();
   cached_team_shared_data_.clear();
   pending_invitation_by_expired_time_.clear();
@@ -1320,8 +1363,10 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
     case atfw::dtmq::DChannelMessageDetail::kDestroy: {
       is_member_ = false;
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
-      reset_cached_state();
-      owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+      reset_cached_state(ctx);
+      // 频道销毁意味着 room 已不存在, 向其发送 remove_member 是无意义的(dtmq 先派发本回调,
+      // 后置 set_destroyed 才置位, send_exit_team_request 的 is_destroyed 守卫此时还挡不住), 必须跳过
+      owner_->remove_team(ctx, team_key_, /*send_exit=*/false, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
       break;
     }
     case atfw::dtmq::DChannelMessageDetail::kEvent: {
@@ -1363,7 +1408,15 @@ void user_team::do_team_shared_data(rpc::context& ctx,
 
   const auto& handle_map = user_team_utility::get_team_shared_data_update_handlers_map();
   for (const auto& item : data) {
-    if (item.value().data().type_url().empty()) {
+    // 与 teamsvr-room apply_team_update 一致(GAP-09): 携带 key 但 type_url 或 payload 为空的项表示删除该 key
+    if (item.value().data().type_url().empty() || item.value().data().value().empty()) {
+      if (cached_team_shared_data_.erase(item.key()) > 0) {
+        // 删除已缓存的模块也要驱动处理器复位派生本地状态(如 is_matching_)
+        auto iter = handle_map.find(item.key());
+        if (iter != handle_map.end() && iter->second.do_delete != nullptr) {
+          iter->second.do_delete(ctx, *this, item.key());
+        }
+      }
       continue;
     }
     if (!item.value().data().Is<PROJECT_NAMESPACE_ID::DTeamSharedDataModule>()) {
@@ -1410,7 +1463,19 @@ void user_team::do_member_shared_data(
   const bool is_self = owner_->get_owner().is(user_key);
   const auto& handle_map = user_team_utility::get_member_shared_data_update_handlers_map();
   for (const auto& item : data) {
-    if (item.value().data().type_url().empty()) {
+    // 与 teamsvr-room 一致(GAP-09): 携带 key 但 type_url 或 payload 为空的项表示删除该 key
+    if (item.value().data().type_url().empty() || item.value().data().value().empty()) {
+      bool erased = false;
+      if (member_iter != cached_members_.end()) {
+        erased = member_iter->second.shared_member_data.erase(item.key()) > 0;
+      }
+      // 与 do_update 相同的 gating: 本地行为只处理自己的数据; 仅在真实删除时回调
+      if (erased && is_self) {
+        auto iter = handle_map.find(item.key());
+        if (iter != handle_map.end() && iter->second.do_delete != nullptr) {
+          iter->second.do_delete(ctx, *this, user_key, item.key());
+        }
+      }
       continue;
     }
     if (!item.value().data().Is<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule>()) {
@@ -1445,6 +1510,27 @@ void user_team::do_member_shared_data(
     }
     iter->second.do_update(ctx, *this, user_key, *unpacked);
   }
+}
+
+void user_team::notify_destroy_to_client(rpc::context& ctx) {
+  // 真实 destroy_team action 已追加(WAL 事件路径)则不再合成; 频道销毁/个人解散通知路径合成等价 action,
+  // 客户端以 increase 中的 destroy_team 作为队伍解散信号
+  bool has_pending_destroy = false;
+  for (const auto& one_action : pending_dirty_actions_) {
+    if (one_action.action().action_case() == atfw::team::DTeamAction::kDestroyTeam) {
+      has_pending_destroy = true;
+      break;
+    }
+  }
+  if (!has_pending_destroy && !destroyed_dirty_notified_) {
+    atfw::team::DTeamAction action;
+    protobuf_copy_message(*action.mutable_destroy_team(), team_key_);
+    append_pending_dirty_action(ctx, action);
+  }
+  destroyed_dirty_notified_ = true;
+
+  // 不经过 CS 任务收尾的回调路径(快照/增量/频道事件)都需要主动触发一次脏数据下发
+  owner_->get_owner().send_all_syn_msg(ctx);
 }
 
 void user_team::insert_dirty_snapshot_handle() {

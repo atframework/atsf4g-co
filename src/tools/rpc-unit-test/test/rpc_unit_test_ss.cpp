@@ -452,3 +452,133 @@ CASE_TEST(rpc_unit_test, ss_mock_registration_validation) {
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+CASE_TEST(rpc_unit_test, ss_preempt_rule_shadows_default_once) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  auto remote = test.discovery().add_node(make_remote_node(0x130071, "unit-test-remote-ss-preempt"));
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    test.stop();
+    return;
+  }
+
+  // Long-lived unlimited default rule registered first.
+  auto default_rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("default:" + typed_request.payload());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!default_rule);
+
+  // One-shot preempt rule registered later must shadow the default rule for exactly one call.
+  atfw::testing::ss_rule_options preempt_options;
+  preempt_options.preempt = true;
+  preempt_options.times = 1;
+  auto preempt_rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &request, google::protobuf::Message &response) -> rpc::result_code_type {
+        const auto &typed_request = static_cast<const rpc_unit_test::RpcUnitTestEchoReq &>(request.body);
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("preempt:" + typed_request.payload());
+        RPC_RETURN_CODE(0);
+      },
+      preempt_options);
+  CASE_EXPECT_TRUE(!!preempt_rule);
+
+  auto call_once = [&test](const char *payload, std::string &echo_out) {
+    auto task = test.run_task("ss_preempt_call", std::chrono::seconds{2},
+                              [payload, &echo_out](rpc::context &ctx) -> rpc::result_code_type {
+                                rpc_unit_test::RpcUnitTestEchoReq req_body;
+                                req_body.set_payload(payload);
+                                rpc_unit_test::RpcUnitTestEchoRsp rsp_body;
+                                int32_t res = RPC_AWAIT_CODE_RESULT(rpc::unit_test::rpc_unit_test_user(
+                                    ctx, 0x130071, 1, 10001, "openid-preempt", req_body, rsp_body));
+                                echo_out = rsp_body.echo();
+                                RPC_RETURN_CODE(res);
+                              });
+    if (task.empty()) {
+      return INT32_MIN;
+    }
+    auto result = test.wait(task, std::chrono::seconds{5});
+    if (!result.task_exited || result.hard_timed_out) {
+      return INT32_MIN;
+    }
+    return result.result_code;
+  };
+
+  // First call hits the preempt rule, then the budget is exhausted and the default rule resumes.
+  std::string echo;
+  CASE_EXPECT_EQ(0, call_once("p1", echo));
+  CASE_EXPECT_EQ("preempt:p1", echo);
+  CASE_EXPECT_EQ(0, call_once("p2", echo));
+  CASE_EXPECT_EQ("default:p2", echo);
+
+  // FIFO among preempt rules: a preempt rule registered later fires after an earlier preempt rule.
+  atfw::testing::ss_rule_options second_preempt_options;
+  second_preempt_options.preempt = true;
+  second_preempt_options.times = 1;
+  auto second_preempt_rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &, google::protobuf::Message &response) -> rpc::result_code_type {
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("preempt2");
+        RPC_RETURN_CODE(0);
+      },
+      second_preempt_options);
+  CASE_EXPECT_TRUE(!!second_preempt_rule);
+  atfw::testing::ss_rule_options third_preempt_options;
+  third_preempt_options.preempt = true;
+  third_preempt_options.times = 1;
+  auto third_preempt_rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &, google::protobuf::Message &response) -> rpc::result_code_type {
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("preempt3");
+        RPC_RETURN_CODE(0);
+      },
+      third_preempt_options);
+  CASE_EXPECT_TRUE(!!third_preempt_rule);
+
+  CASE_EXPECT_EQ(0, call_once("p3", echo));
+  CASE_EXPECT_EQ("preempt2", echo);
+  CASE_EXPECT_EQ(0, call_once("p4", echo));
+  CASE_EXPECT_EQ("preempt3", echo);
+  CASE_EXPECT_EQ(0, call_once("p5", echo));
+  CASE_EXPECT_EQ("default:p5", echo);
+
+  // An unconsumed preempt rule is still reported like any other times-limited rule, and resetting
+  // the handle deactivates it.
+  atfw::testing::ss_rule_options unconsumed_options;
+  unconsumed_options.preempt = true;
+  unconsumed_options.times = 1;
+  auto unconsumed_rule = test.ss().mock(
+      rpc::unit_test::packer::get_full_name_of_rpc_unit_test_user(),
+      rpc_unit_test::RpcUnitTestEchoReq::descriptor()->full_name(),
+      rpc_unit_test::RpcUnitTestEchoRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view &, google::protobuf::Message &response) -> rpc::result_code_type {
+        static_cast<rpc_unit_test::RpcUnitTestEchoRsp &>(response).set_echo("never-fired");
+        RPC_RETURN_CODE(0);
+      },
+      unconsumed_options);
+  CASE_EXPECT_TRUE(!!unconsumed_rule);
+  CASE_EXPECT_EQ(1, static_cast<int>(test.ss().unconsumed_rule_count()));
+  unconsumed_rule.reset();
+  CASE_EXPECT_EQ(0, static_cast<int>(test.ss().unconsumed_rule_count()));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

@@ -81,6 +81,10 @@ class user_team_manager {
   team_join_request_ptr_t get_pending_join_request(const atfw::team::DTeamKey& team_key) const noexcept;
 
   team_invitation_ptr_t get_pending_invitation(const atfw::team::DTeamKey& team_key) const noexcept;
+  // 个人频道已处理事件水位(随 table 落地, 用于去重迟到事件)
+  inline int64_t get_processed_private_chat_channel_sequence() const noexcept {
+    return processed_private_chat_channel_sequence_;
+  }
 
   // 同意收到的邀请(协程内调用): 打包 SSTeamRoomApproveInvitationReq 并转发到 teamsvr-room(按队伍一致性哈希路由)，
   // 成员数据(客户端版本/路由)由被邀请人在同意时上报，业务结果经 client_result 透传
@@ -150,6 +154,8 @@ class user_team_manager {
   int64_t processed_private_chat_channel_sequence_;
 
   friend class user_team_manager_utility;
+  // user_team 在频道销毁(WAL kDestroy)等已知 room 已不存在的路径上需要跳过退出上报的重载
+  friend class user_team;
 
   // 可以同时在多个队伍（分组）中，但同组队伍只能存在一个
   std::unordered_map<uint32_t, team_group> team_group_;

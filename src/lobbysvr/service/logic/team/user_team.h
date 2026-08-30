@@ -65,6 +65,9 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   bool is_destroyed() const noexcept;
 
+  // 本地派生状态: 由队伍共享数据模块的 do_update/do_delete 处理器驱动(当前为 battle.matching)
+  inline bool is_matching() const noexcept { return is_matching_; }
+
   inline uint32_t get_team_type() const noexcept { return team_type_; }
 
   inline const atfw::team::DTeamKey& get_team_key() const noexcept { return team_key_; }
@@ -78,6 +81,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   inline atfw::team::EnTeamPermissionRole get_cached_permission_role() const noexcept {
     return cached_permission_role_;
   }
+  // 最近一次退出/被移除的原因(由个人通知或本地退出流程记录,随退出重试复用)
+  inline atfw::team::EnTeamExitReason get_last_exit_reason() const noexcept { return last_exit_team_reason_; }
 
   inline const atfw::team::DTeamConfigure& get_configure() const noexcept { return cached_configure_; }
 
@@ -116,6 +121,9 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void set_exit_team(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason);
 
   void retry_send_exit_team_request(rpc::context& ctx);
+  // 队伍销毁(destroy action/频道销毁/个人解散通知)时先把解散通知下发给客户端, 再允许对象移除:
+  // 已追加真实 destroy_team action 时直接下发, 否则合成等价 action; 重复调用幂等
+  void notify_destroy_to_client(rpc::context& ctx);
 
   void try_load_snapshot(rpc::context& ctx);
 
@@ -143,7 +151,7 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void remove_pending_join_request(const PROJECT_NAMESPACE_ID::DUserIDKey& requester);
 
   // 队伍销毁/退出后清空本地缓存状态
-  void reset_cached_state();
+  void reset_cached_state(rpc::context& ctx);
 
   void load_snapshot(rpc::context& ctx);
 
@@ -167,6 +175,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   bool pending_dirty_snapshot_;
   std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction> pending_dirty_actions_;
+  // 销毁通知只合成/下发一次(destroy action、频道销毁、个人解散通知可能先后触发)
+  bool destroyed_dirty_notified_ = false;
 
   uint32_t team_type_;
   atfw::team::DTeamKey team_key_;

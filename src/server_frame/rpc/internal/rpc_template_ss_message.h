@@ -55,6 +55,10 @@ ATFW_UTIL_SYMBOL_VISIBLE result_code_type wait_and_unpack_ss_response(context& c
       FCTXLOGERROR(ctx, "rpc {} expect response message {}, but got {}", rpc_full_name, type_full_name,
                    rsp_msg.head().rpc_response().type_url());
     }
+    // 不把坏包当成功: 无显式错误码时按解包失败处理
+    if (res >= 0 && rsp_msg.head().error_code() == 0) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+    }
   } else if (!rsp_msg.body_bin().empty()) {
     res = unpack_rpc_body(response_body, rsp_msg.body_bin(), rpc_full_name, type_full_name);
     if (res < 0) {

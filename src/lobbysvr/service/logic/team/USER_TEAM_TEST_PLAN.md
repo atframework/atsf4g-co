@@ -1,6 +1,7 @@
 # lobbysvr 用户组队单元测试执行计划
 
-> 状态：2026-08-29 当前执行计划。本文只描述应保留的最新契约和落地顺序，不记录历史方案。
+> 状态：2026-08-30 全部用例已落地并通过（`lobbysvr_user_team` 组 68/68，lobbysvr suite 76/76）。本文只
+> 描述应保留的最新契约，不记录历史方案；§6 记录执行期关闭的实现缺陷，§7 记录完成证据。
 >
 > 被测范围：`src/lobbysvr/service/logic/team/` 的 `user_team_manager`、`user_team` 和组队 CS task action。
 > 服务端事实源：当前工作区的 `src/teamsvr/service/room/logic/room/team_room.cpp`、组队 protobuf、
@@ -154,9 +155,8 @@ handle 注销；迟到的重复个人通知或队伍事件不重建队伍、不�
 复用 `${PROJECT_NAME}-lobbysvr-unit-test`、`atfw::testing::runtime`，运行时 features 为 `{ss, cs}`。
 现有 `src/lobbysvr/test/lobbysvr_test_user_team_manager.cpp` 已有 7 个 `lobbysvr_user_team` 用例。
 
-落地 CS task-action 用例前，`src/lobbysvr/test/CMakeLists.txt` 必须显式加入本目录下 12 个
-`task_action_team_*.cpp`；当前目标只编译 `user_team_manager.cpp/user_team.cpp/user_team_algorithm.cpp`，原计划若
-直接写 task action 用例会链接失败。不要新建第二个 service test target。
+`src/lobbysvr/test/CMakeLists.txt` 已显式编入本目录 12 个 `task_action_team_*.cpp` 和全部 `team_test` 源文件，
+CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 service test target。
 
 用例增长后将通用 helper 下沉到 `lobbysvr_test_user_team_common.h`，但场景输入和关键期望保留在 case 中。
 
@@ -179,31 +179,41 @@ handle 注销；迟到的重复个人通知或队伍事件不重建队伍、不�
 - 使用 `time_utility::set_global_now_offset/update` 推进逻辑时间，显式调用 second/minute refresh；每例 teardown
   必须 reset offset；
 - 每个前置断言失败后先完成 `test.stop()` 再 return；每例最后断言 `test.stop()==0`，让未消费的 SS expectation
-  使测试失败。
+使测试失败；
+- dtmq 订阅管理和 mock WAL 是进程级状态且频道水位不回退：同一测试进程内不得复用 user/team/channel id，
+  各测试文件独占 id 段（现状：manager 30001-30006、cs 30010/30090+、admission 30011-30014、
+  cache 30021-30024、kick 30031-30039、robust 30041/30051-30059、lifecycle 30101-30110；新增用例先查重）；
+- 注入快照会重置该频道 WAL：快照之后的增量日志 hash 从 0 重新链（`channel_event_chain.hash_code` 归零），
+  不得沿用快照前的 hash 续链；
+- 个人频道业务回调按 Any 消息类型分发：type_url 不匹配的事件在订阅层被过滤，业务回调不触发、manager 水位
+  不推进；只有 type_url 匹配但 value 损坏的事件才走“水位推进后忽略”路径；
+- CS 用例每个 runtime 必须调用
+  `handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice()` 注册处理器；
+  `team_test::post_cs_request` 捕获的响应必须显式消费，否则 dispatcher 的 stale-response 清理会让用例失败。
 
 ## 5. 用例矩阵
 
-标记说明：`现有` 表示已有部分实现，仍按本计划补强；`新增` 表示尚无对应 case；`RED` 表示按权威契约编写后
-应先暴露当前实现缺陷，修复实现后才能转绿。
+截至 2026-08-30 下列矩阵全部落地并通过，各条目的实现用例见 §5.7 覆盖映射；§6 列出执行期关闭的
+实现缺陷。新增用例时保留原 ID 语义，不要把多个不相关场景塞进同一个 case。
 
 ### 5.1 P0：成员、快照、退出和客户端投影
 
 | ID | 状态 | 场景和关键断言 |
 | --- | --- | --- |
-| MEM-01 | 现有补强 | 富字段快照权威重建：成员全部业务字段、configure、队伍/成员共享数据、两类 pending；内部字段只在客户端投影层裁剪，缓存更新不能污染源 fixture |
-| MEM-02 | 新增 | `add_member` 新增和重复 upsert；同 key 不重复成员，保留更早 joined_timepoint，较新的业务字段覆盖；self 首次加入只 flush 一次本端 shared data，并连带删除该用户的队伍级 invitation/join request |
-| MEM-03 | 现有补强 | `member_update` 的非空 client_version、共享数据按 key 后写覆盖/未出现 key 保留；空版本不回退；未知成员不创建缓存；dirty 投影剥内部字段并解包 shared data |
-| MEM-04 | 新增 | `remove_member(other)` 删除存在成员并下发完整 increase；重复删除/未知成员幂等，不损坏其他缓存 |
-| ROLE-01 | 现有补强 | `member_set_role` 更新他人与 self；self 同步 `cached_permission_role_`，权限判断随事件改变 |
-| ROLE-02 | RED | `election_captain` 显式 role、默认 role 继承原队长 role、原队长缺失回退 OWNER、旧队长降 NORMAL、同一人不误降、非成员目标不改缓存；当前 lobbysvr 默认强制 OWNER，与 room 当前契约不一致 |
-| TEAM-01 | 现有补强 | `team_update` configure 整体替换、shared data 同 key 合并、matching 行为；空/错误 Any 不进入解包缓存，合法未知模块不能被注册 handler 的存在与否误删 |
-| DIRTY-01 | 现有补强 | snapshot 投影逐字段完整且内部字段裁剪正确；比较使用业务 key，不依赖输出顺序 |
-| DIRTY-02 | 现有补强 | 除单独由 DEST-01 验证的 destroy 外，每一种 `DTeamAction` 的 increase 投影逐字段检查；批量/单条发送都只要求 action 集合和顺序契约，不锁死 CS push 数量 |
-| KICK-01 | 新增 | §3.1 两种个人通知/队伍事件顺序及共同终态 |
-| KICK-02 | 新增 | §3.2 个人通知丢失、仅 `remove_member(self)` 的客户端获知和最终缓存清理 |
-| KICK-03 | 新增 | §3.3 两种消息都丢失、仅快照无 self 的客户端获知和权威重建；含 self 对照组 |
-| KICK-04 | 新增 | 只有个人 remove 到达、队伍快照仍暂时含 self：pending-to-exit 重试/exit timeout 后收编，期间不把队伍作为 running team 导出 |
-| DEST-01 | RED | `destroy_team` action 必须先下发完整 destroy increase 再清缓存；channel destroy/on_destroyed 无 action 时合成等价通知；三条路径随后清 manager，低于新 create sequence 的旧 destroyed 回调忽略；当前 action 路径会在 batch dirty flush 前移除对象，频道销毁路径也没有客户端解散通知 |
+| MEM-01 | 已覆盖 | 富字段快照权威重建：成员全部业务字段、configure、队伍/成员共享数据、两类 pending；内部字段只在客户端投影层裁剪，缓存更新不能污染源 fixture |
+| MEM-02 | 已覆盖 | `add_member` 新增和重复 upsert；同 key 不重复成员，保留更早 joined_timepoint，较新的业务字段覆盖；self 首次加入只 flush 一次本端 shared data，并连带删除该用户的队伍级 invitation/join request |
+| MEM-03 | 已覆盖 | `member_update` 的非空 client_version、共享数据按 key 后写覆盖/未出现 key 保留；空版本不回退；未知成员不创建缓存；dirty 投影剥内部字段并解包 shared data |
+| MEM-04 | 已覆盖 | `remove_member(other)` 删除存在成员并下发完整 increase；重复删除/未知成员幂等，不损坏其他缓存 |
+| ROLE-01 | 已覆盖 | `member_set_role` 更新他人与 self；self 同步 `cached_permission_role_`，权限判断随事件改变 |
+| ROLE-02 | 已覆盖 | `election_captain` 显式 role、默认 role 继承原队长 role、原队长缺失回退 OWNER、旧队长降 NORMAL、同一人不误降、非成员目标不改缓存 |
+| TEAM-01 | 已覆盖 | `team_update` configure 整体替换、shared data 同 key 合并、matching 行为；空/错误 Any 不进入解包缓存，合法未知模块不能被注册 handler 的存在与否误删 |
+| DIRTY-01 | 已覆盖 | snapshot 投影逐字段完整且内部字段裁剪正确；比较使用业务 key，不依赖输出顺序 |
+| DIRTY-02 | 已覆盖 | 除单独由 DEST-01 验证的 destroy 外，每一种 `DTeamAction` 的 increase 投影逐字段检查；批量/单条发送都只要求 action 集合和顺序契约，不锁死 CS push 数量 |
+| KICK-01 | 已覆盖 | §3.1 两种个人通知/队伍事件顺序及共同终态 |
+| KICK-02 | 已覆盖 | §3.2 个人通知丢失、仅 `remove_member(self)` 的客户端获知和最终缓存清理 |
+| KICK-03 | 已覆盖 | §3.3 两种消息都丢失、仅快照无 self 的客户端获知和权威重建；含 self 对照组 |
+| KICK-04 | 已覆盖 | 只有个人 remove 到达、队伍快照仍暂时含 self：pending-to-exit 重试/exit timeout 后收编，期间不把队伍作为 running team 导出 |
+| DEST-01 | 已覆盖 | `destroy_team` action 必须先下发完整 destroy increase 再清缓存；channel destroy/on_destroyed 无 action 时合成等价通知；三条路径随后清 manager，低于新 create sequence 的旧 destroyed 回调忽略 |
 
 ### 5.2 P0：队伍级 invitation/join-request 缓存
 
@@ -211,51 +221,50 @@ handle 注销；迟到的重复个人通知或队伍事件不重建队伍、不�
 
 | ID | 状态 | 场景和关键断言 |
 | --- | --- | --- |
-| ADM-TEAM-01 | 现有补强 | 快照加载多条有效/已过期/无效 key 数据；只保留有效项，完整字段不丢，按过期时间升序导出 |
-| ADM-TEAM-02 | 现有补强 | `add_invitation` 同 key 同 expiry 原位覆盖、expiry 变化重排；invitee 已是成员时忽略；team/source/time/admission 全字段保存 |
-| ADM-TEAM-03 | 现有补强 | `approve_invitation/reject_invitation` 删除 list 和索引；重复结果幂等；dirty 私有频道裁剪且 admission 投影符合 §2.3 |
-| ADM-TEAM-04 | 现有补强 | `add_join_request` 同 key覆盖/重排、成员忽略；requester/channel/source/version/router/expiry/admission 全字段保存 |
-| ADM-TEAM-05 | 现有补强 | `approve_join_request/reject_join_request` 删除 list 和索引；重复结果幂等；dirty channel/router/admission 投影符合 §2.3 |
-| ADM-TEAM-06 | 新增 | `add_member` 同时删除该 user 的 invitation 和 join request；删除一个 key 不影响其他 key |
-| ADM-TEAM-07 | 现有补强 | `expired_timepoint == now` 视为过期；分两段推进时间，只清理已过期前缀；refresh 后 list/index/dump 三者一致，且不伪造 room 取消事件 |
+| ADM-TEAM-01 | 已覆盖 | 快照加载多条有效/已过期/无效 key 数据；只保留有效项，完整字段不丢，按过期时间升序导出 |
+| ADM-TEAM-02 | 已覆盖 | `add_invitation` 同 key 同 expiry 原位覆盖、expiry 变化重排；invitee 已是成员时忽略；team/source/time/admission 全字段保存 |
+| ADM-TEAM-03 | 已覆盖 | `approve_invitation/reject_invitation` 删除 list 和索引；重复结果幂等；dirty 私有频道裁剪且 admission 投影符合 §2.3 |
+| ADM-TEAM-04 | 已覆盖 | `add_join_request` 同 key覆盖/重排、成员忽略；requester/channel/source/version/router/expiry/admission 全字段保存 |
+| ADM-TEAM-05 | 已覆盖 | `approve_join_request/reject_join_request` 删除 list 和索引；重复结果幂等；dirty channel/router/admission 投影符合 §2.3 |
+| ADM-TEAM-06 | 已覆盖 | `add_member` 同时删除该 user 的 invitation 和 join request；删除一个 key 不影响其他 key |
+| ADM-TEAM-07 | 已覆盖 | `expired_timepoint == now` 视为过期；分两段推进时间，只清理已过期前缀；refresh 后 list/index/dump 三者一致，且不伪造 room 取消事件 |
 
 ### 5.3 P0：自己的 pending invitation/join-request 缓存
 
 | ID | 状态 | 场景和关键断言 |
 | --- | --- | --- |
-| ADM-SELF-01 | 现有补强 | `invited` 按 §2.2 构造真实完整通知；manager 逐字段保存 PUBLIC 队伍/全成员快照，MEMBER 数据不泄漏；非本人 invitee 忽略 |
-| ADM-SELF-02 | 现有补强 | `apply_join_request` 保存 room 归一化后的全部字段；非本人 requester 忽略；send RPC 成功本身不提前插入缓存 |
-| ADM-SELF-03 | 新增 | 两类缓存的同 team_key 同 expiry 原位覆盖、不同 expiry 重排、不同 team_key 共存；通过 get 返回的最新完整内容和分段 cleanup 终态证明 list/map 同步 |
-| ADM-SELF-04 | RED | 无效 team_id、已过期、`expiry == now` 均不得插入；当前 invitation 路径缺 team_id 校验而 join-request 已有 |
-| ADM-SELF-05 | 现有补强 | 个人 `reject_*` 删除对应 list/index，重复 reject 幂等，另一类/另一 team 不受影响 |
-| ADM-SELF-06 | 新增 | approve/reject invitation 上行 payload 完整；成功删除；普通业务失败保留以便重试；`DTMQ_CHANNEL_NOT_FOUND` 说明 room 已不存在，应映射错误并删除确定失效的本地记录 |
-| ADM-SELF-07 | RED | `joined_team`/create/登录恢复注册 team 时，必须删除同 team_key 的自己的 invitation 和 join request；当前 `add_team` 不做该清理，非 approve 路径会留下陈旧 pending |
-| ADM-SELF-08 | 现有补强 | second refresh 分段清理两类过期前缀；清理后 get 返回空；重复申请预检不能把已过期但尚未 refresh 的记录当作有效 |
-| ADM-SELF-09 | RED | table dump/init 往返后，未过期的自己的 invitation/join request 与消费水位同时恢复，旧个人事件仍去重；当前 table 只持久化水位和 current team，恢复后 pending 会不可逆丢失 |
-| ADM-SELF-10 | 现有补强 | 个人频道 sequence 小于/等于水位不重复处理，大于水位只处理一次；水位变化设置 manager dirty 并正确落地 |
+| ADM-SELF-01 | 已覆盖 | `invited` 按 §2.2 构造真实完整通知；manager 逐字段保存 PUBLIC 队伍/全成员快照，MEMBER 数据不泄漏；非本人 invitee 忽略 |
+| ADM-SELF-02 | 已覆盖 | `apply_join_request` 保存 room 归一化后的全部字段；非本人 requester 忽略；send RPC 成功本身不提前插入缓存 |
+| ADM-SELF-03 | 已覆盖 | 两类缓存的同 team_key 同 expiry 原位覆盖、不同 expiry 重排、不同 team_key 共存；通过 get 返回的最新完整内容和分段 cleanup 终态证明 list/map 同步 |
+| ADM-SELF-04 | 已覆盖 | 无效 team_id、已过期、`expiry == now` 均不得插入 |
+| ADM-SELF-05 | 已覆盖 | 个人 `reject_*` 删除对应 list/index，重复 reject 幂等，另一类/另一 team 不受影响 |
+| ADM-SELF-06 | 已覆盖 | approve/reject invitation 上行 payload 完整；成功删除；普通业务失败保留以便重试；`DTMQ_CHANNEL_NOT_FOUND` 说明 room 已不存在，应映射错误并删除确定失效的本地记录 |
+| ADM-SELF-07 | 已覆盖 | `joined_team`/create/登录恢复注册 team 时，必须删除同 team_key 的自己的 invitation 和 join request |
+| ADM-SELF-08 | 已覆盖 | second refresh 分段清理两类过期前缀；清理后 get 返回空；重复申请预检不能把已过期但尚未 refresh 的记录当作有效 |
+| ADM-SELF-09 | 已覆盖 | table dump/init 往返后，未过期的自己的 invitation/join request 与消费水位同时恢复，旧个人事件仍去重 |
+| ADM-SELF-10 | 已覆盖 | 个人频道 sequence 小于/等于水位不重复处理，大于水位只处理一次；水位变化设置 manager dirty 并正确落地 |
 
-`ADM-SELF-09` 的修复必须二选一并以“恢复后 pending 不丢”为验收：把两类 pending 写入 `user_team_data`；或提供
-可从个人频道权威快照重建且不被已落地水位跳过的机制。不能只把水位清零后依赖全量重放，因为会重新执行历史
-`joined_team/remove_member` 等副作用。
+`ADM-SELF-09` 采用的修复：`user_team_data` 持久化两类自己的 pending（`svr.local.table.proto`），dump/init 往返
+恢复；水位保持落地语义，不依赖全量重放（重放会重新执行历史 `joined_team/remove_member` 副作用）。
 
 ### 5.4 P1：注册、切队、序列和生命周期
 
 | ID | 状态 | 场景和关键断言 |
 | --- | --- | --- |
-| JOIN-01 | 现有补强 | `joined_team` 的五个字段完整进入新队；订阅严格使用 `team_channel`；非本人通知忽略；snapshot ready 后才判定成员 |
-| JOIN-02 | 现有补强 | 同组 A→B：A 转 pending-to-exit 并发 reason=`IN_ANOTHER_TEAM` 的 exit；table 只保存 B/current 和 team_type |
-| JOIN-03 | 现有 | pending-to-exit 的 A 再收到 joined：A 恢复 current、B 退出，旧 A 不泄漏且恢复后不重试旧 exit |
-| CREATE-01 | 新增 | create SS 请求完整：team_id=0/zone、sender/channel、client_version/router、configure 保持当前默认空值（由 room 修订默认门槛）、两类初始 shared data；响应成功后无需 joined 即注册 OWNER/captain/self，输出 key 精确等于响应 |
-| CREATE-02 | 新增 | transport/client_result 失败不注册、不修改 output/index，错误码精确透传 |
-| SEQ-01 | 新增 | 快照 `saved_action_sequence=N` 后 `<=N` 日志不应用，`>N` 按 hash chain 应用；重复日志不重复 dirty |
-| SEQ-02 | 新增 | update-custom-data 快照覆盖旧缓存，快照回放期间 action 被 snapshot 吞并只下发最终 snapshot；实时 action 下发 increase |
-| SEQ-03 | 新增 | 高 create sequence 新代际快照后，旧 destroy/on_destroyed 乱序到达不删除新代际 |
-| HB-01 | 新增 | 成员且 ready 时 heartbeat 上报 team/user/router 和最新 sequence/hash；间隔内节流、达到边界再发 |
-| HB-02 | 新增 | 非成员、退出中、未 ready、destroyed 均不发 heartbeat |
-| EXIT-01 | 新增 | 主动退出上行 remove self payload 和 reason；仍为成员时进入 pending-to-exit，回环 remove 后收编 |
-| EXIT-02 | 新增 | retry interval 边界、exit timeout 边界和清理后停止重试；频道 destroyed 可直接移除 |
-| DUMP-01 | 现有补强 | manager table dump/init 恢复 team_type/current/channel/captain/role/个人水位；pending-to-exit 不落地；非法 team type/channel 不恢复 |
-| DUMP-02 | 新增 | `user_get_info(need_user_team)` 只导出 current 且非 exiting/destroyed 的队伍，并使用与 dirty snapshot 相同的字段裁剪契约 |
+| JOIN-01 | 已覆盖 | `joined_team` 的五个字段完整进入新队；订阅严格使用 `team_channel`；非本人通知忽略；snapshot ready 后才判定成员 |
+| JOIN-02 | 已覆盖 | 同组 A→B：A 转 pending-to-exit 并发 reason=`IN_ANOTHER_TEAM` 的 exit；table 只保存 B/current 和 team_type |
+| JOIN-03 | 已覆盖 | pending-to-exit 的 A 再收到 joined：A 恢复 current、B 退出，旧 A 不泄漏且恢复后不重试旧 exit |
+| CREATE-01 | 已覆盖 | create SS 请求完整：team_id=0/zone、sender/channel、client_version/router、configure 保持当前默认空值（由 room 修订默认门槛）、两类初始 shared data；响应成功后无需 joined 即注册 OWNER/captain/self，输出 key 精确等于响应 |
+| CREATE-02 | 已覆盖 | transport/client_result 失败不注册、不修改 output/index，错误码精确透传 |
+| SEQ-01 | 已覆盖 | 快照 `saved_action_sequence=N` 后 `<=N` 日志不应用，`>N` 按 hash chain 应用；重复日志不重复 dirty |
+| SEQ-02 | 已覆盖 | update-custom-data 快照覆盖旧缓存，快照回放期间 action 被 snapshot 吞并只下发最终 snapshot；实时 action 下发 increase |
+| SEQ-03 | 已覆盖 | 高 create sequence 新代际快照后，旧 destroy/on_destroyed 乱序到达不删除新代际 |
+| HB-01 | 已覆盖 | 成员且 ready 时 heartbeat 上报 team/user/router 和最新 sequence/hash；间隔内节流、达到边界再发 |
+| HB-02 | 已覆盖 | 非成员、退出中、未 ready、destroyed 均不发 heartbeat |
+| EXIT-01 | 已覆盖 | 主动退出上行 remove self payload 和 reason；仍为成员时进入 pending-to-exit，回环 remove 后收编 |
+| EXIT-02 | 已覆盖 | retry interval 边界、exit timeout 边界和清理后停止重试；频道 destroyed 可直接移除 |
+| DUMP-01 | 已覆盖 | manager table dump/init 恢复 team_type/current/channel/captain/role/个人水位；pending-to-exit 不落地；非法 team type/channel 不恢复 |
+| DUMP-02 | 已覆盖 | `user_get_info(need_user_team)` 只导出 current 且非 exiting/destroyed 的队伍，并使用与 dirty snapshot 相同的字段裁剪契约 |
 
 ### 5.5 P1：CS 请求和上行 SS payload
 
@@ -282,35 +291,79 @@ handle 注销；迟到的重复个人通知或队伍事件不重建队伍、不�
 | ROBUST-03 | 队伍 action 中错误 shared-data Any 只跳过该 key，不丢同批合法 key，不创建错误 unpacked 输出 |
 | ROBUST-04 | runtime/task 前置失败、未消费 mock、hard timeout、时间 offset 泄漏均使 case 失败；组内连续运行两次无 singleton/dirty handle 污染 |
 
-## 6. 当前必须由测试暴露并关闭的问题
+### 5.7 覆盖映射（2026-08-30）
 
-这些不是待讨论的绿色断言。先按上文权威契约写 focused case 并观察预期 RED，再修复实现：
+全部 68 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
+矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 8 例，cs 文件）。
 
-1. `user_team::load_team_action(election_captain)` 的默认角色仍强制 OWNER，与当前 room 的“继承原队长角色”不一致；
-2. manager 的 invitation 插入缺少无效 team_id 校验；
-3. `add_team` 不清理同 team_key 的自己的 invitation/join request；
-4. 个人 `remove_member` 丢弃服务端 `remove_member_reason`，固定写 DEFAULT；
-5. room channel 不存在时 approve/reject invitation 映射为 not-found，但仍保留已确定失效的本地 pending；
-6. table 同时持久化个人频道水位却不持久化自己的 pending，重启/迁移恢复会丢数据且历史事件被水位跳过；
-7. destroy action/频道销毁会清 manager，但当前没有保证客户端先收到解散通知，可能残留客户端队伍缓存；
-8. lobbysvr test target 未编译 team task-action 源码，CS 请求层用例尚不能落地；
-9. 现有用例中的固定 `pump_rounds`、固定 push 数和旧的“wait timeout 默认 30s”描述需要改为 §4.3 的
-   可观察条件及当前 5s 配置事实。
+| 矩阵 ID | 覆盖用例 |
+| --- | --- |
+| MEM-01 | manager.`dump_snapshot_exports_cached_state`；robust.`robust_snapshot_rebuild_cleans_pendings_and_indexes` |
+| MEM-02 | manager.`incremental_actions_update_cache_and_dirty_push`；robust.`robust_duplicate_events_idempotent`；admission.`team_add_member_clears_joined_user_pendings` |
+| MEM-03 | cache.`member_update_full_fields_and_dirty_projection`、`member_update_rejected_without_cache_or_dirty_push` |
+| MEM-04 | kick.`kick_channel_action_fallback_without_personal_notify`；robust.`robust_duplicate_events_idempotent` |
+| ROLE-01 | manager.`member_set_role_updates_cached_data`；cache.`member_set_role_full_payload_update_cache` |
+| ROLE-02 | cache.`election_captain_role_semantics` |
+| TEAM-01 | cache.`team_update_shared_data_and_snapshot_admission_filter`；robust.`robust_bad_shared_data_any_skips_only_that_key` |
+| DIRTY-01 | manager.`dump_snapshot_exports_cached_state`；lifecycle.`user_get_info_exports_only_running_team_with_trimming` |
+| DIRTY-02 | manager.`incremental_actions_update_cache_and_dirty_push`；cache.`member_update_full_fields_and_dirty_projection`、`member_set_role_full_payload_update_cache` |
+| KICK-01 | kick.`kick_channel_event_first_then_personal`、`kick_personal_event_first_then_channel` |
+| KICK-02 | kick.`kick_channel_action_fallback_without_personal_notify` |
+| KICK-03 | kick.`kick_snapshot_fallback_without_personal_notify` |
+| KICK-04 | kick.`kick_exit_retry_converges_while_snapshot_still_has_self`、`kick_personal_notify_fallback_until_wal_remove` |
+| DEST-01 | kick.`destroy_action_pushes_increase_before_cleanup`、`channel_destroyed_event_synthesizes_destroy_notify`、`personal_destroy_notification_pushes_increase` |
+| ADM-TEAM-01..07 | admission.`team_admission_snapshot_load_filters_and_orders`、`team_add_invitation_upsert_and_projection`、`team_invitation_result_removes_pending`、`team_add_join_request_upsert_and_projection`、`team_join_request_result_removes_pending`、`team_add_member_clears_joined_user_pendings`、`team_admission_expiry_boundary_and_cleanup` |
+| ADM-SELF-01..10 | admission.`self_invited_notification_full_payload`、`self_join_request_receipt_full_payload`、`self_pending_upsert_reorder_and_segmented_cleanup`、`self_pending_admission_insert_validation`、`self_reject_notifications_remove_pending`、`approve_reject_invitation_result_contract`、`join_team_clears_own_pending_admissions`、`self_pending_second_refresh_and_expired_reapply_precheck`；lifecycle.`table_dump_init_round_trip_restores_watermark_team_and_pendings` 与 manager.`table_roundtrip_restores_pending_admissions`（09）；admission.`self_private_channel_sequence_watermark` 与 manager.`member_events_manage_pending_admissions`（10） |
+| JOIN-01..03 | lifecycle.`joined_team_notification_registers_team`、`switch_team_moves_previous_to_pending_exit`、`rejoin_pending_exit_team_swaps_back`；manager.`rejoin_pending_exit_team_restores_current` |
+| CREATE-01/02 | lifecycle.`create_team_registers_owner_and_clears_pending`、`create_team_failure_passthrough_and_wal_replay` |
+| SEQ-01..03 | lifecycle.`snapshot_saved_sequence_guards_incremental_replay`、`compacted_snapshot_overrides_cache_and_swallows_replay`、`stale_destroy_does_not_remove_new_generation` |
+| HB-01/02 | lifecycle.`heartbeat_reports_watermark_and_throttles`、`heartbeat_suppressed_outside_running_member_state` |
+| EXIT-01/02 | lifecycle.`exit_team_request_then_channel_remove_converges`、`exit_retry_timeout_cleanup_and_channel_destroy` |
+| DUMP-01/02 | lifecycle.`table_dump_init_round_trip_restores_watermark_team_and_pendings`、`user_get_info_exports_only_running_team_with_trimming`；manager.`dump_snapshot_exports_cached_state` |
+| CS-INVITE/JOIN/MEMBER/CAPTAIN/DATA | cs.`cs_invite_01/02`、`cs_join_01/02`、`cs_member_01`、`cs_captain_01`、`cs_data_01/02`（共 8 例） |
+| ROBUST-01..04 | robust.`robust_bad_any_personal_event_ignored`、`robust_bad_any_team_snapshot_preserves_cache`、`robust_bad_shared_data_any_skips_only_that_key`、`robust_fixture_time_and_runtime_hygiene` |
+| §3 叙事补强 | robust.`robust_duplicate_events_idempotent`、`robust_out_of_order_events_converge`、`robust_late_events_after_channel_destroy_ignored`、`robust_snapshot_rebuild_cleans_pendings_and_indexes` |
+| 生命周期收编对照 | manager.`minute_refresh_removes_never_member_current_team`、`minute_refresh_keeps_member_current_team` |
 
-本次文档修改不改生产代码；上述条目在对应 RED、实现修复、focused case 和 affected suite 全绿后，才从执行
-阻塞项移入已覆盖用例说明。
+## 6. 执行期关闭的实现缺陷（2026-08-30 全部关闭）
 
-## 7. 实施顺序和完成证据
+执行期按计划先观察 RED 再修复实现，以下条目均已由 §5.7 映射的用例锁定并转绿：
 
-1. 夹具整理：新增 `pump_until`、typed SS capture、dirty payload 归一化 helper；先迁移现有 7 例，确认行为
-   不变并消除固定 pump/push oracle。
-2. P0 缓存：完成 MEM/ROLE/TEAM/DIRTY、两层 ADM 的 CRUD/expiry/full-payload 用例。
-3. P0 丢消息：完成 KICK-01～03，分别验证 remove action 和 snapshot 兜底及最终本地清理。
-4. RED 修复：逐个观察并关闭 §6 的实现问题，不把多个不相关修复塞进同一个 case。
-5. P1 生命周期：JOIN/CREATE/SEQ/HB/EXIT/DUMP。
-6. CMake 加入 task-action 源码后完成 CS 请求矩阵；最后完成 P2 健壮性。
+1. `user_team` 的 `election_captain` 默认角色强制 OWNER → 改为显式 role 用事件值、默认继承原队长角色、
+   原队长缺失才回退 OWNER（`cache.election_captain_role_semantics`）；
+2. manager 的 invitation 插入缺少无效 team_id 校验 → 已补，与 join-request 一致
+   （`admission.self_pending_admission_insert_validation`）；
+3. `add_team` 不清理同 team_key 的自己的 pending → 注册时连带删除
+   （`admission.join_team_clears_own_pending_admissions`、`lifecycle.create_team_registers_owner_and_clears_pending`）；
+4. 个人 `remove_member` 丢弃 `remove_member_reason` → 透传真实 reason（kick 三例及 EXIT 系列）；
+5. approve/reject invitation 遇 room 不存在时保留失效 pending → `DTMQ_CHANNEL_NOT_FOUND` 映射为确定性
+   失败并删除本地 pending（`admission.approve_reject_invitation_result_contract`）；
+6. table 只持久化水位不持久化自己的 pending → `svr.local.table.proto` 的 `user_team_data` 增加两类 pending
+   字段，dump/init 往返恢复（`lifecycle.table_dump_init_round_trip_restores_watermark_team_and_pendings`）；
+7. destroy 路径客户端可能收不到解散通知 → action/personal/频道销毁三条路径都在 manager 移除前下发
+   destroy increase 并注销 dirty handle（kick.`destroy_action_*`、`channel_destroyed_*`、`personal_destroy_*`）；
+8. test target 缺 task-action 源码 → CMake 已编入，CS 矩阵 8 例落地；
+9. 固定 `pump_rounds`/固定 push 数/“默认 30s” → 全面改为 §4.3 可观察条件；`wait_add_member_timeout` 读配置
+   （默认 5s），heartbeat 间隔读配置（120s）。
 
-每阶段验证顺序：
+执行期另发现并已修复两个计划外缺陷：
+
+10. `member_update` 的 dirty 投影在 action 缓存副本上原地解包 shared data，污染后续投影与缓存
+    → 投影层改为构建剥离后的副本（`cache.member_update_full_fields_and_dirty_projection`）；
+11. `do_team_shared_data` 把空 type_url+空 value 的条目误判为新模块类型 → 明确为删除标记语义，与
+    `add_member` 的“空数据不动”对齐（`cache.team_update_shared_data_and_snapshot_admission_filter` 等）；
+12. 删除标记和快照/销毁的缓存重置都不驱动共享数据处理器，派生状态（`is_matching_`）残留旧值
+    → 队伍/成员两张处理器表都新增幂等 `do_delete(ctx, team, [user_key,] key)` 回调（key 标识被删模块）。
+    触发口径统一为“只对真实删除的数据项回调”：删除标记分支仅在缓存中确有该 key 时触发（成员侧与
+    `do_update` 一样只对自己的数据回调）；`reset_cached_state(ctx)` 只遍历缓存中真实存在的项（队伍侧遍历
+    `cached_team_shared_data_`，成员侧只遍历自己的成员条目），未缓存的注册 key 不产生回调。快照重建经
+    同一入口（`cache.team_update_*`、`robust.robust_bad_any_team_snapshot_preserves_cache` 断言
+    `is_matching()` 终态）。
+
+## 7. 完成证据（2026-08-30）
+
+实施顺序（夹具整理 → P0 缓存 → P0 丢消息 → RED 修复 → P1 生命周期 → CS 矩阵/P2 健壮性）已全部执行完毕。
+回归验证命令（`<BUILD_DIR>` 按仓库 build/test Skill 解析，注意 Windows DLL PATH）：
 
 ```powershell
 cmake --build <BUILD_DIR> --target atf4g-co-lobbysvr-unit-test --parallel <workspace-parallelism>
@@ -319,6 +372,14 @@ cmake --build <BUILD_DIR> --target atf4g-co-lobbysvr-unit-test --parallel <works
 ctest --test-dir <BUILD_DIR> -R "^atf4g-co-lobbysvr-unit-test\.unit$" --output-on-failure
 ```
 
-实际 target 名以当前 `${PROJECT_NAME}` 展开结果为准；运行前按仓库 build/test Skill 解析 `<BUILD_DIR>`、配置和
-Windows DLL PATH。完成报告必须分别给出：源码审阅结论、编译结果、focused case 选中/通过数、完整
-`lobbysvr_user_team` 组结果、lobbysvr affected suite 结果、跳过项和未验证平台。静态审阅不能写成测试已通过。
+验证记录（Windows 11 amd64、MSVC 19.44、Debug、`build_jobs_cmake_tools`，ninja；§5.7 的 68 例全部落地）：
+
+- 编译：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 12` 通过，
+  含 12 个 `task_action_team_*.cpp` 在内的全部测试源文件；`svr.local.table.proto` 变更后相关生成代码已重建；
+- 组结果：`atf4g-co-lobbysvr-unit-test.exe -r lobbysvr_user_team` → 68 选中 / 68 通过 / 0 失败；
+- 受影响 suite：全量运行（含 chat、matching、async-jobs 既有用例）→ 76 选中 / 76 通过 / 0 失败；
+- ctest：`ctest -R "^atf4g-co-lobbysvr-unit-test\.unit$"` → 1/1 Passed（4.26s）；
+- 跳过项：无；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
+
+后续维护入口：改组队行为时先更新 §2/§3 契约，再按 §5.7 找到对应用例调整；新增用例遵循 §4.3 的可观察
+同步约定和 id 段分配。上述验证命令照旧可用，`<BUILD_DIR>` 按仓库 build/test Skill 解析。

@@ -48,10 +48,10 @@ WAL migration, faction assignment, Orbit room creation, and client-visible event
    - `DMatchingScope` is only the coarse bucket: `level_type`, region, battle version, and pool.
    - Every Unit carries normalized `acceptable_level_ids`; all Units in a room must have a non-empty intersection.
    - The room independently owns `selected_level_id`, keeps it inside the current intersection, and Orbit uses it.
-   `DMatchingScope` must never contain the selected or preferred level. Validate the client selection against server-owned
-   level configuration before building the normalized candidate set. `DLevelSelect.level_ids` is a required, non-empty CS
-   multi-select input; `level_id` is only the preferred candidate and, when nonzero, must belong to the list. Every candidate
-   must resolve to the same requested `level_type` and server-owned matching pool.
+     `DMatchingScope` must never contain the selected or preferred level. Validate the client selection against server-owned
+     level configuration before building the normalized candidate set. `DLevelSelect.level_ids` is a required, non-empty CS
+     multi-select input; `level_id` is only the preferred candidate and, when nonzero, must belong to the list. Every candidate
+     must resolve to the same requested `level_type` and server-owned matching pool.
 7. For rule or faction changes, test boundary values, impossible assignments, multiple parties, and rollback after a
    failed placement. Treat a faction as a room-owned group with a capacity fixed when the faction is created; never
    resize or remap an existing faction to another template slot. Keep the result template dynamic while `MATCHING`:
@@ -78,26 +78,26 @@ WAL migration, faction assignment, Orbit room creation, and client-visible event
      capacity index; joins validate only incoming Unit compatibility plus the prospective capacity-count change; readiness
      checks only exact template equality and selects the final template. Existing room structure is an invariant checked
      at mutation boundaries or in tests, not a normal matchmaking branch.
-   Prefer a room where the incoming Unit completes an existing faction, then one leaving the smallest gap, before a
-   room that requires a new faction. For a new room's first Unit, use the capacity/count index directly.
-   Rebalance is target-centric: process targets from oldest to newest and let an older target pull a bounded sequence of
-   migration atoms from newer donors. Build and score one candidate frontier per target call; because adding members and
-   consuming template capacity can only tighten feasibility, discard initially invalid candidates and lazily revalidate
-   each retained atom against current source and target state immediately before committing it. Re-evaluate both rooms
-   after every commit, but do not rescan every candidate after every atom. Bound both one target's migrations and total
-   migrations per service tick. The old-to-new direction prevents
-   a Unit from hopping through multiple rooms in one tick and keeps convergence deterministic. The migration atoms are
-   one Unit from an incomplete faction, or every Unit of a complete faction
-   together while preserving its capacity and membership. Never move only part of a complete faction, and never merge a
-   complete donor faction into an incomplete target faction. A migration must strictly improve the target by filling an
-   existing faction, adding a complete faction, or increasing the legal user count for a template without factions; it
-   must not create a new incomplete faction. Require the preserved donor and prospective target capacity multisets to
-   remain compatible with active templates. Re-evaluate readiness before rebalance and only migrate between rooms that
-   are still searching; a ready donor or target must enter confirmation instead of being expanded or dismantled. Review
-   algorithmic cost because matching executes from the service tick.
-   During matching and confirmation, store only faction membership and capacity. Immediately before battle creation,
-   assign deterministic battle `faction_id` values once, cache them for retries, and keep every Unit in one membership on
-   the same ID. Never derive a battle ID from container iteration order or expose one before battle creation begins.
+     Prefer a room where the incoming Unit completes an existing faction, then one leaving the smallest gap, before a
+     room that requires a new faction. For a new room's first Unit, use the capacity/count index directly.
+     Rebalance is target-centric: process targets from oldest to newest and let an older target pull a bounded sequence of
+     migration atoms from newer donors. Build and score one candidate frontier per target call; because adding members and
+     consuming template capacity can only tighten feasibility, discard initially invalid candidates and lazily revalidate
+     each retained atom against current source and target state immediately before committing it. Re-evaluate both rooms
+     after every commit, but do not rescan every candidate after every atom. Bound both one target's migrations and total
+     migrations per service tick. The old-to-new direction prevents
+     a Unit from hopping through multiple rooms in one tick and keeps convergence deterministic. The migration atoms are
+     one Unit from an incomplete faction, or every Unit of a complete faction
+     together while preserving its capacity and membership. Never move only part of a complete faction, and never merge a
+     complete donor faction into an incomplete target faction. A migration must strictly improve the target by filling an
+     existing faction, adding a complete faction, or increasing the legal user count for a template without factions; it
+     must not create a new incomplete faction. Require the preserved donor and prospective target capacity multisets to
+     remain compatible with active templates. Re-evaluate readiness before rebalance and only migrate between rooms that
+     are still searching; a ready donor or target must enter confirmation instead of being expanded or dismantled. Review
+     algorithmic cost because matching executes from the service tick.
+     During matching and confirmation, store only faction membership and capacity. Immediately before battle creation,
+     assign deterministic battle `faction_id` values once, cache them for retries, and keep every Unit in one membership on
+     the same ID. Never derive a battle ID from container iteration order or expose one before battle creation begins.
 8. Keep room state and subscriber state separate:
    - `DMatchingRoomSnapshot` is matchsvr-internal diagnostic/test state and may contain every Unit.
    - SS RPC responses, WAL subscription sync, and lobbysvr persistence use the internal `DMatchingPlayerView`. It owns
@@ -110,7 +110,7 @@ WAL migration, faction assignment, Orbit room creation, and client-visible event
      attempt. Cancel and confirm requests identify this stable Unit. Lobby must reject a stale Unit before forwarding a
      destructive request and then use its current internal `matching_id` for the SS RPC. Check requires no client room
      identifier or acknowledgement cursor.
-   - Increment `view_revision` only for accepted room migrations or changes to fields projected into
+   - Increment `view_revision` only for accepted room migrations or changes to fields exposed in
      `DMatchingClientView`; a Matchsvr WAL cursor-only update must not advance it. Never reset it when the internal room
      changes. Clients discard a view whose `view_revision` is lower than the locally applied version. Lobby alone
      advances and persists the Matchsvr WAL cursor.

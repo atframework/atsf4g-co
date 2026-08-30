@@ -76,6 +76,10 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ss_rule_options {
   bool malformed_type_url = false;
   // Inject a response with an unparsable body.
   bool malformed_body = false;
+  // Match before all non-preempt rules regardless of registration order, so a one-shot fault rule
+  // (usually with times(1)) can shadow a long-lived unlimited default rule. Preempt rules keep FIFO
+  // among themselves.
+  bool preempt = false;
 };
 
 namespace detail {

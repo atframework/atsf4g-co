@@ -57,8 +57,8 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
   `name` and `description` unless a verified client-specific requirement justifies a separate client-owned surface.
 - Make `description` intent-first and specific: say what the Skill does, when it should trigger, and a useful near-miss
   boundary. Keep the key trigger early and stay within 1024 characters.
-- Write imperative, project-specific procedures. Remove explanations the agent already knows; use one clear default and
-  make control stricter only where the workflow is fragile.
+- Follow the root writing rule. Write imperative, project-specific procedures, remove explanations the agent already
+  knows, use one clear default, and make control stricter only where the workflow is fragile.
 - Treat 500 lines and about 5,000 tokens as ceilings, not targets. Keep the entrypoint much smaller when possible; move
   low-frequency APIs, examples, platform branches, and diagnostics to one-level `references/` with explicit load
   conditions. Keep deterministic repeated logic in tested, non-interactive `scripts/` with actionable errors.
@@ -90,5 +90,7 @@ Use this Skill for AI-facing surfaces in the `atsf4g-co` root repository. For an
 
 - Read [compatibility sources](references/compatibility-sources.md) only when changing Skill formats, discovery paths,
   bridge behavior, client-specific configuration, MCP guidance, or cross-tool compatibility claims.
+- Read [writing guidance](references/writing-guidance.md) only when changing rules for comments, documentation, tone,
+  terminology, or AI-generated prose.
 - Read [upstream change-workflow methods](../change-workflow/references/upstream-methods.md) only when changing risk
   routing or OpenSpec/Superpowers integration policy.

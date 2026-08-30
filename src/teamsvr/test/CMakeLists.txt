@@ -37,6 +37,7 @@ project_add_rpc_unit_test(
   "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_action.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_permission.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_admission.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_concurrency.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_event.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_recovery.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/teamsvr_room_test_lifecycle.cpp"

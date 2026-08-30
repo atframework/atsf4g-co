@@ -12,6 +12,7 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 | `build/`                  | CMake configure/build and compile, link, or configure failures                        |
 | `testing/`                | Unit-test design/review, private-framework execution, filters, and Windows startup    |
 | `rpc-unit-test/`          | Offline service RPC tests using `atfw::testing::runtime` and mock engines             |
+| `matching/`               | Matchmaking behavior across matchsvr/lobbysvr, WAL migration, rules, and tests       |
 | `deployment-config/`      | Go deployment templates, Helm values, atdtool rendering, and generated scripts        |
 | `configure-expression/`   | `enable_expression` and environment expansion in annotated config fields              |
 | `atgateway-protocol/`     | atgateway v2 wire protocol, handshake, crypto, compression, and reconnection          |

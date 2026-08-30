@@ -26,7 +26,8 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
   `RPC_AWAIT_CODE_RESULT`/`RPC_AWAIT_TYPE_RESULT`/`RPC_AWAIT_IGNORE_RESULT`/`RPC_AWAIT_IGNORE_VOID`; reject any direct
   `co_await`/`co_yield` keyword in project code.
 - Prefer existing helper APIs, project error codes, and local patterns over ad hoc alternatives.
-- Keep comments useful and current; remove placeholder `TODO` text when implementing the placeholder.
+- Follow the root writing rule for comments. Keep them useful and current; remove placeholder `TODO` text when
+  implementing the placeholder.
 - Treat unconditional touch or same-content overwrite of target-consumed code/resources as a blocking build-performance
   defect, including generated and copied files. Require content-stable publication plus accurate
   `OUTPUT`/`BYPRODUCTS`/`DEPENDS`/`DEPFILE`; allow touch only on a dedicated non-consumed stamp.

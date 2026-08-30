@@ -587,7 +587,7 @@ condition。DATA 行复用 EVT/ADM/RCV 的真实业务路径，不以直接访�
 | LCK-04 | ✅ | P0 | 接管缺失队长但仍有成员的快照后，只由新主控产生确定性 election action |
 | LCK-05 | ✅ | P0 | event 已应用并排队个人通知、flush 前锁转给他人；旧主控不得继续发送该副作用 |
 | LCK-06 | 🔶 | P0 | 两个候选同时以同一旧锁 CAS，只有一个成功；失败者即使随后收到迟到 event/response 也不能恢复 writer 身份（2026-08-29 决策: 迟到不恢复 writer 为设计行为，维持现状） |
-| LCK-07 | 🔶 | P0 | 续租 update 与普通 send_message 并发、回包乱序；较旧响应不能回退 current lock/compact 状态 |
+| LCK-07 | ✅ | P0 | 续租 update 与普通 send_message 并发、回包乱序；较旧响应不能回退 current lock/compact 状态（`renew_response_out_of_order_no_regress`：挂起续租响应→业务 send 先行→迟到响应不腐蚀锁与边界，锁重置超时单调） |
 | LCK-08 | ⬜ | P1 | writable DTMQ 节点迁移/readonly snapshot transfer 期间 Room 锁租约切换，任一 lock epoch 至多一个副作用生产者 |
 | LCK-09 | ⬜ | P1 | 锁租约配置契约：租约不短于频道 `subscriber_timeout`（配置缺失时按 2*心跳+重试推导），续租间隔为租约一半且不低于 1s；违反时续租必然晚于锁过期，属于必须红灯的配置错误 |
 
@@ -612,11 +612,11 @@ DTMQ component 测试。
 
 | ID | 状态 | 优先级 | 场景与主要断言 |
 | --- | --- | --- | --- |
-| CON-01 | ⬜ | P0 | 两个 create task 在 acquire-lock 延迟期间并发：`team_created_` 先占位，只有一个初始 update 成功，另一个返回 no-permission 且零写入；首个 create 因抢锁失败回滚占位后，重试可再次成功 |
-| CON-02 | ⬜ | P0 | 同一 invitee/requester 的新增、刷新、approve、reject、expiry 两两竞态；终态只能是一个合法状态，不能残留幽灵 admission |
-| CON-03 | ⬜ | P0 | remove-member 与 heartbeat/member-update 并发；已提交删除不可被本地 touch 复活，未提交删除不能提前消失；remove 在途时同一成员 re-add（新 add_member 事件）按日志序收敛，且该成员的删除重试状态被清除 |
-| CON-04 | ⬜ | P0 | 队长主动转让与队长退出/离线删除并发；最终恰有一个有效 captain 且角色变更可由日志重放复现 |
-| CON-05 | ⬜ | P0 | compact update 悬挂时继续收到新 action；snapshot saved/compact 边界和后续回放不遗漏新日志 |
+| CON-01 | ✅ | P0 | 两个 create task 在 acquire-lock 延迟期间并发：`team_created_` 先占位，只有一个初始 update 成功，另一个返回 no-permission 且零写入；首个 create 因抢锁失败回滚占位后，重试可再次成功（`concurrent_create_placeholder_blocks_duplicate`：响应挂起门确定性交错） |
+| CON-02 | ✅ | P0 | 同一 invitee/requester 的新增、刷新、approve、reject、expiry 两两竞态；终态只能是一个合法状态，不能残留幽灵 admission（`admission_pairwise_races_converge`：approve 挂起+reject 在途、approve 挂起+refresh 在途、approve 在途+到期清理、先到期后 approve 回包 not-found 零写入，均恰一处生效且恢复等价） |
+| CON-03 | ✅ | P0 | remove-member 与 heartbeat/member-update 并发；已提交删除不可被本地 touch 复活，未提交删除不能提前消失；remove 在途时同一成员 re-add（新 add_member 事件）按日志序收敛，且该成员的删除重试状态被清除（`remove_member_races_heartbeat_update_and_readd`：挂起窗口 heartbeat 消费重试标记、迟到 member_update 被拒、在途 re-add 返回 already-in-team 零写入、回放后 re-add 成功） |
+| CON-04 | ✅ | P0 | 队长主动转让与队长退出/离线删除并发；最终恰有一个有效 captain 且角色变更可由日志重放复现（`captain_transfer_races_exit_and_offline_kick`：election 挂起+owner 退出、owner 退出挂起+election 后提交、转让挂起窗口 owner 离线到期被踢 OFFLINE_EXPIRED；三场景恰一条 election 日志且恢复等价） |
+| CON-05 | ✅ | P0 | compact update 悬挂时继续收到新 action；snapshot saved/compact 边界和后续回放不遗漏新日志（`compact_update_suspended_keeps_new_logs`：挂起门钉住请求时刻边界与快照 saved，悬挂中新写入与恢复等价性） |
 | CON-06 | ⬜ | P1 | 多 room 同时触发 timer、event-sync 和 pending flush；请求、个人频道及 timer watcher 不串 room |
 
 外部调用点的故障覆盖不能只集中在 `send_message`：
@@ -624,9 +624,9 @@ DTMQ component 测试。
 | ID | 状态 | 优先级 | 调用点与故障脚本 |
 | --- | --- | --- | --- |
 | FLT-01 | 🔶 | P1 | 已覆盖 subscribe heartbeat 快速失败后恢复一次；延迟、无节点、旧节点迟到响应与 snapshot error 恢复未覆盖 |
-| FLT-02 | 🔶 | P0 | 已覆盖 CAS 冲突、提交后丢响应及真实 holder 自己/他人分支；malformed response 未覆盖 |
+| FLT-02 | ✅ | P0 | 已覆盖 CAS 冲突、提交后丢响应及真实 holder 自己/他人分支；malformed response 已覆盖（`malformed_reset_lock_response_no_false_master` 先 RED 暴露 type_url 坏包被当成功的生产缺陷，修复后 GREEN；`malformed_update_body_fails_visibly` 锁定 create update 坏响应体失败可见+重试收敛） |
 | FLT-03 | 🔶 | P0 | 已覆盖 admission 的 add-member 提交后响应丢失及重试；通用预提交失败、no-wait drop、event/回包两种顺序未系统化 |
-| FLT-04 | 🔶 | P0 | 已覆盖 compact 提交后响应丢失、普通 update 失败和锁冲突退位；迟到旧响应及坏 checker/custom/private response 未覆盖 |
+| FLT-04 | 🔶 | P0 | 已覆盖 compact 提交后响应丢失、普通 update 失败和锁冲突退位；迟到续租 update 响应已由 LCK-07 用例锁定，坏 checker/custom/private response 未覆盖 |
 | FLT-05 | 🔶 | P0 | 已覆盖 no-wait 远端接收前丢弃/接收后失败的 at-most-once，以及 flush 前失锁 fencing；提交丢响应和产品级 retry/去重未定 |
 | FLT-06 | 🔶 | P0 | 已覆盖正常 destroy 流程及 destroy-team 提交后恢复；destroy-channel 各故障点、重复 destroy 和旧 epoch 交错未覆盖 |
 | FLT-07 | ⬜ | P1 | forward：目标节点消失、transport error、`forward_ok=false`、迟到成功；本节点不得同时执行 |
@@ -705,7 +705,7 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 
 | ID | 已修复问题 | 锁定用例 |
 | --- | --- | --- |
-| FIX-01 | `create_team` 曾在 `acquire_lock` 协程让出后才设置 `team_created_`，同节点两个并发 create 可重复覆写初始快照；现在让出前先占位、失败回滚 | CON-01（⬜，实现已修但专用并发回归未落地） |
+| FIX-01 | `create_team` 曾在 `acquire_lock` 协程让出后才设置 `team_created_`，同节点两个并发 create 可重复覆写初始快照；现在让出前先占位、失败回滚 | CON-01 |
 | FIX-02 | `get_member_offline_deadline` 曾把最后心跳与入队时间（而非当前最大 baseline）比较，快照恢复后兜底失效、成员可能被提前踢出 | LIFE-13 |
 | FIX-03 | `add_join_request` 曾缺少队伍存在性校验，可对从未创建的 team id 写入无人能审批的加入请求；现在返回 room-not-found 且零写入 | PERM-10 |
 | FIX-04 | 接收回调曾注册在 `on_receive_event`（仅 kEvent 触发），续租产生的 kResetLock 等非 event 日志不推进 ack 和最老未压缩日志时间点，时间维度压缩加速失效；现改为 `on_receive_raw_message`，覆盖全部 command_case 且每条日志恰好回调一次 | EVT-11、CMP-13 |
@@ -715,6 +715,7 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 | FIX-08 | 管理员经 `send_message` 更新他人时曾能把不可信的 `user_router_server_id` 写入事件；现 action 层在权限通过后、提交前清零，本人更新仍保留 | EVT-04、DATA-01 |
 | FIX-09 | one-shot timer 的维护协程曾在 `schedule_next_timer()` 后才 reset `maintenance_task_`，重入时可能因“旧 task 仍运行”丢失下一定时器；现按 task id 在调度前 reset | timer fixture 的 task-exit guard、CMP/LIFE timer 用例；不声称已观察到依赖调度竞态的 pre-fix RED |
 | FIX-10 | 加入请求过去没有向申请人返回可供本地缓存的受理结果，`lobbysvr` 也未完整消费 admission 个人事件；现在 Room 发送含规范化过期时间的 `apply_join_request`，消费者按私聊 sequence 幂等处理邀请/申请/拒绝/入队/移除并自行清理过期项 | ADM-09/10、LIFE-05；`lobbysvr_user_team.member_events_manage_pending_admissions` |
+| FIX-11 | SS RPC 响应 type_url 与期望不符（坏包）时，`wait_and_unpack_ss_response` 曾只记日志不返回错误，锁冲突等关键响应被当成功导致误判主控；现无显式错误码时按 `EN_SYS_UNPACK` 失败返回 | FLT-02（`malformed_reset_lock_response_no_false_master`，先观察到 RED 再修复） |
 
 ## 6. 分阶段执行
 
@@ -892,7 +893,7 @@ Windows 下经 CTest 运行的目标已自动设置 working directory、`RPC_UNI
 
 ## 8. 完成标准
 
-- 🔶 离线 P0 主体的 125 个现有 case 已构建并通过（含重复执行）；CON 主体和 FLT 未覆盖子项仍未完成。
+- 🔶 离线 P0 主体已构建并通过（含重复执行，2026-08-30 起 133 个 case）；CON-06 与 FLT 未覆盖子项仍未完成。
 - ✅ 每个权限失败用例均证明没有提交 `DTeamAction`，而不只是检查错误码。
 - ✅ COND-01～06 已证明条件在提交前检查、失败零写入、通过后从事件裁剪；DATA-04(单请求重复 key 拒绝/跨请求覆盖)已按 GAP-11 决策锁定，DATA-05 冻结旧 wire fixture 仍为 ⬜。
 - 🔶 compact 快照逐字段覆盖成员、邀请、申请、keyed shared data 和其他公共/私有状态；快照加增量恢复与全量日志结果等价（CMP-06～08、RCV-01/02 已锁定；四路径 model oracle 未做）。
@@ -907,7 +908,6 @@ Windows 下经 CTest 运行的目标已自动设置 working directory、`RPC_UNI
 - ⬜ 固定 seed 的 model trace 能在任意已选 compact/重启点得到同一规范化终态，失败时报告 seed 和最短 action trace。
 - ✅ Room 为新加入请求发送一次规范化受理回执、重复请求不重复发送；到期清理阶段不新增取消通知，`lobbysvr`
   消费者按过期时间自行清理（ADM-09/10、LIFE-05 与 `member_events_manage_pending_admissions` 已锁定）。
-- 🔶 FIX 回归（LIFE-13、PERM-10、EVT-04/09/11、CMP-13 已锁定；FIX-01 的 CON-01 未实现；FIX-09 不声称观察到调度竞态 RED）。
+- 🔶 FIX 回归（LIFE-13、PERM-10、EVT-04/09/11、CMP-13、CON-01、FLT-02 已锁定；FIX-09 不声称观察到调度竞态 RED）。
 - ✅ GAP-01/03/04/06～12 已有明确协议决定(2026-08-29)并落地实现与锁定用例(见 §5 各行)；DATA-05 冻结旧 wire fixture 与滚动升级组合仍待补。
-- ✅ 本轮 124 个 case 无硬超时、无未消费 fault script/mock expectation，suite 退出码为 0；CTest 首次及
-  连续两次运行均通过（另 3 轮重复全绿），lobbysvr 套件同步通过。
+- ✅ 本轮 133 个 case 无硬超时、无未消费 fault script/mock expectation，suite 退出码为 0；lobbysvr 套件同步通过。

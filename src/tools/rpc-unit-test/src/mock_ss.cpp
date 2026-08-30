@@ -506,7 +506,17 @@ ss_rule_handle mock_ss::mock_typed(
   rule->options = options;
   rule->invoker = std::move(invoker);
   rule->remaining_times = options.times;
-  rules_.push_back(rule);
+  if (rule->options.preempt) {
+    // Preempt rules match before every non-preempt rule and keep FIFO among themselves, so a
+    // one-shot fault rule shadows a long-lived default rule exactly until its budget is consumed.
+    auto insert_at = rules_.begin();
+    while (insert_at != rules_.end() && *insert_at && (*insert_at)->options.preempt) {
+      ++insert_at;
+    }
+    rules_.insert(insert_at, rule);
+  } else {
+    rules_.push_back(rule);
+  }
   return ss_rule_handle{std::move(rule)};
 }
 

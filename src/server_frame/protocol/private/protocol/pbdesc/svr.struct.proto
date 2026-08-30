@@ -163,4 +163,8 @@ message user_team_data {
 
   // 当前的队伍组数据
   repeated team_group group = 11;
+  // 待处理的组队邀请(重启/迁移后恢复;恢复时会过滤已过期或无效 team_id 的条目)
+  repeated atframework.team.DTeamInvitation pending_invitation = 12;
+  // 待处理的加入请求(同上)
+  repeated atframework.team.DTeamJoinRequest pending_join_request = 13;
 }

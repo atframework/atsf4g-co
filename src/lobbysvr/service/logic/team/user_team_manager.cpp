@@ -63,8 +63,7 @@ class user_team_manager_utility {
     switch (action->action_case()) {
       case atfw::team::DTeamMemberAction::kInvited: {
         const auto& invited = action->invited();
-        if (user_inst.get_user_id() != invited.invitee().user_id() ||
-            user_inst.get_zone_id() != invited.invitee().zone_id()) {
+        if (!user_inst.is(invited.invitee())) {
           FCTXLOGERROR(ctx, "{} receive an invitation to team {}:{} for {}:{}, but the invitee is not me", user_inst,
                        invited.team_key().zone_id(), invited.team_key().team_id(), invited.invitee().zone_id(),
                        invited.invitee().user_id());
@@ -79,8 +78,7 @@ class user_team_manager_utility {
       }
       case atfw::team::DTeamMemberAction::kRejectInvitation: {
         const auto& reject_invitation = action->reject_invitation();
-        if (user_inst.get_user_id() != reject_invitation.invitee().user_id() ||
-            user_inst.get_zone_id() != reject_invitation.invitee().zone_id()) {
+        if (!user_inst.is(reject_invitation.invitee())) {
           FCTXLOGERROR(ctx, "{} receive a rejection for invitation to team {}:{} for {}:{}, but the invitee is not me",
                        user_inst, reject_invitation.team_key().zone_id(), reject_invitation.team_key().team_id(),
                        reject_invitation.invitee().zone_id(), reject_invitation.invitee().user_id());
@@ -94,8 +92,7 @@ class user_team_manager_utility {
       }
       case atfw::team::DTeamMemberAction::kApplyJoinRequest: {
         const auto& apply_join_request = action->apply_join_request();
-        if (user_inst.get_user_id() != apply_join_request.requester().user_id() ||
-            user_inst.get_zone_id() != apply_join_request.requester().zone_id()) {
+        if (!user_inst.is(apply_join_request.requester())) {
           FCTXLOGERROR(ctx, "{} receive an application to join team {}:{} from {}:{}, but the requester is not me",
                        user_inst, apply_join_request.team_key().zone_id(), apply_join_request.team_key().team_id(),
                        apply_join_request.requester().zone_id(), apply_join_request.requester().user_id());
@@ -110,8 +107,7 @@ class user_team_manager_utility {
       }
       case atfw::team::DTeamMemberAction::kRejectJoinRequest: {
         const auto& reject_join_request = action->reject_join_request();
-        if (user_inst.get_user_id() != reject_join_request.requester().user_id() ||
-            user_inst.get_zone_id() != reject_join_request.requester().zone_id()) {
+        if (!user_inst.is(reject_join_request.requester())) {
           FCTXLOGERROR(ctx,
                        "{} receive a rejection for join request to team {}:{} from {}:{}, but the requester is not me",
                        user_inst, reject_join_request.team_key().zone_id(), reject_join_request.team_key().team_id(),
@@ -126,8 +122,7 @@ class user_team_manager_utility {
       }
       case atfw::team::DTeamMemberAction::kJoinedTeam: {
         const auto& joined_team = action->joined_team();
-        if (user_inst.get_user_id() != joined_team.user_key().user_id() ||
-            user_inst.get_zone_id() != joined_team.user_key().zone_id()) {
+        if (!user_inst.is(joined_team.user_key())) {
           FCTXLOGERROR(ctx, "{} has joined team {}:{} from {}:{}, but the user is not me", user_inst,
                        joined_team.team_key().zone_id(), joined_team.team_key().team_id(),
                        joined_team.user_key().zone_id(), joined_team.user_key().user_id());
@@ -141,8 +136,7 @@ class user_team_manager_utility {
       }
       case atfw::team::DTeamMemberAction::kRemoveMember: {
         const auto& remove_member = action->remove_member();
-        if (user_inst.get_user_id() != remove_member.user_key().user_id() ||
-            user_inst.get_zone_id() != remove_member.user_key().zone_id()) {
+        if (!user_inst.is(remove_member.user_key())) {
           FCTXLOGERROR(ctx, "{} has been removed from team {}:{} by {}:{}, but the user is not me", user_inst,
                        remove_member.team_key().zone_id(), remove_member.team_key().team_id(),
                        remove_member.user_key().zone_id(), remove_member.user_key().user_id());
@@ -150,7 +144,8 @@ class user_team_manager_utility {
           FCTXLOGINFO(ctx, "{} has been removed from team {}:{} by {}:{}", user_inst,
                       remove_member.team_key().zone_id(), remove_member.team_key().team_id(),
                       remove_member.user_key().zone_id(), remove_member.user_key().user_id());
-          team_mgr.remove_team(ctx, remove_member.team_key(), false, atfw::team::EN_TEAM_EXIT_REASON_DEFAULT);
+          // 透传服务端下发的移除原因(退出重试复用该 reason, 队伍解散时还要驱动客户端解散通知)
+          team_mgr.remove_team(ctx, remove_member.team_key(), false, remove_member.remove_member_reason());
         }
         break;
       }
@@ -251,6 +246,20 @@ void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
 void user_team_manager::init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   const auto& team_data = user_table.team_data();
   processed_private_chat_channel_sequence_ = team_data.processed_private_chat_channel_sequence();
+  pending_join_request_by_team_id_.clear();
+  pending_join_request_by_expired_time_.clear();
+  pending_invitation_by_team_id_.clear();
+  pending_invitation_by_expired_time_.clear();
+
+  // 先恢复待处理的邀请/加入请求(已过期或无效 team_id 的条目会被 add_pending_* 丢弃)，
+  // 再由 add_team 清理当前队伍同 team_key 的 pending(入队后同队伍的邀请/加入请求视为已有结论)
+  for (const auto& invitation : team_data.pending_invitation()) {
+    add_pending_invitation(ctx, atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamInvitation>(invitation));
+  }
+  for (const auto& join_request : team_data.pending_join_request()) {
+    add_pending_join_request(ctx,
+                             atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>(join_request));
+  }
 
   for (const auto& group_data : team_data.group()) {
     if (group_data.has_current()) {
@@ -283,6 +292,15 @@ int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_u
 
     // pending_to_exit 里的队伍理论上都尝试过发送exit消息了，如果发送失败，也可以等超时自动清理
     // 不用再落地数据库再恢复
+  }
+
+  // 待处理的邀请/加入请求也要落地，否则重启/迁移后本地 pending 丢失，且相关历史事件已被水位跳过不会重放。
+  // 恢复时由 add_pending_invitation/add_pending_join_request 过滤已过期或无效 team_id 的条目。
+  for (const auto& invitation : pending_invitation_by_expired_time_) {
+    protobuf_copy_message(*team_data->add_pending_invitation(), *invitation);
+  }
+  for (const auto& join_request : pending_join_request_by_expired_time_) {
+    protobuf_copy_message(*team_data->add_pending_join_request(), *join_request);
   }
   return 0;
 }
@@ -347,8 +365,11 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
   if (0 == ret) {
     // 接受后房间只向被邀请人发 joined_team 通知，这里直接移除本地待处理邀请
     remove_pending_invitation(ctx, invitation->team_key());
-  } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
-    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为邀请不存在
+  } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret ||
+             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND == ret) {
+    // room 上的记录已不存在(从未存在/已过期被清理/频道已销毁), 本地 pending 确定失效, 一并删除;
+    // 对客户端表现为邀请不存在
+    remove_pending_invitation(ctx, invitation->team_key());
     ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND;
   }
   RPC_RETURN_CODE(ret);
@@ -375,8 +396,11 @@ rpc::result_code_type user_team_manager::reject_invitation(rpc::context& ctx, co
   if (0 == ret) {
     // 拒绝成功后即使房间的回执事件丢失，也不再需要保留本地记录
     remove_pending_invitation(ctx, invitation->team_key());
-  } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
-    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为邀请不存在
+  } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret ||
+             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND == ret) {
+    // room 上的记录已不存在(从未存在/已过期被清理/频道已销毁), 本地 pending 确定失效, 一并删除;
+    // 对客户端表现为邀请不存在
+    remove_pending_invitation(ctx, invitation->team_key());
     ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND;
   }
   RPC_RETURN_CODE(ret);
@@ -593,6 +617,10 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
       FCTXLOGINFO(ctx, "{} add_team: team {}:{} already exists, skip to add a new one", *owner_, team_key.zone_id(),
                   team_key.team_id());
     }
+    // 入队事件到达说明同队的邀请/加入请求已有结论(无论是否经过 approve), 清理自己的 pending
+    remove_pending_invitation(ctx, team_key);
+    remove_pending_join_request(ctx, team_key);
+
     exists_team->make_current_actived(ctx);
     return;
   }
@@ -611,6 +639,9 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
   }
   group.current = team_ptr;
   team_index_.emplace(team_key, team_ptr);
+  // 同队的邀请/加入请求已有结论, 清理自己的 pending
+  remove_pending_invitation(ctx, team_key);
+  remove_pending_join_request(ctx, team_key);
 
   team_ptr->init_cached_data(join_data.captain_user_key(), join_data.user_role());
   team_ptr->make_current_actived(ctx);
@@ -634,6 +665,11 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
     team_ptr->send_exit_team_request(ctx, exit_reason);
   } else if (!team_ptr->is_exiting()) {
     team_ptr->set_exit_team(ctx, exit_reason);
+  }
+  // 解散语义: 客户端必须先收到 destroy increase(真实 destroy action 已追加则直接下发, 否则合成等价通知),
+  // 之后对象移除/dirty handle 注销才不会吞掉解散通知
+  if (atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM == exit_reason) {
+    team_ptr->notify_destroy_to_client(ctx);
   }
 
   auto iter_group = team_group_.find(team_ptr->get_team_type());
@@ -799,6 +835,9 @@ size_t user_team_manager::cleanup_expired_invitation(rpc::context& ctx) {
 
 bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_invitation_ptr_t& invitation) {
   if (!invitation) {
+    return false;
+  }
+  if (invitation->team_key().team_id() == 0) {
     return false;
   }
 

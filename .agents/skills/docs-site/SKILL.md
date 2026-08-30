@@ -40,7 +40,8 @@ loading, or typography. Do not load it for ordinary content or navigation edits.
 
 ## Conventions
 
-- Keep docs concise and source-backed; reference code with `path/to/file` (no deep line numbers that drift).
+- Follow the root writing rule. Keep docs concise and source-backed; reference code with `path/to/file` instead of deep
+  line numbers that drift.
 - One topic per page; use the existing sidebar categories (getting-started / architecture / components / services /
   development) instead of creating new top-level sections without user approval.
 - Do not commit `doc/node_modules/`, `doc/build/`, or `doc/.docusaurus/` (already in `doc/.gitignore`).

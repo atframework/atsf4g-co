@@ -10,27 +10,22 @@ scratch data.
   - `rpc::make_shared_message<MessageType>(ctx)` when a `rpc::context &ctx` is available.
   - `rpc::make_shared_message<MessageType>(get_shared_context())` inside `task_action_*` classes.
 - Add `#include <rpc/rpc_shared_message.h>` when the symbol is not already included.
-- Use the returned shared message naturally:
-  - `msg->mutable_field()` / `msg->set_field(...)`
-  - `*msg` for APIs such as `PackFrom`, `SerializeToString`, or helpers taking a message reference
-  - `msg.get()` for APIs such as `UnpackTo`
+- Pass `*msg` to APIs taking a message reference. Use `msg.get()` only when an API requires a raw pointer.
+
+## Temporary message example
+
+`MessageType`, `field`, and `payload` are placeholders. Replace them with current generated types and fields.
+
+```cpp
+auto message = rpc::make_shared_message<MessageType>(ctx);
+message->set_field(value);
+
+if (!response.mutable_payload()->PackFrom(*message)) {
+  // Use the surrounding function's existing conversion-error path.
+}
+```
 
 ## Do not use for long-lived data
 
 Do not store task-Arena messages in members, global structures, caches, delayed callbacks, or data structures that may
 outlive the task/RPC context. Copy, clone, or allocate with an owning lifetime that matches the storage instead.
-
-## Example
-
-```cpp
-auto cache_meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DUserCacheMeta>(get_shared_context());
-cache_meta->mutable_user_key()->set_zone_id(user->get_zone_id());
-cache_meta->mutable_user_key()->set_user_id(user->get_user_id());
-
-if (!rsp_body.mutable_cache_meta()->mutable_cache_meta()->PackFrom(*cache_meta)) {
-  // handle pack error
-}
-```
-
-This reuses the task/RPC Arena and reduces heap fragmentation compared with creating short-lived stack or heap protobuf
-messages.
