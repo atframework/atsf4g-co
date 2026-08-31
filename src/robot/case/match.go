@@ -64,8 +64,7 @@ func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.User
 		return fmt.Errorf("user not initialized, run login first")
 	}
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), levelIds, region,
-			factionFillPolicy)
+		return task.MatchingStartTask(taskAction, levelIds, region, factionFillPolicy)
 	}, "Matching Start Task"))
 }
 

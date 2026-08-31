@@ -40,12 +40,34 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
     bool operator<(const bucket_key& other) const noexcept;
   };
 
+  struct migration_candidate {
+    std::vector<uint64_t> unit_ids;
+    uint32_t faction_capacity = 0;
+    bool complete_faction = false;
+
+    // 按完整 faction 优先、Unit ID 字典序稳定排列迁移原子。
+    bool operator<(const migration_candidate& other) const noexcept;
+  };
+
+  struct candidate_evaluation {
+    bool accepted = false;
+    PROJECT_NAMESPACE_ID::DMatchingUnitJoinEvaluation target_result;
+  };
+
+  // 可加入房间的完整查找结果；房间与 assignments 始终来自同一个候选评估。
+  struct joinable_room_result {
+    matching_room::ptr_t room;
+    PROJECT_NAMESPACE_ID::DMatchingUnitJoinEvaluation evaluation;
+  };
+
   // 桶内候选按创建时间排序，相同时间再按 ID 保持确定性。
   struct queue_entry {
     int64_t created_time = 0;
     std::string matching_id;
 
     bool operator<(const queue_entry& other) const noexcept;
+    // 按 queue_entry 的同一顺序比较两个有效房间指针。
+    static bool room_precedes(const matching_room::ptr_t& left, const matching_room::ptr_t& right) noexcept;
   };
 
  protected:
@@ -105,11 +127,10 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   static bucket_key make_bucket_key(const PROJECT_NAMESPACE_ID::DMatchingScope& scope);
   // 查找请求指定的房间；matching_id 已过期或不再包含 unit 时回退到活动 unit 索引。
   matching_room::ptr_t find_room(const std::string& matching_id, uint64_t unit_id) const;
-  // 在相同粗桶中优先查找能补齐已有 faction 的房间。
-  matching_room::ptr_t find_joinable_room(const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
-                                          const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now,
-                                          PROJECT_NAMESPACE_ID::DMatchingUnitJoinEvaluation& evaluation) const;
-  // 固定目标房间，从同一粗桶内更新的 donor 连续拉取最优迁移原子，返回实际迁移数。
+  // 在相同粗桶中优先查找能补齐已有 faction 的房间，并返回同次检查产生的 assignments。
+  joinable_room_result find_joinable_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
+                                          const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now) const;
+  // 固定目标房间，按稳定顺序从同一粗桶内更新的 donor 连续拉取迁移原子，返回实际迁移数。
   size_t rebalance_room(rpc::context& ctx, const matching_room::ptr_t& target_room, int64_t now,
                         size_t max_migration_count);
   // 原子迁移一个或多个 Unit；多个 Unit 只用于保持满员 faction 的成员关系。
@@ -133,6 +154,14 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   void handle_confirm_timeout(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
   // 创建战斗或等待 ready 回调超时后释放全部 Unit。
   void handle_battle_create_timeout(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now);
+
+  // 按确定性顺序收集 donor 中可保持 Unit 或完整 faction 原子性的迁移候选。
+  std::vector<migration_candidate> collect_migration_candidates(rpc::context& ctx, const matching_room& source_room);
+  // 单次校验迁移候选，并返回提交到 target 的完整 faction assignments。
+  candidate_evaluation evaluate_candidate(const matching_room::ptr_t& target_room,
+                                          const matching_room::ptr_t& source_room, const migration_candidate& candidate,
+                                          int32_t current_global_matching_users);
+
   // matching_id 到房间对象的唯一所有权索引。
   std::unordered_map<std::string, matching_room::ptr_t> rooms_;
   // 活动 unit_id 到 matching_id 的索引。

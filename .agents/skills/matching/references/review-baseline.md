@@ -77,13 +77,12 @@ early return. The full executable was run with all 31 test cases entering their 
 
 `DMatchingRoomSnapshot` is now retained as matchsvr-internal room state. Direct SS replies, WAL sync, lobbysvr
 persistence use a Unit-scoped internal `DMatchingPlayerView`. Lobby projects it to `DMatchingClientView` for CS replies
-and pushes; the client view contains a stable `unit_id` and Lobby-monotonic `view_revision`, but no `matching_id`, Matchsvr
+and pushes; the client view contains a stable `unit_id`, but no `matching_id`, Matchsvr
 WAL cursor, switch metadata, or raw event logs. Lobby resolves the current room internally and rejects stale cancel or
 confirm requests by Unit before forwarding. WAL subscribers are grouped by lobbysvr and `unit_id`; add/remove events
 for other Units are filtered, and matched events no longer carry the full snapshot. Legacy persisted snapshots are read
 once to locate the current player's Unit and are rewritten as player views. Regression coverage checks legacy
-migration, monotonic client view revisions across room changes, own-Unit isolation, stale Unit rejection, and temporary
-faction non-disclosure.
+migration, own-Unit isolation, stale Unit rejection, and temporary faction non-disclosure.
 
 ### Resolved 2026-08-19: Orbit room-ready failure bypassed ownership and state checks
 
@@ -100,11 +99,12 @@ The agreed invariant is incremental placement over room-owned, fixed-capacity fa
 backtracking to normalize cancellation, template changes, joins, readiness, or rebalance. Select templates dynamically
 by capacity-count containment while searching and exact capacity-count equality when ready. Rebalance is target-centric:
 process older targets before newer targets and pull only from newer donors. Within per-target and per-tick budgets, move
-multiple atoms sequentially. Build one candidate frontier, then lazily revalidate each retained atom immediately before
-commit and re-evaluate both rooms afterward; do not rescan the full frontier after every move. Each atom is either one
+multiple atoms sequentially. Traverse donors and their atoms in stable order, evaluate each atom once against current
+room state, commit it immediately with the generated assignments, and re-evaluate both rooms afterward. Each atom is one
 Unit from an incomplete faction or one complete faction. The move must fill an existing target faction, add a complete faction, or
 increase users for a no-faction template; it must not create a new incomplete target faction. Matching and confirmation
-retain only membership and capacity. Generate deterministic battle faction IDs once, cache them, and expose them only
+retain membership, fixed capacity, and a mutation-validated assigned-user-count cache so hot candidate scans do not
+recalculate every Unit's size. Generate deterministic battle faction IDs once, cache them, and expose them only
 when battle creation begins. Benchmark representative and adversarial room/faction counts and add deterministic limits
 if the service-tick budget is exceeded.
 
@@ -135,8 +135,6 @@ At minimum preserve cases for:
 - Confirm accept, decline, duplicate, disconnect, timeout, and late response.
 - Orbit create error, `start_success=false`, callback loss, duplicate callback, and late callback after cleanup.
 - WAL switch/remove/add delivery under reordered and duplicate records.
-- Lobby-monotonic `view_revision` advances for room migration and client-visible state changes, but not for WAL-only
-  updates; stale Unit cancel/confirm requests are rejected before Matchsvr forwarding and cannot affect a newer
-  matching attempt.
+- Stale Unit cancel/confirm requests are rejected before Matchsvr forwarding and cannot affect a newer matching attempt.
 - Runtime fixture startup failure is visible as a failed test, not a skipped-success case.
 - Generated resources retain every required pool, rule, constraint, and faction-template field.

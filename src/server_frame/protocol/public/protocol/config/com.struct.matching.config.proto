@@ -82,7 +82,6 @@ message ExcelMatchingRule {
   TimeLimit time_limit = 2;
   repeated DMatchingRuleItem rules = 3;
   repeated int32 result_template_ids = 4 [(org.xresloader.field_separator) = ","];
-  int32 min_total_user = 5;
   int32 start_battle_min_user = 6;
   repeated DMatchingForceLimit force_type_limits = 7 [(org.xresloader.field_separator) = ","];
   repeated string region_limits = 9 [(org.xresloader.field_separator) = ","];

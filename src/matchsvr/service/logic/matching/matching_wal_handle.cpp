@@ -22,15 +22,10 @@
 matching_wal_context::matching_wal_context(rpc::context& ctx, int32_t& output_result)
     : context(std::ref(ctx)), result_code(std::ref(output_result)) {}
 
-namespace {
-using wal_result_code = atfw::util::distributed_system::wal_result_code;
-
-using subscriber_group_key = std::pair<uint64_t, uint64_t>;
-using subscriber_group = std::map<subscriber_group_key, std::vector<matching_wal_publisher::subscriber_pointer>>;
-
-subscriber_group collect_subscribers(matching_wal_publisher::subscriber_iterator begin,
-                                     matching_wal_publisher::subscriber_iterator end) {
-  subscriber_group result;
+namespace matching_wal_detail {
+matching_wal_subscriber_group collect_subscribers(matching_wal_publisher::subscriber_iterator begin,
+                                                  matching_wal_publisher::subscriber_iterator end) {
+  matching_wal_subscriber_group result;
   for (; begin != end; ++begin) {
     auto subscriber = begin->second;
     if (!subscriber || !subscriber->get_private_data() || subscriber->get_private_data()->server_id() == 0 ||
@@ -46,7 +41,7 @@ subscriber_group collect_subscribers(matching_wal_publisher::subscriber_iterator
   return result;
 }
 
-void send_to_subscribers(matching_wal_publisher& publisher, const subscriber_group& groups,
+void send_to_subscribers(matching_wal_publisher& publisher, const matching_wal_subscriber_group& groups,
                          const PROJECT_NAMESPACE_ID::SSMatchingEventSync& message, matching_wal_context param,
                          int64_t last_event_id) {
   auto* room = publisher.get_private_data();
@@ -56,7 +51,10 @@ void send_to_subscribers(matching_wal_publisher& publisher, const subscriber_gro
   for (const auto& group : groups) {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMatchingEventSync> group_message(param.context.get());
     group_message->set_matching_id(message.matching_id());
-    if (!room->dump_player_view(group.first.second, *group_message->mutable_player_view())) {
+    const auto* subscribed_unit = room->find_unit(group.first.second);
+    if (subscribed_unit != nullptr) {
+      room->dump_player_view(*subscribed_unit, *group_message->mutable_player_view());
+    } else {
       bool found_removed_unit = false;
       for (const auto& event_log : message.event_logs()) {
         if (event_log.event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kRemoveUnit &&
@@ -70,13 +68,14 @@ void send_to_subscribers(matching_wal_publisher& publisher, const subscriber_gro
         continue;
       }
     }
+    std::vector<matching_wal_publisher::subscriber_pointer> included_subscribers;
+    included_subscribers.reserve(group.second.size());
     for (const auto& subscriber : group.second) {
       if (!subscriber || !subscriber->get_private_data()) {
         continue;
       }
       protobuf_copy_message(*group_message->add_user_keys(), subscriber->get_key());
-      subscriber->get_private_data()->set_last_send_event_id(
-          std::max(last_event_id, subscriber->get_private_data()->last_send_event_id()));
+      included_subscribers.emplace_back(subscriber);
     }
     for (const auto& event_log : message.event_logs()) {
       if (event_log.event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kAddUnit &&
@@ -94,12 +93,20 @@ void send_to_subscribers(matching_wal_publisher& publisher, const subscriber_gro
         output_event->mutable_matched()->Clear();
       }
     }
-    const int32_t result = rpc::matching::matching_event_sync(param.context.get(), group.first.first, *group_message).unwrap();
+    const int32_t result =
+        rpc::matching::matching_event_sync(param.context.get(), group.first.first, *group_message).unwrap();
     if (result != 0) {
       FCTXLOGERROR(param.context.get(), "matching {} send WAL to lobbysvr {:#x} failed, result: {}({})",
                    room->get_matching_id(), group.first.first, result, protobuf_mini_dumper_get_error_msg(result));
       param.result_code.get() = result;
     } else {
+      for (const auto& subscriber : included_subscribers) {
+        if (!subscriber || !subscriber->get_private_data()) {
+          continue;
+        }
+        subscriber->get_private_data()->set_last_send_event_id(
+            std::max(last_event_id, subscriber->get_private_data()->last_send_event_id()));
+      }
       FCTXLOGDEBUG(param.context.get(),
                    "matching {} send WAL to lobbysvr {:#x} finish, users={}, view={}, event_count={}, "
                    "last_event_id={}",
@@ -110,7 +117,6 @@ void send_to_subscribers(matching_wal_publisher& publisher, const subscriber_gro
 }
 
 matching_wal_publisher::vtable_pointer create_vtable() {
-  using wal_object = matching_wal_publisher::object_type;
   static matching_wal_publisher::vtable_pointer result;
   if (result) {
     return result;
@@ -120,19 +126,18 @@ matching_wal_publisher::vtable_pointer create_vtable() {
     return result;
   }
 
-  result->load = [](wal_object&, const wal_object::storage_type&, wal_object::callback_param_type) {
-    return wal_result_code::kOk;
-  };
-  result->dump = [](const wal_object&, wal_object::storage_type&, wal_object::callback_param_type) {
-    return wal_result_code::kOk;
-  };
-  result->get_meta = [](const wal_object&, const wal_object::log_type& log) {
+  result->load = [](matching_wal_object&, const matching_wal_object::storage_type&,
+                    matching_wal_object::callback_param_type) { return matching_wal_result_code::kOk; };
+  result->dump = [](const matching_wal_object&, matching_wal_object::storage_type&,
+                    matching_wal_object::callback_param_type) { return matching_wal_result_code::kOk; };
+  result->get_meta = [](const matching_wal_object&, const matching_wal_object::log_type& log) {
     auto timepoint = std::chrono::system_clock::from_time_t(log.timepoint().seconds()) +
                      std::chrono::nanoseconds{log.timepoint().nanos()};
     auto cast_timepoint = std::chrono::time_point_cast<std::chrono::system_clock::duration>(timepoint);
-    return wal_object::meta_result_type::make_success(cast_timepoint, log.event_id(), log.event_case());
+    return matching_wal_object::meta_result_type::make_success(cast_timepoint, log.event_id(), log.event_case());
   };
-  result->set_meta = [](const wal_object&, wal_object::log_type& log, const wal_object::meta_type& meta) {
+  result->set_meta = [](const matching_wal_object&, matching_wal_object::log_type& log,
+                        const matching_wal_object::meta_type& meta) {
     const time_t seconds = std::chrono::system_clock::to_time_t(meta.timepoint);
     const int32_t nanos = static_cast<int32_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
                                                    meta.timepoint - std::chrono::system_clock::from_time_t(seconds))
@@ -141,21 +146,25 @@ matching_wal_publisher::vtable_pointer create_vtable() {
     log.mutable_timepoint()->set_nanos(nanos);
     log.set_event_id(meta.log_key);
   };
-  result->merge_log = [](const wal_object&, wal_object::callback_param_type, wal_object::log_type& to,
-                         const wal_object::log_type& from) {
+  result->merge_log = [](const matching_wal_object&, matching_wal_object::callback_param_type,
+                         matching_wal_object::log_type& to, const matching_wal_object::log_type& from) {
     FWLOGERROR("matching WAL logs must not merge, from:\n{}to:\n{}", from.DebugString(), to.DebugString());
   };
-  result->get_log_key = [](const wal_object&, const wal_object::log_type& log) { return log.event_id(); };
-  result->allocate_log_key = [](wal_object& wal, const wal_object::log_type& log, wal_object::callback_param_type) {
+  result->get_log_key = [](const matching_wal_object&, const matching_wal_object::log_type& log) {
+    return log.event_id();
+  };
+  result->allocate_log_key = [](matching_wal_object& wal, const matching_wal_object::log_type& log,
+                                matching_wal_object::callback_param_type) {
     if (log.event_id() > 0) {
-      return wal_object::log_key_result_type::make_success(log.event_id());
+      return matching_wal_object::log_key_result_type::make_success(log.event_id());
     }
     auto* room = wal.get_private_data();
-    return room ? wal_object::log_key_result_type::make_success(room->get_last_event_id() + 1)
-                : wal_object::log_key_result_type::make_error(wal_result_code::kInitlization);
+    return room ? matching_wal_object::log_key_result_type::make_success(room->get_last_event_id() + 1)
+                : matching_wal_object::log_key_result_type::make_error(matching_wal_result_code::kInitlization);
   };
-  result->default_delegate.action = [](wal_object&, const wal_object::log_type&, wal_object::callback_param_type) {
-    return wal_result_code::kOk;
+  result->default_delegate.action = [](matching_wal_object&, const matching_wal_object::log_type&,
+                                       matching_wal_object::callback_param_type) {
+    return matching_wal_result_code::kOk;
   };
 
   result->send_snapshot = [](matching_wal_publisher& publisher, matching_wal_publisher::subscriber_iterator begin,
@@ -163,12 +172,12 @@ matching_wal_publisher::vtable_pointer create_vtable() {
                              matching_wal_publisher::callback_param_type param) {
     auto* room = publisher.get_private_data();
     if (!room || begin == end) {
-      return wal_result_code::kOk;
+      return matching_wal_result_code::kOk;
     }
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMatchingEventSync> message(param.context.get());
     message->set_matching_id(room->get_matching_id());
     send_to_subscribers(publisher, collect_subscribers(begin, end), *message, param, room->get_last_event_id());
-    return wal_result_code::kOk;
+    return matching_wal_result_code::kOk;
   };
   result->send_logs = [](matching_wal_publisher& publisher, matching_wal_publisher::log_const_iterator log_begin,
                          matching_wal_publisher::log_const_iterator log_end,
@@ -177,7 +186,7 @@ matching_wal_publisher::vtable_pointer create_vtable() {
                          matching_wal_publisher::callback_param_type param) {
     auto* room = publisher.get_private_data();
     if (!room || log_begin == log_end || subscriber_begin == subscriber_end) {
-      return wal_result_code::kOk;
+      return matching_wal_result_code::kOk;
     }
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMatchingEventSync> message(param.context.get());
     message->set_matching_id(room->get_matching_id());
@@ -191,7 +200,7 @@ matching_wal_publisher::vtable_pointer create_vtable() {
     }
     send_to_subscribers(publisher, collect_subscribers(subscriber_begin, subscriber_end), *message, param,
                         last_event_id);
-    return wal_result_code::kOk;
+    return matching_wal_result_code::kOk;
   };
   result->check_subscriber = [](matching_wal_publisher&, const matching_wal_publisher::subscriber_pointer&,
                                 matching_wal_publisher::callback_param_type) { return true; };
@@ -219,8 +228,9 @@ matching_wal_publisher::configure_pointer create_configure() {
   result->subscriber_timeout = std::chrono::minutes{3};
   return result;
 }
-}  // namespace
+}  // namespace matching_wal_detail
 
 matching_wal_log_operator::strong_ptr<matching_wal_publisher> create_matching_wal_publisher(matching_room& room) {
-  return matching_wal_publisher::create(create_vtable(), create_configure(), &room);
+  return matching_wal_publisher::create(matching_wal_detail::create_vtable(), matching_wal_detail::create_configure(),
+                                        &room);
 }

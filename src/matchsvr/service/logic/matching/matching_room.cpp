@@ -21,52 +21,45 @@
 
 namespace {
 constexpr int32_t kFirstBattleFactionId = 1001;
+}  // namespace
 
-struct faction_statistics {
-  std::unordered_map<size_t, size_t> faction_count_by_capacity;
-  std::set<size_t> fill_enabled_faction_capacities;
-  size_t completed_faction_count = 0;
-  size_t pending_user_count = 0;
-};
-
-bool calculate_faction_statistics(
+std::optional<matching_room::faction_statistics> matching_room::calculate_faction_statistics(
     const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& units,
-    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments,
-    faction_statistics& output) {
-  faction_statistics result;
+    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments) {
+  matching_room::faction_statistics result;
   if (assignments.empty()) {
-    output = std::move(result);
-    return true;
+    return result;
   }
 
   std::unordered_set<uint64_t> assigned_unit_ids;
   for (const auto& assignment : assignments) {
     if (assignment.user_capacity() == 0 || assignment.unit_ids_size() <= 0) {
-      return false;
+      return std::nullopt;
     }
     size_t faction_users = 0;
     bool fill_enabled = false;
     for (uint64_t unit_id : assignment.unit_ids()) {
       auto unit_iter = units.find(unit_id);
       if (unit_iter == units.end() || !assigned_unit_ids.emplace(unit_id).second) {
-        return false;
+        return std::nullopt;
       }
       const auto& unit = unit_iter->second;
       const size_t unit_size = static_cast<size_t>(unit.users_size());
       if (unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE) {
         if (assignment.unit_ids_size() != 1 || unit_size != assignment.user_capacity()) {
-          return false;
+          return std::nullopt;
         }
       } else if (unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE) {
         fill_enabled = true;
       } else {
-        return false;
+        return std::nullopt;
       }
       faction_users += unit_size;
     }
     if (faction_users > assignment.user_capacity()) {
-      return false;
+      return std::nullopt;
     }
+    result.assigned_user_counts.emplace_back(static_cast<uint32_t>(faction_users));
     ++result.faction_count_by_capacity[assignment.user_capacity()];
     if (faction_users == assignment.user_capacity()) {
       ++result.completed_faction_count;
@@ -77,12 +70,25 @@ bool calculate_faction_statistics(
     result.pending_user_count += static_cast<size_t>(assignment.user_capacity()) - faction_users;
   }
   if (assigned_unit_ids.size() != units.size()) {
-    return false;
+    return std::nullopt;
   }
-  output = std::move(result);
-  return true;
+  return result;
 }
-}  // namespace
+
+void matching_room::commit_faction_assignments(
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>&& assignments,
+    faction_statistics&& statistics) {
+  assert(static_cast<size_t>(assignments.size()) == statistics.assigned_user_counts.size());
+  for (int position = 0; position < assignments.size(); ++position) {
+    assignments.Mutable(position)->set_assigned_user_count(
+        statistics.assigned_user_counts[static_cast<size_t>(position)]);
+  }
+  faction_assignments_.Swap(&assignments);
+  faction_count_by_capacity_ = std::move(statistics.faction_count_by_capacity);
+  fill_enabled_faction_capacities_ = std::move(statistics.fill_enabled_faction_capacities);
+  completed_faction_count_ = statistics.completed_faction_count;
+  pending_faction_user_count_ = statistics.pending_user_count;
+}
 
 matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
                              int32_t selected_level_id, int64_t now, int64_t expire_time)
@@ -112,6 +118,11 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
 }
 
 bool matching_room::has_unit(uint64_t unit_id) const noexcept { return units_.find(unit_id) != units_.end(); }
+
+const PROJECT_NAMESPACE_ID::DMatchingUnit* matching_room::find_unit(uint64_t unit_id) const noexcept {
+  auto unit_iter = units_.find(unit_id);
+  return unit_iter == units_.end() ? nullptr : &unit_iter->second;
+}
 
 bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept {
   for (const auto& unit : units_) {
@@ -220,15 +231,10 @@ bool matching_room::remove_unit(uint64_t unit_id) {
       remaining_assignments.RemoveLast();
     }
   }
-  faction_assignments_.Swap(&remaining_assignments);
-  faction_statistics statistics;
-  const bool statistics_valid = calculate_faction_statistics(units_, faction_assignments_, statistics);
-  assert(statistics_valid);
-  if (statistics_valid) {
-    faction_count_by_capacity_ = std::move(statistics.faction_count_by_capacity);
-    fill_enabled_faction_capacities_ = std::move(statistics.fill_enabled_faction_capacities);
-    completed_faction_count_ = statistics.completed_faction_count;
-    pending_faction_user_count_ = statistics.pending_user_count;
+  auto statistics = calculate_faction_statistics(units_, remaining_assignments);
+  assert(statistics.has_value());
+  if (statistics.has_value()) {
+    commit_faction_assignments(std::move(remaining_assignments), std::move(*statistics));
   }
   result_template_id_ = 0;
   finalized_unit_faction_ids_.clear();
@@ -305,19 +311,16 @@ void matching_room::set_result_template_id(int32_t value) noexcept { result_temp
 
 bool matching_room::set_faction_assignments(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& value) {
-  faction_statistics statistics;
-  if (!calculate_faction_statistics(units_, value, statistics)) {
+  auto statistics = calculate_faction_statistics(units_, value);
+  if (!statistics.has_value()) {
     return false;
   }
-  faction_assignments_.Clear();
-  faction_assignments_.Reserve(value.size());
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> normalized_assignments;
+  normalized_assignments.Reserve(value.size());
   for (const auto& assignment : value) {
-    protobuf_copy_message(*faction_assignments_.Add(), assignment);
+    protobuf_copy_message(*normalized_assignments.Add(), assignment);
   }
-  faction_count_by_capacity_ = std::move(statistics.faction_count_by_capacity);
-  fill_enabled_faction_capacities_ = std::move(statistics.fill_enabled_faction_capacities);
-  completed_faction_count_ = statistics.completed_faction_count;
-  pending_faction_user_count_ = statistics.pending_user_count;
+  commit_faction_assignments(std::move(normalized_assignments), std::move(*statistics));
   finalized_unit_faction_ids_.clear();
   faction_ids_finalized_ = false;
   return true;
@@ -331,6 +334,13 @@ void matching_room::clear_faction_assignments() noexcept {
   pending_faction_user_count_ = 0;
   finalized_unit_faction_ids_.clear();
   faction_ids_finalized_ = false;
+}
+
+bool matching_room::faction_assignment_precedes(
+    const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* left,
+    const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* right) noexcept {
+  return *std::min_element(left->unit_ids().begin(), left->unit_ids().end()) <
+         *std::min_element(right->unit_ids().begin(), right->unit_ids().end());
 }
 
 bool matching_room::finalize_faction_ids() {
@@ -348,10 +358,7 @@ bool matching_room::finalize_faction_ids() {
     }
     ordered_factions.emplace_back(&assignment);
   }
-  std::sort(ordered_factions.begin(), ordered_factions.end(), [](const auto* left, const auto* right) {
-    return *std::min_element(left->unit_ids().begin(), left->unit_ids().end()) <
-           *std::min_element(right->unit_ids().begin(), right->unit_ids().end());
-  });
+  std::sort(ordered_factions.begin(), ordered_factions.end(), faction_assignment_precedes);
 
   std::unordered_map<uint64_t, int32_t> finalized_ids;
   finalized_ids.reserve(units_.size());
@@ -461,16 +468,6 @@ void matching_room::dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) co
   protobuf_copy_message(*output.mutable_orbit_room_key(), orbit_room_key_);
 }
 
-bool matching_room::dump_player_view(uint64_t unit_id, PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const {
-  auto unit_iter = units_.find(unit_id);
-  if (unit_iter == units_.end()) {
-    return false;
-  }
-
-  dump_player_view(unit_iter->second, output);
-  return true;
-}
-
 void matching_room::dump_player_view(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
                                      PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const {
   output.Clear();
@@ -552,29 +549,33 @@ bool matching_room::subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUs
 
 void matching_room::unsubscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
   if (!wal_publisher_) {
+    FCTXLOGERROR(ctx, "unsubscribe matching WAL failed without publisher, matching_id={}, user={}:{}", matching_id_,
+                 user_key.user_id(), user_key.zone_id());
     return;
   }
   int32_t result = 0;
   matching_wal_context wal_ctx{ctx, result};
   wal_publisher_->remove_subscriber(user_key, atfw::util::distributed_system::wal_unsubscribe_reason::kClientRequest,
                                     wal_ctx);
+  FCTXLOGDEBUG(ctx, "unsubscribe matching WAL, matching_id={}, user={}:{}, result={}", matching_id_, user_key.user_id(),
+               user_key.zone_id(), result);
 }
 
-bool matching_room::get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t& server_id,
-                                         int64_t& acknowledge_event_id) {
+std::optional<matching_room::subscriber_route> matching_room::get_subscriber_route(
+    const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
   if (!wal_publisher_) {
-    return false;
+    return std::nullopt;
   }
   rpc::context ctx{rpc::context::create_without_task()};
-  int32_t result = 0;
-  matching_wal_context wal_ctx{ctx, result};
+  int32_t wal_result = 0;
+  matching_wal_context wal_ctx{ctx, wal_result};
   auto subscriber = wal_publisher_->find_subscriber(user_key, wal_ctx);
   if (!subscriber || !subscriber->get_private_data()) {
-    return false;
+    return std::nullopt;
   }
-  server_id = subscriber->get_private_data()->server_id();
-  acknowledge_event_id = subscriber->get_private_data()->last_send_event_id();
-  return server_id != 0;
+  subscriber_route route{subscriber->get_private_data()->server_id(),
+                         subscriber->get_private_data()->last_send_event_id()};
+  return route.server_id == 0 ? std::nullopt : std::optional<subscriber_route>{route};
 }
 
 void matching_room::publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log) {

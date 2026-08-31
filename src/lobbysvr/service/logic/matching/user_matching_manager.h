@@ -53,9 +53,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_matching(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingStartReq& request,
       PROJECT_NAMESPACE_ID::SCMatchingStartRsp& response);
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_matching(
-      rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingCheckReq& request,
-      PROJECT_NAMESPACE_ID::SCMatchingCheckRsp& response);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_matching(rpc::context& ctx,
+                                                                    PROJECT_NAMESPACE_ID::SCMatchingCheckRsp& response);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type cancel_matching(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingCancelReq& request,
       PROJECT_NAMESPACE_ID::SCMatchingCancelRsp& response);
@@ -71,16 +70,16 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int64_t get_last_event_id() const;
 
  private:
-  // 将同步 RPC 回包写入内部视图；客户端投影变化或迁房时递增 view_revision，仅 WAL 变化不递增。
-  bool update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view);
+  // 合并 Matchsvr 玩家视图；同一房间内拒绝早于本地 WAL 游标的旧视图。
+  void update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view);
   void clear_matching_state();
+  void dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const;
   void dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const;
 
   ATFW_EXPLICIT_NODISCARD_ATTR int32_t fill_matching_scope(const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                                            const std::string& battle_version,
                                                            PROJECT_NAMESPACE_ID::DMatchingScope& output,
-                                                           std::vector<int32_t>& acceptable_level_ids,
-                                                           int32_t& preferred_level_id) const;
+                                                           std::vector<int32_t>& acceptable_level_ids) const;
   // 组队未接入前，只组装包含当前登录玩家的单人 unit。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type fill_matching_unit(
       rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingUnit& output) const;
@@ -91,8 +90,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   uint64_t get_current_unit_id() const;
   // 当前 lobbysvr 已应用的 matchsvr WAL 游标，用于断点重放。
   int64_t get_acknowledge_event_id() const;
-  // 发送客户端权威匹配视图；离线时只保留持久化状态。
-  void send_log_sync(rpc::context& ctx);
+
+  void on_client_view_changed(rpc::context& ctx);
 
  public:
   static void on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,

@@ -12,6 +12,7 @@ import "protocol/pbdesc/com.struct.proto";
 import "protocol/common/com.struct.item.common.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 import "protocol/pbdesc/com.struct.team.shared.proto";
+import "protocol/pbdesc/com.struct.match.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -62,6 +63,10 @@ message DUserItemDirtyChg {
   repeated DItemInstanceEntry update_entries = 3;
 }
 
+message DMatchingClientViewDirtyChg {
+    DMatchingClientView client_view = 1;
+}
+
 // 脏数据同步包
 message SCUserDirtyChgSync {
   DOrbitRoomDirty dirty_orbit_rooms = 1;
@@ -69,6 +74,7 @@ message SCUserDirtyChgSync {
   repeated DUserItemDirtyChg dirty_item_chgs = 3;
 
   // 业务ditry开始
+  DMatchingClientViewDirtyChg dirty_matching_chg = 32;
 }
 
 // 心跳包，上行包

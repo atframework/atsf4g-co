@@ -12,6 +12,7 @@
 #include <data/user_key_hash_helper.h>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -27,6 +28,21 @@ class context;
 class matching_room {
  public:
   using ptr_t = std::shared_ptr<matching_room>;
+
+  struct faction_statistics {
+    std::unordered_map<size_t, size_t> faction_count_by_capacity;
+    std::set<size_t> fill_enabled_faction_capacities;
+    // 与 assignments 位置对齐的实际人数，用于提交时规范化 protobuf 缓存。
+    std::vector<uint32_t> assigned_user_counts;
+    size_t completed_faction_count = 0;
+    size_t pending_user_count = 0;
+  };
+
+  // 一个订阅者迁移所需的路由和已确认 WAL 游标。
+  struct subscriber_route {
+    uint64_t server_id = 0;
+    int64_t acknowledge_event_id = 0;
+  };
 
   // 使用已确定的粗桶和初始关卡创建一个空房间。
   matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID::DMatchingScope& scope, int32_t selected_level_id,
@@ -88,6 +104,8 @@ class matching_room {
   const std::vector<size_t>& get_unit_size_counts() const noexcept { return unit_size_counts_; }
   // 判断 unit 是否仍在本房间。
   bool has_unit(uint64_t unit_id) const noexcept;
+  // 查找房间内的 Unit；不存在时返回 nullptr。
+  const PROJECT_NAMESPACE_ID::DMatchingUnit* find_unit(uint64_t unit_id) const noexcept;
   // 判断玩家是否仍在本房间。
   bool has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
 
@@ -130,9 +148,7 @@ class matching_room {
   void mark_cancelled(int64_t now) noexcept;
   // 导出不暴露内部容器的协议快照。
   void dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) const;
-  // 导出单个订阅 Unit 的玩家视图；找不到 Unit 时返回 false。
-  bool dump_player_view(uint64_t unit_id, PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const;
-  // 为刚移除但仍需接收最终事件的 Unit 导出玩家视图。
+  // 导出指定 Unit 的玩家视图，也用于刚移除但仍需接收最终事件的 Unit。
   void dump_player_view(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
                         PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const;
   void set_orbit_expired_timepoint(int64_t value) noexcept { orbit_expired_timepoint_ = value; }
@@ -142,13 +158,24 @@ class matching_room {
                  int64_t acknowledge_event_id);
   // 主动移除玩家订阅。
   void unsubscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
-  // 读取订阅路由，供迁房时把订阅者转移到目标房间。
-  bool get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t& server_id,
-                            int64_t& acknowledge_event_id);
+  // 读取订阅路由，供迁房时把订阅者转移到目标房间；不存在时返回空值。
+  std::optional<subscriber_route> get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   // 追加并立即广播一条房间 WAL 日志。
   void publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log);
 
  private:
+  // 校验 faction 分配覆盖关系并一次性计算房间缓存的 faction 统计信息。
+  static std::optional<faction_statistics> calculate_faction_statistics(
+      const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& units,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments);
+  // 按最小 Unit ID 稳定排列已校验且非空的 faction assignment。
+  static bool faction_assignment_precedes(const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* left,
+                                          const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* right) noexcept;
+  // 原子提交已校验的 assignments，并把实际人数写回每个 faction 的冗余缓存。
+  void commit_faction_assignments(
+      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>&& assignments,
+      faction_statistics&& statistics);
+
   // 匹配房间的稳定 ID。
   std::string matching_id_;
   // 四维粗粒度匹配桶。

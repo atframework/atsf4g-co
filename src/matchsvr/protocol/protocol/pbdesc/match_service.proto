@@ -34,13 +34,10 @@ message SSMatchingEventSync {
 }
 
 message SSMatchingCreateReq {
-  DMatchingScope scope = 1;      // 粗粒度匹配桶
-  DMatchingUnit unit = 2;        // 参与匹配的信息
-  DUserIDKey operator_user = 3;  // 本次实际操作者，由 lobbysvr 根据登录态覆盖
+  DMatchingScope scope = 1;         // 匹配桶
+  DMatchingUnit unit = 2;           // 参与匹配的单位信息
+  DUserIDKey operator_user = 3;     // 本次实际操作者
   uint64 subscriber_server_id = 4;  // 当前 lobbysvr 实例，由内部链路填写
-  int64 acknowledge_event_id = 5;   // lobbysvr 已消费的 WAL 游标
-  // 新建房间时优先选择的关卡；必须属于 unit.acceptable_level_ids。
-  int32 preferred_level_id = 6;
 }
 
 message SSMatchingCancelReq {

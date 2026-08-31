@@ -104,6 +104,8 @@ message DMatchingFactionAssignment {
   repeated uint64 unit_ids = 2;
   // faction 创建时锁定的玩家容量；搜索期间选择其他结果模板也不得修改。
   uint32 user_capacity = 3;
+  // unit_ids 对应 Unit 的当前总人数缓存；room 在提交 assignment 时按 membership 重新计算。
+  uint32 assigned_user_count = 4;
 }
 
 // 尝试把一个完整 Unit 加入房间时的只读检查结果。
@@ -166,8 +168,6 @@ message DMatchingPlayerView {
 message DMatchingClientView {
   // 一轮匹配内保持不变，迁房不变；新一轮匹配重新生成。客户端只把它当作不透明操作标识。
   uint64 unit_id = 1;
-  // lobbysvr 为当前玩家生成的单调版本。客户端只接受 view_revision 不小于本地版本的视图。
-  uint64 view_revision = 2;
   EnMatchingRoomStatus status = 3;
   int32 result = 4;
   int64 expire_time = 5;
@@ -198,12 +198,8 @@ message DMatchingEventLog {
 
 // lobbysvr 持久化的内部玩家匹配视图，用于重登录后从 WAL 游标恢复。
 message DUserMatchingData {
-  // 旧版本持久化的完整房间快照，仅用于加载迁移；新版本不再写入。
-  DMatchingRoomSnapshot legacy_snapshot = 1;
   int64 last_event_id = 2;
   DMatchingPlayerView view = 4;
-  // 客户端视图版本跨迁房和匹配轮次保持单调，不得在清理当前房间状态时归零。
-  uint64 client_view_revision = 5;
 }
 
 message DBattleLevelParameter {

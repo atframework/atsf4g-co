@@ -23,18 +23,11 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 	if len(cmd) < 1 {
 		return fmt.Errorf("need level_type")
 	}
-	levelType, err := strconv.ParseInt(cmd[0], 10, 32)
+	levelId, err := strconv.ParseInt(cmd[0], 10, 32)
 	if err != nil {
 		return err
 	}
-	levelId := levelType
-	if len(cmd) > 1 {
-		levelId, err = strconv.ParseInt(cmd[1], 10, 32)
-		if err != nil {
-			return err
-		}
-	}
-	region := "cn"
+	region := "default"
 	if len(cmd) > 2 {
 		region = cmd[2]
 	}
@@ -59,8 +52,7 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 	}
 
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, int32(levelType), int32(levelId), levelIds, region,
-			factionFillPolicy)
+		return task.MatchingStartTask(taskAction, levelIds, region, factionFillPolicy)
 	}, "Matching Start Task"))
 }
 

@@ -14,6 +14,9 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
+#include <utility>
+#include <vector>
 
 class matching_room;
 
@@ -53,23 +56,47 @@ struct matching_wal_action_equal {
   }
 };
 
-struct matching_wal_log_operator
-    : public atfw::util::distributed_system::wal_log_operator<
-          int64_t, PROJECT_NAMESPACE_ID::DMatchingEventLog, matching_wal_action_getter, std::less<>,
-          matching_wal_action_hash, matching_wal_action_equal,
-          atfw::memory::stl::allocator<PROJECT_NAMESPACE_ID::DMatchingEventLog>> {};
+struct matching_wal_log_operator : public atfw::util::distributed_system::wal_log_operator<
+                                       int64_t, PROJECT_NAMESPACE_ID::DMatchingEventLog, matching_wal_action_getter,
+                                       std::less<>, matching_wal_action_hash, matching_wal_action_equal,
+                                       atfw::memory::stl::allocator<PROJECT_NAMESPACE_ID::DMatchingEventLog>> {};
 
 using matching_wal_subscriber_private_data =
     atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::DMatchingSubscriberData>;
 
 // 每个玩家是一个订阅者；同一 lobbysvr 的玩家会合并成一次通知 RPC。
 struct matching_wal_subscriber
-    : public atfw::util::distributed_system::wal_subscriber<matching_wal_subscriber_private_data,
-                                                            PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t,
-                                                            user_key_equal_t> {};
+    : public atfw::util::distributed_system::wal_subscriber<
+          matching_wal_subscriber_private_data, PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> {};
 
 using matching_wal_publisher =
-    atfw::util::distributed_system::wal_publisher<matching_wal_storage, matching_wal_log_operator,
-                                                  matching_wal_context, matching_room*, matching_wal_subscriber>;
+    atfw::util::distributed_system::wal_publisher<matching_wal_storage, matching_wal_log_operator, matching_wal_context,
+                                                  matching_room*, matching_wal_subscriber>;
 
+using matching_wal_result_code = atfw::util::distributed_system::wal_result_code;
+using matching_wal_subscriber_group_key = std::pair<uint64_t, uint64_t>;
+using matching_wal_subscriber_group =
+    std::map<matching_wal_subscriber_group_key, std::vector<matching_wal_publisher::subscriber_pointer>>;
+using matching_wal_object = matching_wal_publisher::object_type;
+
+namespace matching_wal_detail {
+
+// 按 lobbysvr 和 Unit 聚合仍在线且路由有效的 WAL 订阅者。
+matching_wal_subscriber_group collect_subscribers(matching_wal_publisher::subscriber_iterator begin,
+                                                  matching_wal_publisher::subscriber_iterator end);
+
+// 向订阅者分组发送快照或增量日志，并仅在发送成功后推进发送游标。
+void send_to_subscribers(matching_wal_publisher& publisher, const matching_wal_subscriber_group& groups,
+                         const PROJECT_NAMESPACE_ID::SSMatchingEventSync& message, matching_wal_context param,
+                         int64_t last_event_id);
+
+// 创建并缓存匹配 WAL publisher 的回调表。
+matching_wal_publisher::vtable_pointer create_vtable();
+
+// 创建匹配 WAL publisher 的日志保留和订阅超时配置。
+matching_wal_publisher::configure_pointer create_configure();
+
+}  // namespace matching_wal_detail
+
+// 创建绑定指定匹配房间的 WAL publisher。
 matching_wal_log_operator::strong_ptr<matching_wal_publisher> create_matching_wal_publisher(matching_room& room);

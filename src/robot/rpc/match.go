@@ -10,13 +10,12 @@ import (
 	user_data "github.com/atframework/robot-go/data"
 )
 
-func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelType, preferredLevelId int32,
-	levelIds []int32, region string,
+func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelIds []int32, region string,
 	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
 	csBody := &public_protocol_pbdesc.CSMatchingStartReq{
 		LevelSelect: &public_protocol_pbdesc.DLevelSelect{
-			LevelIds:  levelIds,
-			Region:    region,
+			LevelIds: levelIds,
+			Region:   region,
 		},
 		BattleVersion:     "0.0.0.1",
 		FactionFillPolicy: factionFillPolicy,
@@ -63,20 +62,12 @@ func SaveMatchingView(user user_data.User, view *public_protocol_pbdesc.DMatchin
 	if view == nil {
 		return
 	}
-	currentViewRevision, _ := user.GetExtralData("MatchingViewRevision").(uint64)
-	if view.GetViewRevision() < currentViewRevision {
-		user.Log("ignore stale matching view: view_revision=%d current_view_revision=%d", view.GetViewRevision(),
-			currentViewRevision)
-		return
-	}
 	if view.GetUnitId() != 0 {
 		user.SetExtralData("UnitId", view.GetUnitId())
 	}
-	user.SetExtralData("MatchingViewRevision", view.GetViewRevision())
 	user.SetExtralData("MatchingStatus", view.GetStatus())
 	// user.SetExtralData("MatchingFactionId", view.GetFactionId())
-	user.Log("matching view: view_revision=%d status=%s unit_id=%d", view.GetViewRevision(),
-		view.GetStatus().String(), view.GetUnitId())
+	user.Log("matching view: status=%s unit_id=%d", view.GetStatus().String(), view.GetUnitId())
 }
 
 func RegisterMatchingLogSyncHandler(user user_data.User) {

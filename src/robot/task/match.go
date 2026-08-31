@@ -8,11 +8,9 @@ import (
 	user_data "github.com/atframework/robot-go/data"
 )
 
-func MatchingStartTask(task *user_data.TaskActionUser, levelType, preferredLevelId int32, levelIds []int32,
-	region string,
+func MatchingStartTask(task *user_data.TaskActionUser, levelIds []int32, region string,
 	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) error {
-	errCode, rspHolder, rpcErr := protocol.MatchingStartRpc(task, task.User, levelType, preferredLevelId, levelIds, region,
-		factionFillPolicy)
+	errCode, rspHolder, rpcErr := protocol.MatchingStartRpc(task, task.User, levelIds, region, factionFillPolicy)
 	if rpcErr != nil {
 		return rpcErr
 	}
@@ -30,8 +28,7 @@ func MatchingStartTask(task *user_data.TaskActionUser, levelType, preferredLevel
 	}
 	protocol.SaveMatchingView(task.User, rsp.GetView())
 	task.User.SetExtralData("MatchingFactionId", int32(0))
-	task.Log("matching start success, unit_id=%d view_revision=%d", rsp.GetView().GetUnitId(),
-		rsp.GetView().GetViewRevision())
+	task.Log("matching start success, unit_id=%d", rsp.GetView().GetUnitId())
 	return nil
 }
 

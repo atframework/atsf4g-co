@@ -200,6 +200,7 @@ CASE_TEST(matchsvr_matching_room, maintains_internal_factions_until_confirmation
   faction->add_unit_ids(1);
   faction->add_unit_ids(2);
   CASE_EXPECT_TRUE(room.set_faction_assignments(assignments));
+  CASE_EXPECT_EQ(2, room.get_faction_assignments().Get(0).assigned_user_count());
   CASE_EXPECT_EQ(1, room.get_faction_count_by_capacity().at(2));
   CASE_EXPECT_EQ(1, room.get_completed_faction_count());
   CASE_EXPECT_EQ(0, room.get_pending_faction_user_count());
@@ -220,7 +221,12 @@ CASE_TEST(matchsvr_matching_room, maintains_internal_factions_until_confirmation
   CASE_EXPECT_EQ(0, snapshot.faction_assignments_size());
   CASE_EXPECT_EQ(1, room.get_faction_assignments().size());
   PROJECT_NAMESPACE_ID::DMatchingPlayerView player_view;
-  CASE_EXPECT_TRUE(room.dump_player_view(1, player_view));
+  const auto* first_unit = room.find_unit(1);
+  CASE_EXPECT_TRUE(first_unit != nullptr);
+  if (first_unit == nullptr) {
+    return;
+  }
+  room.dump_player_view(*first_unit, player_view);
   CASE_EXPECT_EQ(1, player_view.unit().unit_id());
   CASE_EXPECT_EQ(1, player_view.unit().users_size());
   CASE_EXPECT_EQ(0, player_view.faction_id());
@@ -228,12 +234,13 @@ CASE_TEST(matchsvr_matching_room, maintains_internal_factions_until_confirmation
   room.begin_confirmation(300);
   room.dump(snapshot);
   CASE_EXPECT_EQ(1, snapshot.faction_assignments_size());
-  CASE_EXPECT_TRUE(room.dump_player_view(1, player_view));
+  room.dump_player_view(*first_unit, player_view);
   CASE_EXPECT_EQ(0, player_view.faction_id());
   CASE_EXPECT_TRUE(room.remove_unit(1));
   CASE_EXPECT_EQ(1, room.get_faction_assignments().size());
   CASE_EXPECT_EQ(1, room.get_faction_assignments().Get(0).unit_ids_size());
   CASE_EXPECT_EQ(2, room.get_faction_assignments().Get(0).unit_ids(0));
+  CASE_EXPECT_EQ(1, room.get_faction_assignments().Get(0).assigned_user_count());
   CASE_EXPECT_EQ(0, room.get_completed_faction_count());
   CASE_EXPECT_EQ(1, room.get_pending_faction_user_count());
 
@@ -261,7 +268,14 @@ CASE_TEST(matchsvr_matching_room, finalizes_battle_faction_ids_from_membership_o
 
   room.begin_confirmation(300);
   PROJECT_NAMESPACE_ID::DMatchingPlayerView player_view;
-  CASE_EXPECT_TRUE(room.dump_player_view(10, player_view));
+  const auto* first_unit = room.find_unit(10);
+  const auto* second_unit = room.find_unit(20);
+  CASE_EXPECT_TRUE(first_unit != nullptr);
+  CASE_EXPECT_TRUE(second_unit != nullptr);
+  if (first_unit == nullptr || second_unit == nullptr) {
+    return;
+  }
+  room.dump_player_view(*first_unit, player_view);
   CASE_EXPECT_EQ(0, player_view.faction_id());
   CASE_EXPECT_TRUE(room.finalize_faction_ids());
   CASE_EXPECT_TRUE(room.finalize_faction_ids());
@@ -270,9 +284,9 @@ CASE_TEST(matchsvr_matching_room, finalizes_battle_faction_ids_from_membership_o
   CASE_EXPECT_EQ(1002, room.get_unit_faction_id(20));
 
   room.mark_creating_battle(0x1234, 400);
-  CASE_EXPECT_TRUE(room.dump_player_view(10, player_view));
+  room.dump_player_view(*first_unit, player_view);
   CASE_EXPECT_EQ(1001, player_view.faction_id());
-  CASE_EXPECT_TRUE(room.dump_player_view(20, player_view));
+  room.dump_player_view(*second_unit, player_view);
   CASE_EXPECT_EQ(1002, player_view.faction_id());
 }
 

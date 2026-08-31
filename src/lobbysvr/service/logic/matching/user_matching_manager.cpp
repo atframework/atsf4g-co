@@ -32,17 +32,6 @@
 #include <rpc/rpc_shared_message.h>
 
 namespace {
-bool same_user(const PROJECT_NAMESPACE_ID::DUserIDKey& left, const PROJECT_NAMESPACE_ID::DUserIDKey& right) {
-  return left.user_id() == right.user_id() && left.zone_id() == right.zone_id();
-}
-
-static bool client_view_payload_equal(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& left,
-                                      const PROJECT_NAMESPACE_ID::DMatchingPlayerView& right) {
-  return left.unit().unit_id() == right.unit().unit_id() && left.status() == right.status() &&
-         left.result() == right.result() && left.expire_time() == right.expire_time() &&
-         left.selected_level_id() == right.selected_level_id() && left.faction_id() == right.faction_id();
-}
-
 static bool init_user_matching_manager_gm_handle() {
   task_action_user_gm_cmd_nomsg::init_gm_cmd("matching_start", user_matching_manager::on_gm_cmd_start_matching,
                                              "matching_start <level_id> <region>");
@@ -68,7 +57,6 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingCheckReq>(ctx);
   auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingCheckRsp>(ctx);
   if (get_current_unit_id() == 0) {
     clear_matching_state();
@@ -76,7 +64,7 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  int32_t result = RPC_AWAIT_CODE_RESULT(check_matching(ctx, *request, *response));
+  int32_t result = RPC_AWAIT_CODE_RESULT(check_matching(ctx, *response));
   if (result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND) {
     // 如何玩家离线前处于匹配，并且已经confirm了匹配，重登后不知道是否已经进入了对局，直接转交给orbit确认
     if (data_.view().status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE) {
@@ -94,46 +82,11 @@ rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
 
 void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NAMESPACE_ID::table_user& user_table) {
   data_.Clear();
-  bool migrated_legacy_snapshot = false;
   if (user_table.has_matching_data()) {
     protobuf_copy_message(data_, user_table.matching_data());
   }
-  if (!data_.has_view() && data_.has_legacy_snapshot()) {
-    const auto& legacy = data_.legacy_snapshot();
-    auto* view = data_.mutable_view();
-    view->set_matching_id(legacy.matching_id());
-    view->set_status(legacy.status());
-    view->set_result(legacy.result());
-    view->set_expire_time(legacy.expire_time());
-    view->set_last_event_id(legacy.last_event_id());
-    view->set_confirm_expire_time(legacy.confirm_expire_time());
-    protobuf_copy_message(*view->mutable_orbit_room_key(), legacy.orbit_room_key());
-    view->set_orbit_expired_timepoint(legacy.orbit_expired_timepoint());
-    view->set_selected_level_id(legacy.selected_level_id());
-    for (const auto& unit : legacy.units()) {
-      bool is_current_unit = false;
-      for (const auto& matching_user : unit.users()) {
-        is_current_unit = matching_user.user_key().user_id() == owner_->get_user_id() &&
-                          matching_user.user_key().zone_id() == owner_->get_zone_id();
-        if (is_current_unit) {
-          break;
-        }
-      }
-      if (is_current_unit) {
-        protobuf_copy_message(*view->mutable_unit(), unit);
-        break;
-      }
-    }
-    // 旧快照中的匹配期 faction 序号不是最终战斗 ID，迁移时不再推导 faction_id。
-    data_.clear_legacy_snapshot();
-    migrated_legacy_snapshot = true;
-  }
-  if (data_.has_view() && data_.client_view_revision() == 0) {
-    data_.set_client_view_revision(1);
-    migrated_legacy_snapshot = true;
-  }
   pending_switch_matching_id_.clear();
-  dirty_ = migrated_legacy_snapshot;
+  dirty_ = false;
 }
 
 int user_matching_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
@@ -187,9 +140,8 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
   // TODO 接入battle_versnion
   std::vector<int32_t> acceptable_level_ids;
-  int32_t preferred_level_id = 0;
   int32_t ret = fill_matching_scope(request.level_select(), request.battle_version(), *rpc_request->mutable_scope(),
-                                    acceptable_level_ids, preferred_level_id);
+                                    acceptable_level_ids);
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
     FWLOGERROR("{} fill_matching_scope failed, ret={}, level_select={},battle_version={}", *owner_, ret,
                request.level_select().DebugString(), request.battle_version());
@@ -202,7 +154,6 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
                request.level_select().DebugString(), request.battle_version());
     RPC_RETURN_CODE(ret);
   }
-  rpc_request->set_preferred_level_id(preferred_level_id);
   for (int32_t level_id : acceptable_level_ids) {
     rpc_request->mutable_unit()->add_acceptable_level_ids(level_id);
   }
@@ -219,12 +170,11 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   bool operator_is_member = false;
   for (auto& matching_user : *rpc_request->mutable_unit()->mutable_users()) {
     matching_user.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
-    operator_is_member = operator_is_member || same_user(matching_user.user_key(), operator_user);
+    operator_is_member = operator_is_member || (matching_user.user_key().user_id() == operator_user.user_id() &&
+                                                matching_user.user_key().zone_id() == operator_user.zone_id());
   }
 
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
-  // 新 matching_id 的 WAL 从头计数，不能沿用上一场客户端游标。
-  rpc_request->set_acknowledge_event_id(0);
   const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWLOGERROR("{} start matching failed, no ready matchsvr, unit_id={}", *owner_, rpc_request->unit().unit_id());
@@ -252,17 +202,14 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
     level_parameter->add_level_ids(level_id);
   }
 
-  FWLOGDEBUG(
-      "{} start matching finish, level_select={}, battle_version={}, matching_id={}, unit_id={}, "
-      "view_revision={}",
-      *owner_, request.level_select().DebugString(), request.battle_version(), data_.view().matching_id(),
-      get_current_unit_id(), data_.client_view_revision());
+  FWLOGDEBUG("{} start matching finish, level_select={}, battle_version={}, matching_id={}, unit_id={}", *owner_,
+             request.level_select().DebugString(), request.battle_version(), data_.view().matching_id(),
+             get_current_unit_id());
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 rpc::result_code_type user_matching_manager::check_matching(rpc::context& ctx,
-                                                            const PROJECT_NAMESPACE_ID::CSMatchingCheckReq&,
                                                             PROJECT_NAMESPACE_ID::SCMatchingCheckRsp& response) {
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
@@ -303,10 +250,9 @@ rpc::result_code_type user_matching_manager::check_matching(rpc::context& ctx,
   }
   update_view(rpc_response->snapshot());
   dump_client_view(*response.mutable_view());
-  FWLOGDEBUG("{} check matching finish, matching_id={}, unit_id={}, status={}, last_event_id={}, view_revision={}",
-             *owner_, rpc_response->snapshot().matching_id(), unit_id,
-             static_cast<int>(rpc_response->snapshot().status()), rpc_response->snapshot().last_event_id(),
-             data_.client_view_revision());
+  FWLOGDEBUG("{} check matching finish, matching_id={}, unit_id={}, status={}, last_event_id={}", *owner_,
+             rpc_response->snapshot().matching_id(), unit_id, static_cast<int>(rpc_response->snapshot().status()),
+             rpc_response->snapshot().last_event_id());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -343,12 +289,11 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
     update_view(rpc_response->snapshot());
   }
   dump_client_view(*response.mutable_view());
-  FWLOGDEBUG("{} cancel matching finish, matching_id={}, unit_id={}, result={}({}), status={}, view_revision={}",
-             *owner_, data_.view().matching_id(), unit_id, rpc_response->result(),
+  FWLOGDEBUG("{} cancel matching finish, matching_id={}, unit_id={}, result={}({}), status={}", *owner_,
+             data_.view().matching_id(), unit_id, rpc_response->result(),
              protobuf_mini_dumper_get_error_msg(rpc_response->result()),
              rpc_response->has_snapshot() ? static_cast<int>(rpc_response->snapshot().status())
-                                          : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID),
-             data_.client_view_revision());
+                                          : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID));
   RPC_RETURN_CODE(rpc_response->result());
 }
 
@@ -392,14 +337,11 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
     update_view(rpc_response->snapshot());
   }
   dump_client_view(*response.mutable_view());
-  FWLOGDEBUG(
-      "{} confirm matching finish, matching_id={}, unit_id={}, confirmed={}, result={}({}), status={}, "
-      "view_revision={}",
-      *owner_, data_.view().matching_id(), unit_id, request.confirmed(), rpc_response->result(),
-      protobuf_mini_dumper_get_error_msg(rpc_response->result()),
-      rpc_response->has_snapshot() ? static_cast<int>(rpc_response->snapshot().status())
-                                   : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID),
-      data_.client_view_revision());
+  FWLOGDEBUG("{} confirm matching finish, matching_id={}, unit_id={}, confirmed={}, result={}({}), status={}", *owner_,
+             data_.view().matching_id(), unit_id, request.confirmed(), rpc_response->result(),
+             protobuf_mini_dumper_get_error_msg(rpc_response->result()),
+             rpc_response->has_snapshot() ? static_cast<int>(rpc_response->snapshot().status())
+                                          : static_cast<int>(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_INVALID));
   RPC_RETURN_CODE(rpc_response->result());
 }
 
@@ -444,12 +386,9 @@ void user_matching_manager::acknowledge_matching_sync(rpc::context& ctx,
   if (is_switch) {
     pending_switch_matching_id_.clear();
   }
-  FWLOGDEBUG(
-      "{} acknowledge matching event sync finish, matching_id={}, status={}, last_event_id={}, "
-      "view_revision={}",
-      *owner_, data_.view().matching_id(), static_cast<int>(data_.view().status()), data_.last_event_id(),
-      data_.client_view_revision());
-  send_log_sync(ctx);
+  FWLOGDEBUG("{} acknowledge matching event sync finish, matching_id={}, status={}, last_event_id={}", *owner_,
+             data_.view().matching_id(), static_cast<int>(data_.view().status()), data_.last_event_id());
+  on_client_view_changed(ctx);
 }
 
 const PROJECT_NAMESPACE_ID::DMatchingPlayerView& user_matching_manager::get_view() const { return data_.view(); }
@@ -462,37 +401,32 @@ PROJECT_NAMESPACE_ID::DMatchingClientView user_matching_manager::get_client_view
 
 int64_t user_matching_manager::get_last_event_id() const { return data_.last_event_id(); }
 
-bool user_matching_manager::update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view) {
+void user_matching_manager::update_view(const PROJECT_NAMESPACE_ID::DMatchingPlayerView& view) {
   const bool matching_id_changed = data_.view().matching_id() != view.matching_id();
   if (!matching_id_changed && view.last_event_id() < data_.last_event_id()) {
-    return false;
+    return;
   }
   if (atfw::atapp::protobuf_equal(data_.view(), view)) {
-    return false;
+    return;
   }
-  const bool client_view_changed = matching_id_changed || !client_view_payload_equal(data_.view(), view);
 
   protobuf_copy_message(*data_.mutable_view(), view);
-  data_.clear_legacy_snapshot();
   data_.set_last_event_id(matching_id_changed ? view.last_event_id()
                                               : std::max(data_.last_event_id(), view.last_event_id()));
-  if (client_view_changed) {
-    data_.set_client_view_revision(data_.client_view_revision() + 1);
-  }
   dirty_ = true;
-  return client_view_changed;
 }
 
 void user_matching_manager::clear_matching_state() {
-  const uint64_t client_view_revision = data_.client_view_revision();
   data_.Clear();
-  data_.set_client_view_revision(client_view_revision);
   pending_switch_matching_id_.clear();
 }
 
-void user_matching_manager::dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const {
+void user_matching_manager::dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const {
   output.Clear();
-  output.set_view_revision(data_.client_view_revision());
+  dump_client_view(*output.mutable_client_view());
+}
+
+void user_matching_manager::dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const {
   if (!data_.has_view()) {
     return;
   }
@@ -501,17 +435,14 @@ void user_matching_manager::dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClie
   output.set_result(data_.view().result());
   output.set_expire_time(data_.view().expire_time());
   output.set_selected_level_id(data_.view().selected_level_id());
-  // output.set_faction_id(data_.view().faction_id());
 }
 
 int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
                                                    const std::string& battle_version,
                                                    PROJECT_NAMESPACE_ID::DMatchingScope& output,
-                                                   std::vector<int32_t>& acceptable_level_ids,
-                                                   int32_t& preferred_level_id) const {
+                                                   std::vector<int32_t>& acceptable_level_ids) const {
   output.Clear();
   acceptable_level_ids.clear();
-  preferred_level_id = 0;
   if (level_select.level_ids_size() <= 0) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
   }
@@ -524,40 +455,30 @@ int32_t user_matching_manager::fill_matching_scope(const PROJECT_NAMESPACE_ID::D
   std::sort(acceptable_level_ids.begin(), acceptable_level_ids.end());
   acceptable_level_ids.erase(std::unique(acceptable_level_ids.begin(), acceptable_level_ids.end()),
                              acceptable_level_ids.end());
-  preferred_level_id = level_select.level_ids(0) > 0 ? level_select.level_ids(0) : acceptable_level_ids.front();
-  if (!std::binary_search(acceptable_level_ids.begin(), acceptable_level_ids.end(), preferred_level_id)) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
-  }
-
-  auto preferred_level_cfg = excel::get_ExcelLevel_by_level_id(preferred_level_id);
-  if (!preferred_level_cfg) {
-    return PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND;
-  }
-
-  auto preferred_level_type = preferred_level_cfg->level_type();
-
-  output.set_level_type(preferred_level_type);
   output.set_region(level_select.region());
   output.set_battle_version(battle_version);
 
+  int32_t level_type = 0;
   int32_t matching_pool_id = 0;
   for (int32_t level_id : acceptable_level_ids) {
     const auto level_cfg = excel::get_ExcelLevel_by_level_id(level_id);
-    FWLOGDEBUG("{} fill_matching_scope, level_type={}, level_id={}, battle_version={}, level_cfg={}", *owner_,
-               level_cfg->level_type(), level_id, battle_version, level_cfg ? level_cfg->DebugString() : "null");
     if (!level_cfg) {
       return PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND;
     }
-    if (preferred_level_type != level_cfg->level_type() ||
+    FWLOGDEBUG("{} fill_matching_scope, level_type={}, level_id={}, battle_version={}, level_cfg={}", *owner_,
+               level_cfg->level_type(), level_id, battle_version, level_cfg ? level_cfg->DebugString() : "null");
+    if ((level_type > 0 && level_type != level_cfg->level_type()) ||
         (matching_pool_id > 0 && matching_pool_id != level_cfg->matching_pool_id())) {
       return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
     }
+    level_type = level_cfg->level_type();
     matching_pool_id = level_cfg->matching_pool_id();
   }
   if (matching_pool_id <= 0 || !excel::get_ExcelMatchingPool_by_id(matching_pool_id)) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_POOL_ID_CFG_NOT_FOUND;
   }
 
+  output.set_level_type(level_type);
   output.set_matching_pool_id(matching_pool_id);
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
@@ -592,18 +513,29 @@ uint64_t user_matching_manager::get_current_unit_id() const { return data_.view(
 
 int64_t user_matching_manager::get_acknowledge_event_id() const { return data_.last_event_id(); }
 
-void user_matching_manager::send_log_sync(rpc::context& ctx) {
-  auto session = owner_->get_session();
-  if (!session) {
-    FWLOGDEBUG("{} skip matching view sync to offline client, matching_id={}, view_revision={}", *owner_,
-               data_.view().matching_id(), data_.client_view_revision());
-    return;
-  }
-  auto output = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingLogSync>(ctx);
-  dump_client_view(*output->mutable_client_view());
-  FWLOGDEBUG("{} send matching view sync to client, matching_id={}, unit_id={}, view_revision={}", *owner_,
-             data_.view().matching_id(), output->client_view().unit_id(), output->client_view().view_revision());
-  rpc::lobbysvrclientservice::send_matching_log_sync(ctx, *output, *session).unwrap();
+void user_matching_manager::on_client_view_changed(rpc::context& ctx) {
+  dirty_ = true;
+  owner_->insert_dirty_handle_if_not_exists(
+      reinterpret_cast<uintptr_t>(this), "user.user_matching_manager.dirty", [](gsl::string_view, user&) {
+        user::dirty_sync_handle_t handle;
+        handle.build_fn = [](rpc::context&, user& user_inst, user::dirty_message_container& output) {
+          auto& mgr = user_inst.get_user_matching_manager();
+          if (!mgr.dirty_) {
+            return;
+          }
+          if (!output.user_dirty) {
+            output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
+          }
+          if (!output.user_dirty) {
+            FWLOGERROR("malloc dirty msg body failed");
+            return;
+          }
+          mgr.dump_dirty_data(*output.user_dirty->mutable_dirty_matching_chg());
+        };
+        handle.clear_fn = [](rpc::context&, user& user_inst) { user_inst.get_user_matching_manager().clear_dirty(); };
+        return handle;
+      });
+  owner_->send_all_syn_msg(ctx);
 }
 
 void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,

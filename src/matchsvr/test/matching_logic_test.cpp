@@ -8,7 +8,9 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
+#include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_resource.h>
+#include <atframework/testing/raw_transport.h>
 #include <atframework/testing/runtime.h>
 
 #include <logic/matching/matching_logic.h>
@@ -365,6 +367,19 @@ bool start_runtime(atframework::testing::runtime& runtime) {
   return false;
 }
 
+bool start_wal_runtime(atframework::testing::runtime& runtime) {
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss};
+  const int32_t start_result = runtime.start(options);
+  CASE_EXPECT_EQ(0, start_result);
+  CASE_EXPECT_TRUE(runtime.is_running());
+  if (start_result == 0 && runtime.is_running()) {
+    return true;
+  }
+  CASE_MSG_INFO() << "runtime start failed: " << runtime.get_diagnostic() << '\n';
+  return false;
+}
+
 PROJECT_NAMESPACE_ID::SSMatchingCreateReq make_create_request(uint64_t unit_id, uint64_t user_id, int32_t rank_level,
                                                               int32_t force_type = 0, int32_t matching_pool_id = 1) {
   PROJECT_NAMESPACE_ID::SSMatchingCreateReq result;
@@ -375,7 +390,6 @@ PROJECT_NAMESPACE_ID::SSMatchingCreateReq make_create_request(uint64_t unit_id, 
   protobuf_copy_message(*result.mutable_unit(), make_unit(unit_id, user_id, rank_level, force_type));
   const int32_t default_level_id = matching_pool_id * 100 + 1;
   result.mutable_unit()->set_acceptable_level_ids(0, default_level_id);
-  result.set_preferred_level_id(default_level_id);
   protobuf_copy_message(*result.mutable_operator_user(), result.unit().captain_user_key());
   return result;
 }
@@ -391,20 +405,95 @@ PROJECT_NAMESPACE_ID::SSMatchingCreateReq make_party_create_request(uint64_t uni
   protobuf_copy_message(*result.mutable_unit(),
                         make_party_unit(unit_id, first_user_id, user_count, rank_level, allow_faction_fill));
   result.mutable_unit()->set_acceptable_level_ids(0, 301);
-  result.set_preferred_level_id(301);
   protobuf_copy_message(*result.mutable_operator_user(), result.unit().captain_user_key());
   return result;
 }
 
-void set_request_levels(PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request, int32_t preferred_level_id,
+void set_request_levels(PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request,
                         std::initializer_list<int32_t> acceptable_level_ids) {
-  request.set_preferred_level_id(preferred_level_id);
   request.mutable_unit()->clear_acceptable_level_ids();
   for (int32_t level_id : acceptable_level_ids) {
     request.mutable_unit()->add_acceptable_level_ids(level_id);
   }
 }
 }  // namespace
+
+CASE_TEST(matchsvr_matching_wal, advances_subscriber_cursor_only_after_successful_delivery) {
+  atframework::testing::runtime runtime;
+  if (!start_wal_runtime(runtime)) {
+    return;
+  }
+
+  constexpr uint64_t kLobbyServerId = 0x160001;
+  atfw::testing::mock_node lobby_node;
+  lobby_node.set_id(kLobbyServerId)
+      .set_name("matching-wal-test-lobby")
+      .set_type_id(4097)
+      .set_type_name("matching-wal-test-lobby")
+      .set_zone_id(1);
+  auto remote = runtime.discovery().add_node(lobby_node);
+  CASE_EXPECT_TRUE(!!remote);
+  if (!remote) {
+    runtime.stop();
+    return;
+  }
+
+  auto room = make_room();
+  auto unit = make_unit(1, 10001, 10);
+  const bool unit_added = room.add_unit(unit);
+  CASE_EXPECT_TRUE(unit_added);
+  if (!unit_added) {
+    runtime.stop();
+    return;
+  }
+  rpc::context ctx{rpc::context::create_without_task()};
+  const bool subscribed = room.subscribe(ctx, unit.users(0).user_key(), kLobbyServerId, 0);
+  CASE_EXPECT_TRUE(subscribed);
+  if (!subscribed) {
+    runtime.stop();
+    return;
+  }
+  runtime.transport().clear_history();
+
+  atframework::testing::transport_send_behavior failed_send;
+  failed_send.immediate_error = -12345;
+  auto failed_send_rule = runtime.transport().add_rule(kLobbyServerId, -1, failed_send);
+
+  PROJECT_NAMESPACE_ID::DMatchingEventLog event_log;
+  protobuf_copy_message(*event_log.mutable_add_unit(), unit);
+  room.publish(ctx, std::move(event_log));
+
+  auto subscriber_route = room.get_subscriber_route(unit.users(0).user_key());
+  CASE_EXPECT_TRUE(subscriber_route.has_value());
+  if (subscriber_route.has_value()) {
+    CASE_EXPECT_EQ(kLobbyServerId, subscriber_route->server_id);
+    CASE_EXPECT_EQ(0, subscriber_route->acknowledge_event_id);
+  }
+
+  failed_send_rule.reset();
+  const bool replayed = room.subscribe(ctx, unit.users(0).user_key(), kLobbyServerId, 0);
+  CASE_EXPECT_TRUE(replayed);
+  if (!replayed) {
+    runtime.stop();
+    return;
+  }
+  subscriber_route = room.get_subscriber_route(unit.users(0).user_key());
+  CASE_EXPECT_TRUE(subscriber_route.has_value());
+  if (subscriber_route.has_value()) {
+    CASE_EXPECT_EQ(1, subscriber_route->acknowledge_event_id);
+  }
+  CASE_EXPECT_EQ(2, runtime.transport().outbound_count_to(kLobbyServerId));
+  const auto* failed_record = runtime.transport().outbound_at(0);
+  const auto* replay_record = runtime.transport().outbound_at(1);
+  CASE_EXPECT_TRUE(nullptr != failed_record);
+  CASE_EXPECT_TRUE(nullptr != replay_record);
+  if (nullptr != failed_record && nullptr != replay_record) {
+    CASE_EXPECT_EQ(-12345, failed_record->immediate_error);
+    CASE_EXPECT_EQ(0, replay_record->immediate_error);
+  }
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
 
 CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_and_captain_contract) {
   atframework::testing::runtime runtime;
@@ -449,24 +538,24 @@ CASE_TEST(matchsvr_matching_logic, applies_capacity_rank_template_and_force_limi
   set_single_faction(room, 1, 1);
 
   auto accepted = matching_logic::check_unit_can_join(room, make_unit(2, 10002, 14, 2), 110, 2);
-  CASE_EXPECT_TRUE(accepted.can_join());
-  CASE_EXPECT_EQ(0, accepted.result());
+  CASE_EXPECT_TRUE(accepted.evaluation.can_join());
+  CASE_EXPECT_EQ(0, accepted.evaluation.result());
 
   auto rank_rejected = matching_logic::check_unit_can_join(room, make_unit(3, 10003, 16, 2), 110, 2);
-  CASE_EXPECT_FALSE(rank_rejected.can_join());
+  CASE_EXPECT_FALSE(rank_rejected.evaluation.can_join());
   auto force_rejected = matching_logic::check_unit_can_join(room, make_unit(4, 10004, 12, 1), 110, 2);
-  CASE_EXPECT_FALSE(force_rejected.can_join());
+  CASE_EXPECT_FALSE(force_rejected.evaluation.can_join());
 
   auto oversized = make_unit(5, 10005, 12, 2);
   for (uint64_t user_id = 10006; user_id <= 10008; ++user_id) {
     oversized.add_users()->mutable_user_key()->set_user_id(user_id);
   }
   auto room_full = matching_logic::check_unit_can_join(room, oversized, 110, 2);
-  CASE_EXPECT_FALSE(room_full.can_join());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, room_full.result());
+  CASE_EXPECT_FALSE(room_full.evaluation.can_join());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_FULL, room_full.evaluation.result());
 
   CASE_EXPECT_TRUE(room.add_unit(make_unit(2, 10002, 14, 2)));
-  CASE_EXPECT_TRUE(room.set_faction_assignments(accepted.faction_assignments()));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(accepted.evaluation.faction_assignments()));
   auto ready = matching_logic::check_room_ready(room, 110, 2);
   CASE_EXPECT_TRUE(ready.ready());
   CASE_EXPECT_EQ(1000, ready.result_template_id());
@@ -487,20 +576,22 @@ CASE_TEST(matchsvr_matching_logic, selects_initial_faction_from_template_capacit
   scope.set_matching_pool_id(3);
 
   auto fillable = matching_logic::check_unit_can_create_room(scope, make_party_unit(21, 26001, 2, 10, true), 100, 2);
-  CASE_EXPECT_TRUE(fillable.can_join());
-  CASE_EXPECT_EQ(1, fillable.faction_assignments_size());
-  CASE_EXPECT_EQ(3, fillable.faction_assignments(0).user_capacity());
+  CASE_EXPECT_TRUE(fillable.evaluation.can_join());
+  CASE_EXPECT_EQ(1, fillable.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(3, fillable.evaluation.faction_assignments(0).user_capacity());
+  CASE_EXPECT_EQ(2, fillable.evaluation.faction_assignments(0).assigned_user_count());
 
   auto exclusive = matching_logic::check_unit_can_create_room(scope, make_party_unit(22, 26003, 2, 10, false), 100, 2);
-  CASE_EXPECT_TRUE(exclusive.can_join());
-  CASE_EXPECT_EQ(1, exclusive.faction_assignments_size());
-  CASE_EXPECT_EQ(2, exclusive.faction_assignments(0).user_capacity());
+  CASE_EXPECT_TRUE(exclusive.evaluation.can_join());
+  CASE_EXPECT_EQ(1, exclusive.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(2, exclusive.evaluation.faction_assignments(0).user_capacity());
+  CASE_EXPECT_EQ(2, exclusive.evaluation.faction_assignments(0).assigned_user_count());
 
   scope.set_matching_pool_id(4);
   auto missing_slot =
       matching_logic::check_unit_can_create_room(scope, make_party_unit(23, 26005, 3, 10, true), 100, 3);
-  CASE_EXPECT_FALSE(missing_slot.can_join());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, missing_slot.result());
+  CASE_EXPECT_FALSE(missing_slot.evaluation.can_join());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, missing_slot.evaluation.result());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -519,15 +610,15 @@ CASE_TEST(matchsvr_matching_logic, keeps_template_eligible_until_room_start_thre
 
   auto first_unit = make_unit(24, 27001, 10);
   auto created = matching_logic::check_unit_can_create_room(scope, first_unit, 100, 1);
-  CASE_EXPECT_TRUE(created.can_join());
-  if (!created.can_join()) {
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (!created.evaluation.can_join()) {
     CASE_EXPECT_EQ(0, runtime.stop());
     return;
   }
 
   matching_room room{"start-threshold", scope, 501, 100, 500};
   CASE_EXPECT_TRUE(room.add_unit(std::move(first_unit)));
-  CASE_EXPECT_TRUE(room.set_faction_assignments(created.faction_assignments()));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
 
   auto ready = matching_logic::check_room_ready(room, 100, 1);
   CASE_EXPECT_EQ(0, ready.result());
@@ -535,9 +626,9 @@ CASE_TEST(matchsvr_matching_logic, keeps_template_eligible_until_room_start_thre
 
   auto second_unit = make_unit(25, 27002, 10);
   auto joined = matching_logic::check_unit_can_join(room, second_unit, 162, 2);
-  CASE_EXPECT_TRUE(joined.can_join());
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
   CASE_EXPECT_TRUE(room.add_unit(std::move(second_unit)));
-  CASE_EXPECT_TRUE(room.set_faction_assignments(joined.faction_assignments()));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
 
   ready = matching_logic::check_room_ready(room, 162, 2);
   CASE_EXPECT_EQ(0, ready.result());
@@ -602,14 +693,51 @@ CASE_TEST(matchsvr_matching_logic, rejects_banned_users_wrong_region_and_expired
   protobuf_copy_message(*stored.add_ban_users(), make_unit(2, 10002, 10).users(0).user_key());
   CASE_EXPECT_TRUE(room.add_unit(stored));
   set_single_faction(room, 1, 1);
-  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(2, 10002, 10), 110, 2).can_join());
-  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(3, 10003, 10), 161, 2).can_join());
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(2, 10002, 10), 110, 2).evaluation.can_join());
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(3, 10003, 10), 161, 2).evaluation.can_join());
 
   PROJECT_NAMESPACE_ID::DMatchingScope other_scope = room.get_scope();
   other_scope.set_region("us");
   matching_room other_room{"other-region", other_scope, 1, 100, 300};
   CASE_EXPECT_TRUE(other_room.add_unit(make_unit(4, 10004, 10)));
-  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(other_room, make_unit(5, 10005, 10), 110, 2).can_join());
+  CASE_EXPECT_FALSE(
+      matching_logic::check_unit_can_join(other_room, make_unit(5, 10005, 10), 110, 2).evaluation.can_join());
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, rejects_bidirectional_unit_and_user_history_bans) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  auto stored = make_unit(1, 10001, 10);
+  protobuf_copy_message(*stored.add_ban_users(), make_unit(2, 10002, 10).users(0).user_key());
+  protobuf_copy_message(*stored.mutable_users(0)->add_lasting_ban_users(), make_unit(4, 10004, 10).users(0).user_key());
+  protobuf_copy_message(*stored.mutable_users(0)->add_last_battle_users(), make_unit(6, 10006, 10).users(0).user_key());
+  auto room = make_room();
+  CASE_EXPECT_TRUE(room.add_unit(stored));
+  set_single_faction(room, 1, 1);
+
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(2, 10002, 10), 110, 2).evaluation.can_join());
+
+  auto unit_bans_existing = make_unit(3, 10003, 10);
+  protobuf_copy_message(*unit_bans_existing.add_ban_users(), stored.users(0).user_key());
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, unit_bans_existing, 110, 2).evaluation.can_join());
+
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(4, 10004, 10), 110, 2).evaluation.can_join());
+
+  auto lasting_bans_existing = make_unit(5, 10005, 10);
+  protobuf_copy_message(*lasting_bans_existing.mutable_users(0)->add_lasting_ban_users(), stored.users(0).user_key());
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, lasting_bans_existing, 110, 2).evaluation.can_join());
+
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, make_unit(6, 10006, 10), 110, 2).evaluation.can_join());
+
+  auto last_battle_with_existing = make_unit(7, 10007, 10);
+  protobuf_copy_message(*last_battle_with_existing.mutable_users(0)->add_last_battle_users(),
+                        stored.users(0).user_key());
+  CASE_EXPECT_FALSE(matching_logic::check_unit_can_join(room, last_battle_with_existing, 110, 2).evaluation.can_join());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -741,14 +869,61 @@ CASE_TEST(matchsvr_matching_logic, creates_a_second_incomplete_faction_when_exis
   CASE_EXPECT_TRUE(room.set_faction_assignments(initial_assignments));
 
   const auto accepted = matching_logic::check_unit_can_join(room, make_party_unit(2, 23003, 2, 10, true), 110, 4);
-  CASE_EXPECT_TRUE(accepted.can_join());
-  CASE_EXPECT_EQ(2, accepted.faction_assignments_size());
-  CASE_EXPECT_EQ(3, accepted.faction_assignments(1).user_capacity());
+  CASE_EXPECT_TRUE(accepted.evaluation.can_join());
+  CASE_EXPECT_EQ(2, accepted.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(3, accepted.evaluation.faction_assignments(1).user_capacity());
+  CASE_EXPECT_EQ(2, accepted.evaluation.faction_assignments(1).assigned_user_count());
 
   const auto completed = matching_logic::check_unit_can_join(room, make_party_unit(3, 23005, 1, 10, true), 110, 3);
-  CASE_EXPECT_TRUE(completed.can_join());
-  CASE_EXPECT_EQ(1, completed.faction_assignments_size());
-  CASE_EXPECT_EQ(2, completed.faction_assignments(0).unit_ids_size());
+  CASE_EXPECT_TRUE(completed.evaluation.can_join());
+  CASE_EXPECT_EQ(1, completed.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(2, completed.evaluation.faction_assignments(0).unit_ids_size());
+  CASE_EXPECT_EQ(3, completed.evaluation.faction_assignments(0).assigned_user_count());
+  CASE_EXPECT_TRUE(completed.progress.has_faction);
+  CASE_EXPECT_TRUE(completed.progress.joins_existing);
+  CASE_EXPECT_TRUE(completed.progress.completes_faction);
+  CASE_EXPECT_EQ(0, completed.progress.remaining_user_count);
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, rebalance_unit_only_fills_an_existing_faction) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(3);
+
+  matching_room room{"rebalance-existing-faction-only", scope, 301, 100, 300};
+  CASE_EXPECT_TRUE(room.add_unit(make_party_unit(1, 23101, 2, 10, true)));
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment> initial_assignments;
+  auto* faction = initial_assignments.Add();
+  faction->set_user_capacity(3);
+  faction->add_unit_ids(1);
+  CASE_EXPECT_TRUE(room.set_faction_assignments(initial_assignments));
+
+  const auto would_create_faction =
+      matching_logic::check_unit_can_join_for_rebalance(room, make_party_unit(2, 23103, 2, 10, true), 110, 4);
+  CASE_EXPECT_FALSE(would_create_faction.evaluation.can_join());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND, would_create_faction.evaluation.result());
+  CASE_EXPECT_EQ(0, would_create_faction.evaluation.faction_assignments_size());
+  CASE_EXPECT_FALSE(would_create_faction.progress.has_faction);
+
+  const auto fills_existing =
+      matching_logic::check_unit_can_join_for_rebalance(room, make_party_unit(3, 23105, 1, 10, true), 110, 3);
+  CASE_EXPECT_TRUE(fills_existing.evaluation.can_join());
+  CASE_EXPECT_EQ(1, fills_existing.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(2, fills_existing.evaluation.faction_assignments(0).unit_ids_size());
+  CASE_EXPECT_EQ(3, fills_existing.evaluation.faction_assignments(0).unit_ids(1));
+  CASE_EXPECT_TRUE(fills_existing.progress.has_faction);
+  CASE_EXPECT_TRUE(fills_existing.progress.joins_existing);
+  CASE_EXPECT_TRUE(fills_existing.progress.completes_faction);
+  CASE_EXPECT_EQ(0, fills_existing.progress.remaining_user_count);
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -777,12 +952,13 @@ CASE_TEST(matchsvr_matching_logic, fills_the_pending_faction_before_opening_anot
   CASE_EXPECT_TRUE(room.set_faction_assignments(initial_assignments));
 
   auto joined = matching_logic::check_unit_can_join(room, make_party_unit(3, 30003, 1, 10, true), 110, 3);
-  CASE_EXPECT_TRUE(joined.can_join());
-  CASE_EXPECT_EQ(1, joined.faction_assignments_size());
-  CASE_EXPECT_EQ(3, joined.faction_assignments(0).unit_ids_size());
-  CASE_EXPECT_EQ(1, joined.faction_assignments(0).unit_ids(0));
-  CASE_EXPECT_EQ(2, joined.faction_assignments(0).unit_ids(1));
-  CASE_EXPECT_EQ(3, joined.faction_assignments(0).unit_ids(2));
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_EQ(1, joined.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(0).unit_ids_size());
+  CASE_EXPECT_EQ(1, joined.evaluation.faction_assignments(0).unit_ids(0));
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(0).unit_ids(1));
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(0).unit_ids(2));
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(0).assigned_user_count());
 
   matching_room create_faction_room{"create-faction", scope, 301, 100, 300};
   CASE_EXPECT_TRUE(create_faction_room.add_unit(make_party_unit(11, 31001, 2, 10, true)));
@@ -796,10 +972,10 @@ CASE_TEST(matchsvr_matching_logic, fills_the_pending_faction_before_opening_anot
   CASE_EXPECT_TRUE(create_faction_room.set_faction_assignments(create_faction_assignments));
 
   joined = matching_logic::check_unit_can_join(create_faction_room, make_party_unit(12, 31003, 2, 10, true), 110, 4);
-  CASE_EXPECT_TRUE(joined.can_join());
-  CASE_EXPECT_EQ(2, joined.faction_assignments_size());
-  CASE_EXPECT_EQ(11, joined.faction_assignments(0).unit_ids(0));
-  CASE_EXPECT_EQ(12, joined.faction_assignments(1).unit_ids(0));
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(11, joined.evaluation.faction_assignments(0).unit_ids(0));
+  CASE_EXPECT_EQ(12, joined.evaluation.faction_assignments(1).unit_ids(0));
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -832,7 +1008,7 @@ CASE_TEST(matchsvr_matching_logic, does_not_rebuild_factions_after_incremental_a
   CASE_EXPECT_TRUE(room.set_faction_assignments(initial_assignments));
 
   auto joined = matching_logic::check_unit_can_join(room, make_party_unit(4, 32005, 2, 10, true), 110, 6);
-  CASE_EXPECT_FALSE(joined.can_join());
+  CASE_EXPECT_FALSE(joined.evaluation.can_join());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -860,10 +1036,10 @@ CASE_TEST(matchsvr_matching_logic, keeps_created_faction_capacity_when_larger_te
   CASE_EXPECT_TRUE(room.set_faction_assignments(initial_assignments));
 
   const auto joined = matching_logic::check_unit_can_join(room, make_party_unit(3, 33003, 1, 10, true), 110, 3);
-  CASE_EXPECT_TRUE(joined.can_join());
-  CASE_EXPECT_EQ(2, joined.faction_assignments_size());
-  CASE_EXPECT_EQ(2, joined.faction_assignments(0).user_capacity());
-  CASE_EXPECT_EQ(2, joined.faction_assignments(1).user_capacity());
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(0).user_capacity());
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(1).user_capacity());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -929,14 +1105,19 @@ CASE_TEST(matchsvr_matching_logic, moves_a_complete_faction_without_merging_or_s
   source_units.emplace_back(make_party_unit(12, 35103, 1, 10, true));
   const auto source_view = make_unit_view(source_units);
   const auto joined = matching_logic::check_faction_can_join(target, source_view, 3, 110, 5);
-  CASE_EXPECT_TRUE(joined.can_join());
-  CASE_EXPECT_EQ(2, joined.faction_assignments_size());
-  CASE_EXPECT_EQ(1, joined.faction_assignments(0).unit_ids_size());
-  CASE_EXPECT_EQ(10, joined.faction_assignments(0).unit_ids(0));
-  CASE_EXPECT_EQ(2, joined.faction_assignments(1).unit_ids_size());
-  CASE_EXPECT_EQ(11, joined.faction_assignments(1).unit_ids(0));
-  CASE_EXPECT_EQ(12, joined.faction_assignments(1).unit_ids(1));
-  CASE_EXPECT_EQ(3, joined.faction_assignments(1).user_capacity());
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments_size());
+  CASE_EXPECT_EQ(1, joined.evaluation.faction_assignments(0).unit_ids_size());
+  CASE_EXPECT_EQ(10, joined.evaluation.faction_assignments(0).unit_ids(0));
+  CASE_EXPECT_EQ(2, joined.evaluation.faction_assignments(1).unit_ids_size());
+  CASE_EXPECT_EQ(11, joined.evaluation.faction_assignments(1).unit_ids(0));
+  CASE_EXPECT_EQ(12, joined.evaluation.faction_assignments(1).unit_ids(1));
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(1).user_capacity());
+  CASE_EXPECT_EQ(3, joined.evaluation.faction_assignments(1).assigned_user_count());
+  CASE_EXPECT_TRUE(joined.progress.has_faction);
+  CASE_EXPECT_FALSE(joined.progress.joins_existing);
+  CASE_EXPECT_TRUE(joined.progress.completes_faction);
+  CASE_EXPECT_EQ(0, joined.progress.remaining_user_count);
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -952,20 +1133,20 @@ CASE_TEST(matchsvr_matching_manager, intersects_level_candidates_inside_one_coar
   rpc::context ctx{rpc::context::create_without_task()};
 
   auto first = make_create_request(801, 98001, 10, 0, 2);
-  set_request_levels(first, 201, {202, 201, 202});
+  set_request_levels(first, {202, 201, 202});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot first_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, first, first_response));
   CASE_EXPECT_EQ(201, first_response.snapshot().selected_level_id());
 
   auto overlapping = make_create_request(802, 98002, 11, 0, 2);
-  set_request_levels(overlapping, 203, {203, 202});
+  set_request_levels(overlapping, {203, 202});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot overlapping_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, overlapping, overlapping_response));
   CASE_EXPECT_EQ(first_response.snapshot().matching_id(), overlapping_response.snapshot().matching_id());
   CASE_EXPECT_EQ(202, overlapping_response.snapshot().selected_level_id());
 
   auto disjoint = make_create_request(803, 98003, 12, 0, 2);
-  set_request_levels(disjoint, 203, {203});
+  set_request_levels(disjoint, {203});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot disjoint_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, disjoint, disjoint_response));
   CASE_EXPECT_TRUE(first_response.snapshot().matching_id() != disjoint_response.snapshot().matching_id());
@@ -986,7 +1167,6 @@ CASE_TEST(matchsvr_matching_manager, rejects_create_without_level_candidates) {
   manager->clear();
   rpc::context ctx{rpc::context::create_without_task()};
   auto request = make_create_request(804, 98004, 10, 0, 2);
-  request.set_preferred_level_id(207);
   request.mutable_unit()->clear_acceptable_level_ids();
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
@@ -1062,13 +1242,9 @@ CASE_TEST(matchsvr_matching_manager, rejects_conflicts_and_unauthorized_operatio
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
                  manager->create_matching(ctx, invalid_scope, conflict_response));
   auto cross_pool_level = make_create_request(13, 20003, 10);
-  set_request_levels(cross_pool_level, 201, {201});
+  set_request_levels(cross_pool_level, {201});
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
                  manager->create_matching(ctx, cross_pool_level, conflict_response));
-  auto invalid_preferred_level = make_create_request(14, 20004, 10);
-  invalid_preferred_level.set_preferred_level_id(102);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
-                 manager->create_matching(ctx, invalid_preferred_level, conflict_response));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_CONFLICT,
                  manager->create_matching(ctx, request, conflict_response));
 
@@ -1108,7 +1284,7 @@ CASE_TEST(matchsvr_matching_manager, rejects_first_unit_that_cannot_fit_any_fact
   rpc::context ctx{rpc::context::create_without_task()};
   auto request = make_party_create_request(20, 25001, 3, 10);
   request.mutable_scope()->set_matching_pool_id(4);
-  set_request_levels(request, 401, {401});
+  set_request_levels(request, {401});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
 
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND,
@@ -1326,6 +1502,70 @@ CASE_TEST(matchsvr_matching_manager, fills_an_older_target_with_multiple_atoms_i
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
+CASE_TEST(matchsvr_matching_manager, rebalances_from_oldest_compatible_donor_first) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  auto manager = matching_manager::me();
+  manager->clear();
+  atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
+  rpc::context ctx{rpc::context::create_without_task()};
+
+  auto target_request = make_create_request(34, 40101, 0, 0, 5);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot target_response;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, target_request, target_response));
+  const std::string target_matching_id = target_response.snapshot().matching_id();
+
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{1});
+  auto older_donor_request = make_create_request(35, 40102, 100, 0, 5);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot older_donor_response;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, older_donor_request, older_donor_response));
+  const std::string older_donor_matching_id = older_donor_response.snapshot().matching_id();
+
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{2});
+  auto newer_donor_request = make_create_request(36, 40103, 200, 0, 5);
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot newer_donor_response;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, newer_donor_request, newer_donor_response));
+  const std::string newer_donor_matching_id = newer_donor_response.snapshot().matching_id();
+  CASE_EXPECT_TRUE(target_matching_id != older_donor_matching_id);
+  CASE_EXPECT_TRUE(target_matching_id != newer_donor_matching_id);
+  CASE_EXPECT_TRUE(older_donor_matching_id != newer_donor_matching_id);
+
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{63});
+  PROJECT_NAMESPACE_ID::SSMatchingCheckReq target_check;
+  target_check.set_matching_id(target_matching_id);
+  target_check.set_unit_id(target_request.unit().unit_id());
+  protobuf_copy_message(*target_check.mutable_operator_user(), target_request.operator_user());
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot target_checked_response;
+  CASE_EXPECT_EQ(0, manager->check_matching(ctx, target_check, target_checked_response));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING, target_checked_response.snapshot().status());
+
+  PROJECT_NAMESPACE_ID::SSMatchingCheckReq older_donor_check;
+  older_donor_check.set_matching_id(older_donor_matching_id);
+  older_donor_check.set_unit_id(older_donor_request.unit().unit_id());
+  protobuf_copy_message(*older_donor_check.mutable_operator_user(), older_donor_request.operator_user());
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot older_donor_checked_response;
+  CASE_EXPECT_EQ(0, manager->check_matching(ctx, older_donor_check, older_donor_checked_response));
+  CASE_EXPECT_EQ(target_matching_id, older_donor_checked_response.snapshot().matching_id());
+
+  PROJECT_NAMESPACE_ID::SSMatchingCheckReq newer_donor_check;
+  newer_donor_check.set_matching_id(newer_donor_matching_id);
+  newer_donor_check.set_unit_id(newer_donor_request.unit().unit_id());
+  protobuf_copy_message(*newer_donor_check.mutable_operator_user(), newer_donor_request.operator_user());
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot newer_donor_checked_response;
+  CASE_EXPECT_EQ(0, manager->check_matching(ctx, newer_donor_check, newer_donor_checked_response));
+  CASE_EXPECT_EQ(newer_donor_matching_id, newer_donor_checked_response.snapshot().matching_id());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING,
+                 newer_donor_checked_response.snapshot().status());
+
+  atfw::util::time::time_utility::reset_global_now_offset();
+  manager->clear();
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
 CASE_TEST(matchsvr_matching_manager, target_rebalance_does_not_create_a_new_incomplete_faction) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
@@ -1437,8 +1677,8 @@ CASE_TEST(matchsvr_matching_manager, rejects_rebalance_when_level_candidate_inte
 
   auto target_one = make_create_request(811, 98101, 100, 0, 2);
   auto target_two = make_create_request(812, 98102, 102, 0, 2);
-  set_request_levels(target_one, 201, {201});
-  set_request_levels(target_two, 201, {201});
+  set_request_levels(target_one, {201});
+  set_request_levels(target_two, {201});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot target_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, target_one, target_response));
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, target_two, target_response));
@@ -1447,7 +1687,7 @@ CASE_TEST(matchsvr_matching_manager, rejects_rebalance_when_level_candidate_inte
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{1});
   auto source = make_create_request(813, 98103, 0, 0, 2);
-  set_request_levels(source, 202, {202});
+  set_request_levels(source, {202});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot source_response;
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, source, source_response));
   const std::string source_matching_id = source_response.snapshot().matching_id();
@@ -1485,7 +1725,7 @@ CASE_TEST(matchsvr_matching_manager, isolates_rooms_by_every_coarse_scope_dimens
 
   auto different_level = make_create_request(42, 50002, 10, 0, 2);
   different_level.mutable_scope()->set_level_type(2);
-  set_request_levels(different_level, 208, {208});
+  set_request_levels(different_level, {208});
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, different_level, response));
   auto different_region = make_create_request(43, 50003, 10, 0, 2);
   different_region.mutable_scope()->set_region("us");
