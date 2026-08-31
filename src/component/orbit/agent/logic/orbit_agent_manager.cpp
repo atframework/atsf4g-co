@@ -1154,7 +1154,9 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
       // 创建流程
       loop_ = new uv_loop_t();
       uv_loop_init(loop_);
-      orbit_agent_manager::me()->uv_loop_queue_.emplace(worker_unique_id, uv_loop_data{loop_});
+      uv_loop_data loop_data;
+      loop_data.loop_ = loop_;
+      orbit_agent_manager::me()->uv_loop_queue_.emplace(worker_unique_id, loop_data);
       worker_pool->add_tick_callback(worker_tick_callback, worker_ctx);
     } else {
       loop_ = accessor->second.loop_;
