@@ -220,7 +220,7 @@ atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
     }
 
     // 检查Tags标签
-    if (!match_tag.empty() && !load.tag().empty()) {
+    if (!match_tag.empty()) {
       if (load.tag() != match_tag) {
         continue;
       }

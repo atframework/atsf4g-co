@@ -49,7 +49,8 @@ orbit_room::orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
                        const PROJECT_NAMESPACE_ID::DOrbitRoomInitData& room_data)
     : room_key_(room_key), room_data_(room_data) {
   channel_key_.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
-  channel_key_.set_channel_id(rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
+  channel_key_.set_channel_id(
+      rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
   subscriber_key_ = atfw::util::string::format("orbit_room");
 }
 
@@ -153,7 +154,7 @@ int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t matc
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
   subscriber_ = rpc::dtmq::client_subscriber::create(channel_key_, subscribe_options);
   if (!subscriber_) {
-    FWLOGERROR("Failed to create world chat channel {}:{}, maybe configure is missing.", channel_key_.channel_type(),
+    FWLOGERROR("Failed to create client_subscriber {}:{}, maybe configure is missing.", channel_key_.channel_type(),
                channel_key_.channel_id());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
   }
@@ -180,6 +181,11 @@ rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const atfw::or
     FWLOGERROR("orbit_room {} start_client failed, ret: {}", get_client_id(), ret);
     room_finish(ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED);
     RPC_RETURN_CODE(ret);
+  }
+  // 检查超时
+  if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED != room_status_) {
+    FWLOGERROR("orbit_room {} start_client failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID);
   }
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_LOADING);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -314,7 +320,7 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
               continue;
             }
             user_iter->second->init_retry_count_++;
-            if (user_iter->second->init_retry_count_ > 3) {
+            if (user_iter->second->init_retry_count_ >= 3) {
               FWLOGERROR("orbit_room {} user_init failed, user init retry count exceeded, user_key: {}",
                          room_ptr->get_client_id(), user_data.user_key().user_key().user_id());
               user_iter->second->finish_ = true;
@@ -361,7 +367,7 @@ int32_t orbit_room::on_user_finish(
     rpc::context& ctx,
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results) {
   if (results.empty()) {
-    FWLOGWARNING("orbit_room {} on_user_finish with empty results, room will exit directly", get_client_id());
+    FWLOGWARNING("orbit_room {} on_user_finish with empty results", get_client_id());
     return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_FINISH_RESULT_EMPTY;
   }
 

@@ -72,6 +72,10 @@ ORBIT_SERVER_SERVICE_API void orbit_server_manager::tick() {
 ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_client(
     rpc::context& ctx, const std::string& region, const atfw::orbit::DAgentClientStartArgs& args) {
   const std::string& client_id = args.client_start_args().client_id().client_id();
+  if (client_id.empty()) {
+    FWLOGERROR("orbit start_client rejected: client_id is empty");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ != nullptr) {
     FWLOGERROR("already found client info for client identity {}", client_id);
@@ -109,9 +113,15 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
     erase_client_info(client_id);
     RPC_RETURN_CODE(rpc_result);
   }
-  client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_STARTING;
+  if (client_info_ptr_->status == EnClientStatus::EN_CLIENT_STATUS_START_CONFIRMING) {
+    client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_STARTING;
+  }
   client_info_ptr_->client_identity = rsp->client_identity();
-  add_client_timeout(client_info_ptr_);
+  if (args.startup_timeout_sec() > 0) {
+    add_client_timeout(client_info_ptr_, args.startup_timeout_sec() + 10);  // 容忍时间
+  } else {
+    add_client_timeout(client_info_ptr_);  // 保底超时
+  }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
@@ -253,8 +263,9 @@ void orbit_server_manager::server_heartbeat() {
     for (auto agent_id : iter.second) {
       req->add_agent_identity()->set_agent_server_id(agent_id);
     }
-    int32_t rpc_result =
-        rpc::servertocontrollerservice::server_heartbeat(logic_server_get_current_tick_context(), controller_server_id, *req).unwrap();
+    int32_t rpc_result = rpc::servertocontrollerservice::server_heartbeat(logic_server_get_current_tick_context(),
+                                                                          controller_server_id, *req)
+                             .unwrap();
     if (rpc_result < 0) {
       FWLOGERROR("orbit server_heartbeat failed to controller {:#x}, res: {}", controller_server_id, rpc_result);
     }
@@ -317,11 +328,14 @@ void orbit_server_manager::erase_client_info(const std::string& client_id) {
   }
 }
 
-void orbit_server_manager::add_client_timeout(const client_info_ptr& client) {
+void orbit_server_manager::add_client_timeout(const client_info_ptr& client, time_t timeout_sec) {
   if (client == nullptr) {
     return;
   }
-  client->timeout_exit_time = atfw::util::time::time_utility::get_sys_now() + client_timeout_sec_;
+  if (timeout_sec <= 0) {
+    timeout_sec = client_timeout_sec_;
+  }
+  client->timeout_exit_time = atfw::util::time::time_utility::get_sys_now() + timeout_sec;
   // 加入到超时检查内
   timeout_client_queue_.emplace_back(
       client_timeout_info{.client_info_weak_ptr = client, .timeout_exit_time = client->timeout_exit_time});
@@ -398,13 +412,20 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_clie
     FWLOGERROR("not found client info for client identity {}", client_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_FOUND);
   }
-  if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_STARTING) {
+  if (client_info_ptr_->status == EnClientStatus::EN_CLIENT_STATUS_RUNNING) {
+    FWLOGINFO("client {} already in running status, current status: {}", client_id,
+              static_cast<int>(client_info_ptr_->status));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+  if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_STARTING &&
+      client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_START_CONFIRMING) {
     FWLOGERROR("client {} is not in starting status, current status: {}", client_id,
                static_cast<int>(client_info_ptr_->status));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_RUNNING);
   }
   client_info_ptr_->client_identity = req.client_identity();
   client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_RUNNING;
+  add_client_timeout(client_info_ptr_);
   if (on_client_start_notify_) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(on_client_start_notify_(ctx, client_id, req.client_addr(), req.data())));
   }
@@ -437,8 +458,10 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_clie
       FWLOGERROR("failed to find client info for client identity {}", id);
       continue;
     }
-    // 刷新心跳时间
-    add_client_timeout(client_info_ptr_);
+    // 刷新心跳时间 非running 来检查启动超时
+    if (client_info_ptr_->status == EnClientStatus::EN_CLIENT_STATUS_RUNNING) {
+      add_client_timeout(client_info_ptr_);
+    }
   }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

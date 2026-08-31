@@ -129,7 +129,7 @@ class main_service_module : public atfw::atapp::module_impl {
 
     rpc::context ctx{rpc::context::create_without_task()};
     auto invoke_result = rpc::async_invoke(
-        ctx, "lobbysvr.orbit_start_client",
+        ctx, "orbitsvr.orbit_start_client",
         [region = std::move(region), client_id = std::move(client_id),
          match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
           atfw::orbit::DAgentClientStartArgs request;

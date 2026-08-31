@@ -22,6 +22,12 @@ vector:
   enabled: false
   log_path: /data/atframework/publish/orbit-agent/log
 
+# 禁用扩缩容线程 大于 max_batch_startup_count
+atapp:
+  worker_pool:
+    worker_number_min: 4
+    worker_number_max: 4
+
 orbit_agent:
   region: default
   tag: ""

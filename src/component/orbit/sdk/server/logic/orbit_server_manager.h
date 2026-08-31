@@ -136,7 +136,7 @@ class orbit_server_manager {
   void check_client_timeout();
 
   client_info_ptr get_client_info(const std::string& client_id);
-  void add_client_timeout(const client_info_ptr& client);
+  void add_client_timeout(const client_info_ptr& client, time_t timeout_sec = 0);
   void erase_client_info(const std::string& client_id);
 
   static uint64_t select_controller_server_id(const std::string& client_id, const std::string& region);

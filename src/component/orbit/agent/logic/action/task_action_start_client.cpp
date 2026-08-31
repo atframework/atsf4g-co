@@ -39,6 +39,8 @@ task_action_start_client::result_type task_action_start_client::operator()() {
 
   int32_t rpc_result =
       RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->handle_start_client(get_shared_context(), req_body, rsp_body));
+  orbit_agent_manager::me()->update_etcd_load_snapshot();
+  *rsp_body.mutable_load_record() = orbit_agent_manager::me()->get_load_record();
   TASK_ACTION_RETURN_CODE(rpc_result);
 }
 

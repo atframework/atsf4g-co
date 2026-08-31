@@ -7,6 +7,7 @@
 #include <uv.h>
 
 #include <tbb/concurrent_hash_map.h>
+#include <tbb/concurrent_set.h>
 #include <tbb/concurrent_queue.h>
 
 #include <atframe/atapp.h>
@@ -62,7 +63,8 @@ struct orbit_agent_client_record {
 
   // 进程管理
   int64_t process_id = 0;
-  uv_process_t* process_handle = nullptr;  ///< 进程句柄，由 libuv 生命周期管理，spawn 后有效
+  ///< 进程句柄，由 libuv 生命周期管理，spawn 后有效 对于他的操作都需要在worker线程上
+  uv_process_t* process_handle_main_thread = nullptr;
 
   time_t start_timepoint = 0;          ///< 启动时间点 (unix sec)
   uint64_t startup_timeout_sec = 0;    ///< STARTING 状态最大等待时间 (秒)
@@ -129,6 +131,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   orbit_agent_client_record_ptr find_client(const std::string& client_id) noexcept;
   orbit_agent_client_record_ptr find_client(const std::string& client_id) const noexcept;
 
+  void update_etcd_load_snapshot();
+  const atfw::orbit::DAgentEtcdLoadRecord& get_load_record() const noexcept { return load_record_; }
+
  private:
   int startup_seed_client();
 
@@ -157,7 +162,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void check_client_timeouts(time_t now);
   void check_client_force_kill(time_t now);
   void check_server_identity_timeouts(time_t now);
-  static int kill_client_process(const orbit_agent_client_record_ptr& client_record, int signal_number,
+  int kill_client_process(const orbit_agent_client_record_ptr& client_record, int signal_number,
                                  atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   void server_heartbeat(const atfw::orbit::DServerIdentity& server_identity);
@@ -166,7 +171,6 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   atfw::orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
   void on_client_process_exit(const orbit_agent_client_record_ptr& record, int64_t exit_status, int term_signal);
 
-  void update_etcd_load_snapshot();
   void load_record_to_json();
   void try_sync_load_to_etcd();
 
@@ -184,7 +188,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
     int32_t uv_result = 0;
   };
   struct process_exit_action_t {
-    uv_process_t* handle_ = nullptr;
+    std::string client_id;
     int64_t exit_status_ = 0;
     int term_signal_ = 0;
   };
@@ -196,6 +200,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void process_uv_actions();
   void process_spawn_completion(const spawn_completion_t& completion);
   void process_exit_action(const process_exit_action_t& action);
+  static void delete_uv_process_handle(uv_process_t* process_handle);
   static void worker_exit_callback(const atfw::atapp::worker_context& worker_ctx);
   static void worker_tick_callback(const atfw::atapp::worker_context& worker_ctx);
   int32_t spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line, bool detached);
@@ -261,6 +266,11 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   uint64_t sequence_allocator_ = 0;
 
   std::deque<server_identity_timeout_entry_t> server_identity_timeout_queue_;
-  tbb::concurrent_hash_map<uint64_t, uv_loop_t*> uv_loop_queue_;
+  struct uv_loop_data {
+    uv_loop_t* loop_ = nullptr;
+    std::unordered_set<uv_process_t*> process_handles_;
+  };
+  tbb::concurrent_hash_map<uint64_t, uv_loop_data> uv_loop_queue_;
+  tbb::concurrent_hash_map<uv_process_t*, int> need_kill_process_;
   tbb::concurrent_queue<uv_action_t> uv_actions_;
 };
