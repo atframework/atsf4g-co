@@ -270,7 +270,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
     uv_loop_t* loop_ = nullptr;
     std::unordered_set<uv_process_t*> process_handles_;
   };
-  tbb::concurrent_hash_map<uint64_t, uv_loop_data> uv_loop_queue_;
+  tbb::concurrent_hash_map<uint64_t, std::shared_ptr<uv_loop_data>> uv_loop_queue_;
   tbb::concurrent_hash_map<uv_process_t*, int> need_kill_process_;
   tbb::concurrent_queue<uv_action_t> uv_actions_;
 };

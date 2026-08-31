@@ -1099,14 +1099,14 @@ void orbit_agent_manager::delete_uv_process_handle(uv_process_t* process_handle)
 void orbit_agent_manager::worker_exit_callback(const atfw::atapp::worker_context& worker_ctx) {
   uint64_t worker_unique_id = worker_ctx.worker_unique_id;
   uv_loop_t* loop_ = nullptr;
-  tbb::concurrent_hash_map<uint64_t, uv_loop_data>::accessor accessor;
+  tbb::concurrent_hash_map<uint64_t, std::shared_ptr<uv_loop_data>>::accessor accessor;
   if (orbit_agent_manager::me()->uv_loop_queue_.find(accessor, worker_unique_id)) {
-    loop_ = accessor->second.loop_;
+    loop_ = accessor->second->loop_;
     // 处理所有还未退出的子进程
-    for (uv_process_t* process_handle : accessor->second.process_handles_) {
+    for (uv_process_t* process_handle : accessor->second->process_handles_) {
       delete_uv_process_handle(process_handle);
     }
-    accessor->second.process_handles_.clear();
+    accessor->second->process_handles_.clear();
     uv_stop(loop_);
     uv_loop_close(loop_);
     delete loop_;
@@ -1118,10 +1118,10 @@ void orbit_agent_manager::worker_tick_callback(const atfw::atapp::worker_context
   // 处理need_kill进程
   uv_loop_t* loop_ = nullptr;
   {
-    tbb::concurrent_hash_map<uint64_t, uv_loop_data>::accessor tick_accessor;
+    tbb::concurrent_hash_map<uint64_t, std::shared_ptr<uv_loop_data>>::accessor tick_accessor;
     if (orbit_agent_manager::me()->uv_loop_queue_.find(tick_accessor, worker_ctx.worker_unique_id)) {
-      loop_ = tick_accessor->second.loop_;
-      for (uv_process_t* process_handle : tick_accessor->second.process_handles_) {
+      loop_ = tick_accessor->second->loop_;
+      for (uv_process_t* process_handle : tick_accessor->second->process_handles_) {
         tbb::concurrent_hash_map<uv_process_t*, int>::accessor kill_process_accessor;
         if (orbit_agent_manager::me()->need_kill_process_.find(kill_process_accessor, process_handle)) {
           // 需要kill的进程
@@ -1148,18 +1148,18 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
   auto spawn_func = [client_id_copy = client_id, launch_arguments = std::move(command_line), worker_pool,
                      detached](const atfw::atapp::worker_context& worker_ctx) mutable {
     uint64_t worker_unique_id = worker_ctx.worker_unique_id;
-    uv_loop_t* loop_ = nullptr;
-    tbb::concurrent_hash_map<uint64_t, uv_loop_data>::accessor accessor;
+    tbb::concurrent_hash_map<uint64_t, std::shared_ptr<uv_loop_data>>::accessor accessor;
+    std::shared_ptr<uv_loop_data> loop_data_ptr = nullptr;
     if (!orbit_agent_manager::me()->uv_loop_queue_.find(accessor, worker_unique_id)) {
       // 创建流程
-      loop_ = new uv_loop_t();
+      uv_loop_t* loop_ = new uv_loop_t();
       uv_loop_init(loop_);
-      uv_loop_data loop_data;
-      loop_data.loop_ = loop_;
-      orbit_agent_manager::me()->uv_loop_queue_.emplace(worker_unique_id, loop_data);
+      loop_data_ptr = std::make_shared<uv_loop_data>();
+      loop_data_ptr->loop_ = loop_;
+      orbit_agent_manager::me()->uv_loop_queue_.emplace(worker_unique_id, loop_data_ptr);
       worker_pool->add_tick_callback(worker_tick_callback, worker_ctx);
     } else {
-      loop_ = accessor->second.loop_;
+      loop_data_ptr = accessor->second;
     }
 
     std::vector<char*> launch_argv;
@@ -1195,7 +1195,7 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
     }
 
     FWLOGINFO("orbit agent spawning client {} by command {}", client_id_copy, command_line_str);
-    int uv_result = uv_spawn(loop_, process_handle, &options);
+    int uv_result = uv_spawn(loop_data_ptr->loop_, process_handle, &options);
 
     spawn_completion_t completion;
     completion.client_id = client_id_copy;  // record is not captured in the lambda anymore
@@ -1207,7 +1207,7 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
         completion.process_id = static_cast<int64_t>(process_handle->pid);
       }
       // 塞入handle列表
-      accessor->second.process_handles_.insert(process_handle);
+      loop_data_ptr->process_handles_.insert(process_handle);
       FWLOGINFO("orbit agent started client {} with pid {} by command {}", client_id_copy, completion.process_id,
                 command_line_str);
     } else {
@@ -1293,9 +1293,9 @@ void orbit_agent_manager::on_uv_process_exit(uv_process_t* process_handle, int64
   delete_uv_process_handle(process_handle);
   {
     // 删除handle缓存
-    tbb::concurrent_hash_map<uint64_t, uv_loop_data>::accessor accessor;
+    tbb::concurrent_hash_map<uint64_t, std::shared_ptr<uv_loop_data>>::accessor accessor;
     if (orbit_agent_manager::me()->uv_loop_queue_.find(accessor, worker_unique_id)) {
-      accessor->second.process_handles_.erase(process_handle);
+      accessor->second->process_handles_.erase(process_handle);
     }
   }
   uv_actions_.push(std::move(action));
