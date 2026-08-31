@@ -9,7 +9,7 @@ libatbus, libatapp, libcopp, and other atframework components. It provides a com
 high-performance game server architectures.
 
 - **Repository**: <https://github.com/atframework/atsf4g-co>
-- **Languages**: C++ (C++17 required, C++17/C++20/C++23 features used when available)
+- **Languages**: C++ (C++17-capable build toolchain; new and modified project-owned C++ uses a C++14-compatible subset)
 
 ## Project Map
 
@@ -41,6 +41,11 @@ high-performance game server architectures.
 - Before a nontrivial plan or edit, inspect the relevant code, configs, docs, generated sources, tests, and current
   official docs for mutable external behavior. Separate verified facts from assumptions, then state the smallest plan
   and verification path; do not invent behavior from memory.
+- Keep new and modified project-owned C++ in this root repository source-compatible with C++14, including tests and
+  templates that emit C++. A build configured for a newer standard does not permit post-C++14 syntax or standard-library
+  APIs. Use existing compatibility wrappers or C++14 forms; if dependency integration requires a newer facility,
+  isolate it behind a standard-version guard and keep an equivalent C++14 path. See `engineering-guidelines` for
+  examples and review checks.
 - For test work, derive cases from verified behavior and risk. Exercise a contract-valid workflow with deterministic
   controls, then cover the highest-value boundaries and failures. Do not invent interfaces, fields, environments, or
   root causes; do not shape data only to make a test pass or add redundant cases for counts. When a check fails, fix

@@ -14,6 +14,11 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 
 - Check naming, ownership/lifetime, return-code handling, logging, include wrappers, generated-code boundaries,
   header inline/API ABI rules, and helper usage in the same pass.
+- Check changed project-owned C++ code and C++-emitting templates for C++14 source compatibility. Reject post-C++14
+  syntax and standard-library APIs such as designated initializers, structured bindings, `if constexpr`,
+  `<ranges>`/`std::ranges`, `std::optional`, `std::variant`, `std::filesystem`, `std::string_view`, and
+  `std::scoped_lock`. A successful build in a newer language mode is not evidence of C++14 compatibility; require an
+  established compatibility API or a guarded equivalent C++14 path as specified in [`cpp-style.md`](cpp-style.md).
 - For every `rpc::async_invoke` call, enforce the no-reference-capture lifetime rule in
   [`cpp-style.md`](cpp-style.md); inspect both default and explicit lambda captures instead of assuming the enclosing
   function remains alive until the spawned task completes.
