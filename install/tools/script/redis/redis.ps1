@@ -43,9 +43,12 @@ elseif ($IsMacOS) {
 }
 
 if ([string]::IsNullOrEmpty($WorkDir)) {
-  # [System.IO.Path]::GetTempPath() resolves $env:TEMP on Windows and TMPDIR (or /tmp) on
-  # Linux/macOS; $env:TEMP does not exist on Unix hosts.
-  $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) "redis-unit-test"
+  if (Test-Path ENV:WORK_DIR) {
+    $WorkDir = $env:WORK_DIR
+  }
+  else {
+    $WorkDir = Join-Path (Get-Location) "redis-unit-test"
+  }
 }
 
 # Windows (native) paths
@@ -54,10 +57,10 @@ if ($IsWindowsHost) {
   $ExeSuffix = ".exe"
 }
 $REDIS_SERVER_EXE = Join-Path $WorkDir "redis-server$ExeSuffix"
-$REDIS_CLI_EXE    = Join-Path $WorkDir "redis-cli$ExeSuffix"
-$REDIS_CONF       = Join-Path $WorkDir "redis.windows.conf"
-$PID_FILE         = Join-Path $WorkDir "redis.pid"
-$LOG_FILE         = Join-Path $WorkDir "redis.log"
+$REDIS_CLI_EXE = Join-Path $WorkDir "redis-cli$ExeSuffix"
+$REDIS_CONF = Join-Path $WorkDir "redis.windows.conf"
+$PID_FILE = Join-Path $WorkDir "redis.pid"
+$LOG_FILE = Join-Path $WorkDir "redis.log"
 
 # Unix (container) state
 # 7.2.x is the last BSD-3-Clause licensed release line and resolves "latest".
@@ -65,9 +68,9 @@ $ImageTag = $RedisVersion
 if ($ImageTag -eq "latest") {
   $ImageTag = "7.2.16"
 }
-$REDIS_IMAGE    = "redis:$ImageTag"
+$REDIS_IMAGE = "redis:$ImageTag"
 $CONTAINER_NAME = "atsf4g-redis-unit-test"
-$CID_FILE       = Join-Path $WorkDir "redis.cid"
+$CID_FILE = Join-Path $WorkDir "redis.cid"
 
 function Get-RunningProcess {
   # Returns the process for the given PID text, or $null when the text is not a number or
@@ -588,8 +591,8 @@ function Invoke-Status {
 
 switch ($Command) {
   "download" { Invoke-Download }
-  "start"    { Invoke-Start }
-  "stop"     { Invoke-Stop }
-  "cleanup"  { Invoke-Cleanup }
-  "status"   { Invoke-Status }
+  "start" { Invoke-Start }
+  "stop" { Invoke-Stop }
+  "cleanup" { Invoke-Cleanup }
+  "status" { Invoke-Status }
 }

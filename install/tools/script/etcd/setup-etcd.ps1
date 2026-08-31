@@ -37,9 +37,12 @@ elseif ($IsMacOS) {
 }
 
 if ([string]::IsNullOrEmpty($WorkDir)) {
-  # [System.IO.Path]::GetTempPath() resolves $env:TEMP on Windows and TMPDIR (or /tmp) on
-  # Linux/macOS; $env:TEMP does not exist on Unix hosts.
-  $WorkDir = Join-Path ([System.IO.Path]::GetTempPath()) "etcd-unit-test"
+  if (Test-Path ENV:WORK_DIR) {
+    $WorkDir = $env:WORK_DIR
+  }
+  else {
+    $WorkDir = Join-Path (Get-Location) "etcd-unit-test"
+  }
 }
 
 $ExeSuffix = ""
@@ -105,7 +108,7 @@ function Invoke-Download {
   $arch = "amd64"
   try {
     if ([System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq
-        [System.Runtime.InteropServices.Architecture]::Arm64) {
+      [System.Runtime.InteropServices.Architecture]::Arm64) {
       $arch = "arm64"
     }
   }

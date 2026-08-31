@@ -10,7 +10,7 @@
 
 set -eu
 
-WORK_DIR="/tmp/etcd-unit-test"
+WORK_DIR="${WORK_DIR:-$PWD}/etcd-unit-test"
 CLIENT_PORT=12379
 PEER_PORT=12380
 ETCD_VERSION="latest"

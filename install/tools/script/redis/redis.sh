@@ -16,7 +16,7 @@
 
 set -eu
 
-WORK_DIR="${TMPDIR:-/tmp}/redis-unit-test"
+WORK_DIR="${WORK_DIR:-$PWD}/redis-unit-test"
 CLIENT_PORT=6379
 REDIS_VERSION="7.2.16"
 CONTAINER_ENGINE=""
