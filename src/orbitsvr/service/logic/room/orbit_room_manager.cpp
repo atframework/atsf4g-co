@@ -28,6 +28,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <memory/object_allocator.h>
+
 int orbit_room_manager::init() {
   is_inited_ = true;
   return 0;
@@ -103,7 +105,7 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND);
   }
 
-  auto room = atfw::util::memory::make_strong_rc<orbit_room>(req.room_key(), req.room_data());
+  auto room = atfw::component::memory::stl::make_strong_rc<orbit_room>(req.room_key(), req.room_data());
   int32_t ret = room->create(ctx, match_server_id);
   if (ret != 0) {
     FWLOGERROR("orbit_room_manager create_room failed, client_id: {}, ret: {}", client_id, ret);

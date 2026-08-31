@@ -4,6 +4,8 @@
 
 #include <log/log_wrapper.h>
 
+#include <memory/object_allocator.h>
+
 #include <config/excel/config_manager.h>
 #include <data/user.h>
 #include <logic/item/user_item_grid_manager.h>
@@ -15,13 +17,13 @@ user_virtual_inventory_grid::user_virtual_inventory_grid(user* owner)
 user_virtual_inventory_grid::~user_virtual_inventory_grid() = default;
 
 item_algorithm::item_grid_algorithm_ptr_t user_virtual_inventory_grid::create_empty_clone() const {
-  auto clone = atfw::util::memory::make_strong_rc<user_virtual_inventory_grid>(get_owner());
+  auto clone = atfw::component::memory::stl::make_strong_rc<user_virtual_inventory_grid>(get_owner());
   copy_empty_config_to(*clone);
   return clone;
 }
 
 user_virtual_inventory::user_virtual_inventory(user* owner)
-    : owner_(owner), virtual_grid_(atfw::util::memory::make_strong_rc<user_virtual_inventory_grid>(owner)) {}
+    : owner_(owner), virtual_grid_(atfw::component::memory::stl::make_strong_rc<user_virtual_inventory_grid>(owner)) {}
 
 void user_virtual_inventory::init(const PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& data) {
   for (const auto& item : data.items()) {

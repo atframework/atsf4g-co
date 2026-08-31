@@ -1937,7 +1937,7 @@ DTMQ_PROXY_SDK_API const std::string& client_subscriber::client_subscriber::get_
     return *iter->second;
   }
 
-  auto ret = atfw::util::memory::make_strong_rc<std::string>(parse_fn());
+  auto ret = atfw::component::memory::stl::make_strong_rc<std::string>(parse_fn());
   name_mapping[desc] = ret;
 
   return *ret;

@@ -32,6 +32,7 @@
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
 
+#include <config/excel/config_manager.h>
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
 #include <rpc/internal/rpc_template_cs_message.h>
@@ -51,10 +52,11 @@
 #include "data/session.h"
 #include "data/user.h"
 #include "frame/test_macros.h"
+#include "lobbysvr_test_runtime_helper.h"  // NOLINT: build/include_subdir
 #include "logic/chat/user_chat_manager.h"
+#include "logic/item/user_item_grid_manager.h"
 #include "logic/logic_server_setup.h"
 #include "logic/session_manager.h"
-#include "lobbysvr_test_runtime_helper.h"  // NOLINT: build/include_subdir
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_subscriber.h"
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
@@ -1051,12 +1053,29 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
   const size_t dirty_baseline = find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size();
 
   // A dirty item marked outside any CS task (the dtmq dispatch path) has no CS epilogue to flush it.
-  CASE_EXPECT_TRUE(run_sync_task(test, "chat.mark_dirty_item", [&user3](rpc::context &) -> rpc::result_code_type {
+  // The item grid manager registers its dirty handle through the real add flow: create_init allocates the first
+  // inventory page with container_guid=1, and adding a grid-occupying weapon fires on_item_changed.
+  CASE_EXPECT_TRUE(run_sync_task(test, "chat.mark_dirty_item", [&user3](rpc::context &ctx) -> rpc::result_code_type {
+    auto &item_mgr = user3.user_inst->get_user_item_grid_manager();
+    item_mgr.create_init(ctx);
+    const int64_t container_guid = 1;  // create_init allocates page guids from 1 on a fresh user
+
     PROJECT_NAMESPACE_ID::DItemInstance dirty_item;
-    dirty_item.mutable_item_basic()->set_type_id(420001);
-    dirty_item.mutable_item_basic()->set_count(7);
-    user3.user_inst->mutable_dirty_item(dirty_item);
-    RPC_RETURN_CODE(0);
+    auto *basic = dirty_item.mutable_item_basic();
+    basic->set_type_id(301000);  // weapon row present in both ExcelItemType and UESourceInventory
+    basic->set_count(1);
+    basic->set_guid(930001);
+    basic->mutable_position()->set_container_guid(container_guid);
+    basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
+    basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
+
+    item_algorithm::ItemGridAddRequest add_requests;
+    *add_requests.Add() = dirty_item;
+    auto checked = item_mgr.check_add(excel::get_current_config_group(), std::move(add_requests));
+    if (PROJECT_NAMESPACE_ID::EN_SUCCESS != checked.get_error_code()) {
+      RPC_RETURN_CODE(checked.get_error_code());
+    }
+    RPC_RETURN_CODE(item_mgr.add(checked).error_code);
   }));
   pump_rounds(test, 2);
   CASE_EXPECT_EQ(dirty_baseline, find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size());
@@ -1087,10 +1106,12 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
       PROJECT_NAMESPACE_ID::SCUserDirtyChgSync dirty_body;
       CASE_EXPECT_TRUE(dirty_body.ParseFromString(dirty_cs_msg.body_bin()));
       bool found_dirty_item = false;
-      for (const auto &item : dirty_body.dirty_items()) {
-        if (420001 == item.item_basic().type_id()) {
-          found_dirty_item = true;
-          CASE_EXPECT_EQ(7, item.item_basic().count());
+      for (const auto &chg : dirty_body.dirty_item_chgs()) {
+        for (const auto &entry : chg.update_entries()) {
+          if (301000 == entry.instance().item_basic().type_id()) {
+            found_dirty_item = true;
+            CASE_EXPECT_EQ(1, static_cast<int>(entry.instance().item_basic().count()));
+          }
         }
       }
       CASE_EXPECT_TRUE(found_dirty_item);

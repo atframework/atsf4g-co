@@ -39,6 +39,8 @@
 
 #include <config/extern_service_types.h>
 
+#include <memory/object_allocator.h>
+
 namespace {
 const PROJECT_NAMESPACE_ID::config::orbitsvr_cfg& get_orbitsvr_cfg() noexcept {
   return logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::orbitsvr_cfg>();
@@ -257,7 +259,7 @@ int32_t orbit_room::init_user(
 
   // 先放入
   for (const auto& user_init_data : user_list) {
-    orbit_room_user_data_ptr_t user_data = atfw::util::memory::make_strong_rc<orbit_room_user_data>();
+    orbit_room_user_data_ptr_t user_data = atfw::component::memory::stl::make_strong_rc<orbit_room_user_data>();
     user_data->init_data_ = user_init_data;
     user_data->user_key_ = user_init_data.user_key().user_key();
     user_data_index_[user_init_data.user_key().user_key()] = user_data;

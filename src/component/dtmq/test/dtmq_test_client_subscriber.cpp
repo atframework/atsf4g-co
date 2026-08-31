@@ -51,6 +51,8 @@
 #include <atframework/testing/mock_ss.h>
 #include <atframework/testing/runtime.h>
 
+#include <memory/object_allocator.h>
+
 #include <chrono>
 #include <cstdint>
 #include <memory>
@@ -423,9 +425,8 @@ CASE_TEST(component_dtmq_subscriber, callback_setters_and_getters) {
   CASE_EXPECT_TRUE(static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_ready(*shared_set)));
   CASE_EXPECT_TRUE(static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_destroyed(*shared_set)));
   CASE_EXPECT_TRUE(static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_receive_text(*shared_set)));
-  CASE_EXPECT_TRUE(
-      static_cast<bool>(rpc::dtmq::client_subscriber::get_event_callback_on_receive_batch_message_finished(
-          *shared_set)));
+  CASE_EXPECT_TRUE(static_cast<bool>(
+      rpc::dtmq::client_subscriber::get_event_callback_on_receive_batch_message_finished(*shared_set)));
 
   // --- Private set takes precedence over the shared set. ---
   // Setting a private on_ready installs a non-empty callable returned by the getter. The actual
@@ -686,8 +687,9 @@ CASE_TEST(component_dtmq_subscriber, receive_messages_and_events) {
   std::vector<std::pair<int64_t, int64_t>> batch_ranges;
   rpc::dtmq::client_subscriber::set_event_callback_on_receive_batch_message_finished(
       *subscriber_options.event_callback_set,
-      [&batch_ranges](rpc::context&, const subscriber_ptr&, int64_t first_log_sequence,
-                      int64_t last_log_sequence) { batch_ranges.emplace_back(first_log_sequence, last_log_sequence); });
+      [&batch_ranges](rpc::context&, const subscriber_ptr&, int64_t first_log_sequence, int64_t last_log_sequence) {
+        batch_ranges.emplace_back(first_log_sequence, last_log_sequence);
+      });
 
   auto nullable = rpc::dtmq::client_subscriber::create(channel_key, subscriber_options);
   CASE_EXPECT_TRUE(!!nullable);
@@ -1266,9 +1268,9 @@ CASE_TEST(component_dtmq_subscriber, business_rpc_and_cache) {
       test.run_task("send_msg", std::chrono::seconds{3}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
         atfw::dtmq::DChannelMessageDetail detail;
         detail.set_text("from-subscriber");
-        auto lock_checker = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto lock_checker = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         lock_checker->mutable_expect_value()->set_lock_holder("expected-holder");
-        auto lock_checker_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto lock_checker_rsp = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         int32_t res = RPC_AWAIT_CODE_RESULT(
             subscriber->send_message(ctx, std::move(detail), lock_checker, lock_checker_rsp, true, false));
         CASE_EXPECT_EQ(0, res);
@@ -1325,33 +1327,33 @@ CASE_TEST(component_dtmq_subscriber, send_message_sender_info_group) {
     std::string message_sender_key;
   };
   std::vector<sender_info_snapshot_t> captured_senders;
-  auto send_rule = test.ss().mock(
-      rpc::dtmq::packer::get_full_name_of_send_message(),
-      atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
-      atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
-      [&captured_senders](const atframework::testing::ss_request_view& request,
-                          google::protobuf::Message& response) -> rpc::result_code_type {
-        const auto& typed_request = static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body);
-        auto& typed_response = static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response);
-        sender_info_snapshot_t snapshot;
-        snapshot.subscriber_key = typed_request.subscriber().subscriber_key();
-        snapshot.subscriber_server_id = typed_request.subscriber().subscriber_server_id();
-        snapshot.with_private_data = typed_request.subscriber().with_private_data();
-        snapshot.message_sender_key = typed_request.message_content(0).sender_key();
-        captured_senders.push_back(std::move(snapshot));
-        typed_response.set_client_result(0);
-        RPC_RETURN_CODE(0);
-      });
+  auto send_rule = test.ss().mock(rpc::dtmq::packer::get_full_name_of_send_message(),
+                                  atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
+                                  atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(),
+                                  [&captured_senders](const atframework::testing::ss_request_view& request,
+                                                      google::protobuf::Message& response) -> rpc::result_code_type {
+                                    const auto& typed_request =
+                                        static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body);
+                                    auto& typed_response = static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response);
+                                    sender_info_snapshot_t snapshot;
+                                    snapshot.subscriber_key = typed_request.subscriber().subscriber_key();
+                                    snapshot.subscriber_server_id = typed_request.subscriber().subscriber_server_id();
+                                    snapshot.with_private_data = typed_request.subscriber().with_private_data();
+                                    snapshot.message_sender_key = typed_request.message_content(0).sender_key();
+                                    captured_senders.push_back(std::move(snapshot));
+                                    typed_response.set_client_result(0);
+                                    RPC_RETURN_CODE(0);
+                                  });
   CASE_EXPECT_TRUE(!!subscribe_rule && !!send_rule);
 
   auto send_one = [&test](subscriber_ptr& subscriber, gsl::string_view task_name) -> bool {
-    auto task = test.run_task(task_name, std::chrono::seconds{3},
-                              [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
-                                atfw::dtmq::DChannelMessageDetail detail;
-                                detail.set_text("sender-info-group");
-                                RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                                    subscriber->send_message(ctx, std::move(detail), nullptr, nullptr, true, false)));
-                              });
+    auto task =
+        test.run_task(task_name, std::chrono::seconds{3}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
+          atfw::dtmq::DChannelMessageDetail detail;
+          detail.set_text("sender-info-group");
+          RPC_RETURN_CODE(
+              RPC_AWAIT_CODE_RESULT(subscriber->send_message(ctx, std::move(detail), nullptr, nullptr, true, false)));
+        });
     if (task.empty()) {
       return false;
     }
@@ -2072,9 +2074,9 @@ CASE_TEST(component_dtmq_subscriber, send_text_and_send_event) {
   auto task = test.run_task(
       "send_text_event", std::chrono::seconds{4}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
         // send_text with the lock checker pair and auto_create_channel=true.
-        auto lock_checker = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto lock_checker = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         lock_checker->mutable_expect_value()->set_lock_holder("expected-holder");
-        auto lock_checker_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto lock_checker_rsp = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         int32_t res = RPC_AWAIT_CODE_RESULT(
             subscriber->send_text(ctx, "hello-send-text", lock_checker, lock_checker_rsp, true, false));
         CASE_EXPECT_EQ(0, res);
@@ -2211,15 +2213,15 @@ CASE_TEST(component_dtmq_subscriber, send_destroy_reset_lock_and_update) {
   auto task =
       test.run_task("send_ctl", std::chrono::seconds{4}, [&subscriber](rpc::context& ctx) -> rpc::result_code_type {
         // send_destroy forwards the channel_key and the optional lock checker.
-        auto destroy_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto destroy_lock = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         destroy_lock->mutable_expect_value()->set_lock_holder("destroy-expected");
         int32_t res = RPC_AWAIT_CODE_RESULT(subscriber->send_destroy(ctx, destroy_lock, false));
         CASE_EXPECT_EQ(0, res);
 
         // send_reset_lock with the lock checker pair and auto_create_channel=true.
-        auto reset_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto reset_lock = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         reset_lock->mutable_expect_value()->set_lock_holder("reset-expected");
-        auto reset_lock_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto reset_lock_rsp = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         res = RPC_AWAIT_CODE_RESULT(subscriber->send_reset_lock(ctx, reset_lock, reset_lock_rsp, true, false));
         CASE_EXPECT_EQ(0, res);
         CASE_EXPECT_EQ("reset-actual", reset_lock_rsp->real_value().lock_holder());
@@ -2243,9 +2245,9 @@ CASE_TEST(component_dtmq_subscriber, send_destroy_reset_lock_and_update) {
         const atfw::dtmq::channel_subscriber* force_update_list[] = {&subscriber->get_shared_subscriber_info(),
                                                                      nullptr};
         update_options.force_update_subscribers = gsl::span<const atfw::dtmq::channel_subscriber*>{force_update_list};
-        auto update_lock = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto update_lock = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         update_lock->mutable_expect_value()->set_lock_holder("update-expected");
-        auto update_lock_rsp = atfw::util::memory::make_strong_rc<atfw::dtmq::channel_lock_checker>();
+        auto update_lock_rsp = atfw::component::memory::stl::make_strong_rc<atfw::dtmq::channel_lock_checker>();
         res = RPC_AWAIT_CODE_RESULT(
             subscriber->send_update(ctx, update_options, update_lock, update_lock_rsp, true, false));
         CASE_EXPECT_EQ(13579, res);
