@@ -25,6 +25,8 @@
 #include <logic/orbit/user_orbit_manager.h>
 #include <logic/rank/user_rank_manager.h>
 #include <logic/team/user_team_manager.h>
+#include <logic/item/user_item_manager.h>
+#include <logic/item/user_item_grid_manager.h>
 
 ////////////////// 业务Manager开始 ////////////////////
 
@@ -115,7 +117,9 @@ user::user(fake_constructor &ctor)
       user_chat_manager_(atfw::component::memory::stl::make_strong_rc<user_chat_manager>(*this)),
       user_orbit_manager_(atfw::component::memory::stl::make_strong_rc<user_orbit_manager>(*this)),
       user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)),
-      user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this))
+      user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this)),
+      user_item_manager_(atfw::component::memory::stl::make_strong_rc<user_item_manager>(*this)),
+      user_item_grid_manager_(atfw::component::memory::stl::make_strong_rc<user_item_grid_manager>(*this))
 ////////////////// 业务Manager开始 ////////////////////
 
 ////////////////// 业务Manager结束 ////////////////////
@@ -181,6 +185,7 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
   user_team_manager_->create_init(ctx);
+  user_item_grid_manager_->create_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
   // TODO init all interval checkpoint
 
@@ -241,6 +246,7 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
 
+  user_item_grid_manager_->login_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
 
   set_inited();
@@ -420,6 +426,10 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_team_manager_->init_from_table_data(ctx, tb_user);
   }
 
+  if (tb_user.has_user_item_grid_manager_data()) {
+    user_item_grid_manager_->init_from_table_data(ctx, tb_user);
+  }
+
   ////////////////// 业务Manager开始 ////////////////////
 
   trace.finish({0, {}});
@@ -469,6 +479,12 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
   ret = user_team_manager_->dump(ctx, table);
   if (ret < 0) {
     FWLOGERROR("{} dump user_team_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
+  ret = user_item_grid_manager_->dump(ctx, table);
+  if (ret < 0) {
+    FWLOGERROR("{} dump user_item_grid_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 
@@ -626,20 +642,6 @@ static user::dirty_sync_handle_t _user_generate_dirty_handle(
   return handle;
 }
 }  // namespace
-
-PROJECT_NAMESPACE_ID::DItemInstance &user::mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in) {
-  insert_dirty_handle_if_not_exists(reinterpret_cast<uintptr_t>(&cache_data_.dirty_item_by_type),
-                                    "user.mutable_dirty_item", [](gsl::string_view handle_name, user &) {
-                                      return _user_generate_dirty_handle(
-                                          handle_name, &PROJECT_NAMESPACE_ID::SCUserDirtyChgSync::add_dirty_items,
-                                          &user::cache_t::dirty_item_by_type);
-                                    });
-
-  PROJECT_NAMESPACE_ID::DItemInstance &ret =
-      cache_data_.dirty_item_by_type[static_cast<int32_t>(in.item_basic().type_id())];
-  ret = in;
-  return ret;
-}
 
 void user::insert_dirty_handle_if_not_exists(uintptr_t key, gsl::string_view handle_name,
                                              dirty_sync_handle_t (*create_handle_fn)(gsl::string_view handle_name,

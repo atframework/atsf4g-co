@@ -35,6 +35,8 @@ class user_chat_manager;
 class user_orbit_manager;
 class user_matching_manager;
 class user_team_manager;
+class user_item_manager;
+class user_item_grid_manager;
 
 ////////////////// 业务Manager开始 ////////////////////
 
@@ -208,8 +210,6 @@ class user : public user_cache {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_before_logout_tasks(rpc::context &ctx) override;
   void clear_dirty_cache(rpc::context &);
 
-  PROJECT_NAMESPACE_ID::DItemInstance &mutable_dirty_item(const PROJECT_NAMESPACE_ID::DItemInstance &in);
-
   /**
    * @brief 插入脏数据handle
    *
@@ -255,6 +255,8 @@ class user : public user_cache {
   REG_USER_MGR_PTR_DEF(user_orbit_manager)
   REG_USER_MGR_PTR_DEF(user_matching_manager)
   REG_USER_MGR_PTR_DEF(user_team_manager)
+  REG_USER_MGR_PTR_DEF(user_item_manager)
+  REG_USER_MGR_PTR_DEF(user_item_grid_manager)
 
   ////////////////// 业务Manager开始 ////////////////////
 };

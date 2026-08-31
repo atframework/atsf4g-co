@@ -6,7 +6,10 @@ option optimize_for = SPEED;
 // --cpp_out=lite:,--cpp_out=
 option cc_enable_arenas = true;
 
+import "google/protobuf/timestamp.proto";
+
 import "protocol/extension/v3/xresloader.proto";
+import "protocol/extension/xrescode_extensions_v3.proto";
 
 import "protocol/common/com.struct.isolation_scope.common.proto";
 import "protocol/common/com.struct.extension.common.proto";
@@ -78,6 +81,15 @@ message DItemInstance {
 message DItemInstanceEntry {
   DItemInstance instance = 1;
   uint64 entry_id = 2;
+}
+
+message DUserVirtualInventoryData {
+  repeated DItemInstance items = 1;
+}
+
+// 用户道具管理模块持久化数据
+message DUserItemManagerData {
+  uint64 next_container_guid = 1;  // 自增容器 GUID 分配器
 }
 
 // 道具数据(增量,用于奖励等)

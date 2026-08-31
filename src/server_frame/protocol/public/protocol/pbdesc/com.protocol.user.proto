@@ -46,7 +46,7 @@ message CSLoginReq {
 message SCLoginRsp {
   int32 last_sequence = 1;       // 上次收包的seq(不算MCSLogin)
   int64 heartbeat_interval = 2;  // 心跳包间隔
-  bool is_new_user = 3;        // 是否是新用户
+  bool is_new_user = 3;          // 是否是新用户
   int32 version_type = 4;        // 版本类型 @EnVersionType
   uint32 zone_id = 5;            // 大区ID
 }
@@ -55,11 +55,18 @@ message SCUserProfileSyn {
   DUserProfile user = 1;
 }
 
+// 道具脏数据(按容器) — 结构与 apply_entries 入参一致
+message DUserItemDirtyChg {
+  int64 container_guid = 1;
+  repeated uint64 removed_entry_ids = 2;
+  repeated DItemInstanceEntry update_entries = 3;
+}
+
 // 脏数据同步包
 message SCUserDirtyChgSync {
-  repeated DItemInstance dirty_items = 1;
-  DOrbitRoomDirty dirty_orbit_rooms = 2;
-  repeated DUserTeamDirty dirty_team = 3;
+  DOrbitRoomDirty dirty_orbit_rooms = 1;
+  repeated DUserTeamDirty dirty_team = 2;
+  repeated DUserItemDirtyChg dirty_item_chgs = 3;
 
   // 业务ditry开始
 }
@@ -72,21 +79,23 @@ message SCPongRsp {}
 
 // 请求用户数据
 message CSUserGetInfoReq {
-  bool need_user_information = 1;  // 标记为true 回包才有会有用户基本数据
-  bool need_user_options = 2;      // 标记为true 回包才有会有用户选项数据
-  bool need_user_orbit_room = 3;   // 标记为true 回包才有会有用户orbit房间数据
-  bool need_user_team = 4;         // 标记为true 回包才有会有用户team数据
+  bool need_user_information = 1;        // 标记为true 回包才有会有用户基本数据
+  bool need_user_options = 2;            // 标记为true 回包才有会有用户选项数据
+  bool need_user_orbit_room = 3;         // 标记为true 回包才有会有用户orbit房间数据
+  bool need_user_team = 4;               // 标记为true 回包才有会有用户team数据
+  bool need_user_virtual_inventory = 5;  // 标记为true 回包才有会有用户虚拟仓库数据
 
   // 业务数据开始
 }
 
 // 用户数据返回
 message SCUserGetInfoRsp {
-  DUserInformation user_information = 1;    // 用户数据
-  DUserOptions user_private_options = 2;            // 用户自定义选项
+  DUserInformation user_information = 1;  // 用户数据
+  DUserOptions user_private_options = 2;  // 用户自定义选项
   DUserSharedOptions user_shared_options = 3;
-  DOrbitRoomUserData user_orbit_room = 4;   // 用户orbit房间数据
-  repeated DUserTeamSnapshot user_team = 5; // 用户team数据
+  DOrbitRoomUserData user_orbit_room = 4;                // 用户orbit房间数据
+  repeated DUserTeamSnapshot user_team = 5;              // 用户team数据
+  DUserVirtualInventoryData user_virtual_inventory = 6;  // 用户虚拟仓库数据
 
   // 业务数据开始
 }

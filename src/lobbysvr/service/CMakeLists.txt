@@ -63,6 +63,7 @@ project_service_declare_instance(
   USE_COMPONENTS
   "rank-logic-sdk"
   "dtmq-proxy-sdk"
+  "ItemAlgorithmSDK"
   USE_SERVICE_SDK
   "lobbysvr-sdk"
   "cachesvr-sdk"

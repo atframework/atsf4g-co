@@ -166,7 +166,9 @@ enum EnErrorCode {
   EN_ERR_USER_GM_CMD_INVALID = -120
                                [(error_code.description) = "GM命令无效"];
   EN_ERR_USER_GM_CMD_PARAM_NUMBER = -121
-                                     [(error_code.description) = "GM命令参数数量错误"];
+                                    [(error_code.description) = "GM命令参数数量错误"];
+  EN_ERR_NOT_IMPLEMENTED = -122
+                           [(error_code.description) = "功能未实现"];
   // openapi
   EN_ERR_OPENAPI_LIMIT = -201
                          [(error_code.description) = "openapi调用频率限制"];
@@ -218,7 +220,7 @@ enum EnErrorCode {
   EN_ERR_LOGIN_OPENID_NOT_MATCH = -415
                                   [(error_code.description) = "上传上来的openid不匹配"];
   EN_ERR_LOGIN_CREATE_USER_FAILED = -416
-                                      [(error_code.description) = "创建用户失败"];
+                                    [(error_code.description) = "创建用户失败"];
   EN_ERR_LOGIN_USERID_NOT_MATCH = -417
                                   [(error_code.description) = "用户ID不匹配"];
 
@@ -317,7 +319,7 @@ enum EnErrorCode {
   EN_MATCHING_RESULT_NOT_FOUND = -902
                                  [(error_code.description) = "没有找到"];
   EN_MATCHING_RESULT_CONFLICT = -903
-                                 [(error_code.description) = "冲突"];
+                                [(error_code.description) = "冲突"];
   EN_MATCHING_RESULT_POOL_NOT_FOUND = -904
                                       [(error_code.description) = "匹配池未找到"];
   EN_MATCHING_RESULT_RULE_NOT_FOUND = -905
@@ -327,18 +329,19 @@ enum EnErrorCode {
   EN_MATCHING_RESULT_BATTLE_START_FAILED = -907
                                            [(error_code.description) = "战斗启动失败"];
   EN_MATCHING_POOL_ID_CFG_NOT_FOUND = -908
-                                           [(error_code.description) = "匹配池配置未找到"];
+                                      [(error_code.description) = "匹配池配置未找到"];
   EN_MATCHING_RESULT_START_FAILED = -909
-                                           [(error_code.description) = "匹配ds启动失败"];
+                                    [(error_code.description) = "匹配ds启动失败"];
   EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING = -910
-                                           [(error_code.description) = "用户已经在匹配中"];
+                                                [(error_code.description) = "用户已经在匹配中"];
   // 关卡模块[1001-1100]
   EN_LEVEL_CFG_NOT_FOUND = -1001
-                                        [(error_code.description) = "关卡配置未找到"];
+                           [(error_code.description) = "关卡配置未找到"];
   // orbit错误码
   EN_ERR_ORBIT_ALREADY_IN_ROOM = -1101
                                  [(error_code.description) = "已经在房间中"];
-
+  EN_ERR_USER_IN_ORBIT = -1102
+                         [(error_code.description) = "角色在orbit中"];
   // 组队模块[1201-1300]
   EN_ERR_TEAM_NOT_IN_TEAM = -1201
                             [(error_code.description) = "不在队伍中"];
@@ -353,13 +356,13 @@ enum EnErrorCode {
   EN_ERR_TEAM_INVITATION_NOT_FOUND = -1206
                                      [(error_code.description) = "组队邀请不存在"];
   EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND = -1207
-                                        [(error_code.description) = "组队加入请求不存在"];
+                                       [(error_code.description) = "组队加入请求不存在"];
   EN_ERR_TEAM_NO_PERMISSION = -1208
                               [(error_code.description) = "没有组队操作权限"];
   EN_ERR_TEAM_CONDITION_NOT_MATCH = -1209
-                                     [(error_code.description) = "组队数据条件检查未通过"];
+                                    [(error_code.description) = "组队数据条件检查未通过"];
   // 新错误码只能追加在已发布值之后，不能改动已有数值(客户端按值解释错误码)
   EN_ERR_TEAM_JOIN_REQUEST_ALREADY_EXISTS = -1210
-                                       [(error_code.description) = "组队加入请求已存在"];
+                                            [(error_code.description) = "组队加入请求已存在"];
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }
