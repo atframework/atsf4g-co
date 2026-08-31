@@ -209,7 +209,7 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
   atfw::dtmq::DChannelIdKey channel_key;
   channel_key.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
-  channel_key.set_channel_id(room_key_.client_id());
+  channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
   subscriber_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
   if (!subscriber_) {
     FWLOGERROR("Failed to create world chat channel {}:{}, maybe configure is missing.", channel_key.channel_type(),

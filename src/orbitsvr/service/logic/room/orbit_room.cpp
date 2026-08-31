@@ -49,8 +49,8 @@ orbit_room::orbit_room(const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
                        const PROJECT_NAMESPACE_ID::DOrbitRoomInitData& room_data)
     : room_key_(room_key), room_data_(room_data) {
   channel_key_.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
-  channel_key_.set_channel_id(room_key.client_id());
-  subscriber_key_ = atfw::util::string::format("orbit_room:{}", room_key.client_id());
+  channel_key_.set_channel_id(rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
+  subscriber_key_ = atfw::util::string::format("orbit_room");
 }
 
 void orbit_room::tick() {
@@ -476,7 +476,7 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
 
   // 结算未结算的用户
   for (auto& user_data : user_data_index_) {
-    if (user_data.second->init_ && !user_data.second->finish_) {
+    if (!user_data.second->finish_) {
       user_data.second->finish_ = true;
       need_retry_settlement_ = true;
       user_data.second->finish_timepoint_ = util::time::time_utility::get_now();
