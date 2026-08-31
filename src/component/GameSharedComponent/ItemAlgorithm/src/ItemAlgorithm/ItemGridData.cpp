@@ -26,11 +26,13 @@ uint64_t ItemGridEntry::get_sort_key() const {
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
       return (static_cast<uint64_t>(item_instance_.item_basic().position().grid_position().user_inventory().y())
               << 32) +
-             item_instance_.item_basic().position().grid_position().user_inventory().x();
+             (static_cast<uint64_t>(item_instance_.item_basic().position().grid_position().user_inventory().x()) &
+              0xFFFFFFFF);
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory:
       return (static_cast<uint64_t>(item_instance_.item_basic().position().grid_position().character_inventory().y())
               << 32) +
-             item_instance_.item_basic().position().grid_position().character_inventory().x();
+             (static_cast<uint64_t>(item_instance_.item_basic().position().grid_position().character_inventory().x()) &
+              0xFFFFFFFF);
     case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment:
       return static_cast<uint64_t>(
           item_instance_.item_basic().position().grid_position().character_equipment().slot_idx());
