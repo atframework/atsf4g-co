@@ -21,6 +21,27 @@ ItemGridEntry::~ItemGridEntry() {
 
 uint64_t ItemGridEntry::entry_id() const { return entry_id_; }
 
+uint64_t ItemGridEntry::get_sort_key() const {
+  switch (item_instance_.item_basic().position().grid_position().position_type_case()) {
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory:
+      return (static_cast<uint64_t>(item_instance_.item_basic().position().grid_position().user_inventory().y())
+              << 32) +
+             item_instance_.item_basic().position().grid_position().user_inventory().x();
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterInventory:
+      return (static_cast<uint64_t>(item_instance_.item_basic().position().grid_position().character_inventory().y())
+              << 32) +
+             item_instance_.item_basic().position().grid_position().character_inventory().x();
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment:
+      return static_cast<uint64_t>(
+          item_instance_.item_basic().position().grid_position().character_equipment().slot_idx());
+    case PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory:
+      return 0;
+    default:
+      break;
+  }
+  return 0;
+}
+
 const PROJECT_NAMESPACE_ID::DItemInstance& ItemGridEntry::item_instance() const { return item_instance_; }
 
 PROJECT_NAMESPACE_ID::DItemData& ItemGridEntry::mutable_item_data() {

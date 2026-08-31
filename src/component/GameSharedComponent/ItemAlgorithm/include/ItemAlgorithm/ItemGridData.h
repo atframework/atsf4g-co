@@ -87,6 +87,7 @@ struct ITEM_ALGORITHM_API ItemGridEntry : public atfw::util::memory::enable_shar
   uint64_t entry_id() const;
   const PROJECT_NAMESPACE_ID::DItemInstance& item_instance() const;
   PROJECT_NAMESPACE_ID::DItemData& mutable_item_data();
+  uint64_t get_sort_key() const;
 
  private:
   friend class ItemGridAlgorithm;
@@ -105,6 +106,13 @@ using item_grid_entry_weak_ptr_t = atfw::util::memory::weak_rc_ptr<ItemGridEntry
 using ItemGridAddRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>;
 using ItemGridSubRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>;
 using ItemGridReplaceRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>;
+using ItemGridHasRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>;
+
+struct item_grid_entry_ptr_comparator {
+  bool operator()(const item_grid_entry_ptr_t& l, const item_grid_entry_ptr_t& r) const {
+    return l->get_sort_key() < r->get_sort_key();
+  }
+};
 
 struct ITEM_ALGORITHM_API ItemGridMoveSubRequest {
   item_grid_entry_ptr_t entry;

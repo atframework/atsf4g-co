@@ -1358,7 +1358,7 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     CASE_EXPECT_TRUE(load_server.get_by_guid(2001) != nullptr);
     // find_entry_by_id 校验: Load 的条目都应能按 entry_id 找到
     {
-      uint64_t item_eid = load_server.get_group(kItemTypeId_1x1)->front()->entry_id();
+      uint64_t item_eid = (*load_server.get_group(kItemTypeId_1x1)->begin())->entry_id();
       uint64_t equip_eid = load_server.get_by_guid(2001)->entry_id();
       verify_find_entry_by_id(load_server, item_eid, kItemTypeId_1x1, 65, 0);
       verify_find_entry_by_id(load_server, equip_eid, kEquipmentTypeId, 1, 2001);
@@ -1822,8 +1822,8 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     verify_item_count_consistency(*container.backpack_grid, kItemTypeId_1x1);
     // find_entry_by_id 校验: 源 entry 仍在(数量减少), 目标为新 entry, 各 Grid 索引相互独立
     {
-      uint64_t src_eid = container.inventory_grid->get_group(kItemTypeId_1x1)->front()->entry_id();
-      uint64_t dst_eid = container.backpack_grid->get_group(kItemTypeId_1x1)->front()->entry_id();
+      uint64_t src_eid = (*container.inventory_grid->get_group(kItemTypeId_1x1)->begin())->entry_id();
+      uint64_t dst_eid = (*container.backpack_grid->get_group(kItemTypeId_1x1)->begin())->entry_id();
       verify_find_entry_by_id(*container.inventory_grid, src_eid, kItemTypeId_1x1, 4, 0);
       verify_find_entry_by_id(*container.backpack_grid, dst_eid, kItemTypeId_1x1, 6, 0);
     }
@@ -2666,7 +2666,7 @@ CASE_TEST(ItemGridAlgorithm, no_position_ungrid_lifecycle) {
   if (!virtual_group || virtual_group->empty()) {
     return;
   }
-  uint64_t virtual_entry_id = virtual_group->front()->entry_id();
+  uint64_t virtual_entry_id = (*virtual_group->begin())->entry_id();
 
   // 客户端增量同步也必须在无位置模式中维护普通道具的 entry_id 与数量。
   call_apply_entries(grid, config, {}, {{virtual_entry_id, make_ungrid_item(kVirtualTypeId, 12)}});
@@ -2680,7 +2680,7 @@ CASE_TEST(ItemGridAlgorithm, no_position_ungrid_lifecycle) {
   verify_not_find_entry_by_id(grid, virtual_entry_id);
 
   std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kCoinTypeId, 1),
-                                                            make_sub_basic(kVirtualTypeId, 1)};
+                                                          make_sub_basic(kVirtualTypeId, 1)};
   std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
   CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, positions));
   CASE_EXPECT_EQ(positions.size(), static_cast<size_t>(2));
@@ -2754,7 +2754,7 @@ CASE_TEST(ItemGridAlgorithm, no_position_rejects_position_operations) {
   }
 
   ItemGridMoveRequest move_requests;
-  move_requests.move_sub_entrys.push_back({coin_group->front(), 1});
+  move_requests.move_sub_entrys.push_back({(*coin_group->begin()), 1});
   auto move_checked = grid.check_move(config, std::move(move_requests));
   CASE_EXPECT_EQ(move_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   CASE_EXPECT_EQ(grid.move(move_checked).error_code, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
@@ -2976,4 +2976,125 @@ CASE_TEST(ItemGridAlgorithm, on_check_item_count_limit_hook) {
   CASE_EXPECT_EQ(state.on_check_item_count_limit_calls, 1);
   CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 1);
   CASE_EXPECT_EQ(source_grid.get_item_count(kItemTypeId_1x1), 1);
+}
+
+CASE_TEST(ItemGridAlgorithm, check_has) {
+  auto config = make_test_config_group();
+
+  // 占格道具按位置查询, GUID 道具按 GUID 查询。
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    init_test_grid(grid);
+    grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+
+    ItemGridAddRequest add_requests;
+    *add_requests.Add() = make_grid_item(kItemTypeId_1x1, 5, 0, 0);
+    *add_requests.Add() = make_equip_item(9001, 1, 0);
+    auto add_checked = grid.check_add(config, std::move(add_requests));
+    CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(grid.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+    ItemGridHasRequest has_requests;
+    *has_requests.Add() = make_sub_basic(kItemTypeId_1x1, 5, 0, 0);
+    *has_requests.Add() = make_equip_sub_by_guid(9001);
+    auto has_result = grid.check_has(config, has_requests);
+    CASE_EXPECT_EQ(has_result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(grid.get_item_count(kItemTypeId_1x1), 5);
+
+    ItemGridHasRequest repeated_position_requests;
+    *repeated_position_requests.Add() = make_sub_basic(kItemTypeId_1x1, 2, 0, 0);
+    *repeated_position_requests.Add() = make_sub_basic(kItemTypeId_1x1, 3, 0, 0);
+    CASE_EXPECT_EQ(grid.check_has(config, repeated_position_requests).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+    ItemGridHasRequest insufficient_requests;
+    *insufficient_requests.Add() = make_sub_basic(kItemTypeId_1x1, 6, 0, 0);
+    auto insufficient_result = grid.check_has(config, insufficient_requests);
+    CASE_EXPECT_EQ(insufficient_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
+    CASE_EXPECT_EQ(insufficient_result.failed_index, 0);
+
+    ItemGridHasRequest missing_position_requests;
+    *missing_position_requests.Add() = make_sub_basic(kItemTypeId_1x1, 1, 2, 0);
+    auto missing_position_result = grid.check_has(config, missing_position_requests);
+    CASE_EXPECT_EQ(missing_position_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
+    CASE_EXPECT_EQ(missing_position_result.failed_index, 0);
+
+    ItemGridHasRequest missing_guid_requests;
+    *missing_guid_requests.Add() = make_equip_sub_by_guid(9002);
+    auto missing_guid_result = grid.check_has(config, missing_guid_requests);
+    CASE_EXPECT_EQ(missing_guid_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
+    CASE_EXPECT_EQ(missing_guid_result.failed_index, 0);
+  }
+
+  // 无位置道具按类型总数查询, 同一批次的请求需要累计数量。
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    register_test_log_handler(grid);
+
+    ItemGridAddRequest add_requests;
+    *add_requests.Add() = make_ungrid_item(kCoinTypeId, 10);
+    *add_requests.Add() = make_ungrid_item(kVirtualTypeId, 4);
+    auto add_checked = grid.check_add(config, std::move(add_requests));
+    CASE_EXPECT_EQ(add_checked.result.error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+    CASE_EXPECT_EQ(grid.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+    ItemGridHasRequest has_requests;
+    *has_requests.Add() = make_sub_basic(kCoinTypeId, 7);
+    *has_requests.Add() = make_sub_basic(kVirtualTypeId, 4);
+    CASE_EXPECT_EQ(grid.check_has(config, has_requests).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+    ItemGridHasRequest repeated_type_requests;
+    *repeated_type_requests.Add() = make_sub_basic(kCoinTypeId, 6);
+    *repeated_type_requests.Add() = make_sub_basic(kCoinTypeId, 5);
+    auto repeated_type_result = grid.check_has(config, repeated_type_requests);
+    CASE_EXPECT_EQ(repeated_type_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
+    CASE_EXPECT_EQ(repeated_type_result.failed_index, 1);
+
+    ItemGridHasRequest missing_type_requests;
+    *missing_type_requests.Add() = make_sub_basic(kVirtualTypeId, 5);
+    auto missing_type_result = grid.check_has(config, missing_type_requests);
+    CASE_EXPECT_EQ(missing_type_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH);
+    CASE_EXPECT_EQ(missing_type_result.failed_index, 0);
+  }
+}
+
+CASE_TEST(ItemGridContainer, check_has) {
+  auto config = make_test_config_group();
+  auto container_ptr = atfw::util::memory::make_strong_rc<DualGridContainer>();
+  auto& container = *container_ptr;
+
+  auto inventory_item = make_grid_item(kItemTypeId_1x1, 5, 1, 1);
+  auto backpack_item = make_grid_item(kItemTypeId_1x1, 7, 2, 2);
+  backpack_item.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_character_inventory()->set_x(
+      2);
+  backpack_item.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_character_inventory()->set_y(
+      2);
+
+  ItemGridAddRequest add_requests;
+  *add_requests.Add() = inventory_item;
+  *add_requests.Add() = backpack_item;
+  auto add_checked = container.check_add(config, std::move(add_requests));
+  CASE_EXPECT_EQ(add_checked.get_error_code(), PROJECT_NAMESPACE_ID::EN_SUCCESS);
+  CASE_EXPECT_EQ(container.add(add_checked).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  auto inventory_basic = make_sub_basic(kItemTypeId_1x1, 3, 1, 1);
+  auto backpack_basic = make_sub_basic(kItemTypeId_1x1, 7, 2, 2);
+  backpack_basic.mutable_position()->mutable_grid_position()->mutable_character_inventory()->set_x(2);
+  backpack_basic.mutable_position()->mutable_grid_position()->mutable_character_inventory()->set_y(2);
+
+  ItemGridHasRequest has_requests;
+  *has_requests.Add() = inventory_basic;
+  *has_requests.Add() = backpack_basic;
+  CASE_EXPECT_EQ(container.check_has(config, has_requests).error_code, PROJECT_NAMESPACE_ID::EN_SUCCESS);
+
+  ItemGridHasRequest failed_requests;
+  *failed_requests.Add() = inventory_basic;
+  auto missing_backpack = backpack_basic;
+  missing_backpack.mutable_position()->mutable_grid_position()->mutable_character_inventory()->set_x(3);
+  *failed_requests.Add() = missing_backpack;
+  auto failed_result = container.check_has(config, failed_requests);
+  CASE_EXPECT_EQ(failed_result.error_code, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND);
+  CASE_EXPECT_EQ(failed_result.failed_index, 1);
 }

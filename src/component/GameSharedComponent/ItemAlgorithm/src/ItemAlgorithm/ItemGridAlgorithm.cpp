@@ -92,7 +92,7 @@ ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checke
         // 不需要GUID: 合并到已有entry (entry数量始终为1, 无堆叠上限)
         auto group_it = item_groups_.find(type_id);
         if (group_it != item_groups_.end() && !group_it->second.empty()) {
-          auto& existing = group_it->second.front();
+          auto& existing = *group_it->second.begin();
           int64_t old_count = existing->item_instance().item_basic().count();
           existing->mutable_item_basic().set_count(old_count + add_count);
           item_count_cache_[type_id] += add_count;
@@ -107,7 +107,11 @@ ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checke
 
       // 需要GUID 或 首次添加: 新建entry
       item_grid_entry_ptr_t entry = make_entry(std::move(req));
-      item_groups_[type_id].push_back(entry);
+      if (!item_groups_[type_id].insert(entry).second) {
+        ITEM_ALGORITHM_LOG_ERROR_FMT(
+            "[EntrySortKeyError] add failed to insert entry type={} count={} guid={} entry_id={}", type_id, add_count,
+            guid, entry->entry_id());
+      }
       if (guid != 0) {
         guid_index_[guid] = entry;
       }
@@ -141,7 +145,11 @@ ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checke
     apply_position(*req.mutable_item_basic()->mutable_position()->mutable_grid_position(), target_pos);
 
     item_grid_entry_ptr_t entry = make_entry(std::move(req));
-    item_groups_[type_id].push_back(entry);
+    if (!item_groups_[type_id].insert(entry).second) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT(
+          "[EntrySortKeyError] add failed to insert entry type={} count={} guid={} at ({},{}) entry_id={}", type_id,
+          add_count, guid, target_pos.x, target_pos.y, entry->entry_id());
+    }
     add_entry_index(*get_item_position_cfg(checked_request.config_group, entry->item_instance().item_basic()), entry);
     item_count_cache_[type_id] += add_count;
     on_item_count_changed(type_id, entry, entry->item_instance().item_basic().guid(), target_pos, 0, add_count,
@@ -763,6 +771,91 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
   return checked_request;
 }
 
+ItemGridOperationResult ItemGridAlgorithm::check_has(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+    const ItemGridHasRequest& requests) const {
+  ItemGridOperationResult result;
+  if (!init_) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT("check_has called before init, container_guid={}", container_guid_);
+    result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
+    return result;
+  }
+
+  std::unordered_map<int64_t, int64_t> guid_required_count;
+  std::unordered_map<int32_t, int64_t> type_required_count;
+  std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> position_required_count;
+
+  for (int32_t i = 0; i < requests.size(); ++i) {
+    const auto& request = requests[i];
+    if (!is_item_valid(config_group, request) || request.position().container_guid() != container_guid_ ||
+        !check_item_position(request.position())) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_index = i;
+      return result;
+    }
+
+    auto item_type_config = ItemAlgorithmTypeOption::GetItemType(request.type_id());
+    if (item_type_config->need_guid) {
+      auto guid_it = guid_index_.find(request.guid());
+      if (guid_it == guid_index_.end() ||
+          guid_it->second->item_instance().item_basic().type_id() != request.type_id()) {
+        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
+        result.failed_index = i;
+        return result;
+      }
+
+      int64_t required_count = guid_required_count[request.guid()] + request.count();
+      if (guid_it->second->item_instance().item_basic().count() < required_count) {
+        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+        result.failed_index = i;
+        return result;
+      }
+      guid_required_count[request.guid()] = required_count;
+    } else if (item_type_config->need_occupy_the_grid) {
+      ItemGridPosition position = extract_position(request.position().grid_position());
+      auto position_it = position_index_.find(position);
+      if (position_it == position_index_.end() ||
+          position_it->second->item_instance().item_basic().type_id() != request.type_id()) {
+        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
+        result.failed_index = i;
+        return result;
+      }
+
+      int64_t required_count = position_required_count[position] + request.count();
+      if (position_it->second->item_instance().item_basic().count() < required_count) {
+        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+        result.failed_index = i;
+        return result;
+      }
+      position_required_count[position] = required_count;
+    } else {
+      auto group_it = item_groups_.find(request.type_id());
+      if (group_it == item_groups_.end()) {
+        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_FOUND;
+        result.failed_index = i;
+        return result;
+      }
+
+      int64_t total_count = 0;
+      for (const auto& entry : group_it->second) {
+        if (entry) {
+          total_count += entry->item_instance().item_basic().count();
+        }
+      }
+
+      int64_t required_count = type_required_count[request.type_id()] + request.count();
+      if (total_count < required_count) {
+        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+        result.failed_index = i;
+        return result;
+      }
+      type_required_count[request.type_id()] = required_count;
+    }
+  }
+
+  return result;
+}
+
 ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveCheckedRequest& checked_request) {
   if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("move called with failed checked request, error={} ({})",
@@ -857,7 +950,12 @@ ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveCheckedRequest& chec
       new_instance.mutable_item_basic()->set_count(add_req.op_count);
       *new_instance.mutable_item_basic()->mutable_position() = add_req.goal_position;
       item_grid_entry_ptr_t new_entry = make_entry(std::move(new_instance));
-      item_groups_[type_id].push_back(new_entry);
+      if (!item_groups_[type_id].insert(new_entry).second) {
+        ITEM_ALGORITHM_LOG_ERROR_FMT(
+            "[EntrySortKeyError] add failed to insert entry type={} count={} guid={} at ({},{}) entry_id={}", type_id,
+            add_req.op_count, new_entry->item_instance().item_basic().guid(), add_req.position.x, add_req.position.y,
+            new_entry->entry_id());
+      }
       add_entry_index(*position_cfg, new_entry);
       item_count_cache_[type_id] += add_req.op_count;
       on_item_count_changed(type_id, new_entry, new_entry->item_instance().item_basic().guid(), add_req.position, 0,
@@ -1315,7 +1413,7 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
       // 无GUID: 合并到已有 entry
       auto group_it = item_groups_.find(type_id);
       if (group_it != item_groups_.end() && !group_it->second.empty()) {
-        auto& existing = group_it->second.front();
+        auto& existing = *group_it->second.begin();
         int64_t old_count = existing->item_instance().item_basic().count();
         existing->mutable_item_basic().set_count(old_count + add_count);
         item_count_cache_[type_id] += add_count;
@@ -1331,7 +1429,11 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
     // 有GUID 或 首次添加
     PROJECT_NAMESPACE_ID::DItemInstance new_instance = item_instance;
     item_grid_entry_ptr_t entry = make_entry(std::move(new_instance));
-    item_groups_[type_id].push_back(entry);
+    if (!item_groups_[type_id].insert(entry).second) {
+      ITEM_ALGORITHM_LOG_ERROR_FMT(
+          "[EntrySortKeyError] load failed to insert entry type={} count={} guid={} entry_id={}", type_id, add_count,
+          guid, entry->entry_id());
+    }
     if (guid != 0) {
       guid_index_[guid] = entry;
     }
@@ -1401,7 +1503,11 @@ bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr
   apply_position(*new_instance.mutable_item_basic()->mutable_position()->mutable_grid_position(), target_pos);
 
   item_grid_entry_ptr_t entry = make_entry(std::move(new_instance));
-  item_groups_[type_id].push_back(entry);
+  if (!item_groups_[type_id].insert(entry).second) {
+    ITEM_ALGORITHM_LOG_ERROR_FMT(
+        "[EntrySortKeyError] load failed to insert entry type={} count={} guid={} at ({},{}) entry_id={}", type_id,
+        add_count, guid, target_pos.x, target_pos.y, entry->entry_id());
+  }
   add_entry_index(*position_cfg, entry);
   item_count_cache_[type_id] += add_count;
   on_item_count_changed(type_id, entry, entry->item_instance().item_basic().guid(), target_pos, 0, add_count,
@@ -1565,7 +1671,11 @@ void ItemGridAlgorithm::apply_entries(
         new_entry = make_entry(PROJECT_NAMESPACE_ID::DItemInstance(update.instance()));
       }
 
-      item_groups_[type_id].push_back(new_entry);
+      if (!item_groups_[type_id].insert(new_entry).second) {
+        ITEM_ALGORITHM_LOG_ERROR_FMT(
+            "[EntrySortKeyError] apply add failed to insert entry type={} count={} guid={} entry_id={}", type_id,
+            new_count, guid, new_entry->entry_id());
+      }
 
       if (item_type_config->need_occupy_the_grid) {
         auto position_cfg = get_item_position_cfg(config_group, item_basic);
@@ -1750,8 +1860,8 @@ bool ItemGridAlgorithm::find_positions_for_basics(
     const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
     std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition>& out_positions) const {
   if (!init_) {
-    ITEM_ALGORITHM_LOG_ERROR_FMT("find_positions_for_basics called before init, container_guid={} operate_id={}", container_guid_,
-                                 operate_id_);
+    ITEM_ALGORITHM_LOG_ERROR_FMT("find_positions_for_basics called before init, container_guid={} operate_id={}",
+                                 container_guid_, operate_id_);
     return false;
   }
 
@@ -2141,7 +2251,7 @@ item_grid_entry_ptr_t ItemGridAlgorithm::find_entry(const PROJECT_NAMESPACE_ID::
     int32_t type_id = basic.type_id();
     auto it = item_groups_.find(type_id);
     if (it != item_groups_.end() && !it->second.empty()) {
-      return it->second.front();
+      return *it->second.begin();
     }
   }
   return nullptr;
@@ -2179,7 +2289,7 @@ void ItemGridAlgorithm::remove_entry_from_group(const item_grid_entry_ptr_t& ent
   int32_t type_id = entry->item_instance().item_basic().type_id();
   auto group_it = item_groups_.find(type_id);
   if (group_it != item_groups_.end()) {
-    group_it->second.remove(entry);
+    group_it->second.erase(entry);
     if (group_it->second.empty()) {
       item_groups_.erase(group_it);
     }

@@ -48,7 +48,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   friend struct ItemGridEntry;
 
  public:
-  using item_group_type = std::list<item_grid_entry_ptr_t>;
+  using item_group_type = std::set<item_grid_entry_ptr_t, item_grid_entry_ptr_comparator>;
   using item_group_map_type = std::unordered_map<int32_t, item_group_type>;
   using position_index_type =
       std::unordered_map<ItemGridPosition, item_grid_entry_ptr_t, ItemGridPositionHash, ItemGridPositionEqualTo>;
@@ -95,6 +95,10 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
       ItemGridReplaceRequest&& requests) const;
 
+  ItemGridOperationResult check_has(
+      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+      const ItemGridHasRequest& requests) const;
+
  public:
   // 客户端模式同步接口
   void apply_entries(
@@ -124,6 +128,7 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   void foreach (std::function<bool(const PROJECT_NAMESPACE_ID::DItemInstance&)> fn) const;
   item_grid_entry_ptr_t get(const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const;
   item_grid_entry_ptr_t get_by_guid(int64_t guid) const;
+  // 按照位置排序了的数据
   const item_group_type* get_group(int32_t type_id) const;
   // 遍历接口 不建议在正常流程中调用
   int64_t get_item_count(int32_t type_id) const;

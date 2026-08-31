@@ -522,6 +522,49 @@ ItemGridOperationResult ItemGridContainer::replace(ItemGridContainerReplaceCheck
   return result;
 }
 
+ItemGridOperationResult ItemGridContainer::check_has(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
+    const ItemGridHasRequest& in_requests) const {
+  ItemGridOperationResult result;
+
+  struct GridBatch {
+    item_grid_algorithm_ptr_t grid = nullptr;
+    std::vector<int32_t> original_indices;
+    ItemGridHasRequest has_requests;
+  };
+  std::unordered_map<item_grid_algorithm_ptr_t, GridBatch> batches;
+
+  for (int32_t i = 0; i < in_requests.size(); ++i) {
+    const auto& request = in_requests[i];
+    item_grid_algorithm_ptr_t grid = select_grid(request.position());
+    if (grid == nullptr) {
+      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
+      result.failed_index = i;
+      return result;
+    }
+
+    auto& batch = batches[grid];
+    batch.grid = grid;
+    batch.original_indices.push_back(i);
+    *batch.has_requests.Add() = request;
+  }
+
+  for (auto& pair : batches) {
+    auto& batch = pair.second;
+    auto grid_result = batch.grid->check_has(in_config_group, batch.has_requests);
+    if (grid_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      result.error_code = grid_result.error_code;
+      if (grid_result.failed_index >= 0 &&
+          static_cast<size_t>(grid_result.failed_index) < batch.original_indices.size()) {
+        result.failed_index = batch.original_indices[static_cast<size_t>(grid_result.failed_index)];
+      }
+      return result;
+    }
+  }
+
+  return result;
+}
+
 }  // namespace item_algorithm
 
 ITEM_ALGORITHM_NAMESPACE_END

@@ -187,6 +187,9 @@ class ITEM_ALGORITHM_API ItemGridContainer {
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       ItemGridReplaceRequest&& in_requests);
   ItemGridOperationResult replace(ItemGridContainerReplaceCheckedRequest& checked_request);
+  ItemGridOperationResult check_has(
+      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+      const ItemGridHasRequest& requests) const;
 };
 
 }  // namespace item_algorithm
