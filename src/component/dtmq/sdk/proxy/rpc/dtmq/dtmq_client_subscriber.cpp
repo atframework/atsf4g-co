@@ -3196,6 +3196,13 @@ void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChan
   });
 
   if (result_code >= 0 && is_ready()) {
+    // 快照是对订阅/心跳的响应，说明心跳刚完成一轮: 把下一次心跳推后一个间隔，否则 wal_client_
+    // 的创建时间点会被 setup_timer 当作心跳已到期，导致短时间内重复发送 subscribe
+    if (wal_client_) {
+      wal_client_->set_next_heartbeat_timepoint(
+          atfw::util::time::time_utility::now() +
+          protobuf_to_chrono_duration<std::chrono::system_clock::duration>(configure_.heartbeat_interval()));
+    }
     // 刷新定时器,如果服务器下发的心跳间隔更短，则要缩短下一次心跳定时器间隔
     // 加载快照后配置可能发生变化，所以要不能忽略同action
     setup_timer(timer_action_type::kSendHeartbeat, false);

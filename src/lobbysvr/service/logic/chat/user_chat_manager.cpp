@@ -400,6 +400,12 @@ static void global_chat_manager_send_pending_message_once(rpc::context& ctx, int
             continue;
           }
 
+          // 同步下发数据，否则可能会漏掉一些待发送的消息，导致一致性问题
+          auto user_inst = sess->get_user();
+          if (user_inst) {
+            user_inst->send_all_syn_msg(child_ctx);
+          }
+
           int32_t result_code = RPC_AWAIT_CODE_RESULT(rpc::lobbysvrclientservice::send_chat_channel_sync(
               child_ctx, current_data.sync_data->sync_message, *sess));
           if (result_code < 0) {

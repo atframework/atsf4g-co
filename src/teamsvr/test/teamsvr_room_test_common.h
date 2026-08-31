@@ -861,8 +861,8 @@ class room_test_env {
     if (key.channel_type() != kTeamRoomChannelType) {
       return nullptr;
     }
-    // 频道 ID 由 team_api::make_team_room_channel_key 生成的标准单播格式: "channel:<type>:<zone_id>:D<team_id>"
-    // (实例段带 D/N 前缀以区分数字/名字实例)
+    // 频道 ID 由 team_api::make_team_room_channel_key 生成的标准单播格式: "channel:<type>:<zone_id>:<team_id>"
+    // (数字实例段无前缀; 名字实例段带 $ 前缀, 不是房间频道)
     try {
       const std::string& channel_id = key.channel_id();
       size_t type_begin = channel_id.find(':');
@@ -875,8 +875,8 @@ class room_test_env {
       std::string type_text = channel_id.substr(type_begin + 1, zone_begin - type_begin - 1);
       std::string zone_text = channel_id.substr(zone_begin + 1, team_begin - zone_begin - 1);
       std::string team_text = channel_id.substr(team_begin + 1);
-      if (!team_text.empty() && (team_text.front() == 'D' || team_text.front() == 'N')) {
-        team_text = team_text.substr(1);
+      if (!team_text.empty() && team_text.front() == '$') {
+        return nullptr;
       }
       auto channel_type = std::stoul(type_text);
       auto zone_id = std::stoul(zone_text);

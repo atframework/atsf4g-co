@@ -66,6 +66,12 @@ task_action_team_send_invitation::operator()() {
       set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
+    if (team_ptr->is_destroyed()) {
+      set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+      user_inst->get_user_team_manager().remove_team(get_shared_context(), team_ptr->get_team_key(),
+                                                     atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+      TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
   }
 
   atfw::team::DTeamKey team_key;
@@ -77,7 +83,7 @@ task_action_team_send_invitation::operator()() {
 
     // 先尝试使用已存在的队伍
     team_ptr = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
-    if (team_ptr) {
+    if (team_ptr && !team_ptr->is_destroyed()) {
       protobuf_copy_message(team_key, team_ptr->get_team_key());
       break;
     }

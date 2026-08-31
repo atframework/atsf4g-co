@@ -14,9 +14,11 @@
 
 #include <google/protobuf/any.pb.h>
 #include <protocol/common/com.struct.dtmq.common.pb.h>
+#include <protocol/common/com.struct.item.common.pb.h>
 #include <protocol/extension/atframework.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.protocol.chat.pb.h>
+#include <protocol/pbdesc/com.protocol.user.pb.h>
 #include <protocol/pbdesc/com.struct.chat.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
 #include <protocol/pbdesc/dtmq_proxy.pb.h>
@@ -42,7 +44,6 @@
 #include <memory>
 #include <set>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -53,6 +54,7 @@
 #include "logic/chat/user_chat_manager.h"
 #include "logic/logic_server_setup.h"
 #include "logic/session_manager.h"
+#include "lobbysvr_test_runtime_helper.h"  // NOLINT: build/include_subdir
 #include "rpc/dtmq/dtmq_algorithm.h"
 #include "rpc/dtmq/dtmq_client_subscriber.h"
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
@@ -64,6 +66,7 @@ constexpr uint64_t kGatewayNodeId = 0x82000001;
 constexpr uint64_t kDtmqProxyNodeId = 0x1C0001;
 constexpr uint64_t kUserId1 = 10001;
 constexpr uint64_t kUserId2 = 10002;
+constexpr uint64_t kUserId3 = 10003;
 constexpr uint32_t kZoneId = 1;
 
 struct chat_test_user {
@@ -348,6 +351,10 @@ bool parse_channel_sync_body(const atframework::CSMsg &cs_msg, atframework::chat
   return out.ParseFromString(cs_msg.body_bin());
 }
 
+// Indices of every downstream stream post of one rpc name addressed to one session, in send order (used to
+// assert the relative order of a dirty push and the chat sync that carried it).
+using lobbysvr_test::find_stream_post_indices;
+
 atframework::dtmq::DChannelMessage make_channel_message(int64_t sequence, gsl::string_view sender_key,
                                                         uint32_t channel_type, gsl::string_view text) {
   atframework::dtmq::DChannelMessage msg;
@@ -416,16 +423,9 @@ bool receive_channel_event(atfw::testing::runtime &test, const atframework::dtmq
   });
 }
 
-// user_chat_manager::global_tick only flushes once per 100ms wall window; sleep first so consecutive flushes in one
-// case are not deduplicated, then pump to let the spawned push task finish.
-void flush_pending_chat_messages(atfw::testing::runtime &test) {
-  std::this_thread::sleep_for(std::chrono::milliseconds{110});
-  static_cast<void>(run_sync_task(test, "chat.global_tick", [](rpc::context &ctx) -> rpc::result_code_type {
-    user_chat_manager::global_tick(ctx);
-    RPC_RETURN_CODE(0);
-  }));
-  pump_rounds(test, 6);
-}
+// user_chat_manager::global_tick only flushes once per 100ms wall window; the shared helper sleeps first so
+// consecutive flushes in one case are not deduplicated, then pumps to let the spawned push task finish.
+using lobbysvr_test::flush_pending_chat_messages;
 
 atframework::chat::DChatChannelKey make_chat_key_of_private_channel(uint64_t user_id, uint32_t zone_id) {
   atframework::chat::DChatChannelKey chat_key;
@@ -1001,5 +1001,105 @@ CASE_TEST(lobbysvr_user_chat, heartbeat_resync_and_snapshot_merge) {
   }
 
   flush_pending_chat_messages(test);
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// Dirty flush piggybacked on chat pushes (regression for the approve-invitation race, where a dirty team
+// snapshot registered outside any CS task waited for the next ping): a dirty item marked outside any CS task
+// stays pending while no push channel runs; the flush tick of a later private-channel message delivers the
+// dirty push BEFORE the chat sync; consumed handles are not resent by a later idle flush.
+CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
+  atfw::testing::runtime test;
+  if (!start_chat_runtime(test)) {
+    return;
+  }
+  if (!setup_dtmq_proxy_node(test)) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_EQ(0, handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice());
+
+  dtmq_proxy_capture capture;
+  auto proxy_rules = mock_dtmq_proxy(test, capture);
+  CASE_EXPECT_TRUE(!!proxy_rules.subscribe);
+  CASE_EXPECT_TRUE(!!proxy_rules.send_message);
+
+  chat_test_user user3;
+  if (!create_chat_user(test, kUserId3, 3003, "openid-chat-3", user3)) {
+    test.stop();
+    return;
+  }
+
+  // The private channel becomes ready so a later incremental message has a pending sync to flush.
+  const auto private_key = make_private_channel_key(kUserId3);
+  atframework::chat::CSChatGetChannelSnapshotReq snapshot_req;
+  snapshot_req.set_channel_id(private_key.channel_id());
+  auto packed_snapshot = pack_chat_cs_request(
+      rpc::lobbysvrclientservice::packer::get_full_name_of_chat_get_channel_snapshot(), snapshot_req);
+  CASE_EXPECT_TRUE(post_and_pump(test, user3.client, packed_snapshot));
+
+  int64_t private_base_sequence = 0;
+  if (auto channel = find_channel(user3.user_inst->get_user_chat_manager(), private_key.channel_id())) {
+    private_base_sequence = channel->get_last_message_sequence();
+  }
+  CASE_EXPECT_TRUE(receive_channel_event(
+      test, make_snapshot_event(private_key, private_base_sequence + 1, private_base_sequence, {})));
+  flush_pending_chat_messages(test);
+
+  const auto dirty_rpc_name = rpc::lobbysvrclientservice::packer::get_full_name_of_user_dirty_chg_sync();
+  const auto sync_rpc_name = rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync();
+  const size_t dirty_baseline = find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size();
+
+  // A dirty item marked outside any CS task (the dtmq dispatch path) has no CS epilogue to flush it.
+  CASE_EXPECT_TRUE(run_sync_task(test, "chat.mark_dirty_item", [&user3](rpc::context &) -> rpc::result_code_type {
+    PROJECT_NAMESPACE_ID::DItemInstance dirty_item;
+    dirty_item.mutable_item_basic()->set_type_id(420001);
+    dirty_item.mutable_item_basic()->set_count(7);
+    user3.user_inst->mutable_dirty_item(dirty_item);
+    RPC_RETURN_CODE(0);
+  }));
+  pump_rounds(test, 2);
+  CASE_EXPECT_EQ(dirty_baseline, find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size());
+
+  // A private-channel message queues a pending sync; the flush tick delivers the dirty push BEFORE the chat sync.
+  const int64_t msg_seq = private_base_sequence + 1;
+  std::vector<atframework::dtmq::DChannelMessage> private_msgs{
+      make_channel_message(msg_seq, "user:1:10003", private_key.channel_type(), "flush-carrier"),
+  };
+  chain_message_hashes(private_msgs, 0);
+  CASE_EXPECT_TRUE(receive_channel_event(test, make_incremental_event(private_key, msg_seq, private_msgs)));
+  flush_pending_chat_messages(test);
+
+  const auto dirty_posts = find_stream_post_indices(test, user3.session_id, dirty_rpc_name);
+  const auto sync_posts = find_stream_post_indices(test, user3.session_id, sync_rpc_name);
+  CASE_EXPECT_EQ(dirty_baseline + 1, dirty_posts.size());
+  CASE_EXPECT_FALSE(sync_posts.empty());
+  if (dirty_posts.size() > dirty_baseline && !sync_posts.empty()) {
+    CASE_EXPECT_LT(dirty_posts.back(), sync_posts.back());
+  }
+
+  if (dirty_posts.size() > dirty_baseline) {
+    const auto *dirty_record = test.cs().call_at(dirty_posts.back());
+    CASE_EXPECT_TRUE(nullptr != dirty_record);
+    if (nullptr != dirty_record) {
+      atframework::CSMsg dirty_cs_msg;
+      CASE_EXPECT_TRUE(dirty_cs_msg.ParseFromString(dirty_record->message.body().post().content()));
+      PROJECT_NAMESPACE_ID::SCUserDirtyChgSync dirty_body;
+      CASE_EXPECT_TRUE(dirty_body.ParseFromString(dirty_cs_msg.body_bin()));
+      bool found_dirty_item = false;
+      for (const auto &item : dirty_body.dirty_items()) {
+        if (420001 == item.item_basic().type_id()) {
+          found_dirty_item = true;
+          CASE_EXPECT_EQ(7, item.item_basic().count());
+        }
+      }
+      CASE_EXPECT_TRUE(found_dirty_item);
+    }
+  }
+
+  // Consumed handles are cleared, so a later idle flush does not resend the dirty push.
+  flush_pending_chat_messages(test);
+  CASE_EXPECT_EQ(dirty_baseline + 1, find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size());
+
   CASE_EXPECT_EQ(0, test.stop());
 }

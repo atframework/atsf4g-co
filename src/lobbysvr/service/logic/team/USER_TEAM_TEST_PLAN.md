@@ -275,6 +275,8 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | --- | --- | --- |
 | CS-INVITE-01 | `team_send_invitation` | invitee 无效零上行；显式 team 不存在；未指定 team 时复用 current；无 current 时 create→本地注册→add_invitation；权限不足零 add-invitation；payload 含完整 team_key、inviter/invitee、派生私有频道、source，开始/过期时间留给 room |
 | CS-INVITE-02 | approve/reject invitation | 无 pending/已过期零上行；正常请求 sender/invitee/version/router/shared_member_data 完整；client_result 透传；成功和 room-not-found 的缓存终态见 ADM-SELF-06 |
+| CS-INVITE-03 | approve 后 dirty snapshot 下发时机 | approve 响应先于个人频道 joined_team 投递（同节点队长使队伍共享订阅已 ready）：`add_team`→`try_load_snapshot` 同步登记快照脏标记但无 CS 任务收尾下发；修复后由聊天推送 flush 顺带下发，dirty 在 chat_channel_sync 之前到达且无需新 CS 请求 |
+| CS-INVITE-04 | current 为已销毁已销毁时的邀请 | 显式指定已销毁队伍直接 `EN_ERR_TEAM_NOT_IN_TEAM` 并收编已销毁（索引移除 + destroy 推送）；未指定 team 的邀请不复用已销毁、直接 create 新队伍且邀请落在新 team_id；显式存活队伍仍复用（对照组）；用例须先耗尽首个 CS 请求前置的分钟 refresh（`user::refresh_feature_limit` 首触会把 destroyed current 按 EXPIRED 收编），已销毁才能存活到 task body |
 | CS-JOIN-01 | `team_send_join_request` | 已在队、有效 pending 时零上行；正常 payload 含 team_key/requester/本人私有频道/source/client_version/router/member_admission_data；channel-not-found 映射 room-not-found；缓存只由 `apply_join_request` 建立 |
 | CS-JOIN-02 | accept/reject join request | team 不存在/角色不足零上行；正常 action 含 team_key/requester，业务结果透传 |
 | CS-MEMBER-01 | exit/remove/role | self remove 走 manager exit，reason=`EXIT_TEAM`；移除他人需权限且 action reason=`REMOVE_MEMBER`；set-role 权限/role 边界及 payload |
@@ -293,8 +295,8 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 
 ### 5.7 覆盖映射（2026-08-30）
 
-全部 68 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
-矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 8 例，cs 文件）。
+全部 70 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
+矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 10 例，cs 文件）。
 
 | 矩阵 ID | 覆盖用例 |
 | --- | --- |
@@ -320,7 +322,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | HB-01/02 | lifecycle.`heartbeat_reports_watermark_and_throttles`、`heartbeat_suppressed_outside_running_member_state` |
 | EXIT-01/02 | lifecycle.`exit_team_request_then_channel_remove_converges`、`exit_retry_timeout_cleanup_and_channel_destroy` |
 | DUMP-01/02 | lifecycle.`table_dump_init_round_trip_restores_watermark_team_and_pendings`、`user_get_info_exports_only_running_team_with_trimming`；manager.`dump_snapshot_exports_cached_state` |
-| CS-INVITE/JOIN/MEMBER/CAPTAIN/DATA | cs.`cs_invite_01/02`、`cs_join_01/02`、`cs_member_01`、`cs_captain_01`、`cs_data_01/02`（共 8 例） |
+| CS-INVITE/JOIN/MEMBER/CAPTAIN/DATA | cs.`cs_invite_01/02/03`、`cs_join_01/02`、`cs_member_01`、`cs_captain_01`、`cs_data_01/02`（共 9 例） |
 | ROBUST-01..04 | robust.`robust_bad_any_personal_event_ignored`、`robust_bad_any_team_snapshot_preserves_cache`、`robust_bad_shared_data_any_skips_only_that_key`、`robust_fixture_time_and_runtime_hygiene` |
 | §3 叙事补强 | robust.`robust_duplicate_events_idempotent`、`robust_out_of_order_events_converge`、`robust_late_events_after_channel_destroy_ignored`、`robust_snapshot_rebuild_cleans_pendings_and_indexes` |
 | 生命周期收编对照 | manager.`minute_refresh_removes_never_member_current_team`、`minute_refresh_keeps_member_current_team` |
@@ -380,6 +382,21 @@ ctest --test-dir <BUILD_DIR> -R "^atf4g-co-lobbysvr-unit-test\.unit$" --output-o
 - 受影响 suite：全量运行（含 chat、matching、async-jobs 既有用例）→ 76 选中 / 76 通过 / 0 失败；
 - ctest：`ctest -R "^atf4g-co-lobbysvr-unit-test\.unit$"` → 1/1 Passed（4.26s）；
 - 跳过项：无；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
+
+验证记录（Linux x86_64、clang 21、Debug、`build_jobs_cmake_tools`，ninja；新增 CS-INVITE-03 后 §5.7 共 69 例）：
+
+- 编译：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 12` 通过；
+- 聚焦用例：`cs_invite_03_approve_dirty_snapshot_flushed_with_chat_sync`（team）与
+  `chat_channel_sync_flushes_pending_user_dirty`（chat，同修复的聊天侧回归）均通过；
+- 全量：`atf4g-co-lobbysvr-unit-test`（无过滤）→ 78 选中 / 78 通过 / 0 失败（含 chat 5 例、team 69 例）；
+
+验证记录（Linux x86_64、clang 21、Debug、`build_jobs_cmake_tools`，ninja；新增 CS-INVITE-04 后 §5.7 共 70 例）：
+
+- 编译：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 4` 通过；
+- 聚焦用例：`cs_invite_04_destroyed_current_team_replaced_on_invite` 连续 3 次运行均通过；
+- 全量：`atf4g-co-lobbysvr-unit-test`（无过滤）→ 79 选中 / 79 通过 / 0 失败（含 chat 5 例、team 70 例）；
+- teamsvr 回归：`atf4g-co-teamsvr-room-unit-test` 全量仅 `teamsvr_room_lifecycle.subscribe_failure_then_recover_once`
+  失败，隔离单跑通过，为 main 基线已存在的用例间时序依赖 flake，与本次改动无关；
 
 后续维护入口：改组队行为时先更新 §2/§3 契约，再按 §5.7 找到对应用例调整；新增用例遵循 §4.3 的可观察
 同步约定和 id 段分配。上述验证命令照旧可用，`<BUILD_DIR>` 按仓库 build/test Skill 解析。

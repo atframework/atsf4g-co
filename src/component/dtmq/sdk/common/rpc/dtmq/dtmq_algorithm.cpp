@@ -61,12 +61,12 @@ DTMQ_COMMON_SDK_API uint64_t calculate_hash_code(uint64_t previous,
 }
 
 DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id, uint64_t instance_id) {
-  return atfw::util::string::format("channel:{}:{}:D{}", type_id, zone_id, instance_id);
+  return atfw::util::string::format("channel:{}:{}:{}", type_id, zone_id, instance_id);
 }
 
 DTMQ_COMMON_SDK_API std::string make_unicast_channel_id(uint32_t type_id, uint64_t zone_id,
                                                         gsl::string_view instance_name) {
-  return atfw::util::string::format("channel:{}:{}:N{}", type_id, zone_id, instance_name);
+  return atfw::util::string::format("channel:{}:{}:${}", type_id, zone_id, instance_name);
 }
 
 DTMQ_COMMON_SDK_API uint32_t parse_unicast_channel_type_from_channel_id(gsl::string_view channel_id) {
