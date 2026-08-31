@@ -4,7 +4,7 @@
 //   SDK-DTMQ-01~04: rpc::dtmq::update/reset_lock/destroy_channel 从 req.channel_key 提取目标节点
 //   SDK-TEAM-01~07: rpc::team::team_api 封装从 req 提取 DTeamKey(zone_id + team_id) 并内嵌一致性哈希路由
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -20,7 +20,13 @@
 #include <rpc/team/teamroomservice.atfw.gen.h>
 
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::kDtmqProxyNodeId;
+using teamsvr_room_test::kLocalRoomNodeId;
+using teamsvr_room_test::kTestZoneId;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_env;
 
 constexpr uint64_t kRemoteRoomNodeId = 0x11000002;
 
@@ -63,7 +69,7 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_reset_lock_routed_by_req_channel_key) {
   CASE_EXPECT_EQ(kDtmqProxyNodeId,
                  last_call_target(env.runtime(), rpc::dtmq::packer::get_full_name_of_reset_lock(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -97,7 +103,7 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_update_and_destroy_routed_by_req_channel_ke
   CASE_EXPECT_EQ(kDtmqProxyNodeId,
                  last_call_target(env.runtime(), rpc::dtmq::packer::get_full_name_of_destroy_channel(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -133,7 +139,7 @@ CASE_TEST(teamsvr_room_sdk_api, dtmq_wrappers_reject_empty_channel_key) {
   CASE_EXPECT_EQ(0u, fake.reset_lock_calls());
   CASE_EXPECT_EQ(0u, fake.destroy_calls());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -209,7 +215,7 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_basic_rpcs_route_to_hash_node) {
   }));
   CASE_EXPECT_EQ(kLocalRoomNodeId, last_call_target(env.runtime(), rpc::team::packer::get_full_name_of_heartbeat(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -260,7 +266,7 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_create_allows_server_generated_team_id)
   CASE_EXPECT_EQ(kTestZoneId, response.team_key().zone_id());
   CASE_EXPECT_EQ(kGeneratedTeamId, response.team_key().team_id());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -321,7 +327,7 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_routes_to_remote_node) {
   CASE_EXPECT_EQ(kRemoteRoomNodeId,
                  last_call_target(env.runtime(), rpc::team::packer::get_full_name_of_send_message(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -358,7 +364,7 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_add_invitation_nested_key_routing) {
   CASE_EXPECT_EQ(kLocalRoomNodeId,
                  last_call_target(env.runtime(), rpc::team::packer::get_full_name_of_add_invitation(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -394,7 +400,7 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_add_join_request_nested_key_routing) {
   CASE_EXPECT_EQ(kLocalRoomNodeId,
                  last_call_target(env.runtime(), rpc::team::packer::get_full_name_of_add_join_request(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -452,7 +458,7 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_approve_reject_route_by_team_key) {
   CASE_EXPECT_EQ(kLocalRoomNodeId,
                  last_call_target(env.runtime(), rpc::team::packer::get_full_name_of_reject_invitation(), 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -478,11 +484,12 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_no_ready_node_returns_not_available) {
                  }));
   CASE_EXPECT_EQ(calls_before, env.runtime().ss().calls(full_name));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ SDK-TEAM-07: team_id 为 0 返回 INVALID_PARAM 且不发 RPC;zone_id 为 0 视为不分区队伍,走全局发现集正常路由 ============
+// ============ SDK-TEAM-07: team_id 为 0 返回 INVALID_PARAM 且不发 RPC;zone_id 为 0 视为不分区队伍,
+// 走全局发现集正常路由 ============
 CASE_TEST(teamsvr_room_sdk_api, team_api_reject_invalid_routing_key) {
   room_test_env env;
   // 本进程不作为房间节点,zone 0(不分区队伍)经全局发现集路由到远端 mock 节点
@@ -524,6 +531,6 @@ CASE_TEST(teamsvr_room_sdk_api, team_api_reject_invalid_routing_key) {
   CASE_EXPECT_EQ(calls_before + 1, env.runtime().ss().calls(full_name));
   CASE_EXPECT_EQ(kLocalRoomNodeId, last_call_target(env.runtime(), full_name, 0));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

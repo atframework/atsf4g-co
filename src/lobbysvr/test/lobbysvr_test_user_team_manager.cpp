@@ -12,7 +12,9 @@
 // - channel incremental actions maintain the caches and project increase dirty pushes to the client;
 // - personal-channel receipt events drive the manager-level pending invitation/join-request lists.
 
-#include "lobbysvr_test_user_team_common.h"
+#include <string>
+
+#include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
 namespace {
 constexpr int64_t kFirstTeamId = 101;
 constexpr int64_t kSecondTeamId = 102;
@@ -94,8 +96,9 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_restores_current) {
   {
     atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kFirstTeamId);
     team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                  {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-    team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+    team_test::add_storage_member(team_storage, kUserId,
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kFirstTeamId, team_storage));
     CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
       return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == restored->get_cached_permission_role();
@@ -105,7 +108,7 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_restores_current) {
   // After the exit retry interval the minute refresh retries B's exit, but must never resend A's stale exit.
   {
     team_test::now_offset_guard time_guard;
-    time_guard.advance(team_test::get_exit_retry_interval() + std::chrono::seconds{1});
+    team_test::now_offset_guard::advance(team_test::get_exit_retry_interval() + std::chrono::seconds{1});
     user::ptr_t user_ptr = user_inst;
     CASE_EXPECT_TRUE(
         team_test::run_sync_task(test, "team.refresh_minute", [&user_ptr](rpc::context& ctx) -> rpc::result_code_type {
@@ -168,8 +171,8 @@ CASE_TEST(lobbysvr_user_team, minute_refresh_keeps_member_current_team) {
   // Observable condition: the snapshot resets the cached role from the join-data NORMAL to the storage role.
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == current->get_cached_permission_role();
@@ -178,7 +181,7 @@ CASE_TEST(lobbysvr_user_team, minute_refresh_keeps_member_current_team) {
   // Fast-forward past the configured wait_add_member_timeout: a member is never reported as timeout.
   {
     team_test::now_offset_guard time_guard;
-    time_guard.advance(team_test::get_wait_add_member_timeout() + std::chrono::seconds{1});
+    team_test::now_offset_guard::advance(team_test::get_wait_add_member_timeout() + std::chrono::seconds{1});
     {
       rpc::context ctx{rpc::context::create_without_task()};
       CASE_EXPECT_FALSE(current->wait_to_be_member_but_timeout(ctx));
@@ -249,7 +252,7 @@ CASE_TEST(lobbysvr_user_team, minute_refresh_removes_never_member_current_team) 
   // the snapshot reset the cached role back to GUEST.
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return atfw::team::EN_TEAM_MEMBER_ROLE_GUEST == current->get_cached_permission_role();
@@ -258,7 +261,7 @@ CASE_TEST(lobbysvr_user_team, minute_refresh_removes_never_member_current_team) 
   // Fast-forward past the configured wait_add_member_timeout.
   {
     team_test::now_offset_guard time_guard;
-    time_guard.advance(team_test::get_wait_add_member_timeout() + std::chrono::seconds{1});
+    team_test::now_offset_guard::advance(team_test::get_wait_add_member_timeout() + std::chrono::seconds{1});
     {
       rpc::context ctx{rpc::context::create_without_task()};
       CASE_EXPECT_TRUE(current->wait_to_be_member_but_timeout(ctx));
@@ -332,8 +335,8 @@ CASE_TEST(lobbysvr_user_team, member_set_role_updates_cached_data) {
   // Team channel snapshot with the user as a NORMAL member.
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == current->get_cached_permission_role();
@@ -623,8 +626,8 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
 
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   // 快照加载后客户端应收到一条携带完整快照的脏数据推送
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
@@ -886,7 +889,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
   // 部分过期清理: 只移除过期前缀(短有效期的加入请求和邀请)，遇到第一个未过期条目即停止
   {
     team_test::now_offset_guard time_guard;
-    time_guard.advance(std::chrono::seconds(150));
+    team_test::now_offset_guard::advance(std::chrono::seconds(150));
     {
       rpc::context ctx{rpc::context::create_without_task()};
       CASE_EXPECT_EQ(2, static_cast<int>(current->cleanup_expired_admissions(ctx)));
@@ -904,7 +907,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
     }
 
     // 继续快进到 300s 有效期的加入请求也过期: 只剩最长有效期的邀请
-    time_guard.advance(std::chrono::seconds(250));
+    team_test::now_offset_guard::advance(std::chrono::seconds(250));
     {
       rpc::context ctx{rpc::context::create_without_task()};
       CASE_EXPECT_EQ(1, static_cast<int>(current->cleanup_expired_admissions(ctx)));
@@ -1194,7 +1197,8 @@ CASE_TEST(lobbysvr_user_team, table_roundtrip_restores_pending_admissions) {
   auto restored_user = user::create(kRestoredUserId, team_test::kZoneId, "team-test-user-restored");
   CASE_EXPECT_TRUE(!!restored_user);
   if (restored_user) {
-    CASE_EXPECT_TRUE(team_test::run_sync_task(test, "team.restore_table", [&](rpc::context& ctx) -> rpc::result_code_type {
+    CASE_EXPECT_TRUE(team_test::run_sync_task(
+        test, "team.restore_table", [&](rpc::context& ctx) -> rpc::result_code_type {
       restored_user->get_user_team_manager().init_from_table_data(ctx, table);
       RPC_RETURN_CODE(0);
     }));

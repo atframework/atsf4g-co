@@ -6,10 +6,25 @@
 // 个人频道 DTeamMemberAction 的目标/类型/内容、PUBLIC 数据过滤(ADM-03)、通知频道以 room 本地记录为准、
 // 准入内存缓存清理(approve/reject 后 not-found 且零写入)、重复请求幂等(ADM-02/10/16)。
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
+
+#include <string>
 
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::add_team_any_data_entry;
+using teamsvr_room_test::count_personal_actions;
+using teamsvr_room_test::fake_team_room_channel;
+using teamsvr_room_test::global_now_offset_guard;
+using teamsvr_room_test::kTestZoneId;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_cfg_values;
+using teamsvr_room_test::room_test_env;
+using teamsvr_room_test::setup_standard_team;
+using teamsvr_room_test::standard_team_members;
+using teamsvr_room_test::update_request_record;
 
 // 追加一条合法 admission 数据项(Any 同时携带 type_url+payload)。admission 数据按新请求全量覆盖，
 // 不使用共享数据更新入口的删除标记；测试数据按真实流程构造完整 Any。
@@ -355,7 +370,7 @@ CASE_TEST(teamsvr_room_admission, add_invitation_normalization_and_notify) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(1u, env.personal_message_count());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -447,7 +462,7 @@ CASE_TEST(teamsvr_room_admission, duplicate_invitation_no_extra_log) {
   // 每次内容变化的刷新都补发一次 invited 通知
   CASE_EXPECT_EQ(personal_after_first + 3, env.personal_message_count());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -532,7 +547,7 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
     CASE_EXPECT_TRUE(found_member_entry);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -664,7 +679,7 @@ CASE_TEST(teamsvr_room_admission, approve_invitation_writes_and_notifies) {
   }
   expect_compacted_storage_complete(fake, owner, {&member_a, &member_b, &invitee_data});
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -679,7 +694,7 @@ CASE_TEST(teamsvr_room_admission, reject_invitation_notify) {
     return;
   }
 
-  for (int scenario = 0; scenario < 2; ++scenario) {
+  for (uint64_t scenario = 0; scenario < 2; ++scenario) {
     int64_t team_id = next_test_team_id();
     team_room::ptr_t room;
     standard_team_members members;
@@ -688,7 +703,7 @@ CASE_TEST(teamsvr_room_admission, reject_invitation_notify) {
       break;
     }
 
-    auto invitee = make_user_key(1, 8041 + scenario);
+    auto invitee = make_user_key(1, 8041u + scenario);
     auto invite_req = make_add_invitation_req(members.normal, members.normal, invitee);
     // 邀请携带 admission 数据: 频道日志负载保留完整记录，个人回执裁剪 admission 数据
     // (记录里有数据，"已裁剪"断言才非空转)
@@ -786,7 +801,7 @@ CASE_TEST(teamsvr_room_admission, reject_invitation_notify) {
     }));
     CASE_EXPECT_EQ(sends_after_reject, fake.send_message_calls());
 
-    env.clear_rooms();
+    room_test_env::clear_rooms();
   }
 
   CASE_EXPECT_EQ(0, env.stop());
@@ -909,7 +924,7 @@ CASE_TEST(teamsvr_room_admission, join_request_normalization_and_duplicate) {
   CASE_EXPECT_EQ(2u,
                  count_personal_actions(env, applicant.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1038,7 +1053,7 @@ CASE_TEST(teamsvr_room_admission, approve_and_reject_join_request) {
       }
       expect_compacted_storage_complete(fake, owner, {&member_a, &member_b, &applicant_data});
 
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -1136,7 +1151,7 @@ CASE_TEST(teamsvr_room_admission, approve_and_reject_join_request) {
       }));
       CASE_EXPECT_EQ(sends_after_reject, fake.send_message_calls());
 
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -1217,7 +1232,7 @@ CASE_TEST(teamsvr_room_admission, expired_admission_semantics) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, reject_join)));
   }));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1266,7 +1281,7 @@ CASE_TEST(teamsvr_room_admission, standby_node_no_personal_side_effects) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(personal_before, env.personal_message_count());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1318,7 +1333,7 @@ CASE_TEST(teamsvr_room_admission, approve_when_already_member) {
       // 已是成员: 补一次 joined_team 通知(重试幂等场景的当前契约)
       CASE_EXPECT_EQ(personal_before + 1, env.personal_message_count());
 
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -1382,7 +1397,7 @@ CASE_TEST(teamsvr_room_admission, approve_when_already_member) {
           }));
       CASE_EXPECT_EQ(sends_after_approve, fake.send_message_calls());
 
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -1564,7 +1579,7 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1631,7 +1646,7 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
   // 恢复按恢复时刻剔除过期邀请，长有效期加入请求保留
   {
     global_now_offset_guard guard(std::chrono::seconds{5});
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     room.reset();
     auto restored = env.setup_ready_room(team_id);
     CASE_EXPECT_TRUE(!!restored);
@@ -1658,9 +1673,10 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
     protobuf_copy_message(*approve_join.mutable_sender_user_key(), members.owner);
     protobuf_copy_message(*approve_join.mutable_applicant(), applicant);
     CASE_EXPECT_EQ(0, env.run("approve_valid_after_restore",
-                              [restored, &approve_join](rpc::context& ctx) -> rpc::result_code_type {
-                                RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->approve_join_request(ctx, approve_join)));
-                              }));
+                               [restored, &approve_join](rpc::context& ctx) -> rpc::result_code_type {
+                                 RPC_RETURN_CODE(
+                                     RPC_AWAIT_CODE_RESULT(restored->approve_join_request(ctx, approve_join)));
+                               }));
     CASE_EXPECT_EQ(0, env.sync(team_id));
     CASE_EXPECT_TRUE(nullptr != restored->find_member(applicant, false));
   }
@@ -1694,30 +1710,33 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
       protobuf_copy_message(*approve_no_expiry.mutable_sender_user_key(), no_expiry_invitee);
       protobuf_copy_message(*approve_no_expiry.mutable_invitee(), no_expiry_invitee);
       CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
-                     env.run("approve_no_expiry", [room2, &approve_no_expiry](rpc::context& ctx) -> rpc::result_code_type {
+                     env.run("approve_no_expiry",
+                             [room2, &approve_no_expiry](rpc::context& ctx) -> rpc::result_code_type {
                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room2->approve_invitation(ctx, approve_no_expiry)));
                      }));
       CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
 
       // 维护后的压缩快照不携带任何 admission(无有效期记录未进入 dump)。
       // 只检查最后一条携带 custom_data 的 update: 早前的压缩快照合法包含当时有效的 admission
-      bool saw_compact_snapshot = false;
-      for (auto iter = fake.update_requests().rbegin(); iter != fake.update_requests().rend(); ++iter) {
-        if (!iter->request.has_custom_data()) {
-          continue;
+      const update_request_record* last_custom_request = nullptr;
+      for (const auto& record : fake.update_requests()) {
+        if (record.request.has_custom_data()) {
+          last_custom_request = &record;
         }
+      }
+      bool saw_compact_snapshot = false;
+      if (nullptr != last_custom_request) {
         atfw::team::DTeamStorage storage;
-        if (iter->request.custom_data().UnpackTo(&storage)) {
+        if (last_custom_request->request.custom_data().UnpackTo(&storage)) {
           saw_compact_snapshot = true;
           CASE_EXPECT_EQ(0, storage.pending_invitation_size());
           CASE_EXPECT_EQ(0, storage.pending_join_request_size());
         }
-        break;
       }
       CASE_EXPECT_TRUE(saw_compact_snapshot);
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

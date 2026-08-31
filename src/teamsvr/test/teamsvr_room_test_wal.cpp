@@ -9,7 +9,7 @@
 // client_subscriber::global_receive_channel_event, exactly like the production proxy -> room seam.
 // Distribution/forwarding stays covered by component-dtmq-proxysvr-unit-test.
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -24,6 +24,8 @@
 
 #include <chrono>
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -106,7 +108,8 @@ CASE_TEST(teamsvr_room_wal, channel_smoke_and_ready) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ WAL-01: publisher 混合 DTeamAction 提交，真实 sequence/hash 链经 SSChannelEventSync 后 Room 终态与 journal 一致 ============
+// ============ WAL-01: publisher 混合 DTeamAction 提交，真实 sequence/hash 链经 SSChannelEventSync 后
+// Room 终态与 journal 一致 ============
 CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
   room_test_env env;
   env.wal_journal_mode = true;
@@ -192,7 +195,8 @@ CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
                    channel->set_lock(ctx, lock);
 
                    for (const auto& action : trace) {
-                     auto commit_ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action));
+                     auto commit_ret =
+                         RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action));
                      if (0 != commit_ret) {
                        RPC_RETURN_CODE(commit_ret);
                      }
@@ -287,8 +291,8 @@ CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
     atfw::team::DTeamAction match;
     teamsvr_room_test::add_team_any_data_entry(match.mutable_team_update()->mutable_shared_team_data(), 101,
                                                "post-wal");
-    teamsvr_room_test::add_team_any_value_entry(match.mutable_team_update()->add_condition()->mutable_shared_team_data(),
-                                                100, "wal-team-1");
+    teamsvr_room_test::add_team_any_value_entry(
+        match.mutable_team_update()->add_condition()->mutable_shared_team_data(), 100, "wal-team-1");
     CASE_EXPECT_EQ(0, check_condition(match));
 
     atfw::team::DTeamAction mismatch;
@@ -315,8 +319,8 @@ CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
     protobuf_copy_message(*mismatch_update->mutable_user_key(), admin_key);
     auto* mismatch_group = mismatch_update->add_condition()->add_member_condition_group();
     protobuf_copy_message(*mismatch_group->mutable_user_key(), admin_key);
-    teamsvr_room_test::add_team_any_value_entry(mismatch_group->mutable_member_condition()->mutable_shared_member_data(),
-                                                7, "wal-member-other");
+    teamsvr_room_test::add_team_any_value_entry(
+        mismatch_group->mutable_member_condition()->mutable_shared_member_data(), 7, "wal-member-other");
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, check_condition(mismatch));
   }
 
@@ -331,14 +335,16 @@ CASE_TEST(teamsvr_room_wal, mixed_actions_replay_matches_journal) {
     protobuf_copy_message(*add_member->mutable_user_channel(), outsider_channel);
     add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
     CASE_EXPECT_EQ(0, env.run("commit_more", [&](rpc::context& ctx) -> rpc::result_code_type {
-                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action)));
+                     RPC_RETURN_CODE(
+                         RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action)));
                    }));
   }
   int64_t new_sequence = channel->get_last_message_sequence();
   CASE_EXPECT_GT(new_sequence, checkpoint_sequence);
   CASE_EXPECT_EQ(0, env.run("resubscribe", [&](rpc::context& ctx) -> rpc::result_code_type {
                    RPC_RETURN_CODE(
-                       RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, channel, checkpoint_sequence, checkpoint_hash)));
+                       RPC_AWAIT_CODE_RESULT(room_test_env::wal_resubscribe(ctx, channel, checkpoint_sequence,
+                                                                            checkpoint_hash)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
 
@@ -390,7 +396,8 @@ CASE_TEST(teamsvr_room_wal, checkpoint_incremental_and_hash_mismatch_snapshot) {
                      auto* add_member = action.mutable_add_member();
                      protobuf_copy_message(*add_member->mutable_user_key(), user_key);
                      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
-                     auto commit_ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action));
+                     auto commit_ret =
+                         RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action));
                      if (0 != commit_ret) {
                        RPC_RETURN_CODE(commit_ret);
                      }
@@ -446,7 +453,8 @@ CASE_TEST(teamsvr_room_wal, checkpoint_incremental_and_hash_mismatch_snapshot) {
     protobuf_copy_message(*add_member->mutable_user_key(), u3);
     add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
     CASE_EXPECT_EQ(0, env.run("commit_u3", [&](rpc::context& ctx) -> rpc::result_code_type {
-                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action)));
+                     RPC_RETURN_CODE(
+                         RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action)));
                    }));
   }
   int64_t sequence_u3 = channel->get_last_message_sequence();
@@ -454,7 +462,8 @@ CASE_TEST(teamsvr_room_wal, checkpoint_incremental_and_hash_mismatch_snapshot) {
 
   CASE_EXPECT_EQ(0, env.run("resubscribe_normal", [&](rpc::context& ctx) -> rpc::result_code_type {
                    RPC_RETURN_CODE(
-                       RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, channel, checkpoint_sequence, checkpoint_hash)));
+                       RPC_AWAIT_CODE_RESULT(room_test_env::wal_resubscribe(ctx, channel, checkpoint_sequence,
+                                                                            checkpoint_hash)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
 
@@ -482,7 +491,8 @@ CASE_TEST(teamsvr_room_wal, checkpoint_incremental_and_hash_mismatch_snapshot) {
   CASE_EXPECT_NE(0u, wrong_hash);
 
   CASE_EXPECT_EQ(0, env.run("resubscribe_hash_mismatch", [&](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, channel, sequence_u3, wrong_hash)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                       room_test_env::wal_resubscribe(ctx, channel, sequence_u3, wrong_hash)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
 
@@ -545,11 +555,13 @@ CASE_TEST(teamsvr_room_wal, lagging_subscriber_snapshot_caught_up_incremental) {
                    for (uint64_t user_id = 8501; user_id <= 8504; ++user_id) {
                      atfw::team::DTeamAction action;
                      auto* add_member = action.mutable_add_member();
-                     protobuf_copy_message(*add_member->mutable_user_key(), teamsvr_room_test::make_user_key(1, user_id));
+                     protobuf_copy_message(*add_member->mutable_user_key(),
+                                           teamsvr_room_test::make_user_key(1, user_id));
                      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
                      // 第二条日志跳号，压缩边界落在非连续 sequence 上
                      int64_t gap = (8502 == user_id) ? 1000 : 0;
-                     auto commit_ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action, gap));
+                     auto commit_ret =
+                         RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action, gap));
                      if (0 != commit_ret) {
                        RPC_RETURN_CODE(commit_ret);
                      }
@@ -596,7 +608,8 @@ CASE_TEST(teamsvr_room_wal, lagging_subscriber_snapshot_caught_up_incremental) {
   env.wal_clear_event_batches();
   CASE_EXPECT_EQ(0, env.run("subscribe_lagging", [&](rpc::context& ctx) -> rpc::result_code_type {
                    RPC_RETURN_CODE(
-                       RPC_AWAIT_CODE_RESULT(env.wal_resubscribe_as(ctx, channel, kLaggingKey, 0, 0, false)));
+                       RPC_AWAIT_CODE_RESULT(
+                           room_test_env::wal_resubscribe_as(ctx, channel, kLaggingKey, 0, 0, false)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
   {
@@ -637,7 +650,7 @@ CASE_TEST(teamsvr_room_wal, lagging_subscriber_snapshot_caught_up_incremental) {
                    auto* add_member = action.mutable_add_member();
                    protobuf_copy_message(*add_member->mutable_user_key(), teamsvr_room_test::make_user_key(1, 8505));
                    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action)));
                  }));
   int64_t new_sequence = channel->get_last_message_sequence();
   {
@@ -652,7 +665,8 @@ CASE_TEST(teamsvr_room_wal, lagging_subscriber_snapshot_caught_up_incremental) {
     CASE_EXPECT_NE(0u, boundary_hash);
     CASE_EXPECT_EQ(0, env.run("subscribe_caught_up", [&](rpc::context& ctx) -> rpc::result_code_type {
                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                         env.wal_resubscribe_as(ctx, channel, kCaughtUpKey, boundary, boundary_hash, false)));
+                         room_test_env::wal_resubscribe_as(ctx, channel, kCaughtUpKey, boundary,
+                                                           boundary_hash, false)));
                    }));
   }
   CASE_EXPECT_EQ(0, env.wal_converge());
@@ -709,7 +723,8 @@ CASE_TEST(teamsvr_room_wal, lagging_subscriber_snapshot_caught_up_incremental) {
 // ============ WAL-04: compact_sequence 边界保留/删除语义与 Room 重放起点一致(含非连续 sequence) ============
 // 全链路走真实路径: 建队/加成员/带跳号的事件 -> 房间真实维护触发压缩 update -> 真实 mq_channel
 // 裁剪 -> 丢弃旧 room 后以 checkpoint=0 重订阅(真实快照 + 剩余日志)恢复。锁定真实裁剪契约:
-// sequence < compact_sequence 的日志被物理移除、== compact_sequence 的日志保留(fake journal 已对齐同一开区间语义)；恢复房间的压缩边界/成员/共享数据与权威频道一致
+// sequence < compact_sequence 的日志被物理移除、== compact_sequence 的日志保留(fake journal 已对齐同一开区间语义)；
+// 恢复房间的压缩边界/成员/共享数据与权威频道一致
 CASE_TEST(teamsvr_room_wal, compact_boundary_and_replay_start) {
   // 双维度硬保证语义下，订阅者缓存在维护时可能尚未积累到最小保留条数(WAL 事件异步送达);
   // 数量维度关闭(keep_count/keep_percent 均为 0)使本用例聚焦时间维度裁剪契约
@@ -791,7 +806,7 @@ CASE_TEST(teamsvr_room_wal, compact_boundary_and_replay_start) {
                      teamsvr_room_test::add_team_any_data_entry(update->mutable_shared_member_data(), 30 + i,
                                                                "wal-gap-" + std::to_string(i));
                      int64_t gap = (1 == i) ? 1000 : 0;
-                     auto ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action, gap));
+                     auto ret = RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action, gap));
                      if (0 != ret) {
                        RPC_RETURN_CODE(ret);
                      }
@@ -833,7 +848,7 @@ CASE_TEST(teamsvr_room_wal, compact_boundary_and_replay_start) {
   }
 
   // 丢弃旧 room，强制以 checkpoint=0 重新订阅: 0 < last_removed -> 真实快照(含 custom/private 与剩余日志)
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   room.reset();
   team_room::ptr_t restored = env.setup_ready_room(team_key);
   CASE_EXPECT_TRUE(!!restored);
@@ -843,7 +858,7 @@ CASE_TEST(teamsvr_room_wal, compact_boundary_and_replay_start) {
   }
   env.wal_clear_event_batches();
   CASE_EXPECT_EQ(0, env.run("force_snapshot_restore", [&](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, channel, 0, 0)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room_test_env::wal_resubscribe(ctx, channel, 0, 0)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
 
@@ -909,8 +924,8 @@ CASE_TEST(teamsvr_room_wal, compact_boundary_and_replay_start) {
     protobuf_copy_message(*mismatch_update->mutable_user_key(), members.normal);
     auto* mismatch_group = mismatch_update->add_condition()->add_member_condition_group();
     protobuf_copy_message(*mismatch_group->mutable_user_key(), members.normal);
-    teamsvr_room_test::add_team_any_value_entry(mismatch_group->mutable_member_condition()->mutable_shared_member_data(),
-                                                33, "wal-gap-other");
+    teamsvr_room_test::add_team_any_value_entry(
+        mismatch_group->mutable_member_condition()->mutable_shared_member_data(), 33, "wal-gap-other");
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
                    env.run("check_condition_mismatch", [&](rpc::context& ctx) -> rpc::result_code_type {
                      RPC_RETURN_CODE(
@@ -1007,7 +1022,7 @@ CASE_TEST(teamsvr_room_wal, snapshot_dump_load_round_trip) {
                      teamsvr_room_test::add_team_any_data_entry(update->mutable_shared_member_data(), 40 + i,
                                                                "wal-rt-gap-" + std::to_string(i));
                      int64_t gap = (1 == i) ? 1000 : 0;
-                     auto ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action, gap));
+                     auto ret = RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action, gap));
                      if (0 != ret) {
                        RPC_RETURN_CODE(ret);
                      }
@@ -1076,7 +1091,8 @@ CASE_TEST(teamsvr_room_wal, snapshot_dump_load_round_trip) {
   // ---- 空白可写频道 load_snapshot: 逐字段与源频道等价 ----
   room_test_env::wal_channel_ptr_t replacement;
   CASE_EXPECT_EQ(0, env.run("load_snapshot", [&](rpc::context& ctx) -> rpc::result_code_type {
-                   auto make_ret = RPC_AWAIT_CODE_RESULT(env.wal_make_replacement_channel(ctx, team_key, replacement));
+                   auto make_ret =
+                       RPC_AWAIT_CODE_RESULT(room_test_env::wal_make_replacement_channel(ctx, team_key, replacement));
                    if (0 != make_ret) {
                      RPC_RETURN_CODE(make_ret);
                    }
@@ -1138,7 +1154,7 @@ CASE_TEST(teamsvr_room_wal, snapshot_dump_load_round_trip) {
   int64_t source_last_sequence_after_swap = channel->get_last_message_sequence();
   size_t source_log_count_after_swap = channel->get_shared_wal_object()->get_all_logs().size();
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   room.reset();
   team_room::ptr_t restored = env.setup_ready_room(team_key);
   CASE_EXPECT_TRUE(!!restored);
@@ -1174,7 +1190,8 @@ CASE_TEST(teamsvr_room_wal, snapshot_dump_load_round_trip) {
     teamsvr_room_test::add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), 43,
                                                 "wal-rt-gap-3");
     CASE_EXPECT_EQ(0, env.run("check_condition_match", [&](rpc::context& ctx) -> rpc::result_code_type {
-                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->check_action_permission(ctx, members.owner, match)));
+                     RPC_RETURN_CODE(
+                         RPC_AWAIT_CODE_RESULT(restored->check_action_permission(ctx, members.owner, match)));
                    }));
   }
 
@@ -1237,7 +1254,8 @@ CASE_TEST(teamsvr_room_wal, transfer_pending_logs_and_old_publisher_fence) {
     return;
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_EQ(0, env.run("setup_members", [&admin_key, &admin_channel, &room](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("setup_members",
+                            [&admin_key, &admin_channel, &room](rpc::context& ctx) -> rpc::result_code_type {
                    atfw::team::DTeamAction action;
                    auto* add_member = action.mutable_add_member();
                    protobuf_copy_message(*add_member->mutable_user_key(), admin_key);
@@ -1268,7 +1286,8 @@ CASE_TEST(teamsvr_room_wal, transfer_pending_logs_and_old_publisher_fence) {
                    protobuf_copy_message(*add_member->mutable_user_key(), outsider_key);
                    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
                    // broadcast=false: 只入 journal，不 tick 不投递
-                   auto ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action, 0, false));
+                   auto ret =
+                       RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action, 0, false));
                    if (0 != ret) {
                      RPC_RETURN_CODE(ret);
                    }
@@ -1302,7 +1321,8 @@ CASE_TEST(teamsvr_room_wal, transfer_pending_logs_and_old_publisher_fence) {
   // ---- 新频道 load 并激活为唯一权威(旧频道对象保活用于隔离断言) ----
   room_test_env::wal_channel_ptr_t replacement;
   CASE_EXPECT_EQ(0, env.run("load_and_swap", [&](rpc::context& ctx) -> rpc::result_code_type {
-                   auto make_ret = RPC_AWAIT_CODE_RESULT(env.wal_make_replacement_channel(ctx, team_key, replacement));
+                   auto make_ret =
+                       RPC_AWAIT_CODE_RESULT(room_test_env::wal_make_replacement_channel(ctx, team_key, replacement));
                    if (0 != make_ret) {
                      RPC_RETURN_CODE(make_ret);
                    }
@@ -1353,7 +1373,8 @@ CASE_TEST(teamsvr_room_wal, transfer_pending_logs_and_old_publisher_fence) {
   env.wal_clear_event_batches();
   CASE_EXPECT_EQ(0, env.run("resubscribe_new_authority", [&](rpc::context& ctx) -> rpc::result_code_type {
                    RPC_RETURN_CODE(
-                       RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, replacement, room_ack_sequence, room_ack_hash)));
+                       RPC_AWAIT_CODE_RESULT(
+                           room_test_env::wal_resubscribe(ctx, replacement, room_ack_sequence, room_ack_hash)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
   {
@@ -1421,7 +1442,8 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
     return;
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_EQ(0, env.run("setup_members", [&admin_key, &admin_channel, &room](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("setup_members",
+                            [&admin_key, &admin_channel, &room](rpc::context& ctx) -> rpc::result_code_type {
                    atfw::team::DTeamAction action;
                    auto* add_member = action.mutable_add_member();
                    protobuf_copy_message(*add_member->mutable_user_key(), admin_key);
@@ -1465,7 +1487,7 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
   {
     teamsvr_room_test::global_now_offset_guard destroy_guard{std::chrono::seconds{2}};
     for (int round = 0; round < 8 && !channel->is_destroyed(); ++round) {
-      destroy_guard.advance(std::chrono::seconds{2});
+      teamsvr_room_test::global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -1485,11 +1507,10 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
   uint64_t old_epoch_hash = 0;
   {
     const auto& logs = channel->get_shared_wal_object()->get_all_logs();
-    for (auto iter = logs.rbegin(); iter != logs.rend(); ++iter) {
-      if ((*iter)->detail().command_case() == atfw::dtmq::DChannelMessageDetail::kEvent) {
-        old_epoch_sequence = (*iter)->sequence();
-        old_epoch_hash = (*iter)->hash_code();
-        break;
+    for (const auto& log : logs) {
+      if (log->detail().command_case() == atfw::dtmq::DChannelMessageDetail::kEvent) {
+        old_epoch_sequence = log->sequence();
+        old_epoch_hash = log->hash_code();
       }
     }
     CASE_EXPECT_GT(old_epoch_sequence, 0);
@@ -1497,7 +1518,7 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
   int64_t destroy_sequence = channel->get_shared_wal_object()->get_all_logs().back()->sequence();
 
   // ---- Part C: 已销毁频道上的新房间恢复销毁状态(防重建) ----
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   room.reset();
   {
     auto restored = env.setup_ready_room(team_key);
@@ -1510,7 +1531,8 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
       protobuf_copy_message(*create_req.mutable_sender_user_channel(), owner_channel);
       size_t logs_before = channel->get_shared_wal_object()->get_all_logs().size();
       CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED,
-                     env.run("create_after_destroy", [restored, &create_req](rpc::context& ctx) -> rpc::result_code_type {
+                     env.run("create_after_destroy",
+                             [restored, &create_req](rpc::context& ctx) -> rpc::result_code_type {
                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->create_team(ctx, create_req)));
                      }));
       CASE_EXPECT_EQ(logs_before, channel->get_shared_wal_object()->get_all_logs().size());
@@ -1551,7 +1573,7 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
 
   // ---- Part E: 新代际上的新房间恢复旧成员，create 仍被拒(防重建跨代际) ----
   {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     auto restored = env.setup_ready_room(team_key);
     CASE_EXPECT_TRUE(!!restored);
     if (restored) {
@@ -1559,7 +1581,7 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
       // 进程级订阅者仍缓存旧代际视图(含 destroy_team 事件)。以 checkpoint 0 强制重订阅，
       // 让真实快照(新代际: 仅 kCreate + 旧 custom/private)覆盖客户端缓存后重新恢复
       CASE_EXPECT_EQ(0, env.run("refresh_client_view", [&](rpc::context& ctx) -> rpc::result_code_type {
-                       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, channel, 0, 0)));
+                       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room_test_env::wal_resubscribe(ctx, channel, 0, 0)));
                      }));
       CASE_EXPECT_EQ(0, env.sync(team_id));
       CASE_EXPECT_TRUE(nullptr != restored->find_member(owner_key, false));
@@ -1571,7 +1593,8 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
       protobuf_copy_message(*create_req.mutable_sender_user_channel(), owner_channel);
       size_t logs_before = channel->get_shared_wal_object()->get_all_logs().size();
       // team_created 随 custom/private 跨代际保留: 旧 team id 不得被重新创建
-      int32_t create_ret = env.run("create_after_recreate", [restored, &create_req](rpc::context& ctx) -> rpc::result_code_type {
+      int32_t create_ret =
+          env.run("create_after_recreate", [restored, &create_req](rpc::context& ctx) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->create_team(ctx, create_req)));
       });
       CASE_EXPECT_TRUE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION == create_ret ||
@@ -1585,9 +1608,9 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
     env.wal_clear_event_batches();
     const std::string kOldEpochKey = "server:wal-old-epoch";
     CASE_EXPECT_EQ(0, env.run("resubscribe_old_epoch", [&](rpc::context& ctx) -> rpc::result_code_type {
-                     RPC_RETURN_CODE(
-                         RPC_AWAIT_CODE_RESULT(env.wal_resubscribe_as(ctx, channel, kOldEpochKey, old_epoch_sequence,
-                                                                     old_epoch_hash, false)));
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                         room_test_env::wal_resubscribe_as(ctx, channel, kOldEpochKey, old_epoch_sequence,
+                                                           old_epoch_hash, false)));
                    }));
     CASE_EXPECT_EQ(0, env.wal_converge());
     bool saw_snapshot = false;
@@ -1652,11 +1675,12 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
                    for (uint64_t user_id = 9201; user_id <= 9204; ++user_id) {
                      atfw::team::DTeamAction action;
                      auto* add_member = action.mutable_add_member();
-                     protobuf_copy_message(*add_member->mutable_user_key(), teamsvr_room_test::make_user_key(1, user_id));
+                     protobuf_copy_message(*add_member->mutable_user_key(),
+                                           teamsvr_room_test::make_user_key(1, user_id));
                      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
                      // 第二条日志跳号，压缩边界落在非连续 sequence 上
                      int64_t gap = (9202 == user_id) ? 1000 : 0;
-                     auto ret = RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action, gap));
+                     auto ret = RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action, gap));
                      if (0 != ret) {
                        RPC_RETURN_CODE(ret);
                      }
@@ -1706,7 +1730,8 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
   for (const auto& key : {kCaughtUpKey, kStaleKey}) {
     CASE_EXPECT_EQ(0, env.run("subscribe", [&](rpc::context& ctx) -> rpc::result_code_type {
                      RPC_RETURN_CODE(
-                         RPC_AWAIT_CODE_RESULT(env.wal_resubscribe_as(ctx, channel, key, boundary, boundary_hash, false)));
+                         RPC_AWAIT_CODE_RESULT(
+                             room_test_env::wal_resubscribe_as(ctx, channel, key, boundary, boundary_hash, false)));
                    }));
   }
   CASE_EXPECT_EQ(0, env.wal_converge());
@@ -1718,7 +1743,7 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
                    auto* add_member = action.mutable_add_member();
                    protobuf_copy_message(*add_member->mutable_user_key(), teamsvr_room_test::make_user_key(1, 9205));
                    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
   {
@@ -1754,14 +1779,15 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
     teamsvr_room_test::global_now_offset_guard advance_guard{std::chrono::seconds{11}};
     CASE_EXPECT_EQ(0, env.run("refresh_heartbeats", [&](rpc::context& ctx) -> rpc::result_code_type {
                      // 房间真实订阅者(shared key)与跟得上的订阅者刷新心跳
-                     RPC_RETURN_CODE(
-                         RPC_AWAIT_CODE_RESULT(env.wal_resubscribe(ctx, channel, channel->get_last_message_sequence(),
-                                                                   channel->get_last_hash_code())));
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                         room_test_env::wal_resubscribe(ctx, channel, channel->get_last_message_sequence(),
+                                                         channel->get_last_hash_code())));
                    }));
     CASE_EXPECT_EQ(0, env.run("refresh_caught_up", [&](rpc::context& ctx) -> rpc::result_code_type {
                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                         env.wal_resubscribe_as(ctx, channel, kCaughtUpKey, channel->get_last_message_sequence(),
-                                                channel->get_last_hash_code(), false)));
+                         room_test_env::wal_resubscribe_as(ctx, channel, kCaughtUpKey,
+                                                           channel->get_last_message_sequence(),
+                                                           channel->get_last_hash_code(), false)));
                    }));
     // 驱动 publisher tick: 过期订阅者被订阅者管理器按超时移除
     CASE_EXPECT_EQ(0, env.run("tick_gc", [&](rpc::context& ctx) -> rpc::result_code_type {
@@ -1776,7 +1802,7 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
                    auto* add_member = action.mutable_add_member();
                    protobuf_copy_message(*add_member->mutable_user_key(), teamsvr_room_test::make_user_key(1, 9206));
                    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_commit_team_action(ctx, channel, action)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room_test_env::wal_commit_team_action(ctx, channel, action)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
   {
@@ -1803,8 +1829,8 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
   // 按增量连续补齐 checkpoint 之后的全部剩余日志(u5/u6)，状态不缺口、无需快照兜底
   env.wal_clear_event_batches();
   CASE_EXPECT_EQ(0, env.run("stale_recovery", [&](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(env.wal_resubscribe_as(ctx, channel, kStaleKey, boundary,
-                                                                                boundary_hash, false)));
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room_test_env::wal_resubscribe_as(
+                       ctx, channel, kStaleKey, boundary, boundary_hash, false)));
                  }));
   CASE_EXPECT_EQ(0, env.wal_converge());
   {

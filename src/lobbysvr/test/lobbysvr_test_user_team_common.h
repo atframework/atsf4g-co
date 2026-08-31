@@ -53,6 +53,8 @@
 #include <time/time_utility.h>
 #include <utility/protobuf_mini_dumper.h>
 
+#include <atframe/atapp.h>
+
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -60,7 +62,6 @@
 #include <utility>
 #include <vector>
 
-#include <atframe/atapp.h>
 #include "atframe/atapp_conf.h"  // IWYU pragma: keep
 #include "data/session.h"
 #include "data/user.h"
@@ -224,7 +225,39 @@ struct storage_member_options {
   // Packed shared_member_data entries (use pack_member_module / a foreign-typed entry for negative cases).
   std::vector<atfw::team::DTeamAnyDataWithKey> shared_member_data;
   bool pollute_internal_fields = false;
+
+  storage_member_options& set_joined_timepoint(std::chrono::system_clock::time_point value) {
+    joined_timepoint = value;
+    return *this;
+  }
+
+  storage_member_options& set_client_version(gsl::string_view value) {
+    client_version = std::string(value);
+    return *this;
+  }
+
+  storage_member_options& set_team_source_type(atfw::team::EnTeamSourceType value) {
+    team_source_type = value;
+    return *this;
+  }
+
+  storage_member_options& set_shared_member_data(std::vector<atfw::team::DTeamAnyDataWithKey> value) {
+    shared_member_data = std::move(value);
+    return *this;
+  }
+
+  storage_member_options& set_pollute_internal_fields(bool value) {
+    pollute_internal_fields = value;
+    return *this;
+  }
 };
+
+// 按角色构造成员装饰项(其余字段保持默认值，需要时用链式 set_* 追加)
+inline storage_member_options role_options(atfw::team::EnTeamPermissionRole role) {
+  storage_member_options options;
+  options.role = role;
+  return options;
+}
 
 inline atfw::team::DTeamMember* add_storage_member(atfw::team::DTeamStorage& storage, uint64_t user_id,
                                                    const storage_member_options& options = {}) {
@@ -325,7 +358,7 @@ class now_offset_guard {
   now_offset_guard(const now_offset_guard&) = delete;
   now_offset_guard& operator=(const now_offset_guard&) = delete;
 
-  void advance(std::chrono::system_clock::duration by) {
+  static void advance(std::chrono::system_clock::duration by) {
     auto next = atfw::util::time::time_utility::get_global_now_offset() + by;
     atfw::util::time::time_utility::set_global_now_offset(next);
     if (next > mutable_now_offset_floor()) {
@@ -334,7 +367,7 @@ class now_offset_guard {
     atfw::util::time::time_utility::update();
   }
 
-  std::chrono::system_clock::time_point logical_now() const {
+  static std::chrono::system_clock::time_point logical_now() {
     return std::chrono::system_clock::now() + atfw::util::time::time_utility::get_global_now_offset();
   }
 
@@ -731,8 +764,8 @@ atfw::testing::ss_rule_handle register_team_room_rpc(
     std::function<int32_t(const TReq&, TRsp&)>& responder, std::function<void(TReq&, TRsp&)> default_fill) {
   return test.ss().mock(
       full_name, TReq::descriptor()->full_name(), TRsp::descriptor()->full_name(),
-      [&capture, &responder, default_fill](const atfw::testing::ss_request_view& view,
-                                           google::protobuf::Message& rsp_msg) -> rpc::result_code_type {
+      [&capture, &responder, default_fill = std::move(default_fill)](
+          const atfw::testing::ss_request_view& view, google::protobuf::Message& rsp_msg) -> rpc::result_code_type {
         const auto& req = static_cast<const TReq&>(view.body);
         capture.push_back(req);
         auto& rsp = static_cast<TRsp&>(rsp_msg);
@@ -764,7 +797,8 @@ inline bool setup_team_room_ss_capture(atfw::testing::runtime& test, team_room_s
   capture.rules.push_back(
       register_team_room_rpc<atfw::team::SSTeamRoomSendMessageReq, atfw::team::SSTeamRoomSendMessageRsp>(
           test, rpc::team::packer::get_full_name_of_send_message(), capture.send_message_reqs,
-          capture.send_message_responder, [](atfw::team::SSTeamRoomSendMessageReq&, atfw::team::SSTeamRoomSendMessageRsp&) {}));
+          capture.send_message_responder,
+          [](atfw::team::SSTeamRoomSendMessageReq&, atfw::team::SSTeamRoomSendMessageRsp&) {}));
   capture.rules.push_back(
       register_team_room_rpc<atfw::team::SSTeamRoomHeartbeatReq, atfw::team::SSTeamRoomHeartbeatRsp>(
           test, rpc::team::packer::get_full_name_of_heartbeat(), capture.heartbeat_reqs, capture.heartbeat_responder,

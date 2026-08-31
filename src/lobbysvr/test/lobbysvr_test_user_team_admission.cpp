@@ -31,7 +31,10 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include "lobbysvr_test_user_team_common.h"
+#include <string>
+#include <vector>
+
+#include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
 
 // 生成的 CS dispatcher 注册入口(test runtime 每次启动后需显式注册, 否则 RPC 分发返回 EN_SYS_INIT)
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
@@ -65,7 +68,7 @@ bool inject_apply_join_request_event(atfw::testing::runtime& test, team_test::ch
 
 // 在真实 runtime task 内调用 manager 的 approve/reject invitation 协程并返回其业务结果码
 template <class TFn>
-int32_t run_manager_admission_call(atfw::testing::runtime& test, const char* name, TFn&& fn) {
+int32_t run_manager_admission_call(atfw::testing::runtime& test, const char* name, TFn fn) {
   int32_t ret = 0;
   bool ran = team_test::run_sync_task(test, name, [&fn, &ret](rpc::context& ctx) -> rpc::result_code_type {
     ret = RPC_AWAIT_CODE_RESULT(fn(ctx));
@@ -103,7 +106,7 @@ CASE_TEST(lobbysvr_user_team, self_pending_admission_insert_validation) {
 
   // 用逻辑时钟构造过期时间: 共享的订阅定时器 wheel 不会回退, 组内前序用例可能已推进全局 offset(§6.9)
   team_test::now_offset_guard time_guard;
-  const auto now = time_guard.logical_now();
+  const auto now = team_test::now_offset_guard::logical_now();
   const auto valid_expiry = now + std::chrono::seconds(300);
 
   // 无效 team_id(0): 不得插入(邀请路径当前缺失该校验)
@@ -178,7 +181,7 @@ CASE_TEST(lobbysvr_user_team, approve_reject_invitation_result_contract) {
   private_chain.channel_key = private_channel_key;
   // 过期时间基于逻辑时钟(§6.9: 全局 offset 可能被组内前序用例推进)
   team_test::now_offset_guard time_guard;
-  const auto valid_expiry = time_guard.logical_now() + std::chrono::seconds(300);
+  const auto valid_expiry = team_test::now_offset_guard::logical_now() + std::chrono::seconds(300);
 
   // 1. 成功: 上行 payload 完整, 本地 pending 删除
   constexpr int64_t kTeamSuccess = 411;
@@ -326,7 +329,7 @@ CASE_TEST(lobbysvr_user_team, join_team_clears_own_pending_admissions) {
   private_chain.channel_key = private_channel_key;
   // 过期时间基于逻辑时钟(§6.9: 全局 offset 可能被组内前序用例推进)
   team_test::now_offset_guard time_guard;
-  const auto valid_expiry = time_guard.logical_now() + std::chrono::seconds(300);
+  const auto valid_expiry = team_test::now_offset_guard::logical_now() + std::chrono::seconds(300);
 
   // 非 approve 路径留下的陈旧 pending: 同一队伍既有邀请(可能他人重复邀请)又有加入请求
   CASE_EXPECT_TRUE(inject_invited_event(test, private_chain, kUserId, kJoinedTeamId, valid_expiry));
@@ -583,9 +586,9 @@ user_team::ptr_t setup_running_team(atfw::testing::runtime& test, const user::pt
   }
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(team_id);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   team_test::add_storage_member(team_storage, user_inst->get_user_id(),
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   if (!team_test::apply_team_snapshot(test, team_id, team_storage)) {
     return nullptr;
   }
@@ -640,7 +643,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -656,8 +659,8 @@ CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
   // 初始快照: 有效(长/短)/已过期/无效 key 的邀请与加入请求混合
   atfw::team::DTeamStorage storage_v1 = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(storage_v1, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(storage_v1, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(storage_v1, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   {
     auto invitation_long = make_full_invitation(kTeamId, team_test::kCaptainUserId, kInviteeLong,
                                                 base - std::chrono::seconds(30), base + std::chrono::seconds(600),
@@ -747,8 +750,8 @@ CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
   // 更高 custom_data_sequence 的新快照: 短有效期条目被淘汰, 长有效期条目内容被覆盖
   atfw::team::DTeamStorage storage_v2 = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(storage_v2, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(storage_v2, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(storage_v2, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   protobuf_copy_message(*storage_v2.add_pending_invitation(),
                         make_full_invitation(kTeamId, team_test::kCaptainUserId, kInviteeLong,
                                              base - std::chrono::seconds(30), base + std::chrono::seconds(600),
@@ -797,8 +800,9 @@ CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
   // 低于水位(custom_data_sequence=2 < 当前 3)的过期快照: 不得覆盖当前缓存
   atfw::team::DTeamStorage storage_stale = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(storage_stale, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(storage_stale, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(storage_stale, kUserId,
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   protobuf_copy_message(*storage_stale.add_pending_invitation(),
                         make_full_invitation(kTeamId, team_test::kCaptainUserId, kInviteeShort, base,
                                              base + std::chrono::seconds(120),
@@ -853,7 +857,7 @@ CASE_TEST(lobbysvr_user_team, team_add_invitation_upsert_and_projection) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -1015,7 +1019,7 @@ CASE_TEST(lobbysvr_user_team, team_invitation_result_removes_pending) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -1156,7 +1160,7 @@ CASE_TEST(lobbysvr_user_team, team_add_join_request_upsert_and_projection) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -1307,7 +1311,7 @@ CASE_TEST(lobbysvr_user_team, team_join_request_result_removes_pending) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -1446,7 +1450,7 @@ CASE_TEST(lobbysvr_user_team, team_add_member_clears_joined_user_pendings) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -1558,7 +1562,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_expiry_boundary_and_cleanup) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto current = setup_running_team(test, user_inst, kTeamId);
   CASE_EXPECT_TRUE(!!current);
@@ -1598,7 +1602,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_expiry_boundary_and_cleanup) {
   }));
 
   // 阶段 0: 推进 50s, 未达任何过期边界: refresh 不清理任何条目
-  time_guard.advance(std::chrono::seconds(50));
+  team_test::now_offset_guard::advance(std::chrono::seconds(50));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   {
     auto snapshot = dump_team_snapshot(current);
@@ -1609,8 +1613,8 @@ CASE_TEST(lobbysvr_user_team, team_admission_expiry_boundary_and_cleanup) {
   // expiry == logical now 的插入视为过期: 动作事件已处理(dirty 投影照常下发)但 upsert 拒绝, 不进入缓存
   CASE_EXPECT_TRUE(inject_team_invitation_action(
       test, team_chain, atfw::team::DTeamAction::kAddInvitation,
-      make_full_invitation(kTeamId, team_test::kCaptainUserId, kInviteeBoundary, base, time_guard.logical_now(),
-                           atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND)));
+      make_full_invitation(kTeamId, team_test::kCaptainUserId, kInviteeBoundary, base,
+                           team_test::now_offset_guard::logical_now(), atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND)));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return team_test::count_actions_of_case(team_test::collect_team_dirty(test, kSessionId, kTeamId),
                                             atfw::team::DTeamAction::kAddInvitation) >= 3;
@@ -1619,7 +1623,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_expiry_boundary_and_cleanup) {
 
   // 阶段 1: 推进到 100s 边界: 已过期条目在 refresh 前就不得从 dump 下发(dump 侧过滤),
   // 清理只移除过期前缀(两条 100s 条目), 长有效期保留
-  time_guard.advance(std::chrono::seconds(50));
+  team_test::now_offset_guard::advance(std::chrono::seconds(50));
   {
     auto snapshot = dump_team_snapshot(current);
     CASE_EXPECT_EQ(1, snapshot.snapshot().pending_invitation_size());
@@ -1666,7 +1670,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_expiry_boundary_and_cleanup) {
                         ss_capture.send_message_action_count(atfw::team::DTeamAction::kRejectJoinRequest)));
 
   // 阶段 2: 推进到 600s 边界: 长有效期条目也被清理, 只剩重新插入的 900s 邀请
-  time_guard.advance(std::chrono::seconds(500));
+  team_test::now_offset_guard::advance(std::chrono::seconds(500));
   {
     rpc::context ctx{rpc::context::create_without_task()};
     CASE_EXPECT_EQ(2, static_cast<int>(current->cleanup_expired_admissions(ctx)));
@@ -1709,7 +1713,7 @@ CASE_TEST(lobbysvr_user_team, self_invited_notification_full_payload) {
   private_chain.channel_key = private_channel_key;
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
   const auto start = base - std::chrono::seconds(30);
   const auto expiry = base + std::chrono::seconds(300);
 
@@ -1836,7 +1840,7 @@ CASE_TEST(lobbysvr_user_team, self_join_request_receipt_full_payload) {
   private_chain.channel_key = private_channel_key;
 
   team_test::now_offset_guard time_guard;
-  const auto expiry = time_guard.logical_now() + std::chrono::seconds(300);
+  const auto expiry = team_test::now_offset_guard::logical_now() + std::chrono::seconds(300);
 
   // 1. send_join_request 上行成功: payload 完整, 但本地 pending 不提前插入
   {
@@ -1950,7 +1954,7 @@ CASE_TEST(lobbysvr_user_team, self_pending_upsert_reorder_and_segmented_cleanup)
   private_chain.channel_key = private_channel_key;
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   auto inject_invitation = [&](int64_t team_id, std::chrono::system_clock::time_point expiry,
                                atfw::team::EnTeamSourceType source_type) {
@@ -2021,7 +2025,7 @@ CASE_TEST(lobbysvr_user_team, self_pending_upsert_reorder_and_segmented_cleanup)
   }
 
   // 分段 cleanup 第一段: 推进 150s, 只有最短有效期的 B 被清理(前缀语义: A/C 均未过期即停止)
-  time_guard.advance(std::chrono::seconds(150));
+  team_test::now_offset_guard::advance(std::chrono::seconds(150));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamB)));
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamA)));
@@ -2029,7 +2033,7 @@ CASE_TEST(lobbysvr_user_team, self_pending_upsert_reorder_and_segmented_cleanup)
 
   // 分段 cleanup 第二段: 推进到 350s, C(300s)过期被清理; 重排后的 A(900s)必须存活 —
   // 若重排时只改内容未更新过期时间, A 会在此处被误清理
-  time_guard.advance(std::chrono::seconds(200));
+  team_test::now_offset_guard::advance(std::chrono::seconds(200));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_join_request(team_test::make_team_key(kTeamC)));
   {
@@ -2072,7 +2076,7 @@ CASE_TEST(lobbysvr_user_team, self_reject_notifications_remove_pending) {
   private_chain.channel_key = private_channel_key;
 
   team_test::now_offset_guard time_guard;
-  const auto expiry = time_guard.logical_now() + std::chrono::seconds(300);
+  const auto expiry = team_test::now_offset_guard::logical_now() + std::chrono::seconds(300);
 
   // 建立: 邀请 A、加入请求 B、邀请 C
   CASE_EXPECT_TRUE(inject_invited_event(test, private_chain, kUserId, kTeamA, expiry));
@@ -2181,7 +2185,7 @@ CASE_TEST(lobbysvr_user_team, self_pending_second_refresh_and_expired_reapply_pr
   private_chain.channel_key = private_channel_key;
 
   team_test::now_offset_guard time_guard;
-  const auto base = time_guard.logical_now();
+  const auto base = team_test::now_offset_guard::logical_now();
 
   // 邀请 A(100s)、加入请求 B(100s)、邀请 C(300s)、加入请求 D(100s)
   CASE_EXPECT_TRUE(inject_invited_event(test, private_chain, kUserId, kTeamA, base + std::chrono::seconds(100)));
@@ -2199,13 +2203,13 @@ CASE_TEST(lobbysvr_user_team, self_pending_second_refresh_and_expired_reapply_pr
   }));
 
   // 第一段: 推进 50s, 未达边界, 两类缓存都保留
-  time_guard.advance(std::chrono::seconds(50));
+  team_test::now_offset_guard::advance(std::chrono::seconds(50));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamA)));
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_join_request(team_test::make_team_key(kTeamB)));
 
   // 第二段: 推进到 100s 边界, 两类过期前缀都被清理(长有效期的 C 保留), 清理后 get 返回空
-  time_guard.advance(std::chrono::seconds(50));
+  team_test::now_offset_guard::advance(std::chrono::seconds(50));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamA)));
   CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_join_request(team_test::make_team_key(kTeamB)));
@@ -2213,13 +2217,13 @@ CASE_TEST(lobbysvr_user_team, self_pending_second_refresh_and_expired_reapply_pr
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamC)));
 
   // 预检: E 的加入请求已过期但尚未 refresh, 真实 CS 入口不得返回 ALREADY_EXISTS, 必须重新上行
-  CASE_EXPECT_TRUE(inject_apply_join_request_event(test, private_chain, kUserId, kTeamE,
-                                                   time_guard.logical_now() + std::chrono::seconds(50)));
+  CASE_EXPECT_TRUE(inject_apply_join_request_event(
+      test, private_chain, kUserId, kTeamE, team_test::now_offset_guard::logical_now() + std::chrono::seconds(50)));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return !!user_inst->get_user_team_manager().get_pending_join_request(team_test::make_team_key(kTeamE));
   }));
   // 推进 60s: E 已过期但 second refresh 尚未运行
-  time_guard.advance(std::chrono::seconds(60));
+  team_test::now_offset_guard::advance(std::chrono::seconds(60));
   {
     atframework::shared::CSTeamSendJoinRequestReq req;
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamE));
@@ -2240,7 +2244,7 @@ CASE_TEST(lobbysvr_user_team, self_pending_second_refresh_and_expired_reapply_pr
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamC)));
 
   // 第三段: 推进到 300s 边界之后, 长有效期的 C 也被清理
-  time_guard.advance(std::chrono::seconds(150));
+  team_test::now_offset_guard::advance(std::chrono::seconds(150));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamC)));
 
@@ -2270,7 +2274,7 @@ CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
   }
 
   team_test::now_offset_guard time_guard;
-  const auto expiry = time_guard.logical_now() + std::chrono::seconds(300);
+  const auto expiry = team_test::now_offset_guard::logical_now() + std::chrono::seconds(300);
 
   auto& mgr = user_inst->get_user_team_manager();
   CASE_EXPECT_FALSE(mgr.is_dirty());

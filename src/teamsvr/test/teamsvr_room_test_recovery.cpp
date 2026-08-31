@@ -3,10 +3,27 @@
 // teamsvr-room 日志压缩、快照恢复与锁转移用例(TEAM_ROOM_TEST_PLAN.md §4.5 CMP/RCV/LCK)。
 // 通过 fake journal 的真实 sequence/hash chain 与 global_now_offset_guard 驱动定时维护。
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
+
+#include <string>
 
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::add_team_any_data_entry;
+using teamsvr_room_test::add_team_any_value_entry;
+using teamsvr_room_test::count_personal_actions;
+using teamsvr_room_test::fake_team_room_channel;
+using teamsvr_room_test::global_now_offset_guard;
+using teamsvr_room_test::kTestZoneId;
+using teamsvr_room_test::make_foreign_lock;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_cfg_values;
+using teamsvr_room_test::room_test_env;
+using teamsvr_room_test::self_lock_holder;
+using teamsvr_room_test::setup_standard_team;
+using teamsvr_room_test::standard_team_members;
 
 // 写 N 个 member_update 事件(产生可压缩日志)
 bool write_member_update_logs(room_test_env& env, const team_room::ptr_t& room,
@@ -73,7 +90,7 @@ CASE_TEST(teamsvr_room_compact, maintenance_without_compactable_logs) {
   // 房间仍持有锁
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -112,7 +129,7 @@ CASE_TEST(teamsvr_room_compact, count_based_compaction_and_snapshot_content) {
   const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(fake);
   CASE_EXPECT_TRUE(nullptr != compact_update);
   if (nullptr == compact_update) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -155,7 +172,7 @@ CASE_TEST(teamsvr_room_compact, count_based_compaction_and_snapshot_content) {
   CASE_EXPECT_LE(total_logs_after, 5 + 3 + 1);  // 保留窗口 + 维护自身产生的 kResetLock/kUpdateCustomData/kNoop + 边界
   CASE_EXPECT_LE(event_logs_after, 5u + 1u);    // 保留窗口 + 边界日志(同为 event)
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -196,7 +213,7 @@ CASE_TEST(teamsvr_room_compact, compaction_repicked_each_maintenance) {
   const atfw::dtmq::SSChannelUpdateReq* compact1 = find_compact_update(fake);
   CASE_EXPECT_TRUE(nullptr != compact1);
   if (nullptr == compact1) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -219,7 +236,7 @@ CASE_TEST(teamsvr_room_compact, compaction_repicked_each_maintenance) {
   }
   CASE_EXPECT_GT(boundary2, boundary1);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -284,7 +301,7 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
 
     // T0+6: 续租维护(renew 5s 到期)。keep_deadline = T0+6-5 = T0+1:
     //   w0-(T0) 在窗口外被裁剪，w1-(T0+3) 在窗口内保留
-    guard.advance(std::chrono::seconds{3});
+    global_now_offset_guard::advance(std::chrono::seconds{3});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
     // 开区间语义: 边界日志(窗口外最新的 w0- 日志)保留，其余 w0- 被裁剪;w1- 全在窗口内保留
@@ -302,7 +319,7 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
     CASE_EXPECT_EQ(3u, count_versions("w1-"));
 
     // T0+8: batch w2-(2 条)
-    guard.advance(std::chrono::seconds{2});
+    global_now_offset_guard::advance(std::chrono::seconds{2});
     for (int i = 0; i < 2; ++i) {
       atfw::team::DTeamAction action;
       protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
@@ -316,7 +333,7 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
     // T0+12: 续租维护。keep_deadline = T0+12-5 = T0+7: 维护#1 在 T0+6 追加的续租/快照通知日志
     // 同样在窗口之外，时间维度的裁剪点推进到该快照通知日志(开区间语义: 边界日志本身保留)；
     // w0-/w1- 全部位于边界之前被裁剪，w2-(T0+8) 在窗口内保留
-    guard.advance(std::chrono::seconds{4});
+    global_now_offset_guard::advance(std::chrono::seconds{4});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
     CASE_EXPECT_EQ(0u, count_versions("w0-"));
@@ -334,7 +351,7 @@ CASE_TEST(teamsvr_room_compact, time_policy_compaction_window) {
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -372,7 +389,7 @@ CASE_TEST(teamsvr_room_compact, time_policy_keep_time_clamped_to_start) {
   CASE_EXPECT_TRUE(nullptr != find_compact_update(fake));
   CASE_EXPECT_GT(fake.last_removed_sequence(), 0);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -409,7 +426,7 @@ CASE_TEST(teamsvr_room_compact, combined_policy_picks_conservative_cutoff) {
 
     // T0+7: 第一次续租维护。数量维度要求裁到剩 2 条(激进)，时间维度保护 5s 窗口内的新日志:
     //   组合取 min -> 只裁掉 setup 期的旧日志，新日志全部保留
-    guard.advance(std::chrono::seconds{1});
+    global_now_offset_guard::advance(std::chrono::seconds{1});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
   }
@@ -419,7 +436,7 @@ CASE_TEST(teamsvr_room_compact, combined_policy_picks_conservative_cutoff) {
   CASE_EXPECT_EQ(7u, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
   CASE_EXPECT_TRUE(nullptr != find_compact_update(fake));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -478,7 +495,7 @@ CASE_TEST(teamsvr_room_compact, compact_committed_response_lost) {
   CASE_EXPECT_EQ(boundary2, room->debug_last_compact_sequence());
 
   // 新节点从快照恢复: 压缩边界/成员状态与旧主控等价
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   team_room::ptr_t recovered = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!recovered);
   if (recovered) {
@@ -488,7 +505,7 @@ CASE_TEST(teamsvr_room_compact, compact_committed_response_lost) {
     CASE_EXPECT_GT(recovered->debug_saved_action_sequence(), 0);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -558,7 +575,7 @@ CASE_TEST(teamsvr_room_compact, admission_expired_then_update_failure) {
   // 有效期基于真实时钟，这里保持时间偏移使"过期"在新主控视角同样成立
   {
     global_now_offset_guard guard(std::chrono::seconds{13});
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     team_room::ptr_t recovered = env.setup_ready_room(team_id);
     CASE_EXPECT_TRUE(!!recovered);
     if (recovered) {
@@ -570,7 +587,7 @@ CASE_TEST(teamsvr_room_compact, admission_expired_then_update_failure) {
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -634,7 +651,7 @@ CASE_TEST(teamsvr_room_compact, reset_lock_only_channel_time_compaction) {
   // 房间仍主控且持续可写
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -689,7 +706,7 @@ CASE_TEST(teamsvr_room_compact, keep_count_floor_protects_old_logs) {
   // 压缩后未压缩日志仍不少于 keep_count(30) 条(最小保留条数是硬保证)
   CASE_EXPECT_GE(fake.journal().size(), 30u);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
@@ -789,7 +806,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
 
   // 丢弃旧 room，再从同一 team channel 的已保存快照和 compact 后增量建立新 room。
   size_t personal_before_restore = env.personal_message_count();
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   source_room.reset();
   team_room::ptr_t restored_room = env.setup_ready_room(source_team);
   CASE_EXPECT_TRUE(!!restored_room);
@@ -900,7 +917,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
                  }));
   CASE_EXPECT_EQ(0, env.sync(source_team));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -931,7 +948,7 @@ CASE_TEST(teamsvr_room_recovery, corrupt_custom_data_restore_fails) {
     CASE_EXPECT_FALSE(room->is_lock_holder());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -991,7 +1008,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_identity_validation_rejects_cross_zone
   CASE_EXPECT_EQ(0u, global_fake.send_message_calls());
   CASE_EXPECT_EQ(0u, global_fake.update_calls());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1071,7 +1088,7 @@ CASE_TEST(teamsvr_room_recovery, approve_crash_checkpoint_retry) {
       });
   CASE_EXPECT_EQ(1u, add_count);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1101,7 +1118,7 @@ CASE_TEST(teamsvr_room_recovery, destroyed_team_not_recreated) {
 
   // 真实丢弃旧 room，再从同一 subscriber 的快照/journal 建立新 room；不能复用 manager 中
   // 已经标记 destroyed 的原对象来冒充恢复覆盖。
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   room.reset();
   team_room::ptr_t recovered = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!recovered);
@@ -1117,7 +1134,7 @@ CASE_TEST(teamsvr_room_recovery, destroyed_team_not_recreated) {
                    }));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1177,7 +1194,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_lru_order) {
     CASE_EXPECT_EQ(key_c.user_id(), lru_keys[3].user_id());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1241,7 +1258,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_invalid_duplicate_member_keys) {
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, captain->member_data.role());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1267,7 +1284,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_missing_private_data_legacy) {
     }());
     CASE_EXPECT_TRUE(nullptr != add_log);
     // 立即取 sequence: 继续 append 会使 journal vector 扩容导致指针失效
-    const int64_t saved_sequence = add_log ? add_log->sequence() : 0;
+    const int64_t saved_sequence = nullptr != add_log ? add_log->sequence() : 0;
     env.inject_team_action(team_id, [&key_owner]() {
       atfw::team::DTeamAction action;
       auto* update = action.mutable_member_update();
@@ -1320,7 +1337,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_missing_private_data_legacy) {
                  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1389,7 +1406,7 @@ CASE_TEST(teamsvr_room_recovery, snapshot_boundary_contradiction_rejected) {
     CASE_EXPECT_EQ(resets_before, fake.reset_lock_calls());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1421,7 +1438,7 @@ CASE_TEST(teamsvr_room_recovery, failover_without_new_logs_no_premature_kick) {
   // 这是真实 failover/restart 对象边界，不在同一个 room 上强制调用 restore 来冒充切主。
   {
     global_now_offset_guard guard(std::chrono::seconds{25});
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     room.reset();
     room = env.setup_ready_room(team_id);
     CASE_EXPECT_TRUE(!!room);
@@ -1437,7 +1454,7 @@ CASE_TEST(teamsvr_room_recovery, failover_without_new_logs_no_premature_kick) {
 
     // 恢复点 + 27s 内: 仍不踢(恢复点为下限, 30s 过期线未到)
     for (int round = 0; round < 3; ++round) {
-      guard.advance(std::chrono::seconds{9});
+      global_now_offset_guard::advance(std::chrono::seconds{9});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -1453,7 +1470,7 @@ CASE_TEST(teamsvr_room_recovery, failover_without_new_logs_no_premature_kick) {
 
     // T2+36: normal 到达恢复点+30s 过期线被踢出; owner 因新心跳存活
     for (int round = 0; round < 3; ++round) {
-      guard.advance(std::chrono::seconds{3});
+      global_now_offset_guard::advance(std::chrono::seconds{3});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -1461,7 +1478,7 @@ CASE_TEST(teamsvr_room_recovery, failover_without_new_logs_no_premature_kick) {
     CASE_EXPECT_TRUE(room->find_member(members.owner, false) != nullptr);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1522,7 +1539,7 @@ CASE_TEST(teamsvr_room_lock, unexpired_foreign_lock_no_steal) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
   }));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1613,7 +1630,7 @@ CASE_TEST(teamsvr_room_lock, captainless_snapshot_takeover_election) {
     return true;
   });
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1663,7 +1680,7 @@ CASE_TEST(teamsvr_room_lock, flush_drops_notifications_after_lock_loss) {
   // 锁已易主: 写入被锁拒绝(FIX-07 不抢锁)
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED, reject_ret);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1737,7 +1754,7 @@ CASE_TEST(teamsvr_room_lock, concurrent_cas_competitor_no_revive) {
   }
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1792,7 +1809,7 @@ CASE_TEST(teamsvr_room_lock, concurrent_renew_and_send_monotonic) {
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1833,7 +1850,7 @@ CASE_TEST(teamsvr_room_lock, cas_acquire_semantics) {
   }));
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1888,7 +1905,7 @@ CASE_TEST(teamsvr_room_lock, write_conflict_steps_down) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(personal_before, env.personal_message_count());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1936,6 +1953,6 @@ CASE_TEST(teamsvr_room_lock, reset_lock_response_loss_idempotent) {
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND, retry_ret);
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

@@ -10,6 +10,10 @@ Checks:
   - "portability-*"
   - "readability-*"
   - "-misc-non-private-member-variables-in-classes"
+  # misc-non-private-member-variables-in-classes 的新版规范名，与上面的别名保持同样的关闭策略
+  - "-cppcoreguidelines-non-private-member-variables-in-classes"
+  # 编译器默认关闭的诊断，仅 clang-tidy 的 clang-diagnostic-* 通配会打开；指定初始化列表配合默认成员初始化是合法风格
+  - "-clang-diagnostic-missing-designated-field-initializers"
   - "-misc-unused-parameters"
   - "-modernize-use-trailing-return-type"
   - "-modernize-avoid-c-arrays"

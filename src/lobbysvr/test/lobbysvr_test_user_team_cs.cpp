@@ -7,9 +7,6 @@
 // calls captured by team_room_ss_capture (zero-uplink branches must not grow the counters), and checks the full
 // uplink payload (team_key/sender/invitee/requester/operator, derived private channels, client_version, router and
 // pass-through source data / shared-data conditions) whenever an uplink is required.
-#include "lobbysvr_test_user_team_common.h"
-#include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -20,6 +17,12 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <string>
+#include <vector>
+
+#include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
+#include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
 
 namespace {
 // Distinctive client version reported through user::set_client_info, asserted in every uplink payload field that
@@ -127,11 +130,11 @@ bool join_team_with_snapshot(atfw::testing::runtime& test, const user::ptr_t& us
   protobuf_copy_message(*storage.mutable_captain_user_key(), team_test::make_user_key(captain_id));
   if (!self_captain) {
     team_test::add_storage_member(storage, team_test::kCaptainUserId,
-                                  {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   }
-  team_test::add_storage_member(storage, user_inst->get_user_id(), {.role = self_role});
+  team_test::add_storage_member(storage, user_inst->get_user_id(), team_test::role_options(self_role));
   for (uint64_t other_id : other_members) {
-    team_test::add_storage_member(storage, other_id, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+    team_test::add_storage_member(storage, other_id, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   }
   if (nullptr != configure) {
     protobuf_copy_message(*storage.mutable_configure(), *configure);
@@ -346,7 +349,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
   {
     auto storage = team_test::make_team_storage(allocated_key.team_id());
     protobuf_copy_message(*storage.mutable_captain_user_key(), team_test::make_user_key(kUserId));
-    team_test::add_storage_member(storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+    team_test::add_storage_member(storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     storage.mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
         test, team_test::make_snapshot_event(team_test::make_team_channel_key(allocated_key.team_id()), 1, 0,
@@ -413,7 +416,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
     protobuf_copy_message(*invited->mutable_invitee(), team_test::make_user_key(kUserId));
     protobuf_copy_message(*invited->mutable_invitee_private_channel(),
                           team_test::make_private_channel_key(kUserId));
-    *invited->mutable_start_timepoint() = protobuf_from_system_clock(time_guard.logical_now());
+    *invited->mutable_start_timepoint() = protobuf_from_system_clock(team_test::now_offset_guard::logical_now());
     *invited->mutable_expired_timepoint() = protobuf_from_system_clock(expired_timepoint);
     invited->set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
     CASE_EXPECT_TRUE(team_test::inject_event_message(test, private_chain, action));
@@ -444,8 +447,8 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
 
   // 已过期(expired <= logical_now): 记录尚在但上行被拒绝
   {
-    inject_invited(820104, time_guard.logical_now() + std::chrono::seconds{2});
-    time_guard.advance(std::chrono::seconds{3});
+    inject_invited(820104, team_test::now_offset_guard::logical_now() + std::chrono::seconds{2});
+    team_test::now_offset_guard::advance(std::chrono::seconds{3});
     atframework::shared::CSTeamApproveInvitationReq req;
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(820104));
     atframework::CSMsg rsp_msg;
@@ -456,7 +459,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
   }
 
   // 正常 approve: sender/invitee/version/router/shared_member_data 完整, 成功后本地 pending 删除
-  inject_invited(820101, time_guard.logical_now() + std::chrono::seconds{600});
+  inject_invited(820101, team_test::now_offset_guard::logical_now() + std::chrono::seconds{600});
   {
     atframework::shared::CSTeamApproveInvitationReq req;
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(820101));
@@ -484,7 +487,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
   }
 
   // room 频道已不存在(DTMQ_CHANNEL_NOT_FOUND): 映射为邀请不存在并删除确定失效的本地记录
-  inject_invited(820102, time_guard.logical_now() + std::chrono::seconds{600});
+  inject_invited(820102, team_test::now_offset_guard::logical_now() + std::chrono::seconds{600});
   ss_capture.reject_invitation_responder =
       [](const atfw::team::SSTeamRoomRejectInvitationReq&, atfw::team::SSTeamRoomRejectInvitationRsp&) {
         return PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND;
@@ -510,7 +513,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
   ss_capture.reject_invitation_responder = nullptr;
 
   // 普通业务失败: client_result 精确透传且本地 pending 保留以便重试; 重试成功后删除
-  inject_invited(820103, time_guard.logical_now() + std::chrono::seconds{600});
+  inject_invited(820103, team_test::now_offset_guard::logical_now() + std::chrono::seconds{600});
   ss_capture.approve_invitation_responder =
       [](const atfw::team::SSTeamRoomApproveInvitationReq&, atfw::team::SSTeamRoomApproveInvitationRsp&) {
         return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
@@ -767,8 +770,8 @@ CASE_TEST(lobbysvr_user_team, cs_join_02_accept_reject_join_request_contract) {
     auto storage = team_test::make_team_storage(kTeamId);
     protobuf_copy_message(*storage.mutable_captain_user_key(), team_test::make_user_key(team_test::kCaptainUserId));
     team_test::add_storage_member(storage, team_test::kCaptainUserId,
-                                  {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-    team_test::add_storage_member(storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+    team_test::add_storage_member(storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     protobuf_copy_message(*storage.mutable_configure(), configure);
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
         test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), 1, 0, &storage, 2)));
@@ -786,7 +789,8 @@ CASE_TEST(lobbysvr_user_team, cs_join_02_accept_reject_join_request_contract) {
     CASE_EXPECT_TRUE(post_team_cs_request(
         test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_accept_join_request(), req, rsp_msg));
     CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
-    CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kApproveJoinRequest)));
+    CASE_EXPECT_EQ(1, static_cast<int>(
+                          ss_capture.send_message_action_count(atfw::team::DTeamAction::kApproveJoinRequest)));
     const auto& action_req = ss_capture.send_message_reqs.back();
     expect_send_message_envelope(action_req, kTeamId, kUserId);
     const auto& approve = action_req.action().approve_join_request();
@@ -809,7 +813,8 @@ CASE_TEST(lobbysvr_user_team, cs_join_02_accept_reject_join_request_contract) {
     CASE_EXPECT_TRUE(post_team_cs_request(
         test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_reject_join_request(), req, rsp_msg));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, rsp_msg.head().error_code());
-    CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kRejectJoinRequest)));
+    CASE_EXPECT_EQ(1, static_cast<int>(
+                          ss_capture.send_message_action_count(atfw::team::DTeamAction::kRejectJoinRequest)));
   }
   ss_capture.send_message_responder = nullptr;
   {
@@ -820,7 +825,8 @@ CASE_TEST(lobbysvr_user_team, cs_join_02_accept_reject_join_request_contract) {
     CASE_EXPECT_TRUE(post_team_cs_request(
         test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_reject_join_request(), req, rsp_msg));
     CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
-    CASE_EXPECT_EQ(2, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kRejectJoinRequest)));
+    CASE_EXPECT_EQ(2, static_cast<int>(
+                          ss_capture.send_message_action_count(atfw::team::DTeamAction::kRejectJoinRequest)));
     const auto& action_req = ss_capture.send_message_reqs.back();
     expect_send_message_envelope(action_req, kTeamId, kUserId);
     const auto& reject = action_req.action().reject_join_request();
@@ -1016,7 +1022,9 @@ CASE_TEST(lobbysvr_user_team, cs_member_01_exit_remove_role_contract) {
     atframework::shared::CSTeamUpdateMemberRoleReq over_req;
     protobuf_copy_message(*over_req.mutable_team_key(), team_test::make_team_key(kTeamId));
     protobuf_copy_message(*over_req.mutable_user_key(), team_test::make_user_key(kMemberB));
+    // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
     over_req.set_role(static_cast<atfw::team::EnTeamPermissionRole>(400));
+    // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
     atframework::CSMsg over_rsp_msg;
     CASE_EXPECT_TRUE(post_team_cs_request(
         test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_update_member_role(), over_req,
@@ -1138,9 +1146,9 @@ CASE_TEST(lobbysvr_user_team, cs_captain_01_transfer_captain_contract) {
     auto storage = team_test::make_team_storage(kTeamId);
     protobuf_copy_message(*storage.mutable_captain_user_key(), team_test::make_user_key(team_test::kCaptainUserId));
     team_test::add_storage_member(storage, team_test::kCaptainUserId,
-                                  {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-    team_test::add_storage_member(storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN});
-    team_test::add_storage_member(storage, kMemberB, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+    team_test::add_storage_member(storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN));
+    team_test::add_storage_member(storage, kMemberB, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
         test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), 1, 0, &storage, 2)));
     auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));

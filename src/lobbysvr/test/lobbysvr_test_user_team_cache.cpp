@@ -10,7 +10,9 @@
 // - ROLE-01: member_set_role full-payload cache update and dirty projection (standalone case).
 // - TEAM-01: team_update configure replace / shared-data key merge+removal and snapshot admission filtering.
 
-#include "lobbysvr_test_user_team_common.h"
+#include <string>
+
+#include "lobbysvr_test_user_team_common.h" // NOLINT: build/include_subdir
 
 namespace {
 
@@ -89,21 +91,24 @@ CASE_TEST(lobbysvr_user_team, member_update_full_fields_and_dirty_projection) {
   const auto third_joined_timepoint = now - std::chrono::seconds(60);
 
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
-  team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER,
-                                 .client_version = "capt-v1",
-                                 .team_source_type = atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND,
-                                 .shared_member_data = {team_test::pack_member_module(
-                                     team_test::make_member_ready_module(false))}});
+  team_test::add_storage_member(
+      team_storage, team_test::kCaptainUserId,
+      team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)
+          .set_client_version("capt-v1")
+          .set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND)
+          .set_shared_member_data({team_test::pack_member_module(
+              team_test::make_member_ready_module(false))}));
   team_test::add_storage_member(team_storage, kUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, .client_version = "self-v1"});
-  team_test::add_storage_member(team_storage, kThirdMemberId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                                 .joined_timepoint = third_joined_timepoint,
-                                 .client_version = "third-v1",
-                                 .team_source_type = atfw::team::EN_TEAM_SOURCE_TYPE_MATCH,
-                                 .shared_member_data = {team_test::pack_member_module(
-                                     team_test::make_member_ready_module(false))}});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("self-v1"));
+  team_test::add_storage_member(
+      team_storage, kThirdMemberId,
+      team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+          .set_joined_timepoint(third_joined_timepoint)
+          .set_client_version("third-v1")
+          .set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_MATCH)
+          .set_shared_member_data({team_test::pack_member_module(
+              team_test::make_member_ready_module(false))}));
   team_test::add_storage_invitation(team_storage, kInviteeId, now + std::chrono::seconds(300), true);
   auto* storage_join_request =
       team_test::add_storage_join_request(team_storage, kJoinRequesterId, now + std::chrono::seconds(300), true);
@@ -345,10 +350,11 @@ CASE_TEST(lobbysvr_user_team, member_update_rejected_without_cache_or_dirty_push
 
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   team_test::add_storage_member(team_storage, kOtherMemberId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, .client_version = "other-v1"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("other-v1"));
 
   atfw::testing::mock_client client;
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
@@ -480,11 +486,14 @@ CASE_TEST(lobbysvr_user_team, member_set_role_full_payload_update_cache) {
 
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, .client_version = "capt-v1"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)
+                                    .set_client_version("capt-v1"));
   team_test::add_storage_member(team_storage, kUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, .client_version = "self-v1"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("self-v1"));
   team_test::add_storage_member(team_storage, kThirdMemberId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, .client_version = "third-v1"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("third-v1"));
 
   atfw::testing::mock_client client;
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
@@ -643,8 +652,8 @@ CASE_TEST(lobbysvr_user_team, team_update_shared_data_and_snapshot_admission_fil
   team_storage.mutable_configure()->set_manage_member_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
   team_storage.mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   *team_storage.add_shared_team_data() =
       team_test::pack_team_module(team_test::make_team_matching_module(false));
   // 有效 admission(携带内部字段验证投影裁剪)
@@ -682,7 +691,7 @@ CASE_TEST(lobbysvr_user_team, team_update_shared_data_and_snapshot_admission_fil
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot dumped;
     dump_team_snapshot(*current, dumped);
     if (!view.snapshots.empty()) {
-      for (const auto* pushed : {&view.snapshots[0], &dumped}) {
+      for (const auto* pushed : {view.snapshots.data(), &dumped}) {
         CASE_EXPECT_EQ(team_test::kZoneId, pushed->snapshot().team_key().zone_id());
         CASE_EXPECT_EQ(kTeamId, pushed->snapshot().team_key().team_id());
         CASE_EXPECT_EQ(team_test::kZoneId, pushed->snapshot().captain_user_key().zone_id());
@@ -915,9 +924,10 @@ CASE_TEST(lobbysvr_user_team, election_captain_role_semantics) {
   // 快照: 原队长此前被降为 ADMIN(队长身份与成员角色是两个维度), 自己是普通成员, 另有第三成员
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
-  team_test::add_storage_member(team_storage, kThirdMemberId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+  team_test::add_storage_member(team_storage, kThirdMemberId,
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;

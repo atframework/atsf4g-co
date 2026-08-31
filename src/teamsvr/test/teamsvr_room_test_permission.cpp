@@ -7,7 +7,7 @@
 // 所有失败断言均带统一零写入门禁: team 房间频道 send/update/reset_lock/destroy 调用数与
 // 个人频道通知数保持不变。
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -24,8 +24,21 @@
 #include <logic/action/task_action_send_message.h>
 #include <rpc/team/teamroomservice.atfw.gen.h>
 
+#include <string>
+
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::add_team_any_data_entry;
+using teamsvr_room_test::add_team_any_value_entry;
+using teamsvr_room_test::fake_team_room_channel;
+using teamsvr_room_test::global_now_offset_guard;
+using teamsvr_room_test::kDtmqProxyNodeId;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_env;
+using teamsvr_room_test::setup_standard_team;
+using teamsvr_room_test::standard_team_members;
 
 // 经由真实 task_action_send_message(路由+权限+专用流程转换)驱动写路径，返回 action 结果码。
 // 注意: 业务失败码经 set_response_code 下发，task 结果固定为 EN_SUCCESS(0)，因此业务码断言
@@ -62,8 +75,13 @@ struct write_counters {
 };
 
 write_counters snapshot_counters(room_test_env& env, fake_team_room_channel& fake) {
-  return write_counters{fake.send_message_calls(), fake.update_calls(), fake.reset_lock_calls(), fake.destroy_calls(),
-                        env.personal_message_count()};
+  write_counters counters;
+  counters.send = fake.send_message_calls();
+  counters.update = fake.update_calls();
+  counters.reset_lock = fake.reset_lock_calls();
+  counters.destroy = fake.destroy_calls();
+  counters.personal = env.personal_message_count();
+  return counters;
 }
 
 void expect_no_write(fake_team_room_channel& fake, room_test_env& env, const write_counters& before) {
@@ -166,20 +184,21 @@ atfw::team::DTeamAction make_team_update_configure_action(const atfw::team::DTea
 
 // 查找 fake journal 最后一条携带配置变更的 team_update 事件(用于断言下发给订阅者的配置载荷)
 bool find_last_team_update_configure(const fake_team_room_channel& fake, atfw::team::DTeamConfigure& out) {
-  for (auto it = fake.journal().rbegin(); it != fake.journal().rend(); ++it) {
-    if (it->detail().command_case() != atfw::dtmq::DChannelMessageDetail::kEvent) {
+  bool found = false;
+  for (const auto& message : fake.journal()) {
+    if (message.detail().command_case() != atfw::dtmq::DChannelMessageDetail::kEvent) {
       continue;
     }
     atfw::team::DTeamAction action;
-    if (!it->detail().event().UnpackTo(&action)) {
+    if (!message.detail().event().UnpackTo(&action)) {
       continue;
     }
     if (action.has_team_update() && action.team_update().has_configure()) {
       out = action.team_update().configure();
-      return true;
+      found = true;
     }
   }
-  return false;
+  return found;
 }
 
 atfw::team::DTeamAction make_destroy_action(int64_t team_id) {
@@ -253,7 +272,7 @@ CASE_TEST(teamsvr_room_permission, remove_member_default_roles) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin, make_remove_action(members.owner)));
   expect_no_write(fake, env, before);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -340,7 +359,7 @@ CASE_TEST(teamsvr_room_permission, add_member_constraints) {
                                                                    atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
   expect_no_write(fake, env, before);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -390,7 +409,7 @@ CASE_TEST(teamsvr_room_permission, member_update_roles) {
                  run_send_message_action(env, team_id, members.outsider, make_member_update_action(members.outsider)));
   expect_no_write(fake, env, before);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -417,7 +436,7 @@ CASE_TEST(teamsvr_room_permission, team_update_roles) {
                      check_permission(env, room, members.outsider, make_team_update_action()));
       CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.outsider, make_team_update_action()));
       expect_no_write(fake, env, before);
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -444,7 +463,7 @@ CASE_TEST(teamsvr_room_permission, team_update_roles) {
 
       CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin, make_team_update_action()));
       CASE_EXPECT_EQ(0, env.sync(team_id));
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -501,7 +520,7 @@ CASE_TEST(teamsvr_room_permission, election_captain_roles) {
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, normal_member->member_data.role());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -550,7 +569,7 @@ CASE_TEST(teamsvr_room_permission, destroy_team_owner_only) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner, make_destroy_action(team_id)));
   CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -598,7 +617,8 @@ CASE_TEST(teamsvr_room_permission, add_invitation_roles) {
   if (1 == env.personal_message_count()) {
     CASE_EXPECT_EQ(atfw::team::DTeamMemberAction::kInvited, env.personal_messages()[0].action.action_case());
     // 通知投递到邀请时登记的 invitee 私有频道，且身份与邀请一致
-    CASE_EXPECT_EQ(make_personal_channel(invitee.user_id()).channel_id(), env.personal_messages()[0].channel.channel_id());
+    CASE_EXPECT_EQ(make_personal_channel(invitee.user_id()).channel_id(),
+                   env.personal_messages()[0].channel.channel_id());
     CASE_EXPECT_EQ(invitee.user_id(), env.personal_messages()[0].action.invited().invitee().user_id());
     CASE_EXPECT_EQ(members.normal.user_id(), env.personal_messages()[0].action.invited().inviter().user_id());
   }
@@ -619,7 +639,7 @@ CASE_TEST(teamsvr_room_permission, add_invitation_roles) {
       0, run_send_message_action(env, team_id, members.normal, make_invitation_action(members.normal, invitee2)));
   expect_no_write(fake, env, before);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -678,7 +698,7 @@ CASE_TEST(teamsvr_room_permission, approve_invitation_self_only) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_TRUE(room->find_member(invitee, false) != nullptr);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -751,7 +771,7 @@ CASE_TEST(teamsvr_room_permission, reject_invitation_roles) {
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -782,7 +802,7 @@ CASE_TEST(teamsvr_room_permission, add_join_request_gates) {
       });
       CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND, ret);
       expect_no_write(fake, env, before);
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -856,7 +876,7 @@ CASE_TEST(teamsvr_room_permission, add_join_request_gates) {
                      }));
       expect_no_write(fake, env, before);
 
-      env.clear_rooms();
+      room_test_env::clear_rooms();
     }
   }
 
@@ -946,7 +966,7 @@ CASE_TEST(teamsvr_room_permission, approve_reject_join_roles) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_TRUE(room->find_member(applicant, false) != nullptr);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -981,7 +1001,7 @@ CASE_TEST(teamsvr_room_permission, unknown_action_case) {
     RPC_RETURN_CODE(0);
   }));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1022,6 +1042,7 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   expect_no_write(fake, env, before);
 
   // 低于 NORMAL 的自定义门槛 50 按大小生效: NORMAL(100) >= 50 可以删除当前角色严格低于自己的成员
+  // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
   write_configure(static_cast<atfw::team::EnTeamPermissionRole>(50));
   auto junior = make_user_key(1, 7107);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
@@ -1064,13 +1085,14 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
     add_member->set_role(static_cast<atfw::team::EnTeamPermissionRole>(350));
     return action;
   }());
+  // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
   CASE_EXPECT_EQ(0, env.sync(team_id));
   write_configure(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, super, make_remove_action(vip)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(vip, false).get());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1180,7 +1202,7 @@ CASE_TEST(teamsvr_room_permission, member_set_role_default_gates) {
                                  make_member_set_role_action(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)));
   expect_no_write(fake, env, before);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1228,7 +1250,7 @@ CASE_TEST(teamsvr_room_permission, member_set_role_custom_threshold) {
                                  make_member_set_role_action(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
   expect_no_write(fake, env, before);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1280,7 +1302,7 @@ CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
   CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, published.update_team_data_role());
   CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, published.reject_invitation_role());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 // ============ COND-01: member_update 成员共享数据条件(指定成员 scope + 通过后裁剪 condition) ============
@@ -1385,7 +1407,7 @@ CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
     CASE_EXPECT_EQ(0, check_permission(env, room, members.admin, make_conditioned_update("ready")));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1451,7 +1473,7 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_team_data) {
     expect_no_write(fake, env, before);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1531,7 +1553,7 @@ CASE_TEST(teamsvr_room_permission, team_update_condition_count_and_or) {
     expect_no_write(fake, env, before);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1650,7 +1672,7 @@ CASE_TEST(teamsvr_room_permission, member_condition_group_scopes) {
     CASE_EXPECT_EQ(0, check_permission(env, room, members.normal, unlimited_action));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1740,7 +1762,7 @@ CASE_TEST(teamsvr_room_permission, member_condition_group_percent) {
     expect_no_write(fake, env, before);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 // ============ COND-06: Any 语义比较(打包字节布局不同但语义相同必须判定相等) ============
@@ -1847,7 +1869,7 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
                    check_any_condition(44, int64_type_url, five.SerializeAsString()));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1882,7 +1904,8 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
   // OWNER 队长显式转让 role=OWNER 给 NORMAL 成员: 不高于原队长(OWNER)，允许；
   // 新队长成为 OWNER，旧队长降为 NORMAL(旧实现按目标当前角色拒绝，与默认行为矛盾，已按决策修正)
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
-                                            make_election_with_role(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+                                            make_election_with_role(members.normal,
+                                                                    atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   {
     auto captain = room->find_member(members.normal, false);
@@ -1898,7 +1921,8 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
 
   // OWNER 队长(normal)显式转让 role=ADMIN 给 admin: 新队长为 ADMIN(队长不恒为 OWNER)
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal,
-                                            make_election_with_role(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+                                            make_election_with_role(members.admin,
+                                                                    atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   {
     auto captain = room->find_member(members.admin, false);
@@ -1916,7 +1940,8 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
                                     make_election_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
     // RPC 路径权限失败时 transport 成功(精确错误码在 client_result，由 check_permission 断言)
     CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin,
-                                              make_election_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+                                              make_election_with_role(members.owner,
+                                                                      atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
     expect_no_write(fake, env, before);
   }
 
@@ -1944,7 +1969,7 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_GT(room->debug_last_compact_sequence(), 0);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   room.reset();
   auto restored = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!restored);
@@ -2006,6 +2031,6 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

@@ -3,7 +3,7 @@
 // teamsvr-room 事件应用、成员与队长用例(TEAM_ROOM_TEST_PLAN.md §4.4 EVT-01~11)。
 // 通过 fake journal 直接注入 DTeamAction/非 event 日志验证 apply 语义的幂等性与确定性。
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -19,8 +19,21 @@
 
 #include <rpc/team/teamroomservice.atfw.gen.h>
 
+#include <string>
+
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::add_team_any_data_entry;
+using teamsvr_room_test::add_team_any_value_entry;
+using teamsvr_room_test::count_personal_actions;
+using teamsvr_room_test::global_now_offset_guard;
+using teamsvr_room_test::kDtmqProxyNodeId;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_env;
+using teamsvr_room_test::setup_standard_team;
+using teamsvr_room_test::standard_team_members;
 
 atfw::team::DTeamAction make_injected_add_member(const PROJECT_NAMESPACE_ID::DUserIDKey& key, uint64_t user_id,
                                                  int64_t joined_after_seconds, int64_t heartbeat_after_seconds) {
@@ -65,7 +78,7 @@ CASE_TEST(teamsvr_room_event, sequence_gap_applied_and_ack_monotonic) {
   auto extra_member = room->find_member(extra, false);
   CASE_EXPECT_TRUE(extra_member != nullptr);
   if (!extra_member) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -87,7 +100,7 @@ CASE_TEST(teamsvr_room_event, sequence_gap_applied_and_ack_monotonic) {
   CASE_EXPECT_GT(room->debug_acknowledge_action_sequence(), ack_before);
   CASE_EXPECT_EQ(env.channel(team_id).last_sequence(), room->debug_acknowledge_action_sequence());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -131,7 +144,7 @@ CASE_TEST(teamsvr_room_event, add_member_default_timepoints) {
     CASE_EXPECT_TRUE(heartbeat >= before && heartbeat <= after);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -182,7 +195,7 @@ CASE_TEST(teamsvr_room_event, duplicate_add_member_keep_earliest_state) {
     CASE_EXPECT_EQ(0x9999u, member->member_data.user_router_server_id());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -236,7 +249,7 @@ CASE_TEST(teamsvr_room_event, captain_election_deterministic) {
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, admin_member->member_data.role());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -282,7 +295,7 @@ CASE_TEST(teamsvr_room_event, remove_event_idempotent) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(personal_after_remove, env.personal_message_count());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -318,7 +331,7 @@ CASE_TEST(teamsvr_room_event, corrupted_event_steps_down) {
   // room 退位(不再以旧锁身份写入；后续写入会走新的 CAS 抢锁流程，仍保持单写者安全)
   CASE_EXPECT_FALSE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -353,7 +366,7 @@ CASE_TEST(teamsvr_room_event, destroy_event_marks_destroyed) {
                  }));
   CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -377,7 +390,7 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
   auto normal_member = room->find_member(members.normal, false);
   CASE_EXPECT_TRUE(!!normal_member);
   if (!normal_member) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -450,7 +463,7 @@ CASE_TEST(teamsvr_room_event, member_update_merge_and_router_trust) {
   CASE_EXPECT_EQ(0x7777u, normal_member->member_data.user_router_server_id());
   CASE_EXPECT_GT(normal_member->last_heartbeat_timepoint, initial_heartbeat);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -553,7 +566,7 @@ CASE_TEST(teamsvr_room_event, team_update_merge_semantics) {
                    }));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -680,7 +693,7 @@ CASE_TEST(teamsvr_room_event, update_dedup_no_change) {
   }
   CASE_EXPECT_EQ(events_before + 4, count_events());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -719,7 +732,7 @@ CASE_TEST(teamsvr_room_event, event_sync_duplicate_batch_ignored) {
   const auto* invitation_log = fake.find_journal_message(fake.last_sequence());
   CASE_EXPECT_TRUE(nullptr != invitation_log);
   if (nullptr == invitation_log) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -762,7 +775,7 @@ CASE_TEST(teamsvr_room_event, event_sync_duplicate_batch_ignored) {
   CASE_EXPECT_EQ(personal_before_stale, env.personal_message_count());
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -798,7 +811,7 @@ CASE_TEST(teamsvr_room_event, event_sync_hash_mismatch_prefix_then_snapshot) {
   const atfw::dtmq::DChannelMessage* msg_c = fake.find_journal_message(last);
   CASE_EXPECT_TRUE(nullptr != msg_a && nullptr != msg_b && nullptr != msg_c);
   if (nullptr == msg_a || nullptr == msg_b || nullptr == msg_c) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -826,7 +839,7 @@ CASE_TEST(teamsvr_room_event, event_sync_hash_mismatch_prefix_then_snapshot) {
   CASE_EXPECT_TRUE(room->find_member(user_c, false) != nullptr);
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -919,7 +932,7 @@ CASE_TEST(teamsvr_room_event, event_sync_corrupt_any_mid_batch) {
   }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -945,7 +958,7 @@ CASE_TEST(teamsvr_room_event, event_sync_source_node_switch) {
   const auto* log = fake.find_journal_message(fake.last_sequence());
   CASE_EXPECT_TRUE(nullptr != log);
   if (nullptr == log) {
-    env.clear_rooms();
+    room_test_env::clear_rooms();
     CASE_EXPECT_EQ(0, env.stop());
     return;
   }
@@ -957,7 +970,7 @@ CASE_TEST(teamsvr_room_event, event_sync_source_node_switch) {
   CASE_EXPECT_EQ(0, env.sync_custom_event_sync(event_sync, kDtmqProxyNodeId + 1));
   CASE_EXPECT_TRUE(room->find_member(extra, false) != nullptr);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1024,7 +1037,7 @@ CASE_TEST(teamsvr_room_event, non_team_action_logs_advance_ack) {
     CASE_EXPECT_EQ(sends_before_destroy, fake.send_message_calls());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1148,7 +1161,8 @@ CASE_TEST(teamsvr_room_event, keyed_data_duplicate_key_rules) {
     auto* group = check_update->add_condition()->add_member_condition_group();
     protobuf_copy_message(*group->mutable_user_key(), members.normal);
     add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), 400, "cross-second");
-    CASE_EXPECT_EQ(0, env.run("cond_match_second", [room, &members, &check_second](rpc::context& ctx) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(0, env.run("cond_match_second",
+                             [room, &members, &check_second](rpc::context& ctx) -> rpc::result_code_type {
                      RPC_RETURN_CODE(
                          RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, check_second)));
                    }));
@@ -1160,13 +1174,14 @@ CASE_TEST(teamsvr_room_event, keyed_data_duplicate_key_rules) {
     protobuf_copy_message(*group_first->mutable_user_key(), members.normal);
     add_team_any_value_entry(group_first->mutable_member_condition()->mutable_shared_member_data(), 400, "cross-first");
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
-                   env.run("cond_match_first", [room, &members, &check_first](rpc::context& ctx) -> rpc::result_code_type {
+                   env.run("cond_match_first",
+                           [room, &members, &check_first](rpc::context& ctx) -> rpc::result_code_type {
                      RPC_RETURN_CODE(
                          RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, members.owner, check_first)));
                    }));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1208,7 +1223,7 @@ CASE_TEST(teamsvr_room_event, update_shared_data_delete_marker) {
     add_team_any_value_entry(group->mutable_member_condition()->mutable_shared_member_data(), key, value);
     return action;
   };
-  auto make_team_condition = [team_id](int64_t key, const std::string& value) {
+  auto make_team_condition = [](int64_t key, const std::string& value) {
     atfw::team::DTeamAction action;
     auto* checker = action.mutable_team_update()->add_condition();
     add_team_any_value_entry(checker->mutable_shared_team_data(), key, value);
@@ -1250,9 +1265,11 @@ CASE_TEST(teamsvr_room_event, update_shared_data_delete_marker) {
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, check_condition(make_member_condition(101, "m-101")));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                 check_condition(make_member_condition(101, "m-101")));
   CASE_EXPECT_EQ(0, check_condition(make_member_condition(102, "m-102")));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, check_condition(make_team_condition(201, "t-201")));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                 check_condition(make_team_condition(201, "t-201")));
   CASE_EXPECT_EQ(0, check_condition(make_team_condition(202, "t-202")));
 
   // 对不存在 key 的删除标记不产生状态变化: 与空更新约定一致保留写入(锁探测)，
@@ -1275,6 +1292,6 @@ CASE_TEST(teamsvr_room_event, update_shared_data_delete_marker) {
     CASE_EXPECT_EQ(0, check_condition(make_team_condition(202, "t-202")));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

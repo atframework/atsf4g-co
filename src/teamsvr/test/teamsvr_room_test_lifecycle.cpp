@@ -3,10 +3,21 @@
 // teamsvr-room 心跳、过期与房间生命周期用例(TEAM_ROOM_TEST_PLAN.md §4.8 LIFE-01~14)。
 // 通过 global_now_offset_guard + drive_timer_ticks 精确触发定时事件，不依赖真实 sleep。
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::count_personal_actions;
+using teamsvr_room_test::fake_team_room_channel;
+using teamsvr_room_test::global_now_offset_guard;
+using teamsvr_room_test::make_foreign_lock;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_cfg_values;
+using teamsvr_room_test::room_test_env;
+using teamsvr_room_test::setup_standard_team;
+using teamsvr_room_test::standard_team_members;
 
 int32_t send_heartbeat(room_test_env& env, const team_room::ptr_t& room, const PROJECT_NAMESPACE_ID::DUserIDKey& key,
                     uint64_t router_id, int64_t sequence = 0, uint64_t hash_code = 0) {
@@ -80,7 +91,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_semantics) {
                    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->heartbeat(ctx, hb)));
                  }));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -107,7 +118,7 @@ CASE_TEST(teamsvr_room_lifecycle, offline_member_kicked) {
     CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1));
     // 分轮推进+驱动: 每轮推进 2s，让"过期期限"被推到 now+1 的定时器在下一轮触发
     for (int round = 0; round < 4; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -143,7 +154,7 @@ CASE_TEST(teamsvr_room_lifecycle, offline_member_kicked) {
   // 成员仍在的 owner 未被误踢
   CASE_EXPECT_TRUE(room->find_member(members.owner, false) != nullptr);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -205,7 +216,7 @@ CASE_TEST(teamsvr_room_lifecycle, admission_expiry_cleanup_no_notify) {
       }));
     }
     for (int round = 0; round < 4; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -231,7 +242,7 @@ CASE_TEST(teamsvr_room_lifecycle, admission_expiry_cleanup_no_notify) {
                    }));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -270,7 +281,7 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_flow) {
   {
     global_now_offset_guard guard(std::chrono::seconds{6});
     for (int round = 0; round < 8; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -289,7 +300,7 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_flow) {
   CASE_EXPECT_TRUE(found_destroy);
   CASE_EXPECT_GE(fake.destroy_calls(), 1u);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -336,21 +347,21 @@ CASE_TEST(teamsvr_room_lifecycle, restore_offline_deadline_floor_precise) {
   {
     global_now_offset_guard guard(std::chrono::seconds{20});
     for (int round = 0; round < 4; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(target_team));
     }
     CASE_EXPECT_TRUE(restored->find_member(normal_user, false) != nullptr);
 
     for (int round = 0; round < 4; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(target_team));
     }
     CASE_EXPECT_EQ(nullptr, restored->find_member(normal_user, false).get());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -389,7 +400,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_on_uncreated_team) {
   {
     global_now_offset_guard guard(std::chrono::seconds{6});
     for (int round = 0; round < 8; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -405,7 +416,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_on_uncreated_team) {
   });
   CASE_EXPECT_TRUE(found_destroy);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -460,7 +471,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(members.normal, false).get());
   CASE_EXPECT_EQ(0u, room->debug_retry_remove_count());
-  guard.advance(std::chrono::seconds{3});
+  global_now_offset_guard::advance(std::chrono::seconds{3});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(1u, count_remove_logs());  // 无重试补发
@@ -469,7 +480,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   // 3) 重试间隔准确: 发送失败后 interval 内不重发，到点重发
   // 续租事件可能与重试事件竞争最早到期(取决于建队后的真实耗时): 先越过续租点
   // 驱动一次续租使其重新排期到 now+lease/2，再注入失败——最早事件判定不依赖真实耗时
-  guard.advance(std::chrono::seconds{3});
+  global_now_offset_guard::advance(std::chrono::seconds{3});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
@@ -491,7 +502,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   CASE_EXPECT_LE(retry_event.timeout, inject_end + std::chrono::seconds{1});
 
   // 到点重发成功，不用“多等一秒”掩盖边界错误。
-  guard.advance(std::chrono::seconds{1});
+  global_now_offset_guard::advance(std::chrono::seconds{1});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(2u, count_remove_logs());
   CASE_EXPECT_EQ(0, env.sync(team_id));
@@ -500,7 +511,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_semantics) {
   CASE_EXPECT_EQ(0u, room->debug_retry_remove_count());
   CASE_EXPECT_EQ(1u, count_personal_actions(env, 7002, atfw::team::DTeamMemberAction::kRemoveMember));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -559,7 +570,7 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
 
     // 越过原销毁点(5s)再多推进: 非空队伍不得触发 empty-room destroy
     for (int round = 0; round < 4; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -575,7 +586,7 @@ CASE_TEST(teamsvr_room_lifecycle, empty_room_destroy_cancelled_by_join) {
   CASE_EXPECT_FALSE(found_destroy);
   CASE_EXPECT_EQ(0u, fake.destroy_calls());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -621,20 +632,20 @@ CASE_TEST(teamsvr_room_lifecycle, single_timer_earliest_event_wins) {
     // 每轮推进 6s，与两侧事件边界各留秒级余量，真实耗时偏移不可能越过边界
     size_t updates_before = env.channel(team_id).update_calls();
     for (int round = 0; round < 5; ++round) {
-      guard.advance(std::chrono::seconds{round == 0 ? 4 : 6});  // T0+6,+12,+18,+24,+30
+      global_now_offset_guard::advance(std::chrono::seconds{round == 0 ? 4 : 6});  // T0+6,+12,+18,+24,+30
       env.drive_timer_ticks();
     }
     CASE_EXPECT_GE(env.channel(team_id).update_calls(), updates_before + 5);
     CASE_EXPECT_TRUE(room->find_member(members.normal, false) != nullptr);
 
     // 续租已推进到 T0+35 之后，成员到期点(T0+32)成为最近事件: 成员事件被正确选中且未提前触发
-    guard.advance(std::chrono::seconds{1});  // T0+31
+    global_now_offset_guard::advance(std::chrono::seconds{1});  // T0+31
     ev = room->get_next_timer_event(atfw::util::time::time_utility::now());
     CASE_EXPECT_EQ(static_cast<int32_t>(team_room_timer_event_type::kKickOfflineMember), static_cast<int32_t>(ev.type));
     CASE_EXPECT_TRUE(room->find_member(members.owner, false) != nullptr);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -694,7 +705,7 @@ CASE_TEST(teamsvr_room_lifecycle, tick_only_due_rooms) {
     CASE_EXPECT_EQ(0, env.sync(team_b));
     // B 的定时器链: 首个到期项(续租/压缩维护)处理后重排到 kick 点，继续推进直到 kick 生效
     for (int round = 0; round < 3; ++round) {
-      guard.advance(std::chrono::seconds{1});
+      global_now_offset_guard::advance(std::chrono::seconds{1});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_a));
       CASE_EXPECT_EQ(0, env.sync(team_b));
@@ -711,7 +722,7 @@ CASE_TEST(teamsvr_room_lifecycle, tick_only_due_rooms) {
   CASE_EXPECT_EQ(1u, count_personal_actions(env, 8803, atfw::team::DTeamMemberAction::kRemoveMember));
   CASE_EXPECT_EQ(0u, count_personal_actions(env, 8703, atfw::team::DTeamMemberAction::kRemoveMember));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -767,7 +778,7 @@ CASE_TEST(teamsvr_room_lifecycle, personal_channel_send_contract) {
     CASE_EXPECT_EQ(1u, count_personal_actions(env, 7002, atfw::team::DTeamMemberAction::kRemoveMember));
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -799,7 +810,7 @@ CASE_TEST(teamsvr_room_lifecycle, step_down_freezes_maintenance_until_takeover) 
   {
     global_now_offset_guard guard(std::chrono::seconds{8});
     for (int round = 0; round < 3; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -827,7 +838,7 @@ CASE_TEST(teamsvr_room_lifecycle, step_down_freezes_maintenance_until_takeover) 
     CASE_EXPECT_GT(fake.update_calls(), updates_before);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -900,7 +911,7 @@ CASE_TEST(teamsvr_room_lifecycle, subscribe_failure_then_recover_once) {
   }
   CASE_EXPECT_EQ(rooms_before + 1, team_room_manager::me()->get_room_count());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -930,10 +941,8 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_runtime_dirty_saved_on_maintenance) 
 
   auto& fake = env.channel(team_id);
   auto last_update_has_custom = [&fake]() -> bool {
-    for (auto iter = fake.update_requests().rbegin(); iter != fake.update_requests().rend(); ++iter) {
-      return iter->request.has_custom_data();
-    }
-    return false;
+    const auto& requests = fake.update_requests();
+    return !requests.empty() && requests.back().request.has_custom_data();
   };
 
   // 时间驱动使用单一 guard 顺序推进(guard 析构会回退虚拟时间，独立作用域会使后续定时器永不到期)
@@ -948,7 +957,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_runtime_dirty_saved_on_maintenance) 
   CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.normal, 0x2233, heartbeat_sequence, 0xCCCC));
 
   // 下一次维护随续租保存 custom/private 快照: 快照携带刷新后的 router/ack
-  time_guard.advance(std::chrono::seconds{6});
+  global_now_offset_guard::advance(std::chrono::seconds{6});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(0, env.sync(team_id));
   {
@@ -978,14 +987,14 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_runtime_dirty_saved_on_maintenance) 
   }
 
   // 保存成功后脏标记清除: 无新心跳的下一次维护回到仅续租(不携带快照)
-  time_guard.advance(std::chrono::seconds{6});
+  global_now_offset_guard::advance(std::chrono::seconds{6});
   env.drive_timer_ticks();
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_FALSE(last_update_has_custom());
 
   // 运行时脏快照覆盖到了 saved_action_sequence；恢复时不得再回放更早日志，
   // 否则旧 add_member/member_update 会把快照中的 heartbeat router/ack 回退。
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   room.reset();
   auto restored = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!restored);
@@ -1000,7 +1009,7 @@ CASE_TEST(teamsvr_room_lifecycle, heartbeat_runtime_dirty_saved_on_maintenance) 
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1051,7 +1060,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log)
   // 以重试队列为循环退出条件
   queue_remove_fault();
   for (int round = 0; round < 24 && 0 == room->debug_retry_remove_count(); ++round) {
-    time_guard.advance(std::chrono::seconds{2});
+    global_now_offset_guard::advance(std::chrono::seconds{2});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
   }
@@ -1067,7 +1076,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log)
     CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
     queue_remove_fault();
     for (int round = 0; round < 8 && fake.next_send_fault.present; ++round) {
-      time_guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
@@ -1082,7 +1091,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log)
   CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1001));
   CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
   for (int round = 0; round < 8 && 0 != room->debug_retry_remove_count(); ++round) {
-    time_guard.advance(std::chrono::seconds{2});
+    global_now_offset_guard::advance(std::chrono::seconds{2});
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
   }
@@ -1104,6 +1113,6 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log)
   });
   CASE_EXPECT_EQ(remove_logs_before + 1, remove_logs_after);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

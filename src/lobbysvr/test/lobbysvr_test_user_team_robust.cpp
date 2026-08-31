@@ -10,7 +10,10 @@
 // - ROBUST-04: 快照重建清理旧 pending/成员/共享数据, manager 索引与 table 数据一致, 脏推送 handle 随对象释放注销。
 // 文件末尾四例对应计划 §5.6 P2 健壮性矩阵: 个人频道错误 Any、队伍快照错误 Any、共享数据错误 Any、夹具卫生。
 
-#include "lobbysvr_test_user_team_common.h"
+#include <string>
+#include <vector>
+
+#include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
 
 namespace {
 
@@ -238,7 +241,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
   // 初始快照: 仅队长(自己尚未被 add_member 确认, is_member_ 仍为 false)
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
 
   auto current = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
@@ -259,7 +262,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
   team_chain.channel_key = team_test::make_team_channel_key(kTeamId);
 
   // 1. 同一 add_member(其他成员) WAL 消息投递两次
-  const auto joined_member = time_guard.logical_now() - std::chrono::seconds(10);
+  const auto joined_member = team_test::now_offset_guard::logical_now() - std::chrono::seconds(10);
   const auto joined_member_ts = protobuf_from_system_clock(joined_member);
   auto add_member_batch = make_chain_event_batch(
       team_chain, make_add_member_action(kMemberUserId, joined_member, atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
@@ -314,7 +317,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
 
   // 2. 同一 add_member(self) 投递两次: self 首次加入只 flush 一次本端 shared data
   auto add_self_batch = make_chain_event_batch(
-      team_chain, make_add_member_action(kUserId, time_guard.logical_now(),
+      team_chain, make_add_member_action(kUserId, team_test::now_offset_guard::logical_now(),
                                          atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, "1.0.1-self",
                                          atfw::team::EN_TEAM_SOURCE_TYPE_NONE, false));
   CASE_EXPECT_TRUE(deliver_chain_batch(test, team_chain, add_self_batch));
@@ -345,7 +348,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
   }
 
   // 3. 同一 add_invitation 投递两次: 队伍级 pending 只有一条
-  const auto invitation_expired = time_guard.logical_now() + std::chrono::hours(1);
+  const auto invitation_expired = team_test::now_offset_guard::logical_now() + std::chrono::hours(1);
   const auto invitation_expired_ts = protobuf_from_system_clock(invitation_expired);
   {
     atfw::team::DTeamAction action;
@@ -391,7 +394,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
   }));
 
   // 5. 同一 invited 个人通知投递两次: manager 自己的 pending 不变, 水位不前进, 不重复置脏
-  const auto invited_expired = time_guard.logical_now() + std::chrono::hours(1);
+  const auto invited_expired = team_test::now_offset_guard::logical_now() + std::chrono::hours(1);
   const auto invited_expired_ts = protobuf_from_system_clock(invited_expired);
   auto invited_batch =
       make_chain_event_batch(private_chain, make_invited_action(kInvitedTeamId, kUserId, invited_expired));
@@ -468,10 +471,10 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
   // 初始快照: 队长 + 自己(直接是成员, 避免 wait_add_member_timeout 语义干扰)
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   team_test::add_storage_member(team_storage, kUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                                 .client_version = "2.0.0-self"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("2.0.0-self"));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
 
   auto current = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
@@ -490,7 +493,7 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
 
   // --- A. member_update 先于 add_member(同一 WAL 批次内, 应用顺序即投递顺序) ------------
   // A1. 同一批次 [update(X), add(X)]: update 不为未知成员创建幽灵缓存, add 以自身业务字段落地
-  const auto joined_reordered = time_guard.logical_now() - std::chrono::seconds(30);
+  const auto joined_reordered = team_test::now_offset_guard::logical_now() - std::chrono::seconds(30);
   const auto joined_reordered_ts = protobuf_from_system_clock(joined_reordered);
   atfw::team::DTeamAction update_action = make_member_update_action(kReorderedUserId, "9.9.9-pre", true, true);
   atfw::team::DTeamAction add_action =
@@ -556,17 +559,17 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
   // A3. 权威快照(saved 覆盖已收日志)重建: 终态与正序处理同一 room 日志流一致(逐项断言)
   atfw::team::DTeamStorage rebuilt_storage = team_test::make_team_storage(kTeamId, team_chain.sequence);
   team_test::add_storage_member(rebuilt_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   team_test::add_storage_member(rebuilt_storage, kUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                                 .client_version = "2.0.0-self"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("2.0.0-self"));
   team_test::add_storage_member(
       rebuilt_storage, kReorderedUserId,
-      {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-       .joined_timepoint = joined_reordered,
-       .client_version = "9.9.9-final",
-       .team_source_type = atfw::team::EN_TEAM_SOURCE_TYPE_MATCH,
-       .shared_member_data = {team_test::pack_member_module(team_test::make_member_ready_module(true))}});
+      team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+          .set_joined_timepoint(joined_reordered)
+          .set_client_version("9.9.9-final")
+          .set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_MATCH)
+          .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(true))}));
   CASE_EXPECT_TRUE(team_test::receive_channel_event(
       test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), /*create_sequence=*/1,
                                            team_chain.sequence, &rebuilt_storage, /*custom_data_sequence=*/2,
@@ -626,8 +629,9 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
   // B2. admit(add_member) 落地
   CASE_EXPECT_TRUE(team_test::inject_event_message(
       test, team_chain,
-      make_add_member_action(kAdmitUserId, time_guard.logical_now(), atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                             "2.1.0-admit", atfw::team::EN_TEAM_SOURCE_TYPE_SNS_PLATFORM, false)));
+      make_add_member_action(kAdmitUserId, team_test::now_offset_guard::logical_now(),
+                             atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, "2.1.0-admit",
+                             atfw::team::EN_TEAM_SOURCE_TYPE_SNS_PLATFORM, false)));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     dump_team_snapshot(*current, snapshot);
@@ -635,7 +639,7 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
   }));
 
   // B3. 迟到的 add_invitation/add_join_request: 目标已是成员, 被抑制, 不进入 pending
-  const auto late_expired = time_guard.logical_now() + std::chrono::hours(1);
+  const auto late_expired = team_test::now_offset_guard::logical_now() + std::chrono::hours(1);
   {
     atfw::team::DTeamAction action;
     fill_invitation(*action.mutable_add_invitation(), kTeamId, kAdmitUserId, late_expired);
@@ -751,16 +755,16 @@ CASE_TEST(lobbysvr_user_team, robust_late_events_after_channel_destroy_ignored) 
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
 
   // 丰富缓存: 队长 + 自己 + 另一成员 + 两类 pending + 队伍共享数据
-  const auto admission_expired = time_guard.logical_now() + std::chrono::hours(1);
+  const auto admission_expired = team_test::now_offset_guard::logical_now() + std::chrono::hours(1);
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   team_test::add_storage_member(
       team_storage, kMemberUserId,
-      {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-       .client_version = "3.1.0-m",
-       .shared_member_data = {team_test::pack_member_module(team_test::make_member_ready_module(true))}});
+      team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+          .set_client_version("3.1.0-m")
+          .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(true))}));
   team_test::add_storage_invitation(team_storage, kInviteeUserId, admission_expired, true);
   team_test::add_storage_join_request(team_storage, kRequesterUserId, admission_expired, true);
   protobuf_copy_message(*team_storage.add_shared_team_data(),
@@ -828,8 +832,9 @@ CASE_TEST(lobbysvr_user_team, robust_late_events_after_channel_destroy_ignored) 
   // 迟到的队伍频道 action(频道已销毁, 订阅端整条忽略)
   CASE_EXPECT_TRUE(team_test::inject_event_message(
       test, team_chain,
-      make_add_member_action(kLateUserId, time_guard.logical_now(), atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                             "3.9.9-late", atfw::team::EN_TEAM_SOURCE_TYPE_BATTLE, false)));
+      make_add_member_action(kLateUserId, team_test::now_offset_guard::logical_now(),
+                             atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, "3.9.9-late",
+                             atfw::team::EN_TEAM_SOURCE_TYPE_BATTLE, false)));
   CASE_EXPECT_TRUE(team_test::inject_event_message(
       test, team_chain, make_member_update_action(kMemberUserId, "3.9.9-late-update", false, false)));
   {
@@ -907,7 +912,7 @@ CASE_TEST(lobbysvr_user_team, robust_snapshot_rebuild_cleans_pendings_and_indexe
   private_chain.channel_key = private_channel_key;
 
   // 1. 自己的 pending: 541 的陈旧邀请(将被 joined 清理), 542 邀请 + 543 加入请求(重建后必须保留)
-  const auto pending_expired = time_guard.logical_now() + std::chrono::hours(1);
+  const auto pending_expired = team_test::now_offset_guard::logical_now() + std::chrono::hours(1);
   const auto pending_expired_ts = protobuf_from_system_clock(pending_expired);
   CASE_EXPECT_TRUE(team_test::inject_event_message(
       test, private_chain, make_invited_action(kTeamId, kUserId, pending_expired)));
@@ -948,15 +953,15 @@ CASE_TEST(lobbysvr_user_team, robust_snapshot_rebuild_cleans_pendings_and_indexe
   // 3. 快照 S1(旧缓存): M1 + P1 + R1 + configure + 队伍共享数据
   atfw::team::DTeamStorage old_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(old_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   team_test::add_storage_member(old_storage, kUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                                 .client_version = "4.1.0-self"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("4.1.0-self"));
   team_test::add_storage_member(
       old_storage, kOldMemberUserId,
-      {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-       .client_version = "4.1.0-m1",
-       .shared_member_data = {team_test::pack_member_module(team_test::make_member_ready_module(false))}});
+      team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+          .set_client_version("4.1.0-m1")
+          .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(false))}));
   team_test::add_storage_invitation(old_storage, kOldInviteeId, pending_expired, true);
   team_test::add_storage_join_request(old_storage, kOldRequesterId, pending_expired, true);
   old_storage.mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
@@ -1042,15 +1047,15 @@ CASE_TEST(lobbysvr_user_team, robust_snapshot_rebuild_cleans_pendings_and_indexe
   // 5. 权威重建快照 S2(saved 覆盖 seq1-2): 旧 pending/成员/共享数据/configure 全部清理
   atfw::team::DTeamStorage rebuilt_storage = team_test::make_team_storage(kTeamId, team_chain.sequence);
   team_test::add_storage_member(rebuilt_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   team_test::add_storage_member(rebuilt_storage, kUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL,
-                                 .client_version = "4.1.0-self"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("4.1.0-self"));
   team_test::add_storage_member(
       rebuilt_storage, kNewMemberUserId,
-      {.role = atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN,
-       .client_version = "4.1.0-m3",
-       .shared_member_data = {team_test::pack_member_module(team_test::make_member_ready_module(true))}});
+      team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)
+          .set_client_version("4.1.0-m3")
+          .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(true))}));
   team_test::add_storage_invitation(rebuilt_storage, kNewInviteeId,
                                     pending_expired + std::chrono::seconds(200), true);
   team_test::add_storage_join_request(rebuilt_storage, kNewRequesterId,
@@ -1241,14 +1246,14 @@ CASE_TEST(lobbysvr_user_team, robust_bad_any_personal_event_ignored) {
   // 注: 后续的合法事件正常入列同时证明两条坏消息已被 WAL 接收(hash chain 连续), 而非静默丢失。
 
   // 后续更高 sequence 的合法 invited 正常入列(全字段)
-  const auto expiry = time_guard.logical_now() + std::chrono::seconds(300);
+  const auto expiry = team_test::now_offset_guard::logical_now() + std::chrono::seconds(300);
   {
     atfw::team::DTeamMemberAction action;
     auto* invited = action.mutable_invited();
     protobuf_copy_message(*invited->mutable_team_key(), team_test::make_team_key(kTeamId));
     protobuf_copy_message(*invited->mutable_inviter(), team_test::make_user_key(team_test::kCaptainUserId));
     protobuf_copy_message(*invited->mutable_invitee(), team_test::make_user_key(kUserId));
-    *invited->mutable_start_timepoint() = protobuf_from_system_clock(time_guard.logical_now());
+    *invited->mutable_start_timepoint() = protobuf_from_system_clock(team_test::now_offset_guard::logical_now());
     *invited->mutable_expired_timepoint() = protobuf_from_system_clock(expiry);
     CASE_EXPECT_TRUE(team_test::inject_event_message(test, private_chain, action));
   }
@@ -1300,10 +1305,11 @@ CASE_TEST(lobbysvr_user_team, robust_bad_any_team_snapshot_preserves_cache) {
   // 建立富缓存基线: 两成员 + 队伍共享数据
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   team_test::add_storage_member(team_storage, kMemberUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, .client_version = "4.0.0-base"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("4.0.0-base"));
   protobuf_copy_message(*team_storage.add_shared_team_data(),
                         team_test::pack_team_module(team_test::make_team_matching_module(true)));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
@@ -1337,7 +1343,7 @@ CASE_TEST(lobbysvr_user_team, robust_bad_any_team_snapshot_preserves_cache) {
       CASE_EXPECT_EQ(3, snapshot.snapshot().member_size());
       const auto* member = team_test::find_snapshot_member(snapshot, kMemberUserId);
       CASE_EXPECT_TRUE(nullptr != member);
-      if (member) {
+      if (nullptr != member) {
         CASE_EXPECT_EQ(std::string("4.0.0-base"), member->client_version());
       }
       // dump 级解包模块: matching=true
@@ -1353,10 +1359,12 @@ CASE_TEST(lobbysvr_user_team, robust_bad_any_team_snapshot_preserves_cache) {
   // 合法快照(更高 custom_data_sequence)恢复: 缓存重建且客户端收到 snapshot
   atfw::team::DTeamStorage healed_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(healed_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(healed_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(healed_storage, kUserId,
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   team_test::add_storage_member(healed_storage, kMemberUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, .client_version = "4.0.1-healed"});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
+                                    .set_client_version("4.0.1-healed"));
   CASE_EXPECT_TRUE(team_test::receive_channel_event(
       test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), /*create_sequence=*/1,
                                            /*last_sequence=*/0, &healed_storage, /*custom_data_sequence=*/3)));
@@ -1417,8 +1425,8 @@ CASE_TEST(lobbysvr_user_team, robust_bad_shared_data_any_skips_only_that_key) {
 
   atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                {.role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER});
-  team_test::add_storage_member(team_storage, kUserId, {.role = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL});
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   protobuf_copy_message(*team_storage.add_shared_team_data(),
                         team_test::pack_team_module(team_test::make_team_matching_module(true)));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));

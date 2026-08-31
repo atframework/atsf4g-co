@@ -4,10 +4,25 @@
 // 响应挂起用 response_gate_t(custom_wait/custom_resume 确定性放行)，一次性坏包用
 // inject_*_response_fault_once(mock_ss preempt 语义)，均不依赖真实 sleep 或固定 pump 次数。
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
+
+#include <string>
+#include <vector>
 
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::fake_team_room_channel;
+using teamsvr_room_test::global_now_offset_guard;
+using teamsvr_room_test::make_foreign_lock;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::response_fault_kind;
+using teamsvr_room_test::room_test_cfg_values;
+using teamsvr_room_test::room_test_env;
+using teamsvr_room_test::self_lock_holder;
+using teamsvr_room_test::setup_standard_team;
+using teamsvr_room_test::standard_team_members;
 
 // 写 N 个 member_update 事件(与 recovery 用例同形的本地 helper，避免跨文件耦合)
 bool write_member_updates(room_test_env& env, const team_room::ptr_t& room,
@@ -43,7 +58,8 @@ bool wait_maintenance_exit(room_test_env& env) {
 // 构造 add_invitation 请求(本文件用例所需的最小字段)
 atfw::team::SSTeamRoomAddInvitationReq make_invitation_req(const PROJECT_NAMESPACE_ID::DUserIDKey& inviter,
                                                            const PROJECT_NAMESPACE_ID::DUserIDKey& invitee,
-                                                           int64_t source_type = atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND) {
+                                                           int64_t source_type =
+                                                               atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND) {
   atfw::team::SSTeamRoomAddInvitationReq req;
   protobuf_copy_message(*req.mutable_sender_user_key(), inviter);
   auto* invitation = req.mutable_invitation();
@@ -89,7 +105,8 @@ struct journal_action_entry {
 };
 std::vector<journal_action_entry> collect_journal_actions(const fake_team_room_channel& fake, uint64_t user_id) {
   std::vector<journal_action_entry> ret;
-  fake.foreach_team_action([&ret, user_id](const atfw::dtmq::DChannelMessage& message, const atfw::team::DTeamAction& action) {
+  fake.foreach_team_action(
+      [&ret, user_id](const atfw::dtmq::DChannelMessage& message, const atfw::team::DTeamAction& action) {
     uint64_t action_user = 0;
     switch (action.action_case()) {
       case atfw::team::DTeamAction::kAddMember:
@@ -137,7 +154,7 @@ size_t count_personal_actions(const room_test_env& env, const atfw::dtmq::DChann
 
 // 清空房间后从 journal 重建并返回(模拟重启恢复)
 team_room::ptr_t recover_room(room_test_env& env, int64_t team_id) {
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   return env.setup_ready_room(team_id);
 }
 }  // namespace
@@ -165,7 +182,8 @@ CASE_TEST(teamsvr_room_concurrency, concurrent_create_placeholder_blocks_duplica
 
   env.update_response_gate.armed = true;
   auto task_a = env.runtime().run_task(
-      "create_a", std::chrono::seconds{8}, [room, team_id, &owner_key, &owner_channel](rpc::context& ctx) -> rpc::result_code_type {
+      "create_a", std::chrono::seconds{8},
+      [room, team_id, &owner_key, &owner_channel](rpc::context& ctx) -> rpc::result_code_type {
         atfw::team::SSTeamRoomCreateReq req;
         protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
         protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
@@ -199,7 +217,7 @@ CASE_TEST(teamsvr_room_concurrency, concurrent_create_placeholder_blocks_duplica
   CASE_EXPECT_EQ(personal_before, env.personal_message_count());
 
   // 释放挂起响应: 首个 create 恢复正常
-  CASE_EXPECT_TRUE(env.release_gate(env.update_response_gate));
+  CASE_EXPECT_TRUE(room_test_env::release_gate(env.update_response_gate));
   auto result_a = env.runtime().wait(task_a, std::chrono::seconds{15});
   CASE_EXPECT_TRUE(result_a.task_exited && !result_a.hard_timed_out);
   CASE_EXPECT_EQ(0, result_a.result_code);
@@ -216,7 +234,8 @@ CASE_TEST(teamsvr_room_concurrency, concurrent_create_placeholder_blocks_duplica
   }
   // 前置未被第二个 create 污染: 恢复后仍只有一条 no permission
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
-                 env.run("create_after_success", [room, team_id, &other_key](rpc::context& ctx) -> rpc::result_code_type {
+                 env.run("create_after_success",
+                         [room, team_id, &other_key](rpc::context& ctx) -> rpc::result_code_type {
                    atfw::team::SSTeamRoomCreateReq req;
                    protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
                    protobuf_copy_message(*req.mutable_sender_user_key(), other_key);
@@ -240,7 +259,8 @@ CASE_TEST(teamsvr_room_concurrency, concurrent_create_placeholder_blocks_duplica
   CASE_EXPECT_FALSE(room_b->is_lock_holder());
 
   // 模拟外部抢锁竞争: create 的抢锁 RPC 前置冲突(FIX-07), 前置回滚
-  int32_t conflict_ret = env.run("create_lock_conflict", [room_b, team_b, &owner_b](rpc::context& ctx) -> rpc::result_code_type {
+  int32_t conflict_ret = env.run("create_lock_conflict",
+                                 [room_b, team_b, &owner_b](rpc::context& ctx) -> rpc::result_code_type {
     atfw::team::SSTeamRoomCreateReq req;
     protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_b));
     protobuf_copy_message(*req.mutable_sender_user_key(), owner_b);
@@ -253,7 +273,8 @@ CASE_TEST(teamsvr_room_concurrency, concurrent_create_placeholder_blocks_duplica
   // 冲突后重试 create: CAS 按持有者恢复成功(前置已回滚, 不再占用锁)
   {
     global_now_offset_guard guard(std::chrono::seconds{3601});
-    int32_t retry_ret = env.run("create_retry_after_expiry", [room_b, team_b, &owner_b](rpc::context& ctx) -> rpc::result_code_type {
+    int32_t retry_ret = env.run("create_retry_after_expiry",
+                                [room_b, team_b, &owner_b](rpc::context& ctx) -> rpc::result_code_type {
       atfw::team::SSTeamRoomCreateReq req;
       protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_b));
       protobuf_copy_message(*req.mutable_sender_user_key(), owner_b);
@@ -265,7 +286,7 @@ CASE_TEST(teamsvr_room_concurrency, concurrent_create_placeholder_blocks_duplica
   CASE_EXPECT_TRUE(room_b->is_lock_holder());
   CASE_EXPECT_TRUE(room_b->find_member(owner_b, false) != nullptr);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -332,12 +353,13 @@ CASE_TEST(teamsvr_room_concurrency, compact_update_suspended_keeps_new_logs) {
     }
 
     // 释放挂起的 update 响应
-    CASE_EXPECT_TRUE(env.release_gate(env.update_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.update_response_gate));
     CASE_EXPECT_TRUE(wait_maintenance_exit(env));
 
     // 收集新日志 sequence: 继续递增且不覆盖已 saved 的快照
     int64_t late_sequence = 0;
-    fake.foreach_team_action([&late_sequence](const atfw::dtmq::DChannelMessage& message, const atfw::team::DTeamAction& action) {
+    fake.foreach_team_action(
+        [&late_sequence](const atfw::dtmq::DChannelMessage& message, const atfw::team::DTeamAction& action) {
       if (action.has_member_update() && action.member_update().client_version() == "late-write") {
         late_sequence = message.sequence();
         return false;
@@ -361,7 +383,7 @@ CASE_TEST(teamsvr_room_concurrency, compact_update_suspended_keeps_new_logs) {
   }
 
   // 恢复后内容: 事件 + 快照回滚不覆盖挂起窗口的新日志
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   team_room::ptr_t recovered = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!recovered);
   if (recovered) {
@@ -374,7 +396,7 @@ CASE_TEST(teamsvr_room_concurrency, compact_update_suspended_keeps_new_logs) {
     CASE_EXPECT_TRUE(recovered->find_member(members.admin, false) != nullptr);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -433,7 +455,7 @@ CASE_TEST(teamsvr_room_concurrency, renew_response_out_of_order_no_regress) {
     CASE_EXPECT_TRUE(room->is_lock_holder());
 
     // 释放挂起的续租响应: 不降级
-    CASE_EXPECT_TRUE(env.release_gate(env.update_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.update_response_gate));
     CASE_EXPECT_TRUE(wait_maintenance_exit(env));
     CASE_EXPECT_EQ(0, env.sync(team_id));
 
@@ -448,7 +470,7 @@ CASE_TEST(teamsvr_room_concurrency, renew_response_out_of_order_no_regress) {
     }
 
     // 推进下一轮心跳窗口
-    guard.advance(std::chrono::seconds{6});
+    global_now_offset_guard::advance(std::chrono::seconds{6});
     const size_t renews_before = fake.update_requests().size();
     env.drive_timer_ticks();
     CASE_EXPECT_GT(fake.update_requests().size(), renews_before);
@@ -462,14 +484,15 @@ CASE_TEST(teamsvr_room_concurrency, renew_response_out_of_order_no_regress) {
         !record.request.compare_and_maybe_reset_lock().has_reset_value()) {
       continue;
     }
-    auto reset_timeout = protobuf_to_system_clock(record.request.compare_and_maybe_reset_lock().reset_value().timeout());
+    auto reset_timeout =
+        protobuf_to_system_clock(record.request.compare_and_maybe_reset_lock().reset_value().timeout());
     if (last_reset_timeout != std::chrono::system_clock::time_point{}) {
       CASE_EXPECT_GE(reset_timeout, last_reset_timeout);
     }
     last_reset_timeout = reset_timeout;
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -521,7 +544,7 @@ CASE_TEST(teamsvr_room_fault, malformed_reset_lock_response_no_false_master) {
   CASE_EXPECT_TRUE(room->is_lock_holder());
   CASE_EXPECT_EQ(self_lock_holder(), fake.lock().lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -552,7 +575,9 @@ CASE_TEST(teamsvr_room_fault, malformed_update_body_fails_visibly) {
   }
 
   // 坏响应体必须表现为失败(EN_SYS_PACK)，不能被当成成功
-  int32_t first_ret = env.run("create_malformed_body", [room, team_id, &owner_key, &owner_channel](rpc::context& ctx) -> rpc::result_code_type {
+  int32_t first_ret = env.run("create_malformed_body",
+                              [room, team_id, &owner_key, &owner_channel](
+                                  rpc::context& ctx) -> rpc::result_code_type {
     atfw::team::SSTeamRoomCreateReq req;
     protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
@@ -568,7 +593,8 @@ CASE_TEST(teamsvr_room_fault, malformed_update_body_fails_visibly) {
 
   // 事件回放后订阅者视图看到已提交的本地节点与初始快照; 重试 create 的 CAS 按持有者返回成功
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  int32_t retry_ret = env.run("create_retry", [room, team_id, &owner_key, &owner_channel](rpc::context& ctx) -> rpc::result_code_type {
+  int32_t retry_ret = env.run("create_retry",
+                              [room, team_id, &owner_key, &owner_channel](rpc::context& ctx) -> rpc::result_code_type {
     atfw::team::SSTeamRoomCreateReq req;
     protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
     protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
@@ -586,11 +612,12 @@ CASE_TEST(teamsvr_room_fault, malformed_update_body_fails_visibly) {
   CASE_EXPECT_EQ(2u, fake.update_calls());
   CASE_EXPECT_EQ(0u, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ CON-02: 同一 invitee 的 approve/reject/refresh/expiry 两两并发 -> 恰一处生效, 此后 admission 收敛 ============
+// ============ CON-02: 同一 invitee 的 approve/reject/refresh/expiry 两两并发 -> 恰一处生效,
+// 此后 admission 收敛 ============
 CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
   room_test_env env;
   if (!env.start()) {
@@ -636,7 +663,7 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_invitation(ctx, reject_req)));
     }));
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto approve_result = env.runtime().wait(approve_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(approve_result.task_exited && !approve_result.hard_timed_out);
     CASE_EXPECT_EQ(0, approve_result.result_code);
@@ -645,12 +672,14 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
     // 收集 invitee 相关 journal: 顺序 add_member/approve 先于 reject
     auto journal = collect_journal_actions(fake, invitee.user_id());
     std::vector<atfw::team::DTeamAction::ActionCase> kinds;
+    kinds.reserve(journal.size());
     for (const auto& entry : journal) {
       kinds.push_back(entry.action_case);
     }
     CASE_EXPECT_TRUE((std::vector<atfw::team::DTeamAction::ActionCase>{
                          atfw::team::DTeamAction::kAddInvitation, atfw::team::DTeamAction::kAddMember,
-                         atfw::team::DTeamAction::kApproveInvitation, atfw::team::DTeamAction::kRejectInvitation}) == kinds);
+                         atfw::team::DTeamAction::kApproveInvitation,
+                         atfw::team::DTeamAction::kRejectInvitation}) == kinds);
 
     // 结论: 恰一处生效; approve 已消费 admission, reject 事件仍可操作 -> 此后 admission
     CASE_EXPECT_TRUE(room->find_member(invitee, false) != nullptr);
@@ -671,7 +700,8 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
       CASE_EXPECT_TRUE(recovered->find_member(invitee, false) != nullptr);
       CASE_EXPECT_TRUE(recovered->find_member(members.owner, false) != nullptr);
       CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
-                     env.run("approve_recovered_a", [recovered, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                     env.run("approve_recovered_a",
+                             [recovered, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(recovered->approve_invitation(ctx, approve_req)));
                      }));
     }
@@ -715,7 +745,7 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, refresh_req)));
     }));
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto approve_result = env.runtime().wait(approve_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(approve_result.task_exited && !approve_result.hard_timed_out);
     CASE_EXPECT_EQ(0, approve_result.result_code);
@@ -724,12 +754,14 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
     // 收集 journal: 校验刷新被拒、无重复 admission
     auto journal = collect_journal_actions(fake, invitee.user_id());
     std::vector<atfw::team::DTeamAction::ActionCase> kinds;
+    kinds.reserve(journal.size());
     for (const auto& entry : journal) {
       kinds.push_back(entry.action_case);
     }
     CASE_EXPECT_TRUE((std::vector<atfw::team::DTeamAction::ActionCase>{
                          atfw::team::DTeamAction::kAddInvitation, atfw::team::DTeamAction::kAddMember,
-                         atfw::team::DTeamAction::kApproveInvitation, atfw::team::DTeamAction::kAddInvitation}) == kinds);
+                         atfw::team::DTeamAction::kApproveInvitation,
+                         atfw::team::DTeamAction::kAddInvitation}) == kinds);
     CASE_EXPECT_TRUE(room->find_member(invitee, false) != nullptr);
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
                    env.run("approve_again_b", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
@@ -780,7 +812,7 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
       global_now_offset_guard guard(std::chrono::seconds{6});
       env.drive_timer_ticks();
       // 清理后 approve 响应仍挂起; 释放已提交的 add_member/approve
-      CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+      CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
       auto approve_result = env.runtime().wait(approve_task, std::chrono::seconds{15});
       CASE_EXPECT_TRUE(approve_result.task_exited && !approve_result.hard_timed_out);
       CASE_EXPECT_EQ(0, approve_result.result_code);
@@ -834,7 +866,7 @@ CASE_TEST(teamsvr_room_concurrency, admission_pairwise_races_converge) {
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -887,7 +919,7 @@ CASE_TEST(teamsvr_room_concurrency, remove_member_races_heartbeat_update_and_rea
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }));
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto remove_result = env.runtime().wait(remove_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(remove_result.task_exited && !remove_result.hard_timed_out);
     CASE_EXPECT_EQ(0, remove_result.result_code);
@@ -904,10 +936,12 @@ CASE_TEST(teamsvr_room_concurrency, remove_member_races_heartbeat_update_and_rea
       }
     }
     CASE_EXPECT_TRUE((std::vector<atfw::team::DTeamAction::ActionCase>{atfw::team::DTeamAction::kRemoveMember,
-                                                                       atfw::team::DTeamAction::kMemberUpdate}) == kinds);
+                                                                       atfw::team::DTeamAction::kMemberUpdate}) ==
+                                                                   kinds);
 
     // 删除后心跳: member-not-found; 此后心跳恢复
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND, send_heartbeat(env, room, members.normal, 0x1234));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_FOUND,
+                   send_heartbeat(env, room, members.normal, 0x1234));
     env.drive_timer_ticks();
     CASE_EXPECT_EQ(0, env.sync(team_id));
     CASE_EXPECT_TRUE(room->find_member(members.normal, false) == nullptr);
@@ -965,7 +999,7 @@ CASE_TEST(teamsvr_room_concurrency, remove_member_races_heartbeat_update_and_rea
                    }));
     CASE_EXPECT_EQ(sends_in_flight, fake.send_message_calls());
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto remove_result = env.runtime().wait(remove_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(remove_result.task_exited && !remove_result.hard_timed_out);
     CASE_EXPECT_EQ(0, remove_result.result_code);
@@ -1009,7 +1043,7 @@ CASE_TEST(teamsvr_room_concurrency, remove_member_races_heartbeat_update_and_rea
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -1053,7 +1087,7 @@ CASE_TEST(teamsvr_room_concurrency, captain_transfer_races_exit_and_offline_kick
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }));
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto transfer_result = env.runtime().wait(transfer_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(transfer_result.task_exited && !transfer_result.hard_timed_out);
     CASE_EXPECT_EQ(0, transfer_result.result_code);
@@ -1122,7 +1156,7 @@ CASE_TEST(teamsvr_room_concurrency, captain_transfer_races_exit_and_offline_kick
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }));
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto exit_result = env.runtime().wait(exit_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(exit_result.task_exited && !exit_result.hard_timed_out);
     CASE_EXPECT_EQ(0, exit_result.result_code);
@@ -1208,12 +1242,12 @@ CASE_TEST(teamsvr_room_concurrency, captain_transfer_races_exit_and_offline_kick
 
     // 转让在途窗口分轮推进时间轮: 旧队长离线到期被踢(每轮 2s, 让 now+1 到期的踢人定时器在下一轮触发并回环)
     for (int round = 0; round < 4; ++round) {
-      guard.advance(std::chrono::seconds{2});
+      global_now_offset_guard::advance(std::chrono::seconds{2});
       env.drive_timer_ticks();
       CASE_EXPECT_EQ(0, env.sync(team_id));
     }
 
-    CASE_EXPECT_TRUE(env.release_gate(env.send_message_response_gate));
+    CASE_EXPECT_TRUE(room_test_env::release_gate(env.send_message_response_gate));
     auto transfer_result = env.runtime().wait(transfer_task, std::chrono::seconds{15});
     CASE_EXPECT_TRUE(transfer_result.task_exited && !transfer_result.hard_timed_out);
     CASE_EXPECT_EQ(0, transfer_result.result_code);
@@ -1229,7 +1263,8 @@ CASE_TEST(teamsvr_room_concurrency, captain_transfer_races_exit_and_offline_kick
     bool kick_seen = false;
     int election_logs = 0;
     fake.foreach_team_action(
-        [&kick_seen, &election_logs, &members](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+        [&kick_seen, &election_logs, &members](const atfw::dtmq::DChannelMessage&,
+                                               const atfw::team::DTeamAction& action) {
           if (action.action_case() == atfw::team::DTeamAction::kRemoveMember &&
               action.remove_member().user_key().user_id() == members.owner.user_id()) {
             kick_seen = true;
@@ -1257,6 +1292,6 @@ CASE_TEST(teamsvr_room_concurrency, captain_transfer_races_exit_and_offline_kick
     }
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

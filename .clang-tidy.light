@@ -7,6 +7,10 @@ Checks:
   - '-performance-enum-size'
   - '-bugprone-misplaced-widening-cast'
   - '-bugprone-branch-clone'
+  # misc-non-private-member-variables-in-classes 的新版规范名，与上面的别名保持同样的关闭策略
+  - "-cppcoreguidelines-non-private-member-variables-in-classes"
+  # 编译器默认关闭的诊断，仅 clang-tidy 的 clang-diagnostic-* 通配会打开；指定初始化列表配合默认成员初始化是合法风格
+  - "-clang-diagnostic-missing-designated-field-initializers"
   # 虽然按规范下划线开头的都是保留字，但是写通用库的时候常见使用私有的保留字来减少冲突
   - '-bugprone-reserved-identifier'
   # 过于常见的用法而忽略

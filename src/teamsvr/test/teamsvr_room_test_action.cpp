@@ -5,7 +5,7 @@
 //   CRT-01~04: 创建队伍/UUID 路径/非法参数与重复创建/响应丢失恢复
 //   ROU-01~02: 本地路由/远端转发
 
-#include "teamsvr_room_test_common.h"
+#include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -23,8 +23,19 @@
 #include <rpc/team/team_common_api.h>
 #include <rpc/team/teamroomservice.atfw.gen.h>
 
+#include <string>
+
 namespace {
-using namespace teamsvr_room_test;
+using teamsvr_room_test::fake_team_room_channel;
+using teamsvr_room_test::kDtmqProxyNodeId;
+using teamsvr_room_test::kLocalRoomNodeId;
+using teamsvr_room_test::kTeamRoomChannelType;
+using teamsvr_room_test::kTestZoneId;
+using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_team_key;
+using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::next_test_team_id;
+using teamsvr_room_test::room_test_env;
 
 // 权限失败统一门禁: 预期错误码 + team 房间频道与个人频道零写入
 void expect_zero_write(fake_team_room_channel& fake, size_t send_before, size_t update_before, size_t reset_before,
@@ -63,7 +74,7 @@ CASE_TEST(teamsvr_room_infrastructure, subscribe_ready_with_private_data) {
   CASE_EXPECT_FALSE(room->is_lock_holder());
 
   // 用例结束清理 manager 后无残留
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0u, team_room_manager::me()->get_room_count());
   CASE_EXPECT_EQ(0, env.stop());
 }
@@ -110,7 +121,7 @@ CASE_TEST(teamsvr_room_infrastructure, ready_snapshot_delivery) {
   CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 1001), false) != nullptr);
   CASE_EXPECT_FALSE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -141,7 +152,8 @@ CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
   // 相同 team_id、不同 zone_id 是不同队伍，room 与 DTMQ channel 都不能复用。
   auto other_zone_key = make_team_key(team_id, kTestZoneId + 1);
   team_room::ptr_t other_zone_room;
-  CASE_EXPECT_EQ(0, env.run("same_id_other_zone", [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_EQ(0, env.run("same_id_other_zone",
+                            [&other_zone_key, &other_zone_room](rpc::context& ctx) -> rpc::result_code_type {
     other_zone_room = team_room_manager::me()->mutable_room(ctx, other_zone_key);
     CASE_EXPECT_TRUE(!!other_zone_room);
     RPC_RETURN_CODE(0);
@@ -199,7 +211,7 @@ CASE_TEST(teamsvr_room_infrastructure, mutable_room_reuse_and_cleanup) {
       }));
   CASE_EXPECT_TRUE(found_normalized_destroy);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0u, team_room_manager::me()->get_room_count());
   CASE_EXPECT_EQ(0, env.stop());
 }
@@ -252,7 +264,7 @@ CASE_TEST(teamsvr_room_infrastructure, typed_ss_action_invoke) {
     CASE_EXPECT_EQ(0x1234u, heartbeat_member->member_data.user_router_server_id());
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -343,7 +355,7 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_TRUE(room->is_lock_holder());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -411,7 +423,7 @@ CASE_TEST(teamsvr_room_create, create_team_with_uuid) {
     CASE_EXPECT_GE(fake.update_calls(), 1u);
   }
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -500,7 +512,7 @@ CASE_TEST(teamsvr_room_create, create_team_invalid_states) {
   expect_zero_write(fake, destroyed_sends, destroyed_updates, destroyed_resets, destroyed_destroys, env,
                     destroyed_personal);
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -546,7 +558,7 @@ CASE_TEST(teamsvr_room_create, create_response_loss_idempotent) {
 
   // 丢弃原 room，重新订阅恢复: 从已提交快照看到 team_created -> create 返回 no permission，
   // 且不产生第二支初始 update
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   team_room::ptr_t recovered = env.setup_ready_room(team_id);
   CASE_EXPECT_TRUE(!!recovered);
   if (recovered) {
@@ -561,7 +573,7 @@ CASE_TEST(teamsvr_room_create, create_response_loss_idempotent) {
   }
   CASE_EXPECT_EQ(1u, fake.update_calls());
 
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
 
@@ -650,6 +662,6 @@ CASE_TEST(teamsvr_room_routing, forward_to_remote) {
   CASE_EXPECT_EQ(nullptr, team_room_manager::me()->get_room(make_team_key(remote_team_id)).get());
 
   remote_rule.reset();
-  env.clear_rooms();
+  room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }

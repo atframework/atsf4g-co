@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	pu "github.com/atframework/atframe-utils-go/proto_utility"
-	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
 	lobbysvr_rpc_handle "github.com/atframework/atsf4g-co-robot/rpc_handle/lobbysvr"
+	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
 	base "github.com/atframework/robot-go/base"
 	user_data "github.com/atframework/robot-go/data"
 )
@@ -119,8 +119,8 @@ func TeamSendInvitationRpc(action base.TaskActionImpl, user user_data.User, invi
 		return 0, nil, fmt.Errorf("invitee is empty")
 	}
 	csBody := &public_protocol_pbdesc.CSTeamSendInvitationReq{
-		TeamKey:       teamKey,
-		UserKey:       invitee,
+		TeamKey:        teamKey,
+		UserKey:        invitee,
 		TeamSourceType: public_protocol_pbdesc.EnTeamSourceType_EN_TEAM_SOURCE_TYPE_FRIEND,
 	}
 	return lobbysvr_rpc_handle.SendTeamSendInvitation(action, user, csBody, true)
@@ -159,7 +159,7 @@ func TeamSendJoinRequestRpc(action base.TaskActionImpl, user user_data.User, tea
 		return 0, nil, fmt.Errorf("team_key is empty")
 	}
 	csBody := &public_protocol_pbdesc.CSTeamSendJoinRequestReq{
-		TeamKey:       teamKey,
+		TeamKey:        teamKey,
 		TeamSourceType: public_protocol_pbdesc.EnTeamSourceType_EN_TEAM_SOURCE_TYPE_NONE,
 	}
 	return lobbysvr_rpc_handle.SendTeamSendJoinRequest(action, user, csBody, true)
@@ -299,9 +299,9 @@ func RegisterTeamDirtySyncPushHandler(user user_data.User) {
 					teamKey := increase.GetTeamKey()
 					actions := make([]*public_protocol_pbdesc.DTeamAction, 0, len(increase.GetActions()))
 					for _, oneAction := range increase.GetActions() {
-						actions = append(actions, oneAction.GetActions())
+						actions = append(actions, oneAction.GetAction())
 						action.User.Log("[team] push increase team=%d:%d, action=%s, member_shared_data=%d",
-							teamKey.GetZoneId(), teamKey.GetTeamId(), oneAction.GetActions().String(),
+							teamKey.GetZoneId(), teamKey.GetTeamId(), oneAction.GetAction().String(),
 							len(oneAction.GetSharedMemberData()))
 					}
 					AppendTeamIncreaseActions(action.User, actions)

@@ -54,6 +54,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <atframe/atapp.h>
 #include <atframework/testing/mock_db.h>
 #include <atframework/testing/mock_discovery.h>
 #include <atframework/testing/mock_resource.h>
@@ -78,9 +79,9 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
-#include <atframe/atapp.h>
 #include "atframe/atapp_conf.h"  // IWYU pragma: keep
 #include "config/extern_service_types.h"
 #include "config/logic_config.h"
@@ -292,7 +293,7 @@ class global_now_offset_guard {
     atfw::util::time::time_utility::set_global_now_offset(previous_ + advance_by);
   }
 
-  void advance(std::chrono::system_clock::duration by) {
+  static void advance(std::chrono::system_clock::duration by) {
     atfw::util::time::time_utility::set_global_now_offset(atfw::util::time::time_utility::get_global_now_offset() + by);
   }
 
@@ -401,7 +402,7 @@ class fake_team_room_channel {
 
   // 遍历 journal 中所有 kEvent 日志并解包 DTeamAction；坏 Any 返回 false 并停止。
   template <class Fn>
-  bool foreach_team_action(Fn&& fn) const {
+  bool foreach_team_action(const Fn& fn) const {
     for (const auto& message : journal_) {
       if (message.detail().command_case() != atfw::dtmq::DChannelMessageDetail::kEvent) {
         continue;
@@ -837,7 +838,10 @@ class room_test_env {
     if (runtime_ && runtime_->is_running()) {
       ret = runtime_->stop();
     }
-    return 0 != ret ? ret : (has_unconsumed_fault ? -1 : 0);
+    if (0 != ret) {
+      return ret;
+    }
+    return has_unconsumed_fault ? -1 : 0;
   }
 
   // ---- fake channel registry ----
@@ -912,7 +916,7 @@ class room_test_env {
   static bool gate_parked(const response_gate_t& gate) noexcept { return 0 != gate.parked_task; }
 
   // 放行挂起中的响应; 无挂起返回 false。放行后 handler 任务在下一轮泵完成,响应随即投递
-  bool release_gate(response_gate_t& gate) {
+  static bool release_gate(response_gate_t& gate) {
     if (0 == gate.parked_task) {
       return false;
     }
@@ -926,41 +930,43 @@ class room_test_env {
   // fixture 服务端语义由同一 impl 执行(照常提交/照常拒绝),故障只作用于响应投递层。
   // 仅支持 fake 层(WAL 模式下 team-room 分支由真实 mq_channel 处理,不走这里)。
   atframework::testing::ss_rule_handle inject_update_response_fault_once(response_fault_kind kind) {
+    preempt_handler_t handler = [](room_test_env* self, const atframework::testing::ss_request_view& request,
+                                   google::protobuf::Message& response) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+          self->fake_handle_update(static_cast<const atfw::dtmq::SSChannelUpdateReq&>(request.body),
+                                   static_cast<atfw::dtmq::SSChannelUpdateRsp&>(response), request.context)));
+    };
     return inject_response_fault_once(rpc::dtmq::packer::get_full_name_of_update(),
                                       atfw::dtmq::SSChannelUpdateReq::descriptor()->full_name(),
                                       atfw::dtmq::SSChannelUpdateRsp::descriptor()->full_name(), kind,
-                                      [](room_test_env* self, const atframework::testing::ss_request_view& request,
-                                         google::protobuf::Message& response) -> rpc::result_code_type {
-                                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
-                                            self->fake_handle_update(static_cast<const atfw::dtmq::SSChannelUpdateReq&>(request.body),
-                                                                     static_cast<atfw::dtmq::SSChannelUpdateRsp&>(response),
-                                                                     request.context)));
-                                      });
+                                      std::move(handler));
   }
 
   atframework::testing::ss_rule_handle inject_reset_lock_response_fault_once(response_fault_kind kind) {
+    preempt_handler_t handler = [](room_test_env* self, const atframework::testing::ss_request_view& request,
+                                   google::protobuf::Message& response) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+          self->fake_handle_reset_lock(static_cast<const atfw::dtmq::SSChannelResetLockReq&>(request.body),
+                                       static_cast<atfw::dtmq::SSChannelResetLockRsp&>(response), request.context)));
+    };
     return inject_response_fault_once(rpc::dtmq::packer::get_full_name_of_reset_lock(),
                                       atfw::dtmq::SSChannelResetLockReq::descriptor()->full_name(),
                                       atfw::dtmq::SSChannelResetLockRsp::descriptor()->full_name(), kind,
-                                      [](room_test_env* self, const atframework::testing::ss_request_view& request,
-                                         google::protobuf::Message& response) -> rpc::result_code_type {
-                                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->fake_handle_reset_lock(
-                                            static_cast<const atfw::dtmq::SSChannelResetLockReq&>(request.body),
-                                            static_cast<atfw::dtmq::SSChannelResetLockRsp&>(response), request.context)));
-                                      });
+                                      std::move(handler));
   }
 
   atframework::testing::ss_rule_handle inject_send_message_response_fault_once(response_fault_kind kind) {
+    preempt_handler_t handler = [](room_test_env* self, const atframework::testing::ss_request_view& request,
+                                   google::protobuf::Message& response) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+          self->fake_handle_send_message(static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body),
+                                         static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response),
+                                         request.context)));
+    };
     return inject_response_fault_once(rpc::dtmq::packer::get_full_name_of_send_message(),
                                       atfw::dtmq::SSChannelSendMessageReq::descriptor()->full_name(),
                                       atfw::dtmq::SSChannelSendMessageRsp::descriptor()->full_name(), kind,
-                                      [](room_test_env* self, const atframework::testing::ss_request_view& request,
-                                         google::protobuf::Message& response) -> rpc::result_code_type {
-                                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->fake_handle_send_message(
-                                            static_cast<const atfw::dtmq::SSChannelSendMessageReq&>(request.body),
-                                            static_cast<atfw::dtmq::SSChannelSendMessageRsp&>(response),
-                                            request.context)));
-                                      });
+                                      std::move(handler));
   }
 
   // ---- WAL journal mode(真实 mq_channel/wal_publisher 层，计划 §3.2/§4.6) ----
@@ -997,9 +1003,9 @@ class room_test_env {
   // 协程内直接向真实 publisher 提交一条 kEvent(DTeamAction) 日志(sequence/hash 由真实
   // allocate_log_key/哈希链分配)。forced_sequence_gap>0 时跳号构造非连续 sequence(EVT-01/WAL-04)；
   // broadcast=false 时不 tick，日志停留在 journal 未向订阅者广播(WAL-06 的"待广播日志"场景)
-  rpc::result_code_type wal_commit_team_action(rpc::context& ctx, const wal_channel_ptr_t& channel,
-                                               const atfw::team::DTeamAction& action,
-                                               int64_t forced_sequence_gap = 0, bool broadcast = true) {
+  static rpc::result_code_type wal_commit_team_action(rpc::context& ctx, const wal_channel_ptr_t& channel,
+                                                       const atfw::team::DTeamAction& action,
+                                                       int64_t forced_sequence_gap = 0, bool broadcast = true) {
     if (!channel || !channel->is_available()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
     }
@@ -1026,8 +1032,8 @@ class room_test_env {
   // 协程内创建一个与现有频道同 key 的空白可写频道(WAL-05/06 的 dump->load 往返目标，镜像
   // writable transfer 后新节点上的频道对象)。不做任何注册: 调用方 load_snapshot 后以
   // wal_swap_channel 激活为唯一权威。空白频道不追加 kCreate 日志(日志随快照载入)
-  rpc::result_code_type wal_make_replacement_channel(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
-                                                     wal_channel_ptr_t& output) {
+  static rpc::result_code_type wal_make_replacement_channel(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
+                                                             wal_channel_ptr_t& output) {
     auto channel_key = rpc::team::team_api::make_team_room_channel_key(team_key);
     auto configure = excel::get_dtmq_channel_configure(channel_key.channel_type());
     if (!configure) {
@@ -1060,8 +1066,8 @@ class room_test_env {
 
   // 协程内以指定 checkpoint 对真实 publisher 触发一次订阅决策(WAL-02: 正常 checkpoint 只补后续
   // 日志、hash 不匹配强制 snapshot)。订阅者信息与 room 侧共享订阅者一致
-  rpc::result_code_type wal_resubscribe(rpc::context& ctx, const wal_channel_ptr_t& channel, int64_t last_sequence,
-                                        uint64_t last_hash_code) {
+  static rpc::result_code_type wal_resubscribe(rpc::context& ctx, const wal_channel_ptr_t& channel,
+                                                int64_t last_sequence, uint64_t last_hash_code) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
         wal_resubscribe_as(ctx, channel, shared_subscriber_key_for(), last_sequence, last_hash_code, true)));
   }
@@ -1069,9 +1075,9 @@ class room_test_env {
   // wal_resubscribe 的多订阅者版本: 以指定订阅者 key 触发订阅决策(WAL-03 的落后/跟得上双订阅者)。
   // 进程内没有该 key 对应的 client_subscriber 时批次由 global_receive_channel_event 记录并丢弃，
   // 不影响批次内容断言。with_private_data 会更新到已存在订阅者(与 room 共享 key 时必须传 true)
-  rpc::result_code_type wal_resubscribe_as(rpc::context& ctx, const wal_channel_ptr_t& channel,
-                                           const std::string& subscriber_key, int64_t last_sequence,
-                                           uint64_t last_hash_code, bool with_private_data) {
+  static rpc::result_code_type wal_resubscribe_as(rpc::context& ctx, const wal_channel_ptr_t& channel,
+                                                  const std::string& subscriber_key, int64_t last_sequence,
+                                                  uint64_t last_hash_code, bool with_private_data) {
     if (!channel || !channel->is_available()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
     }
@@ -1277,7 +1283,7 @@ class room_test_env {
   }
 
   // 用例结束清理: 房间与定时器。
-  void clear_rooms() {
+  static void clear_rooms() {
     if (!team_room_manager::is_instance_destroyed()) {
       team_room_manager::me()->clear();
     }
@@ -1285,7 +1291,7 @@ class room_test_env {
 
  private:
   template <class Predicate>
-  bool wait_until(Predicate&& predicate, std::chrono::milliseconds timeout = std::chrono::seconds{5}) {
+  bool wait_until(Predicate predicate, std::chrono::milliseconds timeout = std::chrono::seconds{5}) {
     auto deadline = std::chrono::steady_clock::now() + timeout;
     while (!predicate()) {
       if (std::chrono::steady_clock::now() >= deadline) {
@@ -1496,7 +1502,8 @@ class room_test_env {
               if (nullptr == request.context) {
                 RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
               }
-              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_send_message(*request.context, typed_request, typed_response)));
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                  self->wal_handle_send_message(*request.context, typed_request, typed_response)));
             }
           } else {
             fake = self->find_channel_by_key(typed_request.channel_key());
@@ -1557,7 +1564,8 @@ class room_test_env {
               if (nullptr == request.context) {
                 RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
               }
-              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_update(*request.context, typed_request, typed_response)));
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                  self->wal_handle_update(*request.context, typed_request, typed_response)));
             }
             typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
             RPC_RETURN_CODE(0);
@@ -1590,7 +1598,8 @@ class room_test_env {
               if (nullptr == request.context) {
                 RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
               }
-              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(self->wal_handle_reset_lock(*request.context, typed_request, typed_response)));
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                  self->wal_handle_reset_lock(*request.context, typed_request, typed_response)));
             }
             typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
             RPC_RETURN_CODE(0);
@@ -1802,8 +1811,9 @@ class room_test_env {
     RPC_RETURN_CODE(0);
   }
 
-  using preempt_handler_t = std::function<rpc::result_code_type(room_test_env*, const atframework::testing::ss_request_view&,
-                                                                google::protobuf::Message&)>;
+  using preempt_handler_t =
+      std::function<rpc::result_code_type(room_test_env*, const atframework::testing::ss_request_view&,
+                                          google::protobuf::Message&)>;
 
   atframework::testing::ss_rule_handle inject_response_fault_once(gsl::string_view full_rpc_name,
                                                                    gsl::string_view request_type_name,
