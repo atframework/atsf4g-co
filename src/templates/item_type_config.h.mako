@@ -25,6 +25,7 @@ struct ItemAlgorithmTypeOption {
 
   EXCEL_CONFIG_LOADER_API static const ItemAlgorithmTypeOption *GetItemType(int32_t item_id);
   EXCEL_CONFIG_LOADER_API static bool IsNeedGuid(int32_t item_id);
+  EXCEL_CONFIG_LOADER_API static bool IsNeedOccupyTheGrid(int32_t item_id);
 
   EXCEL_CONFIG_LOADER_API bool operator<(const ItemAlgorithmTypeOption &other) const noexcept;
   int32_t index_begin_;

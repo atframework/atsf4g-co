@@ -17,6 +17,10 @@
 #include <config/excel/config_manager.h>
 #include <config/excel/item_type_config.h>
 
+#include <ItemInitialize/ItemInitialize.h>
+#include <logic/item/user_item_grid_manager.h>
+#include <rpc/db/uuid.h>
+
 #include <data/user.h>
 
 #include <algorithm>
@@ -154,6 +158,28 @@ item_operation_checked_sub_request user_item_manager::check_sub(
   return item_operation_checked_sub_request(owner_, std::move(checked_request));
 }
 
+item_operation_checked_sub_request user_item_manager::check_sub(
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& input,
+    int32_t multiple) const {
+  if (multiple <= 0) {
+    return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, -1);
+  }
+  // 只支持虚拟仓库
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basic_input;
+  for (auto& item : input) {
+    if (ItemAlgorithmTypeOption::IsNeedOccupyTheGrid(static_cast<int32_t>(item.item_offset().type_id()))) {
+      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, -1);
+    }
+    auto& basic = *basic_input.Add();
+    basic.set_type_id(item.item_offset().type_id());
+    basic.set_count(item.item_offset().count() * multiple);
+    basic.mutable_position()->set_container_guid(
+        owner_->get_user_item_grid_manager().get_virtual_inventory_container_guid());
+    basic.mutable_position()->mutable_grid_position()->set_virtual_inventory(true);
+  }
+  return check_sub(ctx, std::move(basic_input));
+}
+
 item_operation_result user_item_manager::check_has(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) {
   // 首先分组
@@ -182,4 +208,67 @@ item_operation_result user_item_manager::check_has(
     }
   }
   return item_operation_result{PROJECT_NAMESPACE_ID::EN_SUCCESS, -1};
+}
+
+rpc::result_code_type user_item_manager::generate_item_from_offset_cfg(
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out_instances, int32_t multiple) const {
+  if (multiple <= 0) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+  out_instances.Clear();
+  // 生成物品
+  for (auto& offset : offset_cfg) {
+    // 初始化道具实例
+    PROJECT_NAMESPACE_ID::battle_utility::item_initialize::ItemInitializeArgs args;
+    if (!PROJECT_NAMESPACE_ID::battle_utility::item_initialize::CreateItem(
+            excel::get_current_config_group(), PROJECT_NAMESPACE_ID::battle_utility::random::GetRandomGenerator(),
+            offset.item_offset().type_id(), offset.item_offset().count() * multiple, args, out_instances)) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+    }
+  }
+  // 生成guid
+  for (auto& item : out_instances) {
+    if (ItemAlgorithmTypeOption::IsNeedGuid(item.item_basic().type_id())) {
+      int64_t guid = RPC_AWAIT_CODE_RESULT(generate_item_guid(ctx));
+      if (guid <= 0) {
+        RPC_RETURN_CODE(static_cast<int32_t>(guid));
+      }
+      item.mutable_item_basic()->set_guid(guid);
+    }
+  }
+  // 寻找位置 TODO
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+}
+
+rpc::rpc_result<int64_t> user_item_manager::generate_item_guid(rpc::context& ctx) const {
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::db::uuid::generate_global_unique_id(
+      ctx, PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_ITEM_GUID, owner_->get_zone_id(), 0)));
+}
+
+bool user_item_manager::check_offset_instance_match(
+    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
+    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& instances, int32_t multiple) {
+  if (multiple <= 0) {
+    return false;
+  }
+  // 仅检查数量
+  std::map<int32_t, int64_t> offset_count;
+  for (auto& offset : offset_cfg) {
+    offset_count[offset.item_offset().type_id()] += offset.item_offset().count() * multiple;
+  }
+  for (auto& instance : instances) {
+    if (instance.item_basic().count() <= 0) {
+      return false;
+    }
+    auto& count = offset_count[instance.item_basic().type_id()];
+    count -= instance.item_basic().count();
+    if (count < 0) {
+      return false;
+    }
+    if (count == 0) {
+      offset_count.erase(instance.item_basic().type_id());
+    }
+  }
+  return offset_count.empty();
 }

@@ -89,6 +89,7 @@ project_add_rpc_unit_test(
   components::dtmq-proxy-sdk
   components::rank-logic-sdk
   components::ItemAlgorithmSDK
+  components::BattleUtilitySDK
   protocol::lobbysvr-config
   FEATURES
   SS

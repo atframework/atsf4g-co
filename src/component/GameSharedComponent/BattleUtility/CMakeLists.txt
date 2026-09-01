@@ -15,6 +15,8 @@ project_game_shared_component_declare_sdk(
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/include/BattleUtility/BattleUtilityConfig.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/Random/Random.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemInitialize/ItemInitialize.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/src/Random/Random.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemInitialize/ItemInitialize.cpp"
 )

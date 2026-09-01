@@ -83,6 +83,14 @@ EXCEL_CONFIG_LOADER_API bool ItemAlgorithmTypeOption::IsNeedGuid(int32_t item_id
   return option->need_guid;
 }
 
+EXCEL_CONFIG_LOADER_API bool ItemAlgorithmTypeOption::IsNeedOccupyTheGrid(int32_t item_id) {
+  auto option = GetItemType(item_id);
+  if (option == nullptr) {
+    return false;
+  }
+  return option->need_occupy_the_grid;
+}
+
 namespace ItemTypeConfig {
 
 % for raw_file_path in database.raw_files:

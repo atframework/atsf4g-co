@@ -111,6 +111,9 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
 
  public:
   int64_t allocate_container_guid();
+  int64_t get_virtual_inventory_container_guid() const {
+    return virtual_inventory_.get_virtual_grid()->get_container_guid();
+  }
 
   void register_item_grid_algorithm(atfw::util::memory::strong_rc_ptr<user_item_grid_algorithm> grid);
   void unregister_item_grid_algorithm(user_item_grid_algorithm* ATFW_UTIL_MACRO_NONNULL grid);
