@@ -27,6 +27,14 @@
 #include "logic/matching/matching_unit.h"
 #include "logic/matching/matching_utility.h"
 
+#if !((defined(__cplusplus) && __cplusplus >= 201703L) || (defined(_MSVC_LANG) && _MSVC_LANG >= 201703L))
+constexpr const int64_t matching_logic::kDefaultSearchTimeout;
+constexpr const int64_t matching_logic::kDefaultConfirmTimeout;
+constexpr const int64_t matching_logic::kTerminalRetention;
+constexpr const size_t matching_logic::kMaxRebalanceMigrationsPerTarget;
+constexpr const size_t matching_logic::kMaxRebalanceMigrationsPerTick;
+#endif
+
 bool matching_logic::placement_candidate::is_valid() const noexcept { return position >= 0; }
 
 bool matching_logic::placement_candidate::is_better_than(const placement_candidate& other) const noexcept {
@@ -419,7 +427,7 @@ matching_logic::join_check_result matching_logic::check_unit_can_create_room(
   const auto rules = select_rules(scope, now, now, global_matching_users_count);
   faction_assignment_list assignments;
   if (has_compatible_rule_without_factions(rules, scope, existing_units, incoming_units, empty_layout)) {
-    return make_join_evaluation(std::move(assignments));
+    return make_join_evaluation(std::move(assignments), {});
   }
 
   const size_t faction_capacity =
@@ -511,7 +519,7 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
   const auto rules = select_rules(room.get_scope(), room.get_created_time(), now, global_matching_users_count);
   if (assignments.empty()) {
     if (has_compatible_rule_without_factions(rules, room.get_scope(), existing_units, incoming_units, current_layout)) {
-      return make_join_evaluation({});
+      return make_join_evaluation({}, {});
     }
     if (!allow_new_faction) {
       return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);
@@ -646,7 +654,7 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
     int32_t exact_template_id = 0;
     for (int32_t template_id : rule->result_template_ids()) {
       auto result_template = excel::get_matching_result_template_index(template_id);
-      if (!result_template || total_users > result_template->total_user_count ||
+      if (!result_template || total_users > static_cast<size_t>(result_template->total_user_count) ||
           !template_contains_layout(layout, *result_template)) {
         continue;
       }

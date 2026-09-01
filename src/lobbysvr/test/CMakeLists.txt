@@ -50,6 +50,7 @@ project_add_rpc_unit_test(
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/item/user_item_grid_manager.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/item/user_virtual_inventory.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/item/user_item_grid_algorithm.cpp"
+  "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/item/user_item_operation_handler.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_channel_heartbeat.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_get_all_channel.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/chat/task_action_chat_get_channel_snapshot.cpp"

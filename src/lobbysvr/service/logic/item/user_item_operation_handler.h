@@ -44,7 +44,7 @@ struct item_operation_handle_checked_add_request {
   atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request;
   explicit item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_index = -1)
       : check_result{error_code, failed_index} {}
-  item_operation_handle_checked_add_request(
+  explicit item_operation_handle_checked_add_request(
       atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request)
       : checked_request(std::move(checked_request)) {}
 
@@ -53,12 +53,13 @@ struct item_operation_handle_checked_add_request {
   item_operation_handle_checked_add_request(item_operation_handle_checked_add_request&&) = default;
   item_operation_handle_checked_add_request& operator=(item_operation_handle_checked_add_request&&) = default;
 };
+
 struct item_operation_handle_checked_sub_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request;
   explicit item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_index = -1)
       : check_result{error_code, failed_index} {}
-  item_operation_handle_checked_sub_request(
+  explicit item_operation_handle_checked_sub_request(
       atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request)
       : checked_request(std::move(checked_request)) {}
 
@@ -124,4 +125,6 @@ class item_operation_handler {
 
   virtual item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) = 0;
   virtual item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) = 0;
+
+  virtual ~item_operation_handler();
 };

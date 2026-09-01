@@ -72,6 +72,8 @@ class user_grid_item_operation_handler : public item_operation_handler {
 
   item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) override;
   item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) override;
+
+  ~user_grid_item_operation_handler();
 };
 
 class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,

@@ -41,15 +41,17 @@ static bool init_user_item_grid_manager_handle() {
 }
 }  // namespace
 
+user_grid_item_operation_handler::~user_grid_item_operation_handler() {}
+
 item_operation_handle_checked_add_request user_grid_item_operation_handler::check_add(
     rpc::context&, user& user_inst,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
   auto result = user_inst.get_user_item_grid_manager().check_add(std::move(input));
   if (result.get_error_code() != 0) {
-    return item_operation_handle_checked_add_request{result.get_error_code(), result.get_failed_index()};
+    return item_operation_handle_checked_add_request(result.get_error_code(), result.get_failed_index());
   }
-  return item_operation_handle_checked_add_request{
-      atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_add_data>(std::move(result))};
+  return item_operation_handle_checked_add_request(
+      atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_add_data>(std::move(result)));
 }
 
 item_operation_handle_checked_sub_request user_grid_item_operation_handler::check_sub(
@@ -57,10 +59,10 @@ item_operation_handle_checked_sub_request user_grid_item_operation_handler::chec
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
   auto result = user_inst.get_user_item_grid_manager().check_sub(std::move(input));
   if (result.get_error_code() != 0) {
-    return item_operation_handle_checked_sub_request{result.get_error_code(), result.get_failed_index()};
+    return item_operation_handle_checked_sub_request(result.get_error_code(), result.get_failed_index());
   }
-  return item_operation_handle_checked_sub_request{
-      atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_sub_data>(std::move(result))};
+  return item_operation_handle_checked_sub_request(
+      atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_sub_data>(std::move(result)));
 }
 
 item_operation_result user_grid_item_operation_handler::check_has(

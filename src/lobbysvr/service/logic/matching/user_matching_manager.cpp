@@ -38,11 +38,13 @@ static bool init_user_matching_manager_gm_handle() {
   return true;
 }
 
+/* -Werror,-Wunused-function
 bool is_matching_not_found(int32_t result) {
   return result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND ||
          result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND ||
          result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND;
 }
+*/
 
 }  // namespace
 

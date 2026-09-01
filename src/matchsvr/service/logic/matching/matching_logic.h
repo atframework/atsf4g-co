@@ -62,11 +62,11 @@ class matching_logic {
     faction_join_progress progress;
   };
 
-  static const int64_t kDefaultSearchTimeout = 120;
-  static const int64_t kDefaultConfirmTimeout = 15;
-  static const int64_t kTerminalRetention = 60;
-  static const size_t kMaxRebalanceMigrationsPerTarget = 8;
-  static const size_t kMaxRebalanceMigrationsPerTick = 64;
+  static constexpr const int64_t kDefaultSearchTimeout = 120;
+  static constexpr const int64_t kDefaultConfirmTimeout = 15;
+  static constexpr const int64_t kTerminalRetention = 60;
+  static constexpr const size_t kMaxRebalanceMigrationsPerTarget = 8;
+  static constexpr const size_t kMaxRebalanceMigrationsPerTick = 64;
 
   // 读取匹配池搜索超时，配置缺失或无效时使用服务默认值。
   static int64_t get_search_timeout_seconds(int32_t matching_pool_id);
@@ -169,7 +169,7 @@ class matching_logic {
                                              const PROJECT_NAMESPACE_ID::DMatchingUnit& new_faction_unit);
   // 取得 assignments 所有权并构造成功加入结果，避免候选成功后再次复制全部 membership。
   static join_check_result make_join_evaluation(faction_assignment_list assignments,
-                                                faction_join_progress progress = {});
+                                                faction_join_progress progress);
   // 构造指定错误码的拒绝加入结果。
   static join_check_result make_rejected_join(int32_t result_code);
   // 公共 Unit 加入实现；allow_new_faction=false 时只允许补已有 faction 或使用无 faction 模板。
