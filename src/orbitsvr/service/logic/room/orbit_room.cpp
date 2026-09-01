@@ -42,7 +42,7 @@
 #include <memory/object_allocator.h>
 
 namespace {
-const PROJECT_NAMESPACE_ID::config::orbitsvr_cfg& get_orbitsvr_cfg() noexcept {
+static const PROJECT_NAMESPACE_ID::config::orbitsvr_cfg& get_orbitsvr_cfg() noexcept {
   return logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::orbitsvr_cfg>();
 }
 }  // namespace
@@ -132,7 +132,7 @@ void orbit_room::on_destroy() {
   FWLOGINFO("orbit_room {} on_destroy", get_client_id());
 }
 
-int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t match_server_id) {
+int32_t orbit_room::create(rpc::context& ctx, uint64_t match_server_id) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_INVALID != room_status_) {
     FWLOGERROR("orbit_room {} create failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
     return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
@@ -145,12 +145,10 @@ int32_t orbit_room::create(EXPLICIT_UNUSED_ATTR rpc::context& ctx, uint64_t matc
 
   // 初始化流程
   create_timepoint_ = util::time::time_utility::get_now();
-  if (row->room_expired_timeout() > 0) {
-    expired_timepoint_ = create_timepoint_ + row->room_expired_timeout();
-  }
+  expired_timepoint_ = create_timepoint_ + row->room_expired_timeout() + 10;  // 容忍时间
   match_server_id_ = match_server_id;
   // Loading 超时
-  loading_timeout_ = create_timepoint_ + get_orbitsvr_cfg().room_client_loading_timeout_sec();
+  loading_timeout_ = create_timepoint_ + row->startup_timeout_sec() + 10;  // 容忍时间
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED);
 
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
@@ -184,17 +182,20 @@ rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const atfw::or
     room_finish(ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED);
     RPC_RETURN_CODE(ret);
   }
-  // 检查超时
-  if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED != room_status_) {
+  if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED == room_status_) {
+    set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_LOADING);
+  } else if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_RUNNING == room_status_) {
+    // already loading
+  } else {
     FWLOGERROR("orbit_room {} start_client failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID);
   }
-  set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_LOADING);
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 int32_t orbit_room::on_client_start(EXPLICIT_UNUSED_ATTR rpc::context& ctx, const std::string& client_addr) {
-  if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_LOADING != room_status_) {
+  if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CLIENT_LOADING != room_status_ &&
+      PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED != room_status_) {
     FWLOGERROR("orbit_room {} on_client_start failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
     return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
   }
@@ -249,7 +250,7 @@ int32_t orbit_room::init_user(
   if (init_user_finish_) {
     FWLOGERROR("orbit_room {} init_user failed, already finish, status: {}", get_client_id(),
                static_cast<int32_t>(room_status_));
-    return PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID;
+    return 0;
   }
   if (join_end_timepoint_ != 0 && util::time::time_utility::get_now() > join_end_timepoint_) {
     FWLOGERROR("orbit_room {} join_users failed, join_end_timepoint: {}, now: {}", get_client_id(), join_end_timepoint_,
@@ -474,6 +475,8 @@ int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbit
   }
 
   set_status(PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH);
+  loading_timeout_ = 0;
+  expired_timepoint_ = 0;
   exit_reason_ = exit_reason;
 
   PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
@@ -596,6 +599,12 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
       FWLOGERROR("orbit_room {} user_settlement failed too many times for user {},{}", get_client_id(),
                  user_ptr->init_data_.user_key().user_key().user_id(),
                  user_ptr->init_data_.user_key().user_key().zone_id());
+      user_ptr->settlement_finish_ = true;
+      PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
+      event_log.set_orbit_room_status(room_status_);
+      *event_log.mutable_room_key() = room_key_;
+      *event_log.mutable_user_finish()->mutable_user_key() = user_ptr->user_key_;
+      add_event_log(ctx, std::move(event_log));
     } else {
       need_retry_settlement_ = true;
     }

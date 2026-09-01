@@ -51,12 +51,11 @@
 #include <logic/room/orbit_room_manager.h>
 
 namespace {
-uint64_t make_orbit_server_unique_id() {
+static uint64_t make_orbit_server_unique_id() {
   return static_cast<uint64_t>((atfw::util::time::time_utility::get_sys_now() -
                                 PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
                                << 23) +
-         static_cast<uint64_t>(atfw::util::time::time_utility::get_now_usec() << 3) +
-         static_cast<uint64_t>(logic_config::me()->get_local_server_id());
+         static_cast<uint64_t>(atfw::util::time::time_utility::get_now_usec() << 3);
 }
 
 void add_command_response(atfw::util::cli::callback_param params, const std::string &message) {
@@ -134,8 +133,7 @@ class main_service_module : public atfw::atapp::module_impl {
          match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
           atfw::orbit::DAgentClientStartArgs request;
           orbit_room_manager::fill_client_start_args_from_template_id(1, client_id, request);
-          RPC_RETURN_CODE(
-              RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, request)));
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, request)));
         });
 
     if (invoke_result.is_error()) {

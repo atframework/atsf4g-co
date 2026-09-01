@@ -33,7 +33,7 @@ class task_action_echo : public task_action_orbit_rpc_base<PROJECT_NAMESPACE_ID:
 
  public:
   explicit task_action_echo(dispatcher_start_data_type &&param);
-  ~task_action_echo();
+  ~task_action_echo() override;
 
   const char *name() const override;
 

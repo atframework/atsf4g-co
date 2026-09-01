@@ -337,8 +337,7 @@ void orbit_server_manager::add_client_timeout(const client_info_ptr& client, tim
   }
   client->timeout_exit_time = atfw::util::time::time_utility::get_sys_now() + timeout_sec;
   // 加入到超时检查内
-  timeout_client_queue_.emplace_back(
-      client_timeout_info{.client_info_weak_ptr = client, .timeout_exit_time = client->timeout_exit_time});
+  timeout_client_queue_.emplace_back(client_timeout_info{client, client->timeout_exit_time});
 }
 
 uint64_t orbit_server_manager::select_controller_server_id(const std::string& client_id, const std::string& region) {

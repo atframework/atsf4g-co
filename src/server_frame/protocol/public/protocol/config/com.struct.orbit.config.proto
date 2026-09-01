@@ -27,9 +27,9 @@ message ExcelOrbitClientTemplate {
   double expected_normal_memory_mb = 3;
   double expected_seed_cpu = 4;
   double expected_seed_memory_mb = 5;
-  uint32 startup_timeout_sec = 6;
-  uint32 heartbeat_timeout_sec = 7;
+  uint32 startup_timeout_sec = 6 [(org.xresloader.validator) = ">0"];
+  uint32 heartbeat_timeout_sec = 7 [(org.xresloader.validator) = ">0"];
   string match_tag = 8;
-  uint32 room_expired_timeout = 9;
+  uint32 room_expired_timeout = 9 [(org.xresloader.validator) = ">0"];
   repeated string launch_args = 21;
 }

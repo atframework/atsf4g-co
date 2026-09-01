@@ -33,7 +33,7 @@ class task_action_user_finish : public task_action_orbit_rpc_base<PROJECT_NAMESP
 
  public:
   explicit task_action_user_finish(dispatcher_start_data_type &&param);
-  ~task_action_user_finish();
+  ~task_action_user_finish() override;
 
   const char *name() const override;
 

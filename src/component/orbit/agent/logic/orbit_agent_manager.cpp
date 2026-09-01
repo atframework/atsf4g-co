@@ -1048,6 +1048,12 @@ int orbit_agent_manager::prepare_start_client_record(const atfw::orbit::CTAStart
       seed_mode_enabled_ ? request.args().resource().seed_memory_mb() : request.args().resource().normal_memory_mb();
   record->startup_timeout_sec = request.args().startup_timeout_sec();
   record->heartbeat_timeout_sec = request.args().heartbeat_timeout_sec();
+  if (record->startup_timeout_sec <= 0) {
+    record->startup_timeout_sec = 120;  // 默认120秒保底
+  }
+  if (record->heartbeat_timeout_sec <= 0) {
+    record->heartbeat_timeout_sec = 60;  // 默认60秒保底
+  }
   record->server_unique_id = request.server_identity().unique_id();
 
   set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
