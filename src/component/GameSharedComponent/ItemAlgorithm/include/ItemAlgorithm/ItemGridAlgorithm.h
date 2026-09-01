@@ -222,6 +222,10 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   /// @param position 道具位置 用于检查额外字段
   virtual bool check_item_position(const PROJECT_NAMESPACE_ID::DItemPosition& position) const;
 
+  // 物品不足时返回错误码
+  // 默认返回 PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH
+  virtual int32_t on_item_not_enough(int32_t type_id) const;
+
  private:
   item_grid_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance);
   item_grid_entry_ptr_t make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance, uint64_t entry_id);

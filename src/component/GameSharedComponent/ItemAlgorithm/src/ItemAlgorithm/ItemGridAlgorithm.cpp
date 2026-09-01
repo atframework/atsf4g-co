@@ -711,7 +711,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
         int64_t current = entry_basic.count();
         int64_t already_sub = position_sub_count[target_pos];
         if (current - already_sub < sub_count) {
-          result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+          result.error_code = on_item_not_enough(type_id);
           result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT(
               "check_sub failed[{}]: not enough at ({},{}), current={} already_sub={} "
@@ -741,7 +741,7 @@ ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
 
         int64_t already_sub = type_sub_count[type_id];
         if (total_count - already_sub < sub_count) {
-          result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+          result.error_code = on_item_not_enough(type_id);
           result.failed_index = static_cast<int32_t>(i);
           ITEM_ALGORITHM_LOG_WARNING_FMT(
               "check_sub failed[{}]: not enough type={}, total={} already_sub={} sub={}, "
@@ -806,7 +806,7 @@ ItemGridOperationResult ItemGridAlgorithm::check_has(
 
       int64_t required_count = guid_required_count[request.guid()] + request.count();
       if (guid_it->second->item_instance().item_basic().count() < required_count) {
-        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+        result.error_code = on_item_not_enough(request.type_id());
         result.failed_index = i;
         return result;
       }
@@ -823,7 +823,7 @@ ItemGridOperationResult ItemGridAlgorithm::check_has(
 
       int64_t required_count = position_required_count[position] + request.count();
       if (position_it->second->item_instance().item_basic().count() < required_count) {
-        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+        result.error_code = on_item_not_enough(request.type_id());
         result.failed_index = i;
         return result;
       }
@@ -845,7 +845,7 @@ ItemGridOperationResult ItemGridAlgorithm::check_has(
 
       int64_t required_count = type_required_count[request.type_id()] + request.count();
       if (total_count < required_count) {
-        result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+        result.error_code = on_item_not_enough(request.type_id());
         result.failed_index = i;
         return result;
       }
@@ -1020,7 +1020,7 @@ bool ItemGridAlgorithm::check_move_request(
 
     // op_count 不能超过 entry 的 count
     if (sub_req.op_count > ref_basic.count()) {
-      error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+      error_code = on_item_not_enough(type_id);
       ITEM_ALGORITHM_LOG_WARNING_FMT(
           "check_move failed: move_sub count={} exceeds entry count={} entry_id={}, "
           "error={} ({})",
@@ -2115,6 +2115,10 @@ void ItemGridAlgorithm::on_item_data_changed(const item_grid_entry_ptr_t& /*entr
 
 bool ItemGridAlgorithm::check_item_position(const PROJECT_NAMESPACE_ID::DItemPosition& /*position*/) const {
   return true;  // 默认不检查, 子类按需覆盖
+}
+
+int32_t ItemGridAlgorithm::on_item_not_enough(int32_t /*type_id*/) const {
+  return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
 }
 
 item_grid_entry_ptr_t ItemGridAlgorithm::make_entry(PROJECT_NAMESPACE_ID::DItemInstance&& instance) {

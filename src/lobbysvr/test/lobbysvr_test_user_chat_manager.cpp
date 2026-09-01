@@ -1071,7 +1071,7 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
 
     item_algorithm::ItemGridAddRequest add_requests;
     *add_requests.Add() = dirty_item;
-    auto checked = item_mgr.check_add(excel::get_current_config_group(), std::move(add_requests));
+    auto checked = item_mgr.check_add(std::move(add_requests));
     if (PROJECT_NAMESPACE_ID::EN_SUCCESS != checked.get_error_code()) {
       RPC_RETURN_CODE(checked.get_error_code());
     }

@@ -6,6 +6,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <protocol/common/com.struct.item_type.common.pb.h>
 #include <protocol/pbdesc/com.protocol.user.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
@@ -30,9 +31,57 @@ static bool init_user_item_grid_manager_handle() {
       [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
         user_inst.get_user_item_grid_manager().dump_virtual_inventory(*rsp.mutable_user_virtual_inventory());
       });
+  PROJECT_NAMESPACE_ID::EnItemType item_types[] = {
+      PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_COIN, PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_VIRTUAL,
+      PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_ITEM, PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_EQUIPMENT};
+  user_item_manager::register_item_type_handler(
+      item_types, atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_handler>());
   return true;
 }
 }  // namespace
+
+item_operation_handle_checked_add_request user_grid_item_operation_handler::check_add(
+    rpc::context&, user& user_inst,
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
+  auto result = user_inst.get_user_item_grid_manager().check_add(std::move(input));
+  if (result.get_error_code() != 0) {
+    return {result.get_error_code(), result.get_failed_index()};
+  }
+  return {atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_add_data>(std::move(result))};
+}
+
+item_operation_handle_checked_sub_request user_grid_item_operation_handler::check_sub(
+    rpc::context&, user& user_inst,
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
+  auto result = user_inst.get_user_item_grid_manager().check_sub(std::move(input));
+  if (result.get_error_code() != 0) {
+    return {result.get_error_code(), result.get_failed_index()};
+  }
+  return {atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_sub_data>(std::move(result))};
+}
+
+item_operation_result user_grid_item_operation_handler::check_has(
+    rpc::context&, user& user_inst,
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
+  auto result = user_inst.get_user_item_grid_manager().check_has(std::move(input));
+  return {result.error_code, result.failed_index};
+}
+
+item_operation_result user_grid_item_operation_handler::add(rpc::context&, user& user_inst,
+                                                            item_operation_handle_checked_add_request&& input) {
+  auto data_ptr =
+      atfw::util::memory::static_pointer_cast<user_grid_item_operation_checked_add_data>(input.checked_request);
+  auto result = user_inst.get_user_item_grid_manager().add(data_ptr->data);
+  return {result.error_code, result.failed_index};
+}
+
+item_operation_result user_grid_item_operation_handler::sub(rpc::context&, user& user_inst,
+                                                            item_operation_handle_checked_sub_request&& input) {
+  auto data_ptr =
+      atfw::util::memory::static_pointer_cast<user_grid_item_operation_checked_sub_data>(input.checked_request);
+  auto result = user_inst.get_user_item_grid_manager().sub(data_ptr->data);
+  return {result.error_code, result.failed_index};
+}
 
 user_item_grid_manager::user_item_grid_manager(user& owner) : owner_(&owner), virtual_inventory_(&owner) {
   ATFW_EXPLICIT_UNUSED_ATTR static bool init_handle = init_user_item_grid_manager_handle();
@@ -182,38 +231,38 @@ item_algorithm::item_grid_algorithm_ptr_t user_item_grid_manager::select_grid(
 }
 
 item_algorithm::ItemGridContainerAddCheckedRequest user_item_grid_manager::check_add(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    item_algorithm::ItemGridAddRequest&& in_requests) {
-  return item_algorithm::ItemGridContainer::check_add(in_config_group, std::move(in_requests));
+    item_algorithm::ItemGridAddRequest&& in_requests) const {
+  return item_algorithm::ItemGridContainer::check_add(excel::get_current_config_group(), std::move(in_requests));
 }
 item_algorithm::ItemGridOperationResult user_item_grid_manager::add(
     item_algorithm::ItemGridContainerAddCheckedRequest& checked_request) {
   return item_algorithm::ItemGridContainer::add(checked_request);
 }
 item_algorithm::ItemGridContainerSubCheckedRequest user_item_grid_manager::check_sub(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    item_algorithm::ItemGridSubRequest&& in_requests) {
-  return item_algorithm::ItemGridContainer::check_sub(in_config_group, std::move(in_requests));
+    item_algorithm::ItemGridSubRequest&& in_requests) const {
+  return item_algorithm::ItemGridContainer::check_sub(excel::get_current_config_group(), std::move(in_requests));
 }
 item_algorithm::ItemGridOperationResult user_item_grid_manager::sub(
     item_algorithm::ItemGridContainerSubCheckedRequest& checked_request) {
   return item_algorithm::ItemGridContainer::sub(checked_request);
 }
 item_algorithm::ItemGridContainerMoveCheckedRequest user_item_grid_manager::check_move(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    std::vector<item_algorithm::ItemGridContainerMoveRequest>&& in_requests) {
-  return item_algorithm::ItemGridContainer::check_move(in_config_group, std::move(in_requests));
+    std::vector<item_algorithm::ItemGridContainerMoveRequest>&& in_requests) const {
+  return item_algorithm::ItemGridContainer::check_move(excel::get_current_config_group(), std::move(in_requests));
 }
 item_algorithm::ItemGridOperationResult user_item_grid_manager::move(
     item_algorithm::ItemGridContainerMoveCheckedRequest& checked_request) {
   return item_algorithm::ItemGridContainer::move(checked_request);
 }
 item_algorithm::ItemGridContainerReplaceCheckedRequest user_item_grid_manager::check_replace(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    item_algorithm::ItemGridReplaceRequest&& in_requests) {
-  return item_algorithm::ItemGridContainer::check_replace(in_config_group, std::move(in_requests));
+    item_algorithm::ItemGridReplaceRequest&& in_requests) const {
+  return item_algorithm::ItemGridContainer::check_replace(excel::get_current_config_group(), std::move(in_requests));
 }
 item_algorithm::ItemGridOperationResult user_item_grid_manager::replace(
     item_algorithm::ItemGridContainerReplaceCheckedRequest& checked_request) {
   return item_algorithm::ItemGridContainer::replace(checked_request);
+}
+item_algorithm::ItemGridOperationResult user_item_grid_manager::check_has(
+    const item_algorithm::ItemGridHasRequest& requests) const {
+  return item_algorithm::ItemGridContainer::check_has(excel::get_current_config_group(), requests);
 }

@@ -19,6 +19,7 @@
 #include <memory/rc_ptr.h>
 
 #include <logic/item/user_item_grid_algorithm.h>
+#include <logic/item/user_item_manager.h>
 #include <logic/item/user_virtual_inventory.h>
 
 #include <cstdint>
@@ -30,6 +31,47 @@ namespace rpc {
 class context;
 }
 class user;
+
+class user_grid_item_operation_checked_add_data : public item_operation_checked_add_private_data {
+ public:
+  user_grid_item_operation_checked_add_data(item_algorithm::ItemGridContainerAddCheckedRequest&& in_data)
+      : data(std::move(in_data)) {}
+  ~user_grid_item_operation_checked_add_data() override = default;
+
+  user_grid_item_operation_checked_add_data(const user_grid_item_operation_checked_add_data&) = delete;
+  user_grid_item_operation_checked_add_data& operator=(const user_grid_item_operation_checked_add_data&) = delete;
+  user_grid_item_operation_checked_add_data(user_grid_item_operation_checked_add_data&&) = default;
+  user_grid_item_operation_checked_add_data& operator=(user_grid_item_operation_checked_add_data&&) = default;
+
+  item_algorithm::ItemGridContainerAddCheckedRequest data;
+};
+
+class user_grid_item_operation_checked_sub_data : public item_operation_checked_sub_private_data {
+ public:
+  user_grid_item_operation_checked_sub_data(item_algorithm::ItemGridContainerSubCheckedRequest&& in_data)
+      : data(std::move(in_data)) {}
+  ~user_grid_item_operation_checked_sub_data() override = default;
+
+  user_grid_item_operation_checked_sub_data(const user_grid_item_operation_checked_sub_data&) = delete;
+  user_grid_item_operation_checked_sub_data& operator=(const user_grid_item_operation_checked_sub_data&) = delete;
+  user_grid_item_operation_checked_sub_data(user_grid_item_operation_checked_sub_data&&) = default;
+  user_grid_item_operation_checked_sub_data& operator=(user_grid_item_operation_checked_sub_data&&) = default;
+
+  item_algorithm::ItemGridContainerSubCheckedRequest data;
+};
+
+class user_grid_item_operation_handler : public item_operation_handler {
+ public:
+  virtual item_operation_handle_checked_add_request check_add(
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const override;
+  virtual item_operation_handle_checked_sub_request check_sub(
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const override;
+  virtual item_operation_result check_has(
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const override;
+
+  virtual item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) override;
+  virtual item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) override;
+};
 
 class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
                                public item_algorithm::ItemGridContainer {
@@ -54,23 +96,18 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
 
  public:
   // 操作接口
-  item_algorithm::ItemGridContainerAddCheckedRequest check_add(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      item_algorithm::ItemGridAddRequest&& in_requests);
+  item_algorithm::ItemGridContainerAddCheckedRequest check_add(item_algorithm::ItemGridAddRequest&& in_requests) const;
   item_algorithm::ItemGridOperationResult add(item_algorithm::ItemGridContainerAddCheckedRequest& checked_request);
-  item_algorithm::ItemGridContainerSubCheckedRequest check_sub(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      item_algorithm::ItemGridSubRequest&& in_requests);
+  item_algorithm::ItemGridContainerSubCheckedRequest check_sub(item_algorithm::ItemGridSubRequest&& in_requests) const;
   item_algorithm::ItemGridOperationResult sub(item_algorithm::ItemGridContainerSubCheckedRequest& checked_request);
   item_algorithm::ItemGridContainerMoveCheckedRequest check_move(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      std::vector<item_algorithm::ItemGridContainerMoveRequest>&& in_requests);
+      std::vector<item_algorithm::ItemGridContainerMoveRequest>&& in_requests) const;
   item_algorithm::ItemGridOperationResult move(item_algorithm::ItemGridContainerMoveCheckedRequest& checked_request);
   item_algorithm::ItemGridContainerReplaceCheckedRequest check_replace(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      item_algorithm::ItemGridReplaceRequest&& in_requests);
+      item_algorithm::ItemGridReplaceRequest&& in_requests) const;
   item_algorithm::ItemGridOperationResult replace(
       item_algorithm::ItemGridContainerReplaceCheckedRequest& checked_request);
+  item_algorithm::ItemGridOperationResult check_has(const item_algorithm::ItemGridHasRequest& requests) const;
 
  public:
   int64_t allocate_container_guid();

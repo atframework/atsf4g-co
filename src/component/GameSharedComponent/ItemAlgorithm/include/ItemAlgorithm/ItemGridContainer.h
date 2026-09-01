@@ -32,6 +32,8 @@ struct ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest {
       ItemGridAddRequest&& in_requests)
       : config_group(in_config_group), requests(std::move(in_requests)) {}
   int32_t get_error_code() const { return result.error_code; }
+  int32_t get_failed_index() const { return result.failed_index; }
+
   ItemGridContainerAddCheckedRequest(const ItemGridContainerAddCheckedRequest&) = delete;
   ItemGridContainerAddCheckedRequest& operator=(const ItemGridContainerAddCheckedRequest&) = delete;
   ItemGridContainerAddCheckedRequest(ItemGridContainerAddCheckedRequest&&) = default;
@@ -62,6 +64,8 @@ struct ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest {
       ItemGridSubRequest&& in_requests)
       : config_group(in_config_group), requests(std::move(in_requests)) {}
   int32_t get_error_code() const { return result.error_code; }
+  int32_t get_failed_index() const { return result.failed_index; }
+
   ItemGridContainerSubCheckedRequest(const ItemGridContainerSubCheckedRequest&) = delete;
   ItemGridContainerSubCheckedRequest& operator=(const ItemGridContainerSubCheckedRequest&) = delete;
   ItemGridContainerSubCheckedRequest(ItemGridContainerSubCheckedRequest&&) = default;
@@ -98,6 +102,8 @@ struct ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest {
       std::vector<ItemGridContainerMoveRequest>&& in_requests)
       : config_group(in_config_group), requests(std::move(in_requests)) {}
   int32_t get_error_code() const { return result.error_code; }
+  int32_t get_failed_index() const { return result.failed_index; }
+
   ItemGridContainerMoveCheckedRequest(const ItemGridContainerMoveCheckedRequest&) = delete;
   ItemGridContainerMoveCheckedRequest& operator=(const ItemGridContainerMoveCheckedRequest&) = delete;
   ItemGridContainerMoveCheckedRequest(ItemGridContainerMoveCheckedRequest&&) = default;
@@ -128,6 +134,8 @@ struct ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest {
       ItemGridReplaceRequest&& in_requests)
       : config_group(in_config_group), requests(std::move(in_requests)) {}
   int32_t get_error_code() const { return result.error_code; }
+  int32_t get_failed_index() const { return result.failed_index; }
+
   ItemGridContainerReplaceCheckedRequest(const ItemGridContainerReplaceCheckedRequest&) = delete;
   ItemGridContainerReplaceCheckedRequest& operator=(const ItemGridContainerReplaceCheckedRequest&) = delete;
   ItemGridContainerReplaceCheckedRequest(ItemGridContainerReplaceCheckedRequest&&) = default;
@@ -172,20 +180,20 @@ class ITEM_ALGORITHM_API ItemGridContainer {
   // ============================================================
   ItemGridContainerAddCheckedRequest check_add(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridAddRequest&& in_requests);
+      ItemGridAddRequest&& in_requests) const;
   ItemGridOperationResult add(ItemGridContainerAddCheckedRequest& checked_request);
   ItemGridContainerSubCheckedRequest check_sub(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridSubRequest&& in_requests);
+      ItemGridSubRequest&& in_requests) const;
   ItemGridOperationResult sub(ItemGridContainerSubCheckedRequest& checked_request);
   ItemGridContainerMoveCheckedRequest check_move(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      std::vector<ItemGridContainerMoveRequest>&& in_requests);
+      std::vector<ItemGridContainerMoveRequest>&& in_requests) const;
   ItemGridOperationResult move(ItemGridContainerMoveCheckedRequest& checked_request);
   // 整体替换 (仅单个 Grid 原子, 跨 Grid 不保证原子性)
   ItemGridContainerReplaceCheckedRequest check_replace(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridReplaceRequest&& in_requests);
+      ItemGridReplaceRequest&& in_requests) const;
   ItemGridOperationResult replace(ItemGridContainerReplaceCheckedRequest& checked_request);
   ItemGridOperationResult check_has(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,

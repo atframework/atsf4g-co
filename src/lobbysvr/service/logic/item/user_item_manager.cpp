@@ -15,10 +15,171 @@
 #include <log/log_wrapper.h>
 
 #include <config/excel/config_manager.h>
+#include <config/excel/item_type_config.h>
 
 #include <data/user.h>
 
 #include <algorithm>
 #include <map>
 
+std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> user_item_manager::item_type_handler_id_;
+std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_handler>>
+    user_item_manager::item_type_handler_;
+
 user_item_manager::user_item_manager(user& owner) : owner_(&owner) {}
+
+void user_item_manager::register_item_type_handler(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+                                                   atfw::util::memory::strong_rc_ptr<item_operation_handler> handler) {
+  if (item_type.empty()) {
+    FWLOGERROR("user_item_manager::register_item_type_handler: item_type is empty");
+    abort();  // 空的道具类型列表
+  }
+  if (handler == nullptr) {
+    FWLOGERROR("user_item_manager::register_item_type_handler: handler is nullptr");
+    abort();  // 空的处理器
+  }
+  static int32_t handler_id_ = 10000;
+  handler_id_++;
+  item_type_handler_[handler_id_] = handler;
+  for (auto item_type_value : item_type) {
+    if (item_type_handler_id_.count(item_type_value)) {
+      FWLOGERROR("user_item_manager::register_item_type_handler: item_type {} already registered",
+                 static_cast<int32_t>(item_type_value));
+      abort();  // 重复注册
+    }
+    item_type_handler_id_[item_type_value] = handler_id_;
+  }
+}
+
+item_operation_result item_operation_checked_add_request::do_operation(rpc::context& ctx) {
+  if (check_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    return check_result;
+  }
+  for (auto& group : checked_request) {
+    auto handler_it = user_item_manager::item_type_handler_.find(group.first);
+    if (handler_it == user_item_manager::item_type_handler_.end()) {
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, -1};
+    }
+    if (group.second.checked_request == nullptr) {
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN, -1};
+    }
+    auto& handler = handler_it->second;
+    auto result = handler->add(ctx, *owner_, std::move(group.second));
+    if (result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      return result;
+    }
+  }
+  return {};
+}
+item_operation_result item_operation_checked_sub_request::do_operation(rpc::context& ctx) {
+  if (check_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+    return check_result;
+  }
+  for (auto& group : checked_request) {
+    auto handler_it = user_item_manager::item_type_handler_.find(group.first);
+    if (handler_it == user_item_manager::item_type_handler_.end()) {
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, -1};
+    }
+    if (group.second.checked_request == nullptr) {
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN, -1};
+    }
+    auto& handler = handler_it->second;
+    auto result = handler->sub(ctx, *owner_, std::move(group.second));
+    if (result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
+      return result;
+    }
+  }
+  return {};
+}
+
+item_operation_checked_add_request user_item_manager::check_add(
+    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
+  // 首先分组
+  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
+  int32_t index = 0;
+  std::list<std::pair<int32_t, item_operation_handle_checked_add_request>> checked_request;
+  for (auto& item : input) {
+    auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.item_basic().type_id()));
+    if (type_config == nullptr) {
+      return item_operation_checked_add_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, index);
+    }
+    auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
+    if (handler_id_it == item_type_handler_id_.end()) {
+      return item_operation_checked_add_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, index);
+    }
+    grouped_requests[handler_id_it->second].Add(std::move(item));
+    index++;
+  }
+  for (auto& group : grouped_requests) {
+    auto& handler = item_type_handler_.find(group.first)->second;
+    // 调用具体的处理器进行检查
+    auto result = handler->check_add(ctx, *owner_, std::move(group.second));
+    if (result.check_result.error_code != 0) {
+      return item_operation_checked_add_request(owner_, result.check_result.error_code,
+                                                result.check_result.failed_index);
+    }
+    checked_request.push_back(std::make_pair(group.first, std::move(result)));
+  }
+  return item_operation_checked_add_request(owner_, std::move(checked_request));
+}
+
+item_operation_checked_sub_request user_item_manager::check_sub(
+    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
+  // 首先分组
+  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
+  int32_t index = 0;
+  std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>> checked_request;
+  for (auto& item : input) {
+    auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.type_id()));
+    if (type_config == nullptr) {
+      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, index);
+    }
+    auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
+    if (handler_id_it == item_type_handler_id_.end()) {
+      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, index);
+    }
+    grouped_requests[handler_id_it->second].Add(std::move(item));
+    index++;
+  }
+  for (auto& group : grouped_requests) {
+    auto& handler = item_type_handler_.find(group.first)->second;
+    // 调用具体的处理器进行检查
+    auto result = handler->check_sub(ctx, *owner_, std::move(group.second));
+    if (result.check_result.error_code != 0) {
+      return item_operation_checked_sub_request(owner_, result.check_result.error_code,
+                                                result.check_result.failed_index);
+    }
+    checked_request.push_back(std::make_pair(group.first, std::move(result)));
+  }
+  return item_operation_checked_sub_request(owner_, std::move(checked_request));
+}
+
+item_operation_result user_item_manager::check_has(
+    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) {
+  // 首先分组
+  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
+  int32_t index = 0;
+  std::list<std::pair<int32_t, std::vector<atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data>>>>
+      checked_request;
+  for (auto& item : input) {
+    auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.type_id()));
+    if (type_config == nullptr) {
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, index};
+    }
+    auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
+    if (handler_id_it == item_type_handler_id_.end()) {
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, index};
+    }
+    grouped_requests[handler_id_it->second].Add(std::move(item));
+    index++;
+  }
+  for (auto& group : grouped_requests) {
+    auto& handler = item_type_handler_.find(group.first)->second;
+    // 调用具体的处理器进行检查
+    auto result = handler->check_has(ctx, *owner_, std::move(group.second));
+    if (result.error_code != 0) {
+      return result;
+    }
+  }
+  return item_operation_result{PROJECT_NAMESPACE_ID::EN_SUCCESS, -1};
+}

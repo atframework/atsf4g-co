@@ -15,6 +15,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <gsl/select-gsl.h>
 #include <memory/rc_ptr.h>
 #include <utility>
 
@@ -38,60 +39,118 @@ class item_operation_checked_sub_private_data {
   virtual ~item_operation_checked_sub_private_data() = default;
 };
 
-struct item_operation_checked_add_request {
+class user_item_manager;
+
+struct item_operation_handle_checked_add_request {
   item_operation_result check_result;
-  atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request = nullptr;
+  atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request;
+  item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_index = -1)
+      : check_result{error_code, failed_index} {}
+  item_operation_handle_checked_add_request(
+      atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request)
+      : checked_request(std::move(checked_request)) {}
+
+  item_operation_handle_checked_add_request(const item_operation_handle_checked_add_request&) = delete;
+  item_operation_handle_checked_add_request& operator=(const item_operation_handle_checked_add_request&) = delete;
+  item_operation_handle_checked_add_request(item_operation_handle_checked_add_request&&) = default;
+  item_operation_handle_checked_add_request& operator=(item_operation_handle_checked_add_request&&) = default;
+};
+struct item_operation_handle_checked_sub_request {
+  item_operation_result check_result;
+  atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request;
+  item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_index = -1)
+      : check_result{error_code, failed_index} {}
+  item_operation_handle_checked_sub_request(
+      atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request)
+      : checked_request(std::move(checked_request)) {}
+
+  item_operation_handle_checked_sub_request(const item_operation_handle_checked_sub_request&) = delete;
+  item_operation_handle_checked_sub_request& operator=(const item_operation_handle_checked_sub_request&) = delete;
+  item_operation_handle_checked_sub_request(item_operation_handle_checked_sub_request&&) = default;
+  item_operation_handle_checked_sub_request& operator=(item_operation_handle_checked_sub_request&&) = default;
+};
+
+struct item_operation_checked_add_request {
+  friend class user_item_manager;
+  item_operation_result do_operation(rpc::context& ctx);
+
+  item_operation_checked_add_request(const item_operation_checked_add_request&) = delete;
+  item_operation_checked_add_request& operator=(const item_operation_checked_add_request&) = delete;
+  item_operation_checked_add_request(item_operation_checked_add_request&&) = default;
+  item_operation_checked_add_request& operator=(item_operation_checked_add_request&&) = default;
+
+ private:
+  item_operation_checked_add_request(user* ATFW_UTIL_MACRO_NONNULL owner,
+                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_index = -1)
+      : owner_(owner), check_result{error_code, failed_index} {}
+  item_operation_checked_add_request(
+      user* ATFW_UTIL_MACRO_NONNULL owner,
+      std::list<std::pair<int32_t, item_operation_handle_checked_add_request>>&& checked_request)
+      : owner_(owner), checked_request(std::move(checked_request)) {}
+
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
+  item_operation_result check_result;
+  std::list<std::pair<int32_t, item_operation_handle_checked_add_request>> checked_request;
 };
 struct item_operation_checked_sub_request {
+  friend class user_item_manager;
+  item_operation_result do_operation(rpc::context& ctx);
+
+  item_operation_checked_sub_request(const item_operation_checked_sub_request&) = delete;
+  item_operation_checked_sub_request& operator=(const item_operation_checked_sub_request&) = delete;
+  item_operation_checked_sub_request(item_operation_checked_sub_request&&) = default;
+  item_operation_checked_sub_request& operator=(item_operation_checked_sub_request&&) = default;
+
+ private:
+  item_operation_checked_sub_request(user* ATFW_UTIL_MACRO_NONNULL owner,
+                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_index = -1)
+      : owner_(owner), check_result{error_code, failed_index} {}
+  item_operation_checked_sub_request(
+      user* ATFW_UTIL_MACRO_NONNULL owner,
+      std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>>&& checked_request)
+      : owner_(owner), checked_request(std::move(checked_request)) {}
+
+  user* ATFW_UTIL_MACRO_NONNULL owner_;
   item_operation_result check_result;
-  atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request = nullptr;
+  std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>> checked_request;
 };
 
 class item_operation_handler {
  public:
-  virtual item_operation_checked_add_request check_add(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const {
-    return item_operation_checked_add_request{item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_NOT_IMPLEMENTED, -1},
-                                              nullptr};
-  }
-  virtual item_operation_checked_sub_request check_sub(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const {
-    return item_operation_checked_sub_request{item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_NOT_IMPLEMENTED, -1},
-                                              nullptr};
-  }
+  virtual item_operation_handle_checked_add_request check_add(
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const = 0;
+  virtual item_operation_handle_checked_sub_request check_sub(
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const = 0;
   virtual item_operation_result check_has(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const {
-    return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_NOT_IMPLEMENTED, -1};
-  }
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const = 0;
 
-  virtual item_operation_result add(rpc::context&, user&, item_operation_checked_add_request&&) {
-    return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_NOT_IMPLEMENTED, -1};
-  }
-  virtual item_operation_result sub(rpc::context&, user&, item_operation_checked_sub_request&&) {
-    return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_NOT_IMPLEMENTED, -1};
-  }
+  virtual item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) = 0;
+  virtual item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) = 0;
 };
 
 class user_item_manager : public atfw::util::design_pattern::noncopyable {
+  friend struct item_operation_checked_add_request;
+  friend struct item_operation_checked_sub_request;
+
  public:
   explicit user_item_manager(user& owner);
   user& get_owner() { return *owner_; }
   const user& get_owner() const { return *owner_; }
 
-  static void register_item_type_handler(PROJECT_NAMESPACE_ID::EnItemType item_type,
+  static void register_item_type_handler(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                          atfw::util::memory::strong_rc_ptr<item_operation_handler> handler);
 
  public:
   item_operation_checked_add_request check_add(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const;
+      rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const;
   item_operation_checked_sub_request check_sub(
-      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const;
-  item_operation_result check_has(rpc::context&, user&,
+      rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const;
+  item_operation_result check_has(rpc::context&,
                                   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&);
-
-  item_operation_result add(rpc::context&, user&, item_operation_checked_add_request&&);
-  item_operation_result sub(rpc::context&, user&, item_operation_checked_sub_request&&);
 
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
+
+  static std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> item_type_handler_id_;
+  static std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_handler>> item_type_handler_;
 };

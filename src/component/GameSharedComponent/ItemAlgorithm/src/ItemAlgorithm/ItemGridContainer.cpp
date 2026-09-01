@@ -24,7 +24,7 @@ ItemGridContainer::~ItemGridContainer() = default;
 
 ItemGridContainerAddCheckedRequest ItemGridContainer::check_add(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    ItemGridAddRequest&& in_requests) {
+    ItemGridAddRequest&& in_requests) const {
   ItemGridContainerAddCheckedRequest checked_request(in_config_group, std::move(in_requests));
 
   const auto& config_group = checked_request.config_group;
@@ -119,7 +119,7 @@ ItemGridOperationResult ItemGridContainer::add(ItemGridContainerAddCheckedReques
 
 ItemGridContainerSubCheckedRequest ItemGridContainer::check_sub(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    ItemGridSubRequest&& in_requests) {
+    ItemGridSubRequest&& in_requests) const {
   ItemGridContainerSubCheckedRequest checked_request(in_config_group, std::move(in_requests));
   const auto& config_group = checked_request.config_group;
   auto& requests = checked_request.requests;
@@ -212,7 +212,7 @@ ItemGridOperationResult ItemGridContainer::sub(ItemGridContainerSubCheckedReques
 
 ItemGridContainerMoveCheckedRequest ItemGridContainer::check_move(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    std::vector<ItemGridContainerMoveRequest>&& in_requests) {
+    std::vector<ItemGridContainerMoveRequest>&& in_requests) const {
   ItemGridContainerMoveCheckedRequest checked_request(in_config_group, std::move(in_requests));
   const auto& config_group = checked_request.config_group;
   const auto& requests = checked_request.requests;
@@ -436,7 +436,7 @@ ItemGridOperationResult ItemGridContainer::move(ItemGridContainerMoveCheckedRequ
 
 ItemGridContainerReplaceCheckedRequest ItemGridContainer::check_replace(
     const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    ItemGridReplaceRequest&& in_requests) {
+    ItemGridReplaceRequest&& in_requests) const {
   ItemGridContainerReplaceCheckedRequest checked_request(in_config_group, std::move(in_requests));
 
   const auto& config_group = checked_request.config_group;

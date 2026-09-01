@@ -243,6 +243,10 @@ enum EnErrorCode {
                              [(error_code.description) = "背包已满"];
   EN_ERR_ITEM_STACK_OVERFLOW = -509
                                [(error_code.description) = "堆叠数量超过上限"];
+  EN_ERR_ITEM_TYPE_NOT_FOUND = -510
+                               [(error_code.description) = "道具类型未找到"];
+  EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND = -511
+                                      [(error_code.description) = "道具类型处理器未找到"];
   // 排行榜[601-700]
   EN_ERR_RANK_USER_NOT_FOUND = -601
                                [(error_code.description) = "排行榜用户不在榜单上"];
