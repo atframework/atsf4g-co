@@ -13,10 +13,10 @@ import (
 )
 
 func init() {
-	robot_cmd.RegisterUserCommand([]string{"user", "matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [fill_policy] [level_ids_csv]", "开始匹配", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "matching", "check"}, MatchingCheckCmd, "", "查询匹配状态", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "matching", "cancel"}, MatchingCancelCmd, "", "取消匹配", nil, cmdDefaultTimeout)
-	robot_cmd.RegisterUserCommand([]string{"user", "matching", "confirm"}, MatchingConfirmCmd, "<true|false>", "确认匹配", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [fill_policy] [level_ids_csv]", "开始匹配", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"matching", "check"}, MatchingCheckCmd, "", "查询匹配状态", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"matching", "cancel"}, MatchingCancelCmd, "", "取消匹配", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"matching", "confirm"}, MatchingConfirmCmd, "<true|false>", "确认匹配", nil, cmdDefaultTimeout)
 }
 
 func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {

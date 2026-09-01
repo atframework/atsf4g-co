@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "logic/matching/matching_room.h"
+#include "logic/matching/matching_unit.h"
 
 namespace rpc {
 class context;
@@ -94,6 +95,7 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   // 接收成员的战斗确认；拒绝时整 Unit 退出，剩余 Unit 回到撮合。
   int32_t confirm_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingConfirmReq& request,
                            PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
+  int32_t acknowledge_matching_events(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingEventAckReq& request);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_room_ready(
       rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyReq& request,
       PROJECT_NAMESPACE_ID::SSMatchingOrbitRoomReadyRsp& response, uint64_t source_server_id);
@@ -127,6 +129,10 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
   static bucket_key make_bucket_key(const PROJECT_NAMESPACE_ID::DMatchingScope& scope);
   // 查找请求指定的房间；matching_id 已过期或不再包含 unit 时回退到活动 unit 索引。
   matching_room::ptr_t find_room(const std::string& matching_id, uint64_t unit_id) const;
+  matching_unit::ptr_t find_unit(uint64_t unit_id) const;
+  // 记录内部 Room 事件，并把真正的玩家可见变化发布到稳定 Unit 事件流。
+  void publish_room_event(rpc::context& ctx, const matching_room::ptr_t& room,
+                          PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log);
   // 在相同粗桶中优先查找能补齐已有 faction 的房间，并返回同次检查产生的 assignments。
   joinable_room_result find_joinable_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingScope& scope,
                                           const PROJECT_NAMESPACE_ID::DMatchingUnit& unit, int64_t now) const;
@@ -164,6 +170,10 @@ class matching_manager : public util::design_pattern::singleton<matching_manager
 
   // matching_id 到房间对象的唯一所有权索引。
   std::unordered_map<std::string, matching_room::ptr_t> rooms_;
+  // Unit 生命周期对象独立于房间；迁房只更新弱引用，不移动订阅或 WAL。
+  std::unordered_map<uint64_t, matching_unit::ptr_t> units_;
+  // Unit WAL 有界重试的轮转游标，避免 Unit 数量超过单 tick 上限时发生饥饿。
+  uint64_t wal_retry_cursor_ = 0;
   // 活动 unit_id 到 matching_id 的索引。
   std::unordered_map<uint64_t, std::string> unit_to_room_;
   // 活动玩家到 unit_id 的冲突索引，保证同一 matchsvr 内只能参加一个匹配。

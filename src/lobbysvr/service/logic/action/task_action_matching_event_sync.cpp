@@ -30,22 +30,12 @@
 #include <data/user.h>
 #include <logic/matching/user_matching_manager.h>
 #include <logic/user_manager.h>
+#include <rpc/matching/matching_api.h>
+#include <rpc/matching/matchsvrservice.atfw.gen.h>
 
 namespace {
 // 产品流程由 lobbysvr 统一确认，客户端只订阅匹配状态。
 constexpr bool kAutoConfirmMatching = true;
-
-bool should_auto_confirm(const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync) {
-  if (!kAutoConfirmMatching) {
-    return false;
-  }
-  for (const auto& event_log : sync.event_logs()) {
-    if (event_log.event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kNotifyConfirm) {
-      return true;
-    }
-  }
-  return false;
-}
 }  // namespace
 
 task_action_matching_event_sync::task_action_matching_event_sync(dispatcher_start_data_type&& param)
@@ -60,43 +50,73 @@ task_action_matching_event_sync::result_type task_action_matching_event_sync::op
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
-  FCTXLOGDEBUG(get_shared_context(), "receive matching event sync, matching_id={}, users={}, view={}, event_count={}",
-               req_body.matching_id(), req_body.user_keys_size(), req_body.has_player_view(),
-               req_body.event_logs_size());
+  FCTXLOGDEBUG(get_shared_context(), "receive matching Unit sync, unit_id={}, users={}, view={}, event_count={}",
+               req_body.unit_id(), req_body.user_keys_size(), req_body.has_unit_view(), req_body.event_logs_size());
 
-  const bool auto_confirm = should_auto_confirm(req_body);
-
+  auto ack_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingEventAckReq>(get_shared_context());
+  ack_request->set_unit_id(req_body.unit_id());
+  ack_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   for (const auto& user_key : req_body.user_keys()) {
     auto user_inst = user_manager::me()->find_as<user>(user_key.user_id(), user_key.zone_id());
     if (!user_inst) {
       // 玩家离线时由持久化游标在下次登录执行 check_matching 恢复。
-      FCTXLOGDEBUG(get_shared_context(), "skip matching event sync for offline user, matching_id={}, user={}:{}",
-                   req_body.matching_id(), user_key.user_id(), user_key.zone_id());
+      FCTXLOGDEBUG(get_shared_context(), "skip matching Unit sync for offline user, unit_id={}, user={}:{}",
+                   req_body.unit_id(), user_key.user_id(), user_key.zone_id());
       continue;
     }
-    user_inst->get_user_matching_manager().acknowledge_matching_sync(get_shared_context(), req_body);
-    if (!auto_confirm) {
+    auto& matching_manager = user_inst->get_user_matching_manager();
+    auto sync_result = matching_manager.acknowledge_matching_sync(get_shared_context(), req_body);
+    if (!sync_result.accepted) {
       continue;
     }
 
-    auto confirm_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingConfirmReq>(get_shared_context());
-    auto confirm_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp>(get_shared_context());
-    confirm_request->set_unit_id(user_inst->get_user_matching_manager().get_view().unit().unit_id());
-    confirm_request->set_confirmed(true);
-    const int32_t result = RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().confirm_matching(
-        get_shared_context(), *confirm_request, *confirm_response));
-    if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-      FCTXLOGERROR(get_shared_context(), "auto confirm matching failed, matching_id={}, user={}:{}, result={}({})",
-                   req_body.matching_id(), user_key.user_id(), user_key.zone_id(), result,
-                   protobuf_mini_dumper_get_error_msg(result));
-    } else {
-      FCTXLOGDEBUG(get_shared_context(), "auto confirm matching finish, matching_id={}, user={}:{}",
-                   req_body.matching_id(), user_key.user_id(), user_key.zone_id());
+    if (sync_result.confirm_event_id > 0) {
+      bool confirm_success = false;
+      if (kAutoConfirmMatching) {
+        auto confirm_request =
+            rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingConfirmReq>(get_shared_context());
+        auto confirm_response =
+            rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp>(get_shared_context());
+        confirm_request->set_unit_id(matching_manager.get_view().unit().unit_id());
+        confirm_request->set_confirmed(true);
+        const int32_t result = RPC_AWAIT_CODE_RESULT(
+            matching_manager.confirm_matching(get_shared_context(), *confirm_request, *confirm_response));
+        confirm_success = result == PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+        if (!confirm_success) {
+          FCTXLOGERROR(get_shared_context(),
+                       "auto confirm matching failed, unit_id={}, user={}:{}, event_id={}, result={}({})",
+                       req_body.unit_id(), user_key.user_id(), user_key.zone_id(), sync_result.confirm_event_id, result,
+                       protobuf_mini_dumper_get_error_msg(result));
+        } else {
+          FCTXLOGDEBUG(get_shared_context(), "auto confirm matching finish, unit_id={}, user={}:{}, event_id={}",
+                       req_body.unit_id(), user_key.user_id(), user_key.zone_id(), sync_result.confirm_event_id);
+        }
+      }
+      if (matching_manager.finish_matching_event(get_shared_context(), req_body.unit_id(), sync_result.confirm_event_id,
+                                                 confirm_success)) {
+        sync_result.acknowledge_event_id = sync_result.confirm_event_id;
+      }
     }
+
+    auto* user_ack = ack_request->add_user_acks();
+    protobuf_copy_message(*user_ack->mutable_user_key(), user_key);
+    user_ack->set_event_id(sync_result.acknowledge_event_id);
   }
 
-  FCTXLOGDEBUG(get_shared_context(), "handle matching event sync finish, matching_id={}, users={}",
-               req_body.matching_id(), req_body.user_keys_size());
+  if (ack_request->user_acks_size() > 0) {
+    const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
+    auto ack_response = rpc::make_shared_message<google::protobuf::Empty>(get_shared_context());
+    if (matchsvr_id != 0) {
+      const int32_t ack_result = RPC_AWAIT_CODE_RESULT(rpc::matching::acknowledge_matching_events(
+          get_shared_context(), matchsvr_id, *ack_request, *ack_response, true));
+      if (ack_result < 0) {
+        FCTXLOGERROR(get_shared_context(), "send matching Unit ACK failed, unit_id={}, result={}({})",
+                     req_body.unit_id(), ack_result, protobuf_mini_dumper_get_error_msg(ack_result));
+      }
+    }
+  }
+  FCTXLOGDEBUG(get_shared_context(), "handle matching Unit sync finish, unit_id={}, users={}", req_body.unit_id(),
+               req_body.user_keys_size());
 
   TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }

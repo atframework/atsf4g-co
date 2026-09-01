@@ -18,16 +18,18 @@
 #include <unordered_map>
 #include <vector>
 
-#include "logic/matching/matching_wal_handle.h"
-
 namespace rpc {
 class context;
 }
+
+class matching_unit;
 
 // 一次匹配房间。房间只管理不可拆分的组队 unit 和自身状态，不负责选择配置或全局索引。
 class matching_room {
  public:
   using ptr_t = std::shared_ptr<matching_room>;
+  using unit_ptr_t = std::shared_ptr<matching_unit>;
+  using unit_map_t = std::unordered_map<uint64_t, unit_ptr_t>;
 
   struct faction_statistics {
     std::unordered_map<size_t, size_t> faction_count_by_capacity;
@@ -36,12 +38,6 @@ class matching_room {
     std::vector<uint32_t> assigned_user_counts;
     size_t completed_faction_count = 0;
     size_t pending_user_count = 0;
-  };
-
-  // 一个订阅者迁移所需的路由和已确认 WAL 游标。
-  struct subscriber_route {
-    uint64_t server_id = 0;
-    int64_t acknowledge_event_id = 0;
   };
 
   // 使用已确定的粗桶和初始关卡创建一个空房间。
@@ -68,14 +64,14 @@ class matching_room {
   int64_t get_confirm_expire_time() const noexcept { return confirm_expire_time_; }
   // 返回创建战斗阶段截止时间；非创建阶段为 0。
   int64_t get_battle_create_expire_time() const noexcept { return battle_create_expire_time_; }
-  // 返回房间 WAL 最近分配的事件 ID。
+  // 返回 matchsvr 内部房间事件序号；不用于 lobbysvr 订阅。
   int64_t get_last_event_id() const noexcept { return last_event_id_; }
   // 返回成局时动态选中的最终结果模板 ID；搜索期间为 0。
   int32_t get_result_template_id() const noexcept { return result_template_id_; }
   // 返回房间当前业务结果。
   int32_t get_result() const noexcept { return result_; }
   // 返回当前所有 unit，key 为 unit_id。
-  const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& get_units() const noexcept { return units_; }
+  const unit_map_t& get_units() const noexcept { return units_; }
   const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& get_faction_assignments()
       const noexcept {
     return faction_assignments_;
@@ -97,6 +93,7 @@ class matching_room {
                                   const std::string& user_open_id);
 
   const PROJECT_NAMESPACE_ID::DOrbitRoomKey& get_orbit_room_key() const noexcept { return orbit_room_key_; }
+  int64_t get_orbit_expired_timepoint() const noexcept { return orbit_expired_timepoint_; }
 
   // 统计房间内的真实玩家数量。
   size_t get_user_count() const noexcept { return user_count_; }
@@ -105,12 +102,12 @@ class matching_room {
   // 判断 unit 是否仍在本房间。
   bool has_unit(uint64_t unit_id) const noexcept;
   // 查找房间内的 Unit；不存在时返回 nullptr。
-  const PROJECT_NAMESPACE_ID::DMatchingUnit* find_unit(uint64_t unit_id) const noexcept;
+  unit_ptr_t find_unit(uint64_t unit_id) const noexcept;
   // 判断玩家是否仍在本房间。
   bool has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
 
   // 原子加入一个不可拆分 unit；重复 unit 或玩家返回 false。
-  bool add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
+  bool add_unit(const unit_ptr_t& unit);
   // 从仍在匹配的房间移除 unit；返回是否实际移除。
   bool remove_unit(uint64_t unit_id);
   // 撮合完成后进入战斗确认，并把全部成员重置为待确认。
@@ -148,25 +145,15 @@ class matching_room {
   void mark_cancelled(int64_t now) noexcept;
   // 导出不暴露内部容器的协议快照。
   void dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) const;
-  // 导出指定 Unit 的玩家视图，也用于刚移除但仍需接收最终事件的 Unit。
-  void dump_player_view(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
-                        PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const;
   void set_orbit_expired_timepoint(int64_t value) noexcept { orbit_expired_timepoint_ = value; }
 
-  // 为玩家创建或刷新 WAL 订阅；acknowledge_event_id 用于增量重放。
-  bool subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
-                 int64_t acknowledge_event_id);
-  // 主动移除玩家订阅。
-  void unsubscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
-  // 读取订阅路由，供迁房时把订阅者转移到目标房间；不存在时返回空值。
-  std::optional<subscriber_route> get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
-  // 追加并立即广播一条房间 WAL 日志。
+  // 只维护 matchsvr 内部房间事件序号；跨服通知由 matching_unit 发布。
   void publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log);
 
  private:
   // 校验 faction 分配覆盖关系并一次性计算房间缓存的 faction 统计信息。
   static std::optional<faction_statistics> calculate_faction_statistics(
-      const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& units,
+      const unit_map_t& units,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments);
   // 按最小 Unit ID 稳定排列已校验且非空的 faction assignment。
   static bool faction_assignment_precedes(const PROJECT_NAMESPACE_ID::DMatchingFactionAssignment* left,
@@ -186,8 +173,8 @@ class matching_room {
   int32_t selected_level_id_;
   // 房间当前状态。
   PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status_;
-  // unit_id 到完整组队数据的映射。
-  std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit> units_;
+  // Room 只保存 Unit 运行时对象引用；组队数据、订阅和事件游标只有 matching_unit 一份事实源。
+  unit_map_t units_;
   // 随 Unit 增删增量维护，避免高频成局检查重复遍历房间。
   size_t user_count_;
   std::vector<size_t> unit_size_counts_;
@@ -229,6 +216,4 @@ class matching_room {
   std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, PROJECT_NAMESPACE_ID::DMatchingOrbitInitData, user_key_hash_t,
                      user_key_equal_t>
       orbit_users_init_detail_;
-  // 房间级 WAL publisher，负责日志保留、重放、快照和跨服通知。
-  matching_wal_log_operator::strong_ptr<matching_wal_publisher> wal_publisher_;
 };

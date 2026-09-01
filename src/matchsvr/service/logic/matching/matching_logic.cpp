@@ -24,6 +24,7 @@
 #include "config/excel_config_matching_index.h"
 #include "logic/logic_server_setup.h"
 #include "logic/matching/matching_room.h"
+#include "logic/matching/matching_unit.h"
 #include "logic/matching/matching_utility.h"
 
 bool matching_logic::placement_candidate::is_valid() const noexcept { return position >= 0; }
@@ -469,7 +470,10 @@ matching_logic::join_check_result matching_logic::check_unit_can_join_impl(
   unit_view existing_units;
   existing_units.reserve(room.get_units().size());
   for (const auto& stored : room.get_units()) {
-    existing_units.emplace_back(&stored.second);
+    if (!stored.second) {
+      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    }
+    existing_units.emplace_back(&stored.second->get_data());
   }
 
   // 相同关卡
@@ -576,7 +580,10 @@ matching_logic::join_check_result matching_logic::check_faction_can_join(const m
   unit_view existing_units;
   existing_units.reserve(room.get_units().size());
   for (const auto& stored : room.get_units()) {
-    existing_units.emplace_back(&stored.second);
+    if (!stored.second) {
+      return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    }
+    existing_units.emplace_back(&stored.second->get_data());
   }
   if (!incoming_levels_are_compatible(room.get_compatible_level_ids(), faction_units)) {
     return make_rejected_join(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_RULE_NOT_FOUND);

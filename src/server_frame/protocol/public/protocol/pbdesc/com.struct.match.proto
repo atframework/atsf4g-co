@@ -25,6 +25,18 @@ enum EnMatchingRoomStatus {
   EN_MATCHING_ROOM_STATUS_CONFIRMING = 7;
 }
 
+// 玩家可见的 Unit 生命周期。Room 状态只描述一次内部撮合尝试，不再作为订阅协议。
+enum EnMatchingUnitLifecycleStatus {
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_INVALID = 0;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING = 1;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING = 2;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE = 3;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED = 4;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED = 5;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT = 6;
+  EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED = 7;
+}
+
 enum EnMatchingUnitStatus {
   EN_MATCHING_UNIT_STATUS_INVALID = 0;
   EN_MATCHING_UNIT_STATUS_SEARCHING = 1;
@@ -137,6 +149,7 @@ message DMatchingRoomSnapshot {
   int64 created_time = 6;
   int64 expire_time = 7;
   int32 result = 9;
+  // 内部诊断字段；通知可靠性游标由 Unit 单独维护。
   int64 last_event_id = 10;
   int64 confirm_expire_time = 11;
   DOrbitRoomKey orbit_room_key = 12;
@@ -147,11 +160,9 @@ message DMatchingRoomSnapshot {
   int32 selected_level_id = 15;
 }
 
-// 单个订阅 Unit 的匹配视图。
-message DMatchingPlayerView {
-  string matching_id = 1;
-  EnMatchingRoomStatus status = 2;
-  // 仅包含当前玩家订阅的 Unit；不包含房间内其他 Unit。
+// Unit 的稳定玩家视图。迁房只改变内部 room 归属，不改变该对象或事件流。
+message DMatchingUnitView {
+  EnMatchingUnitLifecycleStatus status = 1;
   DMatchingUnit unit = 3;
   int32 result = 4;
   int64 expire_time = 5;
@@ -164,17 +175,35 @@ message DMatchingPlayerView {
   int32 faction_id = 11;
 }
 
-// lobbysvr 输出给客户端的匹配视图。matching_id 和 matchsvr WAL 游标只保留在内部玩家视图中。
+// lobbysvr 输出给客户端的匹配视图。
 message DMatchingClientView {
   // 一轮匹配内保持不变，迁房不变；新一轮匹配重新生成。客户端只把它当作不透明操作标识。
   uint64 unit_id = 1;
-  EnMatchingRoomStatus status = 3;
+  EnMatchingUnitLifecycleStatus status = 3;
   int32 result = 4;
   int64 expire_time = 5;
   int32 selected_level_id = 6;
+  int32 faction_id = 7;
 }
 
-// 迁房事件携带原 unit 和目标房间。目标为空表示取消或普通移除。
+enum EnMatchingUnitEventType {
+  EN_MATCHING_UNIT_EVENT_TYPE_INVALID = 0;
+  EN_MATCHING_UNIT_EVENT_TYPE_CREATED = 1;
+  EN_MATCHING_UNIT_EVENT_TYPE_VIEW_CHANGED = 2;
+  EN_MATCHING_UNIT_EVENT_TYPE_CONFIRM_REQUIRED = 3;
+  EN_MATCHING_UNIT_EVENT_TYPE_BATTLE_READY = 4;
+  EN_MATCHING_UNIT_EVENT_TYPE_TERMINAL = 5;
+}
+
+// 单个 Unit 内单调递增的通知日志；迁房不会重建或转移该日志。
+message DMatchingUnitEventLog {
+  int64 event_id = 1;
+  google.protobuf.Timestamp timepoint = 2;
+  EnMatchingUnitEventType event_type = 3;
+  DMatchingUnitView view = 4;
+}
+
+// 以下事件只用于 matchsvr 内部驱动房间状态变更，不作为订阅协议发送给 lobbysvr。
 message DMatchingRemoveUnitEvent {
   DMatchingUnit unit = 1;
   string switch_to_matching_id = 2;
@@ -196,10 +225,11 @@ message DMatchingEventLog {
   }
 }
 
-// lobbysvr 持久化的内部玩家匹配视图，用于重登录后从 WAL 游标恢复。
+// lobbysvr 持久化的内部玩家匹配状态。
+// view.last_event_id 表示已见到的最新 Unit 视图；acknowledge_event_id 表示该事件及之前的业务副作用已完成。
 message DUserMatchingData {
-  int64 last_event_id = 2;
-  DMatchingPlayerView view = 4;
+  int64 acknowledge_event_id = 1;
+  DMatchingUnitView view = 2;
 }
 
 message DBattleLevelParameter {

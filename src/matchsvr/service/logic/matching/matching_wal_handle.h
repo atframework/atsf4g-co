@@ -18,7 +18,7 @@
 #include <utility>
 #include <vector>
 
-class matching_room;
+class matching_unit;
 
 namespace rpc {
 class context;
@@ -37,27 +37,27 @@ struct matching_wal_context {
 
 // oneof case 是 WAL 的 action key，用于框架分组和合并动作。
 struct matching_wal_action_getter {
-  PROJECT_NAMESPACE_ID::DMatchingEventLog::EventCase operator()(
-      const PROJECT_NAMESPACE_ID::DMatchingEventLog& log) const noexcept {
-    return log.event_case();
+  PROJECT_NAMESPACE_ID::EnMatchingUnitEventType operator()(
+      const PROJECT_NAMESPACE_ID::DMatchingUnitEventLog& log) const noexcept {
+    return log.event_type();
   }
 };
 
 struct matching_wal_action_hash {
-  size_t operator()(PROJECT_NAMESPACE_ID::DMatchingEventLog::EventCase value) const noexcept {
+  size_t operator()(PROJECT_NAMESPACE_ID::EnMatchingUnitEventType value) const noexcept {
     return std::hash<int32_t>{}(static_cast<int32_t>(value));
   }
 };
 
 struct matching_wal_action_equal {
-  bool operator()(PROJECT_NAMESPACE_ID::DMatchingEventLog::EventCase left,
-                  PROJECT_NAMESPACE_ID::DMatchingEventLog::EventCase right) const noexcept {
+  bool operator()(PROJECT_NAMESPACE_ID::EnMatchingUnitEventType left,
+                  PROJECT_NAMESPACE_ID::EnMatchingUnitEventType right) const noexcept {
     return left == right;
   }
 };
 
 struct matching_wal_log_operator : public atfw::util::distributed_system::wal_log_operator<
-                                       int64_t, PROJECT_NAMESPACE_ID::DMatchingEventLog, matching_wal_action_getter,
+                                       int64_t, PROJECT_NAMESPACE_ID::DMatchingUnitEventLog, matching_wal_action_getter,
                                        std::less<>, matching_wal_action_hash, matching_wal_action_equal,
                                        atfw::memory::stl::allocator<PROJECT_NAMESPACE_ID::DMatchingEventLog>> {};
 
@@ -71,17 +71,16 @@ struct matching_wal_subscriber
 
 using matching_wal_publisher =
     atfw::util::distributed_system::wal_publisher<matching_wal_storage, matching_wal_log_operator, matching_wal_context,
-                                                  matching_room*, matching_wal_subscriber>;
+                                                  matching_unit*, matching_wal_subscriber>;
 
 using matching_wal_result_code = atfw::util::distributed_system::wal_result_code;
-using matching_wal_subscriber_group_key = std::pair<uint64_t, uint64_t>;
 using matching_wal_subscriber_group =
-    std::map<matching_wal_subscriber_group_key, std::vector<matching_wal_publisher::subscriber_pointer>>;
+    std::map<uint64_t, std::vector<matching_wal_publisher::subscriber_pointer>>;
 using matching_wal_object = matching_wal_publisher::object_type;
 
 namespace matching_wal_detail {
 
-// 按 lobbysvr 和 Unit 聚合仍在线且路由有效的 WAL 订阅者。
+// 按 lobbysvr 聚合仍在线且路由有效的 Unit WAL 订阅者。
 matching_wal_subscriber_group collect_subscribers(matching_wal_publisher::subscriber_iterator begin,
                                                   matching_wal_publisher::subscriber_iterator end);
 
@@ -98,5 +97,5 @@ matching_wal_publisher::configure_pointer create_configure();
 
 }  // namespace matching_wal_detail
 
-// 创建绑定指定匹配房间的 WAL publisher。
-matching_wal_log_operator::strong_ptr<matching_wal_publisher> create_matching_wal_publisher(matching_room& room);
+// 创建绑定指定匹配 Unit 的 WAL publisher。
+matching_wal_log_operator::strong_ptr<matching_wal_publisher> create_matching_wal_publisher(matching_unit& unit);

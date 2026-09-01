@@ -6,6 +6,7 @@ set(MATCHSVR_TEST_TARGET "${PROJECT_NAME}-matchsvr-unit-test")
 
 set(MATCHSVR_TEST_SOURCES
     matching_room_test.cpp "${PROJECT_SOURCE_DIR}/src/matchsvr/service/logic/matching/matching_room.cpp"
+    "${PROJECT_SOURCE_DIR}/src/matchsvr/service/logic/matching/matching_unit.cpp"
     "${PROJECT_SOURCE_DIR}/src/matchsvr/service/logic/matching/matching_utility.cpp"
     "${PROJECT_SOURCE_DIR}/src/matchsvr/service/logic/matching/matching_wal_handle.cpp")
 set(MATCHSVR_TEST_LINK_LIBRARIES server_frame protocol::matchsvr-protocol sdk::matchsvr-sdk sdk::orbitsvr-sdk)

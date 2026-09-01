@@ -13,11 +13,9 @@
 
 #include <algorithm>
 #include <chrono>
-#include <map>
 #include <utility>
-#include <vector>
 
-#include "logic/matching/matching_room.h"
+#include "logic/matching/matching_unit.h"
 
 matching_wal_context::matching_wal_context(rpc::context& ctx, int32_t& output_result)
     : context(std::ref(ctx)), result_code(std::ref(output_result)) {}
@@ -32,11 +30,7 @@ matching_wal_subscriber_group collect_subscribers(matching_wal_publisher::subscr
         subscriber->is_offline(atfw::util::time::time_utility::now())) {
       continue;
     }
-    if (subscriber->get_private_data()->unit_id() == 0) {
-      continue;
-    }
-    result[{subscriber->get_private_data()->server_id(), subscriber->get_private_data()->unit_id()}].emplace_back(
-        std::move(subscriber));
+    result[subscriber->get_private_data()->server_id()].emplace_back(std::move(subscriber));
   }
   return result;
 }
@@ -44,74 +38,34 @@ matching_wal_subscriber_group collect_subscribers(matching_wal_publisher::subscr
 void send_to_subscribers(matching_wal_publisher& publisher, const matching_wal_subscriber_group& groups,
                          const PROJECT_NAMESPACE_ID::SSMatchingEventSync& message, matching_wal_context param,
                          int64_t last_event_id) {
-  auto* room = publisher.get_private_data();
-  if (!room) {
+  auto* unit = publisher.get_private_data();
+  if (!unit) {
     return;
   }
   for (const auto& group : groups) {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMatchingEventSync> group_message(param.context.get());
-    group_message->set_matching_id(message.matching_id());
-    const auto* subscribed_unit = room->find_unit(group.first.second);
-    if (subscribed_unit != nullptr) {
-      room->dump_player_view(*subscribed_unit, *group_message->mutable_player_view());
-    } else {
-      bool found_removed_unit = false;
-      for (const auto& event_log : message.event_logs()) {
-        if (event_log.event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kRemoveUnit &&
-            event_log.remove_unit().unit().unit_id() == group.first.second) {
-          room->dump_player_view(event_log.remove_unit().unit(), *group_message->mutable_player_view());
-          found_removed_unit = true;
-          break;
-        }
-      }
-      if (!found_removed_unit) {
-        continue;
-      }
-    }
-    std::vector<matching_wal_publisher::subscriber_pointer> included_subscribers;
-    included_subscribers.reserve(group.second.size());
+    group_message->set_unit_id(unit->get_unit_id());
+    protobuf_copy_message(*group_message->mutable_unit_view(), unit->get_view());
     for (const auto& subscriber : group.second) {
-      if (!subscriber || !subscriber->get_private_data()) {
-        continue;
+      if (subscriber && subscriber->get_private_data()) {
+        protobuf_copy_message(*group_message->add_user_keys(), subscriber->get_key());
       }
-      protobuf_copy_message(*group_message->add_user_keys(), subscriber->get_key());
-      included_subscribers.emplace_back(subscriber);
     }
     for (const auto& event_log : message.event_logs()) {
-      if (event_log.event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kAddUnit &&
-          event_log.add_unit().unit_id() != group.first.second) {
-        continue;
-      }
-      if (event_log.event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kRemoveUnit &&
-          event_log.remove_unit().unit().unit_id() != group.first.second) {
-        continue;
-      }
-      auto* output_event = group_message->add_event_logs();
-      protobuf_copy_message(*output_event, event_log);
-      if (output_event->event_case() == PROJECT_NAMESPACE_ID::DMatchingEventLog::kMatched) {
-        // 成局状态和 Orbit 信息由 player_view 表达，事件本身不再携带完整房间快照。
-        output_event->mutable_matched()->Clear();
-      }
+      protobuf_copy_message(*group_message->add_event_logs(), event_log);
     }
-    const int32_t result =
-        rpc::matching::matching_event_sync(param.context.get(), group.first.first, *group_message).unwrap();
+    const int32_t result = rpc::matching::matching_event_sync(param.context.get(), group.first, *group_message).unwrap();
     if (result != 0) {
-      FCTXLOGERROR(param.context.get(), "matching {} send WAL to lobbysvr {:#x} failed, result: {}({})",
-                   room->get_matching_id(), group.first.first, result, protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGERROR(param.context.get(), "matching Unit {} send WAL to lobbysvr {:#x} failed, result: {}({})",
+                   unit->get_unit_id(), group.first, result, protobuf_mini_dumper_get_error_msg(result));
       param.result_code.get() = result;
-    } else {
-      for (const auto& subscriber : included_subscribers) {
-        if (!subscriber || !subscriber->get_private_data()) {
-          continue;
-        }
+      continue;
+    }
+    for (const auto& subscriber : group.second) {
+      if (subscriber && subscriber->get_private_data()) {
         subscriber->get_private_data()->set_last_send_event_id(
             std::max(last_event_id, subscriber->get_private_data()->last_send_event_id()));
       }
-      FCTXLOGDEBUG(param.context.get(),
-                   "matching {} send WAL to lobbysvr {:#x} finish, users={}, view={}, event_count={}, "
-                   "last_event_id={}",
-                   room->get_matching_id(), group.first.first, group_message->user_keys_size(),
-                   group_message->has_player_view(), group_message->event_logs_size(), last_event_id);
     }
   }
 }
@@ -125,7 +79,6 @@ matching_wal_publisher::vtable_pointer create_vtable() {
   if (!result) {
     return result;
   }
-
   result->load = [](matching_wal_object&, const matching_wal_object::storage_type&,
                     matching_wal_object::callback_param_type) { return matching_wal_result_code::kOk; };
   result->dump = [](const matching_wal_object&, matching_wal_object::storage_type&,
@@ -133,22 +86,23 @@ matching_wal_publisher::vtable_pointer create_vtable() {
   result->get_meta = [](const matching_wal_object&, const matching_wal_object::log_type& log) {
     auto timepoint = std::chrono::system_clock::from_time_t(log.timepoint().seconds()) +
                      std::chrono::nanoseconds{log.timepoint().nanos()};
-    auto cast_timepoint = std::chrono::time_point_cast<std::chrono::system_clock::duration>(timepoint);
-    return matching_wal_object::meta_result_type::make_success(cast_timepoint, log.event_id(), log.event_case());
+    return matching_wal_object::meta_result_type::make_success(
+        std::chrono::time_point_cast<std::chrono::system_clock::duration>(timepoint), log.event_id(),
+        log.event_type());
   };
   result->set_meta = [](const matching_wal_object&, matching_wal_object::log_type& log,
                         const matching_wal_object::meta_type& meta) {
     const time_t seconds = std::chrono::system_clock::to_time_t(meta.timepoint);
-    const int32_t nanos = static_cast<int32_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                                   meta.timepoint - std::chrono::system_clock::from_time_t(seconds))
-                                                   .count());
     log.mutable_timepoint()->set_seconds(seconds);
-    log.mutable_timepoint()->set_nanos(nanos);
+    log.mutable_timepoint()->set_nanos(static_cast<int32_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                                                meta.timepoint -
+                                                                std::chrono::system_clock::from_time_t(seconds))
+                                                                .count()));
     log.set_event_id(meta.log_key);
   };
   result->merge_log = [](const matching_wal_object&, matching_wal_object::callback_param_type,
-                         matching_wal_object::log_type& to, const matching_wal_object::log_type& from) {
-    FWLOGERROR("matching WAL logs must not merge, from:\n{}to:\n{}", from.DebugString(), to.DebugString());
+                         matching_wal_object::log_type&, const matching_wal_object::log_type&) {
+    FWLOGERROR("matching Unit WAL logs must not merge");
   };
   result->get_log_key = [](const matching_wal_object&, const matching_wal_object::log_type& log) {
     return log.event_id();
@@ -158,25 +112,24 @@ matching_wal_publisher::vtable_pointer create_vtable() {
     if (log.event_id() > 0) {
       return matching_wal_object::log_key_result_type::make_success(log.event_id());
     }
-    auto* room = wal.get_private_data();
-    return room ? matching_wal_object::log_key_result_type::make_success(room->get_last_event_id() + 1)
+    auto* unit = wal.get_private_data();
+    return unit ? matching_wal_object::log_key_result_type::make_success(unit->get_last_event_id() + 1)
                 : matching_wal_object::log_key_result_type::make_error(matching_wal_result_code::kInitlization);
   };
   result->default_delegate.action = [](matching_wal_object&, const matching_wal_object::log_type&,
                                        matching_wal_object::callback_param_type) {
     return matching_wal_result_code::kOk;
   };
-
   result->send_snapshot = [](matching_wal_publisher& publisher, matching_wal_publisher::subscriber_iterator begin,
                              matching_wal_publisher::subscriber_iterator end,
                              matching_wal_publisher::callback_param_type param) {
-    auto* room = publisher.get_private_data();
-    if (!room || begin == end) {
+    auto* unit = publisher.get_private_data();
+    if (!unit || begin == end) {
       return matching_wal_result_code::kOk;
     }
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMatchingEventSync> message(param.context.get());
-    message->set_matching_id(room->get_matching_id());
-    send_to_subscribers(publisher, collect_subscribers(begin, end), *message, param, room->get_last_event_id());
+    message->set_unit_id(unit->get_unit_id());
+    send_to_subscribers(publisher, collect_subscribers(begin, end), *message, param, unit->get_last_event_id());
     return matching_wal_result_code::kOk;
   };
   result->send_logs = [](matching_wal_publisher& publisher, matching_wal_publisher::log_const_iterator log_begin,
@@ -184,19 +137,16 @@ matching_wal_publisher::vtable_pointer create_vtable() {
                          matching_wal_publisher::subscriber_iterator subscriber_begin,
                          matching_wal_publisher::subscriber_iterator subscriber_end,
                          matching_wal_publisher::callback_param_type param) {
-    auto* room = publisher.get_private_data();
-    if (!room || log_begin == log_end || subscriber_begin == subscriber_end) {
+    if (!publisher.get_private_data() || log_begin == log_end || subscriber_begin == subscriber_end) {
       return matching_wal_result_code::kOk;
     }
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::SSMatchingEventSync> message(param.context.get());
-    message->set_matching_id(room->get_matching_id());
     int64_t last_event_id = 0;
     for (; log_begin != log_end; ++log_begin) {
-      if (!*log_begin) {
-        continue;
+      if (*log_begin) {
+        protobuf_copy_message(*message->add_event_logs(), **log_begin);
+        last_event_id = std::max(last_event_id, (*log_begin)->event_id());
       }
-      protobuf_copy_message(*message->add_event_logs(), **log_begin);
-      last_event_id = std::max(last_event_id, (*log_begin)->event_id());
     }
     send_to_subscribers(publisher, collect_subscribers(subscriber_begin, subscriber_end), *message, param,
                         last_event_id);
@@ -230,7 +180,7 @@ matching_wal_publisher::configure_pointer create_configure() {
 }
 }  // namespace matching_wal_detail
 
-matching_wal_log_operator::strong_ptr<matching_wal_publisher> create_matching_wal_publisher(matching_room& room) {
+matching_wal_log_operator::strong_ptr<matching_wal_publisher> create_matching_wal_publisher(matching_unit& unit) {
   return matching_wal_publisher::create(matching_wal_detail::create_vtable(), matching_wal_detail::create_configure(),
-                                        &room);
+                                        &unit);
 }

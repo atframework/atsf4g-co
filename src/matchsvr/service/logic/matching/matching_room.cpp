@@ -2,6 +2,7 @@
 
 #include "logic/matching/matching_room.h"
 
+#include "logic/matching/matching_unit.h"
 #include "logic/matching/matching_utility.h"
 
 #include <log/log_wrapper.h>
@@ -24,7 +25,7 @@ constexpr int32_t kFirstBattleFactionId = 1001;
 }  // namespace
 
 std::optional<matching_room::faction_statistics> matching_room::calculate_faction_statistics(
-    const std::unordered_map<uint64_t, PROJECT_NAMESPACE_ID::DMatchingUnit>& units,
+    const unit_map_t& units,
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingFactionAssignment>& assignments) {
   matching_room::faction_statistics result;
   if (assignments.empty()) {
@@ -43,7 +44,10 @@ std::optional<matching_room::faction_statistics> matching_room::calculate_factio
       if (unit_iter == units.end() || !assigned_unit_ids.emplace(unit_id).second) {
         return std::nullopt;
       }
-      const auto& unit = unit_iter->second;
+      if (!unit_iter->second) {
+        return std::nullopt;
+      }
+      const auto& unit = unit_iter->second->data_;
       const size_t unit_size = static_cast<size_t>(unit.users_size());
       if (unit.faction_fill_policy() == PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE) {
         if (assignment.unit_ids_size() != 1 || unit_size != assignment.user_capacity()) {
@@ -108,8 +112,7 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
       result_template_id_(0),
       result_(0),
       orbit_ready_processing_(false),
-      orbit_server_id_(0),
-      wal_publisher_(create_matching_wal_publisher(*this)) {
+      orbit_server_id_(0) {
   scope_.set_level_type(scope.level_type());
   scope_.set_region(scope.region());
   scope_.set_battle_version(scope.battle_version());
@@ -119,14 +122,17 @@ matching_room::matching_room(std::string matching_id, const PROJECT_NAMESPACE_ID
 
 bool matching_room::has_unit(uint64_t unit_id) const noexcept { return units_.find(unit_id) != units_.end(); }
 
-const PROJECT_NAMESPACE_ID::DMatchingUnit* matching_room::find_unit(uint64_t unit_id) const noexcept {
+matching_room::unit_ptr_t matching_room::find_unit(uint64_t unit_id) const noexcept {
   auto unit_iter = units_.find(unit_id);
-  return unit_iter == units_.end() ? nullptr : &unit_iter->second;
+  return unit_iter == units_.end() ? nullptr : unit_iter->second;
 }
 
 bool matching_room::has_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept {
   for (const auto& unit : units_) {
-    for (const auto& user : unit.second.users()) {
+    if (!unit.second) {
+      continue;
+    }
+    for (const auto& user : unit.second->data_.users()) {
       if (matching_utility::same_user(user.user_key(), user_key)) {
         return true;
       }
@@ -150,41 +156,41 @@ void matching_room::add_orbit_user_init_detail(const PROJECT_NAMESPACE_ID::DUser
   data.set_user_open_id(user_open_id);
 }
 
-bool matching_room::add_unit(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit) {
-  if (status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING || unit.unit_id() == 0 ||
-      units_.find(unit.unit_id()) != units_.end()) {
+bool matching_room::add_unit(const unit_ptr_t& unit) {
+  if (!unit || status_ != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING || unit->get_unit_id() == 0 ||
+      units_.find(unit->get_unit_id()) != units_.end()) {
     return false;
   }
-  PROJECT_NAMESPACE_ID::DMatchingUnit normalized_unit;
-  protobuf_copy_message(normalized_unit, unit);
-  if (!matching_utility::normalize_acceptable_level_ids(normalized_unit)) {
+  if (!matching_utility::normalize_acceptable_level_ids(unit->data_)) {
     return false;
   }
   std::vector<const PROJECT_NAMESPACE_ID::DMatchingUnit*> prospective_units;
   prospective_units.reserve(units_.size() + 1);
   for (const auto& stored : units_) {
-    prospective_units.emplace_back(&stored.second);
+    if (!stored.second) {
+      return false;
+    }
+    prospective_units.emplace_back(&stored.second->data_);
   }
-  prospective_units.emplace_back(&normalized_unit);
+  prospective_units.emplace_back(&unit->data_);
   auto compatible_level_ids = matching_utility::get_compatible_level_ids(prospective_units);
   if (compatible_level_ids.empty()) {
     return false;
   }
-  for (int left = 0; left < normalized_unit.users_size(); ++left) {
-    const auto& user = normalized_unit.users(left);
+  for (int left = 0; left < unit->data_.users_size(); ++left) {
+    const auto& user = unit->data_.users(left);
     if (has_user(user.user_key())) {
       return false;
     }
-    for (int right = left + 1; right < normalized_unit.users_size(); ++right) {
-      if (matching_utility::same_user(user.user_key(), normalized_unit.users(right).user_key())) {
+    for (int right = left + 1; right < unit->data_.users_size(); ++right) {
+      if (matching_utility::same_user(user.user_key(), unit->data_.users(right).user_key())) {
         return false;
       }
     }
   }
-  const size_t unit_size = static_cast<size_t>(normalized_unit.users_size());
-  auto& stored = units_[normalized_unit.unit_id()];
-  protobuf_move_message(stored, std::move(normalized_unit));
-  stored.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
+  const size_t unit_size = static_cast<size_t>(unit->data_.users_size());
+  unit->data_.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
+  units_.emplace(unit->get_unit_id(), unit);
   compatible_level_ids_ = std::move(compatible_level_ids);
   if (std::find(compatible_level_ids_.begin(), compatible_level_ids_.end(), selected_level_id_) ==
       compatible_level_ids_.end()) {
@@ -210,7 +216,10 @@ bool matching_room::remove_unit(uint64_t unit_id) {
   if (unit_iter == units_.end()) {
     return false;
   }
-  const size_t unit_size = static_cast<size_t>(unit_iter->second.users_size());
+  if (!unit_iter->second) {
+    return false;
+  }
+  const size_t unit_size = static_cast<size_t>(unit_iter->second->data_.users_size());
   user_count_ -= unit_size;
   if (unit_size < unit_size_counts_.size() && unit_size_counts_[unit_size] > 0) {
     --unit_size_counts_[unit_size];
@@ -242,7 +251,9 @@ bool matching_room::remove_unit(uint64_t unit_id) {
   std::vector<const PROJECT_NAMESPACE_ID::DMatchingUnit*> remaining_units;
   remaining_units.reserve(units_.size());
   for (const auto& stored : units_) {
-    remaining_units.emplace_back(&stored.second);
+    if (stored.second) {
+      remaining_units.emplace_back(&stored.second->data_);
+    }
   }
   compatible_level_ids_ = matching_utility::get_compatible_level_ids(remaining_units);
   if (!compatible_level_ids_.empty() && std::find(compatible_level_ids_.begin(), compatible_level_ids_.end(),
@@ -256,7 +267,10 @@ void matching_room::begin_confirmation(int64_t expire_time) noexcept {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING;
   confirm_expire_time_ = expire_time;
   for (auto& unit : units_) {
-    for (auto& user : *unit.second.mutable_users()) {
+    if (!unit.second) {
+      continue;
+    }
+    for (auto& user : *unit.second->data_.mutable_users()) {
       user.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
     }
   }
@@ -267,7 +281,10 @@ bool matching_room::confirm_user(const PROJECT_NAMESPACE_ID::DUserIDKey& user_ke
     return false;
   }
   for (auto& unit : units_) {
-    for (auto& user : *unit.second.mutable_users()) {
+    if (!unit.second) {
+      continue;
+    }
+    for (auto& user : *unit.second->data_.mutable_users()) {
       if (matching_utility::same_user(user.user_key(), user_key)) {
         user.set_confirm_status(accepted ? PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED
                                          : PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_REFUSED);
@@ -283,7 +300,10 @@ bool matching_room::are_all_users_confirmed() const noexcept {
     return false;
   }
   for (const auto& unit : units_) {
-    for (const auto& user : unit.second.users()) {
+    if (!unit.second) {
+      return false;
+    }
+    for (const auto& user : unit.second->data_.users()) {
       if (user.confirm_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_ACCEPTED) {
         return false;
       }
@@ -300,8 +320,11 @@ void matching_room::resume_matching(int64_t expire_time) noexcept {
   finalized_unit_faction_ids_.clear();
   faction_ids_finalized_ = false;
   for (auto& unit : units_) {
-    unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
-    for (auto& user : *unit.second.mutable_users()) {
+    if (!unit.second) {
+      continue;
+    }
+    unit.second->data_.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
+    for (auto& user : *unit.second->data_.mutable_users()) {
       user.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
     }
   }
@@ -393,7 +416,9 @@ void matching_room::mark_creating_battle(uint64_t orbit_server_id, int64_t expir
   confirm_expire_time_ = 0;
   battle_create_expire_time_ = expire_time;
   for (auto& unit : units_) {
-    unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_MATCHED);
+    if (unit.second) {
+      unit.second->data_.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_MATCHED);
+    }
   }
 }
 
@@ -421,7 +446,9 @@ void matching_room::mark_failed(int32_t result, int64_t now) noexcept {
   terminal_time_ = now;
   battle_create_expire_time_ = 0;
   for (auto& unit : units_) {
-    unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_CANCELLED);
+    if (unit.second) {
+      unit.second->data_.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_CANCELLED);
+    }
   }
 }
 
@@ -429,7 +456,9 @@ void matching_room::mark_timeout(int64_t now) noexcept {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_TIMEOUT;
   terminal_time_ = now;
   for (auto& unit : units_) {
-    unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_CANCELLED);
+    if (unit.second) {
+      unit.second->data_.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_CANCELLED);
+    }
   }
 }
 
@@ -437,7 +466,9 @@ void matching_room::mark_cancelled(int64_t now) noexcept {
   status_ = PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CANCELLED;
   terminal_time_ = now;
   for (auto& unit : units_) {
-    unit.second.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_CANCELLED);
+    if (unit.second) {
+      unit.second->data_.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_CANCELLED);
+    }
   }
 }
 
@@ -454,7 +485,9 @@ void matching_room::dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) co
   output.set_last_event_id(last_event_id_);
   output.set_confirm_expire_time(confirm_expire_time_);
   for (const auto& unit : units_) {
-    protobuf_copy_message(*output.add_units(), unit.second);
+    if (unit.second) {
+      protobuf_copy_message(*output.add_units(), unit.second->data_);
+    }
   }
   // 搜索阶段或搜索超时的 faction 仍可能局部调整，不作为对外承诺；进入确认后才同步最终战斗阵营。
   if (status_ == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CONFIRMING ||
@@ -468,137 +501,9 @@ void matching_room::dump(PROJECT_NAMESPACE_ID::DMatchingRoomSnapshot& output) co
   protobuf_copy_message(*output.mutable_orbit_room_key(), orbit_room_key_);
 }
 
-void matching_room::dump_player_view(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit,
-                                     PROJECT_NAMESPACE_ID::DMatchingPlayerView& output) const {
-  output.Clear();
-  output.set_matching_id(matching_id_);
-  output.set_status(status_);
-  protobuf_copy_message(*output.mutable_unit(), unit);
-  output.set_result(result_);
-  output.set_expire_time(expire_time_);
-  output.set_last_event_id(last_event_id_);
-  output.set_confirm_expire_time(confirm_expire_time_);
-  protobuf_copy_message(*output.mutable_orbit_room_key(), orbit_room_key_);
-  output.set_orbit_expired_timepoint(orbit_expired_timepoint_);
-  output.set_selected_level_id(selected_level_id_);
-  if (status_ == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_CREATING_BATTLE ||
-      status_ == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FINISHED ||
-      status_ == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_FAILED) {
-    const int32_t faction_id = get_unit_faction_id(unit.unit_id());
-    if (faction_id != 0) {
-      output.set_faction_id(faction_id);
-    }
-  }
-}
-
-bool matching_room::subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
-                              int64_t acknowledge_event_id) {
-  if (!wal_publisher_ || server_id == 0) {
-    FCTXLOGERROR(ctx, "subscribe matching WAL rejected, matching_id={}, user={}:{}, server_id={:#x}, wal_ready={}",
-                 matching_id_, user_key.user_id(), user_key.zone_id(), server_id, static_cast<bool>(wal_publisher_));
-    return false;
-  }
-  int32_t result = 0;
-  matching_wal_context wal_ctx{ctx, result};
-  auto subscriber = wal_publisher_->find_subscriber(user_key, wal_ctx);
-  if (subscriber && subscriber->get_private_data()) {
-    subscriber->get_private_data()->set_server_id(server_id);
-    for (const auto& unit : units_) {
-      if (matching_utility::unit_has_user(unit.second, user_key)) {
-        subscriber->get_private_data()->set_unit_id(unit.first);
-        break;
-      }
-    }
-    wal_publisher_->receive_subscribe_request(user_key, acknowledge_event_id, atfw::util::time::time_utility::now(),
-                                              wal_ctx);
-    FCTXLOGDEBUG(ctx,
-                 "refresh matching WAL subscriber, matching_id={}, user={}:{}, server_id={:#x}, "
-                 "acknowledge_event_id={}, result={}",
-                 matching_id_, user_key.user_id(), user_key.zone_id(), server_id, acknowledge_event_id, result);
-    return result >= 0;
-  }
-
-  auto private_data = atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::DMatchingSubscriberData>();
-  if (!private_data) {
-    FCTXLOGERROR(ctx, "create matching WAL subscriber data failed, matching_id={}, user={}:{}", matching_id_,
-                 user_key.user_id(), user_key.zone_id());
-    return false;
-  }
-  private_data->set_server_id(server_id);
-  for (const auto& unit : units_) {
-    if (matching_utility::unit_has_user(unit.second, user_key)) {
-      private_data->set_unit_id(unit.first);
-      break;
-    }
-  }
-  private_data->set_last_send_event_id(acknowledge_event_id);
-  private_data->set_valid_event_id_bound(last_event_id_ + 1);
-  const bool created = static_cast<bool>(wal_publisher_->create_subscriber(
-      user_key, atfw::util::time::time_utility::now(), acknowledge_event_id, wal_ctx, std::move(private_data)));
-  if (created) {
-    FCTXLOGDEBUG(ctx,
-                 "create matching WAL subscriber, matching_id={}, user={}:{}, server_id={:#x}, "
-                 "acknowledge_event_id={}",
-                 matching_id_, user_key.user_id(), user_key.zone_id(), server_id, acknowledge_event_id);
-  } else {
-    FCTXLOGERROR(ctx, "create matching WAL subscriber failed, matching_id={}, user={}:{}, server_id={:#x}",
-                 matching_id_, user_key.user_id(), user_key.zone_id(), server_id);
-  }
-  return created;
-}
-
-void matching_room::unsubscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
-  if (!wal_publisher_) {
-    FCTXLOGERROR(ctx, "unsubscribe matching WAL failed without publisher, matching_id={}, user={}:{}", matching_id_,
-                 user_key.user_id(), user_key.zone_id());
-    return;
-  }
-  int32_t result = 0;
-  matching_wal_context wal_ctx{ctx, result};
-  wal_publisher_->remove_subscriber(user_key, atfw::util::distributed_system::wal_unsubscribe_reason::kClientRequest,
-                                    wal_ctx);
-  FCTXLOGDEBUG(ctx, "unsubscribe matching WAL, matching_id={}, user={}:{}, result={}", matching_id_, user_key.user_id(),
-               user_key.zone_id(), result);
-}
-
-std::optional<matching_room::subscriber_route> matching_room::get_subscriber_route(
-    const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
-  if (!wal_publisher_) {
-    return std::nullopt;
-  }
-  rpc::context ctx{rpc::context::create_without_task()};
-  int32_t wal_result = 0;
-  matching_wal_context wal_ctx{ctx, wal_result};
-  auto subscriber = wal_publisher_->find_subscriber(user_key, wal_ctx);
-  if (!subscriber || !subscriber->get_private_data()) {
-    return std::nullopt;
-  }
-  subscriber_route route{subscriber->get_private_data()->server_id(),
-                         subscriber->get_private_data()->last_send_event_id()};
-  return route.server_id == 0 ? std::nullopt : std::optional<subscriber_route>{route};
-}
-
 void matching_room::publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log) {
-  if (!wal_publisher_) {
-    FCTXLOGERROR(ctx, "publish matching event failed without WAL publisher, matching_id={}, event_case={}",
-                 matching_id_, static_cast<int>(event_log.event_case()));
-    return;
-  }
   event_log.set_room_status(status_);
   event_log.set_event_id(++last_event_id_);
-  const auto event_case = event_log.event_case();
-  int32_t result = 0;
-  matching_wal_context wal_ctx{ctx, result};
-  auto log = wal_publisher_->allocate_log(atfw::util::time::time_utility::now(), event_log.event_case(), wal_ctx,
-                                          std::move(event_log));
-  if (wal_publisher_->emplace_back_log(std::move(log), wal_ctx) <
-      atfw::util::distributed_system::wal_result_code::kOk) {
-    FCTXLOGERROR(ctx, "publish matching event failed to append WAL, matching_id={}, event_id={}, status={}",
-                 matching_id_, last_event_id_, static_cast<int>(status_));
-    return;
-  }
-  FCTXLOGDEBUG(ctx, "publish matching event, matching_id={}, event_id={}, event_case={}, status={}", matching_id_,
-               last_event_id_, static_cast<int>(event_case), static_cast<int>(status_));
-  wal_publisher_->broadcast(wal_ctx);
-  wal_publisher_->tick(atfw::util::time::time_utility::now(), wal_ctx);
+  FCTXLOGDEBUG(ctx, "record internal room event, matching_id={}, event_id={}, event_case={}, status={}", matching_id_,
+               last_event_id_, static_cast<int>(event_log.event_case()), static_cast<int>(status_));
 }

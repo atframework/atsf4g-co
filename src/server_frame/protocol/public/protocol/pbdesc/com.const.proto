@@ -340,6 +340,22 @@ enum EnErrorCode {
                                            [(error_code.description) = "用户已经在匹配中"];
   EN_MATCHING_RESULT_NOT_SAME_LEVEL = -911
                                       [(error_code.description) = "匹配关卡不一致"];
+  EN_MATCHING_RESULT_ROOM_STATUS_NOT_MATCHING = -912
+                                           [(error_code.description) = "房间状态不匹配"];         
+  EN_MATCHING_RESULT_UNIT_NOT_FOUND = -913
+                                      [(error_code.description) = "匹配单元未找到"];
+  EN_MATCHING_RESULT_CANNOT_CANCEL = -914
+                                           [(error_code.description) = "无法取消匹配"];
+  EN_MATCHING_RESULT_ROOM_NOT_FOUND = -915
+                                           [(error_code.description) = "房间未找到"];
+  EN_MATCHING_RESULT_UNIT_NOT_MATCHING = -916
+                                      [(error_code.description) = "匹配单元不匹配"];
+  EN_MATCHING_SERVER_NOT_FOUND = -917
+                                      [(error_code.description) = "匹配服务器未找到"];
+  EN_MATCHING_USER_IN_BATTLE = -918
+                                [(error_code.description) = "玩家在战斗"];
+  EN_MATCHING_SOURCE_SERVER_ID_NOT_FOUND = -919
+                                [(error_code.description) = "战斗服id未找到"];
   // 关卡模块[1001-1100]
   EN_LEVEL_CFG_NOT_FOUND = -1001
                            [(error_code.description) = "关卡配置未找到"];

@@ -3,7 +3,6 @@ package atsf4g_go_robot_case
 import (
 	"fmt"
 	"strconv"
-	"strings"
 	"time"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
@@ -24,40 +23,23 @@ func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.User
 	if len(args) < 1 {
 		return fmt.Errorf("need level_type")
 	}
-	levelType, err := strconv.ParseInt(args[0], 10, 32)
+	levelId, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
 		return err
 	}
-	levelId := levelType
 	region := "cn"
 	if len(args) > 1 {
-		levelId, err = strconv.ParseInt(args[1], 10, 32)
-		if err != nil {
-			return err
-		}
-	}
-	if len(args) > 2 {
-		region = args[2]
+		region = args[1]
 	}
 	factionFillPolicy := public_protocol_pbdesc.EnMatchingFactionFillPolicy_EN_MATCHING_FACTION_FILL_POLICY_DISABLE
-	if len(args) > 3 {
-		fillPolicyValue, parseErr := strconv.ParseInt(args[3], 10, 32)
+	if len(args) > 2 {
+		fillPolicyValue, parseErr := strconv.ParseInt(args[2], 10, 32)
 		if parseErr != nil {
 			return parseErr
 		}
 		factionFillPolicy = public_protocol_pbdesc.EnMatchingFactionFillPolicy(fillPolicyValue)
 	}
 	levelIds := []int32{int32(levelId)}
-	if len(args) > 4 {
-		levelIds = levelIds[:0]
-		for _, value := range strings.Split(args[4], ",") {
-			parsed, parseErr := strconv.ParseInt(value, 10, 32)
-			if parseErr != nil {
-				return parseErr
-			}
-			levelIds = append(levelIds, int32(parsed))
-		}
-	}
 
 	user := holder.GetUser()
 	if user == nil {
