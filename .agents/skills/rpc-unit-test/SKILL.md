@@ -1,13 +1,14 @@
 ---
 name: rpc-unit-test
-description: "Use when: writing, reviewing, or running offline service RPC tests with atfw::testing::runtime, its mock engines, feature flags, or project_add_rpc_unit_test. For generic test execution/filtering/PATH use testing; for production RPC code use engineering-guidelines."
+description: "Use when: writing, reviewing, or running src unit tests that exercise project RPC paths, use atfw::testing::runtime or mock engines, require async test hooks, or use project_add_rpc_unit_test. For ordinary unit tests and generic execution/filtering/PATH use testing; for production RPC code use engineering-guidelines."
 ---
 
-# Offline RPC unit tests
+# RPC and async-hook unit tests
 
 `src/tools/rpc-unit-test` runs real application, dispatcher, coroutine task, and generated RPC paths against offline
-mock boundaries. Use `src/tools/rpc-unit-test/README.md` for current APIs, feature names, CMake arguments, and examples;
-do not copy that catalog into this Skill.
+mock boundaries. Its target helper also owns `src/**` unit tests that require the project's async test hooks, even when
+the main case is not an RPC contract. Use `src/tools/rpc-unit-test/README.md` for current APIs, feature names, CMake
+arguments, and examples; do not copy that catalog into this Skill.
 
 Read `../testing/references/test-design-and-acceptance.md` when designing or reviewing cases. Read
 `references/engine-invariants.md` only when changing mock engines or diagnosing scheduling, delivery, process-lifetime,
@@ -87,8 +88,13 @@ CASE_TEST(rpc_unit_test, framework_flow) {
 
 ## Target and timeout rules
 
-- Add targets through `project_add_rpc_unit_test`; use the category that matches the linked layer and do not hardcode
-  the project prefix. Consult the fixture README for the current argument set.
+- Under `src/**`, add a unit-test target through `project_add_rpc_unit_test` when any case exercises project RPC paths or
+  requires async test hooks guarded by `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`. This rule applies to a target that
+  mixes ordinary and RPC/hook-dependent cases. Use `project_add_normal_unit_test` for an ordinary target with neither
+  dependency.
+- Do not reproduce target creation, private-framework sources, links, dependencies, PCH, post-build events, RPATH,
+  runtime environment, or CTest labels in the consuming `CMakeLists.txt`. Use the category that matches the linked layer
+  and do not hardcode the project prefix. Consult the fixture README for the current argument set.
 - Set the CTest `TIMEOUT` above the serial sum of all case hard timeouts and teardown in that executable, not above one
   case timeout only.
 - Keep generated runtime configuration in the target's build-tree working directory. Never write

@@ -44,7 +44,7 @@ elseif ($IsMacOS) {
 
 if ([string]::IsNullOrEmpty($WorkDir)) {
   if (Test-Path ENV:WORK_DIR) {
-    $WorkDir = $env:WORK_DIR
+    $WorkDir = Join-Path $env:WORK_DIR "redis-unit-test"
   }
   else {
     $WorkDir = Join-Path (Get-Location) "redis-unit-test"

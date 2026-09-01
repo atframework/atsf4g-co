@@ -22,6 +22,19 @@ Detail companion to `SKILL.md`. Load when editing CMake files, protobuf, templat
   This applies to `add_library`/`add_executable`/`add_custom_target`, ALIAS targets, `if(TARGET ...)` checks,
   `add_dependencies`, `$<TARGET_OBJECTS:...>`, folder/label strings, and diagnostic messages.
 
+## Unit-test targets
+
+- Add every ordinary C++ unit-test target in this root project through `project_add_normal_unit_test` from
+  `project/cmake/ProjectTestTools.cmake`.
+- Under `src/**`, use `project_add_rpc_unit_test` instead when any case in the executable exercises project RPC paths or
+  requires async test hooks guarded by `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`. A target that mixes ordinary and
+  RPC/hook cases is an RPC unit-test target.
+- In consuming test `CMakeLists.txt` files, do not call `add_executable`, `atframe_add_test_executable`, or `add_test`
+  directly and do not reproduce their link, dependency, PCH, post-build, RPATH, runtime-environment, or label setup.
+  Pass sources, libraries, features, environment, labels, and timeout through the selected project helper.
+- `atframe_add_test_executable` is an implementation detail of `project_add_normal_unit_test`, not a root-project test
+  target API. Vendored `atframework/**` subprojects follow their own nearest `AGENTS.md` and CMake conventions.
+
 ## Incremental build stability
 
 - Never unconditionally `touch` or overwrite unchanged code, headers, protocols, configuration, or resources consumed

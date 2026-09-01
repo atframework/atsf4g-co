@@ -41,15 +41,21 @@ if(NOT TARGET ${PROJECT_NAME}-rpc-unit-test-private-frame)
   set_property(TARGET ${PROJECT_NAME}-rpc-unit-test-private-frame PROPERTY FOLDER "${PROJECT_NAME}/test")
 endif()
 
-# project_add_rpc_unit_test( TARGET <target>                # required, executable target name COMPONENT
-# <component-name>     # required, used for stable labels/folder, never guessed from paths CATEGORY
-# <component|sdk|service>  # optional label category prefix, defaults to "component" SOURCES <a.cpp> [<b.cpp> ...]  #
-# required, test sources of this component LINK_LIBRARIES <targets...>    # optional, component
-# SDK/protocol/implementation targets FEATURES <SS DNS CS DB UUID RESOURCE ROUTER ORBIT HPA...> # optional, validated
-# feature tags LABELS <extra ctest labels...> TIMEOUT <seconds>              # ctest process-level timeout, must cover
-# the worst serial-case sum CONFIG <file>                  # optional extra config file copied next to the executable
-# working directory WORKING_DIRECTORY <dir>        # optional, defaults to a per-target directory inside the caller
-# build tree ENVIRONMENT <VAR=value ...>    # optional extra ctest environment )
+#[[
+project_add_rpc_unit_test(
+  TARGET <target>                   # required, executable target name
+  COMPONENT <component-name>        # required, used for stable labels/folder, never guessed from paths
+  CATEGORY <component|sdk|service>  # optional label category prefix, defaults to "component"
+  SOURCES <a.cpp> [<b.cpp> ...]     # required, test sources of this component
+  LINK_LIBRARIES <targets...>       # optional, component SDK/protocol/implementation targets
+  FEATURES <SS DNS CS DB UUID RESOURCE ROUTER ORBIT HPA...> # optional, validated feature tags
+  LABELS <extra ctest labels...>
+  TIMEOUT <seconds>                 # ctest process-level timeout, must cover the worst serial-case sum
+  CONFIG <file>                     # optional extra config file copied next to the executable working directory
+  WORKING_DIRECTORY <dir>           # optional, defaults to a per-target directory inside the caller build tree
+  ENVIRONMENT <VAR=value ...>       # optional extra ctest environment
+)
+]]
 function(project_add_rpc_unit_test)
   set(PROJECT_RPC_UNIT_TEST_KNOWN_FEATURES
       SS
@@ -100,8 +106,8 @@ function(project_add_rpc_unit_test)
   endif()
   target_compile_options(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
   project_tool_split_target_debug_sybmol(${PROJECT_RPC_UNIT_TEST_TARGET})
-  project_tool_set_target_runtime_output_directory("${PROJECT_INSTALL_BAS_DIR}/bin" ${PROJECT_RPC_UNIT_TEST_TARGET}
-                                                   WITH_TARGET_RPATH WITH_ARCHIVE_RPATH)
+  project_tool_set_target_runtime_output_directory("${PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+                                                   ${PROJECT_RPC_UNIT_TEST_TARGET} WITH_TARGET_RPATH WITH_ARCHIVE_RPATH)
 
   # Reuse PCH from dependencies. The support library reuses the server_frame PCH, so it resolves to the same pch
   # interface target; linked component SDK/protocol targets are candidates as well and the pch tool picks the one with
@@ -129,8 +135,10 @@ function(project_add_rpc_unit_test)
                BUILD_RPATH_USE_ORIGIN YES)
   set_property(TARGET ${PROJECT_RPC_UNIT_TEST_TARGET} PROPERTY FOLDER "${PROJECT_NAME}/test")
 
-  project_setup_runtime_post_build_bash(${PROJECT_RPC_UNIT_TEST_TARGET} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_BASH)
-  project_setup_runtime_post_build_pwsh(${PROJECT_RPC_UNIT_TEST_TARGET} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_PWSH)
+  project_setup_runtime_post_build_bash(${PROJECT_RPC_UNIT_TEST_TARGET}
+                                        PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_BASH)
+  project_setup_runtime_post_build_pwsh(${PROJECT_RPC_UNIT_TEST_TARGET}
+                                        PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_PWSH)
 
   if(NOT PROJECT_RPC_UNIT_TEST_WORKING_DIRECTORY)
     set(PROJECT_RPC_UNIT_TEST_WORKING_DIRECTORY
@@ -170,16 +178,21 @@ function(project_add_rpc_unit_test)
     PROPERTIES LABELS "${PROJECT_RPC_UNIT_TEST_ALL_LABELS}" TIMEOUT "${PROJECT_RPC_UNIT_TEST_TIMEOUT}"
                WORKING_DIRECTORY "${PROJECT_RPC_UNIT_TEST_WORKING_DIRECTORY}")
 
-  # Windows: executables and dependency DLLs are placed into the unified runtime output directory. CTest uses
-  # ENVIRONMENT_MODIFICATION (CMake 3.24+) to prepend it into PATH instead of copying DLLs.
+  # Windows: CTest prepends the test, project-runtime, and third-party DLL directories to PATH. The test output remains
+  # separate from the publish tree and does not need copied DLLs.
   if(WIN32)
+    set(PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS "PATH=path_list_prepend:${PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY}")
+    if(CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+      list(APPEND PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+    endif()
+    if(PROJECT_THIRD_PARTY_INSTALL_DIR)
+      list(APPEND PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS
+           "PATH=path_list_prepend:${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin")
+    endif()
     set_property(
       TEST ${PROJECT_RPC_UNIT_TEST_TARGET}.unit
       APPEND
-      PROPERTY
-        ENVIRONMENT_MODIFICATION
-        "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY};PATH=path_list_prepend:${PROJECT_THIRD_PARTY_INSTALL_DIR}/bin"
-    )
+      PROPERTY ENVIRONMENT_MODIFICATION "${PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS}")
   endif()
 
   # Per-target working directory for the runtime (preserves per-fixture isolation when ctest runs targets in parallel).

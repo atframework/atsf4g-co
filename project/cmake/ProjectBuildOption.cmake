@@ -33,6 +33,15 @@ else()
   endif()
 endif()
 option(PROJECT_ENABLE_TOOLS "Enable build tools." ON)
+
+set(PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY
+    "${CMAKE_BINARY_DIR}/sample"
+    CACHE STRING "Default output directory for samples.")
+
+set(PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY
+    "${CMAKE_BINARY_DIR}/test"
+    CACHE STRING "Default output directory for tests.")
+
 option(PROJECT_ENABLE_PRECOMPILE_HEADERS "Enable precompile headers." ON)
 # Unity build(jumbo build) merges sources into unity_*.cxx, which removes per-file compile_commands.json entries and
 # breaks clangd/IDE per-file indexing. Keep it OFF for local/clangd builds; enable it (e.g. in CI) for faster builds.

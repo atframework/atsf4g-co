@@ -2,4 +2,6 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 
 add_subdirectory(api)
-add_subdirectory(ItemAlgorithmTest)
+if(BUILD_TESTING OR PROJECT_ENABLE_UNITTEST)
+  add_subdirectory(ItemAlgorithmTest)
+endif()

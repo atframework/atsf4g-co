@@ -410,6 +410,11 @@ endfunction()
 
 function(project_tool_set_target_runtime_output_directory OUTPUT_DIR TARGET_NAME)
   file(RELATIVE_PATH TARGET_OUTPUT_RELATIVE_PATH "${OUTPUT_DIR}" "${PROJECT_INSTALL_BAS_DIR}")
+  if(TARGET_OUTPUT_RELATIVE_PATH STREQUAL ".")
+    set(TARGET_OUTPUT_RELATIVE_PATH "")
+  else()
+    string(APPEND TARGET_OUTPUT_RELATIVE_PATH "/")
+  endif()
   cmake_parse_arguments(project_tool_set_target_runtime_output_directory "WITH_TARGET_RPATH;WITH_ARCHIVE_RPATH" "" ""
                         ${ARGN})
   set(project_tool_set_target_runtime_output_directory_APPEND_RPATH)
@@ -518,11 +523,11 @@ function(project_setup_runtime_post_build_pwsh TARGET_NAME SCRIPTS_VAR_NAME)
         "${ATFRAMEWORK_CMAKE_TOOLSET_PWSH}"
         "-File"
         "${POST_BUILD_SCRIPT}"
-        "$<TARGET_FILE:${TARGET_FULL_NAME}>"
+        "$<TARGET_FILE:${TARGET_NAME}>"
         "${PROJECT_INSTALL_BAS_DIR}")
     endforeach()
     add_custom_command(
-      TARGET ${TARGET_FULL_NAME}
+      TARGET ${TARGET_NAME}
       POST_BUILD
       COMMAND ${POST_BUILD_SCRIPTS}
       COMMENT "Run(pwsh) post build of $<TARGET_FILE:${TARGET_NAME}>: ${${SCRIPTS_VAR_NAME}}")

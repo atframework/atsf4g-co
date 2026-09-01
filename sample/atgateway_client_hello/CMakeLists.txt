@@ -8,9 +8,9 @@ set(SAMPLE_SRC_BIN_NAME "sample_${SAMPLE_SRC_BIN_NAME}")
 echowithcolor(COLOR GREEN "-- Configure ${SAMPLE_SRC_BIN_NAME} on ${CMAKE_CURRENT_LIST_DIR}")
 
 aux_source_directory(${CMAKE_CURRENT_LIST_DIR} SAMPLE_SRC_LIST)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/sample")
 
 add_executable(${SAMPLE_SRC_BIN_NAME} ${SAMPLE_SRC_LIST})
+project_tool_set_target_runtime_output_directory("${PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY}" ${SAMPLE_SRC_BIN_NAME})
 
 target_link_libraries(${SAMPLE_SRC_BIN_NAME} atgateway_client_sdk_v2_c)
 

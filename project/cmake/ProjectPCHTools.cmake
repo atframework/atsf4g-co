@@ -265,7 +265,7 @@ function(project_pch_tool_set_precompile_headers TARGET_NAME)
   unset(__project_pch_tool_protocol_include_path)
   if(__project_pch_tool_PROTOCOL_PRECOMPILE_HEADER)
     list(SORT __project_pch_tool_PROTOCOL_PRECOMPILE_HEADER)
-    set(__project_pch_tool_protocol_include_path "${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES}")
+    set(__project_pch_tool_protocol_include_path "${PROJECT_PCH_TOOL_GENERATED_DIR}")
     set(__project_pch_tool_protocol_include_file_prefix
         "${__project_pch_tool_protocol_include_path}/atfw.protocol_pch.${TARGET_NAME}")
     string(TIMESTAMP __project_pch_tool_copyright_year "%Y")

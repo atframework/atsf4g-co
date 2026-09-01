@@ -52,6 +52,11 @@ high-performance game server architectures.
   the implementation or the case design; never weaken, skip, or loosen an existing assertion, add a retry, or widen a
   timeout merely to force green. If scope or prerequisites remain unclear, state assumptions and coverage gaps instead
   of claiming completeness.
+- Add root-project ordinary C++ unit-test targets only through `project_add_normal_unit_test`. For tests under `src/**`
+  that exercise project RPC paths or require async test hooks guarded by `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`,
+  use `project_add_rpc_unit_test` instead. Do not wire consuming test targets directly with `add_executable`,
+  `atframe_add_test_executable`, or `add_test`; the project helpers own their links, dependencies, PCH, post-build
+  events, RPATH, runtime environment, and CTest labels.
 - Match process to risk: use the shortest verified path for small changes; read `change-workflow` for defects and for
   cross-module behavior, public API/ABI, data model/migration, security, or deployment changes. Keep their scope and
   acceptance in one existing authoritative artifact or active task plan; do not initialize a methodology for ceremony.

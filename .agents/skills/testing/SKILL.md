@@ -1,6 +1,6 @@
 ---
 name: testing
-description: "Use when: designing, writing, reviewing, or running generic unit tests, filtering private-framework cases, or fixing Windows test startup/PATH. For offline service RPC tests with atfw::testing::runtime, use rpc-unit-test."
+description: "Use when: designing, writing, reviewing, or running generic unit tests, adding ordinary targets with project_add_normal_unit_test, filtering private-framework cases, or fixing Windows test startup/PATH. For src tests that exercise project RPC paths or require async test hooks, use rpc-unit-test."
 ---
 
 # Unit testing (atsf4g-co)
@@ -9,6 +9,15 @@ This repository uses a private unit testing framework shared by several atframew
 
 Read [test design and acceptance](references/test-design-and-acceptance.md) when planning, writing, or reviewing cases.
 It is not needed merely to run a known test command.
+
+## Target registration
+
+- Add every ordinary C++ unit-test target in this root project through `project_add_normal_unit_test`.
+- For a target under `src/**`, use `project_add_rpc_unit_test` and the `rpc-unit-test` Skill instead when any case
+  exercises project RPC paths or requires async test hooks guarded by `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`.
+  This includes executables that mix ordinary cases with RPC/hook-dependent cases.
+- Consuming test `CMakeLists.txt` files must not call `add_executable`, `atframe_add_test_executable`, or `add_test`
+  directly. Pass the sources and settings supported by the selected helper instead of reproducing target setup.
 
 ## Discover and run tests (generic)
 
@@ -21,23 +30,20 @@ Most test executables support:
 
 ## Windows: DLL lookup via PATH
 
-On Windows, unit tests/samples can fail to start if dependent DLLs are not found.
+On Windows, unit tests/samples can fail to start if dependent DLLs are not found. Tests registered with CTest already
+receive PATH through `ENVIRONMENT_MODIFICATION`; set PATH manually only when running an executable directly.
 
-Preferred approach: **prepend DLL directories to `PATH`** for the current run/debug session.
+Test executables land in `<BUILD_DIR>\test` and samples in `<BUILD_DIR>\sample`. Typical DLL directories:
 
-Typical DLL directories in this repo:
-
-- `<BUILD_DIR>\publish\bin\<Config>` (project DLLs)
+- `<BUILD_DIR>\publish\bin` (project DLLs; multi-config generators use `publish\bin\<Config>`)
 - `<REPO_ROOT>\third_party\install\windows-amd64-msvc-19\bin` (third-party DLLs when using the bundled cmake-toolset)
 
 Example (PowerShell):
 
 ```powershell
 $buildDir = "<BUILD_DIR>"
-$cfg = "Debug"
-$env:PATH = "$buildDir\publish\bin\$cfg;$buildDir\publish\bin;${PWD}\third_party\install\windows-amd64-msvc-19\bin;" + $env:PATH
-Set-Location "$buildDir\_deps\atframe_utils\test\$cfg"
-./atframe_utils_unit_test.exe -l
+$env:PATH = "$buildDir\test;$buildDir\publish\bin;${PWD}\third_party\install\windows-amd64-msvc-19\bin;" + $env:PATH
+& "$buildDir\test\atframe_utils_unit_test.exe" -l
 ```
 
 ## Etcd-dependent tests

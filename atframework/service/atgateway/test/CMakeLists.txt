@@ -20,9 +20,6 @@ list(APPEND PROJECT_TEST_SRC_LIST "${CMAKE_CURRENT_LIST_DIR}/../session.cpp"
 source_group_by_dir(PROJECT_TEST_SRC_LIST)
 
 set(CMAKE_BUILD_RPATH "${CMAKE_INSTALL_RPATH}")
-if(NOT (WIN32 AND BUILD_SHARED_LIBS))
-  set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/test")
-endif()
 
 atframe_add_test_executable(atgateway-unit_test ${PROJECT_TEST_SRC_LIST})
 
@@ -39,3 +36,4 @@ target_link_libraries(
 
 add_test(NAME "atgateway.unit_test" COMMAND "$<TARGET_FILE:atgateway-unit_test>")
 set_tests_properties("atgateway.unit_test" PROPERTIES LABELS "atgateway;atgateway.unit_test")
+atframe_test_setup_run_environment("atgateway.unit_test" "${PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY}")

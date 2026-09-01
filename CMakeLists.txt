@@ -29,6 +29,9 @@ include(MaybePopulateSubmodule)
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/Repository.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/atframework/Repository.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/third_party/AfterFramework.cmake")
+if(BUILD_TESTING OR PROJECT_ENABLE_UNITTEST)
+  include("${CMAKE_CURRENT_LIST_DIR}/project/cmake/ProjectTestTools.cmake")
+endif()
 
 # installer directory
 if(NOT PROJECT_INSTALL_BAS_DIR)
@@ -181,9 +184,8 @@ configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.sh.in"
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/cleanup-dll.ps1.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/cleanup-dll.ps1" ESCAPE_QUOTES @ONLY)
 
-# start_all/stop_all/kill_all scripts are rendered from
-# install/cloud-native/charts/tools by atdtool (install/tools/script/generate_config)
-# instead of configure_file.
+# start_all/stop_all/kill_all scripts are rendered from install/cloud-native/charts/tools by atdtool
+# (install/tools/script/generate_config) instead of configure_file.
 
 add_custom_target(
   "tools-cleanup-dll" ALL

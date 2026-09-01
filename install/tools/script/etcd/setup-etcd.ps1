@@ -38,7 +38,7 @@ elseif ($IsMacOS) {
 
 if ([string]::IsNullOrEmpty($WorkDir)) {
   if (Test-Path ENV:WORK_DIR) {
-    $WorkDir = $env:WORK_DIR
+    $WorkDir = Join-Path $env:WORK_DIR "etcd-unit-test"
   }
   else {
     $WorkDir = Join-Path (Get-Location) "etcd-unit-test"
