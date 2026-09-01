@@ -47,6 +47,9 @@ BATTLE_UTILITY_API bool CreateItem(
     }
     stack_max = ue_item_row->position_cfg().accumulation_limit();
   }
+  if (stack_max < 0) {
+    stack_max = 0;
+  }
 
   while (Cnt > 0) {
     int64_t current_cnt = Cnt;
