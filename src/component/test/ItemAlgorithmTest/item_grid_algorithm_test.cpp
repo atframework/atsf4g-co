@@ -611,13 +611,15 @@ static void verify_server_client_sync(const ServerTestItemGridAlgorithm& server,
   // 3. 对比 occupy_grid_flag
   const auto& server_flags = server.get_occupy_grid_flag();
   const auto& client_flags = client.get_occupy_grid_flag();
-  CASE_EXPECT_EQ(server_flags.size(), client_flags.size());
-  for (size_t r = 0; r < server_flags.size() && r < client_flags.size(); ++r) {
-    CASE_EXPECT_EQ(server_flags[r].size(), client_flags[r].size());
-    for (size_t c = 0; c < server_flags[r].size() && c < client_flags[r].size(); ++c) {
-      if (server_flags[r][c] != client_flags[r][c]) {
+  CASE_EXPECT_EQ(server_flags.row_count(), client_flags.row_count());
+  CASE_EXPECT_EQ(server_flags.column_count(), client_flags.column_count());
+  for (size_t r = 0; r < server_flags.row_count() && r < client_flags.row_count(); ++r) {
+    for (size_t c = 0; c < server_flags.column_count() && c < client_flags.column_count(); ++c) {
+      bool server_occ = server_flags.is_occupied(static_cast<int32_t>(c), static_cast<int32_t>(r));
+      bool client_occ = client_flags.is_occupied(static_cast<int32_t>(c), static_cast<int32_t>(r));
+      if (server_occ != client_occ) {
         CASE_MSG_ERROR() << "occupy_grid_flag mismatch at (" << r << "," << c << ")"
-                         << " server=" << server_flags[r][c] << " client=" << client_flags[r][c];
+                         << " server=" << server_occ << " client=" << client_occ;
       }
     }
   }
@@ -812,11 +814,11 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   // 验证占格标记: (0,0) 装备, (1,0) 1x1, (2,0) 1x1 => 三格占用
   {
     const auto& flags = server.get_occupy_grid_flag();
-    CASE_EXPECT_TRUE(flags[0][0]);   // 装备
-    CASE_EXPECT_TRUE(flags[0][1]);   // 1x1 at (1,0)
-    CASE_EXPECT_TRUE(flags[0][2]);   // 1x1 at (2,0)
-    CASE_EXPECT_FALSE(flags[0][3]);  // 空
-    CASE_EXPECT_FALSE(flags[1][0]);  // 空
+    CASE_EXPECT_TRUE(flags.is_occupied(0, 0));   // 装备
+    CASE_EXPECT_TRUE(flags.is_occupied(1, 0));   // 1x1 at (1,0)
+    CASE_EXPECT_TRUE(flags.is_occupied(2, 0));   // 1x1 at (2,0)
+    CASE_EXPECT_FALSE(flags.is_occupied(3, 0));  // 空
+    CASE_EXPECT_FALSE(flags.is_occupied(0, 1));  // 空
   }
   verify_grid_dump(server);
   sync_and_verify(server, client, config, "Step 2: 拾取材料");
@@ -949,12 +951,12 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
   verify_item_count_consistency(server, kItemTypeId_2x2);
   {
     const auto& flags = server.get_occupy_grid_flag();
-    CASE_EXPECT_TRUE(flags[4][4]);   // (4,4) row=4,col=4
-    CASE_EXPECT_TRUE(flags[4][5]);   // (5,4) row=4,col=5
-    CASE_EXPECT_TRUE(flags[5][4]);   // (4,5) row=5,col=4
-    CASE_EXPECT_TRUE(flags[5][5]);   // (5,5) row=5,col=5
-    CASE_EXPECT_FALSE(flags[4][3]);  // 旁边应为空
-    CASE_EXPECT_FALSE(flags[3][4]);
+    CASE_EXPECT_TRUE(flags.is_occupied(4, 4));   // (4,4) row=4,col=4
+    CASE_EXPECT_TRUE(flags.is_occupied(5, 4));   // (5,4) row=4,col=5
+    CASE_EXPECT_TRUE(flags.is_occupied(4, 5));   // (4,5) row=5,col=4
+    CASE_EXPECT_TRUE(flags.is_occupied(5, 5));   // (5,5) row=5,col=5
+    CASE_EXPECT_FALSE(flags.is_occupied(3, 4));  // 旁边应为空
+    CASE_EXPECT_FALSE(flags.is_occupied(4, 3));
   }
   verify_grid_dump(server);
   sync_and_verify(server, client, config, "Step 7: 添加 2x2 大物品");
@@ -1039,7 +1041,7 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     gpos20.mutable_user_inventory()->set_y(0);
     CASE_EXPECT_TRUE(server.get(gpos20) == nullptr);  // 已释放
     const auto& flags = server.get_occupy_grid_flag();
-    CASE_EXPECT_FALSE(flags[0][2]);  // (2,0) 已释放
+    CASE_EXPECT_FALSE(flags.is_occupied(2, 0));  // (2,0) 已释放
   }
   verify_grid_dump(server);
   sync_and_verify(server, client, config, "Step 10: 消费材料 (完全扣减)");
@@ -1172,8 +1174,8 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
         verify_find_entry_by_id(server, moved->entry_id(), kItemTypeId_1x1, 90, 0);
       }
       const auto& flags = server.get_occupy_grid_flag();
-      CASE_EXPECT_FALSE(flags[0][1]);  // (1,0) 已释放
-      CASE_EXPECT_TRUE(flags[0][2]);   // (2,0) 占用
+      CASE_EXPECT_FALSE(flags.is_occupied(1, 0));  // (1,0) 已释放
+      CASE_EXPECT_TRUE(flags.is_occupied(2, 0));   // (2,0) 占用
     }
     // 整体 Move 后: 旧 entry 已删除, 应无法通过 find_entry_by_id 找到
     verify_not_find_entry_by_id(server, old_entry_id);
@@ -1424,9 +1426,12 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     verify_not_find_entry_by_id(temp, temp_eid1);
     verify_not_find_entry_by_id(temp, temp_eid2);
     // 占格标记应全部清除
-    for (const auto& row : temp.get_occupy_grid_flag()) {
-      for (bool cell : row) {
-        CASE_EXPECT_FALSE(cell);
+    {
+      const auto& flags = temp.get_occupy_grid_flag();
+      for (size_t r = 0; r < flags.row_count(); ++r) {
+        for (size_t c = 0; c < flags.column_count(); ++c) {
+          CASE_EXPECT_FALSE(flags.is_occupied(static_cast<int32_t>(c), static_cast<int32_t>(r)));
+        }
       }
     }
     verify_grid_dump(temp);
@@ -1774,13 +1779,13 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     // 占格标记验证
     {
       const auto& flags = container.grid->get_occupy_grid_flag();
-      CASE_EXPECT_TRUE(flags[0][0]);   // 1x1 at (0,0)
-      CASE_EXPECT_TRUE(flags[0][1]);   // 1x1 at (1,0)
-      CASE_EXPECT_FALSE(flags[1][0]);  // 原来 2x2 占 (0,0)~(1,1), 现在释放
-      CASE_EXPECT_TRUE(flags[0][4]);   // 2x2 at (4,0)
-      CASE_EXPECT_TRUE(flags[0][5]);   // 2x2 at (5,0)→col=5
-      CASE_EXPECT_TRUE(flags[1][4]);   // 2x2 row=1
-      CASE_EXPECT_TRUE(flags[1][5]);
+      CASE_EXPECT_TRUE(flags.is_occupied(0, 0));   // 1x1 at (0,0)
+      CASE_EXPECT_TRUE(flags.is_occupied(1, 0));   // 1x1 at (1,0)
+      CASE_EXPECT_FALSE(flags.is_occupied(0, 1));  // 原来 2x2 占 (0,0)~(1,1), 现在释放
+      CASE_EXPECT_TRUE(flags.is_occupied(4, 0));   // 2x2 at (4,0)
+      CASE_EXPECT_TRUE(flags.is_occupied(5, 0));   // 2x2 at (5,0)→col=5
+      CASE_EXPECT_TRUE(flags.is_occupied(4, 1));   // 2x2 row=1
+      CASE_EXPECT_TRUE(flags.is_occupied(5, 1));
     }
     verify_grid_dump(*container.grid);
   }
@@ -1891,9 +1896,10 @@ CASE_TEST(ItemGridAlgorithm, user_gameplay_simulation) {
     // 占格标记最终一致性
     const auto& sf = server.get_occupy_grid_flag();
     const auto& cf = client.get_occupy_grid_flag();
-    for (size_t r = 0; r < sf.size(); ++r) {
-      for (size_t c = 0; c < sf[r].size(); ++c) {
-        CASE_EXPECT_EQ(sf[r][c], cf[r][c]);
+    for (size_t r = 0; r < sf.row_count(); ++r) {
+      for (size_t c = 0; c < sf.column_count(); ++c) {
+        CASE_EXPECT_EQ(sf.is_occupied(static_cast<int32_t>(c), static_cast<int32_t>(r)),
+                       cf.is_occupied(static_cast<int32_t>(c), static_cast<int32_t>(r)));
       }
     }
 
@@ -3000,6 +3006,59 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_review_issues) {
     if (success.size() == 1) {
       CASE_EXPECT_EQ(get_x(success[0].position().grid_position()), 0);
       CASE_EXPECT_EQ(get_y(success[0].position().grid_position()), 0);
+    }
+  }
+
+  // ============================================================
+  // Case 4: 策略2 + 策略3 混合预订 — 被 ignore_item 整体消耗的格子
+  //         策略2 堆回后必须标记 reserved, 防止策略3 再次预订同一格。
+  //         1x2 背包, limit=99, (1,0) 已有 A×50, ignore=[A×50@(1,0)],
+  //         basics=[{A,250}] → (1,0) 恰好 99, 剩余 52 进 failed_item。
+  // ============================================================
+  CASE_MSG_INFO() << "Case 4: 策略2+策略3 混合预订 (ignore_item 腾位)\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 1, 2, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+
+    // (1,0) 已有 A×50
+    {
+      PROJECT_NAMESPACE_ID::DItemInstance inst;
+      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+      inst.mutable_item_basic()->set_count(50);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(1);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
+      CASE_EXPECT_TRUE(grid.load(config, inst));
+    }
+
+    // 消耗 A×50@(1,0) (整体消耗), 兑换 A×250
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 250)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic_at(kItemTypeId_1x1, 50, 1, 0)};
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = call_find(grid, basics, success, failed, ignore);
+    CASE_EXPECT_TRUE(ok);
+
+    // 统计每个位置规划的总量
+    int64_t planned_at_00 = 0;
+    int64_t planned_at_10 = 0;
+    for (const auto& s : success) {
+      if (get_x(s.position().grid_position()) == 0 && get_y(s.position().grid_position()) == 0) {
+        planned_at_00 += s.count();
+      } else if (get_x(s.position().grid_position()) == 1 && get_y(s.position().grid_position()) == 0) {
+        planned_at_10 += s.count();
+      }
+    }
+    // (1,0) 被整体消耗后, 策略2 堆回 + 策略3 扫描不能超过 limit=99
+    CASE_EXPECT_LE(planned_at_10, 99);
+    // (0,0) 最多 99
+    CASE_EXPECT_LE(planned_at_00, 99);
+    // 剩余 250 - 99 - 99 = 52 进 failed_item
+    CASE_EXPECT_EQ(1u, failed.size());
+    if (failed.size() == 1) {
+      CASE_EXPECT_EQ(failed[0].count(), 52);
     }
   }
 }

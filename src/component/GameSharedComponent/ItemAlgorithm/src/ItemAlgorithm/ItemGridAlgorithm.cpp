@@ -12,6 +12,44 @@ ITEM_ALGORITHM_NAMESPACE_BEGIN
 
 namespace item_algorithm {
 
+// ============================================================
+// ItemGridOccupyFlag — 背包占用位图
+// ============================================================
+
+void ItemGridOccupyFlag::resize(size_t rows, size_t cols) {
+  row_count_ = rows;
+  column_count_ = cols;
+  words_per_row_ = (cols + 63) / 64;
+  data_.assign(rows * words_per_row_, 0);
+}
+
+void ItemGridOccupyFlag::clear() {
+  std::fill(data_.begin(), data_.end(), 0);
+}
+
+bool ItemGridOccupyFlag::is_occupied(int32_t x, int32_t y) const {
+  if (y < 0 || static_cast<size_t>(y) >= row_count_ || x < 0 || static_cast<size_t>(x) >= column_count_) {
+    return false;
+  }
+  const size_t word_index = static_cast<size_t>(y) * words_per_row_ + (static_cast<size_t>(x) >> 6);
+  const size_t bit_index = static_cast<size_t>(x) & 63;
+  return (data_[word_index] >> bit_index) & 1u;
+}
+
+void ItemGridOccupyFlag::set(int32_t x, int32_t y, bool occupied) {
+  if (y < 0 || static_cast<size_t>(y) >= row_count_ || x < 0 || static_cast<size_t>(x) >= column_count_) {
+    return;
+  }
+  const size_t word_index = static_cast<size_t>(y) * words_per_row_ + (static_cast<size_t>(x) >> 6);
+  const size_t bit_index = static_cast<size_t>(x) & 63;
+  uint64_t& word = data_[word_index];
+  if (occupied) {
+    word |= (uint64_t{1} << bit_index);
+  } else {
+    word &= ~(uint64_t{1} << bit_index);
+  }
+}
+
 ItemGridAlgorithm::ItemGridAlgorithm() = default;
 ItemGridAlgorithm::~ItemGridAlgorithm() = default;
 
@@ -37,10 +75,7 @@ void ItemGridAlgorithm::init(ItemGridAlgorithmMode mode, int32_t row_size, int32
       ITEM_ALGORITHM_LOG_ERROR_FMT("init called with invalid column_size={}, reset to 1", column_size_);
       column_size_ = 1;
     }
-    occupy_grid_flag_.resize(static_cast<size_t>(row_size_));
-    for (auto& row : occupy_grid_flag_) {
-      row.resize(static_cast<size_t>(column_size_), false);
-    }
+    occupy_grid_flag_.resize(static_cast<size_t>(row_size_), static_cast<size_t>(column_size_));
   }
 
   ITEM_ALGORITHM_LOG_DEBUG_FMT("init grid rows={} cols={} position_type={} mode={}", row_size_, column_size_,
@@ -175,7 +210,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
     return checked_request;
   }
-  std::vector<std::vector<bool>> tmp_grid_flag;
+  ItemGridOccupyFlag tmp_grid_flag;
   if (is_occupy_flag()) {
     tmp_grid_flag = occupy_grid_flag_;
   }
@@ -362,7 +397,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
             for (int32_t dr = 0; dr < item_row; ++dr) {
               for (int32_t dc = 0; dc < item_col; ++dc) {
-                if (tmp_grid_flag[static_cast<size_t>(target_pos.y + dr)][static_cast<size_t>(target_pos.x + dc)]) {
+                if (tmp_grid_flag.is_occupied(target_pos.x + dc, target_pos.y + dr)) {
                   result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
                   result.failed_index = static_cast<int32_t>(i);
                   ITEM_ALGORITHM_LOG_WARNING_FMT(
@@ -372,7 +407,7 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
                       PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
                   return checked_request;
                 }
-                tmp_grid_flag[static_cast<size_t>(target_pos.y + dr)][static_cast<size_t>(target_pos.x + dc)] = true;
+                tmp_grid_flag.set(target_pos.x + dc, target_pos.y + dr, true);
               }
             }
           }
@@ -1232,7 +1267,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
   // ============================================================
   // Phase 1 (Sub): 虚拟移除所有整体 Sub 的条目, 生成临时格子蒙版
   // ============================================================
-  std::vector<std::vector<bool>> tmp_grid_flag;
+  ItemGridOccupyFlag tmp_grid_flag;
   if (is_occupy_flag()) {
     tmp_grid_flag = occupy_grid_flag_;
   }
@@ -1250,7 +1285,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
         for (int32_t dc = 0; dc < op.item_col; ++dc) {
           int32_t r = op.position.y + dr;
           int32_t c = op.position.x + dc;
-          tmp_grid_flag[static_cast<size_t>(r)][static_cast<size_t>(c)] = false;
+          tmp_grid_flag.set(c, r, false);
         }
       }
     }
@@ -1332,7 +1367,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
     if (is_occupy_flag()) {
       for (int32_t dr = 0; dr < op.item_row; ++dr) {
         for (int32_t dc = 0; dc < op.item_col; ++dc) {
-          if (tmp_grid_flag[static_cast<size_t>(op.position.y + dr)][static_cast<size_t>(op.position.x + dc)]) {
+          if (tmp_grid_flag.is_occupied(op.position.x + dc, op.position.y + dr)) {
             error_code = PROJECT_NAMESPACE_ID::EN_ERR_ITEM_POSITION_OCCUPIED;
             ITEM_ALGORITHM_LOG_WARNING_FMT(
                 "check_move failed: area ({},{}) occupied by pending placement, "
@@ -1340,7 +1375,7 @@ ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
                 op.position.x, op.position.y, error_code, PROJECT_NAMESPACE_ID::EnErrorCode_Name(error_code));
             return checked_request;
           }
-          tmp_grid_flag[static_cast<size_t>(op.position.y + dr)][static_cast<size_t>(op.position.x + dc)] = true;
+          tmp_grid_flag.set(op.position.x + dc, op.position.y + dr, true);
         }
       }
     }
@@ -1716,9 +1751,7 @@ void ItemGridAlgorithm::clear() {
   entry_id_index_.clear();
   item_count_cache_.clear();
 
-  for (auto& row : occupy_grid_flag_) {
-    std::fill(row.begin(), row.end(), false);
-  }
+  occupy_grid_flag_.clear();
 
   ITEM_ALGORITHM_LOG_DEBUG("clear grid");
 }
@@ -1798,7 +1831,7 @@ bool ItemGridAlgorithm::is_empty() const { return item_groups_.empty(); }
 
 const ItemGridAlgorithm::item_group_map_type& ItemGridAlgorithm::get_all_groups() const { return item_groups_; }
 
-const std::vector<std::vector<bool>>& ItemGridAlgorithm::get_occupy_grid_flag() const { return occupy_grid_flag_; }
+const ItemGridOccupyFlag& ItemGridAlgorithm::get_occupy_grid_flag() const { return occupy_grid_flag_; }
 
 int32_t ItemGridAlgorithm::get_row_size() const { return row_size_; }
 
@@ -2002,7 +2035,7 @@ bool ItemGridAlgorithm::find_positions_inner(
   }
 
   // 批次内格子预留副本 (care_item_size 模式)：记录已分配格子，避免批次内冲突，不修改实际背包数据
-  std::vector<std::vector<bool>> reserved;
+  ItemGridOccupyFlag reserved;
   if (is_occupy_flag()) {
     reserved = occupy_grid_flag_;
 
@@ -2034,7 +2067,7 @@ bool ItemGridAlgorithm::find_positions_inner(
               int32_t rr = pos.y + r;
               int32_t cc = pos.x + c;
               if (rr >= 0 && rr < row_size_ && cc >= 0 && cc < column_size_) {
-                reserved[static_cast<size_t>(rr)][static_cast<size_t>(cc)] = false;
+                reserved.set(cc, rr, false);
               }
             }
           }
@@ -2141,7 +2174,7 @@ bool ItemGridAlgorithm::find_positions_inner(
       }
       for (int32_t r = 0; r < item_rows; ++r) {
         for (int32_t c = 0; c < item_cols; ++c) {
-          if (reserved[static_cast<size_t>(y + r)][static_cast<size_t>(x + c)]) {
+          if (reserved.is_occupied(x + c, y + r)) {
             return false;
           }
         }
@@ -2153,7 +2186,7 @@ bool ItemGridAlgorithm::find_positions_inner(
     auto mark_reserved = [&](int32_t x, int32_t y) {
       for (int32_t r = 0; r < item_rows; ++r) {
         for (int32_t c = 0; c < item_cols; ++c) {
-          reserved[static_cast<size_t>(y + r)][static_cast<size_t>(x + c)] = true;
+          reserved.set(x + c, y + r, true);
         }
       }
     };
@@ -2224,6 +2257,9 @@ bool ItemGridAlgorithm::find_positions_inner(
         if (check_pos_ok(out_pos)) {
           push_success(out_pos, put);
           pending_existing_extra[kv.first] = already_planned + put;
+          // 标记 reserved, 防止策略1/3 把该格当作空闲格重复预订
+          // (普通已有条目的格子本为 true, 重复标记无副作用; 被 ignore_item 释放的格子需重新标记)
+          mark_reserved(kv.first.x, kv.first.y);
           remaining -= put;
           ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics: stack to existing type={} at ({},{}) put={}",
                                        basic.type_id(), kv.first.x, kv.first.y, put);
@@ -2463,7 +2499,7 @@ bool ItemGridAlgorithm::check_collision(int32_t x, int32_t y, int32_t item_row_s
       if (r < 0 || r >= row_size_ || c < 0 || c >= column_size_) {
         return true;
       }
-      if (occupy_grid_flag_[static_cast<size_t>(r)][static_cast<size_t>(c)]) {
+      if (occupy_grid_flag_.is_occupied(c, r)) {
         return true;
       }
     }
@@ -2482,7 +2518,7 @@ void ItemGridAlgorithm::set_grid_flag(int32_t x, int32_t y, int32_t item_row_siz
       int32_t r = y + dr;
       int32_t c = x + dc;
       if (r >= 0 && r < row_size_ && c >= 0 && c < column_size_) {
-        occupy_grid_flag_[static_cast<size_t>(r)][static_cast<size_t>(c)] = occupied;
+        occupy_grid_flag_.set(c, r, occupied);
       }
     }
   }
