@@ -1005,7 +1005,7 @@ CASE_TEST(lobbysvr_user_team, member_events_manage_pending_admissions) {
     protobuf_copy_message(*invited->mutable_invitee(), team_test::make_user_key(kOtherUserId));
     *invited->mutable_expired_timepoint() = protobuf_from_system_clock(valid_expiry());
     CASE_EXPECT_TRUE(team_test::inject_event_message(test, private_chain, action));
-    // 非本人事件必须被忽略: 以私有频道水位确认事件已处理完毕, 再断言未入列
+    // 非本人事件必须被忽略: 以私有频道已处理序号确认事件已处理完毕, 再断言未入列
     CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
       return user_inst->get_user_team_manager().get_processed_private_chat_channel_sequence() >=
              private_chain.sequence;

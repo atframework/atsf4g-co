@@ -81,7 +81,7 @@ class user_team_manager {
   team_join_request_ptr_t get_pending_join_request(const atfw::team::DTeamKey& team_key) const noexcept;
 
   team_invitation_ptr_t get_pending_invitation(const atfw::team::DTeamKey& team_key) const noexcept;
-  // 个人频道已处理事件水位(随 table 落地, 用于去重迟到事件)
+  // 个人频道已处理事件的最大 sequence(随 table 落地, 用于去重迟到事件)
   inline int64_t get_processed_private_chat_channel_sequence() const noexcept {
     return processed_private_chat_channel_sequence_;
   }

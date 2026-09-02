@@ -779,7 +779,7 @@ CASE_TEST(lobbysvr_user_team, create_team_failure_passthrough_and_wal_replay) {
 }
 
 // SEQ-01: 快照 saved_action_sequence=N 时, 重放阶段 <=N 的日志不应用(其效果由快照覆盖), >N 按 hash chain 应用;
-// 重复/旧日志不重复应用也不重复下发 dirty; hash 不匹配的事件不应用、不推进水位, 由后续快照恢复。
+// 重复/旧日志不重复应用也不重复下发 dirty; hash 不匹配的事件不应用、不推进已确认序号, 由后续快照恢复。
 CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -870,7 +870,7 @@ CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay)
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
         test, team_test::make_incremental_event(team_test::make_team_channel_key(kTeamId), 3, dup_msgs)));
   }
-  // 旧日志(水位之下): 忽略
+  // 旧日志(sequence 不高于已保存序号): 忽略
   {
     std::vector<atframework::dtmq::DChannelMessage> old_msgs{skipped_msg};
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
@@ -887,7 +887,7 @@ CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay)
     CASE_EXPECT_TRUE(view.actions.empty());
   }
 
-  // hash 不匹配: 事件不应用、不推进水位
+  // hash 不匹配: 事件不应用、不推进已确认序号
   auto mismatch_msg = add_member_message(4, kMismatchMemberId);
   uint64_t real_hash = 0;
   {
@@ -910,7 +910,7 @@ CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay)
     CASE_EXPECT_TRUE(view.actions.empty());
   }
 
-  // hash 不匹配后由后续快照恢复权威状态(新快照覆盖, 重放仍遵守 saved 水位)
+  // hash 不匹配后由后续快照恢复权威状态(新快照覆盖, 重放仍遵守 saved 序号)
   atfw::team::DTeamStorage recovery_storage = team_test::make_team_storage(kTeamId, 4);
   team_test::add_storage_member(recovery_storage, team_test::kCaptainUserId,
                                 team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
@@ -1198,7 +1198,7 @@ CASE_TEST(lobbysvr_user_team, stale_destroy_does_not_remove_new_generation) {
     CASE_EXPECT_TRUE(!team->is_destroyed());
   }
 
-  // 3a. 旧代际 destroy 日志重投(与旧代际销毁同一条日志, 不高于订阅端已处理水位): 忽略, 新代际不受影响
+  // 3a. 旧代际 destroy 日志重投(与旧代际销毁同一条日志, 不高于订阅端已处理序号): 忽略, 新代际不受影响
   {
     std::vector<atframework::dtmq::DChannelMessage> stale_msgs{team_test::make_destroy_log_message(1)};
     team_test::chain_message_hashes(stale_msgs, 0);
@@ -1300,7 +1300,7 @@ CASE_TEST(lobbysvr_user_team, heartbeat_reports_watermark_and_throttles) {
     return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role();
   }));
 
-  // 应用两条频道事件, 让已确认水位非零
+  // 应用两条频道事件, 让已确认序号非零
   team_test::channel_event_chain team_chain;
   team_chain.channel_key = team_test::make_team_channel_key(kTeamId);
   {
@@ -1341,7 +1341,7 @@ CASE_TEST(lobbysvr_user_team, heartbeat_reports_watermark_and_throttles) {
   team_test::pump_rounds(test, 2);
   CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.heartbeat_reqs.size()));
 
-  // 未达到边界仍节流; 达到边界后再发, 上报的水位不变(只增不减)
+  // 未达到边界仍节流; 达到边界后再发, 上报的已确认序号不变(只增不减)
   team_test::now_offset_guard::advance(team_test::get_heartbeat_interval() - std::chrono::seconds{1});
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   team_test::pump_rounds(test, 2);
@@ -1787,8 +1787,8 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
 }
 
 // DUMP-01: manager table dump/init 往返恢复 team_type/current(含 channel/captain/role)、自己的 pending
-// invitation/join-request 与个人频道消费水位; pending-to-exit 不落地; 非法 team type/空 channel/已过期
-// pending 不恢复; 恢复后旧个人事件(<=水位)幂等去重不重复落地, >水位事件正常处理;
+// invitation/join-request 与个人频道已处理序号; pending-to-exit 不落地; 非法 team type/空 channel/已过期
+// pending 不恢复; 恢复后旧个人事件(<=已处理序号)幂等去重不重复落地, >已处理序号事件正常处理;
 // 恢复的队伍经快照重建 user_team 缓存; last_exit 信息不落地(恢复的队伍不在退出流程)。
 CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team_and_pendings) {
   atfw::testing::runtime test;
@@ -1827,7 +1827,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   // 先加入 671 再切到 672: 671 进入 pending-to-exit(不应落地), 672 为 current
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, first_user, private_chain, kAbandonedTeamId));
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, first_user, private_chain, kCurrentTeamId));
-  // 自己的 pending 邀请/加入请求(个人频道水位随之推进到 4)
+  // 自己的 pending 邀请/加入请求(个人频道已处理序号随之推进到 4)
   CASE_EXPECT_TRUE(inject_self_invited_event(test, private_chain, kFirstUserId, kInvitedTeamId, valid_expiry));
   CASE_EXPECT_TRUE(
       inject_self_apply_join_request_event(test, private_chain, kFirstUserId, kJoinRequestTeamId, valid_expiry));
@@ -1854,7 +1854,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
         CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, group.current().user_role());
       }
     }
-    // 自己的 pending 落地(恢复后不被水位跳过也不丢失)
+    // 自己的 pending 落地(恢复后不被已处理序号跳过也不丢失)
     CASE_EXPECT_EQ(1, team_data.pending_invitation_size());
     if (team_data.pending_invitation_size() > 0) {
       CASE_EXPECT_EQ(kInvitedTeamId, team_data.pending_invitation(0).team_key().team_id());
@@ -1910,7 +1910,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   }
   CASE_EXPECT_TRUE(run_init_from_table(test, second_user, dumped_table));
 
-  // 恢复结果: 水位、current 队伍、pending; 非法/过期条目不恢复; 恢复的队伍不在退出流程(last_exit 不落地)
+  // 恢复结果: 个人频道已处理序号、current 队伍、pending; 非法/过期条目不恢复; 恢复的队伍不在退出流程(last_exit 不落地)
   CASE_EXPECT_EQ(4, static_cast<int>(
                         second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
   auto restored_team =
@@ -1979,7 +1979,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
     CASE_EXPECT_TRUE(snapshot.snapshot().configure().disable_join_request());
   }
 
-  // 幂等重放: <=水位的旧个人事件不重复落地, >水位事件正常处理
+  // 幂等重放: <=已处理序号的旧个人事件不重复落地, >已处理序号事件正常处理
   team_test::channel_event_chain second_private_chain;
   second_private_chain.channel_key = second_private_channel_key;
   // seq1: 旧 reject_invitation(673) -> 跳过, pending 保留
@@ -2004,7 +2004,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   CASE_EXPECT_EQ(4, static_cast<int>(
                         second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
 
-  // seq5: 同一事件的更新版本(>水位)正常落地一次, 水位推进
+  // seq5: 同一事件的更新版本(>已处理序号)正常落地一次, 已处理序号推进
   CASE_EXPECT_TRUE(
       inject_self_invited_event(test, second_private_chain, kSecondUserId, kLateInviteTeamId, valid_expiry));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
@@ -2013,7 +2013,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   CASE_EXPECT_EQ(5, static_cast<int>(
                         second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
 
-  // 往返稳定: 新实例的 dump 保持水位/current/pending
+  // 往返稳定: 新实例的 dump 保持已处理序号/current/pending
   {
     auto redumped = dump_team_table(*second_user);
     CASE_EXPECT_EQ(5, static_cast<int>(redumped.team_data().processed_private_chat_channel_sequence()));
@@ -2120,7 +2120,7 @@ CASE_TEST(lobbysvr_user_team, user_get_info_exports_only_running_team_with_trimm
   CASE_EXPECT_EQ(kRunningTeamId, exported.snapshot().team_key().team_id());
   CASE_EXPECT_TRUE(exported.snapshot().configure().disable_join_request());
 
-  // 成员投影裁剪契约: 内部字段剥除, 原始打包共享数据不回填, 解包数据随 unpacked_member_data 下发
+  // 成员视图裁剪契约: 内部字段剥除, 原始打包共享数据不回填, 解包数据随 unpacked_member_data 下发
   CASE_EXPECT_EQ(2, exported.snapshot().member_size());
   for (const auto& member : exported.snapshot().member()) {
     team_test::expect_member_projection_clean(member);

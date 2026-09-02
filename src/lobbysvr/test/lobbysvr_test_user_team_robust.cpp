@@ -114,7 +114,7 @@ atfw::team::DTeamAction make_member_update_action(uint64_t user_id, const std::s
   return action;
 }
 
-// 填充邀请公共字段(开始/过期时间确定; 队伍频道事件携带被邀请人私有频道, dump 投影必须裁剪)
+// 填充邀请公共字段(开始/过期时间确定; 队伍频道事件携带被邀请人私有频道, dump 视图必须裁剪)
 void fill_invitation(atfw::team::DTeamInvitation& invitation, int64_t team_id, uint64_t invitee_id,
                      std::chrono::system_clock::time_point expired_timepoint, bool pollute_channel = true) {
   protobuf_copy_message(*invitation.mutable_team_key(), team_test::make_team_key(team_id));
@@ -129,7 +129,7 @@ void fill_invitation(atfw::team::DTeamInvitation& invitation, int64_t team_id, u
   }
 }
 
-// 填充加入请求公共字段(私有频道/router 属于内部路由字段, dump 投影必须裁剪)
+// 填充加入请求公共字段(私有频道/router 属于内部路由字段, dump 视图必须裁剪)
 void fill_join_request(atfw::team::DTeamJoinRequest& join_request, int64_t team_id, uint64_t requester_id,
                        std::chrono::system_clock::time_point expired_timepoint, bool pollute_channel = true) {
   protobuf_copy_message(*join_request.mutable_team_key(), team_test::make_team_key(team_id));
@@ -202,7 +202,7 @@ atfw::team::DTeamMemberAction make_personal_remove_action(int64_t team_id, uint6
 //   dirty increase 数不增加;
 // - 同一 add_member(self) 重投: self 首次加入只触发一次本端 shared data flush(SS send_message 数不增加);
 // - 同一 add_invitation 重投: 队伍级 pending 只有一条, dirty 不重复;
-// - 同一 invited 个人通知重投: manager 自己的 pending 不变, 消费水位不前进, 不重复置脏;
+// - 同一 invited 个人通知重投: manager 自己的 pending 不变, 已处理序号不前进, 不重复置脏;
 // - 重复消息不腐蚀 WAL 链: 后续更高 sequence 的合法事件仍正常处理。
 CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
   atfw::testing::runtime test;
@@ -375,7 +375,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
     CASE_EXPECT_TRUE(nullptr != invitation);
     if (nullptr != invitation) {
       CASE_EXPECT_EQ(invitation_expired_ts.seconds(), invitation->expired_timepoint().seconds());
-      // dump 投影裁剪内部路由字段
+      // dump 视图裁剪内部路由字段
       CASE_EXPECT_TRUE(invitation->invitee_private_channel().channel_id().empty());
     }
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
@@ -393,7 +393,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
     return nullptr != member && "1.0.2-robust01" == member->client_version();
   }));
 
-  // 5. 同一 invited 个人通知投递两次: manager 自己的 pending 不变, 水位不前进, 不重复置脏
+  // 5. 同一 invited 个人通知投递两次: manager 自己的 pending 不变, 已处理序号不前进, 不重复置脏
   const auto invited_expired = team_test::now_offset_guard::logical_now() + std::chrono::hours(1);
   const auto invited_expired_ts = protobuf_from_system_clock(invited_expired);
   auto invited_batch =
@@ -434,7 +434,7 @@ CASE_TEST(lobbysvr_user_team, robust_duplicate_events_idempotent) {
 // ROBUST-02: 乱序事件最终一致。
 // - update 先于 add(同一 WAL 批次内保证应用顺序): member_update 不会为未知成员创建幽灵缓存,
 //   随后的 add_member 以其自身业务字段落地(成员字段逐项断言);
-// - 过期/乱序的 WAL 同步重投被 finished 水位拒绝(kIgnore), 不改变已落地状态;
+// - 过期/乱序的 WAL 同步重投被已保存序号拒绝(kIgnore), 不改变已落地状态;
 // - 权威快照重建后终态与正序一致(快照后 WAL 日志存储被清空, 后续增量按空存储重新起 hash 链);
 // - admit 乱序: approve 先于 add 到达为幂等无操作, add_member 落地后迟到的 add_invitation/add_join_request
 //   被成员身份抑制, 终态与正序(add -> approve)一致: 成员在队、两类 pending 均无残留。
@@ -538,7 +538,7 @@ CASE_TEST(lobbysvr_user_team, robust_out_of_order_events_converge) {
                           team_test::count_actions_of_case(view, atfw::team::DTeamAction::kAddMember)));
   }
 
-  // A2. 过期/乱序的 WAL 同步重投(同一批次再次下发): 按 finished 水位整条忽略, 不改变已落地状态
+  // A2. 过期/乱序的 WAL 同步重投(同一批次再次下发): 按已保存序号整条忽略, 不改变已落地状态
   CASE_EXPECT_TRUE(deliver_chain_batch(test, team_chain, update_then_add_batch));
   team_test::pump_rounds(test, 2);
   {
@@ -822,7 +822,7 @@ CASE_TEST(lobbysvr_user_team, robust_late_events_after_channel_destroy_ignored) 
   CASE_EXPECT_EQ(0, static_cast<int>(count_running_teams(*user_inst)));
   expect_team_absent_in_table(*user_inst, kTeamId);
   // 频道销毁时 room 已不存在: kDestroy 分支 send_exit=false, 不得产生任何 remove_member 退出上行。
-  // settle 后取上行水位; 迟到事件不得使水位增加
+  // settle 后记录上行请求数; 迟到事件不得使其增加
   team_test::pump_rounds(test, 4);
   const size_t send_message_after_destroy = ss_capture.send_message_reqs.size();
   CASE_EXPECT_EQ(0, static_cast<int>(send_message_after_destroy));
@@ -993,7 +993,7 @@ CASE_TEST(lobbysvr_user_team, robust_snapshot_rebuild_cleans_pendings_and_indexe
     CASE_EXPECT_TRUE(nullptr != find_pending_join_request(snapshot, kOldRequesterId));
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, snapshot.snapshot().configure().invite_role());
   }
-  // 客户端快照投影: 内部字段裁剪, 成员共享数据解包下发
+  // 客户端快照视图: 内部字段裁剪, 成员共享数据解包下发
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     return 1 == view.snapshots.size();
@@ -1183,7 +1183,7 @@ CASE_TEST(lobbysvr_user_team, robust_snapshot_rebuild_cleans_pendings_and_indexe
 // =============================================================================
 
 // §5.6 ROBUST-01: 个人频道错误 Any(类型不符/无法解包)的 action 不修改任一缓存;
-// 水位仍推进(事件已消费), 后续更高 sequence 的合法 action 正常处理。
+// 已处理序号仍推进(事件已消费), 后续更高 sequence 的合法 action 正常处理。
 CASE_TEST(lobbysvr_user_team, robust_bad_any_personal_event_ignored) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -1210,7 +1210,7 @@ CASE_TEST(lobbysvr_user_team, robust_bad_any_personal_event_ignored) {
   private_chain.channel_key = private_channel_key;
   team_test::now_offset_guard time_guard;
 
-  // Leg A: type_url 正确但 value 损坏 -> 业务 dispatch 触发、UnpackTo 失败被忽略, 水位推进;
+  // Leg A: type_url 正确但 value 损坏 -> 业务 dispatch 触发、UnpackTo 失败被忽略, 已处理序号推进;
   {
     atframework::dtmq::DChannelMessage bad_msg;
     atfw::team::DTeamMemberAction shell;
@@ -1479,7 +1479,7 @@ CASE_TEST(lobbysvr_user_team, robust_bad_shared_data_any_skips_only_that_key) {
         CASE_EXPECT_FALSE(snapshot.shared_team_data(0).battle().matching());
       }
     }
-    // increase 投影按原始 action 透传(客户端契约), 缓存侧已验证只应用合法 key
+    // increase 视图按原始 action 透传(客户端契约), 缓存侧已验证只应用合法 key
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_TRUE(
         !team_test::find_actions_of_case(view, atfw::team::DTeamAction::kTeamUpdate).empty());
@@ -1490,7 +1490,7 @@ CASE_TEST(lobbysvr_user_team, robust_bad_shared_data_any_skips_only_that_key) {
 
 // §5.6 ROBUST-04: 夹具卫生——用例入口时全局时间 offset 无泄漏(组内前序用例 teardown 均已复位);
 // 同一进程内两个 runtime 顺序跑同一流程(不同 id), 单例/dirty handle/订阅状态互不污染。
-// 注: dtmq 订阅管理器为进程级单例且频道水位不回退, 因此两遍必须使用不同频道 id(§4.3 增补约定)。
+// 注: dtmq 订阅管理器为进程级单例且频道已消费序号不回退, 因此两遍必须使用不同频道 id(§4.3 增补约定)。
 CASE_TEST(lobbysvr_user_team, robust_fixture_time_and_runtime_hygiene) {
   // 组内前序用例 teardown 若泄漏 offset, 此处立即暴露(standalone 时恒为 0)
   CASE_EXPECT_TRUE(atfw::util::time::time_utility::get_global_now_offset() == std::chrono::seconds::zero());

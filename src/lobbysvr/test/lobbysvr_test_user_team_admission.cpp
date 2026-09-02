@@ -609,7 +609,7 @@ user_team::ptr_t setup_running_team(atfw::testing::runtime& test, const user::pt
 // ADM-TEAM-01: 快照加载多条有效/已过期/无效 key 的邀请与加入请求:
 // - 只保留有效项, 完整字段不丢, dump 按过期时间升序导出并剥掉内部路由字段;
 // - 更高 custom_data_sequence 的新快照权威重建: 已删除的条目被淘汰、同 key 条目内容被覆盖;
-// - 低于水位的过期快照不得覆盖当前缓存(序号水位线)。
+// - custom_data_sequence 低于已应用值的过期快照不得覆盖当前缓存。
 CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -705,7 +705,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
     *invalid->mutable_expired_timepoint() = protobuf_from_system_clock(base + std::chrono::seconds(300));
   }
 
-  // setup_running_team 的初始快照已占用 custom_data_sequence=1, 携带 admission 的快照必须提升水位
+  // setup_running_team 的初始快照已占用 custom_data_sequence=1, 携带 admission 的快照必须使用更大的序号
   CASE_EXPECT_TRUE(team_test::receive_channel_event(
       test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), 1, 0, &storage_v1,
                                            /*custom_data_sequence=*/2)));
@@ -797,7 +797,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_snapshot_load_filters_and_orders) {
     }
   }
 
-  // 低于水位(custom_data_sequence=2 < 当前 3)的过期快照: 不得覆盖当前缓存
+  // 序号低于已应用值(custom_data_sequence=2 < 当前 3)的过期快照: 不得覆盖当前缓存
   atfw::team::DTeamStorage storage_stale = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(storage_stale, team_test::kCaptainUserId,
                                 team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
@@ -959,7 +959,7 @@ CASE_TEST(lobbysvr_user_team, team_add_invitation_upsert_and_projection) {
     CASE_EXPECT_TRUE(nullptr == find_pending_invitation(snapshot, kUserId));
   }
 
-  // 5. dirty 投影: 私有通知频道被剥掉, admission 原始数据保留(快照/增量不同契约见 §2.3)
+  // 5. dirty 视图: 私有通知频道被剥掉, admission 原始数据保留(快照/增量不同契约见 §2.3)
   //    (5 条注入: I1/I2/I1 原位覆盖/I1 重排/成员忽略, 成员忽略的动作也照常下发)
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
@@ -1101,7 +1101,7 @@ CASE_TEST(lobbysvr_user_team, team_invitation_result_removes_pending) {
     CASE_EXPECT_EQ(1, snapshot.snapshot().pending_join_request_size());
   }
 
-  // 4. dirty 投影: approve/reject 剥掉私有频道, 保留完整业务字段(room 写入日志的是规范化后的完整记录)
+  // 4. dirty 视图: approve/reject 剥掉私有频道, 保留完整业务字段(room 写入日志的是规范化后的完整记录)
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     auto approves = team_test::find_actions_of_case(view, atfw::team::DTeamAction::kApproveInvitation);
@@ -1247,7 +1247,7 @@ CASE_TEST(lobbysvr_user_team, team_add_join_request_upsert_and_projection) {
     CASE_EXPECT_TRUE(nullptr == find_pending_join_request(snapshot, team_test::kCaptainUserId));
   }
 
-  // 5. dirty 投影: 剥 channel/router, 原始 member_admission_data 不下发,
+  // 5. dirty 视图: 剥 channel/router, 原始 member_admission_data 不下发,
   //    解包后的成员共享数据随 OneAction.shared_member_data 下发
   //    (5 条注入: R1/R2/R1 原位覆盖/R1 重排/成员忽略, 成员忽略的动作也照常下发)
   {
@@ -1392,7 +1392,7 @@ CASE_TEST(lobbysvr_user_team, team_join_request_result_removes_pending) {
     CASE_EXPECT_EQ(1, snapshot.snapshot().pending_invitation_size());
   }
 
-  // 4. dirty 投影: approve/reject 剥 channel/router, 保留完整业务字段(含 member_admission_data 原始数据)
+  // 4. dirty 视图: approve/reject 剥 channel/router, 保留完整业务字段(含 member_admission_data 原始数据)
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     auto approves = team_test::find_actions_of_case(view, atfw::team::DTeamAction::kApproveJoinRequest);
@@ -1610,7 +1610,7 @@ CASE_TEST(lobbysvr_user_team, team_admission_expiry_boundary_and_cleanup) {
     CASE_EXPECT_EQ(2, snapshot.snapshot().pending_join_request_size());
   }
 
-  // expiry == logical now 的插入视为过期: 动作事件已处理(dirty 投影照常下发)但 upsert 拒绝, 不进入缓存
+  // expiry == logical now 的插入视为过期: 动作事件已处理(dirty 视图照常下发)但 upsert 拒绝, 不进入缓存
   CASE_EXPECT_TRUE(inject_team_invitation_action(
       test, team_chain, atfw::team::DTeamAction::kAddInvitation,
       make_full_invitation(kTeamId, team_test::kCaptainUserId, kInviteeBoundary, base,
@@ -2251,8 +2251,8 @@ CASE_TEST(lobbysvr_user_team, self_pending_second_refresh_and_expired_reapply_pr
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// ADM-SELF-10: 个人频道 sequence 小于/等于水位不重复处理, 大于水位只处理一次;
-// 水位变化设置 manager dirty 并随 table dump 正确落地。
+// ADM-SELF-10: 个人频道 sequence 小于/等于已处理序号不重复处理, 大于已处理序号只处理一次;
+// 已处理序号变化设置 manager dirty 并随 table dump 正确落地。
 CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -2290,7 +2290,7 @@ CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
     return action;
   };
 
-  // 1. seq=1 的邀请事件: 正常处理, 水位前进到 1, manager 置脏
+  // 1. seq=1 的邀请事件: 正常处理, 已处理序号前进到 1, manager 置脏
   auto action_a = make_invited_action(kTeamA);
   std::vector<atframework::dtmq::DChannelMessage> msgs_a{team_test::make_event_message(1, action_a)};
   uint64_t hash_a = team_test::chain_message_hashes(msgs_a, 0);
@@ -2302,7 +2302,7 @@ CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
   CASE_EXPECT_EQ(1, mgr.get_processed_private_chat_channel_sequence());
   CASE_EXPECT_TRUE(mgr.is_dirty());
 
-  // 水位变化随 table dump 落地
+  // 已处理序号变化随 table dump 落地
   {
     PROJECT_NAMESPACE_ID::table_user table;
     rpc::context ctx{rpc::context::create_without_task()};
@@ -2312,8 +2312,8 @@ CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
   mgr.clear_dirty();
   CASE_EXPECT_FALSE(mgr.is_dirty());
 
-  // 2. 重放 seq<=1 的旧事件: 不重复处理(内容不变化), 水位不前进, 不置脏
-  //    (重放是负路径, 订阅层或 manager 水位任一拦截都满足契约, 不断言注入本身的结果码)
+  // 2. 重放 seq<=1 的旧事件: 不重复处理(内容不变化), 已处理序号不前进, 不置脏
+  //    (重放是负路径, 订阅层或 manager 已处理序号任一拦截都满足契约, 不断言注入本身的结果码)
   team_test::receive_channel_event(test, team_test::make_incremental_event(private_channel_key, 1, msgs_a));
   team_test::pump_rounds(test, 3);
   CASE_EXPECT_EQ(1, mgr.get_processed_private_chat_channel_sequence());
@@ -2324,7 +2324,7 @@ CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
     CASE_EXPECT_FALSE(!!mgr.get_pending_invitation(team_test::make_team_key(kTeamB)));
   }
 
-  // 3. seq=2 的新事件: 只处理一次, 水位前进到 2 并置脏
+  // 3. seq=2 的新事件: 只处理一次, 已处理序号前进到 2 并置脏
   auto action_b = make_invited_action(kTeamB);
   std::vector<atframework::dtmq::DChannelMessage> msgs_b{team_test::make_event_message(2, action_b)};
   uint64_t hash_b = team_test::chain_message_hashes(msgs_b, hash_a);
@@ -2337,7 +2337,7 @@ CASE_TEST(lobbysvr_user_team, self_private_channel_sequence_watermark) {
   CASE_EXPECT_TRUE(mgr.is_dirty());
   mgr.clear_dirty();
 
-  // 4. 以最新水位元数据重放 seq=1/2 的旧消息: 均不重复处理、不置脏
+  // 4. 以最新 last_sequence 元数据重放 seq=1/2 的旧消息: 均不重复处理、不置脏
   team_test::receive_channel_event(test, team_test::make_incremental_event(private_channel_key, 2, msgs_b));
   std::vector<atframework::dtmq::DChannelMessage> replay_a{msgs_a.front()};
   {

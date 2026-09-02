@@ -18,7 +18,7 @@ signal into policy.
   introductions or wrap-ups, and factual support.
 
 Do not maintain a general blacklist of "AI words." Vocabulary markers change as models and writers adapt, and a word
-can be correct in one technical context but vague in another. Terms such as `delve`, `robust`, 补强, or 投影 are review
+can be correct in one technical context but vague in another. Terms such as `delve`, `robust`, 补强, 投影, or 水位 are review
 signals only: keep them when they are precise and familiar to the audience; otherwise name the concrete action or
 mechanism.
 

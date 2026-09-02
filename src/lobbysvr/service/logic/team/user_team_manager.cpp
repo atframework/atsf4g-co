@@ -294,7 +294,8 @@ int user_team_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_u
     // 不用再落地数据库再恢复
   }
 
-  // 待处理的邀请/加入请求也要落地，否则重启/迁移后本地 pending 丢失，且相关历史事件已被水位跳过不会重放。
+  // 待处理的邀请/加入请求也要落地，否则重启/迁移后本地 pending 丢失，且相关历史事件的 sequence 低于个人频道
+  // 已处理序号，重放会被跳过。
   // 恢复时由 add_pending_invitation/add_pending_join_request 过滤已过期或无效 team_id 的条目。
   for (const auto& invitation : pending_invitation_by_expired_time_) {
     protobuf_copy_message(*team_data->add_pending_invitation(), *invitation);

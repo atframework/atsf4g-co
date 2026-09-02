@@ -29,7 +29,8 @@ high-performance game server architectures.
 - Respect the user's dirty workspace: inspect current file contents before editing and avoid unrelated reformatting.
 - Write comments, docs, and agent guidance for their intended reader, in the file's own language. Use familiar, literal
   terms and keep established technical terms when they are exact. For example, name the actual 缓存/副本/派生视图 instead
-  of calling it 投影, and name the actual action instead of using 补强. Start with the fact or action, keep one idea per
+  of calling it 投影, name the actual action instead of using 补强, and name the actual 最大值/上限 instead of calling it
+  水位. Start with the fact or action, keep one idea per
   sentence, and remove repeated setup, conclusions, vague praise, and formulaic label-plus-explanation lists. Treat
   suspicious words as editing signals, not a blacklist; replace a term only when it is vague, inaccurate, redundant,
   or unfamiliar to the intended reader.

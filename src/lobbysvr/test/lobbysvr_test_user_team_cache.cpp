@@ -46,13 +46,13 @@ const atfw::team::DTeamJoinRequest* find_pending_join_request(
 
 }  // namespace
 
-// MEM-02: member_update 后成员缓存与 dirty 投影的完整契约:
+// MEM-02: member_update 后成员缓存与 dirty 视图的完整契约:
 // - 已存在成员的非空 client_version 覆盖、空版本不回退; role/joined_timepoint/team_source_type 等业务字段不被
 //   member_update 改动; 共享成员数据按 key 覆盖(battle.ready false -> true), 未携带的模块 key 保留;
 // - dirty increase 的 member_update 只保留 user_key(zone_id/user_id)/client_version, 剥离内部路由字段与原始
 //   打包共享数据, 解包后的模块数据随 OneAction.shared_member_data 下发;
 // - 队伍级 pending invitation/join request 缓存(含 join request 的 member_admission_data)不受 member_update
-//   影响, 且 admission 不随 member_update 的 dirty payload 下发(快照投影中私有频道/router 已裁剪)。
+//   影响, 且 admission 不随 member_update 的 dirty payload 下发(快照视图中私有频道/router 已裁剪)。
 CASE_TEST(lobbysvr_user_team, member_update_full_fields_and_dirty_projection) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -132,7 +132,7 @@ CASE_TEST(lobbysvr_user_team, member_update_full_fields_and_dirty_projection) {
            !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty();
   }));
 
-  // 快照投影: pending invitation/join request 的私有频道与 router 已裁剪, join request 保留打包的 admission 数据
+  // 快照视图: pending invitation/join request 的私有频道与 router 已裁剪, join request 保留打包的 admission 数据
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));
@@ -314,7 +314,7 @@ CASE_TEST(lobbysvr_user_team, member_update_full_fields_and_dirty_projection) {
 
 // MEM-04: member_update 的拒绝路径: 频道 member_update 事件指向不存在(或已移除)的成员时, 不得建立幽灵成员
 // 缓存, 也不得产生任何 dirty 推送(客户端不知道的成员不应收到其更新; 与 plan §2.3 "未知成员不创建幽灵缓存"
-// 及客户端投影一致性要求一致)。
+// 及客户端视图一致性要求一致)。
 CASE_TEST(lobbysvr_user_team, member_update_rejected_without_cache_or_dirty_push) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -656,7 +656,7 @@ CASE_TEST(lobbysvr_user_team, team_update_shared_data_and_snapshot_admission_fil
   team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   *team_storage.add_shared_team_data() =
       team_test::pack_team_module(team_test::make_team_matching_module(false));
-  // 有效 admission(携带内部字段验证投影裁剪)
+  // 有效 admission(携带内部字段验证视图裁剪)
   team_test::add_storage_invitation(team_storage, kInviteeId, now + std::chrono::seconds(300), true);
   auto* storage_join_request =
       team_test::add_storage_join_request(team_storage, kJoinRequesterId, now + std::chrono::seconds(300), true);

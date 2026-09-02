@@ -840,7 +840,7 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
 }
 
 bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
-  // 与 teamsvr-room apply_member_update 一致: 不存在(或已被移除)的成员不产生缓存更新和客户端投影
+  // 与 teamsvr-room apply_member_update 一致: 不存在(或已被移除)的成员不产生缓存更新和客户端下发
   if (atfw::team::DTeamAction::kMemberUpdate == action.action_case() &&
       cached_members_.find(action.member_update().user_key()) == cached_members_.end()) {
     return true;
