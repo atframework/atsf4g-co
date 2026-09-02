@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include <ItemAlgorithm/ItemAlgorithmConfig.h>
-#include <ItemAlgorithm/ItemGridAlgorithm.h>
-#include <ItemAlgorithm/ItemGridData.h>
+#include "ItemAlgorithm/ItemAlgorithmConfig.h"
+#include "ItemAlgorithm/ItemGridAlgorithm.h"
+#include "ItemAlgorithm/ItemGridData.h"
 
 #include <cstdint>
 #include <unordered_map>

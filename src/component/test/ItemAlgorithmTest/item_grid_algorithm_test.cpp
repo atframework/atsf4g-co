@@ -2467,10 +2467,18 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     CASE_EXPECT_EQ(2u, success.size());
     CASE_EXPECT_TRUE(failed.empty());
 
-    int32_t x2 = get_x(pos_of(success[0]));
-    int32_t y2 = get_y(pos_of(success[0]));
-    int32_t x1 = get_x(pos_of(success[1]));
-    int32_t y1 = get_y(pos_of(success[1]));
+    // 输出顺序不保证, 遍历找 2x2 和 1x1
+    int32_t x2 = -1, y2 = -1, x1 = -1, y1 = -1;
+    for (const auto& s : success) {
+      if (s.type_id() == kItemTypeId_2x2) {
+        x2 = get_x(pos_of(s));
+        y2 = get_y(pos_of(s));
+      } else if (s.type_id() == kItemTypeId_1x1) {
+        x1 = get_x(pos_of(s));
+        y1 = get_y(pos_of(s));
+      }
+    }
+    CASE_EXPECT_TRUE(x2 >= 0 && x1 >= 0);
 
     // 1x1 不能落在 2x2 所占的区域内
     bool overlap = (x1 >= x2 && x1 < x2 + 2 && y1 >= y2 && y1 < y2 + 2);
@@ -2561,14 +2569,18 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     CASE_EXPECT_EQ(4u, success.size());
     CASE_EXPECT_TRUE(failed.empty());
 
-    // [0] 和 [2] 非占格，position_type_case 为 NOT_SET (0)
-    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[0]).position_type_case()));
-    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[2]).position_type_case()));
-
-    // [1] 和 [3] 是占格，位置不同
-    bool same = (get_x(pos_of(success[1])) == get_x(pos_of(success[3])) &&
-                 get_y(pos_of(success[1])) == get_y(pos_of(success[3])));
-    CASE_EXPECT_FALSE(same);
+    // 输出顺序不保证, 遍历统计: 2 个非占格 (空位置) + 2 个占格 (位置不同)
+    int non_occupy_count = 0;
+    std::set<std::pair<int32_t, int32_t>> occupy_positions;
+    for (const auto& s : success) {
+      if (pos_of(s).position_type_case() == 0) {
+        ++non_occupy_count;
+      } else {
+        occupy_positions.insert({get_x(pos_of(s)), get_y(pos_of(s))});
+      }
+    }
+    CASE_EXPECT_EQ(2, non_occupy_count);
+    CASE_EXPECT_EQ(2u, occupy_positions.size());  // 两个占格位置不同
   }
 
   // ============================================================
