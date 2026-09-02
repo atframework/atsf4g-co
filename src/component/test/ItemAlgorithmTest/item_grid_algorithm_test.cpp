@@ -2190,6 +2190,29 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
+  // 辅助：调用新签名并返回 success_item
+  auto call_find = [&](TestItemGridAlgorithm& grid,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore = {}) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+    for (const auto& b : basics) {
+      *basics_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    for (const auto& b : ignore) {
+      *ignore_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed);
+    return std::make_tuple(ok, success, failed);
+  };
+
+  // 从 success_item 中读取位置
+  auto pos_of = [](const PROJECT_NAMESPACE_ID::DItemBasic& b) -> const PROJECT_NAMESPACE_ID::DItemGridPosition& {
+    return b.position().grid_position();
+  };
+
   // ============================================================
   // Case 1: 非占格道具 -> 输出空 DItemGridPosition
   // ============================================================
@@ -2205,12 +2228,13 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         make_basic(kCoinTypeId, 10),
         make_basic(kVirtualTypeId, 5),
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(2u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(2u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
     // 空位置：position_type_case 为 POSITION_TYPE_NOT_SET (0)
-    CASE_EXPECT_EQ(0, static_cast<int>(out[0].position_type_case()));
-    CASE_EXPECT_EQ(0, static_cast<int>(out[1].position_type_case()));
+    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[0]).position_type_case()));
+    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[1]).position_type_case()));
   }
 
   // ============================================================
@@ -2229,22 +2253,23 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         make_basic(kItemTypeId_1x1, 1),
         make_basic(kItemTypeId_1x1, 1),
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(3u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(3u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
 
     // 游标优化：第一件在 (0,0)，后续递增
-    CASE_EXPECT_EQ(0, get_x(out[0]));
-    CASE_EXPECT_EQ(0, get_y(out[0]));
-    CASE_EXPECT_EQ(1, get_x(out[1]));
-    CASE_EXPECT_EQ(0, get_y(out[1]));
-    CASE_EXPECT_EQ(2, get_x(out[2]));
-    CASE_EXPECT_EQ(0, get_y(out[2]));
+    CASE_EXPECT_EQ(0, get_x(pos_of(success[0])));
+    CASE_EXPECT_EQ(0, get_y(pos_of(success[0])));
+    CASE_EXPECT_EQ(1, get_x(pos_of(success[1])));
+    CASE_EXPECT_EQ(0, get_y(pos_of(success[1])));
+    CASE_EXPECT_EQ(2, get_x(pos_of(success[2])));
+    CASE_EXPECT_EQ(0, get_y(pos_of(success[2])));
 
     // 三件物品不重复
     std::set<std::pair<int32_t, int32_t>> pos_set;
-    for (const auto& p : out) {
-      pos_set.insert({get_x(p), get_y(p)});
+    for (const auto& s : success) {
+      pos_set.insert({get_x(pos_of(s)), get_y(pos_of(s))});
     }
     CASE_EXPECT_EQ(3u, pos_set.size());
   }
@@ -2263,11 +2288,11 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
         make_basic_at(kItemTypeId_1x1, 1, 3, 2),  // 希望放 (x=3, y=2)
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(1u, out.size());
-    CASE_EXPECT_EQ(3, get_x(out[0]));
-    CASE_EXPECT_EQ(2, get_y(out[0]));
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_EQ(3, get_x(pos_of(success[0])));
+    CASE_EXPECT_EQ(2, get_y(pos_of(success[0])));
   }
 
   // ============================================================
@@ -2295,15 +2320,15 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
         make_basic_at(kItemTypeId_1x1, 1, 3, 2),  // 首选位置已被占
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(1u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
     // 不能落到 (3,2)
-    bool not_original = (get_x(out[0]) != 3 || get_y(out[0]) != 2);
+    bool not_original = (get_x(pos_of(success[0])) != 3 || get_y(pos_of(success[0])) != 2);
     CASE_EXPECT_TRUE(not_original);
     // 必须在合法范围内
-    CASE_EXPECT_TRUE(get_x(out[0]) >= 0 && get_x(out[0]) < 4);
-    CASE_EXPECT_TRUE(get_y(out[0]) >= 0 && get_y(out[0]) < 4);
+    CASE_EXPECT_TRUE(get_x(pos_of(success[0])) >= 0 && get_x(pos_of(success[0])) < 4);
+    CASE_EXPECT_TRUE(get_y(pos_of(success[0])) >= 0 && get_y(pos_of(success[0])) < 4);
   }
 
   // ============================================================
@@ -2330,12 +2355,12 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
         make_basic(kItemTypeId_1x1, 10),  // 剩余 49，可堆叠
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(1u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
     // 定向到已有 entry (x=0, y=0)
-    CASE_EXPECT_EQ(0, get_x(out[0]));
-    CASE_EXPECT_EQ(0, get_y(out[0]));
+    CASE_EXPECT_EQ(0, get_x(pos_of(success[0])));
+    CASE_EXPECT_EQ(0, get_y(pos_of(success[0])));
   }
 
   // ============================================================
@@ -2361,8 +2386,11 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     }
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, basics, out));
+    auto [ok, success, failed] = call_find(grid, basics);
+    // 背包已满: 调用成功, 道具放入 failed_item
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_TRUE(success.empty());
+    CASE_EXPECT_EQ(1u, failed.size());
   }
 
   // ============================================================
@@ -2380,17 +2408,19 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         make_basic(kItemTypeId_2x2, 1),
         make_basic(kItemTypeId_2x2, 1),
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(2u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(2u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
 
     // 每个位置在范围内（2x2 起点 x in [0,2], y in [0,2]）
-    for (const auto& p : out) {
-      CASE_EXPECT_TRUE(get_x(p) >= 0 && get_x(p) + 2 <= 4);
-      CASE_EXPECT_TRUE(get_y(p) >= 0 && get_y(p) + 2 <= 4);
+    for (const auto& s : success) {
+      CASE_EXPECT_TRUE(get_x(pos_of(s)) >= 0 && get_x(pos_of(s)) + 2 <= 4);
+      CASE_EXPECT_TRUE(get_y(pos_of(s)) >= 0 && get_y(pos_of(s)) + 2 <= 4);
     }
     // 两件起点不同（不重叠）
-    bool same_pos = (get_x(out[0]) == get_x(out[1]) && get_y(out[0]) == get_y(out[1]));
+    bool same_pos = (get_x(pos_of(success[0])) == get_x(pos_of(success[1])) &&
+                     get_y(pos_of(success[0])) == get_y(pos_of(success[1])));
     CASE_EXPECT_FALSE(same_pos);
   }
 
@@ -2410,14 +2440,15 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         make_basic(kItemTypeId_2x2, 1),  // 先放 2x2
         make_basic(kItemTypeId_1x1, 1),  // 再放 1x1，应躲开 2x2 区域
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(2u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(2u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
 
-    int32_t x2 = get_x(out[0]);
-    int32_t y2 = get_y(out[0]);
-    int32_t x1 = get_x(out[1]);
-    int32_t y1 = get_y(out[1]);
+    int32_t x2 = get_x(pos_of(success[0]));
+    int32_t y2 = get_y(pos_of(success[0]));
+    int32_t x1 = get_x(pos_of(success[1]));
+    int32_t y1 = get_y(pos_of(success[1]));
 
     // 1x1 不能落在 2x2 所占的区域内
     bool overlap = (x1 >= x2 && x1 < x2 + 2 && y1 >= y2 && y1 < y2 + 2);
@@ -2449,32 +2480,35 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
 
     // 剩余 4 个空格，批量请求 4 件
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics(4, make_basic(kItemTypeId_1x1, 1));
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(4u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(4u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
 
     std::set<std::pair<int32_t, int32_t>> pos_set;
-    for (const auto& p : out) {
-      CASE_EXPECT_EQ(3, get_x(p));  // 必须在 x=3 列
-      CASE_EXPECT_TRUE(get_y(p) >= 0 && get_y(p) < 4);
-      pos_set.insert({get_x(p), get_y(p)});
+    for (const auto& s : success) {
+      CASE_EXPECT_EQ(3, get_x(pos_of(s)));  // 必须在 x=3 列
+      CASE_EXPECT_TRUE(get_y(pos_of(s)) >= 0 && get_y(pos_of(s)) < 4);
+      pos_set.insert({get_x(pos_of(s)), get_y(pos_of(s))});
     }
     CASE_EXPECT_EQ(4u, pos_set.size());  // 无重复
 
     // find_positions_for_basics 是只读规划，不修改格子。
     // 需要实际 load 这 4 件到格子中，再验证满格。
-    for (const auto& p : out) {
+    for (const auto& s : success) {
       PROJECT_NAMESPACE_ID::DItemInstance inst;
       inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
       inst.mutable_item_basic()->set_count(1);
-      *inst.mutable_item_basic()->mutable_position()->mutable_grid_position() = p;
+      *inst.mutable_item_basic()->mutable_position()->mutable_grid_position() = pos_of(s);
       CASE_EXPECT_TRUE(grid.load(config, inst));
     }
 
-    // 格子现在全满，第 5 件应返回 false
+    // 格子现在全满，第 5 件放不下 → 放入 failed_item
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> one_more = {make_basic(kItemTypeId_1x1, 1)};
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out2;
-    CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, one_more, out2));
+    auto [ok2, success2, failed2] = call_find(grid, one_more);
+    CASE_EXPECT_TRUE(ok2);
+    CASE_EXPECT_TRUE(success2.empty());
+    CASE_EXPECT_EQ(1u, failed2.size());
   }
 
   // ============================================================
@@ -2494,22 +2528,24 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
         make_basic(kVirtualTypeId, 50),  // 非占格
         make_basic(kItemTypeId_1x1, 1),  // 占格
     };
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(4u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(4u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
 
     // [0] 和 [2] 非占格，position_type_case 为 NOT_SET (0)
-    CASE_EXPECT_EQ(0, static_cast<int>(out[0].position_type_case()));
-    CASE_EXPECT_EQ(0, static_cast<int>(out[2].position_type_case()));
+    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[0]).position_type_case()));
+    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[2]).position_type_case()));
 
     // [1] 和 [3] 是占格，位置不同
-    bool same = (get_x(out[1]) == get_x(out[3]) && get_y(out[1]) == get_y(out[3]));
+    bool same = (get_x(pos_of(success[1])) == get_x(pos_of(success[3])) &&
+                 get_y(pos_of(success[1])) == get_y(pos_of(success[3])));
     CASE_EXPECT_FALSE(same);
   }
 
   // ============================================================
   // Case 11: on_find_position_for_infinite 钩子被调用
-  //          默认实现返回 false -> find_positions_for_basics 返回 false
+  //          默认实现返回 false -> 道具放入 failed_item
   // ============================================================
   CASE_MSG_INFO() << "Case 11: non-care 走钩子，默认钩子返回 false\n";
   {
@@ -2522,9 +2558,11 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kEquipmentTypeId, 1)};
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    // 默认 on_find_position_for_infinite 返回 false -> 整体返回 false
-    CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, basics, out));
+    // 默认 on_find_position_for_infinite 返回 false -> 道具放入 failed_item
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_TRUE(success.empty());
+    CASE_EXPECT_EQ(1u, failed.size());
   }
 
   // ============================================================
@@ -2552,16 +2590,411 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
-    std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> out;
-    CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, out));
-    CASE_EXPECT_EQ(1u, out.size());
+    auto [ok, success, failed] = call_find(grid, basics);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
     // 结果必须不在 x=0 列
-    CASE_EXPECT_NE(0, get_x(out[0]));
-    CASE_EXPECT_TRUE(get_x(out[0]) >= 1 && get_x(out[0]) < 4);
-    CASE_EXPECT_TRUE(get_y(out[0]) >= 0 && get_y(out[0]) < 4);
+    CASE_EXPECT_NE(0, get_x(pos_of(success[0])));
+    CASE_EXPECT_TRUE(get_x(pos_of(success[0])) >= 1 && get_x(pos_of(success[0])) < 4);
+    CASE_EXPECT_TRUE(get_y(pos_of(success[0])) >= 0 && get_y(pos_of(success[0])) < 4);
   }
 
   CASE_MSG_INFO() << "=== find_positions_for_basics 测试完成 ===\n";
+}
+
+// ============================================================
+// find_positions_for_basics — ignore_item 与拆堆放置
+// ============================================================
+
+CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_ignore_item) {
+  using namespace item_algorithm;
+  auto config = ::excel::excel_config_type_traits::make_shared<::excel::config_group_t>();
+
+  auto make_basic = [](int32_t type_id, int64_t count) {
+    PROJECT_NAMESPACE_ID::DItemBasic b;
+    b.set_type_id(type_id);
+    b.set_count(count);
+    return b;
+  };
+  auto make_basic_at = [](int32_t type_id, int64_t count, int32_t x, int32_t y) {
+    PROJECT_NAMESPACE_ID::DItemBasic b;
+    b.set_type_id(type_id);
+    b.set_count(count);
+    b.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+    b.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
+    return b;
+  };
+  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
+  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
+
+  auto call_find = [&](TestItemGridAlgorithm& grid,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+    for (const auto& b : basics) {
+      *basics_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    for (const auto& b : ignore) {
+      *ignore_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed);
+    return std::make_tuple(ok, success, failed);
+  };
+
+  // ============================================================
+  // Case 1: 消耗 A×1 兑换 A×2, 堆叠上限 99
+  //         原位 (0,0) 已有 A×1, ignore_item 消耗 1 个 → 空出容量,
+  //         兑换的 2 个都堆回原位 (容量 99 足够, 无需找新位置)。
+  // ============================================================
+  CASE_MSG_INFO() << "Case 1: ignore_item 消耗后堆回原位\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+
+    // 原位 (0,0) 已有 A×1
+    {
+      PROJECT_NAMESPACE_ID::DItemInstance inst;
+      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+      inst.mutable_item_basic()->set_count(1);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
+      CASE_EXPECT_TRUE(grid.load(config, inst));
+    }
+
+    // 消耗 A×1 (原位), 兑换 A×2
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 2)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic_at(kItemTypeId_1x1, 1, 0, 0)};
+    auto [ok, success, failed] = call_find(grid, basics, ignore);
+    CASE_EXPECT_TRUE(ok);
+    // 堆叠上限 99, 消耗 1 个空出容量后 2 个都堆回原位
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
+    if (success.size() == 1) {
+      CASE_EXPECT_EQ(get_x(success[0].position().grid_position()), 0);
+      CASE_EXPECT_EQ(get_y(success[0].position().grid_position()), 0);
+      CASE_EXPECT_EQ(success[0].count(), 2);
+    }
+  }
+
+  // ============================================================
+  // Case 2: 堆叠上限 1, 消耗 A×1 兑换 A×2 → 必须拆堆到两个位置
+  // ============================================================
+  CASE_MSG_INFO() << "Case 2: 堆叠上限 1 拆堆放置\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 堆叠上限 1
+
+    // 原位 (0,0) 已有 A×1
+    {
+      PROJECT_NAMESPACE_ID::DItemInstance inst;
+      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+      inst.mutable_item_basic()->set_count(1);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
+      CASE_EXPECT_TRUE(grid.load(config, inst));
+    }
+
+    // 消耗 A×1 (原位), 兑换 A×2 → 1 个堆回原位, 1 个找新位置
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 2)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic_at(kItemTypeId_1x1, 1, 0, 0)};
+    auto [ok, success, failed] = call_find(grid, basics, ignore);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(2u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
+
+    bool has_origin = false;
+    bool has_new = false;
+    for (const auto& s : success) {
+      if (get_x(s.position().grid_position()) == 0 && get_y(s.position().grid_position()) == 0) {
+        has_origin = true;
+      } else {
+        has_new = true;
+      }
+    }
+    CASE_EXPECT_TRUE(has_origin);
+    CASE_EXPECT_TRUE(has_new);
+  }
+
+  // ============================================================
+  // Case 3: ignore_item 数量不足 → 整体失败
+  // ============================================================
+  CASE_MSG_INFO() << "Case 3: ignore_item 数量不足整体失败\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+
+    // 原位 (0,0) 只有 A×1
+    {
+      PROJECT_NAMESPACE_ID::DItemInstance inst;
+      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+      inst.mutable_item_basic()->set_count(1);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
+      CASE_EXPECT_TRUE(grid.load(config, inst));
+    }
+
+    // 消耗 A×2 (超过持有 1) → 整体失败
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic_at(kItemTypeId_1x1, 2, 0, 0)};
+    auto [ok, success, failed] = call_find(grid, basics, ignore);
+    CASE_EXPECT_FALSE(ok);
+    CASE_EXPECT_TRUE(success.empty());
+  }
+
+  // ============================================================
+  // Case 4: ignore_item 不存在 → 整体失败
+  // ============================================================
+  CASE_MSG_INFO() << "Case 4: ignore_item 不存在整体失败\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic_at(kItemTypeId_1x1, 1, 3, 3)};
+    auto [ok, success, failed] = call_find(grid, basics, ignore);
+    CASE_EXPECT_FALSE(ok);
+    CASE_EXPECT_TRUE(success.empty());
+  }
+
+  // ============================================================
+  // Case 5: 无限格子不占格模式传入 ignore_item → 整体失败
+  // ============================================================
+  CASE_MSG_INFO() << "Case 5: 无限格子不占格模式不支持 ignore_item\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kInfiniteGrid, 1, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment,
+              0);
+    grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kEquipmentTypeId, 1)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic(kEquipmentTypeId, 1)};
+    auto [ok, success, failed] = call_find(grid, basics, ignore);
+    CASE_EXPECT_FALSE(ok);
+    CASE_EXPECT_TRUE(success.empty());
+  }
+
+  // ============================================================
+  // Case 6: 无位置模式传入 ignore_item → 整体失败
+  // ============================================================
+  CASE_MSG_INFO() << "Case 6: 无位置模式不支持 ignore_item\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kCoinTypeId, 1)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore = {make_basic(kCoinTypeId, 1)};
+    auto [ok, success, failed] = call_find(grid, basics, ignore);
+    CASE_EXPECT_FALSE(ok);
+    CASE_EXPECT_TRUE(success.empty());
+  }
+}
+
+// ============================================================
+// find_positions_for_basics — 两次搜索位置 (多背包依次塞入)
+//
+// 第一次调用只放入部分道具, 调用方把未放入成功的道具放入 failed_item,
+// 再把 failed_item 作为下一次 basics 调用 (模拟依次塞入多个背包)。
+// ============================================================
+
+CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_two_pass) {
+  using namespace item_algorithm;
+  auto config = ::excel::excel_config_type_traits::make_shared<::excel::config_group_t>();
+
+  auto make_basic = [](int32_t type_id, int64_t count) {
+    PROJECT_NAMESPACE_ID::DItemBasic b;
+    b.set_type_id(type_id);
+    b.set_count(count);
+    return b;
+  };
+  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
+  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
+
+  auto call_find = [&](TestItemGridAlgorithm& grid,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+    for (const auto& b : basics) {
+      *basics_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed);
+    return std::make_tuple(ok, success, failed);
+  };
+
+  // ============================================================
+  // Case 1: 第一次只放得下 2 件 (2x2 背包), 剩余 2 件放入 failed_item,
+  //         第二次用 failed_item 作为 basics 在另一个背包放置。
+  // ============================================================
+  CASE_MSG_INFO() << "Case 1: 两次搜索位置 (多背包依次塞入)\n";
+  {
+    // 第一个背包: 2x2, 堆叠上限 1, 只能放 2 件
+    auto grid1_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid1 = *grid1_ptr;
+    register_test_log_handler(grid1);
+    grid1.init(ItemGridAlgorithmMode::kFiniteGrid, 2, 1, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid1.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
+
+    // 第二个背包: 2x2, 堆叠上限 1, 也能放 2 件
+    auto grid2_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid2 = *grid2_ptr;
+    register_test_log_handler(grid2);
+    grid2.init(ItemGridAlgorithmMode::kFiniteGrid, 2, 1, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid2.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
+
+    // 4 件 1x1, 堆叠上限 1
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
+        make_basic(kItemTypeId_1x1, 1),
+        make_basic(kItemTypeId_1x1, 1),
+        make_basic(kItemTypeId_1x1, 1),
+        make_basic(kItemTypeId_1x1, 1),
+    };
+
+    // 第一次: 背包1 只放得下 2 件, 剩余 2 件由函数放入 failed_item
+    auto [ok1, success1, failed1] = call_find(grid1, basics);
+    CASE_EXPECT_TRUE(ok1);
+    CASE_EXPECT_EQ(2u, success1.size());
+    CASE_EXPECT_EQ(2u, failed1.size());
+
+    // 第二次: 用 failed_item 作为 basics 在背包2 放置
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> remaining;
+    for (const auto& b : failed1) {
+      remaining.push_back(b);
+    }
+    auto [ok2, success2, failed2] = call_find(grid2, remaining);
+    CASE_EXPECT_TRUE(ok2);
+    CASE_EXPECT_EQ(2u, success2.size());
+    CASE_EXPECT_TRUE(failed2.empty());
+
+    // 两个背包合计放入 4 件
+    CASE_EXPECT_EQ(success1.size() + success2.size(), static_cast<size_t>(4));
+  }
+}
+
+// ============================================================
+// find_positions_for_instances — DItemInstance 输入版本
+// ============================================================
+
+CASE_TEST(ItemGridAlgorithm, find_positions_for_instances) {
+  using namespace item_algorithm;
+  auto config = ::excel::excel_config_type_traits::make_shared<::excel::config_group_t>();
+
+  auto make_instance = [](int32_t type_id, int64_t count, int32_t x, int32_t y) {
+    PROJECT_NAMESPACE_ID::DItemInstance inst;
+    auto* basic = inst.mutable_item_basic();
+    basic->set_type_id(type_id);
+    basic->set_count(count);
+    basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+    basic->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
+    return inst;
+  };
+  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
+  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
+
+  auto call_find = [&](TestItemGridAlgorithm& grid,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemInstance>& items,
+                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore = {}) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> items_field;
+    for (const auto& v : items) {
+      *items_field.Add() = v;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    for (const auto& v : ignore) {
+      *ignore_field.Add() = v;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> failed;
+    bool ok = grid.find_positions_for_instances(config, items_field, ignore_field, success, failed);
+    return std::make_tuple(ok, success, failed);
+  };
+
+  // ============================================================
+  // Case 1: 占格道具找位置, 输出 DItemInstance (带位置)
+  // ============================================================
+  CASE_MSG_INFO() << "Case 1: 占格道具找位置\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemInstance> items = {
+        make_instance(kItemTypeId_1x1, 1, 0, 0),
+        make_instance(kItemTypeId_1x1, 1, 0, 0),
+    };
+    auto [ok, success, failed] = call_find(grid, items);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(2u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
+    // 两个位置不同
+    bool same = (get_x(success[0].item_basic().position().grid_position()) ==
+                     get_x(success[1].item_basic().position().grid_position()) &&
+                 get_y(success[0].item_basic().position().grid_position()) ==
+                     get_y(success[1].item_basic().position().grid_position()));
+    CASE_EXPECT_FALSE(same);
+  }
+
+  // ============================================================
+  // Case 2: 非占格道具输出空位置
+  // ============================================================
+  CASE_MSG_INFO() << "Case 2: 非占格道具输出空位置\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemInstance> items = {
+        make_instance(kCoinTypeId, 10, 0, 0),
+    };
+    auto [ok, success, failed] = call_find(grid, items);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
+    CASE_EXPECT_FALSE(success[0].item_basic().position().grid_position().has_user_inventory());
+  }
+
+  // ============================================================
+  // Case 3: 背包放不下 → 放入 failed_item (DItemInstance)
+  // ============================================================
+  CASE_MSG_INFO() << "Case 3: 背包放不下放入 failed_item\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 1, 1, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemInstance> items = {
+        make_instance(kItemTypeId_1x1, 1, 0, 0),
+        make_instance(kItemTypeId_1x1, 1, 0, 0),
+    };
+    auto [ok, success, failed] = call_find(grid, items);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_EQ(1u, failed.size());
+    CASE_EXPECT_EQ(failed[0].item_basic().type_id(), kItemTypeId_1x1);
+  }
 }
 
 CASE_TEST(ItemGridAlgorithm, checked_request_validation) {
@@ -2681,12 +3114,19 @@ CASE_TEST(ItemGridAlgorithm, no_position_ungrid_lifecycle) {
 
   std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kCoinTypeId, 1),
                                                           make_sub_basic(kVirtualTypeId, 1)};
-  std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
-  CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, positions));
-  CASE_EXPECT_EQ(positions.size(), static_cast<size_t>(2));
-  if (positions.size() == 2) {
-    CASE_EXPECT_FALSE(positions[0].has_user_inventory());
-    CASE_EXPECT_FALSE(positions[1].has_user_inventory());
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+  for (const auto& b : basics) {
+    *basics_field.Add() = b;
+  }
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+  CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed));
+  CASE_EXPECT_EQ(success.size(), static_cast<size_t>(2));
+  CASE_EXPECT_TRUE(failed.empty());
+  if (success.size() == 2) {
+    CASE_EXPECT_FALSE(success[0].position().grid_position().has_user_inventory());
+    CASE_EXPECT_FALSE(success[1].position().grid_position().has_user_inventory());
   }
 }
 
@@ -2762,9 +3202,15 @@ CASE_TEST(ItemGridAlgorithm, no_position_rejects_position_operations) {
   verify_item_count_consistency(grid, kCoinTypeId);
 
   std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kItemTypeId_1x1, 1)};
-  std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
-  CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, basics, positions));
-  CASE_EXPECT_TRUE(positions.empty());
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+  for (const auto& b : basics) {
+    *basics_field.Add() = b;
+  }
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+  CASE_EXPECT_FALSE(grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed));
+  CASE_EXPECT_TRUE(success.empty());
 }
 
 CASE_TEST(ItemGridAlgorithm, check_item_position_hook) {
@@ -2880,10 +3326,16 @@ CASE_TEST(ItemGridAlgorithm, on_check_add_hook) {
   state.rejected_add_position_x = 0;
   state.reset_call_counts();
   std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_sub_basic(kItemTypeId_1x1, 1)};
-  std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition> positions;
-  CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics, positions));
-  CASE_EXPECT_EQ(positions.size(), static_cast<size_t>(1));
-  CASE_EXPECT_EQ(positions[0].user_inventory().x(), 1);
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+  for (const auto& b : basics) {
+    *basics_field.Add() = b;
+  }
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+  CASE_EXPECT_TRUE(grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed));
+  CASE_EXPECT_EQ(success.size(), static_cast<size_t>(1));
+  CASE_EXPECT_EQ(success[0].position().grid_position().user_inventory().x(), 1);
   CASE_EXPECT_TRUE(state.on_check_add_calls >= 2);
 }
 

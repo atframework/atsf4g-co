@@ -144,11 +144,46 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   // 通过Basic提取数据
   item_grid_entry_ptr_t find_entry(const PROJECT_NAMESPACE_ID::DItemBasic& basic) const;
   item_grid_entry_ptr_t find_entry_by_id(uint64_t entry_id) const;
-  // 为物品寻找位置
+
+  /// @brief 为物品寻找位置 (只读规划, 不修改背包数据)
+  ///
+  /// @param config_group 配置组
+  /// @param basics        待放置的道具列表
+  /// @param ignore_item   本次消耗掉、即将从背包移除的道具 (可为空)
+  /// @param success_item  [out] 成功找到位置的道具, 每个元素为带位置的 DItemBasic
+  ///                      (位置已写入 position, count 为该位置放入的数量; 拆堆时一个
+  ///                      basic 可能对应多个元素)
+  /// @param failed_item   [out] 未找到位置的道具 (原样传出, count 为剩余未放入数量)。
+  ///                      调用方把 failed_item 作为下一次 basics 再次调用 (多背包依次塞入)。
+  /// @return true 表示调用成功 (校验与寻位流程正常执行); false 表示整体失败
+  ///         (仅当传入参数有问题或配置有问题时返回 false, 如 ignore_item 非法、
+  ///         未知道具类型、无位置模式放入占格道具等)。
+  ///
+  /// 模式约束:
+  ///   - 有限格子模式 (is_occupy_flag): 完整支持 ignore_item 与拆堆放置。
+  ///   - 无限格子不占格模式 (!is_occupy_flag && !is_ignore_position):
+  ///     委托 on_find_position_for_infinite, 不支持 ignore_item, 非空则整体失败。
+  ///   - 无位置模式 (is_ignore_position): 只检查能否放入 (道具是否不占格),
+  ///     不寻找位置, 不支持 ignore_item, 非空则整体失败。
+  ///   - 无位置模式下占格道具无法放入, 整体失败 (外层负责按 Grid 分发, 属调用问题)。
   bool find_positions_for_basics(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-      const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
-      std::vector<PROJECT_NAMESPACE_ID::DItemGridPosition>& out_positions) const;
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
+      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success_item,
+      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed_item) const;
+
+  /// @brief 为物品寻找位置 (只读规划, 不修改背包数据), 输入为 DItemInstance
+  ///
+  /// 语义与 find_positions_for_basics 一致, 仅输入输出类型不同:
+  ///   - items / success_item / failed_item 均为 DItemInstance
+  ///   - ignore_item 仍为 DItemBasic (消耗掉、即将从背包移除的道具)
+  bool find_positions_for_instances(
+      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& items,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
+      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& success_item,
+      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& failed_item) const;
 
  protected:
   // ============================================================
@@ -236,6 +271,15 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
   bool check_move_request(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
                           ItemGridMoveCheckedRequest& checked_request) const;
   void apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& position, const ItemGridPosition& grid_pos) const;
+
+  // 寻位公共实现 (模板, 支持 DItemBasic / DItemInstance 两种输入)
+  template <typename ItemT>
+  bool find_positions_inner(
+      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+      const google::protobuf::RepeatedPtrField<ItemT>& items,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
+      google::protobuf::RepeatedPtrField<ItemT>& success_item,
+      google::protobuf::RepeatedPtrField<ItemT>& failed_item) const;
 
  private:
   bool is_item_valid(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
