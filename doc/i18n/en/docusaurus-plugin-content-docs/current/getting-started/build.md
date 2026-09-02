@@ -52,7 +52,10 @@ You can also run `cmake -S . -B <BUILD_DIR> [options...]` manually and use your 
 All services (echosvr / cachesvr / authsvr / lobbysvr / rank_settlement_svr / orbitsvr / component services /
 tools) are built unconditionally in `src/CMakeLists.txt`; there are no per-service switches.
 
-After the build completes, executables and runtime resources are located in `<BUILD_DIR>/publish/`.
+After the build completes, service executables and runtime resources are located in `<BUILD_DIR>/publish/`; unit-test
+executables in `PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY` (default `<BUILD_DIR>/test`) and sample executables in
+`PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY` (default `<BUILD_DIR>/sample`). Both are CMake cache variables and can be
+redirected at configure time.
 
 ## Incremental Build Conventions
 

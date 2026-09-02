@@ -223,7 +223,7 @@ otlp_file 导出；HPA 默认零网络，启用时自动安装 prometheus pull h
 ```powershell
 cmake --build build_jobs_cmake_tools --target atf4g-co-rpc-unit-test-selftest --parallel 12
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
-# 过滤单 case：build_jobs_cmake_tools/publish/bin/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.<case>"
+# 过滤单 case：build_jobs_cmake_tools/test/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.<case>"
 ```
 
 ## 参考

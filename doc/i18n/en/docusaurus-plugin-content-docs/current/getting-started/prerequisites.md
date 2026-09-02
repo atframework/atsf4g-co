@@ -43,7 +43,8 @@ cluster and sentinel/raw connection modes). Services that use the DB must have i
 
 ## Directory Conventions
 
-- All build artifacts are published to `<BUILD_DIR>/publish/`.
+- Service and deployment artifacts are published to `<BUILD_DIR>/publish/`; unit tests to `<BUILD_DIR>/test/` and
+  samples to `<BUILD_DIR>/sample/`.
 - On Windows, the recommended build directory is `build_jobs_cmake_tools` (consistent with the clangd
   configuration in `.vscode/settings.json`).
 - On Linux, `cmake_dev.sh` automatically creates `build_jobs_$(uname -s)`.

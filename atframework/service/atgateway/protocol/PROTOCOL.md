@@ -402,7 +402,7 @@ Build and run:
 cmake --build <build_dir> --target atgateway_protocol_unit_test
 
 # On Windows, add DLLs to PATH:
-#   publish/bin, publish/atframework/atgateway/bin, third_party/install/.../bin
+#   publish/bin, third_party/install/.../bin
 ./test/atgateway_protocol_unit_test
 ```
 

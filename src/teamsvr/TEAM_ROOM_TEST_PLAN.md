@@ -869,10 +869,10 @@ ctest --test-dir build_jobs_cmake_tools -R component-dtmq-proxysvr --output-on-f
 
 ```powershell
 $repo_root = (Get-Location).Path
-$test_exe = (Resolve-Path "$repo_root/build_jobs_cmake_tools/publish/bin/atf4g-co-teamsvr-room-unit-test.exe").Path
+$test_exe = (Resolve-Path "$repo_root/build_jobs_cmake_tools/test/atf4g-co-teamsvr-room-unit-test.exe").Path
 $room_test_workdir = (Resolve-Path "$repo_root/build_jobs_cmake_tools/src/teamsvr/test/rpc-unit-test-workdir/atf4g-co-teamsvr-room-unit-test").Path
 $env:RPC_UNIT_TEST_WORKDIR = $room_test_workdir
-$env:PATH = "$repo_root/build_jobs_cmake_tools/publish/bin;$repo_root/third_party/install/windows-amd64-msvc-19/bin;" + $env:PATH
+$env:PATH = "$repo_root/build_jobs_cmake_tools/test;$repo_root/build_jobs_cmake_tools/publish/bin;$repo_root/third_party/install/windows-amd64-msvc-19/bin;" + $env:PATH
 Push-Location $room_test_workdir
 try {
   & $test_exe -l

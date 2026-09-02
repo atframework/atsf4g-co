@@ -299,6 +299,6 @@ cmake --build build_jobs_cmake_tools --target atf4g-co-rpc-unit-test-selftest --
 # 按 label 运行
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
 ctest --test-dir build_jobs_cmake_tools -L "sdk:server-frame" --output-on-failure
-# 过滤单 case（atframe_utils 私有框架）
-build_jobs_cmake_tools/publish/bin/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.combined_dns_ss_db_smoke"
+# 过滤单 case（atframe_utils 私有框架；可执行文件位于 PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY，默认 <BUILD_DIR>/test）
+build_jobs_cmake_tools/test/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.combined_dns_ss_db_smoke"
 ```

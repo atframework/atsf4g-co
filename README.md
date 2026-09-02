@@ -70,7 +70,7 @@ Such as sh cmake_dev.sh -su to enable all unit test and samples, or sh cmake_dev
 You can also directly run cmake [SOURCE PATH] [options...] just like in windows, use your own prebuilt libraries or not.
 It depends to you.
 
-All resource and file will be put into ```<BUILD_DIR>/publish``` after compile completed.
+All resource and file will be put into ```<BUILD_DIR>/publish``` after compile completed. Unit test executables are put into ```PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY```(default ```<BUILD_DIR>/test```) and samples are put into ```PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY```(default ```<BUILD_DIR>/sample```).
 
 ### Configure & Run
 

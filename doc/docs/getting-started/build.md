@@ -51,7 +51,9 @@ cmake --build . -- -j4
 所有服务（echosvr / cachesvr / authsvr / lobbysvr / rank_settlement_svr / orbitsvr / 组件服务 / tools）
 都在 `src/CMakeLists.txt` 中无条件构建，没有按服务开关的选项。
 
-构建完成后，可执行文件与运行资源位于 `<BUILD_DIR>/publish/`。
+构建完成后，服务可执行文件与运行资源位于 `<BUILD_DIR>/publish/`；单元测试可执行文件位于
+`PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY`（默认 `<BUILD_DIR>/test`），sample 可执行文件位于
+`PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY`（默认 `<BUILD_DIR>/sample`）。两者均为 CMake 缓存变量，可在配置期重定向。
 
 ## 增量构建约定
 

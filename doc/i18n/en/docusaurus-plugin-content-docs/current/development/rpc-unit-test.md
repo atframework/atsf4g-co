@@ -249,7 +249,7 @@ error when no answer is configured.
 ```powershell
 cmake --build build_jobs_cmake_tools --target atf4g-co-rpc-unit-test-selftest --parallel 12
 ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test --output-on-failure
-# Filter one case: build_jobs_cmake_tools/publish/bin/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.<case>"
+# Filter one case: build_jobs_cmake_tools/test/atf4g-co-rpc-unit-test-selftest.exe -r "rpc_unit_test.<case>"
 ```
 
 ## References

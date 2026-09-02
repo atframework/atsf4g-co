@@ -27,8 +27,10 @@ repository root. Read the live workspace settings on every run instead of copyin
 - For a new tree, pass the generator and configure settings resolved from the workspace; do not silently replace
   explicit user options with defaults.
 - Build with `cmake --build <BUILD_DIR> --parallel <jobs>` and add `--target <target>` for the narrowest useful target.
-- Inspect `<BUILD_DIR>/CMakeCache.txt` rather than guessing what was configured. Outputs are normally under
-  `<BUILD_DIR>/publish/`.
+- Inspect `<BUILD_DIR>/CMakeCache.txt` rather than guessing what was configured. Server/tool outputs go to
+  `<BUILD_DIR>/publish/`; unit-test executables to `PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY` (default `<BUILD_DIR>/test`)
+  and samples to `PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY` (default `<BUILD_DIR>/sample`); all three are redirectable
+  cache variables.
 - Read [platform configure examples](references/platform-configure.md) only when creating a new Windows/vcpkg or
   Unix-like build tree, or when choosing project feature options.
 

@@ -33,9 +33,11 @@ Most test executables support:
 On Windows, unit tests/samples can fail to start if dependent DLLs are not found. Tests registered with CTest already
 receive PATH through `ENVIRONMENT_MODIFICATION`; set PATH manually only when running an executable directly.
 
-Test executables land in `<BUILD_DIR>\test` and samples in `<BUILD_DIR>\sample`. Typical DLL directories:
+Test executables land in `PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY` (default `<BUILD_DIR>\test`) and samples in
+`PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY` (default `<BUILD_DIR>\sample`); the per-config output directories are pinned
+to these paths, so no `<Config>` subdirectory is appended on multi-config generators. Typical DLL directories:
 
-- `<BUILD_DIR>\publish\bin` (project DLLs; multi-config generators use `publish\bin\<Config>`)
+- `<BUILD_DIR>\publish\bin` (project DLLs)
 - `<REPO_ROOT>\third_party\install\windows-amd64-msvc-19\bin` (third-party DLLs when using the bundled cmake-toolset)
 
 Example (PowerShell):

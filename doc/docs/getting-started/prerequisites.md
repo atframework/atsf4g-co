@@ -41,6 +41,7 @@ $env:ATAPP_UNIT_TEST_ETCD_HOST = "http://127.0.0.1:12379"
 
 ## 目录约定
 
-- 构建产物统一输出到 `<BUILD_DIR>/publish/`。
+- 服务与部署产物输出到 `<BUILD_DIR>/publish/`；单元测试输出到 `<BUILD_DIR>/test/`，sample 输出到
+  `<BUILD_DIR>/sample/`。
 - Windows 下推荐构建目录 `build_jobs_cmake_tools`（与 `.vscode/settings.json` 中的 clangd 配置一致）。
 - Linux 下 `cmake_dev.sh` 自动生成 `build_jobs_$(uname -s)`。
