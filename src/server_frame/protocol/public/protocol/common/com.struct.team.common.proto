@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+package atframework.team;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+import "protocol/extension/v3/xresloader.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/common";
+
+// 注意必须低于 256(支持蓝图直接调用)
+enum EnTeamPermissionRole {
+  EN_TEAM_MEMBER_ROLE_GUEST = 0 [(org.xresloader.enum_alias) = "Guest"];
+  EN_TEAM_MEMBER_ROLE_NORMAL = 50 [(org.xresloader.enum_alias) = "Normal"];
+  EN_TEAM_MEMBER_ROLE_ADMIN = 100 [(org.xresloader.enum_alias) = "Admin"];
+  EN_TEAM_MEMBER_ROLE_OWNER = 150 [(org.xresloader.enum_alias) = "Owner"];
+}
+
+message DTeamKey {
+  int64 team_id = 1;
+  // 队伍所属区服；和 team_id 一起构成队伍唯一标识，路由/分片以 (zone_id, team_id) 为 key
+  uint32 zone_id = 2;
+}
+
+message DTeamConfigure {
+  // 各项管理操作要求的最低成员角色，保持 GUEST(0) 时使用字段注释中的默认值。
+  // destroy_team 与无条件修改队长(election_captain)固定要求 EN_TEAM_MEMBER_ROLE_OWNER，不可配置。
+  // 所有成员都可以删除自己(视为主动退出)和 member_update 自己的数据；
+  // 所有人(包括游客)都可以同意或否决发给自己的邀请，也都可以发起加入请求。
+  EnTeamPermissionRole manage_member_role = 1;         // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
+  EnTeamPermissionRole approve_join_request_role = 2;  // 同意/拒绝其他玩家的加入请求，默认 NORMAL
+  EnTeamPermissionRole invite_role = 3;                // 发起邀请，默认 NORMAL
+  EnTeamPermissionRole update_team_data_role = 4;      // 更新队伍共享数据(team_update)，默认 NORMAL
+  EnTeamPermissionRole reject_invitation_role = 5;     // 否决他人收到的邀请(撤回邀请)，默认 ADMIN；
+                                                       // 被邀请人本人总是可以否决发给自己的邀请
+  bool disable_join_request = 6;                  // 禁止非成员发起加入请求(私人小队，仅通过邀请加入)，默认 false(允许)
+  EnTeamPermissionRole set_member_role_role = 7;  // 设置成员角色(member_set_role)，默认 ADMIN；
+                                                  // 无论配置如何都不能授予高于操作者自身的角色
+
+  uint32 max_member_count = 21;        // 队伍最大成员数
+  uint32 max_join_request_count = 22;  // 队伍最大加入请求数
+  uint32 max_invitation_count = 23;    // 队伍最大邀请数
+}

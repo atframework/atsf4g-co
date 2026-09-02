@@ -11,6 +11,7 @@ import "google/protobuf/timestamp.proto";
 
 import "protocol/extension/atframework.proto";
 import "protocol/common/com.struct.dtmq.common.proto";
+import "protocol/common/com.struct.team.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.team.proto";
 
@@ -20,10 +21,11 @@ package atframework.team;
 
 message SSTeamRoomCreateReq {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey sender_user_key = 2;
-  atframework.dtmq.DChannelIdKey sender_user_channel = 3;
+  uint32 team_type = 2;
+  atframework.shared.DUserIDKey sender_user_key = 3;
+  atframework.dtmq.DChannelIdKey sender_user_channel = 4;
 
-  DTeamConfigure configure = 4;
+  DTeamConfigure configure = 5;
 
   // 创建者(首任队长)上报的客户端版本与成员通知路由，与 SSTeamRoomApproveInvitationReq 同义
   string client_version = 6;

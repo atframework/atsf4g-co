@@ -8,6 +8,8 @@ option cc_enable_arenas = true;
 option cc_generic_services = true;
 
 import "protocol/extension/atframework.proto";
+
+import "protocol/common/com.struct.team.common.proto";
 import "protocol/pbdesc/com.struct.team.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/service-teamsvr/protocol/match/protocol/pbdesc";

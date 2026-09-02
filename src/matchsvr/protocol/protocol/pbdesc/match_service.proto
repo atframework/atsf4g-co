@@ -41,9 +41,9 @@ message SSMatchingEventSync {
 }
 
 message SSMatchingCreateReq {
-  DMatchingScope scope = 1;         // 匹配桶
-  DMatchingUnit unit = 2;           // 参与匹配的单位信息
-  DUserIDKey operator_user = 3;     // 本次实际操作者
+  DMatchingScope scope = 1;                                 // 匹配桶
+  DMatchingUnit unit = 2;                                   // 参与匹配的单位信息
+  DUserIDKey operator_user = 3;                             // 本次实际操作者
   repeated DMatchingSubscriberRoute subscriber_routes = 4;  // 必须且只覆盖 unit 中的全部用户
 }
 
@@ -58,8 +58,8 @@ message SSMatchingConfirmReq {
   bool confirmed = 3;
   uint64 subscriber_server_id = 4;
   int64 acknowledge_event_id = 5;
-  string user_open_id = 6; // 用户的 openid_id，lobbysvr 需要在确认战斗时传入
-  DOrbitUserInitDataDetail orbit_init_data = 7; // 保底的战斗房间初始化数据，确保玩家会进入到局内
+  string user_open_id = 6;                       // 用户的 openid_id，lobbysvr 需要在确认战斗时传入
+  DOrbitUserInitDataDetail orbit_init_data = 7;  // 保底的战斗房间初始化数据，确保玩家会进入到局内
 }
 
 message SSMatchingSnapshot {
@@ -84,13 +84,19 @@ message SSMatchingCheckReq {
 }
 
 service MatchsvrService {
-  option (atframework.service_options) = { module_name: "matching" };
+  option (atframework.service_options) = {
+    module_name: "matching"
+  };
 
   rpc create_matching(SSMatchingCreateReq) returns (SSMatchingSnapshot) {
-    option (atframework.rpc_options) = { api_name: "创建或加入匹配" };
+    option (atframework.rpc_options) = {
+      api_name: "创建或加入匹配"
+    };
   };
   rpc cancel_matching(SSMatchingCancelReq) returns (SSMatchingSnapshot) {
-    option (atframework.rpc_options) = { api_name: "取消匹配" };
+    option (atframework.rpc_options) = {
+      api_name: "取消匹配"
+    };
   };
   rpc matching_heart_bear(SSMatchingCheckReq) returns (SSMatchingSnapshot) {
     option (atframework.rpc_options) = {
@@ -99,13 +105,17 @@ service MatchsvrService {
     };
   };
   rpc confirm_matching(SSMatchingConfirmReq) returns (SSMatchingSnapshot) {
-    option (atframework.rpc_options) = { api_name: "确认或拒绝战斗" };
+    option (atframework.rpc_options) = {
+      api_name: "确认或拒绝战斗"
+    };
   };
 }
 
 // 发送端和接收端共用同一份 SDK；lobbysvr 只生成接收处理器。
 service MatchsvrNotifyService {
-  option (atframework.service_options) = { module_name: "matching" };
+  option (atframework.service_options) = {
+    module_name: "matching"
+  };
 
   rpc matching_event_sync(stream SSMatchingEventSync) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {

@@ -8,6 +8,7 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
+import "protocol/common/com.struct.team.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.team.proto";
 
@@ -55,7 +56,6 @@ message DTeamMemberSharedDataModule {
     DTeamMemberSharedDataTypeBattle battle = 1;
   }
 }
-
 
 // ======================== 队伍脏数据下发数据 ========================
 message DUserTeamSnapshot {

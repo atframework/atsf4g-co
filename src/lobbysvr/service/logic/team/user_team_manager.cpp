@@ -17,6 +17,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/excel/config_easy_api.h>
 #include <config/logic_config.h>
 
 #include <memory/object_allocator.h>
@@ -130,7 +131,7 @@ class user_team_manager_utility {
           FCTXLOGINFO(ctx, "{} has joined team {}:{} from {}:{}", user_inst, joined_team.team_key().zone_id(),
                       joined_team.team_key().team_id(), joined_team.user_key().zone_id(),
                       joined_team.user_key().user_id());
-          team_mgr.add_team(ctx, user_team_algorithm::get_team_type(joined_team), joined_team);
+          team_mgr.add_team(ctx, joined_team);
         }
         break;
       }
@@ -264,7 +265,7 @@ void user_team_manager::init_from_table_data(rpc::context& ctx, const PROJECT_NA
   for (const auto& group_data : team_data.group()) {
     if (group_data.has_current()) {
       const auto& current_team_data = group_data.current();
-      add_team(ctx, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(group_data.team_type()), current_team_data);
+      add_team(ctx, current_team_data);
     }
   }
 }
@@ -355,8 +356,7 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
   ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充 shared_member_data
-  pack_team_member_shared_data(ctx, user_team_algorithm::get_team_type(*invitation),
-                               *ss_req->mutable_shared_member_data());
+  pack_team_member_shared_data(ctx, *ss_req->mutable_shared_member_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::approve_invitation(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -427,8 +427,7 @@ rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, co
   protobuf_copy_message(*join_request->mutable_team_source_data(), team_source_data);
 
   // 填充 member_admission_data
-  pack_team_member_shared_data(ctx, user_team_algorithm::get_team_type(*join_request),
-                               *join_request->mutable_member_admission_data());
+  pack_team_member_shared_data(ctx, *join_request->mutable_member_admission_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::add_join_request(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -456,8 +455,8 @@ rpc::result_code_type user_team_manager::create_team(rpc::context& ctx, PROJECT_
   ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充初始的共享数据(队伍的和成员的)，各模块按 key 区分自己的数据
-  pack_team_shared_data(ctx, type, *ss_req->mutable_shared_team_data());
-  pack_team_member_shared_data(ctx, type, *ss_req->mutable_shared_member_data());
+  pack_team_shared_data(ctx, *ss_req->mutable_shared_team_data());
+  pack_team_member_shared_data(ctx, *ss_req->mutable_shared_member_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::create(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -470,11 +469,12 @@ rpc::result_code_type user_team_manager::create_team(rpc::context& ctx, PROJECT_
   // create 不会回发 joined_team 通知，这里直接按响应注册本地队伍(创建者即队长)
   atfw::team::DTeamMemberJoinData join_data;
   protobuf_copy_message(*join_data.mutable_team_key(), ss_rsp->team_key());
+  join_data.set_team_type(static_cast<uint32_t>(type));
   protobuf_copy_message(*join_data.mutable_user_key(), ss_req->sender_user_key());
   protobuf_copy_message(*join_data.mutable_team_channel(), ss_rsp->room_channel());
   join_data.set_user_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
   protobuf_copy_message(*join_data.mutable_captain_user_key(), ss_req->sender_user_key());
-  add_team(ctx, type, join_data);
+  add_team(ctx, join_data);
 
   protobuf_copy_message(output_team_key, ss_rsp->team_key());
   RPC_RETURN_CODE(0);
@@ -536,8 +536,7 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
 }
 
 void user_team_manager::pack_team_shared_data(
-    rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
-    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
+    rpc::context& ctx, ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
   // 战斗模块
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
@@ -554,8 +553,7 @@ void user_team_manager::pack_team_shared_data(
 }
 
 void user_team_manager::pack_team_member_shared_data(
-    rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
-    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
+    rpc::context& ctx, ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
   // 战斗模块
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> wrapper{ctx};
@@ -580,20 +578,15 @@ void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequ
   is_dirty_ = true;
 }
 
-void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType team_type,
-                                 const atfw::team::DTeamMemberJoinData& join_data) {
+void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMemberJoinData& join_data) {
   // Implementation here
   if (join_data.team_key().team_id() == 0 || join_data.team_channel().channel_id().empty()) {
     return;
   }
 
-  switch (team_type) {
-    case PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL:
-      break;
-    default: {
-      FCTXLOGERROR(ctx, "{} add_team: unknown team type {}", *owner_, static_cast<int32_t>(team_type));
-      return;
-    }
+  if (!excel::get_ExcelTeamType_by_team_type(join_data.team_type())) {
+    FCTXLOGERROR(ctx, "{} add_team: unknown team type {}", *owner_, static_cast<int32_t>(join_data.team_type()));
+    return;
   }
 
   const auto& team_key = join_data.team_key();
@@ -626,7 +619,7 @@ void user_team_manager::add_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeam
     return;
   }
 
-  auto team_ptr = user_team::create(ctx, *this, static_cast<uint32_t>(team_type), team_key, channel_key);
+  auto team_ptr = user_team::create(ctx, *this, join_data.team_type(), team_key, channel_key);
   if (!team_ptr) {
     FCTXLOGERROR(ctx, "{} add_team: create user_team failed for team {}:{}", *owner_, team_key.zone_id(),
                  team_key.team_id());

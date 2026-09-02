@@ -24,6 +24,7 @@
     <tree id="dtmq" name="消息队列"></tree>
     <tree id="level" name="关卡"></tree>
     <tree id="matching" name="匹配"></tree>
+    <tree id="team" name="组队"></tree>
   </category>
 
   <list>
@@ -90,6 +91,11 @@
       <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Matching.xlsx|匹配结果模板|3,1</scheme>
       <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelMatchingResultTemplate</scheme>
       <scheme name="OutputFile" desc="输出文件名">Both/matching_result_template.bytes</scheme>
+    </item>
+    <item name="组队配置" cat="team" class="server">
+      <scheme name="DataSource" desc="数据源(文件名|表名|数据起始行号,数据起始列号)">Team.xlsx|组队类型配置|3,1</scheme>
+      <scheme name="ProtoName" desc="协议名">atframework.shared.config.ExcelTeamType</scheme>
+      <scheme name="OutputFile" desc="输出文件名">Both/team_type.bytes</scheme>
     </item>
   </list>
 </root>

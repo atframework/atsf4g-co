@@ -134,6 +134,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   static team_room::ptr_t create(rpc::context& ctx, const atfw::team::DTeamKey& team_key);
 
   const atfw::team::DTeamKey& get_team_key() const noexcept;
+
+  uint32_t get_team_type() const noexcept;
+
   const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept;
   // 频道订阅已就绪(首轮数据已同步)
   bool is_subscriber_ready() const noexcept;
@@ -253,23 +256,30 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   void update_acknowledge(int64_t sequence, uint64_t hash_code);
   // 应用成员入队(幂等): 已存在的成员保留其 key 与更早的入队时间，首位成员成为队长。
   // 入队/心跳时间缺失时以 event_timepoint(频道事件创建时间)兜底，保证各节点状态一致
-  void apply_add_member(atfw::team::DTeamMember&& member_data, std::chrono::system_clock::time_point event_timepoint);
+  void apply_add_member(rpc::context& ctx, atfw::team::DTeamMember&& member_data,
+                        std::chrono::system_clock::time_point event_timepoint);
 
   // apply_action 的各事件分支处理(拆分为独立函数以降低单个函数复杂度)
   void apply_member_update(const atfw::team::DTeamMemberUpdateData& update_data);
   void apply_team_update(const atfw::team::DTeamUpdateData& update_data);
   void apply_member_set_role(const atfw::team::DTeamMemberSetRole& set_role);
-  void apply_add_invitation(const atfw::team::DTeamInvitation& invitation);
+  void apply_add_invitation(rpc::context& ctx, const atfw::team::DTeamInvitation& invitation);
   void apply_approve_invitation(const atfw::team::DTeamInvitation& invitation);
   void apply_reject_invitation(const atfw::team::DTeamInvitation& invitation);
-  void apply_add_join_request(const atfw::team::DTeamJoinRequest& join_request);
+  void apply_add_join_request(rpc::context& ctx, const atfw::team::DTeamJoinRequest& join_request);
   void apply_approve_join_request(const atfw::team::DTeamJoinRequest& join_request);
   void apply_reject_join_request(const atfw::team::DTeamJoinRequest& join_request);
 
-  member_ptr_t mutable_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
+  member_ptr_t mutable_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
   bool remove_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                      atfw::team::EnTeamExitReason reason, bool with_notify);
-  void foreach_member(atfw::util::nostd::function_ref<bool(atfw::util::nostd::nonnull<const member_ptr_t>&)> fn);
+  void foreach_member(
+      rpc::context& ctx,
+      atfw::util::nostd::function_ref<bool(rpc::context&, atfw::util::nostd::nonnull<const member_ptr_t>&)> fn);
+
+  bool resolve_max_member_count(rpc::context& ctx);
+  bool resolve_max_join_request_count(rpc::context& ctx);
+  bool resolve_max_invitation_count(rpc::context& ctx);
 
   void append_team_member_channel_notification(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                                                atfw::dtmq::DChannelIdKey&& channel_id,
@@ -323,10 +333,10 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 解散空队伍
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type destroy_empty_room(rpc::context& ctx);
 
-  void dump_private_data(atfw::team::DTeamRoomPrivateData& output, int64_t compact_sequence,
+  void dump_private_data(rpc::context& ctx, atfw::team::DTeamRoomPrivateData& output, int64_t compact_sequence,
                          std::chrono::system_clock::time_point compact_timepoint);
   // dump 公共快照；GAP-08: 已过期的邀请/加入请求不写入快照(now 为判定基准)
-  void dump_public_data(atfw::team::DTeamStorage& output, std::chrono::system_clock::time_point now);
+  void dump_public_data(rpc::context& ctx, atfw::team::DTeamStorage& output, std::chrono::system_clock::time_point now);
 
   // 乐观锁租约时长，不低于 dtmq 频道配置的订阅者心跳过期淘汰时间(subscriber_timeout)
   std::chrono::system_clock::duration get_lock_lease() const;
@@ -350,6 +360,10 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   atfw::team::EnTeamPermissionRole get_update_team_data_role() const;      // 默认 NORMAL
   atfw::team::EnTeamPermissionRole get_reject_invitation_role() const;     // 默认 ADMIN
   atfw::team::EnTeamPermissionRole get_set_member_role_role() const;       // 默认 ADMIN
+
+  uint32_t get_max_member_count() const;        // 默认 3
+  uint32_t get_max_join_request_count() const;  // 默认 30
+  uint32_t get_max_invitation_count() const;    // 默认 30
   // 是否允许非成员发起加入请求(false 即私人小队，仅通过邀请加入)，默认允许
   bool is_join_request_allowed() const;
 

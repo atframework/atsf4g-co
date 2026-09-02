@@ -6,16 +6,6 @@
 #  undef GetMessage
 #endif
 
-PROJECT_NAMESPACE_ID::EnTeamType user_team_algorithm::get_team_type(const atfw::team::DTeamMemberJoinData&) noexcept {
-  return PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL;
-}
-PROJECT_NAMESPACE_ID::EnTeamType user_team_algorithm::get_team_type(const atfw::team::DTeamJoinRequest&) noexcept {
-  return PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL;
-}
-PROJECT_NAMESPACE_ID::EnTeamType user_team_algorithm::get_team_type(const atfw::team::DTeamInvitation&) noexcept {
-  return PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL;
-}
-
 namespace {
 // 由 module oneof 中被设置的 Message 字段取二级 data_type oneof 中被设置字段的 field number，
 // 按 (module_id << 32) | data_type_id 打包共享数据 key(见 com.struct.team.shared.proto 的 Key 算法约定)。

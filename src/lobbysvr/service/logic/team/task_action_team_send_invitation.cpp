@@ -18,8 +18,10 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/excel/config_easy_api.h>
 #include <config/logic_config.h>
 #include <config/server_frame_build_feature.h>
+
 #include <utility/protobuf_mini_dumper.h>
 
 #include <rpc/rpc_context.h>
@@ -42,7 +44,7 @@ ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API const char* task_action_team_send_i
 
 ATFRAMEWORK_SHARED_LOBBYSVRCLIENTSERVICE_API task_action_team_send_invitation::result_type
 task_action_team_send_invitation::operator()() {
-  const rpc_request_type& req_body = get_request_body();
+  rpc_request_type& req_body = get_request_body();
   // rpc_response_type& rsp_body = get_response_body();
 
   user::ptr_t user_inst = get_user<user>();
@@ -52,10 +54,19 @@ task_action_team_send_invitation::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  const auto& invitee = req_body.user_key();
-  if (invitee.user_id() == 0 || invitee.zone_id() == 0) {
+  if (!excel::get_ExcelTeamType_by_team_type(static_cast<uint32_t>(req_body.team_type()))) {
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  auto& invitee = *req_body.mutable_user_key();
+  if (invitee.user_id() == 0) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  if (invitee.zone_id() == 0) {
+    invitee.set_zone_id(user_inst->get_zone_id());
   }
 
   user_team::ptr_t team_ptr;
@@ -89,8 +100,8 @@ task_action_team_send_invitation::operator()() {
     }
 
     // 如果没有队伍，先创建一个(创建者即队长，初始 shared_data 由 user_team_manager 填充)
-    int32_t create_ret = RPC_AWAIT_CODE_RESULT(user_inst->get_user_team_manager().create_team(
-        get_shared_context(), PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL, team_key));
+    int32_t create_ret = RPC_AWAIT_CODE_RESULT(
+        user_inst->get_user_team_manager().create_team(get_shared_context(), req_body.team_type(), team_key));
     if (0 != create_ret) {
       set_response_code(create_ret);
       TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

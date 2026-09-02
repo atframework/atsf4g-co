@@ -19,10 +19,6 @@
 
 class user_team_algorithm {
  public:
-  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamMemberJoinData&) noexcept;
-  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamJoinRequest&) noexcept;
-  static PROJECT_NAMESPACE_ID::EnTeamType get_team_type(const atfw::team::DTeamInvitation&) noexcept;
-
   static int64_t make_team_shared_data_key(const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data);
 
   static int64_t make_team_member_shared_data_key(const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data);

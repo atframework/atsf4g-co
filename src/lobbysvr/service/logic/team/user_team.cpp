@@ -781,9 +781,8 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
         member_update->set_client_version(user_inst->get_client_info().client_version());
         member_update->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
-        user_inst->get_user_team_manager().pack_team_member_shared_data(
-            child_ctx, static_cast<atfw::shared::EnTeamType>(team->team_type_),
-            *member_update->mutable_shared_member_data());
+        user_inst->get_user_team_manager().pack_team_member_shared_data(child_ctx,
+                                                                        *member_update->mutable_shared_member_data());
 
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team->send_action(child_ctx, std::move(*action))));
       });

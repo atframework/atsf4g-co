@@ -10,6 +10,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/timestamp.proto";
 
 import "protocol/common/com.struct.dtmq.common.proto";
+import "protocol/common/com.struct.team.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
@@ -96,20 +97,6 @@ message DTeamAnyDataWithKey {
 message DTeamAnyValueWithKey {
   int64 key = 1;
   google.protobuf.Any value = 2;
-}
-
-message DTeamKey {
-  int64 team_id = 1;
-  // 队伍所属区服；和 team_id 一起构成队伍唯一标识，路由/分片以 (zone_id, team_id) 为 key
-  uint32 zone_id = 2;
-}
-
-// 注意必须低于 1000
-enum EnTeamPermissionRole {
-  EN_TEAM_MEMBER_ROLE_GUEST = 0;
-  EN_TEAM_MEMBER_ROLE_NORMAL = 100;
-  EN_TEAM_MEMBER_ROLE_ADMIN = 200;
-  EN_TEAM_MEMBER_ROLE_OWNER = 300;
 }
 
 // 队伍数据检查器
@@ -204,9 +191,10 @@ message DTeamMemberUpdateData {
 
 message DTeamMemberJoinData {
   DTeamKey team_key = 1;
-  atframework.shared.DUserIDKey user_key = 2;
-  atframework.dtmq.DChannelIdKey team_channel = 3;
-  EnTeamPermissionRole user_role = 4;
+  uint32 team_type = 2;
+  atframework.shared.DUserIDKey user_key = 3;
+  atframework.dtmq.DChannelIdKey team_channel = 4;
+  EnTeamPermissionRole user_role = 5;
 
   atframework.shared.DUserIDKey captain_user_key = 11;
 }
@@ -248,6 +236,7 @@ message DTeamInvitation {
   atframework.shared.DUserIDKey invitee = 2;
   atframework.dtmq.DChannelIdKey invitee_private_channel = 3;
   DTeamKey team_key = 4;
+  uint32 team_type = 5;
 
   EnTeamSourceType team_source_type = 6;
   google.protobuf.Any team_source_data = 7;
@@ -293,28 +282,14 @@ message DTeamJoinRequest {
   repeated DTeamAnyDataWithKey member_admission_data = 14;
 }
 
-message DTeamConfigure {
-  // 各项管理操作要求的最低成员角色，保持 GUEST(0) 时使用字段注释中的默认值。
-  // destroy_team 与无条件修改队长(election_captain)固定要求 EN_TEAM_MEMBER_ROLE_OWNER，不可配置。
-  // 所有成员都可以删除自己(视为主动退出)和 member_update 自己的数据；
-  // 所有人(包括游客)都可以同意或否决发给自己的邀请，也都可以发起加入请求。
-  EnTeamPermissionRole manage_member_role = 1;         // 直接添加/删除其他成员、member_update 其他成员数据，默认 ADMIN
-  EnTeamPermissionRole approve_join_request_role = 2;  // 同意/拒绝其他玩家的加入请求，默认 NORMAL
-  EnTeamPermissionRole invite_role = 3;                // 发起邀请，默认 NORMAL
-  EnTeamPermissionRole update_team_data_role = 4;      // 更新队伍共享数据(team_update)，默认 NORMAL
-  EnTeamPermissionRole reject_invitation_role = 5;     // 否决他人收到的邀请(撤回邀请)，默认 ADMIN；
-                                                       // 被邀请人本人总是可以否决发给自己的邀请
-  bool disable_join_request = 6;                  // 禁止非成员发起加入请求(私人小队，仅通过邀请加入)，默认 false(允许)
-  EnTeamPermissionRole set_member_role_role = 7;  // 设置成员角色(member_set_role)，默认 ADMIN；
-                                                  // 无论配置如何都不能授予高于操作者自身的角色
-}
-
 message DTeamStorage {
   DTeamKey team_key = 1;
-  // 当前队长
-  atframework.shared.DUserIDKey captain_user_key = 2;
+  uint32 team_type = 2;
 
-  DTeamConfigure configure = 3;
+  // 当前队长
+  atframework.shared.DUserIDKey captain_user_key = 3;
+
+  DTeamConfigure configure = 4;
 
   // 当前成员
   repeated DTeamMember member = 6;
