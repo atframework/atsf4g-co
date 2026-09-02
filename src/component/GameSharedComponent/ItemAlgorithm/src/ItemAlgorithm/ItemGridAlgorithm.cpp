@@ -273,7 +273,8 @@ ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
 
       int64_t accumulation_limit = position_cfg->accumulation_limit();
       if (accumulation_limit <= 0) {
-        accumulation_limit = 1;
+        // <=0 视为无限堆叠
+        accumulation_limit = INT32_MAX;
       }
 
       if (add_count > accumulation_limit) {
@@ -1118,7 +1119,8 @@ bool ItemGridAlgorithm::check_move_request(
 
     int64_t accumulation_limit = position_cfg->accumulation_limit();
     if (accumulation_limit <= 0) {
-      accumulation_limit = 1;
+      // <=0 视为无限堆叠
+      accumulation_limit = INT32_MAX;
     }
 
     // 填充 Helper 字段
@@ -1954,6 +1956,12 @@ bool ItemGridAlgorithm::find_positions_inner(
         return false;
       }
       ignore_guid_count[ignore.guid()] = required;
+      // 记录该 GUID 条目所在位置, 供 reserved 释放 (整体消耗时允许新道具落回原位)
+      if (ignore_cfg->need_occupy_the_grid) {
+        ItemGridPosition pos =
+            extract_position(guid_it->second->item_instance().item_basic().position().grid_position());
+        ignore_position_count[pos] += ignore.count();
+      }
     } else if (ignore_cfg->need_occupy_the_grid) {
       ItemGridPosition pos = extract_position(ignore.position().grid_position());
       auto pos_it = position_index_.find(pos);
@@ -1997,6 +2005,42 @@ bool ItemGridAlgorithm::find_positions_inner(
   std::vector<std::vector<bool>> reserved;
   if (is_occupy_flag()) {
     reserved = occupy_grid_flag_;
+
+    // ignore_item 中被整体消耗的格子应从 reserved 释放 (先消耗再放入的真实语义)。
+    // 这样带 GUID 道具 / 消耗位与新道具类型不同的场景也能落回原位。
+    for (const auto& ignore_pair : ignore_position_count) {
+      const ItemGridPosition& pos = ignore_pair.first;
+      // 该位置被消耗的数量
+      int64_t consumed = ignore_pair.second;
+      auto pos_it = position_index_.find(pos);
+      if (pos_it == position_index_.end()) {
+        continue;
+      }
+      const auto& eb = pos_it->second->item_instance().item_basic();
+      if (eb.count() <= consumed) {
+        // 整体消耗: 释放该条目占用的区域
+        auto* ignore_pos_cfg = get_item_position_cfg(config_group, eb);
+        if (ignore_pos_cfg != nullptr) {
+          int32_t item_row = ignore_pos_cfg->row_size();
+          int32_t item_col = ignore_pos_cfg->column_size();
+          if (item_row <= 0) {
+            item_row = 1;
+          }
+          if (item_col <= 0) {
+            item_col = 1;
+          }
+          for (int32_t r = 0; r < item_row; ++r) {
+            for (int32_t c = 0; c < item_col; ++c) {
+              int32_t rr = pos.y + r;
+              int32_t cc = pos.x + c;
+              if (rr >= 0 && rr < row_size_ && cc >= 0 && cc < column_size_) {
+                reserved[static_cast<size_t>(rr)][static_cast<size_t>(cc)] = false;
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -2009,6 +2053,10 @@ bool ItemGridAlgorithm::find_positions_inner(
 
   // 复用临时 DItemInstance（避免循环体内多次分配），用于构造 on_check_add 入参
   PROJECT_NAMESPACE_ID::DItemInstance tmp_inst;
+
+  // 批次内已规划到已有条目的数量 (位置 → 本批次累计规划), 避免同一批多个可堆叠
+  // basic 重复预订同一格容量导致超过 accumulation_limit。
+  std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo> pending_existing_extra;
 
   for (const auto& item : items) {
     const auto& basic = accessor::get_basic(item);
@@ -2049,6 +2097,11 @@ bool ItemGridAlgorithm::find_positions_inner(
     }
     const int32_t item_rows = is_occupy_flag() ? pos_cfg->row_size() : 1;
     const int32_t item_cols = is_occupy_flag() ? pos_cfg->column_size() : 1;
+    // 与 check_add / check_move 一致: accumulation_limit <= 0 (配置缺省) 视为无限堆叠
+    int64_t accumulation_limit = pos_cfg->accumulation_limit();
+    if (accumulation_limit <= 0) {
+      accumulation_limit = INT32_MAX;
+    }
 
     // 辅助：构造含候选位置的临时请求并通过 on_check_add 做额外校验
     auto check_pos_ok = [&](const PROJECT_NAMESPACE_ID::DItemGridPosition& cand_pos) -> bool {
@@ -2124,10 +2177,11 @@ bool ItemGridAlgorithm::find_positions_inner(
         PROJECT_NAMESPACE_ID::DItemGridPosition out_pos;
         apply_position(out_pos, preferred);
         if (check_pos_ok(out_pos)) {
-          int64_t put = (pos_cfg->accumulation_limit() > 0) ? std::min<int64_t>(remaining, pos_cfg->accumulation_limit())
-                                                            : remaining;
+          int64_t put = std::min<int64_t>(remaining, accumulation_limit);
           push_success(out_pos, put);
           mark_reserved(preferred.x, preferred.y);
+          // 记录本批次已规划到该位置的数量, 供策略2 计算剩余容量时扣除
+          pending_existing_extra[preferred] += put;
           remaining -= put;
           ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics: preferred type={} at ({},{}) put={}",
                                        basic.type_id(), preferred.x, preferred.y, put);
@@ -2138,6 +2192,7 @@ bool ItemGridAlgorithm::find_positions_inner(
     // 策略 2：堆叠到已有的同类型无GUID条目 (支持拆堆)
     // 注意: ignore_item 消耗的数量要从可堆叠容量中扣除 (消耗后原位空出容量)。
     // 即使堆叠上限为 1, 只要 ignore_item 消耗了该位置的数量 (空出容量), 也能堆回原位。
+    // 同一批多个可堆叠 basic 规划到同一位置时, 需扣除本批次已规划数量 (pending_existing_extra)。
     if (remaining > 0 && basic.guid() == 0) {
       for (const auto& kv : position_index_) {
         if (remaining <= 0) {
@@ -2153,8 +2208,13 @@ bool ItemGridAlgorithm::find_positions_inner(
         if (ignore_it != ignore_position_count.end()) {
           ignored = ignore_it->second;
         }
-        int64_t remaining_capacity =
-            static_cast<int64_t>(pos_cfg->accumulation_limit()) - eb.count() + ignored;
+        // 本批次已规划到该位置的数量 (避免重复预订容量)
+        int64_t already_planned = 0;
+        auto planned_it = pending_existing_extra.find(kv.first);
+        if (planned_it != pending_existing_extra.end()) {
+          already_planned = planned_it->second;
+        }
+        int64_t remaining_capacity = accumulation_limit - eb.count() + ignored - already_planned;
         if (remaining_capacity <= 0) {
           continue;
         }
@@ -2163,6 +2223,7 @@ bool ItemGridAlgorithm::find_positions_inner(
         apply_position(out_pos, kv.first);
         if (check_pos_ok(out_pos)) {
           push_success(out_pos, put);
+          pending_existing_extra[kv.first] = already_planned + put;
           remaining -= put;
           ITEM_ALGORITHM_LOG_DEBUG_FMT("find_positions_for_basics: stack to existing type={} at ({},{}) put={}",
                                        basic.type_id(), kv.first.x, kv.first.y, put);
@@ -2194,9 +2255,7 @@ bool ItemGridAlgorithm::find_positions_inner(
           if (!check_pos_ok(out_pos)) {
             continue;
           }
-          int64_t put = (pos_cfg->accumulation_limit() > 0)
-                            ? std::min<int64_t>(remaining, pos_cfg->accumulation_limit())
-                            : remaining;
+          int64_t put = std::min<int64_t>(remaining, accumulation_limit);
           push_success(out_pos, put);
           mark_reserved(x, y);
           remaining -= put;
