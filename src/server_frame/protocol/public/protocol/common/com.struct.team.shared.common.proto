@@ -12,9 +12,6 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 
 package atframework.shared;
 
-// 注意: 放到 public/protocol/common 下是因为 atframework.shared.config.ExcelTeamType 的
-// xresloader validator 需要在 config.pb 中解析本枚举(pbdesc 下的枚举不进 config.pb)。
-// 本枚举曾被定义在 pbdesc/com.struct.team.shared.proto,移动后全名和值不变,不影响线上协议。
 enum EnTeamType {
   EN_TEAM_TYPE_INVALID = 0;  // 无效类型
   EN_TEAM_TYPE_NORMAL = 1;   // 普通组队

@@ -31,6 +31,7 @@
 constexpr const int64_t matching_logic::kDefaultSearchTimeout;
 constexpr const int64_t matching_logic::kDefaultConfirmTimeout;
 constexpr const int64_t matching_logic::kTerminalRetention;
+constexpr const int64_t matching_logic::kUnitHeartbeatTimeout;
 constexpr const size_t matching_logic::kMaxRebalanceMigrationsPerTarget;
 constexpr const size_t matching_logic::kMaxRebalanceMigrationsPerTick;
 #endif

@@ -62,12 +62,12 @@ class matching_logic {
     faction_join_progress progress;
   };
 
-  static const int64_t kDefaultSearchTimeout = 120;
-  static const int64_t kDefaultConfirmTimeout = 15;
-  static const int64_t kTerminalRetention = 60;
-  static const int64_t kUnitHeartbeatTimeout = 10;
-  static const size_t kMaxRebalanceMigrationsPerTarget = 8;
-  static const size_t kMaxRebalanceMigrationsPerTick = 64;
+  static constexpr const int64_t kDefaultSearchTimeout = 120;
+  static constexpr const int64_t kDefaultConfirmTimeout = 15;
+  static constexpr const int64_t kTerminalRetention = 60;
+  static constexpr const int64_t kUnitHeartbeatTimeout = 10;
+  static constexpr const size_t kMaxRebalanceMigrationsPerTarget = 8;
+  static constexpr const size_t kMaxRebalanceMigrationsPerTick = 64;
 
   // 读取匹配池搜索超时，配置缺失或无效时使用服务默认值。
   static int64_t get_search_timeout_seconds(int32_t matching_pool_id);
