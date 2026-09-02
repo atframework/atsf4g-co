@@ -443,10 +443,16 @@ rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, co
 
 rpc::result_code_type user_team_manager::create_team(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnTeamType type,
                                                      atfw::team::DTeamKey& output_team_key) {
+  // 非法队伍类型直接拒绝，避免房间创建成功后本地 add_team 校验失败导致两端状态不一致
+  if (!excel::get_ExcelTeamType_by_team_type(static_cast<uint32_t>(type))) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE);
+  }
+
   rpc::context::message_holder<atfw::team::SSTeamRoomCreateReq> ss_req{ctx};
   rpc::context::message_holder<atfw::team::SSTeamRoomCreateRsp> ss_rsp{ctx};
   // team_id 置 0 由 teamsvr-room 分配，zone_id 参与按队伍一致性哈希的路由
   ss_req->mutable_team_key()->set_zone_id(owner_->get_zone_id());
+  ss_req->set_team_type(static_cast<uint32_t>(type));
   owner_->dump_user_key(*ss_req->mutable_sender_user_key());
   protobuf_copy_message(*ss_req->mutable_sender_user_channel(),
                         owner_->get_user_chat_manager().get_private_chat_channel_key());
@@ -584,8 +590,14 @@ void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMembe
     return;
   }
 
-  if (!excel::get_ExcelTeamType_by_team_type(join_data.team_type())) {
-    FCTXLOGERROR(ctx, "{} add_team: unknown team type {}", *owner_, static_cast<int32_t>(join_data.team_type()));
+  // 旧版本房间事件/存档未携带 team_type, 按普通组队处理; 显式传入但未配置的类型仍然丢弃
+  // (init_from_table_data 依赖丢弃非法类型来恢复分组)
+  uint32_t team_type = join_data.team_type();
+  if (static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_INVALID) == team_type) {
+    team_type = static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+  }
+  if (!excel::get_ExcelTeamType_by_team_type(team_type)) {
+    FCTXLOGERROR(ctx, "{} add_team: unknown team type {}", *owner_, static_cast<int32_t>(team_type));
     return;
   }
 
@@ -619,7 +631,7 @@ void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMembe
     return;
   }
 
-  auto team_ptr = user_team::create(ctx, *this, join_data.team_type(), team_key, channel_key);
+  auto team_ptr = user_team::create(ctx, *this, team_type, team_key, channel_key);
   if (!team_ptr) {
     FCTXLOGERROR(ctx, "{} add_team: create user_team failed for team {}:{}", *owner_, team_key.zone_id(),
                  team_key.team_id());

@@ -179,8 +179,8 @@ bool expect_not_logined(atfw::testing::runtime& test, uint64_t session_id, gsl::
 }
 }  // namespace
 
-// CS-INVITE-01: team_send_invitation — invalid invitee / unknown explicit team / current-team reuse /
-// create-on-demand with full create+add_invitation payloads / permission-denied zero uplink.
+// CS-INVITE-01: team_send_invitation — invalid team_type / invalid invitee / unknown explicit team /
+// current-team reuse / create-on-demand with full create+add_invitation payloads / permission-denied zero uplink.
 CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -213,6 +213,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
   // 未登录: 不入会话的请求直接 EN_ERR_LOGIN_NOT_LOGINED 且零上行
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     CASE_EXPECT_TRUE(expect_not_logined(
         test, 9100901, rpc::lobbysvrclientservice::packer::get_full_name_of_team_send_invitation(), req));
@@ -220,9 +221,31 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.add_invitation_reqs.size()));
   }
 
+  // team_type 未指定或不在配置表中: EN_ERR_TEAM_INVALID_TEAM_TYPE 且零上行(先于 invitee/team_key 检查)
+  {
+    atframework::shared::CSTeamSendInvitationReq req;
+    protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
+    atframework::CSMsg rsp_msg;
+    CASE_EXPECT_TRUE(post_team_cs_request(
+        test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_send_invitation(), req, rsp_msg));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE, rsp_msg.head().error_code());
+
+    // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
+    req.set_team_type(static_cast<atframework::shared::EnTeamType>(999));
+    // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
+    atframework::CSMsg rsp_msg_unknown;
+    CASE_EXPECT_TRUE(post_team_cs_request(
+        test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_send_invitation(), req,
+        rsp_msg_unknown));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE, rsp_msg_unknown.head().error_code());
+    CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.create_reqs.size()));
+    CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.add_invitation_reqs.size()));
+  }
+
   // invitee 无效(user_id/zone_id 缺 0): EN_ERR_INVALID_PARAM 且零上行
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     atframework::CSMsg rsp_msg;
     CASE_EXPECT_TRUE(post_team_cs_request(
         test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_send_invitation(), req, rsp_msg));
@@ -234,6 +257,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
   // 显式指定不存在的队伍: EN_ERR_TEAM_NOT_IN_TEAM 且零上行(不会为该 team_key 创建队伍)
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(799999));
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     atframework::CSMsg rsp_msg;
@@ -246,6 +270,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
 
   // 不指定 team 且无 current: create(team_id=0) -> 本地注册 -> add_invitation, 两次上行 payload 完整
   atframework::shared::CSTeamSendInvitationReq create_flow_req;
+  create_flow_req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
   protobuf_copy_message(*create_flow_req.mutable_user_key(), team_test::make_user_key(kInviteeId));
   create_flow_req.set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
   {
@@ -268,6 +293,8 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     // team_id=0 由 room 分配, zone 参与路由; sender/频道/版本/路由完整上报
     CASE_EXPECT_EQ(0, create_req.team_key().team_id());
     CASE_EXPECT_EQ(team_test::kZoneId, create_req.team_key().zone_id());
+    // team_type 透传到 room 的 create 请求(房间据此记录类型并读取该类型的默认配置)
+    CASE_EXPECT_EQ(atframework::shared::EN_TEAM_TYPE_NORMAL, create_req.team_type());
     CASE_EXPECT_EQ(kUserId, create_req.sender_user_key().user_id());
     CASE_EXPECT_EQ(team_test::kZoneId, create_req.sender_user_key().zone_id());
     CASE_EXPECT_EQ(private_channel_key.channel_id(), create_req.sender_user_channel().channel_id());
@@ -328,6 +355,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
   // 显式指定已存在的队伍: 复用而不重复 create
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_team_key(), allocated_key);
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     atframework::CSMsg rsp_msg;
@@ -361,6 +389,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     }));
 
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     atframework::CSMsg rsp_msg;
     CASE_EXPECT_TRUE(post_team_cs_request(
@@ -1774,6 +1803,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
   // 显式指定已销毁队伍: 直接 EN_ERR_TEAM_NOT_IN_TEAM, 零新增上行, 已销毁被收编且客户端收到 destroy
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     atframework::CSMsg rsp_msg;
@@ -1813,6 +1843,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
   const auto allocated_key = team_test::make_team_key(710401);
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     req.set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
     atframework::CSMsg rsp_msg;
@@ -1844,6 +1875,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
   // 对照组: 显式指定存活队伍, 正常复用且不被误删(防止 destroyed 判断写反)
   {
     atframework::shared::CSTeamSendInvitationReq req;
+    req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
     protobuf_copy_message(*req.mutable_team_key(), allocated_key);
     protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kInviteeId));
     atframework::CSMsg rsp_msg;

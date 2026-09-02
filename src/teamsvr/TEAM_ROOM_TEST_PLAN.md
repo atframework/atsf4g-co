@@ -451,7 +451,7 @@ task 退出、调用被消费或状态谓词成立后再断言，不能把固定
 | INF-02 | ✅ | P0 | ready snapshot 的完整 team key、锁、custom/private data 和增量日志能送达 room 回调 |
 | INF-03 | ✅ | P0 | 每个 case 清理 manager；相同完整 team key 复用 room，相同 team id 的不同 zone 隔离且不串 DTMQ channel |
 | INF-04 | 🔶 | P1 | typed `invoke_ss_action` 覆盖业务 action；另用 raw transport smoke case 验证 dispatcher 注册、RPC envelope 和非法 type URL/body |
-| CRT-01 | ✅ | P0 | 显式 team id 创建成功；初始 update 为 `save=true`，创建者为 OWNER/队长，公共和私有初始数据完整 |
+| CRT-01 | ✅ | P0 | 显式 team id 创建成功；初始 update 为 `save=true`，创建者为 OWNER/队长，公共和私有初始数据完整；team_type 落入首帧快照 |
 | CRT-02 | 🔶 | P1 | team id 为 0 时 UUID 成功/失败；只在生成成功后创建 room |
 | CRT-03 | ✅ | P0 | sender key 非法、重复创建、已销毁频道分别返回精确错误，且无额外权威写入 |
 | CRT-04 | ✅ | P0 | 创建 update 已提交但响应丢失；重新订阅/重试从已提交快照恢复，不覆盖成第二支初始状态 |
@@ -495,6 +495,7 @@ task 退出、调用被消费或状态谓词成立后再断言，不能把固定
 | PERM-16 | ✅ | P0 | `member_set_role` | 非成员/目标不存在、role<=GUEST、低于门槛、授予高于自身均拒绝且零写；ADMIN 可把较低角色提升到 ADMIN，OWNER 可降级他人，任何人不能经此修改当前队长 |
 | PERM-17 | ✅ | P0 | `member_set_role` 自定义门槛 | 降低 `set_member_role_role` 只改变操作资格，不改变“目标当前角色必须严格低于操作者”和“目标 role 不高于操作者”两道授权上限 |
 | PERM-18 | ✅ | P1 | 配置默认门槛修订下发 | create 快照 custom_data 与 team_update 增量事件中的 configure 均携带修订后的完整门槛（revise_configure_default_permission），不允许出现 GUEST 占位，订阅者无需自行补默认值 |
+| PERM-19 | ✅ | P1 | 配置默认值来源 | 未显式配置时门槛与上限取自 ExcelTeamType 配置行（normalize_configure_default_values），行内未覆盖字段回退内置默认；getter 与 create 快照 custom_data 一致 |
 
 #### 条件更新与 keyed repeated 数据
 
@@ -535,6 +536,11 @@ condition。DATA 行复用 EVT/ADM/RCV 的真实业务路径，不以直接访�
 | ADM-14 | ✅ | P0 | 备用 room 应用同一批历史 admission 日志不发送 `DTeamMemberAction`，接管后只发送新事件的副作用 |
 | ADM-15 | ⬜ | P1 | 多个 invitee/requester 并存时，按 user key 独立更新、批准、拒绝和清理，不串频道或数据 |
 | ADM-16 | ✅ | P1 | 目标已是成员时再次 approve（双击/断线重连重试/重放）：不再写第二个 `add_member`，仍清理 admission 并只补一次 `joined_team`；`approve_invitation` 与 `approve_join_request` 两条路径行为一致 |
+| ADM-17 | ✅ | P0 | `add_invitation` 数量上限 | 超过 `max_invitation_count` 返回精确错误码且零写入零通知；已存在邀请仍可受理；受理释放名额后可再次邀请 |
+| ADM-18 | ✅ | P0 | `add_join_request` 数量上限 | 超过 `max_join_request_count` 返回精确错误码且零写入零回执；已存在申请仍可受理；受理释放名额后可再次申请 |
+| ADM-19 | ✅ | P0 | `approve_invitation` 满员门禁 | 满员时接受邀请返回精确错误码（专用 RPC 与 `check_action_permission` 一致）且不消耗邀请；成员离队后同一邀请可正常接受 |
+| ADM-20 | ✅ | P0 | `approve_join_request` 满员门禁 | 满员时批准申请返回精确错误码（双入口一致）且不消耗申请；成员离队后同一申请可正常批准 |
+| ADM-21 | ✅ | P0 | 配置下调淘汰多余成员 | `max_member_count` 下调后 apply 路径不本地淘汰；主控维护经 `remove_member` 日志事件按加入时间从旧到新淘汰多余非队长成员（回放节点与持有者一致），队长保留 |
 
 ### 4.4 事件应用、成员和队长
 
@@ -716,6 +722,7 @@ FIX-10、FIX-08 收敛并移出开放清单；保留编号空洞以兼容历史�
 | FIX-09 | one-shot timer 的维护协程曾在 `schedule_next_timer()` 后才 reset `maintenance_task_`，重入时可能因“旧 task 仍运行”丢失下一定时器；现按 task id 在调度前 reset | timer fixture 的 task-exit guard、CMP/LIFE timer 用例；不声称已观察到依赖调度竞态的 pre-fix RED |
 | FIX-10 | 加入请求过去没有向申请人返回可供本地缓存的受理结果，`lobbysvr` 也未完整消费 admission 个人事件；现在 Room 发送含规范化过期时间的 `apply_join_request`，消费者按私聊 sequence 幂等处理邀请/申请/拒绝/入队/移除并自行清理过期项 | ADM-09/10、LIFE-05；`lobbysvr_user_team.member_events_manage_pending_admissions` |
 | FIX-11 | SS RPC 响应 type_url 与期望不符（坏包）时，`wait_and_unpack_ss_response` 曾只记日志不返回错误，锁冲突等关键响应被当成功导致误判主控；现无显式错误码时按 `EN_SYS_UNPACK` 失败返回 | FLT-02（`malformed_reset_lock_response_no_false_master`，先观察到 RED 再修复） |
+| FIX-12 | `approve_invitation` 曾把 `team_type` 写到 `mutable_reject_invitation()`(oneof 互斥会清掉已填的 approve 负载，日志退化为只含 team_type 的 reject 事件，回放节点不再清理邀请也不补成员缓存以外的状态)；现写回 `mutable_approve_invitation()`。同一轮: 成员上限淘汰从 apply 路径(`mutable_member`/`foreach_member` 尾声按 LRU 序本地裁剪且不落日志，回放节点与持有者会分叉)移到主控周期维护(`cleanup_overlimit_members`，按加入时间经 `remove_member` 日志事件淘汰)；`approve_invitation`/`approve_join_request` 补满员门禁 | ADM-04(approve 负载)、ADM-19～21 |
 
 ## 6. 分阶段执行
 

@@ -1219,6 +1219,11 @@ rpc::result_code_type team_room::approve_invitation(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
   }
 
+  // 满员检查: 被邀请人已是成员时不新增成员(仅续期成员数据)，否则受 get_max_member_count 限制
+  if (!find_member(req.invitee(), false) && member_.size() >= get_max_member_count()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED);
+  }
+
   // 入队事件与接受邀请事件合并为一次写入，日志按列表顺序追加(add_member 先于 approve_invitation)
   rpc::context::message_holder<atfw::team::DTeamAction> add_action(ctx);
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
@@ -1245,7 +1250,7 @@ rpc::result_code_type team_room::approve_invitation(rpc::context& ctx,
 
   protobuf_copy_message(*action->mutable_approve_invitation(), invitation);
   protobuf_copy_message(*action->mutable_approve_invitation()->mutable_team_key(), team_key_);
-  action->mutable_reject_invitation()->set_team_type(get_team_type());
+  action->mutable_approve_invitation()->set_team_type(get_team_type());
   batch_actions[batch_action_count++] = &(*action);
 
   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
@@ -1392,6 +1397,11 @@ rpc::result_code_type team_room::approve_join_request(rpc::context& ctx,
   if (join_request.expired_timepoint().seconds() > 0 &&
       protobuf_to_system_clock(join_request.expired_timepoint()) <= now) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND);
+  }
+
+  // 满员检查: 申请人已是成员时不新增成员(仅续期成员数据)，否则受 get_max_member_count 限制
+  if (!find_member(req.applicant(), false) && member_.size() >= get_max_member_count()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED);
   }
 
   // 入队事件与批准申请事件合并为一次写入，日志按列表顺序追加(add_member 先于 approve_join_request)
@@ -1966,6 +1976,9 @@ void team_room::apply_add_join_request(rpc::context& ctx, const atfw::team::DTea
     data_ptr = atfw::component::memory::stl::make_strong_rc<atfw::team::DTeamJoinRequest>();
   }
   protobuf_copy_message(*data_ptr, join_request);
+  // 与 apply_add_invitation 一致: 存储记录回填房间权威 team_key(DTeamJoinRequest 无 team_type 字段,
+  // 类型由房间 storage_ 记录并在 joined_team 等事件负载中下发)
+  protobuf_copy_message(*data_ptr->mutable_team_key(), get_team_key());
   // 不需要额外通知队长审批，队长会通过队伍的频道获取到数据
 
   // 通知申请人申请已受理(作为其操作回执; 携带房间规范化后的过期时间，
@@ -2158,7 +2171,8 @@ void team_room::refresh_empty_tracking(std::chrono::system_clock::time_point now
   }
 }
 
-team_room::member_ptr_t team_room::mutable_member(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+team_room::member_ptr_t team_room::mutable_member(rpc::context& /*ctx*/,
+                                                  const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
   // mutable接口总是由有效的成员调用，所以总是可以刷新LRU的最近访问时间
   member_ptr_t ret = find_member(user_key, true);
   if (ret) {
@@ -2192,8 +2206,6 @@ team_room::member_ptr_t team_room::mutable_member(rpc::context& ctx, const PROJE
 
   // 收到新的新增消息，移除删除重试队列
   member_retry_remove_.erase(user_key);
-
-  resolve_max_member_count(ctx);
   return ret;
 }
 
@@ -2287,12 +2299,7 @@ void team_room::foreach_member(
       member_retry_remove_.erase(pair.first);
     }
 
-    bool auto_remove = false;
-    if (!current_protect_instance.pending_to_add.empty()) {
-      auto_remove = resolve_max_member_count(ctx);
-    }
-
-    if (auto_remove || !current_protect_instance.pending_to_remove.empty()) {
+    if (!current_protect_instance.pending_to_remove.empty()) {
       if (storage_.captain_user_key().user_id() == 0 && !member_.empty() && is_lock_holder()) {
         team_room_manager::me()->mark_room_pending_flush(*this);
       }
@@ -2302,23 +2309,61 @@ void team_room::foreach_member(
   }
 }
 
-bool team_room::resolve_max_member_count(rpc::context& ctx) {
-  // 如果超出限制，则移除最老的
-  bool ret = false;
-  while (member_.size() > get_max_member_count()) {
-    auto iter = member_.begin();
-    // 优先跳过队长，避免不必要的权限转移
-    if (user_key_equal_t()(iter->first, storage_.captain_user_key())) {
-      ++iter;
-      if (iter == member_.end()) {
-        iter = member_.begin();
-      }
-    }
-    remove_member(ctx, iter->first, atfw::team::EnTeamExitReason::EN_TEAM_EXIT_REASON_REMOVE_MEMBER, true);
-    ret = true;
+rpc::result_code_type team_room::cleanup_overlimit_members(rpc::context& ctx) {
+  uint32_t max_member_count = get_max_member_count();
+  if (member_.size() <= max_member_count) {
+    RPC_RETURN_CODE(0);
   }
 
-  return ret;
+  user_key_equal_t user_key_eq;
+  // 配置上限下调后按加入时间从旧到新淘汰多余的非队长成员。
+  // 淘汰必须经 remove_member 日志事件下发，保证 WAL 回放节点、快照与持有者内存状态一致
+  std::vector<member_ptr_t> candidates;
+  candidates.reserve(member_.size());
+  for (const auto& member_pair : member_) {
+    if (!member_pair.second) {
+      continue;
+    }
+    // 优先跳过队长，避免不必要的权限转移
+    if (user_key_eq(member_pair.first, storage_.captain_user_key())) {
+      continue;
+    }
+    candidates.push_back(member_pair.second);
+  }
+  std::sort(candidates.begin(), candidates.end(), [](const member_ptr_t& lhs, const member_ptr_t& rhs) {
+    auto ljoin = protobuf_to_system_clock(lhs->member_data.joined_timepoint());
+    auto rjoin = protobuf_to_system_clock(rhs->member_data.joined_timepoint());
+    if (ljoin == rjoin) {
+      return lhs->member_data.user_key().user_id() < rhs->member_data.user_key().user_id();
+    }
+    return ljoin < rjoin;
+  });
+
+  size_t remove_count = std::min(candidates.size(), member_.size() - max_member_count);
+  // 每次因超限执行淘汰后按进程配置 overlimit_cleanup_timeout 冷却: 淘汰成功时成员数已回落到上限内
+  // (新增受上限门禁拦截，不会立刻再次超限); 无可淘汰成员(如仅剩队长)时避免超限状态驱动定时器空转
+  overlimit_cleanup_not_before_ = atfw::util::time::time_utility::now() +
+                                  protobuf_to_system_clock(get_teamsvr_room_cfg().overlimit_cleanup_timeout());
+  if (0 == remove_count) {
+    RPC_RETURN_CODE(0);
+  }
+
+  // 移除消息是无条件的且有重试机制，no_wait 避免阻塞维护流程
+  std::vector<rpc::context::message_holder<atfw::team::DTeamAction>> remove_actions;
+  remove_actions.reserve(remove_count);
+  for (size_t i = 0; i < remove_count; ++i) {
+    auto& action = remove_actions.emplace_back(ctx);
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    *action->mutable_remove_member()->mutable_user_key() = candidates[i]->member_data.user_key();
+    action->mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
+  }
+  std::vector<const atfw::team::DTeamAction*> remove_action_ptrs;
+  remove_action_ptrs.reserve(remove_actions.size());
+  for (auto& action : remove_actions) {
+    remove_action_ptrs.push_back(&(*action));
+  }
+  RPC_AWAIT_IGNORE_RESULT(send_actions(ctx, gsl::span<const atfw::team::DTeamAction* const>{remove_action_ptrs}, true));
+  RPC_RETURN_CODE(0);
 }
 
 bool team_room::resolve_max_join_request_count(rpc::context& /*ctx*/) {
@@ -2822,6 +2867,11 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
       if (!is_self(action.approve_invitation().invitee())) {
         ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
       }
+      // 被邀请人已是成员时不新增成员(仅续期成员数据)，否则受 get_max_member_count 限制
+      if (ret == 0 && !find_member(action.approve_invitation().invitee(), false) &&
+          member_.size() >= get_max_member_count()) {
+        ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED;
+      }
       break;
     case atfw::team::DTeamAction::kRejectInvitation:
       // 所有人(包括游客)都可以否决发给自己的邀请，
@@ -2842,8 +2892,16 @@ rpc::result_code_type team_room::check_action_permission(rpc::context& ctx,
       }
       break;
     case atfw::team::DTeamAction::kApproveJoinRequest:
+      // 默认所有成员都有同意他人的加入请求的权限
+      ret = require_role(get_approve_join_request_role());
+      // 申请人已是成员时不新增成员(仅续期成员数据)，否则受 get_max_member_count 限制
+      if (ret == 0 && !find_member(action.approve_join_request().requester(), false) &&
+          member_.size() >= get_max_member_count()) {
+        ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED;
+      }
+      break;
     case atfw::team::DTeamAction::kRejectJoinRequest:
-      // 默认所有成员都有同意和否决他人的加入请求的权限
+      // 默认所有成员都有否决他人的加入请求的权限
       ret = require_role(get_approve_join_request_role());
       break;
     default:
@@ -3156,6 +3214,11 @@ team_room_timer_event team_room::get_next_timer_event(std::chrono::system_clock:
     }
   }
 
+  // 成员数超上限: 尽快触发一次维护淘汰多余成员; 冷却窗口防止超限状态无法收敛时反复立即触发
+  if (member_.size() > get_max_member_count()) {
+    ret.timeout = (std::min)(ret.timeout, (std::max)(now, overlimit_cleanup_not_before_));
+  }
+
   // 剔除最久未心跳的成员(LRU front)
   if (!member_.empty()) {
     const auto& oldest = member_.front();
@@ -3316,6 +3379,9 @@ rpc::result_code_type team_room::do_maintenance(rpc::context& ctx) {
   if (!lock_acquired_) {
     RPC_RETURN_CODE(0);
   }
+
+  // 配置上限下调后淘汰多余的非队长成员
+  RPC_AWAIT_CODE_RESULT(cleanup_overlimit_members(ctx));
 
   int64_t last_sequence = subscriber_->get_last_message_sequence();
 

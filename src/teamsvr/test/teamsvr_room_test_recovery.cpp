@@ -762,6 +762,9 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
     atfw::team::DTeamAction action;
     add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 100, "shared-1");
     action.mutable_team_update()->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    // team_update 整体替换配置并重订默认值: 上限会被重置为 excel 默认值(3)，恢复后还要审批第 4 名成员，
+    // 这里显式留出成员余量
+    action.mutable_team_update()->mutable_configure()->set_max_member_count(8);
     CASE_EXPECT_EQ(0, env.run("team_update", [source_room, &action](rpc::context& ctx) -> rpc::result_code_type {
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(source_room->send_action(ctx, action)));
     }));
@@ -829,6 +832,9 @@ CASE_TEST(teamsvr_room_recovery, snapshot_restore_equivalence) {
   if (restored_normal) {
     CASE_EXPECT_EQ("after-snapshot", restored_normal->member_data.client_version());
   }
+
+  // team_type 经快照回填(后续审批/配置默认值均以其为准)
+  CASE_EXPECT_EQ(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL), restored_room->get_team_type());
 
   // configure 在快照中把 invite_role 提高到 ADMIN，NORMAL 恢复后仍不能发邀请。
   auto denied_invitee = make_user_key(1, 8203);

@@ -43,6 +43,7 @@
 
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
 #include <protocol/config/pb_header_v3.pb.h>
+#include <protocol/config/com.struct.team.config.pb.h>
 #include <protocol/config/team_room.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
@@ -224,6 +225,21 @@ inline std::string make_team_room_channel_type_bytes(const room_test_cfg_values&
   configure->mutable_heartbeat_interval()->set_seconds(300);
   configure->mutable_heartbeat_retry_interval()->set_seconds(60);
   configure->mutable_subscriber_timeout()->set_seconds(values.lock_lease_seconds);
+  blocks.add_data_block(item.SerializeAsString());
+  return blocks.SerializeAsString();
+}
+
+// Build a populated team_type.bytes with one team_type row carrying the given DTeamConfigure defaults
+// (格式与 make_team_room_channel_type_bytes 相同, 用于覆盖 ExcelTeamType 默认值来源的用例)
+inline std::string make_team_type_bytes(uint32_t team_type, const atfw::team::DTeamConfigure& configure) {
+  org::xresloader::pb::xresloader_datablocks blocks;
+  blocks.mutable_header()->set_hash_code("rpc-unit-test");
+  blocks.mutable_header()->set_count(1);
+  // 生成的加载器按 data_message_type 校验行类型，缺省时 reload 会失败
+  blocks.set_data_message_type("atframework.shared.config.ExcelTeamType");
+  PROJECT_NAMESPACE_ID::config::ExcelTeamType item;
+  item.set_team_type(team_type);
+  protobuf_copy_message(*item.mutable_configure(), configure);
   blocks.add_data_block(item.SerializeAsString());
   return blocks.SerializeAsString();
 }
@@ -1220,6 +1236,8 @@ class room_test_env {
                 shared_member_data](rpc::context& ctx) -> rpc::result_code_type {
                  atfw::team::SSTeamRoomCreateReq req;
                  protobuf_copy_message(*req.mutable_team_key(), make_team_key(team_id));
+                 // create_team 不校验 team_type,但房间状态需要记录真实类型(快照/邀请事件均依赖)
+                 req.set_team_type(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL));
                  protobuf_copy_message(*req.mutable_sender_user_key(), owner_key);
                  protobuf_copy_message(*req.mutable_sender_user_channel(), owner_channel);
                  if (nullptr != configure) {
@@ -2286,6 +2304,17 @@ struct standard_team_members {
   atfw::dtmq::DChannelIdKey normal_channel;
 };
 
+
+// 标准测试队伍的默认配置: 上限留出余量(excel 默认上限为 3 成员/30 邀请/30 申请，标准队已有 3 名成员，
+// 审批第 4 名成员等常规用例需要余量; 上限行为本身由专门用例以小上限验证)
+inline atfw::team::DTeamConfigure make_standard_team_configure() {
+  atfw::team::DTeamConfigure configure;
+  configure.set_max_member_count(8);
+  configure.set_max_invitation_count(8);
+  configure.set_max_join_request_count(8);
+  return configure;
+}
+
 inline bool setup_standard_team(room_test_env& env, int64_t team_id, team_room::ptr_t& out_room,
                                 standard_team_members& members, uint64_t user_id_base = 7000) {
   members.owner = make_user_key(1, user_id_base + 1);
@@ -2296,7 +2325,8 @@ inline bool setup_standard_team(room_test_env& env, int64_t team_id, team_room::
   members.admin_channel = make_personal_channel(user_id_base + 2);
   members.normal_channel = make_personal_channel(user_id_base + 3);
 
-  if (0 != env.setup_created_team(team_id, members.owner, members.owner_channel, &out_room)) {
+  auto configure = make_standard_team_configure();
+  if (0 != env.setup_created_team(team_id, members.owner, members.owner_channel, &out_room, &configure)) {
     return false;
   }
   if (0 != env.sync(team_id)) {

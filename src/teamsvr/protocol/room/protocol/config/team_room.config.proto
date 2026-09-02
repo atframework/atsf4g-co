@@ -20,31 +20,34 @@ message teamsvr_room_cfg {
   google.protobuf.Duration compact_log_start_time = 1
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "600s" min_value: "5s" }];
   // 按时间维度压缩时保留最近该时长内的日志(较新的日志不按时间维度压缩)，为 0 时取 compact_log_start_time 的一半
-  google.protobuf.Duration compact_log_keep_time = 11
+  google.protobuf.Duration compact_log_keep_time = 2
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "0s" min_value: "0s" }];
 
   // 当前log数量超过上限的一定百分比后执行压缩
-  int32 compact_log_over_percent = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "1" }];
+  int32 compact_log_over_percent = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "1" }];
   // 每次压缩后保留的日志百分比
-  int32 compact_log_keep_percent = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
+  int32 compact_log_keep_percent = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
   // 每次压缩后至少保留的日志数量(两种压缩方式都受限于该下限)
-  uint32 compact_log_keep_count = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
+  uint32 compact_log_keep_count = 5 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30" min_value: "1" }];
 
   // 成员离线过期时长(秒)，超过此时长未心跳的成员会被移出队伍
-  google.protobuf.Duration member_offline_expire = 5
+  google.protobuf.Duration member_offline_expire = 6
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "300s" min_value: "30" }];
   // 空队伍保留时长(秒)，所有成员退出后保留一段时间再销毁频道
-  google.protobuf.Duration empty_room_destroy_delay = 6
+  google.protobuf.Duration empty_room_destroy_delay = 7
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "30s" min_value: "5s" }];
   // 加入请求默认有效期(秒)，外部请求未带过期时间时使用
-  google.protobuf.Duration join_request_expire = 7
+  google.protobuf.Duration join_request_expire = 8
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5s" }];
   // 加入邀请默认有效期(秒)，外部请求未带过期时间时使用
-  google.protobuf.Duration invitation_expire = 8
+  google.protobuf.Duration invitation_expire = 9
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "5s" }];
   // 成员通知频道的重试间隔
-  google.protobuf.Duration member_channel_notification_retry_interval = 9
+  google.protobuf.Duration member_channel_notification_retry_interval = 10
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3s" min_value: "1s" }];
-  uint32 member_channel_notification_retry_times = 10
+  uint32 member_channel_notification_retry_times = 11
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3" min_value: "1" }];
+  // 超限清理超时时间
+  google.protobuf.Duration overlimit_cleanup_timeout = 12
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];
 }

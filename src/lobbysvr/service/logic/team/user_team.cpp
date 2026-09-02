@@ -402,6 +402,7 @@ void user_team::dump(atfw::team::DTeamMemberJoinData& join_data) const {
   protobuf_copy_message(*join_data.mutable_team_key(), get_team_key());
   protobuf_copy_message(*join_data.mutable_team_channel(), get_channel_key());
   owner_->get_owner().dump_user_key(*join_data.mutable_user_key());
+  join_data.set_team_type(team_type_);
 
   join_data.mutable_captain_user_key()->CopyFrom(cached_captain_user_key_);
   join_data.set_user_role(cached_permission_role_);
@@ -411,6 +412,7 @@ void user_team::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamSnapshot&
   auto* storage = output.mutable_snapshot();
   protobuf_copy_message(*storage->mutable_team_key(), team_key_);
   protobuf_copy_message(*storage->mutable_captain_user_key(), cached_captain_user_key_);
+  storage->set_team_type(team_type_);
   protobuf_copy_message(*storage->mutable_configure(), cached_configure_);
 
   // 成员数据(快照无需有序，直接按哈希表序导出)。

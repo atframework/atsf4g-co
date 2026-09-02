@@ -59,6 +59,10 @@ ATFRAMEWORK_TEAM_TEAMROOMSERVICE_API task_action_create::result_type task_action
     req_body.mutable_team_key()->set_team_id(new_team_id);
   }
 
+  // 未携带 team_type(老版本客户端) 按普通组队处理; 显式传入但未在 ExcelTeamType 配置的类型拒绝
+  if (static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_INVALID) == req_body.team_type()) {
+    req_body.set_team_type(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL));
+  }
   if (!excel::get_ExcelTeamType_by_team_type(req_body.team_type())) {
     set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);

@@ -256,6 +256,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | JOIN-03 | 已覆盖 | pending-to-exit 的 A 再收到 joined：A 恢复 current、B 退出，旧 A 不泄漏且恢复后不重试旧 exit |
 | CREATE-01 | 已覆盖 | create SS 请求完整：team_id=0/zone、sender/channel、client_version/router、configure 保持当前默认空值（由 room 修订默认门槛）、两类初始 shared data；响应成功后无需 joined 即注册 OWNER/captain/self，输出 key 精确等于响应 |
 | CREATE-02 | 已覆盖 | transport/client_result 失败不注册、不修改 output/index，错误码精确透传 |
+| CREATE-03 | 已覆盖 | 非法 team_type（未设置/配置表中不存在）直接拒绝：不上行 create、不注册本地队伍、不修改输出 key；create 上行请求携带 team_type（CS-INVITE-01 断言） |
 | SEQ-01 | 已覆盖 | 快照 `saved_action_sequence=N` 后 `<=N` 日志不应用，`>N` 按 hash chain 应用；重复日志不重复 dirty |
 | SEQ-02 | 已覆盖 | update-custom-data 快照覆盖旧缓存，快照回放期间 action 被 snapshot 吞并只下发最终 snapshot；实时 action 下发 increase |
 | SEQ-03 | 已覆盖 | 高 create sequence 新代际快照后，旧 destroy/on_destroyed 乱序到达不删除新代际 |
@@ -317,7 +318,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | ADM-TEAM-01..07 | admission.`team_admission_snapshot_load_filters_and_orders`、`team_add_invitation_upsert_and_projection`、`team_invitation_result_removes_pending`、`team_add_join_request_upsert_and_projection`、`team_join_request_result_removes_pending`、`team_add_member_clears_joined_user_pendings`、`team_admission_expiry_boundary_and_cleanup` |
 | ADM-SELF-01..10 | admission.`self_invited_notification_full_payload`、`self_join_request_receipt_full_payload`、`self_pending_upsert_reorder_and_segmented_cleanup`、`self_pending_admission_insert_validation`、`self_reject_notifications_remove_pending`、`approve_reject_invitation_result_contract`、`join_team_clears_own_pending_admissions`、`self_pending_second_refresh_and_expired_reapply_precheck`；lifecycle.`table_dump_init_round_trip_restores_watermark_team_and_pendings` 与 manager.`table_roundtrip_restores_pending_admissions`（09）；admission.`self_private_channel_sequence_watermark` 与 manager.`member_events_manage_pending_admissions`（10） |
 | JOIN-01..03 | lifecycle.`joined_team_notification_registers_team`、`switch_team_moves_previous_to_pending_exit`、`rejoin_pending_exit_team_swaps_back`；manager.`rejoin_pending_exit_team_restores_current` |
-| CREATE-01/02 | lifecycle.`create_team_registers_owner_and_clears_pending`、`create_team_failure_passthrough_and_wal_replay` |
+| CREATE-01/02/03 | lifecycle.`create_team_registers_owner_and_clears_pending`、`create_team_failure_passthrough_and_wal_replay`、`create_team_rejects_invalid_team_type` |
 | SEQ-01..03 | lifecycle.`snapshot_saved_sequence_guards_incremental_replay`、`compacted_snapshot_overrides_cache_and_swallows_replay`、`stale_destroy_does_not_remove_new_generation` |
 | HB-01/02 | lifecycle.`heartbeat_reports_watermark_and_throttles`、`heartbeat_suppressed_outside_running_member_state` |
 | EXIT-01/02 | lifecycle.`exit_team_request_then_channel_remove_converges`、`exit_retry_timeout_cleanup_and_channel_destroy` |

@@ -21,6 +21,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <config/excel/config_easy_api.h>
 #include <logic/action/task_action_send_message.h>
 #include <rpc/team/teamroomservice.atfw.gen.h>
 
@@ -942,6 +943,8 @@ CASE_TEST(teamsvr_room_permission, approve_reject_join_roles) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
   atfw::team::DTeamConfigure configure;
+  // team_update 整体替换配置并重订默认值: 上限会被重置为 excel 默认值(3)，这里显式留出成员余量
+  configure.set_max_member_count(8);
   configure.set_approve_join_request_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
   atfw::team::DTeamAction config_action;
   protobuf_copy_message(*config_action.mutable_team_update()->mutable_configure(), configure);
@@ -1024,8 +1027,10 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   }
 
   auto& fake = env.channel(team_id);
+  // team_update 的 configure 是全量覆盖(未设置字段会按 ExcelTeamType 默认值重填)，
+  // 必须携带 fixture 的显式上限，否则上限回落 excel 默认值 3 导致后续添加成员被拒
   auto write_configure = [&](atfw::team::EnTeamPermissionRole manage_role) {
-    atfw::team::DTeamConfigure configure;
+    atfw::team::DTeamConfigure configure = teamsvr_room_test::make_standard_team_configure();
     configure.set_manage_member_role(manage_role);
     atfw::team::DTeamAction config_action;
     protobuf_copy_message(*config_action.mutable_team_update()->mutable_configure(), configure);
@@ -1041,27 +1046,27 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_remove_action(members.admin)));
   expect_no_write(fake, env, before);
 
-  // 低于 NORMAL 的自定义门槛 50 按大小生效: NORMAL(100) >= 50 可以删除当前角色严格低于自己的成员
+  // 低于 NORMAL 的自定义门槛 25 按大小生效: NORMAL(50) >= 25 可以删除当前角色严格低于自己的成员
   // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
-  write_configure(static_cast<atfw::team::EnTeamPermissionRole>(50));
+  write_configure(static_cast<atfw::team::EnTeamPermissionRole>(25));
   auto junior = make_user_key(1, 7107);
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
                                             make_add_member_action(junior, make_personal_channel(7107),
-                                                                   static_cast<atfw::team::EnTeamPermissionRole>(50))));
+                                                                   static_cast<atfw::team::EnTeamPermissionRole>(25))));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_remove_action(junior)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(junior, false).get());
 
-  // 档位间自定义角色 150(介于 NORMAL 与 ADMIN): 阈值比较按大小，不需要 == 命中某个已定义档位
+  // 档位间自定义角色 75(介于 NORMAL=50 与 ADMIN=100): 阈值比较按大小，不需要 == 命中某个已定义档位
   auto vip = make_user_key(1, 7105);
   CASE_EXPECT_EQ(0,
                  run_send_message_action(env, team_id, members.owner,
                                          make_add_member_action(vip, make_personal_channel(7105),
-                                                                static_cast<atfw::team::EnTeamPermissionRole>(150))));
+                                                                static_cast<atfw::team::EnTeamPermissionRole>(75))));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
-  // 默认门槛(ADMIN=200)下 150 < 200 不能删除他人
+  // 默认门槛(ADMIN=100)下 75 < 100 不能删除他人
   write_configure(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST);
   before = snapshot_counters(env, fake);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION,
@@ -1069,20 +1074,20 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, vip, make_remove_action(members.normal)));
   expect_no_write(fake, env, before);
 
-  // 自定义门槛 150 下 150 >= 150 可以删除他人(>= 而非 >，含等于档位本身)
-  write_configure(static_cast<atfw::team::EnTeamPermissionRole>(150));
+  // 自定义门槛 75 下 75 >= 75 可以删除他人(>= 而非 >，含等于档位本身)
+  write_configure(static_cast<atfw::team::EnTeamPermissionRole>(75));
   CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, vip, make_remove_action(members.normal)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(nullptr, room->find_member(members.normal, false).get());
 
-  // 高于 OWNER 的自定义档位 350 同样按大小生效: 350 >= 默认 ADMIN(200)
+  // 高于 OWNER(150) 的自定义档位 200 同样按大小生效: 200 >= 默认 ADMIN(100)
   auto super = make_user_key(1, 7106);
   env.inject_team_action(team_id, [&super]() {
     atfw::team::DTeamAction action;
     auto* add_member = action.mutable_add_member();
     protobuf_copy_message(*add_member->mutable_user_key(), super);
     protobuf_copy_message(*add_member->mutable_user_channel(), make_personal_channel(7106));
-    add_member->set_role(static_cast<atfw::team::EnTeamPermissionRole>(350));
+    add_member->set_role(static_cast<atfw::team::EnTeamPermissionRole>(200));
     return action;
   }());
   // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
@@ -1305,6 +1310,113 @@ CASE_TEST(teamsvr_room_permission, configure_default_revision_published) {
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
 }
+
+// ============ PERM-19: 未显式配置时默认门槛与上限来自 ExcelTeamType 配置行 ============
+CASE_TEST(teamsvr_room_permission, configure_defaults_from_excel_team_type) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  // 备份真实 team_type 表(从已加载的 excel 配置全量导出); mock_resource 的 remove_file 会把
+  org::xresloader::pb::xresloader_datablocks original_blocks;
+  original_blocks.mutable_header()->set_hash_code("rpc-unit-test");
+  // 生成的加载器按 data_message_type 校验行类型，缺省时 reload 会失败
+  original_blocks.set_data_message_type("atframework.shared.config.ExcelTeamType");
+  for (const auto& row : excel::get_ExcelTeamType_all_of_team_type()) {
+    if (row.second) {
+      original_blocks.add_data_block(row.second->SerializeAsString());
+    }
+  }
+  original_blocks.mutable_header()->set_count(original_blocks.data_block_size());
+  const std::string original_team_type_bytes = original_blocks.SerializeAsString();
+
+  // 覆盖 team_type 配置表: NORMAL 类型行携带自定义默认门槛与上限
+  atfw::team::DTeamConfigure excel_defaults;
+  excel_defaults.set_max_member_count(5);
+  excel_defaults.set_max_invitation_count(6);
+  excel_defaults.set_max_join_request_count(7);
+  excel_defaults.set_manage_member_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+  excel_defaults.set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+  env.runtime().resource().set_file(
+      "team_type.bytes", teamsvr_room_test::make_team_type_bytes(
+                             static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL), excel_defaults));
+  // 同版本 reload 是 no-op(excel config manager 按版本判重)，覆盖后必须递增版本号
+  env.runtime().resource().set_version("0.10.0.2");
+  CASE_EXPECT_TRUE(env.runtime().resource().reload() >= 0);
+  // excel wrapper 是进程级单例, 用例结束(含提前退出)前必须恢复真实配置表
+  auto restore_team_type_table = [&env, &original_team_type_bytes]() {
+    env.runtime().resource().set_file("team_type.bytes", original_team_type_bytes);
+    env.runtime().resource().set_version("0.10.0.3");
+    CASE_EXPECT_TRUE(env.runtime().resource().reload() >= 0);
+  };
+
+  int64_t team_id = next_test_team_id();
+  auto owner = make_user_key(1, 7601);
+  team_room::ptr_t room;
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(7601), &room));
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    restore_team_type_table();
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  // 行为验证: 邀请上限取自 excel 行(内置默认 30 时第 7 条邀请不会被拒)
+  for (int i = 0; i < 6; ++i) {
+    auto invitee = make_user_key(1, 7602 + static_cast<uint64_t>(i));
+    CASE_EXPECT_EQ(0, env.run("invite_within_limit", [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+      atfw::team::SSTeamRoomAddInvitationReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), owner);
+      auto* invitation = req.mutable_invitation();
+      protobuf_copy_message(*invitation->mutable_inviter(), owner);
+      protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+      protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+    }));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  {
+    auto invitee = make_user_key(1, 7608);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_COUNT_LIMIT,
+                   env.run("invite_over_excel_limit",
+                           [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+                             atfw::team::SSTeamRoomAddInvitationReq req;
+                             protobuf_copy_message(*req.mutable_sender_user_key(), owner);
+                             auto* invitation = req.mutable_invitation();
+                             protobuf_copy_message(*invitation->mutable_inviter(), owner);
+                             protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+                             protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
+                                                   make_personal_channel(invitee.user_id()));
+                             RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+                           }));
+  }
+
+  // 创建快照 custom_data 中的 configure 携带同一组修订结果(订阅者无需自行补默认值)
+  auto& fake = env.channel(team_id);
+  const atfw::dtmq::SSChannelUpdateReq* initial_update = nullptr;
+  for (const auto& record : fake.update_requests()) {
+    if (record.request.save()) {
+      initial_update = &record.request;
+      break;
+    }
+  }
+  CASE_EXPECT_TRUE(nullptr != initial_update);
+  if (nullptr != initial_update) {
+    atfw::team::DTeamStorage storage;
+    CASE_EXPECT_TRUE(initial_update->custom_data().UnpackTo(&storage));
+    CASE_EXPECT_EQ(5u, storage.configure().max_member_count());
+    CASE_EXPECT_EQ(6u, storage.configure().max_invitation_count());
+    CASE_EXPECT_EQ(7u, storage.configure().max_join_request_count());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, storage.configure().manage_member_role());
+    CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN, storage.configure().invite_role());
+  }
+
+  restore_team_type_table();
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
 // ============ COND-01: member_update 成员共享数据条件(指定成员 scope + 通过后裁剪 condition) ============
 CASE_TEST(teamsvr_room_permission, member_update_condition_member_data) {
   room_test_env env;

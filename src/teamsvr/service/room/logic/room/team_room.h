@@ -277,7 +277,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
       rpc::context& ctx,
       atfw::util::nostd::function_ref<bool(rpc::context&, atfw::util::nostd::nonnull<const member_ptr_t>&)> fn);
 
-  bool resolve_max_member_count(rpc::context& ctx);
+  // 配置上限下调后按加入时间淘汰多余的非队长成员，仅主控节点周期维护(do_maintenance)时调用；
+  // 淘汰通过 remove_member 日志事件下发，保证 WAL 回放节点与持有者状态一致
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type cleanup_overlimit_members(rpc::context& ctx);
   bool resolve_max_join_request_count(rpc::context& ctx);
   bool resolve_max_invitation_count(rpc::context& ctx);
 
@@ -424,6 +426,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   // 均衡态下维护自身追加的续租/快照日志抵消裁剪量，日志数不增长，加速触发不会反复置为
   // "已过期"而饿死 kick/destroy 等更晚到期的定时事件; 突发写入带来的真实增长仍可及时触发压缩
   int64_t last_maintenance_uncompacted_count_ = 0;
+  // 成员数超上限的淘汰维护冷却: 超限时尽快触发一次维护，但每次执行后按进程配置
+  // overlimit_cleanup_timeout 冷却，防止超限状态无法收敛(如仅剩队长)时驱动定时器空转
+  std::chrono::system_clock::time_point overlimit_cleanup_not_before_;
   int64_t last_compact_sequence_ = 0;
   std::chrono::system_clock::time_point last_compact_timepoint_;
   task_type_trait::task_type maintenance_task_;

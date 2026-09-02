@@ -778,6 +778,50 @@ CASE_TEST(lobbysvr_user_team, create_team_failure_passthrough_and_wal_replay) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
+// CREATE-03: 非法 team_type(未设置/配置表中不存在)直接拒绝: 不上行 create、不注册本地队伍、不修改输出 key
+CASE_TEST(lobbysvr_user_team, create_team_rejects_invalid_team_type) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(team_test::setup_team_room_node(test));
+  team_test::team_room_ss_capture ss_capture;
+  CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
+  ss_capture.next_allocated_team_id = 730101;
+
+  constexpr uint64_t kUserId = 73001;
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(team_test::setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+
+  constexpr int64_t kPreservedTeamId = 730999;
+  atfw::team::DTeamKey output_team_key;
+  output_team_key.set_team_id(kPreservedTeamId);
+  // 未设置(0=INVALID)
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE,
+                 run_create_team(test, user_inst, PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_INVALID, output_team_key));
+  // 配置表中不存在
+  // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE,
+                 run_create_team(test, user_inst, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(999),
+                                 output_team_key));
+  // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
+
+  // 零上行、零注册、输出 key 未修改
+  CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.create_reqs.size()));
+  CASE_EXPECT_EQ(kPreservedTeamId, output_team_key.team_id());
+  CASE_EXPECT_TRUE(
+      !user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_INVALID));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 // SEQ-01: 快照 saved_action_sequence=N 时, 重放阶段 <=N 的日志不应用(其效果由快照覆盖), >N 按 hash chain 应用;
 // 重复/旧日志不重复应用也不重复下发 dirty; hash 不匹配的事件不应用、不推进已确认序号, 由后续快照恢复。
 CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay) {
@@ -1847,6 +1891,8 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
       CASE_EXPECT_TRUE(group.has_current());
       if (group.has_current()) {
         CASE_EXPECT_EQ(kCurrentTeamId, group.current().team_key().team_id());
+        // current join data 的 team_type 随 dump 落地(恢复时据此校验与分组)
+        CASE_EXPECT_EQ(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL), group.current().team_type());
         CASE_EXPECT_EQ(kFirstUserId, group.current().user_key().user_id());
         CASE_EXPECT_EQ(team_test::make_team_channel_key(kCurrentTeamId).channel_id(),
                        group.current().team_channel().channel_id());
@@ -1875,11 +1921,12 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
     protobuf_copy_message(*dumped_table.mutable_team_data()->mutable_pending_join_request(0)->mutable_requester(),
                           team_test::make_user_key(kSecondUserId));
 
-    // 非法 team type 的分组不恢复
+    // 非法 team type 的分组不恢复(恢复校验以持久化 join data 的 team_type 为准)
     auto* invalid_group = dumped_table.mutable_team_data()->add_group();
     invalid_group->set_team_type(999);
-    protobuf_copy_message(*invalid_group->mutable_current(),
-                          team_test::make_join_data(kSecondUserId, kInvalidTypeTeamId));
+    auto invalid_join = team_test::make_join_data(kSecondUserId, kInvalidTypeTeamId);
+    invalid_join.set_team_type(999);
+    protobuf_copy_message(*invalid_group->mutable_current(), invalid_join);
     // 空 channel 的分组不恢复
     auto* empty_channel_group = dumped_table.mutable_team_data()->add_group();
     empty_channel_group->set_team_type(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL));

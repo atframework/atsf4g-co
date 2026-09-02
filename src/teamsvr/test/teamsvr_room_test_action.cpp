@@ -336,6 +336,8 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
       CASE_EXPECT_EQ(kOwnerRouterServerId, storage.member(0).user_router_server_id());
     }
     CASE_EXPECT_EQ(owner_key.user_id(), storage.captain_user_key().user_id());
+    // team_type 随 create 落入首帧快照(后续邀请/审批事件与配置默认值均以其为准)
+    CASE_EXPECT_EQ(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL), storage.team_type());
 
     atfw::team::DTeamRoomPrivateData private_data;
     CASE_EXPECT_TRUE(initial_update->private_data().UnpackTo(&private_data));
@@ -350,6 +352,7 @@ CASE_TEST(teamsvr_room_create, create_team_success) {
     CASE_EXPECT_EQ(owner_client_version, owner->member_data.client_version());
     CASE_EXPECT_EQ(kOwnerRouterServerId, owner->member_data.user_router_server_id());
   }
+  CASE_EXPECT_EQ(static_cast<uint32_t>(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL), room->get_team_type());
 
   // 事件回环(初始 update 产生的 kUpdateCustomData/kNoop 日志)后房间仍为主控
   CASE_EXPECT_EQ(0, env.sync(team_id));

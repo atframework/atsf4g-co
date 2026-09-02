@@ -55,7 +55,7 @@ task_action_team_send_invitation::operator()() {
   }
 
   if (!excel::get_ExcelTeamType_by_team_type(static_cast<uint32_t>(req_body.team_type()))) {
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_LOGIN_NOT_LOGINED);
+    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
@@ -93,7 +93,7 @@ task_action_team_send_invitation::operator()() {
     }
 
     // 先尝试使用已存在的队伍
-    team_ptr = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
+    team_ptr = user_inst->get_user_team_manager().get_team_by_team_type(req_body.team_type());
     if (team_ptr && !team_ptr->is_destroyed()) {
       protobuf_copy_message(team_key, team_ptr->get_team_key());
       break;

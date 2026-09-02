@@ -9,6 +9,7 @@ option cc_enable_arenas = true;
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 import "protocol/common/com.struct.team.common.proto";
+import "protocol/common/com.struct.team.shared.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.team.proto";
 
@@ -16,10 +17,6 @@ package atframework.shared;
 
 // 本文件用于存放和业务内容有关的组队共享数据定义，而 com.struct.team.proto 是和业务内容无关的定义
 
-enum EnTeamType {
-  EN_TEAM_TYPE_INVALID = 0;  // 无效类型
-  EN_TEAM_TYPE_NORMAL = 1;   // 普通组队
-}
 
 // ======================== 队伍数据内容定义 ========================
 message DTeamSharedDataTypeBattle {

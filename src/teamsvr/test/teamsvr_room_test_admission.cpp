@@ -19,6 +19,7 @@ using teamsvr_room_test::kTestZoneId;
 using teamsvr_room_test::make_personal_channel;
 using teamsvr_room_test::make_team_key;
 using teamsvr_room_test::make_user_key;
+using teamsvr_room_test::make_standard_team_configure;
 using teamsvr_room_test::next_test_team_id;
 using teamsvr_room_test::room_test_cfg_values;
 using teamsvr_room_test::room_test_env;
@@ -235,7 +236,9 @@ bool setup_full_data_team(room_test_env& env, int64_t team_id, team_room::ptr_t&
 
   google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey> owner_shared;
   add_team_any_data_entry(&owner_shared, owner.shared_data_key, owner.shared_data_value);
-  if (0 != env.setup_created_team(team_id, owner.user_key, owner.personal_channel, &out_room, nullptr,
+  // 上限留出余量: excel 默认上限为 3 成员，准入用例需要在 3 名成员基础上继续审批新成员
+  auto configure = teamsvr_room_test::make_standard_team_configure();
+  if (0 != env.setup_created_team(team_id, owner.user_key, owner.personal_channel, &out_room, &configure,
                                   &owner.client_version, owner.user_router_server_id, &owner_shared)) {
     return false;
   }
@@ -1735,6 +1738,385 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
       }
       CASE_EXPECT_TRUE(saw_compact_snapshot);
     }
+  }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-17: add_invitation 待处理邀请数量上限(DTeamConfigure.max_invitation_count) ============
+// 超过上限拒绝且不写日志、不发通知; 已存在的邀请不受影响; 受理释放名额后可再次邀请
+CASE_TEST(teamsvr_room_admission, add_invitation_count_limit_gate) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto owner = make_user_key(1, 8701);
+  team_room::ptr_t room;
+  atfw::team::DTeamConfigure configure = make_standard_team_configure();
+  configure.set_max_invitation_count(1);
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(8701), &room, &configure));
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  auto invitee_a = make_user_key(1, 8702);
+  auto invitee_b = make_user_key(1, 8703);
+  CASE_EXPECT_EQ(0, env.run("invite_a", [room, &owner, &invitee_a](rpc::context& ctx) -> rpc::result_code_type {
+    auto req = make_add_invitation_req(owner, owner, invitee_a);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee_a.user_id(), atfw::team::DTeamMemberAction::kInvited));
+
+  // 超过上限: 精确错误码、零写入、无个人通知
+  size_t sends_before = fake.send_message_calls();
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_COUNT_LIMIT,
+                 env.run("invite_b_over_limit", [room, &owner, &invitee_b](rpc::context& ctx) -> rpc::result_code_type {
+                   auto req = make_add_invitation_req(owner, owner, invitee_b);
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+                 }));
+  CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, invitee_b.user_id(), atfw::team::DTeamMemberAction::kInvited));
+
+  // 已存在的邀请仍可受理(上限不阻塞 approve)
+  atfw::team::SSTeamRoomApproveInvitationReq approve_req;
+  protobuf_copy_message(*approve_req.mutable_sender_user_key(), invitee_a);
+  protobuf_copy_message(*approve_req.mutable_invitee(), invitee_a);
+  CASE_EXPECT_EQ(0, env.run("approve_a", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(invitee_a, false) != nullptr);
+
+  // 受理后名额释放, 可再次邀请
+  CASE_EXPECT_EQ(0, env.run("invite_b_after_slot_freed",
+                            [room, &owner, &invitee_b](rpc::context& ctx) -> rpc::result_code_type {
+                              auto req = make_add_invitation_req(owner, owner, invitee_b);
+                              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+                            }));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-18: add_join_request 待处理申请数量上限(DTeamConfigure.max_join_request_count) ============
+CASE_TEST(teamsvr_room_admission, add_join_request_count_limit_gate) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto owner = make_user_key(1, 8711);
+  team_room::ptr_t room;
+  atfw::team::DTeamConfigure configure = make_standard_team_configure();
+  configure.set_max_join_request_count(1);
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(8711), &room, &configure));
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  auto applicant_a = make_user_key(1, 8712);
+  auto applicant_b = make_user_key(1, 8713);
+  CASE_EXPECT_EQ(0, env.run("join_a", [room, &applicant_a](rpc::context& ctx) -> rpc::result_code_type {
+    auto req = make_add_join_request_req(applicant_a);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, applicant_a.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
+
+  // 超过上限: 精确错误码、零写入、无受理回执
+  size_t sends_before = fake.send_message_calls();
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_COUNT_LIMIT,
+                 env.run("join_b_over_limit", [room, &applicant_b](rpc::context& ctx) -> rpc::result_code_type {
+                   auto req = make_add_join_request_req(applicant_b);
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+                 }));
+  CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  CASE_EXPECT_EQ(0u,
+                 count_personal_actions(env, applicant_b.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
+
+  // 已存在的申请仍可受理, 释放名额后可再次申请
+  atfw::team::SSTeamRoomApproveJoinRequestReq approve_req;
+  protobuf_copy_message(*approve_req.mutable_sender_user_key(), owner);
+  protobuf_copy_message(*approve_req.mutable_applicant(), applicant_a);
+  CASE_EXPECT_EQ(0, env.run("approve_a", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(applicant_a, false) != nullptr);
+
+  CASE_EXPECT_EQ(0, env.run("join_b_after_slot_freed", [room, &applicant_b](rpc::context& ctx) -> rpc::result_code_type {
+    auto req = make_add_join_request_req(applicant_b);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+  }));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-19: approve_invitation 满员门禁(DTeamConfigure.max_member_count) ============
+// 满员时接受邀请返回精确错误码且不消耗邀请; 有成员离队后可再次接受
+CASE_TEST(teamsvr_room_admission, approve_invitation_team_full_gate) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto owner = make_user_key(1, 8721);
+  auto admin = make_user_key(1, 8722);
+  team_room::ptr_t room;
+  // 小上限: 队长 + 1 名成员即满员
+  atfw::team::DTeamConfigure configure = make_standard_team_configure();
+  configure.set_max_member_count(2);
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(8721), &room, &configure));
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  // 第二名成员入队(与 setup_standard_team 相同的原始写入路径), 队伍满员
+  CASE_EXPECT_EQ(0, env.run("add_admin", [room, &admin](rpc::context& ctx) -> rpc::result_code_type {
+    atfw::team::DTeamAction action;
+    auto* add_member = action.mutable_add_member();
+    protobuf_copy_message(*add_member->mutable_user_key(), admin);
+    protobuf_copy_message(*add_member->mutable_user_channel(), make_personal_channel(admin.user_id()));
+    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(admin, false) != nullptr);
+
+  auto invitee = make_user_key(1, 8723);
+  CASE_EXPECT_EQ(0, env.run("invite", [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+    auto req = make_add_invitation_req(owner, owner, invitee);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  auto& fake = env.channel(team_id);
+  atfw::team::SSTeamRoomApproveInvitationReq approve_req;
+  protobuf_copy_message(*approve_req.mutable_sender_user_key(), invitee);
+  protobuf_copy_message(*approve_req.mutable_invitee(), invitee);
+
+  // 满员: 专用 RPC 与 check_action_permission(send_message 前置校验)返回一致的精确错误码, 零写入
+  size_t sends_before = fake.send_message_calls();
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+                 env.run("approve_full", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+                 }));
+  {
+    atfw::team::DTeamAction approve_action;
+    protobuf_copy_message(*approve_action.mutable_approve_invitation()->mutable_invitee(), invitee);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+                   env.run("check_approve_full",
+                           [room, &invitee, &approve_action](rpc::context& ctx) -> rpc::result_code_type {
+                             RPC_RETURN_CODE(
+                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, invitee, approve_action)));
+                           }));
+  }
+  CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  CASE_EXPECT_TRUE(room->find_member(invitee, false) == nullptr);
+
+  // 邀请不被满员拒绝消耗: 再次尝试仍报满员而不是 not-found
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+                 env.run("approve_full_again", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+                 }));
+
+  // 有成员离队后名额释放, 同一邀请可正常接受
+  CASE_EXPECT_EQ(0, env.run("remove_admin", [room, &admin](rpc::context& ctx) -> rpc::result_code_type {
+    atfw::team::DTeamAction action;
+    protobuf_copy_message(*action.mutable_remove_member()->mutable_user_key(), admin);
+    action.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  CASE_EXPECT_EQ(0, env.run("approve_after_free", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(invitee, false) != nullptr);
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-20: approve_join_request 满员门禁(DTeamConfigure.max_member_count) ============
+CASE_TEST(teamsvr_room_admission, approve_join_request_team_full_gate) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto owner = make_user_key(1, 8731);
+  auto admin = make_user_key(1, 8732);
+  team_room::ptr_t room;
+  atfw::team::DTeamConfigure configure = make_standard_team_configure();
+  configure.set_max_member_count(2);
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(8731), &room, &configure));
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  CASE_EXPECT_EQ(0, env.run("add_admin", [room, &admin](rpc::context& ctx) -> rpc::result_code_type {
+    atfw::team::DTeamAction action;
+    auto* add_member = action.mutable_add_member();
+    protobuf_copy_message(*add_member->mutable_user_key(), admin);
+    protobuf_copy_message(*add_member->mutable_user_channel(), make_personal_channel(admin.user_id()));
+    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  auto applicant = make_user_key(1, 8733);
+  CASE_EXPECT_EQ(0, env.run("join_request", [room, &applicant](rpc::context& ctx) -> rpc::result_code_type {
+    auto req = make_add_join_request_req(applicant);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  auto& fake = env.channel(team_id);
+  atfw::team::SSTeamRoomApproveJoinRequestReq approve_req;
+  protobuf_copy_message(*approve_req.mutable_sender_user_key(), owner);
+  protobuf_copy_message(*approve_req.mutable_applicant(), applicant);
+
+  // 满员: 专用 RPC 与 check_action_permission 返回一致的精确错误码, 零写入
+  size_t sends_before = fake.send_message_calls();
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+                 env.run("approve_full", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
+                 }));
+  {
+    atfw::team::DTeamAction approve_action;
+    protobuf_copy_message(*approve_action.mutable_approve_join_request()->mutable_requester(), applicant);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+                   env.run("check_approve_full",
+                           [room, &owner, &approve_action](rpc::context& ctx) -> rpc::result_code_type {
+                             RPC_RETURN_CODE(
+                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, owner, approve_action)));
+                           }));
+  }
+  CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+  CASE_EXPECT_TRUE(room->find_member(applicant, false) == nullptr);
+
+  // 申请不被满员拒绝消耗
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+                 env.run("approve_full_again", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
+                 }));
+
+  // 有成员离队后名额释放, 同一申请可正常批准
+  CASE_EXPECT_EQ(0, env.run("remove_admin", [room, &admin](rpc::context& ctx) -> rpc::result_code_type {
+    atfw::team::DTeamAction action;
+    protobuf_copy_message(*action.mutable_remove_member()->mutable_user_key(), admin);
+    action.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  CASE_EXPECT_EQ(0, env.run("approve_after_free", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(applicant, false) != nullptr);
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, applicant.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-21: 配置上限下调后由主控维护经 remove_member 日志事件淘汰多余成员 ============
+// 淘汰不在事件应用(apply)路径本地发生: 回放节点必须经同样的日志事件收敛, 避免节点间状态分叉
+CASE_TEST(teamsvr_room_admission, config_shrink_trims_overlimit_members_via_maintenance) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto owner = make_user_key(1, 8741);
+  team_room::ptr_t room;
+  atfw::team::DTeamConfigure configure = make_standard_team_configure();
+  configure.set_max_member_count(4);
+  CASE_EXPECT_EQ(0, env.setup_created_team(team_id, owner, make_personal_channel(8741), &room, &configure));
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  // 真实写入路径补齐到 4 名成员(owner + 3 名普通成员)
+  for (uint64_t user_id = 8742; user_id <= 8744; ++user_id) {
+    CASE_EXPECT_EQ(0, env.run("add_member", [room, user_id](rpc::context& ctx) -> rpc::result_code_type {
+      atfw::team::DTeamAction action;
+      auto* add_member = action.mutable_add_member();
+      protobuf_copy_message(*add_member->mutable_user_key(), make_user_key(1, user_id));
+      protobuf_copy_message(*add_member->mutable_user_channel(), make_personal_channel(user_id));
+      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8744), false) != nullptr);
+
+  // 下调上限到 2: 事件应用路径不淘汰成员, 等待主控维护统一处理
+  CASE_EXPECT_EQ(0, env.run("shrink_max_member_count", [room](rpc::context& ctx) -> rpc::result_code_type {
+    atfw::team::DTeamAction action;
+    action.mutable_team_update()->mutable_configure()->set_max_member_count(2);
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8742), false) != nullptr);
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8743), false) != nullptr);
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8744), false) != nullptr);
+
+  // 推进到下一维护点: 主控维护写入 remove_member 日志事件淘汰多余的非队长成员
+  size_t sends_before = fake.send_message_calls();
+  {
+    global_now_offset_guard guard(std::chrono::seconds{12});
+    env.drive_timer_ticks();
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_GT(fake.send_message_calls(), sends_before);
+
+  // 按加入时间(相同则按 user id)从旧到新淘汰: 8742/8743 离队, 队长与最新成员保留
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8742), false) == nullptr);
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8743), false) == nullptr);
+  CASE_EXPECT_TRUE(room->find_member(owner, false) != nullptr);
+  CASE_EXPECT_TRUE(room->find_member(make_user_key(1, 8744), false) != nullptr);
+
+  // 淘汰经 remove_member 日志事件下发(回放节点可收敛到同一状态), reason 与管理移除一致
+  std::vector<uint64_t> removed_ids;
+  fake.foreach_team_action([&removed_ids](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+    if (action.action_case() == atfw::team::DTeamAction::kRemoveMember &&
+        action.remove_member().remove_member_reason() == atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER) {
+      removed_ids.push_back(action.remove_member().user_key().user_id());
+    }
+    return true;
+  });
+  std::sort(removed_ids.begin(), removed_ids.end());
+  CASE_EXPECT_EQ(2u, removed_ids.size());
+  if (2 == removed_ids.size()) {
+    CASE_EXPECT_EQ(static_cast<uint64_t>(8742), removed_ids[0]);
+    CASE_EXPECT_EQ(static_cast<uint64_t>(8743), removed_ids[1]);
   }
 
   room_test_env::clear_rooms();

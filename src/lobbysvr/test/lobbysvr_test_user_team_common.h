@@ -208,6 +208,7 @@ inline atfw::team::DTeamAnyDataWithKey pack_member_module(
 inline atfw::team::DTeamMemberJoinData make_join_data(uint64_t user_id, int64_t team_id) {
   atfw::team::DTeamMemberJoinData join_data;
   protobuf_copy_message(*join_data.mutable_team_key(), make_team_key(team_id));
+  join_data.set_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
   protobuf_copy_message(*join_data.mutable_user_key(), make_user_key(user_id));
   protobuf_copy_message(*join_data.mutable_team_channel(), make_team_channel_key(team_id));
   join_data.set_user_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
