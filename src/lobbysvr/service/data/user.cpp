@@ -297,6 +297,7 @@ void user::refresh_feature_limit(rpc::context &ctx) {
     user_cache_manager_->refresh_feature_limit_second(ctx);
     user_orbit_manager_->refresh_feature_limit_second(ctx);
     user_team_manager_->refresh_feature_limit_second(ctx);
+    user_matching_manager_->refresh_feature_limit_second(ctx);
 
     ////////////////// 业务Manager开始 ////////////////////
   }

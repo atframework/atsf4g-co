@@ -33,9 +33,16 @@ message lobbysvr_team_cfg {
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120s" min_value: "5s" }];
 }
 
+message lobbysvr_matching_cfg {
+  // Unit 心跳同时驱动 Matchsvr WAL 重放；必须显著小于 Matchsvr 的 10 秒失联判定。
+  google.protobuf.Duration heartbeat_interval = 1
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "1s" }];
+}
+
 message lobbysvr_cfg {
   google.protobuf.Duration rank_auto_update_interval = 101
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "3600s" min_value: "30s" }];  // 排行榜强制刷新间隔
   lobbysvr_chat_cfg chat = 201;
   lobbysvr_team_cfg team = 202;
+  lobbysvr_matching_cfg matching = 203;
 }

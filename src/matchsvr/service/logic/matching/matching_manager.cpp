@@ -84,6 +84,28 @@ int32_t matching_manager::init() { return 0; }
 int32_t matching_manager::tick() {
   const int64_t now = atfw::util::time::time_utility::get_now();
   rpc::context ctx = logic_server_get_current_tick_context();
+  if (now != last_heartbeat_check_time_) {
+    last_heartbeat_check_time_ = now;
+    std::vector<uint64_t> expired_unit_ids;
+    for (const auto& value : units_) {
+      if (!value.second) {
+        continue;
+      }
+      auto room = value.second->get_room();
+      if (room && room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING &&
+          value.second->is_heartbeat_expired(now - matching_logic::kUnitHeartbeatTimeout)) {
+        expired_unit_ids.emplace_back(value.first);
+      }
+    }
+    std::sort(expired_unit_ids.begin(), expired_unit_ids.end());
+    for (uint64_t unit_id : expired_unit_ids) {
+      auto unit = find_unit(unit_id);
+      if (unit) {
+        handle_unit_heartbeat_timeout(ctx, unit, now);
+      }
+    }
+  }
+
   std::vector<std::string> recycle_rooms;
   std::vector<matching_room::ptr_t> rebalance_targets;
   for (const auto& value : rooms_) {
@@ -147,40 +169,16 @@ int32_t matching_manager::tick() {
     }
     rooms_.erase(matching_id);
   }
-  std::vector<uint64_t> retry_unit_ids;
-  retry_unit_ids.reserve(units_.size());
   std::vector<uint64_t> recycle_units;
-  const auto retry_now = atfw::util::time::time_utility::now();
   for (const auto& value : units_) {
     if (!value.second) {
       recycle_units.emplace_back(value.first);
       continue;
     }
-    if (value.second->is_retry_due(retry_now)) {
-      retry_unit_ids.emplace_back(value.first);
-    }
     if (value.second->get_terminal_time() > 0 &&
         now - value.second->get_terminal_time() >= matching_logic::kTerminalRetention) {
       recycle_units.emplace_back(value.first);
     }
-  }
-  std::sort(retry_unit_ids.begin(), retry_unit_ids.end());
-  if (!retry_unit_ids.empty()) {
-    auto retry_iter = std::upper_bound(retry_unit_ids.begin(), retry_unit_ids.end(), wal_retry_cursor_);
-    const size_t retry_count = (std::min)(static_cast<size_t>(64), retry_unit_ids.size());
-    for (size_t index = 0; index < retry_count; ++index) {
-      if (retry_iter == retry_unit_ids.end()) {
-        retry_iter = retry_unit_ids.begin();
-      }
-      auto unit_iter = units_.find(*retry_iter);
-      wal_retry_cursor_ = *retry_iter;
-      ++retry_iter;
-      if (unit_iter != units_.end() && unit_iter->second) {
-        unit_iter->second->retry_pending(ctx);
-      }
-    }
-  } else {
-    wal_retry_cursor_ = 0;
   }
   for (uint64_t unit_id : recycle_units) {
     units_.erase(unit_id);
@@ -194,7 +192,7 @@ void matching_manager::clear() {
   unit_to_room_.clear();
   rooms_.clear();
   units_.clear();
-  wal_retry_cursor_ = 0;
+  last_heartbeat_check_time_ = 0;
 }
 
 int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request,
@@ -424,34 +422,49 @@ int32_t matching_manager::cancel_matching(rpc::context& ctx, const PROJECT_NAMES
 }
 
 int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESPACE_ID::SSMatchingCheckReq& request,
-                                         PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) {
+                                         PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response,
+                                         uint64_t source_server_id) {
   response.Clear();
-  FCTXLOGDEBUG(ctx,
-               "check matching, unit_id={}, user={}:{}, subscriber_server_id={:#x}, "
-               "acknowledge_event_id={}",
-               request.unit_id(), request.operator_user().user_id(), request.operator_user().zone_id(),
-               request.subscriber_server_id(), request.acknowledge_event_id());
+  FCTXLOGDEBUG(ctx, "matching heartbeat, unit_id={}, subscriber_server_id={:#x}, user={}:{}", request.unit_id(),
+               request.subscriber_server_id(), request.heartbeat_data().user_key().user_id(),
+               request.heartbeat_data().user_key().zone_id());
+  if (source_server_id != 0 && request.subscriber_server_id() != source_server_id) {
+    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    FCTXLOGERROR(ctx,
+                 "matching heartbeat rejected mismatched source, unit_id={}, subscriber_server_id={:#x}, "
+                 "source_server_id={:#x}",
+                 request.unit_id(), request.subscriber_server_id(), source_server_id);
+    return response.result();
+  }
   auto runtime_unit = find_unit(request.unit_id());
-  auto room = runtime_unit ? runtime_unit->get_room() : nullptr;
-  if (!runtime_unit || !room) {
-    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND);
-    FCTXLOGERROR(ctx, "check matching failed to find Unit, unit_id={}, result={}", request.unit_id(),
+  if (!runtime_unit) {
+    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
+    FCTXLOGERROR(ctx, "matching heartbeat failed to find Unit, unit_id={}, result={}", request.unit_id(),
                  response.result());
     return response.result();
   }
-  response.set_matching_id(room->get_matching_id());
-  auto unit_iter = room->get_units().find(request.unit_id());
-  if (unit_iter == room->get_units().end() || !unit_iter->second ||
-      !matching_utility::unit_has_user(unit_iter->second->get_data(), request.operator_user())) {
-    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
-    FCTXLOGERROR(ctx, "check matching failed to find unit member, matching_id={}, unit_id={}, result={}",
-                 room->get_matching_id(), request.unit_id(), response.result());
+  if (!request.has_heartbeat_data() ||
+      !runtime_unit->heartbeat(ctx, request.subscriber_server_id(), request.heartbeat_data())) {
+    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+    FCTXLOGERROR(ctx, "matching heartbeat rejected, unit_id={}, subscriber_server_id={:#x}, user={}:{}",
+                 request.unit_id(), request.subscriber_server_id(), request.heartbeat_data().user_key().user_id(),
+                 request.heartbeat_data().user_key().zone_id());
     return response.result();
   }
-  if (request.subscriber_server_id() != 0 &&
-      !runtime_unit->subscribe(ctx, request.operator_user(), request.subscriber_server_id(),
-                               request.acknowledge_event_id())) {
-    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+
+  auto room = runtime_unit->get_room();
+  if (room) {
+    response.set_matching_id(room->get_matching_id());
+  }
+  if (runtime_unit->is_terminal()) {
+    response.set_result(0);
+    protobuf_copy_message(*response.mutable_snapshot(), runtime_unit->get_view());
+    return response.result();
+  }
+  if (!room || !room->has_unit(request.unit_id())) {
+    response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND);
+    FCTXLOGERROR(ctx, "matching heartbeat failed to find active Unit membership, unit_id={}, result={}",
+                 request.unit_id(), response.result());
     return response.result();
   }
   protobuf_copy_message(*response.mutable_snapshot(), runtime_unit->get_view());
@@ -475,12 +488,11 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
     }
   }
   response.set_result(0);
-  const auto checked_unit = room->find_unit(request.unit_id());
-  if (checked_unit) {
+  if (room->has_unit(request.unit_id())) {
     runtime_unit->refresh_view_from_room(*room);
     protobuf_copy_message(*response.mutable_snapshot(), runtime_unit->get_view());
   }
-  FCTXLOGDEBUG(ctx, "check matching finish, matching_id={}, unit_id={}, status={}, last_event_id={}",
+  FCTXLOGDEBUG(ctx, "matching heartbeat finish, matching_id={}, unit_id={}, status={}, last_event_id={}",
                room->get_matching_id(), request.unit_id(), static_cast<int>(room->get_status()),
                room->get_last_event_id());
   return response.result();
@@ -562,21 +574,6 @@ int32_t matching_manager::confirm_matching(rpc::context& ctx, const PROJECT_NAME
                request.operator_user().zone_id(), request.confirmed(), static_cast<int>(room->get_status()),
                room->get_units().size(), room->get_last_event_id());
   return response.result();
-}
-
-int32_t matching_manager::acknowledge_matching_events(rpc::context& ctx,
-                                                      const PROJECT_NAMESPACE_ID::SSMatchingEventAckReq& request) {
-  auto unit = find_unit(request.unit_id());
-  if (!unit) {
-    FCTXLOGERROR(ctx, "acknowledge matching events failed to find Unit, unit_id={}", request.unit_id());
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND;
-  }
-  if (!unit->acknowledge(ctx, request.subscriber_server_id(), request.user_acks())) {
-    FCTXLOGERROR(ctx, "acknowledge matching events rejected, unit_id={}, server_id={:#x}, ack_count={}",
-                 request.unit_id(), request.subscriber_server_id(), request.user_acks_size());
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
-  }
-  return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
 rpc::result_code_type matching_manager::orbit_room_ready(
@@ -807,7 +804,8 @@ matching_unit::ptr_t matching_manager::find_unit(uint64_t unit_id) const {
 }
 
 void matching_manager::publish_room_event(rpc::context& ctx, const matching_room::ptr_t& room,
-                                          PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log) {
+                                          PROJECT_NAMESPACE_ID::DMatchingEventLog&& event_log,
+                                          PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus removed_unit_status) {
   if (!room) {
     return;
   }
@@ -842,7 +840,8 @@ void matching_manager::publish_room_event(rpc::context& ctx, const matching_room
       continue;
     }
     if (unit->get_unit_id() == removed_unit_id && !is_migration) {
-      unit->mark_terminal(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED, room->get_result(), now);
+      unit->mark_terminal(removed_unit_status, room->get_result(), now);
+      unit->unbind_room();
       unit->publish(ctx, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_TERMINAL);
       continue;
     }
@@ -1372,6 +1371,37 @@ void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_
                  "matching confirmation timeout resumed search, matching_id={}, remaining_units={}, expire_time={}",
                  room->get_matching_id(), room->get_units().size(), room->get_expire_time());
   }
+}
+
+void matching_manager::handle_unit_heartbeat_timeout(rpc::context& ctx, const matching_unit::ptr_t& unit,
+                                                     int64_t now) {
+  auto room = unit ? unit->get_room() : nullptr;
+  if (!unit || !room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING ||
+      !room->has_unit(unit->get_unit_id())) {
+    return;
+  }
+
+  auto remove_event = matching_logic::make_remove_unit_event(unit->get_data());
+  if (!room->remove_unit(unit->get_unit_id())) {
+    return;
+  }
+  unindex_unit(remove_event.remove_unit().unit());
+  const bool room_empty = room->get_units().empty();
+  if (room_empty) {
+    unindex_room(*room);
+    room->mark_timeout(now);
+  }
+  publish_room_event(ctx, room, std::move(remove_event),
+                     PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT);
+  if (room_empty) {
+    PROJECT_NAMESPACE_ID::DMatchingEventLog timeout_event;
+    timeout_event.set_timeout(now);
+    publish_room_event(ctx, room, std::move(timeout_event));
+  } else {
+    evaluate_room(ctx, room, now);
+  }
+  FCTXLOGINFO(ctx, "matching Unit heartbeat expired, matching_id={}, unit_id={}, room_empty={}, now={}",
+              room->get_matching_id(), unit->get_unit_id(), room_empty, now);
 }
 
 void matching_manager::handle_battle_create_timeout(rpc::context& ctx, const matching_room::ptr_t& room, int64_t now) {

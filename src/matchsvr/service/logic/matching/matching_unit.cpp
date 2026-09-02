@@ -15,8 +15,6 @@
 #include "logic/matching/matching_utility.h"
 
 namespace {
-const std::chrono::seconds kMatchingWalRetryInterval{2};
-
 PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus convert_room_status(
     PROJECT_NAMESPACE_ID::EnMatchingRoomStatus status) noexcept {
   switch (status) {
@@ -134,12 +132,9 @@ bool matching_unit::subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUs
     auto& private_data = *subscriber->get_private_data();
     private_data.set_server_id(server_id);
     private_data.set_acknowledge_event_id(std::max(private_data.acknowledge_event_id(), acknowledge_event_id));
+    private_data.set_last_heartbeat_time(atfw::util::time::time_utility::get_now());
     const auto now = atfw::util::time::time_utility::now();
     wal_publisher_->receive_subscribe_request(user_key, private_data.acknowledge_event_id(), now, wal_ctx);
-    if (private_data.acknowledge_event_id() < last_event_id_ &&
-        next_retry_timepoint_ == std::chrono::system_clock::time_point{}) {
-      next_retry_timepoint_ = now;
-    }
     return result >= 0;
   }
   auto private_data = atfw::memory::stl::make_strong_rc<PROJECT_NAMESPACE_ID::DMatchingSubscriberData>();
@@ -150,49 +145,59 @@ bool matching_unit::subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUs
   private_data->set_last_send_event_id(acknowledge_event_id);
   private_data->set_acknowledge_event_id(acknowledge_event_id);
   private_data->set_valid_event_id_bound(last_event_id_ + 1);
+  private_data->set_last_heartbeat_time(atfw::util::time::time_utility::get_now());
   const auto now = atfw::util::time::time_utility::now();
-  const bool result_created = static_cast<bool>(
+  return static_cast<bool>(
       wal_publisher_->create_subscriber(user_key, now, acknowledge_event_id, wal_ctx, std::move(private_data)));
-  if (result_created && acknowledge_event_id < last_event_id_ &&
-      next_retry_timepoint_ == std::chrono::system_clock::time_point{}) {
-    next_retry_timepoint_ = now;
-  }
-  return result_created;
 }
 
-bool matching_unit::acknowledge(
-    rpc::context& ctx, uint64_t server_id,
-    const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingUserEventAck>& user_acks) {
-  if (!wal_publisher_ || server_id == 0 || user_acks.empty()) {
+bool matching_unit::heartbeat(rpc::context& ctx, uint64_t server_id,
+                              const PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat& heartbeat_data) {
+  if (!wal_publisher_ || server_id == 0 || heartbeat_data.user_key().user_id() == 0 ||
+      heartbeat_data.acknowledge_event_id() < 0 || heartbeat_data.acknowledge_event_id() > last_event_id_) {
     return false;
   }
   int32_t result = 0;
   matching_wal_context wal_ctx{ctx, result};
-  std::set<std::pair<uint64_t, uint32_t>> acknowledged_users;
-  std::vector<matching_wal_publisher::subscriber_pointer> subscribers;
-  subscribers.reserve(static_cast<size_t>(user_acks.size()));
-  for (const auto& ack : user_acks) {
-    auto subscriber = wal_publisher_->find_subscriber(ack.user_key(), wal_ctx);
-    if (ack.event_id() < 0 || ack.event_id() > last_event_id_ ||
-        !acknowledged_users.emplace(ack.user_key().user_id(), ack.user_key().zone_id()).second || !subscriber ||
-        !subscriber->get_private_data() || subscriber->get_private_data()->server_id() != server_id) {
-      return false;
-    }
-    subscribers.emplace_back(std::move(subscriber));
+  auto subscriber = wal_publisher_->find_subscriber(heartbeat_data.user_key(), wal_ctx);
+  if (!subscriber || !subscriber->get_private_data()) {
+    return false;
   }
-  for (int index = 0; index < user_acks.size(); ++index) {
-    const auto& ack = user_acks.Get(index);
-    const auto& subscriber = subscribers[static_cast<size_t>(index)];
-    auto& private_data = *subscriber->get_private_data();
-    private_data.set_acknowledge_event_id(std::max(private_data.acknowledge_event_id(), ack.event_id()));
-    const auto now = atfw::util::time::time_utility::now();
-    wal_publisher_->receive_subscribe_request(ack.user_key(), private_data.acknowledge_event_id(), now, wal_ctx);
-    if (private_data.acknowledge_event_id() < last_event_id_ &&
-        next_retry_timepoint_ == std::chrono::system_clock::time_point{}) {
-      next_retry_timepoint_ = now;
+  const auto now = atfw::util::time::time_utility::now();
+  const int64_t now_unix = atfw::util::time::time_utility::get_now();
+  auto& private_data = *subscriber->get_private_data();
+  private_data.set_server_id(server_id);
+  private_data.set_acknowledge_event_id(
+      std::max(private_data.acknowledge_event_id(), heartbeat_data.acknowledge_event_id()));
+  private_data.set_last_heartbeat_time(now_unix);
+  wal_publisher_->receive_subscribe_request(heartbeat_data.user_key(), private_data.acknowledge_event_id(), now,
+                                            wal_ctx);
+  wal_publisher_->tick(now, wal_ctx);
+  if (result < 0) {
+    FCTXLOGWARNING(ctx,
+                   "matching heartbeat accepted but replay delivery failed, unit_id={}, server_id={:#x}, user={}:{}, "
+                   "result={}({})",
+                   get_unit_id(), server_id, heartbeat_data.user_key().user_id(),
+                   heartbeat_data.user_key().zone_id(), result, protobuf_mini_dumper_get_error_msg(result));
+  }
+  // 心跳的路由、ACK 和活跃时间已经提交。重放发送失败由下一次心跳再次触发，不能拒绝本次续约。
+  return true;
+}
+
+bool matching_unit::is_heartbeat_expired(int64_t expire_before) const {
+  if (!wal_publisher_) {
+    return true;
+  }
+  size_t subscriber_count = 0;
+  auto subscribers = wal_publisher_->get_subscribe_manager().all_range();
+  for (auto iter = subscribers.first; iter != subscribers.second; ++iter) {
+    ++subscriber_count;
+    if (!iter->second || !iter->second->get_private_data() ||
+        iter->second->get_private_data()->last_heartbeat_time() <= expire_before) {
+      return true;
     }
   }
-  return result >= 0;
+  return subscriber_count != static_cast<size_t>(data_.users_size());
 }
 
 std::optional<matching_unit::subscriber_route> matching_unit::get_subscriber_route(
@@ -233,39 +238,4 @@ void matching_unit::publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnMatchingU
   view_.set_last_event_id(last_event_id_);
   wal_publisher_->broadcast(wal_ctx);
   wal_publisher_->tick(now, wal_ctx);
-  next_retry_timepoint_ = now + kMatchingWalRetryInterval;
-}
-
-bool matching_unit::is_retry_due(std::chrono::system_clock::time_point now) const noexcept {
-  return next_retry_timepoint_ != std::chrono::system_clock::time_point{} && now >= next_retry_timepoint_;
-}
-
-void matching_unit::retry_pending(rpc::context& ctx) {
-  if (!wal_publisher_) {
-    return;
-  }
-  const auto now = atfw::util::time::time_utility::now();
-  if (next_retry_timepoint_ != std::chrono::system_clock::time_point{} && now < next_retry_timepoint_) {
-    return;
-  }
-  int32_t result = 0;
-  matching_wal_context wal_ctx{ctx, result};
-  std::vector<std::pair<PROJECT_NAMESPACE_ID::DUserIDKey, int64_t>> pending_subscribers;
-  auto subscribers = wal_publisher_->get_subscribe_manager().all_range();
-  for (auto iter = subscribers.first; iter != subscribers.second; ++iter) {
-    if (!iter->second || !iter->second->get_private_data() ||
-        iter->second->get_private_data()->acknowledge_event_id() >= last_event_id_) {
-      continue;
-    }
-    pending_subscribers.emplace_back(iter->first, iter->second->get_private_data()->acknowledge_event_id());
-  }
-  for (const auto& subscriber : pending_subscribers) {
-    wal_publisher_->receive_subscribe_request(subscriber.first, subscriber.second, now, wal_ctx);
-  }
-  if (pending_subscribers.empty()) {
-    next_retry_timepoint_ = std::chrono::system_clock::time_point{};
-    return;
-  }
-  wal_publisher_->tick(now, wal_ctx);
-  next_retry_timepoint_ = now + kMatchingWalRetryInterval;
 }

@@ -8,7 +8,6 @@
 
 #include <config/compiler/protobuf_suffix.h>
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -43,6 +42,8 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
 
   // Room 可替换，但 Unit 对象、订阅者和事件游标在整个匹配生命周期内不变。
   void bind_room(const std::shared_ptr<matching_room>& room) noexcept { room_ = room; }
+  // 非迁移摘房即结束本轮匹配；终态 Unit 仅作为 WAL 补发墓碑保留，不再关联 Room。
+  void unbind_room() noexcept { room_.reset(); }
   std::shared_ptr<matching_room> get_room() const noexcept { return room_.lock(); }
 
   // 从当前 Room 复制业务视图；迁房前后视图相同则不会产生外部事件。
@@ -58,14 +59,15 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes) const;
   bool subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
                  int64_t acknowledge_event_id);
-  bool acknowledge(rpc::context& ctx, uint64_t server_id,
-                   const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingUserEventAck>& user_acks);
+  // 心跳更新单个玩家的路由、业务 ACK 和活跃时间，并立即触发该玩家缺失 WAL 的重放。
+  bool heartbeat(rpc::context& ctx, uint64_t server_id,
+                 const PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat& heartbeat_data);
+  // Unit 是匹配原子；任一成员订阅超过阈值未续约时，整个 Unit 失效。
+  bool is_heartbeat_expired(int64_t expire_before) const;
   std::optional<subscriber_route> get_subscriber_route(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key);
 
   // 只发布 Unit 语义事件。事件中始终携带发布时的完整 Unit 视图。
   void publish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnMatchingUnitEventType event_type);
-  bool is_retry_due(std::chrono::system_clock::time_point now) const noexcept;
-  void retry_pending(rpc::context& ctx);
 
  private:
   friend class matching_room;
@@ -77,6 +79,5 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
   std::weak_ptr<matching_room> room_;
   int64_t last_event_id_ = 0;
   int64_t terminal_time_ = 0;
-  std::chrono::system_clock::time_point next_retry_timepoint_{};
   matching_wal_log_operator::strong_ptr<matching_wal_publisher> wal_publisher_;
 };

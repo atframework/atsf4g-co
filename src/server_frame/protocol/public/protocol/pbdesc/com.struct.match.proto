@@ -230,6 +230,8 @@ message DMatchingEventLog {
 message DUserMatchingData {
   int64 acknowledge_event_id = 1;
   DMatchingUnitView view = 2;
+  // 创建该 Unit 的 Matchsvr。Unit 生命周期内的查询、心跳、取消和确认必须固定路由到该实例。
+  uint64 matchsvr_server_id = 3;
 }
 
 message DBattleLevelParameter {

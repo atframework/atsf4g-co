@@ -14,7 +14,7 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_check_matching
+class task_action_matching_heart_bear
     : public task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSMatchingCheckReq,
                                      PROJECT_NAMESPACE_ID::SSMatchingSnapshot> {
  public:
@@ -22,8 +22,8 @@ class task_action_check_matching
       task_action_ss_rpc_base<PROJECT_NAMESPACE_ID::SSMatchingCheckReq, PROJECT_NAMESPACE_ID::SSMatchingSnapshot>;
   using base_type::operator();
 
-  explicit task_action_check_matching(dispatcher_start_data_type&& param);
-  ~task_action_check_matching() override;
+  explicit task_action_matching_heart_bear(dispatcher_start_data_type&& param);
+  ~task_action_matching_heart_bear() override;
 
   const char* name() const override;
   result_type operator()() override;

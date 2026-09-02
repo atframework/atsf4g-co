@@ -17,6 +17,7 @@
 #include <data/user_type_define.h>
 
 #include <cstdint>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
  public:
   struct matching_sync_result {
     bool accepted = false;
+    // 仍有未完成业务副作用时，不得立即回送旧 ACK；由定时心跳触发下一次重放。
+    bool has_pending_event = false;
     int64_t acknowledge_event_id = 0;
     int64_t confirm_event_id = 0;
   };
@@ -49,6 +52,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
   bool is_dirty() const;
   void clear_dirty();
+  // 每秒调度入口；内部按 matching.heartbeat_interval 节流并异步发送 Unit 心跳。
+  void refresh_feature_limit_second(rpc::context& ctx);
   // 玩家持有有效 Unit 且处于搜索、确认或创建战斗阶段。
   bool is_in_matching() const;
 
@@ -69,14 +74,17 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
       PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp& response);
 
   // 合并 matchsvr 推送，并顺序处理无需异步等待的事件。view.last_event_id 只表示已见到；返回值中的
-  // acknowledge_event_id 只覆盖业务副作用已经完成的事件。确认事件由调用者完成后通过 finish_matching_event 提交。
+  // acknowledge_event_id 只覆盖业务副作用已经完成的事件。确认事件由调用者完成后通过 finish_matching_event 提交；
+  // has_pending_event 表示调用者不能立即回送旧 ACK。
   matching_sync_result acknowledge_matching_sync(rpc::context& ctx,
-                                                 const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync);
+                                                 const PROJECT_NAMESPACE_ID::SSMatchingEventSync& sync,
+                                                 uint64_t source_matchsvr_id = 0);
   bool finish_matching_event(rpc::context& ctx, uint64_t unit_id, int64_t event_id, bool success);
 
   const PROJECT_NAMESPACE_ID::DMatchingUnitView& get_view() const;
   PROJECT_NAMESPACE_ID::DMatchingClientView get_client_view() const;
   int64_t get_last_event_id() const;
+  uint64_t get_current_matchsvr_server_id() const;
 
  private:
   //  重登时尝试回复匹配状态
@@ -118,5 +126,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   user* ATFW_UTIL_MACRO_NONNULL owner_;
   PROJECT_NAMESPACE_ID::DUserMatchingData data_;
   int64_t processing_event_id_ = 0;
+  int64_t last_reported_acknowledge_event_id_ = 0;
+  time_t last_heartbeat_time_ = 0;
+  bool periodic_heartbeat_inflight_ = false;
   bool dirty_;
 };

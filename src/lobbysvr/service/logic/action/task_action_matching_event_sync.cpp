@@ -30,7 +30,6 @@
 #include <data/user.h>
 #include <logic/matching/user_matching_manager.h>
 #include <logic/user_manager.h>
-#include <rpc/matching/matching_api.h>
 #include <rpc/matching/matchsvrservice.atfw.gen.h>
 
 namespace {
@@ -47,15 +46,13 @@ const char* task_action_matching_event_sync::name() const { return "task_action_
 
 task_action_matching_event_sync::result_type task_action_matching_event_sync::operator()() {
   const rpc_request_type& req_body = get_request_body();
+  const uint64_t source_matchsvr_id = get_request_node_id();
   // Stream request or stream response, just ignore auto response
   disable_response_message();
 
   FCTXLOGDEBUG(get_shared_context(), "receive matching Unit sync, unit_id={}, users={}, view={}, event_count={}",
                req_body.unit_id(), req_body.user_keys_size(), req_body.has_unit_view(), req_body.event_logs_size());
 
-  auto ack_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingEventAckReq>(get_shared_context());
-  ack_request->set_unit_id(req_body.unit_id());
-  ack_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   for (const auto& user_key : req_body.user_keys()) {
     auto user_inst = user_manager::me()->find_as<user>(user_key.user_id(), user_key.zone_id());
     if (!user_inst) {
@@ -65,7 +62,7 @@ task_action_matching_event_sync::result_type task_action_matching_event_sync::op
       continue;
     }
     auto& matching_manager = user_inst->get_user_matching_manager();
-    auto sync_result = matching_manager.acknowledge_matching_sync(get_shared_context(), req_body);
+    auto sync_result = matching_manager.acknowledge_matching_sync(get_shared_context(), req_body, source_matchsvr_id);
     if (!sync_result.accepted) {
       continue;
     }
@@ -95,24 +92,32 @@ task_action_matching_event_sync::result_type task_action_matching_event_sync::op
       if (matching_manager.finish_matching_event(get_shared_context(), req_body.unit_id(), sync_result.confirm_event_id,
                                                  confirm_success)) {
         sync_result.acknowledge_event_id = sync_result.confirm_event_id;
+        sync_result.has_pending_event = false;
       }
     }
 
-    auto* user_ack = ack_request->add_user_acks();
-    protobuf_copy_message(*user_ack->mutable_user_key(), user_key);
-    user_ack->set_event_id(sync_result.acknowledge_event_id);
-  }
+    if (sync_result.has_pending_event) {
+      continue;
+    }
 
-  if (ack_request->user_acks_size() > 0) {
-    const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
-    auto ack_response = rpc::make_shared_message<google::protobuf::Empty>(get_shared_context());
-    if (matchsvr_id != 0) {
-      const int32_t ack_result = RPC_AWAIT_CODE_RESULT(rpc::matching::acknowledge_matching_events(
-          get_shared_context(), matchsvr_id, *ack_request, *ack_response, true));
-      if (ack_result < 0) {
-        FCTXLOGERROR(get_shared_context(), "send matching Unit ACK failed, unit_id={}, result={}({})",
-                     req_body.unit_id(), ack_result, protobuf_mini_dumper_get_error_msg(ack_result));
+    auto heartbeat_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCheckReq>(get_shared_context());
+    heartbeat_request->set_unit_id(req_body.unit_id());
+    heartbeat_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
+    auto* heartbeat_data = heartbeat_request->mutable_heartbeat_data();
+    protobuf_copy_message(*heartbeat_data->mutable_user_key(), user_key);
+    heartbeat_data->set_acknowledge_event_id(sync_result.acknowledge_event_id);
+    auto heartbeat_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(get_shared_context());
+    if (source_matchsvr_id != 0) {
+      const int32_t heartbeat_result = RPC_AWAIT_CODE_RESULT(rpc::matching::matching_heart_bear(
+          get_shared_context(), source_matchsvr_id, *heartbeat_request, *heartbeat_response));
+      if (heartbeat_result < 0 || heartbeat_response->result() != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+        const int32_t result = heartbeat_result < 0 ? heartbeat_result : heartbeat_response->result();
+        FCTXLOGERROR(get_shared_context(), "send matching Unit heartbeat failed, unit_id={}, result={}({})",
+                     req_body.unit_id(), result, protobuf_mini_dumper_get_error_msg(result));
       }
+    } else {
+      FCTXLOGERROR(get_shared_context(), "send matching Unit heartbeat failed without source Matchsvr, unit_id={}",
+                   req_body.unit_id());
     }
   }
   FCTXLOGDEBUG(get_shared_context(), "handle matching Unit sync finish, unit_id={}, users={}", req_body.unit_id(),

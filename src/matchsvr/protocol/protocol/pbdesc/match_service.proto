@@ -23,6 +23,8 @@ message DMatchingSubscriberData {
   int64 last_send_event_id = 2;
   int64 valid_event_id_bound = 3;
   int64 acknowledge_event_id = 4;
+  // Matchsvr 接收该玩家最近一次 Unit 心跳时间
+  int64 last_heartbeat_time = 5;
 }
 
 message DMatchingSubscriberRoute {
@@ -50,13 +52,6 @@ message SSMatchingCancelReq {
   DUserIDKey operator_user = 2;
 }
 
-message SSMatchingCheckReq {
-  uint64 unit_id = 1;
-  DUserIDKey operator_user = 2;
-  uint64 subscriber_server_id = 3;
-  int64 acknowledge_event_id = 4;
-}
-
 message SSMatchingConfirmReq {
   uint64 unit_id = 1;
   DUserIDKey operator_user = 2;
@@ -74,15 +69,18 @@ message SSMatchingSnapshot {
   string matching_id = 3;
 }
 
-message DMatchingUserEventAck {
+message DMatchingUserHeartbeat {
   DUserIDKey user_key = 1;
-  int64 event_id = 2;
+  // 该玩家已经完成业务副作用的最大连续 Unit WAL 事件。
+  int64 acknowledge_event_id = 2;
 }
 
-message SSMatchingEventAckReq {
+// Unit 心跳同时承担权威状态查询、订阅路由刷新和 WAL 业务确认。
+message SSMatchingCheckReq {
   uint64 unit_id = 1;
   uint64 subscriber_server_id = 2;
-  repeated DMatchingUserEventAck user_acks = 3;
+  // 当前 Lobby 实际持有的一个 Unit 玩家；同一 Unit 的其他玩家可以位于其他 Lobby。
+  DMatchingUserHeartbeat heartbeat_data = 3;
 }
 
 service MatchsvrService {
@@ -94,17 +92,14 @@ service MatchsvrService {
   rpc cancel_matching(SSMatchingCancelReq) returns (SSMatchingSnapshot) {
     option (atframework.rpc_options) = { api_name: "取消匹配" };
   };
-  rpc check_matching(SSMatchingCheckReq) returns (SSMatchingSnapshot) {
-    option (atframework.rpc_options) = { api_name: "查询匹配" };
+  rpc matching_heart_bear(SSMatchingCheckReq) returns (SSMatchingSnapshot) {
+    option (atframework.rpc_options) = {
+      api_name: "匹配心跳"
+      descriptions: "query authoritative Unit state, acknowledge completed WAL events and trigger replay"
+    };
   };
   rpc confirm_matching(SSMatchingConfirmReq) returns (SSMatchingSnapshot) {
     option (atframework.rpc_options) = { api_name: "确认或拒绝战斗" };
-  };
-  rpc acknowledge_matching_events(SSMatchingEventAckReq) returns (google.protobuf.Empty) {
-    option (atframework.rpc_options) = {
-      api_name: "确认匹配事件"
-      allow_no_wait: true
-    };
   };
 }
 
