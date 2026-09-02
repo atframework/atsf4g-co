@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "ItemAlgorithm/ItemAlgorithmConfig.h"
+#include "ItemAlgorithmConfig.h"
 
 // clang-format off
 #include <log/log_wrapper.h>

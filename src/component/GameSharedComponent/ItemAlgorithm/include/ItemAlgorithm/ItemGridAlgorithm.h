@@ -2,11 +2,9 @@
 
 #pragma once
 
-#include "ItemAlgorithm/ItemAlgorithmConfig.h"
-#include "ItemAlgorithm/ItemAlgorithmLog.h"
-#include "ItemAlgorithm/ItemGridAlgorithmFindPosition.h"
-#include "ItemAlgorithm/ItemGridData.h"
-#include "ItemAlgorithm/ItemGridOccupyFlag.h"
+#include <ItemAlgorithm/ItemAlgorithmConfig.h>
+#include <ItemAlgorithm/ItemAlgorithmLog.h>
+#include <ItemAlgorithm/ItemGridData.h>
 
 #include <cstdint>
 #include <list>
@@ -35,6 +33,50 @@ enum class ItemGridAlgorithmMode : int32_t {
 
 class ItemGridAlgorithm;
 using item_grid_algorithm_ptr_t = atfw::util::memory::strong_rc_ptr<ItemGridAlgorithm>;
+
+/// @brief 背包占用位图 (多行打成一行, 每 64 列一个 uint64)
+///
+/// 内部以单个 uint64 数组按行优先存储位图, 支持按 (x, y) 快速检查/设置占用,
+/// 便于后续寻位优化 (位运算找空位)。
+class ITEM_ALGORITHM_API ItemGridOccupyFlag {
+ public:
+  ItemGridOccupyFlag() = default;
+  ItemGridOccupyFlag(const ItemGridOccupyFlag&) = default;
+  ItemGridOccupyFlag& operator=(const ItemGridOccupyFlag&) = default;
+
+  /// @brief 初始化位图 (rows 行, cols 列), 全部清零
+  void resize(size_t rows, size_t cols);
+
+  /// @brief 全部清零 (保留行列尺寸)
+  void clear();
+
+  /// @brief 是否无任何行
+  bool empty() const { return data_.empty(); }
+
+  /// @brief 行数
+  size_t row_count() const { return row_count_; }
+
+  /// @brief 列数
+  size_t column_count() const { return column_count_; }
+
+  /// @brief 每行占用的 uint64 数量
+  size_t words_per_row() const { return words_per_row_; }
+
+  /// @brief 底层数据 (行优先, 每行 words_per_row() 个 uint64)
+  const std::vector<uint64_t>& data() const { return data_; }
+
+  /// @brief 检查 (x, y) 是否被占用
+  bool is_occupied(int32_t x, int32_t y) const;
+
+  /// @brief 设置 (x, y) 占用状态
+  void set(int32_t x, int32_t y, bool occupied);
+
+ private:
+  std::vector<uint64_t> data_;
+  size_t row_count_ = 0;
+  size_t column_count_ = 0;
+  size_t words_per_row_ = 0;
+};
 
 /// @brief 背包格子算法虚基类
 ///
@@ -276,44 +318,12 @@ class ITEM_ALGORITHM_API ItemGridAlgorithm : public atfw::util::memory::enable_s
 
   // 寻位公共实现 (模板, 支持 DItemBasic / DItemInstance 两种输入)
   template <typename ItemT>
-  bool find_positions_inner(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-                            const google::protobuf::RepeatedPtrField<ItemT>& items,
-                            const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
-                            google::protobuf::RepeatedPtrField<ItemT>& success_item,
-                            google::protobuf::RepeatedPtrField<ItemT>& failed_item) const;
-
-  // 寻位辅助: ignore_item 存在性校验 + 消耗累计 (按 GUID / 位置 / 类型)
-  bool find_positions_validate_ignore(
+  bool find_positions_inner(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+      const google::protobuf::RepeatedPtrField<ItemT>& items,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
-      std::unordered_map<int64_t, int64_t>& ignore_guid_count, std::unordered_map<int32_t, int64_t>& ignore_type_count,
-      std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo>&
-          ignore_position_count) const;
-
-  // 寻位辅助: 构建批次内格子预留副本 reserved (含 ignore_item 整体消耗格子的释放)
-  ItemGridOccupyFlag find_positions_build_reserved(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-      const std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo>&
-          ignore_position_count) const;
-
-  // 寻位辅助: 第一段 (无位置/非占格/无限格子 + 策略1 首选位置 + 策略2 堆叠),
-  // 剩余物品记录到 pending_strategy3
-  template <typename ItemT>
-  bool find_positions_stack_process(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-      const google::protobuf::RepeatedPtrField<ItemT>& items, ItemGridOccupyFlag& reserved,
-      const std::unordered_map<ItemGridPosition, int64_t, ItemGridPositionHash, ItemGridPositionEqualTo>&
-          ignore_position_count,
-      google::protobuf::RepeatedPtrField<ItemT>& success_item, google::protobuf::RepeatedPtrField<ItemT>& failed_item,
-      std::vector<ItemGridPendingFindPositionItem<ItemT>>& pending_strategy3) const;
-
-  // 寻位辅助: 第二段 (剩余物品按大小从大到小排序后, 策略3 位图扫描)
-  template <typename ItemT>
-  void find_positions_occupy_process(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-      ItemGridOccupyFlag& reserved, google::protobuf::RepeatedPtrField<ItemT>& success_item,
-      google::protobuf::RepeatedPtrField<ItemT>& failed_item,
-      std::vector<ItemGridPendingFindPositionItem<ItemT>>& pending_strategy3) const;
+      google::protobuf::RepeatedPtrField<ItemT>& success_item,
+      google::protobuf::RepeatedPtrField<ItemT>& failed_item) const;
 
  private:
   bool is_item_valid(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,

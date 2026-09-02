@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "ItemAlgorithm/ItemAlgorithmConfig.h"
+#include <ItemAlgorithm/ItemAlgorithmConfig.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

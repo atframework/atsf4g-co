@@ -20,15 +20,10 @@ project_game_shared_component_declare_sdk(
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemAlgorithmLog.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridAlgorithm.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridContainer.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridOccupyFlag.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridAlgorithmFindPosition.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridData.h"
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridAlgorithm.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridContainer.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridOccupyFlag.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridAlgorithmFindPosition.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridAlgorithmOperation.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridData.cpp")
 
 target_link_libraries(${TARGET_FULL_NAME} PRIVATE xxHash::xxhash)
