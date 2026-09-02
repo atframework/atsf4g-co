@@ -22,15 +22,15 @@ class user;
 
 class user_virtual_inventory_grid : public user_item_grid_algorithm {
  public:
-  user_virtual_inventory_grid(user* owner);
+  explicit user_virtual_inventory_grid(user* owner);
   ~user_virtual_inventory_grid() override;
 
-  virtual item_algorithm::item_grid_algorithm_ptr_t create_empty_clone() const override;
+  item_algorithm::item_grid_algorithm_ptr_t create_empty_clone() const override;
 };
 
 class user_virtual_inventory {
  public:
-  user_virtual_inventory(user* owner);
+  explicit user_virtual_inventory(user* owner);
 
   void init(const PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& data);
   void dump(PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& out) const;

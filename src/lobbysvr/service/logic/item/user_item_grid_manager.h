@@ -26,6 +26,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace rpc {
 class context;
@@ -34,7 +35,7 @@ class user;
 
 class user_grid_item_operation_checked_add_data : public item_operation_checked_add_private_data {
  public:
-  user_grid_item_operation_checked_add_data(item_algorithm::ItemGridContainerAddCheckedRequest&& in_data)
+  explicit user_grid_item_operation_checked_add_data(item_algorithm::ItemGridContainerAddCheckedRequest&& in_data)
       : data(std::move(in_data)) {}
   ~user_grid_item_operation_checked_add_data() override = default;
 
@@ -48,7 +49,7 @@ class user_grid_item_operation_checked_add_data : public item_operation_checked_
 
 class user_grid_item_operation_checked_sub_data : public item_operation_checked_sub_private_data {
  public:
-  user_grid_item_operation_checked_sub_data(item_algorithm::ItemGridContainerSubCheckedRequest&& in_data)
+  explicit user_grid_item_operation_checked_sub_data(item_algorithm::ItemGridContainerSubCheckedRequest&& in_data)
       : data(std::move(in_data)) {}
   ~user_grid_item_operation_checked_sub_data() override = default;
 
@@ -62,15 +63,15 @@ class user_grid_item_operation_checked_sub_data : public item_operation_checked_
 
 class user_grid_item_operation_handler : public item_operation_handler {
  public:
-  virtual item_operation_handle_checked_add_request check_add(
+  item_operation_handle_checked_add_request check_add(
       rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&&) const override;
-  virtual item_operation_handle_checked_sub_request check_sub(
+  item_operation_handle_checked_sub_request check_sub(
       rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const override;
-  virtual item_operation_result check_has(
+  item_operation_result check_has(
       rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&) const override;
 
-  virtual item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) override;
-  virtual item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) override;
+  item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) override;
+  item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) override;
 };
 
 class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
@@ -126,9 +127,8 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
   void build_dirty_sync(PROJECT_NAMESPACE_ID::SCUserDirtyChgSync& output);
 
  private:
-  virtual item_algorithm::item_grid_algorithm_ptr_t select_grid(
-      const PROJECT_NAMESPACE_ID::DItemPosition& position) override;
-  virtual item_algorithm::item_grid_algorithm_ptr_t select_grid(
+  item_algorithm::item_grid_algorithm_ptr_t select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& position) override;
+  item_algorithm::item_grid_algorithm_ptr_t select_grid(
       const PROJECT_NAMESPACE_ID::DItemPosition& position) const override;
 
  private:

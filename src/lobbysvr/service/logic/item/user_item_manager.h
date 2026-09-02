@@ -21,7 +21,7 @@
 #include <rpc/rpc_utils.h>
 
 #include <utility>
-
+#include <unordered_map>
 namespace rpc {
 class context;
 }

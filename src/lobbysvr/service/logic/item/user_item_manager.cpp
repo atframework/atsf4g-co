@@ -25,6 +25,10 @@
 
 #include <algorithm>
 #include <map>
+#include <unordered_map>
+#include <list>
+#include <vector>
+#include <utility>
 
 std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> user_item_manager::item_type_handler_id_;
 std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_handler>>

@@ -15,6 +15,7 @@
 #include <memory/rc_ptr.h>
 
 #include <list>
+#include <utility>
 
 namespace rpc {
 class context;
@@ -41,7 +42,7 @@ class user_item_manager;
 struct item_operation_handle_checked_add_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request;
-  item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_index = -1)
+  explicit item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_index = -1)
       : check_result{error_code, failed_index} {}
   item_operation_handle_checked_add_request(
       atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request)
@@ -55,7 +56,7 @@ struct item_operation_handle_checked_add_request {
 struct item_operation_handle_checked_sub_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request;
-  item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_index = -1)
+  explicit item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_index = -1)
       : check_result{error_code, failed_index} {}
   item_operation_handle_checked_sub_request(
       atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request)

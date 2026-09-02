@@ -22,6 +22,8 @@
 
 #include <algorithm>
 #include <map>
+#include <utility>
+#include <vector>
 
 namespace {
 static bool init_user_item_grid_manager_handle() {
@@ -31,9 +33,8 @@ static bool init_user_item_grid_manager_handle() {
       [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
         user_inst.get_user_item_grid_manager().dump_virtual_inventory(*rsp.mutable_user_virtual_inventory());
       });
-  PROJECT_NAMESPACE_ID::EnItemType item_types[] = {
-      PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_COIN, PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_VIRTUAL,
-      PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_ITEM, PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_EQUIPMENT};
+  PROJECT_NAMESPACE_ID::EnItemType item_types[] = {PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_COIN,
+                                                   PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_VIRTUAL};
   user_item_manager::register_item_type_handler(
       item_types, atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_handler>());
   return true;
@@ -45,9 +46,10 @@ item_operation_handle_checked_add_request user_grid_item_operation_handler::chec
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
   auto result = user_inst.get_user_item_grid_manager().check_add(std::move(input));
   if (result.get_error_code() != 0) {
-    return {result.get_error_code(), result.get_failed_index()};
+    return item_operation_handle_checked_add_request{result.get_error_code(), result.get_failed_index()};
   }
-  return {atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_add_data>(std::move(result))};
+  return item_operation_handle_checked_add_request{
+      atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_add_data>(std::move(result))};
 }
 
 item_operation_handle_checked_sub_request user_grid_item_operation_handler::check_sub(
@@ -55,9 +57,10 @@ item_operation_handle_checked_sub_request user_grid_item_operation_handler::chec
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
   auto result = user_inst.get_user_item_grid_manager().check_sub(std::move(input));
   if (result.get_error_code() != 0) {
-    return {result.get_error_code(), result.get_failed_index()};
+    return item_operation_handle_checked_sub_request{result.get_error_code(), result.get_failed_index()};
   }
-  return {atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_sub_data>(std::move(result))};
+  return item_operation_handle_checked_sub_request{
+      atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_checked_sub_data>(std::move(result))};
 }
 
 item_operation_result user_grid_item_operation_handler::check_has(
