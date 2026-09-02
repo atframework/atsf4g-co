@@ -184,6 +184,12 @@ function(project_add_rpc_unit_test)
     set(PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS "PATH=path_list_prepend:${PROJECT_TEST_RUNTIME_OUTPUT_DIRECTORY}")
     if(CMAKE_RUNTIME_OUTPUT_DIRECTORY)
       list(APPEND PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+      # Multi-config generators keep shared libraries in a per-config subdirectory; $<CONFIG> resolves to the
+      # configuration CTest runs, so only that subdirectory joins PATH.
+      if(CMAKE_CONFIGURATION_TYPES)
+        list(APPEND PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS
+             "PATH=path_list_prepend:${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>")
+      endif()
     endif()
     if(PROJECT_THIRD_PARTY_INSTALL_DIR)
       list(APPEND PROJECT_RPC_UNIT_TEST_PATH_MODIFICATIONS
