@@ -1060,10 +1060,9 @@ CASE_TEST(teamsvr_room_permission, role_threshold_ordering) {
 
   // 档位间自定义角色 75(介于 NORMAL=50 与 ADMIN=100): 阈值比较按大小，不需要 == 命中某个已定义档位
   auto vip = make_user_key(1, 7105);
-  CASE_EXPECT_EQ(0,
-                 run_send_message_action(env, team_id, members.owner,
-                                         make_add_member_action(vip, make_personal_channel(7105),
-                                                                static_cast<atfw::team::EnTeamPermissionRole>(75))));
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
+                                            make_add_member_action(vip, make_personal_channel(7105),
+                                                                   static_cast<atfw::team::EnTeamPermissionRole>(75))));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
   // 默认门槛(ADMIN=100)下 75 < 100 不能删除他人
@@ -1328,7 +1327,8 @@ CASE_TEST(teamsvr_room_permission, configure_defaults_from_excel_team_type) {
       original_blocks.add_data_block(row.second->SerializeAsString());
     }
   }
-  original_blocks.mutable_header()->set_count(original_blocks.data_block_size());
+  original_blocks.mutable_header()->set_count(
+      static_cast<decltype(original_blocks.mutable_header()->count())>(original_blocks.data_block_size()));
   const std::string original_team_type_bytes = original_blocks.SerializeAsString();
 
   // 覆盖 team_type 配置表: NORMAL 类型行携带自定义默认门槛与上限
@@ -1365,31 +1365,33 @@ CASE_TEST(teamsvr_room_permission, configure_defaults_from_excel_team_type) {
   // 行为验证: 邀请上限取自 excel 行(内置默认 30 时第 7 条邀请不会被拒)
   for (int i = 0; i < 6; ++i) {
     auto invitee = make_user_key(1, 7602 + static_cast<uint64_t>(i));
-    CASE_EXPECT_EQ(0, env.run("invite_within_limit", [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
-      atfw::team::SSTeamRoomAddInvitationReq req;
-      protobuf_copy_message(*req.mutable_sender_user_key(), owner);
-      auto* invitation = req.mutable_invitation();
-      protobuf_copy_message(*invitation->mutable_inviter(), owner);
-      protobuf_copy_message(*invitation->mutable_invitee(), invitee);
-      protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
-    }));
+    CASE_EXPECT_EQ(0,
+                   env.run("invite_within_limit", [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+                     atfw::team::SSTeamRoomAddInvitationReq req;
+                     protobuf_copy_message(*req.mutable_sender_user_key(), owner);
+                     auto* invitation = req.mutable_invitation();
+                     protobuf_copy_message(*invitation->mutable_inviter(), owner);
+                     protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+                     protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
+                                           make_personal_channel(invitee.user_id()));
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+                   }));
   }
   CASE_EXPECT_EQ(0, env.sync(team_id));
   {
     auto invitee = make_user_key(1, 7608);
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_COUNT_LIMIT,
-                   env.run("invite_over_excel_limit",
-                           [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
-                             atfw::team::SSTeamRoomAddInvitationReq req;
-                             protobuf_copy_message(*req.mutable_sender_user_key(), owner);
-                             auto* invitation = req.mutable_invitation();
-                             protobuf_copy_message(*invitation->mutable_inviter(), owner);
-                             protobuf_copy_message(*invitation->mutable_invitee(), invitee);
-                             protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
-                                                   make_personal_channel(invitee.user_id()));
-                             RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
-                           }));
+    CASE_EXPECT_EQ(
+        PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_COUNT_LIMIT,
+        env.run("invite_over_excel_limit", [room, &owner, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+          atfw::team::SSTeamRoomAddInvitationReq req;
+          protobuf_copy_message(*req.mutable_sender_user_key(), owner);
+          auto* invitation = req.mutable_invitation();
+          protobuf_copy_message(*invitation->mutable_inviter(), owner);
+          protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+          protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
+                                make_personal_channel(invitee.user_id()));
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+        }));
   }
 
   // 创建快照 custom_data 中的 configure 携带同一组修订结果(订阅者无需自行补默认值)
@@ -2015,9 +2017,9 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
 
   // OWNER 队长显式转让 role=OWNER 给 NORMAL 成员: 不高于原队长(OWNER)，允许；
   // 新队长成为 OWNER，旧队长降为 NORMAL(旧实现按目标当前角色拒绝，与默认行为矛盾，已按决策修正)
-  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.owner,
-                                            make_election_with_role(members.normal,
-                                                                    atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.owner,
+                                 make_election_with_role(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   {
     auto captain = room->find_member(members.normal, false);
@@ -2032,9 +2034,9 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
   }
 
   // OWNER 队长(normal)显式转让 role=ADMIN 给 admin: 新队长为 ADMIN(队长不恒为 OWNER)
-  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal,
-                                            make_election_with_role(members.admin,
-                                                                    atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
+  CASE_EXPECT_EQ(
+      0, run_send_message_action(env, team_id, members.normal,
+                                 make_election_with_role(members.admin, atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN)));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   {
     auto captain = room->find_member(members.admin, false);
@@ -2051,9 +2053,9 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
                    check_permission(env, room, members.admin,
                                     make_election_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
     // RPC 路径权限失败时 transport 成功(精确错误码在 client_result，由 check_permission 断言)
-    CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.admin,
-                                              make_election_with_role(members.owner,
-                                                                      atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+    CASE_EXPECT_EQ(
+        0, run_send_message_action(env, team_id, members.admin,
+                                   make_election_with_role(members.owner, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
     expect_no_write(fake, env, before);
   }
 
@@ -2127,9 +2129,9 @@ CASE_TEST(teamsvr_room_permission, election_captain_role_semantics) {
     CASE_EXPECT_TRUE(!!injected);
     if (injected) {
       CASE_EXPECT_EQ(0, env.sync(inject_team_id));
-      CASE_EXPECT_EQ(0, run_send_message_action(env, inject_team_id, members.owner,
-                                                make_election_with_role(members.normal,
-                                                                        atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
+      CASE_EXPECT_EQ(
+          0, run_send_message_action(env, inject_team_id, members.owner,
+                                     make_election_with_role(members.normal, atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)));
       CASE_EXPECT_EQ(0, env.sync(inject_team_id));
       auto captain = injected->find_member(members.normal, false);
       auto old_captain = injected->find_member(members.admin, false);

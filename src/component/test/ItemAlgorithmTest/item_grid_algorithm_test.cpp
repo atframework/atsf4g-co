@@ -2198,8 +2198,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
   // 辅助：调用新签名, success/failed 为输出参数
-  auto call_find = [&](TestItemGridAlgorithm& grid,
-                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+  auto call_find = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed,
                        const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore = {}) {
@@ -2659,8 +2658,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_ignore_item) {
   auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
-  auto call_find = [&](TestItemGridAlgorithm& grid,
-                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+  auto call_find = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed,
                        const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore) {
@@ -2882,8 +2880,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_review_issues) {
   auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
-  auto call_find = [&](TestItemGridAlgorithm& grid,
-                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+  auto call_find = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed,
                        const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore = {}) {
@@ -3083,8 +3080,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_two_pass) {
   auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
-  auto call_find = [&](TestItemGridAlgorithm& grid,
-                       const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+  auto call_find = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed) {
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
@@ -3168,8 +3164,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_instances) {
   auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
 
-  auto call_find = [&](TestItemGridAlgorithm& grid,
-                       const std::vector<PROJECT_NAMESPACE_ID::DItemInstance>& items,
+  auto call_find = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemInstance>& items,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& success,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& failed,
                        const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& ignore = {}) {
