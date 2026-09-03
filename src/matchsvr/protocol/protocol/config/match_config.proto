@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "atframe/atapp_conf.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/matchsvr/protocol/protocol/config";
+
+package atframework.shared.config;
+
+message matchsvr_cfg {
+  int64 default_search_timeout = 101
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "120" min_value: "30" }];
+  int64 default_confirm_timeout = 102 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15" min_value: "5" }];
+  int64 terminal_retention = 103 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60" min_value: "30" }];
+  int64 unit_heartbeat_timeout = 104 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "15" min_value: "5" }];
+  uint64 max_rebalance_migrations_per_target = 105
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  uint64 max_rebalance_migrations_per_tick = 106
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
+}

@@ -121,6 +121,17 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
   data_.Clear();
   if (user_table.has_matching_data()) {
     protobuf_copy_message(data_, user_table.matching_data());
+
+    matched_users_.clear();
+    matched_users_.reserve(user_table.matching_data().matched_users_size());
+    for (const auto& matched_user : user_table.matching_data().matched_users()) {
+      matched_users_.push_back(matched_user);
+    }
+
+    std::sort(matched_users_.begin(), matched_users_.end(),
+              [](const PROJECT_NAMESPACE_ID::DMatchedUserData& l, const PROJECT_NAMESPACE_ID::DMatchedUserData& r) {
+                return l.start_timepoint() < r.start_timepoint();
+              });
   }
   processing_event_id_ = 0;
   last_reported_acknowledge_event_id_ = 0;
@@ -131,6 +142,10 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
 
 int user_matching_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
   protobuf_copy_message(*user_table.mutable_matching_data(), data_);
+  for (const auto& matched_user : matched_users_) {
+    auto* output = user_table.mutable_matching_data()->add_matched_users();
+    protobuf_copy_message(*output, matched_user);
+  }
   return 0;
 }
 
@@ -253,8 +268,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
           ? PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE
           : PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
 
-  fill_operator_user(*rpc_request->mutable_operator_user());
-
+  fill_user_key(*rpc_request->mutable_operator_user());
   // 后续接组队
 
   const auto& operator_user = rpc_request->operator_user();
@@ -335,7 +349,7 @@ rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
   rpc_request->set_unit_id(unit_id);
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   auto* heartbeat_data = rpc_request->mutable_heartbeat_data();
-  fill_operator_user(*heartbeat_data->mutable_user_key());
+  fill_user_key(*heartbeat_data->mutable_user_key());
   const int64_t acknowledge_event_id = get_acknowledge_event_id();
   heartbeat_data->set_acknowledge_event_id(acknowledge_event_id);
 
@@ -375,7 +389,7 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_MATCHING);
   }
   rpc_request->set_unit_id(unit_id);
-  fill_operator_user(*rpc_request->mutable_operator_user());
+  fill_user_key(*rpc_request->mutable_operator_user());
   const uint64_t matchsvr_id = get_current_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWLOGERROR("{} cancel matching failed, Unit has no owning matchsvr, unit_id={}", *owner_, unit_id);
@@ -417,7 +431,7 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   }
   rpc_request->set_unit_id(unit_id);
   rpc_request->set_confirmed(request.confirmed());
-  fill_operator_user(*rpc_request->mutable_operator_user());
+  fill_user_key(*rpc_request->mutable_operator_user());
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   rpc_request->set_acknowledge_event_id(get_acknowledge_event_id());
   rpc_request->set_user_open_id(owner_->get_open_id());
@@ -693,18 +707,20 @@ rpc::result_code_type user_matching_manager::fill_matching_unit(rpc::context& ct
   }
   output.set_unit_id(static_cast<uint64_t>(unit_id));
   output.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
-  output.mutable_parameter()->set_role_level(owner_->get_user_data().user_level());
-  output.mutable_parameter()->set_search_start_time(atfw::util::time::time_utility::get_now());
-  auto* matching_user = output.add_users();
-  fill_operator_user(*matching_user->mutable_user_key());
-  matching_user->set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+  // 匹配参数
+  fill_matching_parameter(ctx, *output.mutable_parameter());
+  // 匹配用玩家数据
+  fill_matching_user_data(ctx, *output.add_users());
+
+  // TODO 队伍其他成员数据
+
   output.set_client_version(owner_->get_client_info().client_version());
   // 组队未接入前，队长固定为当前玩家，unit 只包含当前玩家。
-  fill_operator_user(*output.mutable_captain_user_key());
+  fill_user_key(*output.mutable_captain_user_key());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-void user_matching_manager::fill_operator_user(PROJECT_NAMESPACE_ID::DUserIDKey& output) const {
+void user_matching_manager::fill_user_key(PROJECT_NAMESPACE_ID::DUserIDKey& output) const {
   output.set_user_id(owner_->get_user_id());
   output.set_zone_id(owner_->get_zone_id());
 }
@@ -785,4 +801,64 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
     return;
   }
   return;
+}
+
+void user_matching_manager::fill_matching_parameter(rpc::context& /*ctx*/,
+                                                    PROJECT_NAMESPACE_ID::DMatchingParameter& output) const {
+  output.set_role_level(owner_->get_user_data().user_level());
+  output.set_search_start_time(atfw::util::time::time_utility::get_now());
+}
+
+void user_matching_manager::fill_matching_user_data(rpc::context& /*ctx*/,
+                                                    PROJECT_NAMESPACE_ID::DMatchingUser& output) const {
+  // Implementation here
+  fill_user_key(*output.mutable_user_key());
+  output.set_confirm_status(PROJECT_NAMESPACE_ID::EN_MATCHING_CONFIRM_STATUS_PENDING);
+}
+
+void user_matching_manager::fetch_team_matching_parameter(rpc::context& ctx,
+                                                          PROJECT_NAMESPACE_ID::DMatchingTeamParameter& output) const {
+  // Implementation here
+  // fill_(*output.mutable_user());
+  // todo 填充其他匹配参数
+  fill_matching_parameter(ctx, *output.mutable_parameter());
+}
+
+// 当前的匹配视图
+void user_matching_manager::fetch_matching_view(rpc::context& /*ctx*/,
+                                                PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& output) const {
+  // Implementation here
+  output.set_unit_id(get_current_unit_id());
+  output.set_subscriber_server_id(get_current_matchsvr_server_id());
+}
+
+void user_matching_manager::update_last_battle_users(rpc::context& /*ctx*/,
+                                                     const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& data) {
+  int32_t self_faction = 0;
+  for (const auto& user_init_data : data.user_init_datas()) {
+    if (user_init_data.user_key().user_key().user_id() == owner_->get_user_id() &&
+        user_init_data.user_key().user_key().zone_id() == owner_->get_zone_id()) {
+      self_faction = user_init_data.faction_id();
+    }
+  }
+  if (self_faction <= 0) {
+    FWLOGERROR("{} update_last_battle_users failed to find self user in battle users, unit_id={}", *owner_,
+               get_current_unit_id());
+    return;
+  }
+  PROJECT_NAMESPACE_ID::DMatchedUserData matched_data;
+  protobuf_copy_message(*matched_data.mutable_room_key(), data.room_key());
+  matched_data.set_start_timepoint(data.start_timepoint());
+  for (const auto& user_init_data : data.user_init_datas()) {
+    if (user_init_data.faction_id() == self_faction) {
+      continue;
+    }
+    protobuf_copy_message(*matched_data.add_user_key(), user_init_data.user_key().user_key());
+  }
+
+  matched_users_.push_back(std::move(matched_data));
+
+  while (matched_users_.size() > 10) {
+    matched_users_.erase(matched_users_.begin());
+  }
 }

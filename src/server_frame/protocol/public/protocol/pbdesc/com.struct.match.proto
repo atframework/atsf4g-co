@@ -96,6 +96,16 @@ message DMatchingUser {
   EnMatchingConfirmStatus confirm_status = 4;
 }
 
+message DMatchingTeamParameter {
+  DMatchingParameter parameter = 1;
+  DMatchingUser user = 2;
+}
+
+message DMatchingTeamSyncView {
+  uint64 unit_id = 1;
+  uint64 subscriber_server_id = 2;
+}
+
 message DMatchingUnit {
   uint64 unit_id = 1;
   EnMatchingUnitStatus status = 2;
@@ -225,6 +235,13 @@ message DMatchingEventLog {
   }
 }
 
+
+message DMatchedUserData {
+  DOrbitRoomKey room_key = 1;
+  int64 start_timepoint = 2;
+  repeated DUserIDKey user_key = 3;
+}
+
 // lobbysvr 持久化的内部玩家匹配状态。
 // view.last_event_id 表示已见到的最新 Unit 视图；acknowledge_event_id 表示该事件及之前的业务副作用已完成。
 message DUserMatchingData {
@@ -232,6 +249,7 @@ message DUserMatchingData {
   DMatchingUnitView view = 2;
   // 创建该 Unit 的 Matchsvr。Unit 生命周期内的查询、心跳、取消和确认必须固定路由到该实例。
   uint64 matchsvr_server_id = 3;
+  repeated DMatchedUserData matched_users = 4;
 }
 
 message DBattleLevelParameter {

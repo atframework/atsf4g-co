@@ -36,7 +36,7 @@ message lobbysvr_team_cfg {
 message lobbysvr_matching_cfg {
   // Unit 心跳同时驱动 Matchsvr WAL 重放；必须显著小于 Matchsvr 的 10 秒失联判定。
   google.protobuf.Duration heartbeat_interval = 1
-      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "2s" min_value: "1s" }];
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "5s" min_value: "1s" }];
 }
 
 message lobbysvr_cfg {

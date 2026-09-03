@@ -93,7 +93,7 @@ int32_t matching_manager::tick() {
       }
       auto room = value.second->get_room();
       if (room && room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING &&
-          value.second->is_heartbeat_expired(now - matching_logic::kUnitHeartbeatTimeout)) {
+          value.second->is_heartbeat_expired(now - matching_logic::get_unit_heartbeat_timeout_seconds())) {
         expired_unit_ids.emplace_back(value.first);
       }
     }
@@ -141,20 +141,21 @@ int32_t matching_manager::tick() {
                now >= room->get_battle_create_expire_time()) {
       handle_battle_create_timeout(ctx, room, now);
     }
-    if (room->get_terminal_time() > 0 && now - room->get_terminal_time() >= matching_logic::kTerminalRetention) {
+    if (room->get_terminal_time() > 0 &&
+        now - room->get_terminal_time() >= matching_logic::get_terminal_retention_seconds()) {
       recycle_rooms.emplace_back(value.first);
     }
   }
   std::sort(rebalance_targets.begin(), rebalance_targets.end(), queue_entry::room_precedes);
-  size_t remaining_migration_count = matching_logic::kMaxRebalanceMigrationsPerTick;
+  size_t remaining_migration_count = matching_logic::get_max_rebalance_migrations_per_tick();
   for (const auto& target_room : rebalance_targets) {
     if (remaining_migration_count == 0) {
       break;
     }
     if (target_room && target_room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING) {
-      const size_t target_migration_count =
-          rebalance_room(ctx, target_room, now,
-                         (std::min)(matching_logic::kMaxRebalanceMigrationsPerTarget, remaining_migration_count));
+      const size_t target_migration_count = rebalance_room(
+          ctx, target_room, now,
+          (std::min)(matching_logic::get_max_rebalance_migrations_per_target(), remaining_migration_count));
       remaining_migration_count -= (std::min)(target_migration_count, remaining_migration_count);
     }
   }
@@ -176,7 +177,7 @@ int32_t matching_manager::tick() {
       continue;
     }
     if (value.second->get_terminal_time() > 0 &&
-        now - value.second->get_terminal_time() >= matching_logic::kTerminalRetention) {
+        now - value.second->get_terminal_time() >= matching_logic::get_terminal_retention_seconds()) {
       recycle_units.emplace_back(value.first);
     }
   }
@@ -474,7 +475,7 @@ int32_t matching_manager::check_matching(rpc::context& ctx, const PROJECT_NAMESP
     // 规则时间窗可能让当前房间直接满足动态模板；先成局，避免 ready 房间被 rebalance 拆走。
     evaluate_room(ctx, room, now);
     if (room->get_status() == PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING &&
-        rebalance_room(ctx, room, now, matching_logic::kMaxRebalanceMigrationsPerTarget) > 0) {
+        rebalance_room(ctx, room, now, matching_logic::get_max_rebalance_migrations_per_target()) > 0) {
       room = runtime_unit->get_room();
       if (!room) {
         response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND);
@@ -1373,8 +1374,7 @@ void matching_manager::handle_confirm_timeout(rpc::context& ctx, const matching_
   }
 }
 
-void matching_manager::handle_unit_heartbeat_timeout(rpc::context& ctx, const matching_unit::ptr_t& unit,
-                                                     int64_t now) {
+void matching_manager::handle_unit_heartbeat_timeout(rpc::context& ctx, const matching_unit::ptr_t& unit, int64_t now) {
   auto room = unit ? unit->get_room() : nullptr;
   if (!unit || !room || room->get_status() != PROJECT_NAMESPACE_ID::EN_MATCHING_ROOM_STATUS_MATCHING ||
       !room->has_unit(unit->get_unit_id())) {

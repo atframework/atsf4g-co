@@ -5,6 +5,7 @@
 #include <config/compiler/protobuf_prefix.h>
 
 #include <protocol/config/com.struct.matching.config.pb.h>
+#include <protocol/config/match_config.pb.h>
 
 #include <config/compiler/protobuf_suffix.h>
 
@@ -49,13 +50,60 @@ bool matching_logic::placement_candidate::is_better_than(const placement_candida
 }
 
 int64_t matching_logic::get_search_timeout_seconds(int32_t matching_pool_id) {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  int64_t default_search_timeout = server_cfg.default_search_timeout();
+  if (default_search_timeout <= 0) {
+    default_search_timeout = kDefaultSearchTimeout;
+  }
+
   auto pool = excel::get_ExcelMatchingPool_by_id(matching_pool_id);
-  return pool && pool->search_timeout_seconds() > 0 ? pool->search_timeout_seconds() : kDefaultSearchTimeout;
+  return pool && pool->search_timeout_seconds() > 0 ? pool->search_timeout_seconds() : default_search_timeout;
 }
 
 int64_t matching_logic::get_confirm_timeout_seconds(int32_t matching_pool_id) {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  int64_t default_confirm_timeout = server_cfg.default_confirm_timeout();
+  if (default_confirm_timeout <= 0) {
+    default_confirm_timeout = kDefaultConfirmTimeout;
+  }
   auto pool = excel::get_ExcelMatchingPool_by_id(matching_pool_id);
-  return pool && pool->confirm_timeout_seconds() > 0 ? pool->confirm_timeout_seconds() : kDefaultConfirmTimeout;
+  return pool && pool->confirm_timeout_seconds() > 0 ? pool->confirm_timeout_seconds() : default_confirm_timeout;
+}
+
+int64_t matching_logic::get_terminal_retention_seconds() {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  int64_t default_terminal_retention = server_cfg.terminal_retention();
+  if (default_terminal_retention <= 0) {
+    default_terminal_retention = kTerminalRetention;
+  }
+  return default_terminal_retention;
+}
+
+int64_t matching_logic::get_unit_heartbeat_timeout_seconds() {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  int64_t default_heartbeat_timeout = server_cfg.unit_heartbeat_timeout();
+  if (default_heartbeat_timeout <= 0) {
+    default_heartbeat_timeout = kUnitHeartbeatTimeout;
+  }
+  return default_heartbeat_timeout;
+}
+
+size_t matching_logic::get_max_rebalance_migrations_per_target() {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  size_t default_max_migrations_per_target = server_cfg.max_rebalance_migrations_per_target();
+  if (default_max_migrations_per_target <= 0) {
+    default_max_migrations_per_target = kMaxRebalanceMigrationsPerTarget;
+  }
+  return default_max_migrations_per_target;
+}
+
+size_t matching_logic::get_max_rebalance_migrations_per_tick() {
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::matchsvr_cfg>();
+  size_t default_max_migrations_per_tick = server_cfg.max_rebalance_migrations_per_tick();
+  if (default_max_migrations_per_tick <= 0) {
+    default_max_migrations_per_tick = kMaxRebalanceMigrationsPerTick;
+  }
+  return default_max_migrations_per_tick;
 }
 
 PROJECT_NAMESPACE_ID::DMatchingEventLog matching_logic::make_add_unit_event(

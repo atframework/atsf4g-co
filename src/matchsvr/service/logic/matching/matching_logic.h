@@ -73,6 +73,12 @@ class matching_logic {
   static int64_t get_search_timeout_seconds(int32_t matching_pool_id);
   // 读取匹配池确认超时，配置缺失或无效时使用服务默认值。
   static int64_t get_confirm_timeout_seconds(int32_t matching_pool_id);
+
+  static int64_t get_terminal_retention_seconds();
+  static int64_t get_unit_heartbeat_timeout_seconds();
+  static size_t get_max_rebalance_migrations_per_target();
+  static size_t get_max_rebalance_migrations_per_tick();
+
   // 构造 Unit 加入房间的 WAL 事件。
   static PROJECT_NAMESPACE_ID::DMatchingEventLog make_add_unit_event(const PROJECT_NAMESPACE_ID::DMatchingUnit& unit);
   // 构造 Unit 离开房间的 WAL 事件，可携带迁移目标房间 ID。

@@ -108,14 +108,26 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type fill_matching_unit(
       rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingUnit& output) const;
 
-  // 构造只能代表当前登录玩家的内部操作者身份。``
-  void fill_operator_user(PROJECT_NAMESPACE_ID::DUserIDKey& output) const;
+  void fill_user_key(PROJECT_NAMESPACE_ID::DUserIDKey& output) const;
   // 从服务端持久化视图中查找当前玩家所在 unit。
   uint64_t get_current_unit_id() const;
   // 当前 lobbysvr 已完成业务副作用的 matchsvr WAL 游标，用于断点重放。
   int64_t get_acknowledge_event_id() const;
 
   void on_client_view_changed(rpc::context& ctx);
+
+  void fill_matching_parameter(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
+
+  void fill_matching_user_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingUser& output) const;
+
+  // 更新最近遭遇的玩家
+  void update_last_battle_users(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& data);
+
+  // 组队相关接口
+  // 填充组队需要同步的参数
+  void fetch_team_matching_parameter(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamParameter& output) const;
+  // 当前的匹配视图
+  void fetch_matching_view(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& output) const;
 
  public:
   static void on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
@@ -128,6 +140,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   int64_t processing_event_id_ = 0;
   int64_t last_reported_acknowledge_event_id_ = 0;
   time_t last_heartbeat_time_ = 0;
+  std::vector<PROJECT_NAMESPACE_ID::DMatchedUserData> matched_users_;
   bool periodic_heartbeat_inflight_ = false;
   bool dirty_;
 };

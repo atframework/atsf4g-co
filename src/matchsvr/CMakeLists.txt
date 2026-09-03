@@ -1,5 +1,11 @@
+# Copyright 2026 atframework
+# Licensed under the Apache License, Version 2.0 (the "License");
+
 project_service_declare_protocol("matchsvr-protocol" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
                                  "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/pbdesc/match_service.proto")
+
+project_service_declare_protocol("matchsvr-config" "${CMAKE_CURRENT_LIST_DIR}/protocol" PROTOCOLS
+                                 "${CMAKE_CURRENT_LIST_DIR}/protocol/protocol/config/match_config.proto")
 
 generate_for_pb_add_ss_service(
   "${PROJECT_NAMESPACE}.MatchsvrService"
