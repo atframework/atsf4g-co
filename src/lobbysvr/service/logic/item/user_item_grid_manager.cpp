@@ -43,7 +43,8 @@ static bool init_user_item_grid_manager_handle() {
          google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) -> bool {
         google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> empty;
         google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> failed_item;
-        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> input = data;
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> input;
+        input.Swap(&data);
         if (!user_inst.get_user_item_grid_manager()
                  .get_virtual_inventory()
                  .get_virtual_grid()
@@ -150,7 +151,7 @@ void user_item_grid_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context&
   }
 }
 
-void user_item_grid_manager::register_find_position_handle(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+void user_item_grid_manager::register_find_position_handle(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                                            find_position_handle_t handle) {
   static uint32_t handle_id = 10000;
   ++handle_id;

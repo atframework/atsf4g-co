@@ -102,7 +102,7 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
 
   using find_position_handle_t = std::function<bool(
       rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&)>;
-  static void register_find_position_handle(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+  static void register_find_position_handle(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                             find_position_handle_t handle);
 
  public:

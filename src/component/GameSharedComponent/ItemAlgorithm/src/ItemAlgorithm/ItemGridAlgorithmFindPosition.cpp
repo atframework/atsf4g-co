@@ -603,9 +603,8 @@ bool ItemGridAlgorithmFindPositionHelper::find_positions_inner(
     return false;
   }
 
-  success_item.Clear();
   failed_item.Clear();
-  success_item.Reserve(items.size());
+  success_item.Reserve(success_item.size() + items.size());
   failed_item.Reserve(items.size());
 
   // -----------------------------------------------------------------------

@@ -37,7 +37,7 @@ std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_han
 
 user_item_manager::user_item_manager(user& owner) : owner_(&owner) {}
 
-void user_item_manager::register_item_type_handler(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+void user_item_manager::register_item_type_handler(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                                    atfw::util::memory::strong_rc_ptr<item_operation_handler> handler) {
   if (item_type.empty()) {
     FWLOGERROR("user_item_manager::register_item_type_handler: item_type is empty");

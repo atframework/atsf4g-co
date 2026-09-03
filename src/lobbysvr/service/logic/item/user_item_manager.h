@@ -36,7 +36,7 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
   user& get_owner() { return *owner_; }
   const user& get_owner() const { return *owner_; }
 
-  static void register_item_type_handler(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+  static void register_item_type_handler(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                          atfw::util::memory::strong_rc_ptr<item_operation_handler> handler);
 
  public:
