@@ -5,6 +5,7 @@ import (
 
 	pu "github.com/atframework/atframe-utils-go/proto_utility"
 	lobbysvr_rpc_handle "github.com/atframework/atsf4g-co-robot/rpc_handle/lobbysvr"
+	public_common_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/common"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
 	base "github.com/atframework/robot-go/base"
 	user_data "github.com/atframework/robot-go/data"
@@ -61,14 +62,14 @@ func ClearTeamView(user user_data.User) {
 }
 
 // BuildTeamKey 构造队伍 Key。zoneId 传 0 时使用当前用户所在区服。
-func BuildTeamKey(user user_data.User, teamId int64, zoneId uint32) *public_protocol_pbdesc.DTeamKey {
+func BuildTeamKey(user user_data.User, teamId int64, zoneId uint32) *public_common_pbdesc.DTeamKey {
 	if teamId == 0 {
 		return nil
 	}
 	if zoneId == 0 {
 		zoneId = user.GetZoneId()
 	}
-	return &public_protocol_pbdesc.DTeamKey{
+	return &public_common_pbdesc.DTeamKey{
 		TeamId: teamId,
 		ZoneId: zoneId,
 	}
@@ -113,7 +114,7 @@ func BuildTeamMemberReadyData(ready bool) *public_protocol_pbdesc.DTeamMemberSha
 
 // TeamSendInvitationRpc 邀请玩家入队。teamKey 为 nil 时邀请进自己所在的默认队伍(不存在则服务端先创建)。
 func TeamSendInvitationRpc(action base.TaskActionImpl, user user_data.User, invitee *public_protocol_pbdesc.DUserIDKey,
-	teamKey *public_protocol_pbdesc.DTeamKey) (
+	teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamSendInvitationRsp], error) {
 	if invitee == nil || invitee.GetUserId() == 0 {
 		return 0, nil, fmt.Errorf("invitee is empty")
@@ -127,7 +128,7 @@ func TeamSendInvitationRpc(action base.TaskActionImpl, user user_data.User, invi
 }
 
 // TeamApproveInvitationRpc 接受收到的邀请(自己作为被邀请人)。
-func TeamApproveInvitationRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey) (
+func TeamApproveInvitationRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamApproveInvitationRsp], error) {
 	if teamKey == nil {
 		return 0, nil, fmt.Errorf("team_key is empty")
@@ -140,7 +141,7 @@ func TeamApproveInvitationRpc(action base.TaskActionImpl, user user_data.User, t
 }
 
 // TeamRejectInvitationRpc 拒绝收到的邀请(自己作为被邀请人)。
-func TeamRejectInvitationRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey) (
+func TeamRejectInvitationRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamRejectInvitationRsp], error) {
 	if teamKey == nil {
 		return 0, nil, fmt.Errorf("team_key is empty")
@@ -153,7 +154,7 @@ func TeamRejectInvitationRpc(action base.TaskActionImpl, user user_data.User, te
 }
 
 // TeamSendJoinRequestRpc 向指定队伍发起加入申请。
-func TeamSendJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey) (
+func TeamSendJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamSendJoinRequestRsp], error) {
 	if teamKey == nil {
 		return 0, nil, fmt.Errorf("team_key is empty")
@@ -166,7 +167,7 @@ func TeamSendJoinRequestRpc(action base.TaskActionImpl, user user_data.User, tea
 }
 
 // TeamAcceptJoinRequestRpc 批准玩家的加入申请(需要审批权限)。
-func TeamAcceptJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamAcceptJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	requester *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamAcceptJoinRequestRsp], error) {
 	if teamKey == nil || requester == nil || requester.GetUserId() == 0 {
@@ -180,7 +181,7 @@ func TeamAcceptJoinRequestRpc(action base.TaskActionImpl, user user_data.User, t
 }
 
 // TeamRejectJoinRequestRpc 拒绝玩家的加入申请(需要审批权限)。
-func TeamRejectJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamRejectJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	requester *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamRejectJoinRequestRsp], error) {
 	if teamKey == nil || requester == nil || requester.GetUserId() == 0 {
@@ -194,7 +195,7 @@ func TeamRejectJoinRequestRpc(action base.TaskActionImpl, user user_data.User, t
 }
 
 // TeamExitRpc 退出队伍。退出成功后清空本地队伍视图。
-func TeamExitRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey) (
+func TeamExitRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamExitRsp], error) {
 	if teamKey == nil {
 		return 0, nil, fmt.Errorf("team_key is empty")
@@ -206,7 +207,7 @@ func TeamExitRpc(action base.TaskActionImpl, user user_data.User, teamKey *publi
 }
 
 // TeamRemoveMemberRpc 移出成员(需要管理权限); userKey 为自己时等价于主动退队。
-func TeamRemoveMemberRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamRemoveMemberRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamRemoveMemberRsp], error) {
 	if teamKey == nil || member == nil || member.GetUserId() == 0 {
@@ -220,7 +221,7 @@ func TeamRemoveMemberRpc(action base.TaskActionImpl, user user_data.User, teamKe
 }
 
 // TeamTransferCaptainRpc 转移队长(需要是队长或拥有 OWNER 权限)。
-func TeamTransferCaptainRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamTransferCaptainRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamTransferCaptainRsp], error) {
 	if teamKey == nil || member == nil || member.GetUserId() == 0 {
@@ -234,8 +235,8 @@ func TeamTransferCaptainRpc(action base.TaskActionImpl, user user_data.User, tea
 }
 
 // TeamUpdateMemberRoleRpc 设置成员角色(默认需要 ADMIN 权限，不能授予高于自己的角色)。
-func TeamUpdateMemberRoleRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
-	member *public_protocol_pbdesc.DUserIDKey, role public_protocol_pbdesc.EnTeamPermissionRole) (
+func TeamUpdateMemberRoleRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
+	member *public_protocol_pbdesc.DUserIDKey, role public_common_pbdesc.EnTeamPermissionRole) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamUpdateMemberRoleRsp], error) {
 	if teamKey == nil || member == nil || member.GetUserId() == 0 {
 		return 0, nil, fmt.Errorf("team_key or member is empty")
@@ -249,7 +250,7 @@ func TeamUpdateMemberRoleRpc(action base.TaskActionImpl, user user_data.User, te
 }
 
 // TeamUpdateMemberDataRpc 更新自己的成员共享数据(当前支持战斗模块 ready 状态)。
-func TeamUpdateMemberDataRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamUpdateMemberDataRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	ready bool) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamUpdateMemberDataRsp], error) {
 	if teamKey == nil {
@@ -263,7 +264,7 @@ func TeamUpdateMemberDataRpc(action base.TaskActionImpl, user user_data.User, te
 }
 
 // TeamUpdateTeamDataRpc 更新队伍共享数据(当前支持战斗模块 matching 状态)。
-func TeamUpdateTeamDataRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamUpdateTeamDataRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	matching bool) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamUpdateTeamDataRsp], error) {
 	if teamKey == nil {

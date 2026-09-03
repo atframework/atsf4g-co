@@ -72,6 +72,8 @@ $REDIS_IMAGE = "redis:$ImageTag"
 $CONTAINER_NAME = "atsf4g-redis-unit-test"
 $CID_FILE = Join-Path $WorkDir "redis.cid"
 
+mkdir -Force $WorkDir
+
 function Get-RunningProcess {
   # Returns the process for the given PID text, or $null when the text is not a number or
   # the process is gone. Reading a corrupt/partially written PID file must not blow up

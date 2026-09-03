@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
+	public_common_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/common"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
 	user_data "github.com/atframework/robot-go/data"
 )
 
 // TeamSendInvitationTask 邀请玩家入队(无队伍时服务端会先创建)。
 func TeamSendInvitationTask(task *user_data.TaskActionUser, invitee *public_protocol_pbdesc.DUserIDKey,
-	teamKey *public_protocol_pbdesc.DTeamKey) error {
+	teamKey *public_common_pbdesc.DTeamKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamSendInvitationRpc(task, task.User, invitee, teamKey)
 	if rpcErr != nil {
 		return rpcErr
@@ -29,7 +30,7 @@ func TeamSendInvitationTask(task *user_data.TaskActionUser, invitee *public_prot
 }
 
 // TeamApproveInvitationTask 接受邀请。
-func TeamApproveInvitationTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey) error {
+func TeamApproveInvitationTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamApproveInvitationRpc(task, task.User, teamKey)
 	if rpcErr != nil {
 		return rpcErr
@@ -48,7 +49,7 @@ func TeamApproveInvitationTask(task *user_data.TaskActionUser, teamKey *public_p
 }
 
 // TeamRejectInvitationTask 拒绝邀请。
-func TeamRejectInvitationTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey) error {
+func TeamRejectInvitationTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamRejectInvitationRpc(task, task.User, teamKey)
 	if rpcErr != nil {
 		return rpcErr
@@ -66,7 +67,7 @@ func TeamRejectInvitationTask(task *user_data.TaskActionUser, teamKey *public_pr
 }
 
 // TeamSendJoinRequestTask 发起加入申请。
-func TeamSendJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey) error {
+func TeamSendJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamSendJoinRequestRpc(task, task.User, teamKey)
 	if rpcErr != nil {
 		return rpcErr
@@ -85,7 +86,7 @@ func TeamSendJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_pro
 }
 
 // TeamAcceptJoinRequestTask 批准加入申请。
-func TeamAcceptJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamAcceptJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
 	requester *public_protocol_pbdesc.DUserIDKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamAcceptJoinRequestRpc(task, task.User, teamKey, requester)
 	if rpcErr != nil {
@@ -105,7 +106,7 @@ func TeamAcceptJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_p
 }
 
 // TeamRejectJoinRequestTask 拒绝加入申请。
-func TeamRejectJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamRejectJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
 	requester *public_protocol_pbdesc.DUserIDKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamRejectJoinRequestRpc(task, task.User, teamKey, requester)
 	if rpcErr != nil {
@@ -125,7 +126,7 @@ func TeamRejectJoinRequestTask(task *user_data.TaskActionUser, teamKey *public_p
 }
 
 // TeamExitTask 退出队伍，成功后清空本地队伍视图。
-func TeamExitTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey) error {
+func TeamExitTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamExitRpc(task, task.User, teamKey)
 	if rpcErr != nil {
 		return rpcErr
@@ -144,7 +145,7 @@ func TeamExitTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdes
 }
 
 // TeamRemoveMemberTask 移出成员。
-func TeamRemoveMemberTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamRemoveMemberTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamRemoveMemberRpc(task, task.User, teamKey, member)
 	if rpcErr != nil {
@@ -168,7 +169,7 @@ func TeamRemoveMemberTask(task *user_data.TaskActionUser, teamKey *public_protoc
 }
 
 // TeamTransferCaptainTask 转移队长。
-func TeamTransferCaptainTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamTransferCaptainTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey) error {
 	errCode, rspHolder, rpcErr := protocol.TeamTransferCaptainRpc(task, task.User, teamKey, member)
 	if rpcErr != nil {
@@ -188,8 +189,8 @@ func TeamTransferCaptainTask(task *user_data.TaskActionUser, teamKey *public_pro
 }
 
 // TeamUpdateMemberRoleTask 设置成员角色。
-func TeamUpdateMemberRoleTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
-	member *public_protocol_pbdesc.DUserIDKey, role public_protocol_pbdesc.EnTeamPermissionRole) error {
+func TeamUpdateMemberRoleTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
+	member *public_protocol_pbdesc.DUserIDKey, role public_common_pbdesc.EnTeamPermissionRole) error {
 	errCode, rspHolder, rpcErr := protocol.TeamUpdateMemberRoleRpc(task, task.User, teamKey, member, role)
 	if rpcErr != nil {
 		return rpcErr
@@ -208,7 +209,7 @@ func TeamUpdateMemberRoleTask(task *user_data.TaskActionUser, teamKey *public_pr
 }
 
 // TeamUpdateMemberDataTask 更新自己的成员共享数据(ready 状态)。
-func TeamUpdateMemberDataTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamUpdateMemberDataTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
 	ready bool) error {
 	errCode, rspHolder, rpcErr := protocol.TeamUpdateMemberDataRpc(task, task.User, teamKey, ready)
 	if rpcErr != nil {
@@ -227,7 +228,7 @@ func TeamUpdateMemberDataTask(task *user_data.TaskActionUser, teamKey *public_pr
 }
 
 // TeamUpdateTeamDataTask 更新队伍共享数据(matching 状态)。
-func TeamUpdateTeamDataTask(task *user_data.TaskActionUser, teamKey *public_protocol_pbdesc.DTeamKey,
+func TeamUpdateTeamDataTask(task *user_data.TaskActionUser, teamKey *public_common_pbdesc.DTeamKey,
 	matching bool) error {
 	errCode, rspHolder, rpcErr := protocol.TeamUpdateTeamDataRpc(task, task.User, teamKey, matching)
 	if rpcErr != nil {

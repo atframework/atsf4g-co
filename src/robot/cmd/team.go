@@ -6,6 +6,7 @@ import (
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
 	task "github.com/atframework/atsf4g-co-robot/task"
+	public_common_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/common"
 	public_protocol_pbdesc "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc"
 	base "github.com/atframework/robot-go/base"
 	robot_cmd "github.com/atframework/robot-go/cmd"
@@ -44,7 +45,7 @@ func init() {
 }
 
 // resolveTeamKey 从参数中解析 team_id/[zone_id]，缺省时回落到本地缓存视图的队伍 Key。
-func resolveTeamKey(user user_data.User, cmd []string, index int) (*public_protocol_pbdesc.DTeamKey, error) {
+func resolveTeamKey(user user_data.User, cmd []string, index int) (*public_common_pbdesc.DTeamKey, error) {
 	var teamId int64 = 0
 	var zoneId uint32 = 0
 	if len(cmd) > index && cmd[index] != "" {
@@ -94,19 +95,19 @@ func parseUserKey(user user_data.User, cmd []string, index int) (*public_protoco
 	return protocol.BuildUserKey(user, userId, zoneId), nil
 }
 
-func parseTeamRole(cmd []string, index int) (public_protocol_pbdesc.EnTeamPermissionRole, error) {
+func parseTeamRole(cmd []string, index int) (public_common_pbdesc.EnTeamPermissionRole, error) {
 	if len(cmd) <= index || cmd[index] == "" {
 		return 0, fmt.Errorf("need role(member/admin/owner 或 100/200/300)")
 	}
 	switch cmd[index] {
 	case "guest", "0":
-		return public_protocol_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_GUEST, nil
+		return public_common_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_GUEST, nil
 	case "member", "normal", "100":
-		return public_protocol_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_NORMAL, nil
+		return public_common_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_NORMAL, nil
 	case "admin", "200":
-		return public_protocol_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_ADMIN, nil
+		return public_common_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_ADMIN, nil
 	case "owner", "300":
-		return public_protocol_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_OWNER, nil
+		return public_common_pbdesc.EnTeamPermissionRole_EN_TEAM_MEMBER_ROLE_OWNER, nil
 	}
 	return 0, fmt.Errorf("invalid role %q(member/admin/owner 或 100/200/300)", cmd[index])
 }
