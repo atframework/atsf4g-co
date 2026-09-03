@@ -42,7 +42,7 @@ cmake --build . -- -j4
 | `PROJECT_ENABLE_UNITTEST` | OFF | 编译单元测试 |
 | `PROJECT_ENABLE_PRECOMPILE_HEADERS` | ON | 预编译头 |
 | `PROJECT_ENABLE_UNITY_BUILD` | OFF | 联合编译（本地开发 + clangd 建议关闭） |
-| `ATFRAMEWORK_USE_DYNAMIC_LIBRARY` | Linux 默认 ON | 动态库构建 |
+| `ATFRAMEWORK_USE_DYNAMIC_LIBRARY` | 默认 ON（macOS 除外；显式设置 `BUILD_SHARED_LIBS` 时跟随它） | 动态库构建 |
 | `PROJECT_SERVER_FRAME_USE_STD_COROUTINE` | 探测后默认 ON | 使用 C++20 协程（否则 libcopp cotask） |
 | `PROJECT_SERVER_FRAME_ENABLE_RPC_MOCK` | Debug ON | RPC mock |
 | `PROJECT_SANTIZER_USE_ADDRESS/THREAD/...` | OFF | sanitizer |

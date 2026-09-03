@@ -43,7 +43,7 @@ You can also run `cmake -S . -B <BUILD_DIR> [options...]` manually and use your 
 | `PROJECT_ENABLE_UNITTEST` | OFF | Build unit tests |
 | `PROJECT_ENABLE_PRECOMPILE_HEADERS` | ON | Precompiled headers |
 | `PROJECT_ENABLE_UNITY_BUILD` | OFF | Unity build (recommended OFF for local development + clangd) |
-| `ATFRAMEWORK_USE_DYNAMIC_LIBRARY` | ON by default on Linux | Build as dynamic libraries |
+| `ATFRAMEWORK_USE_DYNAMIC_LIBRARY` | ON by default except macOS (follows `BUILD_SHARED_LIBS` when set) | Build as dynamic libraries |
 | `PROJECT_SERVER_FRAME_USE_STD_COROUTINE` | ON after detection | Use C++20 coroutines (otherwise libcopp cotask) |
 | `PROJECT_SERVER_FRAME_ENABLE_RPC_MOCK` | ON in Debug | RPC mock |
 | `PROJECT_SANTIZER_USE_ADDRESS/THREAD/...` | OFF | Sanitizers |

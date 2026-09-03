@@ -6,9 +6,9 @@ include(CMakeDependentOption)
 # 默认配置选项
 # ######################################################################################################################
 
-# gRPC在macOS上符号可见性设置有兼容性问题
 if (DEFINED BUILD_SHARED_LIBS)
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ${BUILD_SHARED_LIBS})
+# gRPC在macOS上符号可见性设置有兼容性问题
 elseif(NOT APPLE)
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
 else()
