@@ -15,7 +15,7 @@ import (
 
 func init() {
 	robot_cmd.RegisterUserCommand([]string{"team", "invite"}, TeamInviteCmd,
-		"<user_id> [zone_id]", "邀请玩家入队(没有队伍时服务端先创建)", nil, cmdDefaultTimeout)
+		"<user_id> [zone_id] [team_type]", "邀请玩家入队(没有队伍时服务端先创建)", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"team", "join"}, TeamSendJoinRequestCmd,
 		"<team_id> [zone_id]", "向队伍发起加入申请", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"team", "accept"}, TeamApproveInvitationCmd,
@@ -130,9 +130,19 @@ func TeamInviteCmd(action base.TaskActionImpl, user user_data.User, cmd []string
 	if err != nil {
 		return err
 	}
+
+	teamType := public_common_pbdesc.EnTeamType_EN_TEAM_TYPE_NORMAL
+	if len(cmd) > 2 && cmd[2] != "" {
+		switch cmd[2] {
+		case "normal", "0":
+			teamType = public_common_pbdesc.EnTeamType_EN_TEAM_TYPE_NORMAL
+		default:
+			return fmt.Errorf("invalid team type %q(normal or 0)", cmd[2])
+		}
+	}
 	// 邀请进自己所在的默认队伍(team_key 为空由服务端创建/复用)
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(t *user_data.TaskActionUser) error {
-		return task.TeamSendInvitationTask(t, invitee, nil)
+		return task.TeamSendInvitationTask(t, invitee, nil, teamType)
 	}, "Team Send Invitation Task"))
 }
 

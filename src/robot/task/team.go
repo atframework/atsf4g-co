@@ -11,8 +11,8 @@ import (
 
 // TeamSendInvitationTask 邀请玩家入队(无队伍时服务端会先创建)。
 func TeamSendInvitationTask(task *user_data.TaskActionUser, invitee *public_protocol_pbdesc.DUserIDKey,
-	teamKey *public_common_pbdesc.DTeamKey) error {
-	errCode, rspHolder, rpcErr := protocol.TeamSendInvitationRpc(task, task.User, invitee, teamKey)
+	teamKey *public_common_pbdesc.DTeamKey, teamType public_common_pbdesc.EnTeamType) error {
+	errCode, rspHolder, rpcErr := protocol.TeamSendInvitationRpc(task, task.User, invitee, teamKey, teamType)
 	if rpcErr != nil {
 		return rpcErr
 	}

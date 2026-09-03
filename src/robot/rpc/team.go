@@ -114,13 +114,14 @@ func BuildTeamMemberReadyData(ready bool) *public_protocol_pbdesc.DTeamMemberSha
 
 // TeamSendInvitationRpc 邀请玩家入队。teamKey 为 nil 时邀请进自己所在的默认队伍(不存在则服务端先创建)。
 func TeamSendInvitationRpc(action base.TaskActionImpl, user user_data.User, invitee *public_protocol_pbdesc.DUserIDKey,
-	teamKey *public_common_pbdesc.DTeamKey) (
+	teamKey *public_common_pbdesc.DTeamKey, teamType public_common_pbdesc.EnTeamType) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamSendInvitationRsp], error) {
 	if invitee == nil || invitee.GetUserId() == 0 {
 		return 0, nil, fmt.Errorf("invitee is empty")
 	}
 	csBody := &public_protocol_pbdesc.CSTeamSendInvitationReq{
 		TeamKey:        teamKey,
+		TeamType:       teamType,
 		UserKey:        invitee,
 		TeamSourceType: public_protocol_pbdesc.EnTeamSourceType_EN_TEAM_SOURCE_TYPE_FRIEND,
 	}
