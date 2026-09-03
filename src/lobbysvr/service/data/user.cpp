@@ -21,12 +21,12 @@
 #include <logic/async_jobs/user_async_jobs_manager.h>
 #include <logic/cache/user_cache_manager.h>
 #include <logic/chat/user_chat_manager.h>
+#include <logic/item/user_item_grid_manager.h>
+#include <logic/item/user_item_manager.h>
 #include <logic/matching/user_matching_manager.h>
 #include <logic/orbit/user_orbit_manager.h>
 #include <logic/rank/user_rank_manager.h>
 #include <logic/team/user_team_manager.h>
-#include <logic/item/user_item_manager.h>
-#include <logic/item/user_item_grid_manager.h>
 
 ////////////////// 业务Manager开始 ////////////////////
 
@@ -179,6 +179,10 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   }
 
   set_data_version(USER_DATA_LOGIC_VERSION);
+
+  // 填充profile
+  get_account_info().mutable_profile()->set_open_id(get_open_id());
+  get_account_info().mutable_profile()->set_user_id(get_user_id());
 
   //! === manager implement === 创建后事件回调，这时候还没进入数据库并且未执行login_init()
   user_async_jobs_manager_->create_init(ctx);
@@ -485,7 +489,8 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
 
   ret = user_item_grid_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWLOGERROR("{} dump user_item_grid_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
+    FWLOGERROR("{} dump user_item_grid_manager_ failed, res: {}({})", *this, ret,
+               protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }
 

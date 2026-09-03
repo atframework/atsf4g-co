@@ -50,6 +50,8 @@ std::string user_cache_manager::memory_leak_debug() {
   return atfw::util::log::format("user_cache_manager: {} \n", watch_data_.size());
 }
 
+std::vector<user_cache_manager::user_modify_meta_callback_t> user_cache_manager::user_modify_meta_callbacks_;
+
 user_cache_manager::user_cache_manager(user& owner)
     : owner_(&owner),
       cachesvr_discovery_version_(0),
@@ -70,6 +72,7 @@ int32_t user_cache_manager::login_init(rpc::context& /*ctx*/) {
 }
 
 void user_cache_manager::on_logout(rpc::context& ctx) {
+  call_user_modify_meta_callbacks();  // 更新数据块
   bool send_expired_right_now = 0 == owner_->get_login_lock().router_server_id();
   if (watch_data_.empty() && !send_expired_right_now) {
     return;
@@ -215,6 +218,7 @@ int32_t user_cache_manager::send_update_user_basic_meta_to_cachesvr(rpc::context
   PROJECT_NAMESPACE_ID::SSCacheUpdateMetaSync* sync_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheUpdateMetaSync>();
   PROJECT_NAMESPACE_ID::object_cache_meta* cache_meta = sync_body->add_object_metas();
 
+  call_user_modify_meta_callbacks();
   pack_user_meta_data(ctx, *cache_meta);
   PROJECT_NAMESPACE_ID::object_cache_watch_key watch_key;
 
@@ -244,6 +248,19 @@ void user_cache_manager::async_send_update_user_basic_meta_to_cachesvr(rpc::cont
                protobuf_mini_dumper_get_error_msg(res));
     need_notify_user_meta_expired_ = true;
     return;
+  }
+}
+
+void user_cache_manager::register_user_modify_meta_callback(user_modify_meta_callback_t callback) {
+  if (!callback) {
+    return;
+  }
+  user_cache_manager::user_modify_meta_callbacks_.emplace_back(std::move(callback));
+}
+
+void user_cache_manager::call_user_modify_meta_callbacks() {
+  for (auto& callback : user_modify_meta_callbacks_) {
+    callback(*owner_, owner_->get_user_data());
   }
 }
 

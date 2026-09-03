@@ -33,8 +33,8 @@ class user_item_grid_algorithm : public item_algorithm::ItemGridAlgorithm {
   void destroy();
 
  protected:
-  void on_item_data_changed(const item_algorithm::item_grid_entry_ptr_t& entry,
-                            item_algorithm::ItemGridOperationReason reason) override;
+  virtual void on_item_data_changed(const item_algorithm::item_grid_entry_ptr_t& entry,
+                            item_algorithm::ItemGridOperationReason reason);
 
  private:
   user* owner_ = nullptr;

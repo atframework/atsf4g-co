@@ -233,6 +233,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE user_cache : public std::enable_shared_from_this<
   ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_login_data &get_login_info() { return login_info_.ref(); }
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_data &get_user_data() const { return user_data_; }
+  ATFW_UTIL_FORCEINLINE PROJECT_NAMESPACE_ID::user_data &get_user_data() { return user_data_.ref(); }
 
   ATFW_UTIL_FORCEINLINE const PROJECT_NAMESPACE_ID::user_option_public_data &get_user_option_public_data() const {
     return user_option_public_data_;
