@@ -20,15 +20,16 @@
 #include <ItemInitialize/ItemInitialize.h>
 #include <logic/item/user_item_grid_manager.h>
 #include <rpc/db/uuid.h>
+#include <utility/protobuf_mini_dumper.h>
 
 #include <data/user.h>
 
 #include <algorithm>
+#include <list>
 #include <map>
 #include <unordered_map>
-#include <list>
-#include <vector>
 #include <utility>
+#include <vector>
 
 std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> user_item_manager::item_type_handler_id_;
 std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_handler>>
@@ -189,8 +190,6 @@ item_operation_result user_item_manager::check_has(
   // 首先分组
   std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
   int32_t index = 0;
-  std::list<std::pair<int32_t, std::vector<atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data>>>>
-      checked_request;
   for (auto& item : input) {
     auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.type_id()));
     if (type_config == nullptr) {
@@ -241,8 +240,36 @@ rpc::result_code_type user_item_manager::generate_item_from_offset_cfg(
       item.mutable_item_basic()->set_guid(guid);
     }
   }
-  // 寻找位置 TODO
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_SUCCESS);
+}
+
+bool user_item_manager::find_position(rpc::context& ctx,
+                                      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& input) {
+  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
+  std::list<std::pair<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>>> request;
+  for (auto& item : input) {
+    auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.item_basic().type_id()));
+    if (type_config == nullptr) {
+      return false;
+    }
+    auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
+    if (handler_id_it == item_type_handler_id_.end()) {
+      return false;
+    }
+    grouped_requests[handler_id_it->second].Add(std::move(item));
+  }
+  input.Clear();
+  for (auto& group : grouped_requests) {
+    auto& handler = item_type_handler_.find(group.first)->second;
+    // 调用具体的处理器进行检查
+    if (!handler->find_position(ctx, *owner_, group.second)) {
+      return false;
+    }
+    for (auto& item : group.second) {
+      protobuf_move_message(*input.Add(), std::move(item));
+    }
+  }
+  return true;
 }
 
 rpc::rpc_result<int64_t> user_item_manager::generate_item_guid(rpc::context& ctx) const {

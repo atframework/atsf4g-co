@@ -126,5 +126,11 @@ class item_operation_handler {
   virtual item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) = 0;
   virtual item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) = 0;
 
+  virtual bool find_position(rpc::context&, user&,
+                             google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&) {
+    // DoNothing
+    return true;
+  }
+
   virtual ~item_operation_handler();
 };

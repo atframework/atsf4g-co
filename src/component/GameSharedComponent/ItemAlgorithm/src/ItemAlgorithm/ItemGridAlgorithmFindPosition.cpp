@@ -650,6 +650,9 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::find_positions_for_basics(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success_item,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed_item) const {
+  if (&basics == &success_item || &basics == &failed_item || &success_item == &failed_item) {
+    return false;
+  }
   return ItemGridAlgorithmFindPositionHelper::find_positions_inner(config_group, this, basics, ignore_item,
                                                                    success_item, failed_item);
 }
@@ -660,6 +663,9 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::find_positions_for_instances(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& ignore_item,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& success_item,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& failed_item) const {
+  if (&items == &success_item || &items == &failed_item || &success_item == &failed_item) {
+    return false;
+  }
   return ItemGridAlgorithmFindPositionHelper::find_positions_inner(config_group, this, items, ignore_item, success_item,
                                                                    failed_item);
 }

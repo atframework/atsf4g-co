@@ -20,8 +20,8 @@
 #include <memory/rc_ptr.h>
 #include <rpc/rpc_utils.h>
 
-#include <utility>
 #include <unordered_map>
+#include <utility>
 namespace rpc {
 class context;
 }
@@ -56,6 +56,9 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
       rpc::context&, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out_instances,
       int32_t multiple = 1) const;
+
+  // Return False 时数据不可用 不要读取
+  bool find_position(rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& input);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::rpc_result<int64_t> generate_item_guid(rpc::context& ctx) const;
 

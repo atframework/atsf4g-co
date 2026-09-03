@@ -37,6 +37,24 @@ static bool init_user_item_grid_manager_handle() {
                                                    PROJECT_NAMESPACE_ID::EN_ITEM_TYPE_VIRTUAL};
   user_item_manager::register_item_type_handler(
       item_types, atfw::component::memory::stl::make_strong_rc<user_grid_item_operation_handler>());
+  user_item_grid_manager::register_find_position_handle(
+      item_types,
+      [](rpc::context&, user& user_inst,
+         google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) -> bool {
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> empty;
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> failed_item;
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> input = data;
+        if (!user_inst.get_user_item_grid_manager()
+                 .get_virtual_inventory()
+                 .get_virtual_grid()
+                 ->find_positions_for_instances(excel::get_current_config_group(), input, empty, data, failed_item)) {
+          return false;
+        }
+        if (!failed_item.empty()) {
+          return false;
+        }
+        return true;
+      });
   return true;
 }
 }  // namespace
@@ -88,6 +106,15 @@ item_operation_result user_grid_item_operation_handler::sub(rpc::context&, user&
   return {result.error_code, result.failed_index};
 }
 
+bool user_grid_item_operation_handler::find_position(
+    rpc::context& ctx, user& user_inst, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) {
+  return user_inst.get_user_item_grid_manager().find_position(ctx, data);
+}
+
+std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> user_item_grid_manager::find_position_handle_id_;
+std::unordered_map<int32_t, user_item_grid_manager::find_position_handle_t>
+    user_item_grid_manager::find_position_handle;
+
 user_item_grid_manager::user_item_grid_manager(user& owner) : owner_(&owner), virtual_inventory_(&owner) {
   ATFW_EXPLICIT_UNUSED_ATTR static bool init_handle = init_user_item_grid_manager_handle();
 }
@@ -121,6 +148,28 @@ void user_item_grid_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context&
   if (manager_data_.next_container_guid() <= 0) {
     manager_data_.set_next_container_guid(1);
   }
+}
+
+void user_item_grid_manager::register_find_position_handle(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+                                                           find_position_handle_t handle) {
+  static uint32_t handle_id = 10000;
+  ++handle_id;
+  if (item_type.empty()) {
+    FWLOGERROR("item_type span is empty");
+    abort();
+  }
+  if (!handle) {
+    FWLOGERROR("find_position_handle is empty");
+    abort();
+  }
+  for (auto type : item_type) {
+    if (find_position_handle_id_.count(type)) {
+      FWLOGERROR("find_position_handle_id_ already contains type: {}", static_cast<int>(type));
+      abort();
+    }
+    find_position_handle_id_[type] = handle_id;
+  }
+  find_position_handle[handle_id] = handle;
 }
 
 void user_item_grid_manager::login_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {}
@@ -270,4 +319,34 @@ item_algorithm::ItemGridOperationResult user_item_grid_manager::replace(
 item_algorithm::ItemGridOperationResult user_item_grid_manager::check_has(
     const item_algorithm::ItemGridHasRequest& requests) const {
   return item_algorithm::ItemGridContainer::check_has(excel::get_current_config_group(), requests);
+}
+
+bool user_item_grid_manager::find_position(
+    rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) const {
+  // 通过道具ID分到 handler id
+  std::map<uint32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> handler_map;
+  for (auto& item_instance : data) {
+    auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item_instance.item_basic().type_id()));
+    if (type_config == nullptr) {
+      return false;
+    }
+    auto iter = find_position_handle_id_.find(type_config->item_type);
+    if (iter == find_position_handle_id_.end()) {
+      FWLOGERROR("Failed to find handler id for type_id: {}", item_instance.item_basic().type_id());
+      return false;
+    }
+    uint32_t handler_id = iter->second;
+    protobuf_move_message((*handler_map[handler_id].Add()), std::move(item_instance));
+  }
+  data.Clear();
+  // 通过handler id 分发
+  for (auto& pair : handler_map) {
+    if (!find_position_handle[pair.first](ctx, *owner_, pair.second)) {
+      return false;
+    }
+    for (auto& item_instance : pair.second) {
+      protobuf_move_message((*data.Add()), std::move(item_instance));
+    }
+  }
+  return true;
 }

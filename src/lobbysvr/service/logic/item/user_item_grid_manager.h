@@ -73,7 +73,10 @@ class user_grid_item_operation_handler : public item_operation_handler {
   item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) override;
   item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) override;
 
-  ~user_grid_item_operation_handler();
+  bool find_position(rpc::context&, user&,
+                     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&) override;
+
+  ~user_grid_item_operation_handler() override;
 };
 
 class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
@@ -97,6 +100,11 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
   void create_init(rpc::context& ctx);
   void login_init(rpc::context& ctx);
 
+  using find_position_handle_t = std::function<bool(
+      rpc::context&, user&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&)>;
+  static void register_find_position_handle(gsl::span<PROJECT_NAMESPACE_ID::EnItemType> item_type,
+                                            find_position_handle_t handle);
+
  public:
   // 操作接口
   item_algorithm::ItemGridContainerAddCheckedRequest check_add(item_algorithm::ItemGridAddRequest&& in_requests) const;
@@ -111,9 +119,12 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
   item_algorithm::ItemGridOperationResult replace(
       item_algorithm::ItemGridContainerReplaceCheckedRequest& checked_request);
   item_algorithm::ItemGridOperationResult check_has(const item_algorithm::ItemGridHasRequest& requests) const;
+  bool find_position(rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&) const;
 
  public:
   int64_t allocate_container_guid();
+  user_virtual_inventory& get_virtual_inventory() { return virtual_inventory_; }
+  const user_virtual_inventory& get_virtual_inventory() const { return virtual_inventory_; }
   int64_t get_virtual_inventory_container_guid() const {
     return virtual_inventory_.get_virtual_grid()->get_container_guid();
   }
@@ -140,4 +151,7 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
 
   std::unordered_map<int64_t, atfw::util::memory::weak_rc_ptr<user_item_grid_algorithm>> container_guid_to_grid_;
   std::unordered_set<std::pair<int64_t, uint64_t>, dirty_entry_hash> dirty_entries_;
+
+  static std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> find_position_handle_id_;
+  static std::unordered_map<int32_t, find_position_handle_t> find_position_handle;
 };
