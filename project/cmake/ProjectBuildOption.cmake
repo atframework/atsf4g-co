@@ -7,7 +7,9 @@ include(CMakeDependentOption)
 # ######################################################################################################################
 
 # gRPC在macOS上符号可见性设置有兼容性问题
-if(UNIX AND NOT APPLE)
+if (DEFINED BUILD_SHARED_LIBS)
+  option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ${BUILD_SHARED_LIBS})
+elseif(NOT APPLE)
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
 else()
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." OFF)
@@ -52,10 +54,6 @@ set(PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE
 set(PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT
     1
     CACHE STRING "Unity build minimum file count.")
-# 默认使用动态库，防止遗漏符号导出
-if(NOT DEFINED ATFRAMEWORK_USE_DYNAMIC_LIBRARY AND NOT DEFINED BUILD_SHARED_LIBS)
-  set(ATFRAMEWORK_USE_DYNAMIC_LIBRARY ON)
-endif()
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "12.1.0")
   option(PROJECT_ENABLE_LINKER_MOLD "Enable use mold as linker." ON)
