@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <ItemAlgorithm/ItemAlgorithmConfig.h>
+#include "ItemAlgorithm/ItemAlgorithmConfig.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -28,11 +28,6 @@ struct config_group_t;
 
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
-#ifdef _MSC_VER
-#  pragma warning(push)
-#  pragma warning(disable : 4251)
-#endif
-
 namespace item_algorithm {
 
 // ============================================================
@@ -57,16 +52,18 @@ enum class ItemGridOperationReason : int32_t {
 // 基础数据类型
 // ============================================================
 
-struct ITEM_ALGORITHM_API ItemGridPosition {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridPosition {
   int32_t x = 0;
   int32_t y = 0;
 
-  inline bool operator==(const ItemGridPosition& other) const noexcept { return x == other.x && y == other.y; }
-  inline bool operator!=(const ItemGridPosition& other) const noexcept { return !(*this == other); }
+  ATFW_UTIL_FORCEINLINE bool operator==(const ItemGridPosition& other) const noexcept {
+    return x == other.x && y == other.y;
+  }
+  ATFW_UTIL_FORCEINLINE bool operator!=(const ItemGridPosition& other) const noexcept { return !(*this == other); }
 };
 
-struct ITEM_ALGORITHM_API ItemGridPositionHash {
-  inline size_t operator()(const ItemGridPosition& pos) const noexcept {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridPositionHash {
+  ATFW_UTIL_FORCEINLINE size_t operator()(const ItemGridPosition& pos) const noexcept {
     // 使用简单的位移组合, 对两个 int32_t 足够
     size_t h = std::hash<int32_t>{}(pos.x);
     h ^= std::hash<int32_t>{}(pos.y) + size_t{0x9e3779b9} + (h << 6) + (h >> 2);
@@ -74,20 +71,22 @@ struct ITEM_ALGORITHM_API ItemGridPositionHash {
   }
 };
 
-struct ITEM_ALGORITHM_API ItemGridPositionEqualTo {
-  inline bool operator()(const ItemGridPosition& lhs, const ItemGridPosition& rhs) const noexcept { return lhs == rhs; }
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridPositionEqualTo {
+  ATFW_UTIL_FORCEINLINE bool operator()(const ItemGridPosition& lhs, const ItemGridPosition& rhs) const noexcept {
+    return lhs == rhs;
+  }
 };
 
 class ItemGridAlgorithm;
 
-struct ITEM_ALGORITHM_API ItemGridEntry : public atfw::util::memory::enable_shared_rc_from_this<ItemGridEntry> {
-  explicit ItemGridEntry(atfw::util::memory::strong_rc_ptr<ItemGridAlgorithm> in_belong_grid,
-                         PROJECT_NAMESPACE_ID::DItemInstance&& inst, uint64_t in_entry_id);
-  ~ItemGridEntry();
-  uint64_t entry_id() const;
-  const PROJECT_NAMESPACE_ID::DItemInstance& item_instance() const;
-  PROJECT_NAMESPACE_ID::DItemData& mutable_item_data();
-  uint64_t get_sort_key() const;
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridEntry : public atfw::util::memory::enable_shared_rc_from_this<ItemGridEntry> {
+  ITEM_ALGORITHM_API explicit ItemGridEntry(atfw::util::memory::strong_rc_ptr<ItemGridAlgorithm> in_belong_grid,
+                                            PROJECT_NAMESPACE_ID::DItemInstance&& inst, uint64_t in_entry_id);
+  ITEM_ALGORITHM_API ~ItemGridEntry();
+  ITEM_ALGORITHM_API uint64_t entry_id() const;
+  ITEM_ALGORITHM_API const PROJECT_NAMESPACE_ID::DItemInstance& item_instance() const;
+  ITEM_ALGORITHM_API PROJECT_NAMESPACE_ID::DItemData& mutable_item_data();
+  ITEM_ALGORITHM_API uint64_t get_sort_key() const;
 
  private:
   friend class ItemGridAlgorithm;
@@ -95,9 +94,9 @@ struct ITEM_ALGORITHM_API ItemGridEntry : public atfw::util::memory::enable_shar
   PROJECT_NAMESPACE_ID::DItemInstance& mutable_item_instance();
 
  private:
-  uint64_t entry_id_ = 0;
-  PROJECT_NAMESPACE_ID::DItemInstance item_instance_;
-  atfw::util::memory::weak_rc_ptr<ItemGridAlgorithm> belong_grid_;
+  ATFW_UTIL_SYMBOL_LOCAL uint64_t entry_id_ = 0;
+  ATFW_UTIL_SYMBOL_LOCAL PROJECT_NAMESPACE_ID::DItemInstance item_instance_;
+  ATFW_UTIL_SYMBOL_LOCAL atfw::util::memory::weak_rc_ptr<ItemGridAlgorithm> belong_grid_;
 };
 
 using item_grid_entry_ptr_t = atfw::util::memory::strong_rc_ptr<ItemGridEntry>;
@@ -108,13 +107,13 @@ using ItemGridSubRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_
 using ItemGridReplaceRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>;
 using ItemGridHasRequest = google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>;
 
-struct item_grid_entry_ptr_comparator {
-  bool operator()(const item_grid_entry_ptr_t& l, const item_grid_entry_ptr_t& r) const {
+struct ATFW_UTIL_SYMBOL_VISIBLE item_grid_entry_ptr_comparator {
+  ATFW_UTIL_FORCEINLINE bool operator()(const item_grid_entry_ptr_t& l, const item_grid_entry_ptr_t& r) const {
     return l->get_sort_key() < r->get_sort_key();
   }
 };
 
-struct ITEM_ALGORITHM_API ItemGridMoveSubRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridMoveSubRequest {
   item_grid_entry_ptr_t entry;
   int32_t op_count = 0;
 
@@ -124,7 +123,7 @@ struct ITEM_ALGORITHM_API ItemGridMoveSubRequest {
   int32_t item_col = 0;
 };
 
-struct ITEM_ALGORITHM_API ItemGridMoveAddRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridMoveAddRequest {
   item_grid_entry_ptr_t entry;  // Entry ID 无效 仅使用instance
   PROJECT_NAMESPACE_ID::DItemPosition goal_position;
   int32_t op_count = 0;
@@ -137,19 +136,19 @@ struct ITEM_ALGORITHM_API ItemGridMoveAddRequest {
   int64_t accumulation_limit = 0;
 };
 
-struct ITEM_ALGORITHM_API ItemGridMoveRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridMoveRequest {
   // Entrys 内 Entry 不可重复
   std::vector<ItemGridMoveSubRequest> move_sub_entrys;
   std::vector<ItemGridMoveAddRequest> move_add_entrys;
 };
 
-struct ITEM_ALGORITHM_API ItemGridOperationResult {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridOperationResult {
   int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS;
   // 操作失败时, 表示第几个请求失败(从0开始), -1表示整体失败
   int32_t failed_index = -1;
 };
 
-struct ITEM_ALGORITHM_API ItemGridAddCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridAddCheckedRequest {
   ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
   ItemGridAddRequest requests;
   ItemGridOperationResult result;
@@ -157,20 +156,16 @@ struct ITEM_ALGORITHM_API ItemGridAddCheckedRequest {
   int64_t container_guid = 0;
   int64_t operate_id = 0;
 
-  ItemGridAddCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridAddCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridAddRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id)
-      : config_group(in_config_group),
-        requests(std::move(in_requests)),
-        container_guid(in_container_guid),
-        operate_id(in_operate_id) {}
+      ItemGridAddRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id);
   ItemGridAddCheckedRequest(const ItemGridAddCheckedRequest&) = delete;
   ItemGridAddCheckedRequest& operator=(const ItemGridAddCheckedRequest&) = delete;
-  ItemGridAddCheckedRequest(ItemGridAddCheckedRequest&&) = default;
-  ItemGridAddCheckedRequest& operator=(ItemGridAddCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridAddCheckedRequest(ItemGridAddCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridAddCheckedRequest& operator=(ItemGridAddCheckedRequest&&) noexcept;
 };
 
-struct ITEM_ALGORITHM_API ItemGridSubCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridSubCheckedRequest {
   ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
   ItemGridSubRequest requests;
   ItemGridOperationResult result;
@@ -178,20 +173,16 @@ struct ITEM_ALGORITHM_API ItemGridSubCheckedRequest {
   int64_t container_guid = 0;
   int64_t operate_id = 0;
 
-  ItemGridSubCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridSubCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridSubRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id)
-      : config_group(in_config_group),
-        requests(std::move(in_requests)),
-        container_guid(in_container_guid),
-        operate_id(in_operate_id) {}
+      ItemGridSubRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id);
   ItemGridSubCheckedRequest(const ItemGridSubCheckedRequest&) = delete;
   ItemGridSubCheckedRequest& operator=(const ItemGridSubCheckedRequest&) = delete;
-  ItemGridSubCheckedRequest(ItemGridSubCheckedRequest&&) = default;
-  ItemGridSubCheckedRequest& operator=(ItemGridSubCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridSubCheckedRequest(ItemGridSubCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridSubCheckedRequest& operator=(ItemGridSubCheckedRequest&&) noexcept;
 };
 
-struct ITEM_ALGORITHM_API ItemGridMoveCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridMoveCheckedRequest {
   ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
   ItemGridMoveRequest request;
   ItemGridOperationResult result;
@@ -199,20 +190,16 @@ struct ITEM_ALGORITHM_API ItemGridMoveCheckedRequest {
   int64_t container_guid = 0;
   int64_t operate_id = 0;
 
-  ItemGridMoveCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridMoveCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridMoveRequest&& in_request, int64_t in_container_guid, int64_t in_operate_id)
-      : config_group(in_config_group),
-        request(std::move(in_request)),
-        container_guid(in_container_guid),
-        operate_id(in_operate_id) {}
+      ItemGridMoveRequest&& in_request, int64_t in_container_guid, int64_t in_operate_id);
   ItemGridMoveCheckedRequest(const ItemGridMoveCheckedRequest&) = delete;
   ItemGridMoveCheckedRequest& operator=(const ItemGridMoveCheckedRequest&) = delete;
-  ItemGridMoveCheckedRequest(ItemGridMoveCheckedRequest&&) = default;
-  ItemGridMoveCheckedRequest& operator=(ItemGridMoveCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridMoveCheckedRequest(ItemGridMoveCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridMoveCheckedRequest& operator=(ItemGridMoveCheckedRequest&&) noexcept;
 };
 
-struct ITEM_ALGORITHM_API ItemGridReplaceCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridReplaceCheckedRequest {
   ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
   ItemGridReplaceRequest requests;
   ItemGridOperationResult result;
@@ -220,22 +207,14 @@ struct ITEM_ALGORITHM_API ItemGridReplaceCheckedRequest {
   int64_t container_guid = 0;
   int64_t operate_id = 0;
 
-  ItemGridReplaceCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridReplaceCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridReplaceRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id)
-      : config_group(in_config_group),
-        requests(std::move(in_requests)),
-        container_guid(in_container_guid),
-        operate_id(in_operate_id) {}
+      ItemGridReplaceRequest&& in_requests, int64_t in_container_guid, int64_t in_operate_id);
   ItemGridReplaceCheckedRequest(const ItemGridReplaceCheckedRequest&) = delete;
   ItemGridReplaceCheckedRequest& operator=(const ItemGridReplaceCheckedRequest&) = delete;
-  ItemGridReplaceCheckedRequest(ItemGridReplaceCheckedRequest&&) = default;
-  ItemGridReplaceCheckedRequest& operator=(ItemGridReplaceCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridReplaceCheckedRequest(ItemGridReplaceCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridReplaceCheckedRequest& operator=(ItemGridReplaceCheckedRequest&&) noexcept;
 };
-
-#ifdef _MSC_VER
-#  pragma warning(pop)
-#endif
 
 }  // namespace item_algorithm
 

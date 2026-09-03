@@ -39,6 +39,7 @@ static constexpr int32_t kVirtualTypeId = 10001;
 // EN_ITEM_TYPE_ITEM: [100000, 400000) — 占格, 默认不需要GUID (由 proto 配置 need_guid=false)
 static constexpr int32_t kItemTypeId_1x1 = 100001;  // 1x1 大小, accumulation_limit = 99
 static constexpr int32_t kItemTypeId_2x2 = 100002;  // 2x2 大小, accumulation_limit = 1
+static constexpr int32_t kItemTypeId_2x1 = 100003;  // 2x1 大小 (宽2 高1), accumulation_limit = 1
 
 static constexpr int32_t kHookRejectedError = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
 
@@ -2226,7 +2227,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
     auto& grid = *grid_ptr;
     register_test_log_handler(grid);
-    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.init(ItemGridAlgorithmMode::kNoPosition, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, 0);
     grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
 
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
@@ -2239,9 +2240,8 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     CASE_EXPECT_TRUE(ok);
     CASE_EXPECT_EQ(2u, success.size());
     CASE_EXPECT_TRUE(failed.empty());
-    // 空位置：position_type_case 为 POSITION_TYPE_NOT_SET (0)
-    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[0]).position_type_case()));
-    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[1]).position_type_case()));
+    CASE_EXPECT_TRUE(pos_of(success[0]).has_virtual_inventory());
+    CASE_EXPECT_TRUE(pos_of(success[1]).has_virtual_inventory());
   }
 
   // ============================================================
@@ -2281,67 +2281,6 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
       pos_set.insert({get_x(pos_of(s)), get_y(pos_of(s))});
     }
     CASE_EXPECT_EQ(3u, pos_set.size());
-  }
-
-  // ============================================================
-  // Case 3: 首选位置被优先使用
-  // ============================================================
-  CASE_MSG_INFO() << "Case 3: 首选位置被优先使用\n";
-  {
-    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    auto& grid = *grid_ptr;
-    register_test_log_handler(grid);
-    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
-    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
-
-    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
-        make_basic_at(kItemTypeId_1x1, 1, 3, 2),  // 希望放 (x=3, y=2)
-    };
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
-    bool ok = call_find(grid, basics, success, failed);
-    CASE_EXPECT_TRUE(ok);
-    CASE_EXPECT_EQ(1u, success.size());
-    CASE_EXPECT_EQ(3, get_x(pos_of(success[0])));
-    CASE_EXPECT_EQ(2, get_y(pos_of(success[0])));
-  }
-
-  // ============================================================
-  // Case 4: 首选位置已占用 - 回退到扫描
-  // ============================================================
-  CASE_MSG_INFO() << "Case 4: 首选位置被占用时回退扫描\n";
-  {
-    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    auto& grid = *grid_ptr;
-    register_test_log_handler(grid);
-    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
-    // accumulation_limit=1: 已有条目无剩余容量，策略2不会命中，确保走策略3扫描
-    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
-
-    // 先 load 一件到 (x=3, y=2) 占住
-    {
-      PROJECT_NAMESPACE_ID::DItemInstance inst;
-      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
-      inst.mutable_item_basic()->set_count(1);
-      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(3);
-      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(2);
-      CASE_EXPECT_TRUE(grid.load(config, inst));
-    }
-
-    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
-        make_basic_at(kItemTypeId_1x1, 1, 3, 2),  // 首选位置已被占
-    };
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
-    bool ok = call_find(grid, basics, success, failed);
-    CASE_EXPECT_TRUE(ok);
-    CASE_EXPECT_EQ(1u, success.size());
-    // 不能落到 (3,2)
-    bool not_original = (get_x(pos_of(success[0])) != 3 || get_y(pos_of(success[0])) != 2);
-    CASE_EXPECT_TRUE(not_original);
-    // 必须在合法范围内
-    CASE_EXPECT_TRUE(get_x(pos_of(success[0])) >= 0 && get_x(pos_of(success[0])) < 4);
-    CASE_EXPECT_TRUE(get_y(pos_of(success[0])) >= 0 && get_y(pos_of(success[0])) < 4);
   }
 
   // ============================================================
@@ -2466,10 +2405,18 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     CASE_EXPECT_EQ(2u, success.size());
     CASE_EXPECT_TRUE(failed.empty());
 
-    int32_t x2 = get_x(pos_of(success[0]));
-    int32_t y2 = get_y(pos_of(success[0]));
-    int32_t x1 = get_x(pos_of(success[1]));
-    int32_t y1 = get_y(pos_of(success[1]));
+    // 输出顺序不保证, 遍历找 2x2 和 1x1
+    int32_t x2 = -1, y2 = -1, x1 = -1, y1 = -1;
+    for (const auto& s : success) {
+      if (s.type_id() == kItemTypeId_2x2) {
+        x2 = get_x(pos_of(s));
+        y2 = get_y(pos_of(s));
+      } else if (s.type_id() == kItemTypeId_1x1) {
+        x1 = get_x(pos_of(s));
+        y1 = get_y(pos_of(s));
+      }
+    }
+    CASE_EXPECT_TRUE(x2 >= 0 && x1 >= 0);
 
     // 1x1 不能落在 2x2 所占的区域内
     bool overlap = (x1 >= x2 && x1 < x2 + 2 && y1 >= y2 && y1 < y2 + 2);
@@ -2537,40 +2484,6 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
   }
 
   // ============================================================
-  // Case 10: 混合非占格 + 占格在同一批次
-  // ============================================================
-  CASE_MSG_INFO() << "Case 10: 混合非占格与占格\n";
-  {
-    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
-    auto& grid = *grid_ptr;
-    register_test_log_handler(grid);
-    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
-    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
-
-    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
-        make_basic(kCoinTypeId, 100),    // 非占格
-        make_basic(kItemTypeId_1x1, 1),  // 占格
-        make_basic(kVirtualTypeId, 50),  // 非占格
-        make_basic(kItemTypeId_1x1, 1),  // 占格
-    };
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
-    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
-    bool ok = call_find(grid, basics, success, failed);
-    CASE_EXPECT_TRUE(ok);
-    CASE_EXPECT_EQ(4u, success.size());
-    CASE_EXPECT_TRUE(failed.empty());
-
-    // [0] 和 [2] 非占格，position_type_case 为 NOT_SET (0)
-    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[0]).position_type_case()));
-    CASE_EXPECT_EQ(0, static_cast<int>(pos_of(success[2]).position_type_case()));
-
-    // [1] 和 [3] 是占格，位置不同
-    bool same = (get_x(pos_of(success[1])) == get_x(pos_of(success[3])) &&
-                 get_y(pos_of(success[1])) == get_y(pos_of(success[3])));
-    CASE_EXPECT_FALSE(same);
-  }
-
-  // ============================================================
   // Case 11: on_find_position_for_infinite 钩子被调用
   //          默认实现返回 false -> 道具放入 failed_item
   // ============================================================
@@ -2582,9 +2495,9 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics) {
     register_test_log_handler(grid);
     grid.init(ItemGridAlgorithmMode::kInfiniteGrid, 1, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kCharacterEquipment,
               0);
-    grid.register_position_cfg(kEquipmentTypeId, 1, 1, 1);
+    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
 
-    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kEquipmentTypeId, 1)};
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {make_basic(kItemTypeId_1x1, 1)};
     // 默认 on_find_position_for_infinite 返回 false -> 道具放入 failed_item
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
@@ -2989,7 +2902,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_basics_review_issues) {
     basics.push_back(make_equip_sub_by_guid(2001));  // 新装备 (GUID 2001)
     std::vector<PROJECT_NAMESPACE_ID::DItemBasic> ignore;
     ignore.push_back(make_equip_sub_by_guid(1001));  // 消耗旧装备 (GUID 1001)
-    // 新装备首选位置指向 (0,0) (旧装备原位)
+    // 新装备指向 (0,0) (旧装备原位)
     basics[0].mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
     basics[0].mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
 
@@ -3227,7 +3140,7 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_instances) {
     CASE_EXPECT_TRUE(ok);
     CASE_EXPECT_EQ(1u, success.size());
     CASE_EXPECT_TRUE(failed.empty());
-    CASE_EXPECT_FALSE(success[0].item_basic().position().grid_position().has_user_inventory());
+    CASE_EXPECT_FALSE(success[0].item_basic().position().grid_position().has_virtual_inventory());
   }
 
   // ============================================================
@@ -3252,6 +3165,243 @@ CASE_TEST(ItemGridAlgorithm, find_positions_for_instances) {
     CASE_EXPECT_EQ(1u, success.size());
     CASE_EXPECT_EQ(1u, failed.size());
     CASE_EXPECT_EQ(failed[0].item_basic().type_id(), kItemTypeId_1x1);
+  }
+}
+
+// ============================================================
+// find_positions — 输出物品填充 container_guid
+// ============================================================
+
+CASE_TEST(ItemGridAlgorithm, find_positions_fill_container_guid) {
+  using namespace item_algorithm;
+  auto config = ::excel::excel_config_type_traits::make_shared<::excel::config_group_t>();
+  constexpr int64_t kContainerGuid = 10001;
+
+  auto make_basic = [](int32_t type_id, int64_t count) {
+    PROJECT_NAMESPACE_ID::DItemBasic b;
+    b.set_type_id(type_id);
+    b.set_count(count);
+    return b;
+  };
+
+  auto call_find_basics = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+                              google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
+                              google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+    for (const auto& b : basics) {
+      *basics_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    return grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed);
+  };
+
+  // ============================================================
+  // Case 1: 无位置模式 (kNoPosition) — 输出填充 container_guid
+  // ============================================================
+  CASE_MSG_INFO() << "Case 1: 无位置模式输出填充 container_guid\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kNoPosition, 0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory,
+              kContainerGuid);
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
+        make_basic(kCoinTypeId, 10),
+    };
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = call_find_basics(grid, basics, success, failed);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_EQ(kContainerGuid, success[0].position().container_guid());
+  }
+
+  // ============================================================
+  // Case 2: 堆叠到已有条目 — 输出填充 container_guid
+  // ============================================================
+  CASE_MSG_INFO() << "Case 2: 堆叠到已有条目输出填充 container_guid\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory,
+              kContainerGuid);
+    grid.register_position_cfg(kItemTypeId_1x1, 99, 1, 1);
+
+    // 先 load 一件到 (0,0), count=50, 堆叠上限99
+    {
+      PROJECT_NAMESPACE_ID::DItemInstance inst;
+      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+      inst.mutable_item_basic()->set_count(50);
+      inst.mutable_item_basic()->mutable_position()->set_container_guid(kContainerGuid);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(0);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(0);
+      CASE_EXPECT_TRUE(grid.load(config, inst));
+    }
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
+        make_basic(kItemTypeId_1x1, 10),
+    };
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = call_find_basics(grid, basics, success, failed);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_EQ(kContainerGuid, success[0].position().container_guid());
+  }
+
+  // ============================================================
+  // Case 3: 位图扫描 (空网格, 不可堆叠) — 输出填充 container_guid
+  // ============================================================
+  CASE_MSG_INFO() << "Case 3: 位图扫描输出填充 container_guid\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory,
+              kContainerGuid);
+    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 不可堆叠, 走位图扫描
+
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
+        make_basic(kItemTypeId_1x1, 1),
+    };
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = call_find_basics(grid, basics, success, failed);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_EQ(kContainerGuid, success[0].position().container_guid());
+  }
+
+  // ============================================================
+  // Case 4: find_positions_for_instances 位图扫描 — 输出填充 container_guid
+  // ============================================================
+  CASE_MSG_INFO() << "Case 4: find_positions_for_instances 输出填充 container_guid\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory,
+              kContainerGuid);
+    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);
+
+    PROJECT_NAMESPACE_ID::DItemInstance inst;
+    inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+    inst.mutable_item_basic()->set_count(1);
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> items_field;
+    *items_field.Add() = inst;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> failed;
+    bool ok = grid.find_positions_for_instances(config, items_field, ignore_field, success, failed);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(1u, success.size());
+    CASE_EXPECT_EQ(kContainerGuid, success[0].item_basic().position().container_guid());
+  }
+}
+
+// ============================================================
+// find_positions — 背包仅剩不同大小位置时, 从大到小正好放入
+// ============================================================
+
+CASE_TEST(ItemGridAlgorithm, find_positions_fit_various_sizes) {
+  using namespace item_algorithm;
+  auto config = ::excel::excel_config_type_traits::make_shared<::excel::config_group_t>();
+
+  auto make_basic = [](int32_t type_id, int64_t count) {
+    PROJECT_NAMESPACE_ID::DItemBasic b;
+    b.set_type_id(type_id);
+    b.set_count(count);
+    return b;
+  };
+
+  auto call_find = [&](TestItemGridAlgorithm& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
+                       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
+                       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basics_field;
+    for (const auto& b : basics) {
+      *basics_field.Add() = b;
+    }
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> ignore_field;
+    return grid.find_positions_for_basics(config, basics_field, ignore_field, success, failed);
+  };
+
+  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
+  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
+
+  // ============================================================
+  // Case 1: 4x4 背包仅剩 2x2 / 2x1 / 1x1 三个区域, 从大到小正好放入
+  // ============================================================
+  CASE_MSG_INFO() << "Case 1: 不同大小位置从大到小正好放入\n";
+  {
+    auto grid_ptr = atfw::util::memory::make_strong_rc<TestItemGridAlgorithm>();
+    auto& grid = *grid_ptr;
+    register_test_log_handler(grid);
+    grid.init(ItemGridAlgorithmMode::kFiniteGrid, 4, 4, PROJECT_NAMESPACE_ID::DItemGridPosition::kUserInventory, 0);
+    grid.register_position_cfg(kItemTypeId_2x2, 1, 2, 2);  // 宽2 高2
+    grid.register_position_cfg(kItemTypeId_2x1, 1, 1, 2);  // 宽2 高1
+    grid.register_position_cfg(kItemTypeId_1x1, 1, 1, 1);  // 宽1 高1
+
+    // 占位后仅剩:
+    //   行0: (0,0)(1,0)(2,0)(3,0) 空闲
+    //   行1: (0,1)(1,1) 空闲, (2,1)(3,1) 占位
+    //   行2: 全部占位
+    //   行3: (0,3)(1,3)(2,3) 占位, (3,3) 空闲
+    // 空闲区域: (0,0)-(1,1) 2x2, (2,0)-(3,0) 2x1, (3,3) 1x1
+    auto load_occupy = [&](int32_t x, int32_t y) {
+      PROJECT_NAMESPACE_ID::DItemInstance inst;
+      inst.mutable_item_basic()->set_type_id(kItemTypeId_1x1);
+      inst.mutable_item_basic()->set_count(1);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
+      inst.mutable_item_basic()->mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
+      CASE_EXPECT_TRUE(grid.load(config, inst));
+    };
+    load_occupy(2, 1);
+    load_occupy(3, 1);
+    for (int32_t x = 0; x < 4; ++x) {
+      load_occupy(x, 2);
+    }
+    load_occupy(0, 3);
+    load_occupy(1, 3);
+    load_occupy(2, 3);
+
+    // 待放入: 2x2, 2x1, 1x1 (排序后从大到小: 2x2 -> 2x1 -> 1x1)
+    std::vector<PROJECT_NAMESPACE_ID::DItemBasic> basics = {
+        make_basic(kItemTypeId_2x2, 1),
+        make_basic(kItemTypeId_2x1, 1),
+        make_basic(kItemTypeId_1x1, 1),
+    };
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> success;
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> failed;
+    bool ok = call_find(grid, basics, success, failed);
+    CASE_EXPECT_TRUE(ok);
+    CASE_EXPECT_EQ(3u, success.size());
+    CASE_EXPECT_TRUE(failed.empty());
+
+    // 验证每个物品放入对应大小的空闲区域
+    int32_t x2 = -1, y2 = -1, x21 = -1, y21 = -1, x1 = -1, y1 = -1;
+    for (const auto& s : success) {
+      if (s.type_id() == kItemTypeId_2x2) {
+        x2 = get_x(s.position().grid_position());
+        y2 = get_y(s.position().grid_position());
+      } else if (s.type_id() == kItemTypeId_2x1) {
+        x21 = get_x(s.position().grid_position());
+        y21 = get_y(s.position().grid_position());
+      } else if (s.type_id() == kItemTypeId_1x1) {
+        x1 = get_x(s.position().grid_position());
+        y1 = get_y(s.position().grid_position());
+      }
+    }
+    // 2x2 放入 (0,0)
+    CASE_EXPECT_EQ(0, x2);
+    CASE_EXPECT_EQ(0, y2);
+    // 2x1 放入 (2,0)
+    CASE_EXPECT_EQ(2, x21);
+    CASE_EXPECT_EQ(0, y21);
+    // 1x1 放入 (3,3)
+    CASE_EXPECT_EQ(3, x1);
+    CASE_EXPECT_EQ(3, y1);
   }
 }
 
@@ -3383,8 +3533,8 @@ CASE_TEST(ItemGridAlgorithm, no_position_ungrid_lifecycle) {
   CASE_EXPECT_EQ(success.size(), static_cast<size_t>(2));
   CASE_EXPECT_TRUE(failed.empty());
   if (success.size() == 2) {
-    CASE_EXPECT_FALSE(success[0].position().grid_position().has_user_inventory());
-    CASE_EXPECT_FALSE(success[1].position().grid_position().has_user_inventory());
+    CASE_EXPECT_FALSE(success[0].position().grid_position().has_virtual_inventory());
+    CASE_EXPECT_FALSE(success[1].position().grid_position().has_virtual_inventory());
   }
 }
 

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "ItemAlgorithmConfig.h"
+#include "ItemAlgorithm/ItemAlgorithmConfig.h"
 
 // clang-format off
 #include <log/log_wrapper.h>
@@ -18,7 +18,7 @@ namespace item_algorithm {
 
 enum class ItemLogLevel : uint8_t { kDebug = 0, kInfo = 1, kWarning = 2, kError = 3 };
 
-struct ItemLogRecord {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemLogRecord {
   ItemLogLevel level = ItemLogLevel::kInfo;
   const char* file_name = nullptr;
   int line_number = 0;
@@ -28,7 +28,7 @@ struct ItemLogRecord {
 
 using ItemLogCallback = std::function<void(const ItemLogRecord& record)>;
 
-struct ItemLogHandler {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemLogHandler {
   std::string category = "ItemAlgorithm";
   ItemLogCallback on_log = nullptr;
 };

@@ -15,8 +15,135 @@ namespace item_algorithm {
 // ItemGridContainer
 // ============================================================
 
-ItemGridContainer::ItemGridContainer() = default;
-ItemGridContainer::~ItemGridContainer() = default;
+ItemGridContainer::ItemGridContainer() {}
+
+ItemGridContainer::~ItemGridContainer() {}
+
+// ============================================================
+// Checked Request 特殊成员实现 (导出符号)
+// ============================================================
+
+ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest::ItemGridContainerAddCheckedRequest(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
+    ItemGridAddRequest&& in_requests)
+    : config_group(in_config_group), requests(std::move(in_requests)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest::ItemGridContainerAddCheckedRequest(
+    ItemGridContainerAddCheckedRequest&& other) noexcept
+    : config_group(std::move(other.config_group)),
+      requests(std::move(other.requests)),
+      result(other.result),
+      grid_data(std::move(other.grid_data)),
+      apply(other.apply) {}
+
+ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest& ItemGridContainerAddCheckedRequest::operator=(
+    ItemGridContainerAddCheckedRequest&& other) noexcept {
+  if (this != &other) {
+    config_group = std::move(other.config_group);
+    requests = std::move(other.requests);
+    result = other.result;
+    grid_data = std::move(other.grid_data);
+    apply = other.apply;
+  }
+  return *this;
+}
+
+ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest::PerGridData::PerGridData(
+    item_grid_algorithm_ptr_t in_grid, ItemGridAddCheckedRequest&& in_add_requests,
+    std::vector<int32_t>&& in_original_indices)
+    : grid(in_grid), add_requests(std::move(in_add_requests)), original_indices(std::move(in_original_indices)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest::ItemGridContainerSubCheckedRequest(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
+    ItemGridSubRequest&& in_requests)
+    : config_group(in_config_group), requests(std::move(in_requests)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest::ItemGridContainerSubCheckedRequest(
+    ItemGridContainerSubCheckedRequest&& other) noexcept
+    : config_group(std::move(other.config_group)),
+      requests(std::move(other.requests)),
+      result(other.result),
+      grid_data(std::move(other.grid_data)),
+      apply(other.apply) {}
+
+ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest& ItemGridContainerSubCheckedRequest::operator=(
+    ItemGridContainerSubCheckedRequest&& other) noexcept {
+  if (this != &other) {
+    config_group = std::move(other.config_group);
+    requests = std::move(other.requests);
+    result = other.result;
+    grid_data = std::move(other.grid_data);
+    apply = other.apply;
+  }
+  return *this;
+}
+
+ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest::PerGridData::PerGridData(
+    item_grid_algorithm_ptr_t in_grid, ItemGridSubCheckedRequest&& in_sub_requests,
+    std::vector<int32_t>&& in_original_indices)
+    : grid(in_grid), sub_requests(std::move(in_sub_requests)), original_indices(std::move(in_original_indices)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest::ItemGridContainerMoveCheckedRequest(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
+    std::vector<ItemGridContainerMoveRequest>&& in_requests)
+    : config_group(in_config_group), requests(std::move(in_requests)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest::ItemGridContainerMoveCheckedRequest(
+    ItemGridContainerMoveCheckedRequest&& other) noexcept
+    : config_group(std::move(other.config_group)),
+      requests(std::move(other.requests)),
+      result(other.result),
+      grid_data(std::move(other.grid_data)),
+      apply(other.apply) {}
+
+ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest& ItemGridContainerMoveCheckedRequest::operator=(
+    ItemGridContainerMoveCheckedRequest&& other) noexcept {
+  if (this != &other) {
+    config_group = std::move(other.config_group);
+    requests = std::move(other.requests);
+    result = other.result;
+    grid_data = std::move(other.grid_data);
+    apply = other.apply;
+  }
+  return *this;
+}
+
+ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest::PerGridData::PerGridData(
+    item_grid_algorithm_ptr_t in_grid, ItemGridMoveCheckedRequest&& in_move_request,
+    std::vector<int32_t>&& in_original_indices)
+    : grid(in_grid), move_request(std::move(in_move_request)), original_indices(std::move(in_original_indices)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest::ItemGridContainerReplaceCheckedRequest(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
+    ItemGridReplaceRequest&& in_requests)
+    : config_group(in_config_group), requests(std::move(in_requests)) {}
+
+ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest::ItemGridContainerReplaceCheckedRequest(
+    ItemGridContainerReplaceCheckedRequest&& other) noexcept
+    : config_group(std::move(other.config_group)),
+      requests(std::move(other.requests)),
+      result(other.result),
+      grid_data(std::move(other.grid_data)),
+      apply(other.apply) {}
+
+ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest& ItemGridContainerReplaceCheckedRequest::operator=(
+    ItemGridContainerReplaceCheckedRequest&& other) noexcept {
+  if (this != &other) {
+    config_group = std::move(other.config_group);
+    requests = std::move(other.requests);
+    result = other.result;
+    grid_data = std::move(other.grid_data);
+    apply = other.apply;
+  }
+  return *this;
+}
+
+ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest::PerGridData::PerGridData(
+    item_grid_algorithm_ptr_t in_grid, ItemGridReplaceCheckedRequest&& in_replace_request,
+    std::vector<int32_t>&& in_original_indices)
+    : grid(in_grid),
+      replace_requests(std::move(in_replace_request)),
+      original_indices(std::move(in_original_indices)) {}
 
 // ============================================================
 // Add — check_add: 按 DItemPosition 分组委托各 Grid 的 check_add

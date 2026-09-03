@@ -2,9 +2,9 @@
 
 #pragma once
 
-#include <ItemAlgorithm/ItemAlgorithmConfig.h>
-#include <ItemAlgorithm/ItemGridAlgorithm.h>
-#include <ItemAlgorithm/ItemGridData.h>
+#include "ItemAlgorithm/ItemAlgorithmConfig.h"
+#include "ItemAlgorithm/ItemGridAlgorithm.h"
+#include "ItemAlgorithm/ItemGridData.h"
 
 #include <cstdint>
 #include <unordered_map>
@@ -16,153 +16,138 @@ struct config_group_t;
 
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
-#ifdef _MSC_VER
-#  pragma warning(push)
-#  pragma warning(disable : 4251)
-#endif
-
 namespace item_algorithm {
 
-struct ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridContainerAddCheckedRequest {
   friend class ItemGridContainer;
   friend class ItemGridAlgorithm;
 
-  ItemGridContainerAddCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridAddRequest&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
-  int32_t get_error_code() const { return result.error_code; }
-  int32_t get_failed_index() const { return result.failed_index; }
+      ItemGridAddRequest&& in_requests);
+  ATFW_UTIL_FORCEINLINE int32_t get_error_code() const { return result.error_code; }
+  ATFW_UTIL_FORCEINLINE int32_t get_failed_index() const { return result.failed_index; }
 
   ItemGridContainerAddCheckedRequest(const ItemGridContainerAddCheckedRequest&) = delete;
   ItemGridContainerAddCheckedRequest& operator=(const ItemGridContainerAddCheckedRequest&) = delete;
-  ItemGridContainerAddCheckedRequest(ItemGridContainerAddCheckedRequest&&) = default;
-  ItemGridContainerAddCheckedRequest& operator=(ItemGridContainerAddCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest(ItemGridContainerAddCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest& operator=(ItemGridContainerAddCheckedRequest&&) noexcept;
 
  private:
-  ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
-  ItemGridAddRequest requests;
-  ItemGridOperationResult result;
+  ATFW_UTIL_SYMBOL_LOCAL ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridAddRequest requests;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridOperationResult result;
   struct PerGridData {
-    PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridAddCheckedRequest&& in_add_requests,
-                std::vector<int32_t>&& in_original_indices)
-        : grid(in_grid), add_requests(std::move(in_add_requests)), original_indices(std::move(in_original_indices)) {}
-    item_grid_algorithm_ptr_t grid = nullptr;
-    ItemGridAddCheckedRequest add_requests;
-    std::vector<int32_t> original_indices;
+    ITEM_ALGORITHM_API PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridAddCheckedRequest&& in_add_requests,
+                                   std::vector<int32_t>&& in_original_indices);
+    ATFW_UTIL_SYMBOL_LOCAL item_grid_algorithm_ptr_t grid = nullptr;
+    ATFW_UTIL_SYMBOL_LOCAL ItemGridAddCheckedRequest add_requests;
+    ATFW_UTIL_SYMBOL_LOCAL std::vector<int32_t> original_indices;
   };
-  std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
-  bool apply = false;
+  ATFW_UTIL_SYMBOL_LOCAL std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
+  ATFW_UTIL_SYMBOL_LOCAL bool apply = false;
 };
 
-struct ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridContainerSubCheckedRequest {
   friend class ItemGridContainer;
   friend class ItemGridAlgorithm;
 
-  ItemGridContainerSubCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridSubRequest&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
-  int32_t get_error_code() const { return result.error_code; }
-  int32_t get_failed_index() const { return result.failed_index; }
+      ItemGridSubRequest&& in_requests);
+  ATFW_UTIL_FORCEINLINE int32_t get_error_code() const { return result.error_code; }
+  ATFW_UTIL_FORCEINLINE int32_t get_failed_index() const { return result.failed_index; }
 
   ItemGridContainerSubCheckedRequest(const ItemGridContainerSubCheckedRequest&) = delete;
   ItemGridContainerSubCheckedRequest& operator=(const ItemGridContainerSubCheckedRequest&) = delete;
-  ItemGridContainerSubCheckedRequest(ItemGridContainerSubCheckedRequest&&) = default;
-  ItemGridContainerSubCheckedRequest& operator=(ItemGridContainerSubCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest(ItemGridContainerSubCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest& operator=(ItemGridContainerSubCheckedRequest&&) noexcept;
 
  private:
-  ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
-  ItemGridSubRequest requests;
-  ItemGridOperationResult result;
+  ATFW_UTIL_SYMBOL_LOCAL ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridSubRequest requests;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridOperationResult result;
 
   struct PerGridData {
-    PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridSubCheckedRequest&& in_sub_requests,
-                std::vector<int32_t>&& in_original_indices)
-        : grid(in_grid), sub_requests(std::move(in_sub_requests)), original_indices(std::move(in_original_indices)) {}
-    item_grid_algorithm_ptr_t grid = nullptr;
-    ItemGridSubCheckedRequest sub_requests;
-    std::vector<int32_t> original_indices;
+    ITEM_ALGORITHM_API PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridSubCheckedRequest&& in_sub_requests,
+                                   std::vector<int32_t>&& in_original_indices);
+    ATFW_UTIL_SYMBOL_LOCAL item_grid_algorithm_ptr_t grid = nullptr;
+    ATFW_UTIL_SYMBOL_LOCAL ItemGridSubCheckedRequest sub_requests;
+    ATFW_UTIL_SYMBOL_LOCAL std::vector<int32_t> original_indices;
   };
-  std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
-  bool apply = false;
+  ATFW_UTIL_SYMBOL_LOCAL std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
+  ATFW_UTIL_SYMBOL_LOCAL bool apply = false;
 };
 
-struct ITEM_ALGORITHM_API ItemGridContainerMoveRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridContainerMoveRequest {
   PROJECT_NAMESPACE_ID::DItemBasic source_item_basic;
   PROJECT_NAMESPACE_ID::DItemPosition target_position;
 };
 
-struct ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridContainerMoveCheckedRequest {
   friend class ItemGridContainer;
   friend class ItemGridAlgorithm;
 
-  ItemGridContainerMoveCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      std::vector<ItemGridContainerMoveRequest>&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
-  int32_t get_error_code() const { return result.error_code; }
-  int32_t get_failed_index() const { return result.failed_index; }
+      std::vector<ItemGridContainerMoveRequest>&& in_requests);
+  ATFW_UTIL_FORCEINLINE int32_t get_error_code() const { return result.error_code; }
+  ATFW_UTIL_FORCEINLINE int32_t get_failed_index() const { return result.failed_index; }
 
   ItemGridContainerMoveCheckedRequest(const ItemGridContainerMoveCheckedRequest&) = delete;
   ItemGridContainerMoveCheckedRequest& operator=(const ItemGridContainerMoveCheckedRequest&) = delete;
-  ItemGridContainerMoveCheckedRequest(ItemGridContainerMoveCheckedRequest&&) = default;
-  ItemGridContainerMoveCheckedRequest& operator=(ItemGridContainerMoveCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest(ItemGridContainerMoveCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest& operator=(ItemGridContainerMoveCheckedRequest&&) noexcept;
 
  private:
-  ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
-  std::vector<ItemGridContainerMoveRequest> requests;
-  ItemGridOperationResult result;
+  ATFW_UTIL_SYMBOL_LOCAL ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
+  ATFW_UTIL_SYMBOL_LOCAL std::vector<ItemGridContainerMoveRequest> requests;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridOperationResult result;
   struct PerGridData {
-    PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridMoveCheckedRequest&& in_move_request,
-                std::vector<int32_t>&& in_original_indices)
-        : grid(in_grid), move_request(std::move(in_move_request)), original_indices(std::move(in_original_indices)) {}
-    item_grid_algorithm_ptr_t grid = nullptr;
-    ItemGridMoveCheckedRequest move_request;
-    std::vector<int32_t> original_indices;
+    ITEM_ALGORITHM_API PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridMoveCheckedRequest&& in_move_request,
+                                   std::vector<int32_t>&& in_original_indices);
+    ATFW_UTIL_SYMBOL_LOCAL item_grid_algorithm_ptr_t grid = nullptr;
+    ATFW_UTIL_SYMBOL_LOCAL ItemGridMoveCheckedRequest move_request;
+    ATFW_UTIL_SYMBOL_LOCAL std::vector<int32_t> original_indices;
   };
-  std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
-  bool apply = false;
+  ATFW_UTIL_SYMBOL_LOCAL std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
+  ATFW_UTIL_SYMBOL_LOCAL bool apply = false;
 };
 
-struct ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest {
+struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridContainerReplaceCheckedRequest {
   friend class ItemGridContainer;
   friend class ItemGridAlgorithm;
 
-  ItemGridContainerReplaceCheckedRequest(
+  ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      ItemGridReplaceRequest&& in_requests)
-      : config_group(in_config_group), requests(std::move(in_requests)) {}
-  int32_t get_error_code() const { return result.error_code; }
-  int32_t get_failed_index() const { return result.failed_index; }
+      ItemGridReplaceRequest&& in_requests);
+  ATFW_UTIL_FORCEINLINE int32_t get_error_code() const { return result.error_code; }
+  ATFW_UTIL_FORCEINLINE int32_t get_failed_index() const { return result.failed_index; }
 
   ItemGridContainerReplaceCheckedRequest(const ItemGridContainerReplaceCheckedRequest&) = delete;
   ItemGridContainerReplaceCheckedRequest& operator=(const ItemGridContainerReplaceCheckedRequest&) = delete;
-  ItemGridContainerReplaceCheckedRequest(ItemGridContainerReplaceCheckedRequest&&) = default;
-  ItemGridContainerReplaceCheckedRequest& operator=(ItemGridContainerReplaceCheckedRequest&&) = default;
+  ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest(ItemGridContainerReplaceCheckedRequest&&) noexcept;
+  ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest& operator=(ItemGridContainerReplaceCheckedRequest&&) noexcept;
 
  private:
-  ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
-  ItemGridReplaceRequest requests;
-  ItemGridOperationResult result;
+  ATFW_UTIL_SYMBOL_LOCAL ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridReplaceRequest requests;
+  ATFW_UTIL_SYMBOL_LOCAL ItemGridOperationResult result;
   struct PerGridData {
-    PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridReplaceCheckedRequest&& in_replace_request,
-                std::vector<int32_t>&& in_original_indices)
-        : grid(in_grid),
-          replace_requests(std::move(in_replace_request)),
-          original_indices(std::move(in_original_indices)) {}
-    item_grid_algorithm_ptr_t grid = nullptr;
-    ItemGridReplaceCheckedRequest replace_requests;
-    std::vector<int32_t> original_indices;
+    ITEM_ALGORITHM_API PerGridData(item_grid_algorithm_ptr_t in_grid, ItemGridReplaceCheckedRequest&& in_replace_request,
+                                   std::vector<int32_t>&& in_original_indices);
+    ATFW_UTIL_SYMBOL_LOCAL item_grid_algorithm_ptr_t grid = nullptr;
+    ATFW_UTIL_SYMBOL_LOCAL ItemGridReplaceCheckedRequest replace_requests;
+    ATFW_UTIL_SYMBOL_LOCAL std::vector<int32_t> original_indices;
   };
-  std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
-  bool apply = false;
+  ATFW_UTIL_SYMBOL_LOCAL std::vector<atfw::util::memory::strong_rc_ptr<PerGridData>> grid_data;
+  ATFW_UTIL_SYMBOL_LOCAL bool apply = false;
 };
 
-class ITEM_ALGORITHM_API ItemGridContainer {
+class ATFW_UTIL_SYMBOL_VISIBLE ItemGridContainer {
  public:
-  ItemGridContainer();
-  virtual ~ItemGridContainer();
+  ITEM_ALGORITHM_API ItemGridContainer();
+  ITEM_ALGORITHM_API virtual ~ItemGridContainer();
 
   ItemGridContainer(const ItemGridContainer&) = delete;
   ItemGridContainer& operator=(const ItemGridContainer&) = delete;
@@ -172,38 +157,34 @@ class ITEM_ALGORITHM_API ItemGridContainer {
   // ============================================================
   // 路由虚函数 — 子类必须实现
   // ============================================================
-  virtual item_grid_algorithm_ptr_t select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& position) = 0;
-  virtual item_grid_algorithm_ptr_t select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& position) const = 0;
+  ITEM_ALGORITHM_API virtual item_grid_algorithm_ptr_t select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& position) = 0;
+  ITEM_ALGORITHM_API virtual item_grid_algorithm_ptr_t select_grid(const PROJECT_NAMESPACE_ID::DItemPosition& position) const = 0;
 
   // ============================================================
   // 批量操作接口
   // ============================================================
-  ItemGridContainerAddCheckedRequest check_add(
+  ITEM_ALGORITHM_API ItemGridContainerAddCheckedRequest check_add(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       ItemGridAddRequest&& in_requests) const;
-  ItemGridOperationResult add(ItemGridContainerAddCheckedRequest& checked_request);
-  ItemGridContainerSubCheckedRequest check_sub(
+  ITEM_ALGORITHM_API ItemGridOperationResult add(ItemGridContainerAddCheckedRequest& checked_request);
+  ITEM_ALGORITHM_API ItemGridContainerSubCheckedRequest check_sub(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       ItemGridSubRequest&& in_requests) const;
-  ItemGridOperationResult sub(ItemGridContainerSubCheckedRequest& checked_request);
-  ItemGridContainerMoveCheckedRequest check_move(
+  ITEM_ALGORITHM_API ItemGridOperationResult sub(ItemGridContainerSubCheckedRequest& checked_request);
+  ITEM_ALGORITHM_API ItemGridContainerMoveCheckedRequest check_move(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       std::vector<ItemGridContainerMoveRequest>&& in_requests) const;
-  ItemGridOperationResult move(ItemGridContainerMoveCheckedRequest& checked_request);
+  ITEM_ALGORITHM_API ItemGridOperationResult move(ItemGridContainerMoveCheckedRequest& checked_request);
   // 整体替换 (仅单个 Grid 原子, 跨 Grid 不保证原子性)
-  ItemGridContainerReplaceCheckedRequest check_replace(
+  ITEM_ALGORITHM_API ItemGridContainerReplaceCheckedRequest check_replace(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
       ItemGridReplaceRequest&& in_requests) const;
-  ItemGridOperationResult replace(ItemGridContainerReplaceCheckedRequest& checked_request);
-  ItemGridOperationResult check_has(
+  ITEM_ALGORITHM_API ItemGridOperationResult replace(ItemGridContainerReplaceCheckedRequest& checked_request);
+  ITEM_ALGORITHM_API ItemGridOperationResult check_has(
       const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
       const ItemGridHasRequest& requests) const;
 };
 
 }  // namespace item_algorithm
-
-#ifdef _MSC_VER
-#  pragma warning(pop)
-#endif
 
 ITEM_ALGORITHM_NAMESPACE_END
