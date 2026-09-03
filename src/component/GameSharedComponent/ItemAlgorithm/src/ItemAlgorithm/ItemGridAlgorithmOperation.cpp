@@ -2,6 +2,8 @@
 
 #include "ItemAlgorithm/ItemGridAlgorithm.h"
 
+#include "config/excel/item_type_config.h"
+
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
 namespace item_algorithm {

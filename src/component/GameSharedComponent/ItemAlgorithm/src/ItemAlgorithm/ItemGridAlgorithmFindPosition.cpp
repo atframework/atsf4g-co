@@ -4,6 +4,8 @@
 
 #include "ItemAlgorithm/ItemGridAlgorithm.h"
 
+#include "config/excel/item_type_config.h"
+
 namespace {
 
 // 平台无关的 ctz (count trailing zeros), v 必须非 0
