@@ -68,6 +68,19 @@ high-performance game server architectures.
   Before CMake commands, reuse the workspace generator, configure options, and parallelism.
 - For paths under vendored subprojects, read the nearest subproject `AGENTS.md` before changing code.
 
+## Terminal and Tooling
+
+- On Windows use PowerShell 7+ (`pwsh.exe`); never use the legacy Windows PowerShell 5.1 (`powershell.exe`). Launch
+  independent processes with `pwsh.exe -NoLogo -NoProfile`, and do not nest `cmd.exe`, Git Bash, WSL, or other shells
+  unless the task explicitly requires it.
+- Probe before use (`Get-Command <name>`): prefer an installed modern CLI tool (`rg`, `fd`, `sd`, `bat`, `jq`, ...)
+  and fall back to PowerShell cmdlets or the traditional tool when it is absent.
+- Write PowerShell defensively: single quotes unless expansion is needed, `${name}` for ambiguous boundaries,
+  here-strings instead of heredocs, `& { ... } | ...` to pipe statement blocks, and full cmdlet names instead of
+  ambiguous Unix aliases (`cat`, `find`, `where`).
+- Read the `shell-tooling` skill for the full modern-tool inventory, install channels, agent practices, and
+  PowerShell authoring rules before shell-heavy work or command-failure debugging.
+
 ## Skill Routing
 
 Use the Skill metadata exposed by the harness. If it exposes none, read the compact
