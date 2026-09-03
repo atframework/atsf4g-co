@@ -20,7 +20,6 @@
 
 #include <data/user.h>
 
-#include <algorithm>
 #include <map>
 #include <utility>
 #include <vector>
@@ -153,7 +152,7 @@ void user_item_grid_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context&
 
 void user_item_grid_manager::register_find_position_handle(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                                            find_position_handle_t handle) {
-  static uint32_t handle_id = 10000;
+  static int32_t handle_id = 10000;
   ++handle_id;
   if (item_type.empty()) {
     FWLOGERROR("item_type span is empty");
@@ -255,7 +254,7 @@ void user_item_grid_manager::register_item_grid_algorithm(
 void user_item_grid_manager::unregister_item_grid_algorithm(user_item_grid_algorithm* grid) {
   auto iter = container_guid_to_grid_.find(grid->get_container_guid());
   if (iter != container_guid_to_grid_.end()) {
-    auto ptr = iter->second.lock().get();
+    auto* ptr = iter->second.lock().get();
     if (ptr == nullptr) {
       FWLOGERROR("user_item_grid_manager unregister_item_grid_algorithm container_guid: {} grid ptr expired",
                  grid->get_container_guid());
@@ -325,9 +324,10 @@ item_algorithm::ItemGridOperationResult user_item_grid_manager::check_has(
 bool user_item_grid_manager::find_position(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) const {
   // 通过道具ID分到 handler id
-  std::map<uint32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> handler_map;
+  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> handler_map;
   for (auto& item_instance : data) {
-    auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item_instance.item_basic().type_id()));
+    const auto* type_config =
+        ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item_instance.item_basic().type_id()));
     if (type_config == nullptr) {
       return false;
     }
@@ -336,7 +336,7 @@ bool user_item_grid_manager::find_position(
       FWLOGERROR("Failed to find handler id for type_id: {}", item_instance.item_basic().type_id());
       return false;
     }
-    uint32_t handler_id = iter->second;
+    int32_t handler_id = iter->second;
     protobuf_move_message((*handler_map[handler_id].Add()), std::move(item_instance));
   }
   data.Clear();
