@@ -94,14 +94,31 @@ CACHE_RPC_API bool cache_key_equal_t::operator()(const PROJECT_NAMESPACE_ID::obj
 
 CACHE_RPC_API void update_cache_content_from_meta(::rpc::context &, PROJECT_NAMESPACE_ID::DUserBasicData &output,
                                                   const PROJECT_NAMESPACE_ID::DUserBasicDataMeta &input) {
-  protobuf_copy_message(*output.mutable_meta_data(), input);
+  if (input.has_user_key()) {
+    *output.mutable_meta_data()->mutable_user_key() = input.user_key();
+  }
+
+  if (input.has_login_data()) {
+    *output.mutable_meta_data()->mutable_login_data() = input.login_data();
+  }
+
+  if (input.has_profile()) {
+    *output.mutable_meta_data()->mutable_profile() = input.profile();
+  }
+  output.mutable_meta_data()->set_user_data_version(input.user_data_version());
 }
 
 // NOLINTNEXTLINE(misc-use-internal-linkage)
-CACHE_RPC_API void update_cache_meta_from_origin_data(
-    ::rpc::context &, PROJECT_NAMESPACE_ID::DUserBasicDataMeta &output, uint64_t data_version,
-    const PROJECT_NAMESPACE_ID::user_login_data *input_login_data, const PROJECT_NAMESPACE_ID::user_data *,
-    const PROJECT_NAMESPACE_ID::DUserProfile *input_user_profile, const PROJECT_NAMESPACE_ID::DClientDeviceInfo *) {
+CACHE_RPC_API void update_cache_meta_from_origin_data(::rpc::context &,
+                                                      PROJECT_NAMESPACE_ID::DUserBasicDataMeta &output,
+                                                      uint64_t user_id, uint32_t zone_id, uint64_t data_version,
+                                                      const PROJECT_NAMESPACE_ID::user_login_data *input_login_data,
+                                                      const PROJECT_NAMESPACE_ID::user_data *,
+                                                      const PROJECT_NAMESPACE_ID::DUserProfile *input_user_profile,
+                                                      const PROJECT_NAMESPACE_ID::DClientDeviceInfo *) {
+  output.mutable_user_key()->set_user_id(user_id);
+  output.mutable_user_key()->set_zone_id(zone_id);
+
   if (data_version > 0) {
     output.set_user_data_version(data_version);
   }
@@ -195,8 +212,7 @@ CACHE_RPC_API bool unpack_cache_meta_from_any(::rpc::context &ctx, PROJECT_NAMES
     return false;
   }
 
-  auto res = internal_try_unpack<PROJECT_NAMESPACE_ID::DUserBasicDataMeta>(
-      ctx, input, [&output]() { return output.mutable_user_meta(); });
+  auto res = internal_try_unpack<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(ctx, input, [&output]() { return &output; });
 
   if (res.first) {
     return res.second;
@@ -243,8 +259,8 @@ CACHE_RPC_API bool unpack_cache_content_from_any(::rpc::context &ctx, PROJECT_NA
     return false;
   }
 
-  auto res = internal_try_unpack<PROJECT_NAMESPACE_ID::DUserBasicData>(
-      ctx, input, [&output]() { return output.mutable_user_cache(); });
+  auto res =
+      internal_try_unpack<PROJECT_NAMESPACE_ID::DCacheApiObjectData>(ctx, input, [&output]() { return &output; });
 
   if (res.first) {
     return res.second;

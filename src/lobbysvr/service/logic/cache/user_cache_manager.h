@@ -50,6 +50,8 @@ class user_cache_manager : public atfw::util::design_pattern::noncopyable {
   void on_saved(rpc::context&);
   void refresh_feature_limit_minute(rpc::context& ctx);
 
+  int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
+
   user& get_owner() { return *owner_; }
   const user& get_owner() const { return *owner_; }
 
@@ -58,12 +60,12 @@ class user_cache_manager : public atfw::util::design_pattern::noncopyable {
   // 注册修改meta数据时的回调 内部修改meta数据
   using user_modify_meta_callback_t = std::function<void(user&, PROJECT_NAMESPACE_ID::user_data&)>;
   static void register_user_modify_meta_callback(user_modify_meta_callback_t callback);
-  void call_user_modify_meta_callbacks();
+  void call_user_modify_meta_callbacks() const;
 
   void set_user_cache_expired();
   void set_user_meta_expired();
   void set_user_meta_expired_delay_sync();
-  void pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_meta& cache_meta);
+  bool pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_meta& cache_meta);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_user_id_valid(rpc::context& ctx, uint32_t zone_id,
                                                                          uint64_t user_id);

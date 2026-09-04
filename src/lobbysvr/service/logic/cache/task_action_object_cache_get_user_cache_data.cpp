@@ -41,8 +41,7 @@ const char* task_action_object_cache_get_user_cache_data::name() const {
   return "task_action_object_cache_get_user_cache_data";
 }
 
-task_action_object_cache_get_user_cache_data::result_type
-task_action_object_cache_get_user_cache_data::operator()() {
+task_action_object_cache_get_user_cache_data::result_type task_action_object_cache_get_user_cache_data::operator()() {
   const rpc_request_type& req_body = get_request_body();
   rpc_response_type& rsp_body = get_response_body();
 
@@ -57,17 +56,8 @@ task_action_object_cache_get_user_cache_data::operator()() {
         TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
       }
 
-      auto cache_meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(get_shared_context());
-      cache_meta->mutable_user_meta()->mutable_user_key()->set_zone_id(user_inst->get_zone_id());
-      cache_meta->mutable_user_meta()->mutable_user_key()->set_user_id(user_inst->get_user_id());
-
-      rpc::cache_api::update_cache_meta_from_origin_data(
-          get_shared_context(), *cache_meta->mutable_user_meta(), user_inst->get_data_version(),
-          &user_inst->get_login_info(), &user_inst->get_user_data(), &user_inst->get_account_info().profile(),
-          &user_inst->get_client_info());
-
-      if (!rpc::cache_api::pack_cache_meta_to_any(get_shared_context(),
-                                                  *rsp_body.mutable_cache_meta()->mutable_cache_meta(), *cache_meta)) {
+      if (!user_inst->get_user_cache_manager().pack_user_meta_data(get_shared_context(),
+                                                                   *rsp_body.mutable_cache_meta())) {
         FWLOGERROR("pack cache meta failed for user {}:{}", user_inst->get_zone_id(), user_inst->get_user_id());
         ret_code = PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
         rsp_body.set_result(ret_code);

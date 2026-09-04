@@ -72,7 +72,6 @@ int32_t user_cache_manager::login_init(rpc::context& /*ctx*/) {
 }
 
 void user_cache_manager::on_logout(rpc::context& ctx) {
-  call_user_modify_meta_callbacks();  // 更新数据块
   bool send_expired_right_now = 0 == owner_->get_login_lock().router_server_id();
   if (watch_data_.empty() && !send_expired_right_now) {
     return;
@@ -96,6 +95,11 @@ void user_cache_manager::refresh_feature_limit_second(rpc::context& /*ctx*/) {
   if (next_time_meta_update_time_ != -1 && next_time_meta_update_time_ <= atfw::util::time::time_utility::get_now()) {
     set_user_meta_expired();
   }
+}
+
+int user_cache_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_user& /*user_table*/) const {
+  call_user_modify_meta_callbacks();
+  return 0;
 }
 
 void user_cache_manager::on_update_session(rpc::context& ctx) {
@@ -218,7 +222,6 @@ int32_t user_cache_manager::send_update_user_basic_meta_to_cachesvr(rpc::context
   PROJECT_NAMESPACE_ID::SSCacheUpdateMetaSync* sync_body = ctx.create<PROJECT_NAMESPACE_ID::SSCacheUpdateMetaSync>();
   PROJECT_NAMESPACE_ID::object_cache_meta* cache_meta = sync_body->add_object_metas();
 
-  call_user_modify_meta_callbacks();
   pack_user_meta_data(ctx, *cache_meta);
   PROJECT_NAMESPACE_ID::object_cache_watch_key watch_key;
 
@@ -258,7 +261,7 @@ void user_cache_manager::register_user_modify_meta_callback(user_modify_meta_cal
   user_cache_manager::user_modify_meta_callbacks_.emplace_back(std::move(callback));
 }
 
-void user_cache_manager::call_user_modify_meta_callbacks() {
+void user_cache_manager::call_user_modify_meta_callbacks() const {
   for (auto& callback : user_modify_meta_callbacks_) {
     callback(*owner_, owner_->get_user_data());
   }
@@ -617,13 +620,15 @@ void user_cache_manager::watch_heartbeat(rpc::context& ctx) {
   return;
 }
 
-void user_cache_manager::pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_meta& cache_meta) {
+bool user_cache_manager::pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_meta& cache_meta) {
+  call_user_modify_meta_callbacks();
   auto meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(ctx);
-  rpc::cache_api::update_cache_meta_from_origin_data(ctx, *meta->mutable_user_meta(), owner_->get_data_version(),
+  rpc::cache_api::update_cache_meta_from_origin_data(ctx, *meta->mutable_user_meta(), owner_->get_user_id(),
+                                                     owner_->get_zone_id(), owner_->get_data_version(),
                                                      &owner_->get_login_info(), &owner_->get_user_data(),
                                                      &owner_->get_account_info().profile(), &owner_->get_client_info());
 
-  rpc::cache_api::pack_cache_meta_to_any(ctx, *cache_meta.mutable_cache_meta(), *meta);
+  return rpc::cache_api::pack_cache_meta_to_any(ctx, *cache_meta.mutable_cache_meta(), *meta);
 }
 
 ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cache(
