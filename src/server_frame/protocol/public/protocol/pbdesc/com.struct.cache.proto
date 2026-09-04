@@ -12,46 +12,29 @@ import "protocol/pbdesc/com.struct.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-message DUserCacheMetaBasicProfile {
-  string nick_name = 3;
-  string logo_url = 4;
-  EnGenderType gender = 5;
-
-  string custom_nick_name = 11;  // 用户自定义昵称
+message DUserDataBasicCache {
+  // 业务数据
 }
 
-message DUserCacheMetaLoginBasicData {
-  // 业务层注册时间
-  int64 business_register_time = 31;
-
-  // 业务层登入时间
-  int64 business_login_time = 32;
-
-  // 业务层登出时间
-  int64 business_logout_time = 33;
-
-  // 业务层注销时间
-  int64 business_unregister_time = 34;
+message DUserBasicDataMetaLogin {
+  int64 business_register_time = 1;    // 业务层注册时间
+  int64 business_login_time = 2;       // 业务层登入时间
+  int64 business_logout_time = 3;      // 业务层登出时间
+  int64 business_unregister_time = 4;  // 业务层注销时间
 }
 
-message DUserCacheMetaUserInformation {
-  int32 user_level = 1;
-}
-
-message DUserCacheMetaClientInformation {
-  // 客户端版本
-  string client_version = 1;
-}
-
-message DUserCacheMeta {
+message DUserBasicDataMeta {
   DUserIDKey user_key = 1;
+  DUserBasicDataMetaLogin login_data = 2;
+  DUserProfile profile = 3;
+  uint64 user_data_version = 4;
+}
 
-  DUserCacheMetaLoginBasicData login_basic = 5;
-  DUserCacheMetaBasicProfile basic_profile = 6;
-  DUserCacheMetaUserInformation user_information = 7;
-  DUserCacheMetaClientInformation client_information = 8;
-
-  uint64 user_data_version = 10;
+// 用户基础信息（允许客户端批量拉）
+message DUserBasicData {
+  DUserBasicDataMeta meta_data = 1;
+  DUserSharedOptions shared_options = 11;  // 公开的用户自定义选项
+  DUserDataBasicCache basic_cache = 12;    // 用户基础缓存数据
 }
 
 message DCacheApiObjectData {
@@ -62,7 +45,6 @@ message DCacheApiObjectData {
 
 message DCacheApiMetaData {
   oneof meta_data {
-    // User Meta
-    DUserCacheMeta user_meta = 11;
+    DUserBasicDataMeta user_meta = 11;
   }
 }

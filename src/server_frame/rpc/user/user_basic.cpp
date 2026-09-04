@@ -60,41 +60,26 @@ SERVER_FRAME_API bool is_valid_user_id(int64_t in) noexcept {
   return in == 0;
 }
 
-SERVER_FRAME_API void merge_basic_profile(PROJECT_NAMESPACE_ID::DUserBasicData& /*output*/,
-                                          const PROJECT_NAMESPACE_ID::DUserCacheMetaBasicProfile& /*input*/) noexcept {
-  // 填充基本信息
-}
+SERVER_FRAME_API void convert_to_client_meta_data(PROJECT_NAMESPACE_ID::DUserBasicDataMeta& output,
+                                                  const PROJECT_NAMESPACE_ID::table_user& input_user) noexcept {
+  output.mutable_user_key()->set_zone_id(input_user.zone_id());
+  output.mutable_user_key()->set_user_id(input_user.user_id());
 
-SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DLoginBasicDataCache& output,
-                                             const PROJECT_NAMESPACE_ID::table_user& input_user) noexcept {
-  const auto& login_data = input_user.login_data();
-  output.set_business_register_time(login_data.business_register_time());
-  output.set_business_login_time(login_data.business_login_time());
-  output.set_business_logout_time(login_data.business_logout_time());
-  output.set_business_unregister_time(login_data.business_unregister_time());
+  output.mutable_login_data()->set_business_register_time(input_user.login_data().business_register_time());
+  output.mutable_login_data()->set_business_login_time(input_user.login_data().business_login_time());
+  output.mutable_login_data()->set_business_logout_time(input_user.login_data().business_logout_time());
+  output.mutable_login_data()->set_business_unregister_time(input_user.login_data().business_unregister_time());
+
+  protobuf_copy_message(*output.mutable_profile(), input_user.account_data().profile());
+
+  output.set_user_data_version(input_user.data_version());
 }
 
 SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DUserBasicData& output,
                                              const PROJECT_NAMESPACE_ID::table_user& input) noexcept {
-  output.mutable_user_key()->set_zone_id(input.zone_id());
-  output.mutable_user_key()->set_user_id(input.user_id());
-
-  output.set_account_type(input.account_data().account_type());
-  output.set_account_login_channel(input.account_data().channel_id());
-  // output.set_account_id(0);
-
-  convert_to_client_data(*output.mutable_login_data_cache(), input);
-
-  // output.set_client_version();
-  protobuf_copy_message(*output.mutable_profile(), input.account_data().profile());
-  // output.set_package_register_channel();
-  // output.set_package_login_channel();
-  output.set_version_type(input.account_data().version_type());
-
-  output.set_user_level(input.user_data().user_level());
-  output.set_user_data_version(input.data_version());
-
+  convert_to_client_meta_data(*output.mutable_meta_data(), input);
   protobuf_copy_message(*output.mutable_shared_options(), input.option_data_public().custom_options());
+  protobuf_copy_message(*output.mutable_basic_cache(), input.user_data().basic_cache());
 }
 
 }  // namespace user

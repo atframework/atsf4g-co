@@ -805,7 +805,6 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
 
 void user_matching_manager::fill_matching_parameter(rpc::context& /*ctx*/,
                                                     PROJECT_NAMESPACE_ID::DMatchingParameter& output) const {
-  output.set_role_level(owner_->get_user_data().user_level());
   output.set_search_start_time(atfw::util::time::time_utility::get_now());
 }
 

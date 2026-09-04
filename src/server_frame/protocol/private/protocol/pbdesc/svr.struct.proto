@@ -13,6 +13,7 @@ import "protocol/common/com.struct.rank.common.proto";
 import "protocol/pbdesc/com.struct.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 import "protocol/pbdesc/com.struct.team.proto";
+import "protocol/pbdesc/com.struct.cache.proto";
 
 package atframework.shared;
 
@@ -44,8 +45,8 @@ message login_record {
 }
 
 message user_data {
-  int32 user_level = 1;         // 用户等级
-  uint64 session_sequence = 2;  // 用户的全局递增发包序号
+  uint64 session_sequence = 1;          // 用户的全局递增发包序号
+  DUserDataBasicCache basic_cache = 2;  // 用户基础缓存数据
 }
 
 message user_option_private_data {

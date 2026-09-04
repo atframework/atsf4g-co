@@ -93,72 +93,29 @@ CACHE_RPC_API bool cache_key_equal_t::operator()(const PROJECT_NAMESPACE_ID::obj
 }
 
 CACHE_RPC_API void update_cache_content_from_meta(::rpc::context &, PROJECT_NAMESPACE_ID::DUserBasicData &output,
-                                                  const PROJECT_NAMESPACE_ID::DUserCacheMeta &input) {
-  if (input.has_login_basic()) {
-    auto *login_basic = output.mutable_login_data_cache();
-    const auto &input_login_basic = input.login_basic();
-    login_basic->set_business_register_time(input_login_basic.business_register_time());
-    login_basic->set_business_login_time(input_login_basic.business_login_time());
-    login_basic->set_business_logout_time(input_login_basic.business_logout_time());
-    login_basic->set_business_unregister_time(input_login_basic.business_unregister_time());
-  }
-
-  if (input.has_basic_profile()) {
-    auto *output_profile = output.mutable_profile();
-    const auto &input_profile = input.basic_profile();
-    output_profile->set_nick_name(input_profile.nick_name());
-    output_profile->set_logo_url(input_profile.logo_url());
-    output_profile->set_gender(input_profile.gender());
-    output_profile->set_custom_nick_name(input_profile.custom_nick_name());
-  }
-
-  if (input.has_user_information()) {
-    const auto &input_user_info = input.user_information();
-    output.set_user_level(input_user_info.user_level());
-  }
-  if (input.has_client_information()) {
-    const auto &input_client_info = input.client_information();
-    output.set_client_version(input_client_info.client_version());
-  }
-
-  output.set_user_data_version(input.user_data_version());
+                                                  const PROJECT_NAMESPACE_ID::DUserBasicDataMeta &input) {
+  protobuf_copy_message(*output.mutable_meta_data(), input);
 }
 
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 CACHE_RPC_API void update_cache_meta_from_origin_data(
-    ::rpc::context &, PROJECT_NAMESPACE_ID::DUserCacheMeta &output, uint64_t data_version,
-    const PROJECT_NAMESPACE_ID::user_login_data *input_login_data,
-    const PROJECT_NAMESPACE_ID::user_data *input_user_data,
-    const PROJECT_NAMESPACE_ID::DUserProfile *input_user_profile,
-    const PROJECT_NAMESPACE_ID::DClientDeviceInfo *input_client_device_info) {
+    ::rpc::context &, PROJECT_NAMESPACE_ID::DUserBasicDataMeta &output, uint64_t data_version,
+    const PROJECT_NAMESPACE_ID::user_login_data *input_login_data, const PROJECT_NAMESPACE_ID::user_data *,
+    const PROJECT_NAMESPACE_ID::DUserProfile *input_user_profile, const PROJECT_NAMESPACE_ID::DClientDeviceInfo *) {
   if (data_version > 0) {
     output.set_user_data_version(data_version);
   }
 
   if (input_login_data != nullptr) {
-    auto *login_basic = output.mutable_login_basic();
+    auto *login_basic = output.mutable_login_data();
     login_basic->set_business_register_time(input_login_data->business_register_time());
     login_basic->set_business_login_time(input_login_data->business_login_time());
     login_basic->set_business_logout_time(input_login_data->business_logout_time());
     login_basic->set_business_unregister_time(input_login_data->business_unregister_time());
   }
 
-  if (input_user_data != nullptr) {
-    auto *user_info = output.mutable_user_information();
-    user_info->set_user_level(input_user_data->user_level());
-  }
-
   if (input_user_profile != nullptr) {
-    auto *profile = output.mutable_basic_profile();
-    profile->set_nick_name(input_user_profile->nick_name());
-    profile->set_logo_url(input_user_profile->logo_url());
-    profile->set_gender(input_user_profile->gender());
-    profile->set_custom_nick_name(input_user_profile->custom_nick_name());
-  }
-
-  if (input_client_device_info != nullptr) {
-    auto *client_info = output.mutable_client_information();
-    client_info->set_client_version(input_client_device_info->client_version());
+    protobuf_copy_message(*output.mutable_profile(), *input_user_profile);
   }
 }
 
@@ -187,8 +144,8 @@ CACHE_RPC_API void pick_key_from_content(::rpc::context & /*ctx*/, PROJECT_NAMES
     case PROJECT_NAMESPACE_ID::DCacheApiObjectData::kUserCache: {
       const auto &user_cache = input.user_cache();
       output.set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
-      output.set_zone_id(user_cache.user_key().zone_id());
-      output.set_instance_id(user_cache.user_key().user_id());
+      output.set_zone_id(user_cache.meta_data().user_key().zone_id());
+      output.set_instance_id(user_cache.meta_data().user_key().user_id());
       return;
     }
     default:
@@ -238,7 +195,7 @@ CACHE_RPC_API bool unpack_cache_meta_from_any(::rpc::context &ctx, PROJECT_NAMES
     return false;
   }
 
-  auto res = internal_try_unpack<PROJECT_NAMESPACE_ID::DUserCacheMeta>(
+  auto res = internal_try_unpack<PROJECT_NAMESPACE_ID::DUserBasicDataMeta>(
       ctx, input, [&output]() { return output.mutable_user_meta(); });
 
   if (res.first) {

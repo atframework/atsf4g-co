@@ -37,10 +37,7 @@ ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::rpc_result<int64_t> allocate_
  */
 SERVER_FRAME_API bool is_valid_user_id(int64_t in) noexcept;
 
-SERVER_FRAME_API void merge_basic_profile(PROJECT_NAMESPACE_ID::DUserBasicData& output,
-                                          const PROJECT_NAMESPACE_ID::DUserCacheMetaBasicProfile& input) noexcept;
-
-SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DLoginBasicDataCache& output,
+SERVER_FRAME_API void convert_to_client_meta_data(PROJECT_NAMESPACE_ID::DUserBasicDataMeta& output,
                                              const PROJECT_NAMESPACE_ID::table_user& input_user) noexcept;
 
 SERVER_FRAME_API void convert_to_client_data(PROJECT_NAMESPACE_ID::DUserBasicData& output,

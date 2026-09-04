@@ -61,7 +61,6 @@ static bool build_user_cache_get_info_handles() {
                              [](rpc::context & /*ctx*/, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp &rsp, user &user_inst) {
                                protobuf_copy_message(*rsp.mutable_user_information()->mutable_profile(),
                                                      user_inst.get_account_info().profile());
-                               rsp.mutable_user_information()->set_user_level(user_inst.get_user_data().user_level());
                                auto *user_statistics = rsp.mutable_user_information()->mutable_user_statistics();
                                user_statistics->set_last_login_time(user_inst.get_login_info().business_login_time());
                                user_statistics->set_register_time(user_inst.get_login_info().business_register_time());

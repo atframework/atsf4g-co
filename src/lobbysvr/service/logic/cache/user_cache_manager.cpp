@@ -440,31 +440,26 @@ int32_t user_cache_manager::unwatch_cache_keys(
 }
 
 void user_cache_manager::fill_self_basic_data(PROJECT_NAMESPACE_ID::DUserBasicData& output) {
-  output.mutable_user_key()->set_user_id(owner_->get_user_id());
-  output.mutable_user_key()->set_zone_id(owner_->get_zone_id());
-  // output.set_account_id(owner_->get_account_id());
+  call_user_modify_meta_callbacks();
+
+  // Meta
+  output.mutable_meta_data()->mutable_user_key()->set_user_id(owner_->get_user_id());
+  output.mutable_meta_data()->mutable_user_key()->set_zone_id(owner_->get_zone_id());
 
   // user 表里的这个字段可能没更新，用本地login表里的
-  PROJECT_NAMESPACE_ID::DLoginBasicDataCache* login_cache = output.mutable_login_data_cache();
+  PROJECT_NAMESPACE_ID::DUserBasicDataMetaLogin* login_cache = output.mutable_meta_data()->mutable_login_data();
   login_cache->set_business_login_time(owner_->get_login_info().business_login_time());
   login_cache->set_business_logout_time(owner_->get_login_info().business_logout_time());
   login_cache->set_business_register_time(owner_->get_login_info().business_register_time());
   login_cache->set_business_unregister_time(owner_->get_login_info().business_unregister_time());
 
-  output.set_account_type(owner_->get_account_info().account_type());
-  output.set_account_login_channel(owner_->get_account_info().channel_id());
-  // output.set_package_login_channel(owner_->get_account_info().package_login_channel());
-  // output.set_package_register_channel(owner_->get_account_info().package_register_channel());
-  output.set_user_data_version(owner_->get_data_version());
-  output.set_user_level(owner_->get_user_data().user_level());
-  output.set_version_type(owner_->get_account_info().version_type());
+  protobuf_copy_message(*output.mutable_meta_data()->mutable_profile(), owner_->get_account_info().profile());
 
-  protobuf_copy_message(*output.mutable_profile(), owner_->get_account_info().profile());
+  output.mutable_meta_data()->set_user_data_version(owner_->get_data_version());
+
+  // 额外数据
   protobuf_copy_message(*output.mutable_shared_options(), owner_->get_user_option_public_data().custom_options());
-
-  //  FIXME 经验、战力等
-  //  output.set_combat();
-  //  output.set_combat_timepoint();
+  protobuf_copy_message(*output.mutable_basic_cache(), owner_->get_user_data().basic_cache());
 }
 
 void user_cache_manager::async_unwatch_all(rpc::context& ctx) {
@@ -660,13 +655,13 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
 
     if (filter_unused_id) {
       for (auto iter = output.begin(); iter != output.end();) {
-        if (iter->has_user_cache() && iter->user_cache().login_data_cache().business_unregister_time() != 0) {
+        if (iter->has_user_cache() && iter->user_cache().meta_data().login_data().business_unregister_time() != 0) {
           if (not_found_keys != nullptr) {
             auto* key = not_found_keys->Add();
             if (key != nullptr) {
               key->set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
-              key->set_zone_id(iter->user_cache().user_key().zone_id());
-              key->set_instance_id(iter->user_cache().user_key().user_id());
+              key->set_zone_id(iter->user_cache().meta_data().user_key().zone_id());
+              key->set_instance_id(iter->user_cache().meta_data().user_key().user_id());
             }
           }
           iter = output.erase(iter);
@@ -723,14 +718,14 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::pull_cach
 
       rpc::cache_api::pick_key_from_content(ctx, got_cache_key, *output_data);
       if (output_data->has_user_cache() && filter_unused_id &&
-          output_data->user_cache().login_data_cache().business_unregister_time() != 0) {
+          output_data->user_cache().meta_data().login_data().business_unregister_time() != 0) {
         // 注销 的情况不下发
         if (not_found_keys != nullptr) {
           auto* key = not_found_keys->Add();
           if (key != nullptr) {
             key->set_cache_type(PROJECT_NAMESPACE_ID::EN_CACHE_API_CACHE_TYPE_USER);
-            key->set_zone_id(output_data->user_cache().user_key().zone_id());
-            key->set_instance_id(output_data->user_cache().user_key().user_id());
+            key->set_zone_id(output_data->user_cache().meta_data().user_key().zone_id());
+            key->set_instance_id(output_data->user_cache().meta_data().user_key().user_id());
           }
         }
         output.RemoveLast();
@@ -798,11 +793,12 @@ ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type user_cache_manager::get_user_
 
   const auto& user_cache = cache_contents->at(0).user_cache();
 
-  if (user_cache.user_key().user_id() != user_id || user_cache.user_key().zone_id() != zone_id) {
+  if (user_cache.meta_data().user_key().user_id() != user_id ||
+      user_cache.meta_data().user_key().zone_id() != zone_id) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
   }
 
-  if (user_cache.login_data_cache().business_unregister_time() != 0) {
+  if (user_cache.meta_data().login_data().business_unregister_time() != 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
   }
   if (out != nullptr) {

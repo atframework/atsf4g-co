@@ -91,9 +91,9 @@ struct cache_key_equal_t {
 };
 
 CACHE_RPC_API void update_cache_content_from_meta(::rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserBasicData& output,
-                                                  const PROJECT_NAMESPACE_ID::DUserCacheMeta& input);
+                                                  const PROJECT_NAMESPACE_ID::DUserBasicDataMeta& input);
 CACHE_RPC_API void update_cache_meta_from_origin_data(
-    ::rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserCacheMeta& output, uint64_t data_version,
+    ::rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserBasicDataMeta& output, uint64_t data_version,
     const PROJECT_NAMESPACE_ID::user_login_data* input_login_data,
     const PROJECT_NAMESPACE_ID::user_data* input_user_data,
     const PROJECT_NAMESPACE_ID::DUserProfile* input_user_profile,
