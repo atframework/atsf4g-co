@@ -26,7 +26,6 @@
 
 #include <algorithm>
 #include <list>
-#include <map>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -104,7 +103,7 @@ item_operation_result item_operation_checked_sub_request::do_operation(rpc::cont
 item_operation_checked_add_request user_item_manager::check_add(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
   // 首先分组
-  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
+  std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
   int32_t index = 0;
   std::list<std::pair<int32_t, item_operation_handle_checked_add_request>> checked_request;
   for (auto& item : input) {
@@ -135,7 +134,7 @@ item_operation_checked_add_request user_item_manager::check_add(
 item_operation_checked_sub_request user_item_manager::check_sub(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
   // 首先分组
-  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
+  std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
   int32_t index = 0;
   std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>> checked_request;
   for (auto& item : input) {
@@ -188,7 +187,7 @@ item_operation_checked_sub_request user_item_manager::check_sub(
 item_operation_result user_item_manager::check_has(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) {
   // 首先分组
-  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
+  std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
   int32_t index = 0;
   for (auto& item : input) {
     auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.type_id()));
@@ -245,7 +244,7 @@ rpc::result_code_type user_item_manager::generate_item_from_offset_cfg(
 
 bool user_item_manager::find_position(rpc::context& ctx,
                                       google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& input) {
-  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
+  std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
   std::list<std::pair<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>>> request;
   for (auto& item : input) {
     auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.item_basic().type_id()));
@@ -284,7 +283,7 @@ bool user_item_manager::check_offset_instance_match(
     return false;
   }
   // 仅检查数量
-  std::map<int32_t, int64_t> offset_count;
+  std::unordered_map<int32_t, int64_t> offset_count;
   for (auto& offset : offset_cfg) {
     offset_count[offset.item_offset().type_id()] += offset.item_offset().count() * multiple;
   }

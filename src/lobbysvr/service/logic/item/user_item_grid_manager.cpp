@@ -20,7 +20,7 @@
 
 #include <data/user.h>
 
-#include <map>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -217,7 +217,7 @@ void user_item_grid_manager::build_dirty_sync(PROJECT_NAMESPACE_ID::SCUserDirtyC
   }
 
   // 按容器 GUID 分组
-  std::map<int64_t, std::vector<uint64_t>> container_entries;
+  std::unordered_map<int64_t, std::vector<uint64_t>> container_entries;
   for (const auto& pair : dirty_entries_) {
     container_entries[pair.first].push_back(pair.second);
   }
@@ -324,7 +324,7 @@ item_algorithm::ItemGridOperationResult user_item_grid_manager::check_has(
 bool user_item_grid_manager::find_position(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) const {
   // 通过道具ID分到 handler id
-  std::map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> handler_map;
+  std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> handler_map;
   for (auto& item_instance : data) {
     const auto* type_config =
         ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item_instance.item_basic().type_id()));
