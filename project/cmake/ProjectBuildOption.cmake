@@ -6,9 +6,9 @@ include(CMakeDependentOption)
 # 默认配置选项
 # ######################################################################################################################
 
-if (DEFINED BUILD_SHARED_LIBS)
+if(DEFINED BUILD_SHARED_LIBS)
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ${BUILD_SHARED_LIBS})
-# gRPC在macOS上符号可见性设置有兼容性问题
+  # gRPC在macOS上符号可见性设置有兼容性问题
 elseif(NOT APPLE)
   option(ATFRAMEWORK_USE_DYNAMIC_LIBRARY "Build and linking with dynamic libraries." ON)
 else()
@@ -35,6 +35,8 @@ else()
   endif()
 endif()
 option(PROJECT_ENABLE_TOOLS "Enable build tools." ON)
+
+option(PROJECT_ENABLE_CODE_ANALYSIS "Enable code analysis" ON)
 
 set(PROJECT_SAMPLE_RUNTIME_OUTPUT_DIRECTORY
     "${CMAKE_BINARY_DIR}/sample"

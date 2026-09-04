@@ -3,6 +3,39 @@
 
 include_guard(GLOBAL)
 
+# Recursively collect compile targets that participate in the default build.
+function(project_collect_compile_targets output_variable source_directory)
+  set(project_collect_compile_targets_result)
+  get_property(
+    project_collect_compile_targets_directory_targets
+    DIRECTORY "${source_directory}"
+    PROPERTY BUILDSYSTEM_TARGETS)
+  foreach(project_collect_compile_targets_target IN LISTS project_collect_compile_targets_directory_targets)
+    get_target_property(project_collect_compile_targets_target_type "${project_collect_compile_targets_target}" TYPE)
+    get_target_property(project_collect_compile_targets_target_excluded "${project_collect_compile_targets_target}"
+                        EXCLUDE_FROM_ALL)
+    if(project_collect_compile_targets_target_type MATCHES
+       "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY|OBJECT_LIBRARY)$"
+       AND NOT project_collect_compile_targets_target_excluded)
+      list(APPEND project_collect_compile_targets_result "${project_collect_compile_targets_target}")
+    endif()
+  endforeach()
+
+  get_property(
+    project_collect_compile_targets_subdirectories
+    DIRECTORY "${source_directory}"
+    PROPERTY SUBDIRECTORIES)
+  foreach(project_collect_compile_targets_subdirectory IN LISTS project_collect_compile_targets_subdirectories)
+    project_collect_compile_targets(project_collect_compile_targets_subdirectory_targets
+                                    "${project_collect_compile_targets_subdirectory}")
+    list(APPEND project_collect_compile_targets_result ${project_collect_compile_targets_subdirectory_targets})
+  endforeach()
+
+  set(${output_variable}
+      "${project_collect_compile_targets_result}"
+      PARENT_SCOPE)
+endfunction()
+
 set(LOG_WRAPPER_CATEGORIZE_SIZE
     16
     CACHE STRING "全局日志分类个数限制")
