@@ -31,6 +31,8 @@
 #include <rpc/rpc_shared_message.h>
 #include <rpc/user/user_basic.h>
 
+#include "logic/cache/user_cache_manager.h"
+
 task_action_object_cache_get_user_cache_data::task_action_object_cache_get_user_cache_data(
     dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
