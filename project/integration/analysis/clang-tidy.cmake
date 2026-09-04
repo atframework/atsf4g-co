@@ -39,19 +39,11 @@ function(project_code_analysis_clang_tidy_print_install_hint reason)
            "  Then reconfigure, or set -DPROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE=<path>.")
 endfunction()
 
-if(NOT CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
-  message(
-    WARNING
-      "The ${CMAKE_GENERATOR} generator does not provide compile_commands.json. "
-      "The clang-tidy target is disabled; configure with Ninja or a Makefile generator for complete code analysis.")
-  return()
-endif()
-
 # ---------------------------------------------------------------------------------------------------------------------
 # Minimum Clang frontend version required by the compiler environment.
 #
-# The MSVC STL intentionally rejects Clang frontends older than the version recorded in yvals_core.h. Do not bypass
-# that guard: removed STL workarounds can make an older clang-tidy parse the translation unit incorrectly.
+# The MSVC STL intentionally rejects Clang frontends older than the version recorded in yvals_core.h. Do not bypass that
+# guard: removed STL workarounds can make an older clang-tidy parse the translation unit incorrectly.
 # ---------------------------------------------------------------------------------------------------------------------
 set(project_code_analysis_clang_tidy_msvc_stl_minimum_version 0)
 set(project_code_analysis_clang_tidy_msvc_stl_header)
@@ -69,8 +61,8 @@ if(CMAKE_HOST_WIN32 AND (MSVC OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "M
          "${project_code_analysis_clang_tidy_msvc_toolset_directory}/include/yvals_core.h")
   endif()
 
-  foreach(project_code_analysis_clang_tidy_msvc_stl_header_candidate IN LISTS
-                                                                        project_code_analysis_clang_tidy_msvc_stl_header_candidates)
+  foreach(project_code_analysis_clang_tidy_msvc_stl_header_candidate IN
+          LISTS project_code_analysis_clang_tidy_msvc_stl_header_candidates)
     if(EXISTS "${project_code_analysis_clang_tidy_msvc_stl_header_candidate}")
       set(project_code_analysis_clang_tidy_msvc_stl_header
           "${project_code_analysis_clang_tidy_msvc_stl_header_candidate}")
@@ -82,10 +74,9 @@ endif()
 if(project_code_analysis_clang_tidy_msvc_stl_header)
   file(READ "${project_code_analysis_clang_tidy_msvc_stl_header}"
        project_code_analysis_clang_tidy_msvc_stl_header_content)
-  string(
-    REGEX MATCH "expected Clang[ \t]+([0-9]+)(\\.[0-9]+)*[ \t]+or newer"
-                project_code_analysis_clang_tidy_msvc_stl_version_match
-                "${project_code_analysis_clang_tidy_msvc_stl_header_content}")
+  string(REGEX MATCH "expected Clang[ \t]+([0-9]+)(\\.[0-9]+)*[ \t]+or newer"
+               project_code_analysis_clang_tidy_msvc_stl_version_match
+               "${project_code_analysis_clang_tidy_msvc_stl_header_content}")
   if(project_code_analysis_clang_tidy_msvc_stl_version_match)
     set(project_code_analysis_clang_tidy_msvc_stl_minimum_version "${CMAKE_MATCH_1}")
   endif()
@@ -93,16 +84,24 @@ endif()
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Probe one clang-tidy candidate. A candidate is usable only when it runs, exposes a parsable version, satisfies the
-# compiler environment minimum and parses every top-level option in the repository .clang-tidy. --dump-config loads
-# the configuration exactly like an analysis run; unknown top-level keys (for example ExcludeHeaderFilterRegex on
-# clang-tidy 18 and older) are reported as "unknown key" / "Error parsing" without a failing exit code, so the
-# diagnostics themselves have to be matched.
+# compiler environment minimum and parses every top-level option in the repository .clang-tidy. --dump-config loads the
+# configuration exactly like an analysis run; unknown top-level keys (for example ExcludeHeaderFilterRegex on clang-tidy
+# 18 and older) are reported as "unknown key" / "Error parsing" without a failing exit code, so the diagnostics
+# themselves have to be matched.
 # ---------------------------------------------------------------------------------------------------------------------
 function(project_code_analysis_clang_tidy_probe_candidate candidate out_supported out_version out_major out_reason)
-  set(${out_supported} FALSE PARENT_SCOPE)
-  set(${out_version} "" PARENT_SCOPE)
-  set(${out_major} "" PARENT_SCOPE)
-  set(${out_reason} "" PARENT_SCOPE)
+  set(${out_supported}
+      FALSE
+      PARENT_SCOPE)
+  set(${out_version}
+      ""
+      PARENT_SCOPE)
+  set(${out_major}
+      ""
+      PARENT_SCOPE)
+  set(${out_reason}
+      ""
+      PARENT_SCOPE)
 
   execute_process(
     COMMAND "${candidate}" --version
@@ -112,23 +111,29 @@ function(project_code_analysis_clang_tidy_probe_candidate candidate out_supporte
     OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_STRIP_TRAILING_WHITESPACE
     TIMEOUT 10)
   if(NOT project_code_analysis_clang_tidy_probe_result STREQUAL "0")
-    set(${out_reason} "could not be executed" PARENT_SCOPE)
+    set(${out_reason}
+        "could not be executed"
+        PARENT_SCOPE)
     return()
   endif()
 
-  string(
-    REGEX MATCH "[Vv]ersion[ \t]+([0-9]+(\\.[0-9]+)+)"
-                project_code_analysis_clang_tidy_probe_version_match
-                "${project_code_analysis_clang_tidy_probe_output}\n${project_code_analysis_clang_tidy_probe_error}")
+  string(REGEX MATCH "[Vv]ersion[ \t]+([0-9]+(\\.[0-9]+)+)" project_code_analysis_clang_tidy_probe_version_match
+               "${project_code_analysis_clang_tidy_probe_output}\n${project_code_analysis_clang_tidy_probe_error}")
   if(NOT project_code_analysis_clang_tidy_probe_version_match)
-    set(${out_reason} "version could not be determined" PARENT_SCOPE)
+    set(${out_reason}
+        "version could not be determined"
+        PARENT_SCOPE)
     return()
   endif()
   set(project_code_analysis_clang_tidy_probe_version "${CMAKE_MATCH_1}")
   string(REGEX MATCH "^[0-9]+" project_code_analysis_clang_tidy_probe_major
                "${project_code_analysis_clang_tidy_probe_version}")
-  set(${out_version} "${project_code_analysis_clang_tidy_probe_version}" PARENT_SCOPE)
-  set(${out_major} "${project_code_analysis_clang_tidy_probe_major}" PARENT_SCOPE)
+  set(${out_version}
+      "${project_code_analysis_clang_tidy_probe_version}"
+      PARENT_SCOPE)
+  set(${out_major}
+      "${project_code_analysis_clang_tidy_probe_major}"
+      PARENT_SCOPE)
 
   if(project_code_analysis_clang_tidy_probe_major LESS project_code_analysis_clang_tidy_msvc_stl_minimum_version)
     set(${out_reason}
@@ -148,14 +153,17 @@ function(project_code_analysis_clang_tidy_probe_candidate candidate out_supporte
     set(project_code_analysis_clang_tidy_probe_dump_text
         "${project_code_analysis_clang_tidy_probe_dump_output}\n${project_code_analysis_clang_tidy_probe_dump_error}")
     if(NOT project_code_analysis_clang_tidy_probe_dump_result STREQUAL "0"
-       OR project_code_analysis_clang_tidy_probe_dump_text MATCHES
-          "[Uu]nknown[ \t]+key|[Ee]rror[ \t]+parsing")
-      set(${out_reason} "does not support every option in ${PROJECT_SOURCE_DIR}/.clang-tidy" PARENT_SCOPE)
+       OR project_code_analysis_clang_tidy_probe_dump_text MATCHES "[Uu]nknown[ \t]+key|[Ee]rror[ \t]+parsing")
+      set(${out_reason}
+          "does not support every option in ${PROJECT_SOURCE_DIR}/.clang-tidy"
+          PARENT_SCOPE)
       return()
     endif()
   endif()
 
-  set(${out_supported} TRUE PARENT_SCOPE)
+  set(${out_supported}
+      TRUE
+      PARENT_SCOPE)
 endfunction()
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -190,16 +198,26 @@ function(project_code_analysis_clang_tidy_select_candidate out_executable out_ve
     endif()
   endforeach()
 
-  set(${out_executable} "${best_executable}" PARENT_SCOPE)
-  set(${out_version} "${best_version}" PARENT_SCOPE)
-  set(${out_major} "${best_major}" PARENT_SCOPE)
+  set(${out_executable}
+      "${best_executable}"
+      PARENT_SCOPE)
+  set(${out_version}
+      "${best_version}"
+      PARENT_SCOPE)
+  set(${out_major}
+      "${best_major}"
+      PARENT_SCOPE)
   if(newest_rejected STREQUAL "")
-    set(${out_rejection} "" PARENT_SCOPE)
+    set(${out_rejection}
+        ""
+        PARENT_SCOPE)
   else()
     if(newest_rejected_version STREQUAL "0")
       set(newest_rejected_version "unknown version")
     endif()
-    set(${out_rejection} "${newest_rejected} (${newest_rejected_version}) ${newest_rejected_reason}" PARENT_SCOPE)
+    set(${out_rejection}
+        "${newest_rejected} (${newest_rejected_version}) ${newest_rejected_reason}"
+        PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -262,8 +280,8 @@ if(project_code_analysis_clang_tidy_executable STREQUAL "" AND NOT project_code_
     list(APPEND project_code_analysis_clang_tidy_fallback_directories
          ${project_code_analysis_clang_tidy_llvm_package_directories})
   endif()
-  foreach(project_code_analysis_clang_tidy_fallback_directory IN LISTS
-                                                                  project_code_analysis_clang_tidy_fallback_directories)
+  foreach(project_code_analysis_clang_tidy_fallback_directory IN
+          LISTS project_code_analysis_clang_tidy_fallback_directories)
     file(
       GLOB project_code_analysis_clang_tidy_fallback_matches
       LIST_DIRECTORIES false
@@ -318,6 +336,14 @@ endif()
 mark_as_advanced(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE)
 set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAJOR_VERSION "${project_code_analysis_clang_tidy_major}")
 
+if(NOT CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
+  message(
+    WARNING
+      "clang-tidy was found, but the ${CMAKE_GENERATOR} generator does not provide compile_commands.json. "
+      "The clang-tidy target is disabled; configure with Ninja or a Makefile generator for complete code analysis.")
+  return()
+endif()
+
 set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES
     5
     CACHE STRING "Maximum number of clang-tidy issues allowed in staged, unstaged, and unpushed files.")
@@ -327,8 +353,8 @@ if(NOT PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES MATCHES "^[0-9]+$")
 endif()
 
 set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS
-    8
-    CACHE STRING "Number of files analyzed by clang-tidy in parallel.")
+    4
+    CACHE STRING "Maximum number of concurrent clang-tidy analysis processes.")
 if(NOT PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS MATCHES "^[1-9][0-9]*$")
   message(FATAL_ERROR "PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS must be a positive integer, "
                       "got: ${PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS}")
@@ -391,12 +417,12 @@ message(
     "Code analysis: using clang-tidy ${project_code_analysis_clang_tidy_version}: ${PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE}"
 )
 add_custom_target(
-  "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_TARGET}" ALL
+  "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_TARGET}" # ALL clang-tidy 太慢了，默认不启用
   COMMAND ${PROJECT_CODE_ANALYSIS_CLANG_TIDY_COMMAND}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
   COMMENT "Run clang-tidy on staged, unstaged, and unpushed C/C++ files"
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/clang-tidy.ps1" "${CMAKE_CURRENT_LIST_DIR}/clang-tidy.sh"
-          "${CMAKE_CURRENT_LIST_DIR}/clang-tidy-prepare.py"
+          "${CMAKE_CURRENT_LIST_DIR}/clang-tidy-prepare.py" "${CMAKE_CURRENT_LIST_DIR}/clang-tidy-clangd-rules.py"
   USES_TERMINAL VERBATIM)
 set_property(TARGET "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_TARGET}" PROPERTY FOLDER "${PROJECT_NAME}/tools/analysis")
 
