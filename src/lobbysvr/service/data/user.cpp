@@ -461,6 +461,12 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
     return trace.finish({ret, {}});
   }
 
+  ret = user_cache_manager_->dump(ctx, table);
+  if (ret < 0) {
+    FWLOGERROR("{} dump user_cache_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
+    return trace.finish({ret, {}});
+  }
+
   ret = user_rank_manager_->dump(ctx, table);
   if (ret < 0) {
     FWLOGERROR("{} dump user_rank_manager_ failed, res: {}({})", *this, ret, protobuf_mini_dumper_get_error_msg(ret));
