@@ -81,14 +81,15 @@ temporary_directory=$(mktemp -d "${report_directory%/}/cpplint.XXXXXX") || {
 }
 staged_file_list="$temporary_directory/staged-files.txt"
 unstaged_file_list="$temporary_directory/unstaged-files.txt"
+unpushed_file_list="$temporary_directory/unpushed-files.txt"
 changed_file_list="$temporary_directory/changed-files.txt"
 report_file="$temporary_directory/report.txt"
 current_report_file="$temporary_directory/current-report.txt"
 git_error_file="$temporary_directory/git-error.txt"
 
 cleanup() {
-  rm -f "$staged_file_list" "$unstaged_file_list" "$changed_file_list" "$report_file" "$current_report_file" \
-    "$git_error_file"
+  rm -f "$staged_file_list" "$unstaged_file_list" "$unpushed_file_list" "$changed_file_list" "$report_file" \
+    "$current_report_file" "$git_error_file"
   rmdir "$temporary_directory" 2>/dev/null || :
 }
 trap cleanup EXIT HUP INT TERM
@@ -105,8 +106,17 @@ if ! "$git_command" -c core.quotePath=false -C "$repository_root" diff --name-on
   printf '%s\n' 'cpplint: failed to list unstaged files.' >&2
   exit 2
 fi
-if ! LC_ALL=C sort -u "$staged_file_list" "$unstaged_file_list" >"$changed_file_list"; then
-  printf '%s\n' 'cpplint: failed to merge the staged and unstaged file lists.' >&2
+: >"$unpushed_file_list"
+if "$git_command" -C "$repository_root" rev-parse --verify --quiet '@{upstream}^{commit}' >/dev/null 2>&1; then
+  if ! "$git_command" -c core.quotePath=false -C "$repository_root" diff --name-only --diff-filter=ACMRTUXB \
+       '@{upstream}...HEAD' -- >"$unpushed_file_list" 2>"$git_error_file"; then
+    cat "$git_error_file" >&2
+    printf '%s\n' 'cpplint: failed to list files changed in unpushed commits.' >&2
+    exit 2
+  fi
+fi
+if ! LC_ALL=C sort -u "$staged_file_list" "$unstaged_file_list" "$unpushed_file_list" >"$changed_file_list"; then
+  printf '%s\n' 'cpplint: failed to merge the staged, unstaged, and unpushed file lists.' >&2
   exit 2
 fi
 
@@ -159,16 +169,16 @@ while IFS= read -r relative_path || [ -n "$relative_path" ]; do
 done <"$changed_file_list"
 
 if [ "$changed_file_count" -eq 0 ]; then
-  printf '%s\n' 'cpplint: no staged or unstaged C/C++ files to check.'
+  printf '%s\n' 'cpplint: no staged, unstaged, or unpushed C/C++ files to check.'
   exit 0
 fi
 
 if [ "$issue_count" -gt "$max_issues" ]; then
-  printf 'cpplint report for %s staged or unstaged C/C++ file(s):\n' "$changed_file_count" >&2
+  printf 'cpplint report for %s staged, unstaged, or unpushed C/C++ file(s):\n' "$changed_file_count" >&2
   cat "$report_file" >&2
   printf 'cpplint: %s issue(s) exceed the configured maximum of %s.\n' "$issue_count" "$max_issues" >&2
   exit 1
 fi
 
-printf 'cpplint: %s issue(s) found in %s staged or unstaged C/C++ file(s); maximum allowed is %s.\n' \
+printf 'cpplint: %s issue(s) found in %s staged, unstaged, or unpushed C/C++ file(s); maximum allowed is %s.\n' \
   "$issue_count" "$changed_file_count" "$max_issues"

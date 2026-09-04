@@ -18,11 +18,23 @@ param(
   [ValidateRange(0, [int]::MaxValue)]
   [int] $MaxIssues,
 
-  [switch] $DisableMsvcPrecompiledHeader
+  [Parameter(Mandatory = $true)]
+  [ValidateRange(1, [int]::MaxValue)]
+  [int] $ClangTidyMajorVersion,
+
+  [string] $PythonExecutable = '',
+
+  [string] $PrepareScript = '',
+
+  [Parameter(Mandatory = $true)]
+  [string] $ReportDirectory,
+
+  [switch] $PrepareMsvcCompilationDatabase
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -107,6 +119,15 @@ $gitNameListParameters.Arguments = @('diff', '--cached', '--name-only', '-z', '-
 foreach ($path in Invoke-GitNameList @gitNameListParameters) {
   [void] $changedFileSet.Add($path)
 }
+& $gitCommand.Source '-C' $RepositoryRoot 'rev-parse' '--verify' '--quiet' '@{upstream}^{commit}' 2>$null |
+  Out-Null
+if ($LASTEXITCODE -eq 0) {
+  $gitNameListParameters.Arguments =
+    @('diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', '@{upstream}...HEAD', '--')
+  foreach ($path in Invoke-GitNameList @gitNameListParameters) {
+    [void] $changedFileSet.Add($path)
+  }
+}
 
 $clangTidyExtensions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($extension in @('.c', '.c++', '.cc', '.cpp', '.cu', '.cuh', '.cxx', '.h', '.h++', '.hh', '.hpp', '.hxx')) {
@@ -130,7 +151,7 @@ $changedFiles = @(
 $changedFiles = @($changedFiles)
 
 if ($changedFiles.Count -eq 0) {
-  Write-Output 'clang-tidy: no staged or unstaged C/C++ files to check.'
+  Write-Output 'clang-tidy: no staged, unstaged, or unpushed C/C++ files to check.'
   exit 0
 }
 
@@ -152,6 +173,60 @@ if ($null -eq $clangTidyCommand) {
   exit 2
 }
 
+if (-not (Test-Path -LiteralPath $ReportDirectory -PathType Container)) {
+  [void] (New-Item -ItemType Directory -Path $ReportDirectory -Force)
+}
+$analysisDirectory = Join-Path -Path $ReportDirectory -ChildPath 'current'
+if (-not (Test-Path -LiteralPath $analysisDirectory -PathType Container)) {
+  [void] (New-Item -ItemType Directory -Path $analysisDirectory -Force)
+}
+
+$analysisBuildDirectory = $BuildDirectory
+if ($PrepareMsvcCompilationDatabase) {
+  if ([string]::IsNullOrWhiteSpace($PythonExecutable) -or [string]::IsNullOrWhiteSpace($PrepareScript)) {
+    [Console]::Error.WriteLine(
+      'clang-tidy: -PythonExecutable and -PrepareScript are required with -PrepareMsvcCompilationDatabase.'
+    )
+    exit 2
+  }
+  $pythonCommand = Get-Command -Name $PythonExecutable -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($null -eq $pythonCommand) {
+    [Console]::Error.WriteLine("clang-tidy: Python executable is no longer available: $PythonExecutable")
+    exit 2
+  }
+  if (-not (Test-Path -LiteralPath $PrepareScript -PathType Leaf)) {
+    [Console]::Error.WriteLine("clang-tidy: compilation database preparation script does not exist: $PrepareScript")
+    exit 2
+  }
+
+  $preparedCompilationDatabase = Join-Path -Path $analysisDirectory -ChildPath 'compile_commands.json'
+  & $pythonCommand.Source $PrepareScript '--input' $compilationDatabase '--output' $preparedCompilationDatabase `
+    '--remove-cmake-msvc-pch'
+  if ($LASTEXITCODE -ne 0) {
+    [Console]::Error.WriteLine('clang-tidy: failed to prepare the analysis-only compilation database.')
+    exit 2
+  }
+  $analysisBuildDirectory = $analysisDirectory
+}
+
+$configurationArguments = @()
+$clangTidyConfiguration = Join-Path -Path $RepositoryRoot -ChildPath '.clang-tidy'
+if ($ClangTidyMajorVersion -lt 19 -and (Test-Path -LiteralPath $clangTidyConfiguration -PathType Leaf)) {
+  $compatibleConfiguration = Join-Path -Path $analysisDirectory -ChildPath '.clang-tidy'
+  $configurationLines = [System.IO.File]::ReadAllLines($clangTidyConfiguration) |
+    Where-Object { $_ -notmatch '^ExcludeHeaderFilterRegex[\t ]*:' }
+  [System.IO.File]::WriteAllLines(
+    $compatibleConfiguration,
+    $configurationLines,
+    [System.Text.UTF8Encoding]::new($false)
+  )
+  $configurationArguments += "--config-file=$compatibleConfiguration"
+  Write-Output (
+    'clang-tidy: using a compatibility configuration without ExcludeHeaderFilterRegex, which requires clang-tidy 19.'
+  )
+}
+
 $reportLines = [System.Collections.Generic.List[string]]::new()
 $issueCount = 0
 $diagnosticPattern =
@@ -162,13 +237,13 @@ foreach ($changedFile in $changedFiles) {
   $clangTidyArguments = @(
     '--quiet'
     '--use-color=false'
-    "-p=$BuildDirectory"
+    "-p=$analysisBuildDirectory"
     '--extra-arg=-Wno-error'
     "--line-filter=$lineFilter"
   )
-  if ($DisableMsvcPrecompiledHeader) {
+  $clangTidyArguments += $configurationArguments
+  if ($PrepareMsvcCompilationDatabase) {
     $clangTidyArguments += @(
-      '--extra-arg=/Y-'
       '--extra-arg=/WX-'
       '--extra-arg=-Wno-unused-command-line-argument'
     )
@@ -195,14 +270,14 @@ foreach ($changedFile in $changedFiles) {
 }
 
 if ($issueCount -gt $MaxIssues) {
-  [Console]::Error.WriteLine("clang-tidy report for $($changedFiles.Count) staged or unstaged C/C++ file(s):")
+  [Console]::Error.WriteLine("clang-tidy report for $($changedFiles.Count) staged, unstaged, or unpushed C/C++ file(s):")
   [Console]::Error.WriteLine(($reportLines -join [Environment]::NewLine))
   [Console]::Error.WriteLine("clang-tidy: $issueCount issue(s) exceed the configured maximum of $MaxIssues.")
   exit 1
 }
 
 Write-Output (
-  "clang-tidy: $issueCount issue(s) found in $($changedFiles.Count) staged or unstaged C/C++ file(s); " +
+  "clang-tidy: $issueCount issue(s) found in $($changedFiles.Count) staged, unstaged, or unpushed C/C++ file(s); " +
   "maximum allowed is $MaxIssues."
 )
 exit 0

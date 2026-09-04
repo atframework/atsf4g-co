@@ -128,7 +128,7 @@ CheckOptions:
   llvm-else-after-return.WarnOnUnfixable: "false"
   llvm-qualified-auto.AddConstToQualified: "false"
   bugprone-lambda-function-name.IgnoreMacros: "true"
-  bugprone-signed-char-misuse.CharTypdefsToIgnore: "signed char"
+  bugprone-signed-char-misuse.CharTypedefsToIgnore: "signed char"
   bugprone-implicit-widening-of-multiplication-result.IgnoreConstantIntExpr: "true"
   readability-function-cognitive-complexity.Threshold: "160"
   readability-implicit-bool-conversion.AllowIntegerConditions: "true"

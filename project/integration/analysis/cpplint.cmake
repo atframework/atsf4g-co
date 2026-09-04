@@ -2,8 +2,8 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 
 set(PROJECT_CODE_ANALYSIS_CPPLINT_MAX_ISSUES
-    10
-    CACHE STRING "Maximum number of cpplint issues allowed in staged and unstaged files.")
+    5
+    CACHE STRING "Maximum number of cpplint issues allowed in staged, unstaged, and unpushed files.")
 
 if(NOT PROJECT_CODE_ANALYSIS_CPPLINT_MAX_ISSUES MATCHES "^[0-9]+$")
   message(FATAL_ERROR "PROJECT_CODE_ANALYSIS_CPPLINT_MAX_ISSUES must be a non-negative integer, "
@@ -31,7 +31,7 @@ add_custom_target(
   "${PROJECT_CODE_ANALYSIS_CPPLINT_TARGET}" ALL
   COMMAND ${PROJECT_CODE_ANALYSIS_CPPLINT_COMMAND}
   WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  COMMENT "Run cpplint on staged and unstaged C/C++ files"
+  COMMENT "Run cpplint on staged, unstaged, and unpushed C/C++ files"
   SOURCES "${CMAKE_CURRENT_LIST_DIR}/cpplint.ps1" "${CMAKE_CURRENT_LIST_DIR}/cpplint.sh"
   USES_TERMINAL VERBATIM)
 set_property(TARGET "${PROJECT_CODE_ANALYSIS_CPPLINT_TARGET}" PROPERTY FOLDER "${PROJECT_NAME}/tools/analysis")

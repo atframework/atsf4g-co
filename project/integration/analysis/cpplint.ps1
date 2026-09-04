@@ -19,6 +19,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -103,6 +104,15 @@ $gitNameListParameters.Arguments = @('diff', '--cached', '--name-only', '-z', '-
 foreach ($path in Invoke-GitNameList @gitNameListParameters) {
   [void] $changedFileSet.Add($path)
 }
+& $gitCommand.Source '-C' $RepositoryRoot 'rev-parse' '--verify' '--quiet' '@{upstream}^{commit}' 2>$null |
+  Out-Null
+if ($LASTEXITCODE -eq 0) {
+  $gitNameListParameters.Arguments =
+    @('diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', '@{upstream}...HEAD', '--')
+  foreach ($path in Invoke-GitNameList @gitNameListParameters) {
+    [void] $changedFileSet.Add($path)
+  }
+}
 
 $cpplintExtensions = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($extension in @('.c', '.c++', '.cc', '.cpp', '.cu', '.cuh', '.cxx', '.h', '.h++', '.hh', '.hpp', '.hxx')) {
@@ -123,7 +133,7 @@ $changedFiles = @(
 $changedFiles = @($changedFiles)
 
 if ($changedFiles.Count -eq 0) {
-  Write-Output 'cpplint: no staged or unstaged C/C++ files to check.'
+  Write-Output 'cpplint: no staged, unstaged, or unpushed C/C++ files to check.'
   exit 0
 }
 
@@ -170,14 +180,14 @@ foreach ($changedFile in $changedFiles) {
 }
 
 if ($issueCount -gt $MaxIssues) {
-  [Console]::Error.WriteLine("cpplint report for $($changedFiles.Count) staged or unstaged C/C++ file(s):")
+  [Console]::Error.WriteLine("cpplint report for $($changedFiles.Count) staged, unstaged, or unpushed C/C++ file(s):")
   [Console]::Error.WriteLine(($reportLines -join [Environment]::NewLine))
   [Console]::Error.WriteLine("cpplint: $issueCount issue(s) exceed the configured maximum of $MaxIssues.")
   exit 1
 }
 
 Write-Output (
-  "cpplint: $issueCount issue(s) found in $($changedFiles.Count) staged or unstaged C/C++ file(s); " +
+  "cpplint: $issueCount issue(s) found in $($changedFiles.Count) staged, unstaged, or unpushed C/C++ file(s); " +
   "maximum allowed is $MaxIssues."
 )
 exit 0
