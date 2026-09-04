@@ -585,6 +585,26 @@ inline bool inject_log_message(atfw::testing::runtime& test, channel_event_chain
   return receive_channel_event(test, make_incremental_event(chain.channel_key, chain.sequence, msgs));
 }
 
+// Inject a maintenance-style custom_data update on the chain's channel (mirrors team_room periodic save):
+// one update_custom_data WAL log plus the new DTeamStorage in metadata.custom_data
+// (custom_data_sequence = the log's sequence).
+inline bool inject_custom_data_update(atfw::testing::runtime& test, channel_event_chain& chain,
+                                      const atfw::team::DTeamStorage& storage) {
+  atframework::dtmq::DChannelMessage custom_msg;
+  custom_msg.mutable_detail()->set_update_custom_data(true);
+  *custom_msg.mutable_create_timepoint() = protobuf_from_system_clock(std::chrono::system_clock::now());
+
+  std::vector<atframework::dtmq::DChannelMessage> msgs{custom_msg};
+  msgs.back().set_sequence(++chain.sequence);
+  chain.hash_code = chain_message_hashes(msgs, chain.hash_code);
+
+  auto event_sync = make_incremental_event(chain.channel_key, chain.sequence, msgs);
+  auto* metadata = event_sync.mutable_channel_metadata();
+  metadata->set_custom_data_sequence(chain.sequence);
+  CASE_EXPECT_TRUE(metadata->mutable_custom_data()->PackFrom(storage));
+  return receive_channel_event(test, event_sync);
+}
+
 // ---- User / session setup -------------------------------------------------------------
 // The join flow as production drives it: chat login_init (creates the private channel and the subscriber key),
 // team manager login_init (registers the private channel event dispatcher), then a snapshot pull mirroring the

@@ -2206,3 +2206,163 @@ CASE_TEST(lobbysvr_user_team, user_get_info_exports_only_running_team_with_trimm
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// MNT-01: team_room 周期维护经增量 custom_data 更新重存快照的行为契约
+// - update_custom_data 事件不触发快照加载: 无论 saved_action_sequence 是否超出本端已应用序号,
+//   都不重建缓存、不产生脏快照推送;
+// - 本端经增量 add_member 入队、落库快照尚未包含本端的场景(生产 EXPIRED 误踢现场),
+//   超过 wait_add_member_timeout 后 minute refresh 不得发出退出请求;
+// - 快照覆盖本端未见日志时, 收敛由增量日志完成: 迟到的成员经 add_member 日志入队并下发增量。
+CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cache) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(team_test::setup_team_room_node(test));
+  team_test::team_room_ss_capture ss_capture;
+  CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
+
+  constexpr uint64_t kUserId = 30120;
+  constexpr uint64_t kSessionId = 0x10120;
+  constexpr int64_t kTeamId = 670;
+  constexpr uint64_t kLateMemberId = 93101;
+
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(team_test::setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+  atfw::testing::mock_client client;
+  CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
+  if (!client) {
+    test.stop();
+    return;
+  }
+
+  team_test::now_offset_guard time_guard;
+  team_test::channel_event_chain private_chain;
+  private_chain.channel_key = private_channel_key;
+  CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
+
+  auto current = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
+  CASE_EXPECT_TRUE(!!current);
+  if (!current) {
+    test.stop();
+    return;
+  }
+
+  // 落库快照不含本端(成员加入只走增量日志, 不落快照)
+  atfw::team::DTeamStorage storage_v1 = team_test::make_team_storage(kTeamId);
+  team_test::add_storage_member(storage_v1, team_test::kCaptainUserId,
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, storage_v1));
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+    return !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty();
+  }));
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST, current->get_cached_permission_role());
+
+  // 本端经增量 add_member 入队
+  team_test::channel_event_chain team_chain;
+  team_chain.channel_key = team_test::make_team_channel_key(kTeamId);
+  {
+    atfw::team::DTeamAction action;
+    auto* add_member = action.mutable_add_member();
+    protobuf_copy_message(*add_member->mutable_user_key(), team_test::make_user_key(kUserId));
+    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+    *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(logical_system_now());
+    CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, action));
+  }
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == current->get_cached_permission_role();
+  }));
+  test.cs().clear_history();
+
+  // (a) 维护重存: saved=1 仅覆盖已应用的 add_member 日志, 内容与已应用状态一致(含本端)
+  {
+    atfw::team::DTeamStorage storage_mnt = team_test::make_team_storage(kTeamId, 1);
+    team_test::add_storage_member(storage_mnt, team_test::kCaptainUserId,
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+    team_test::add_storage_member(storage_mnt, kUserId,
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+    CASE_EXPECT_TRUE(team_test::inject_custom_data_update(test, team_chain, storage_mnt));
+  }
+  // 纯稳定性等待: 事件已经同步入口处理, 多 pump 只为耗尽潜在的异步尾巴
+  team_test::pump_rounds(test, 4);
+  // update 事件不加载快照: 无脏推送, 成员/角色缓存不变
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kSessionId).empty());
+  CASE_EXPECT_EQ(0, static_cast<int>(test.cs().call_count()));
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, current->get_cached_permission_role());
+  {
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    rpc::context ctx{rpc::context::create_without_task()};
+    current->dump(ctx, snapshot);
+    CASE_EXPECT_EQ(2, snapshot.snapshot().member_size());
+    CASE_EXPECT_TRUE(nullptr != team_test::find_snapshot_member(snapshot, kUserId));
+  }
+
+  // 超过 wait_add_member_timeout 后 minute refresh: 成员身份不得被维护快照误置, 不产生退出请求
+  const size_t sent_requests_before = ss_capture.send_message_reqs.size();
+  team_test::now_offset_guard::advance(team_test::get_wait_add_member_timeout() + std::chrono::seconds{1});
+  CASE_EXPECT_TRUE(team_test::run_sync_task(
+      test, "team.refresh_minute", [&user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        user_inst->get_user_team_manager().refresh_feature_limit_minute(ctx);
+        RPC_RETURN_CODE(0);
+      }));
+  team_test::pump_rounds(test, 4);
+  CASE_EXPECT_EQ(static_cast<int>(sent_requests_before), static_cast<int>(ss_capture.send_message_reqs.size()));
+  CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, current->get_cached_permission_role());
+
+  // (b) saved=5 超出已应用序号(快照覆盖本端未见的 add_member 日志):
+  // update 事件仍不加载快照, 迟到的成员由增量 add_member 日志补齐
+  {
+    atfw::team::DTeamStorage storage_v2 = team_test::make_team_storage(kTeamId, 5);
+    team_test::add_storage_member(storage_v2, team_test::kCaptainUserId,
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+    team_test::add_storage_member(storage_v2, kUserId,
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+    team_test::add_storage_member(storage_v2, kLateMemberId,
+                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+    CASE_EXPECT_TRUE(team_test::inject_custom_data_update(test, team_chain, storage_v2));
+  }
+  team_test::pump_rounds(test, 4);
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kSessionId).empty());
+  {
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    rpc::context ctx{rpc::context::create_without_task()};
+    current->dump(ctx, snapshot);
+    CASE_EXPECT_EQ(2, snapshot.snapshot().member_size());
+    CASE_EXPECT_TRUE(nullptr == team_test::find_snapshot_member(snapshot, kLateMemberId));
+  }
+
+  // 增量日志到达: 成员入队并向客户端下发增量
+  {
+    atfw::team::DTeamAction action;
+    auto* add_member = action.mutable_add_member();
+    protobuf_copy_message(*add_member->mutable_user_key(), team_test::make_user_key(kLateMemberId));
+    add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+    *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(logical_system_now());
+    CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, action));
+  }
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+    return !team_test::collect_team_dirty(test, kSessionId, kTeamId).actions.empty();
+  }));
+  {
+    auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
+    CASE_EXPECT_TRUE(view.snapshots.empty());
+    CASE_EXPECT_EQ(1, static_cast<int>(view.actions.size()));
+  }
+  {
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    rpc::context ctx{rpc::context::create_without_task()};
+    current->dump(ctx, snapshot);
+    CASE_EXPECT_EQ(3, snapshot.snapshot().member_size());
+    CASE_EXPECT_TRUE(nullptr != team_test::find_snapshot_member(snapshot, kLateMemberId));
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
