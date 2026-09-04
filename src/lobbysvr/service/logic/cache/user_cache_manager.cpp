@@ -55,7 +55,6 @@ user_cache_manager::user_cache_manager(user& owner)
       cachesvr_discovery_version_(0),
       need_notify_user_cache_expired_(false),
       need_notify_user_meta_expired_(false),
-      need_notify_user_match_exired_(false),
       fallback_notify_expired_timepoint_(0),
       watch_heartbeat_timepoint_(0),
       is_logout_(false),

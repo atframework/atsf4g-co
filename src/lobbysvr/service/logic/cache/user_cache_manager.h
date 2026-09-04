@@ -109,7 +109,6 @@ class user_cache_manager : public atfw::util::design_pattern::noncopyable {
   int64_t cachesvr_discovery_version_;
   bool need_notify_user_cache_expired_;
   bool need_notify_user_meta_expired_;
-  bool need_notify_user_match_exired_;
   time_t fallback_notify_expired_timepoint_;
   time_t watch_heartbeat_timepoint_;
   bool is_logout_;
