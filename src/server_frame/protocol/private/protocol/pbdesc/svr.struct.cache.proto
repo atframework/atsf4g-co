@@ -34,7 +34,7 @@ message object_cache_meta {
   int64 data_version = 1;
 
   // 缓存Meta数据，变更直接下发，不需要客户端再拉取
-  // - DUserCacheMeta
+  // - DUserBasicDataMeta
   google.protobuf.Any cache_meta = 2;
 }
 

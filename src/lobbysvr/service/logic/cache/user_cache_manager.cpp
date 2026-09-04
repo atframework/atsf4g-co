@@ -50,8 +50,6 @@ std::string user_cache_manager::memory_leak_debug() {
   return atfw::util::log::format("user_cache_manager: {} \n", watch_data_.size());
 }
 
-std::vector<user_cache_manager::user_modify_meta_callback_t> user_cache_manager::user_modify_meta_callbacks_;
-
 user_cache_manager::user_cache_manager(user& owner)
     : owner_(&owner),
       cachesvr_discovery_version_(0),
@@ -95,11 +93,6 @@ void user_cache_manager::refresh_feature_limit_second(rpc::context& /*ctx*/) {
   if (next_time_meta_update_time_ != -1 && next_time_meta_update_time_ <= atfw::util::time::time_utility::get_now()) {
     set_user_meta_expired();
   }
-}
-
-int user_cache_manager::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_user& /*user_table*/) const {
-  call_user_modify_meta_callbacks();
-  return 0;
 }
 
 void user_cache_manager::on_update_session(rpc::context& ctx) {
@@ -251,19 +244,6 @@ void user_cache_manager::async_send_update_user_basic_meta_to_cachesvr(rpc::cont
                protobuf_mini_dumper_get_error_msg(res));
     need_notify_user_meta_expired_ = true;
     return;
-  }
-}
-
-void user_cache_manager::register_user_modify_meta_callback(user_modify_meta_callback_t callback) {
-  if (!callback) {
-    return;
-  }
-  user_cache_manager::user_modify_meta_callbacks_.emplace_back(std::move(callback));
-}
-
-void user_cache_manager::call_user_modify_meta_callbacks() const {
-  for (auto& callback : user_modify_meta_callbacks_) {
-    callback(*owner_, owner_->get_user_data());
   }
 }
 
@@ -443,8 +423,6 @@ int32_t user_cache_manager::unwatch_cache_keys(
 }
 
 void user_cache_manager::fill_self_basic_data(PROJECT_NAMESPACE_ID::DUserBasicData& output) {
-  call_user_modify_meta_callbacks();
-
   // Meta
   output.mutable_meta_data()->mutable_user_key()->set_user_id(owner_->get_user_id());
   output.mutable_meta_data()->mutable_user_key()->set_zone_id(owner_->get_zone_id());
@@ -456,7 +434,7 @@ void user_cache_manager::fill_self_basic_data(PROJECT_NAMESPACE_ID::DUserBasicDa
   login_cache->set_business_register_time(owner_->get_login_info().business_register_time());
   login_cache->set_business_unregister_time(owner_->get_login_info().business_unregister_time());
 
-  protobuf_copy_message(*output.mutable_meta_data()->mutable_profile(), owner_->get_account_info().profile());
+  output.mutable_meta_data()->mutable_profile()->set_open_id(owner_->get_account_info().profile().open_id());
 
   output.mutable_meta_data()->set_user_data_version(owner_->get_data_version());
 
@@ -621,7 +599,6 @@ void user_cache_manager::watch_heartbeat(rpc::context& ctx) {
 }
 
 bool user_cache_manager::pack_user_meta_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::object_cache_meta& cache_meta) {
-  call_user_modify_meta_callbacks();
   auto meta = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DCacheApiMetaData>(ctx);
   rpc::cache_api::update_cache_meta_from_origin_data(ctx, *meta->mutable_user_meta(), owner_->get_user_id(),
                                                      owner_->get_zone_id(), owner_->get_data_version(),

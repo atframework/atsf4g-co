@@ -132,7 +132,7 @@ CACHE_RPC_API void update_cache_meta_from_origin_data(::rpc::context &,
   }
 
   if (input_user_profile != nullptr) {
-    protobuf_copy_message(*output.mutable_profile(), *input_user_profile);
+    output.mutable_profile()->set_open_id(input_user_profile->open_id());
   }
 }
 

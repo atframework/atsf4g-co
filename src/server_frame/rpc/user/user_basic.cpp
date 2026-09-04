@@ -70,7 +70,7 @@ SERVER_FRAME_API void convert_to_client_meta_data(PROJECT_NAMESPACE_ID::DUserBas
   output.mutable_login_data()->set_business_logout_time(input_user.login_data().business_logout_time());
   output.mutable_login_data()->set_business_unregister_time(input_user.login_data().business_unregister_time());
 
-  protobuf_copy_message(*output.mutable_profile(), input_user.account_data().profile());
+  output.mutable_profile()->set_open_id(input_user.account_data().profile().open_id());
 
   output.set_user_data_version(input_user.data_version());
 }
