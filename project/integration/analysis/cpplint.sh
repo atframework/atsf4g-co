@@ -134,6 +134,14 @@ if [ -n "$python_venv_dir" ]; then
   export VIRTUAL_ENV PATH
 fi
 
+if LC_ALL=C grep -E -q '\.(c|c\+\+|cc|cpp|cu|cuh|cxx|h|h\+\+|hh|hpp|hxx)$' "$changed_file_list" &&
+   ! command -v cpplint >/dev/null 2>&1; then
+  printf '%s\n' \
+    'cpplint: executable not found in the project Python virtual environment or inherited PATH;' \
+    'the third_party python_env may not have been installed. Skipping analysis.' >&2
+  exit 0
+fi
+
 changed_file_count=0
 issue_count=0
 : >"$report_file"
@@ -146,11 +154,6 @@ while IFS= read -r relative_path || [ -n "$relative_path" ]; do
   changed_file="${repository_root%/}/$relative_path"
   [ -f "$changed_file" ] || continue
   changed_file_count=$((changed_file_count + 1))
-
-  if ! command -v cpplint >/dev/null 2>&1; then
-    printf '%s\n' 'cpplint: executable not found in the project Python virtual environment or inherited PATH.' >&2
-    exit 2
-  fi
 
   cpplint "--repository=$repository_root" "$changed_file" >"$current_report_file" 2>&1
   cpplint_exit_code=$?

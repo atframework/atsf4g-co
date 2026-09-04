@@ -150,9 +150,10 @@ $cpplintCommand = Get-Command -Name 'cpplint' -CommandType Application, External
   Select-Object -First 1
 if ($null -eq $cpplintCommand) {
   [Console]::Error.WriteLine(
-    'cpplint: executable not found in the project Python virtual environment or inherited PATH.'
+    'cpplint: executable not found in the project Python virtual environment or inherited PATH; ' +
+    'the third_party python_env may not have been installed. Skipping analysis.'
   )
-  exit 2
+  exit 0
 }
 
 $reportLines = [System.Collections.Generic.List[string]]::new()

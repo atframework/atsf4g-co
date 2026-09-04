@@ -39,6 +39,14 @@ function(project_code_analysis_clang_tidy_print_install_hint reason)
            "  Then reconfigure, or set -DPROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE=<path>.")
 endfunction()
 
+if(NOT CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
+  message(
+    WARNING
+      "The ${CMAKE_GENERATOR} generator does not provide compile_commands.json. "
+      "The clang-tidy target is disabled; configure with Ninja or a Makefile generator for complete code analysis.")
+  return()
+endif()
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Minimum Clang frontend version required by the compiler environment.
 #
@@ -310,20 +318,20 @@ endif()
 mark_as_advanced(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE)
 set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAJOR_VERSION "${project_code_analysis_clang_tidy_major}")
 
-if(NOT CMAKE_GENERATOR MATCHES "Ninja|Makefiles")
-  message(
-    WARNING
-      "clang-tidy was found, but the ${CMAKE_GENERATOR} generator does not provide compile_commands.json. "
-      "The clang-tidy target is disabled; configure with Ninja or a Makefile generator for complete code analysis.")
-  return()
-endif()
-
 set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES
     5
     CACHE STRING "Maximum number of clang-tidy issues allowed in staged, unstaged, and unpushed files.")
 if(NOT PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES MATCHES "^[0-9]+$")
   message(FATAL_ERROR "PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES must be a non-negative integer, "
                       "got: ${PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES}")
+endif()
+
+set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS
+    8
+    CACHE STRING "Number of files analyzed by clang-tidy in parallel.")
+if(NOT PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS MATCHES "^[1-9][0-9]*$")
+  message(FATAL_ERROR "PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS must be a positive integer, "
+                      "got: ${PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS}")
 endif()
 
 project_collect_compile_targets(PROJECT_CODE_ANALYSIS_CLANG_TIDY_DEPENDENCIES "${PROJECT_SOURCE_DIR}")
@@ -360,7 +368,7 @@ if(CMAKE_HOST_WIN32 AND ATFRAMEWORK_CMAKE_TOOLSET_PWSH)
       "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES}" "-ClangTidyMajorVersion"
       "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAJOR_VERSION}" "-PythonExecutable" "${Python3_EXECUTABLE}" "-PrepareScript"
       "${CMAKE_CURRENT_LIST_DIR}/clang-tidy-prepare.py" "-ReportDirectory" "${CMAKE_BINARY_DIR}/_agent_tmp/clang-tidy"
-      ${_project_code_analysis_clang_tidy_msvc_arguments})
+      "-Jobs" "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS}" ${_project_code_analysis_clang_tidy_msvc_arguments})
 elseif(ATFRAMEWORK_CMAKE_TOOLSET_BASH)
   set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_COMMAND
       "${ATFRAMEWORK_CMAKE_TOOLSET_BASH}" "${CMAKE_CURRENT_LIST_DIR}/clang-tidy.sh" "--repository-root"
@@ -368,7 +376,8 @@ elseif(ATFRAMEWORK_CMAKE_TOOLSET_BASH)
       "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE}" "--max-issues" "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAX_ISSUES}"
       "--clang-tidy-major-version" "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAJOR_VERSION}" "--python-executable"
       "${Python3_EXECUTABLE}" "--prepare-script" "${CMAKE_CURRENT_LIST_DIR}/clang-tidy-prepare.py" "--report-directory"
-      "${CMAKE_BINARY_DIR}/_agent_tmp/clang-tidy" ${_project_code_analysis_clang_tidy_msvc_arguments})
+      "${CMAKE_BINARY_DIR}/_agent_tmp/clang-tidy" "--jobs" "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_JOBS}"
+      ${_project_code_analysis_clang_tidy_msvc_arguments})
 else()
   message(
     WARNING

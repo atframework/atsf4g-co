@@ -6,6 +6,7 @@
 
 import argparse
 import ctypes
+import hashlib
 import json
 import os
 import shlex
@@ -107,8 +108,20 @@ def main():
     parser.add_argument("--remove-cmake-msvc-pch", action="store_true")
     arguments = parser.parse_args()
 
-    with arguments.input.open("r", encoding="utf-8-sig") as input_file:
-        database = json.load(input_file)
+    input_bytes = arguments.input.read_bytes()
+    input_fingerprint = "remove-cmake-msvc-pch={}:{}".format(
+        int(arguments.remove_cmake_msvc_pch), hashlib.sha256(input_bytes).hexdigest()
+    )
+    stamp_path = arguments.output.with_name(f"{arguments.output.name}.stamp")
+    if (
+        arguments.output.is_file()
+        and stamp_path.is_file()
+        and stamp_path.read_text(encoding="utf-8") == input_fingerprint
+    ):
+        print("clang-tidy: compilation database unchanged; reusing the prepared one.")
+        return 0
+
+    database = json.loads(input_bytes.decode("utf-8-sig"))
     if not isinstance(database, list):
         raise ValueError("the compilation database root must be an array")
 
@@ -132,6 +145,7 @@ def main():
         json.dump(prepared_database, output_file, ensure_ascii=False, indent=2)
         output_file.write("\n")
     os.replace(temporary_output, arguments.output)
+    stamp_path.write_text(input_fingerprint, encoding="utf-8")
     print(
         f"clang-tidy: prepared {len(prepared_database)} compilation database entries; "
         f"removed {removed_count} CMake MSVC PCH argument(s)."

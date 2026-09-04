@@ -11,12 +11,13 @@ clang_tidy_major_version=''
 python_executable=''
 prepare_script=''
 prepare_msvc_compilation_database=0
+jobs=8
 
 print_usage() {
   printf '%s\n' \
     'Usage: clang-tidy.sh --repository-root <path> --build-directory <path> --clang-tidy-executable <path>' \
     '       --max-issues <count> --clang-tidy-major-version <version> --report-directory <path>' \
-    '       [--python-executable <path> --prepare-script <path> --prepare-msvc-compilation-database]'
+    '       [--python-executable <path> --prepare-script <path> --prepare-msvc-compilation-database] [--jobs <count>]'
 }
 
 while [ "$#" -gt 0 ]; do
@@ -65,6 +66,11 @@ while [ "$#" -gt 0 ]; do
       prepare_msvc_compilation_database=1
       shift
       ;;
+    --jobs)
+      [ "$#" -ge 2 ] || { print_usage >&2; exit 2; }
+      jobs=$2
+      shift 2
+      ;;
     *)
       printf 'clang-tidy: unknown argument: %s\n' "$1" >&2
       print_usage >&2
@@ -88,6 +94,12 @@ case "$clang_tidy_major_version" in
   *[!0-9]*|'')
     printf 'clang-tidy: --clang-tidy-major-version must be a positive integer, got: %s\n' \
       "$clang_tidy_major_version" >&2
+    exit 2
+    ;;
+esac
+case "$jobs" in
+  *[!0-9]*|''|0)
+    printf 'clang-tidy: --jobs must be a positive integer, got: %s\n' "$jobs" >&2
     exit 2
     ;;
 esac
@@ -124,18 +136,14 @@ unpushed_file_list="$temporary_directory/unpushed-files.txt"
 changed_file_list="$temporary_directory/changed-files.txt"
 analysis_file_list="$temporary_directory/analysis-files.txt"
 report_file="$temporary_directory/report.txt"
-current_report_file="$temporary_directory/current-report.txt"
 git_error_file="$temporary_directory/git-error.txt"
 compatible_configuration="$temporary_directory/.clang-tidy"
-prepared_database_directory="$temporary_directory/compilation-database"
+prepared_database_directory="$report_directory/current/compilation-database"
 prepared_compilation_database="$prepared_database_directory/compile_commands.json"
+cache_directory="$report_directory/cache"
 
 cleanup() {
-  rm -f "$staged_file_list" "$unstaged_file_list" "$unpushed_file_list" "$changed_file_list" "$analysis_file_list" \
-    "$report_file" "$current_report_file" "$git_error_file" "$compatible_configuration" \
-    "$prepared_compilation_database"
-  rmdir "$prepared_database_directory" 2>/dev/null || :
-  rmdir "$temporary_directory" 2>/dev/null || :
+  rm -rf "$temporary_directory"
 }
 trap cleanup EXIT HUP INT TERM
 
@@ -219,6 +227,7 @@ if [ "$prepare_msvc_compilation_database" -eq 1 ]; then
 fi
 
 use_compatible_configuration=0
+configuration_file="${repository_root%/}/.clang-tidy"
 if [ "$clang_tidy_major_version" -lt 19 ] && [ -f "${repository_root%/}/.clang-tidy" ]; then
   if ! sed '/^ExcludeHeaderFilterRegex[[:space:]]*:/d' "${repository_root%/}/.clang-tidy" \
        >"$compatible_configuration"; then
@@ -226,43 +235,97 @@ if [ "$clang_tidy_major_version" -lt 19 ] && [ -f "${repository_root%/}/.clang-t
     exit 2
   fi
   use_compatible_configuration=1
+  configuration_file=$compatible_configuration
   printf '%s\n' \
     'clang-tidy: using a compatibility configuration without ExcludeHeaderFilterRegex, which requires clang-tidy 19.'
 fi
 
+database_hash=$(sha256sum "${analysis_build_directory%/}/compile_commands.json" | cut -d' ' -f1)
+configuration_hash=''
+if [ -f "$configuration_file" ]; then
+  configuration_hash=$(sha256sum "$configuration_file" | cut -d' ' -f1)
+fi
+if ! mkdir -p "$cache_directory"; then
+  printf 'clang-tidy: failed to create cache directory: %s\n' "$cache_directory" >&2
+  exit 2
+fi
+
 issue_count=0
 : >"$report_file"
+file_index=0
+running_jobs=0
 while IFS= read -r changed_file || [ -n "$changed_file" ]; do
-  relative_path=$changed_file
-  changed_file="${repository_root%/}/$relative_path"
-  line_filter_path=$(printf '%s' "$relative_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
-  line_filter=$(printf '[{"name":"%s"}]' "$line_filter_path")
+  file_index=$((file_index + 1))
+  (
+    relative_path=$changed_file
+    full_file="${repository_root%/}/$relative_path"
+    fragment_prefix="$temporary_directory/fragment.$file_index"
 
-  set -- --quiet --use-color=false "-p=$analysis_build_directory" '--extra-arg=-Wno-error' \
-    "--line-filter=$line_filter"
-  if [ "$use_compatible_configuration" -eq 1 ]; then
-    set -- "$@" "--config-file=$compatible_configuration"
-  fi
-  if [ "$prepare_msvc_compilation_database" -eq 1 ]; then
-    set -- "$@" '--extra-arg=/WX-' '--extra-arg=-Wno-unused-command-line-argument'
-    MSYS2_ARG_CONV_EXCL='--extra-arg=/WX-' "$clang_tidy_executable" "$@" "$changed_file" \
-      >"$current_report_file" 2>&1
-  else
-    "$clang_tidy_executable" "$@" "$changed_file" >"$current_report_file" 2>&1
-  fi
-  clang_tidy_exit_code=$?
+    file_hash=$(sha256sum "$full_file" | cut -d' ' -f1)
+    cache_key=$(printf '%s\n%s\n%s\n%s\n%s\n%s\n' "$database_hash" "$configuration_hash" "$clang_tidy_executable" \
+      "$clang_tidy_major_version" "$relative_path" "$file_hash" | sha256sum | cut -d' ' -f1)
+    cache_count_file="$cache_directory/$cache_key.count"
+    cache_output_file="$cache_directory/$cache_key.out"
+    if [ -f "$cache_count_file" ] && [ -f "$cache_output_file" ]; then
+      printf 'clang-tidy: %s (unchanged since the last analysis, skipped)\n' "$full_file" \
+        >"$fragment_prefix.header"
+      cp "$cache_output_file" "$fragment_prefix.out"
+      cat "$cache_count_file" >"$fragment_prefix.count"
+      printf '0\n' >"$fragment_prefix.exit"
+      exit 0
+    fi
 
-  printf 'clang-tidy: %s\n' "$changed_file" >>"$report_file"
-  cat "$current_report_file" >>"$report_file"
-  if [ "$clang_tidy_exit_code" -ne 0 ]; then
-    cat "$current_report_file" >&2
-    printf "clang-tidy: failed to analyze '%s' with exit code %s.\n" "$changed_file" "$clang_tidy_exit_code" >&2
+    printf 'clang-tidy: %s\n' "$full_file" >"$fragment_prefix.header"
+    line_filter_path=$(printf '%s' "$relative_path" | sed 's/\\/\\\\/g; s/"/\\"/g')
+    line_filter=$(printf '[{"name":"%s"}]' "$line_filter_path")
+
+    set -- --quiet --use-color=false "-p=$analysis_build_directory" '--extra-arg=-Wno-error' \
+      "--line-filter=$line_filter"
+    if [ "$use_compatible_configuration" -eq 1 ]; then
+      set -- "$@" "--config-file=$compatible_configuration"
+    fi
+    if [ "$prepare_msvc_compilation_database" -eq 1 ]; then
+      set -- "$@" '--extra-arg=/WX-' '--extra-arg=-Wno-unused-command-line-argument'
+      MSYS2_ARG_CONV_EXCL='--extra-arg=/WX-' "$clang_tidy_executable" "$@" "$full_file" \
+        >"$fragment_prefix.out" 2>&1
+    else
+      "$clang_tidy_executable" "$@" "$full_file" >"$fragment_prefix.out" 2>&1
+    fi
+    clang_tidy_exit_code=$?
+    printf '%s\n' "$clang_tidy_exit_code" >"$fragment_prefix.exit"
+    if [ "$clang_tidy_exit_code" -ne 0 ]; then
+      exit 0
+    fi
+
+    current_issue_count=$(LC_ALL=C grep -E -c \
+      '(:[0-9]+:[0-9]+:|\([0-9]+(,[0-9]+)?\):)[[:space:]]*(warning|error|fatal error):' \
+      "$fragment_prefix.out") || current_issue_count=0
+    printf '%s' "$current_issue_count" >"$fragment_prefix.count"
+    cp "$fragment_prefix.out" "$cache_output_file"
+    cp "$fragment_prefix.count" "$cache_count_file"
+  ) &
+  running_jobs=$((running_jobs + 1))
+  if [ "$running_jobs" -ge "$jobs" ]; then
+    wait
+    running_jobs=0
+  fi
+done <"$analysis_file_list"
+wait
+
+file_index=0
+while IFS= read -r changed_file || [ -n "$changed_file" ]; do
+  file_index=$((file_index + 1))
+  fragment_prefix="$temporary_directory/fragment.$file_index"
+  fragment_exit_code=$(cat "$fragment_prefix.exit")
+  if [ "$fragment_exit_code" -ne 0 ]; then
+    cat "$fragment_prefix.out" >&2
+    printf "clang-tidy: failed to analyze '%s' with exit code %s.\n" \
+      "$(sed 's/^clang-tidy: //' "$fragment_prefix.header")" "$fragment_exit_code" >&2
     exit 2
   fi
-
-  current_issue_count=$(LC_ALL=C grep -E -c \
-    '(:[0-9]+:[0-9]+:|\([0-9]+(,[0-9]+)?\):)[[:space:]]*(warning|error|fatal error):' \
-    "$current_report_file") || current_issue_count=0
+  cat "$fragment_prefix.header" >>"$report_file"
+  cat "$fragment_prefix.out" >>"$report_file"
+  current_issue_count=$(cat "$fragment_prefix.count")
   issue_count=$((issue_count + current_issue_count))
 done <"$analysis_file_list"
 

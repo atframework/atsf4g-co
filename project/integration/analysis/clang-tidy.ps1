@@ -29,6 +29,9 @@ param(
   [Parameter(Mandatory = $true)]
   [string] $ReportDirectory,
 
+  [ValidateRange(1, 256)]
+  [int] $Jobs = 8,
+
   [switch] $PrepareMsvcCompilationDatabase
 )
 
@@ -212,6 +215,7 @@ if ($PrepareMsvcCompilationDatabase) {
 
 $configurationArguments = @()
 $clangTidyConfiguration = Join-Path -Path $RepositoryRoot -ChildPath '.clang-tidy'
+$effectiveConfiguration = $clangTidyConfiguration
 if ($ClangTidyMajorVersion -lt 19 -and (Test-Path -LiteralPath $clangTidyConfiguration -PathType Leaf)) {
   $compatibleConfiguration = Join-Path -Path $analysisDirectory -ChildPath '.clang-tidy'
   $configurationLines = [System.IO.File]::ReadAllLines($clangTidyConfiguration) |
@@ -222,51 +226,126 @@ if ($ClangTidyMajorVersion -lt 19 -and (Test-Path -LiteralPath $clangTidyConfigu
     [System.Text.UTF8Encoding]::new($false)
   )
   $configurationArguments += "--config-file=$compatibleConfiguration"
+  $effectiveConfiguration = $compatibleConfiguration
   Write-Output (
     'clang-tidy: using a compatibility configuration without ExcludeHeaderFilterRegex, which requires clang-tidy 19.'
   )
+}
+
+$activeCompilationDatabase = Join-Path -Path $analysisBuildDirectory -ChildPath 'compile_commands.json'
+$databaseHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $activeCompilationDatabase).Hash
+$configurationMaterial = ''
+if (Test-Path -LiteralPath $effectiveConfiguration -PathType Leaf) {
+  $configurationMaterial = [System.IO.File]::ReadAllText($effectiveConfiguration)
+}
+$cacheDirectory = Join-Path -Path $ReportDirectory -ChildPath 'cache'
+if (-not (Test-Path -LiteralPath $cacheDirectory -PathType Container)) {
+  [void] (New-Item -ItemType Directory -Path $cacheDirectory -Force)
 }
 
 $reportLines = [System.Collections.Generic.List[string]]::new()
 $issueCount = 0
 $diagnosticPattern =
   '^(?:.+):[0-9]+:[0-9]+:\s+(?:warning|error|fatal error):|^.+\([0-9]+(?:,[0-9]+)?\):\s+(?:warning|error|fatal error)\b'
-foreach ($changedFile in $changedFiles) {
-  $lineFilter = [ordered]@{ name = $changedFile.RelativePath } |
-    ConvertTo-Json -Compress -AsArray
-  $clangTidyArguments = @(
-    '--quiet'
-    '--use-color=false'
-    "-p=$analysisBuildDirectory"
-    '--extra-arg=-Wno-error'
-    "--line-filter=$lineFilter"
-  )
-  $clangTidyArguments += $configurationArguments
-  if ($PrepareMsvcCompilationDatabase) {
-    $clangTidyArguments += @(
-      '--extra-arg=/WX-'
-      '--extra-arg=-Wno-unused-command-line-argument'
-    )
-  }
-  $clangTidyArguments += $changedFile.FullPath
+$analysisResults = @(
+  $changedFiles | ForEach-Object -Parallel {
+    $changedFile = $_
+    $fileHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $changedFile.FullPath).Hash
+    $cacheKeyMaterial = @(
+      $using:databaseHash
+      $using:configurationMaterial
+      $using:ClangTidyExecutable
+      $using:ClangTidyMajorVersion
+      $changedFile.RelativePath
+      $fileHash
+    ) -join "`n"
+    $cacheKey = [System.BitConverter]::ToString(
+      [System.Security.Cryptography.SHA256]::HashData(
+        [System.Text.UTF8Encoding]::new($false).GetBytes($cacheKeyMaterial)
+      )
+    ).Replace('-', '').ToLowerInvariant()
+    $cacheCountFile = Join-Path -Path $using:cacheDirectory -ChildPath "$cacheKey.count"
+    $cacheOutputFile = Join-Path -Path $using:cacheDirectory -ChildPath "$cacheKey.out"
+    if ((Test-Path -LiteralPath $cacheCountFile -PathType Leaf) -and
+        (Test-Path -LiteralPath $cacheOutputFile -PathType Leaf)) {
+      [PSCustomObject]@{
+        FullPath = $changedFile.FullPath
+        RelativePath = $changedFile.RelativePath
+        Skipped = $true
+        Output = [string[]] ([System.IO.File]::ReadAllLines($cacheOutputFile))
+        IssueCount = [int] ([System.IO.File]::ReadAllText($cacheCountFile).Trim())
+        ExitCode = 0
+      }
+      return
+    }
 
-  $lintOutput = @(& $clangTidyCommand.Source @clangTidyArguments 2>&1) |
-    ForEach-Object { $_.ToString() }
-  $lintExitCode = $LASTEXITCODE
-  $reportLines.Add("clang-tidy: $($changedFile.FullPath)")
-  foreach ($line in $lintOutput) {
+    $lineFilter = [ordered]@{ name = $changedFile.RelativePath } |
+      ConvertTo-Json -Compress -AsArray
+    $clangTidyArguments = @(
+      '--quiet'
+      '--use-color=false'
+      "-p=$using:analysisBuildDirectory"
+      '--extra-arg=-Wno-error'
+      "--line-filter=$lineFilter"
+    )
+    $clangTidyArguments += $using:configurationArguments
+    if ($using:PrepareMsvcCompilationDatabase) {
+      $clangTidyArguments += @(
+        '--extra-arg=/WX-'
+        '--extra-arg=-Wno-unused-command-line-argument'
+      )
+    }
+    $clangTidyArguments += $changedFile.FullPath
+
+    $lintOutput = @(& $using:ClangTidyExecutable @clangTidyArguments 2>&1 |
+      ForEach-Object { $_.ToString() })
+    $lintExitCode = $LASTEXITCODE
+    if ($lintExitCode -ne 0) {
+      [PSCustomObject]@{
+        FullPath = $changedFile.FullPath
+        RelativePath = $changedFile.RelativePath
+        Skipped = $false
+        Output = [string[]] $lintOutput
+        IssueCount = 0
+        ExitCode = $lintExitCode
+      }
+      return
+    }
+
+    $currentFileIssueCount = @($lintOutput | Select-String -Pattern $using:diagnosticPattern).Count
+    [System.IO.File]::WriteAllLines($cacheOutputFile, [string[]] $lintOutput, [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText($cacheCountFile, "$currentFileIssueCount", [System.Text.UTF8Encoding]::new($false))
+    [PSCustomObject]@{
+      FullPath = $changedFile.FullPath
+      RelativePath = $changedFile.RelativePath
+      Skipped = $false
+      Output = [string[]] $lintOutput
+      IssueCount = $currentFileIssueCount
+      ExitCode = 0
+    }
+  } -ThrottleLimit $Jobs
+)
+$analysisResults = @($analysisResults | Sort-Object -Property RelativePath)
+
+foreach ($analysisResult in $analysisResults) {
+  if ($analysisResult.Skipped) {
+    $reportLines.Add("clang-tidy: $($analysisResult.FullPath) (unchanged since the last analysis, skipped)")
+  } else {
+    $reportLines.Add("clang-tidy: $($analysisResult.FullPath)")
+  }
+  foreach ($line in $analysisResult.Output) {
     $reportLines.Add($line)
   }
 
-  if ($lintExitCode -ne 0) {
-    [Console]::Error.WriteLine(($lintOutput -join [Environment]::NewLine))
+  if ($analysisResult.ExitCode -ne 0) {
+    [Console]::Error.WriteLine(($analysisResult.Output -join [Environment]::NewLine))
     [Console]::Error.WriteLine(
-      "clang-tidy: failed to analyze '$($changedFile.FullPath)' with exit code $lintExitCode."
+      "clang-tidy: failed to analyze '$($analysisResult.FullPath)' with exit code $($analysisResult.ExitCode)."
     )
     exit 2
   }
 
-  $issueCount += @($lintOutput | Select-String -Pattern $diagnosticPattern).Count
+  $issueCount += $analysisResult.IssueCount
 }
 
 if ($issueCount -gt $MaxIssues) {
