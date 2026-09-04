@@ -14,6 +14,11 @@ Detail companion to `SKILL.md`. Load when reviewing a change or finalizing edits
 
 - Check naming, ownership/lifetime, return-code handling, logging, include wrappers, generated-code boundaries,
   header inline/API ABI rules, and helper usage in the same pass.
+- Enforce the naming rules in [`cpp-style.md`](cpp-style.md): reject abbreviated and meaningless names in function
+  names, member/global/static variables, and protobuf type/field names. The listed examples (`pos`, `desc`, `cnt`,
+  `buf`, `ptr`, `len`, `sz`, `in`, `out`, `ver`, `dir`, `a`/`b`/`c`, `tmp`, `temp`) are non-exhaustive; reject any
+  similar shortened or meaningless form. Only temporary stack variables and established conventional abbreviations
+  are exempt.
 - Check changed project-owned C++ code and C++-emitting templates for C++14 source compatibility. Reject post-C++14
   syntax and standard-library APIs such as designated initializers, structured bindings, `if constexpr`,
   `<ranges>`/`std::ranges`, `std::optional`, `std::variant`, `std::filesystem`, `std::string_view`, and

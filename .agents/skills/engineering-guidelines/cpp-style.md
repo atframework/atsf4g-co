@@ -16,6 +16,17 @@ Detail companion to `SKILL.md`. Load when writing or reviewing C++ or protobuf c
   same rule; do not hand-edit derived output to hide an incompatible template.
 - Follow Google C++ Style except that functions and C++ types use STL-like lowercase with underscores; everything else
   (variables, parameters, namespaces, file names, comments) follows Google defaults.
+- Do not abbreviate identifiers. Function names, member/global/static variable names, protobuf type names, and
+  protobuf field names must use full words. The ban is not limited to a fixed list: any similar shortened form is
+  rejected. Examples of banned abbreviations: `pos`, `desc`, `opr`, `cnt`, `par`, `arr`, `buf`, `ptr`, `ts`, `len`,
+  `col`, `sz`, `con`, `dec`, `enc`, `in`, `out`, `ver`, and `dir`; write `position`, `description`, `operation`,
+  `count`, `parameter`, `array`, `buffer`, `pointer`, `timestamp`, `length`, `column`, `size`, `connection`,
+  `decode`/`decoder`, `encode`/`encoder`, `input`, `output`, `version`, and `directory` instead. Temporary stack
+  variables are exempt. Widely established project or domain abbreviations that every reader already knows (for
+  example `id`, `cfg`, `rpc`, `db`) remain allowed.
+- Do not use meaningless names. The ban is not limited to a fixed list: `a`, `b`, `c`, `tmp`, and `temp` are
+  examples, and any other name that carries no meaning for its content or purpose is rejected. Conventional short
+  loop counters (`i`, `j`, `k`) in small loops are still acceptable.
 - New typedefs/aliases commonly use a `*_t` suffix. Preserve existing public names, generated names, protobuf names,
   enum constants, macro-style constants, and ABI/API names instead of renaming for style churn.
 - Namespaces follow local project naming; framework code uses `atframework::*`.
