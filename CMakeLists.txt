@@ -222,14 +222,15 @@ else()
     COMMENT "Cleanup old dlls...")
 endif()
 
-# Windows .bat wrapper scripts for the deploy base directory (installed only on Windows builds)
+# Windows .bat scripts for the deploy base directory (installed only on Windows builds)
 if(WIN32)
   set(PROJECT_WINDOWS_BAT_WRAPPERS
       "start_all.bat"
       "stop_all.bat"
       "kill_all.bat"
       "start_local_test_env.bat"
-      "stop_local_test_env.bat")
+      "stop_local_test_env.bat"
+      "pack_logs.bat")
   foreach(PROJECT_WINDOWS_BAT_WRAPPER IN LISTS PROJECT_WINDOWS_BAT_WRAPPERS)
     configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/${PROJECT_WINDOWS_BAT_WRAPPER}"
                    "${PROJECT_GENERATED_TOOLS_DIR}/${PROJECT_WINDOWS_BAT_WRAPPER}" @ONLY)
@@ -242,13 +243,15 @@ if(WIN32)
             "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.bat"
             "${PROJECT_GENERATED_TOOLS_DIR}/start_local_test_env.bat"
             "${PROJECT_GENERATED_TOOLS_DIR}/stop_local_test_env.bat"
+            "${PROJECT_GENERATED_TOOLS_DIR}/pack_logs.bat"
             "${PROJECT_INSTALL_BAS_DIR}"
     BYPRODUCTS
             "${PROJECT_INSTALL_BAS_DIR}/start_all.bat"
             "${PROJECT_INSTALL_BAS_DIR}/stop_all.bat"
             "${PROJECT_INSTALL_BAS_DIR}/kill_all.bat"
             "${PROJECT_INSTALL_BAS_DIR}/start_local_test_env.bat"
-            "${PROJECT_INSTALL_BAS_DIR}/stop_local_test_env.bat")
+            "${PROJECT_INSTALL_BAS_DIR}/stop_local_test_env.bat"
+            "${PROJECT_INSTALL_BAS_DIR}/pack_logs.bat")
   set_property(TARGET "tools-windows-bat-wrappers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 endif()
 
