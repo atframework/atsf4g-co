@@ -1439,6 +1439,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
   if (nullptr == callbacks_ || !callbacks_->write_fn || !callbacks_->new_session_fn) {
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
+  on_init_new_session_fn_t new_session_fn = callbacks_->new_session_fn;
 
   // Verify access data first (before setup_handshake)
   int ret = verify_access_data(body_handshake);
@@ -1457,7 +1458,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_key_exchange_r
   // Allocate new session ID
   {
     flag_guard_t flag_guard(flags_, flag_t::kInCallback);
-    callbacks_->new_session_fn(this, session_id_);
+    new_session_fn(this, session_id_);
   }
 
   // Dispatch using shared server-side handshake logic
@@ -1498,7 +1499,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_reconn_req(
     return ret;
   }
 
-  if (callbacks_->reconnect_fn) {
+  if (nullptr != callbacks_ && callbacks_->reconnect_fn) {
     flag_guard_t flag_guard(flags_, flag_t::kInCallback);
     ret = callbacks_->reconnect_fn(this, body_handshake.session_id());
   } else {
@@ -2434,6 +2435,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
     return 0;
   }
 
+  on_write_start_fn_t write_fn = callbacks_->write_fn;
   int ret = 0;
   bool is_done = false;
 
@@ -2494,7 +2496,7 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
 
   set_flag(flag_t::kWriting, true);
   last_write_ptr_ = writing_block->raw_data();
-  ret = callbacks_->write_fn(
+  ret = write_fn(
       this,
       gsl::span<unsigned char>{reinterpret_cast<unsigned char *>(writing_block->raw_data()), writing_block->raw_size()},
       &is_done);
