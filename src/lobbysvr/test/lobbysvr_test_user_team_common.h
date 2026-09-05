@@ -284,9 +284,9 @@ inline atfw::team::DTeamMember* add_storage_member(atfw::team::DTeamStorage& sto
   return member;
 }
 
-inline atfw::team::DTeamInvitation* add_storage_invitation(
-    atfw::team::DTeamStorage& storage, uint64_t invitee_id, std::chrono::system_clock::time_point expired_timepoint,
-    bool pollute_internal_fields = false) {
+inline atfw::team::DTeamInvitation* add_storage_invitation(atfw::team::DTeamStorage& storage, uint64_t invitee_id,
+                                                           std::chrono::system_clock::time_point expired_timepoint,
+                                                           bool pollute_internal_fields = false) {
   auto* invitation = storage.add_pending_invitation();
   protobuf_copy_message(*invitation->mutable_team_key(), storage.team_key());
   protobuf_copy_message(*invitation->mutable_inviter(), make_user_key(kCaptainUserId));
@@ -300,9 +300,9 @@ inline atfw::team::DTeamInvitation* add_storage_invitation(
   return invitation;
 }
 
-inline atfw::team::DTeamJoinRequest* add_storage_join_request(
-    atfw::team::DTeamStorage& storage, uint64_t requester_id, std::chrono::system_clock::time_point expired_timepoint,
-    bool pollute_internal_fields = false) {
+inline atfw::team::DTeamJoinRequest* add_storage_join_request(atfw::team::DTeamStorage& storage, uint64_t requester_id,
+                                                              std::chrono::system_clock::time_point expired_timepoint,
+                                                              bool pollute_internal_fields = false) {
   auto* join_request = storage.add_pending_join_request();
   protobuf_copy_message(*join_request->mutable_team_key(), storage.team_key());
   protobuf_copy_message(*join_request->mutable_requester(), make_user_key(requester_id));
@@ -709,8 +709,8 @@ inline bool join_team_via_notification(atfw::testing::runtime& test, const user:
 
 // Make the team channel ready with the given storage snapshot, then pump until the subscriber reports ready
 // (observable: the team applies the snapshot and is_member_ reflects the member list).
-inline bool apply_team_snapshot(atfw::testing::runtime& test, int64_t team_id,
-                                const atfw::team::DTeamStorage& storage, int64_t create_sequence = 1) {
+inline bool apply_team_snapshot(atfw::testing::runtime& test, int64_t team_id, const atfw::team::DTeamStorage& storage,
+                                int64_t create_sequence = 1) {
   return receive_channel_event(test, make_snapshot_event(make_team_channel_key(team_id), create_sequence,
                                                          storage.saved_action_sequence(), &storage));
 }
@@ -741,8 +741,7 @@ struct team_room_ss_capture {
       heartbeat_responder;
   std::function<int32_t(const atfw::team::SSTeamRoomAddInvitationReq&, atfw::team::SSTeamRoomAddInvitationRsp&)>
       add_invitation_responder;
-  std::function<int32_t(const atfw::team::SSTeamRoomApproveInvitationReq&,
-                        atfw::team::SSTeamRoomApproveInvitationRsp&)>
+  std::function<int32_t(const atfw::team::SSTeamRoomApproveInvitationReq&, atfw::team::SSTeamRoomApproveInvitationRsp&)>
       approve_invitation_responder;
   std::function<int32_t(const atfw::team::SSTeamRoomRejectInvitationReq&, atfw::team::SSTeamRoomRejectInvitationRsp&)>
       reject_invitation_responder;
@@ -751,8 +750,7 @@ struct team_room_ss_capture {
   std::function<int32_t(const atfw::team::SSTeamRoomApproveJoinRequestReq&,
                         atfw::team::SSTeamRoomApproveJoinRequestRsp&)>
       approve_join_request_responder;
-  std::function<int32_t(const atfw::team::SSTeamRoomRejectJoinRequestReq&,
-                        atfw::team::SSTeamRoomRejectJoinRequestRsp&)>
+  std::function<int32_t(const atfw::team::SSTeamRoomRejectJoinRequestReq&, atfw::team::SSTeamRoomRejectJoinRequestRsp&)>
       reject_join_request_responder;
 
   std::vector<atfw::testing::ss_rule_handle> rules;
@@ -780,9 +778,10 @@ inline size_t count_remove_member_requests(const team_room_ss_capture& capture, 
 }
 
 template <class TReq, class TRsp>
-atfw::testing::ss_rule_handle register_team_room_rpc(
-    atfw::testing::runtime& test, gsl::string_view full_name, std::vector<TReq>& capture,
-    std::function<int32_t(const TReq&, TRsp&)>& responder, std::function<void(TReq&, TRsp&)> default_fill) {
+atfw::testing::ss_rule_handle register_team_room_rpc(atfw::testing::runtime& test, gsl::string_view full_name,
+                                                     std::vector<TReq>& capture,
+                                                     std::function<int32_t(const TReq&, TRsp&)>& responder,
+                                                     std::function<void(TReq&, TRsp&)> default_fill) {
   return test.ss().mock(
       full_name, TReq::descriptor()->full_name(), TRsp::descriptor()->full_name(),
       [&capture, &responder, default_fill = std::move(default_fill)](
@@ -845,8 +844,7 @@ inline bool setup_team_room_ss_capture(atfw::testing::runtime& test, team_room_s
           capture.add_join_request_responder,
           [](atfw::team::SSTeamRoomAddJoinRequestReq&, atfw::team::SSTeamRoomAddJoinRequestRsp&) {}));
   capture.rules.push_back(
-      register_team_room_rpc<atfw::team::SSTeamRoomApproveJoinRequestReq,
-                             atfw::team::SSTeamRoomApproveJoinRequestRsp>(
+      register_team_room_rpc<atfw::team::SSTeamRoomApproveJoinRequestReq, atfw::team::SSTeamRoomApproveJoinRequestRsp>(
           test, rpc::team::packer::get_full_name_of_approve_join_request(), capture.approve_join_request_reqs,
           capture.approve_join_request_responder,
           [](atfw::team::SSTeamRoomApproveJoinRequestReq&, atfw::team::SSTeamRoomApproveJoinRequestRsp&) {}));
@@ -867,8 +865,8 @@ inline bool setup_team_room_ss_capture(atfw::testing::runtime& test, team_room_s
 
 // ---- Client dirty-push collection -------------------------------------------------------
 // Collect every downstream user_dirty_chg_sync push addressed to the session.
-inline std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_pushes(
-    atfw::testing::runtime& test, uint64_t session_id) {
+inline std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_pushes(atfw::testing::runtime& test,
+                                                                                       uint64_t session_id) {
   std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> ret;
   for (size_t i = 0; i < test.cs().call_count(); ++i) {
     const auto* record = test.cs().call_at(i);
@@ -896,19 +894,19 @@ inline std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_
 // Normalized dirty view: pushes may batch several actions and several teams, so cases assert on this flattened
 // projection (per team: ordered snapshot/increase payloads) instead of on raw push counts.
 struct team_dirty_view {
-  std::vector<PROJECT_NAMESPACE_ID::DUserTeamSnapshot> snapshots;  // arrival order
-  std::vector<PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction> actions;  // arrival order across all increases
+  std::vector<PROJECT_NAMESPACE_ID::DUserTeamSnapshot> snapshots;         // arrival order
+  std::vector<PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction> actions;  // arrival order across all increases
 };
 
 inline team_dirty_view collect_team_dirty(atfw::testing::runtime& test, uint64_t session_id, int64_t team_id) {
   team_dirty_view ret;
   for (const auto& push : collect_dirty_sync_pushes(test, session_id)) {
     for (const auto& dirty_team : push.dirty_team()) {
-      if (dirty_team.has_snapshot() && dirty_team.snapshot().snapshot().team_key().team_id() == team_id) {
-        ret.snapshots.push_back(dirty_team.snapshot());
+      if (dirty_team.has_team_snapshot() && dirty_team.team_snapshot().snapshot().team_key().team_id() == team_id) {
+        ret.snapshots.push_back(dirty_team.team_snapshot());
       }
-      if (dirty_team.has_increase() && dirty_team.increase().team_key().team_id() == team_id) {
-        for (const auto& action : dirty_team.increase().actions()) {
+      if (dirty_team.has_team_increase() && dirty_team.team_increase().team_key().team_id() == team_id) {
+        for (const auto& action : dirty_team.team_increase().actions()) {
           ret.actions.push_back(action);
         }
       }
@@ -928,9 +926,9 @@ inline size_t count_actions_of_case(const team_dirty_view& view, atfw::team::DTe
 }
 
 // All actions of one case type, in arrival order.
-inline std::vector<const PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction*> find_actions_of_case(
+inline std::vector<const PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction*> find_actions_of_case(
     const team_dirty_view& view, atfw::team::DTeamAction::ActionCase action_case) {
-  std::vector<const PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction*> ret;
+  std::vector<const PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction*> ret;
   for (const auto& one_action : view.actions) {
     if (one_action.action().action_case() == action_case) {
       ret.push_back(&one_action);
@@ -1016,8 +1014,9 @@ bool post_cs_request(atfw::testing::runtime& test, const atfw::testing::mock_cli
     return false;
   }
   atframework::CSMsg rsp_msg;
-  if (!pump_until(test, [&] { return nullptr != find_downstream_response(test, client.session_id(), rpc_full_name,
-                                                                         rsp_msg); })) {
+  if (!pump_until(test, [&] {
+        return nullptr != find_downstream_response(test, client.session_id(), rpc_full_name, rsp_msg);
+      })) {
     CASE_MSG_INFO() << "no response for " << rpc_full_name.data() << '\n';
     return false;
   }

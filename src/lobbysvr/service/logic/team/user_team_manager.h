@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <list>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "logic/team/user_team.h"
 
@@ -145,10 +146,16 @@ class user_team_manager {
   bool add_pending_invitation(rpc::context& ctx, const team_invitation_ptr_t& invitation);
   bool remove_pending_invitation(rpc::context& ctx, const atfw::team::DTeamKey& team_key);
 
+  bool insert_dirty_handle();
+  bool insert_dirty_handle_for_team(const atfw::team::DTeamKey& key);
+  bool insert_dirty_handle_for_invitation(const atfw::team::DTeamKey& key);
+  bool insert_dirty_handle_for_join_request(const atfw::team::DTeamKey& key);
+
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
 
   bool is_dirty_;
+  bool is_pulled_;
 
   int64_t processed_private_chat_channel_sequence_;
 
@@ -171,4 +178,11 @@ class user_team_manager {
   std::unordered_map<atfw::team::DTeamKey, std::list<team_invitation_ptr_t>::iterator,
                      rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
       pending_invitation_by_team_id_;
+
+  std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
+      dirty_team_;
+  std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
+      dirty_invitation_;
+  std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
+      dirty_join_request_;
 };

@@ -30,7 +30,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 #include "rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h"
 
@@ -231,6 +230,8 @@ class user_team_utility {
           if (team_ptr != nullptr && log_sequence >= team_ptr->channel_create_sequence_) {
             auto hold_lifetime = team_ptr->shared_from_this();
             hold_lifetime->is_member_ = false;
+            // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
+
             FCTXLOGDEBUG(ctx, "{} channel for team {}:{} destroyed, sequence:{}", hold_lifetime->owner_->get_owner(),
                          hold_lifetime->team_key_.zone_id(), hold_lifetime->team_key_.team_id(), log_sequence);
             hold_lifetime->owner_->remove_team(ctx, hold_lifetime->get_team_key(),
@@ -802,6 +803,59 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
   }
 }
 
+void user_team::dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output) {
+  if (pending_dirty_snapshot_) {
+    dump(ctx, *output.mutable_team_snapshot());
+    return;
+  }
+
+  auto* dump_team_actions = output.mutable_team_increase();
+  protobuf_copy_message(*dump_team_actions->mutable_team_key(), get_team_key());
+
+  std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction> actions;
+  actions.swap(pending_dirty_actions_);
+  for (auto& action : actions) {
+    auto* one_action = dump_team_actions->add_actions();
+    protobuf_move_message(*one_action, std::move(action));
+  }
+}
+
+void user_team::clear_dirty_data(rpc::context& /*ctx*/) {
+  pending_dirty_snapshot_ = false;
+  pending_dirty_actions_.clear();
+}
+
+bool user_team::insert_dirty_snapshot_handle() {
+  if (pending_dirty_snapshot_) {
+    return true;
+  }
+
+  // 未准备好数据则不需要下发
+  if (!channel_subscriber_->is_ready() && !channel_subscriber_->is_destroyed()) {
+    return false;
+  }
+
+  if (!owner_->insert_dirty_handle_for_team(get_team_key())) {
+    return false;
+  }
+
+  pending_dirty_snapshot_ = true;
+  pending_dirty_actions_.clear();
+  return true;
+}
+
+bool user_team::insert_dirty_action_handle() {
+  if (pending_dirty_snapshot_) {
+    return false;
+  }
+
+  if (!owner_->insert_dirty_handle_for_team(get_team_key())) {
+    return false;
+  }
+
+  return true;
+}
+
 bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobuf::Any& custom_data) {
   rpc::context::message_holder<atfw::team::DTeamStorage> team_snapshot{ctx};
   if (!custom_data.UnpackTo(&(*team_snapshot))) {
@@ -816,6 +870,7 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
   cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
   cached_configure_ = team_snapshot->configure();
 
+  bool before_is_member = is_member_;
   is_member_ = false;
 
   // 快照是权威状态，重建全部本地缓存(含共享数据处理器派生状态的复位)
@@ -843,7 +898,10 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
     upsert_pending_join_request(ctx, join_request);
   }
 
-  insert_dirty_snapshot_handle();
+  // 成员状态变化要下发脏数据通知
+  if (before_is_member != is_member_) {
+    insert_dirty_snapshot_handle();
+  }
   return true;
 }
 
@@ -859,6 +917,8 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
   switch (action.action_case()) {
     case atfw::team::DTeamAction::kDestroyTeam: {
       is_member_ = false;
+      // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
+
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
       reset_cached_state(ctx);
       owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
@@ -879,6 +939,9 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
         if (is_member_ == false) {
           is_member_ = true;
 
+          // 成为成员时要下发快照
+          insert_dirty_snapshot_handle();
+
           // 进入队伍后要刷新一次当前成员的数据，以防发起邀请时使用的数据后续又发生变化（比如角色更新装备）
           async_flush_all_member_shared_data(ctx);
         }
@@ -894,7 +957,13 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       const auto& member_data = action.remove_member();
       cached_members_.erase(member_data.user_key());
       if (owner_->get_owner().is(member_data.user_key())) {
-        is_member_ = false;
+        if (is_member_) {
+          is_member_ = false;
+
+          // 不再是成员时要下发快照
+          insert_dirty_snapshot_handle();
+        }
+
         cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
       }
       break;
@@ -1016,7 +1085,9 @@ void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::tea
   if (pending_dirty_snapshot_) {
     return;
   }
-  insert_dirty_action_handle();
+  if (!insert_dirty_action_handle()) {
+    return;
+  }
 
   pending_dirty_actions_.emplace_back();
   auto& one_action = pending_dirty_actions_.back();
@@ -1370,6 +1441,8 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
     }
     case atfw::dtmq::DChannelMessageDetail::kDestroy: {
       is_member_ = false;
+      // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
+
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
       reset_cached_state(ctx);
       // 频道销毁意味着 room 已不存在, 向其发送 remove_member 是无意义的(dtmq 先派发本回调,
@@ -1537,76 +1610,4 @@ void user_team::notify_destroy_to_client(rpc::context& ctx) {
 
   // 不经过 CS 任务收尾的回调路径(快照/增量/频道事件)都需要主动触发一次脏数据下发
   owner_->get_owner().send_all_syn_msg(ctx);
-}
-
-void user_team::insert_dirty_snapshot_handle() {
-  if (pending_dirty_snapshot_) {
-    return;
-  }
-  pending_dirty_snapshot_ = true;
-  pending_dirty_actions_.clear();
-
-  auto self_weak = weak_from_this();
-  owner_->get_owner().insert_dirty_handle_if_not_exists(
-      reinterpret_cast<uintptr_t>(&pending_dirty_snapshot_), "user.user_team.insert_dirty_snapshot_handle",
-      [self_weak](rpc::context& ctx, user&, user::dirty_message_container& output) {
-        auto self = self_weak.lock();
-        if (!self) {
-          return;
-        }
-        self->pending_dirty_snapshot_ = false;
-
-        if (!output.user_dirty) {
-          output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
-        }
-
-        self->dump(ctx, *output.user_dirty->add_dirty_team()->mutable_snapshot());
-      },
-      [self_weak](rpc::context&, user&) {
-        auto self = self_weak.lock();
-        if (!self) {
-          return;
-        }
-        self->pending_dirty_snapshot_ = false;
-      });
-}
-
-void user_team::insert_dirty_action_handle() {
-  if (pending_dirty_snapshot_) {
-    return;
-  }
-
-  auto self_weak = weak_from_this();
-  owner_->get_owner().insert_dirty_handle_if_not_exists(
-      reinterpret_cast<uintptr_t>(&pending_dirty_actions_), "user.user_team.insert_dirty_action_handle",
-      [self_weak](rpc::context&, user&, user::dirty_message_container& output) {
-        auto self = self_weak.lock();
-        if (!self) {
-          return;
-        }
-
-        if (self->pending_dirty_actions_.empty()) {
-          return;
-        }
-
-        if (!output.user_dirty) {
-          output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
-        }
-        auto* dump_team_actions = output.user_dirty->add_dirty_team()->mutable_increase();
-        protobuf_copy_message(*dump_team_actions->mutable_team_key(), self->get_team_key());
-
-        std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction> actions;
-        actions.swap(self->pending_dirty_actions_);
-        for (auto& action : actions) {
-          auto* one_action = dump_team_actions->add_actions();
-          protobuf_move_message(*one_action, std::move(action));
-        }
-      },
-      [self_weak](rpc::context&, user&) {
-        auto self = self_weak.lock();
-        if (!self) {
-          return;
-        }
-        self->pending_dirty_actions_.clear();
-      });
 }

@@ -2158,12 +2158,12 @@ CASE_TEST(lobbysvr_user_team, user_get_info_exports_only_running_team_with_trimm
       }));
 
   // 只导出 running 的 681
-  CASE_EXPECT_EQ(1, get_info_rsp.user_team_size());
-  if (1 != get_info_rsp.user_team_size()) {
+  CASE_EXPECT_EQ(1, get_info_rsp.user_team().team_size());
+  if (1 != get_info_rsp.user_team().team_size()) {
     test.stop();
     return;
   }
-  const auto& exported = get_info_rsp.user_team(0);
+  const auto& exported = get_info_rsp.user_team().team(0);
   CASE_EXPECT_EQ(kRunningTeamId, exported.snapshot().team_key().team_id());
   CASE_EXPECT_TRUE(exported.snapshot().configure().disable_join_request());
 

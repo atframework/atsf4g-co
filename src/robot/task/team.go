@@ -264,14 +264,14 @@ func TeamPullInfoTask(task *user_data.TaskActionUser) error {
 	if err != nil {
 		return fmt.Errorf("failed to get user get info response message: %v", err)
 	}
-	for _, snapshot := range rsp.GetUserTeam() {
+	for _, snapshot := range rsp.GetUserTeam().GetTeam() {
 		protocol.SaveTeamSnapshot(task.User, snapshot)
 		teamKey := snapshot.GetSnapshot().GetTeamKey()
 		task.Log("team pull info, team=%d:%d, members=%d, pending_invitations=%d, pending_join_requests=%d",
 			teamKey.GetZoneId(), teamKey.GetTeamId(), len(snapshot.GetSnapshot().GetMember()),
 			len(snapshot.GetSnapshot().GetPendingInvitation()), len(snapshot.GetSnapshot().GetPendingJoinRequest()))
 	}
-	if len(rsp.GetUserTeam()) == 0 {
+	if len(rsp.GetUserTeam().GetTeam()) == 0 {
 		protocol.ClearTeamView(task.User)
 		task.Log("team pull info, not in any team")
 	}

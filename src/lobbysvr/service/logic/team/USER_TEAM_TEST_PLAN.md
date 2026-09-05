@@ -87,14 +87,14 @@ room 的 admission 到期清理不发个人取消通知，lobbysvr 按 `expired_
 | teamsvr-room 权威数据 | lobbysvr 缓存要求 | `SCUserDirtyChgSync` 要求 |
 | --- | --- | --- |
 | create/compact 的 `DTeamStorage` | 清空旧成员、共享数据、配置和两类队伍级 pending 后权威重建；已过期/无效 admission 不进入缓存；成员表决定 `is_member_` 和自己的 role | 一条 snapshot；成员内部频道/router/ack 和原始 `shared_member_data` 清空；成员共享数据转到 `unpacked_member_data`；原始 `snapshot.shared_team_data` 清空并转为解包后的 `shared_team_data`；pending 私有频道/router 清空 |
-| invitation 批准的 `add_member` | 版本/路由/频道/加入及心跳时间/role/source/shared data 完整消费；重复 add 保留更早 joined_timepoint | increase 保留 user_key、时间、role、source、client_version；剥 user_channel/router/ack/原始 shared data，shared data 解包到 `OneAction.shared_member_data` |
+| invitation 批准的 `add_member` | 版本/路由/频道/加入及心跳时间/role/source/shared data 完整消费；重复 add 保留更早 joined_timepoint | increase 保留 user_key、时间、role、source、client_version；剥 user_channel/router/ack/原始 shared data，shared data 解包到 `TeamAction.shared_member_data` |
 | join-request 批准的 `add_member` | 同上；shared data 来自申请记录的 member_admission_data | 同上 |
 | `remove_member` | 删除目标成员；目标为自己时置 `is_member_=false`、role=GUEST | increase 必须保留 team_key、user_key、真实 reason |
 | `member_update` | 已存在成员仅用非空 client_version 覆盖，shared data 按 key 合并；未知成员不创建幽灵缓存 | 剥内部频道/router 和原始 shared data，保留 user_key/client_version，shared data 解包后下发 |
 | `member_set_role` | 更新目标成员 role；目标为自己时同步权限 role | 完整 action increase |
 | `election_captain` | 新队长必须已在成员缓存；默认 role=GUEST 时继承原队长 role，原队长缺失才回退 OWNER；显式 role 使用事件值；旧队长降 NORMAL | 完整 action increase；缓存和 action 视图终态一致 |
 | `team_update` | configure 整体覆盖；shared data 按 key 合并并执行 matching 本地行为 | 完整 action increase；队伍共享数据仍在 action 中以 Any 形式下发 |
-| invitation/join-request `add/approve/reject` | add upsert，approve/reject delete；add_member 连带删除该用户的两类 pending | invitation 清私有频道；join request 清私有频道/router；`add_join_request.member_admission_data` 转为 `OneAction.shared_member_data` |
+| invitation/join-request `add/approve/reject` | add upsert，approve/reject delete；add_member 连带删除该用户的两类 pending | invitation 清私有频道；join request 清私有频道/router；`add_join_request.member_admission_data` 转为 `TeamAction.shared_member_data` |
 | `destroy_team`、频道 destroy/on_destroyed | 清空全部 `user_team` 缓存并从 manager 移除 | 客户端先收到 `destroy_team` increase；订阅失败/仅有频道 destroy 时合成等价 destroy action；下发后注销 dirty handle，不允许迟到 push |
 
 快照和增量是不同客户端契约，不能用一次 `dump()` 同时冒充两者。snapshot pending 保留可见的 admission

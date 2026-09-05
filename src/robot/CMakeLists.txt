@@ -225,4 +225,4 @@ else()
     USES_TERMINAL VERBATIM
     COMMENT "Build robot (go-task missing)")
 endif()
-set_property(TARGET robot-build PROPERTY FOLDER "${PROJECT_NAME}/robot")
+set_property(TARGET robot-build PROPERTY FOLDER "${PROJECT_NAME}/tools/robot")

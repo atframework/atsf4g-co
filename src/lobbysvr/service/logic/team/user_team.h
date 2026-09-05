@@ -68,6 +68,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   // 本地派生状态: 由队伍共享数据模块的 do_update/do_delete 处理器驱动(当前为 battle.matching)
   inline bool is_matching() const noexcept { return is_matching_; }
 
+  inline bool is_member() const noexcept { return is_member_; }
+
   inline uint32_t get_team_type() const noexcept { return team_type_; }
 
   inline const atfw::team::DTeamKey& get_team_key() const noexcept { return team_key_; }
@@ -129,6 +131,12 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void async_flush_all_member_shared_data(rpc::context& ctx);
 
+  void dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output);
+  void clear_dirty_data(rpc::context& ctx);
+
+  bool insert_dirty_snapshot_handle();
+  bool insert_dirty_action_handle();
+
  private:
   // 打包队伍事件并按 team_key 一致性哈希路由发送到 teamsvr-room，返回透传的业务结果
   rpc::result_code_type send_action(rpc::context& ctx, atfw::team::DTeamAction&& action);
@@ -165,16 +173,13 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void do_member_shared_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
                              const ::google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>& data);
 
-  void insert_dirty_snapshot_handle();
-  void insert_dirty_action_handle();
-
  private:
   friend class user_team_utility;
 
   user_team_manager* ATFW_UTIL_MACRO_NONNULL owner_;
 
   bool pending_dirty_snapshot_;
-  std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::OneAction> pending_dirty_actions_;
+  std::list<PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction> pending_dirty_actions_;
   // 销毁通知只合成/下发一次(destroy action、频道销毁、个人解散通知可能先后触发)
   bool destroyed_dirty_notified_ = false;
 

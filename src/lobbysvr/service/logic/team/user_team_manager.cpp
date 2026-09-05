@@ -159,15 +159,16 @@ class user_team_manager_utility {
 };
 
 user_team_manager::user_team_manager(user& owner)
-    : owner_(&owner), is_dirty_(false), processed_private_chat_channel_sequence_(0) {
+    : owner_(&owner), is_dirty_(false), is_pulled_(false), processed_private_chat_channel_sequence_(0) {
   ATFW_EXPLICIT_UNUSED_ATTR static auto _init_get_info_handle = user::init_get_info_handle(
       PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
           PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber),
       [](rpc::context& ctx, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
         auto& team_mgr = user_inst.get_user_team_manager();
+        team_mgr.is_pulled_ = true;
         team_mgr.foreach_running_team(
             [&ctx, &rsp](uint32_t /*group_type*/, const atfw::util::nostd::nonnull<user_team::ptr_t>& team) {
-              team->dump(ctx, *rsp.add_user_team());
+              team->dump(ctx, *rsp.mutable_user_team()->add_team());
             });
       });
 }
@@ -182,6 +183,7 @@ int32_t user_team_manager::login_init(rpc::context&) {
       user_team_manager_utility::dispatch_team_member_event);
 
   is_dirty_ = false;
+  is_pulled_ = false;
   return 0;
 }
 
@@ -220,6 +222,7 @@ void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
     for (const auto& team_key : can_be_removed_keys) {
       group.second.pending_to_exit.erase(team_key);
       team_index_.erase(team_key);
+      insert_dirty_handle_for_team(team_key);
     }
 
     // 如果当前队伍长时间都检测不到在队伍中，则是数据链路出现问题，直接准备退出
@@ -614,8 +617,14 @@ void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMembe
         iter_group->second.pending_to_exit.emplace(iter_group->second.current->get_team_key(),
                                                    iter_group->second.current);
         iter_group->second.current->send_exit_team_request(ctx, atfw::team::EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM);
+
+        // 准备退出的队伍也需要标记为脏，以便触发下发移除
+        insert_dirty_handle_for_team(iter_group->second.current->get_team_key());
       }
       iter_group->second.current = exists_team;
+      // 已存在的新队伍要重新下发快照,因为之前可能已经下发过移除通知
+      exists_team->insert_dirty_snapshot_handle();
+
       exists_team->init_cached_data(join_data.captain_user_key(), join_data.user_role());
       FCTXLOGINFO(ctx, "{} add_team: team {}:{} is still in exit queue, restore it to current", *owner_,
                   team_key.zone_id(), team_key.team_id());
@@ -642,8 +651,14 @@ void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMembe
   if (group.current) {
     group.pending_to_exit.emplace(group.current->get_team_key(), group.current);
     group.current->send_exit_team_request(ctx, atfw::team::EN_TEAM_EXIT_REASON_IN_ANOTHER_TEAM);
+
+    // 准备退出的队伍也需要标记为脏，以便触发下发移除
+    insert_dirty_handle_for_team(group.current->get_team_key());
   }
+
   group.current = team_ptr;
+  // 新的team会在load_snapshot时下发脏数据快照
+
   team_index_.emplace(team_key, team_ptr);
   // 同队的邀请/加入请求已有结论, 清理自己的 pending
   remove_pending_invitation(ctx, team_key);
@@ -664,6 +679,7 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
 
   if (!iter->second) {
     team_index_.erase(iter);
+    insert_dirty_handle_for_team(team_key);
     return;
   }
   auto team_ptr = iter->second;
@@ -685,6 +701,7 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
       if (team_ptr->can_be_removed(ctx)) {
         iter_group->second.pending_to_exit.erase(team_key);
         team_index_.erase(iter);
+        insert_dirty_handle_for_team(team_key);
       } else {
         // 如果是当前队伍，仍然是成员，移入到退出列表中，以便后续重试发送移除成员的消息
         iter_group->second.pending_to_exit.emplace(iter_group->second.current->get_team_key(),
@@ -698,6 +715,7 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
         if (iter_pending->second->can_be_removed(ctx)) {
           iter_group->second.pending_to_exit.erase(iter_pending);
           team_index_.erase(iter);
+          insert_dirty_handle_for_team(team_key);
         }
       }
     }
@@ -758,6 +776,8 @@ bool user_team_manager::add_pending_join_request(rpc::context& ctx, const team_j
     }
     if (protobuf_to_system_clock((*iter->second)->expired_timepoint()) == expired_timepoint) {
       protobuf_copy_message(*(*iter->second), *join_request);
+
+      insert_dirty_handle_for_join_request(join_request->team_key());
       return true;
     }
 
@@ -768,6 +788,7 @@ bool user_team_manager::add_pending_join_request(rpc::context& ctx, const team_j
   if (pending_join_request_by_expired_time_.empty()) {
     auto iter = pending_join_request_by_expired_time_.insert(pending_join_request_by_expired_time_.end(), join_request);
     pending_join_request_by_team_id_.emplace(join_request->team_key(), iter);
+    insert_dirty_handle_for_join_request(join_request->team_key());
     return true;
   }
 
@@ -775,6 +796,7 @@ bool user_team_manager::add_pending_join_request(rpc::context& ctx, const team_j
       protobuf_to_system_clock((*pending_join_request_by_expired_time_.rbegin())->expired_timepoint())) {
     auto iter = pending_join_request_by_expired_time_.insert(pending_join_request_by_expired_time_.end(), join_request);
     pending_join_request_by_team_id_.emplace(join_request->team_key(), iter);
+    insert_dirty_handle_for_join_request(join_request->team_key());
     return true;
   }
 
@@ -783,6 +805,7 @@ bool user_team_manager::add_pending_join_request(rpc::context& ctx, const team_j
     auto iter =
         pending_join_request_by_expired_time_.insert(pending_join_request_by_expired_time_.begin(), join_request);
     pending_join_request_by_team_id_.emplace(join_request->team_key(), iter);
+    insert_dirty_handle_for_join_request(join_request->team_key());
     return true;
   }
 
@@ -792,6 +815,7 @@ bool user_team_manager::add_pending_join_request(rpc::context& ctx, const team_j
     if (expired_timepoint < protobuf_to_system_clock((*iter)->expired_timepoint())) {
       auto new_iter = pending_join_request_by_expired_time_.insert(iter, join_request);
       pending_join_request_by_team_id_.emplace(join_request->team_key(), new_iter);
+      insert_dirty_handle_for_join_request(join_request->team_key());
       break;
     }
   }
@@ -807,6 +831,8 @@ bool user_team_manager::remove_pending_join_request(rpc::context& /*ctx*/, const
 
   pending_join_request_by_expired_time_.erase(iter->second);
   pending_join_request_by_team_id_.erase(iter);
+
+  insert_dirty_handle_for_join_request(team_key);
   return true;
 }
 
@@ -858,8 +884,11 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
     if (iter == pending_invitation_by_team_id_.end()) {
       break;
     }
+
     if (protobuf_to_system_clock((*iter->second)->expired_timepoint()) == expired_timepoint) {
       protobuf_copy_message(*(*iter->second), *invitation);
+
+      insert_dirty_handle_for_invitation(invitation->team_key());
       return true;
     }
 
@@ -870,6 +899,7 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
   if (pending_invitation_by_expired_time_.empty()) {
     auto iter = pending_invitation_by_expired_time_.insert(pending_invitation_by_expired_time_.end(), invitation);
     pending_invitation_by_team_id_.emplace(invitation->team_key(), iter);
+    insert_dirty_handle_for_invitation(invitation->team_key());
     return true;
   }
 
@@ -877,6 +907,7 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
       protobuf_to_system_clock((*pending_invitation_by_expired_time_.rbegin())->expired_timepoint())) {
     auto iter = pending_invitation_by_expired_time_.insert(pending_invitation_by_expired_time_.end(), invitation);
     pending_invitation_by_team_id_.emplace(invitation->team_key(), iter);
+    insert_dirty_handle_for_invitation(invitation->team_key());
     return true;
   }
 
@@ -884,6 +915,7 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
       protobuf_to_system_clock((*pending_invitation_by_expired_time_.begin())->expired_timepoint())) {
     auto iter = pending_invitation_by_expired_time_.insert(pending_invitation_by_expired_time_.begin(), invitation);
     pending_invitation_by_team_id_.emplace(invitation->team_key(), iter);
+    insert_dirty_handle_for_invitation(invitation->team_key());
     return true;
   }
 
@@ -897,6 +929,7 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
     }
   }
 
+  insert_dirty_handle_for_invitation(invitation->team_key());
   return true;
 }
 
@@ -908,5 +941,122 @@ bool user_team_manager::remove_pending_invitation(rpc::context& /*ctx*/, const a
 
   pending_invitation_by_expired_time_.erase(iter->second);
   pending_invitation_by_team_id_.erase(iter);
+
+  insert_dirty_handle_for_invitation(team_key);
+  return true;
+}
+
+bool user_team_manager::insert_dirty_handle() {
+  // 未拉取过数据，直接返回，不用设置数据推送
+  if (!is_pulled_) {
+    return false;
+  }
+
+  owner_->insert_dirty_handle_if_not_exists(
+      reinterpret_cast<uintptr_t>(this), "user_team_manager.insert_dirty_handle",
+      [](rpc::context& ctx, user& user_inst, user::dirty_message_container& output) {
+        auto& team_mgr = user_inst.get_user_team_manager();
+
+        if (team_mgr.dirty_team_.empty() && team_mgr.dirty_invitation_.empty() &&
+            team_mgr.dirty_join_request_.empty()) {
+          return;
+        }
+
+        if (!output.user_dirty) {
+          output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
+        }
+
+        // team的脏数据dump在team里执行，如果找不到说明是移除
+        for (const auto& key : team_mgr.dirty_team_) {
+          auto team = team_mgr.get_team_by_team_key(key);
+          if (!team) {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+            continue;
+          }
+
+          // 如果离开成员状态，说明正在准备退出这个队伍，对客户端来说，当成移除处理
+          if (!team->is_member()) {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+            continue;
+          }
+
+          // 已销毁频道和正在退出的队伍，对客户端来说，当成移除处理
+          if (team->is_exiting() || team->is_destroyed()) {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+            continue;
+          }
+
+          // 如果要dump的队伍不是当前队伍，说明正在准备退出这个队伍，对客户端来说，当成移除处理
+          if (team_mgr.get_team_by_team_type(static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(team->get_team_type())) !=
+              team) {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+            continue;
+          }
+
+          team->dump_dirty_data(ctx, *output.user_dirty->mutable_dirty_team()->Add());
+        }
+
+        // 更新数据和新增都是add，找不到则是移除
+        for (const auto& key : team_mgr.dirty_invitation_) {
+          auto invitation = team_mgr.get_pending_invitation(key);
+          if (invitation) {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_add_pending_invitation(),
+                                  *invitation);
+          } else {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_remove_pending_invitation(),
+                                  key);
+          }
+        }
+
+        for (const auto& key : team_mgr.dirty_join_request_) {
+          auto join_request = team_mgr.get_pending_join_request(key);
+          if (join_request) {
+            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_add_pending_join_request(),
+                                  *join_request);
+          } else {
+            protobuf_copy_message(
+                *output.user_dirty->mutable_dirty_team()->Add()->mutable_remove_pending_join_request(), key);
+          }
+        }
+      },
+      [](rpc::context& ctx, user& user_inst) {
+        auto& team_mgr = user_inst.get_user_team_manager();
+
+        for (const auto& key : team_mgr.dirty_team_) {
+          auto team = team_mgr.get_team_by_team_key(key);
+          if (team) {
+            team->clear_dirty_data(ctx);
+          }
+        }
+
+        team_mgr.dirty_team_.clear();
+        team_mgr.dirty_invitation_.clear();
+        team_mgr.dirty_join_request_.clear();
+      });
+
+  return true;
+}
+
+bool user_team_manager::insert_dirty_handle_for_team(const atfw::team::DTeamKey& key) {
+  if (!insert_dirty_handle()) {
+    return false;
+  }
+  dirty_team_.insert(key);
+  return true;
+}
+
+bool user_team_manager::insert_dirty_handle_for_invitation(const atfw::team::DTeamKey& key) {
+  if (!insert_dirty_handle()) {
+    return false;
+  }
+  dirty_invitation_.insert(key);
+  return true;
+}
+
+bool user_team_manager::insert_dirty_handle_for_join_request(const atfw::team::DTeamKey& key) {
+  if (!insert_dirty_handle()) {
+    return false;
+  }
+  dirty_join_request_.insert(key);
   return true;
 }

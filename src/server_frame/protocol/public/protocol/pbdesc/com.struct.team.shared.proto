@@ -70,21 +70,34 @@ message DUserTeamSnapshot {
   repeated UnpackedMemberSharedData unpacked_member_data = 3;
 }
 
+message DTeamUserData {
+  repeated DUserTeamSnapshot team = 1;
+
+  repeated atframework.team.DTeamInvitation pending_invitation = 2;
+  repeated atframework.team.DTeamJoinRequest pending_join_request = 3;
+}
+
 message DUserTeamDirty {
-  message OneAction {
+  message TeamAction {
     atframework.team.DTeamAction action = 1;
 
     // actions里的队伍成员共享数据（如果有，解包后）
     repeated DTeamMemberSharedDataModule shared_member_data = 2;
   }
 
-  message Increase {
+  message TeamIncrease {
     atframework.team.DTeamKey team_key = 1;
-    repeated OneAction actions = 2;
+    repeated TeamAction actions = 2;
   }
 
   oneof dirty_type {
-    DUserTeamSnapshot snapshot = 1;
-    Increase increase = 2;
+    DUserTeamSnapshot team_snapshot = 1;
+    TeamIncrease team_increase = 2;
+    atframework.team.DTeamKey team_remove = 3;
+
+    atframework.team.DTeamInvitation add_pending_invitation = 11;
+    atframework.team.DTeamKey remove_pending_invitation = 12;
+    atframework.team.DTeamJoinRequest add_pending_join_request = 13;
+    atframework.team.DTeamKey remove_pending_join_request = 14;
   }
 }

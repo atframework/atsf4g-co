@@ -287,7 +287,7 @@ func RegisterTeamDirtySyncPushHandler(user user_data.User) {
 				return nil
 			}
 			for _, dirtyTeam := range msg.GetDirtyTeam() {
-				if snapshot := dirtyTeam.GetSnapshot(); snapshot != nil {
+				if snapshot := dirtyTeam.GetTeamSnapshot(); snapshot != nil {
 					SaveTeamSnapshot(action.User, snapshot)
 					teamKey := snapshot.GetSnapshot().GetTeamKey()
 					action.User.Log(
@@ -297,7 +297,7 @@ func RegisterTeamDirtySyncPushHandler(user user_data.User) {
 						len(snapshot.GetSnapshot().GetPendingJoinRequest()), len(snapshot.GetSharedTeamData()))
 					continue
 				}
-				if increase := dirtyTeam.GetIncrease(); increase != nil {
+				if increase := dirtyTeam.GetTeamIncrease(); increase != nil {
 					teamKey := increase.GetTeamKey()
 					actions := make([]*public_protocol_pbdesc.DTeamAction, 0, len(increase.GetActions()))
 					for _, oneAction := range increase.GetActions() {
