@@ -13,7 +13,9 @@
 #include <memory>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "algorithm/compression.h"
@@ -48,6 +50,21 @@ const constexpr uint64_t kMaxUntrustedMessageSize = 4096;
 
 const constexpr uint64_t kDefaultMaxPostMessageSize = 2 * 1024 * 1024;
 const constexpr uint64_t kDefaultCompressionThresholdSize = 1024;
+
+// Internal flag bit (not part of libatgw_protocol_api::flag_t, which only uses low bits): set while the current
+// call stack is draining the write queue inside libatgw_protocol_sdk::try_write(). write_done() checks it to
+// avoid recursively re-entering try_write() when it is invoked from that drain loop.
+const constexpr uint32_t kInternalFlagInTryWrite = 0x80000000u;
+
+struct internal_flag_guard_t {
+  uint32_t &flags_;
+  uint32_t bit_;
+  internal_flag_guard_t(uint32_t &f, uint32_t b) : flags_(f), bit_(b) { flags_ |= bit_; }
+  ~internal_flag_guard_t() { flags_ &= ~bit_; }
+  internal_flag_guard_t(const internal_flag_guard_t &) = delete;
+  internal_flag_guard_t &operator=(const internal_flag_guard_t &) = delete;
+};
+
 using protocol_crypto_algorithm_t = ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atfw::gateway::v2,
                                                                                 crypto_algorithm_t);
 using protocol_key_exchange_t = ATFRAMEWORK_GATEWAY_MACRO_ENUM_STORAGE_TYPE(::atfw::gateway::v2, key_exchange_t);
@@ -229,7 +246,6 @@ static const std::string &map_crypto_algorithm_to_name(protocol_crypto_algorithm
 
 /// Map flatbuffers compression_algorithm_t to atfw::util::compression::algorithm_t
 static ::atfw::util::compression::algorithm_t map_compression_algorithm(protocol_compression_algorithm_t alg) {
-  using namespace ::atfw::gateway::v2;
   switch (alg) {
     case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_algorithm_t, kZstd):
       return ::atfw::util::compression::algorithm_t::kZstd;
@@ -267,7 +283,6 @@ static size_t padding_buffer_size(size_t origin_size) {
 
 /// Map compression_level_t to atfw::util::compression::level_t
 static ::atfw::util::compression::level_t map_compression_level(protocol_compression_level_t level) {
-  using namespace ::atfw::gateway::v2;
   switch (level) {
     case ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(compression_level_t, kStorage):
       return ::atfw::util::compression::level_t::kStorage;
@@ -290,14 +305,12 @@ static ::atfw::util::compression::level_t map_compression_level(protocol_compres
 struct crypto_shared_context_t {
   using ptr_t = std::shared_ptr<crypto_shared_context_t>;
 
-  crypto_shared_context_t(libatgw_protocol_sdk::crypto_conf_t conf) : conf_(std::move(conf)), inited_(false) {
+  explicit crypto_shared_context_t(libatgw_protocol_sdk::crypto_conf_t conf) : conf_(std::move(conf)), inited_(false) {
     shared_dh_context_ = atfw::util::crypto::dh::shared_context::create();
   }
   ~crypto_shared_context_t() { close(); }
 
   int setup_key_exchange_algorithm() {
-    using namespace ::atfw::gateway::v2;
-
     // Initialize DH shared context based on key exchange algorithm
     if (conf_.key_exchange_algorithm != ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(key_exchange_t, kNone)) {
       if (shared_dh_context_) {
@@ -327,8 +340,6 @@ struct crypto_shared_context_t {
   }
 
   int setup_crypto_algorithm() {
-    using namespace ::atfw::gateway::v2;
-
     ordered_algorithms_.clear();
     available_algorithms_.clear();
     ordered_algorithms_.reserve(conf_.supported_algorithms.size());
@@ -357,8 +368,6 @@ struct crypto_shared_context_t {
   }
 
   int setup_compression_algorithm() {
-    using namespace ::atfw::gateway::v2;
-
     available_compression_algorithms_.clear();
     ordered_compression_algorithms_.clear();
 
@@ -426,7 +435,6 @@ struct crypto_shared_context_t {
   }
 
   bool check_algorithm(protocol_crypto_algorithm_t alg) const {
-    using namespace ::atfw::gateway::v2;
     if (alg == ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(crypto_algorithm_t, kNone)) {
       return true;
     }
@@ -1385,8 +1393,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake(
     return static_cast<int>(::atfw::gateway::error_code_t::kClosing);
   }
 
-  using namespace atfw::gateway::v2;
-
   // Reconnect requests are allowed even after the initial handshake is done,
   // because kHandshakeUpdate is set later inside setup_handshake() when the
   // server processes the reconnect/key-refresh flow.
@@ -1508,7 +1514,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::dispatch_handshake_reconn_req(
 
   if (0 != ret) {
     // Reconnect refused, send rejection response with session_id = 0
-    using namespace ::atfw::gateway::v2;
 
     flatbuffers::FlatBufferBuilder builder;
     flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
@@ -1625,7 +1630,6 @@ int libatgw_protocol_sdk::dispatch_handshake_server_common(const ::atfw::gateway
                                                         : (kDefaultMaxPostMessageSize));
 
   // Build response message
-  using namespace ::atfw::gateway::v2;
 
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
@@ -2068,8 +2072,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::start_session(gsl::span<const uns
     router_hash_data_.assign(hash_data.data(), hash_data.data() + hash_data.size());
   }
 
-  using namespace ::atfw::gateway::v2;
-
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
       builder, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kHandshake), alloc_seq());
@@ -2154,8 +2156,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::reconnect_session(uint64_t sess_i
     router_hash_data_.assign(hash_data.data(), hash_data.data() + hash_data.size());
   }
 
-  using namespace ::atfw::gateway::v2;
-
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
       builder, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kHandshake), alloc_seq());
@@ -2236,8 +2236,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_post(::atfw::gateway::v2::cl
     return res;
   }
 
-  using namespace ::atfw::gateway::v2;
-
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(builder, msg_type, alloc_seq());
 
@@ -2275,8 +2273,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_ping() {
 
   ping_.last_ping = ping_data_t::clk_t::now();
 
-  using namespace ::atfw::gateway::v2;
-
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
       builder, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kPing), alloc_seq());
@@ -2301,8 +2297,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_pong(int64_t tp) {
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
 
-  using namespace ::atfw::gateway::v2;
-
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
       builder, ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(client_message_type_t, kPong), alloc_seq());
@@ -2325,8 +2319,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_kickoff(int32_t reason, int3
   if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
-
-  using namespace ::atfw::gateway::v2;
 
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
@@ -2354,8 +2346,6 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::send_confirm() {
   if (nullptr == callbacks_ || !callbacks_->write_fn) {
     return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
   }
-
-  using namespace ::atfw::gateway::v2;
 
   flatbuffers::FlatBufferBuilder builder;
   flatbuffers::Offset<client_message_head> header_data = Createclient_message_head(
@@ -2423,85 +2413,111 @@ LIBATGW_PROTOCOL_API void libatgw_protocol_sdk::set_logger(atfw::util::log::log_
 // ========================= Write infrastructure (preserved from original) =========================
 
 LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::try_write() {
-  if (nullptr == callbacks_ || !callbacks_->write_fn) {
-    return static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
-  }
-
   if (check_flag(flag_t::kWriting)) {
     return 0;
   }
 
-  if (write_buffers_.empty()) {
+  // Callbacks invoked from the drain loop below may re-enter try_write() (through write_message()
+  // or write_done()). Never start a second drain loop on the same call stack; the outer loop keeps
+  // draining until the queue is empty or a write becomes asynchronous.
+  if (0 != (flags_ & kInternalFlagInTryWrite)) {
     return 0;
   }
+  internal_flag_guard_t in_try_write_guard(flags_, kInternalFlagInTryWrite);
 
-  on_write_start_fn_t write_fn = callbacks_->write_fn;
   int ret = 0;
-  bool is_done = false;
+  bool is_done = true;
 
-  // Merge small writes for efficiency
-  if (write_buffers_.limit().cost_number_ > 1 &&
-      write_buffers_.front()->raw_size() <= ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE) {
-    auto tls_buffer = get_tls_buffer(tls_buffer_t::kMerge);
-    size_t available_bytes = tls_buffer.size() - write_header_offset_;
-    unsigned char *buffer_start = tls_buffer.data();
-    unsigned char *free_buffer = buffer_start;
+  while (!write_buffers_.empty()) {
+    is_done = false;
 
-    assert(ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE < available_bytes);
-
-    ::atbus::detail::buffer_block *preview_bb = nullptr;
-    while (!write_buffers_.empty() && available_bytes > 0) {
-      ::atbus::detail::buffer_block *bb = write_buffers_.front();
-      if (nullptr == bb || bb->raw_size() > available_bytes) {
-        break;
-      }
-
-      if (write_buffers_.is_static_mode() && nullptr != preview_bb && preview_bb > bb) {
-        break;
-      }
-      preview_bb = bb;
-
-      size_t bb_size = bb->raw_size() - write_header_offset_;
-      memcpy(free_buffer, ::atbus::detail::fn::buffer_next(bb->raw_data(), write_header_offset_), bb_size);
-      free_buffer += bb_size;
-      available_bytes -= bb_size;
-
-      write_buffers_.pop_front(bb->raw_size(), true);
+    if (nullptr == callbacks_ || !callbacks_->write_fn) {
+      ret = static_cast<int>(::atfw::gateway::error_code_t::kMissCallbacks);
+      break;
     }
 
-    void *data = nullptr;
-    write_buffers_.push_front(data, write_header_offset_ + static_cast<size_t>(free_buffer - buffer_start));
+    on_write_start_fn_t write_fn = callbacks_->write_fn;
 
-    assert(data);
-    assert(free_buffer > buffer_start);
-    assert(static_cast<size_t>(free_buffer - buffer_start) <= (tls_buffer.size() - write_header_offset_));
+    // Merge small writes for efficiency
+    if (write_buffers_.limit().cost_number_ > 1 &&
+        write_buffers_.front()->raw_size() <= ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE) {
+      auto tls_buffer = get_tls_buffer(tls_buffer_t::kMerge);
+      size_t available_bytes = tls_buffer.size() - write_header_offset_;
+      unsigned char *buffer_start = tls_buffer.data();
+      unsigned char *free_buffer = buffer_start;
 
-    data = ::atbus::detail::fn::buffer_next(data, write_header_offset_);
-    memcpy(data, buffer_start, static_cast<size_t>(free_buffer - buffer_start));
-  }
+      assert(ATFRAMEWORK_GATEWAY_MACRO_DATA_SMALL_SIZE < available_bytes);
 
-  ::atbus::detail::buffer_block *writing_block = write_buffers_.front();
+      ::atbus::detail::buffer_block *preview_bb = nullptr;
+      while (!write_buffers_.empty() && available_bytes > 0) {
+        ::atbus::detail::buffer_block *bb = write_buffers_.front();
+        if (nullptr == bb || bb->raw_size() > available_bytes) {
+          break;
+        }
 
-  if (nullptr == writing_block) {
-    assert(writing_block);
-    write_buffers_.pop_front(0, true);
+        if (write_buffers_.is_static_mode() && nullptr != preview_bb && preview_bb > bb) {
+          break;
+        }
+        preview_bb = bb;
+
+        size_t bb_size = bb->raw_size() - write_header_offset_;
+        memcpy(free_buffer, ::atbus::detail::fn::buffer_next(bb->raw_data(), write_header_offset_), bb_size);
+        free_buffer += bb_size;
+        available_bytes -= bb_size;
+
+        write_buffers_.pop_front(bb->raw_size(), true);
+      }
+
+      void *data = nullptr;
+      write_buffers_.push_front(data, write_header_offset_ + static_cast<size_t>(free_buffer - buffer_start));
+
+      assert(data);
+      assert(free_buffer > buffer_start);
+      assert(static_cast<size_t>(free_buffer - buffer_start) <= (tls_buffer.size() - write_header_offset_));
+
+      data = ::atbus::detail::fn::buffer_next(data, write_header_offset_);
+      memcpy(data, buffer_start, static_cast<size_t>(free_buffer - buffer_start));
+    }
+
+    ::atbus::detail::buffer_block *writing_block = write_buffers_.front();
+
+    if (nullptr == writing_block) {
+      assert(writing_block);
+      write_buffers_.pop_front(0, true);
+      set_flag(flag_t::kWriting, true);
+      ret = write_done(static_cast<int>(::atfw::gateway::error_code_t::kNoData));
+      continue;
+    }
+
+    if (writing_block->raw_size() <= write_header_offset_) {
+      write_buffers_.pop_front(writing_block->raw_size(), true);
+      continue;
+    }
+
     set_flag(flag_t::kWriting, true);
-    return write_done(static_cast<int>(::atfw::gateway::error_code_t::kNoData));
+    last_write_ptr_ = writing_block->raw_data();
+    ret = write_fn(this,
+                   gsl::span<unsigned char>{reinterpret_cast<unsigned char *>(writing_block->raw_data()),
+                                            writing_block->raw_size()},
+                   &is_done);
+    if (!is_done) {
+      // The write is asynchronous now. Keep flag_t::kWriting set and the current block queued, and
+      // wait for the user layer to call write_done(status) when the writing finished. write_done()
+      // resumes draining the remaining queue. Continuing the loop here would re-invoke write_fn on
+      // the same block again and again, which duplicates the data into the user layer and never
+      // terminates when the user layer applies backpressure.
+      break;
+    }
+
+    ret = write_done(ret);
   }
 
-  if (writing_block->raw_size() <= write_header_offset_) {
-    write_buffers_.pop_front(writing_block->raw_size(), true);
-    return try_write();
-  }
+  if (is_done && check_flag(flag_t::kClosing) && !check_flag(flag_t::kClosed) && !check_flag(flag_t::kWriting)) {
+    set_flag(flag_t::kClosed, true);
 
-  set_flag(flag_t::kWriting, true);
-  last_write_ptr_ = writing_block->raw_data();
-  ret = write_fn(
-      this,
-      gsl::span<unsigned char>{reinterpret_cast<unsigned char *>(writing_block->raw_data()), writing_block->raw_size()},
-      &is_done);
-  if (is_done) {
-    return write_done(ret);
+    if (nullptr != callbacks_ && callbacks_->close_fn) {
+      return callbacks_->close_fn(this, close_reason_, close_sub_reason_, close_message_);
+    }
   }
 
   return ret;
@@ -2559,37 +2575,41 @@ LIBATGW_PROTOCOL_API int libatgw_protocol_sdk::write_done(int status) {
   size_t nread = 0;
   size_t nwrite = 0;
 
-  while (true) {
-    write_buffers_.front(data, nread, nwrite);
-    if (nullptr == data) {
-      break;
+  // Pop only the blocks handed out by try_write(). When last_write_ptr_ is nullptr, the writing
+  // flag was set by the user layer itself (see the write() contract in libatgw_protocol_api.h), so
+  // no block owned by try_write() is being completed and the queued data must be kept.
+  if (nullptr != last_write_ptr_) {
+    while (true) {
+      write_buffers_.front(data, nread, nwrite);
+      if (nullptr == data) {
+        break;
+      }
+
+      assert(0 == nread);
+
+      if (0 == nwrite) {
+        write_buffers_.pop_front(0, true);
+        break;
+      }
+
+      write_buffers_.pop_front(nwrite, true);
+
+      if (last_write_ptr_ == data) {
+        break;
+      }
     }
-
-    assert(0 == nread);
-
-    if (0 == nwrite) {
-      write_buffers_.pop_front(0, true);
-      break;
-    }
-
-    write_buffers_.pop_front(nwrite, true);
-
-    if (last_write_ptr_ == data) {
-      break;
-    }
-  };
-  last_write_ptr_ = nullptr;
+    last_write_ptr_ = nullptr;
+  }
 
   set_flag(flag_t::kWriting, false);
 
-  status = try_write();
-
-  if (check_flag(flag_t::kClosing) && !check_flag(flag_t::kClosed) && !check_flag(flag_t::kWriting)) {
-    set_flag(flag_t::kClosed, true);
-
-    if (nullptr != callbacks_ && callbacks_->close_fn) {
-      return callbacks_->close_fn(this, close_reason_, close_sub_reason_, close_message_);
-    }
+  // This write completed outside the drain loop (asynchronous write reported by the user layer).
+  // Resume draining data queued while the write was in flight; when closing, also let try_write()
+  // run its completion path (set flag_t::kClosed and invoke close_fn) so the connection is not
+  // stuck waiting. When invoked from try_write()'s own drain loop, that loop keeps draining and
+  // we must not recurse into it here.
+  if (0 == (flags_ & kInternalFlagInTryWrite) && (!write_buffers_.empty() || check_flag(flag_t::kClosing))) {
+    try_write();
   }
 
   return status;

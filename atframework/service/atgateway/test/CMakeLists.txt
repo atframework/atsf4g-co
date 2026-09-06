@@ -6,9 +6,6 @@ include("${PROJECT_TEST_BAS_DIR}/test.build_bin.cmake")
 file(
   GLOB_RECURSE
   PROJECT_TEST_SRC_LIST
-  ${PROJECT_TEST_SRC_DIR}/app/*.cpp
-  ${PROJECT_TEST_SRC_DIR}/frame/*.h
-  ${PROJECT_TEST_SRC_DIR}/frame/*.cpp
   ${CMAKE_CURRENT_LIST_DIR}/*.hpp
   ${CMAKE_CURRENT_LIST_DIR}/*.h
   ${CMAKE_CURRENT_LIST_DIR}/*.c
@@ -21,7 +18,7 @@ source_group_by_dir(PROJECT_TEST_SRC_LIST)
 
 set(CMAKE_BUILD_RPATH "${CMAKE_INSTALL_RPATH}")
 
-atframe_add_test_executable(atgateway-unit_test ${PROJECT_TEST_SRC_LIST})
+atframe_add_test_executable(atgateway-unit_test ${PROJECT_TEST_SRC_LIST} LINK_TEST_MAIN)
 
 target_include_directories(atgateway-unit_test PRIVATE "${CMAKE_CURRENT_LIST_DIR}/..")
 

@@ -47,6 +47,7 @@ struct sim_peer_t {
   std::vector<std::vector<unsigned char>> received_messages;
   int error_count;
   bool closed;
+  int close_count;
   int close_reason;
   uint64_t new_session_id_counter;
   bool pause_writing = false;
@@ -60,6 +61,7 @@ struct sim_peer_t {
         handshake_update_status(-1),
         error_count(0),
         closed(false),
+        close_count(0),
         close_reason(0),
         new_session_id_counter(0x1000),
         pause_writing(false),
@@ -191,6 +193,7 @@ static int sim_close_fn(libatgw_protocol_api *proto, int32_t reason, int32_t, at
   auto *self = reinterpret_cast<sim_peer_t *>(proto->get_private_data());
   if (nullptr != self) {
     self->closed = true;
+    ++self->close_count;
     self->close_reason = reason;
   }
   return 0;
@@ -1630,6 +1633,100 @@ CASE_TEST(atgateway_protocol_sdk, server_client_handshake_update_midstream) {
   }
 
   CASE_MSG_INFO() << "handshake_update mid-stream: 3 phases verified, session_id=" << session_id << '\n';
+}
+
+// Regression test: when the transport cannot complete a write synchronously (write_fn leaves
+// *is_done == false), try_write() must stop calling write_fn and wait for write_done(). It must
+// not re-deliver the same block in a loop (unbounded memory growth), must not drop messages queued
+// while a write is in flight, and close() must still finish (close_fn) after the pending write
+// completes asynchronously.
+CASE_TEST(atgateway_protocol_sdk, server_client_async_write_backpressure) {
+  ensure_openssl_init();
+
+  crypto_conf_t server_conf_data;
+  server_conf_data.key_exchange_algorithm =
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::key_exchange_t, kX25519);
+  server_conf_data.supported_algorithms.push_back(
+      ATFRAMEWORK_GATEWAY_MACRO_ENUM_VALUE(::atframework::gateway::v2::crypto_algorithm_t, kAes256Gcm));
+  server_conf_data.client_mode = false;
+  server_conf_data.key_refresh_interval = std::chrono::seconds(300);
+
+  crypto_conf_t client_conf_data = server_conf_data;
+  client_conf_data.client_mode = true;
+
+  auto server_conf = libatgw_protocol_sdk::create_shared_context(server_conf_data);
+  auto client_conf = libatgw_protocol_sdk::create_shared_context(client_conf_data);
+  CASE_EXPECT_TRUE(!!server_conf && !!client_conf);
+  if (!server_conf || !client_conf) {
+    return;
+  }
+
+  sim_peer_t server, client;
+  libatgw_protocol_api::proto_callbacks_t server_cbs = {}, client_cbs = {};
+  setup_sim_pair(server, client, server_conf, client_conf, server_cbs, client_cbs);
+
+  int ret = client.sdk->start_session();
+  CASE_EXPECT_EQ(0, ret);
+  CASE_EXPECT_EQ(0, client.handshake_status);
+
+  // The handshake already produced server-side writes; measure from this baseline.
+  const size_t captured_baseline = server.captured_write_payloads.size();
+
+  // Pause the server's transport: writes become asynchronous and stay in flight.
+  server.pause_writing = true;
+
+  std::string msg1 = "backpressure message-1";
+  gsl::span<const unsigned char> msg1_span{reinterpret_cast<const unsigned char *>(msg1.data()), msg1.size()};
+  ret = server.sdk->send_post(msg1_span);
+  CASE_EXPECT_EQ(0, ret);
+
+  // The second message must be queued behind the in-flight write.
+  std::string msg2 = "backpressure message-2";
+  gsl::span<const unsigned char> msg2_span{reinterpret_cast<const unsigned char *>(msg2.data()), msg2.size()};
+  ret = server.sdk->send_post(msg2_span);
+  CASE_EXPECT_EQ(0, ret);
+
+  // While backpressured: nothing delivered, and the in-flight block must be handed to the
+  // transport exactly once (no duplicate write_fn calls, no unbounded growth).
+  CASE_EXPECT_TRUE(client.received_messages.empty());
+  CASE_EXPECT_EQ(captured_baseline + 1, server.captured_write_payloads.size());
+  CASE_EXPECT_EQ(static_cast<size_t>(1), server.pending_write_messages.size());
+
+  // Resume the transport and complete the in-flight write; the queued message must be drained
+  // by write_done() without any further send call.
+  server.pause_writing = false;
+  sim_process_writing(server.sdk.get(), nullptr);
+
+  CASE_EXPECT_EQ(static_cast<size_t>(2), client.received_messages.size());
+  if (client.received_messages.size() >= 2) {
+    std::string received1(client.received_messages[0].begin(), client.received_messages[0].end());
+    std::string received2(client.received_messages[1].begin(), client.received_messages[1].end());
+    CASE_EXPECT_EQ(msg1, received1);
+    CASE_EXPECT_EQ(msg2, received2);
+  }
+  // Each message was written to the transport exactly once.
+  CASE_EXPECT_EQ(captured_baseline + 2, server.captured_write_payloads.size());
+  CASE_EXPECT_TRUE(server.pending_write_messages.empty());
+
+  // close() while a write is in flight must not fire close_fn immediately ...
+  client.pause_writing = true;
+  client.sdk->close(static_cast<int32_t>(::atframework::gateway::close_reason_t::kEof), 0, "async close");
+  CASE_EXPECT_FALSE(client.closed);
+  CASE_EXPECT_FALSE(server.closed);
+
+  // ... and must complete after the pending kickoff write is done asynchronously.
+  client.pause_writing = false;
+  sim_process_writing(client.sdk.get(), nullptr);
+
+  CASE_EXPECT_TRUE(server.closed);
+  CASE_EXPECT_TRUE(client.closed);
+  // close_fn has two fire sites (close() and the try_write() completion path); they must stay
+  // mutually exclusive via flag_t::kClosed, so each side must be notified exactly once.
+  CASE_EXPECT_EQ(1, server.close_count);
+  CASE_EXPECT_EQ(1, client.close_count);
+  CASE_EXPECT_EQ(static_cast<int32_t>(::atframework::gateway::close_reason_t::kEof), server.close_reason);
+
+  CASE_MSG_INFO() << "async write backpressure: no duplication, queued message drained, async close completed" << '\n';
 }
 
 // ========== Access token mismatch test ==========

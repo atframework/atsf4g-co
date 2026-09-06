@@ -28,6 +28,15 @@ Most test executables support:
 - Filter (wildcards): `-f "pattern*"` / `--filter "pattern*"`
 - Help/version: `-h`, `-v`
 
+## Resource limits
+
+The private framework enforces per-process resource limits by default (full contract in the atframe_utils
+`testing` skill): memory capped at min(90% of available physical memory at startup, 8GiB) — job object on
+Windows, RSS watchdog elsewhere, ignored under sanitizers; CPU capped to leave one core free where the OS
+supports it; 600s per case and 1800s per program. A violation kills the test process with exit code 137 and
+a `[ RESOURCE ] ... killing test process` stderr line. Tune per scope with `set_test_resource_limit` /
+`set_test_suite_resource_limit` / `set_test_case_resource_limit` from `frame/test_macros.h`.
+
 ## Windows: DLL lookup via PATH
 
 On Windows, unit tests/samples can fail to start if dependent DLLs are not found. Tests registered with CTest already
