@@ -224,13 +224,21 @@ endfunction()
 # ---------------------------------------------------------------------------------------------------------------------
 # Discover clang-tidy. An explicit PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE wins. Otherwise pick the newest usable
 # version on PATH first, then the official package default installation directories (which may not be on PATH).
+# A cached value that matches PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE_AUTODETECTED was written by automatic
+# discovery on a previous configure, not by the user; it is probed again as an ordinary candidate so an upgraded or
+# removed toolchain does not short-circuit discovery and is not misreported as an explicit override.
 # ---------------------------------------------------------------------------------------------------------------------
 set(project_code_analysis_clang_tidy_candidates)
 set(project_code_analysis_clang_tidy_explicit_override FALSE)
-if(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE)
+if(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE
+   AND NOT PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE STREQUAL
+           "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE_AUTODETECTED}")
   set(project_code_analysis_clang_tidy_explicit_override TRUE)
   list(APPEND project_code_analysis_clang_tidy_candidates "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE}")
 else()
+  if(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE)
+    list(APPEND project_code_analysis_clang_tidy_candidates "${PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE}")
+  endif()
   set(project_code_analysis_clang_tidy_path_entries "$ENV{PATH}")
   if(NOT CMAKE_HOST_WIN32)
     string(REPLACE ":" ";" project_code_analysis_clang_tidy_path_entries
@@ -332,6 +340,11 @@ if(NOT project_code_analysis_clang_tidy_explicit_override)
   set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE
       "${project_code_analysis_clang_tidy_executable}"
       CACHE FILEPATH "Path to the clang-tidy executable used for incremental code analysis.")
+  set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE_AUTODETECTED
+      "${project_code_analysis_clang_tidy_executable}"
+      CACHE INTERNAL "Automatically discovered clang-tidy executable, used to detect explicit user overrides.")
+else()
+  unset(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE_AUTODETECTED CACHE)
 endif()
 mark_as_advanced(PROJECT_CODE_ANALYSIS_CLANG_TIDY_EXECUTABLE)
 set(PROJECT_CODE_ANALYSIS_CLANG_TIDY_MAJOR_VERSION "${project_code_analysis_clang_tidy_major}")

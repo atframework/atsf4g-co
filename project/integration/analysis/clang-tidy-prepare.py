@@ -38,11 +38,11 @@ def _split_command_line(command):
 
 
 def _msvc_option(argument):
-    lower_argument = argument.lower()
-    for option in ("/yu", "/yc", "/fp", "/fi"):
-        if lower_argument == option:
+    # MSVC options are case sensitive: /Fp is the PCH file path while /fp: is the floating-point model.
+    for option in ("/Yu", "/Yc", "/Fp", "/Fi"):
+        if argument == option:
             return option, None
-        if lower_argument.startswith(option):
+        if argument.startswith(option):
             return option, argument[len(option) :]
     return None, None
 
@@ -58,7 +58,7 @@ def _has_cmake_msvc_pch(arguments):
     index = 1
     while index < len(arguments):
         option, value = _msvc_option(arguments[index])
-        if option in ("/yu", "/yc", "/fi"):
+        if option in ("/Yu", "/Yc", "/Fi"):
             if value is None and index + 1 < len(arguments):
                 value = arguments[index + 1]
             if _is_cmake_pch_header(value):
@@ -79,8 +79,8 @@ def _remove_cmake_msvc_pch(arguments):
         option, value = _msvc_option(argument)
         consumes_value = value is None and option is not None and index + 1 < len(arguments)
         option_value = arguments[index + 1] if consumes_value else value
-        remove_argument = option == "/fp" or (
-            option in ("/yu", "/yc", "/fi") and _is_cmake_pch_header(option_value)
+        remove_argument = option == "/Fp" or (
+            option in ("/Yu", "/Yc", "/Fi") and _is_cmake_pch_header(option_value)
         )
         if remove_argument:
             removed_count += 1 + int(consumes_value)
