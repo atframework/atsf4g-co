@@ -73,6 +73,9 @@ class user_team_manager {
 
   void clear_dirty();
 
+  // DTMQ 回调仅在组队数据发生变化时触发统一下发；CS 路径由任务收尾下发。
+  void send_dirty_data(rpc::context& ctx);
+
   inline user& get_owner() { return *owner_; }
   inline const user& get_owner() const { return *owner_; }
 
@@ -179,7 +182,9 @@ class user_team_manager {
                      rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
       pending_invitation_by_team_id_;
 
-  std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
+  // 移除索引后仍持有对象直到 dirty 清理，确保 DTMQ 批次结束回调能够发送 remove。
+  std::unordered_map<atfw::team::DTeamKey, user_team::ptr_t, rpc::team::team_api::team_key_hash_t,
+                     rpc::team::team_api::team_key_equal_t>
       dirty_team_;
   std::unordered_set<atfw::team::DTeamKey, rpc::team::team_api::team_key_hash_t, rpc::team::team_api::team_key_equal_t>
       dirty_invitation_;

@@ -50,9 +50,9 @@ bool inject_self_invited_event(atfw::testing::runtime& test, team_test::channel_
 }
 
 // 注入一条本人的 apply_join_request 个人通知(room 归一化后的回执)
-bool inject_self_apply_join_request_event(atfw::testing::runtime& test,
-                                          team_test::channel_event_chain& private_chain, uint64_t user_id,
-                                          int64_t team_id, std::chrono::system_clock::time_point expired_timepoint) {
+bool inject_self_apply_join_request_event(atfw::testing::runtime& test, team_test::channel_event_chain& private_chain,
+                                          uint64_t user_id, int64_t team_id,
+                                          std::chrono::system_clock::time_point expired_timepoint) {
   atfw::team::DTeamMemberAction action;
   auto* join_request = action.mutable_apply_join_request();
   protobuf_copy_message(*join_request->mutable_team_key(), team_test::make_team_key(team_id));
@@ -225,15 +225,14 @@ CASE_TEST(lobbysvr_user_team, joined_team_notification_registers_team) {
   }
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
 
   // 非本人 joined_team 通知必须忽略
   {
     auto join_data = team_test::make_join_data(kOtherUserId, kTeamId);
     CASE_EXPECT_TRUE(inject_joined_team_event(test, private_chain, join_data));
     team_test::pump_rounds(test, 3);
-    CASE_EXPECT_TRUE(
-        !user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
+    CASE_EXPECT_TRUE(!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
   }
 
   // 本人 joined_team: 使用与标准派生不同的 team_channel, 证明订阅严格使用通知里的频道
@@ -287,9 +286,8 @@ CASE_TEST(lobbysvr_user_team, joined_team_notification_registers_team) {
     CASE_EXPECT_TRUE(
         team_test::receive_channel_event(test, team_test::make_snapshot_event(custom_channel, 1, 0, &team_storage)));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role(); }));
   {
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     rpc::context ctx{rpc::context::create_without_task()};
@@ -344,29 +342,25 @@ CASE_TEST(lobbysvr_user_team, switch_team_moves_previous_to_pending_exit) {
   }
   auto first_team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kFirstTeamId));
   CASE_EXPECT_TRUE(!!first_team);
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == first_team->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == first_team->get_cached_permission_role(); }));
 
   // 切换到 B
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kSecondTeamId));
   {
-    auto current =
-        user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+    auto current = user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
     CASE_EXPECT_TRUE(!!current);
     if (current) {
       CASE_EXPECT_EQ(kSecondTeamId, current->get_team_key().team_id());
     }
   }
   // A 仍在索引中且处于退出流程
-  CASE_EXPECT_TRUE(
-      !!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kFirstTeamId)));
+  CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kFirstTeamId)));
   CASE_EXPECT_TRUE(first_team->is_exiting());
 
   // 切队必须发出恰好一条 reason=IN_ANOTHER_TEAM 的 A 退出请求, payload 完整
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kFirstTeamId, kUserId) >= 1;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kFirstTeamId, kUserId) >= 1; }));
   CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_remove_member_requests(ss_capture, kFirstTeamId, kUserId)));
   for (const auto& req : ss_capture.send_message_reqs) {
     if (req.action().has_remove_member() && req.action().remove_member().team_key().team_id() == kFirstTeamId) {
@@ -435,7 +429,7 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_swaps_back) {
   }
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
 
   // A 先成为成员(快照确认): 否则 minute refresh 的防泄漏分支会对"非成员 current 队伍"补发退出请求
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kFirstTeamId));
@@ -448,9 +442,8 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_swaps_back) {
     CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kFirstTeamId, team_storage));
   }
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kSecondTeamId));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kFirstTeamId, kUserId) >= 1;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kFirstTeamId, kUserId) >= 1; }));
   auto first_team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kFirstTeamId));
   CASE_EXPECT_TRUE(!!first_team);
   if (!first_team) {
@@ -467,8 +460,7 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_swaps_back) {
     CASE_EXPECT_TRUE(inject_joined_team_event(test, private_chain, join_data));
   }
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    auto current =
-        user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+    auto current = user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
     return current && current->get_team_key().team_id() == kFirstTeamId;
   }));
   CASE_EXPECT_TRUE(!first_team->is_exiting());
@@ -478,9 +470,8 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_swaps_back) {
   // B 转入退出队列并发出 IN_ANOTHER_TEAM 退出请求
   auto second_team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kSecondTeamId));
   CASE_EXPECT_TRUE(!!second_team);
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kSecondTeamId, kUserId) >= 1;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kSecondTeamId, kUserId) >= 1; }));
   if (second_team) {
     CASE_EXPECT_TRUE(second_team->is_exiting());
   }
@@ -498,9 +489,8 @@ CASE_TEST(lobbysvr_user_team, rejoin_pending_exit_team_swaps_back) {
     team_test::now_offset_guard::advance(team_test::get_exit_retry_interval() + std::chrono::seconds{1});
     CASE_EXPECT_TRUE(run_minute_refresh(test, user_inst));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kSecondTeamId, kUserId) >= 2;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kSecondTeamId, kUserId) >= 2; }));
   CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_remove_member_requests(ss_capture, kFirstTeamId, kUserId)));
 
   CASE_EXPECT_EQ(0, test.stop());
@@ -536,11 +526,11 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
   {
     PROJECT_NAMESPACE_ID::DClientDeviceInfo client_info;
     client_info.set_client_version("create-01-client-v1");
-    CASE_EXPECT_TRUE(team_test::run_sync_task(
-        test, "team.set_client_info", [&user_inst, &client_info](rpc::context&) -> rpc::result_code_type {
-          user_inst->set_client_info(client_info);
-          RPC_RETURN_CODE(0);
-        }));
+    CASE_EXPECT_TRUE(team_test::run_sync_task(test, "team.set_client_info",
+                                              [&user_inst, &client_info](rpc::context&) -> rpc::result_code_type {
+                                                user_inst->set_client_info(client_info);
+                                                RPC_RETURN_CODE(0);
+                                              }));
   }
 
   team_test::channel_event_chain private_chain;
@@ -612,8 +602,7 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
     return;
   }
   {
-    auto current =
-        user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+    auto current = user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
     CASE_EXPECT_TRUE(!!current);
     if (current) {
       CASE_EXPECT_EQ(kCreatedTeamId, current->get_team_key().team_id());
@@ -673,8 +662,7 @@ CASE_TEST(lobbysvr_user_team, create_team_failure_passthrough_and_wal_replay) {
   CASE_EXPECT_EQ(0, output_team_key.team_id());
   CASE_EXPECT_TRUE(
       !user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL));
-  CASE_EXPECT_TRUE(
-      !user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kCreatedTeamId)));
+  CASE_EXPECT_TRUE(!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kCreatedTeamId)));
   ss_capture.create_responder = nullptr;
 
   // 2. 成功: 注册后频道 ready 前无缓存、无快照脏数据、refresh 不发心跳
@@ -809,8 +797,7 @@ CASE_TEST(lobbysvr_user_team, create_team_rejects_invalid_team_type) {
   // 配置表中不存在
   // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE,
-                 run_create_team(test, user_inst, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(999),
-                                 output_team_key));
+                 run_create_team(test, user_inst, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(999), output_team_key));
   // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
 
   // 零上行、零注册、输出 key 未修改
@@ -852,7 +839,7 @@ CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay)
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
   auto team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   CASE_EXPECT_TRUE(!!team);
@@ -881,7 +868,7 @@ CASE_TEST(lobbysvr_user_team, snapshot_saved_sequence_guards_incremental_replay)
   replay_msgs.push_back(add_member_message(3, kAppliedMemberId));
   uint64_t chained_hash = team_test::chain_message_hashes(replay_msgs, 0);
   const auto applied_msg = replay_msgs.back();
-  const auto skipped_msg = replay_msgs[1];
+  const auto skipped_msg = replay_msgs.at(1);
 
   CASE_EXPECT_TRUE(team_test::receive_channel_event(
       test, make_snapshot_event_with_messages(team_test::make_team_channel_key(kTeamId), 1, 3, team_storage, 1,
@@ -1017,7 +1004,7 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
   auto team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   CASE_EXPECT_TRUE(!!team);
@@ -1037,9 +1024,8 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
                                   team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty(); }));
 
   team_test::channel_event_chain team_chain;
   team_chain.channel_key = team_test::make_team_channel_key(kTeamId);
@@ -1050,8 +1036,7 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
     auto* member_update = action.mutable_member_update();
     protobuf_copy_message(*member_update->mutable_user_key(), team_test::make_user_key(kUserId));
     member_update->set_client_version("seq02-v1");
-    *member_update->add_shared_member_data() =
-        team_test::pack_member_module(team_test::make_member_ready_module(true));
+    *member_update->add_shared_member_data() = team_test::pack_member_module(team_test::make_member_ready_module(true));
     CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, action));
   }
   {
@@ -1075,19 +1060,16 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
         compacted_storage, kUserId,
         team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
             .set_client_version("seq02-v1")
-            .set_shared_member_data({team_test::pack_member_module(
-                team_test::make_member_ready_module(true))}));
-    *compacted_storage.add_shared_team_data() =
-        team_test::pack_team_module(team_test::make_team_matching_module(true));
+            .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(true))}));
+    *compacted_storage.add_shared_team_data() = team_test::pack_team_module(team_test::make_team_matching_module(true));
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
         test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), 1, 2, &compacted_storage, 2,
                                              team_chain.hash_code)));
   }
 
   // 快照覆盖旧缓存: 旧成员被清理, 版本/共享数据与压缩快照逐项一致
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.size() >= 2;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.size() >= 2; }));
   {
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     rpc::context ctx{rpc::context::create_without_task()};
@@ -1116,10 +1098,8 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_EQ(2, static_cast<int>(view.snapshots.size()));
-    CASE_EXPECT_EQ(1, static_cast<int>(
-                          team_test::count_actions_of_case(view, atfw::team::DTeamAction::kMemberUpdate)));
-    CASE_EXPECT_EQ(1,
-                   static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kTeamUpdate)));
+    CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kMemberUpdate)));
+    CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kTeamUpdate)));
   }
 
   // 压缩点之后的实时事件正常下发 increase
@@ -1139,7 +1119,7 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
     auto updates = team_test::find_actions_of_case(view, atfw::team::DTeamAction::kMemberUpdate);
     CASE_EXPECT_EQ(2, static_cast<int>(updates.size()));
     if (updates.size() >= 2) {
-      CASE_EXPECT_EQ(std::string("seq02-v2"), updates[1]->action().member_update().client_version());
+      CASE_EXPECT_EQ(std::string("seq02-v2"), updates.at(1)->action().member_update().client_version());
     }
     CASE_EXPECT_EQ(2, static_cast<int>(view.snapshots.size()));
   }
@@ -1148,8 +1128,9 @@ CASE_TEST(lobbysvr_user_team, compacted_snapshot_overrides_cache_and_swallows_re
 }
 
 // SEQ-03: 旧代际销毁后重新创建(高 create sequence 新代际快照): 乱序到达的旧代际 destroy 日志(重投)与
-// metadata-only destroy 事件都不删除新代际; 真正的频道销毁只有 WAL destroy 日志(或带快照的 destroy 元数据)
-// 才生效, 且新代际 create sequence 之后的 destroy 正常收编。
+// 旧代际 metadata-only destroy 事件(destroy_sequence 低于新代际 create_sequence)都不删除新代际;
+// 新代际 create sequence 之后的 destroy 元数据(权威销毁声明)正常收编并下发新代际的 team_remove,
+// 此后迟到的 WAL destroy 日志幂等(不产生第三次通知)。
 CASE_TEST(lobbysvr_user_team, stale_destroy_does_not_remove_new_generation) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -1176,7 +1157,7 @@ CASE_TEST(lobbysvr_user_team, stale_destroy_does_not_remove_new_generation) {
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   const auto team_channel_key = team_test::make_team_channel_key(kTeamId);
 
   // 1. 旧代际: create_sequence=1 的快照 + WAL destroy 日志销毁
@@ -1192,9 +1173,8 @@ CASE_TEST(lobbysvr_user_team, stale_destroy_does_not_remove_new_generation) {
     CASE_EXPECT_TRUE(
         team_test::receive_channel_event(test, team_test::make_snapshot_event(team_channel_key, 1, 0, &gen1_storage)));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty(); }));
 
   team_test::channel_event_chain gen1_chain;
   gen1_chain.channel_key = team_channel_key;
@@ -1204,8 +1184,9 @@ CASE_TEST(lobbysvr_user_team, stale_destroy_does_not_remove_new_generation) {
   }));
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-    CASE_EXPECT_EQ(1,
-                   static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam)));
+    CASE_EXPECT_EQ(1, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_TRUE(view.actions.empty());
+    CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));  // gen1 入队时下发过快照
   }
 
   // 2. 重新创建: 再次加入 + 高 create sequence(10) 的新代际快照
@@ -1246,46 +1227,57 @@ CASE_TEST(lobbysvr_user_team, stale_destroy_does_not_remove_new_generation) {
   {
     std::vector<atframework::dtmq::DChannelMessage> stale_msgs{team_test::make_destroy_log_message(1)};
     team_test::chain_message_hashes(stale_msgs, 0);
-    CASE_EXPECT_TRUE(team_test::receive_channel_event(
-        test, team_test::make_incremental_event(team_channel_key, 10, stale_msgs)));
+    CASE_EXPECT_TRUE(
+        team_test::receive_channel_event(test, team_test::make_incremental_event(team_channel_key, 10, stale_msgs)));
   }
   team_test::pump_rounds(test, 3);
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
   CASE_EXPECT_TRUE(!team->is_destroyed());
 
-  // 3b. metadata-only 的 destroy 事件(destroy_sequence 低于新代际 create_sequence): 不销毁
-  CASE_EXPECT_TRUE(team_test::receive_channel_event(
-      test, team_test::make_channel_destroyed_event(team_channel_key, 10, 8, 10)));
-  // 3c. metadata-only 的 destroy 事件(destroy_sequence 高于 create_sequence): 同样不销毁,
-  //     频道销毁只经 WAL destroy 日志或快照元数据生效
-  CASE_EXPECT_TRUE(team_test::receive_channel_event(
-      test, team_test::make_channel_destroyed_event(team_channel_key, 10, 11, 10)));
+  // 3b. metadata-only 的 destroy 事件(destroy_sequence 低于新代际 create_sequence, 旧代际残留): 不销毁
+  CASE_EXPECT_TRUE(
+      team_test::receive_channel_event(test, team_test::make_channel_destroyed_event(team_channel_key, 10, 8, 10)));
   team_test::pump_rounds(test, 3);
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
   CASE_EXPECT_TRUE(!team->is_destroyed());
   {
-    // 上述乱序事件不产生新的解散通知, 缓存仍是新代际
+    // 旧代际乱序事件不产生新的解散通知, 缓存仍是新代际
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     rpc::context ctx{rpc::context::create_without_task()};
     team->dump(ctx, snapshot);
     CASE_EXPECT_TRUE(nullptr != team_test::find_snapshot_member(snapshot, kNewMemberId));
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-    CASE_EXPECT_EQ(1,
-                   static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam)));
+    CASE_EXPECT_EQ(1, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_EQ(2, static_cast<int>(view.snapshots.size()));  // gen1 + gen2 各一次入队快照
+    CASE_EXPECT_TRUE(view.actions.empty());
   }
 
-  // 4. 对照: 新代际 create sequence 之后的 WAL destroy 日志正常收编
-  team_test::channel_event_chain gen2_chain;
-  gen2_chain.channel_key = team_channel_key;
-  gen2_chain.sequence = 11;
-  CASE_EXPECT_TRUE(team_test::inject_log_message(test, gen2_chain, team_test::make_destroy_log_message(0)));
+  // 3c. metadata-only 的 destroy 事件(destroy_sequence 高于新代际 create_sequence): 权威销毁声明,
+  //     收编并下发新代际的 team_remove(总计第二个 remove, 分别对应两个代际)
+  CASE_EXPECT_TRUE(
+      team_test::receive_channel_event(test, team_test::make_channel_destroyed_event(team_channel_key, 10, 11, 10)));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return !user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   }));
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-    CASE_EXPECT_EQ(2,
-                   static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam)));
+    CASE_EXPECT_EQ(2, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_EQ(2, static_cast<int>(view.snapshots.size()));  // gen1 + gen2 各一次入队快照
+    CASE_EXPECT_TRUE(view.actions.empty());
+  }
+
+  // 4. 迟到的 WAL destroy 日志(同代际补投): 幂等, 不产生第三次通知
+  team_test::channel_event_chain gen2_chain;
+  gen2_chain.channel_key = team_channel_key;
+  gen2_chain.sequence = 11;
+  CASE_EXPECT_TRUE(team_test::inject_log_message(test, gen2_chain, team_test::make_destroy_log_message(0)));
+  team_test::pump_rounds(test, 3);
+  CASE_EXPECT_TRUE(!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
+  {
+    auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
+    CASE_EXPECT_EQ(2, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_TRUE(view.actions.empty());
+    CASE_EXPECT_EQ(2, static_cast<int>(view.snapshots.size()));  // 两次入队快照, 收编不再补发
   }
 
   CASE_EXPECT_EQ(0, test.stop());
@@ -1304,12 +1296,12 @@ CASE_TEST(lobbysvr_user_team, heartbeat_reports_watermark_and_throttles) {
   CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
 
   // 真实配置值(lobbysvr_config.proto 注解默认), 不写死旧的代码 fallback
-  CASE_EXPECT_EQ(120, static_cast<int>(
-                          std::chrono::duration_cast<std::chrono::seconds>(team_test::get_heartbeat_interval())
-                              .count()));
-  CASE_EXPECT_EQ(5, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(
-                                         team_test::get_wait_add_member_timeout())
-                                         .count()));
+  CASE_EXPECT_EQ(
+      120,
+      static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(team_test::get_heartbeat_interval()).count()));
+  CASE_EXPECT_EQ(
+      5, static_cast<int>(
+             std::chrono::duration_cast<std::chrono::seconds>(team_test::get_wait_add_member_timeout()).count()));
 
   constexpr uint64_t kUserId = 30109;
   constexpr int64_t kTeamId = 664;
@@ -1324,7 +1316,7 @@ CASE_TEST(lobbysvr_user_team, heartbeat_reports_watermark_and_throttles) {
   }
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
   auto team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   CASE_EXPECT_TRUE(!!team);
@@ -1340,9 +1332,8 @@ CASE_TEST(lobbysvr_user_team, heartbeat_reports_watermark_and_throttles) {
                                   team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role(); }));
 
   // 应用两条频道事件, 让已确认序号非零
   team_test::channel_event_chain team_chain;
@@ -1427,7 +1418,7 @@ CASE_TEST(lobbysvr_user_team, heartbeat_suppressed_outside_running_member_state)
   }
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
   auto team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   CASE_EXPECT_TRUE(!!team);
@@ -1468,9 +1459,8 @@ CASE_TEST(lobbysvr_user_team, heartbeat_suppressed_outside_running_member_state)
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
         test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), 1, 0, &team_storage, 2)));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role(); }));
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] { return !ss_capture.heartbeat_reqs.empty(); }));
   CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.heartbeat_reqs.size()));
@@ -1526,7 +1516,7 @@ CASE_TEST(lobbysvr_user_team, exit_team_request_then_channel_remove_converges) {
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, kSessionId, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
   auto team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
   CASE_EXPECT_TRUE(!!team);
@@ -1542,16 +1532,14 @@ CASE_TEST(lobbysvr_user_team, exit_team_request_then_channel_remove_converges) {
                                   team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == team->get_cached_permission_role(); }));
   test.cs().clear_history();
 
   // 1. 主动退出: 上行 remove self, reason=EXIT_TEAM
   CASE_EXPECT_TRUE(run_exit_team(test, user_inst, kTeamId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kTeamId, kUserId) >= 1;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kTeamId, kUserId) >= 1; }));
   CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_remove_member_requests(ss_capture, kTeamId, kUserId)));
   {
     const auto& req = ss_capture.send_message_reqs.front();
@@ -1595,24 +1583,26 @@ CASE_TEST(lobbysvr_user_team, exit_team_request_then_channel_remove_converges) {
   CASE_EXPECT_TRUE(run_second_refresh(test, user_inst));
   team_test::pump_rounds(test, 2);
   CASE_EXPECT_TRUE(ss_capture.heartbeat_reqs.empty());
-
-  // 3. 回环 remove_member(self): 客户端收到带真实 reason 的 increase, self 缓存删除
-  CASE_EXPECT_TRUE(inject_channel_remove_event(test, team_chain, kTeamId, kUserId,
-                                               atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+  {
+    // 主动退出发起后(首个频道 flush 时机)客户端已收到 team_remove; 退出中的队伍不再下发增量
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-    return !team_test::find_actions_of_case(view, atfw::team::DTeamAction::kRemoveMember).empty();
-  }));
+    CASE_EXPECT_EQ(1, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_TRUE(view.actions.empty());
+    CASE_EXPECT_TRUE(view.snapshots.empty());
+    if (!view.removals.empty()) {
+      CASE_EXPECT_EQ(kTeamId, view.removals.front().team_id());
+    }
+  }
+
+  // 3. 回环 remove_member(self): self 缓存删除; team_remove 已在退出发起时下发, 不再重复下发
+  CASE_EXPECT_TRUE(
+      inject_channel_remove_event(test, team_chain, kTeamId, kUserId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] { return !team->is_member(); }));
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-    auto removes = team_test::find_actions_of_case(view, atfw::team::DTeamAction::kRemoveMember);
-    CASE_EXPECT_EQ(1, static_cast<int>(removes.size()));
-    if (!removes.empty()) {
-      const auto& remove_data = removes.front()->action().remove_member();
-      CASE_EXPECT_EQ(kTeamId, remove_data.team_key().team_id());
-      CASE_EXPECT_EQ(kUserId, remove_data.user_key().user_id());
-      CASE_EXPECT_EQ(atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM, remove_data.remove_member_reason());
-    }
+    CASE_EXPECT_EQ(1, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_TRUE(view.actions.empty());
+    CASE_EXPECT_TRUE(view.snapshots.empty());
   }
   CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST, team->get_cached_permission_role());
 
@@ -1626,15 +1616,16 @@ CASE_TEST(lobbysvr_user_team, exit_team_request_then_channel_remove_converges) {
 
   // 5. 迟到重复事件: 不重建队伍、不重复下发、不再发退出请求
   test.cs().clear_history();
-  CASE_EXPECT_TRUE(inject_channel_remove_event(test, team_chain, kTeamId, kUserId,
-                                               atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
-  CASE_EXPECT_TRUE(inject_personal_remove_event(test, private_chain, kUserId, kTeamId,
-                                                atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
+  CASE_EXPECT_TRUE(
+      inject_channel_remove_event(test, team_chain, kTeamId, kUserId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
+  CASE_EXPECT_TRUE(
+      inject_personal_remove_event(test, private_chain, kUserId, kTeamId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
   team_test::pump_rounds(test, 3);
   CASE_EXPECT_TRUE(!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
   CASE_EXPECT_EQ(1, static_cast<int>(team_test::count_remove_member_requests(ss_capture, kTeamId, kUserId)));
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
+    CASE_EXPECT_TRUE(view.removals.empty());
     CASE_EXPECT_TRUE(view.actions.empty());
     CASE_EXPECT_TRUE(view.snapshots.empty());
   }
@@ -1655,12 +1646,11 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
   team_test::team_room_ss_capture ss_capture;
   CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
 
-  CASE_EXPECT_EQ(10,
-                 static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(
-                                      team_test::get_exit_retry_interval())
-                                      .count()));
-  CASE_EXPECT_EQ(35, static_cast<int>(
-                         std::chrono::duration_cast<std::chrono::seconds>(team_test::get_exit_timeout()).count()));
+  CASE_EXPECT_EQ(
+      10,
+      static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(team_test::get_exit_retry_interval()).count()));
+  CASE_EXPECT_EQ(
+      35, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(team_test::get_exit_timeout()).count()));
 
   constexpr uint64_t kUserId = 30112;
   constexpr uint64_t kSessionId = 0x10112;
@@ -1693,11 +1683,9 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
   // 1. 频道 destroyed 可直接移除(不等 exit timeout)
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kDestroyedTeamId));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kDestroyedTeamId, make_self_member_storage(kDestroyedTeamId)));
-  CASE_EXPECT_TRUE(
-      run_exit_team(test, user_inst, kDestroyedTeamId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kDestroyedTeamId, kUserId) >= 1;
-  }));
+  CASE_EXPECT_TRUE(run_exit_team(test, user_inst, kDestroyedTeamId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kDestroyedTeamId, kUserId) >= 1; }));
   {
     team_test::channel_event_chain destroyed_chain;
     destroyed_chain.channel_key = team_test::make_team_channel_key(kDestroyedTeamId);
@@ -1706,11 +1694,15 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return !user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kDestroyedTeamId));
   }));
-  // 销毁路径合成解散通知且只下发一次, 不再补发退出请求
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+  // 销毁路径下发 team_remove 且只下发一次(退出发起时已登记脏标记, 随销毁收编的 flush 下发), 不再补发退出请求
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return !team_test::collect_team_dirty(test, kSessionId, kDestroyedTeamId).removals.empty(); }));
+  {
     auto view = team_test::collect_team_dirty(test, kSessionId, kDestroyedTeamId);
-    return !team_test::find_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam).empty();
-  }));
+    CASE_EXPECT_EQ(1, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_TRUE(view.actions.empty());
+    CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));  // 入队时下发过快照
+  }
   {
     // 重复投递第二条 destroy 日志: 频道已销毁且队伍已移除, 不产生第二次解散通知
     team_test::channel_event_chain destroyed_chain2;
@@ -1721,8 +1713,9 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
     CASE_EXPECT_TRUE(team_test::inject_log_message(test, destroyed_chain2, team_test::make_destroy_log_message(0)));
     team_test::pump_rounds(test, 3);
     auto view = team_test::collect_team_dirty(test, kSessionId, kDestroyedTeamId);
-    CASE_EXPECT_EQ(1,
-                   static_cast<int>(team_test::count_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam)));
+    CASE_EXPECT_EQ(1, static_cast<int>(view.removals.size()));
+    CASE_EXPECT_TRUE(view.actions.empty());
+    CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));  // 重复 destroy 不补发
   }
   // 销毁不再产生额外的 DESTROY_TEAM 退出请求(频道销毁即 room 已不存在, kDestroy 分支 send_exit=false;
   // 之后的 on_destroyed 回调因索引已空幂等返回, 重复 destroy 日志被订阅端忽略)
@@ -1736,7 +1729,7 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
     }
     CASE_EXPECT_EQ(1, static_cast<int>(destroyed_team_reasons.size()));
     if (!destroyed_team_reasons.empty()) {
-      CASE_EXPECT_EQ(atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM, destroyed_team_reasons[0]);
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM, destroyed_team_reasons.at(0));
     }
   }
   expect_team_absent_in_table(*user_inst, kDestroyedTeamId);
@@ -1748,11 +1741,9 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
   // 否则“边界前不重试”断言会被此前用例累积的 floor 污染
   team_test::now_offset_guard time_guard;
   CASE_EXPECT_TRUE(run_exit_team(test, user_inst, kTimeoutTeamId, atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kTimeoutTeamId, kUserId) >= 1;
-  }));
-  auto timeout_team =
-      user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTimeoutTeamId));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kTimeoutTeamId, kUserId) >= 1; }));
+  auto timeout_team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTimeoutTeamId));
   CASE_EXPECT_TRUE(!!timeout_team);
   if (!timeout_team) {
     test.stop();
@@ -1768,9 +1759,8 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
   // 越过 retry 边界: 补发, reason 保持 EXIT_TEAM
   team_test::now_offset_guard::advance(std::chrono::seconds{2});
   CASE_EXPECT_TRUE(run_minute_refresh(test, user_inst));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return team_test::count_remove_member_requests(ss_capture, kTimeoutTeamId, kUserId) >= 2;
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return team_test::count_remove_member_requests(ss_capture, kTimeoutTeamId, kUserId) >= 2; }));
   for (const auto& req : ss_capture.send_message_reqs) {
     if (req.action().has_remove_member() && req.action().remove_member().team_key().team_id() == kTimeoutTeamId) {
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM, req.action().remove_member().remove_member_reason());
@@ -1813,12 +1803,11 @@ CASE_TEST(lobbysvr_user_team, exit_retry_timeout_cleanup_and_channel_destroy) {
   {
     atfw::team::DTeamStorage rejoin_storage = make_self_member_storage(kTimeoutTeamId);
     CASE_EXPECT_TRUE(team_test::receive_channel_event(
-        test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTimeoutTeamId), 1, 0,
-                                             &rejoin_storage, 2)));
+        test,
+        team_test::make_snapshot_event(team_test::make_team_channel_key(kTimeoutTeamId), 1, 0, &rejoin_storage, 2)));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return !team_test::collect_team_dirty(test, kSessionId, kTimeoutTeamId).snapshots.empty();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return !team_test::collect_team_dirty(test, kSessionId, kTimeoutTeamId).snapshots.empty(); }));
   {
     PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
     rpc::context ctx{rpc::context::create_without_task()};
@@ -1865,7 +1854,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   }
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   auto valid_expiry = logical_system_now() + std::chrono::seconds(600);
 
   // 先加入 671 再切到 672: 671 进入 pending-to-exit(不应落地), 672 为 current
@@ -1875,9 +1864,8 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   CASE_EXPECT_TRUE(inject_self_invited_event(test, private_chain, kFirstUserId, kInvitedTeamId, valid_expiry));
   CASE_EXPECT_TRUE(
       inject_self_apply_join_request_event(test, private_chain, kFirstUserId, kJoinRequestTeamId, valid_expiry));
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return 4 == first_user->get_user_team_manager().get_processed_private_chat_channel_sequence();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return 4 == first_user->get_user_team_manager().get_processed_private_chat_channel_sequence(); }));
 
   PROJECT_NAMESPACE_ID::table_user dumped_table = dump_team_table(*first_user);
   {
@@ -1935,8 +1923,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
     protobuf_copy_message(*empty_channel_group->mutable_current(), empty_channel_join);
     // 已过期的 pending 不恢复
     auto* expired_invitation = dumped_table.mutable_team_data()->add_pending_invitation();
-    protobuf_copy_message(*expired_invitation->mutable_team_key(),
-                          team_test::make_team_key(kExpiredInvitationTeamId));
+    protobuf_copy_message(*expired_invitation->mutable_team_key(), team_test::make_team_key(kExpiredInvitationTeamId));
     protobuf_copy_message(*expired_invitation->mutable_inviter(), team_test::make_user_key(team_test::kCaptainUserId));
     protobuf_copy_message(*expired_invitation->mutable_invitee(), team_test::make_user_key(kSecondUserId));
     *expired_invitation->mutable_start_timepoint() =
@@ -1949,8 +1936,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   std::string second_subscriber_key;
   atframework::dtmq::DChannelIdKey second_private_channel_key;
   CASE_EXPECT_TRUE(
-      team_test::setup_team_user(test, kSecondUserId, second_user, second_subscriber_key,
-                                 second_private_channel_key));
+      team_test::setup_team_user(test, kSecondUserId, second_user, second_subscriber_key, second_private_channel_key));
   if (!second_user) {
     test.stop();
     return;
@@ -1958,8 +1944,8 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   CASE_EXPECT_TRUE(run_init_from_table(test, second_user, dumped_table));
 
   // 恢复结果: 个人频道已处理序号、current 队伍、pending; 非法/过期条目不恢复; 恢复的队伍不在退出流程(last_exit 不落地)
-  CASE_EXPECT_EQ(4, static_cast<int>(
-                        second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
+  CASE_EXPECT_EQ(4,
+                 static_cast<int>(second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
   auto restored_team =
       second_user->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kCurrentTeamId));
   CASE_EXPECT_TRUE(!!restored_team);
@@ -2028,7 +2014,7 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
 
   // 幂等重放: <=已处理序号的旧个人事件不重复落地, >已处理序号事件正常处理
   team_test::channel_event_chain second_private_chain;
-  second_private_chain.channel_key = second_private_channel_key;
+  second_private_chain.channel_key = std::move(second_private_channel_key);
   // seq1: 旧 reject_invitation(673) -> 跳过, pending 保留
   CASE_EXPECT_TRUE(inject_reject_invitation_event(test, second_private_chain, kSecondUserId, kInvitedTeamId));
   // seq2: 旧 reject_join_request(674) -> 跳过, pending 保留
@@ -2048,8 +2034,8 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
       !!second_user->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kCurrentTeamId)));
   CASE_EXPECT_TRUE(
       !second_user->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kLateInviteTeamId)));
-  CASE_EXPECT_EQ(4, static_cast<int>(
-                        second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
+  CASE_EXPECT_EQ(4,
+                 static_cast<int>(second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
 
   // seq5: 同一事件的更新版本(>已处理序号)正常落地一次, 已处理序号推进
   CASE_EXPECT_TRUE(
@@ -2057,8 +2043,8 @@ CASE_TEST(lobbysvr_user_team, table_dump_init_round_trip_restores_watermark_team
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
     return !!second_user->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kLateInviteTeamId));
   }));
-  CASE_EXPECT_EQ(5, static_cast<int>(
-                        second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
+  CASE_EXPECT_EQ(5,
+                 static_cast<int>(second_user->get_user_team_manager().get_processed_private_chat_channel_sequence()));
 
   // 往返稳定: 新实例的 dump 保持已处理序号/current/pending
   {
@@ -2108,9 +2094,9 @@ CASE_TEST(lobbysvr_user_team, user_get_info_exports_only_running_team_with_trimm
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kRunningTeamId));
   {
     atfw::team::DTeamStorage team_storage = team_test::make_team_storage(kRunningTeamId);
-    team_test::add_storage_member(team_storage, team_test::kCaptainUserId,
-                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER)
-                                      .set_pollute_internal_fields(true));
+    team_test::add_storage_member(
+        team_storage, team_test::kCaptainUserId,
+        team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER).set_pollute_internal_fields(true));
     team_test::add_storage_member(
         team_storage, kUserId,
         team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
@@ -2118,37 +2104,31 @@ CASE_TEST(lobbysvr_user_team, user_get_info_exports_only_running_team_with_trimm
             .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(true))})
             .set_pollute_internal_fields(true));
     team_storage.mutable_configure()->set_disable_join_request(true);
-    team_test::add_storage_invitation(team_storage, kPendingInviteeId,
-                                      logical_system_now() + std::chrono::seconds(600), true);
-    *team_storage.add_shared_team_data() =
-        team_test::pack_team_module(team_test::make_team_matching_module(true));
+    team_test::add_storage_invitation(team_storage, kPendingInviteeId, logical_system_now() + std::chrono::seconds(600),
+                                      true);
+    *team_storage.add_shared_team_data() = team_test::pack_team_module(team_test::make_team_matching_module(true));
     CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kRunningTeamId, team_storage));
   }
-  auto running_team =
-      user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kRunningTeamId));
+  auto running_team = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kRunningTeamId));
   CASE_EXPECT_TRUE(!!running_team);
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == running_team->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == running_team->get_cached_permission_role(); }));
 
   // 切到 682 再切回 681: 682 处于 pending-to-exit(导出时排除), 681 保持 current 且缓存完整
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kExitingTeamId));
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kRunningTeamId));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    auto current =
-        user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+    auto current = user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
     return current && current->get_team_key().team_id() == kRunningTeamId && !current->is_exiting();
   }));
-  CASE_EXPECT_TRUE(
-      !!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kExitingTeamId)));
+  CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kExitingTeamId)));
 
   // 经生产注册的 need_user_team get_info 句柄导出
   PROJECT_NAMESPACE_ID::SCUserGetInfoRsp get_info_rsp;
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.user_get_info", [&user_inst, &get_info_rsp](rpc::context& ctx) -> rpc::result_code_type {
-        const auto* need_user_team_field =
-            PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
-                PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber);
+        const auto* need_user_team_field = PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+            PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber);
         for (const auto& handle : user::get_get_info_handle()) {
           if (handle.first == need_user_team_field && nullptr != handle.second) {
             handle.second(ctx, get_info_rsp, *user_inst);
@@ -2245,7 +2225,7 @@ CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cach
 
   team_test::now_offset_guard time_guard;
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
 
   auto current = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
@@ -2255,15 +2235,20 @@ CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cach
     return;
   }
 
-  // 落库快照不含本端(成员加入只走增量日志, 不落快照)
+  // 落库快照不含本端(成员加入只走增量日志, 不落快照); 本端未成为成员, 快照不下发、不产生任何脏数据推送
   atfw::team::DTeamStorage storage_v1 = team_test::make_team_storage(kTeamId);
   team_test::add_storage_member(storage_v1, team_test::kCaptainUserId,
                                 team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, storage_v1));
   CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return !team_test::collect_team_dirty(test, kSessionId, kTeamId).snapshots.empty();
+    PROJECT_NAMESPACE_ID::DUserTeamSnapshot snapshot;
+    rpc::context ctx{rpc::context::create_without_task()};
+    current->dump(ctx, snapshot);
+    return 1 == snapshot.snapshot().member_size();
   }));
   CASE_EXPECT_EQ(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST, current->get_cached_permission_role());
+  team_test::pump_rounds(test, 2);
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kSessionId).empty());
 
   // 本端经增量 add_member 入队
   team_test::channel_event_chain team_chain;
@@ -2276,9 +2261,8 @@ CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cach
     *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(logical_system_now());
     CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, action));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == current->get_cached_permission_role();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == current->get_cached_permission_role(); }));
   test.cs().clear_history();
 
   // (a) 维护重存: saved=1 仅覆盖已应用的 add_member 日志, 内容与已应用状态一致(含本端)
@@ -2307,8 +2291,8 @@ CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cach
   // 超过 wait_add_member_timeout 后 minute refresh: 成员身份不得被维护快照误置, 不产生退出请求
   const size_t sent_requests_before = ss_capture.send_message_reqs.size();
   team_test::now_offset_guard::advance(team_test::get_wait_add_member_timeout() + std::chrono::seconds{1});
-  CASE_EXPECT_TRUE(team_test::run_sync_task(
-      test, "team.refresh_minute", [&user_inst](rpc::context& ctx) -> rpc::result_code_type {
+  CASE_EXPECT_TRUE(
+      team_test::run_sync_task(test, "team.refresh_minute", [&user_inst](rpc::context& ctx) -> rpc::result_code_type {
         user_inst->get_user_team_manager().refresh_feature_limit_minute(ctx);
         RPC_RETURN_CODE(0);
       }));
@@ -2323,8 +2307,7 @@ CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cach
     atfw::team::DTeamStorage storage_v2 = team_test::make_team_storage(kTeamId, 5);
     team_test::add_storage_member(storage_v2, team_test::kCaptainUserId,
                                   team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
-    team_test::add_storage_member(storage_v2, kUserId,
-                                  team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+    team_test::add_storage_member(storage_v2, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     team_test::add_storage_member(storage_v2, kLateMemberId,
                                   team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
     CASE_EXPECT_TRUE(team_test::inject_custom_data_update(test, team_chain, storage_v2));
@@ -2348,9 +2331,8 @@ CASE_TEST(lobbysvr_user_team, maintenance_custom_data_update_never_rebuilds_cach
     *add_member->mutable_joined_timepoint() = protobuf_from_system_clock(logical_system_now());
     CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, action));
   }
-  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-    return !team_test::collect_team_dirty(test, kSessionId, kTeamId).actions.empty();
-  }));
+  CASE_EXPECT_TRUE(team_test::pump_until(
+      test, [&] { return !team_test::collect_team_dirty(test, kSessionId, kTeamId).actions.empty(); }));
   {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_TRUE(view.snapshots.empty());

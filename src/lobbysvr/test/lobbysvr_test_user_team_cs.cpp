@@ -19,6 +19,7 @@
 // clang-format on
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
@@ -161,6 +162,17 @@ void expect_send_message_envelope(const atfw::team::SSTeamRoomSendMessageReq& re
   CASE_EXPECT_EQ(sender_id, req.sender_user_key().user_id());
 }
 
+// Count remove_pending_invitation dirty entries of one team in one dirty view (removal payload is DTeamKey only).
+size_t count_pending_invitation_removals(const team_test::team_dirty_view& view, int64_t team_id) {
+  size_t ret = 0;
+  for (const auto& removed : view.removed_pending_invitations) {
+    if (removed.team_id() == team_id) {
+      ++ret;
+    }
+  }
+  return ret;
+}
+
 // An unbound session (no user attached) drives every task action into the not-logined branch.
 template <class TRequest>
 bool expect_not_logined(atfw::testing::runtime& test, uint64_t session_id, gsl::string_view rpc_full_name,
@@ -234,9 +246,9 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     req.set_team_type(static_cast<atframework::shared::EnTeamType>(999));
     // NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
     atframework::CSMsg rsp_msg_unknown;
-    CASE_EXPECT_TRUE(post_team_cs_request(
-        test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_send_invitation(), req,
-        rsp_msg_unknown));
+    CASE_EXPECT_TRUE(post_team_cs_request(test, client,
+                                          rpc::lobbysvrclientservice::packer::get_full_name_of_team_send_invitation(),
+                                          req, rsp_msg_unknown));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVALID_TEAM_TYPE, rsp_msg_unknown.head().error_code());
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.create_reqs.size()));
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.add_invitation_reqs.size()));
@@ -431,7 +443,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, 9200101, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   team_test::now_offset_guard time_guard;
 
   auto inject_invited = [&](int64_t team_id, std::chrono::system_clock::time_point expired_timepoint) {
@@ -738,7 +750,7 @@ CASE_TEST(lobbysvr_user_team, cs_join_02_accept_reject_join_request_contract) {
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, 9400101, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
 
   // team 不存在: accept/reject 均 EN_ERR_TEAM_NOT_IN_TEAM 且零上行
   {
@@ -1111,6 +1123,9 @@ CASE_TEST(lobbysvr_user_team, cs_captain_01_transfer_captain_contract) {
   constexpr uint64_t kUserId = 96001;
   constexpr uint64_t kMemberB = 96002;
   constexpr int64_t kTeamId = 860101;
+  // 锁定逻辑时间: 否则首个 task 前置 refresh 与后续 transfer 请求是否落在同一逻辑分钟取决于真实时间,
+  // 跨分钟时 refresh 会补发首次心跳(heartbeat_reqs==0 断言偶发失败)
+  team_test::now_offset_guard time_guard;
   user::ptr_t user_inst;
   std::string subscriber_key;
   atframework::dtmq::DChannelIdKey private_channel_key;
@@ -1125,7 +1140,7 @@ CASE_TEST(lobbysvr_user_team, cs_captain_01_transfer_captain_contract) {
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, 9600101, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
 
   auto post_transfer = [&](int64_t team_id, uint64_t target_id, atframework::CSMsg& out_rsp) {
     atframework::shared::CSTeamTransferCaptainReq req;
@@ -1417,7 +1432,7 @@ CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
   CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, 9800101, client));
 
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
 
   auto post_update = [&](const atframework::shared::CSTeamUpdateTeamDataReq& req, atframework::CSMsg& out_rsp) {
     return post_team_cs_request(
@@ -1557,9 +1572,13 @@ CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
 using lobbysvr_test::find_stream_post_indices;
 using lobbysvr_test::flush_pending_chat_messages;
 
-// CS-INVITE-03: approve 响应先于个人频道 joined_team 投递时(同节点队长使队伍频道共享订阅已 ready)，
-// add_team 的 try_load_snapshot 同步登记快照脏标记但没有 CS 任务收尾来下发(回归点: 修复前要等下一个
-// CS 请求)。修复后由聊天通知推送顺带 flush: 客户端在下发的 chat_channel_sync 之前收到 dirty_team.snapshot。
+// CS-INVITE-03: approve 响应先于个人频道 joined_team 投递时(同节点队长使队伍频道共享订阅已 ready):
+// - 个人频道 invited 事件只登记脏数据, 不主动下发(等 CS 收尾/聊天推送等顺带 flush);
+// - approve CS 任务收尾 flush 时邀请已被移除, dump 反映当前状态: 只补发 remove_pending_invitation
+//   (add 从未下发过, 客户端按幂等 remove 处理);
+// - joined_team 触发 add_team -> try_load_snapshot 同步命中已 ready 的共享订阅并登记快照脏标记,
+//   个人频道事件同样没有 flush 时机, 不主动下发;
+// - 聊天推送顺带 flush: 客户端在 chat_channel_sync 之前收到 dirty_team.snapshot。
 CASE_TEST(lobbysvr_user_team, cs_invite_03_approve_dirty_snapshot_flushed_with_chat_sync) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -1635,6 +1654,9 @@ CASE_TEST(lobbysvr_user_team, cs_invite_03_approve_dirty_snapshot_flushed_with_c
     }));
   }
 
+  // 个人频道事件只登记脏数据, 没有收尾 flush 时机, 不主动下发
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kInviteeSessionId).empty());
+
   // room 在 approve 后把双成员快照写进频道 custom data(被邀请人尚未注册订阅, 只推进共享实例内容)
   {
     auto storage = team_test::make_team_storage(kTeamId);
@@ -1645,7 +1667,8 @@ CASE_TEST(lobbysvr_user_team, cs_invite_03_approve_dirty_snapshot_flushed_with_c
         test, team_test::make_snapshot_event(team_test::make_team_channel_key(kTeamId), 1, 0, &storage, 2)));
   }
 
-  // approve 先于 joined_team 完成: 响应成功时还没有任何 team 脏数据待下发
+  // approve 先于 joined_team 完成: 响应成功; 自己的 pending 邀请已有结论,
+  // remove_pending_invitation 随本次 CS 任务收尾下发(不等 joined_team)
   {
     atframework::shared::CSTeamApproveInvitationReq req;
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
@@ -1655,26 +1678,38 @@ CASE_TEST(lobbysvr_user_team, cs_invite_03_approve_dirty_snapshot_flushed_with_c
         rsp_msg));
     CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
     CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.approve_invitation_reqs.size()));
-    CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kInviteeSessionId).empty());
+    CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+      return 1 == count_pending_invitation_removals(team_test::collect_team_dirty(test, kInviteeSessionId, kTeamId),
+                                                    kTeamId);
+    }));
+    auto dirty_view = team_test::collect_team_dirty(test, kInviteeSessionId, kTeamId);
+    CASE_EXPECT_EQ(1, static_cast<int>(count_pending_invitation_removals(dirty_view, kTeamId)));
+    // 邀请到达与 approve 之间没有 flush 时机, add 从未下发; dump 反映当前状态只补发 remove
+    CASE_EXPECT_TRUE(dirty_view.added_pending_invitations.empty());
+    CASE_EXPECT_TRUE(dirty_view.snapshots.empty());
+    CASE_EXPECT_TRUE(dirty_view.removals.empty());
+    // approve 的 CS 任务收尾只下发这一次 dirty 推送
+    CASE_EXPECT_EQ(1, static_cast<int>(team_test::collect_dirty_sync_pushes(test, kInviteeSessionId).size()));
   }
 
   // joined_team 在个人频道投递: add_team -> try_load_snapshot 同步命中已 ready 的共享订阅,
-  // 快照脏标记登记成功但没有 CS 任务收尾来触发下发; 修复前要等下一个 CS 请求(如 ping)
+  //   快照脏标记登记成功但个人频道事件没有收尾 flush, 不主动下发(等聊天推送顺带 flush)
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, invitee_inst, invitee_private_chain, kTeamId));
   CASE_EXPECT_TRUE(!!invitee_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
   team_test::pump_rounds(test, 4);
-  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kInviteeSessionId).empty());
+  // 仍只有 approve 收尾那一次 dirty 推送: 快照登记后没有 flush 时机, 不产生第二次推送
+  CASE_EXPECT_EQ(1, static_cast<int>(team_test::collect_dirty_sync_pushes(test, kInviteeSessionId).size()));
 
-  // 聊天推送 flush 顺带下发脏数据: dirty 在 chat sync 之前, 无需任何新的 CS 请求
+  // 聊天推送顺带 flush 出快照脏数据: 第二次 dirty 推送随聊天 flush 下发, 全部 dirty 推送均先于 chat sync
   flush_pending_chat_messages(test);
   const auto dirty_indices = find_stream_post_indices(
       test, kInviteeSessionId, rpc::lobbysvrclientservice::packer::get_full_name_of_user_dirty_chg_sync());
   const auto chat_indices = find_stream_post_indices(
       test, kInviteeSessionId, rpc::lobbysvrclientservice::packer::get_full_name_of_chat_channel_sync());
-  CASE_EXPECT_EQ(1, static_cast<int>(dirty_indices.size()));
+  CASE_EXPECT_EQ(2, static_cast<int>(dirty_indices.size()));
   CASE_EXPECT_EQ(1, static_cast<int>(chat_indices.size()));
   if (!dirty_indices.empty() && !chat_indices.empty()) {
-    CASE_EXPECT_LT(dirty_indices.front(), chat_indices.front());
+    CASE_EXPECT_LT(dirty_indices.back(), chat_indices.front());
   }
 
   // 快照内容: 双成员 + 角色 + 队长(内部路由字段裁剪契约由 DIRTY 组用例覆盖, 这里不重复)
@@ -1703,7 +1738,8 @@ CASE_TEST(lobbysvr_user_team, cs_invite_03_approve_dirty_snapshot_flushed_with_c
 
 // CS-INVITE-04: 当前队伍是已销毁(同节点另一订阅先把队伍频道销毁, 本用户 joined_team 迟到, on_destroyed
 // 不重放注册前的 destroy, 已销毁占住 current)时: 显式指定已销毁队伍直接 EN_ERR_TEAM_NOT_IN_TEAM 并收编已销毁
-// (索引移除 + 客户端收到 destroy); 未指定 team 的邀请不复用已销毁, 直接 create 新队伍且邀请落在新 team_id 上;
+// (索引移除; 该队伍数据从未下发给客户端, 收编不产生 team_remove 通知); 未指定 team 的邀请不复用已销毁,
+// 直接 create 新队伍且邀请落在新 team_id 上;
 // 显式指定存活队伍仍正常复用(对照组, 防止 destroyed 判断写反)。
 // 注意: 首个 CS 请求的 task 前置 refresh 会把 destroyed current 已销毁按 EXPIRED 收编(task_action_cs_req_base.cpp:113
 // -> user::refresh_feature_limit -> user_team_manager::refresh_feature_limit_minute), 用例先手动耗尽首次
@@ -1741,7 +1777,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
   }
   {
     team_test::channel_event_chain other_private_chain;
-    other_private_chain.channel_key = other_private_channel_key;
+    other_private_chain.channel_key = std::move(other_private_channel_key);
     CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, other_inst, other_private_chain, kTeamId));
   }
   {
@@ -1785,7 +1821,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
 
   // 被测用户 joined_team 迟到: add_team 挂在已销毁的共享实例上, 已销毁成为 current
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));
   {
     auto corpse = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
@@ -1800,7 +1836,7 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
         user_inst->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL).get());
   }
 
-  // 显式指定已销毁队伍: 直接 EN_ERR_TEAM_NOT_IN_TEAM, 零新增上行, 已销毁被收编且客户端收到 destroy
+  // 显式指定已销毁队伍: 直接 EN_ERR_TEAM_NOT_IN_TEAM, 零新增上行, 已销毁被收编
   {
     atframework::shared::CSTeamSendInvitationReq req;
     req.set_team_type(atframework::shared::EN_TEAM_TYPE_NORMAL);
@@ -1814,18 +1850,10 @@ CASE_TEST(lobbysvr_user_team, cs_invite_04_destroyed_current_team_replaced_on_in
   CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.create_reqs.size()));
   CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.add_invitation_reqs.size()));
   CASE_EXPECT_TRUE(!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
-  {
-    CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
-      auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-      return !team_test::find_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam).empty();
-    }));
-    auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
-    auto destroys = team_test::find_actions_of_case(view, atfw::team::DTeamAction::kDestroyTeam);
-    CASE_EXPECT_EQ(1, static_cast<int>(destroys.size()));
-    if (!destroys.empty()) {
-      CASE_EXPECT_EQ(kTeamId, destroys.front()->action().destroy_team().team_id());
-    }
-  }
+  // 客户端从未收到过该队伍的数据(入队时频道已销毁, 快照从未下发), 收编只移除索引,
+  // 不需要也不应下发 team_remove(未发布过的队伍不向客户端推送任何通知)
+  CASE_EXPECT_TRUE(team_test::collect_team_dirty(test, kSessionId, kTeamId).removals.empty());
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(test, kSessionId).empty());
 
   // 再次 joined_team 复活已销毁(共享实例仍在缓存且 destroyed), 覆盖未指定 team 的邀请分支
   CASE_EXPECT_TRUE(team_test::join_team_via_notification(test, user_inst, private_chain, kTeamId));

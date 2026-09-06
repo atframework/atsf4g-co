@@ -33,6 +33,7 @@ project_add_rpc_unit_test(
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_lifecycle.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_cs.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_robust.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_dirty.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_async_jobs_db_contract.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/data/user.cpp"
   "${LOBBYSVR_CHAT_TEST_SERVICE_DIR}/logic/action/task_action_access_update.cpp"

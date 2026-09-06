@@ -10,6 +10,16 @@
 #include <nostd/type_traits.h>
 #include <std/explicit_declare.h>
 
+// clang-format off
+#include <config/compiler/protobuf_prefix.h>
+// clang-format on
+
+#include <protocol/common/com.struct.dtmq.common.pb.h>
+
+// clang-format off
+#include <config/compiler/protobuf_suffix.h>
+// clang-format on
+
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
 
@@ -36,6 +46,7 @@ class DChatChannelKey;
 class DChatChannelMeta;
 class DChatChannelData;
 class DChatChannelSnapshot;
+class SCChatChannelSync;
 }  // namespace chat
 }  // namespace atframework
 

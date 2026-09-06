@@ -307,6 +307,18 @@ func RegisterTeamDirtySyncPushHandler(user user_data.User) {
 							len(oneAction.GetSharedMemberData()))
 					}
 					AppendTeamIncreaseActions(action.User, actions)
+					continue
+				}
+				if teamRemove := dirtyTeam.GetTeamRemove(); teamRemove != nil {
+					// team_remove 是一次性移除语义: 本地视图命中该队伍则清空
+					view := GetTeamView(action.User)
+					if view.Snapshot != nil &&
+						view.Snapshot.GetSnapshot().GetTeamKey().GetTeamId() == teamRemove.GetTeamId() &&
+						view.Snapshot.GetSnapshot().GetTeamKey().GetZoneId() == teamRemove.GetZoneId() {
+						ClearTeamView(action.User)
+					}
+					action.User.Log("[team] push remove team=%d:%d", teamRemove.GetZoneId(), teamRemove.GetTeamId())
+					continue
 				}
 			}
 			return nil

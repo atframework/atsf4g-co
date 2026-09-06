@@ -189,7 +189,7 @@ class user_team_utility {
             auto hold_lifetime = team_ptr->shared_from_this();
             hold_lifetime->load_snapshot(ctx);
             // 快照脏数据在回调任务内不会经过 CS 任务收尾，这里主动触发一次脏数据下发
-            hold_lifetime->owner_->get_owner().send_all_syn_msg(ctx);
+            hold_lifetime->owner_->send_dirty_data(ctx);
           }
         });
 
@@ -206,7 +206,7 @@ class user_team_utility {
     // update_custom_data 事件不触发快照加载:
     // - receive_event_sync 为保持事件顺序先分发日志、后落库 custom_data, 日志回调里
     //   get_custom_data_content 读到的是旧快照; 旧快照可能不含本端成员(成员加入只走增量日志、
-    //   不落快照), 据此重建会把 is_member_ 误置 false 进而被 wait_to_be_member_but_timeout 踢出
+    //   不落快照), 据此重建会把成员标志误置 false 进而被 wait_to_be_member_but_timeout 踢出
     // - 本地状态收敛不依赖该事件: 快照中 user_team 消费的字段(成员/角色/队长/配置/准入)均由
     //   增量 action 覆盖; 水位低于压缩边界或 hash 不匹配时 publisher 会强制下发全量快照,
     //   由 on_receive_snapshot_finished 经 load_snapshot 重建
@@ -218,7 +218,7 @@ class user_team_utility {
             auto hold_lifetime = team_ptr->shared_from_this();
             // 实时事件(非快照回放)处理后主动触发一次脏数据下发，快照回放路径由
             // on_receive_snapshot_finished 统一触发，不会逐条消息下发
-            hold_lifetime->owner_->get_owner().send_all_syn_msg(ctx);
+            hold_lifetime->owner_->send_dirty_data(ctx);
           }
         });
 
@@ -226,16 +226,22 @@ class user_team_utility {
         *ret, [](rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber, int64_t log_sequence,
                  std::chrono::system_clock::time_point /*destroy_time*/) {
           user_team* team_ptr = get_user_team(subscriber, "on_destroyed");
+          // 对象已从 manager 索引移除(收编/被新代际替换)时, 迟到的销毁通知不再处理,
+          // 防止把新代际对象一并移除
+          if (team_ptr != nullptr && !team_ptr->is_active_generation()) {
+            team_ptr = nullptr;
+          }
           // 可能先删除频道，而后重新创建的流程。所以要忽略之前的频道销毁通知
           if (team_ptr != nullptr && log_sequence >= team_ptr->channel_create_sequence_) {
             auto hold_lifetime = team_ptr->shared_from_this();
-            hold_lifetime->is_member_ = false;
+            hold_lifetime->set_flag(user_team::team_flag::kMember, false);
             // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
 
             FCTXLOGDEBUG(ctx, "{} channel for team {}:{} destroyed, sequence:{}", hold_lifetime->owner_->get_owner(),
                          hold_lifetime->team_key_.zone_id(), hold_lifetime->team_key_.team_id(), log_sequence);
             hold_lifetime->owner_->remove_team(ctx, hold_lifetime->get_team_key(),
                                                atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+            hold_lifetime->owner_->send_dirty_data(ctx);
           }
         });
 
@@ -358,29 +364,24 @@ user_team::user_team(ctor_guard_t&, rpc::context& /*ctx*/, user_team_manager& ow
                      // NOLINTNEXTLINE(modernize-pass-by-value)
                      uint32_t team_type, const atfw::team::DTeamKey& team_key)
     : owner_(&owner),
-      pending_dirty_snapshot_(false),
       team_type_(team_type),
       team_key_(team_key),
       channel_subscriber_(channel_subscriber),
-      is_member_(false),
-      is_matching_(false),
       channel_create_sequence_(0),
       channel_saved_sequence_(0),
+      actived_timepoint_(std::chrono::system_clock::from_time_t(0)),
       last_exit_team_request_timepoint_(std::chrono::system_clock::from_time_t(0)),
+      exit_started_timepoint_(std::chrono::system_clock::from_time_t(0)),
       last_exit_team_reason_(atfw::team::EN_TEAM_EXIT_REASON_DEFAULT),
-      cached_permission_role_(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+      cached_permission_role_(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST),
+      last_applied_action_sequence_(0),
+      last_applied_action_hash_code_(0),
+      last_heartbeat_timepoint_(std::chrono::system_clock::from_time_t(0)) {
   uintptr_t local_private_data[] = {reinterpret_cast<uintptr_t>(this)};
   channel_subscriber_->set_local_private_data(local_private_data);
 }
 
-user_team::~user_team() {
-  // 脏数据句柄以成员地址为 key 挂在 user 上，对象析构后不会自动移除。
-  // 若不注销，新的 user_team 复用到相同地址时 insert_dirty_handle_if_not_exists 会因 key 冲突而跳过注册，
-  // 导致新队伍的脏数据(快照/增量)永远无法下发。
-  auto& dirty_handles = owner_->get_owner().get_cache_data().dirty_handles;
-  dirty_handles.erase(reinterpret_cast<uintptr_t>(&pending_dirty_snapshot_));
-  dirty_handles.erase(reinterpret_cast<uintptr_t>(&pending_dirty_actions_));
-}
+user_team::~user_team() { channel_subscriber_->set_local_private_data({}); }
 
 user_team::ptr_t user_team::create(rpc::context& ctx, user_team_manager& owner, uint32_t team_type,
                                    const atfw::team::DTeamKey& team_key, const atfw::dtmq::DChannelIdKey& channel_key) {
@@ -482,7 +483,7 @@ bool user_team::can_be_removed(rpc::context& ctx) const noexcept {
     return false;
   }
 
-  if (ctx.logical_now() >= last_exit_team_request_timepoint_ + get_exit_team_timeout()) {
+  if (ctx.logical_now() >= exit_started_timepoint_ + get_exit_team_timeout()) {
     return true;
   }
 
@@ -490,7 +491,7 @@ bool user_team::can_be_removed(rpc::context& ctx) const noexcept {
     return false;
   }
 
-  return !is_member_;
+  return !check_flag(team_flag::kMember);
 }
 
 bool user_team::wait_to_be_member_but_timeout(rpc::context& ctx) const noexcept {
@@ -499,7 +500,7 @@ bool user_team::wait_to_be_member_but_timeout(rpc::context& ctx) const noexcept 
     return true;
   }
 
-  if (is_member_) {
+  if (check_flag(team_flag::kMember)) {
     return false;
   }
 
@@ -512,6 +513,15 @@ bool user_team::is_exiting() const noexcept {
 
 bool user_team::is_destroyed() const noexcept { return channel_subscriber_->is_destroyed(); }
 
+bool user_team::is_removed_for_client() const noexcept {
+  // 与 user_team_manager 脏数据下发时的移除判定一致: 已不是成员、正在退出、频道已销毁、
+  // 已让出当前队伍(切队)或对象已被新的一代替换时，客户端视角这个队伍等同于移除
+  return !check_flag(team_flag::kMember) || is_exiting() || is_destroyed() || !is_active_generation() ||
+         owner_->get_team_by_team_type(static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(team_type_)).get() != this;
+}
+
+bool user_team::is_active_generation() const noexcept { return check_flag(team_flag::kIndexActive); }
+
 const atfw::dtmq::DChannelIdKey& user_team::get_channel_key() const noexcept {
   return channel_subscriber_->get_channel_key();
 }
@@ -522,7 +532,10 @@ bool user_team::check_permission(atfw::team::EnTeamPermissionRole checked) const
 
 void user_team::make_current_actived(rpc::context& ctx) {
   last_exit_team_request_timepoint_ = std::chrono::system_clock::from_time_t(0);
+  exit_started_timepoint_ = std::chrono::system_clock::from_time_t(0);
   actived_timepoint_ = ctx.logical_now();
+  // 重新激活意味着之前下发的 remove 已作废, 复位后 remove 已下发标记的快捷判定(注册与下发两侧)才能放行
+  set_flag(team_flag::kDirtyRemoveSent, false);
 }
 
 void user_team::send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason) {
@@ -746,6 +759,10 @@ rpc::result_code_type user_team::update_member_shared_data(
 }
 
 void user_team::set_exit_team(rpc::context& ctx, atfw::team::EnTeamExitReason exit_reason) {
+  if (!is_exiting()) {
+    exit_started_timepoint_ = ctx.logical_now();
+    owner_->insert_dirty_handle_for_team(team_key_);
+  }
   last_exit_team_reason_ = exit_reason;
   last_exit_team_request_timepoint_ = ctx.logical_now();
 }
@@ -802,10 +819,14 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
                  protobuf_mini_dumper_get_error_msg(*result.get_error()));
   }
 }
-
 void user_team::dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output) {
-  if (pending_dirty_snapshot_) {
+  if (check_flag(team_flag::kPendingDirtySnapshot)) {
     dump(ctx, *output.mutable_team_snapshot());
+    return;
+  }
+
+  // 无增量内容时保持 dirty_type 不设置, 由调用方回滚空 entry, 不下发只带 team_key 的空 increase
+  if (pending_dirty_actions_.empty()) {
     return;
   }
 
@@ -821,12 +842,11 @@ void user_team::dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTe
 }
 
 void user_team::clear_dirty_data(rpc::context& /*ctx*/) {
-  pending_dirty_snapshot_ = false;
+  set_flag(team_flag::kPendingDirtySnapshot, false);
   pending_dirty_actions_.clear();
 }
-
 bool user_team::insert_dirty_snapshot_handle() {
-  if (pending_dirty_snapshot_) {
+  if (check_flag(team_flag::kPendingDirtySnapshot)) {
     return true;
   }
 
@@ -839,13 +859,21 @@ bool user_team::insert_dirty_snapshot_handle() {
     return false;
   }
 
-  pending_dirty_snapshot_ = true;
+  set_flag(team_flag::kPendingDirtySnapshot, true);
   pending_dirty_actions_.clear();
   return true;
 }
 
 bool user_team::insert_dirty_action_handle() {
-  if (pending_dirty_snapshot_) {
+  // 已有待下发增量时必定已注册脏句柄且未走完 flush(唯一排空点是 dump/clear, 与 dirty_team_ 集合同步清空),
+  // 直接短路返回, 省掉 is_removed_for_client 的索引查找和重复注册; 快照脏数据待下发时增量必为空, 不会误入此分支
+  if (!pending_dirty_actions_.empty()) {
+    return true;
+  }
+
+  // 快照脏数据待下发时增量由快照覆盖; 对客户端已等同移除的队伍不再下发增量
+  // (移除判定与 user_team_manager 的下发规则共用 is_removed_for_client, 含成员标志/退出中/销毁/切队/代际检查)
+  if (check_flag(team_flag::kPendingDirtySnapshot) || is_removed_for_client()) {
     return false;
   }
 
@@ -870,8 +898,8 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
   cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
   cached_configure_ = team_snapshot->configure();
 
-  bool before_is_member = is_member_;
-  is_member_ = false;
+  bool before_is_member = check_flag(team_flag::kMember);
+  set_flag(team_flag::kMember, false);
 
   // 快照是权威状态，重建全部本地缓存(含共享数据处理器派生状态的复位)
   reset_cached_state(ctx);
@@ -882,7 +910,7 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
     upsert_member_cache(ctx, member);
 
     if (owner_->get_owner().is(member.user_key())) {
-      is_member_ = true;
+      set_flag(team_flag::kMember, true);
       cached_permission_role_ = member.role();
 
       // 自己的共享成员数据需要触发本地行为(其他成员的数据仅入缓存供快照导出)
@@ -898,14 +926,21 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
     upsert_pending_join_request(ctx, join_request);
   }
 
-  // 成员状态变化要下发脏数据通知
-  if (before_is_member != is_member_) {
-    insert_dirty_snapshot_handle();
+  // 成员状态变化要下发脏数据通知: 成为成员时下发快照; 不再是成员时按移除下发
+  if (before_is_member != check_flag(team_flag::kMember)) {
+    if (check_flag(team_flag::kMember)) {
+      insert_dirty_snapshot_handle();
+    } else {
+      owner_->insert_dirty_handle_for_team(team_key_);
+    }
   }
   return true;
 }
 
 bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
+  if (action.action_case() == atfw::team::DTeamAction::ACTION_NOT_SET) {
+    return true;
+  }
   // 与 teamsvr-room apply_member_update 一致: 不存在(或已被移除)的成员不产生缓存更新和客户端下发
   if (atfw::team::DTeamAction::kMemberUpdate == action.action_case() &&
       cached_members_.find(action.member_update().user_key()) == cached_members_.end()) {
@@ -916,12 +951,12 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
 
   switch (action.action_case()) {
     case atfw::team::DTeamAction::kDestroyTeam: {
-      is_member_ = false;
+      set_flag(team_flag::kMember, false);
       // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
 
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
       reset_cached_state(ctx);
-      owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+      owner_->remove_team(ctx, team_key_, /*send_exit=*/false, atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
       break;
     }
     case atfw::team::DTeamAction::kAddMember: {
@@ -936,8 +971,8 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       }
 
       if (owner_->get_owner().is(member_data.user_key())) {
-        if (is_member_ == false) {
-          is_member_ = true;
+        if (check_flag(team_flag::kMember) == false) {
+          set_flag(team_flag::kMember, true);
 
           // 成为成员时要下发快照
           insert_dirty_snapshot_handle();
@@ -956,12 +991,15 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
     case atfw::team::DTeamAction::kRemoveMember: {
       const auto& member_data = action.remove_member();
       cached_members_.erase(member_data.user_key());
+      if (user_key_equal_t()(cached_captain_user_key_, member_data.user_key())) {
+        cached_captain_user_key_.Clear();
+      }
       if (owner_->get_owner().is(member_data.user_key())) {
-        if (is_member_) {
-          is_member_ = false;
+        if (check_flag(team_flag::kMember)) {
+          set_flag(team_flag::kMember, false);
 
-          // 不再是成员时要下发快照
-          insert_dirty_snapshot_handle();
+          // 本人的移除由 manager 下发 team_remove，保留其他成员的增量语义。
+          owner_->insert_dirty_handle_for_team(team_key_);
         }
 
         cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
@@ -1082,7 +1120,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
 
 void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
   // 快照脏数据待下发时，重放期间的变更已由快照覆盖，无需再追加增量
-  if (pending_dirty_snapshot_) {
+  if (check_flag(team_flag::kPendingDirtySnapshot)) {
     return;
   }
   if (!insert_dirty_action_handle()) {
@@ -1165,6 +1203,12 @@ void user_team::append_pending_dirty_action(rpc::context& ctx, const ::atfw::tea
   // 动作里携带的成员共享数据解包后随动作下发，客户端无需再关心 Any 的打包类型
   if (nullptr != member_shared_data) {
     for (const auto& item : *member_shared_data) {
+      if (action.has_member_update() &&
+          (item.value().data().type_url().empty() || item.value().data().value().empty())) {
+        // 删除没有可解包的模块，保留原 action 的 keyed 删除标记。
+        one_action.mutable_action()->mutable_member_update()->add_shared_member_data()->set_key(item.key());
+        continue;
+      }
       if (item.value().data().type_url().empty()) {
         continue;
       }
@@ -1286,7 +1330,7 @@ void user_team::remove_pending_join_request(const PROJECT_NAMESPACE_ID::DUserIDK
 
 void user_team::reset_cached_state(rpc::context& ctx) {
   // 缓存整体失效时, 只对真实删除的缓存项驱动处理器复位派生本地状态(未缓存的 key 不可能产生派生状态,
-  // 不触发回调); 否则快照重建/删除后 is_matching_ 等派生状态会残留旧值
+  // 不触发回调); 否则快照重建/删除后匹配中等派生状态会残留旧值
   const auto& handle_map = user_team_utility::get_team_shared_data_update_handlers_map();
   for (const auto& kv : cached_team_shared_data_) {
     auto iter = handle_map.find(kv.first);
@@ -1347,7 +1391,7 @@ size_t user_team::cleanup_expired_admissions(rpc::context& ctx) {
 
 void user_team::maybe_send_heartbeat(rpc::context& ctx) {
   // 只在确认是成员且频道可用时心跳，退出中/未入队/频道销毁时无需心跳
-  if (!is_member_ || is_exiting() || channel_subscriber_->is_destroyed()) {
+  if (!check_flag(team_flag::kMember) || is_exiting() || channel_subscriber_->is_destroyed()) {
     return;
   }
   if (!channel_subscriber_->is_ready()) {
@@ -1384,6 +1428,12 @@ void user_team::maybe_send_heartbeat(rpc::context& ctx) {
 }
 
 void user_team::load_snapshot(rpc::context& ctx) {
+  // 对象已从 manager 索引移除(收编/被新代际替换)时, 迟到的快照回调不再处理,
+  // 防止污染新代际的索引与脏数据
+  if (!is_active_generation()) {
+    return;
+  }
+
   FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, load a snapshot, last sequence:{}", owner_->get_owner(),
                team_key_.zone_id(), team_key_.team_id(), channel_subscriber_->get_last_message_sequence());
 
@@ -1394,7 +1444,7 @@ void user_team::load_snapshot(rpc::context& ctx) {
     return;
   }
 
-  // 回放压缩点之后的增量日志
+  // 回放压缩点之后的增量日志(本端的 add_member 可能尚未落入快照，由回放补齐成员身份)
   rpc::dtmq::client_subscriber::query_options options;
   options.start_sequence = channel_subscriber_->get_last_removed_sequence() + 1;
   channel_subscriber_->query_cached_message(
@@ -1404,6 +1454,13 @@ void user_team::load_snapshot(rpc::context& ctx) {
         return true;
       },
       options);
+
+  // 只有加载后确认是成员才下发快照: 加入流程中首个落库快照可能尚未包含本端
+  // (成员加入只走增量日志、不落快照), 等成为成员(add_member 日志)时再下发,
+  // 否则客户端会先看到一份不含自己的队伍数据
+  if (check_flag(team_flag::kMember)) {
+    insert_dirty_snapshot_handle();
+  }
 
   // 如果已经可以被删除，则直接通知 manager 移除
   if (can_be_removed(ctx)) {
@@ -1418,6 +1475,12 @@ void user_team::load_snapshot(rpc::context& ctx) {
 }
 
 void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data) {
+  // 对象已从 manager 索引移除(收编/被新代际替换)时, 迟到消息不再处理,
+  // 防止重复登记脏数据或影响新代际
+  if (!is_active_generation()) {
+    return;
+  }
+
   if (data.sequence() <= channel_saved_sequence_) {
     // 已经处理过，直接忽略
     return;
@@ -1440,7 +1503,7 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
       break;
     }
     case atfw::dtmq::DChannelMessageDetail::kDestroy: {
-      is_member_ = false;
+      set_flag(team_flag::kMember, false);
       // remove_team 会标记脏数据下发，所以这里不用冗余插入脏handle
 
       cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
@@ -1470,11 +1533,11 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
 }
 
 void user_team::set_matching(rpc::context& /*ctx*/, bool value) {
-  if (is_matching_ == value) {
+  if (check_flag(team_flag::kMatching) == value) {
     return;
   }
 
-  is_matching_ = value;
+  set_flag(team_flag::kMatching, value);
 
   // TODO(owent): 发起匹配流程
 }
@@ -1490,7 +1553,7 @@ void user_team::do_team_shared_data(rpc::context& ctx,
     // 与 teamsvr-room apply_team_update 一致(GAP-09): 携带 key 但 type_url 或 payload 为空的项表示删除该 key
     if (item.value().data().type_url().empty() || item.value().data().value().empty()) {
       if (cached_team_shared_data_.erase(item.key()) > 0) {
-        // 删除已缓存的模块也要驱动处理器复位派生本地状态(如 is_matching_)
+        // 删除已缓存的模块也要驱动处理器复位派生本地状态(如匹配中标志)
         auto iter = handle_map.find(item.key());
         if (iter != handle_map.end() && iter->second.do_delete != nullptr) {
           iter->second.do_delete(ctx, *this, item.key());
@@ -1589,25 +1652,4 @@ void user_team::do_member_shared_data(
     }
     iter->second.do_update(ctx, *this, user_key, *unpacked);
   }
-}
-
-void user_team::notify_destroy_to_client(rpc::context& ctx) {
-  // 真实 destroy_team action 已追加(WAL 事件路径)则不再合成; 频道销毁/个人解散通知路径合成等价 action,
-  // 客户端以 increase 中的 destroy_team 作为队伍解散信号
-  bool has_pending_destroy = false;
-  for (const auto& one_action : pending_dirty_actions_) {
-    if (one_action.action().action_case() == atfw::team::DTeamAction::kDestroyTeam) {
-      has_pending_destroy = true;
-      break;
-    }
-  }
-  if (!has_pending_destroy && !destroyed_dirty_notified_) {
-    atfw::team::DTeamAction action;
-    protobuf_copy_message(*action.mutable_destroy_team(), team_key_);
-    append_pending_dirty_action(ctx, action);
-  }
-  destroyed_dirty_notified_ = true;
-
-  // 不经过 CS 任务收尾的回调路径(快照/增量/频道事件)都需要主动触发一次脏数据下发
-  owner_->get_owner().send_all_syn_msg(ctx);
 }

@@ -165,11 +165,41 @@ user_team_manager::user_team_manager(user& owner)
           PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber),
       [](rpc::context& ctx, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
         auto& team_mgr = user_inst.get_user_team_manager();
-        team_mgr.is_pulled_ = true;
+        team_mgr.cleanup_expired_invitation(ctx);
+        team_mgr.cleanup_expired_join_request(ctx);
         team_mgr.foreach_running_team(
             [&ctx, &rsp](uint32_t /*group_type*/, const atfw::util::nostd::nonnull<user_team::ptr_t>& team) {
               team->dump(ctx, *rsp.mutable_user_team()->add_team());
+              // get-info 响应导出了完整队伍数据，客户端已知晓该队伍
+              user_team::manager_accessor::set_client_announced(*team, true);
+              user_team::manager_accessor::set_dirty_remove_sent(*team, false);
             });
+        for (const auto& invitation : team_mgr.pending_invitation_by_expired_time_) {
+          auto* output = rsp.mutable_user_team()->add_pending_invitation();
+          protobuf_copy_message(*output, *invitation);
+          output->clear_invitee_private_channel();
+        }
+        for (const auto& request : team_mgr.pending_join_request_by_expired_time_) {
+          auto* output = rsp.mutable_user_team()->add_pending_join_request();
+          protobuf_copy_message(*output, *request);
+          output->clear_requester_private_channel();
+          output->set_user_router_server_id(0);
+        }
+        // 该响应包含完整当前状态，之前积累的增量已被覆盖。
+        // 登记时的对象可能已被收编/替换, 与 flush 收尾一致, 索引中的当前代际也要一并清理
+        for (auto& dirty : team_mgr.dirty_team_) {
+          auto current_team = team_mgr.get_team_by_team_key(dirty.first);
+          if (current_team && current_team != dirty.second) {
+            current_team->clear_dirty_data(ctx);
+          }
+          if (dirty.second) {
+            dirty.second->clear_dirty_data(ctx);
+          }
+        }
+        team_mgr.dirty_team_.clear();
+        team_mgr.dirty_invitation_.clear();
+        team_mgr.dirty_join_request_.clear();
+        team_mgr.is_pulled_ = true;
       });
 }
 
@@ -220,9 +250,17 @@ void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
     }
 
     for (const auto& team_key : can_be_removed_keys) {
-      group.second.pending_to_exit.erase(team_key);
-      team_index_.erase(team_key);
       insert_dirty_handle_for_team(team_key);
+      group.second.pending_to_exit.erase(team_key);
+      // 从索引移除时同步清代际标志, 对象的迟到回调经 is_active_generation 短路
+      auto iter_removed = team_index_.find(team_key);
+      if (iter_removed != team_index_.end()) {
+        if (iter_removed->second) {
+          user_team::manager_accessor::set_index_active(*iter_removed->second, false);
+        }
+        team_index_.erase(iter_removed);
+      }
+      is_dirty_ = true;
     }
 
     // 如果当前队伍长时间都检测不到在队伍中，则是数据链路出现问题，直接准备退出
@@ -314,10 +352,17 @@ bool user_team_manager::is_dirty() const { return is_dirty_; }
 
 void user_team_manager::clear_dirty() { is_dirty_ = false; }
 
+void user_team_manager::send_dirty_data(rpc::context& ctx) {
+  if (!dirty_team_.empty() || !dirty_invitation_.empty() || !dirty_join_request_.empty()) {
+    owner_->send_all_syn_msg(ctx);
+  }
+}
+
 void user_team_manager::foreach_running_team(
     atfw::util::nostd::function_ref<void(uint32_t, const atfw::util::nostd::nonnull<user_team::ptr_t>&)> fn) const {
   for (const auto& group : team_group_) {
-    if (group.second.current && !group.second.current->is_exiting() && !group.second.current->is_destroyed()) {
+    if (group.second.current && group.second.current->is_member() && !group.second.current->is_exiting() &&
+        !group.second.current->is_destroyed()) {
       fn(group.first, group.second.current);
     }
   }
@@ -588,7 +633,6 @@ void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequ
 }
 
 void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMemberJoinData& join_data) {
-  // Implementation here
   if (join_data.team_key().team_id() == 0 || join_data.team_channel().channel_id().empty()) {
     return;
   }
@@ -623,20 +667,22 @@ void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMembe
       }
       iter_group->second.current = exists_team;
       // 已存在的新队伍要重新下发快照,因为之前可能已经下发过移除通知
-      exists_team->insert_dirty_snapshot_handle();
-
       exists_team->init_cached_data(join_data.captain_user_key(), join_data.user_role());
+      exists_team->make_current_actived(ctx);
+      exists_team->insert_dirty_snapshot_handle();
+      is_dirty_ = true;
       FCTXLOGINFO(ctx, "{} add_team: team {}:{} is still in exit queue, restore it to current", *owner_,
                   team_key.zone_id(), team_key.team_id());
     } else {
       FCTXLOGINFO(ctx, "{} add_team: team {}:{} already exists, skip to add a new one", *owner_, team_key.zone_id(),
                   team_key.team_id());
+      // 重复入队(含退出流程中重新成为当前队伍前的通知)重置激活时间，避免被 wait_to_be_member 超时误踢
+      exists_team->make_current_actived(ctx);
     }
     // 入队事件到达说明同队的邀请/加入请求已有结论(无论是否经过 approve), 清理自己的 pending
     remove_pending_invitation(ctx, team_key);
     remove_pending_join_request(ctx, team_key);
 
-    exists_team->make_current_actived(ctx);
     return;
   }
 
@@ -660,6 +706,8 @@ void user_team_manager::add_team(rpc::context& ctx, const atfw::team::DTeamMembe
   // 新的team会在load_snapshot时下发脏数据快照
 
   team_index_.emplace(team_key, team_ptr);
+  user_team::manager_accessor::set_index_active(*team_ptr, true);
+  is_dirty_ = true;
   // 同队的邀请/加入请求已有结论, 清理自己的 pending
   remove_pending_invitation(ctx, team_key);
   remove_pending_join_request(ctx, team_key);
@@ -688,11 +736,7 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
   } else if (!team_ptr->is_exiting()) {
     team_ptr->set_exit_team(ctx, exit_reason);
   }
-  // 解散语义: 客户端必须先收到 destroy increase(真实 destroy action 已追加则直接下发, 否则合成等价通知),
-  // 之后对象移除/dirty handle 注销才不会吞掉解散通知
-  if (atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM == exit_reason) {
-    team_ptr->notify_destroy_to_client(ctx);
-  }
+  insert_dirty_handle_for_team(team_key);
 
   auto iter_group = team_group_.find(team_ptr->get_team_type());
   if (iter_group != team_group_.end()) {
@@ -700,22 +744,24 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
       // 如果是当前队伍，且已经不是成员了或退出超时，则直接移除
       if (team_ptr->can_be_removed(ctx)) {
         iter_group->second.pending_to_exit.erase(team_key);
+        user_team::manager_accessor::set_index_active(*team_ptr, false);
         team_index_.erase(iter);
-        insert_dirty_handle_for_team(team_key);
       } else {
         // 如果是当前队伍，仍然是成员，移入到退出列表中，以便后续重试发送移除成员的消息
         iter_group->second.pending_to_exit.emplace(iter_group->second.current->get_team_key(),
                                                    iter_group->second.current);
       }
       iter_group->second.current.reset();
+      is_dirty_ = true;
     } else {
       // 如果已经在退出列表中，检查是否可以直接移除
       auto iter_pending = iter_group->second.pending_to_exit.find(team_key);
       if (iter_pending != iter_group->second.pending_to_exit.end()) {
         if (iter_pending->second->can_be_removed(ctx)) {
           iter_group->second.pending_to_exit.erase(iter_pending);
+          user_team::manager_accessor::set_index_active(*team_ptr, false);
           team_index_.erase(iter);
-          insert_dirty_handle_for_team(team_key);
+          is_dirty_ = true;
         }
       }
     }
@@ -731,8 +777,8 @@ size_t user_team_manager::cleanup_expired_join_request(rpc::context& ctx) {
       expired_team_keys;
 
   auto now = ctx.logical_now();
-  for (auto iter = pending_join_request_by_expired_time_.begin(); iter != pending_join_request_by_expired_time_.end();
-       ++iter) {
+  for (auto iter = pending_join_request_by_expired_time_.begin();
+       iter != pending_join_request_by_expired_time_.end();) {
     if (!*iter) {
       iter = pending_join_request_by_expired_time_.erase(iter);
       continue;
@@ -743,6 +789,7 @@ size_t user_team_manager::cleanup_expired_join_request(rpc::context& ctx) {
     }
 
     expired_team_keys.insert((*iter)->team_key());
+    ++iter;
   }
 
   size_t ret = 0;
@@ -767,6 +814,7 @@ bool user_team_manager::add_pending_join_request(rpc::context& ctx, const team_j
   if (expired_timepoint <= ctx.logical_now()) {
     return false;
   }
+  is_dirty_ = true;
 
   // 覆盖检查
   do {
@@ -831,6 +879,7 @@ bool user_team_manager::remove_pending_join_request(rpc::context& /*ctx*/, const
 
   pending_join_request_by_expired_time_.erase(iter->second);
   pending_join_request_by_team_id_.erase(iter);
+  is_dirty_ = true;
 
   insert_dirty_handle_for_join_request(team_key);
   return true;
@@ -841,8 +890,7 @@ size_t user_team_manager::cleanup_expired_invitation(rpc::context& ctx) {
       expired_team_keys;
 
   auto now = ctx.logical_now();
-  for (auto iter = pending_invitation_by_expired_time_.begin(); iter != pending_invitation_by_expired_time_.end();
-       ++iter) {
+  for (auto iter = pending_invitation_by_expired_time_.begin(); iter != pending_invitation_by_expired_time_.end();) {
     if (!*iter) {
       iter = pending_invitation_by_expired_time_.erase(iter);
       continue;
@@ -853,6 +901,7 @@ size_t user_team_manager::cleanup_expired_invitation(rpc::context& ctx) {
     }
 
     expired_team_keys.insert((*iter)->team_key());
+    ++iter;
   }
 
   size_t ret = 0;
@@ -877,6 +926,7 @@ bool user_team_manager::add_pending_invitation(rpc::context& ctx, const team_inv
   if (expired_timepoint <= ctx.logical_now()) {
     return false;
   }
+  is_dirty_ = true;
 
   // 覆盖检查
   do {
@@ -941,6 +991,7 @@ bool user_team_manager::remove_pending_invitation(rpc::context& /*ctx*/, const a
 
   pending_invitation_by_expired_time_.erase(iter->second);
   pending_invitation_by_team_id_.erase(iter);
+  is_dirty_ = true;
 
   insert_dirty_handle_for_invitation(team_key);
   return true;
@@ -962,70 +1013,102 @@ bool user_team_manager::insert_dirty_handle() {
           return;
         }
 
-        if (!output.user_dirty) {
+        // 直接写入输出消息, 记录追加前的基数: 脏集合非空不代表有内容要发(全部去重/已移除未发布过时为空),
+        // 末尾按基数判定, 仍为空则回收本次创建的 SCUserDirtyChgSync, 避免向客户端下发空消息
+        const bool created_here = !output.user_dirty;
+        if (created_here) {
           output.user_dirty = gsl::make_unique<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync>();
         }
+        auto* output_teams = output.user_dirty->mutable_dirty_team();
+        const int output_base_size = output_teams->size();
 
         // team的脏数据dump在team里执行，如果找不到说明是移除
-        for (const auto& key : team_mgr.dirty_team_) {
+        for (const auto& dirty : team_mgr.dirty_team_) {
+          const auto& key = dirty.first;
           auto team = team_mgr.get_team_by_team_key(key);
           if (!team) {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+            // 索引中找不到说明队伍已移除; 只有客户端曾经收到过这个队伍的数据才需要下发 remove
+            // (对象缺失时无法确认是否下发过，保守下发, 客户端对未知队伍的 remove 是幂等的)
+            if (!dirty.second || user_team::manager_accessor::is_client_announced(*dirty.second)) {
+              protobuf_copy_message(*output_teams->Add()->mutable_team_remove(), key);
+            }
+            if (dirty.second) {
+              user_team::manager_accessor::set_client_announced(*dirty.second, false);
+              user_team::manager_accessor::set_dirty_remove_sent(*dirty.second, true);
+            }
             continue;
           }
 
-          // 如果离开成员状态，说明正在准备退出这个队伍，对客户端来说，当成移除处理
-          if (!team->is_member()) {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+          // remove 已下发且之后未重新激活(add_team 经 make_current_actived 复位该标记),
+          // 直接跳过, 无须再走 is_removed_for_client 的索引查找
+          if (user_team::manager_accessor::is_dirty_remove_sent(*team)) {
             continue;
           }
 
-          // 已销毁频道和正在退出的队伍，对客户端来说，当成移除处理
-          if (team->is_exiting() || team->is_destroyed()) {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
+          // 离开成员状态/正在退出/频道已销毁/已让出当前队伍或被新对象替换，对客户端来说都当成移除处理
+          // (与 user_team::insert_dirty_action_handle 的增量准入共用同一判定)
+          if (team->is_removed_for_client()) {
+            // 即使本次因未发布过而无需下发，也标记为已处理，防止退出重试/迟到事件/清理流程重复标记
+            user_team::manager_accessor::set_dirty_remove_sent(*team, true);
+            if (user_team::manager_accessor::is_client_announced(*team)) {
+              user_team::manager_accessor::set_client_announced(*team, false);
+              protobuf_copy_message(*output_teams->Add()->mutable_team_remove(), key);
+            }
+
             continue;
           }
 
-          // 如果要dump的队伍不是当前队伍，说明正在准备退出这个队伍，对客户端来说，当成移除处理
-          if (team_mgr.get_team_by_team_type(static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(team->get_team_type())) !=
-              team) {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_team_remove(), key);
-            continue;
+          // 直接 dump 到输出 entry: dump 无内容时保持 dirty_type 未设置, 回滚该 entry, 空 entry 不下发
+          team->dump_dirty_data(ctx, *output_teams->Add());
+          if (PROJECT_NAMESPACE_ID::DUserTeamDirty::DIRTY_TYPE_NOT_SET ==
+              output_teams->at(output_teams->size() - 1).dirty_type_case()) {
+            output_teams->RemoveLast();
+          } else {
+            user_team::manager_accessor::set_client_announced(*team, true);
           }
-
-          team->dump_dirty_data(ctx, *output.user_dirty->mutable_dirty_team()->Add());
         }
 
         // 更新数据和新增都是add，找不到则是移除
         for (const auto& key : team_mgr.dirty_invitation_) {
           auto invitation = team_mgr.get_pending_invitation(key);
           if (invitation) {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_add_pending_invitation(),
-                                  *invitation);
+            auto* added = output_teams->Add()->mutable_add_pending_invitation();
+            protobuf_copy_message(*added, *invitation);
+            added->clear_invitee_private_channel();
           } else {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_remove_pending_invitation(),
-                                  key);
+            protobuf_copy_message(*output_teams->Add()->mutable_remove_pending_invitation(), key);
           }
         }
 
         for (const auto& key : team_mgr.dirty_join_request_) {
           auto join_request = team_mgr.get_pending_join_request(key);
           if (join_request) {
-            protobuf_copy_message(*output.user_dirty->mutable_dirty_team()->Add()->mutable_add_pending_join_request(),
-                                  *join_request);
+            auto* added = output_teams->Add()->mutable_add_pending_join_request();
+            protobuf_copy_message(*added, *join_request);
+            added->clear_requester_private_channel();
+            added->set_user_router_server_id(0);
           } else {
-            protobuf_copy_message(
-                *output.user_dirty->mutable_dirty_team()->Add()->mutable_remove_pending_join_request(), key);
+            protobuf_copy_message(*output_teams->Add()->mutable_remove_pending_join_request(), key);
           }
+        }
+
+        if (output_teams->size() == output_base_size && created_here) {
+          // 本次没有追加任何内容且消息由本回调创建, 回收以避免空推送; 已有消息则原样保留其他模块的内容
+          output.user_dirty.reset();
         }
       },
       [](rpc::context& ctx, user& user_inst) {
         auto& team_mgr = user_inst.get_user_team_manager();
 
-        for (const auto& key : team_mgr.dirty_team_) {
-          auto team = team_mgr.get_team_by_team_key(key);
-          if (team) {
-            team->clear_dirty_data(ctx);
+        for (const auto& dirty : team_mgr.dirty_team_) {
+          // 登记时的对象可能已被收编/替换(条目未随 flush 及时清理), 此时要清理的是索引里的当前代际,
+          // 否则当前代际的 pending 快照/增量标志残留, 下一次 flush 会重复下发
+          auto current_team = team_mgr.get_team_by_team_key(dirty.first);
+          if (current_team && current_team != dirty.second) {
+            current_team->clear_dirty_data(ctx);
+          }
+          if (dirty.second) {
+            dirty.second->clear_dirty_data(ctx);
           }
         }
 
@@ -1038,10 +1121,16 @@ bool user_team_manager::insert_dirty_handle() {
 }
 
 bool user_team_manager::insert_dirty_handle_for_team(const atfw::team::DTeamKey& key) {
+  auto team = get_team_by_team_key(key);
+  // remove 已下发(或无需下发)后不重复标记; 重新激活(add_team 经 make_current_actived)会复位该标记,
+  // 因此这里无须再调用 is_removed_for_client 做索引查找
+  if (team && user_team::manager_accessor::is_dirty_remove_sent(*team)) {
+    return false;
+  }
   if (!insert_dirty_handle()) {
     return false;
   }
-  dirty_team_.insert(key);
+  dirty_team_.emplace(key, team);
   return true;
 }
 

@@ -93,9 +93,10 @@ inline void register_lobbysvr_config_loader() {
 }
 
 // Start the fixture runtime with the lobbysvr config loader installed. Team cases use {ss, cs}.
-inline bool start_team_runtime(atfw::testing::runtime& test,
-                               std::vector<atfw::testing::feature> features = {atfw::testing::feature::ss,
-                                                                               atfw::testing::feature::cs}) {
+inline bool start_team_runtime(atfw::testing::runtime& test, std::vector<atfw::testing::feature> features = {
+                                                                 atfw::testing::feature::ss,
+                                                                 atfw::testing::feature::cs,
+                                                             }) {
   atfw::testing::runtime_options options;
   options.features = std::move(features);
   options.setup_callback = [](atfw::testing::runtime&) -> int {
@@ -107,11 +108,11 @@ inline bool start_team_runtime(atfw::testing::runtime& test,
 }
 
 // ---- Well-known ids ---------------------------------------------------------------
-inline constexpr uint64_t kDtmqProxyNodeId = 0x1C0001;
-inline constexpr uint32_t kZoneId = 1;
-inline constexpr uint64_t kCaptainUserId = 90001;
-inline constexpr uint64_t kGatewayNodeId = 0x82000001;
-inline constexpr uint64_t kTeamRoomNodeId = 0x12000001;
+constexpr uint64_t kDtmqProxyNodeId = 0x1C0001;
+constexpr uint32_t kZoneId = 1;
+constexpr uint64_t kCaptainUserId = 90001;
+constexpr uint64_t kGatewayNodeId = 0x82000001;
+constexpr uint64_t kTeamRoomNodeId = 0x12000001;
 
 // ---- Key builders -----------------------------------------------------------------
 inline atfw::team::DTeamKey make_team_key(int64_t team_id, uint32_t zone_id = kZoneId) {
@@ -670,9 +671,25 @@ inline bool restore_team_from_table(atfw::testing::runtime& test, const user::pt
       });
 }
 
-// Bind a mock CS client session to the user so dirty pushes and CS responses are captured per session.
+// Invoke the production get-info handler to establish the client's team subscription.
+inline bool pull_team_data(atfw::testing::runtime& test, const user::ptr_t& user_pointer,
+                           PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& response) {
+  return run_sync_task(test, "team.pull_data", [&user_pointer, &response](rpc::context& ctx) -> rpc::result_code_type {
+    const auto* field = PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+        PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber);
+    for (const auto& handle : user::get_get_info_handle()) {
+      if (handle.first == field && handle.second != nullptr) {
+        handle.second(ctx, response, *user_pointer);
+        RPC_RETURN_CODE(0);
+      }
+    }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  });
+}
+
+// Bind and pull team data through its production handler. Pass false to test the pre-subscription state.
 inline bool bind_client_session(atfw::testing::runtime& test, const user::ptr_t& user_ptr, uint64_t session_id,
-                                atfw::testing::mock_client& out_client) {
+                                atfw::testing::mock_client& out_client, bool pull_team = true) {
   out_client = test.cs().create_client(kGatewayNodeId, session_id);
   if (!out_client || 0 != out_client.add()) {
     CASE_MSG_INFO() << "client add failed\n";
@@ -686,11 +703,16 @@ inline bool bind_client_session(atfw::testing::runtime& test, const user::ptr_t&
     CASE_MSG_INFO() << "session not found\n";
     return false;
   }
-  return run_sync_task(test, "team.bind_session", [&user_ptr, &sess](rpc::context& ctx) -> rpc::result_code_type {
+  bool bound = run_sync_task(test, "team.bind_session", [&user_ptr, &sess](rpc::context& ctx) -> rpc::result_code_type {
     sess->set_user(user_ptr);
     user_ptr->set_session(ctx, sess);
     RPC_RETURN_CODE(0);
   });
+  if (!bound || !pull_team) {
+    return bound;
+  }
+  PROJECT_NAMESPACE_ID::SCUserGetInfoRsp response;
+  return pull_team_data(test, user_ptr, response);
 }
 
 // Join a team through the real personal-channel joined_team notification (sequence/hash chained on the private
@@ -896,12 +918,20 @@ inline std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_
 struct team_dirty_view {
   std::vector<PROJECT_NAMESPACE_ID::DUserTeamSnapshot> snapshots;         // arrival order
   std::vector<PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction> actions;  // arrival order across all increases
+  std::vector<atfw::team::DTeamKey> removals;
+  std::vector<atfw::team::DTeamInvitation> added_pending_invitations;
+  std::vector<atfw::team::DTeamKey> removed_pending_invitations;
+  std::vector<atfw::team::DTeamJoinRequest> added_pending_join_requests;
+  std::vector<atfw::team::DTeamKey> removed_pending_join_requests;
 };
 
 inline team_dirty_view collect_team_dirty(atfw::testing::runtime& test, uint64_t session_id, int64_t team_id) {
   team_dirty_view ret;
   for (const auto& push : collect_dirty_sync_pushes(test, session_id)) {
     for (const auto& dirty_team : push.dirty_team()) {
+      if (dirty_team.has_team_remove() && dirty_team.team_remove().team_id() == team_id) {
+        ret.removals.push_back(dirty_team.team_remove());
+      }
       if (dirty_team.has_team_snapshot() && dirty_team.team_snapshot().snapshot().team_key().team_id() == team_id) {
         ret.snapshots.push_back(dirty_team.team_snapshot());
       }
@@ -909,6 +939,21 @@ inline team_dirty_view collect_team_dirty(atfw::testing::runtime& test, uint64_t
         for (const auto& action : dirty_team.team_increase().actions()) {
           ret.actions.push_back(action);
         }
+      }
+      if (dirty_team.has_add_pending_invitation() &&
+          dirty_team.add_pending_invitation().team_key().team_id() == team_id) {
+        ret.added_pending_invitations.push_back(dirty_team.add_pending_invitation());
+      }
+      if (dirty_team.has_remove_pending_invitation() && dirty_team.remove_pending_invitation().team_id() == team_id) {
+        ret.removed_pending_invitations.push_back(dirty_team.remove_pending_invitation());
+      }
+      if (dirty_team.has_add_pending_join_request() &&
+          dirty_team.add_pending_join_request().team_key().team_id() == team_id) {
+        ret.added_pending_join_requests.push_back(dirty_team.add_pending_join_request());
+      }
+      if (dirty_team.has_remove_pending_join_request() &&
+          dirty_team.remove_pending_join_request().team_id() == team_id) {
+        ret.removed_pending_join_requests.push_back(dirty_team.remove_pending_join_request());
       }
     }
   }

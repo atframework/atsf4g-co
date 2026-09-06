@@ -2319,7 +2319,7 @@ static void internal_subscriber_manager_do_retry_heartbeat(rpc::context& /*ctx*/
   std::unordered_set<shared_subscriber*> retry_subscriber_set;
   retry_subscriber_set.swap(mgr.retry_heartbeat_subscriber);
 
-  for (auto* subscriber : retry_subscriber_set) {
+  for (const auto& subscriber : retry_subscriber_set) {
     if (subscriber == nullptr) {
       continue;
     }
@@ -2394,7 +2394,7 @@ mq_client_subscriber_wal_client_type::vtable_pointer shared_subscriber::create_c
   using wal_client_type = mq_client_subscriber_wal_client_type;
   using wal_object_type = wal_client_type::object_type;
   using snapshot_type = mq_client_subscriber_storage_type;
-  using wal_result_code = atfw::util::distributed_system::wal_result_code;
+  using atfw::util::distributed_system::wal_result_code;
 
   static wal_client_type::vtable_pointer ret;
   if (ret) {
@@ -2786,8 +2786,10 @@ void shared_subscriber::foreach_registered_client_subscriber(
   auto hold_lifetime = shared_from_this();
 
   lock_registered_client_guard guard(*this);
-  std::unordered_set<client_subscriber*>* subscriber_container[] = {&registered_client_auto_create_channel_,
-                                                                    &registered_client_no_create_channel_};
+  std::unordered_set<client_subscriber*>* subscriber_container[] = {
+      &registered_client_auto_create_channel_,
+      &registered_client_no_create_channel_,
+  };
   for (auto* container : subscriber_container) {
     for (const auto& client : *container) {
       if (client == nullptr) {
@@ -2973,7 +2975,7 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
     return;
   }
   set_flag(subscriber_flag::kInCallbackReceiveEvent, true);
-  auto reset_flag_guard = gsl::finally([this]() { set_flag(subscriber_flag::kInCallbackReceiveEvent, false); });
+  auto reset_flag_guard = gsl::finally([this] { set_flag(subscriber_flag::kInCallbackReceiveEvent, false); });
 
   // Ignore events if the subscriber is not ready and the event is not a snapshot
   int64_t start_sequence = 0;
@@ -3102,6 +3104,16 @@ void shared_subscriber::receive_event_sync(rpc::context& ctx, const atfw::dtmq::
     update_private_data(ctx, update_private_data_sequence, event_sync.channel_runtime().private_data());
   }
 
+  // 增量同步的元数据也可能声明频道已销毁(销毁 WAL 日志丢失/被压缩或事件仅包含元数据时),
+  // 与快照路径(load_metadata)一致收敛到已销毁状态; set_destroyed 内部负责合并与去重,
+  // 不早于本端已知创建代际的销毁才生效(忽略上一个代际的迟到销毁)
+  if (failure_log_sequence == 0 && event_sync.channel_metadata().destroy_timepoint().seconds() > 0 &&
+      event_sync.channel_metadata().destroy_sequence() > 0 &&
+      event_sync.channel_metadata().destroy_sequence() >= create_sequence_) {
+    set_destroyed(ctx, event_sync.channel_metadata().destroy_sequence(),
+                  protobuf_to_system_clock(event_sync.channel_metadata().destroy_timepoint()));
+  }
+
   // 同步GC边界
   if (event_sync.channel_runtime().last_removed_sequence() > failure_log_sequence) {
     compact(ctx, event_sync.channel_runtime().last_removed_sequence());
@@ -3136,7 +3148,7 @@ void shared_subscriber::load_snapshot(rpc::context& ctx, const atfw::dtmq::DChan
     return;
   }
   set_flag(subscriber_flag::kInCallbackLoadSnapshot, true);
-  auto reset_flag_guard = gsl::finally([this]() { set_flag(subscriber_flag::kInCallbackLoadSnapshot, false); });
+  auto reset_flag_guard = gsl::finally([this] { set_flag(subscriber_flag::kInCallbackLoadSnapshot, false); });
 
   // 要考虑异常情况快照回退，保证最终一致性
   if (snapshot.channel_metadata().has_channel_configure()) {

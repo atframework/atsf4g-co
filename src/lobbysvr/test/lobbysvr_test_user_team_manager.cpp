@@ -13,6 +13,7 @@
 // - personal-channel receipt events drive the manager-level pending invitation/join-request lists.
 
 #include <string>
+#include <utility>
 
 #include "lobbysvr_test_user_team_common.h"  // NOLINT: build/include_subdir
 namespace {
@@ -171,6 +172,7 @@ CASE_TEST(lobbysvr_user_team, minute_refresh_keeps_member_current_team) {
                                 team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
   team_test::add_storage_member(team_storage, kUserId, team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
   CASE_EXPECT_TRUE(team_test::apply_team_snapshot(test, kTeamId, team_storage));
+
   CASE_EXPECT_TRUE(team_test::pump_until(
       test, [&] { return atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL == current->get_cached_permission_role(); }));
 
@@ -628,7 +630,7 @@ CASE_TEST(lobbysvr_user_team, incremental_actions_update_cache_and_dirty_push) {
     auto view = team_test::collect_team_dirty(test, kSessionId, kTeamId);
     CASE_EXPECT_EQ(1, static_cast<int>(view.snapshots.size()));
     if (!view.snapshots.empty()) {
-      CASE_EXPECT_EQ(2, view.snapshots[0].snapshot().member_size());
+      CASE_EXPECT_EQ(2, view.snapshots.at(0).snapshot().member_size());
     }
     CASE_EXPECT_TRUE(view.actions.empty());
   }
@@ -941,7 +943,7 @@ CASE_TEST(lobbysvr_user_team, member_events_manage_pending_admissions) {
   private_chain.channel_key = private_channel_key;
 
   auto now = std::chrono::system_clock::now();
-  auto valid_expiry = [&now]() { return now + std::chrono::seconds{60}; };
+  auto valid_expiry = [&now] { return now + std::chrono::seconds{60}; };
 
   // invited -> 待处理邀请入列，完整字段(含 room 填充的 PUBLIC admission 数据)逐项保存
   const auto ready_module = team_test::make_member_ready_module(true);
@@ -1117,7 +1119,7 @@ CASE_TEST(lobbysvr_user_team, table_roundtrip_restores_pending_admissions) {
     return;
   }
   team_test::channel_event_chain private_chain;
-  private_chain.channel_key = private_channel_key;
+  private_chain.channel_key = std::move(private_channel_key);
 
   const auto now = std::chrono::system_clock::now();
   const auto long_expiry = now + std::chrono::seconds(300);
