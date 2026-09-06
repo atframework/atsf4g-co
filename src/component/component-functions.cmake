@@ -533,6 +533,7 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   set(multiValueArgs
       HEADERS
       SOURCES
+      MAIN_SOURCES
       RESOURCE_DIRECTORIES
       RESOURCE_FILES
       USE_COMPONENTS
@@ -559,23 +560,58 @@ function(project_component_declare_service TARGET_NAME SERVICE_ROOT_DIR)
   else()
     set(TARGET_FULL_NAME "${PROJECT_NAME}-component-${TARGET_NAME}")
   endif()
+  # MAIN_SOURCES holds the entry-point translation units (main()). Everything else is compiled once into a static
+  # implementation library (<TARGET_FULL_NAME>-private, alias components::<TARGET_NAME>::private) which the service
+  # executable and unit tests link, so tests reuse the compiled service objects instead of recompiling them. A static
+  # archive needs no import/export annotation (export tables and .def files only exist when linking a shared library
+  # or executable); force default symbol visibility and PIC so global visibility presets never hide symbols from
+  # consumers and the PCH .pic variant stays flag-compatible.
+  unset(project_component_declare_service_IMPL_TARGET_NAME)
+  if(project_component_declare_service_MAIN_SOURCES)
+    list(REMOVE_ITEM project_component_declare_service_SOURCES ${project_component_declare_service_MAIN_SOURCES})
+    set(project_component_declare_service_IMPL_TARGET_NAME "${TARGET_FULL_NAME}-private")
+  endif()
+
   echowithcolor(COLOR GREEN "-- Configure components::${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
 
   source_group(TREE ${SERVICE_ROOT_DIR} FILES ${project_component_declare_service_HEADERS}
-                                              ${project_component_declare_service_SOURCES})
-  add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_HEADERS}
-                                     ${project_component_declare_service_SOURCES})
+                                              ${project_component_declare_service_SOURCES}
+                                              ${project_component_declare_service_MAIN_SOURCES})
+  if(project_component_declare_service_IMPL_TARGET_NAME)
+    add_library("${project_component_declare_service_IMPL_TARGET_NAME}" STATIC
+                ${project_component_declare_service_HEADERS} ${project_component_declare_service_SOURCES})
+    set_target_properties(
+      "${project_component_declare_service_IMPL_TARGET_NAME}"
+      PROPERTIES C_VISIBILITY_PRESET "default"
+                 CXX_VISIBILITY_PRESET "default"
+                 VISIBILITY_INLINES_HIDDEN OFF
+                 POSITION_INDEPENDENT_CODE ON)
+    add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_MAIN_SOURCES})
+  else()
+    add_executable(${TARGET_FULL_NAME} ${project_component_declare_service_HEADERS}
+                                       ${project_component_declare_service_SOURCES})
+  endif()
 
   project_tool_set_target_incremental_link_database(${TARGET_FULL_NAME})
   project_tool_split_target_debug_sybmol(${TARGET_FULL_NAME})
   generate_for_pb_add_dependencies(${TARGET_FULL_NAME} "${project_component_declare_service_GENERATED_FLOW_NAMES}")
 
   target_compile_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  if(project_component_declare_service_IMPL_TARGET_NAME)
+    generate_for_pb_add_dependencies("${project_component_declare_service_IMPL_TARGET_NAME}"
+                                     "${project_component_declare_service_GENERATED_FLOW_NAMES}")
+    target_compile_options("${project_component_declare_service_IMPL_TARGET_NAME}"
+                           PRIVATE ${PROJECT_COMMON_PRIVATE_COMPILE_OPTIONS})
+  endif()
   if(PROJECT_COMMON_PRIVATE_LINK_OPTIONS)
     target_link_options(${TARGET_FULL_NAME} PRIVATE ${PROJECT_COMMON_PRIVATE_LINK_OPTIONS})
   endif()
   if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
     target_include_directories("${TARGET_FULL_NAME}" PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+    if(project_component_declare_service_IMPL_TARGET_NAME)
+      target_include_directories("${project_component_declare_service_IMPL_TARGET_NAME}"
+                                 PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
+    endif()
   endif()
 
   if(project_component_declare_service_OUTPUT_NAME)
@@ -671,17 +707,30 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
         PARENT_SCOPE)
   endif()
 
-  target_include_directories(${TARGET_FULL_NAME} PRIVATE "$<BUILD_INTERFACE:${SERVICE_ROOT_DIR}>")
-  if(project_component_declare_service_INCLUDE_DIR)
-    target_include_directories(${TARGET_FULL_NAME}
-                               PRIVATE "$<BUILD_INTERFACE:${project_component_declare_service_INCLUDE_DIR}>")
+  if(project_component_declare_service_IMPL_TARGET_NAME)
+    # PUBLIC: the executable (MAIN_SOURCES) and unit tests inherit service include paths by linking the library.
+    target_include_directories("${project_component_declare_service_IMPL_TARGET_NAME}"
+                               PUBLIC "$<BUILD_INTERFACE:${SERVICE_ROOT_DIR}>")
+    if(project_component_declare_service_INCLUDE_DIR)
+      target_include_directories("${project_component_declare_service_IMPL_TARGET_NAME}"
+                                 PUBLIC "$<BUILD_INTERFACE:${project_component_declare_service_INCLUDE_DIR}>")
+    endif()
+    set(project_component_declare_service_CODE_TARGET_NAME "${project_component_declare_service_IMPL_TARGET_NAME}")
+  else()
+    target_include_directories(${TARGET_FULL_NAME} PRIVATE "$<BUILD_INTERFACE:${SERVICE_ROOT_DIR}>")
+    if(project_component_declare_service_INCLUDE_DIR)
+      target_include_directories(${TARGET_FULL_NAME}
+                                 PRIVATE "$<BUILD_INTERFACE:${project_component_declare_service_INCLUDE_DIR}>")
+    endif()
+    set(project_component_declare_service_CODE_TARGET_NAME "${TARGET_FULL_NAME}")
   endif()
 
   list(LENGTH project_component_declare_service_SOURCES __project_component_declare_service_SOURCES_LENGTH)
   if(PROJECT_ENABLE_UNITY_BUILD AND __project_component_declare_service_SOURCES_LENGTH GREATER
                                     PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
-    set_target_properties(${TARGET_FULL_NAME} PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
-                                                                        ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
+    set_target_properties("${project_component_declare_service_CODE_TARGET_NAME}"
+                          PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
+                                                    ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
   endif()
 
   # Precompile headers
@@ -716,7 +765,7 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
     project_pch_tool_increase_pch_weight(__current_pch_weight 1 ${project_component_declare_service_PCH_FILES})
 
     project_pch_tool_set_precompile_headers(
-      "${TARGET_FULL_NAME}"
+      "${project_component_declare_service_CODE_TARGET_NAME}"
       PCH_INIT_WEIGHT_RATIO
       ${__current_pch_weight}
       FOLDER
@@ -726,11 +775,20 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       REUSE_FROM_TARGET
       ${__LINK_TARGETS})
   else()
-    project_pch_tool_set_precompile_headers("${TARGET_FULL_NAME}" FOLDER "${PROJECT_NAME}/component/service"
+    project_pch_tool_set_precompile_headers("${project_component_declare_service_CODE_TARGET_NAME}"
+                                            FOLDER "${PROJECT_NAME}/component/service"
                                             REUSE_FROM_TARGET ${__LINK_TARGETS})
   endif()
 
-  target_link_libraries(${TARGET_FULL_NAME} PRIVATE ${__LINK_TARGETS})
+  if(project_component_declare_service_IMPL_TARGET_NAME)
+    # MAIN_SOURCES reuse the implementation library PCH; the executable only links the library.
+    project_pch_tool_set_precompile_headers("${TARGET_FULL_NAME}" FOLDER "${PROJECT_NAME}/component/service"
+                                            REUSE_FROM_TARGET "${project_component_declare_service_IMPL_TARGET_NAME}")
+    target_link_libraries("${project_component_declare_service_IMPL_TARGET_NAME}" PUBLIC ${__LINK_TARGETS})
+    target_link_libraries("${TARGET_FULL_NAME}" PRIVATE "${project_component_declare_service_IMPL_TARGET_NAME}")
+  else()
+    target_link_libraries(${TARGET_FULL_NAME} PRIVATE ${__LINK_TARGETS})
+  endif()
 
   project_setup_runtime_post_build_bash(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_BASH)
   project_setup_runtime_post_build_pwsh(${TARGET_FULL_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_PWSH)
@@ -772,6 +830,11 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
   endif()
 
   add_executable("components::${TARGET_NAME}" ALIAS "${TARGET_FULL_NAME}")
+  if(project_component_declare_service_IMPL_TARGET_NAME)
+    add_library("components::${TARGET_NAME}::private" ALIAS "${project_component_declare_service_IMPL_TARGET_NAME}")
+    set_property(TARGET "${project_component_declare_service_IMPL_TARGET_NAME}" PROPERTY FOLDER
+                                                                                         "${PROJECT_NAME}/component/service")
+  endif()
 
   set_property(TARGET "${TARGET_FULL_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/component/service")
 endfunction()

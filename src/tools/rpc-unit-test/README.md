@@ -41,6 +41,13 @@ component-functions.cmake 创建的目标，`sdk` 适用于库/SDK 测试，`ser
 （秒，写入 CTest，默认 120）。它复用集中编译的 atframe_utils 私有 main/frame support targets，自动
 `add_test`、配 labels（`${CATEGORY}:<name>` 前缀）、CTest timeout 和 Windows DLL `ENVIRONMENT_MODIFICATION` PATH。
 
+测试服务可执行文件内部代码（`CATEGORY service`）时，不要把服务源码列入 `SOURCES` 重复编译：服务声明
+（`project_service_declare_instance` / `project_component_declare_service`）用 `MAIN_SOURCES` 传入入口文件
+（`app/*_main.cpp`）后，其余源码只编译一次进静态库，测试 target 链接其别名 `service::<name>::private` 或
+`components::<name>::private`，即可继承服务 include 目录、SDK/protocol 依赖、生成代码构建顺序和 PCH 复用。
+需要手工 `REUSE_FROM_TARGET` 复用 PCH 时用真实 target 名 `<name>-private`。示例见
+`src/lobbysvr/test/CMakeLists.txt`、`src/component/dtmq/test/CMakeLists.txt`。
+
 ## 最小 CASE_TEST 示例
 
 ```cpp

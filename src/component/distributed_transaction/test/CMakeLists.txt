@@ -63,20 +63,11 @@ project_add_rpc_unit_test(
   TIMEOUT
   300)
 
-# Coordinator internals (manager + 7 actions) are only compiled into the service executable, so the sources are compiled
-# directly into the test target like component/dtmq/test does.
-set(DTCOORDSVR_INTERNAL_TEST_SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/transaction_manager.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_create.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_query.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_commit.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_reject.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_commit_participator.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_reject_participator.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/action/task_action_remove.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/app/handle_ss_rpc_dtcoordsvrservice.atfw.gen.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/distributed_transaction_test_dtcoordsvr.cpp")
-
+# Coordinator internals (manager + 7 actions + the generated service handle) are compiled once into the static
+# library components::dtcoordsvr::private by the dtcoordsvr service (see project_component_declare_service
+# MAIN_SOURCES); this target compiles only the case sources and links that library. The dtcoordsvr include directory
+# and the dtcoordsvr-config usage requirements propagate from the library; the explicit links stay because the case
+# sources include the SDK and config headers directly.
 project_add_rpc_unit_test(
   TARGET
   ${PROJECT_NAME}-component-dtcoordsvr-unit-test
@@ -85,8 +76,9 @@ project_add_rpc_unit_test(
   CATEGORY
   service
   SOURCES
-  ${DTCOORDSVR_INTERNAL_TEST_SOURCES}
+  "${CMAKE_CURRENT_LIST_DIR}/distributed_transaction_test_dtcoordsvr.cpp"
   LINK_LIBRARIES
+  components::dtcoordsvr::private
   components::distributed-transaction-sdk
   components::dtcoordsvr-config
   FEATURES
@@ -98,11 +90,6 @@ project_add_rpc_unit_test(
   TIMEOUT
   300)
 
-# The coordinator action sources use relative includes ("logic/transaction_manager.h"); replicate the service target's
-# include behavior.
-target_include_directories(${PROJECT_NAME}-component-dtcoordsvr-unit-test
-                           PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr")
-
 # transaction_manager::stop() poisons mutable_transaction for the whole process lifetime; keep it in a dedicated
 # executable so it cannot affect other coordinator cases.
 project_add_rpc_unit_test(
@@ -113,9 +100,9 @@ project_add_rpc_unit_test(
   CATEGORY
   service
   SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr/logic/transaction_manager.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/distributed_transaction_test_dtcoordsvr_stop.cpp"
   LINK_LIBRARIES
+  components::dtcoordsvr::private
   components::distributed-transaction-sdk
   components::dtcoordsvr-config
   FEATURES
@@ -126,9 +113,6 @@ project_add_rpc_unit_test(
   distributed-transaction
   TIMEOUT
   120)
-
-target_include_directories(${PROJECT_NAME}-component-dtcoordsvr-stop-unit-test
-                           PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../dtcoordsvr")
 
 # Short-transaction stress case (bounded retry loops drive real coroutine tasks per round). Labelled stress so the
 # default fast regression is not slowed down by the long case.

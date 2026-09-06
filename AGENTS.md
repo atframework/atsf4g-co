@@ -58,6 +58,9 @@ high-performance game server architectures.
   use `project_add_rpc_unit_test` instead. Do not wire consuming test targets directly with `add_executable`,
   `atframe_add_test_executable`, or `add_test`; the project helpers own their links, dependencies, PCH, post-build
   events, RPATH, runtime environment, and CTest labels.
+  When a test needs code compiled into a service executable, pass the service entry-point sources as `MAIN_SOURCES` in
+  its `project_service_declare_instance`/`project_component_declare_service` call and link the generated static library
+  (`service::<name>::private` or `components::<name>::private`); never list service sources in the test target.
 - Match process to risk: use the shortest verified path for small changes; read `change-workflow` for defects and for
   cross-module behavior, public API/ABI, data model/migration, security, or deployment changes. Keep their scope and
   acceptance in one existing authoritative artifact or active task plan; do not initialize a methodology for ceremony.

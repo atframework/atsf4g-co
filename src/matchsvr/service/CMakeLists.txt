@@ -39,6 +39,8 @@ project_service_declare_instance(
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}
+  MAIN_SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/app/matchsvr_main.cpp"
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   GENERATED_FLOW_NAMES

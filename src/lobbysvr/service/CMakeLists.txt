@@ -53,6 +53,8 @@ project_service_declare_instance(
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}
+  MAIN_SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/app/lobbysvr_main.cpp"
   PRECOMPILE_HEADERS
   "data/user.h"
   "data/user_type_define.h"

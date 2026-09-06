@@ -95,6 +95,11 @@ CASE_TEST(rpc_unit_test, framework_flow) {
 - Do not reproduce target creation, private-framework sources, links, dependencies, PCH, post-build events, RPATH,
   runtime environment, or CTest labels in the consuming `CMakeLists.txt`. Use the category that matches the linked layer
   and do not hardcode the project prefix. Consult the fixture README for the current argument set.
+- For cases over service-executable internals, link the service's private static library
+  (`service::<name>::private` or `components::<name>::private`, created when the service declaration passes
+  `MAIN_SOURCES`) instead of listing service sources in `SOURCES`. The alias propagates the service include
+  directories, SDK/protocol dependencies, generated-flow build order, and PCH reuse weight; use the real
+  `<name>-private` target name for a manual `REUSE_FROM_TARGET`.
 - Set the CTest `TIMEOUT` above the serial sum of all case hard timeouts and teardown in that executable, not above one
   case timeout only.
 - Keep generated runtime configuration in the target's build-tree working directory. Never write

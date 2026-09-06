@@ -71,12 +71,18 @@ Implications:
 
 - Use for normal service executables.
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
-- Source/resource lists: `HEADERS`, `SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
+- Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`,
+  `PRECOMPILE_HEADERS`.
 - Dependency options:
   - `USE_COMPONENTS <names...>` -> `components::<name>`.
   - `USE_SERVICE_SDK <names...>` -> `sdk::<name>`.
   - `USE_SERVICE_PROTOCOL <names...>` -> `protocol::<name>`.
-- Executable target name is `TARGET_NAME`; no stable alias is created for normal service instances.
+- `MAIN_SOURCES <entry-point sources...>` (typically `app/*_main.cpp`) splits the build: every other `SOURCES` entry
+  (including generated flow outputs) compiles once into the static library `<TARGET_NAME>-private` (alias
+  `service::<TARGET_NAME>::private`), and the executable compiles only `MAIN_SOURCES` and links the library. The
+  library forces default symbol visibility and PIC, publishes `SERVICE_ROOT_DIR`/`INCLUDE_DIR` and the dependency
+  links as `PUBLIC`, and owns unity build and PCH. Unit tests link the alias instead of recompiling service sources.
+- Executable target name is `TARGET_NAME`; the executable itself has no stable alias.
 - Default runtime output is `<TARGET_NAME>/bin` when not specified.
 
 ### Component helpers
@@ -104,8 +110,11 @@ Implications:
 
 - Use for component-owned service executables (e.g., rank board, distributed transaction coordinator).
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
-- Source/resource lists: `HEADERS`, `SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
+- Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`,
+  `PRECOMPILE_HEADERS`.
 - Dependency option: `USE_COMPONENTS <names...>` -> `components::<name>`.
+- `MAIN_SOURCES` splits the build like the service helper: the static library is `<TARGET_FULL_NAME>-private` with
+  alias `components::<TARGET_NAME>::private`; the executable compiles only `MAIN_SOURCES` and links it.
 - Exports executable alias: `components::<TARGET_NAME>`.
 - Default runtime output is `component/<TARGET_NAME>/bin` when not specified.
 
@@ -119,11 +128,15 @@ Implications:
 | `project_component_declare_protocol` | Windows: `pc-<name>`; other: `${PROJECT_NAME}-component-<name>` | `components::<name>` | `USE_COMPONENTS`                                            | `PUBLIC`                |
 | `project_component_declare_sdk`      | Windows: `pc-<name>`; other: `${PROJECT_NAME}-component-<name>` | `components::<name>` | `USE_COMPONENTS`                                            | `PUBLIC` or `INTERFACE` |
 | `project_component_declare_service`  | Windows: `pc-<name>`; other: `${PROJECT_NAME}-component-<name>` | `components::<name>` | `USE_COMPONENTS`                                            | `PRIVATE`               |
+| instance private library (`MAIN_SOURCES`) | `<name>-private` | `service::<name>::private` | inherited from the service declaration | `PUBLIC` |
+| component service private library (`MAIN_SOURCES`) | `<real service target>-private` | `components::<name>::private` | inherited from the service declaration | `PUBLIC` |
 
 Rules:
 
 - Reference dependencies by alias (`protocol::<name>`, `sdk::<name>`, `components::<name>`), not by platform-specific
   real target name.
+- When a test needs code from a service executable, pass the service entry-point sources via `MAIN_SOURCES` and link
+  `service::<name>::private` / `components::<name>::private`; never compile service sources into the test target.
 - Use the bare dependency name in helper arguments, e.g., `USE_SERVICE_SDK "lobbysvr-sdk"` (not
   `USE_SERVICE_SDK sdk::lobbysvr-sdk`).
 - Use `OUTPUT_TARGET_NAME SOME_VAR` when later CMake needs the real target (install include dirs, manual links).
@@ -185,6 +198,11 @@ fall back to `OUTPUT_TARGET_NAME` + `target_link_libraries` only for custom prop
   the real outputs and dependencies, and preserve the destination timestamp when content is unchanged.
 - Avoid broad `file(GLOB_RECURSE ...)` rewrites unless matching local style. Many existing service/component
   executables use it for `SERVICE_SOURCES`/`SERVICE_HEADERS`.
+- The private library alias (`service::<name>::private` / `components::<name>::private`) works for
+  `target_link_libraries`, but `project_pch_tool_set_precompile_headers(... REUSE_FROM_TARGET ...)` reads real target
+  properties and must use the real `<name>-private` target name, not the alias.
+- The private library is a static archive: it takes no `project_tool_split_target_debug_sybmol` (debug info must stay
+  in the archived objects for consumers) and no incremental-link setup (no link step); both stay on the executable.
 
 ## Validation checklist
 

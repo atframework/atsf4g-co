@@ -73,6 +73,12 @@ project_add_rpc_unit_test(
   TIMEOUT 120)
 ```
 
+When testing code that lives in a service executable (`CATEGORY service`), do not recompile service sources in
+`SOURCES`: once the service declaration (`project_service_declare_instance`/`project_component_declare_service`)
+passes its entry-point files via `MAIN_SOURCES`, everything else compiles once into a static library, and the test
+links the alias `service::<name>::private` or `components::<name>::private` to inherit the include directories,
+SDK/protocol dependencies, and generated-code build order (example: `src/lobbysvr/test/CMakeLists.txt`).
+
 Minimal case (`src/tools/rpc-unit-test/test/example_readme.cpp` compiles and runs it verbatim, keeping it in sync
 with the real API):
 

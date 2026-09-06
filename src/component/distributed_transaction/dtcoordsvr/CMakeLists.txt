@@ -14,6 +14,8 @@ project_component_declare_service(
   ${SERVICE_HEADERS}
   SOURCES
   ${SERVICE_SOURCES}
+  MAIN_SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/app/dtcoordsvr_main.cpp"
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS

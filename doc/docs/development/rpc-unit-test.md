@@ -66,6 +66,11 @@ project_add_rpc_unit_test(
   TIMEOUT 120)
 ```
 
+测试服务可执行文件内部代码（`CATEGORY service`）时，不要在 `SOURCES` 里重复编译服务源码：服务声明
+（`project_service_declare_instance`/`project_component_declare_service`）通过 `MAIN_SOURCES` 传入入口文件后，
+其余代码只编译一次进静态库，测试链接别名 `service::<name>::private` 或 `components::<name>::private` 即可继承
+include 目录、SDK/protocol 依赖与生成代码构建顺序（示例：`src/lobbysvr/test/CMakeLists.txt`）。
+
 最小用例（`src/tools/rpc-unit-test/test/example_readme.cpp` 逐字编译执行，保证与真实 API 一致）：
 
 ```cpp

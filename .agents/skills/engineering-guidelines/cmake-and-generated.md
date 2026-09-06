@@ -32,6 +32,9 @@ Detail companion to `SKILL.md`. Load when editing CMake files, protobuf, templat
 - In consuming test `CMakeLists.txt` files, do not call `add_executable`, `atframe_add_test_executable`, or `add_test`
   directly and do not reproduce their link, dependency, PCH, post-build, RPATH, runtime-environment, or label setup.
   Pass sources, libraries, features, environment, labels, and timeout through the selected project helper.
+- Tests over service-executable internals link the service's private static library
+  (`service::<name>::private`/`components::<name>::private`, produced by the service declaration's `MAIN_SOURCES`
+  option) instead of listing service sources in `SOURCES`; see `service-functions-cmake.md`.
 - `atframe_add_test_executable` is an implementation detail of `project_add_normal_unit_test`, not a root-project test
   target API. Vendored `atframework/**` subprojects follow their own nearest `AGENTS.md` and CMake conventions.
 
