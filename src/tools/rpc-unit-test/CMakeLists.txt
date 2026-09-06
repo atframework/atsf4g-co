@@ -43,10 +43,8 @@ project_pch_tool_set_precompile_headers(${PROJECT_NAME}-rpc-unit-test FOLDER "${
 
 add_library(${PROJECT_NAME}::rpc-unit-test ALIAS ${PROJECT_NAME}-rpc-unit-test)
 
-target_include_directories(
-  ${PROJECT_NAME}-rpc-unit-test
-  PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>"
-  PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
+target_include_directories(${PROJECT_NAME}-rpc-unit-test
+                           PUBLIC "$<BUILD_INTERFACE:${PROJECT_RPC_UNIT_TEST_PUBLIC_INCLUDE_DIR}>")
 target_compile_definitions(${PROJECT_NAME}-rpc-unit-test PRIVATE RPC_UNIT_TEST_NATIVE=1)
 # Build-tree default working directory for directly-invoked test executables (no RPC_UNIT_TEST_WORKDIR env, no ctest) so
 # they don't write the generated config into the repository root. project_add_rpc_unit_test override this per target via
@@ -67,8 +65,12 @@ if(PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES)
   target_include_directories(${PROJECT_NAME}-rpc-unit-test PRIVATE ${PROJECT_COMMON_PRIVATE_INCLUDE_DIRECTORIES})
 endif()
 
-target_link_libraries(${PROJECT_NAME}-rpc-unit-test PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK}
-                                                           ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME})
+# runtime.cpp consumes the private atframe_utils test frame (<frame/test_case_base.h>); atframework::test::library
+# exports the frame include directory.
+target_link_libraries(
+  ${PROJECT_NAME}-rpc-unit-test
+  PUBLIC ${PROJECT_SERVER_FRAME_LIB_LINK} ${ATFRAMEWORK_ATFRAME_UTILS_LINK_NAME}
+  PRIVATE atframework::test::library)
 
 set_target_properties(
   ${PROJECT_NAME}-rpc-unit-test

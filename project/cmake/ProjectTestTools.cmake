@@ -61,9 +61,8 @@ function(project_add_normal_unit_test)
   endif()
 
 
-  # atframe_add_test_executable resolves these variables dynamically from its caller. Set them here instead of relying
-  # on variables that are local to the atframe_utils/test directory.
-  set(PROJECT_TEST_INC_DIR "${PROJECT_NORMAL_UNIT_TEST_FRAME_DIR}")
+  # atframe_add_test_executable resolves these variables dynamically from its caller; prevent it from inheriting
+  # caller-scope values. The frame include directory comes from atframework::test::main (LINK_TEST_MAIN).
   unset(PROJECT_TEST_DEFINITIONS)
   unset(PROJECT_TEST_LIB_LINK)
   atframe_add_test_executable(

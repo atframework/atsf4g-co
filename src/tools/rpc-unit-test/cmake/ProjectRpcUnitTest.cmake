@@ -70,7 +70,7 @@ function(project_add_rpc_unit_test)
     ${PROJECT_RPC_UNIT_TEST_TARGET}
     ${PROJECT_RPC_UNIT_TEST_SOURCES}
   )
-  target_include_directories(${PROJECT_RPC_UNIT_TEST_TARGET} PRIVATE "${PROJECT_RPC_UNIT_TEST_FRAME_DIR}")
+  # Frame headers (frame/test_macros.h) come from atframework::test::main's PUBLIC include directories.
   target_link_libraries(
     ${PROJECT_RPC_UNIT_TEST_TARGET}
     PRIVATE ${PROJECT_NAME}::rpc-unit-test ${PROJECT_SERVER_FRAME_LIB_LINK} atframework::test::main
