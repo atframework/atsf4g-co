@@ -249,7 +249,7 @@ func TeamUpdateTeamDataTask(task *user_data.TaskActionUser, teamKey *public_comm
 
 // TeamPullInfoTask 主动拉取队伍快照(user_get_info need_user_team)，并更新本地队伍视图。
 func TeamPullInfoTask(task *user_data.TaskActionUser) error {
-	errCode, rspHolder, rpcErr := protocol.GetInfoRpc(task, task.User, []string{"team"})
+	errCode, rspHolder, rpcErr := protocol.GetInfoRpc(task, task.User, []string{"user_team"})
 	if rpcErr != nil {
 		return rpcErr
 	}

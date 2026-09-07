@@ -112,12 +112,35 @@ func BuildTeamMemberReadyData(ready bool) *public_protocol_pbdesc.DTeamMemberSha
 	}
 }
 
+// requireFullTeamKey 校验用于服务端查找/路由的 team_key: 服务端按 team_id+zone_id 精确匹配且不做缺省填充。
+func requireFullTeamKey(teamKey *public_common_pbdesc.DTeamKey) error {
+	if teamKey == nil || teamKey.GetTeamId() == 0 || teamKey.GetZoneId() == 0 {
+		return fmt.Errorf("team_key is empty or missing team_id/zone_id")
+	}
+	return nil
+}
+
+// requireFullUserKey 校验目标用户 Key: 服务端按 user_id+zone_id 精确匹配成员且不做缺省填充。
+func requireFullUserKey(name string, userKey *public_protocol_pbdesc.DUserIDKey) error {
+	if userKey == nil || userKey.GetUserId() == 0 || userKey.GetZoneId() == 0 {
+		return fmt.Errorf("%s is empty or missing user_id/zone_id", name)
+	}
+	return nil
+}
+
 // TeamSendInvitationRpc 邀请玩家入队。teamKey 为 nil 时邀请进自己所在的默认队伍(不存在则服务端先创建)。
+// invitee.zone_id 为 0 时服务端填充为操作者所在区服。
 func TeamSendInvitationRpc(action base.TaskActionImpl, user user_data.User, invitee *public_protocol_pbdesc.DUserIDKey,
 	teamKey *public_common_pbdesc.DTeamKey, teamType public_common_pbdesc.EnTeamType) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamSendInvitationRsp], error) {
 	if invitee == nil || invitee.GetUserId() == 0 {
 		return 0, nil, fmt.Errorf("invitee is empty")
+	}
+	if teamType == public_common_pbdesc.EnTeamType_EN_TEAM_TYPE_INVALID {
+		return 0, nil, fmt.Errorf("team_type is invalid")
+	}
+	if teamKey != nil && teamKey.GetTeamId() != 0 && teamKey.GetZoneId() == 0 {
+		return 0, nil, fmt.Errorf("team_key is missing zone_id")
 	}
 	csBody := &public_protocol_pbdesc.CSTeamSendInvitationReq{
 		TeamKey:        teamKey,
@@ -131,8 +154,8 @@ func TeamSendInvitationRpc(action base.TaskActionImpl, user user_data.User, invi
 // TeamApproveInvitationRpc 接受收到的邀请(自己作为被邀请人)。
 func TeamApproveInvitationRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamApproveInvitationRsp], error) {
-	if teamKey == nil {
-		return 0, nil, fmt.Errorf("team_key is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamApproveInvitationReq{
 		TeamKey: teamKey,
@@ -144,8 +167,8 @@ func TeamApproveInvitationRpc(action base.TaskActionImpl, user user_data.User, t
 // TeamRejectInvitationRpc 拒绝收到的邀请(自己作为被邀请人)。
 func TeamRejectInvitationRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamRejectInvitationRsp], error) {
-	if teamKey == nil {
-		return 0, nil, fmt.Errorf("team_key is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamRejectInvitationReq{
 		TeamKey: teamKey,
@@ -157,8 +180,8 @@ func TeamRejectInvitationRpc(action base.TaskActionImpl, user user_data.User, te
 // TeamSendJoinRequestRpc 向指定队伍发起加入申请。
 func TeamSendJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamSendJoinRequestRsp], error) {
-	if teamKey == nil {
-		return 0, nil, fmt.Errorf("team_key is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamSendJoinRequestReq{
 		TeamKey:        teamKey,
@@ -171,8 +194,11 @@ func TeamSendJoinRequestRpc(action base.TaskActionImpl, user user_data.User, tea
 func TeamAcceptJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	requester *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamAcceptJoinRequestRsp], error) {
-	if teamKey == nil || requester == nil || requester.GetUserId() == 0 {
-		return 0, nil, fmt.Errorf("team_key or requester is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
+	}
+	if err := requireFullUserKey("requester", requester); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamAcceptJoinRequestReq{
 		TeamKey: teamKey,
@@ -185,8 +211,11 @@ func TeamAcceptJoinRequestRpc(action base.TaskActionImpl, user user_data.User, t
 func TeamRejectJoinRequestRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	requester *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamRejectJoinRequestRsp], error) {
-	if teamKey == nil || requester == nil || requester.GetUserId() == 0 {
-		return 0, nil, fmt.Errorf("team_key or requester is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
+	}
+	if err := requireFullUserKey("requester", requester); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamRejectJoinRequestReq{
 		TeamKey: teamKey,
@@ -198,8 +227,8 @@ func TeamRejectJoinRequestRpc(action base.TaskActionImpl, user user_data.User, t
 // TeamExitRpc 退出队伍。退出成功后清空本地队伍视图。
 func TeamExitRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamExitRsp], error) {
-	if teamKey == nil {
-		return 0, nil, fmt.Errorf("team_key is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamExitReq{
 		TeamKey: teamKey,
@@ -211,8 +240,11 @@ func TeamExitRpc(action base.TaskActionImpl, user user_data.User, teamKey *publi
 func TeamRemoveMemberRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamRemoveMemberRsp], error) {
-	if teamKey == nil || member == nil || member.GetUserId() == 0 {
-		return 0, nil, fmt.Errorf("team_key or member is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
+	}
+	if err := requireFullUserKey("member", member); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamRemoveMemberReq{
 		TeamKey: teamKey,
@@ -225,8 +257,11 @@ func TeamRemoveMemberRpc(action base.TaskActionImpl, user user_data.User, teamKe
 func TeamTransferCaptainRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamTransferCaptainRsp], error) {
-	if teamKey == nil || member == nil || member.GetUserId() == 0 {
-		return 0, nil, fmt.Errorf("team_key or member is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
+	}
+	if err := requireFullUserKey("member", member); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamTransferCaptainReq{
 		TeamKey: teamKey,
@@ -239,8 +274,11 @@ func TeamTransferCaptainRpc(action base.TaskActionImpl, user user_data.User, tea
 func TeamUpdateMemberRoleRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	member *public_protocol_pbdesc.DUserIDKey, role public_common_pbdesc.EnTeamPermissionRole) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamUpdateMemberRoleRsp], error) {
-	if teamKey == nil || member == nil || member.GetUserId() == 0 {
-		return 0, nil, fmt.Errorf("team_key or member is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
+	}
+	if err := requireFullUserKey("member", member); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamUpdateMemberRoleReq{
 		TeamKey: teamKey,
@@ -254,8 +292,8 @@ func TeamUpdateMemberRoleRpc(action base.TaskActionImpl, user user_data.User, te
 func TeamUpdateMemberDataRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	ready bool) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamUpdateMemberDataRsp], error) {
-	if teamKey == nil {
-		return 0, nil, fmt.Errorf("team_key is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamUpdateMemberDataReq{
 		TeamKey: teamKey,
@@ -268,8 +306,8 @@ func TeamUpdateMemberDataRpc(action base.TaskActionImpl, user user_data.User, te
 func TeamUpdateTeamDataRpc(action base.TaskActionImpl, user user_data.User, teamKey *public_common_pbdesc.DTeamKey,
 	matching bool) (
 	int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCTeamUpdateTeamDataRsp], error) {
-	if teamKey == nil {
-		return 0, nil, fmt.Errorf("team_key is empty")
+	if err := requireFullTeamKey(teamKey); err != nil {
+		return 0, nil, err
 	}
 	csBody := &public_protocol_pbdesc.CSTeamUpdateTeamDataReq{
 		TeamKey: teamKey,
