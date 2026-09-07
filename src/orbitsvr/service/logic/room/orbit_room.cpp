@@ -425,6 +425,25 @@ int32_t orbit_room::on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitRe
   return room_finish(ctx, room_exit_reason);
 }
 
+rpc::result_code_type orbit_room::on_remote_start_client(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg) {
+  // 通知一个User启动Client
+  if (room_data_.remote_start_user_key().user_id() == 0 || room_data_.remote_start_user_key().zone_id() == 0) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+  }
+  // 通过AsyncJob通知
+  auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(ctx);
+  *req->mutable_orbit_remote_start()->mutable_arg() = arg;
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::add_jobs(ctx, PROJECT_NAMESPACE_ID::EN_PAJT_NORMAL,
+                                                                room_data_.remote_start_user_key().user_id(),
+                                                                room_data_.remote_start_user_key().zone_id(), req));
+  if (ret != 0) {
+    FWLOGERROR("orbit_room {} add remote_start_client async job failed for user {},{} ret: {}", get_client_id(),
+               room_data_.remote_start_user_key().user_id(), room_data_.remote_start_user_key().zone_id(), ret);
+  }
+  RPC_RETURN_CODE(ret);
+}
+
 int32_t orbit_room::room_finish(rpc::context& ctx, PROJECT_NAMESPACE_ID::EnOrbitRoomExitReason exit_reason) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_FINISH == room_status_) {
     return 0;

@@ -59,6 +59,15 @@ service LobbysvrClientService {
     };
   };
 
+  // ================ Orbit RPC ==============
+  rpc orbit_remote_start_sync(google.protobuf.Empty) returns (stream SCOrbitRemoteStartSync) {
+    option (atframework.rpc_options) = {
+      module_name: "orbit"
+      api_name: "远程启动Orbit"
+      no_cache: true
+    };
+  };
+
   // ================ 匹配 RPC ================
   rpc matching_start(CSMatchingStartReq) returns (SCMatchingStartRsp) {
     option (atframework.rpc_options) = {

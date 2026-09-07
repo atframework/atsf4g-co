@@ -31,5 +31,6 @@ message ExcelOrbitClientTemplate {
   uint32 heartbeat_timeout_sec = 7 [(org.xresloader.validator) = ">0"];
   string match_tag = 8;
   uint32 room_expired_timeout = 9 [(org.xresloader.validator) = ">0"];
+  bool remote_start_client = 10;
   repeated string launch_args = 21;
 }

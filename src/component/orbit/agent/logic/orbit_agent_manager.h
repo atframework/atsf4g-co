@@ -7,8 +7,8 @@
 #include <uv.h>
 
 #include <tbb/concurrent_hash_map.h>
-#include <tbb/concurrent_set.h>
 #include <tbb/concurrent_queue.h>
+#include <tbb/concurrent_set.h>
 
 #include <atframe/atapp.h>
 #include <atframe/etcdcli/etcd_keepalive.h>
@@ -144,6 +144,9 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
   int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line,
                            const std::vector<std::string>& command_line_append, bool seed_client);
+  rpc::result_code_type remote_spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record,
+                                                    const std::vector<std::string>& command_line,
+                                                    const std::vector<std::string>& command_line_append);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(rpc::context& ctx,
                                                                           orbit_agent_client_record_ptr record);
   void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
@@ -163,7 +166,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void check_client_force_kill(time_t now);
   void check_server_identity_timeouts(time_t now);
   int kill_client_process(const orbit_agent_client_record_ptr& client_record, int signal_number,
-                                 atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
+                          atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
 
   void server_heartbeat(const atfw::orbit::DServerIdentity& server_identity);
   int32_t agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,

@@ -29,13 +29,18 @@
 
 #include <dispatcher/task_manager.h>
 #include <logic/async_jobs/user_async_jobs_manager.h>
-#include <logic/orbit/user_orbit_manager.h>
 
 #include <rpc/async_jobs/async_jobs.h>
 
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
+
+std::unordered_map<int32_t, task_action_user_remote_patch_jobs::sync_callback_type>
+    task_action_user_remote_patch_jobs::sync_callbacks;
+std::unordered_map<int32_t, task_action_user_remote_patch_jobs::async_callback_type>
+    task_action_user_remote_patch_jobs::async_callbacks;
 
 task_action_user_remote_patch_jobs::task_action_user_remote_patch_jobs(ctor_param_t&& param)
     : task_action_no_req_base(param),
@@ -457,24 +462,27 @@ int task_action_user_remote_patch_jobs::on_failed() {
   return get_result();
 }
 
-void task_action_user_remote_patch_jobs::register_callbacks(
-    std::unordered_map<int32_t, sync_callback_type>& sync_callbacks,
-    std::unordered_map<int32_t, async_callback_type>& /*async_callbacks*/) {
-  sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kDebugMessage)] =
-      [](task_action_user_remote_patch_jobs& /*task_action_inst*/, user& user_inst, int32_t /*job_type*/,
-         async_job_ptr_type job_data) -> int32_t {
-    FWLOGINFO("{} [TODO] do async action {}, message: {}", user_inst, static_cast<int32_t>(job_data->action_case()),
-              job_data->DebugString());
-    return 0;
-  };
-  sync_callbacks[static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish)] =
-      [](task_action_user_remote_patch_jobs& task_action_inst, user& user_inst, int32_t /*job_type*/,
-         async_job_ptr_type job_data) -> int32_t {
-    const PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = job_data->orbit_finish();
-    user_inst.get_user_orbit_manager().receive_orbit_settlement(task_action_inst.get_shared_context(),
-                                                                orbit_finish_data.data());
-    return 0;
-  };
+void task_action_user_remote_patch_jobs::register_sync_callbacks(int32_t type, sync_callback_type callback) {
+  if (sync_callbacks.find(type) != sync_callbacks.end()) {
+    FWLOGERROR("sync callback for type {} is already registered", type);
+    abort();
+  }
+  if (callback == nullptr) {
+    FWLOGERROR("sync callback for type {} is null", type);
+    abort();
+  }
+  sync_callbacks[type] = callback;
+}
+void task_action_user_remote_patch_jobs::register_async_callbacks(int32_t type, async_callback_type callback) {
+  if (async_callbacks.find(type) != async_callbacks.end()) {
+    FWLOGERROR("async callback for type {} is already registered", type);
+    abort();
+  }
+  if (callback == nullptr) {
+    FWLOGERROR("async callback for type {} is null", type);
+    abort();
+  }
+  async_callbacks[type] = callback;
 }
 
 int32_t task_action_user_remote_patch_jobs::do_job(int32_t job_type, const async_job_ptr_type& job_data) {
@@ -482,16 +490,9 @@ int32_t task_action_user_remote_patch_jobs::do_job(int32_t job_type, const async
     return 0;
   }
 
-  static std::unordered_map<int32_t, sync_callback_type> sync_callbacks;
-  static std::unordered_map<int32_t, async_callback_type> async_callbacks;
-
-  if (sync_callbacks.empty() && async_callbacks.empty()) {
-    register_callbacks(sync_callbacks, async_callbacks);
-  }
-
   auto iter_sync = sync_callbacks.find(static_cast<int32_t>(job_data->action_case()));
   if (iter_sync != sync_callbacks.end() && iter_sync->second) {
-    return iter_sync->second(*this, *param_.user_inst, job_type, job_data);
+    return iter_sync->second(get_shared_context(), *param_.user_inst, job_type, job_data);
   }
 
   auto iter_async = async_callbacks.find(static_cast<int32_t>(job_data->action_case()));

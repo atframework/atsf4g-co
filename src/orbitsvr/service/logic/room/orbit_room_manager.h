@@ -51,6 +51,8 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
                                         const std::string& payload);
   rpc::result_code_type on_client_end(rpc::context& ctx, const std::string& client_id, const std::string& payload,
                                       atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
+  rpc::result_code_type on_remote_start_client(rpc::context& ctx, const std::string& client_id,
+                                               const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
   rpc::result_code_type on_user_finish(
       rpc::context& ctx, const std::string& client_id,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);

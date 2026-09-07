@@ -161,6 +161,17 @@ rpc::result_code_type orbit_room_manager::on_client_end(rpc::context& ctx, const
   RPC_RETURN_CODE(room->on_client_end(ctx, exit_reason, exit_code));
 }
 
+rpc::result_code_type orbit_room_manager::on_remote_start_client(
+    rpc::context& ctx, const std::string& client_id, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg) {
+  FWLOGINFO("orbit_room_manager on_remote_start_client, client_id: {}", client_id);
+  auto room = get_room(client_id);
+  if (!room) {
+    FWLOGWARNING("orbit_room_manager on_remote_start_client, room {} not found", client_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->on_remote_start_client(ctx, arg)));
+}
+
 rpc::result_code_type orbit_room_manager::on_user_finish(
     rpc::context& ctx, const std::string& client_id,
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results) {
@@ -188,5 +199,6 @@ bool orbit_room_manager::fill_client_start_args_from_template_id(int32_t templat
   args.set_heartbeat_timeout_sec(row->heartbeat_timeout_sec());
   *args.mutable_client_start_args()->mutable_custom_args() = row->launch_args();
   args.set_match_tag(row->match_tag());
+  args.set_remote_start(row->remote_start_client());
   return true;
 }

@@ -81,6 +81,7 @@ message DOrbitRoomInitData {
   int32 client_template_id = 1;
   string region = 2;
   string match_id = 3;
+  DUserIDKey remote_start_user_key = 4;
 }
 
 enum EnOrbitRoomStatus {
@@ -158,4 +159,8 @@ message DOrbitRoomUserData {
 
 message DOrbitRoomDirty {
   DOrbitRoomUserData data = 1;
+}
+
+message DOrbitRemoteStartArg {
+  repeated string command_lines = 1;
 }

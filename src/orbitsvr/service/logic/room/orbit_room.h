@@ -70,6 +70,8 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
       rpc::context& ctx,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);
   int32_t on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitReason exit_reason, int32_t exit_code);
+  rpc::result_code_type on_remote_start_client(rpc::context& ctx,
+                                               const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
 
   bool ready_to_destroy() const;
   void on_destroy();

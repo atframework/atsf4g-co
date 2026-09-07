@@ -116,3 +116,7 @@ message SCUserGMCommandRsp {
   string result_message = 2;        // result message of some command
   repeated string result_list = 3;  // result list of some command
 }
+
+message SCOrbitRemoteStartSync {
+  DOrbitRemoteStartArg arg = 1;
+}

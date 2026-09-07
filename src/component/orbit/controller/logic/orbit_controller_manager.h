@@ -68,6 +68,10 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
       rpc::context& ctx, const atfw::orbit::ATCForwardToServerReq& request,
       atfw::orbit::CTAForwardToServerRsp& response);
 
+  EXPLICIT_NODISCARD_ATTR static rpc::result_code_type handle_remote_start_client(
+      rpc::context& ctx, const atfw::orbit::ATCRemoteStartClientReq& request,
+      atfw::orbit::CTARemoteStartClientRsp& response);
+
   // ---- 来自 Server ----
   // Server 请求启动 Client
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type handle_launch_client(rpc::context& ctx,

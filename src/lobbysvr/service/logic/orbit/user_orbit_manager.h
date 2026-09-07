@@ -48,6 +48,8 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
                        int64_t end_join_timepoint);
   // 收到结算消息
   void receive_orbit_settlement(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
+  // 远端启动Client
+  void receive_orbit_remote_start(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
   // 组装历史数据
   void load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::client_subscriber::ptr_t subscriber);
   // 收到事件消息

@@ -13,6 +13,7 @@ import "protocol/extension/atframework.proto";
 package atframework.orbit;
 
 import "protocol/common/orbit.common.proto";
+import "protocol/pbdesc/com.struct.orbit.proto";
 
 /////////////// Controller -> Server ///////////////
 service ControllerToServerService {
@@ -37,6 +38,12 @@ service ControllerToServerService {
   rpc client_agent_heartbeat(stream CTSClientAgentHeartbeatNotify) returns (google.protobuf.Empty) {
     option (atframework.rpc_options) = {
       api_name: "Client心跳通知"
+    };
+  };
+
+  rpc remote_start_client(CTSRemoteStartClientReq) returns (STCRemoteStartClientRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "远端启动Client"
     };
   };
 }
@@ -72,6 +79,16 @@ message STCClientEndRsp {
 message CTSClientAgentHeartbeatNotify {
   DAgentIdentity agent_identity = 1;
   repeated DClientId client_ids = 2;
+}
+
+message CTSRemoteStartClientReq {
+  DClientIdentity client_identity = 1;
+
+  atframework.shared.DOrbitRemoteStartArg arg = 11;
+}
+
+message STCRemoteStartClientRsp {
+  int32 error_code = 1;
 }
 
 /////////////// Server -> Controller ///////////////

@@ -1265,6 +1265,14 @@ void matching_manager::start_battle(rpc::context& ctx, const matching_room::ptr_
         request->mutable_room_data()->set_client_template_id(client_template_id);
         request->mutable_room_data()->set_region(room->get_scope().region());
         request->mutable_room_data()->set_match_id(room->get_matching_id());
+        auto room_unit = room->get_units();
+        if (!room_unit.empty()) {
+          const auto& user = room_unit.begin()->second->get_data().users();
+          if (!user.empty()) {
+            protobuf_copy_message(*request->mutable_room_data()->mutable_remote_start_user_key(),
+                                  user.begin()->user_key());
+          }
+        }
         const int32_t result =
             RPC_AWAIT_CODE_RESULT(rpc::orbit::create_room(child_ctx, orbit_server_id, *request, *response));
         const int32_t business_result = result == 0 ? response->result_code() : result;

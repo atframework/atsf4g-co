@@ -95,6 +95,12 @@ class main_service_module : public atfw::atapp::module_impl {
           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
               orbit_room_manager::me()->on_client_end(ctx, client_id, payload, exit_reason, exit_code)));
         });
+    orbit_server_manager::me()->set_on_remote_start_client(
+        [](rpc::context &ctx, const std::string &client_id,
+           const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg &arg) -> rpc::result_code_type {
+          FWLOGINFO("orbit client {} is remotely start with arg: {}", client_id, arg.DebugString());
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_room_manager::me()->on_remote_start_client(ctx, client_id, arg)));
+        });
 
     return 0;
   }

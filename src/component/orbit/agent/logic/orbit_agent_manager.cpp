@@ -587,6 +587,8 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
   }
 
+  bool remote_start = request.args().remote_start();
+
   // 检查负载状态
   {
     const double expected_cpu =
@@ -618,7 +620,15 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
   }
   fill_client_identity(*response.mutable_client_identity(), client_record);
 
-  if (seed_mode_enabled_) {
+  if (remote_start) {
+    // 远程启动模式
+    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(
+        ctx, client_record, configured_client_command_line_, configured_client_command_line_append_));
+    if (spawn_result < 0) {
+      delete_client(client_record);
+      RPC_RETURN_CODE(spawn_result);
+    }
+  } else if (seed_mode_enabled_) {
     // 种子模式
     int32_t spawn_result = RPC_AWAIT_CODE_RESULT(spawn_seed_client_process(ctx, client_record));
     if (spawn_result < 0) {
@@ -1255,6 +1265,41 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
 
   FWLOGINFO("orbit agent submitted spawn client {} to worker pool", record->client_id);
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+}
+
+rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(
+    rpc::context& ctx, const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line,
+    const std::vector<std::string>& command_line_append) {
+  std::vector<std::string> launch_arguments;
+
+  // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
+  std::unordered_map<std::string, std::string> render_values;
+  render_values.emplace("client_id", record->client_id);
+  std::tm tm_local = atfw::util::time::time_utility::get_local_tm(atfw::util::time::time_utility::get_sys_now());
+  char buf[64] = {0};
+  std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
+  render_values.emplace("time", buf);
+
+  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments);
+
+  auto req = rpc::make_shared_message<atfw::orbit::ATCRemoteStartClientReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::CTARemoteStartClientRsp>(ctx);
+  for (const auto& arg : launch_arguments) {
+    req->mutable_arg()->add_command_lines(arg);
+  }
+
+  auto controller_server_id = record->get_controller_server_id();
+
+  int32_t rpc_result =
+      RPC_AWAIT_CODE_RESULT(rpc::agenttocontrollerservice::remote_start_client(ctx, controller_server_id, *req, *rsp));
+  if (rpc_result == 0) {
+    rpc_result = rsp->error_code();
+  }
+  if (rpc_result != 0) {
+    FWLOGERROR("orbit agent remote spawn client {} failed, rpc_result: {}", record->client_id, rpc_result);
+    RPC_RETURN_CODE(rpc_result);
+  }
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 void orbit_agent_manager::process_uv_actions() {

@@ -464,3 +464,28 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_clie
   }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
+
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::handle_remote_start_client(
+    rpc::context& ctx, const atfw::orbit::CTSRemoteStartClientReq& req) {
+  const std::string& client_id = req.client_identity().client_id().client_id();
+  auto client_info_ptr_ = get_client_info(client_id);
+  if (client_info_ptr_ == nullptr) {
+    FWLOGERROR("not found client info for client identity {}", client_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_FOUND);
+  }
+  if (client_info_ptr_->status == EnClientStatus::EN_CLIENT_STATUS_RUNNING) {
+    FWLOGINFO("client {} already in running status, current status: {}", client_id,
+              static_cast<int>(client_info_ptr_->status));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+  if (client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_STARTING &&
+      client_info_ptr_->status != EnClientStatus::EN_CLIENT_STATUS_START_CONFIRMING) {
+    FWLOGERROR("client {} is not in starting status, current status: {}", client_id,
+               static_cast<int>(client_info_ptr_->status));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_NOT_RUNNING);
+  }
+  if (on_remote_start_client_) {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(on_remote_start_client_(ctx, client_id, req.arg())));
+  }
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}

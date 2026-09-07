@@ -69,6 +69,8 @@ using on_client_start_notify_fn = std::function<rpc::result_code_type(
 using on_client_end_notify_fn = std::function<rpc::result_code_type(rpc::context& ctx, std::string client_id,
                                                                     atfw::orbit::EnClientExitReason exit_reason,
                                                                     const std::string& exit_data, int32_t exit_code)>;
+using on_remote_start_client_fn = std::function<rpc::result_code_type(
+    rpc::context& ctx, std::string client_id, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg)>;
 
 class orbit_server_manager {
  public:
@@ -115,6 +117,9 @@ class orbit_server_manager {
   ATFW_UTIL_FORCEINLINE void set_on_client_end_notify(on_client_end_notify_fn fn) {
     on_client_end_notify_ = std::move(fn);
   }
+  ATFW_UTIL_FORCEINLINE void set_on_remote_start_client(on_remote_start_client_fn fn) {
+    on_remote_start_client_ = std::move(fn);
+  }
 
  public:
   // SDK 内部使用
@@ -130,6 +135,9 @@ class orbit_server_manager {
   // 收到Client Heartbeat通知
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_client_agent_heartbeat_notify(
       rpc::context& ctx, const atfw::orbit::CTSClientAgentHeartbeatNotify& req);
+  // 收到远程启动Client通知
+  EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type handle_remote_start_client(
+      rpc::context& ctx, const atfw::orbit::CTSRemoteStartClientReq& req);
 
  private:
   void server_heartbeat();
@@ -149,6 +157,7 @@ class orbit_server_manager {
   on_forward_to_server_fn on_forward_to_server_;
   on_client_start_notify_fn on_client_start_notify_;
   on_client_end_notify_fn on_client_end_notify_;
+  on_remote_start_client_fn on_remote_start_client_;
 
   atfw::orbit::DServerIdentity server_identity_;
 

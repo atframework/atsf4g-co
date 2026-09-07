@@ -485,6 +485,45 @@ rpc::result_code_type orbit_controller_manager::handle_forward_to_server(
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+rpc::result_code_type orbit_controller_manager::handle_remote_start_client(
+    rpc::context& ctx, const atfw::orbit::ATCRemoteStartClientReq& request,
+    atfw::orbit::CTARemoteStartClientRsp& response) {
+  const auto& identity = request.client_identity();
+  const std::string& client_id_str = identity.client_id().client_id();
+
+  // 通过请求中携带的 server_identity 路由到目标 Server
+  const uint64_t target_server_unique_id = request.server_identity().unique_id();
+  if (0 == target_server_unique_id) {
+    FWLOGWARNING("orbit controller forward_to_server for {}: no server_identity in request, dropped", client_id_str);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  auto server_node_id = request.server_identity().server_node_id();
+  if (server_node_id == 0) {
+    FWLOGWARNING("orbit controller forward_to_server for {}: server session {} not found, dropped", client_id_str,
+                 target_server_unique_id);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  auto notify = rpc::make_shared_message<atfw::orbit::CTSRemoteStartClientReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::STCRemoteStartClientRsp>(ctx);
+  *notify->mutable_client_identity() = request.client_identity();
+  *notify->mutable_arg() = request.arg();
+
+  int32_t rpc_result =
+      RPC_AWAIT_CODE_RESULT(rpc::controllertoserverservice::remote_start_client(ctx, server_node_id, *notify, *rsp));
+  response.set_error_code(rsp->error_code());
+  if (rpc_result < 0) {
+    FWLOGERROR("orbit controller forward_to_server failed for {} to server {:#x}, res: {}", client_id_str,
+               server_node_id, rpc_result);
+    RPC_RETURN_CODE(rpc_result);
+  }
+
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
 // ===================== Server 侧 handlers =====================
 rpc::result_code_type orbit_controller_manager::handle_launch_client(
     rpc::context& ctx, const atfw::orbit::STCLaunchClientReq& request,

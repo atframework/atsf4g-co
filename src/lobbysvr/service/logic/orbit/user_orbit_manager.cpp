@@ -39,6 +39,7 @@
 
 #include "data/session.h"
 #include "data/user.h"
+#include "logic/async_jobs/task_action_user_remote_patch_jobs.h"
 
 namespace {
 static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit_channel_event_callback_set() {
@@ -76,6 +77,24 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
         }
         orbit_mgr->on_receive_event(ctx, subscriber, data);
         orbit_mgr->get_owner().send_all_syn_msg(logic_server_get_current_tick_context());
+      });
+
+  task_action_user_remote_patch_jobs::register_sync_callbacks(
+      static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish),
+      [](rpc::context& ctx, user& user_inst, int32_t /*job_type*/,
+         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+        const PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = job_data->orbit_finish();
+        user_inst.get_user_orbit_manager().receive_orbit_settlement(ctx, orbit_finish_data.data());
+        return 0;
+      });
+  task_action_user_remote_patch_jobs::register_sync_callbacks(
+      static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitRemoteStart),
+      [](rpc::context& ctx, user& user_inst, int32_t /*job_type*/,
+         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
+        const PROJECT_NAMESPACE_ID::user_async_job_orbit_remote_start& orbit_remote_start_data =
+            job_data->orbit_remote_start();
+        user_inst.get_user_orbit_manager().receive_orbit_remote_start(ctx, orbit_remote_start_data.arg());
+        return 0;
       });
   return ret;
 }
@@ -209,7 +228,8 @@ int32_t user_orbit_manager::create_room(rpc::context& ctx, const PROJECT_NAMESPA
   rpc::dtmq::client_subscriber::subscriber_options subscribe_options{subscriber_key_};
   atfw::dtmq::DChannelIdKey channel_key;
   channel_key.set_channel_type(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM);
-  channel_key.set_channel_id(rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
+  channel_key.set_channel_id(
+      rpc::dtmq::make_unicast_channel_id(PROJECT_NAMESPACE_ID::EN_ORBIT_CHANNEL_TYPE_ROOM, 0, room_key.client_id()));
   subscriber_ = rpc::dtmq::client_subscriber::create(channel_key, subscribe_options);
   if (!subscriber_) {
     FWLOGERROR("Failed to create world chat channel {}:{}, maybe configure is missing.", channel_key.channel_type(),
@@ -297,6 +317,20 @@ void user_orbit_manager::receive_orbit_settlement(
   }
   // TODO 处理结果
   clear_orbit_room_data();
+}
+
+void user_orbit_manager::receive_orbit_remote_start(rpc::context& ctx,
+                                                    const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg) {
+  auto sync_message = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCOrbitRemoteStartSync>(ctx);
+  *sync_message->mutable_arg() = arg;
+  auto sess = owner_->get_session();
+  if (sess) {
+    int32_t send_result = rpc::lobbysvrclientservice::send_orbit_remote_start_sync(ctx, *sync_message, *sess).unwrap();
+    if (send_result < 0) {
+      FCTXLOGERROR(ctx, "{} send orbit remote start failed, error={}({})", *owner_, send_result,
+                   protobuf_mini_dumper_get_error_msg(send_result));
+    }
+  }
 }
 
 void user_orbit_manager::on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
