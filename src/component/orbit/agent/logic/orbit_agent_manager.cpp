@@ -120,14 +120,12 @@ static void append_config_env_line(std::vector<std::string>& output, const char*
 template <class Rep, class Period>
 static std::string make_duration_config_env_value(std::chrono::duration<Rep, Period> input) {
   auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(input);
-  if (0 == microseconds.count() % std::chrono::seconds{1}.count()) {
-    return std::to_string(microseconds.count() / std::chrono::seconds{1}.count()) + "s";
-  }
+  return std::to_string(microseconds.count()) + "us";
+}
 
-  if (0 == microseconds.count() % std::chrono::milliseconds{1}.count()) {
-    return std::to_string(microseconds.count() / std::chrono::milliseconds{1}.count()) + "ms";
-  }
-
+static std::string make_pb_duration_config_env_value(const google::protobuf::Duration& input) {
+  auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(input.seconds()) +
+                                                                            std::chrono::nanoseconds(input.nanos()));
   return std::to_string(microseconds.count()) + "us";
 }
 
@@ -394,7 +392,14 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
       break;
     }
   }
-  if (agent_endpoint_.empty()) {
+  for (int i = 0; i < bus_config.listen_size(); ++i) {
+    if (!bus_config.listen(i).empty()) {
+      if (bus_config.listen(i).starts_with("atcp")) {
+        remote_agent_endpoint_ = bus_config.listen(i);
+      }
+    }
+  }
+  if (agent_endpoint_.empty() || remote_agent_endpoint_.empty()) {
     FWLOGERROR("orbit agent failed to resolve listen address from atapp bus.listen");
     return -7;
   }
@@ -1020,13 +1025,17 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
 }
 
 void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
-                                                           std::vector<std::string>& output) const {
+                                                           std::vector<std::string>& output, bool remote_start) const {
   output.emplace_back("-id");
   output.emplace_back(std::to_string(app_id));
   output.emplace_back("--orbit-client-id");
   output.emplace_back(record.client_id);
   output.emplace_back("--orbit-agent-endpoint");
-  output.emplace_back(agent_endpoint_);
+  if (remote_start) {
+    output.emplace_back(remote_agent_endpoint_);
+  } else {
+    output.emplace_back(agent_endpoint_);
+  }
 
   if (nullptr != owner_app_ && nullptr != owner_app_->get_bus_node()) {
     append_bus_config_env_arguments(owner_app_->get_bus_node()->get_conf(), output);
@@ -1085,7 +1094,7 @@ void orbit_agent_manager::fill_client_identity(atfw::orbit::DClientIdentity& out
 void orbit_agent_manager::build_client_launch_arguments(
     const orbit_agent_client_record_ptr& record, const std::unordered_map<std::string, std::string>& render_values,
     const std::vector<std::string>& command_line, const std::vector<std::string>& command_line_append,
-    std::vector<std::string>& output) {
+    std::vector<std::string>& output, bool remote_start) {
   uint64_t app_id = ++sequence_allocator_;
   output.clear();
 
@@ -1099,7 +1108,7 @@ void orbit_agent_manager::build_client_launch_arguments(
   for (const auto& arg : command_line_append) {
     output.emplace_back(render_string_template(arg, render_values));
   }
-  fill_normal_client_start_command(*record, app_id, output);
+  fill_normal_client_start_command(*record, app_id, output, remote_start);
 }
 
 void orbit_agent_manager::delete_uv_process_handle(uv_process_t* process_handle) {
@@ -1254,7 +1263,7 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
   std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
   render_values.emplace("time", buf);
 
-  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments);
+  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments, false);
 
   int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments), !seed_client);
   if (spawn_result < 0) {
@@ -1280,7 +1289,7 @@ rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(
   std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
   render_values.emplace("time", buf);
 
-  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments);
+  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments, true);
 
   auto req = rpc::make_shared_message<atfw::orbit::ATCRemoteStartClientReq>(ctx);
   auto rsp = rpc::make_shared_message<atfw::orbit::CTARemoteStartClientRsp>(ctx);

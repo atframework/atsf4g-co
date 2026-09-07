@@ -140,7 +140,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void set_client_state(const orbit_agent_client_record_ptr& record, atfw::orbit::EnClientState state);
 
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
-                                        std::vector<std::string>& output) const;
+                                        std::vector<std::string>& output, bool remote_start) const;
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
   int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line,
                            const std::vector<std::string>& command_line_append, bool seed_client);
@@ -153,7 +153,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
                                      const std::unordered_map<std::string, std::string>& render_values,
                                      const std::vector<std::string>& command_line,
                                      const std::vector<std::string>& command_line_append,
-                                     std::vector<std::string>& output);
+                                     std::vector<std::string>& output, bool remote_start);
 
   void fill_client_identity(atfw::orbit::DClientIdentity& output, const orbit_agent_client_record_ptr& client) const;
   void stop_client_process(const orbit_agent_client_record_ptr& client_record,
@@ -226,6 +226,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   // 启动配置
   std::string region_;
   std::string agent_endpoint_;
+  std::string remote_agent_endpoint_;
   std::string tag_;
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
