@@ -123,12 +123,6 @@ static std::string make_duration_config_env_value(std::chrono::duration<Rep, Per
   return std::to_string(microseconds.count()) + "us";
 }
 
-static std::string make_pb_duration_config_env_value(const google::protobuf::Duration& input) {
-  auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::seconds(input.seconds()) +
-                                                                            std::chrono::nanoseconds(input.nanos()));
-  return std::to_string(microseconds.count()) + "us";
-}
-
 static void append_bus_config_env_arguments(const atbus::node::conf_t& bus_conf, std::vector<std::string>& output) {
   if (bus_conf.loop_times > 0) {
     append_config_env_line(output, "ATAPP_BUS_LOOP_TIMES", bus_conf.loop_times);
