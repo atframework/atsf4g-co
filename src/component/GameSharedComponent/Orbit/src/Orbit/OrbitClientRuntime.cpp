@@ -375,7 +375,19 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
     launch_argv.emplace_back(launch_argument.c_str());
   }
 
+  app_ = std::make_unique<::atframework::atapp::app>();
+  int app_init_result =
+      app_->init(uv_default_loop(), static_cast<int>(launch_argv.size()), launch_argv.data(), nullptr);
+  if (0 != app_init_result) {
+    std::ostringstream stream;
+    stream << "init rejected: atapp init failed for app_id=" << resolved_app_id << ", code=" << app_init_result;
+    ORBIT_LOG(OrbitClientLogLevel::kError, stream.str());
+    return -5;
+  }
+
   if (callbacks.on_log) {
+    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
+    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_level(::atframework::util::log::log_level::kDebug);
     WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
         ->add_sink([on_log = callbacks.on_log](const ::atframework::util::log::log_wrapper::caller_info_t &caller,
                                                ::atframework::util::nostd::string_view content) {
@@ -405,16 +417,6 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
           record.message = content.data();
           on_log(record);
         });
-  }
-
-  app_ = std::make_unique<::atframework::atapp::app>();
-  int app_init_result =
-      app_->init(uv_default_loop(), static_cast<int>(launch_argv.size()), launch_argv.data(), nullptr);
-  if (0 != app_init_result) {
-    std::ostringstream stream;
-    stream << "init rejected: atapp init failed for app_id=" << resolved_app_id << ", code=" << app_init_result;
-    ORBIT_LOG(OrbitClientLogLevel::kError, stream.str());
-    return -5;
   }
 
   if (!app_->get_bus_node()) {
