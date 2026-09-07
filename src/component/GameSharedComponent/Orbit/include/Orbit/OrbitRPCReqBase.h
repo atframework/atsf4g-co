@@ -24,7 +24,7 @@ namespace orbit_client_sdk {
 
 class ORBIT_CLIENT_SDK_API task_action_orbit_req_base {
  public:
-  using msg_type = atfw::orbit::OrbitRpcMessage;
+  using msg_type = ::atframework::orbit::OrbitRpcMessage;
   using msg_ref_type = msg_type&;
   using msg_cref_type = const msg_type&;
 
@@ -34,17 +34,17 @@ class ORBIT_CLIENT_SDK_API task_action_orbit_req_base {
 
   msg_ref_type add_rsp_msg();
 
-  static int32_t init_msg(atfw::orbit::OrbitRpcMessage& msg, const atfw::orbit::OrbitRpcMessage& req_msg);
+  static int32_t init_msg(::atframework::orbit::OrbitRpcMessage& msg, const ::atframework::orbit::OrbitRpcMessage& req_msg);
 
  protected:
   void send_response();
   void set_rsp_code(int32_t code) { rsp_code_ = code; }
-  atfw::orbit::OrbitRpcMessage& get_request() { return req_message_; }
-  const atfw::orbit::OrbitRpcMessage& get_request() const { return req_message_; }
+  ::atframework::orbit::OrbitRpcMessage& get_request() { return req_message_; }
+  const ::atframework::orbit::OrbitRpcMessage& get_request() const { return req_message_; }
 
  private:
-  atfw::orbit::OrbitRpcMessage req_message_;
-  atfw::orbit::OrbitRpcMessage response_messages_;
+  ::atframework::orbit::OrbitRpcMessage req_message_;
+  ::atframework::orbit::OrbitRpcMessage response_messages_;
   bool rsp_init_;
   int32_t rsp_code_;
 };
@@ -128,8 +128,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE task_action_orbit_rpc_base : public task_action_o
   void pack_response() {
     has_pack_response_ = true;
 
-    atfw::orbit::OrbitRpcMessage& rsp = add_rsp_msg();
-    atfw::orbit::OrbitRpcMessageHead* head = rsp.mutable_head();
+    ::atframework::orbit::OrbitRpcMessage& rsp = add_rsp_msg();
+    ::atframework::orbit::OrbitRpcMessageHead* head = rsp.mutable_head();
     if (nullptr == head) {
       return;
     }

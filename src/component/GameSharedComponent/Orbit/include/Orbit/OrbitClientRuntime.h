@@ -81,10 +81,10 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API const std::string& find_custom_launch_argument(const std::string& key) const;
   // 发送消息给Server
   ORBIT_CLIENT_SDK_API int32_t
-  send_to_server(const std::string& payload, OrbitClientRpcCallback<atfw::orbit::ATDSendToServerRsp> callback = nullptr,
+  send_to_server(const std::string& payload, OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback = nullptr,
                  const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
   // 请求停止服务
-  ORBIT_CLIENT_SDK_API int32_t request_end(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
+  ORBIT_CLIENT_SDK_API int32_t request_end(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
                                            const std::string& custom_data = std::string{});
 
   ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const char* file_name, int line_number,
@@ -98,7 +98,7 @@ class OrbitClientRuntime {
 
   int32_t notify_seed_process_ready_inner();
   int32_t notify_process_ready_inner(const std::string& client_addr, const std::string& custom_data);
-  int32_t request_end_inner(atfw::orbit::EnClientExitReason reason, int32_t exit_code, const std::string& custom_data);
+  int32_t request_end_inner(::atframework::orbit::EnClientExitReason reason, int32_t exit_code, const std::string& custom_data);
 
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options);
   void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output) const;
@@ -122,8 +122,8 @@ class OrbitClientRuntime {
   int32_t send_heartbeat(const OrbitClientLoadSnapshot& snapshot);
   void on_received_message(const std::string& message);
 
-  int32_t on_received_fork_request(const atfw::orbit::ATDForkSeedClientReq& request);
-  void on_received_stop_request(const atfw::orbit::ATDStopClientReq& request);
+  int32_t on_received_fork_request(const ::atframework::orbit::ATDForkSeedClientReq& request);
+  void on_received_stop_request(const ::atframework::orbit::ATDStopClientReq& request);
   int32_t process_fork_request();
 
  private:
@@ -168,20 +168,20 @@ class OrbitClientRuntime {
   void finalize_shutdown();
   OrbitClientLoadSnapshot make_default_load_snapshot();
 
-  int32_t rpc_send_client_heartbeat(const atfw::orbit::DTAClientHeartbeatNotify& request);
-  int32_t rpc_send_send_to_server(const atfw::orbit::DTASendToServerReq& request,
-                                  OrbitClientRpcCallback<atfw::orbit::ATDSendToServerRsp> callback,
+  int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatNotify& request);
+  int32_t rpc_send_send_to_server(const ::atframework::orbit::DTASendToServerReq& request,
+                                  OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback,
                                   const OrbitClientRequestOptions& request_options);
-  int32_t rpc_send_client_start(const atfw::orbit::DTAClientStartReq& request,
-                                OrbitClientRpcCallback<atfw::orbit::ATDClientStartRsp> callback,
+  int32_t rpc_send_client_start(const ::atframework::orbit::DTAClientStartReq& request,
+                                OrbitClientRpcCallback<::atframework::orbit::ATDClientStartRsp> callback,
                                 const OrbitClientRequestOptions& request_options);
-  int32_t rpc_send_client_exit(const atfw::orbit::DTAClientExitReq& request,
-                               OrbitClientRpcCallback<atfw::orbit::ATDClientExitRsp> callback,
+  int32_t rpc_send_client_exit(const ::atframework::orbit::DTAClientExitReq& request,
+                               OrbitClientRpcCallback<::atframework::orbit::ATDClientExitRsp> callback,
                                const OrbitClientRequestOptions& request_options);
   int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
-                                        atfw::orbit::ATDForwardToClientReq& request);
-  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head, atfw::orbit::ATDForkSeedClientReq& request);
-  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head, atfw::orbit::ATDStopClientReq& request);
+                                        ::atframework::orbit::ATDForwardToClientReq& request);
+  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head, ::atframework::orbit::ATDForkSeedClientReq& request);
+  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head, ::atframework::orbit::ATDStopClientReq& request);
 
  private:
   std::unique_ptr<::atframework::atapp::app> app_;
@@ -200,7 +200,7 @@ class OrbitClientRuntime {
   std::atomic<bool> io_thread_running_;
   std::thread io_thread_;
 
-  tbb::concurrent_queue<atfw::orbit::ATDForkSeedClientReq> pending_fork_requests_;
+  tbb::concurrent_queue<::atframework::orbit::ATDForkSeedClientReq> pending_fork_requests_;
   tbb::concurrent_queue<std::function<void()>> io_task_;
   tbb::concurrent_queue<std::function<void()>> caller_task_;
 
