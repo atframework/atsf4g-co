@@ -15,7 +15,7 @@ namespace item_algorithm {
 ///
 /// 内部以单个 uint64 数组按行优先存储位图, 支持按 (x, y) 快速检查/设置占用,
 /// 便于后续寻位优化 (位运算找空位)。
-class ATFW_UTIL_SYMBOL_VISIBLE ItemGridOccupyFlag {
+class ItemGridOccupyFlag {
  public:
   ITEM_ALGORITHM_API ItemGridOccupyFlag();
   ITEM_ALGORITHM_API ItemGridOccupyFlag(const ItemGridOccupyFlag&);
@@ -49,10 +49,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemGridOccupyFlag {
   ITEM_ALGORITHM_API void set(int32_t x, int32_t y, bool occupied);
 
  private:
-  ATFW_UTIL_SYMBOL_LOCAL std::vector<uint64_t> data_;
-  ATFW_UTIL_SYMBOL_LOCAL size_t row_count_ = 0;
-  ATFW_UTIL_SYMBOL_LOCAL size_t column_count_ = 0;
-  ATFW_UTIL_SYMBOL_LOCAL size_t words_per_row_ = 0;
+  std::vector<uint64_t> data_;
+  size_t row_count_ = 0;
+  size_t column_count_ = 0;
+  size_t words_per_row_ = 0;
 };
 
 }  // namespace item_algorithm

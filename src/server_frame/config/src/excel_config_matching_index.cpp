@@ -30,7 +30,7 @@ EXCEL_CONFIG_LOADER_API void setup_matching_config(config_group_t& group) {
       }
 
       const int32_t user_number = entry.user_number();
-      index.faction_count_by_capacity[user_number] += entry.count();
+      index.faction_count_by_capacity[static_cast<size_t>(user_number)] += static_cast<size_t>(entry.count());
       if (user_number > index.max_faction_capacity) {
         index.max_faction_capacity = user_number;
       }

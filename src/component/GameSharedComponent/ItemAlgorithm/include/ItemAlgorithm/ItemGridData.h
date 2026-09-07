@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "ItemAlgorithm/ItemAlgorithmConfig.h"
-
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -21,6 +19,8 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+
+#include "ItemAlgorithm/ItemAlgorithmConfig.h"
 
 namespace excel {
 struct config_group_t;
@@ -94,9 +94,9 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemGridEntry : public atfw::util::memory::enabl
   PROJECT_NAMESPACE_ID::DItemInstance& mutable_item_instance();
 
  private:
-  ATFW_UTIL_SYMBOL_LOCAL uint64_t entry_id_ = 0;
-  ATFW_UTIL_SYMBOL_LOCAL PROJECT_NAMESPACE_ID::DItemInstance item_instance_;
-  ATFW_UTIL_SYMBOL_LOCAL atfw::util::memory::weak_rc_ptr<ItemGridAlgorithm> belong_grid_;
+  uint64_t entry_id_ = 0;
+  PROJECT_NAMESPACE_ID::DItemInstance item_instance_;
+  atfw::util::memory::weak_rc_ptr<ItemGridAlgorithm> belong_grid_;
 };
 
 using item_grid_entry_ptr_t = atfw::util::memory::strong_rc_ptr<ItemGridEntry>;

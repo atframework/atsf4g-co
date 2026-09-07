@@ -2,17 +2,17 @@
 
 #pragma once
 
-#include "ItemAlgorithm/ItemAlgorithmConfig.h"
-#include "ItemAlgorithm/ItemAlgorithmLog.h"
-#include "ItemAlgorithm/ItemGridAlgorithmFindPosition.h"
-#include "ItemAlgorithm/ItemGridData.h"
-#include "ItemAlgorithm/ItemGridOccupyFlag.h"
-
 #include <cstdint>
 #include <list>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+#include "ItemAlgorithm/ItemAlgorithmConfig.h"
+#include "ItemAlgorithm/ItemAlgorithmLog.h"
+#include "ItemAlgorithm/ItemGridAlgorithmFindPosition.h"
+#include "ItemAlgorithm/ItemGridData.h"
+#include "ItemAlgorithm/ItemGridOccupyFlag.h"
 
 namespace excel {
 struct config_group_t;
@@ -294,22 +294,22 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemGridAlgorithm
   void remove_entry_id_index(uint64_t entry_id);
 
  private:
-  ATFW_UTIL_SYMBOL_LOCAL bool init_ = false;
-  ATFW_UTIL_SYMBOL_LOCAL ItemGridAlgorithmMode mode_;
-  ATFW_UTIL_SYMBOL_LOCAL int64_t container_guid_ = 0;
-  ATFW_UTIL_SYMBOL_LOCAL int32_t row_size_ = 0;
-  ATFW_UTIL_SYMBOL_LOCAL int32_t column_size_ = 0;
-  ATFW_UTIL_SYMBOL_LOCAL PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_;
+  bool init_ = false;
+  ItemGridAlgorithmMode mode_;
+  int64_t container_guid_ = 0;
+  int32_t row_size_ = 0;
+  int32_t column_size_ = 0;
+  PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type_;
 
-  ATFW_UTIL_SYMBOL_LOCAL std::unordered_map<uint64_t, item_grid_entry_weak_ptr_t> entry_id_index_;
-  ATFW_UTIL_SYMBOL_LOCAL item_group_map_type item_groups_;
-  ATFW_UTIL_SYMBOL_LOCAL position_index_type position_index_;
-  ATFW_UTIL_SYMBOL_LOCAL guid_index_type guid_index_;
-  ATFW_UTIL_SYMBOL_LOCAL ItemGridOccupyFlag occupy_grid_flag_;
-  ATFW_UTIL_SYMBOL_LOCAL std::unordered_map<int32_t, int64_t> item_count_cache_;
-  ATFW_UTIL_SYMBOL_LOCAL ItemLogHandler log_handler_;
-  ATFW_UTIL_SYMBOL_LOCAL mutable uint64_t next_entry_id_ = 1;
-  ATFW_UTIL_SYMBOL_LOCAL mutable int64_t operate_id_ = 0;  // 操作流水号
+  std::unordered_map<uint64_t, item_grid_entry_weak_ptr_t> entry_id_index_;
+  item_group_map_type item_groups_;
+  position_index_type position_index_;
+  guid_index_type guid_index_;
+  ItemGridOccupyFlag occupy_grid_flag_;
+  std::unordered_map<int32_t, int64_t> item_count_cache_;
+  ItemLogHandler log_handler_;
+  mutable uint64_t next_entry_id_ = 1;
+  mutable int64_t operate_id_ = 0;  // 操作流水号
 };
 
 }  // namespace item_algorithm

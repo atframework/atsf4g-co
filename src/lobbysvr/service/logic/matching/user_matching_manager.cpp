@@ -2,10 +2,6 @@
 
 #include "logic/matching/user_matching_manager.h"
 
-#include <algorithm>
-#include <string>
-#include <vector>
-
 #include <atframe/atapp.h>
 #include <config/excel/config_easy_api.h>
 #include <config/server_frame_build_feature.h>
@@ -24,13 +20,19 @@
 #include <logic/user/task_action_user_gm_cmd_nomsg.h>
 
 #include <config/logic_config.h>
-#include <data/user.h>
+
 #include <rpc/db/uuid.h>
 #include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/matching/matching_api.h>
 #include <rpc/matching/matchsvrservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_shared_message.h>
+
+#include <algorithm>
+#include <string>
+#include <vector>
+
+#include "data/user.h"
 
 namespace {
 static bool init_user_matching_manager_gm_handle() {
@@ -123,7 +125,7 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
     protobuf_copy_message(data_, user_table.matching_data());
 
     matched_users_.clear();
-    matched_users_.reserve(user_table.matching_data().matched_users_size());
+    matched_users_.reserve(static_cast<size_t>(user_table.matching_data().matched_users_size()));
     for (const auto& matched_user : user_table.matching_data().matched_users()) {
       matched_users_.push_back(matched_user);
     }
@@ -241,10 +243,10 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   FWLOGDEBUG("{} start matching, level_select={}, level_count={}, request={}", *owner_,
              request.level_select().DebugString(), request.battle_version(), request.DebugString());
 
-  // TODO 通知battle锁背包
+  // TODO(jijunliang): 通知battle锁背包
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCreateReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
-  // TODO 接入battle_versnion
+  // TODO(jijunliang): 接入battle_versnion
   std::vector<int32_t> acceptable_level_ids;
   int32_t ret = fill_matching_scope(request.level_select(), request.battle_version(), *rpc_request->mutable_scope(),
                                     acceptable_level_ids);
@@ -417,7 +419,7 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
 rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
                                                               const PROJECT_NAMESPACE_ID::CSMatchingConfirmReq& request,
                                                               PROJECT_NAMESPACE_ID::SCMatchingConfirmRsp& response) {
-  // TODO 填充玩家的战斗数据
+  // TODO(jijunliang): 填充玩家的战斗数据
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingConfirmReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
   const uint64_t unit_id = get_current_unit_id();
@@ -712,7 +714,7 @@ rpc::result_code_type user_matching_manager::fill_matching_unit(rpc::context& ct
   // 匹配用玩家数据
   fill_matching_user_data(ctx, *output.add_users());
 
-  // TODO 队伍其他成员数据
+  // TODO(jijunliang): 队伍其他成员数据
 
   output.set_client_version(owner_->get_client_info().client_version());
   // 组队未接入前，队长固定为当前玩家，unit 只包含当前玩家。
