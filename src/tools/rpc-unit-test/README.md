@@ -45,8 +45,10 @@ component-functions.cmake 创建的目标，`sdk` 适用于库/SDK 测试，`ser
 （`project_service_declare_instance` / `project_component_declare_service`）用 `MAIN_SOURCES` 传入入口文件
 （`app/*_main.cpp`）后，其余源码只编译一次进静态库，测试 target 链接其别名 `service::<name>::private` 或
 `components::<name>::private`，即可继承服务 include 目录、SDK/protocol 依赖、生成代码构建顺序和 PCH 复用。
-需要手工 `REUSE_FROM_TARGET` 复用 PCH 时用真实 target 名 `<name>-private`。示例见
-`src/lobbysvr/test/CMakeLists.txt`、`src/component/dtmq/test/CMakeLists.txt`。
+需要手工 `REUSE_FROM_TARGET` 复用 PCH 时用真实 target 名 `<name>-private`。生成的注册 TU
+（`handle_*_rpc_*.atfw.gen.*`）随入口目录（`MAIN_DIRECTORIES`，默认 `app/`）归入可执行文件
+（`MAIN_SOURCES`/`MAIN_HEADERS`），不进静态库；如果用例需要直接调用 `register_handles_for_<service>()`，
+把这一个生成文件列入测试自己的 `SOURCES`，路径用 `project_service_get_target_root_dir()` 从私有库别名取根目录拼接。
 
 ## 最小 CASE_TEST 示例
 

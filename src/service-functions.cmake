@@ -580,6 +580,8 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
       HEADERS
       SOURCES
       MAIN_SOURCES
+      MAIN_HEADERS
+      MAIN_DIRECTORIES
       RESOURCE_DIRECTORIES
       RESOURCE_FILES
       USE_COMPONENTS
@@ -603,22 +605,29 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
     list(REMOVE_DUPLICATES project_service_declare_instance_HEADERS)
   endif()
 
-  # MAIN_SOURCES holds the entry-point translation units (main()). Everything else is compiled once into a static
-  # implementation library (<TARGET_NAME>-private, alias service::<TARGET_NAME>::private) which the service
-  # executable and unit tests link, so tests reuse the compiled service objects instead of recompiling them. A static
-  # archive needs no import/export annotation (export tables and .def files only exist when linking a shared library
-  # or executable); force default symbol visibility and PIC so global visibility presets never hide symbols from
-  # consumers and the PCH .pic variant stays flag-compatible.
+  # MAIN_SOURCES/MAIN_HEADERS hold the entry-point translation units (main()) and their companion headers;
+  # MAIN_DIRECTORIES (default: app under SERVICE_ROOT_DIR) additionally routes every source and header under those
+  # directories there, so registration TUs like handle_*_rpc_*.atfw.gen.* (strong symbols named after the proto service)
+  # never sit in the co-linkable implementation library. Everything else is compiled once into a static implementation
+  # library (<TARGET_NAME>-private, alias service::<TARGET_NAME>::private) which the service executable and unit tests
+  # link, so tests reuse the compiled service objects instead of recompiling them. A static archive needs no
+  # import/export annotation (export tables and .def files only exist when linking a shared library or executable);
+  # force default symbol visibility and PIC so global visibility presets never hide symbols from consumers and the PCH
+  # .pic variant stays flag-compatible.
   unset(project_service_declare_instance_IMPL_TARGET_NAME)
   if(project_service_declare_instance_MAIN_SOURCES)
-    list(REMOVE_ITEM project_service_declare_instance_SOURCES ${project_service_declare_instance_MAIN_SOURCES})
+    project_service_route_entry_point_files(
+      "${SERVICE_ROOT_DIR}" project_service_declare_instance_SOURCES project_service_declare_instance_HEADERS
+      project_service_declare_instance_MAIN_SOURCES project_service_declare_instance_MAIN_HEADERS
+      project_service_declare_instance_MAIN_DIRECTORIES)
     set(project_service_declare_instance_IMPL_TARGET_NAME "${TARGET_NAME}-private")
   endif()
 
   echowithcolor(COLOR GREEN "-- Configure service ${TARGET_NAME} on ${SERVICE_ROOT_DIR}")
-  source_group(TREE ${SERVICE_ROOT_DIR} FILES ${project_service_declare_instance_HEADERS}
-                                              ${project_service_declare_instance_SOURCES}
-                                              ${project_service_declare_instance_MAIN_SOURCES})
+  source_group(
+    TREE ${SERVICE_ROOT_DIR}
+    FILES ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES}
+          ${project_service_declare_instance_MAIN_SOURCES} ${project_service_declare_instance_MAIN_HEADERS})
   if(project_service_declare_instance_IMPL_TARGET_NAME)
     add_library("${project_service_declare_instance_IMPL_TARGET_NAME}" STATIC
                 ${project_service_declare_instance_HEADERS} ${project_service_declare_instance_SOURCES})
@@ -628,10 +637,11 @@ function(project_service_declare_instance TARGET_NAME SERVICE_ROOT_DIR)
                  CXX_VISIBILITY_PRESET "default"
                  VISIBILITY_INLINES_HIDDEN OFF
                  POSITION_INDEPENDENT_CODE ON)
-    add_executable(${TARGET_NAME} ${project_service_declare_instance_MAIN_SOURCES})
+    add_executable(${TARGET_NAME} ${project_service_declare_instance_MAIN_SOURCES}
+                                  ${project_service_declare_instance_MAIN_HEADERS})
   else()
     add_executable(${TARGET_NAME} ${project_service_declare_instance_HEADERS}
-                                 ${project_service_declare_instance_SOURCES})
+                                  ${project_service_declare_instance_SOURCES})
   endif()
   project_tool_set_target_incremental_link_database(${TARGET_NAME})
 
@@ -766,12 +776,29 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
     set(project_service_declare_instance_CODE_TARGET_NAME "${TARGET_NAME}")
   endif()
 
+  # Record the service locations on the executable and the implementation library so consumers query them through
+  # project_service_get_target_root_dir/project_service_get_target_include_dir instead of hardcoding relative paths.
+  if(project_service_declare_instance_INCLUDE_DIR)
+    if(IS_ABSOLUTE "${project_service_declare_instance_INCLUDE_DIR}")
+      set(__SERVICE_INCLUDE_DIR "${project_service_declare_instance_INCLUDE_DIR}")
+    else()
+      set(__SERVICE_INCLUDE_DIR "${SERVICE_ROOT_DIR}/${project_service_declare_instance_INCLUDE_DIR}")
+    endif()
+  else()
+    set(__SERVICE_INCLUDE_DIR "${SERVICE_ROOT_DIR}")
+  endif()
+  foreach(__SERVICE_PROPERTY_TARGET "${TARGET_NAME}" ${project_service_declare_instance_IMPL_TARGET_NAME})
+    set_target_properties("${__SERVICE_PROPERTY_TARGET}" PROPERTIES SERVICE_ROOT_DIR "${SERVICE_ROOT_DIR}"
+                                                                    SERVICE_INCLUDE_DIR "${__SERVICE_INCLUDE_DIR}")
+  endforeach()
+  unset(__SERVICE_INCLUDE_DIR)
+  unset(__SERVICE_PROPERTY_TARGET)
+
   list(LENGTH project_service_declare_instance_SOURCES __project_service_declare_instance_SOURCES_LENGTH)
   if(PROJECT_ENABLE_UNITY_BUILD AND __project_service_declare_instance_SOURCES_LENGTH GREATER
                                     PROJECT_COMPONENT_UNITY_BUILD_MIN_FILE_COUNT)
     set_target_properties("${project_service_declare_instance_CODE_TARGET_NAME}"
-                          PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE
-                                                    ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
+                          PROPERTIES UNITY_BUILD ON UNITY_BUILD_BATCH_SIZE ${PROJECT_COMPONENT_UNITY_BUILD_BATCH_SIZE})
   endif()
 
   # Precompile headers
@@ -841,14 +868,13 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
       REUSE_FROM_TARGET
       ${__LINK_TARGETS})
   else()
-    project_pch_tool_set_precompile_headers("${project_service_declare_instance_CODE_TARGET_NAME}"
-                                            FOLDER "${PROJECT_NAME}/service/server" REUSE_FROM_TARGET
-                                            ${__LINK_TARGETS})
+    project_pch_tool_set_precompile_headers("${project_service_declare_instance_CODE_TARGET_NAME}" FOLDER
+                                            "${PROJECT_NAME}/service/server" REUSE_FROM_TARGET ${__LINK_TARGETS})
   endif()
   if(project_service_declare_instance_IMPL_TARGET_NAME)
     # MAIN_SOURCES reuse the implementation library PCH; the executable only links the library.
-    project_pch_tool_set_precompile_headers("${TARGET_NAME}" FOLDER "${PROJECT_NAME}/service/server"
-                                            REUSE_FROM_TARGET "${project_service_declare_instance_IMPL_TARGET_NAME}")
+    project_pch_tool_set_precompile_headers("${TARGET_NAME}" FOLDER "${PROJECT_NAME}/service/server" REUSE_FROM_TARGET
+                                            "${project_service_declare_instance_IMPL_TARGET_NAME}")
     target_link_libraries("${project_service_declare_instance_IMPL_TARGET_NAME}" PUBLIC ${__LINK_TARGETS})
     target_link_libraries("${TARGET_NAME}" PRIVATE "${project_service_declare_instance_IMPL_TARGET_NAME}")
   else()
@@ -857,8 +883,8 @@ ${SERVER_FRAME_PACKAGE_SANITIZER_FIELD}
   set_property(TARGET "${TARGET_NAME}" PROPERTY FOLDER "${PROJECT_NAME}/service/server")
   if(project_service_declare_instance_IMPL_TARGET_NAME)
     add_library("service::${TARGET_NAME}::private" ALIAS "${project_service_declare_instance_IMPL_TARGET_NAME}")
-    set_property(TARGET "${project_service_declare_instance_IMPL_TARGET_NAME}" PROPERTY FOLDER
-                                                                                        "${PROJECT_NAME}/service/server")
+    set_property(TARGET "${project_service_declare_instance_IMPL_TARGET_NAME}"
+                 PROPERTY FOLDER "${PROJECT_NAME}/service/server")
   endif()
 
   project_setup_runtime_post_build_bash(${TARGET_NAME} PROJECT_RUNTIME_POST_BUILD_EXECUTABLE_LIBRARY_BASH)

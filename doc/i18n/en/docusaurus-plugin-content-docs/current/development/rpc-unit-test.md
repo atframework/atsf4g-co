@@ -77,7 +77,12 @@ When testing code that lives in a service executable (`CATEGORY service`), do no
 `SOURCES`: once the service declaration (`project_service_declare_instance`/`project_component_declare_service`)
 passes its entry-point files via `MAIN_SOURCES`, everything else compiles once into a static library, and the test
 links the alias `service::<name>::private` or `components::<name>::private` to inherit the include directories,
-SDK/protocol dependencies, and generated-code build order (example: `src/lobbysvr/test/CMakeLists.txt`).
+SDK/protocol dependencies, and generated-code build order (example: `src/lobbysvr/test/CMakeLists.txt`). Generated
+registration TUs (`handle_*_rpc_*.atfw.gen.*`) are routed with the entry-point directories (`MAIN_DIRECTORIES`,
+default `app/`) into the service executable (`MAIN_SOURCES`/`MAIN_HEADERS`) instead of the static library; a case
+that drives `register_handles_for_<service>()` lists that one generated file in its own `SOURCES`, building the
+path from `project_service_get_target_root_dir()` on the private-library alias instead of
+`${CMAKE_CURRENT_LIST_DIR}/..` arithmetic (example: `src/component/distributed_transaction/test/CMakeLists.txt`).
 
 Minimal case (`src/tools/rpc-unit-test/test/example_readme.cpp` compiles and runs it verbatim, keeping it in sync
 with the real API):

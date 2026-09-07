@@ -49,7 +49,7 @@ flowchart LR
 
 | Template | Generated artifact |
 | --- | --- |
-| `handle_ss_rpc.*.mako` | SS RPC registration function `register_handles_for_<service>` |
+| `handle_ss_rpc.*.mako` | SS RPC registration function `register_handles_for_<service>` (generated under the `app/` entry-point directory; the service declaration routes it via `MAIN_DIRECTORIES` into `MAIN_SOURCES`/`MAIN_HEADERS`, compiled into the service executable, not the private static library) |
 | `task_action_ss_rpc.*.mako` | Server-side task action skeleton for each SS RPC method |
 | `rpc_call_api_for_ss.*.mako` | SS RPC client call APIs (unary/stream/no-wait/broadcast/metadata/user/router variants) and per-RPC full-name accessors |
 | `handle_cs_rpc.*.mako` / `task_action_cs_rpc.*.mako` | Handlers and task actions for client RPCs |

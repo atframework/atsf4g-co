@@ -32,6 +32,9 @@ project_service_declare_instance(
   "${SERVICE_TARGET_NAME}/bin"
   USE_SERVICE_SDK
   "matchsvr-sdk"
+  # orbitsvr-matchsvr-sdk generates rpc/orbit/orbitsvrmatchsvrservice.atfw.gen.*, included by
+  # logic/action/task_action_orbit_room_ready.h.
+  "orbitsvr-matchsvr-sdk"
   "orbitsvr-sdk"
   USE_SERVICE_PROTOCOL
   "matchsvr-config"

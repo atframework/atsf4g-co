@@ -63,11 +63,13 @@ project_add_rpc_unit_test(
   TIMEOUT
   300)
 
-# Coordinator internals (manager + 7 actions + the generated service handle) are compiled once into the static
-# library components::dtcoordsvr::private by the dtcoordsvr service (see project_component_declare_service
-# MAIN_SOURCES); this target compiles only the case sources and links that library. The dtcoordsvr include directory
-# and the dtcoordsvr-config usage requirements propagate from the library; the explicit links stay because the case
+# Coordinator internals (manager + 7 actions) come from components::dtcoordsvr::private. The cases drive
+# handle::transaction::register_handles_for_dtcoordsvrservice() once per fixture, and the registration TU belongs to
+# the service executable, so this target compiles that one generated file itself. The dtcoordsvr include directory
+# and dtcoordsvr-config usage requirements propagate from the library; the explicit links stay because the case
 # sources include the SDK and config headers directly.
+project_service_get_target_root_dir(components::dtcoordsvr::private DTCOORDSVR_ROOT_DIR)
+
 project_add_rpc_unit_test(
   TARGET
   ${PROJECT_NAME}-component-dtcoordsvr-unit-test
@@ -77,6 +79,7 @@ project_add_rpc_unit_test(
   service
   SOURCES
   "${CMAKE_CURRENT_LIST_DIR}/distributed_transaction_test_dtcoordsvr.cpp"
+  "${DTCOORDSVR_ROOT_DIR}/app/handle_ss_rpc_dtcoordsvrservice.atfw.gen.cpp"
   LINK_LIBRARIES
   components::dtcoordsvr::private
   components::distributed-transaction-sdk

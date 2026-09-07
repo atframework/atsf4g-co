@@ -60,7 +60,12 @@ high-performance game server architectures.
   events, RPATH, runtime environment, and CTest labels.
   When a test needs code compiled into a service executable, pass the service entry-point sources as `MAIN_SOURCES` in
   its `project_service_declare_instance`/`project_component_declare_service` call and link the generated static library
-  (`service::<name>::private` or `components::<name>::private`); never list service sources in the test target.
+  (`service::<name>::private` or `components::<name>::private`); never list service sources in the test target. The
+  only exception is a generated registration TU (`handle_*_rpc_*.atfw.gen.cpp`): the declaration routes the
+  entry-point directories (`MAIN_DIRECTORIES`, default `app/`) into the service executable
+  (`MAIN_SOURCES`/`MAIN_HEADERS`), so a test driving `register_handles_for_<service>()` compiles that one generated
+  file in its own `SOURCES`, with the path built from `project_service_get_target_root_dir()` on the service's
+  private-library alias rather than `${CMAKE_CURRENT_LIST_DIR}/..` arithmetic.
 - Match process to risk: use the shortest verified path for small changes; read `change-workflow` for defects and for
   cross-module behavior, public API/ABI, data model/migration, security, or deployment changes. Keep their scope and
   acceptance in one existing authoritative artifact or active task plan; do not initialize a methodology for ceremony.

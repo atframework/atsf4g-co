@@ -6,14 +6,15 @@
 # action/permission/admission/notification, journal/compaction/snapshot/replay/lock transfer, heartbeat/timer
 # wheel/offline/empty-room/destroy and the team-id-0 UUID path.
 
-# teamsvr-room and dtmq-proxysvr compile everything except their entry points (team_room_main.cpp is intentionally
-# excluded: the fixture drives team_room_manager::tick() and rpc::dtmq::client_subscriber::global_tick() itself)
-# into the static libraries service::teamsvr-room::private and components::dtmq-proxysvr::private (see
-# project_service_declare_instance/project_component_declare_service MAIN_SOURCES). This target compiles only the
-# case sources and links both libraries; the WAL-layer cases (teamsvr_room_test_wal.cpp) reuse the real mq_channel
-# objects (writable journal + wal_publisher/wal_object) from components::dtmq-proxysvr::private, mirroring
-# component-dtmq-proxysvr-unit-test. Service include directories, SDK/protocol dependencies and generated-flow build
-# order (TeamRoomService invoke_ss_action packer metadata) propagate from the libraries.
+# The fixture drives team_room_manager::tick() and rpc::dtmq::client_subscriber::global_tick() itself, so the entry
+# point stays excluded: case sources link service::teamsvr-room::private. The WAL-layer cases
+# (teamsvr_room_test_wal.cpp) reuse the real mq_channel objects (writable journal + wal_publisher/wal_object) from
+# components::dtmq-proxysvr::private. The private libraries are co-linkable because dtmq-proxysvr keeps its copies
+# of the colliding task_action_* TUs in its executable (task_action_channel_event_sync: both services implement the
+# same notify proto service; task_action_send_message: same RPC name as TeamRoomService.send_message, issue #210).
+# Link order keeps the teamsvr-room include root ahead of the
+# dtmq-proxysvr one: both roots carry logic/action/task_action_send_message.h etc. for their own proto-service
+# implementation, and the case sources must keep including the teamsvr-room copies.
 project_add_rpc_unit_test(
   TARGET
   ${PROJECT_NAME}-teamsvr-room-unit-test
@@ -34,6 +35,8 @@ project_add_rpc_unit_test(
   LINK_LIBRARIES
   service::teamsvr-room::private
   components::dtmq-proxysvr::private
+  components::dtmq-proxy-sdk
+  components::dtmq-protocol-proxy-config
   FEATURES
   SS
   RESOURCE

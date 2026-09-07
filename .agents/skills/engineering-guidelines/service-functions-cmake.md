@@ -8,6 +8,9 @@ Core helper files:
 - `src/service-functions.cmake` — helpers for normal services under `src/*svr`.
 - `src/component/component-functions.cmake` — helpers for reusable components and component-owned services under
   `src/component/**`.
+- `src/service-functions-common.cmake` — helpers shared by both function files (entry-point routing,
+  `project_service_get_target_*` getters); each function file includes it directly so `src/component/**` never
+  includes `service-functions.cmake`.
 
 ## Read before editing
 
@@ -34,6 +37,8 @@ Implications:
 
 - Service declarations can depend on component targets via `USE_COMPONENTS`.
 - Component declarations should not depend on service targets unless the project structure is intentionally changed.
+- Component-side CMake must not call helpers from `service-functions.cmake`; the helpers shared by both families
+  live in `service-functions-common.cmake`.
 - Inside a service directory: protocol declarations, then `add_subdirectory(sdk)`, then `add_subdirectory(service)`.
 - Inside a component directory: component protocol declarations, optional target customization, then
   `add_subdirectory(sdk)`, then component service subdirectories.
@@ -71,17 +76,35 @@ Implications:
 
 - Use for normal service executables.
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
-- Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`,
-  `PRECOMPILE_HEADERS`.
+- Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `MAIN_HEADERS`, `MAIN_DIRECTORIES`,
+  `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
 - Dependency options:
   - `USE_COMPONENTS <names...>` -> `components::<name>`.
   - `USE_SERVICE_SDK <names...>` -> `sdk::<name>`.
   - `USE_SERVICE_PROTOCOL <names...>` -> `protocol::<name>`.
 - `MAIN_SOURCES <entry-point sources...>` (typically `app/*_main.cpp`) splits the build: every other `SOURCES` entry
   (including generated flow outputs) compiles once into the static library `<TARGET_NAME>-private` (alias
-  `service::<TARGET_NAME>::private`), and the executable compiles only `MAIN_SOURCES` and links the library. The
-  library forces default symbol visibility and PIC, publishes `SERVICE_ROOT_DIR`/`INCLUDE_DIR` and the dependency
-  links as `PUBLIC`, and owns unity build and PCH. Unit tests link the alias instead of recompiling service sources.
+  `service::<TARGET_NAME>::private`), and the executable compiles only `MAIN_SOURCES` and links the library.
+  `MAIN_HEADERS` lists entry-point companion headers; it only takes effect together with `MAIN_SOURCES` and attaches
+  the headers to the executable instead of the library. `MAIN_DIRECTORIES <dirs...>` (relative to `SERVICE_ROOT_DIR`
+  or absolute; default `app`) additionally routes every source and header under those directories into
+  `MAIN_SOURCES`/`MAIN_HEADERS`. Generated registration TUs (`handle_*_rpc_*.atfw.gen.*`) live in `app/` and are
+  routed this way: they define `register_handles_for_<service>()` as a strong global symbol named after the proto
+  service, so keeping them out of the private library removes that duplicate-symbol class when a target links two
+  private libraries generated from the same proto service. The generated `task_action_*` classes stay in the private
+  libraries and collide the same way, so such a pair must still not be co-linked. The library publishes
+  `SERVICE_ROOT_DIR`/`INCLUDE_DIR` include paths and the dependency links as `PUBLIC`, and owns unity build and
+  PCH. Unit tests
+  link the alias instead of recompiling service sources; a test that drives `register_handles_for_<service>()`
+  additionally compiles that one generated `handle_*_rpc_*.atfw.gen.cpp` in its own `SOURCES`.
+- The executable and the private library record `SERVICE_ROOT_DIR`/`SERVICE_INCLUDE_DIR` target properties
+  (`SERVICE_INCLUDE_DIR` is the resolved `INCLUDE_DIR`, or the root directory when unset). Read them through
+  `project_service_get_target_root_dir(<target> <var>)` /
+  `project_service_get_target_include_dir(<target> <var>)` (generic form:
+  `project_service_get_target_property`); the getters resolve aliases, so `service::<name>::private` and
+  `components::<name>::private` can be passed directly. A consumer that needs files under another service's root
+  (a test compiling one generated registration TU, or selected sources of a library it must not link) builds the
+  paths from these properties, never from `${CMAKE_CURRENT_LIST_DIR}/..` arithmetic.
 - Executable target name is `TARGET_NAME`; the executable itself has no stable alias.
 - Default runtime output is `<TARGET_NAME>/bin` when not specified.
 
@@ -110,11 +133,14 @@ Implications:
 
 - Use for component-owned service executables (e.g., rank board, distributed transaction coordinator).
 - Common options: `INCLUDE_DIR`, `OUTPUT_NAME`, `OUTPUT_TARGET_NAME`, `RUNTIME_OUTPUT_DIRECTORY`.
-- Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`,
-  `PRECOMPILE_HEADERS`.
+- Source/resource lists: `HEADERS`, `SOURCES`, `MAIN_SOURCES`, `MAIN_HEADERS`, `MAIN_DIRECTORIES`,
+  `RESOURCE_DIRECTORIES`, `RESOURCE_FILES`, `PRECOMPILE_HEADERS`.
 - Dependency option: `USE_COMPONENTS <names...>` -> `components::<name>`.
 - `MAIN_SOURCES` splits the build like the service helper: the static library is `<TARGET_FULL_NAME>-private` with
   alias `components::<TARGET_NAME>::private`; the executable compiles only `MAIN_SOURCES` and links it.
+  `MAIN_HEADERS` attaches entry-point companion headers to the executable, and `MAIN_DIRECTORIES` (default `app`)
+  routes entry-point directories into `MAIN_SOURCES`/`MAIN_HEADERS` (see the service helper above for why).
+- Records the same `SERVICE_ROOT_DIR`/`SERVICE_INCLUDE_DIR` properties; query them with the getters above.
 - Exports executable alias: `components::<TARGET_NAME>`.
 - Default runtime output is `component/<TARGET_NAME>/bin` when not specified.
 
@@ -136,7 +162,10 @@ Rules:
 - Reference dependencies by alias (`protocol::<name>`, `sdk::<name>`, `components::<name>`), not by platform-specific
   real target name.
 - When a test needs code from a service executable, pass the service entry-point sources via `MAIN_SOURCES` and link
-  `service::<name>::private` / `components::<name>::private`; never compile service sources into the test target.
+  `service::<name>::private` / `components::<name>::private`; never compile service sources into the test target. The
+  only exception is a generated `handle_*_rpc_*.atfw.gen.cpp`, which the declaration moves into the service
+  executable: a test driving `register_handles_for_<service>()` compiles that file in its own `SOURCES`, with the
+  path from `project_service_get_target_root_dir()` on the private-library alias.
 - Use the bare dependency name in helper arguments, e.g., `USE_SERVICE_SDK "lobbysvr-sdk"` (not
   `USE_SERVICE_SDK sdk::lobbysvr-sdk`).
 - Use `OUTPUT_TARGET_NAME SOME_VAR` when later CMake needs the real target (install include dirs, manual links).

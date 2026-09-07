@@ -34,6 +34,8 @@ if(PROJECT_ENABLE_UNITTEST AND PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS)
   add_subdirectory(server_frame/test)
 endif()
 
+include("${CMAKE_CURRENT_LIST_DIR}/service-functions-common.cmake")
+
 add_subdirectory(component)
 
 include("${CMAKE_CURRENT_LIST_DIR}/service-functions.cmake")

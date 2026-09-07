@@ -522,6 +522,9 @@ function(generate_for_pb_collect_filtered_output_files ROOT_DIR OUTPUT_FILES SOU
       get_filename_component(_generate_for_pb_output_file_abs "${_generate_for_pb_output_file}" ABSOLUTE BASE_DIR
                              "${_generate_for_pb_root_dir}")
     endif()
+    # The generator prints native paths (backslashes on Windows); normalize to forward slashes so the collected
+    # lists carry one spelling and list(REMOVE_DUPLICATES)/list(REMOVE_ITEM) in consumers compare cleanly.
+    string(REPLACE "\\" "/" _generate_for_pb_output_file_abs "${_generate_for_pb_output_file_abs}")
 
     file(RELATIVE_PATH _generate_for_pb_relative_path "${_generate_for_pb_root_dir}"
          "${_generate_for_pb_output_file_abs}")

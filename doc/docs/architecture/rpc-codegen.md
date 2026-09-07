@@ -47,7 +47,7 @@ flowchart LR
 
 | 模板 | 生成物 |
 | --- | --- |
-| `handle_ss_rpc.*.mako` | SS RPC 注册函数 `register_handles_for_<service>` |
+| `handle_ss_rpc.*.mako` | SS RPC 注册函数 `register_handles_for_<service>`（生成于 `app/` 入口目录，服务声明按 `MAIN_DIRECTORIES` 归入 `MAIN_SOURCES`/`MAIN_HEADERS`，编译进服务可执行文件而非私有静态库） |
 | `task_action_ss_rpc.*.mako` | 每个 SS RPC 方法的服务端 task action 骨架 |
 | `rpc_call_api_for_ss.*.mako` | SS RPC 客户端调用 API（unary/stream/no-wait/broadcast/metadata/user/router 变体）与 per-RPC 全名接口 |
 | `handle_cs_rpc.*.mako` / `task_action_cs_rpc.*.mako` | 客户端 RPC 的 handler 与 task action |

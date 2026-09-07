@@ -42,15 +42,16 @@ project_add_rpc_unit_test(
   TIMEOUT
   120)
 
-# Server-side internal unit tests for dtmq-proxysvr: mq_channel_manager + mq_channel public interfaces. The
-# dtmq-proxysvr service compiles everything except app/dtmq_proxy_main.cpp into the static library
-# components::dtmq-proxysvr::private (see project_component_declare_service MAIN_SOURCES); this target compiles only
-# the case sources and links that library, so the channel/channel_manager objects are no longer recompiled here. The
-# proxysvr include directory and the dtmq-proxy-sdk/dtmq-protocol-proxy-config usage requirements propagate from the
-# library; the two explicit links stay because the case sources include them directly. The auto-linked server_frame
-# library provides rpc::db::dtmq_channel_record and mock hooks. SS + RESOURCE + DB + HPA engines are required: SS for
-# action forwarding and subscribe/transfer mocks, RESOURCE for ExcelDtmqChannelType, DB for dtmq_channel_record
-# mocks, HPA for logic_hpa_current_node_is_in_target().
+# Server-side internal unit tests for dtmq-proxysvr: mq_channel_manager + mq_channel public interfaces. Case sources
+# link components::dtmq-proxysvr::private; the proxysvr include directory and the dtmq-proxy-sdk /
+# dtmq-protocol-proxy-config usage requirements propagate from the library, and the two explicit links stay because
+# the case sources include them directly. The auto-linked server_frame library provides rpc::db::dtmq_channel_record
+# and mock hooks. SS + RESOURCE + DB + HPA engines are required: SS for action forwarding and subscribe/transfer
+# mocks, RESOURCE for ExcelDtmqChannelType, DB for dtmq_channel_record mocks, HPA for
+# logic_hpa_current_node_is_in_target(). task_action_send_message.cpp is compiled here directly: it belongs to the
+# dtmq-proxysvr executable now (its global class name collides with TeamRoomService.send_message, issue #210) and
+# the forwarding cases invoke it by type.
+project_service_get_target_root_dir(components::dtmq-proxysvr::private DTMQ_PROXYSVR_ROOT_DIR)
 project_add_rpc_unit_test(
   TARGET
   ${PROJECT_NAME}-component-dtmq-proxysvr-unit-test
@@ -63,6 +64,7 @@ project_add_rpc_unit_test(
   "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_channel.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_task_forward.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/dtmq_test_task_subscribe.cpp"
+  "${DTMQ_PROXYSVR_ROOT_DIR}/logic/action/task_action_send_message.cpp"
   LINK_LIBRARIES
   components::dtmq-proxysvr::private
   components::dtmq-proxy-sdk

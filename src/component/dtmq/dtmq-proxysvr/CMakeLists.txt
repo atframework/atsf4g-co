@@ -15,7 +15,19 @@ project_component_declare_service(
   SOURCES
   ${SERVICE_SOURCES}
   MAIN_SOURCES
+  "${CMAKE_CURRENT_LIST_DIR}/logic/action/task_action_send_message.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/app/dtmq_proxy_main.cpp"
+  # The executable, not the private library, carries the task_action_* TUs whose global class names collide with
+  # other services: task_action_channel_event_sync implements the notify proto service, which teamsvr-room and
+  # lobbysvr also implement, and task_action_send_message shares an RPC name with TeamRoomService.send_message
+  # (generated task action classes are named after the RPC only). Private libraries holding duplicate task_action_*
+  # definitions can never be co-linked (issue #210), so these stay in the executable and
+  # components::dtmq-proxysvr::private remains co-linkable with those services' private libraries.
+  MAIN_DIRECTORIES
+  app
+  logic/dtmq
+  MAIN_HEADERS
+  "${CMAKE_CURRENT_LIST_DIR}/logic/action/task_action_send_message.h"
   RESOURCE_DIRECTORIES
   "${SERVICE_TARGET_NAME}/log"
   USE_COMPONENTS
@@ -24,3 +36,4 @@ project_component_declare_service(
   GENERATED_FLOW_NAMES
   "atframework.dtmq.DtmqProxysvrService"
   "atframework.dtmq.DtmqProxysvrNotifyService")
+

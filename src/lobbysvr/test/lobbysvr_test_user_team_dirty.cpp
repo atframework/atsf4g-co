@@ -170,7 +170,7 @@ CASE_TEST(lobbysvr_user_team, dirty_remove_sources_and_late_cleanup_are_idempote
   // Same client-visible terminal state reached through each independent authoritative source.
   for (int source = 0; source < 6; ++source) {
     dirty_fixture fixture;
-    CASE_EXPECT_TRUE(fixture.start(73010 + source));
+    CASE_EXPECT_TRUE(fixture.start(static_cast<uint64_t>(73010 + source)));
     CASE_MSG_INFO() << "dirty_remove source=" << source << " team_id=" << fixture.team_id << "\n";
     if (!fixture.player || !fixture.team()) {
       return;

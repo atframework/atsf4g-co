@@ -34,7 +34,11 @@ Detail companion to `SKILL.md`. Load when editing CMake files, protobuf, templat
   Pass sources, libraries, features, environment, labels, and timeout through the selected project helper.
 - Tests over service-executable internals link the service's private static library
   (`service::<name>::private`/`components::<name>::private`, produced by the service declaration's `MAIN_SOURCES`
-  option) instead of listing service sources in `SOURCES`; see `service-functions-cmake.md`.
+  option) instead of listing service sources in `SOURCES`; see `service-functions-cmake.md`. Generated registration
+  TUs (`handle_*_rpc_*.atfw.gen.*`) are routed with the entry-point directories (`MAIN_DIRECTORIES`, default `app/`)
+  into the service executable instead, so a test driving `register_handles_for_<service>()` compiles that one
+  generated file in its own `SOURCES`, with the path from `project_service_get_target_root_dir()` on the
+  private-library alias.
 - `atframe_add_test_executable` is an implementation detail of `project_add_normal_unit_test`, not a root-project test
   target API. Vendored `atframework/**` subprojects follow their own nearest `AGENTS.md` and CMake conventions.
 

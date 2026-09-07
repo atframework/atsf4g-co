@@ -99,7 +99,11 @@ CASE_TEST(rpc_unit_test, framework_flow) {
   (`service::<name>::private` or `components::<name>::private`, created when the service declaration passes
   `MAIN_SOURCES`) instead of listing service sources in `SOURCES`. The alias propagates the service include
   directories, SDK/protocol dependencies, generated-flow build order, and PCH reuse weight; use the real
-  `<name>-private` target name for a manual `REUSE_FROM_TARGET`.
+  `<name>-private` target name for a manual `REUSE_FROM_TARGET`. Generated registration TUs
+  (`handle_*_rpc_*.atfw.gen.*`) are routed with the entry-point directories (`MAIN_DIRECTORIES`, default `app/`)
+  into the service executable, not the private library; a case that drives `register_handles_for_<service>()`
+  compiles that one generated file in its own `SOURCES`, with the path from
+  `project_service_get_target_root_dir()` on the private-library alias.
 - Set the CTest `TIMEOUT` above the serial sum of all case hard timeouts and teardown in that executable, not above one
   case timeout only.
 - Keep generated runtime configuration in the target's build-tree working directory. Never write
