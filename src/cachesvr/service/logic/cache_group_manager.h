@@ -22,11 +22,9 @@
 #include <unordered_set>
 
 #include "logic/cache_group.h"
+#include "logic/user_cache_group.h"
 
 class cache_group_manager : public util::design_pattern::singleton<cache_group_manager> {
- public:
-  using user_cache_group_t = cache_group<PROJECT_NAMESPACE_ID::DUserBasicData>;
-
  protected:
   cache_group_manager();
   ~cache_group_manager();
@@ -51,18 +49,9 @@ class cache_group_manager : public util::design_pattern::singleton<cache_group_m
   cache_group_base *get_group(PROJECT_NAMESPACE_ID::EnCacheApiCacheType cache_type);
 
  private:
-  ATFW_EXPLICIT_NODISCARD_ATTR static rpc::result_code_type pull_user_cache_fn(
-      ::rpc::context &, user_cache_group_t::pull_data_param_ptr_t &);
-  static void pack_user_cache_fn(rpc::context &, const user_cache_group_t::value_type &,
-                                 ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::object_cache_content> &);
-  static void update_meta_user_cache_fn(rpc::context &, const PROJECT_NAMESPACE_ID::object_cache_meta &,
-                                        user_cache_group_t::cache_type &);
-
- private:
   cache_watcher_timer_set_t timers_;
 
-  // 缓存池
-  user_cache_group_t user_cache_group_;
+  user_cache_group user_cache_group_;
 
   // Double check cache
   std::unordered_set<PROJECT_NAMESPACE_ID::object_cache_key, rpc::cache_api::cache_key_hash_t,
