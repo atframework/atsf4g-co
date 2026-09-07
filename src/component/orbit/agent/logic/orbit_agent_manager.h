@@ -171,7 +171,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void server_heartbeat(const atfw::orbit::DServerIdentity& server_identity);
   int32_t agent_heartbeat(rpc::context& ctx, uint64_t controller_server_id,
                           const atfw::orbit::DServerIdentity& server_identity);
-  atfw::orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id);
+  const atfw::orbit::DServerIdentity* find_server_identity(uint64_t server_unique_id) const;
   void on_client_process_exit(const orbit_agent_client_record_ptr& record, int64_t exit_status, int term_signal);
 
   void load_record_to_json();

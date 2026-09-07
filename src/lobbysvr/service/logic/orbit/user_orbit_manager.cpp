@@ -21,6 +21,7 @@
 #include <logic/logic_server_setup.h>
 #include <memory/object_allocator.h>
 #include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/lobbysvrclientservice/lobbysvrclientservice.atfw.gen.h>
 #include <rpc/orbit/orbitsvrservice.atfw.gen.h>
 #include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
@@ -78,7 +79,21 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
         orbit_mgr->on_receive_event(ctx, subscriber, data);
         orbit_mgr->get_owner().send_all_syn_msg(logic_server_get_current_tick_context());
       });
+  return ret;
+}
 
+static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_channel_event_callback_set() {
+  static rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret = build_shared_orbit_channel_event_callback_set();
+  return ret;
+}
+
+static bool init_user_orbit_manager_handle() {
+  user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
+                                 PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserOrbitRoomFieldNumber),
+                             [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
+                               auto& orbit_mgr = user_inst.get_user_orbit_manager();
+                               orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
+                             });
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish),
       [](rpc::context& ctx, user& user_inst, int32_t /*job_type*/,
@@ -96,21 +111,6 @@ static rpc::dtmq::client_subscriber::event_callback_set_ptr_t build_shared_orbit
         user_inst.get_user_orbit_manager().receive_orbit_remote_start(ctx, orbit_remote_start_data.arg());
         return 0;
       });
-  return ret;
-}
-
-static rpc::dtmq::client_subscriber::event_callback_set_ptr_t& get_shared_orbit_channel_event_callback_set() {
-  static rpc::dtmq::client_subscriber::event_callback_set_ptr_t ret = build_shared_orbit_channel_event_callback_set();
-  return ret;
-}
-
-static bool init_user_orbit_manager_handle() {
-  user::init_get_info_handle(PROJECT_NAMESPACE_ID::CSUserGetInfoReq::descriptor()->FindFieldByNumber(
-                                 PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserOrbitRoomFieldNumber),
-                             [](rpc::context&, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
-                               auto& orbit_mgr = user_inst.get_user_orbit_manager();
-                               orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
-                             });
   return true;
 }
 

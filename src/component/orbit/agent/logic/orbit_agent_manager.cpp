@@ -621,9 +621,9 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
   fill_client_identity(*response.mutable_client_identity(), client_record);
 
   if (remote_start) {
-    // 远程启动模式
-    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(
-        ctx, client_record, configured_client_command_line_, configured_client_command_line_append_));
+    // 远程启动模式 不需要Agent相关的参数
+    static std::vector<std::string> empty;
+    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(ctx, client_record, empty, empty));
     if (spawn_result < 0) {
       delete_client(client_record);
       RPC_RETURN_CODE(spawn_result);
@@ -733,7 +733,7 @@ int32_t orbit_agent_manager::agent_heartbeat(rpc::context& ctx, uint64_t control
   return rpc_result;
 }
 
-atfw::orbit::DServerIdentity* orbit_agent_manager::find_server_identity(uint64_t server_unique_id) {
+const atfw::orbit::DServerIdentity* orbit_agent_manager::find_server_identity(uint64_t server_unique_id) const {
   // TODO(yousongyang): 消息缓存
   auto iter = server_unique_id_to_identity_.find(server_unique_id);
   if (iter == server_unique_id_to_identity_.end()) {
@@ -1284,6 +1284,14 @@ rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(
 
   auto req = rpc::make_shared_message<atfw::orbit::ATCRemoteStartClientReq>(ctx);
   auto rsp = rpc::make_shared_message<atfw::orbit::CTARemoteStartClientRsp>(ctx);
+  auto* identity = find_server_identity(record->server_unique_id);
+  if (identity == nullptr) {
+    FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
+               record->client_id, record->server_unique_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+  }
+  *req->mutable_server_identity() = *identity;
+  fill_client_identity(*req->mutable_client_identity(), record);
   for (const auto& arg : launch_arguments) {
     req->mutable_arg()->add_command_lines(arg);
   }
