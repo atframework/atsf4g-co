@@ -1890,8 +1890,12 @@ void team_room::apply_add_invitation(rpc::context& ctx, const atfw::team::DTeamI
   copy_public_permission_data(shared_team_data_, invited->mutable_team_admission_data());
   foreach_member(ctx, [invited](rpc::context&, atfw::util::nostd::nonnull<const member_ptr_t>& member) {
     auto* member_data = invited->add_member_admission_data();
-    protobuf_copy_message(*member_data->mutable_user_key(), member->member_data.user_key());
     copy_public_permission_data(member->shared_member_data, member_data->mutable_member_admission_data());
+    if (member_data->member_admission_data_size() > 0) {
+      protobuf_copy_message(*member_data->mutable_user_key(), member->member_data.user_key());
+    } else {
+      member_data->clear_member_admission_data();
+    }
     return true;
   });
 

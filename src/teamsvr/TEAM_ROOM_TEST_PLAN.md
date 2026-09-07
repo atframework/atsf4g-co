@@ -522,7 +522,7 @@ condition。DATA 行复用 EVT/ADM/RCV 的真实业务路径，不以直接访�
 | --- | --- | --- | --- |
 | ADM-01 | ✅ | P0 | 新邀请补齐 team id、start/expire；写一个 `add_invitation`；回环后只向 invitee 发 `invited` |
 | ADM-02 | ✅ | P1 | 完全重复不追加日志、过期时间只延后；GAP-09 刷新语义(2026-08-29 澄清): admission 数据全量覆盖(以新请求列表为准，无删除标记)，内容变化写新日志并补发 `invited`，inviter/invitee/已顺延过期时间不可变 |
-| ADM-03 | ✅ | P0 | `invited` 对 keyed repeated 的 team/member admission data 只复制 PUBLIC 项，不泄露 MEMBER 数据 |
+| ADM-03 | ✅ | P0 | `invited` 对 keyed repeated 的 team/member admission data 只复制 PUBLIC 项，不泄露 MEMBER 数据；成员条目仅当携带 PUBLIC 数据时才下发 user_key（无数据/仅 MEMBER 数据的成员条目无 user_key） |
 | ADM-04 | ✅ | P0 | invitee 接受有效邀请，依次写 `add_member`、`approve_invitation`；事件回环后成员为 NORMAL 并收到 `joined_team`；通知目标频道以 room 本地记录为准，事件负载中的频道字段不被信任 |
 | ADM-05 | ✅ | P0 | 接受邀请时，client version、router id、shared member data 来自 invitee 本人请求，不能由 inviter 伪造 |
 | ADM-06 | ✅ | P1 | `add_member` 成功但 approve 写入失败后重试：不重复添加成员，最终清理邀请并只产生一次有效结果通知 |

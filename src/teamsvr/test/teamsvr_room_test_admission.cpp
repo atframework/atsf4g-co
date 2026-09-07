@@ -469,7 +469,7 @@ CASE_TEST(teamsvr_room_admission, duplicate_invitation_no_extra_log) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
-// ============ ADM-03: invited 只包含 PUBLIC 权限数据 ============
+// ============ ADM-03: invited 只包含 PUBLIC 权限数据；无 PUBLIC 数据的成员条目不下发 user_key ============
 CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
   room_test_env env;
   if (!env.start()) {
@@ -513,6 +513,16 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
       protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
     }
+    {
+      // admin 仅持有 MEMBER 权限数据: invited 中其条目既不下发 user_key 也不泄露数据
+      atfw::team::DTeamAction action;
+      auto* member_update = action.mutable_member_update();
+      add_team_any_data_entry(member_update->mutable_shared_member_data(), 5, "admin-secret-member-data")
+          ->mutable_value()
+          ->set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+      protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.admin);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    }
   }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
@@ -532,9 +542,16 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
       CASE_EXPECT_EQ(1, invited.team_admission_data(0).key());
       CASE_EXPECT_EQ("public-team-data", invited.team_admission_data(0).value().data().value());
     }
-    // 每个成员仅 PUBLIC 数据下发；secret 数据不泄露
+    // 成员条目契约: 仅当条目携带 PUBLIC 数据时才下发 user_key；
+    // 无 PUBLIC 数据的成员(owner 无数据、admin 仅 MEMBER 数据)既无 user_key 也无数据
+    size_t entries_with_user_key = 0;
     bool found_member_entry = false;
     for (const auto& member_data : invited.member_admission_data()) {
+      CASE_EXPECT_EQ(member_data.has_user_key(), member_data.member_admission_data_size() > 0);
+      if (!member_data.has_user_key()) {
+        continue;
+      }
+      ++entries_with_user_key;
       if (member_data.user_key().user_id() == members.normal.user_id()) {
         found_member_entry = true;
         CASE_EXPECT_EQ(1, member_data.member_admission_data_size());
@@ -545,8 +562,11 @@ CASE_TEST(teamsvr_room_admission, invited_only_public_data) {
       }
       for (const auto& kv : member_data.member_admission_data()) {
         CASE_EXPECT_NE("secret-member-data", kv.value().data().value());
+        CASE_EXPECT_NE("admin-secret-member-data", kv.value().data().value());
       }
     }
+    // 仅 normal 持有 PUBLIC 成员数据: 只有它的条目携带 user_key
+    CASE_EXPECT_EQ(1u, entries_with_user_key);
     CASE_EXPECT_TRUE(found_member_entry);
   }
 

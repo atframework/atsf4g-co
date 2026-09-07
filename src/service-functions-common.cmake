@@ -1,8 +1,9 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-# Helpers shared by service-functions.cmake and component/component-functions.cmake. Both files include this one
-# directly, so neither layer includes the other's function file.
+# Helpers shared by service-functions.cmake and component/component-functions.cmake. src/CMakeLists.txt includes
+# this file once, before add_subdirectory(component) and before including service-functions.cmake, so both
+# function families see these helpers without either layer including the other's function file.
 
 # Routes the files under the entry-point directories out of SOURCES/HEADERS into MAIN_SOURCES/MAIN_HEADERS:
 # every file whose directory is ROOT_DIR/<entry directory> (or an absolute entry directory, subdirectories

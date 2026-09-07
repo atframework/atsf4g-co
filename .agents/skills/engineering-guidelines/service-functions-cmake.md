@@ -9,8 +9,8 @@ Core helper files:
 - `src/component/component-functions.cmake` — helpers for reusable components and component-owned services under
   `src/component/**`.
 - `src/service-functions-common.cmake` — helpers shared by both function files (entry-point routing,
-  `project_service_get_target_*` getters); each function file includes it directly so `src/component/**` never
-  includes `service-functions.cmake`.
+  `project_service_get_target_*` getters); `src/CMakeLists.txt` includes it once before
+  `add_subdirectory(component)`, so `src/component/**` never includes `service-functions.cmake`.
 
 ## Read before editing
 
@@ -28,10 +28,12 @@ Core helper files:
 
 Top-level flow in `src/CMakeLists.txt`:
 
-1. `src/component` is added first and includes `component-functions.cmake`.
-2. Component protocol/SDK/service aliases become available as `components::<name>`.
-3. `service-functions.cmake` is included.
-4. Normal services (`echosvr`, `cachesvr`, `authsvr`, `lobbysvr`, `rank_settlement_svr`) are added.
+1. `service-functions-common.cmake` is included; it must precede `add_subdirectory(component)` and the
+   `service-functions.cmake` include so helpers from either family can call the shared routing/getter functions.
+2. `src/component` is added first and includes `component-functions.cmake`.
+3. Component protocol/SDK/service aliases become available as `components::<name>`.
+4. `service-functions.cmake` is included.
+5. Normal services (`echosvr`, `cachesvr`, `authsvr`, `lobbysvr`, `rank_settlement_svr`) are added.
 
 Implications:
 

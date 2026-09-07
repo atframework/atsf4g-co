@@ -71,6 +71,11 @@ func LoginTask(task *user_data.TaskActionUser) (err error) {
 	if subscribeErr := ChatAutoSubscribeTask(task); subscribeErr != nil {
 		task.Log("[chat] auto subscribe failed: %v", subscribeErr)
 	}
+
+	// 登入成功后主动拉取一次队伍快照，触发队伍脏数据推送；失败不回滚已成功的登入，仅记录日志。
+	if pullErr := TeamPullInfoTask(task); pullErr != nil {
+		task.Log("[team] pull info failed: %v", pullErr)
+	}
 	return
 }
 
