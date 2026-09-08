@@ -59,11 +59,6 @@ task_action_team_reject_invitation::operator()() {
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (get_shared_context().logical_now() >= protobuf_to_system_clock(invitation_ptr->expired_timepoint())) {
-    set_response_code(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
-    TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
-  }
-
   // 转发 reject_invitation 到 teamsvr-room(按队伍一致性哈希路由)，SS消息打包在 user_team_manager 中，业务结果透传
   set_response_code(RPC_AWAIT_CODE_RESULT(
       user_inst->get_user_team_manager().reject_invitation(get_shared_context(), invitation_ptr)));

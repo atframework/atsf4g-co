@@ -1,7 +1,7 @@
 # lobbysvr 用户组队单元测试执行计划
 
-> 状态:2026-09-06 全部用例已落地并通过(`lobbysvr_user_team` 组 76/76,lobbysvr suite 91/91,组内重复运行 4 次
-> 无 flake)。本文只描述应保留的最新契约,不记录历史方案;§6 记录执行期关闭的实现缺陷,§7 记录完成证据。
+> 状态：2026-09-08 完成新 CS 协议下的整体审查，新增通知与修复回归见 §5.8，最新执行证据见 §7。
+> §2/§3 描述当前契约；旧平台记录仅说明当时的执行结果，不代表当前代码已在这些平台验证。
 >
 > 2026-09-05 起 CS 通知流程迁移到新版 `DUserTeamDirty` 协议:脏数据按 `team_snapshot/team_increase/team_remove`
 > 与 `add/remove_pending_invitation`、`add/remove_pending_join_request` 的 oneof 下发,旧的 destroy increase
@@ -107,6 +107,18 @@ room 的 admission 到期清理不发个人取消通知，lobbysvr 按 `expired_
 unordered_map 的输出顺序。
 
 下发时机契约(同一 action 只下发一次, 无 action 不主动推送):
+
+- 未拉取 `need_user_team` 前不登记组队推送；首次拉取返回 `DTeamUserData`，包含队伍和两类个人 pending。
+  即使三者均为空也设置 `user_team` 字段，明确覆盖客户端旧状态；响应覆盖的 dirty 和 remove 去重状态一并清理；
+- 正常 action 只进入一次增量收集；快照仅用于首次获得完整成员状态、恢复已移除的队伍，或 DTMQ 全量修复。
+  metadata 更新、空 action、重复入队通知不得触发重建；已在队中的玩家重放历史 add_member 不重新上报默认成员数据；
+- 同一 action 的多个 dirty 条目在现有 flush 边界合并。过期 refresh 只登记两类个人 pending 的 remove，
+  不主动发送快照或通知；队伍级 admission 过期仍由各端按 expired_timepoint 清理，不伪造 room action；
+- remove 已发送后，权威快照或 add_member 若确认当前队伍重新包含自己，必须解除旧 remove 去重状态并发送恢复快照；
+- 成员操作或发送邀请收到 Room 确认的频道不存在、队伍销毁或操作者不在队中时，清理对应对象并登记
+  `team_remove`；普通权限/传输错误不作为退队依据。晚到响应不得删除已替换的新对象；
+- approve/reject 的过期检查统一在 manager：过期、邀请不存在或 Room 已不存在均删除个人邀请并登记
+  `remove_pending_invitation`；过期申请重新上行前也登记 `remove_pending_join_request`，不依赖后续 RPC 成功。
 
 - 个人频道事件和 CS 任务外的管理动作只登记脏标记, 不主动 flush; flush 时机为 CS 任务收尾、队伍频道批次/快照
   回调(`user_team_manager::send_dirty_data`)以及聊天推送顺带的 `user::send_all_syn_msg`;
@@ -316,9 +328,9 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | ROBUST-03 | 队伍 action 中错误 shared-data Any 只跳过该 key，不丢同批合法 key，不创建错误 unpacked 输出 |
 | ROBUST-04 | runtime/task 前置失败、未消费 mock、hard timeout、时间 offset 泄漏均使 case 失败；组内连续运行两次无 singleton/dirty handle 污染 |
 
-### 5.7 覆盖映射（2026-09-06）
+### 5.7 既有用例覆盖映射
 
-全部 76 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
+既有 76 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
 矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 10 例，cs 文件）。
 
 | 矩阵 ID | 覆盖用例 |
@@ -350,6 +362,24 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | ROBUST-01..04 | robust.`robust_bad_any_personal_event_ignored`、`robust_bad_any_team_snapshot_preserves_cache`、`robust_bad_shared_data_any_skips_only_that_key`、`robust_fixture_time_and_runtime_hygiene` |
 | §3 场景补充 | robust.`robust_duplicate_events_idempotent`、`robust_out_of_order_events_converge`、`robust_late_events_after_channel_destroy_ignored`、`robust_snapshot_rebuild_cleans_pendings_and_indexes` |
 | 生命周期收编对照 | manager.`minute_refresh_removes_never_member_current_team`、`minute_refresh_keeps_member_current_team` |
+
+### 5.8 新协议 dirty 与修复回归（2026-09-08）
+
+以下用例位于 `lobbysvr_test_user_team_dirty.cpp`。每例同时断言实际通知包数量、dirty oneof 和状态；
+批次可以合并多条 action，但不得漏条目或用多发快照掩盖增量遗漏。
+
+| 用例 | 验收场景 |
+| --- | --- |
+| `dirty_repaired_membership_after_remove_is_announced_again` | remove 已发送后，权威快照或 add_member 恢复成员身份，只发一次恢复快照 |
+| `dirty_get_info_empty_state_replaces_previous_team_data` | 空的完整拉取也设置 user_team；已被响应覆盖的 remove 不因迟到确认重发 |
+| `dirty_expired_invitation_cs_precheck_removes_record` | 真实 CS approve/reject 处理过期邀请时零上行，删除记录并下发一次 remove |
+| `dirty_room_error_repairs_only_confirmed_membership_loss` | 成员操作、发送邀请收到频道不存在/不在队/队伍销毁时清理并下发 team_remove；权限失败保留 |
+| `dirty_personal_pending_pull_gate_and_coalesced_removals` | 拉取前静默；完整拉取包含两类 pending；刷新各发一条 add；到期后正常 flush 合并两个 remove，迟到拒绝不重发 |
+| `dirty_expired_manager_calls_remove_pending_before_rpc` | manager 直接 approve/reject 过期邀请零上行；过期申请重试即使 RPC 失败也清理并下发 remove |
+| `dirty_team_batches_and_metadata_do_not_repeat_snapshots` | metadata、空 action、重复 joined_team 不产生 dirty 推送；两个增量合并一包且不发快照 |
+| `dirty_snapshot_replay_does_not_reset_existing_member_data` | 已在队中的玩家重放历史 add_member 只重建缓存，不重报默认 ready；快照覆盖回放增量 |
+| `dirty_invitation_rpc_results_remove_only_invalid_pending` | approve/reject 成功或确认邀请失效均只发一次 remove；普通权限失败不删除、不推送 |
+| `dirty_switch_and_rejoin_merge_team_and_pending_changes` | 切队的旧队 remove 和个人 pending remove 合并；恢复退出中队伍时快照与另一队 remove 合并；重复入队静默 |
 
 ## 6. 执行期关闭的实现缺陷
 
@@ -422,6 +452,32 @@ add/remove)迁移期关闭的缺陷：
 
 ## 7. 完成证据
 
+### 7.1 本次验证（2026-09-08）
+
+- 复核提交 `9a845101153dd342fc62579b4a3153530e54844e`（Team模块新的CS通知流程）及后续协议调用，
+  检查 Lobby team 全目录、Room 成员/邀请错误语义及 DTMQ 的 raw-message、batch、snapshot 回调顺序。
+- 修复移除后重新入队仍被 remove 去重标志挡住快照、空 get-info 未明确替换旧状态、Room 确认成员丢失后
+  本地状态残留、快照重放向 Room 发送已入队成员的默认数据、失效邀请和过期 pending 未完整清除等路径。
+- 新增 §5.8 的 10 例；其中重新入队、空 get-info、成员丢失、快照重放、队伍销毁后的邀请结果共 5 个回归
+  用例在对应修复前出现断言失败，修复后通过。其他用例覆盖批次合并、拉取门控、过期和移除去重边界。
+- 环境：Windows amd64、MSVC 19.51、Debug、Ninja，构建目录 `build_jobs_cmake_tools`，并行度 8。
+  本地构建使用现有 C++20 配置；新增/修改源码保持 C++14 兼容写法，未执行独立 C++14 构建。
+- 构建：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test atf4g-co-teamsvr-room-unit-test --parallel 8`
+  通过。重建失效 PCH 后验证其 Ninja 头依赖已恢复；未修改生成源码。
+- 执行：`ctest --test-dir build_jobs_cmake_tools -V -R '^atf4g-co-(lobbysvr|teamsvr-room)-unit-test\.unit$'`
+  → 2/2 Passed；Lobby 101/101（组队 86 例），Team Room 139/139，0 失败。
+  实际复用 CTest 注册的运行目录、`RPC_UNIT_TEST_WORKDIR` 和 DLL PATH。
+- 本地日志：`<BUILD_DIR>/_agent_tmp/team-final-build.log`、`team-final-test.log`；这些是本地验证产物，不纳入源码。
+- 静态检查：7 个修改的 C++ 文件通过 clang-format、cpplint 和 clang-tidy（VS LLVM 22.1.3、仓库 `.clangd`
+  规则），0 告警。clang-tidy 首次运行受 CMake PCH 的大写 `/FI` 未被脚本剥离影响；仅在分析数据库补全
+  `cmake_pch.h/hxx` 参数剥离后复跑通过，保留其他强制包含，未修改实际构建配置。
+  日志为 `<BUILD_DIR>/_agent_tmp/team-clang-tidy-final.log`。
+- 文档与提示词：`git diff --check`、7 个 Markdown 文件的 CRLF/尾空白检查、56 个具体引用检查通过；
+  新 `team` Skill 通过元数据校验。人工检查 8 个应触发和 8 个近似不应触发的请求，未测量客户端调用率。
+- 本次未运行 Linux、Release 配置；下方旧记录仅表示当时的结果。
+
+### 7.2 历史验证与命令参考
+
 回归验证命令（`<BUILD_DIR>` 按仓库 build/test Skill 解析，注意 Windows DLL PATH; 测试二进制在
 `<BUILD_DIR>\test`, DLL 在 `<BUILD_DIR>\test`、`<BUILD_DIR>\publish\bin` 与 third_party install 的 bin）;
 静态检查用仓库自带管线(与 CMake 目标 `atf4g-co-clang-tidy` 参数一致)：
@@ -436,8 +492,9 @@ pwsh -File project\integration\analysis\clang-tidy.ps1 -RepositoryRoot . -BuildD
 
 ```powershell
 cmake --build <BUILD_DIR> --target atf4g-co-lobbysvr-unit-test --parallel <workspace-parallelism>
-<BUILD_DIR>\test\atf4g-co-lobbysvr-unit-test.exe "lobbysvr_user_team.<focused_case>"
-<BUILD_DIR>\test\atf4g-co-lobbysvr-unit-test.exe "lobbysvr_user_team*"
+# 直接执行时先复用 CTest 的 WORKING_DIRECTORY、RPC_UNIT_TEST_WORKDIR 和 DLL PATH。
+<BUILD_DIR>\test\atf4g-co-lobbysvr-unit-test.exe -r "lobbysvr_user_team.<focused_case>"
+<BUILD_DIR>\test\atf4g-co-lobbysvr-unit-test.exe -r lobbysvr_user_team
 ctest --test-dir <BUILD_DIR> -R lobbysvr-unit-test --output-on-failure
 ```
 
@@ -485,5 +542,5 @@ ctest --test-dir <BUILD_DIR> -R lobbysvr-unit-test --output-on-failure
 - clang-format/cmake-format 全部干净; cmake-lint 无告警;
 - 回归：修复后重编 `atf4g-co-lobbysvr-unit-test` 并全量运行 → 91 选中 / 91 通过 / 0 失败。
 
-后续维护入口：改组队行为时先更新 §2/§3 契约，再按 §5.7 找到对应用例调整；新增用例遵循 §4.3 的可观察
+后续维护入口：改组队行为时先更新 §2/§3 契约，再按 §5.7/§5.8 找到对应用例调整；新增用例遵循 §4.3 的可观察
 同步约定和 id 段分配。上述验证命令照旧可用，`<BUILD_DIR>` 按仓库 build/test Skill 解析。

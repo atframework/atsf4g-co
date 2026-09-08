@@ -570,7 +570,32 @@ void user_team::send_exit_team_request(rpc::context& ctx, atfw::team::EnTeamExit
   }
 }
 
+void user_team::repair_from_room_error(rpc::context& ctx, int32_t result_code) {
+  if (result_code != PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND &&
+      result_code != PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND &&
+      result_code != PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED &&
+      result_code != PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM) {
+    return;
+  }
+  if (!is_active_generation()) {
+    return;
+  }
+
+  // Room 已确认频道或操作者成员身份不存在。清理缓存并登记 remove，不再向失效队伍补发退出。
+  auto hold_lifetime = shared_from_this();
+  set_flag(team_flag::kMember, false);
+  cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_GUEST;
+  reset_cached_state(ctx);
+  owner_->remove_team(ctx, team_key_, false,
+                      result_code == PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM
+                          ? atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER
+                          : atfw::team::EN_TEAM_EXIT_REASON_DESTROY_TEAM);
+}
+
 rpc::result_code_type user_team::send_action(rpc::context& ctx, atfw::team::DTeamAction&& action) {
+  if (!is_active_generation() || is_exiting() || is_destroyed()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+  }
   rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageReq> req_body{ctx};
   rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageRsp> rsp_body{ctx};
   protobuf_copy_message(*req_body->mutable_team_key(), team_key_);
@@ -581,6 +606,7 @@ rpc::result_code_type user_team::send_action(rpc::context& ctx, atfw::team::DTea
   if (0 == ret) {
     ret = rsp_body->client_result();
   }
+  repair_from_room_error(ctx, ret);
   if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
     // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为已不在队伍中
     ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
@@ -845,6 +871,7 @@ void user_team::clear_dirty_data(rpc::context& /*ctx*/) {
   set_flag(team_flag::kPendingDirtySnapshot, false);
   pending_dirty_actions_.clear();
 }
+
 bool user_team::insert_dirty_snapshot_handle() {
   if (check_flag(team_flag::kPendingDirtySnapshot)) {
     return true;
@@ -855,6 +882,11 @@ bool user_team::insert_dirty_snapshot_handle() {
     return false;
   }
 
+  if (is_removed_for_client()) {
+    return false;
+  }
+  // 权威快照或 add_member 已恢复当前成员身份，之前的 remove 去重状态不再适用。
+  set_flag(team_flag::kDirtyRemoveSent, false);
   if (!owner_->insert_dirty_handle_for_team(get_team_key())) {
     return false;
   }
@@ -937,7 +969,7 @@ bool user_team::load_dtmq_custom_data(rpc::context& ctx, const ::google::protobu
   return true;
 }
 
-bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action) {
+bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action, bool refresh_member_data) {
   if (action.action_case() == atfw::team::DTeamAction::ACTION_NOT_SET) {
     return true;
   }
@@ -977,8 +1009,10 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
           // 成为成员时要下发快照
           insert_dirty_snapshot_handle();
 
-          // 进入队伍后要刷新一次当前成员的数据，以防发起邀请时使用的数据后续又发生变化（比如角色更新装备）
-          async_flush_all_member_shared_data(ctx);
+          // 新入队时刷新成员数据；已在队中的玩家重放历史 add_member 时不能重置 ready 等状态。
+          if (refresh_member_data) {
+            async_flush_all_member_shared_data(ctx);
+          }
         }
         cached_permission_role_ =
             member_iter != cached_members_.end() ? member_iter->second.member_data.role() : member_data.role();
@@ -1439,6 +1473,8 @@ void user_team::load_snapshot(rpc::context& ctx) {
 
   channel_create_sequence_ = channel_subscriber_->get_create_sequence();
 
+  // 在重建前记录成员身份，避免回放压缩点之后的历史入队事件时再次提交默认成员数据。
+  const bool refresh_member_data = !check_flag(team_flag::kMember);
   // 加载快照
   if (!load_dtmq_custom_data(ctx, channel_subscriber_->get_custom_data_content())) {
     return;
@@ -1449,8 +1485,8 @@ void user_team::load_snapshot(rpc::context& ctx) {
   options.start_sequence = channel_subscriber_->get_last_removed_sequence() + 1;
   channel_subscriber_->query_cached_message(
       ctx,
-      [this, &ctx](const ::atfw::dtmq::DChannelMessage& message) {
-        on_receive_raw_message(ctx, message);
+      [this, &ctx, refresh_member_data](const ::atfw::dtmq::DChannelMessage& message) {
+        on_receive_raw_message(ctx, message, refresh_member_data);
         return true;
       },
       options);
@@ -1474,7 +1510,8 @@ void user_team::load_snapshot(rpc::context& ctx) {
   }
 }
 
-void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data) {
+void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data,
+                                       bool refresh_member_data) {
   // 对象已从 manager 索引移除(收编/被新代际替换)时, 迟到消息不再处理,
   // 防止重复登记脏数据或影响新代际
   if (!is_active_generation()) {
@@ -1522,7 +1559,7 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
         break;
       }
 
-      load_team_action(ctx, *team_action);
+      load_team_action(ctx, *team_action, refresh_member_data);
       break;
     }
     // kUpdateCustomData 不触发快照加载, 快照仅由 load_snapshot 全量路径加载,

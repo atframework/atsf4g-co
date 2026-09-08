@@ -4,8 +4,8 @@ atgateway:
   # listen address for client to connect, how to use it depends listen.type
   listen:
     address:
-      - ipv4://0.0.0.0:{{ add (.Values.atgateway.listen.begin_port | default 8000 | int64) (.Values.instance_id | default 1 | int64) }}
-    type: inner                     # protocol type
+      - ipv6://:::{{ add (.Values.atgateway.listen.begin_port | default 8000 | int64) (.Values.instance_id | default 1 | int64) }}
+    type: atgateway v2              # protocol type
     max_client: 65536               # max client number, more client will be closed
     backlog: 128
 

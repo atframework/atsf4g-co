@@ -1,6 +1,9 @@
 // Copyright 2026 atframework
 
+#include <rpc/rpc_shared_message.h>
+
 #include <string>
+#include <vector>
 
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
 #include "lobbysvr_test_runtime_helper.h"    // NOLINT: build/include_subdir
@@ -46,6 +49,36 @@ struct dirty_fixture {
         team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL)
             .set_shared_member_data({team_test::pack_member_module(team_test::make_member_ready_module(true))}));
     return storage;
+  }
+
+  atfw::team::DTeamMemberAction pending_event(bool invitation, int64_t target_team_id) const {
+    atfw::team::DTeamMemberAction action;
+    const auto expires =
+        protobuf_from_system_clock(team_test::now_offset_guard::logical_now() + std::chrono::seconds(20));
+    if (invitation) {
+      auto* data = action.mutable_invited();
+      *data->mutable_team_key() = team_test::make_team_key(target_team_id);
+      *data->mutable_inviter() = team_test::make_user_key(team_test::kCaptainUserId);
+      *data->mutable_invitee() = team_test::make_user_key(user_id);
+      *data->mutable_invitee_private_channel() = personal.channel_key;
+      data->set_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+      data->set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
+      *data->mutable_start_timepoint() = protobuf_from_system_clock(team_test::now_offset_guard::logical_now());
+      *data->mutable_expired_timepoint() = expires;
+      auto* member = data->add_member_admission_data();
+      *member->mutable_user_key() = team_test::make_user_key(team_test::kCaptainUserId);
+    } else {
+      auto* data = action.mutable_apply_join_request();
+      *data->mutable_team_key() = team_test::make_team_key(target_team_id);
+      *data->mutable_requester() = team_test::make_user_key(user_id);
+      *data->mutable_requester_private_channel() = personal.channel_key;
+      data->set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
+      data->set_client_version("pending-v2");
+      data->set_user_router_server_id(logic_config::me()->get_local_server_id());
+      *data->mutable_expired_timepoint() = expires;
+      *data->add_member_admission_data() = team_test::pack_member_module(team_test::make_member_ready_module(false));
+    }
+    return action;
   }
 
   user_team::ptr_t team() const {
@@ -255,5 +288,502 @@ CASE_TEST(lobbysvr_user_team, dirty_cs_exit_sends_remove_and_retry_cannot_extend
         }));
   }
   CASE_EXPECT_TRUE(!fixture.team());
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_repaired_membership_after_remove_is_announced_again) {
+  for (int source = 0; source < 2; ++source) {
+    dirty_fixture fixture;
+    CASE_EXPECT_TRUE(fixture.start(static_cast<uint64_t>(73100 + source)));
+    if (!fixture.player || !fixture.team()) {
+      return;
+    }
+    fixture.test.cs().clear_history();
+    atfw::team::DTeamAction removed;
+    *removed.mutable_remove_member()->mutable_team_key() = team_test::make_team_key(fixture.team_id);
+    *removed.mutable_remove_member()->mutable_user_key() = team_test::make_user_key(fixture.user_id);
+    removed.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
+    CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.channel, removed));
+    fixture.expect_one_remove();
+    fixture.test.cs().clear_history();
+
+    // A later snapshot or add_member repairs membership before personal notifications arrive.
+    auto storage = fixture.make_storage();
+    storage.mutable_member(1)->set_client_version("joined-again");
+    if (source == 0) {
+      storage.set_saved_action_sequence(fixture.channel.sequence);
+      CASE_EXPECT_TRUE(team_test::receive_channel_event(
+          fixture.test,
+          team_test::make_snapshot_event(fixture.channel.channel_key, 1, fixture.channel.sequence, &storage, 10)));
+    } else {
+      atfw::team::DTeamAction joined;
+      *joined.mutable_add_member() = storage.member(1);
+      CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.channel, joined));
+    }
+    CASE_EXPECT_TRUE(fixture.team()->is_member());
+    auto changes = fixture.view();
+    CASE_EXPECT_EQ(1, changes.snapshots.size());
+    CASE_EXPECT_TRUE(changes.actions.empty());
+    CASE_EXPECT_TRUE(changes.removals.empty());
+    if (!changes.snapshots.empty()) {
+      const auto* member = team_test::find_snapshot_member(changes.snapshots.front(), fixture.user_id);
+      CASE_EXPECT_TRUE(member != nullptr);
+      if (member != nullptr) {
+        CASE_EXPECT_EQ(std::string("joined-again"), member->client_version());
+      }
+    }
+    fixture.flush();
+    CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  }
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_get_info_empty_state_replaces_previous_team_data) {
+  dirty_fixture fixture;
+  CASE_EXPECT_TRUE(fixture.start(73102));
+  if (!fixture.player || !fixture.team()) {
+    return;
+  }
+  fixture.test.cs().clear_history();
+  CASE_EXPECT_TRUE(team_test::run_sync_task(
+      fixture.test, "team.exit_before_get_info", [&fixture](rpc::context& ctx) -> rpc::result_code_type {
+        fixture.player->get_user_team_manager().remove_team(ctx, team_test::make_team_key(fixture.team_id),
+                                                            atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM);
+        RPC_RETURN_CODE(0);
+      }));
+  PROJECT_NAMESPACE_ID::SCUserGetInfoRsp response;
+  CASE_EXPECT_TRUE(team_test::pull_team_data(fixture.test, fixture.player, response));
+  CASE_EXPECT_TRUE(response.has_user_team());
+  CASE_EXPECT_EQ(0, response.user_team().team_size());
+  fixture.flush();
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+
+  // The full response already removed this team; a later acknowledgement must stay silent.
+  atfw::team::DTeamMemberAction removed;
+  *removed.mutable_remove_member()->mutable_team_key() = team_test::make_team_key(fixture.team_id);
+  *removed.mutable_remove_member()->mutable_user_key() = team_test::make_user_key(fixture.user_id);
+  removed.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM);
+  CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.personal, removed));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  fixture.flush();
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_expired_invitation_cs_precheck_removes_record) {
+  for (int operation = 0; operation < 2; ++operation) {
+    team_test::now_offset_guard time;
+    dirty_fixture fixture;
+    CASE_EXPECT_TRUE(fixture.start(static_cast<uint64_t>(73110 + operation)));
+    if (!fixture.player || !fixture.team()) {
+      return;
+    }
+    const auto key = team_test::make_team_key(fixture.team_id + 100);
+    atfw::team::DTeamMemberAction invited;
+    auto* invitation = invited.mutable_invited();
+    *invitation->mutable_team_key() = key;
+    *invitation->mutable_invitee() = team_test::make_user_key(fixture.user_id);
+    *invitation->mutable_inviter() = team_test::make_user_key(team_test::kCaptainUserId);
+    *invitation->mutable_invitee_private_channel() = fixture.personal.channel_key;
+    *invitation->mutable_expired_timepoint() =
+        protobuf_from_system_clock(team_test::now_offset_guard::logical_now() + std::chrono::seconds(20));
+    CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.personal, invited));
+    lobbysvr_test::flush_pending_chat_messages(fixture.test);
+    CASE_EXPECT_TRUE(!!fixture.player->get_user_team_manager().get_pending_invitation(key));
+    fixture.test.cs().clear_history();
+    team_test::now_offset_guard::advance(std::chrono::seconds(21));
+    if (operation == 0) {
+      PROJECT_NAMESPACE_ID::CSTeamApproveInvitationReq request;
+      *request.mutable_team_key() = key;
+      PROJECT_NAMESPACE_ID::SCTeamApproveInvitationRsp response;
+      auto name = rpc::lobbysvrclientservice::packer::get_full_name_of_team_approve_invitation();
+      CASE_EXPECT_TRUE(team_test::post_cs_request(fixture.test, fixture.client,
+                                                  team_test::pack_cs_request(name, request), name, response));
+      atframework::CSMsg envelope;
+      CASE_EXPECT_TRUE(nullptr !=
+                       team_test::find_downstream_response(fixture.test, fixture.client.session_id(), name, envelope));
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND, envelope.head().error_code());
+    } else {
+      PROJECT_NAMESPACE_ID::CSTeamRejectInvitationReq request;
+      *request.mutable_team_key() = key;
+      PROJECT_NAMESPACE_ID::SCTeamRejectInvitationRsp response;
+      auto name = rpc::lobbysvrclientservice::packer::get_full_name_of_team_reject_invitation();
+      CASE_EXPECT_TRUE(team_test::post_cs_request(fixture.test, fixture.client,
+                                                  team_test::pack_cs_request(name, request), name, response));
+      atframework::CSMsg envelope;
+      CASE_EXPECT_TRUE(nullptr !=
+                       team_test::find_downstream_response(fixture.test, fixture.client.session_id(), name, envelope));
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND, envelope.head().error_code());
+    }
+    CASE_EXPECT_FALSE(!!fixture.player->get_user_team_manager().get_pending_invitation(key));
+    auto changes = team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), key.team_id());
+    CASE_EXPECT_EQ(1, changes.removed_pending_invitations.size());
+    CASE_EXPECT_TRUE(changes.added_pending_invitations.empty());
+    CASE_EXPECT_TRUE(fixture.room.approve_invitation_reqs.empty());
+    CASE_EXPECT_TRUE(fixture.room.reject_invitation_reqs.empty());
+    fixture.flush();
+    CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  }
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_room_error_repairs_only_confirmed_membership_loss) {
+  const int32_t results[] = {PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND,
+                             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED,
+                             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION};
+  for (int operation = 0; operation < 2; ++operation) {
+    for (int scenario = 0; scenario < 4; ++scenario) {
+      dirty_fixture fixture;
+      CASE_EXPECT_TRUE(fixture.start(static_cast<uint64_t>(73120 + operation * 4 + scenario)));
+      if (!fixture.player || !fixture.team()) {
+        return;
+      }
+      const int32_t result = results[scenario];
+      fixture.room.send_message_responder = [result](const atfw::team::SSTeamRoomSendMessageReq&,
+                                                     atfw::team::SSTeamRoomSendMessageRsp&) { return result; };
+      fixture.room.add_invitation_responder = [result](const atfw::team::SSTeamRoomAddInvitationReq&,
+                                                       atfw::team::SSTeamRoomAddInvitationRsp&) { return result; };
+      fixture.test.cs().clear_history();
+      CASE_EXPECT_TRUE(team_test::run_sync_task(
+          fixture.test, "team.room_error", [&fixture, operation, result](rpc::context& ctx) -> rpc::result_code_type {
+            int32_t actual = 0;
+            if (operation == 0) {
+              auto data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSTeamUpdateMemberDataReq>(ctx);
+              *data->add_data() = team_test::make_member_ready_module(false);
+              actual = RPC_AWAIT_CODE_RESULT(fixture.team()->update_member_shared_data(ctx, *data->mutable_data()));
+            } else {
+              auto source = rpc::make_shared_message<google::protobuf::Any>(ctx);
+              actual = RPC_AWAIT_CODE_RESULT(fixture.player->get_user_team_manager().send_invitation(
+                  ctx, team_test::make_team_key(fixture.team_id), team_test::make_user_key(98765),
+                  atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND, *source));
+            }
+            CASE_EXPECT_EQ(result == PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND
+                               ? PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM
+                               : result,
+                           actual);
+            fixture.player->send_all_syn_msg(ctx);
+            RPC_RETURN_CODE(0);
+          }));
+      if (scenario < 3) {
+        CASE_EXPECT_TRUE(!fixture.team() || fixture.team()->is_removed_for_client());
+        fixture.expect_one_remove();
+      } else {
+        CASE_EXPECT_TRUE(fixture.team() && !fixture.team()->is_removed_for_client());
+        CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+      }
+      fixture.test.cs().clear_history();
+      fixture.flush();
+      CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+    }
+  }
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_personal_pending_pull_gate_and_coalesced_removals) {
+  team_test::now_offset_guard time;
+  dirty_fixture fixture;
+  CASE_EXPECT_TRUE(fixture.start(73140, false));
+  if (!fixture.player || !fixture.team()) {
+    return;
+  }
+  const int64_t target = fixture.team_id + 100;
+  auto invitation = fixture.pending_event(true, target);
+  auto request = fixture.pending_event(false, target);
+  CASE_EXPECT_TRUE(team_test::inject_event_messages(fixture.test, fixture.personal, {&invitation, &request}));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  fixture.flush();
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+
+  PROJECT_NAMESPACE_ID::SCUserGetInfoRsp response;
+  CASE_EXPECT_TRUE(team_test::pull_team_data(fixture.test, fixture.player, response));
+  CASE_EXPECT_EQ(1, response.user_team().team_size());
+  CASE_EXPECT_EQ(1, response.user_team().pending_invitation_size());
+  CASE_EXPECT_EQ(1, response.user_team().pending_join_request_size());
+  if (response.user_team().pending_invitation_size() == 1) {
+    CASE_EXPECT_EQ(target, response.user_team().pending_invitation(0).team_key().team_id());
+    CASE_EXPECT_FALSE(response.user_team().pending_invitation(0).has_invitee_private_channel());
+  }
+  if (response.user_team().pending_join_request_size() == 1) {
+    CASE_EXPECT_EQ(std::string("pending-v2"), response.user_team().pending_join_request(0).client_version());
+    CASE_EXPECT_FALSE(response.user_team().pending_join_request(0).has_requester_private_channel());
+    CASE_EXPECT_EQ(0, response.user_team().pending_join_request(0).user_router_server_id());
+  }
+  fixture.flush();
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+
+  // Each refreshed private action contributes one dirty entry; the chat flush batches both entries.
+  request.mutable_apply_join_request()->set_client_version("pending-v3");
+  invitation.mutable_invited()->mutable_expired_timepoint()->set_seconds(
+      invitation.invited().expired_timepoint().seconds() + 1);
+  CASE_EXPECT_TRUE(team_test::inject_event_messages(fixture.test, fixture.personal, {&invitation, &request}));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  auto changes = team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), target);
+  CASE_EXPECT_EQ(1, changes.added_pending_invitations.size());
+  CASE_EXPECT_EQ(1, changes.added_pending_join_requests.size());
+  CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  CASE_EXPECT_TRUE(fixture.view().snapshots.empty());
+  if (!changes.added_pending_join_requests.empty()) {
+    CASE_EXPECT_EQ(std::string("pending-v3"), changes.added_pending_join_requests.front().client_version());
+    CASE_EXPECT_FALSE(changes.added_pending_join_requests.front().has_requester_private_channel());
+    CASE_EXPECT_EQ(0, changes.added_pending_join_requests.front().user_router_server_id());
+  }
+  fixture.test.cs().clear_history();
+
+  // Expiry cleanup has no action and cannot actively push. Its next normal flush must carry both removals.
+  team_test::now_offset_guard::advance(std::chrono::seconds(22));
+  CASE_EXPECT_TRUE(team_test::run_sync_task(fixture.test, "team.expire_pending",
+                                            [&fixture](rpc::context& ctx) -> rpc::result_code_type {
+                                              fixture.player->get_user_team_manager().refresh_feature_limit_second(ctx);
+                                              RPC_RETURN_CODE(0);
+                                            }));
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+  fixture.flush();
+  changes = team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), target);
+  CASE_EXPECT_EQ(1, changes.removed_pending_invitations.size());
+  CASE_EXPECT_EQ(1, changes.removed_pending_join_requests.size());
+  CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+
+  fixture.test.cs().clear_history();
+  atfw::team::DTeamMemberAction rejected_invitation;
+  *rejected_invitation.mutable_reject_invitation() = invitation.invited();
+  atfw::team::DTeamMemberAction rejected_request;
+  *rejected_request.mutable_reject_join_request() = request.apply_join_request();
+  rejected_request.mutable_reject_join_request()->clear_member_admission_data();
+  CASE_EXPECT_TRUE(
+      team_test::inject_event_messages(fixture.test, fixture.personal, {&rejected_invitation, &rejected_request}));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  fixture.flush();
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_expired_manager_calls_remove_pending_before_rpc) {
+  for (int operation = 0; operation < 3; ++operation) {
+    team_test::now_offset_guard time;
+    dirty_fixture fixture;
+    CASE_EXPECT_TRUE(fixture.start(static_cast<uint64_t>(73141 + operation)));
+    if (!fixture.player || !fixture.team()) {
+      return;
+    }
+    const auto key = team_test::make_team_key(fixture.team_id + 100);
+    auto action = fixture.pending_event(operation != 2, key.team_id());
+    CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.personal, action));
+    lobbysvr_test::flush_pending_chat_messages(fixture.test);
+    fixture.test.cs().clear_history();
+    team_test::now_offset_guard::advance(std::chrono::seconds(21));
+    fixture.room.add_join_request_responder = [](const atfw::team::SSTeamRoomAddJoinRequestReq&,
+                                                 atfw::team::SSTeamRoomAddJoinRequestRsp&) {
+      return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
+    };
+    CASE_EXPECT_TRUE(
+        team_test::run_sync_task(fixture.test, "team.expired_manager_call",
+                                 [&fixture, &key, operation](rpc::context& ctx) -> rpc::result_code_type {
+                                   auto& manager = fixture.player->get_user_team_manager();
+                                   int32_t result = 0;
+                                   if (operation == 2) {
+                                     auto source = rpc::make_shared_message<google::protobuf::Any>(ctx);
+                                     result = RPC_AWAIT_CODE_RESULT(manager.send_join_request(
+                                         ctx, key, atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND, *source));
+                                     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, result);
+                                   } else {
+                                     auto pending = manager.get_pending_invitation(key);
+                                     CASE_EXPECT_TRUE(!!pending);
+                                     if (operation == 0) {
+                                       result = RPC_AWAIT_CODE_RESULT(manager.approve_invitation(ctx, pending));
+                                     } else {
+                                       result = RPC_AWAIT_CODE_RESULT(manager.reject_invitation(ctx, pending));
+                                     }
+                                     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND, result);
+                                   }
+                                   manager.send_dirty_data(ctx);
+                                   RPC_RETURN_CODE(0);
+                                 }));
+    CASE_EXPECT_FALSE(!!fixture.player->get_user_team_manager().get_pending_invitation(key));
+    CASE_EXPECT_FALSE(!!fixture.player->get_user_team_manager().get_pending_join_request(key));
+    auto changes = team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), key.team_id());
+    CASE_EXPECT_EQ(operation == 2 ? 0 : 1, changes.removed_pending_invitations.size());
+    CASE_EXPECT_EQ(operation == 2 ? 1 : 0, changes.removed_pending_join_requests.size());
+    CASE_EXPECT_TRUE(fixture.room.approve_invitation_reqs.empty());
+    CASE_EXPECT_TRUE(fixture.room.reject_invitation_reqs.empty());
+    CASE_EXPECT_EQ(operation == 2 ? 1 : 0, fixture.room.add_join_request_reqs.size());
+    fixture.flush();
+    CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  }
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_team_batches_and_metadata_do_not_repeat_snapshots) {
+  dirty_fixture fixture;
+  CASE_EXPECT_TRUE(fixture.start(73144));
+  if (!fixture.player || !fixture.team()) {
+    return;
+  }
+  fixture.test.cs().clear_history();
+  CASE_EXPECT_TRUE(team_test::inject_custom_data_update(fixture.test, fixture.channel, fixture.make_storage()));
+  atfw::team::DTeamAction empty;
+  CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.channel, empty));
+  auto duplicate_join = team_test::make_join_data(fixture.user_id, fixture.team_id);
+  atfw::team::DTeamMemberAction joined;
+  *joined.mutable_joined_team() = duplicate_join;
+  CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.personal, joined));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  fixture.flush();
+  CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
+
+  atfw::team::DTeamAction member_update;
+  *member_update.mutable_member_update()->mutable_user_key() = team_test::make_user_key(fixture.user_id);
+  member_update.mutable_member_update()->set_client_version("batch-v2");
+  atfw::team::DTeamAction team_update;
+  *team_update.mutable_team_update()->add_shared_team_data() =
+      team_test::pack_team_module(team_test::make_team_matching_module(true));
+  CASE_EXPECT_TRUE(team_test::inject_event_messages(fixture.test, fixture.channel, {&member_update, &team_update}));
+  auto changes = fixture.view();
+  CASE_EXPECT_EQ(2, changes.actions.size());
+  CASE_EXPECT_TRUE(changes.snapshots.empty());
+  CASE_EXPECT_TRUE(fixture.team()->is_matching());
+  fixture.flush();
+  CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_snapshot_replay_does_not_reset_existing_member_data) {
+  dirty_fixture fixture;
+  CASE_EXPECT_TRUE(fixture.start(73150));
+  if (!fixture.player || !fixture.team()) {
+    return;
+  }
+  fixture.test.cs().clear_history();
+  auto storage = fixture.make_storage();
+  atfw::team::DTeamAction joined;
+  *joined.mutable_add_member() = storage.member(1);
+  storage.mutable_member()->RemoveLast();
+  std::vector<atfw::dtmq::DChannelMessage> messages{team_test::make_event_message(1, joined)};
+  auto hash = team_test::chain_message_hashes(messages, 0);
+  auto snapshot = team_test::make_snapshot_event(fixture.channel.channel_key, 1, 1, &storage, 10, hash);
+  *snapshot.mutable_channel_snapshot()->add_messages() = messages.front();
+  const auto updates_before = fixture.room.send_message_action_count(atfw::team::DTeamAction::kMemberUpdate);
+  CASE_EXPECT_TRUE(team_test::receive_channel_event(fixture.test, snapshot));
+  fixture.flush();
+  CASE_EXPECT_EQ(updates_before, fixture.room.send_message_action_count(atfw::team::DTeamAction::kMemberUpdate));
+  const auto changes = fixture.view();
+  CASE_EXPECT_EQ(1, changes.snapshots.size());
+  CASE_EXPECT_TRUE(changes.actions.empty());
+  CASE_EXPECT_TRUE(changes.removals.empty());
+  CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  if (!changes.snapshots.empty()) {
+    const auto* member = team_test::find_unpacked_member(changes.snapshots.front(), fixture.user_id);
+    CASE_EXPECT_TRUE(member != nullptr);
+    if (member != nullptr) {
+      CASE_EXPECT_EQ(1, member->shared_member_data_size());
+      if (member->shared_member_data_size() == 1) {
+        CASE_EXPECT_TRUE(member->shared_member_data(0).battle().ready());
+      }
+    }
+  }
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_invitation_rpc_results_remove_only_invalid_pending) {
+  const int32_t results[] = {
+      0, PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
+      PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION};
+  for (int operation = 0; operation < 2; ++operation) {
+    for (int scenario = 0; scenario < 5; ++scenario) {
+      dirty_fixture fixture;
+      CASE_EXPECT_TRUE(fixture.start(static_cast<uint64_t>(73160 + operation * 5 + scenario)));
+      if (!fixture.player || !fixture.team()) {
+        return;
+      }
+      const auto key = team_test::make_team_key(fixture.team_id + 100);
+      auto invited = fixture.pending_event(true, key.team_id());
+      CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.test, fixture.personal, invited));
+      lobbysvr_test::flush_pending_chat_messages(fixture.test);
+      fixture.test.cs().clear_history();
+      const int32_t result = results[scenario];
+      fixture.room.approve_invitation_responder = [result](const atfw::team::SSTeamRoomApproveInvitationReq&,
+                                                           atfw::team::SSTeamRoomApproveInvitationRsp&) {
+        return result;
+      };
+      fixture.room.reject_invitation_responder = [result](const atfw::team::SSTeamRoomRejectInvitationReq&,
+                                                          atfw::team::SSTeamRoomRejectInvitationRsp&) {
+        return result;
+      };
+      gsl::string_view name;
+      if (operation == 0) {
+        PROJECT_NAMESPACE_ID::CSTeamApproveInvitationReq request;
+        *request.mutable_team_key() = key;
+        PROJECT_NAMESPACE_ID::SCTeamApproveInvitationRsp response;
+        name = rpc::lobbysvrclientservice::packer::get_full_name_of_team_approve_invitation();
+        CASE_EXPECT_TRUE(team_test::post_cs_request(fixture.test, fixture.client,
+                                                    team_test::pack_cs_request(name, request), name, response));
+      } else {
+        PROJECT_NAMESPACE_ID::CSTeamRejectInvitationReq request;
+        *request.mutable_team_key() = key;
+        PROJECT_NAMESPACE_ID::SCTeamRejectInvitationRsp response;
+        name = rpc::lobbysvrclientservice::packer::get_full_name_of_team_reject_invitation();
+        CASE_EXPECT_TRUE(team_test::post_cs_request(fixture.test, fixture.client,
+                                                    team_test::pack_cs_request(name, request), name, response));
+      }
+      atframework::CSMsg envelope;
+      CASE_EXPECT_TRUE(nullptr !=
+                       team_test::find_downstream_response(fixture.test, fixture.client.session_id(), name, envelope));
+      CASE_EXPECT_EQ(
+          scenario == 0 ? 0 : (scenario == 4 ? result : PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND),
+          envelope.head().error_code());
+      auto changes = team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), key.team_id());
+      CASE_EXPECT_EQ(scenario == 4 ? 0 : 1, changes.removed_pending_invitations.size());
+      CASE_EXPECT_EQ(scenario == 4, !!fixture.player->get_user_team_manager().get_pending_invitation(key));
+      CASE_EXPECT_TRUE(fixture.view().snapshots.empty());
+      fixture.flush();
+      CASE_EXPECT_EQ(scenario == 4 ? 0 : 1,
+                     team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+      CASE_EXPECT_EQ(operation == 0 ? 1 : 0, fixture.room.approve_invitation_reqs.size());
+      CASE_EXPECT_EQ(operation == 0 ? 0 : 1, fixture.room.reject_invitation_reqs.size());
+    }
+  }
+}
+
+CASE_TEST(lobbysvr_user_team, dirty_switch_and_rejoin_merge_team_and_pending_changes) {
+  dirty_fixture fixture;
+  CASE_EXPECT_TRUE(fixture.start(73180));
+  if (!fixture.player || !fixture.team()) {
+    return;
+  }
+  const int64_t next_team_id = fixture.team_id + 100;
+  auto invitation = fixture.pending_event(true, next_team_id);
+  auto request = fixture.pending_event(false, next_team_id);
+  CASE_EXPECT_TRUE(team_test::inject_event_messages(fixture.test, fixture.personal, {&invitation, &request}));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  fixture.test.cs().clear_history();
+
+  CASE_EXPECT_TRUE(team_test::join_team_via_notification(fixture.test, fixture.player, fixture.personal, next_team_id));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  const auto removed = fixture.view();
+  CASE_EXPECT_EQ(1, removed.removals.size());
+  auto next_changes = team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), next_team_id);
+  CASE_EXPECT_EQ(1, next_changes.removed_pending_invitations.size());
+  CASE_EXPECT_EQ(1, next_changes.removed_pending_join_requests.size());
+  CASE_EXPECT_TRUE(next_changes.snapshots.empty());
+  CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  fixture.test.cs().clear_history();
+
+  auto storage = team_test::make_team_storage(next_team_id);
+  team_test::add_storage_member(storage, team_test::kCaptainUserId,
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  team_test::add_storage_member(storage, fixture.user_id,
+                                team_test::role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+  CASE_EXPECT_TRUE(team_test::apply_team_snapshot(fixture.test, next_team_id, storage));
+  CASE_EXPECT_EQ(
+      1, team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), next_team_id).snapshots.size());
+  fixture.test.cs().clear_history();
+
+  // Reactivating the old team restores its snapshot and removes the new team in the same private-action flush.
+  CASE_EXPECT_TRUE(
+      team_test::join_team_via_notification(fixture.test, fixture.player, fixture.personal, fixture.team_id));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  CASE_EXPECT_EQ(1, fixture.view().snapshots.size());
+  CASE_EXPECT_TRUE(fixture.view().actions.empty());
+  CASE_EXPECT_EQ(
+      1, team_test::collect_team_dirty(fixture.test, fixture.client.session_id(), next_team_id).removals.size());
+  fixture.flush();
+  CASE_EXPECT_EQ(1, team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).size());
+  fixture.test.cs().clear_history();
+
+  CASE_EXPECT_TRUE(
+      team_test::join_team_via_notification(fixture.test, fixture.player, fixture.personal, fixture.team_id));
+  lobbysvr_test::flush_pending_chat_messages(fixture.test);
+  fixture.flush();
   CASE_EXPECT_TRUE(team_test::collect_dirty_sync_pushes(fixture.test, fixture.client.session_id()).empty());
 }

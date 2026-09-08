@@ -61,6 +61,9 @@ CASE_TEST(rpc_unit_test, framework_flow) {
   code.
 - A successful unmatched one-way call is only recorded and dropped. Register an expectation or inspect captured calls
   when the notification or broadcast is required.
+- For dirty notifications, inspect raw push counts as well as flattened payloads. Cover empty actions, initial-pull
+  gating, snapshot replacement, repair removals, and repeated cleanup; a flattened list can hide duplicate packets.
+  Check request pre-refresh and callback order so the case reaches the intended repair branch.
 - Keep business timeout assertions separate from the wait hard timeout. A hard timeout guards CTest from hanging; it
   kills all tasks and leaves the runtime usable only for `stop()`.
 - A non-zero `stop()` reports failed expectations, unconsumed rules, or stale captured responses; treat it as a test

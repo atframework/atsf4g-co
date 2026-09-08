@@ -12,7 +12,7 @@
 //   - team_room_ss_capture: typed mock of atframework.team.TeamRoomService, recording full request payloads and
 //     answering with configurable business results (one-way calls stay record-only, per engine default);
 //   - client projection collection: collect_team_dirty flattens SCUserDirtyChgSync pushes into snapshots and
-//     increase actions keyed by team_key so cases assert payload sets, not push counts;
+//     increase actions keyed by team_key; inspect raw pushes as well when notification counts are the contract;
 //   - pump_until(predicate, hard_limit): pump generations until an observable condition holds; the hard limit only
 //     guards against hangs. Fixed pump_rounds is kept only for settling work that has no observable condition.
 //   - now_offset_guard: monotonic virtual-time driver (the subscriber timer wheel is shared process-wide, so the
@@ -913,8 +913,8 @@ inline std::vector<PROJECT_NAMESPACE_ID::SCUserDirtyChgSync> collect_dirty_sync_
   return ret;
 }
 
-// Normalized dirty view: pushes may batch several actions and several teams, so cases assert on this flattened
-// projection (per team: ordered snapshot/increase payloads) instead of on raw push counts.
+// Flatten batches for payload assertions. Use collect_dirty_sync_pushes separately to assert notification counts
+// and prove that empty actions, covered deltas, and repeated removals produce no extra push.
 struct team_dirty_view {
   std::vector<PROJECT_NAMESPACE_ID::DUserTeamSnapshot> snapshots;         // arrival order
   std::vector<PROJECT_NAMESPACE_ID::DUserTeamDirty::TeamAction> actions;  // arrival order across all increases

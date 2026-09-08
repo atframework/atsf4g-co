@@ -186,6 +186,9 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
     static inline void set_client_announced(user_team& team, bool value) noexcept {
       team.set_flag(team_flag::kClientAnnounced, value);
     }
+    static void repair_from_room_error(user_team& team, rpc::context& ctx, int32_t result_code) {
+      team.repair_from_room_error(ctx, result_code);
+    }
     // 对象是否登记在 manager 索引中(由 manager 在 team_index_ 增删时维护, 供热路径零查找判断代际)
     static inline void set_index_active(user_team& team, bool value) noexcept {
       team.set_flag(team_flag::kIndexActive, value);
@@ -196,9 +199,11 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   // 打包队伍事件并按 team_key 一致性哈希路由发送到 teamsvr-room，返回透传的业务结果
   rpc::result_code_type send_action(rpc::context& ctx, atfw::team::DTeamAction&& action);
 
+  void repair_from_room_error(rpc::context& ctx, int32_t result_code);
+
   bool load_dtmq_custom_data(rpc::context& ctx, const ::google::protobuf::Any& custom_data);
 
-  bool load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action);
+  bool load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAction& action, bool refresh_member_data);
 
   // 追加一条增量脏数据(解包成员共享数据以便客户端直接使用)。快照脏数据待下发时无需追加，
   // 快照会覆盖重放期间的全部变更
@@ -218,7 +223,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void load_snapshot(rpc::context& ctx);
 
-  void on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data);
+  void on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DChannelMessage& data,
+                              bool refresh_member_data = true);
 
   void set_matching(rpc::context& ctx, bool value);
 

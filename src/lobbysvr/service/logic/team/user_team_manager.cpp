@@ -165,6 +165,8 @@ user_team_manager::user_team_manager(user& owner)
           PROJECT_NAMESPACE_ID::CSUserGetInfoReq::kNeedUserTeamFieldNumber),
       [](rpc::context& ctx, PROJECT_NAMESPACE_ID::SCUserGetInfoRsp& rsp, user& user_inst) {
         auto& team_mgr = user_inst.get_user_team_manager();
+        // 即使当前没有队伍或 pending，也显式返回完整空状态，供客户端覆盖旧数据。
+        rsp.mutable_user_team()->Clear();
         team_mgr.cleanup_expired_invitation(ctx);
         team_mgr.cleanup_expired_join_request(ctx);
         team_mgr.foreach_running_team(
@@ -193,6 +195,11 @@ user_team_manager::user_team_manager(user& owner)
             current_team->clear_dirty_data(ctx);
           }
           if (dirty.second) {
+            // 本次完整响应也覆盖移除状态，迟到确认和生命周期清理无需再次下发 remove。
+            if (dirty.second->is_removed_for_client()) {
+              user_team::manager_accessor::set_client_announced(*dirty.second, false);
+              user_team::manager_accessor::set_dirty_remove_sent(*dirty.second, true);
+            }
             dirty.second->clear_dirty_data(ctx);
           }
         }
@@ -392,6 +399,11 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
   }
 
+  if (protobuf_to_system_clock(invitation->expired_timepoint()) <= ctx.logical_now()) {
+    remove_pending_invitation(ctx, invitation->team_key());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
+  }
+
   // 被邀请人本人接受邀请: 版本/路由等成员数据由被邀请人在同意时上报
   rpc::context::message_holder<atfw::team::SSTeamRoomApproveInvitationReq> ss_req{ctx};
   rpc::context::message_holder<atfw::team::SSTeamRoomApproveInvitationRsp> ss_rsp{ctx};
@@ -415,6 +427,8 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
     // 接受后房间只向被邀请人发 joined_team 通知，这里直接移除本地待处理邀请
     remove_pending_invitation(ctx, invitation->team_key());
   } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret ||
+             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND == ret ||
+             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED == ret ||
              PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND == ret) {
     // room 上的记录已不存在(从未存在/已过期被清理/频道已销毁), 本地 pending 确定失效, 一并删除;
     // 对客户端表现为邀请不存在
@@ -426,6 +440,11 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
 
 rpc::result_code_type user_team_manager::reject_invitation(rpc::context& ctx, const team_invitation_ptr_t& invitation) {
   if (!invitation) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
+  }
+
+  if (protobuf_to_system_clock(invitation->expired_timepoint()) <= ctx.logical_now()) {
+    remove_pending_invitation(ctx, invitation->team_key());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND);
   }
 
@@ -446,6 +465,8 @@ rpc::result_code_type user_team_manager::reject_invitation(rpc::context& ctx, co
     // 拒绝成功后即使房间的回执事件丢失，也不再需要保留本地记录
     remove_pending_invitation(ctx, invitation->team_key());
   } else if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret ||
+             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_ROOM_NOT_FOUND == ret ||
+             PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED == ret ||
              PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND == ret) {
     // room 上的记录已不存在(从未存在/已过期被清理/频道已销毁), 本地 pending 确定失效, 一并删除;
     // 对客户端表现为邀请不存在
@@ -458,6 +479,12 @@ rpc::result_code_type user_team_manager::reject_invitation(rpc::context& ctx, co
 rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
                                                            atfw::team::EnTeamSourceType team_source_type,
                                                            const ::google::protobuf::Any& team_source_data) {
+  // 过期申请不阻止重新申请，但必须登记删除，即使本次 RPC 随后失败也不能保留失效记录。
+  auto pending = get_pending_join_request(team_key);
+  if (pending && protobuf_to_system_clock(pending->expired_timepoint()) <= ctx.logical_now()) {
+    remove_pending_join_request(ctx, team_key);
+  }
+
   // 申请人的版本/路由/私有频道由本人上报
   rpc::context::message_holder<atfw::team::SSTeamRoomAddJoinRequestReq> ss_req{ctx};
   rpc::context::message_holder<atfw::team::SSTeamRoomAddJoinRequestRsp> ss_rsp{ctx};
@@ -538,6 +565,11 @@ rpc::result_code_type user_team_manager::send_invitation(rpc::context& ctx, cons
                                                          const PROJECT_NAMESPACE_ID::DUserIDKey& invitee,
                                                          atfw::team::EnTeamSourceType team_source_type,
                                                          const ::google::protobuf::Any& team_source_data) {
+  // 持有本次请求对应的对象；异步响应不得清理同 key 后来建立的新对象。
+  auto team = get_team_by_team_key(team_key);
+  if (team && (team->is_exiting() || team->is_destroyed())) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+  }
   rpc::context::message_holder<atfw::team::SSTeamRoomAddInvitationReq> ss_req{ctx};
   rpc::context::message_holder<atfw::team::SSTeamRoomAddInvitationRsp> ss_rsp{ctx};
   auto* invitation = ss_req->mutable_invitation();
@@ -560,6 +592,9 @@ rpc::result_code_type user_team_manager::send_invitation(rpc::context& ctx, cons
     ret = ss_rsp->client_result();
   }
 
+  if (team) {
+    user_team::manager_accessor::repair_from_room_error(*team, ctx, ret);
+  }
   if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
     // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为已不在队伍中
     ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;

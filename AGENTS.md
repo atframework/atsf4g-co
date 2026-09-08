@@ -14,7 +14,7 @@ high-performance game server architectures.
 ## Project Map
 
 - `src/server_frame/`: shared config, protocol, dispatcher, router, RPC, data, and utility code.
-- `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `rank_settlement_svr`, `orbitsvr`).
+- `src/*svr/`: service implementations (`echosvr`, `authsvr`, `cachesvr`, `lobbysvr`, `teamsvr`, `rank_settlement_svr`, `orbitsvr`).
 - `src/component/`: DTMQ, distributed transaction, rank, orbit, and shared algorithm components plus their SDKs.
 - `src/robot/` and `src/tools/`: Go stress client, generators, diagnostics, and the offline mock-RPC test fixture.
 - `src/templates/`: Mako templates for generated RPC/task code.
@@ -53,6 +53,8 @@ high-performance game server architectures.
   the implementation or the case design; never weaken, skip, or loosen an existing assertion, add a retry, or widen a
   timeout merely to force green. If scope or prerequisites remain unclear, state assumptions and coverage gaps instead
   of claiming completeness.
+- For notification changes, test both payload and delivery: normal actions, empty actions, full-state replacement,
+  data repair, and repeated cleanup. Assert required removals and forbidden duplicate pushes at the actual flush boundary.
 - Add root-project ordinary C++ unit-test targets only through `project_add_normal_unit_test`. For tests under `src/**`
   that exercise project RPC paths or require async test hooks guarded by `PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS`,
   use `project_add_rpc_unit_test` instead. Do not wire consuming test targets directly with `add_executable`,

@@ -38,7 +38,9 @@ class gateway_module : public ::atfw::atapp::module_impl {
     gw_mgr_.get_conf().version = 1;
 
     int res = 0;
-    if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
+    if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("inner", gw_mgr_.get_conf().origin_conf.listen().type().c_str()) ||
+        0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("atgateway v2", gw_mgr_.get_conf().origin_conf.listen().type().c_str()) ||
+        0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("atgateway_v2", gw_mgr_.get_conf().origin_conf.listen().type().c_str())) {
       gw_mgr_.init(get_app(), [this]() { return this->gateway_module::create_proto_inner(); });
 
       gw_mgr_.set_on_create_session([](::atframework::gateway::session *sess, uv_stream_t *handle) -> int {
@@ -222,10 +224,12 @@ class gateway_module : public ::atfw::atapp::module_impl {
     }
 
     // protocol reload
-    if ("inner" == gw_mgr_.get_conf().origin_conf.listen().type()) {
+    if (0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("inner", gw_mgr_.get_conf().origin_conf.listen().type().c_str()) ||
+        0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("atgateway v2", gw_mgr_.get_conf().origin_conf.listen().type().c_str()) ||
+        0 == ATFW_UTIL_STRFUNC_STRCASE_CMP("atgateway_v2", gw_mgr_.get_conf().origin_conf.listen().type().c_str())) {
       auto global_conf = ::atframework::gateway::libatgw_protocol_sdk::create_shared_context(crypto_conf);
       if (!global_conf) {
-        FWLOGERROR("reload inner protocol global configure failed");
+        FWLOGERROR("reload atgateway v2 protocol global configure failed");
         return -1;
       }
       shared_conf_ = global_conf;
@@ -331,12 +335,12 @@ class gateway_module : public ::atfw::atapp::module_impl {
 
   static int proto_inner_callback_on_create_session(::atframework::gateway::session *sess, uv_stream_t *handle) {
     if (nullptr == sess) {
-      FWLOGERROR("{}", "create session with inner proto without session object");
+      FWLOGERROR("{}", "create session with atgateway v2 proto without session object");
       return 0;
     }
 
     if (nullptr == handle) {
-      FWLOGERROR("{}", "create session with inner proto without handle");
+      FWLOGERROR("{}", "create session with atgateway v2 proto without handle");
       return 0;
     }
 
