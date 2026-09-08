@@ -255,6 +255,18 @@ if(WIN32)
   set_property(TARGET "tools-windows-bat-wrappers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 endif()
 
+# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst,
+# excluding every "log" directory and "*.a"/"*.dbg" files. Generated into the build root
+# next to the publish tree.
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/pack_publish.sh"
+               "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh" @ONLY)
+add_custom_target(
+  "tools-pack-publish" ALL
+  COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh"
+          "${PROJECT_BINARY_DIR}"
+  BYPRODUCTS "${PROJECT_BINARY_DIR}/pack_publish.sh")
+set_property(TARGET "tools-pack-publish" PROPERTY FOLDER "${PROJECT_NAME}/tools")
+
 # 清理预编译头(precompile headers)产物的工具目标, 按需手动执行: cmake --build <build dir> --target cleanup-precompile-headers
 add_custom_target(
   "cleanup-precompile-headers"
