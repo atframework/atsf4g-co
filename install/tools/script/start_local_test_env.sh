@@ -18,21 +18,3 @@ SCRIPT_DIR="$(CDPATH='' cd "$(dirname -- "$0")" && pwd)"
 
 "$SCRIPT_DIR/etcd/setup-etcd.sh" start
 "$SCRIPT_DIR/redis/redis.sh" start
-
-# The otel collector binary is downloaded by the CMake build
-# (third_party/otel/otelcol-contrib.cmake); it is not managed here.
-OTELCOL_BIN_DIR="${SCRIPT_DIR}/../../otelcol/bin"
-
-cd "$OTELCOL_BIN_DIR"
-
-if [ ! -x "./otelcol-contrib" ]; then
-  echo "[ERROR] Otel collector executable does not exist or is not executable:" >&2
-  echo "        ${OTELCOL_BIN_DIR}/otelcol-contrib" >&2
-  exit 1
-fi
-
-if [ ! -f "../cfg/config.yaml" ]; then
-  echo "[ERROR] Otel collector config does not exist: ${OTELCOL_BIN_DIR}/../cfg/config.yaml" >&2
-  echo "        Run install/tools/script/generate_config.sh first." >&2
-  exit 1
-fi
