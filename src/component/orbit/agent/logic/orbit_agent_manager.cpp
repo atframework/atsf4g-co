@@ -258,6 +258,21 @@ static uint64_t make_initial_sequence_allocator() {
          static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3) +
          static_cast<uint64_t>(logic_config::me()->get_local_server_id());
 }
+
+static bool replace_public_ip(std::string& input, const std::string& replace_ip) {
+  size_t start_pos = input.find("//");
+  if (start_pos == std::string::npos) {
+    return false;
+  }
+  start_pos += 2;
+  size_t end_pos = input.find(":", start_pos);
+  if (end_pos == std::string::npos) {
+    return false;
+  }
+  size_t old_ip_len = end_pos - start_pos;
+  input.replace(start_pos, old_ip_len, replace_ip);
+  return true;
+}
 }  // namespace
 
 uint64_t orbit_agent_client_record::get_controller_server_id() {
@@ -401,21 +416,11 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   if (replace_ip_.empty()) {
     replace_ip_ = "127.0.0.1";
   }
-  // 将IP替换 atcp://127.0.0.1:xxxx
-  {
-    size_t start_pos = remote_agent_endpoint_.find("//");
-    if (start_pos == std::string::npos) {
-      FWLOGERROR("orbit agent remote_agent_endpoint_ format error: {}", remote_agent_endpoint_);
-      return -8;
-    }
-    start_pos += 2;
-    size_t end_pos = remote_agent_endpoint_.find(":", start_pos);
-    if (end_pos == std::string::npos) {
-      FWLOGERROR("orbit agent remote_agent_endpoint_ format error: {}", remote_agent_endpoint_);
-      return -8;
-    }
-    size_t old_ip_len = end_pos - start_pos;
-    remote_agent_endpoint_.replace(start_pos, old_ip_len, replace_ip_);
+
+  if (!replace_public_ip(remote_agent_endpoint_, replace_ip_)) {
+    FWLOGERROR("orbit agent failed to replace public IP in remote_agent_endpoint {} replace_ip {}",
+               remote_agent_endpoint_, replace_ip_);
+    return -13;
   }
   FWLOGINFO("orbit agent launch client endpoint: {}, remote endpoint: {}", agent_endpoint_, remote_agent_endpoint_);
 
@@ -638,6 +643,7 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     RPC_RETURN_CODE(prepare_result);
   }
   fill_client_identity(*response.mutable_client_identity(), client_record);
+  client_record->remote_start = remote_start;
 
   if (remote_start) {
     // 远程启动模式 不需要Agent相关的参数
@@ -811,7 +817,14 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  client_record->client_addr = atfw::util::string::format("{}:{}", replace_ip_, request.port());
+  if (client_record->remote_start) {
+    // 远端使用远端回传的
+    client_record->client_addr = atfw::util::string::format("{}:{}", request.client_ip(), request.client_port());
+  } else {
+    // 本地起的Client 用本地的replace_id拼接
+    client_record->client_addr = atfw::util::string::format("{}:{}", replace_ip_, request.client_port());
+  }
+  FWLOGINFO("orbit agent client_start succeeded for {}: client_addr={}", client_id, client_record->client_addr);
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
   client_record->client_server_id = client_server_id;
 

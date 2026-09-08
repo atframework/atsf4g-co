@@ -33,11 +33,12 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
-#include <memory>
 
 #include "memory/rc_ptr.h"
 
@@ -66,6 +67,7 @@ struct orbit_agent_client_record {
   int64_t process_id = 0;
   ///< 进程句柄，由 libuv 生命周期管理，spawn 后有效 对于他的操作都需要在worker线程上
   uv_process_t* process_handle_main_thread = nullptr;
+  bool remote_start = false;
 
   time_t start_timepoint = 0;          ///< 启动时间点 (unix sec)
   uint64_t startup_timeout_sec = 0;    ///< STARTING 状态最大等待时间 (秒)

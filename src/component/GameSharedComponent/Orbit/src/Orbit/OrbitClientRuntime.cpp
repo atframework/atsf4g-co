@@ -5,6 +5,7 @@
 
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
+#include <uv.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -169,6 +170,43 @@ int apply_config_env_overrides(const OrbitClientOptions &options) {
 uint64_t make_initial_sequence_allocator() {
   return static_cast<uint64_t>((::util::time::time_utility::get_sys_now() - 1577836800) << 23) +
          static_cast<uint64_t>(::util::time::time_utility::get_now_usec() << 3);
+}
+
+std::string get_global_ip() {
+  uv_interface_address_t *interface_addrs = nullptr;
+  int interface_sz = 0;
+
+  if (uv_interface_addresses(&interface_addrs, &interface_sz) != 0) {
+    return "";
+  }
+
+  std::string result_ip = "";
+
+  for (int i = 0; i < interface_sz; ++i) {
+    uv_interface_address_t *inter_addr = interface_addrs + i;
+
+    if (inter_addr->is_internal) {
+      continue;
+    }
+
+    if (inter_addr->address.address4.sin_family != AF_INET) {
+      continue;
+    }
+
+    char ip_str[16] = {0};
+    if (uv_ip4_name(&inter_addr->address.address4, ip_str, sizeof(ip_str)) == 0) {
+      if (std::strcmp(ip_str, "0.0.0.0") == 0) {
+        continue;
+      }
+
+      result_ip = ip_str;
+      break;
+    }
+  }
+
+  uv_free_interface_addresses(interface_addrs, interface_sz);
+
+  return result_ip;
 }
 
 }  // namespace
@@ -637,7 +675,8 @@ ORBIT_CLIENT_SDK_API const std::string &OrbitClientRuntime::find_custom_launch_a
 int32_t OrbitClientRuntime::notify_process_ready_inner(int32_t port, const std::string &custom_data) {
   ::atframework::orbit::DTAClientStartReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
-  request.set_port(port);
+  request.set_client_ip(get_global_ip());
+  request.set_client_port(port);
   request.set_custom_data(custom_data);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
