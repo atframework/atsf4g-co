@@ -17,7 +17,8 @@ message orbit_agent_cfg {
   uint32 server_identity_timeout_sec = 6;
   uint32 server_identity_check_interval_sec = 7;
   int32 max_batch_startup_count = 8;
-  string replace_ip = 9;
+  string client_ip = 9;
+  string remote_agent_addr = 10;
 
   bool enable_seed_mode = 21;
   uint32 seed_startup_timeout_sec = 22;

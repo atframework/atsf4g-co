@@ -259,20 +259,6 @@ static uint64_t make_initial_sequence_allocator() {
          static_cast<uint64_t>(logic_config::me()->get_local_server_id());
 }
 
-static bool replace_public_ip(std::string& input, const std::string& replace_ip) {
-  size_t start_pos = input.find("//");
-  if (start_pos == std::string::npos) {
-    return false;
-  }
-  start_pos += 2;
-  size_t end_pos = input.find(":", start_pos);
-  if (end_pos == std::string::npos) {
-    return false;
-  }
-  size_t old_ip_len = end_pos - start_pos;
-  input.replace(start_pos, old_ip_len, replace_ip);
-  return true;
-}
 }  // namespace
 
 uint64_t orbit_agent_client_record::get_controller_server_id() {
@@ -401,27 +387,15 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
       break;
     }
   }
-  for (int i = 0; i < bus_config.listen_size(); ++i) {
-    if (!bus_config.listen(i).empty()) {
-      if (bus_config.listen(i).starts_with("atcp")) {
-        remote_agent_endpoint_ = bus_config.listen(i);
-      }
-    }
-  }
+
+  client_ip_ = config.client_ip();
+  remote_agent_endpoint_ = config.remote_agent_addr();
+
   if (agent_endpoint_.empty() || remote_agent_endpoint_.empty()) {
     FWLOGERROR("orbit agent failed to resolve listen address from atapp bus.listen");
     return -7;
   }
-  replace_ip_ = config.replace_ip();
-  if (replace_ip_.empty()) {
-    replace_ip_ = "127.0.0.1";
-  }
 
-  if (!replace_public_ip(remote_agent_endpoint_, replace_ip_)) {
-    FWLOGERROR("orbit agent failed to replace public IP in remote_agent_endpoint {} replace_ip {}",
-               remote_agent_endpoint_, replace_ip_);
-    return -13;
-  }
   FWLOGINFO("orbit agent launch client endpoint: {}, remote endpoint: {}", agent_endpoint_, remote_agent_endpoint_);
 
   if (seed_mode_enabled_) {
@@ -822,7 +796,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     client_record->client_addr = atfw::util::string::format("{}:{}", request.client_ip(), request.client_port());
   } else {
     // 本地起的Client 用本地的replace_id拼接
-    client_record->client_addr = atfw::util::string::format("{}:{}", replace_ip_, request.client_port());
+    client_record->client_addr = atfw::util::string::format("{}:{}", client_ip_, request.client_port());
   }
   FWLOGINFO("orbit agent client_start succeeded for {}: client_addr={}", client_id, client_record->client_addr);
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();

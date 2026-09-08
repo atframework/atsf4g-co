@@ -12,7 +12,7 @@ listen:
   {{- else }}
   - "unix:///tmp/atapp/{{ .Values.atapp.deployment.project_name }}/{{ include "libapp.name" . }}_{{ $bus_addr }}.sock"
   {{- if eq .Values.type_name "orbit-agent" }}
-  - "atcp://{{ $atapp_external_ip }}:{{ $service_port }}"
+  - "atcp://:::{{ $service_port }}"
   {{- end }}
   {{- end }}
   {{- if and (dig "policy" "enable_local_proxy" false .Values.atapp.atbus ) ( ne .Values.type_name "atproxy" ) }}
