@@ -2,8 +2,8 @@
 
 #pragma once
 
-#include "OrbitClientSdkTypes.h"
 #include <tbb/concurrent_queue.h>
+#include "OrbitClientSdkTypes.h"
 
 #define UI UI_ST
 #include <atframe/atapp.h>
@@ -15,9 +15,10 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
-#include <thread>
 
 namespace google {
 namespace protobuf {
@@ -73,16 +74,15 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API int32_t blocking_seed_process();
 
   // 进程已准备成功 可以通知Agent了
-  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr,
-                                                    const std::string& custom_data = std::string{});
+  ORBIT_CLIENT_SDK_API int32_t notify_process_ready(int32_t port, const std::string& custom_data = std::string{});
   // 这个接口会返回额外启动参数
   ORBIT_CLIENT_SDK_API const std::vector<std::string>& get_custom_launch_arguments() const;
   // 通过Key查找额外启动参数
   ORBIT_CLIENT_SDK_API const std::string& find_custom_launch_argument(const std::string& key) const;
   // 发送消息给Server
-  ORBIT_CLIENT_SDK_API int32_t
-  send_to_server(const std::string& payload, OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback = nullptr,
-                 const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
+  ORBIT_CLIENT_SDK_API int32_t send_to_server(
+      const std::string& payload, OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback = nullptr,
+      const OrbitClientRequestOptions& request_options = OrbitClientRequestOptions{});
   // 请求停止服务
   ORBIT_CLIENT_SDK_API int32_t request_end(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
                                            const std::string& custom_data = std::string{});
@@ -97,8 +97,9 @@ class OrbitClientRuntime {
   void io_tick();
 
   int32_t notify_seed_process_ready_inner();
-  int32_t notify_process_ready_inner(const std::string& client_addr, const std::string& custom_data);
-  int32_t request_end_inner(::atframework::orbit::EnClientExitReason reason, int32_t exit_code, const std::string& custom_data);
+  int32_t notify_process_ready_inner(int32_t port, const std::string& custom_data);
+  int32_t request_end_inner(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
+                            const std::string& custom_data);
 
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options);
   void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output) const;
@@ -180,8 +181,10 @@ class OrbitClientRuntime {
                                const OrbitClientRequestOptions& request_options);
   int32_t rpc_receive_forward_to_client(const ::atframework::SSMsgHead& req_head,
                                         ::atframework::orbit::ATDForwardToClientReq& request);
-  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head, ::atframework::orbit::ATDForkSeedClientReq& request);
-  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head, ::atframework::orbit::ATDStopClientReq& request);
+  int32_t rpc_receive_fork_seed_client(const ::atframework::SSMsgHead& req_head,
+                                       ::atframework::orbit::ATDForkSeedClientReq& request);
+  int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head,
+                                  ::atframework::orbit::ATDStopClientReq& request);
 
  private:
   std::unique_ptr<::atframework::atapp::app> app_;
@@ -211,9 +214,8 @@ class OrbitClientRuntime {
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
  public:
-  using orbit_client_send_hook_t =
-      std::function<int32_t(const std::string &rpc_full_name, const std::string &packed_message, uint64_t task_id,
-                             bool reliable)>;
+  using orbit_client_send_hook_t = std::function<int32_t(
+      const std::string& rpc_full_name, const std::string& packed_message, uint64_t task_id, bool reliable)>;
   ORBIT_CLIENT_SDK_API void set_unit_test_send_hook(orbit_client_send_hook_t hook);
 #endif
 

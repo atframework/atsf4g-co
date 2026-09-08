@@ -634,10 +634,10 @@ ORBIT_CLIENT_SDK_API const std::string &OrbitClientRuntime::find_custom_launch_a
   return empty_string;
 }
 
-int32_t OrbitClientRuntime::notify_process_ready_inner(const std::string &client_addr, const std::string &custom_data) {
+int32_t OrbitClientRuntime::notify_process_ready_inner(int32_t port, const std::string &custom_data) {
   ::atframework::orbit::DTAClientStartReq request;
   fill_client_id(*request.mutable_client_id(), options_.client_id);
-  request.set_client_addr(client_addr);
+  request.set_port(port);
   request.set_custom_data(custom_data);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
@@ -657,23 +657,22 @@ int32_t OrbitClientRuntime::notify_process_ready_inner(const std::string &client
   return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(const std::string &client_addr,
-                                                                      const std::string &custom_data) {
+ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::notify_process_ready(int32_t port, const std::string &custom_data) {
   if (state_.load() != OrbitClientRuntimeState::kConnected) {
     ORBIT_LOG(OrbitClientLogLevel::kWarning, "notify_process_ready rejected: runtime is not connected");
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  if (client_addr.empty()) {
-    ORBIT_LOG(OrbitClientLogLevel::kError, "notify_process_ready rejected: client_addr is empty");
+  if (port <= 0) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "notify_process_ready rejected: port is invalid");
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
   if (enabled_io_thread()) {
-    post_to_io_thread([this, client_addr, custom_data] { notify_process_ready_inner(client_addr, custom_data); });
+    post_to_io_thread([this, port, custom_data] { notify_process_ready_inner(port, custom_data); });
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
-  return notify_process_ready_inner(client_addr, custom_data);
+  return notify_process_ready_inner(port, custom_data);
 }
 
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::reset() {

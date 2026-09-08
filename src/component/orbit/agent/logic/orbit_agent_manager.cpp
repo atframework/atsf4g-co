@@ -397,7 +397,27 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     FWLOGERROR("orbit agent failed to resolve listen address from atapp bus.listen");
     return -7;
   }
-  FWLOGINFO("orbit agent launch client endpoint: {}", agent_endpoint_);
+  replace_ip_ = config.replace_ip();
+  if (replace_ip_.empty()) {
+    replace_ip_ = "127.0.0.1";
+  }
+  // 将IP替换 atcp://127.0.0.1:xxxx
+  {
+    size_t start_pos = remote_agent_endpoint_.find("//");
+    if (start_pos == std::string::npos) {
+      FWLOGERROR("orbit agent remote_agent_endpoint_ format error: {}", remote_agent_endpoint_);
+      return -8;
+    }
+    start_pos += 2;
+    size_t end_pos = remote_agent_endpoint_.find(":", start_pos);
+    if (end_pos == std::string::npos) {
+      FWLOGERROR("orbit agent remote_agent_endpoint_ format error: {}", remote_agent_endpoint_);
+      return -8;
+    }
+    size_t old_ip_len = end_pos - start_pos;
+    remote_agent_endpoint_.replace(start_pos, old_ip_len, replace_ip_);
+  }
+  FWLOGINFO("orbit agent launch client endpoint: {}, remote endpoint: {}", agent_endpoint_, remote_agent_endpoint_);
 
   if (seed_mode_enabled_) {
     agent_online_ = false;
@@ -791,7 +811,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  client_record->client_addr = request.client_addr();
+  client_record->client_addr = atfw::util::string::format("{}:{}", replace_ip_, request.port());
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
   client_record->client_server_id = client_server_id;
 

@@ -96,7 +96,7 @@ message ATDSendToServerRsp {
 
 message DTAClientStartReq {
   DClientId client_id = 1;
-  string client_addr = 2;
+  int32 port = 2;
   bytes custom_data = 3;
 }
 message ATDClientStartRsp {

@@ -6,6 +6,10 @@
 #include "OrbitRPCDispatcher.h"
 #include "OrbitRPCHandle.h"
 
+#include <vector>
+#include <string>
+#include <utility>
+
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk_easy_api {
@@ -21,8 +25,7 @@ ORBIT_CLIENT_SDK_API const std::string& find_custom_launch_argument(const std::s
 
 ORBIT_CLIENT_SDK_API int32_t notify_seed_process_ready();
 ORBIT_CLIENT_SDK_API int32_t blocking_seed_process();
-ORBIT_CLIENT_SDK_API int32_t notify_process_ready(const std::string& client_addr,
-                                                  const std::string& custom_data = std::string{});
+ORBIT_CLIENT_SDK_API int32_t notify_process_ready(int32_t port, const std::string& custom_data = std::string{});
 ORBIT_CLIENT_SDK_API int32_t request_end(atfw::orbit::EnClientExitReason reason, int32_t exit_code,
                                          const std::string& custom_data = std::string{});
 

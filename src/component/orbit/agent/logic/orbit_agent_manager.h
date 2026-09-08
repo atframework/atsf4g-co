@@ -37,6 +37,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <memory>
 
 #include "memory/rc_ptr.h"
 
@@ -228,6 +229,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   std::string agent_endpoint_;
   std::string remote_agent_endpoint_;
   std::string tag_;
+  std::string replace_ip_;
   double cpu_capacity_ = 0.0;
   double memory_capacity_mb_ = 0.0;
   time_t server_identity_timeout_sec_ = 0;

@@ -182,7 +182,7 @@ int main(int argc, char* argv[]) {
     const auto now = std::chrono::steady_clock::now();
     if (!ready_sent && now - begin_timepoint >= kReadyDelay) {
       int32_t ready_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::notify_process_ready(
-          "localhost:12345", "orbit-auto-client ready");
+          12345, "orbit-auto-client ready");
       if (ready_result != 0) {
         ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::request_end(
             atfw::orbit::EN_CLIENT_EXIT_STARTUP_FAILED, ready_result, "orbit-auto-client ready failed");
