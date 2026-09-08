@@ -10,7 +10,7 @@ orbit_agent:
   memory_capacity_mb: {{ .Values.orbit_agent.memory_capacity_mb }}
   server_identity_timeout_sec: {{ .Values.orbit_agent.server_identity_timeout_sec }}
   server_identity_check_interval_sec: {{ .Values.orbit_agent.server_identity_check_interval_sec }}
-  max_batch_startup_count: {{ .Values.orbit_agent.ax_batch_startup_count }}
+  max_batch_startup_count: {{ .Values.orbit_agent.max_batch_startup_count }}
   client_ip: {{ .Values.orbit_agent.host_name }}
   remote_agent_addr: dns://{{ .Values.orbit_agent.host_name }}:{{ $service_port }}
   enable_seed_mode: {{ .Values.orbit_agent.enable_seed_mode }}
