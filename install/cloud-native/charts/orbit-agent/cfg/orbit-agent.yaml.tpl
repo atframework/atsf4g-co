@@ -1,6 +1,6 @@
 {{ include "atapp.yaml" . }}
 {{ include "atapp.logic.yaml" . }}                         # relogin to the same gamesvr in 4 hours relogin
-{{- $service_port := include "libapp.atbus.calculateServicePort" . -}}
+{{- $service_port := include "libapp.atbus.calculateServicePort" .}}
 
 orbit_agent:
   region: {{ .Values.orbit_agent.region }}
