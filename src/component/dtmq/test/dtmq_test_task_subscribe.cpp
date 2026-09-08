@@ -416,3 +416,129 @@ CASE_TEST(component_dtmq_task_subscribe, non_auto_create_readonly_replica_propag
   expect_channel_not_created(channel_id);
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+namespace {
+static void check_heartbeat_during_transfer(const std::string& prefix, bool fail_forward, bool exhaust_ttl) {
+  atframework::testing::runtime test;
+  if (!start_dtmq_proxysvr_runtime(test, 2, true, 3)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  atfw::dtmq::DChannelIdKey key;
+  key.set_channel_id(find_local_writable_channel_id(prefix, kLocalNodeId));
+  key.set_channel_type(kTestChannelType);
+  size_t forwarded = 0;
+  bool transfer_finished = false;
+  int64_t heartbeat_sequence = 0;
+  uint64_t heartbeat_hash = 0;
+  rpc::unit_test::ss_mock_rule_options options;
+  options.match_node_id = kPeerNode1;
+  atframework::testing::ss_rule_options forward_options;
+  forward_options.match_node_id = kPeerNode1;
+  forward_options.preempt = true;
+  auto subscribe_rule = test.ss().mock(
+      rpc::dtmq::packer::get_full_name_of_subscribe(), atfw::dtmq::SSChannelSubscribeReq::descriptor()->full_name(),
+      atfw::dtmq::SSChannelSubscribeRsp::descriptor()->full_name(),
+      [&](const atframework::testing::ss_request_view& view,
+          google::protobuf::Message& response_message) -> rpc::result_code_type {
+        const auto& request = static_cast<const atfw::dtmq::SSChannelSubscribeReq&>(view.body);
+        auto& response = static_cast<atfw::dtmq::SSChannelSubscribeRsp&>(response_message);
+        ++forwarded;
+        CASE_EXPECT_FALSE(transfer_finished);
+        CASE_EXPECT_EQ(1u, request.forward_ttl());
+        CASE_EXPECT_EQ(kSubscribeSourceNodeId, request.subscriber().subscriber_server_id());
+        CASE_EXPECT_EQ(1, request.heartbeat_size());
+        if (request.heartbeat_size() == 1) {
+          CASE_EXPECT_EQ(key.channel_id(), request.heartbeat(0).channel_key().channel_id());
+          CASE_EXPECT_EQ(heartbeat_sequence, request.heartbeat(0).last_sequence());
+          CASE_EXPECT_EQ(heartbeat_hash, request.heartbeat(0).last_hash_code());
+          CASE_EXPECT_FALSE(request.heartbeat(0).auto_create_channel());
+          auto* node = response.add_subscribe_node();
+          node->mutable_channel_key()->CopyFrom(key);
+          node->set_server_id(kPeerNode1);
+        }
+        RPC_RETURN_CODE(fail_forward ? PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM : 0);
+      },
+      forward_options);
+  auto transfer_rule = rpc::dtmq::mock::transfer_channel(
+      [&](rpc::context& ctx, const atfw::dtmq::SSChannelTransferChannelReq& request,
+          atfw::dtmq::SSChannelTransferChannelRsp&) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(1, request.snapshot_size());
+        auto heartbeat = make_subscribe_request(key, false, 0);
+        heartbeat.mutable_heartbeat(0)->set_last_sequence(heartbeat_sequence);
+        heartbeat.mutable_heartbeat(0)->set_last_hash_code(heartbeat_hash);
+        if (exhaust_ttl) {
+          heartbeat.set_forward_ttl(logic_config::me()->get_logic_cfg().router().transfer_max_ttl());
+        }
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<task_action_subscribe>(
+                              ctx, heartbeat, make_subscribe_action_options())));
+        CASE_EXPECT_EQ(exhaust_ttl ? 0u : 1u, forwarded);
+        auto channel = mq_channel_manager::me()->get_channel(key.channel_id());
+        CASE_EXPECT_TRUE(!!channel);
+        if (channel) {
+          auto subscriber = channel->get_wal_publisher().get_subscribe_manager().find("UT:task-subscribe");
+          CASE_EXPECT_TRUE(!!subscriber);
+          if (subscriber) {
+            CASE_EXPECT_EQ(heartbeat_sequence, subscriber->get_private_data().last_heartbeat_sequence());
+            CASE_EXPECT_EQ(heartbeat_hash, subscriber->get_private_data().last_heartbeat_hash_code());
+          }
+        }
+        transfer_finished = true;
+        RPC_RETURN_CODE(0);
+      },
+      options);
+  CASE_EXPECT_TRUE(!!subscribe_rule);
+  CASE_EXPECT_TRUE(!!transfer_rule);
+  if (!subscribe_rule || !transfer_rule) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto task = test.run_task(prefix, std::chrono::seconds{4}, [&](rpc::context& ctx) -> rpc::result_code_type {
+    mq_channel_manager::mq_channel_ptr_type channel;
+    uint64_t forward_server_id = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(
+                          mq_channel_manager::me()->make_writable_channel(ctx, channel, forward_server_id, key, true)));
+    if (!channel) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+    }
+    heartbeat_sequence = channel->get_last_message_sequence();
+    heartbeat_hash = channel->get_last_hash_code();
+    CASE_EXPECT_EQ(0, channel->async_start_transfer(ctx, kPeerNode1));
+    int32_t transfer_result = 0;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->await_io_task(ctx, &transfer_result)));
+    CASE_EXPECT_EQ(0, transfer_result);
+    CASE_EXPECT_EQ(0u, channel->get_running_transfer_target_server_id());
+    RPC_RETURN_CODE(0);
+  });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_TRUE(transfer_finished);
+  CASE_EXPECT_EQ(exhaust_ttl ? 0u : 1u, forwarded);
+  if (!fail_forward && !exhaust_ttl) {
+    atfw::dtmq::SSChannelSubscribeRsp response;
+    atfw::SSMsgHead head;
+    CASE_EXPECT_TRUE(find_subscribe_response(test, response, head));
+    CASE_EXPECT_EQ(1, response.subscribe_node_size());
+    if (response.subscribe_node_size() == 1) {
+      CASE_EXPECT_EQ(kPeerNode1, response.subscribe_node(0).server_id());
+    }
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+}  // namespace
+
+CASE_TEST(component_dtmq_task_subscribe, heartbeat_forwarded_before_transfer_finishes) {
+  check_heartbeat_during_transfer("transfer-heartbeat", false, false);
+}
+
+CASE_TEST(component_dtmq_task_subscribe, failed_transfer_heartbeat_forward_is_not_retried) {
+  check_heartbeat_during_transfer("transfer-heartbeat-failure", true, false);
+}
+
+CASE_TEST(component_dtmq_task_subscribe, transfer_heartbeat_respects_forward_ttl) {
+  check_heartbeat_during_transfer("transfer-heartbeat-ttl", false, true);
+}

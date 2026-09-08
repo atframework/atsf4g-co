@@ -67,6 +67,7 @@
 #include "rpc/dtmq/dtmq_client_subscriber.h"
 #include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 #include "rpc/rpc_context.h"
+#include "utility/protobuf_mini_dumper.h"
 
 namespace {
 using subscriber_ptr = rpc::dtmq::client_subscriber::ptr_t;
@@ -2433,5 +2434,72 @@ CASE_TEST(component_dtmq_subscriber, non_auto_create_destroyed_on_server_not_fou
   CASE_EXPECT_EQ(0u, auto_create_destroyed_calls);
   CASE_EXPECT_FALSE(auto_create_subscriber->is_ready());
 
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_dtmq_subscriber, compact_messages_created_in_current_tick) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running() || !setup_dtmq_proxy_node(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto subscribe_rule = mock_subscribe_ack(test);
+  auto key = make_channel_key("subscriber-compact-current-tick");
+  auto subscriber_options = make_subscriber_options("UT:compact-current-tick", true, false);
+  auto subscriber = rpc::dtmq::client_subscriber::create(key, subscriber_options);
+  CASE_EXPECT_TRUE(!!subscriber);
+  if (!subscriber) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto task = test.run_task(
+      "compact_current_tick", std::chrono::seconds{4}, [subscriber, key](rpc::context& ctx) -> rpc::result_code_type {
+        const auto& subscriber_key = subscriber->get_shared_subscriber_info().subscriber_key();
+        atfw::dtmq::SSChannelEventSync snapshot;
+        snapshot.mutable_channel_snapshot()->CopyFrom(make_ready_snapshot(key, 10));
+        snapshot.add_subscriber_keys(subscriber_key);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::dtmq::client_subscriber::global_receive_channel_event(
+                              ctx, kDtmqProxyNodeId, snapshot)));
+        atfw::dtmq::SSChannelEventSync events;
+        events.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(key);
+        events.add_subscriber_keys(subscriber_key);
+        uint64_t previous_hash = 0;
+        for (int64_t sequence = 11; sequence <= 13; ++sequence) {
+          auto* message = events.add_channel_message();
+          message->set_sequence(sequence);
+          message->mutable_detail()->set_text("same-tick");
+          *message->mutable_create_timepoint() = protobuf_from_system_clock(atfw::util::time::time_utility::now());
+          previous_hash = rpc::dtmq::calculate_hash_code(previous_hash, *message);
+          message->set_hash_code(previous_hash);
+        }
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::dtmq::client_subscriber::global_receive_channel_event(
+                              ctx, kDtmqProxyNodeId, events)));
+        CASE_EXPECT_TRUE(subscriber->find_cached_message(ctx, 11, [](const atfw::dtmq::DChannelMessage&) {}));
+        atfw::dtmq::SSChannelEventSync compact;
+        compact.mutable_channel_metadata()->mutable_channel_key()->CopyFrom(key);
+        compact.mutable_channel_runtime()->set_last_removed_sequence(12);
+        compact.add_subscriber_keys(subscriber_key);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::dtmq::client_subscriber::global_receive_channel_event(
+                              ctx, kDtmqProxyNodeId, compact)));
+        CASE_EXPECT_FALSE(subscriber->find_cached_message(ctx, 11, [](const atfw::dtmq::DChannelMessage&) {}));
+        CASE_EXPECT_TRUE(subscriber->find_cached_message(ctx, 12, [](const atfw::dtmq::DChannelMessage&) {}));
+        CASE_EXPECT_TRUE(subscriber->find_cached_message(ctx, 13, [](const atfw::dtmq::DChannelMessage&) {}));
+        CASE_EXPECT_EQ(11, subscriber->get_last_removed_sequence());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
   CASE_EXPECT_EQ(0, test.stop());
 }

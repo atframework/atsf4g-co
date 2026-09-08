@@ -190,6 +190,8 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
 
   uint64_t get_transfer_target_server_id() const noexcept;
 
+  uint64_t get_running_transfer_target_server_id() const noexcept;
+
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_transfer(rpc::context& ctx, uint64_t& transfer_to_server_id);
 
   void force_refresh_distribution();
@@ -341,6 +343,7 @@ class mq_channel : public atfw::util::memory::enable_shared_rc_from_this<mq_chan
   mutable task_type_trait::task_type subscribe_task_;
 
   std::chrono::system_clock::time_point next_send_oss_time_;
+  uint64_t running_transfer_target_server_id_;
   int64_t resolved_transfer_etcd_revision_;
   int64_t server_distribution_etcd_revision_;
   struct replicate_distribution_info {

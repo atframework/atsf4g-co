@@ -351,7 +351,7 @@ void mq_channel_manager::remove_channel(const std::string& channel_id, const mq_
 rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ctx, mq_channel_ptr_type& channel_ptr,
                                                                 uint64_t& forward_server_id,
                                                                 const atfw::dtmq::DChannelIdKey& channel_key,
-                                                                bool auto_create) {
+                                                                bool auto_create, bool recreate_channel) {
   if (!(channel_ptr && channel_ptr->get_channel_id() == channel_key.channel_id())) {
     channel_ptr = get_channel(channel_key.channel_id());
   }
@@ -370,7 +370,7 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
       FCTXLOGDEBUG(ctx, "channel {} select existed writable channel", channel_key.channel_id());
       forward_server_id = 0;
 
-      if (auto_create) {
+      if (auto_create && recreate_channel) {
         channel_ptr->ensure_recreate_after_destroyed(ctx);
       }
       RPC_RETURN_CODE(0);
@@ -439,7 +439,7 @@ rpc::result_code_type mq_channel_manager::make_writable_channel(rpc::context& ct
   }
 
   FCTXLOGDEBUG(ctx, "channel {} is created and writable inited successfully", channel_key.channel_id());
-  if (auto_create) {
+  if (auto_create && recreate_channel) {
     channel_ptr->ensure_recreate_after_destroyed(ctx);
   }
   RPC_RETURN_CODE(0);

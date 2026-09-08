@@ -41,9 +41,11 @@
 #include <google/protobuf/any.h>
 #include <google/protobuf/empty.pb.h>
 
+#include <protocol/common/com.struct.team.shared.common.pb.h>
 #include <protocol/common/svr.struct.dtmq.common.pb.h>
-#include <protocol/config/pb_header_v3.pb.h>
+#include <protocol/config/com.struct.dtmq.config.pb.h>
 #include <protocol/config/com.struct.team.config.pb.h>
+#include <protocol/config/pb_header_v3.pb.h>
 #include <protocol/config/team_room.config.pb.h>
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/com.struct.dtmq.pb.h>
@@ -2118,14 +2120,6 @@ class room_test_env {
       channel->reset_private_data_sequence();
     }
 
-    // wal_object::remove_before 以 back().timepoint < now(严格小于)为移除门禁。本 handler 刚
-    // 追加的通知日志与压缩调用在冻结的虚拟时钟下可能落在同一微秒，物理裁剪会被跳过；生产环境
-    // 两次调用之间真实时间总是推进的(否则下一轮维护重试，见 pick_compact_sequence 的重选语义)，
-    // 这里推进 1ms 做等价模拟
-    if (req.compact_sequence() > 0) {
-      atfw::util::time::time_utility::set_global_now_offset(atfw::util::time::time_utility::get_global_now_offset() +
-                                                            std::chrono::milliseconds{1});
-    }
     channel->compact_stateful_sequence(req.stateful_sequence());
     channel->compact_sequence(req.compact_sequence());
 
@@ -2303,7 +2297,6 @@ struct standard_team_members {
   atfw::dtmq::DChannelIdKey admin_channel;
   atfw::dtmq::DChannelIdKey normal_channel;
 };
-
 
 // 标准测试队伍的默认配置: 上限留出余量(excel 默认上限为 3 成员/30 邀请/30 申请，标准队已有 3 名成员，
 // 审批第 4 名成员等常规用例需要余量; 上限行为本身由专门用例以小上限验证)

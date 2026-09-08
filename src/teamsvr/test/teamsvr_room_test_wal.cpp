@@ -1365,11 +1365,15 @@ CASE_TEST(teamsvr_room_wal, transfer_pending_logs_and_old_publisher_fence) {
   CASE_EXPECT_EQ(source_sequence_after_swap, channel->get_last_message_sequence());
   CASE_EXPECT_EQ(source_log_count_after_swap, channel->get_shared_wal_object()->get_all_logs().size());
 
-  // ---- 步骤 3: 房间以转移前 checkpoint 增量重订阅新权威: 补齐待广播日志，不回退快照 ----
-  // 注: 转移后新 publisher 的广播边界在待广播日志上，对 checkpoint 更早的订阅者，写回事件
-  // 单独到达会因中间缺失日志导致客户端哈希链校验拒绝(由 catch-up 补齐，DTMQ 客户端自愈
-  // 契约)；生产中该补齐由订阅心跳到新可写节点完成，这里以 room_ack checkpoint 显式驱动。
-  // 补齐批次从 checkpoint 起连续覆盖 [pending, post_write]，两条日志一并应用
+  // 心跳之前已补齐转移前日志，并应用新写入；事件收敛不应依赖重新订阅。
+  CASE_EXPECT_TRUE(nullptr != room->find_member(outsider_key, false));
+  auto immediate_admin = room->find_member(admin_key, false);
+  CASE_EXPECT_TRUE(!!immediate_admin);
+  if (immediate_admin) {
+    CASE_EXPECT_EQ("wal-tx-post", immediate_admin->member_data.client_version());
+  }
+
+  // ---- 步骤 3: 用旧 checkpoint 再次订阅，验证增量重放仍连续且不回退房间状态 ----
   env.wal_clear_event_batches();
   CASE_EXPECT_EQ(0, env.run("resubscribe_new_authority", [&](rpc::context& ctx) -> rpc::result_code_type {
                    RPC_RETURN_CODE(
@@ -1543,16 +1547,10 @@ CASE_TEST(teamsvr_room_wal, destroy_recreate_epoch_and_old_checkpoint) {
   {
     size_t old_log_count = channel->get_shared_wal_object()->get_all_logs().size();
     CASE_EXPECT_GT(old_log_count, 0u);
-    CASE_EXPECT_EQ(0, env.run("recreate_epoch", [&channel, old_log_count](rpc::context& ctx) -> rpc::result_code_type {
-                     channel->ensure_recreate_after_destroyed(ctx);
-                     // 生产中 set_created 与 remove_before 之间真实时间总是推进(偶发同微秒跳过由
-                     // 后续维护重试)；固定虚拟时钟下推进 1ms 做等价模拟(与 WAL update handler 一致)
-                     atfw::util::time::time_utility::set_global_now_offset(
-                         atfw::util::time::time_utility::get_global_now_offset() + std::chrono::milliseconds{1});
-                     channel->get_shared_wal_object()->remove_before(atfw::util::time::time_utility::now(),
-                                                                     old_log_count);
-                     RPC_RETURN_CODE(0);
-                   }));
+    CASE_EXPECT_EQ(0, env.run("recreate_epoch", [&channel](rpc::context& ctx) -> rpc::result_code_type {
+      channel->ensure_recreate_after_destroyed(ctx);
+      RPC_RETURN_CODE(0);
+    }));
     CASE_EXPECT_TRUE(channel->is_available());
     CASE_EXPECT_FALSE(channel->is_destroyed());
     const auto& logs = channel->get_shared_wal_object()->get_all_logs();

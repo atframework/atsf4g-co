@@ -38,8 +38,6 @@
 
 #include <rpc/dtmq/dtmq_algorithm.h>
 
-#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
-
 #include <chrono>
 #include <cstdint>
 #include <string>
@@ -50,6 +48,7 @@
 #include "atframe/atapp_conf.h"
 #include "data/mq_channel_wal_handle.h"
 #include "logic/mq_channel_manager.h"
+#include "rpc/dtmq/dtmqproxysvrservice.atfw.gen.h"
 #include "time/time_utility.h"
 
 #ifdef max
@@ -103,6 +102,7 @@ mq_channel::mq_channel(mq_channel_manager& /*manager*/, const atfw::dtmq::DChann
       saved_version_(0),
       saved_sequence_(0),
       io_task_continue_failed_(0),
+      running_transfer_target_server_id_(0),
       resolved_transfer_etcd_revision_(0),
       server_distribution_etcd_revision_(0) {
   protobuf_copy_message(channel_key_, channel_key);
@@ -213,7 +213,8 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
         }
 
         // 合并订阅信息，内存数据优先
-        subscribe(ctx, subscriber_info, subscriber_info.last_heartbeat_sequence(), 0, true);
+        subscribe(ctx, subscriber_info, subscriber_info.last_heartbeat_sequence(),
+                  subscriber_info.last_heartbeat_hash_code(), true);
       }
     }
 
@@ -660,11 +661,7 @@ void mq_channel::merge_subscriber(
     const ::google::protobuf::RepeatedPtrField<::atframework::dtmq::channel_subscriber>& subscribers) {
   // 合并订阅者信息, 只读副本时，每个节点分别维护自己的订阅者。不需要继承可写节点的订阅者。
   for (const auto& subscriber : subscribers) {
-    auto sub_inst = wal_publisher_->get_subscribe_manager().find(subscriber.subscriber_key());
-    if (sub_inst && sub_inst->get_private_data().last_heartbeat_sequence() >= subscriber.last_heartbeat_sequence()) {
-      continue;
-    }
-    subscribe(ctx, subscriber, subscriber.last_heartbeat_sequence(), 0, true);
+    subscribe(ctx, subscriber, subscriber.last_heartbeat_sequence(), subscriber.last_heartbeat_hash_code(), true);
   }
 }
 
@@ -675,9 +672,35 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     return false;
   }
   is_loading_snapshot_ = true;
-  auto loading_guard = gsl::finally([this]() { this->is_loading_snapshot_ = false; });
+  bool replay_subscribers = false;
+  auto loading_guard = gsl::finally([this, &ctx, &replay_subscribers] {
+    this->is_loading_snapshot_ = false;
+    if (!replay_subscribers) {
+      return;
+    }
 
-  auto compact_fn = [&]() {
+    // 数据和订阅者均恢复后，按各自的 checkpoint 补发；压缩或哈希不匹配时由 WAL 下发快照。
+    int32_t result = 0;
+    mq_channel_wal_object_context params{ctx, result};
+    auto now = atfw::util::time::time_utility::now();
+    auto subscribers = wal_publisher_->subscriber_all_range();
+    for (auto iter = subscribers.first; iter != subscribers.second; ++iter) {
+      if (!iter->second || iter->second->is_offline(now)) {
+        continue;
+      }
+      const auto& subscriber = iter->second->get_private_data();
+      if (subscriber.last_heartbeat_hash_code() == 0) {
+        wal_publisher_->receive_subscribe_request(iter->first, subscriber.last_heartbeat_sequence(), now, params);
+      } else {
+        wal_publisher_->receive_subscribe_request(iter->first, subscriber.last_heartbeat_sequence(),
+                                                  subscriber.last_heartbeat_hash_code(), now, params);
+      }
+    }
+    // 已逐个补发到当前日志末尾，下一次广播只发送新日志。
+    wal_publisher_->set_broadcast_key_bound(get_last_message_sequence());
+  });
+
+  auto compact_fn = [&] {
     // 合并日志压缩
     const auto& snapshot_runtime = snapshot.channel_data().channel_runtime();
     if (compact_stateful_sequence_ < snapshot_runtime.compact_stateful_sequence()) {
@@ -696,7 +719,8 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
       FCTXLOGINFO(ctx, "mq channel {} ignore load snapshot, channel is writable but received a readonly snapshot",
                   get_channel_id());
 
-      // 订阅者总是要合并的
+      // 现有数据无需替换，可以直接给合并的订阅者补发。
+      is_loading_snapshot_ = false;
       merge_subscriber(ctx, snapshot.subscriber());
       return true;
     }
@@ -707,7 +731,8 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
       FCTXLOGINFO(ctx, "mq channel {} ignore load snapshot, channel is writable but received a older writable snapshot",
                   get_channel_id());
 
-      // 订阅者总是要合并的
+      // 现有数据无需替换，可以直接给合并的订阅者补发。
+      is_loading_snapshot_ = false;
       merge_subscriber(ctx, snapshot.subscriber());
 
       // 合并日志压缩选项
@@ -725,7 +750,8 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
                   "mq channel {} ignore load snapshot, channel is readonly and received an older readonly snapshot",
                   get_channel_id());
 
-      // 订阅者总是要合并的
+      // 现有数据无需替换，可以直接给合并的订阅者补发。
+      is_loading_snapshot_ = false;
       merge_subscriber(ctx, snapshot.subscriber());
       return true;
     }
@@ -750,17 +776,6 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
   int32_t result = 0;
   mq_channel_wal_object_context params{ctx, result};
 
-  // 加载全量数据会导致广播边界被重置。如果有订阅者也需要重新恢复广播边界以便触发广播。
-  auto subscriber_range = wal_publisher_->get_subscribe_manager().all_range();
-  bool restore_broadcast_boundary = subscriber_range.first != subscriber_range.second;
-  mq_channel_wal_object_type::log_key_type restore_broadcast_key{};
-  if (restore_broadcast_boundary && wal_publisher_->get_broadcast_key_bound() != nullptr) {
-    restore_broadcast_key = *wal_publisher_->get_broadcast_key_bound();
-  } else if (wal_publisher_->get_log_manager().get_all_logs().empty()) {
-    restore_broadcast_key = 0;
-  } else {
-    restore_broadcast_key = (*wal_publisher_->get_log_manager().get_all_logs().begin())->sequence() - 1;
-  }
   // wal_client_ 和 wal_publisher_ 共享WAL层，其中一个加载即可。
   if (wal_client_) {
     wal_client_->receive_snapshot(snapshot.channel_data(), params);
@@ -798,11 +813,6 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
     get_shared_wal_object()->set_last_removed_key((*get_shared_wal_object()->get_all_logs().begin())->sequence());
   }
 
-  // 恢复广播边界,以便如果加载snapshot后有订阅者，能够触发增量广播
-  if (restore_broadcast_boundary) {
-    wal_publisher_->set_broadcast_key_bound(restore_broadcast_key);
-  }
-
   ++dirty_version_;
   if (snapshot.replicate_index() > 0) {
     upgrade_to_readonly(snapshot.replicate_index());
@@ -816,6 +826,7 @@ bool mq_channel::load_snapshot(rpc::context& ctx, atfw::dtmq::channel_snapshot&&
 
   // 订阅者要在数据加载后再合并，否则会触发广播，导致订阅者收到不完整数据
   merge_subscriber(ctx, snapshot.subscriber());
+  replay_subscribers = true;
 
   FCTXLOGINFO(ctx, "channel {}({}) load_snapshot finished.", get_channel_id(), reinterpret_cast<const void*>(this));
   return true;
@@ -1005,11 +1016,15 @@ bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChann
         readonly_replicate_index = 0;
         readonly_server_id = local_server_id;
       } else if (readonly_servers.size() == 1) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         readonly_replicate_index = readonly_servers[0].second;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         readonly_server_id = readonly_servers[0].first;
       } else {
         size_t idx = atfw::component::random_engine::random_between<size_t>(0, readonly_servers.size());
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         readonly_replicate_index = readonly_servers[idx].second;
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         readonly_server_id = readonly_servers[idx].first;
       }
       return false;
@@ -1045,11 +1060,15 @@ bool mq_channel::should_be_readonly_or_random_server_id(const atfw::dtmq::DChann
     readonly_replicate_index = 0;
     readonly_server_id = local_server_id;
   } else if (readonly_servers.size() == 1) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     readonly_replicate_index = readonly_servers[0].second;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     readonly_server_id = readonly_servers[0].first;
   } else {
     size_t idx = atfw::component::random_engine::random_between<size_t>(0, readonly_servers.size());
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     readonly_replicate_index = readonly_servers[idx].second;
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     readonly_server_id = readonly_servers[idx].first;
   }
   return false;
@@ -1109,6 +1128,10 @@ mq_channel::get_target_distribution_replicate_index(uint64_t server_id) const no
   }
 
   return &iter->second;
+}
+
+uint64_t mq_channel::get_running_transfer_target_server_id() const noexcept {
+  return running_transfer_target_server_id_;
 }
 
 uint64_t mq_channel::get_transfer_target_server_id() const noexcept {
@@ -1288,6 +1311,9 @@ int32_t mq_channel::async_start_transfer(rpc::context& ctx, uint64_t target_serv
   auto self_ptr = shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "mq_channel.start_transfer", [self_ptr, target_server_id](rpc::context& child_ctx) -> rpc::result_code_type {
+        self_ptr->running_transfer_target_server_id_ = target_server_id;
+        auto transfer_guard = gsl::finally([self_ptr] { self_ptr->running_transfer_target_server_id_ = 0; });
+
         rpc::context::message_holder<atfw::dtmq::SSChannelTransferChannelReq> req_body{child_ctx};
         rpc::context::message_holder<atfw::dtmq::SSChannelTransferChannelRsp> rsp_body{child_ctx};
         int32_t result = 0;
@@ -1668,8 +1694,9 @@ void mq_channel::ensure_recreate_after_destroyed(rpc::context& ctx) {
   size_t old_log_count = get_shared_wal_object()->get_all_logs().size();
   set_created(ctx, std::chrono::system_clock::from_time_t(0), 0);
 
-  if (old_log_count > 0) {
-    get_shared_wal_object()->remove_before(atfw::util::time::time_utility::now(), old_log_count);
+  if (old_log_count > 0 && is_available()) {
+    // 追加 create 可能已触发容量清理，必须按新代际序号裁剪，不能再按追加前的日志数量删除。
+    compact_sequence(create_sequence_);
   }
 }
 
@@ -2023,14 +2050,14 @@ int32_t mq_channel::subscribe(rpc::context& ctx, const atfw::dtmq::channel_subsc
     if (merge_mode) {
       *subscriber->get_private_data().mutable_last_heartbeat_timepoint() = subscriber_info.last_heartbeat_timepoint();
       if (subscriber->get_private_data().last_heartbeat_sequence() > last_received_sequence) {
-        if (0 == last_received_hash_code) {
+        if (0 == subscriber->get_private_data().last_heartbeat_hash_code()) {
           wal_publisher_->receive_subscribe_request(subscriber_key,
                                                     subscriber->get_private_data().last_heartbeat_sequence(),
                                                     atfw::util::time::time_utility::now(), params);
         } else {
           wal_publisher_->receive_subscribe_request(
-              subscriber_key, subscriber->get_private_data().last_heartbeat_sequence(), last_received_hash_code,
-              atfw::util::time::time_utility::now(), params);
+              subscriber_key, subscriber->get_private_data().last_heartbeat_sequence(),
+              subscriber->get_private_data().last_heartbeat_hash_code(), atfw::util::time::time_utility::now(), params);
         }
       } else {
         if (0 == last_received_hash_code) {
@@ -2311,7 +2338,7 @@ void mq_channel::compact_sequence(int64_t sequence) {
   }
 
   if (remove_count > 0) {
-    get_shared_wal_object()->remove_before(atfw::util::time::time_utility::now(), remove_count);
+    get_shared_wal_object()->remove_before(atfw::util::distributed_system::wal_time_point::max(), remove_count);
     need_make_dirty = true;
   }
 
@@ -2565,6 +2592,7 @@ void mq_channel::recalculate_etcd_cache() {
     rpc::dtmq::get_target_server_ids(server_id_set, get_channel_key(), readonly_replicate_configure_count_,
                                      calc_data.first);
     if (!server_id_set.empty()) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       calc_data.second->writable_server_id = server_id_set[0];
     } else {
       calc_data.second->writable_server_id = 0;
@@ -2576,6 +2604,7 @@ void mq_channel::recalculate_etcd_cache() {
       calc_data.second->readonly_server_id_to_replicate_index.reserve(readonly_replicate_configure_count_);
       calc_data.second->readonly_replicate_index_to_server_id.reserve(readonly_replicate_configure_count_);
       for (size_t i = 1; i < server_id_set.size(); i++) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         uint64_t readonly_server_id = server_id_set[i];
 
         auto& ris = calc_data.second->readonly_server_id_to_replicate_index[readonly_server_id];

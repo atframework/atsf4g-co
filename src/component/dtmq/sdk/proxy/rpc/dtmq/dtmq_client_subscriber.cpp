@@ -3400,7 +3400,7 @@ void shared_subscriber::compact(rpc::context& /*ctx*/, int64_t compact_sequence)
   }
 
   if (remove_count > 0) {
-    wal_client_->get_log_manager().remove_before(atfw::util::time::time_utility::now(), remove_count);
+    wal_client_->get_log_manager().remove_before(atfw::util::distributed_system::wal_time_point::max(), remove_count);
   }
 }
 

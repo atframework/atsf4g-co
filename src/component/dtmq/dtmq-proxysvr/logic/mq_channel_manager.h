@@ -72,13 +72,12 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
    * @param forward_server_id 如果此消息应该被转发，则输出转发的server_id
    * @param channel_key mq_channel_key
    * @param auto_create 不存在是否允许自动创建
+   * @param recreate_channel 是否生成创建或重建日志；转移恢复时关闭，由来源快照提供状态
    * @return 0或RPC错误码
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_writable_channel(rpc::context& ctx,
-                                                                           mq_channel_ptr_type& channel_ptr,
-                                                                           uint64_t& forward_server_id,
-                                                                           const atfw::dtmq::DChannelIdKey& channel_key,
-                                                                           bool auto_create);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type make_writable_channel(
+      rpc::context& ctx, mq_channel_ptr_type& channel_ptr, uint64_t& forward_server_id,
+      const atfw::dtmq::DChannelIdKey& channel_key, bool auto_create, bool recreate_channel = true);
 
   /**
    * @brief 获取可读的channel，如果不存在或不可写则走提升读流程

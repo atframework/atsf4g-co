@@ -54,6 +54,20 @@ task_action_subscribe::result_type task_action_subscribe::operator()() {
   std::unordered_map<uint64_t, std::list<const atfw::dtmq::DChannelSyncPoint*>> forward_by_server_id;
 
   for (const auto& heartbeat : req_body.heartbeat()) {
+    // 转移 RPC 尚未完成时，心跳不能等待同一个 IO 任务；先保留进度，再尝试向实际目标转发一次。
+    auto transferring_channel = mq_channel_manager::me()->get_channel(heartbeat.channel_key().channel_id());
+    if (transferring_channel && transferring_channel->is_writable() &&
+        transferring_channel->get_running_transfer_target_server_id() != 0) {
+      if (req_body.has_subscriber() && req_body.subscriber().subscriber_server_id() != 0) {
+        transferring_channel->subscribe(get_shared_context(), req_body.subscriber(), heartbeat.last_sequence(),
+                                        heartbeat.last_hash_code(), false);
+      }
+      if (req_body.forward_ttl() < logic_config::me()->get_logic_cfg().router().transfer_max_ttl()) {
+        forward_by_server_id[transferring_channel->get_running_transfer_target_server_id()].push_back(&heartbeat);
+      }
+      continue;
+    }
+
     mq_channel_manager::mq_channel_ptr_type channel;
     uint64_t forward_server_id = 0;
     auto res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_readable_channel_with_replicate_index(

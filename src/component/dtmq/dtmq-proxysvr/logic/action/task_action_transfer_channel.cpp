@@ -64,9 +64,10 @@ task_action_transfer_channel::result_type task_action_transfer_channel::operator
           get_shared_context(), channel, forward_server_id, channel_snapshot.replicate_index(),
           channel_snapshot.channel_data().channel_metadata().channel_key(), true));
     } else {
+      // 转移不产生 create 日志，否则新序号会导致来源快照被误判为旧数据。
       res = RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
           get_shared_context(), channel, forward_server_id,
-          channel_snapshot.channel_data().channel_metadata().channel_key(), true));
+          channel_snapshot.channel_data().channel_metadata().channel_key(), true, false));
     }
     if (res < 0) {
       set_response_code(res);

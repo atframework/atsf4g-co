@@ -12,11 +12,16 @@
 //   - B9: IO task (await_io_task/is_io_task_running/is_io_task_too_many_continue_failed)
 //   - B10: tick / force_refresh_distribution / need_save_db / misc accessors
 
+#include <atframework/testing/raw_transport.h>
+#include <atframework/testing/ss_action.h>
+
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "logic/action/task_action_transfer_channel.h"
 
 #include "dtmq_test_channel_common.h"  // NOLINT(build/include_subdir)
 
@@ -399,13 +404,9 @@ CASE_TEST(component_dtmq_channel, compact_sequence) {
           }
         }
 
-        // remove_before 按日志时间点清理（timepoint < now 才移除），同一毫秒内写入的日志不会
-        // 被清理。把时钟拨快 2 秒再压缩，保证最老的消息被物理移除。
-        {
-          global_now_offset_guard offset_guard{std::chrono::seconds{2}};
-          channel->compact_stateful_sequence(seqs.at(1));
-          channel->compact_sequence(seqs.at(1));
-        }
+        // 按序号压缩应立即生效，不依赖当前时钟是否已越过日志时间。
+        channel->compact_stateful_sequence(seqs.at(1));
+        channel->compact_sequence(seqs.at(1));
         CASE_EXPECT_TRUE(channel->get_compact_stateful_sequence() >= seqs.at(1));
 
         // After compaction the messages older than the watermark must be physically removed from
@@ -1128,5 +1129,276 @@ CASE_TEST(component_dtmq_channel, current_replicate_index) {
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+namespace {
+static std::vector<atfw::dtmq::SSChannelEventSync> collect_channel_events(atframework::testing::runtime& test,
+                                                                          size_t begin, const std::string& channel_id) {
+  std::vector<atfw::dtmq::SSChannelEventSync> events;
+  for (size_t index = begin; index < test.transport().outbound_count(); ++index) {
+    const auto* record = test.transport().outbound_at(index);
+    if (nullptr == record || record->target_node_id != kPeerNode1) {
+      continue;
+    }
+    atfw::SSMsg envelope;
+    atfw::dtmq::SSChannelEventSync event;
+    if (envelope.ParseFromArray(record->payload.data(), static_cast<int>(record->payload.size())) &&
+        envelope.head().has_rpc_stream() && event.ParseFromString(envelope.body_bin()) &&
+        event.channel_metadata().channel_key().channel_id() == channel_id) {
+      events.push_back(std::move(event));
+    }
+  }
+  return events;
+}
+
+static mq_channel_wal_object_type::log_pointer append_transfer_message(mq_channel& channel, rpc::context& ctx,
+                                                                       const std::string& text) {
+  int32_t result = 0;
+  mq_channel_wal_object_context params{ctx, result};
+  auto message = channel.get_wal_publisher().allocate_log(atfw::util::time::time_utility::now(),
+                                                          atfw::dtmq::DChannelMessageDetail::kText, params);
+  CASE_EXPECT_TRUE(!!message);
+  if (message) {
+    message->mutable_detail()->set_text(text);
+    auto retained = message;
+    CASE_EXPECT_EQ(atfw::util::distributed_system::wal_result_code::kOk,
+                   channel.get_wal_publisher().emplace_back_log(std::move(message), params));
+    CASE_EXPECT_EQ(0, result);
+    return retained;
+  }
+  return message;
+}
+
+static void check_transfer_catch_up(const std::string& prefix, bool corrupt_hash, bool compact_checkpoint,
+                                    bool existing_subscriber = false) {
+  atframework::testing::runtime test;
+  if (!start_channel_runtime(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  const auto channel_id = find_local_writable_channel_id(prefix, kLocalNodeId);
+  CASE_EXPECT_FALSE(channel_id.empty());
+  auto task = test.run_task(
+      prefix, std::chrono::seconds{4},
+      [&test, channel_id, corrupt_hash, compact_checkpoint,
+       existing_subscriber](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::dtmq::DChannelIdKey key;
+        key.set_channel_id(channel_id);
+        key.set_channel_type(kTestChannelType);
+        auto source = atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), key,
+                                                                               get_configure_for(kTestChannelType));
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(source->writable_init(ctx)));
+        source->ensure_recreate_after_destroyed(ctx);
+        auto checkpoint = append_transfer_message(*source, ctx, "already-received");
+        atfw::dtmq::channel_snapshot baseline;
+        source->dump_snapshot(ctx, baseline);
+        auto missing = append_transfer_message(*source, ctx, "missing-before-transfer");
+        if (!checkpoint || !missing) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+        }
+        atfw::dtmq::channel_subscriber subscriber;
+        subscriber.set_subscriber_server_id(kPeerNode1);
+        subscriber.set_subscriber_key("UT:transfer-catch-up");
+        CASE_EXPECT_EQ(0, source->subscribe(ctx, subscriber, checkpoint->sequence(), checkpoint->hash_code(), false));
+        if (compact_checkpoint) {
+          source->compact_sequence(missing->sequence());
+        }
+        atfw::dtmq::channel_snapshot snapshot;
+        source->dump_snapshot(ctx, snapshot);
+        CASE_EXPECT_EQ(1, snapshot.subscriber_size());
+        if (snapshot.subscriber_size() != 1) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+        }
+        CASE_EXPECT_EQ(checkpoint->sequence(), snapshot.subscriber(0).last_heartbeat_sequence());
+        CASE_EXPECT_EQ(checkpoint->hash_code(), snapshot.subscriber(0).last_heartbeat_hash_code());
+        if (corrupt_hash) {
+          snapshot.mutable_subscriber(0)->set_last_heartbeat_hash_code(checkpoint->hash_code() ^ 1);
+        }
+        if (existing_subscriber) {
+          auto existing = atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), key,
+                                                                                   get_configure_for(kTestChannelType));
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(existing->writable_init(ctx)));
+          CASE_EXPECT_TRUE(existing->load_snapshot(ctx, std::move(baseline)));
+          CASE_EXPECT_EQ(0,
+                         existing->subscribe(ctx, subscriber, checkpoint->sequence(), checkpoint->hash_code(), false));
+          mq_channel_manager::me()->add_channel(ctx, existing);
+        }
+        atfw::dtmq::SSChannelTransferChannelReq transfer;
+        transfer.add_snapshot()->Swap(&snapshot);
+        atframework::testing::ss_action_invoke_options action_options{
+            rpc::dtmq::packer::get_full_name_of_transfer_channel()};
+        action_options.source.node_id = kPeerNode2;
+        action_options.source.source_task_id = 0xD710;
+        action_options.source.sequence = 0xD711;
+        const size_t event_begin = test.transport().outbound_count();
+        // 新目标晚于来源初始化，仍必须恢复来源的数据，不能创建新日志后把来源快照误判为过期。
+        global_now_offset_guard transfer_delay{std::chrono::seconds{1}};
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<task_action_transfer_channel>(
+                              ctx, transfer, action_options)));
+        auto target = mq_channel_manager::me()->get_channel(channel_id);
+        CASE_EXPECT_TRUE(!!target && target->is_writable());
+        if (!target) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+        }
+        CASE_EXPECT_EQ(missing->sequence(), target->get_last_message_sequence());
+        CASE_EXPECT_TRUE(!!target->get_shared_wal_object()->find_log(missing->sequence()));
+        auto fresh = append_transfer_message(*target, ctx, "new-after-transfer");
+        if (!fresh) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+        }
+        target->tick(ctx);
+        auto events = collect_channel_events(test, event_begin, channel_id);
+        CASE_EXPECT_EQ(2u, events.size());
+        if (events.size() == 2) {
+          CASE_EXPECT_EQ(corrupt_hash || compact_checkpoint, events[0].has_channel_snapshot());
+          if (!corrupt_hash && !compact_checkpoint) {
+            CASE_EXPECT_EQ(1, events[0].channel_message_size());
+            if (events[0].channel_message_size() == 1) {
+              CASE_EXPECT_EQ(missing->sequence(), events[0].channel_message(0).sequence());
+              CASE_EXPECT_EQ(missing->hash_code(), events[0].channel_message(0).hash_code());
+              CASE_EXPECT_EQ("missing-before-transfer", events[0].channel_message(0).detail().text());
+            }
+          } else {
+            CASE_EXPECT_EQ(missing->sequence(), events[0].channel_snapshot().channel_metadata().last_sequence());
+          }
+          CASE_EXPECT_FALSE(events[1].has_channel_snapshot());
+          CASE_EXPECT_EQ(1, events[1].channel_message_size());
+          if (events[1].channel_message_size() == 1) {
+            CASE_EXPECT_EQ(fresh->sequence(), events[1].channel_message(0).sequence());
+            CASE_EXPECT_EQ("new-after-transfer", events[1].channel_message(0).detail().text());
+          }
+        }
+        const size_t after_flush = test.transport().outbound_count();
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<task_action_transfer_channel>(
+                              ctx, transfer, action_options)));
+        target->tick(ctx);
+        CASE_EXPECT_TRUE(collect_channel_events(test, after_flush, channel_id).empty());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+}  // namespace
+
+CASE_TEST(component_dtmq_channel, transfer_checkpoint_catches_up_without_heartbeat) {
+  check_transfer_catch_up("transfer-checkpoint", false, false);
+}
+
+CASE_TEST(component_dtmq_channel, transfer_bad_checkpoint_hash_sends_snapshot) {
+  check_transfer_catch_up("transfer-bad-hash", true, false);
+}
+
+CASE_TEST(component_dtmq_channel, transfer_compacted_checkpoint_sends_snapshot) {
+  check_transfer_catch_up("transfer-compacted", false, true);
+}
+
+CASE_TEST(component_dtmq_channel, transfer_preserves_existing_subscriber_progress) {
+  check_transfer_catch_up("transfer-existing-subscriber", false, false, true);
+}
+
+CASE_TEST(component_dtmq_channel, merged_heartbeat_keeps_sequence_and_hash_together) {
+  atframework::testing::runtime test;
+  if (!start_channel_runtime(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto key = make_channel_key("merge-checkpoint-pair", kTestChannelType);
+  auto task = test.run_task(
+      "merge_checkpoint_pair", std::chrono::seconds{4}, [&test, key](rpc::context& ctx) -> rpc::result_code_type {
+        auto channel = atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), key,
+                                                                                get_configure_for(kTestChannelType));
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->writable_init(ctx)));
+        auto older = append_transfer_message(*channel, ctx, "older-checkpoint");
+        auto current = append_transfer_message(*channel, ctx, "current-checkpoint");
+        if (!older || !current) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+        }
+        atfw::dtmq::channel_subscriber subscriber;
+        // 空业务 key 是服务副本的正常订阅方式，由 server id 决定身份。
+        subscriber.set_subscriber_server_id(kPeerNode1);
+        CASE_EXPECT_EQ(0, channel->subscribe(ctx, subscriber, current->sequence(), current->hash_code(), false));
+        atfw::dtmq::channel_snapshot snapshot;
+        channel->dump_snapshot(ctx, snapshot);
+        CASE_EXPECT_EQ(1, snapshot.subscriber_size());
+        if (snapshot.subscriber_size() != 1) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM);
+        }
+        const size_t event_begin = test.transport().outbound_count();
+        global_now_offset_guard later_heartbeat{std::chrono::seconds{1}};
+        auto* merged = snapshot.mutable_subscriber(0);
+        *merged->mutable_last_heartbeat_timepoint() = protobuf_from_system_clock(atfw::util::time::time_utility::now());
+        merged->set_last_heartbeat_sequence(older->sequence());
+        merged->set_last_heartbeat_hash_code(older->hash_code());
+        channel->merge_subscriber(ctx, snapshot.subscriber());
+        auto retained = channel->get_wal_publisher().get_subscribe_manager().find(make_subscriber_key(subscriber));
+        CASE_EXPECT_TRUE(!!retained);
+        if (retained) {
+          CASE_EXPECT_EQ(current->sequence(), retained->get_private_data().last_heartbeat_sequence());
+          CASE_EXPECT_EQ(current->hash_code(), retained->get_private_data().last_heartbeat_hash_code());
+          CASE_EXPECT_EQ(merged->last_heartbeat_timepoint().seconds(),
+                         retained->get_private_data().last_heartbeat_timepoint().seconds());
+        }
+        CASE_EXPECT_TRUE(collect_channel_events(test, event_begin, key.channel_id()).empty());
+        // 过期记录不能替换存活订阅者，也不能恢复已过期的另一订阅者。
+        merged->mutable_last_heartbeat_timepoint()->set_seconds(1);
+        channel->merge_subscriber(ctx, snapshot.subscriber());
+        merged->set_subscriber_key("expired-subscriber");
+        channel->merge_subscriber(ctx, snapshot.subscriber());
+        CASE_EXPECT_FALSE(!!channel->get_wal_publisher().get_subscribe_manager().find("expired-subscriber"));
+        CASE_EXPECT_TRUE(collect_channel_events(test, event_begin, key.channel_id()).empty());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_dtmq_channel, recreate_clears_full_previous_generation_in_same_tick) {
+  atframework::testing::runtime test;
+  if (!start_channel_runtime(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto key = make_channel_key("recreate-same-tick", kTestChannelType);
+  auto task =
+      test.run_task("recreate_same_tick", std::chrono::seconds{4}, [key](rpc::context& ctx) -> rpc::result_code_type {
+        auto configure = get_configure_for(kTestChannelType);
+        configure.set_max_log_count(3);
+        auto channel =
+            atfw::component::memory::stl::make_strong_rc<mq_channel>(*mq_channel_manager::me(), key, configure);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->writable_init(ctx)));
+        channel->ensure_recreate_after_destroyed(ctx);
+        auto old_message = append_transfer_message(*channel, ctx, "previous-generation");
+        if (!old_message) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+        }
+        channel->set_destroyed(ctx, atfw::util::time::time_utility::now(), 0);
+        CASE_EXPECT_TRUE(channel->is_destroyed());
+        CASE_EXPECT_EQ(3u, channel->get_shared_wal_object()->get_all_logs().size());
+        channel->ensure_recreate_after_destroyed(ctx);
+        CASE_EXPECT_TRUE(channel->is_available());
+        CASE_EXPECT_FALSE(!!channel->get_shared_wal_object()->find_log(old_message->sequence()));
+        CASE_EXPECT_EQ(1u, channel->get_shared_wal_object()->get_all_logs().size());
+        auto sequence = channel->get_last_message_sequence();
+        channel->ensure_recreate_after_destroyed(ctx);
+        CASE_EXPECT_EQ(sequence, channel->get_last_message_sequence());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
   CASE_EXPECT_EQ(0, test.stop());
 }

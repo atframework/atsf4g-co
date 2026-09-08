@@ -367,10 +367,9 @@ src/teamsvr/test/teamsvr_room_test_wal.cpp         # 真实 publisher/mq_channel
     writable transfer；`wal_commit_team_action` 新增 `broadcast=false` 参数构造“已入 journal 未广播”的
     待广播日志。生产契约观察：转移快照 dump 携带 metadata(custom/configure)/runtime(private/last_removed)/
     lock/全部剩余日志/存活订阅者；load 后 `last_removed_key` 重置为剩余首条日志 sequence(边界日志保留时与源
-    一致)；load 期间合并订阅者的下发被 `is_loading_snapshot` 抑制；转移后新 publisher 的广播边界在待广播
-    日志上，checkpoint 更早的订阅者收到跳日志的增量批会被客户端哈希链校验拒绝(`kHashCodeMismatch`)，
-    必须由订阅心跳/catch-up 从 checkpoint 起连续补齐(WAL-06 以 `wal_resubscribe(room_ack)` 显式驱动，
-    等价生产中心跳到新可写节点)。
+    一致)。2026-09-08 修复后，load 期间仍抑制下发，但恢复完成后会按订阅者 checkpoint 立即补发，
+    压缩或哈希不匹配时发送快照。WAL-06 在显式重新订阅之前断言待广播日志和新写入均已应用；
+    后续 `wal_resubscribe(room_ack)` 验证旧 checkpoint 的增量重放不回退房间状态。
   - 本轮再次踩中 §3.1 的 ninja 头文件依赖不完整问题：对公共头的任何修改（包括仅改 handler 分支/成员）后若
     不删除目标 `.dir` 内的 `.obj`，会出现新旧对象混链，症状包括与源码矛盾的断言失败甚至析构期段错误；
     连续排查时务必先做干净重编再下结论。
@@ -897,6 +896,13 @@ Windows 下经 CTest 运行的目标已自动设置 working directory、`RPC_UNI
 每次执行报告必须包含：构建目标/生成器/配置、实际注册与选中的 case 数、通过/失败/跳过数、CTest executable 数、
 失败 case 的 DTMQ 调用记录，以及未运行项及原因。直接过滤时必须确认至少选中一个 case；0 case 的绿色退出不算通过。
 依赖缺失导致的 skip 不计为覆盖通过。
+
+
+### 2026-09-08 DTMQ 修复回归
+
+WAL-06 新增重新订阅前的事件可见断言。WAL-08 和共享 update 夹具移除了推进时钟、手动删除日志的补偿代码，直接验证生产压缩和重建接口；原有业务断言保留。
+
+Windows / MSVC Debug / Ninja 下，DTMQ 服务及三个 DTMQ 测试目标、Team Room、Lobby 已重新构建。`ctest --test-dir build_jobs_cmake_tools -L rpc-unit-test -V --output-on-failure` 的 18 个目标全部通过；其中 DTMQ 为 1 + 18 + 66 个用例，Team Room 为 139 个，Lobby 为 101 个，无失败或跳过。此次验证为进程内离线 RPC 测试，未执行其他平台或跨进程集群测试。
 
 ## 8. 完成标准
 
