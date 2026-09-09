@@ -548,8 +548,11 @@ bool OrbitClientRuntime::wait_connect() {
   time_t begin_connect =
       std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   while (state_.load() == OrbitClientRuntimeState::kConnecting) {
-    if (agent_bus_id_ != 0) {
-      set_state(OrbitClientRuntimeState::kConnected);
+    auto node = app_->get_bus_node();
+    if (node) {
+      if (node->get_state() == ::atframework::atbus::node::state_t::kRunning && agent_bus_id_ != 0) {
+        set_state(OrbitClientRuntimeState::kConnected);
+      }
     }
     app_->run_once(0, std::chrono::seconds{0});
     time_t now =
