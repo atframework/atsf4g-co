@@ -19,6 +19,7 @@
 
 #include <cstdint>
 #include <ctime>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -96,7 +97,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
 
   // 向当前 Matchsvr 查询 Unit 权威快照。调用方分别决定客户端返回和登录恢复语义。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_matchsvr_snapshot(
-      rpc::context& ctx, uint64_t unit_id, int64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
+      rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot);
 
   void update_view(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingUnitView& view);
   void clear_matching_state();
@@ -141,7 +142,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
 
  private:
   void try_send_heartbeat(rpc::context& ctx);
-  void send_heartbeat(rpc::context& ctx, uint64_t unit_id, int64_t matchsvr_id);
+  void send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t umatchsvr_id);
 
   void merge_team_matching_parameter(
       rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,

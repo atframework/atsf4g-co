@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 #include "data/user.h"
 
@@ -323,14 +324,13 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
     FWLOGERROR("{} dispatch matching heartbeat failed, unit_id={}, result={}({})", *owner_, get_current_unit_id(),
                *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
-  return;
 }
 
 rpc::result_code_type user_matching_manager::start_matching_inner_(
     rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select, const std::string& battle_version,
     PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy) {
   // Function implementation goes here
-  // TODO 通知battle锁背包
+  // TODO(jijunliang): 通知battle锁背包
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCreateReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
   // TODO(jijunliang): 接入battle_versnion
@@ -420,7 +420,7 @@ rpc::result_code_type user_matching_manager::check_matching(rpc::context& ctx,
 }
 
 rpc::result_code_type user_matching_manager::query_matchsvr_snapshot(
-    rpc::context& ctx, uint64_t unit_id, int64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot) {
+    rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot) {
   if (unit_id == 0) {
     FWLOGERROR("{} check matching failed to find current Unit", *owner_);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
@@ -865,7 +865,7 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
       [user_ptr, rsp, level_id, region](rpc::context& child_ctx) -> rpc::result_code_type {
         auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingStartReq>(child_ctx);
         auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingStartRsp>(child_ctx);
-        auto data = rpc_request->mutable_data();
+        auto* data = rpc_request->mutable_data();
         data->set_battle_version("gm_test");
         auto* level_select = data->mutable_level_select();
         auto cfg = excel::get_ExcelLevel_by_level_id(level_id);
@@ -886,7 +886,6 @@ void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::contex
     rsp->set_result_code(*invoke_result.get_error());
     return;
   }
-  return;
 }
 
 void user_matching_manager::fill_matching_parameter(rpc::context& /*ctx*/,
@@ -996,7 +995,7 @@ void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
   send_heartbeat(ctx, get_current_unit_id(), get_current_matchsvr_server_id());
 }
 
-void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, int64_t matchsvr_id) {
+void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
   periodic_heartbeat_inflight_ = true;
   auto owner = owner_->shared_from_this();
   auto invoke_result = rpc::async_invoke(
