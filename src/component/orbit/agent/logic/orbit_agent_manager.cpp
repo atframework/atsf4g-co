@@ -104,6 +104,33 @@ static std::string render_string_template(const std::string& input,
   return output;
 }
 
+static void append_config_env_line(std::vector<std::string>& output, const char* key, const std::string& value) {
+  output.emplace_back(kOrbitArgsConfigEnvPrefix);
+  output.push_back(LOG_WRAPPER_FWAPI_FORMAT("{}={}", key, value));
+}
+
+static void append_config_env_line(std::vector<std::string>& output, const char* key, uint64_t value) {
+  append_config_env_line(output, key, std::to_string(value));
+}
+
+static void append_bus_config_env_arguments(const atbus::node::conf_t& bus_conf, std::vector<std::string>& output) {
+  size_t access_token_max_number = bus_conf.access_token_max_number;
+  if (access_token_max_number < bus_conf.access_tokens.size()) {
+    access_token_max_number = bus_conf.access_tokens.size();
+  }
+
+  if (access_token_max_number > 0) {
+    append_config_env_line(output, "ATAPP_BUS_ACCESS_TOKEN_MAX_NUMBER", static_cast<uint64_t>(access_token_max_number));
+  }
+
+  for (size_t index = 0; index < bus_conf.access_tokens.size(); ++index) {
+    std::string env_key = "ATAPP_BUS_ACCESS_TOKENS_" + std::to_string(static_cast<uint64_t>(index));
+    append_config_env_line(output, env_key.c_str(),
+                           std::string{reinterpret_cast<const char*>(bus_conf.access_tokens[index].data()),
+                                       bus_conf.access_tokens[index].size()});
+  }
+}
+
 static bool split_command_line(const std::string& input, std::vector<std::string>& output) {
   output.clear();
 
@@ -958,6 +985,10 @@ void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_cli
     output.emplace_back(remote_agent_endpoint_);
   } else {
     output.emplace_back(agent_endpoint_);
+  }
+
+  if (nullptr != owner_app_ && nullptr != owner_app_->get_bus_node()) {
+    append_bus_config_env_arguments(owner_app_->get_bus_node()->get_conf(), output);
   }
 }
 
