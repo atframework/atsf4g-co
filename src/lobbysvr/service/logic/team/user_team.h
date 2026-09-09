@@ -4,6 +4,7 @@
 
 #include <gsl/select-gsl.h>
 #include <memory/rc_ptr.h>
+#include <nostd/function_ref.h>
 #include <nostd/nullability.h>
 
 // clang-format off
@@ -34,9 +35,13 @@
 class user;
 class user_team_manager;
 
+// 队伍成员缓存数据，不对外暴露细节，通过 user_team_battle_library_function 对外提供数据只读接口
+struct user_team_member_cache;
+
 class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_team> {
  public:
   using ptr_t = atfw::util::memory::strong_rc_ptr<user_team>;
+  using member_cache_ptr_t = atfw::util::memory::strong_rc_ptr<user_team_member_cache>;
 
  private:
   struct ctor_guard_t;
@@ -90,10 +95,12 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   // 对客户端来说等同于已移除: 已不是成员、正在退出、频道已销毁、已让出当前队伍或对象已被新的一代替换。
   // user_team_manager 的脏数据下发与 user_team 的增量脏数据准入共用这一判定，不要在别处重复展开
   bool is_removed_for_client() const noexcept;
-  // 对象是否仍是 manager 索引中的当前代际。对象被收编/替换后, 迟到的频道事件、快照回调和销毁回调
+
+  // 对象是否仍是 manager 索引中的数据。对象被收编/替换后, 迟到的频道事件、快照回调和销毁回调
   // 仍可能送达(订阅端私有数据存活期长于索引记录), 此时必须忽略, 防止污染新代际或重复下发。
   // 实现为 manager 在 team_index_ 增删时维护的标志位, 频道消息热路径不产生额外查找
   bool is_active_generation() const noexcept;
+
   // 本地派生状态: 由队伍共享数据模块的 do_update/do_delete 处理器驱动(当前为 battle.matching)
   inline bool is_matching() const noexcept { return check_flag(team_flag::kMatching); }
 
@@ -116,6 +123,12 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   inline atfw::team::EnTeamExitReason get_last_exit_reason() const noexcept { return last_exit_team_reason_; }
 
   inline const atfw::team::DTeamConfigure& get_configure() const noexcept { return cached_configure_; }
+
+  bool foreach_member(
+      rpc::context& ctx,
+      atfw::util::nostd::function_ref<bool(rpc::context&, const user_team_member_cache&)> fn) const noexcept;
+
+  member_cache_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept;
 
   bool check_permission(atfw::team::EnTeamPermissionRole checked) const noexcept;
 
@@ -259,15 +272,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   atfw::team::DTeamConfigure cached_configure_;
 
   // 队伍状态缓存(快照 + 频道增量事件维护)，dump 快照时成员共享数据转出成解包后的模块数据
-  // (DUserTeamSnapshot.unpacked_member_data)，不下发内部路由字段
-  struct member_cache_data {
-    // shared_member_data 字段在内存中恒为空(upsert 时逐字段拷贝、不复制原始打包数据)，
-    // 共享成员数据由下方的 key-value 索引维护
-    atfw::team::DTeamMember member_data;
-    // 成员共享数据(解包后的模块数据，key 算法见 user_team_algorithm::make_team_member_shared_data_key)
-    std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> shared_member_data;
-  };
-  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, member_cache_data, user_key_hash_t, user_key_equal_t>
+  std::unordered_map<PROJECT_NAMESPACE_ID::DUserIDKey, atfw::util::nostd::nonnull<member_cache_ptr_t>, user_key_hash_t,
+                     user_key_equal_t>
       cached_members_;
   // 队伍共享数据(解包后的模块数据，key 算法见 user_team_algorithm::make_team_shared_data_key)
   std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamSharedDataModule> cached_team_shared_data_;

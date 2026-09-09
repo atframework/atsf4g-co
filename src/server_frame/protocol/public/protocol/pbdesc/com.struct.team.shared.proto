@@ -11,17 +11,18 @@ option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/
 import "protocol/common/com.struct.team.common.proto";
 import "protocol/common/com.struct.team.shared.common.proto";
 import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/com.struct.match.proto";
 import "protocol/pbdesc/com.struct.team.proto";
 
 package atframework.shared;
 
 // 本文件用于存放和业务内容有关的组队共享数据定义，而 com.struct.team.proto 是和业务内容无关的定义
 
-
 // ======================== 队伍数据内容定义 ========================
 message DTeamSharedDataTypeBattle {
   oneof data_type {
     bool matching = 1;  // 匹配中
+    DMatchingTeamSyncView matching_team_view = 2;
   }
 }
 
@@ -40,6 +41,7 @@ message DTeamSharedDataModule {
 message DTeamMemberSharedDataTypeBattle {
   oneof data_type {
     bool ready = 1;  // 准备就绪
+    DMatchingTeamParameter matching_parameter = 2;
   }
 }
 

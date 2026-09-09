@@ -35,6 +35,7 @@
 #include "data/user.h"
 #include "logic/chat/user_chat_manager.h"
 #include "logic/team/user_team_algorithm.h"
+#include "logic/team/user_team_battle_library_function.h"
 
 class user_team_manager_utility {
  public:
@@ -627,35 +628,14 @@ void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKe
 void user_team_manager::pack_team_shared_data(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
   // 战斗模块
-  {
-    rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
-    wrapper->mutable_battle()->set_matching(false);
-
-    auto* output_field = output.Add();
-    output_field->set_key(user_team_algorithm::make_team_shared_data_key(*wrapper));
-    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
-      FCTXLOGERROR(ctx, "{} pack_team_shared_data: failed to pack team shared data", *owner_);
-      output.RemoveLast();
-    }
-  }
+  user_team_battle_library_function::pack_default_team_shared_data(ctx, *owner_, output);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void user_team_manager::pack_team_member_shared_data(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
   // 战斗模块
-  {
-    rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> wrapper{ctx};
-    wrapper->mutable_battle()->set_ready(false);
-
-    auto* output_field = output.Add();
-    output_field->set_key(user_team_algorithm::make_team_member_shared_data_key(*wrapper));
-    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
-      FCTXLOGERROR(ctx, "{} pack_team_member_shared_data: failed to pack team member shared data", *owner_);
-      output.RemoveLast();
-    }
-  }
+  user_team_battle_library_function::pack_default_member_shared_data(ctx, *owner_, output);
 }
 
 void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequence) {

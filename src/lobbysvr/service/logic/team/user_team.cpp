@@ -37,6 +37,7 @@
 
 #include "logic/chat/user_chat_manager.h"
 #include "logic/team/user_team_algorithm.h"
+#include "logic/team/user_team_battle_library_function.h"
 #include "logic/team/user_team_manager.h"
 
 namespace {
@@ -131,6 +132,15 @@ static user_team* get_user_team(const rpc::dtmq::client_subscriber::ptr_t& subsc
 }
 
 }  // namespace
+
+// (DUserTeamSnapshot.unpacked_member_data)，不下发内部路由字段
+struct user_team_member_cache {
+  // 共享成员数据由下方的 key-value 索引维护
+  atfw::team::DTeamMember member_data;
+
+  // 成员共享数据(解包后的模块数据，key 算法见 user_team_algorithm::make_team_member_shared_data_key)
+  std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> shared_member_data;
+};
 
 class user_team_utility {
  public:
@@ -354,7 +364,68 @@ class user_team_utility {
         build_member_shared_data_update_handlers_map();
     return handlers_map;
   }
+
+  static const PROJECT_NAMESPACE_ID::DTeamSharedDataModule* get_team_shared_data(const user_team& team,
+                                                                                 int64_t key) noexcept {
+    auto iter = team.cached_team_shared_data_.find(key);
+    if (iter == team.cached_team_shared_data_.end()) {
+      return nullptr;
+    }
+
+    return &iter->second;
+  }
+
+  static const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule* get_member_shared_data(
+      const user_team_member_cache& member, int64_t key) noexcept {
+    auto iter = member.shared_member_data.find(key);
+    if (iter == member.shared_member_data.end()) {
+      return nullptr;
+    }
+
+    return &iter->second;
+  }
 };
+
+const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& user_team_battle_library_function::get_matching_team_sync_view(
+    const user_team& team) noexcept {
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule team_shared_data;
+  team_shared_data.mutable_battle()->mutable_matching_team_view();
+
+  const auto* data =
+      user_team_utility::get_team_shared_data(team, user_team_algorithm::make_team_shared_data_key(team_shared_data));
+  if (nullptr == data) {
+    return PROJECT_NAMESPACE_ID::DMatchingTeamSyncView::default_instance();
+  }
+
+  return data->battle().matching_team_view();
+}
+
+bool user_team_battle_library_function::is_ready(const user_team_member_cache& team) noexcept {
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule member_shared_data;
+  member_shared_data.mutable_battle()->set_ready(true);
+
+  const auto* data = user_team_utility::get_member_shared_data(
+      team, user_team_algorithm::make_team_member_shared_data_key(member_shared_data));
+  if (nullptr == data) {
+    return false;
+  }
+
+  return data->battle().ready();
+}
+
+const PROJECT_NAMESPACE_ID::DMatchingTeamParameter& user_team_battle_library_function::get_matching_team_parameter(
+    const user_team_member_cache& team) noexcept {
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule member_shared_data;
+  member_shared_data.mutable_battle()->mutable_matching_parameter();
+
+  const auto* data = user_team_utility::get_member_shared_data(
+      team, user_team_algorithm::make_team_member_shared_data_key(member_shared_data));
+  if (nullptr == data) {
+    return PROJECT_NAMESPACE_ID::DMatchingTeamParameter::default_instance();
+  }
+
+  return data->battle().matching_parameter();
+}
 
 struct user_team::ctor_guard_t {};
 
@@ -430,18 +501,18 @@ void user_team::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamSnapshot&
   // 共享数据按成员转出成解包后的模块数据，随 unpacked_member_data 下发)
   for (const auto& member : cached_members_) {
     auto* output_member = storage->add_member();
-    protobuf_copy_message(*output_member, member.second.member_data);
+    protobuf_copy_message(*output_member, member.second->member_data);
     output_member->clear_user_channel();
     output_member->set_user_router_server_id(0);
     output_member->set_acknowledge_action_sequence(0);
     output_member->set_acknowledge_action_hash_code(0);
 
-    if (member.second.shared_member_data.empty()) {
+    if (member.second->shared_member_data.empty()) {
       continue;
     }
     auto* unpacked_member = output.add_unpacked_member_data();
     protobuf_copy_message(*unpacked_member->mutable_user_key(), member.first);
-    for (const auto& kv : member.second.shared_member_data) {
+    for (const auto& kv : member.second->shared_member_data) {
       protobuf_copy_message(*unpacked_member->add_shared_member_data(), kv.second);
     }
   }
@@ -524,6 +595,25 @@ bool user_team::is_active_generation() const noexcept { return check_flag(team_f
 
 const atfw::dtmq::DChannelIdKey& user_team::get_channel_key() const noexcept {
   return channel_subscriber_->get_channel_key();
+}
+
+bool user_team::foreach_member(
+    rpc::context& ctx,
+    atfw::util::nostd::function_ref<bool(rpc::context&, const user_team_member_cache&)> fn) const noexcept {
+  for (const auto& member : cached_members_) {
+    if (!fn(ctx, *member.second)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+user_team::member_cache_ptr_t user_team::find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) const noexcept {
+  auto it = cached_members_.find(user_key);
+  if (it != cached_members_.end()) {
+    return it->second;
+  }
+  return nullptr;
 }
 
 bool user_team::check_permission(atfw::team::EnTeamPermissionRole checked) const noexcept {
@@ -999,7 +1089,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       auto member_iter = cached_members_.find(member_data.user_key());
       if (member_iter != cached_members_.end() && cached_captain_user_key_.user_id() == 0) {
         protobuf_copy_message(cached_captain_user_key_, member_data.user_key());
-        member_iter->second.member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+        member_iter->second->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
       }
 
       if (owner_->get_owner().is(member_data.user_key())) {
@@ -1015,7 +1105,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
           }
         }
         cached_permission_role_ =
-            member_iter != cached_members_.end() ? member_iter->second.member_data.role() : member_data.role();
+            member_iter != cached_members_.end() ? member_iter->second->member_data.role() : member_data.role();
       }
       // 入队后不再保留其待处理的加入请求/邀请(与 teamsvr-room apply_add_member 的清理保持一致)
       remove_pending_join_request(member_data.user_key());
@@ -1047,7 +1137,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
         // 与 teamsvr-room apply_member_update 一致: 仅更新非空版本与共享数据，
         // user_router_server_id 由心跳维护且属于内部路由字段，本地缓存不跟踪
         if (!member_update.client_version().empty()) {
-          member_iter->second.member_data.set_client_version(member_update.client_version());
+          member_iter->second->member_data.set_client_version(member_update.client_version());
         }
       }
       if (member_update.shared_member_data_size() > 0) {
@@ -1059,7 +1149,7 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       const auto& set_role = action.member_set_role();
       auto member_iter = cached_members_.find(set_role.user_key());
       if (member_iter != cached_members_.end()) {
-        member_iter->second.member_data.set_role(set_role.role());
+        member_iter->second->member_data.set_role(set_role.role());
       }
       if (owner_->get_owner().is(set_role.user_key())) {
         cached_permission_role_ = set_role.role();
@@ -1080,8 +1170,8 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       atfw::team::EnTeamPermissionRole new_role = election_captain.role();
       if (new_role <= atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
         if (old_captain_iter != cached_members_.end() &&
-            old_captain_iter->second.member_data.role() > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
-          new_role = old_captain_iter->second.member_data.role();
+            old_captain_iter->second->member_data.role() > atfw::team::EN_TEAM_MEMBER_ROLE_GUEST) {
+          new_role = old_captain_iter->second->member_data.role();
         } else {
           new_role = atfw::team::EN_TEAM_MEMBER_ROLE_OWNER;
         }
@@ -1093,10 +1183,10 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
           cached_permission_role_ = atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL;
         }
         if (old_captain_iter != cached_members_.end()) {
-          old_captain_iter->second.member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+          old_captain_iter->second->member_data.set_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
         }
       }
-      new_captain_iter->second.member_data.set_role(new_role);
+      new_captain_iter->second->member_data.set_role(new_role);
       cached_captain_user_key_ = election_captain.user_key();
       if (owner_->get_owner().is(cached_captain_user_key_)) {
         cached_permission_role_ = new_role;
@@ -1268,12 +1358,18 @@ void user_team::upsert_member_cache(rpc::context& ctx, const ::atfw::team::DTeam
   }
 
   auto iter = cached_members_.find(member_data.user_key());
-  bool is_new_member = (iter == cached_members_.end());
-  if (is_new_member) {
-    iter = cached_members_.emplace(member_data.user_key(), member_cache_data{}).first;
+  auto member_cache = atfw::component::memory::stl::make_strong_rc<user_team_member_cache>();
+  if (!member_cache) {
+    FCTXLOGERROR(ctx, "Failed to allocate user_team_member_cache for {}", owner_->get_owner());
+    return;
   }
 
-  auto& cache = iter->second;
+  bool is_new_member = (iter == cached_members_.end());
+  if (is_new_member) {
+    iter = cached_members_.emplace(member_data.user_key(), member_cache).first;
+  }
+
+  auto& cache = *iter->second;
   // 重复 add_member 只保留更早的入队时间，不能改变成员加入顺序(与 teamsvr-room apply_add_member 一致)
   auto previous_joined_timepoint = cache.member_data.joined_timepoint();
   // 逐字段拷贝: 原始打包的 shared_member_data 可能较大且只用于移入 key-value 索引，
@@ -1379,7 +1475,7 @@ void user_team::reset_cached_state(rpc::context& ctx) {
     owner_->get_owner().dump_user_key(self_key);
     auto self_iter = cached_members_.find(self_key);
     if (self_iter != cached_members_.end()) {
-      for (const auto& data_kv : self_iter->second.shared_member_data) {
+      for (const auto& data_kv : self_iter->second->shared_member_data) {
         auto iter = member_handle_map.find(data_kv.first);
         if (iter != member_handle_map.end() && iter->second.do_delete != nullptr) {
           iter->second.do_delete(ctx, *this, self_key, data_kv.first);
@@ -1646,7 +1742,7 @@ void user_team::do_member_shared_data(
     if (item.value().data().type_url().empty() || item.value().data().value().empty()) {
       bool erased = false;
       if (member_iter != cached_members_.end()) {
-        erased = member_iter->second.shared_member_data.erase(item.key()) > 0;
+        erased = member_iter->second->shared_member_data.erase(item.key()) > 0;
       }
       // 与 do_update 相同的 gating: 本地行为只处理自己的数据; 仅在真实删除时回调
       if (erased && is_self) {
@@ -1672,7 +1768,7 @@ void user_team::do_member_shared_data(
 
     int64_t key = user_team_algorithm::make_team_member_shared_data_key(*unpacked);
     if (member_iter != cached_members_.end()) {
-      protobuf_copy_message(member_iter->second.shared_member_data[key], *unpacked);
+      protobuf_copy_message(member_iter->second->shared_member_data[key], *unpacked);
     }
 
     if (!is_self) {
