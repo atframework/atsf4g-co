@@ -73,10 +73,17 @@
 
 #include "logic/hpa/logic_hpa_controller.h"
 
-namespace detail {
-static logic_server_common_module *g_last_common_module = nullptr;
-static std::shared_ptr<logic_server_common_module::stats_data_t> g_last_common_module_stats;
-}  // namespace detail
+namespace {
+static logic_server_common_module *&get_global_last_common_module() {
+  static logic_server_common_module *last_module = nullptr;
+  return last_module;
+}
+
+static std::shared_ptr<logic_server_common_module::stats_data_t> &get_global_last_common_module_stats() {
+  static std::shared_ptr<logic_server_common_module::stats_data_t> last_stats = nullptr;
+  return last_stats;
+}
+}  // namespace
 
 namespace {
 static int show_server_time(util::cli::callback_param params) {
@@ -98,6 +105,7 @@ static int send_notification(util::cli::callback_param params) {
     return 0;
   }
 
+  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   rpc::telemetry::notification_domain domain = rpc::telemetry::notification_domain::kNotice;
   if (0 == UTIL_STRFUNC_STRNCASE_CMP("crirical", params[0]->to_string(), 8)) {
     domain = rpc::telemetry::notification_domain::kCritical;
@@ -112,6 +120,8 @@ static int send_notification(util::cli::callback_param params) {
   rpc::context ctx = logic_server_get_current_tick_context().create_temporary_child();
   rpc::telemetry::opentelemetry_utility::send_notification_event(ctx, domain, params[1]->to_cpp_string(),
                                                                  params[2]->to_cpp_string(), {{"source", "command"}});
+
+  // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   ::atfw::atapp::app::add_custom_command_rsp(params, "success");
   return 0;
 }
@@ -186,6 +196,7 @@ static int app_default_handle_on_forward_response(atfw::atapp::app &app,
   }
 
   int ret = 0;
+  // NOLINTNEXTLINE(readability-trivial-switch)
   switch (msg.type) {
     case static_cast<int32_t>(::atfw::component::message_type::kInServerMessage): {
       ret = ss_msg_dispatcher::me()->on_receive_send_data_response(source, msg, error_code);
@@ -246,12 +257,15 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
                      return;
                    }
 
+                   // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
                    if (params[0]->to_cpp_string().empty()) {
                      return;
                    }
 
-                   app.set_metadata_label(opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
-                                          params[0]->to_cpp_string());
+                   app.set_metadata_label(
+                       opentelemetry::semconv::deployment::kDeploymentEnvironmentName,
+                       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+                       params[0]->to_cpp_string());
                  })
       ->set_help_msg("-env [text]                                               set a env name.");
 
@@ -366,7 +380,9 @@ SERVER_FRAME_API int logic_server_setup_common(atfw::atapp::app &app,
   return 0;
 }
 
-SERVER_FRAME_API logic_server_common_module *logic_server_last_common_module() { return detail::g_last_common_module; }
+SERVER_FRAME_API logic_server_common_module *logic_server_last_common_module() {
+  return get_global_last_common_module();
+}
 
 namespace {
 std::unique_ptr<rpc::context> &logic_server_get_fallback_tick_context() {
@@ -405,17 +421,18 @@ SERVER_FRAME_API logic_server_common_module::logic_server_common_module(
 
   stats_->last_update_usage_timepoint = 0;
   stats_->last_collect_sequence = 0;
+  stats_->last_checkpoint_inited = false;
   stats_->last_checkpoint = atfw::util::time::time_utility::sys_now();
   stats_->previous_tick_checkpoint = atfw::util::time::time_utility::sys_now();
 
-  detail::g_last_common_module = this;
-  detail::g_last_common_module_stats = stats_;
+  get_global_last_common_module() = this;
+  get_global_last_common_module_stats() = stats_;
 }
 
 SERVER_FRAME_API logic_server_common_module::~logic_server_common_module() {
-  if (detail::g_last_common_module == this) {
-    detail::g_last_common_module = nullptr;
-    detail::g_last_common_module_stats.reset();
+  if (get_global_last_common_module() == this) {
+    get_global_last_common_module() = nullptr;
+    get_global_last_common_module_stats().reset();
   }
 }
 
@@ -488,6 +505,7 @@ SERVER_FRAME_API void logic_server_common_module::ready() {
   stats_->collect_sequence.store(0, std::memory_order_release);
   stats_->last_update_usage_timepoint = 0;
   stats_->last_collect_sequence = 0;
+  stats_->last_checkpoint_inited = false;
 
   stats_->last_checkpoint = atfw::util::time::time_utility::sys_now();
   stats_->previous_tick_checkpoint = atfw::util::time::time_utility::sys_now();
@@ -555,9 +573,9 @@ SERVER_FRAME_API int logic_server_common_module::stop() {
 
   // can not use this module after stop
   if (0 == ret) {
-    if (detail::g_last_common_module == this) {
-      detail::g_last_common_module_stats.reset();
-      detail::g_last_common_module = nullptr;
+    if (get_global_last_common_module() == this) {
+      get_global_last_common_module_stats().reset();
+      get_global_last_common_module() = nullptr;
 
       rpc::telemetry::opentelemetry_utility::stop();
     }
@@ -573,9 +591,9 @@ SERVER_FRAME_API int logic_server_common_module::timeout() {
   }
 
   // can not use this module after stop
-  if (detail::g_last_common_module == this) {
-    detail::g_last_common_module_stats.reset();
-    detail::g_last_common_module = nullptr;
+  if (get_global_last_common_module() == this) {
+    get_global_last_common_module_stats().reset();
+    get_global_last_common_module() = nullptr;
   }
   return 0;
 }
@@ -604,7 +622,7 @@ SERVER_FRAME_API int logic_server_common_module::tick() {
   ret += tick_update_remote_configures();
   if (shared_component_.task_manager()) {
     ret += task_manager::me()->tick(util::time::time_utility::get_sys_now(),
-                                    static_cast<int>(1000 * atfw::util::time::time_utility::get_now_usec()));
+                                    1000 * atfw::util::time::time_utility::get_now_usec());
   }
   if (shared_component_.session_manager()) {
     ret += session_manager::me()->proc();
@@ -871,12 +889,13 @@ void logic_server_common_module::tick_stats() {
     }
 
     // 首次tick，初始化
-    if (0 == stats_->last_checkpoint_usage->rusage.ru_utime.tv_sec ||
-        0 == stats_->last_checkpoint_usage->rusage.ru_stime.tv_sec) {
+    if (!stats_->last_checkpoint_inited) {
       stats_->last_checkpoint_usage->rusage = last_usage;
       stats_->last_checkpoint = sys_now;
       stats_->last_collect_sequence = stats_->collect_sequence.load(std::memory_order_acquire);
       stats_->collect_max_tick_interval_us.store(0, std::memory_order_release);
+
+      stats_->last_checkpoint_inited = true;
       break;
     }
 
@@ -895,8 +914,10 @@ void logic_server_common_module::tick_stats() {
       break;
     }
 
-    stats_->collect_cpu_sys.store(offset_sys * 1000000 / checkpoint_offset, std::memory_order_release);
-    stats_->collect_cpu_user.store(offset_usr * 1000000 / checkpoint_offset, std::memory_order_release);
+    stats_->collect_cpu_sys.store((static_cast<int64_t>(offset_sys) * 1000000) / checkpoint_offset,
+                                  std::memory_order_release);
+    stats_->collect_cpu_user.store((static_cast<int64_t>(offset_usr) * 1000000) / checkpoint_offset,
+                                   std::memory_order_release);
     stats_->collect_memory_max_rss.store(last_usage.ru_maxrss, std::memory_order_release);
     size_t memory_rss = 0;
     if (0 == uv_resident_set_memory(&memory_rss)) {
@@ -915,11 +936,12 @@ void logic_server_common_module::tick_stats() {
   } while (false);
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void logic_server_common_module::setup_metrics() {
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
       rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_tick", "", "us"},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
-        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = get_global_last_common_module_stats();
         if (!stats) {
           return;
         }
@@ -933,7 +955,7 @@ void logic_server_common_module::setup_metrics() {
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
       rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_sys", "", "percent"},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
-        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = get_global_last_common_module_stats();
         if (!stats) {
           return;
         }
@@ -947,7 +969,7 @@ void logic_server_common_module::setup_metrics() {
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
       rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_user", "", "percent"},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
-        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = get_global_last_common_module_stats();
         if (!stats) {
           return;
         }
@@ -961,7 +983,7 @@ void logic_server_common_module::setup_metrics() {
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_double(
       rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_cpu_all", "", "percent"},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
-        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = get_global_last_common_module_stats();
         if (!stats) {
           return;
         }
@@ -977,7 +999,7 @@ void logic_server_common_module::setup_metrics() {
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
       rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_maxrss", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
-        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = get_global_last_common_module_stats();
         if (!stats) {
           return;
         }
@@ -991,7 +1013,7 @@ void logic_server_common_module::setup_metrics() {
   rpc::telemetry::opentelemetry_utility::add_global_metics_observable_int64(
       rpc::telemetry::metrics_observable_type::kGauge, "service_rusage", {"service_rusage_memory_rss", "", ""},
       [](rpc::telemetry::opentelemetry_utility::metrics_observer &result) {
-        std::shared_ptr<logic_server_common_module::stats_data_t> stats = detail::g_last_common_module_stats;
+        std::shared_ptr<logic_server_common_module::stats_data_t> stats = get_global_last_common_module_stats();
         if (!stats) {
           return;
         }

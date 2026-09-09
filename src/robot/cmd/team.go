@@ -44,9 +44,6 @@ func init() {
 		"", "打印本地缓存的队伍视图", nil, cmdDefaultTimeout)
 }
 
-// consumeOptionalZoneId 尝试把 cmd[index] 按 zone_id 消费: 仅当能解析为 uint32 时才消费
-// (0 表示使用当前用户所在区服), 否则不消费、原样留给后续参数解析(如 team_id)。
-// 返回解析到的 zone_id 与下一个参数下标。
 func consumeOptionalZoneId(cmd []string, index int) (uint32, int) {
 	if len(cmd) <= index || cmd[index] == "" {
 		return 0, index

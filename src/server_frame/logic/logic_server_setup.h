@@ -106,6 +106,7 @@ class logic_server_common_module : public atfw::atapp::module_impl {
     // main thread
     time_t last_update_usage_timepoint;
     uint64_t last_collect_sequence;
+    bool last_checkpoint_inited;
     std::shared_ptr<sys_rusage_t> last_checkpoint_usage;
     std::chrono::system_clock::time_point last_checkpoint;
     std::chrono::system_clock::time_point previous_tick_checkpoint;
