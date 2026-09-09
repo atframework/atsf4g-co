@@ -998,7 +998,6 @@ int OrbitClientRuntime::on_atapp_disconnected(::atframework::atapp::app &app, ::
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "atapp disconnected");
   if (&app == app_.get() && 0 != agent_bus_id_ && ep.get_id() == agent_bus_id_) {
     agent_bus_id_ = 0;
-    OrbitClientRuntimeState state = state_.load();
     ORBIT_LOG(OrbitClientLogLevel::kWarning, std::string{"agent disconnected, status="} + std::to_string(status));
   }
 
