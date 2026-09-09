@@ -87,9 +87,9 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   uint64_t get_current_matchsvr_server_id() const;
 
  private:
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_matching_inner_(
-      rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select, const std::string& battle_version,
-      PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy);
+  rpc::result_code_type start_matching_inner_(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select,
+                                              const std::string& battle_version,
+                                              PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy);
 
   //  重登时尝试回复匹配状态
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type recover_matching(rpc::context& ctx);
@@ -135,11 +135,9 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void fetch_team_sync_matching_view(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& output) const;
 
   // 订阅匹配单元
-  rpc::result_code_type subscribe_matching_unit(rpc::context& ctx,
-                                                const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& view);
+  void subscribe_matching_unit(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& view);
   // 使用缓存的匹配参数发起匹配请求
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type callback_start_matching(rpc::context& ctx, bool is_start_matching,
-                                                                             int32_t reason = 0);
+  void callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason = 0);
 
  private:
   void try_send_heartbeat(rpc::context& ctx);

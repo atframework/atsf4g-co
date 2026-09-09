@@ -304,15 +304,26 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
-rpc::result_code_type user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_start_matching,
-                                                                     int32_t reason) {
+void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason) {
   if (!is_start_matching) {
     FWLOGDEBUG("{} callback start matching rejected, reason={}", *owner_, reason);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    return;
   }
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(start_matching_inner_(ctx, matching_start_data_.level_select(),
-                                                              matching_start_data_.battle_version(),
-                                                              matching_start_data_.faction_fill_policy())));
+
+  auto owner = owner_->shared_from_this();
+  auto invoke_result = rpc::async_invoke(
+      ctx, "user_matching_manager.heartbeat", [owner](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto& manager = owner->get_user_matching_manager();
+        return manager.start_matching_inner_(child_ctx, manager.matching_start_data_.level_select(),
+                                             manager.matching_start_data_.battle_version(),
+                                             manager.matching_start_data_.faction_fill_policy());
+      });
+  if (invoke_result.is_error()) {
+    periodic_heartbeat_inflight_ = false;
+    FWLOGERROR("{} dispatch matching heartbeat failed, unit_id={}, result={}({})", *owner_, get_current_unit_id(),
+               *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
+  return;
 }
 
 rpc::result_code_type user_matching_manager::start_matching_inner_(
@@ -960,10 +971,9 @@ void user_matching_manager::update_last_battle_users(rpc::context& /*ctx*/,
   }
 }
 
-rpc::result_code_type user_matching_manager::subscribe_matching_unit(
-    rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& view) {
+void user_matching_manager::subscribe_matching_unit(rpc::context& ctx,
+                                                    const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& view) {
   send_heartbeat(ctx, view.unit_id(), view.subscriber_server_id());
-  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {

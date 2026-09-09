@@ -4,6 +4,8 @@
 
 #include <logic/team/user_team_manager.h>
 
+#include <utility>
+
 #include "data/user.h"
 
 user_matching_team_logic::user_matching_team_logic(user& owner) noexcept : owner_(&owner) {}
@@ -29,7 +31,7 @@ void user_matching_team_logic::start_matching_check(rpc::context& ctx) {
     FWLOGERROR("Start matching check function is not registered");
     return;
   }
-  start_matching_check_function_(ctx);
+  start_matching_check_function_(ctx, owner_->shared_from_this());
 }
 
 void user_matching_team_logic::matching_finish(rpc::context& ctx) {
@@ -37,7 +39,7 @@ void user_matching_team_logic::matching_finish(rpc::context& ctx) {
     FWLOGERROR("Matching finish notify function is not registered");
     return;
   }
-  matching_finish_function_(ctx);
+  matching_finish_function_(ctx, owner_->shared_from_this());
 }
 
 void user_matching_team_logic::start_matching_finish(rpc::context& ctx) {
@@ -45,5 +47,5 @@ void user_matching_team_logic::start_matching_finish(rpc::context& ctx) {
     FWLOGERROR("Start matching finish function is not registered");
     return;
   }
-  start_matching_finish_function_(ctx);
+  start_matching_finish_function_(ctx, owner_->shared_from_this());
 }
