@@ -131,8 +131,8 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   // 先尝试从数据库读数据
   rpc::shared_message<PROJECT_NAMESPACE_ID::table_user> tbu{ctx};
   uint64_t tbu_version = 0;
-  auto res = RPC_AWAIT_CODE_RESULT(
-      rpc::db::user::get_all(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
+  auto res =
+      RPC_AWAIT_CODE_RESULT(rpc::db::user::get_all(ctx, get_key().zone_id, get_key().object_id, *tbu, tbu_version));
   if (res < 0) {
     if (PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND != res) {
       FWLOGERROR("load user_cache data for {}:{} failed, error code: {}", get_key().zone_id, get_key().object_id, res);
@@ -299,6 +299,10 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
         obj->get_login_lock().set_router_server_id(get_router_server_id());
         obj->get_login_lock().set_router_version(old_router_ver + 1);
       }
+
+      obj->get_login_lock().mutable_access_token_expired()->set_seconds(
+          static_cast<int64_t>(atfw::util::time::time_utility::get_sys_now()) +
+          logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration().seconds());
 
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, obj->get_login_lock());
