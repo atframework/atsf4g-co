@@ -7,9 +7,9 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk_easy_api {
 
-ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], bool io_thread,
+ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const std::string& config_path, bool io_thread,
                               const orbit_client_sdk::OrbitClientCallbacks& callbacks) {
-  return orbit_client_sdk::OrbitClientRuntime::me()->init(argc, argv, io_thread, callbacks);
+  return orbit_client_sdk::OrbitClientRuntime::me()->init(argc, argv, config_path, io_thread, callbacks);
 }
 ORBIT_CLIENT_SDK_API void init_task_handler_private_data_callback(std::function<void*()> callback) {
   orbit_client_sdk::OrbitRPCDispatcher::me()->init_task_handler_private_data_callback(callback);

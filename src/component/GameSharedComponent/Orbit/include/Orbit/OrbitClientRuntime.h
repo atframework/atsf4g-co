@@ -55,7 +55,8 @@ class OrbitClientRuntime {
  public:
   ORBIT_CLIENT_SDK_API virtual ~OrbitClientRuntime();
 
-  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], bool io_thread, const OrbitClientCallbacks& callbacks);
+  ORBIT_CLIENT_SDK_API int init(int argc, char* argv[], const std::string& config_path, bool io_thread,
+                                const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API int init(uint64_t app_id, const OrbitClientOptions& options,
                                 const OrbitClientCallbacks& callbacks);
   ORBIT_CLIENT_SDK_API void tick();
@@ -102,7 +103,8 @@ class OrbitClientRuntime {
                             const std::string& custom_data);
 
   int extract_launch_options(int argc, char* argv[], uint64_t& app_id, OrbitClientOptions& options);
-  void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output) const;
+  void build_client_launch_arguments(uint64_t app_id, std::vector<std::string>& output,
+                                     const std::string& config_path) const;
   void install_app_callbacks();
   void restore_app_callbacks();
   int on_atapp_forward_request(::atframework::atapp::app& app,
@@ -119,7 +121,7 @@ class OrbitClientRuntime {
 
   void set_state(OrbitClientRuntimeState next_state);
 
-  bool connect();
+  bool wait_connect();
   int32_t send_heartbeat(const OrbitClientLoadSnapshot& snapshot);
   void on_received_message(const std::string& message);
 

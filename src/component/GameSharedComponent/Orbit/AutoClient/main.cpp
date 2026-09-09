@@ -135,7 +135,7 @@ int main(int argc, char* argv[]) {
   callbacks.on_request_stop = [&stopped]() { stopped = true; };
   callbacks.on_seed_waiting_tick = [&write_log_line]() { write_log_line(std::string{"waiting for fork"}); };
 
-  int init_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::init(argc, argv, true, callbacks);
+  int init_result = ORBIT_CLIENT_SDK_NAMESPACE_ID::orbit_client_sdk_easy_api::init(argc, argv, "", true, callbacks);
   if (init_result != 0) {
     write_log_line(std::string{"orbit runtime init failed, code="} + std::to_string(init_result));
     return init_result;

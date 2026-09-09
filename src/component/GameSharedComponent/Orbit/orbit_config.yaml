@@ -1,0 +1,61 @@
+atapp:
+  # =========== bus configure ===========
+  name: orbit-client
+  type_name: orbit-client
+  bus:
+    access_token_max_number: 5
+    access_tokens:
+    - atapp.default
+    backlog: 256
+    compression:
+      algorithm:
+      - none
+      level: default
+    crypto:
+      algorithm:
+      - none
+      key_exchange_type: none
+      key_refresh_interval: 10800s
+    fault_tolerant: 3
+    first_idle_timeout: 30s
+    loop_times: 2048
+    lost_topology_timeout: 120s
+    message_size: 256KB
+    ping_interval: 8s
+    receive_buffer_size: 2MB
+    reconnect_max_interval: 60s
+    reconnect_max_try_times: 5
+    reconnect_start_interval: 8s
+    retry_interval: 3s
+    send_buffer_number: 0
+    send_buffer_size: 1MB
+    ttl: 16
+    topology:
+      data:
+        label:
+          area.region: cn
+      rule:
+        allow_direct_connection: true
+        match_label:
+          area.region:
+            value:
+            - local
+            - cn
+        require_same_host: false
+        require_same_process: false
+        require_same_upstream: true
+  # =========== log configure ===========
+  log:
+    level: DEBUG
+    category:
+      - name: "default"
+        index: 0
+        prefix: "[%L](%k:%n): "
+        stacktrace:
+          min: disable
+          max: disable
+        sink:
+          - type: orbit_client
+            level:
+              min: debug
+              max: fatal

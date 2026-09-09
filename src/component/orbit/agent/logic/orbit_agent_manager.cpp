@@ -104,87 +104,6 @@ static std::string render_string_template(const std::string& input,
   return output;
 }
 
-static void append_config_env_line(std::vector<std::string>& output, const char* key, const std::string& value) {
-  output.emplace_back(kOrbitArgsConfigEnvPrefix);
-  output.push_back(LOG_WRAPPER_FWAPI_FORMAT("{}={}", key, value));
-}
-
-static void append_config_env_line(std::vector<std::string>& output, const char* key, int32_t value) {
-  append_config_env_line(output, key, std::to_string(value));
-}
-
-static void append_config_env_line(std::vector<std::string>& output, const char* key, uint64_t value) {
-  append_config_env_line(output, key, std::to_string(value));
-}
-
-template <class Rep, class Period>
-static std::string make_duration_config_env_value(std::chrono::duration<Rep, Period> input) {
-  auto microseconds = std::chrono::duration_cast<std::chrono::microseconds>(input);
-  return std::to_string(microseconds.count()) + "us";
-}
-
-static void append_bus_config_env_arguments(const atbus::node::conf_t& bus_conf, std::vector<std::string>& output) {
-  if (bus_conf.loop_times > 0) {
-    append_config_env_line(output, "ATAPP_BUS_LOOP_TIMES", bus_conf.loop_times);
-  }
-
-  if (bus_conf.ttl > 0) {
-    append_config_env_line(output, "ATAPP_BUS_TTL", bus_conf.ttl);
-  }
-
-  if (bus_conf.backlog > 0) {
-    append_config_env_line(output, "ATAPP_BUS_BACKLOG", bus_conf.backlog);
-  }
-
-  if (bus_conf.first_idle_timeout.count() > 0) {
-    append_config_env_line(output, "ATAPP_BUS_FIRST_IDLE_TIMEOUT",
-                           make_duration_config_env_value(bus_conf.first_idle_timeout));
-  }
-
-  if (bus_conf.ping_interval.count() > 0) {
-    append_config_env_line(output, "ATAPP_BUS_PING_INTERVAL", make_duration_config_env_value(bus_conf.ping_interval));
-  }
-
-  if (bus_conf.retry_interval.count() > 0) {
-    append_config_env_line(output, "ATAPP_BUS_RETRY_INTERVAL", make_duration_config_env_value(bus_conf.retry_interval));
-  }
-
-  if (bus_conf.fault_tolerant > 0) {
-    append_config_env_line(output, "ATAPP_BUS_FAULT_TOLERANT", static_cast<uint64_t>(bus_conf.fault_tolerant));
-  }
-
-  if (bus_conf.message_size > 0) {
-    append_config_env_line(output, "ATAPP_BUS_MESSAGE_SIZE", static_cast<uint64_t>(bus_conf.message_size));
-  }
-
-  if (bus_conf.receive_buffer_size > 0) {
-    append_config_env_line(output, "ATAPP_BUS_RECEIVE_BUFFER_SIZE",
-                           static_cast<uint64_t>(bus_conf.receive_buffer_size));
-  }
-
-  if (bus_conf.send_buffer_size > 0) {
-    append_config_env_line(output, "ATAPP_BUS_SEND_BUFFER_SIZE", static_cast<uint64_t>(bus_conf.send_buffer_size));
-  }
-
-  append_config_env_line(output, "ATAPP_BUS_SEND_BUFFER_NUMBER", static_cast<uint64_t>(bus_conf.send_buffer_number));
-
-  size_t access_token_max_number = bus_conf.access_token_max_number;
-  if (access_token_max_number < bus_conf.access_tokens.size()) {
-    access_token_max_number = bus_conf.access_tokens.size();
-  }
-
-  if (access_token_max_number > 0) {
-    append_config_env_line(output, "ATAPP_BUS_ACCESS_TOKEN_MAX_NUMBER", static_cast<uint64_t>(access_token_max_number));
-  }
-
-  for (size_t index = 0; index < bus_conf.access_tokens.size(); ++index) {
-    std::string env_key = "ATAPP_BUS_ACCESS_TOKENS_" + std::to_string(static_cast<uint64_t>(index));
-    append_config_env_line(output, env_key.c_str(),
-                           std::string{reinterpret_cast<const char*>(bus_conf.access_tokens[index].data()),
-                                       bus_conf.access_tokens[index].size()});
-  }
-}
-
 static bool split_command_line(const std::string& input, std::vector<std::string>& output) {
   output.clear();
 
@@ -1038,10 +957,6 @@ void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_cli
     output.emplace_back(remote_agent_endpoint_);
   } else {
     output.emplace_back(agent_endpoint_);
-  }
-
-  if (nullptr != owner_app_ && nullptr != owner_app_->get_bus_node()) {
-    append_bus_config_env_arguments(owner_app_->get_bus_node()->get_conf(), output);
   }
 }
 

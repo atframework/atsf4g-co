@@ -209,6 +209,56 @@ std::string get_global_ip() {
   return result_ip;
 }
 
+struct atapp_log_sink_for_orbit {
+  OrbitClientLogCallback log_;
+  atapp_log_sink_for_orbit(OrbitClientLogCallback log) : log_(log) {}
+
+  UTIL_SANITIZER_NO_THREAD void operator()(const util::log::log_wrapper::caller_info_t &caller,
+                                           ::atframework::util::nostd::string_view content) {
+    if (log_) {
+      OrbitClientLogRecord record;
+      switch (caller.level_id) {
+        case ::atframework::util::log::log_level::kTrace:
+        case ::atframework::util::log::log_level::kDebug:
+        case ::atframework::util::log::log_level::kNotice:
+          record.level = OrbitClientLogLevel::kDebug;
+          break;
+        case ::atframework::util::log::log_level::kInfo:
+          record.level = OrbitClientLogLevel::kInfo;
+          break;
+        case ::atframework::util::log::log_level::kWarning:
+          record.level = OrbitClientLogLevel::kWarning;
+          break;
+        case ::atframework::util::log::log_level::kError:
+        case ::atframework::util::log::log_level::kFatal:
+          record.level = OrbitClientLogLevel::kError;
+          break;
+        default:
+          record.level = OrbitClientLogLevel::kInfo;
+          break;
+      }
+      record.file_name = caller.file_path.data();
+      record.line_number = static_cast<int>(caller.line_number);
+      record.message = content;
+      log_(record);
+    }
+  }
+};
+
+struct atapp_log_maker_for_orbit {
+  OrbitClientLogCallback log_;
+  explicit atapp_log_maker_for_orbit(OrbitClientLogCallback log) : log_(log) {}
+  util::log::log_wrapper::log_handler_t operator()(util::log::log_wrapper & /*logger*/, int32_t /*index*/,
+                                                   const ::atapp::protocol::atapp_log & /*log_cfg*/,
+                                                   const ::atapp::protocol::atapp_log_category & /*cat_cfg*/,
+                                                   const ::atapp::protocol::atapp_log_sink & /*cat_cfg*/) {
+    if (!log_) {
+      return nullptr;
+    }
+    return atapp_log_sink_for_orbit(log_);
+  }
+};
+
 }  // namespace
 
 #if defined(ORBIT_CLIENT_SDK_DLL) && ORBIT_CLIENT_SDK_DLL
@@ -236,9 +286,10 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
 
 ORBIT_CLIENT_SDK_API OrbitClientRuntime::~OrbitClientRuntime() { reset(); }
 
-ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char *argv[], bool io_thread,
-                                                  const OrbitClientCallbacks &callbacks) {
+ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(int argc, char *argv[], const std::string &config_path,
+                                                  bool io_thread, const OrbitClientCallbacks &callbacks) {
   OrbitClientOptions options;
+  options.config_path = config_path;
   uint64_t app_id = 0;
 
   int extract_result = extract_launch_options(argc, argv, app_id, options);
@@ -384,6 +435,11 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
     return -4;
   }
 
+  if (options.config_path.empty()) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "init rejected: config_path is empty");
+    return -6;
+  }
+
   restore_app_callbacks();
 
   options_ = options;
@@ -391,6 +447,9 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   agent_bus_id_ = 0;
   sequence_allocator_ = make_initial_sequence_allocator();
   set_state(OrbitClientRuntimeState::kIdle);
+
+  // 将Endpoint 写入 ATAPP_BUS_PROXY
+  options_.config_env.emplace_back("ATAPP_BUS_PROXY=" + options.agent_endpoint);
 
   if (0 != apply_config_env_overrides(options_)) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "init rejected: failed to inject config env overrides");
@@ -405,7 +464,7 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   }
 
   std::vector<std::string> launch_arguments;
-  build_client_launch_arguments(resolved_app_id, launch_arguments);
+  build_client_launch_arguments(resolved_app_id, launch_arguments, options.config_path);
 
   std::vector<const char *> launch_argv;
   launch_argv.reserve(launch_arguments.size());
@@ -414,6 +473,8 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   }
 
   app_ = std::make_unique<::atframework::atapp::app>();
+  install_app_callbacks();
+  app_->add_log_sink_maker("orbit_client", atapp_log_maker_for_orbit(callbacks.on_log));
   int app_init_result =
       app_->init(uv_default_loop(), static_cast<int>(launch_argv.size()), launch_argv.data(), nullptr);
   if (0 != app_init_result) {
@@ -423,51 +484,16 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
     return -5;
   }
 
-  if (callbacks.on_log) {
-    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->init();
-    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)->set_level(::atframework::util::log::log_level::kDebug);
-    WLOG_GETCAT(util::log::log_wrapper::categorize_t::DEFAULT)
-        ->add_sink([on_log = callbacks.on_log](const ::atframework::util::log::log_wrapper::caller_info_t &caller,
-                                               ::atframework::util::nostd::string_view content) {
-          OrbitClientLogRecord record;
-          switch (caller.level_id) {
-            case ::atframework::util::log::log_level::kTrace:
-            case ::atframework::util::log::log_level::kDebug:
-            case ::atframework::util::log::log_level::kNotice:
-              record.level = OrbitClientLogLevel::kDebug;
-              break;
-            case ::atframework::util::log::log_level::kInfo:
-              record.level = OrbitClientLogLevel::kInfo;
-              break;
-            case ::atframework::util::log::log_level::kWarning:
-              record.level = OrbitClientLogLevel::kWarning;
-              break;
-            case ::atframework::util::log::log_level::kError:
-            case ::atframework::util::log::log_level::kFatal:
-              record.level = OrbitClientLogLevel::kError;
-              break;
-            default:
-              record.level = OrbitClientLogLevel::kInfo;
-              break;
-          }
-          record.file_name = caller.file_path.data();
-          record.line_number = static_cast<int>(caller.line_number);
-          record.message = content.data();
-          on_log(record);
-        });
-  }
-
   if (!app_->get_bus_node()) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "init rejected: bus node is unavailable");
     return -6;
   }
 
-  install_app_callbacks();
   configured_ = true;
   ORBIT_LOG(OrbitClientLogLevel::kInfo, std::string{"runtime begin connecting, app_id="} +
                                             std::to_string(static_cast<unsigned long long>(resolved_app_id)));
 
-  if (!connect()) {
+  if (!wait_connect()) {
     restore_app_callbacks();
     configured_ = false;
     return -7;
@@ -487,22 +513,25 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   return 0;
 }
 
-void OrbitClientRuntime::build_client_launch_arguments(uint64_t app_id, std::vector<std::string> &output) const {
+void OrbitClientRuntime::build_client_launch_arguments(uint64_t app_id, std::vector<std::string> &output,
+                                                       const std::string &config_path) const {
   output.clear();
-  output.reserve(4);
+  output.reserve(6);
   output.emplace_back(kAtappProgramName);
   output.emplace_back("-id");
   output.emplace_back(std::to_string(static_cast<unsigned long long>(app_id)));
+  output.emplace_back("-c");
+  output.emplace_back(config_path);
   output.emplace_back("start");
 }
 
-bool OrbitClientRuntime::connect() {
+bool OrbitClientRuntime::wait_connect() {
   if (!configured_) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "connect rejected: runtime is not configured");
     return false;
   }
 
-  if (nullptr == app_ || !app_->get_bus_node()) {
+  if (nullptr == app_) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "connect rejected: bus node is unavailable");
     return false;
   }
@@ -515,18 +544,13 @@ bool OrbitClientRuntime::connect() {
 
   set_state(OrbitClientRuntimeState::kConnecting);
 
-  int connect_result = app_->get_bus_node()->connect(options_.agent_endpoint);
-  if (0 != connect_result) {
-    set_state(OrbitClientRuntimeState::kIdle);
-    ORBIT_LOG(OrbitClientLogLevel::kError,
-              std::string{"connect rejected: get_bus_node()->connect failed, code="} + std::to_string(connect_result));
-    return false;
-  }
-
   // 等待连接完成
   time_t begin_connect =
       std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   while (state_.load() == OrbitClientRuntimeState::kConnecting) {
+    if (agent_bus_id_ != 0) {
+      set_state(OrbitClientRuntimeState::kConnected);
+    }
     app_->run_once(0, std::chrono::seconds{0});
     time_t now =
         std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -959,14 +983,11 @@ int OrbitClientRuntime::on_atapp_forward_response(::atframework::atapp::app &app
 
 int OrbitClientRuntime::on_atapp_connected(::atframework::atapp::app &app, ::atbus::endpoint &ep, int status) {
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "atapp connected");
-  if (&app == app_.get() && 0 == status && OrbitClientRuntimeState::kConnecting == state_.load() &&
-      0 == agent_bus_id_) {
+  if (&app == app_.get() && 0 == status && 0 == agent_bus_id_) {
     agent_bus_id_ = ep.get_id();
-    set_state(OrbitClientRuntimeState::kConnected);
     ORBIT_LOG(OrbitClientLogLevel::kInfo, std::string{"agent connected, endpoint id="} +
                                               std::to_string(static_cast<unsigned long long>(agent_bus_id_)));
   }
-
   return 0;
 }
 
@@ -975,9 +996,6 @@ int OrbitClientRuntime::on_atapp_disconnected(::atframework::atapp::app &app, ::
   if (&app == app_.get() && 0 != agent_bus_id_ && ep.get_id() == agent_bus_id_) {
     agent_bus_id_ = 0;
     OrbitClientRuntimeState state = state_.load();
-    if (state != OrbitClientRuntimeState::kStopping && state != OrbitClientRuntimeState::kStopped) {
-      set_state(OrbitClientRuntimeState::kIdle);
-    }
     ORBIT_LOG(OrbitClientLogLevel::kWarning, std::string{"agent disconnected, status="} + std::to_string(status));
   }
 

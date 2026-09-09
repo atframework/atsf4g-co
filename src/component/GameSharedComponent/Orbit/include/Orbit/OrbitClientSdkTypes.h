@@ -4,6 +4,8 @@
 
 #include "OrbitConfig.h"
 
+#include <nostd/string_view.h>
+
 #include <chrono>
 #include <cstdint>
 #include <functional>
@@ -47,6 +49,7 @@ struct OrbitClientOptions {
   time_t heartbeat_interval_second = 5;
   std::vector<std::string> config_env;
   std::vector<std::string> custom_launch_arguments;
+  std::string config_path;
   bool seed_mode = false;
   // 所有请求会被转入IO线程 所有回调会在主动Tick时调用
   bool io_thread = false;
@@ -62,8 +65,8 @@ struct OrbitClientLogRecord {
   OrbitClientLogLevel level = OrbitClientLogLevel::kInfo;
   const char* file_name = nullptr;
   int line_number = 0;
-  std::string category;
-  std::string message;
+  ::atframework::util::nostd::string_view category;
+  ::atframework::util::nostd::string_view message;
 };
 
 using OrbitClientLogCallback = std::function<void(const OrbitClientLogRecord& record)>;
