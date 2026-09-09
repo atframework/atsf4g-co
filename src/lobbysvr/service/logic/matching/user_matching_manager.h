@@ -15,6 +15,7 @@
 
 #include <cli/cmd_option_list.h>
 #include <data/user_type_define.h>
+#include <logic/matching/user_matching_team_logic.h>
 
 #include <cstdint>
 #include <ctime>
@@ -56,14 +57,13 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void refresh_feature_limit_second(rpc::context& ctx);
   // 玩家持有有效 Unit 且处于搜索、确认或创建战斗阶段。
   bool is_in_matching() const;
-
+  bool is_matching_finish(PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status) const;
   // 是否在流程中
   bool is_in_orbit_or_matching() const;
 
   // CS 匹配操作。操作者身份和 lobbysvr 订阅路由只由服务端填写。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_matching(
-      rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingStartReq& request,
-      PROJECT_NAMESPACE_ID::SCMatchingStartRsp& response);
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::CSMatchingStartReq& request);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type check_matching(rpc::context& ctx,
                                                                     PROJECT_NAMESPACE_ID::SCMatchingCheckRsp& response);
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type cancel_matching(
@@ -87,15 +87,18 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   uint64_t get_current_matchsvr_server_id() const;
 
  private:
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type start_matching_inner_(
+      rpc::context& ctx, const PROJECT_NAMESPACE_ID::DLevelSelect& level_select, const std::string& battle_version,
+      PROJECT_NAMESPACE_ID::EnMatchingFactionFillPolicy faction_fill_policy);
+
   //  重登时尝试回复匹配状态
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type recover_matching(rpc::context& ctx);
 
   // 向当前 Matchsvr 查询 Unit 权威快照。调用方分别决定客户端返回和登录恢复语义。
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type query_matchsvr_snapshot(
-      rpc::context& ctx, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
+      rpc::context& ctx, uint64_t unit_id, int64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response);
 
-  // 合并 Matchsvr Unit 视图；拒绝早于本地 Unit WAL 游标的旧视图。
-  void update_view(const PROJECT_NAMESPACE_ID::DMatchingUnitView& view);
+  void update_view(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingUnitView& view);
   void clear_matching_state();
   void dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const;
   void dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const;
@@ -124,15 +127,27 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void update_last_battle_users(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& data);
 
   // 组队相关接口
-  // 填充组队需要同步的参数
+
+ public:
+  // 填充开始匹配数据
   void fetch_team_matching_parameter(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamParameter& output) const;
-  // 按匹配参数合并规则表生成 Unit 使用的参数。未配置的字段保留队长参数，input 的第一项必须是队长。
+  // 获取组队同步数据
+  void fetch_team_sync_matching_view(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& output) const;
+
+  // 订阅匹配单元
+  rpc::result_code_type subscribe_matching_unit(rpc::context& ctx,
+                                                const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& view);
+  // 使用缓存的匹配参数发起匹配请求
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type callback_start_matching(rpc::context& ctx, bool is_start_matching,
+                                                                             int32_t reason = 0);
+
+ private:
+  void try_send_heartbeat(rpc::context& ctx);
+  void send_heartbeat(rpc::context& ctx, uint64_t unit_id, int64_t matchsvr_id);
+
   void merge_team_matching_parameter(
-      rpc::context& ctx,
-      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,
+      rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,
       PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
-  // 当前的匹配视图
-  void fetch_matching_view(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& output) const;
 
  public:
   static void on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
@@ -141,6 +156,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
 
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
+  user_matching_team_logic team_logic_;
   PROJECT_NAMESPACE_ID::DUserMatchingData data_;
   int64_t processing_event_id_ = 0;
   int64_t last_reported_acknowledge_event_id_ = 0;
@@ -148,4 +164,6 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   std::vector<PROJECT_NAMESPACE_ID::DMatchedUserData> matched_users_;
   bool periodic_heartbeat_inflight_ = false;
   bool dirty_;
+  int64_t is_start_matching_ = 0;
+  PROJECT_NAMESPACE_ID::DMatchingStartData matching_start_data_;
 };

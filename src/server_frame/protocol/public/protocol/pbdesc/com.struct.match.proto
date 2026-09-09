@@ -269,3 +269,10 @@ message DMatchingOrbitInitData {
  DOrbitUserInitDataDetail orbit_init_data = 1;  // 保底的战斗房间初始化数据，确保玩家会进入到局内
  string user_open_id = 2;  // 用户的 openid_id
 }
+
+message DMatchingStartData {
+  string battle_version = 1;
+  DLevelSelect level_select = 2;
+  int32 client_ds_ping = 3;
+  EnMatchingFactionFillPolicy faction_fill_policy = 5;
+}

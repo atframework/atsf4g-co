@@ -17,6 +17,7 @@ message CSMatchingStartReq {
   DLevelSelect level_select = 2;
   int32 client_ds_ping = 3;
   EnMatchingFactionFillPolicy faction_fill_policy = 5;
+  DMatchingStartData data = 6;
 }
 
 message SCMatchingStartRsp {
