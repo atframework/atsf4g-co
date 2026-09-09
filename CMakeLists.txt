@@ -255,9 +255,11 @@ if(WIN32)
   set_property(TARGET "tools-windows-bat-wrappers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 endif()
 
-# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst,
-# excluding every "log" directory and "*.a"/"*.dbg" files. Generated into the build root
-# next to the publish tree.
+# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst.
+# Before packing it splits debug symbols of shared libraries (.so) under <publish>/lib
+# into sibling ".dbg" files with objcopy, then excludes every "log" directory,
+# <publish>/tools/go-task and <publish>/tools/helm, and "*.a"/"*.dbg" files. Generated
+# into the build root next to the publish tree.
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/pack_publish.sh"
                "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh" @ONLY)
 add_custom_target(
