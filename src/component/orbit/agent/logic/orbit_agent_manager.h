@@ -240,6 +240,7 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   bool seed_mode_enabled_ = false;
   uint32_t seed_startup_timeout_sec_ = 0;
   uint32_t seed_heartbeat_timeout_sec_ = 0;
+  int32_t repeated_startup_failures_fatal_error_ = 0;
 
   std::vector<std::string> configured_client_command_line_;
   std::vector<std::string> configured_client_command_line_append_;

@@ -389,6 +389,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   }
 
   client_ip_ = config.client_ip();
+  repeated_startup_failures_fatal_error_ = config.repeated_startup_failures_fatal_error();
   remote_agent_endpoint_ = config.remote_agent_addr();
 
   if (agent_endpoint_.empty() || remote_agent_endpoint_.empty()) {
@@ -1015,7 +1016,8 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
       repeated_startup_failures_ = 0;
     } else {
       ++repeated_startup_failures_;
-      if (repeated_startup_failures_ >= 3) {
+      if (repeated_startup_failures_fatal_error_ != 0 &&
+          repeated_startup_failures_ > repeated_startup_failures_fatal_error_) {
         FWLOGERROR("orbit agent repeated client startup failures reached {}, exiting process",
                    repeated_startup_failures_);
         agent_fatal_error();
