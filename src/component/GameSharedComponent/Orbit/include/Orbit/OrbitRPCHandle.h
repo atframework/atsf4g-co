@@ -1,8 +1,11 @@
+// Copyright 2026 atframework
+
 #pragma once
 
+#include <Orbit/OrbitClientRuntime.h>
+#include <Orbit/OrbitRPCReqBase.h>
+
 #include <log/log_wrapper.h>
-#include "OrbitClientRuntime.h"
-#include "OrbitRPCReqBase.h"
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -15,11 +18,13 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <string>
+
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
 namespace orbit_client_sdk {
 
-namespace {
+namespace detail {
 template <class TBodyType>
 static inline int __pack_rpc_body(const TBodyType& input, std::string* output, const std::string& rpc_full_name) {
   if (false == input.SerializeToString(output)) {
@@ -100,7 +105,7 @@ static inline time_t __get_rpc_wait_timeout(const OrbitClientRequestOptions& req
   return timeout_second * (retry_times + 1);
 }
 
-}  // namespace
+}  // namespace detail
 
 template <class orbit_rpc_req_type, class orbit_rpc_rsp_type>
 int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_name,
@@ -108,13 +113,13 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_
                                                     std::function<void(int32_t, const orbit_rpc_rsp_type&)> callback,
                                                     int32_t retry_time) {
   atfw::orbit::OrbitRpcMessage req_msg;
-  OrbitClientRequestOptions request_options = __make_rpc_request_options(retry_time);
-  int32_t res =
-      __setup_rpc_request_header(*req_msg.mutable_head(), rpc_full_name, orbit_rpc_req_type::descriptor()->full_name());
+  OrbitClientRequestOptions request_options = detail::__make_rpc_request_options(retry_time);
+  int32_t res = detail::__setup_rpc_request_header(*req_msg.mutable_head(), rpc_full_name,
+                                                   orbit_rpc_req_type::descriptor()->full_name());
   if (res < 0) {
     return res;
   }
-  res = __pack_rpc_body(req_body, req_msg.mutable_body_bin(), rpc_full_name);
+  res = detail::__pack_rpc_body(req_body, req_msg.mutable_body_bin(), rpc_full_name);
   if (res < 0) {
     return res;
   }
@@ -124,13 +129,13 @@ int ATFW_UTIL_SYMBOL_VISIBLE orbit_rpc_handle_inner(const std::string& rpc_full_
     return res;
   }
   return OrbitRPCDispatcher::me()->init_rpc_req_callback(
-      sequence, __get_rpc_wait_timeout(request_options),
+      sequence, detail::__get_rpc_wait_timeout(request_options),
       [rpc_full_name, callback](const atfw::orbit::OrbitRpcMessage& rsp_msg) {
         int32_t res = 0;
         orbit_rpc_rsp_type rsp_body;
         if (rsp_msg.head().rpc_response().type_url() == orbit_rpc_rsp_type::descriptor()->full_name() &&
             !rsp_msg.body_bin().empty()) {
-          res = __unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name);
+          res = detail::__unpack_rpc_body(rsp_body, rsp_msg.body_bin(), rpc_full_name);
         }
         if (res == 0) {
           res = rsp_msg.head().error_code();

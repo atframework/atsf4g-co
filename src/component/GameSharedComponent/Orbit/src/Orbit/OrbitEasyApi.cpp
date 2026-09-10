@@ -1,7 +1,11 @@
 // Copyright 2026 atframework
+
 #include <Orbit/OrbitEasyApi.h>
 
 #include <Orbit/OrbitClientRuntime.h>
+
+#include <vector>
+#include <string>
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 

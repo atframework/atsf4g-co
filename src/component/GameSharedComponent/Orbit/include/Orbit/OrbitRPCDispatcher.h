@@ -1,6 +1,8 @@
+// Copyright 2026 atframework
+
 #pragma once
 
-#include "OrbitClientSdkTypes.h"
+#include <Orbit/OrbitClientSdkTypes.h>
 
 #include <design_pattern/singleton.h>
 
@@ -24,6 +26,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 namespace orbit {
 class OrbitRpcMessage;
@@ -33,8 +36,7 @@ ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 namespace orbit_client_sdk {
 
 struct task_action_maker_base_t {
-  explicit task_action_maker_base_t() {};
-  virtual ~task_action_maker_base_t() {};
+  virtual ~task_action_maker_base_t() = default;
   virtual int operator()(void *private_data, atfw::orbit::OrbitRpcMessage &&orbit_msg) = 0;
 };
 

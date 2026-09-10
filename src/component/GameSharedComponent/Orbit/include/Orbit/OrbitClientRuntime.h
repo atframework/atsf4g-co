@@ -2,8 +2,10 @@
 
 #pragma once
 
+#include <Orbit/OrbitClientSdkTypes.h>
+
+#include <nostd/string_view.h>
 #include <tbb/concurrent_queue.h>
-#include "OrbitClientSdkTypes.h"
 
 #define UI UI_ST
 #include <atframe/atapp.h>
@@ -27,6 +29,7 @@ class MethodDescriptor;
 }  // namespace protobuf
 }  // namespace google
 
+//
 namespace atframework {
 class SSMsg;
 }
@@ -89,7 +92,7 @@ class OrbitClientRuntime {
                                            const std::string& custom_data = std::string{});
 
   ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const char* file_name, int line_number,
-                                const std::string& message) const;
+                                ::atframework::util::nostd::string_view message) const;
   ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
 
   using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;

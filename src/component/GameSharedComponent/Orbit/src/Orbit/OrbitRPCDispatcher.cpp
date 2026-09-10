@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include <Orbit/OrbitRPCDispatcher.h>
 
 #include <Orbit/OrbitClientRuntime.h>
@@ -52,7 +54,8 @@ ORBIT_CLIENT_SDK_API bool OrbitRPCDispatcher::check_rpc_success() {
   return true;
 }
 
-ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(const ::atframework::orbit::OrbitRpcMessage& raw_msg) {
+ORBIT_CLIENT_SDK_API const std::string& OrbitRPCDispatcher::pick_rpc_name(
+    const ::atframework::orbit::OrbitRpcMessage& raw_msg) {
   if (!raw_msg.has_head()) {
     return get_empty_string();
   }
@@ -158,7 +161,8 @@ ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_rsp_to_proc(::atframework:
   return OrbitClientRuntime::me()->send_to_server(orbit_msg.SerializeAsString(), nullptr, request_options);
 }
 
-ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_req_to_proc(::atframework::orbit::OrbitRpcMessage& orbit_msg, uint64_t& sequence,
+ORBIT_CLIENT_SDK_API int32_t OrbitRPCDispatcher::send_req_to_proc(::atframework::orbit::OrbitRpcMessage& orbit_msg,
+                                                                  uint64_t& sequence,
                                                                   const OrbitClientRequestOptions& request_options) {
   if (0 == orbit_msg.head().sequence()) {
     orbit_msg.mutable_head()->set_sequence(allocate_sequence());

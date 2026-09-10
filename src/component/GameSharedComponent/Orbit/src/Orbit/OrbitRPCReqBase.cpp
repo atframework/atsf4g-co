@@ -1,3 +1,5 @@
+// Copyright 2026 atframework
+
 #include <Orbit/OrbitRPCReqBase.h>
 
 #include <Orbit/OrbitClientRuntime.h>
@@ -22,7 +24,8 @@ task_action_orbit_req_base::msg_ref_type task_action_orbit_req_base::add_rsp_msg
   return response_messages_;
 }
 
-int32_t task_action_orbit_req_base::init_msg(::atframework::orbit::OrbitRpcMessage& msg, const ::atframework::orbit::OrbitRpcMessage& req_msg) {
+int32_t task_action_orbit_req_base::init_msg(::atframework::orbit::OrbitRpcMessage& msg,
+                                             const ::atframework::orbit::OrbitRpcMessage& req_msg) {
   *msg.mutable_head() = req_msg.head();
   msg.mutable_head()->set_timestamp(::util::time::time_utility::get_sys_now());
 

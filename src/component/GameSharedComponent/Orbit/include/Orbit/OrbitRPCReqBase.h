@@ -1,4 +1,9 @@
+// Copyright 2026 atframework
+
 #pragma once
+
+#include <Orbit/OrbitClientRuntime.h>
+#include <Orbit/OrbitConfig.h>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -9,9 +14,6 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
-
-#include "OrbitClientRuntime.h"
-#include "OrbitConfig.h"
 
 #include <list>
 #include <memory>
@@ -34,7 +36,8 @@ class ORBIT_CLIENT_SDK_API task_action_orbit_req_base {
 
   msg_ref_type add_rsp_msg();
 
-  static int32_t init_msg(::atframework::orbit::OrbitRpcMessage& msg, const ::atframework::orbit::OrbitRpcMessage& req_msg);
+  static int32_t init_msg(::atframework::orbit::OrbitRpcMessage& msg,
+                          const ::atframework::orbit::OrbitRpcMessage& req_msg);
 
  protected:
   void send_response();

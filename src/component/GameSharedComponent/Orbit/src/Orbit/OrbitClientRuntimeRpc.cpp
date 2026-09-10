@@ -1,4 +1,5 @@
 // Copyright 2026 atframework
+
 #include <Orbit/OrbitClientRuntime.h>
 #include <Orbit/OrbitRPCDispatcher.h>
 
@@ -17,7 +18,9 @@
 
 #include <chrono>
 #include <sstream>
+#include <string>
 #include <unordered_map>
+#include <utility>
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
@@ -171,7 +174,7 @@ OrbitClientRuntime::client_request_raw_callback_t make_typed_request_callback(
     if (result == ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS) {
       if (!message.has_head() || !message.head().has_rpc_response()) {
         runtime.log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
-                    std::string{"rpc response head missing for "} + rpc_full_name);
+                    LOG_WRAPPER_FWAPI_FORMAT("rpc response head missing for {}", rpc_full_name));
         result = ::atframework::orbit::EN_ORBIT_ERROR_CODE_MESSAGE_HEAD_NOT_FOUND;
       } else if (message.head().rpc_response().type_url() != TResponse::descriptor()->full_name()) {
         runtime.log(
@@ -198,7 +201,7 @@ void OrbitClientRuntime::on_received_message(const std::string &message) {
   int32_t unpack_result = unpack_message(unpacked_message, message);
   if (unpack_result < 0) {
     ORBIT_LOG(OrbitClientLogLevel::kError,
-              std::string{"failed to parse transport message as SSMsg, code="} + std::to_string(unpack_result));
+              LOG_WRAPPER_FWAPI_FORMAT("failed to parse transport message as SSMsg, code={}", unpack_result));
     return;
   }
 
@@ -463,7 +466,7 @@ int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg &
   const auto &registry = get_receive_rpc_registry();
   auto dispatcher = registry.find(rpc_name);
   if (dispatcher == registry.end()) {
-    ORBIT_LOG(OrbitClientLogLevel::kWarning, std::string{"unsupported rpc received: "} + rpc_name);
+    ORBIT_LOG(OrbitClientLogLevel::kWarning, LOG_WRAPPER_FWAPI_FORMAT("unsupported rpc received: {}", rpc_name));
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
@@ -501,7 +504,8 @@ int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg &
       break;
   }
 
-  ORBIT_LOG(OrbitClientLogLevel::kWarning, std::string{"unsupported registered rpc type for: "} + rpc_name);
+  ORBIT_LOG(OrbitClientLogLevel::kWarning,
+            LOG_WRAPPER_FWAPI_FORMAT("unsupported registered rpc type for: {}", rpc_name));
   return ::atframework::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
 }
 
@@ -592,7 +596,8 @@ void OrbitClientRuntime::execute_pending_request_timeouts() {
       continue;
     }
 
-    if (retry_pending_request(task_id, pending_iter->second, ::atframework::orbit::EN_ORBIT_ERROR_CODE_TIMEOUT, "request timeout")) {
+    if (retry_pending_request(task_id, pending_iter->second, ::atframework::orbit::EN_ORBIT_ERROR_CODE_TIMEOUT,
+                              "request timeout")) {
       continue;
     }
 
@@ -610,9 +615,10 @@ int32_t OrbitClientRuntime::rpc_send_client_heartbeat(const ::atframework::orbit
   return send_stream_message(request, *method);
 }
 
-int32_t OrbitClientRuntime::rpc_send_send_to_server(const ::atframework::orbit::DTASendToServerReq &request,
-                                                    OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback,
-                                                    const OrbitClientRequestOptions &request_options) {
+int32_t OrbitClientRuntime::rpc_send_send_to_server(
+    const ::atframework::orbit::DTASendToServerReq &request,
+    OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback,
+    const OrbitClientRequestOptions &request_options) {
   const google::protobuf::MethodDescriptor *method = get_client_to_agent_method(kMethodSendToServer);
   if (nullptr == method) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "send_to_server method descriptor not found");
@@ -620,13 +626,15 @@ int32_t OrbitClientRuntime::rpc_send_send_to_server(const ::atframework::orbit::
   }
 
   return send_request_message(
-      request, *method, make_typed_request_callback<::atframework::orbit::ATDSendToServerRsp>(*this, *method, std::move(callback)),
+      request, *method,
+      make_typed_request_callback<::atframework::orbit::ATDSendToServerRsp>(*this, *method, std::move(callback)),
       request_options);
 }
 
-int32_t OrbitClientRuntime::rpc_send_client_start(const ::atframework::orbit::DTAClientStartReq &request,
-                                                  OrbitClientRpcCallback<::atframework::orbit::ATDClientStartRsp> callback,
-                                                  const OrbitClientRequestOptions &request_options) {
+int32_t OrbitClientRuntime::rpc_send_client_start(
+    const ::atframework::orbit::DTAClientStartReq &request,
+    OrbitClientRpcCallback<::atframework::orbit::ATDClientStartRsp> callback,
+    const OrbitClientRequestOptions &request_options) {
   const google::protobuf::MethodDescriptor *method = get_client_to_agent_method(kMethodClientStart);
   if (nullptr == method) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "client_start method descriptor not found");
@@ -634,22 +642,25 @@ int32_t OrbitClientRuntime::rpc_send_client_start(const ::atframework::orbit::DT
   }
 
   return send_request_message(
-      request, *method, make_typed_request_callback<::atframework::orbit::ATDClientStartRsp>(*this, *method, std::move(callback)),
+      request, *method,
+      make_typed_request_callback<::atframework::orbit::ATDClientStartRsp>(*this, *method, std::move(callback)),
       request_options);
 }
 
-int32_t OrbitClientRuntime::rpc_send_client_exit(const ::atframework::orbit::DTAClientExitReq &request,
-                                                 OrbitClientRpcCallback<::atframework::orbit::ATDClientExitRsp> callback,
-                                                 const OrbitClientRequestOptions &request_options) {
+int32_t OrbitClientRuntime::rpc_send_client_exit(
+    const ::atframework::orbit::DTAClientExitReq &request,
+    OrbitClientRpcCallback<::atframework::orbit::ATDClientExitRsp> callback,
+    const OrbitClientRequestOptions &request_options) {
   const google::protobuf::MethodDescriptor *method = get_client_to_agent_method(kMethodClientExit);
   if (nullptr == method) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "client_exit method descriptor not found");
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_request_message(request, *method,
-                              make_typed_request_callback<::atframework::orbit::ATDClientExitRsp>(*this, *method, std::move(callback)),
-                              request_options);
+  return send_request_message(
+      request, *method,
+      make_typed_request_callback<::atframework::orbit::ATDClientExitRsp>(*this, *method, std::move(callback)),
+      request_options);
 }
 
 int32_t OrbitClientRuntime::rpc_receive_forward_to_client(const ::atframework::SSMsgHead &req_head,

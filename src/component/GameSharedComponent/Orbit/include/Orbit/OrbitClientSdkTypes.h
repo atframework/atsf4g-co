@@ -2,15 +2,9 @@
 
 #pragma once
 
-#include "OrbitConfig.h"
+#include <Orbit/OrbitConfig.h>
 
 #include <nostd/string_view.h>
-
-#include <chrono>
-#include <cstdint>
-#include <functional>
-#include <string>
-#include <vector>
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
@@ -22,6 +16,12 @@
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
+
+#include <chrono>
+#include <cstdint>
+#include <functional>
+#include <string>
+#include <vector>
 
 ORBIT_CLIENT_SDK_NAMESPACE_BEGIN
 
