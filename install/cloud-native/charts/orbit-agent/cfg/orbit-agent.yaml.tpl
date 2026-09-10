@@ -5,7 +5,6 @@
 orbit_agent:
   region: {{ .Values.orbit_agent.region }}
   tag: {{ .Values.orbit_agent.tag }}
-  configured_client_command_line: {{ .Values.orbit_agent.configured_client_command_line }}
   cpu_capacity: {{ .Values.orbit_agent.cpu_capacity }}
   memory_capacity_mb: {{ .Values.orbit_agent.memory_capacity_mb }}
   server_identity_timeout_sec: {{ .Values.orbit_agent.server_identity_timeout_sec }}
@@ -16,4 +15,8 @@ orbit_agent:
   enable_seed_mode: {{ .Values.orbit_agent.enable_seed_mode }}
   seed_startup_timeout_sec: {{ .Values.orbit_agent.seed_startup_timeout_sec }}
   seed_heartbeat_timeout_sec: {{ .Values.orbit_agent.seed_heartbeat_timeout_sec }}
+
+  client_path: {{ .Values.orbit_agent.client_path }}
+  client_command_line: {{ .Values.orbit_agent.client_command_line }}
+  seed_client_path: {{ .Values.orbit_agent.seed_client_path }}
   seed_client_command_line: {{ .Values.orbit_agent.seed_client_command_line }}

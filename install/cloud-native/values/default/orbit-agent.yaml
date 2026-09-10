@@ -1,0 +1,15 @@
+orbit_agent:
+  region: default
+  tag: ""
+  cpu_capacity: 4
+  memory_capacity_mb: 8192
+  server_identity_timeout_sec: 30
+  server_identity_check_interval_sec: 5
+  max_batch_startup_count: 3
+  host_name: localhost
+  enable_seed_mode: false
+  seed_startup_timeout_sec: 30
+  seed_heartbeat_timeout_sec: 10
+
+  client_path: ..\..\orbit-auto-client\bin\orbit-auto-client.exe
+  seed_client_path: ..\..\orbit-auto-client\bin\orbit-auto-client.exe

@@ -28,21 +28,6 @@ atapp:
     worker_number_min: 4
     worker_number_max: 4
 
-orbit_agent:
-  region: default
-  tag: ""
-  configured_client_command_line: ..\..\orbit-auto-client\bin\orbit-auto-client.exe
-  cpu_capacity: 4
-  memory_capacity_mb: 4096
-  server_identity_timeout_sec: 30
-  server_identity_check_interval_sec: 5
-  max_batch_startup_count: 3
-  host_name: localhost
-
-  enable_seed_mode: false
-  seed_startup_timeout_sec: 30
-  seed_heartbeat_timeout_sec: 10
-  seed_client_command_line: ..\..\orbit-auto-client\bin\orbit-auto-client.exe
 
 etcd:
   cluster_name: atsf4g-co-orbit-agent

@@ -55,6 +55,7 @@ constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
 constexpr const char* kOrbitEnabledArg = "--enable_orbit";
+constexpr const char* kOrbitStartTimeout = "--start_timeout";
 
 static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
   return [expected_server_id](const std::string& checked) -> bool {
@@ -223,8 +224,6 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
   (*controller_policy_selector_.mutable_labels())["orbit.region"] = region_;
 
-  std::string origin_configured_client_command_line_ = config.configured_client_command_line();
-  std::string origin_seed_client_command_line_ = config.seed_client_command_line();
   cpu_capacity_ = config.cpu_capacity();
   memory_capacity_mb_ = config.memory_capacity_mb();
   server_identity_timeout_sec_ = static_cast<time_t>(config.server_identity_timeout_sec());
@@ -238,46 +237,41 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   seed_startup_timeout_sec_ = config.seed_startup_timeout_sec();
   seed_heartbeat_timeout_sec_ = config.seed_heartbeat_timeout_sec();
 
-  if (!origin_configured_client_command_line_.empty()) {
-    FWLOGINFO("orbit agent launch command configured: {}", origin_configured_client_command_line_);
-  } else {
-    FWLOGERROR("orbit agent launch command is empty, set ORBIT_AGENT_CLIENT_COMMAND_LINE before start_client");
+  if (config.client_path().empty()) {
+    FWLOGERROR("orbit agent client path is empty");
     return -1;
   }
+  {
+    configured_client_command_line_.push_back(config.client_path());
 
-  if (!split_command_line(origin_configured_client_command_line_, configured_client_command_line_)) {
-    FWLOGERROR("split_command_line failed for {}", origin_configured_client_command_line_);
-    return -2;
-  }
+    if (!config.client_command_line().empty()) {
+      FWLOGINFO("orbit agent launch command configured: {}", config.client_command_line());
+      if (!split_command_line(config.client_command_line(), configured_client_command_line_)) {
+        FWLOGERROR("split_command_line failed for {}", config.client_command_line());
+        return -2;
+      }
+    }
 
-  if (configured_client_command_line_.empty()) {
-    FWLOGERROR("orbit agent launch command is empty after split, invalid configured_client_command_line: {}",
-               origin_configured_client_command_line_);
-    return -3;
-  }
-
-  configured_client_command_line_append_.emplace_back(kOrbitEnabledArg);
-  // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
-  for (const auto& arg : configured_client_command_line_) {
-    FWLOGINFO("orbit agent launch command argument: {}", arg);
-  }
-  for (const auto& arg : configured_client_command_line_append_) {
-    FWLOGINFO("orbit agent launch command argument: {}", arg);
+    // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
+    for (const auto& arg : configured_client_command_line_) {
+      FWLOGINFO("orbit agent launch command argument: {}", arg);
+    }
   }
 
   if (seed_mode_enabled_) {
-    if (!split_command_line(origin_seed_client_command_line_, seed_client_command_line_)) {
-      FWLOGERROR("split_command_line failed for {}", origin_seed_client_command_line_);
-      return -4;
+    if (config.seed_client_path().empty()) {
+      FWLOGERROR("orbit agent seed_client_path is empty");
+      return -1;
     }
+    seed_client_command_line_.push_back(config.seed_client_path());
 
-    if (seed_client_command_line_.empty()) {
-      FWLOGERROR("orbit agent launch command is empty after split, invalid seed_client_command_line: {}",
-                 origin_seed_client_command_line_);
-      return -5;
+    if (!config.seed_client_command_line().empty()) {
+      FWLOGINFO("orbit agent launch seed command configured: {}", config.seed_client_command_line());
+      if (!split_command_line(config.seed_client_command_line(), seed_client_command_line_)) {
+        FWLOGERROR("split_command_line failed for {}", config.seed_client_command_line());
+        return -4;
+      }
     }
-
-    seed_client_command_line_append_.emplace_back(kOrbitEnabledArg);
     seed_client_command_line_append_.emplace_back("--seed_mode");
 
     // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
@@ -1057,6 +1051,11 @@ void orbit_agent_manager::build_client_launch_arguments(
   }
   for (const auto& arg : command_line_append) {
     output.emplace_back(render_string_template(arg, render_values));
+  }
+  output.emplace_back(kOrbitEnabledArg);
+  if (record->startup_timeout_sec > 0) {
+    output.emplace_back(kOrbitStartTimeout);
+    output.emplace_back(std::to_string(record->startup_timeout_sec));
   }
   fill_normal_client_start_command(*record, app_id, output, remote_start);
 }
