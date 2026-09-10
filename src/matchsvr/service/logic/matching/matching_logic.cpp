@@ -198,6 +198,9 @@ bool matching_logic::matches_rule_item(const PROJECT_NAMESPACE_ID::config::DMatc
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF:
       return std::all_of(item.values().begin(), item.values().end(),
                          [&](int32_t limit) { return abs_diff(left.rank_level(), right.rank_level()) <= limit; });
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_ROLE_LEVEL_DIFF:
+      return std::all_of(item.values().begin(), item.values().end(),
+                         [&](int32_t limit) { return abs_diff(left.role_level(), right.role_level()) <= limit; });
     default:
       return true;
   }

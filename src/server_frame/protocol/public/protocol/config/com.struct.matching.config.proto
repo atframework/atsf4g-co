@@ -17,7 +17,19 @@ package atframework.shared.config;
 
 enum EnMatchingRuleType {
   EN_MATCHING_RULE_NONE = 0;
-  EN_MATCHING_RULE_RANK_DIFF = 1;
+  EN_MATCHING_RULE_RANK_DIFF = 1 [(org.xresloader.enum_alias) = "段位"];  // 段位差异
+  EN_MATCHING_RULE_ROLE_LEVEL_DIFF = 2 [(org.xresloader.enum_alias) = "角色等级"];  // 等级差异
+}
+
+enum EnMatchingParameterMergeType {
+  EN_MATCHING_PARAMETER_MERGE_NONE = 0;
+  EN_MATCHING_PARAMETER_MERGE_MAX = 1 [(org.xresloader.enum_alias) = "最大值"];
+  EN_MATCHING_PARAMETER_MERGE_MIN = 2 [(org.xresloader.enum_alias) = "最小值"];
+  EN_MATCHING_PARAMETER_MERGE_AVERAGE = 3 [(org.xresloader.enum_alias) = "平均值"];
+  EN_MATCHING_PARAMETER_MERGE_SUM = 4 [(org.xresloader.enum_alias) = "求和"];
+  EN_MATCHING_PARAMETER_MERGE_CAPTAIN = 5 [(org.xresloader.enum_alias) = "队长"];
+  EN_MATCHING_PARAMETER_MERGE_ANY = 6 [(org.xresloader.enum_alias) = "任一"];
+  EN_MATCHING_PARAMETER_MERGE_ALL = 7 [(org.xresloader.enum_alias) = "全部"];
 }
 
 message DMatchingRuleItem {
@@ -96,4 +108,15 @@ message ExcelMatchingResultTemplate {
 
   int32 id = 1 [(org.xresloader.field_unique_tag) = "id"];
   repeated DMatchingFactionTemplate faction_template = 2;
+}
+
+message ExcelMatchingParameterMergeRuleTemplate {
+  option (xrescode.loader) = {
+    file_path: "matching_parameter_merge_rule_template.bytes"
+    indexes: { fields: "rule_type" index_type: EN_INDEX_KV }
+    tags: "server"
+  };
+
+  EnMatchingRuleType rule_type = 1 [(org.xresloader.field_unique_tag) = "rule_type"];
+  EnMatchingParameterMergeType merge_type = 2;
 }

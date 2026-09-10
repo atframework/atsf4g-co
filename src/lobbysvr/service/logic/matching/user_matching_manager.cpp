@@ -26,12 +26,14 @@
 #include <rpc/matching/matching_api.h>
 #include <rpc/matching/matchsvrservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_context.h>
 #include <rpc/rpc_shared_message.h>
 
 #include <algorithm>
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
-
 #include "data/user.h"
 
 namespace {
@@ -45,6 +47,78 @@ bool is_matching_not_found(int32_t result) {
   return result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND ||
          result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_UNIT_NOT_FOUND ||
          result == PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_ROOM_NOT_FOUND;
+}
+
+using matching_parameter_type = PROJECT_NAMESPACE_ID::DMatchingParameter;
+using matching_rule_type = PROJECT_NAMESPACE_ID::config::EnMatchingRuleType;
+
+struct numeric_matching_parameter_binding {
+  matching_rule_type rule_type;
+  int32_t (matching_parameter_type::*getter)() const;
+  void (matching_parameter_type::*setter)(int32_t);
+};
+
+const numeric_matching_parameter_binding kNumericMatchingParameterBindings[] = {
+    {PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_RANK_DIFF, &matching_parameter_type::rank_level,
+     &matching_parameter_type::set_rank_level},
+    {PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_ROLE_LEVEL_DIFF, &matching_parameter_type::role_level,
+     &matching_parameter_type::set_role_level},
+};
+
+bool merge_numeric_matching_parameter(rpc::context& ctx,
+                                      const google::protobuf::RepeatedPtrField<matching_parameter_type>& input,
+                                      const numeric_matching_parameter_binding& binding,
+                                      PROJECT_NAMESPACE_ID::config::EnMatchingParameterMergeType merge_type,
+                                      int32_t& output) {
+  int64_t result = (input.Get(0).*binding.getter)();
+  switch (merge_type) {
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_NONE:
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_CAPTAIN:
+      break;
+
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_MAX:
+      for (const auto& parameter : input) {
+        result = std::max(result, static_cast<int64_t>((parameter.*binding.getter)()));
+      }
+      break;
+
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_MIN:
+      for (const auto& parameter : input) {
+        result = std::min(result, static_cast<int64_t>((parameter.*binding.getter)()));
+      }
+      break;
+
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_AVERAGE:
+      result = 0;
+      for (const auto& parameter : input) {
+        result += static_cast<int64_t>((parameter.*binding.getter)());
+      }
+      result /= input.size();
+      break;
+
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_SUM:
+      result = 0;
+      for (const auto& parameter : input) {
+        result += static_cast<int64_t>((parameter.*binding.getter)());
+      }
+      break;
+
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_ANY:
+    case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_ALL:
+    default:
+      FCTXLOGERROR(ctx, "Matching parameter merge type is not valid for a numeric field, rule_type={}, merge_type={}",
+                   static_cast<int32_t>(binding.rule_type), static_cast<int32_t>(merge_type));
+      return false;
+  }
+
+  if (result < std::numeric_limits<int32_t>::min() || result > std::numeric_limits<int32_t>::max()) {
+    FCTXLOGERROR(ctx, "Matching parameter merge result overflows int32, rule_type={}, merge_type={}, value={}",
+                 static_cast<int32_t>(binding.rule_type), static_cast<int32_t>(merge_type), result);
+    return false;
+  }
+
+  output = static_cast<int32_t>(result);
+  return true;
 }
 
 }  // namespace
@@ -823,6 +897,29 @@ void user_matching_manager::fetch_team_matching_parameter(rpc::context& ctx,
   // fill_(*output.mutable_user());
   // todo 填充其他匹配参数
   fill_matching_parameter(ctx, *output.mutable_parameter());
+}
+
+void user_matching_manager::merge_team_matching_parameter(
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,
+    PROJECT_NAMESPACE_ID::DMatchingParameter& output) const {
+  output.Clear();
+  if (input.empty()) {
+    return;
+  }
+
+  // 未参与当前匹配规则的字段沿用队长值。新增匹配规则时，在字段绑定表中显式登记对应字段。
+  output.CopyFrom(input.Get(0));
+  for (const auto& binding : kNumericMatchingParameterBindings) {
+    auto merge_rule = excel::get_ExcelMatchingParameterMergeRuleTemplate_by_rule_type(binding.rule_type);
+    if (!merge_rule) {
+      continue;
+    }
+
+    int32_t merged_value = 0;
+    if (merge_numeric_matching_parameter(ctx, input, binding, merge_rule->merge_type(), merged_value)) {
+      (output.*binding.setter)(merged_value);
+    }
+  }
 }
 
 // 当前的匹配视图

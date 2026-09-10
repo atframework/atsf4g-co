@@ -126,6 +126,11 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 组队相关接口
   // 填充组队需要同步的参数
   void fetch_team_matching_parameter(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamParameter& output) const;
+  // 按匹配参数合并规则表生成 Unit 使用的参数。未配置的字段保留队长参数，input 的第一项必须是队长。
+  void merge_team_matching_parameter(
+      rpc::context& ctx,
+      const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,
+      PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
   // 当前的匹配视图
   void fetch_matching_view(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& output) const;
 
