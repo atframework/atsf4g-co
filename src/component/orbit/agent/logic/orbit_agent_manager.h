@@ -145,17 +145,15 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   void fill_normal_client_start_command(const orbit_agent_client_record& record, uint64_t app_id,
                                         std::vector<std::string>& output, bool remote_start) const;
   int prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request, orbit_agent_client_record_ptr& output);
-  int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line,
-                           const std::vector<std::string>& command_line_append, bool seed_client);
+  int spawn_client_process(const orbit_agent_client_record_ptr& record, const std::string& client_path,
+                           const std::vector<std::string>& command_line, bool seed_client);
   rpc::result_code_type remote_spawn_client_process(rpc::context& ctx, const orbit_agent_client_record_ptr& record,
-                                                    const std::vector<std::string>& command_line,
-                                                    const std::vector<std::string>& command_line_append);
+                                                    const std::vector<std::string>& command_line);
   EXPLICIT_NODISCARD_ATTR rpc::result_code_type spawn_seed_client_process(rpc::context& ctx,
                                                                           orbit_agent_client_record_ptr record);
   void build_client_launch_arguments(const orbit_agent_client_record_ptr& record,
                                      const std::unordered_map<std::string, std::string>& render_values,
-                                     const std::vector<std::string>& command_line,
-                                     const std::vector<std::string>& command_line_append,
+                                     const std::string& client_path, const std::vector<std::string>& command_line,
                                      std::vector<std::string>& output, bool remote_start);
 
   void fill_client_identity(atfw::orbit::DClientIdentity& output, const orbit_agent_client_record_ptr& client) const;
@@ -242,11 +240,11 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   uint32_t seed_heartbeat_timeout_sec_ = 0;
   int32_t repeated_startup_failures_fatal_error_ = 0;
 
-  std::vector<std::string> configured_client_command_line_;
-  std::vector<std::string> configured_client_command_line_append_;
+  std::string client_path_;
+  std::vector<std::string> client_command_line_;
 
+  std::string seed_client_path_;
   std::vector<std::string> seed_client_command_line_;
-  std::vector<std::string> seed_client_command_line_append_;
 
   atfw::orbit::DAgentIdentity agent_identity_;
   atfw::atapp::protocol::atapp_metadata controller_policy_selector_;

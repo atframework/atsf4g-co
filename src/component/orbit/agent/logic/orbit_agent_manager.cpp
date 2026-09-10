@@ -56,6 +56,7 @@ constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
 constexpr const char* kOrbitEnabledArg = "--enable_orbit";
 constexpr const char* kOrbitStartTimeout = "--start_timeout";
+constexpr const char* kOrbitSeedMode = "--seed_mode";
 
 static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
   return [expected_server_id](const std::string& checked) -> bool {
@@ -242,18 +243,21 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     return -1;
   }
   {
-    configured_client_command_line_.push_back(config.client_path());
+    client_path_ = config.client_path();
 
     if (!config.client_command_line().empty()) {
       FWLOGINFO("orbit agent launch command configured: {}", config.client_command_line());
-      if (!split_command_line(config.client_command_line(), configured_client_command_line_)) {
+      if (!split_command_line(config.client_command_line(), client_command_line_)) {
         FWLOGERROR("split_command_line failed for {}", config.client_command_line());
         return -2;
       }
     }
 
-    // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
-    for (const auto& arg : configured_client_command_line_) {
+    client_command_line_.emplace_back(kOrbitEnabledArg);
+
+    // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数)
+    FWLOGINFO("orbit agent launch path: {}", client_path_);
+    for (const auto& arg : client_command_line_) {
       FWLOGINFO("orbit agent launch command argument: {}", arg);
     }
   }
@@ -263,7 +267,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
       FWLOGERROR("orbit agent seed_client_path is empty");
       return -1;
     }
-    seed_client_command_line_.push_back(config.seed_client_path());
+    seed_client_path_ = config.seed_client_path();
 
     if (!config.seed_client_command_line().empty()) {
       FWLOGINFO("orbit agent launch seed command configured: {}", config.seed_client_command_line());
@@ -272,13 +276,12 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
         return -4;
       }
     }
-    seed_client_command_line_append_.emplace_back("--seed_mode");
+    seed_client_command_line_.emplace_back(kOrbitEnabledArg);
+    seed_client_command_line_.emplace_back(kOrbitSeedMode);
 
-    // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数) + (agent需要的额外启动参数)
+    // 启动参数 ./client.exe ... (预设启动参数) + (customed启动参数)
+    FWLOGINFO("orbit agent launch path: {}", seed_client_path_);
     for (const auto& arg : seed_client_command_line_) {
-      FWLOGINFO("orbit agent launch seed client command argument: {}", arg);
-    }
-    for (const auto& arg : seed_client_command_line_append_) {
       FWLOGINFO("orbit agent launch seed client command argument: {}", arg);
     }
   }
@@ -563,8 +566,7 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
 
   if (remote_start) {
     // 远程启动模式 不需要Agent相关的参数
-    static std::vector<std::string> empty;
-    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(ctx, client_record, empty, empty));
+    int32_t spawn_result = RPC_AWAIT_CODE_RESULT(remote_spawn_client_process(ctx, client_record, client_command_line_));
     if (spawn_result < 0) {
       delete_client(client_record);
       RPC_RETURN_CODE(spawn_result);
@@ -578,8 +580,7 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     }
   } else {
     // 普通模式
-    int spawn_result = spawn_client_process(client_record, configured_client_command_line_,
-                                            configured_client_command_line_append_, false);
+    int spawn_result = spawn_client_process(client_record, client_path_, client_command_line_, false);
     if (spawn_result < 0) {
       delete_client(client_record);
       RPC_RETURN_CODE(spawn_result);
@@ -920,7 +921,7 @@ int orbit_agent_manager::startup_seed_client() {
   set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
   record->client_addr.clear();
 
-  return spawn_client_process(record, seed_client_command_line_, seed_client_command_line_append_, true);
+  return spawn_client_process(record, seed_client_path_, seed_client_command_line_, true);
 }
 
 orbit_agent_client_record_ptr orbit_agent_manager::find_client(const std::string& client_id) noexcept {
@@ -1037,11 +1038,14 @@ void orbit_agent_manager::fill_client_identity(atfw::orbit::DClientIdentity& out
 
 void orbit_agent_manager::build_client_launch_arguments(
     const orbit_agent_client_record_ptr& record, const std::unordered_map<std::string, std::string>& render_values,
-    const std::vector<std::string>& command_line, const std::vector<std::string>& command_line_append,
-    std::vector<std::string>& output, bool remote_start) {
+    const std::string& client_path, const std::vector<std::string>& command_line, std::vector<std::string>& output,
+    bool remote_start) {
   uint64_t app_id = ++sequence_allocator_;
   output.clear();
 
+  if (!client_path.empty()) {
+    output.emplace_back(client_path);
+  }
   // 渲染启动参数中的 ${field} 占位符，用 render_values 中的实际值替换
   for (const std::string& arg : command_line) {
     output.emplace_back(render_string_template(arg, render_values));
@@ -1049,10 +1053,6 @@ void orbit_agent_manager::build_client_launch_arguments(
   for (const std::string& custom_arg : record->custom_args) {
     output.emplace_back(render_string_template(custom_arg, render_values));
   }
-  for (const auto& arg : command_line_append) {
-    output.emplace_back(render_string_template(arg, render_values));
-  }
-  output.emplace_back(kOrbitEnabledArg);
   if (record->startup_timeout_sec > 0) {
     output.emplace_back(kOrbitStartTimeout);
     output.emplace_back(std::to_string(record->startup_timeout_sec));
@@ -1200,8 +1200,8 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
 }
 
 int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_ptr& record,
-                                              const std::vector<std::string>& command_line,
-                                              const std::vector<std::string>& command_line_append, bool seed_client) {
+                                              const std::string& client_path,
+                                              const std::vector<std::string>& command_line, bool seed_client) {
   std::vector<std::string> launch_arguments;
 
   // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
@@ -1212,7 +1212,7 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
   std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
   render_values.emplace("time", buf);
 
-  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments, false);
+  build_client_launch_arguments(record, render_values, client_path, command_line, launch_arguments, false);
 
   int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments), !seed_client);
   if (spawn_result < 0) {
@@ -1225,9 +1225,9 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
-rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(
-    rpc::context& ctx, const orbit_agent_client_record_ptr& record, const std::vector<std::string>& command_line,
-    const std::vector<std::string>& command_line_append) {
+rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(rpc::context& ctx,
+                                                                       const orbit_agent_client_record_ptr& record,
+                                                                       const std::vector<std::string>& command_line) {
   std::vector<std::string> launch_arguments;
 
   // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
@@ -1238,7 +1238,7 @@ rpc::result_code_type orbit_agent_manager::remote_spawn_client_process(
   std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
   render_values.emplace("time", buf);
 
-  build_client_launch_arguments(record, render_values, command_line, command_line_append, launch_arguments, true);
+  build_client_launch_arguments(record, render_values, "", command_line, launch_arguments, true);
 
   auto req = rpc::make_shared_message<atfw::orbit::ATCRemoteStartClientReq>(ctx);
   auto rsp = rpc::make_shared_message<atfw::orbit::CTARemoteStartClientRsp>(ctx);
