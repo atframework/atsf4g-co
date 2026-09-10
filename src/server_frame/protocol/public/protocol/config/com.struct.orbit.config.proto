@@ -32,6 +32,5 @@ message ExcelOrbitClientTemplate {
   string match_tag = 8;
   uint32 room_expired_timeout = 9 [(org.xresloader.validator) = ">0"];
   bool remote_start_client = 10;
-  int32 map_id = 11 [(org.xresloader.validator) = "ExcelMapId_map_id"];
   repeated string launch_args = 21;
 }
