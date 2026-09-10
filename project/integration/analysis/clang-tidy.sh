@@ -413,6 +413,9 @@ if [ "$issue_count" -gt "$max_issues" ]; then
   exit 1
 fi
 
+if [ "$issue_count" -gt 0 ]; then
+  cat "$report_file" >&2
+fi
 if [ "$skipped_count" -gt 0 ]; then
   printf '%s\n' \
     "clang-tidy: $issue_count issue(s) found in $((manifest_file_count - skipped_count)) analyzed C/C++ file(s)" \

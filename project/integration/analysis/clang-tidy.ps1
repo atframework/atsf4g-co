@@ -426,6 +426,9 @@ if ($issueCount -gt $MaxIssues) {
   exit 1
 }
 
+if ($issueCount -gt 0) {
+  [Console]::Error.WriteLine(($reportLines -join [Environment]::NewLine))
+}
 if ($skippedCount -gt 0) {
   Write-Output (
     "clang-tidy: $issueCount issue(s) found in $($changedFiles.Count - $skippedCount) analyzed C/C++ file(s) " +

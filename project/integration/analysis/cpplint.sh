@@ -183,5 +183,10 @@ if [ "$issue_count" -gt "$max_issues" ]; then
   exit 1
 fi
 
+if [ "$issue_count" -gt 0 ]; then
+  cat "$report_file" >&2
+fi
+
 printf 'cpplint: %s issue(s) found in %s staged, unstaged, or unpushed C/C++ file(s); maximum allowed is %s.\n' \
   "$issue_count" "$changed_file_count" "$max_issues"
+

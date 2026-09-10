@@ -79,7 +79,7 @@ if (-not (Test-Path -LiteralPath $gitMetadataPath)) {
 }
 
 $gitCommand = Get-Command -Name 'git' -CommandType Application -ErrorAction SilentlyContinue |
-  Select-Object -First 1
+Select-Object -First 1
 if ($null -eq $gitCommand) {
   Write-Output 'cpplint: skipped because git is not available.'
   exit 0
@@ -93,9 +93,9 @@ if ($LASTEXITCODE -ne 0 -or $insideWorkTree -notcontains 'true') {
 
 $changedFileSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
 $gitNameListParameters = @{
-  GitCommand = $gitCommand
+  GitCommand       = $gitCommand
   WorkingDirectory = $RepositoryRoot
-  Arguments = @('diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', '--')
+  Arguments        = @('diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', '--')
 }
 foreach ($path in Invoke-GitNameList @gitNameListParameters) {
   [void] $changedFileSet.Add($path)
@@ -105,10 +105,10 @@ foreach ($path in Invoke-GitNameList @gitNameListParameters) {
   [void] $changedFileSet.Add($path)
 }
 & $gitCommand.Source '-C' $RepositoryRoot 'rev-parse' '--verify' '--quiet' '@{upstream}^{commit}' 2>$null |
-  Out-Null
+Out-Null
 if ($LASTEXITCODE -eq 0) {
   $gitNameListParameters.Arguments =
-    @('diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', '@{upstream}...HEAD', '--')
+  @('diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', '@{upstream}...HEAD', '--')
   foreach ($path in Invoke-GitNameList @gitNameListParameters) {
     [void] $changedFileSet.Add($path)
   }
@@ -147,7 +147,7 @@ if (-not [string]::IsNullOrWhiteSpace($PythonVenvDir)) {
 }
 
 $cpplintCommand = Get-Command -Name 'cpplint' -CommandType Application, ExternalScript -ErrorAction SilentlyContinue |
-  Select-Object -First 1
+Select-Object -First 1
 if ($null -eq $cpplintCommand) {
   [Console]::Error.WriteLine(
     'cpplint: executable not found in the project Python virtual environment or inherited PATH; ' +
@@ -160,22 +160,23 @@ $reportLines = [System.Collections.Generic.List[string]]::new()
 $issueCount = 0
 foreach ($changedFile in $changedFiles) {
   $lintOutput = @(& $cpplintCommand.Source "--repository=$RepositoryRoot" $changedFile 2>&1) |
-    ForEach-Object { $_.ToString() }
+  ForEach-Object { $_.ToString() }
   $lintExitCode = $LASTEXITCODE
   foreach ($line in $lintOutput) {
     $reportLines.Add($line)
   }
 
   $issueCountMatch = $lintOutput |
-    Select-String -Pattern '^Total errors found:\s*([0-9]+)\s*$' |
-    Select-Object -Last 1
+  Select-String -Pattern '^Total errors found:\s*([0-9]+)\s*$' |
+  Select-Object -Last 1
   if ($null -eq $issueCountMatch) {
     if ($lintExitCode -ne 0) {
       [Console]::Error.WriteLine(($lintOutput -join [Environment]::NewLine))
       [Console]::Error.WriteLine("cpplint: failed to analyze '$changedFile' with exit code $lintExitCode.")
       exit 2
     }
-  } else {
+  }
+  else {
     $issueCount += [int] $issueCountMatch.Matches[0].Groups[1].Value
   }
 }
@@ -187,6 +188,9 @@ if ($issueCount -gt $MaxIssues) {
   exit 1
 }
 
+if ($issueCount -gt 0) {
+  [Console]::Error.WriteLine(($reportLines -join [Environment]::NewLine))
+}
 Write-Output (
   "cpplint: $issueCount issue(s) found in $($changedFiles.Count) staged, unstaged, or unpushed C/C++ file(s); " +
   "maximum allowed is $MaxIssues."
