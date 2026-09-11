@@ -297,7 +297,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   data_.set_is_start_matching(atfw::util::time::time_utility::get_now());
   FWLOGDEBUG("{} start matching, level_select={}, level_count={}, request={}", *owner_,
              request.data().level_select().DebugString(), request.data().battle_version(), request.DebugString());
-  protobuf_copy_message(matching_start_data_, request.data());
+  // protobuf_copy_message(matching_start_data_, request.data());
   if (team_logic_.is_in_team()) {
     // team存在异步检查操作，team需要先完成相关操作，再由team发起匹配
     team_logic_.start_matching_check(ctx);
@@ -1063,4 +1063,16 @@ void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, 
     FWLOGERROR("{} dispatch matching heartbeat failed, unit_id={}, result={}({})", *owner_, get_current_unit_id(),
                *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
+}
+
+void user_matching_manager::set_level_select_data(rpc::context& ctx,
+                                                  const PROJECT_NAMESPACE_ID::DMatchingStartData& output) {
+  protobuf_copy_message(*data_.mutable_level_data(), output);
+  team_logic_.level_select_notify(ctx);
+  return;
+}
+void user_matching_manager::fetch_level_select_data(rpc::context& /*ctx*/,
+                                                    PROJECT_NAMESPACE_ID::DMatchingStartData& output) const {
+  protobuf_copy_message(output, data_.level_data());
+  return;
 }

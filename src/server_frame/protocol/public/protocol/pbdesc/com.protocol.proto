@@ -69,6 +69,14 @@ service LobbysvrClientService {
   };
 
   // ================ 匹配 RPC ================
+
+  rpc matching_level_select(CSMatchingLevelSelectReq) returns (SCMatchingLevelSelectRsp) {
+    option (atframework.rpc_options) = {
+      module_name: "matching"
+      api_name: "关卡选择"
+    };
+  };
+
   rpc matching_start(CSMatchingStartReq) returns (SCMatchingStartRsp) {
     option (atframework.rpc_options) = {
       module_name: "matching"

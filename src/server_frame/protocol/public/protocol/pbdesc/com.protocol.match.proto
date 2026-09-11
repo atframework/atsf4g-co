@@ -54,3 +54,10 @@ message SCMatchingConfirmRsp {
 message SCMatchingLogSync {
   DMatchingClientView client_view = 5;
 }
+
+message CSMatchingLevelSelectReq {
+  DMatchingStartData data = 1;
+}
+
+message SCMatchingLevelSelectRsp {
+}

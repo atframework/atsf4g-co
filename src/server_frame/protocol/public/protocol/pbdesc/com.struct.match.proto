@@ -251,6 +251,8 @@ message DUserMatchingData {
   uint64 matchsvr_server_id = 3;
   repeated DMatchedUserData matched_users = 4;
   int64 is_start_matching = 5; //玩家离线前是否处于匹配检查状态
+
+  DMatchingStartData level_data = 10;
 }
 
 message DBattleLevelParameter {

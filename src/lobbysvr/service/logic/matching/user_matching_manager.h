@@ -142,6 +142,9 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   // 使用缓存的匹配参数发起匹配请求
   void callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason = 0);
 
+  ATFW_EXPLICIT_NODISCARD_ATTR void set_level_select_data(rpc::context& ctx,
+                                                          const PROJECT_NAMESPACE_ID::DMatchingStartData& output);
+
  private:
   void try_send_heartbeat(rpc::context& ctx);
   void send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t umatchsvr_id);
@@ -149,6 +152,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void merge_team_matching_parameter(
       rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>& input,
       PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
+
+  void fetch_level_select_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DMatchingStartData& output) const;
 
  public:
   static void on_gm_cmd_start_matching(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,

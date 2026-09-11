@@ -12,6 +12,7 @@
 user_matching_team_logic::start_matching_check_function_t user_matching_team_logic::start_matching_check_function_;
 user_matching_team_logic::matching_finish_function_t user_matching_team_logic::matching_finish_function_;
 user_matching_team_logic::start_matching_finish_function_t user_matching_team_logic::start_matching_finish_function_;
+user_matching_team_logic::level_select_function_t user_matching_team_logic::level_select_function_;
 
 user_matching_team_logic::user_matching_team_logic(user& owner) noexcept : owner_(&owner) {}
 
@@ -43,6 +44,14 @@ void user_matching_team_logic::register_start_matching_finish_function(start_mat
   start_matching_finish_function_ = std::move(function);
 }
 
+void user_matching_team_logic::register_level_select_function(level_select_function_t function) {
+  if (level_select_function_) {
+    FWLOGERROR("Level select function is already registered");
+    return;
+  }
+  level_select_function_ = std::move(function);
+}
+
 void user_matching_team_logic::start_matching_check(rpc::context& ctx) {
   if (!start_matching_check_function_) {
     FWLOGERROR("Start matching check function is not registered");
@@ -65,6 +74,14 @@ void user_matching_team_logic::start_matching_finish(rpc::context& ctx) {
     return;
   }
   start_matching_finish_function_(ctx, owner_->shared_from_this());
+}
+
+void user_matching_team_logic::level_select_notify(rpc::context& ctx) {
+  if (!level_select_function_) {
+    FWLOGERROR("Level select function is not registered");
+    return;
+  }
+  level_select_function_(ctx, owner_->shared_from_this());
 }
 
 google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>
