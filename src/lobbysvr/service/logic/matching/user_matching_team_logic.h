@@ -25,13 +25,13 @@ class user_matching_team_logic : public atfw::util::design_pattern::noncopyable 
   using start_matching_finish_function_t = std::function<void(rpc::context&, user_ptr_t user_inst)>;
 
   // 开启匹配前的检查
-  void register_start_matching_check_function(start_matching_check_function_t function);
+  static void register_start_matching_check_function(start_matching_check_function_t function);
 
   // 匹配结束后的通知
-  void register_matching_finish_function(matching_finish_function_t function);
+  static void register_matching_finish_function(matching_finish_function_t function);
 
   // 匹配开始后的通知
-  void register_start_matching_finish_function(start_matching_finish_function_t function);
+  static void register_start_matching_finish_function(start_matching_finish_function_t function);
 
   void start_matching_check(rpc::context& ctx);
   void matching_finish(rpc::context& ctx);
@@ -46,7 +46,7 @@ class user_matching_team_logic : public atfw::util::design_pattern::noncopyable 
 
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
-  start_matching_check_function_t start_matching_check_function_;
-  matching_finish_function_t matching_finish_function_;
-  start_matching_finish_function_t start_matching_finish_function_;
+  static start_matching_check_function_t start_matching_check_function_;
+  static matching_finish_function_t matching_finish_function_;
+  static start_matching_finish_function_t start_matching_finish_function_;
 };

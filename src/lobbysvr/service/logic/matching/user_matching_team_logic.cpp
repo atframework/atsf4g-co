@@ -9,6 +9,10 @@
 
 #include "data/user.h"
 
+user_matching_team_logic::start_matching_check_function_t user_matching_team_logic::start_matching_check_function_;
+user_matching_team_logic::matching_finish_function_t user_matching_team_logic::matching_finish_function_;
+user_matching_team_logic::start_matching_finish_function_t user_matching_team_logic::start_matching_finish_function_;
+
 user_matching_team_logic::user_matching_team_logic(user& owner) noexcept : owner_(&owner) {}
 
 bool user_matching_team_logic::is_in_team() const noexcept {
@@ -16,14 +20,26 @@ bool user_matching_team_logic::is_in_team() const noexcept {
 }
 
 void user_matching_team_logic::register_start_matching_check_function(start_matching_check_function_t function) {
+  if (start_matching_check_function_) {
+    FWLOGERROR("Start matching check function is already registered");
+    return;
+  }
   start_matching_check_function_ = std::move(function);
 }
 
 void user_matching_team_logic::register_matching_finish_function(matching_finish_function_t function) {
+  if (matching_finish_function_) {
+    FWLOGERROR("Matching finish notify function is already registered");
+    return;
+  }
   matching_finish_function_ = std::move(function);
 }
 
 void user_matching_team_logic::register_start_matching_finish_function(start_matching_finish_function_t function) {
+  if (start_matching_finish_function_) {
+    FWLOGERROR("Start matching finish function is already registered");
+    return;
+  }
   start_matching_finish_function_ = std::move(function);
 }
 
