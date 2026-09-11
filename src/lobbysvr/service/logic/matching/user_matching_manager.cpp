@@ -140,7 +140,6 @@ void user_matching_manager::create_init(rpc::context&) {
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
   is_matching_ = false;
-  is_start_matching_ = 0;
 }
 
 rpc::result_code_type user_matching_manager::login_init(rpc::context& ctx) {
@@ -222,7 +221,6 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
   is_matching_ = false;
-  is_start_matching_ = 0;
 }
 
 int user_matching_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
@@ -240,14 +238,14 @@ void user_matching_manager::clear_dirty() { dirty_ = false; }
 
 void user_matching_manager::refresh_feature_limit_second(rpc::context& ctx) {
   try_send_heartbeat(ctx);
-  if (is_start_matching_ != 0 &&
-      is_start_matching_ + atfw::util::time::time_utility::MINITE_SECONDS < atfw::util::time::time_utility::get_now()) {
-    is_start_matching_ = 0;
+  if (data_.is_start_matching() != 0 && data_.is_start_matching() + atfw::util::time::time_utility::MINITE_SECONDS <
+                                            atfw::util::time::time_utility::get_now()) {
+    data_.set_is_start_matching(0);
   }
 }
 
 bool user_matching_manager::is_in_matching() const {
-  if (is_matching_ || is_start_matching_ != 0) {
+  if (is_matching_ || data_.is_start_matching() != 0) {
     return true;
   }
   if (!data_.has_view() || data_.view().unit().unit_id() == 0) {
@@ -294,7 +292,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
                static_cast<int>(data_.view().status()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_USER_IN_BATTLE);
   }
-  is_start_matching_ = atfw::util::time::time_utility::get_now();
+  data_.set_is_start_matching(atfw::util::time::time_utility::get_now());
   FWLOGDEBUG("{} start matching, level_select={}, level_count={}, request={}", *owner_,
              request.data().level_select().DebugString(), request.data().battle_version(), request.DebugString());
   protobuf_copy_message(matching_start_data_, request.data());
@@ -315,7 +313,7 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
 
 void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason) {
   if (!is_start_matching) {
-    is_start_matching_ = 0;
+    data_.set_is_start_matching(0);
     FWLOGDEBUG("{} callback start matching rejected, reason={}", *owner_, reason);
     return;
   }
@@ -737,7 +735,7 @@ void user_matching_manager::clear_matching_state(rpc::context& ctx) {
 }
 
 void user_matching_manager::set_matching_state(rpc::context& ctx, bool matching) {
-  is_start_matching_ = 0;
+  data_.set_is_start_matching(0);
   if (is_matching_ == matching) {
     return;
   }

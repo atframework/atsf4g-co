@@ -165,6 +165,5 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   bool periodic_heartbeat_inflight_ = false;
   bool dirty_;
   bool is_matching_ = false;
-  int64_t is_start_matching_ = 0;
   PROJECT_NAMESPACE_ID::DMatchingStartData matching_start_data_;
 };
