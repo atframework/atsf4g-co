@@ -58,6 +58,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void refresh_feature_limit_second(rpc::context& ctx);
   // 玩家持有有效 Unit 且处于搜索、确认或创建战斗阶段。
   bool is_in_matching() const;
+  bool is_in_matching_start() const;
   bool is_matching_finish(PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status) const;
   // 是否在流程中
   bool is_in_orbit_or_matching() const;

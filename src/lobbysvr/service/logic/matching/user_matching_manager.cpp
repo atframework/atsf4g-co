@@ -262,6 +262,8 @@ bool user_matching_manager::is_in_matching() const {
   return false;
 }
 
+bool user_matching_manager::is_in_matching_start() const { return data_.is_start_matching() != 0; }
+
 bool user_matching_manager::is_matching_finish(PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status) const {
   switch (status) {
     case PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED:
