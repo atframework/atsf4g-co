@@ -41,6 +41,9 @@ class user_matching_team_logic : public atfw::util::design_pattern::noncopyable 
 
   bool is_in_team() const noexcept;
 
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>
+  get_team_member_matching_team_parameter(rpc::context& ctx) const;
+
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;
   start_matching_check_function_t start_matching_check_function_;

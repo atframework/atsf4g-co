@@ -41,6 +41,7 @@ class user_team_battle_library_function {
   static bool foreach_member(
       rpc::context& ctx, const user_team& team,
       atfw::util::nostd::function_ref<bool(rpc::context&, const user_team_member_cache&)> fn) noexcept;
+
   static atfw::util::memory::strong_rc_ptr<user_team_member_cache> find_member(
       const user_team& team, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) noexcept;
 

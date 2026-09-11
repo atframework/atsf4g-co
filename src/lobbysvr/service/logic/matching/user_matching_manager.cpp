@@ -17,6 +17,7 @@
 #include <config/compiler/protobuf_suffix.h>
 
 #include <logic/orbit/user_orbit_manager.h>
+#include <logic/team/user_team_battle_library_function.h>
 #include <logic/user/task_action_user_gm_cmd_nomsg.h>
 
 #include <config/logic_config.h>
@@ -32,9 +33,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+
 #include "data/user.h"
 
 namespace {
@@ -66,41 +69,40 @@ const numeric_matching_parameter_binding kNumericMatchingParameterBindings[] = {
      &matching_parameter_type::set_role_level},
 };
 
-bool merge_numeric_matching_parameter(rpc::context& ctx,
-                                      const google::protobuf::RepeatedPtrField<matching_parameter_type>& input,
-                                      const numeric_matching_parameter_binding& binding,
-                                      PROJECT_NAMESPACE_ID::config::EnMatchingParameterMergeType merge_type,
-                                      int32_t& output) {
-  int64_t result = (input.Get(0).*binding.getter)();
+bool merge_numeric_matching_parameter(
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>& input,
+    const numeric_matching_parameter_binding& binding,
+    PROJECT_NAMESPACE_ID::config::EnMatchingParameterMergeType merge_type, int32_t& output) {
+  int64_t result = (input.Get(0).parameter().*binding.getter)();
   switch (merge_type) {
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_NONE:
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_CAPTAIN:
       break;
 
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_MAX:
-      for (const auto& parameter : input) {
-        result = std::max(result, static_cast<int64_t>((parameter.*binding.getter)()));
+      for (const auto& matching_data : input) {
+        result = std::max(result, static_cast<int64_t>((matching_data.parameter().*binding.getter)()));
       }
       break;
 
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_MIN:
-      for (const auto& parameter : input) {
-        result = std::min(result, static_cast<int64_t>((parameter.*binding.getter)()));
+      for (const auto& matching_data : input) {
+        result = std::min(result, static_cast<int64_t>((matching_data.parameter().*binding.getter)()));
       }
       break;
 
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_AVERAGE:
       result = 0;
-      for (const auto& parameter : input) {
-        result += static_cast<int64_t>((parameter.*binding.getter)());
+      for (const auto& matching_data : input) {
+        result += static_cast<int64_t>((matching_data.parameter().*binding.getter)());
       }
       result /= input.size();
       break;
 
     case PROJECT_NAMESPACE_ID::config::EN_MATCHING_PARAMETER_MERGE_SUM:
       result = 0;
-      for (const auto& parameter : input) {
-        result += static_cast<int64_t>((parameter.*binding.getter)());
+      for (const auto& matching_data : input) {
+        result += static_cast<int64_t>((matching_data.parameter().*binding.getter)());
       }
       break;
 
@@ -137,6 +139,7 @@ void user_matching_manager::create_init(rpc::context&) {
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
+  is_matching_ = false;
   is_start_matching_ = 0;
 }
 
@@ -148,6 +151,7 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
   if (!is_in_matching()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
+  set_matching_state(ctx, true);
 
   auto response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
   int32_t result = RPC_AWAIT_CODE_RESULT(
@@ -166,7 +170,7 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
                      get_current_unit_id(), join_result, protobuf_mini_dumper_get_error_msg(join_result));
         }
       }
-      clear_matching_state();
+      clear_matching_state(ctx);
       dirty_ = true;
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -187,7 +191,7 @@ rpc::result_code_type user_matching_manager::recover_matching(rpc::context& ctx)
                    get_current_unit_id(), join_result, protobuf_mini_dumper_get_error_msg(join_result));
       }
     }
-    clear_matching_state();
+    clear_matching_state(ctx);
     dirty_ = true;
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -217,6 +221,8 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
   dirty_ = false;
+  is_matching_ = false;
+  is_start_matching_ = 0;
 }
 
 int user_matching_manager::dump(rpc::context&, PROJECT_NAMESPACE_ID::table_user& user_table) const {
@@ -234,18 +240,18 @@ void user_matching_manager::clear_dirty() { dirty_ = false; }
 
 void user_matching_manager::refresh_feature_limit_second(rpc::context& ctx) {
   try_send_heartbeat(ctx);
-  if (is_start_matching_ + atfw::util::time::time_utility::MINITE_SECONDS > atfw::util::time::time_utility::get_now()) {
+  if (is_start_matching_ != 0 &&
+      is_start_matching_ + atfw::util::time::time_utility::MINITE_SECONDS < atfw::util::time::time_utility::get_now()) {
     is_start_matching_ = 0;
   }
 }
 
 bool user_matching_manager::is_in_matching() const {
+  if (is_matching_ || is_start_matching_ != 0) {
+    return true;
+  }
   if (!data_.has_view() || data_.view().unit().unit_id() == 0) {
     return false;
-  }
-
-  if (is_start_matching_ != 0) {
-    return true;
   }
   switch (data_.view().status()) {
     case PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING:
@@ -294,12 +300,14 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
   protobuf_copy_message(matching_start_data_, request.data());
   if (team_logic_.is_in_team()) {
     // team存在异步检查操作，team需要先完成相关操作，再由team发起匹配
-    team_logic_.start_matching_finish(ctx);
+    team_logic_.start_matching_check(ctx);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
+  set_matching_state(ctx, true);
   int32_t ret = RPC_AWAIT_CODE_RESULT(start_matching_inner_(
       ctx, request.data().level_select(), request.data().battle_version(), request.data().faction_fill_policy()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+    set_matching_state(ctx, false);
     RPC_RETURN_CODE(ret);
   }
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -307,20 +315,26 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
 
 void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_start_matching, int32_t reason) {
   if (!is_start_matching) {
+    is_start_matching_ = 0;
     FWLOGDEBUG("{} callback start matching rejected, reason={}", *owner_, reason);
     return;
   }
 
+  set_matching_state(ctx, true);
   auto owner = owner_->shared_from_this();
   auto invoke_result = rpc::async_invoke(
       ctx, "user_matching_manager.heartbeat", [owner](rpc::context& child_ctx) -> rpc::result_code_type {
         auto& manager = owner->get_user_matching_manager();
-        return manager.start_matching_inner_(child_ctx, manager.matching_start_data_.level_select(),
-                                             manager.matching_start_data_.battle_version(),
-                                             manager.matching_start_data_.faction_fill_policy());
+        int32_t result = RPC_AWAIT_CODE_RESULT(manager.start_matching_inner_(
+            child_ctx, manager.matching_start_data_.level_select(), manager.matching_start_data_.battle_version(),
+            manager.matching_start_data_.faction_fill_policy()));
+        if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+          manager.set_matching_state(child_ctx, false);
+        }
+        RPC_RETURN_CODE(result);
       });
   if (invoke_result.is_error()) {
-    periodic_heartbeat_inflight_ = false;
+    set_matching_state(ctx, false);
     FWLOGERROR("{} dispatch matching heartbeat failed, unit_id={}, result={}({})", *owner_, get_current_unit_id(),
                *invoke_result.get_error(), protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
   }
@@ -388,10 +402,6 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   update_view(ctx, rpc_response->snapshot());
   data_.set_matchsvr_server_id(matchsvr_id);
   dirty_ = true;
-
-  if (team_logic_.is_in_team()) {
-    team_logic_.start_matching_finish(ctx);
-  }
 
   FWLOGDEBUG("{} start matching finish, level_select={}, battle_version={}, unit_id={}", *owner_,
              level_select.DebugString(), battle_version, get_current_unit_id());
@@ -692,6 +702,16 @@ void user_matching_manager::update_view(rpc::context& ctx, const PROJECT_NAMESPA
   if (!unit_changed && view.last_event_id() < get_last_event_id()) {
     return;
   }
+  switch (view.status()) {
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING:
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING:
+    case PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE:
+      set_matching_state(ctx, true);
+      break;
+    default:
+      set_matching_state(ctx, false);
+      break;
+  }
   if (atfw::atapp::protobuf_equal(data_.view(), view)) {
     return;
   }
@@ -704,19 +724,30 @@ void user_matching_manager::update_view(rpc::context& ctx, const PROJECT_NAMESPA
     last_heartbeat_time_ = 0;
     periodic_heartbeat_inflight_ = false;
   }
-  if (is_matching_finish(data_.view().status()) && team_logic_.is_in_team()) {
-    team_logic_.matching_finish(ctx);
-  }
-
   dirty_ = true;
 }
 
-void user_matching_manager::clear_matching_state() {
+void user_matching_manager::clear_matching_state(rpc::context& ctx) {
+  set_matching_state(ctx, false);
   data_.Clear();
   processing_event_id_ = 0;
   last_reported_acknowledge_event_id_ = 0;
   last_heartbeat_time_ = 0;
   periodic_heartbeat_inflight_ = false;
+}
+
+void user_matching_manager::set_matching_state(rpc::context& ctx, bool matching) {
+  is_start_matching_ = 0;
+  if (is_matching_ == matching) {
+    return;
+  }
+
+  is_matching_ = matching;
+  if (matching) {
+    team_logic_.start_matching_finish(ctx);
+  } else {
+    team_logic_.matching_finish(ctx);
+  }
 }
 
 void user_matching_manager::dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const {
@@ -792,12 +823,21 @@ rpc::result_code_type user_matching_manager::fill_matching_unit(rpc::context& ct
   }
   output.set_unit_id(static_cast<uint64_t>(unit_id));
   output.set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_STATUS_SEARCHING);
-  // 匹配参数
-  fill_matching_parameter(ctx, *output.mutable_parameter());
-  // 匹配用玩家数据
-  fill_matching_user_data(ctx, *output.add_users());
 
   // TODO(jijunliang): 队伍其他成员数据
+  if (team_logic_.is_in_team()) {
+    auto team_member_matching_team_parameter = team_logic_.get_team_member_matching_team_parameter(ctx);
+
+    for (const auto& team_member : team_member_matching_team_parameter) {
+      protobuf_copy_message(*output.add_users(), team_member.user());
+    }
+    merge_team_matching_parameter(ctx, team_member_matching_team_parameter, *output.mutable_parameter());
+  } else {
+    // 匹配参数
+    fill_matching_parameter(ctx, *output.mutable_parameter());
+    // 匹配用玩家数据
+    fill_matching_user_data(ctx, *output.add_users());
+  }
 
   output.set_client_version(owner_->get_client_info().client_version());
   // 组队未接入前，队长固定为当前玩家，unit 只包含当前玩家。
@@ -909,15 +949,15 @@ void user_matching_manager::fetch_team_matching_parameter(rpc::context& ctx,
 }
 
 void user_matching_manager::merge_team_matching_parameter(
-    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>& input,
     PROJECT_NAMESPACE_ID::DMatchingParameter& output) const {
   output.Clear();
+  fill_matching_parameter(ctx, output);
   if (input.empty()) {
     return;
   }
 
   // 未参与当前匹配规则的字段沿用队长值。新增匹配规则时，在字段绑定表中显式登记对应字段。
-  output.CopyFrom(input.Get(0));
   for (const auto& binding : kNumericMatchingParameterBindings) {
     auto merge_rule = excel::get_ExcelMatchingParameterMergeRuleTemplate_by_rule_type(binding.rule_type);
     if (!merge_rule) {

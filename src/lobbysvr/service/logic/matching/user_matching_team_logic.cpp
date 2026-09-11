@@ -2,6 +2,7 @@
 
 #include "logic/matching/user_matching_team_logic.h"
 
+#include <logic/team/user_team_battle_library_function.h>
 #include <logic/team/user_team_manager.h>
 
 #include <utility>
@@ -48,4 +49,18 @@ void user_matching_team_logic::start_matching_finish(rpc::context& ctx) {
     return;
   }
   start_matching_finish_function_(ctx, owner_->shared_from_this());
+}
+
+google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>
+user_matching_team_logic::get_team_member_matching_team_parameter(rpc::context& ctx) const {
+  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter> result;
+  if (is_in_team()) {
+    user_team_battle_library_function::foreach_member(
+        ctx, *owner_->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL),
+        [&result](rpc::context& /*ctx*/, const user_team_member_cache& member) {
+          *result.Add() = user_team_battle_library_function::get_matching_team_parameter(member);
+          return true;
+        });
+  }
+  return result;
 }

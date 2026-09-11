@@ -100,7 +100,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
       rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id, PROJECT_NAMESPACE_ID::SSMatchingSnapshot& snapshot);
 
   void update_view(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DMatchingUnitView& view);
-  void clear_matching_state();
+  void clear_matching_state(rpc::context& ctx);
+  void set_matching_state(rpc::context& ctx, bool matching);
   void dump_dirty_data(PROJECT_NAMESPACE_ID::DMatchingClientViewDirtyChg& output) const;
   void dump_client_view(PROJECT_NAMESPACE_ID::DMatchingClientView& output) const;
 
@@ -145,7 +146,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   void send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t umatchsvr_id);
 
   void merge_team_matching_parameter(
-      rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingParameter>& input,
+      rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>& input,
       PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
 
  public:
@@ -163,6 +164,7 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
   std::vector<PROJECT_NAMESPACE_ID::DMatchedUserData> matched_users_;
   bool periodic_heartbeat_inflight_ = false;
   bool dirty_;
+  bool is_matching_ = false;
   int64_t is_start_matching_ = 0;
   PROJECT_NAMESPACE_ID::DMatchingStartData matching_start_data_;
 };
