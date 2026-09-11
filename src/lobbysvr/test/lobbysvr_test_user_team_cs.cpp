@@ -80,12 +80,12 @@ bool post_team_cs_request(atfw::testing::runtime& test, const atfw::testing::moc
   return nullptr != team_test::find_downstream_response(test, client.session_id(), rpc_full_name, out_rsp_msg);
 }
 
-// Expected key of the packed member battle(ready) entry produced by user_team_manager::pack_team_member_shared_data.
 int64_t member_ready_data_key() {
   return user_team_algorithm::make_team_member_shared_data_key(team_test::make_member_ready_module(false));
 }
 
-// Expected key of the packed team battle(matching) entry produced by user_team_manager::pack_team_shared_data.
+// Expected key of the packed team battle(matching) entry produced by
+// user_team_battle_library_function::pack_default_team_shared_data.
 int64_t team_matching_data_key() {
   return user_team_algorithm::make_team_shared_data_key(team_test::make_team_matching_module(false));
 }

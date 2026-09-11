@@ -264,6 +264,7 @@ bool user_matching_manager::is_in_matching() const {
 
 bool user_matching_manager::is_in_matching_start() const { return data_.is_start_matching() != 0; }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool user_matching_manager::is_matching_finish(PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status) const {
   switch (status) {
     case PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED:
@@ -892,11 +893,13 @@ void user_matching_manager::on_gm_cmd_start_matching(
   }
 
   int32_t level_id = 0;
+  //  NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   level_id = params[0]->to_int32();
   if (level_id <= 0) {
     rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_LEVEL_CFG_NOT_FOUND);
     return;
   }
+  //  NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
   std::string region = params[1]->to_string();
   auto user_ptr = user_inst->shared_from_this();
 
@@ -928,6 +931,7 @@ void user_matching_manager::on_gm_cmd_start_matching(
   }
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void user_matching_manager::fill_matching_parameter(rpc::context& /*ctx*/,
                                                     PROJECT_NAMESPACE_ID::DMatchingParameter& output) const {
   output.set_search_start_time(atfw::util::time::time_utility::get_now());
@@ -1069,10 +1073,8 @@ void user_matching_manager::set_level_select_data(rpc::context& ctx,
                                                   const PROJECT_NAMESPACE_ID::DMatchingStartData& output) {
   protobuf_copy_message(*data_.mutable_level_data(), output);
   team_logic_.level_select_notify(ctx);
-  return;
 }
 void user_matching_manager::fetch_level_select_data(rpc::context& /*ctx*/,
                                                     PROJECT_NAMESPACE_ID::DMatchingStartData& output) const {
   protobuf_copy_message(output, data_.level_data());
-  return;
 }

@@ -51,6 +51,36 @@ static std::unordered_set<int64_t> build_allow_client_update_member_shared_data_
   }
   return ret;
 }
+
+static bool append_team_shared_data(rpc::context& ctx, user& user_inst,
+                                    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output,
+                                    const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& team_data) {
+  auto* output_field = output.Add();
+  output_field->set_key(user_team_algorithm::make_team_shared_data_key(team_data));
+  output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+  if (!output_field->mutable_value()->mutable_data()->PackFrom(team_data)) {
+    FCTXLOGERROR(ctx, "{} pack team_shared_data: failed to pack team shared data", user_inst);
+    output.RemoveLast();
+    return false;
+  }
+
+  return true;
+}
+
+static bool append_member_shared_data(rpc::context& ctx, user& user_inst,
+                                      ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output,
+                                      const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& team_data) {
+  auto* output_field = output.Add();
+  output_field->set_key(user_team_algorithm::make_team_member_shared_data_key(team_data));
+  output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+  if (!output_field->mutable_value()->mutable_data()->PackFrom(team_data)) {
+    FCTXLOGERROR(ctx, "{} pack member_shared_data: failed to pack member shared data", user_inst);
+    output.RemoveLast();
+    return false;
+  }
+
+  return true;
+}
 }  // namespace
 
 bool user_team_battle_library_function::register_glue_layer_callbacks() {
@@ -92,6 +122,19 @@ bool user_team_battle_library_function::register_glue_layer_callbacks() {
 
     glue_layer_event_on_matching_action_start_matching_finished(ctx, *team);
   });
+
+  user_matching_team_logic::register_level_select_function([](rpc::context& ctx, const user_ptr_t& user_inst) {
+    if (!user_inst) {
+      return;
+    }
+
+    auto team = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
+    if (!team) {
+      return;
+    }
+
+    glue_layer_event_on_level_action_level_select(ctx, *team);
+  });
   return true;
 }
 
@@ -128,64 +171,48 @@ bool user_team_battle_library_function::allow_client_update_team_member_shared_d
 }
 
 void user_team_battle_library_function::pack_default_team_shared_data(
-    rpc::context& ctx, user& user_inst,
+    rpc::context& ctx, user& user_inst, PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
     ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
     wrapper->mutable_battle()->set_matching(false);
 
-    auto* output_field = output.Add();
-    output_field->set_key(user_team_algorithm::make_team_shared_data_key(*wrapper));
-    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
-      FCTXLOGERROR(ctx, "{} pack_team_shared_data: failed to pack team shared data", user_inst);
-      output.RemoveLast();
-    }
+    append_team_shared_data(ctx, user_inst, output, *wrapper);
   }
 
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
     wrapper->mutable_battle()->mutable_matching_team_view();
 
-    auto* output_field = output.Add();
-    output_field->set_key(user_team_algorithm::make_team_shared_data_key(*wrapper));
-    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
-      FCTXLOGERROR(ctx, "{} pack_team_shared_data: failed to pack team shared data", user_inst);
-      output.RemoveLast();
-    }
+    append_team_shared_data(ctx, user_inst, output, *wrapper);
+  }
+
+  {
+    rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> wrapper{ctx};
+    user_inst.get_user_matching_manager().fetch_level_select_data(
+        ctx, *wrapper->mutable_battle()->mutable_matching_start_data());
+
+    append_team_shared_data(ctx, user_inst, output, *wrapper);
   }
 }
 
 bool user_team_battle_library_function::is_matching(const user_team& team) noexcept { return team.is_matching(); }
 
 void user_team_battle_library_function::pack_default_member_shared_data(
-    rpc::context& ctx, user& user_inst,
+    rpc::context& ctx, user& user_inst, PROJECT_NAMESPACE_ID::EnTeamType /*type*/,
     ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> wrapper{ctx};
     wrapper->mutable_battle()->set_ready(false);
 
-    auto* output_field = output.Add();
-    output_field->set_key(user_team_algorithm::make_team_member_shared_data_key(*wrapper));
-    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
-      FCTXLOGERROR(ctx, "{} pack_team_member_shared_data: failed to pack team member shared data", user_inst);
-      output.RemoveLast();
-    }
+    append_member_shared_data(ctx, user_inst, output, *wrapper);
   }
 
   {
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> wrapper{ctx};
     wrapper->mutable_battle()->mutable_matching_parameter();
 
-    auto* output_field = output.Add();
-    output_field->set_key(user_team_algorithm::make_team_member_shared_data_key(*wrapper));
-    output_field->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
-    if (!output_field->mutable_value()->mutable_data()->PackFrom(*wrapper)) {
-      FCTXLOGERROR(ctx, "{} pack_team_member_shared_data: failed to pack team member shared data", user_inst);
-      output.RemoveLast();
-    }
+    append_member_shared_data(ctx, user_inst, output, *wrapper);
   }
 }
 
@@ -248,6 +275,23 @@ void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::co
       matching_mgr.subscribe_matching_unit(ctx, team_view);
     }
   }
+}
+
+void user_team_battle_library_function::glue_layer_event_on_level_action_level_select(rpc::context& ctx,
+                                                                                      user_team& team) {
+  // 只有队长允许改变状态
+  if (!team.is_captain()) {
+    FCTXLOGERROR(
+        ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the matching status.",
+        team.get_owner().get_owner().get_user_id(), team.get_team_key().zone_id(), team.get_team_key().team_id());
+    return;
+  }
+
+  atframework::shared::DTeamSharedDataModule team_data;
+  team.get_owner().get_owner().get_user_matching_manager().fetch_level_select_data(
+      ctx, *team_data.mutable_battle()->mutable_matching_start_data());
+
+  team.async_send_team_shared_data(ctx, std::move(team_data));
 }
 
 void user_team_battle_library_function::glue_layer_normalize_team_action_update_matching(

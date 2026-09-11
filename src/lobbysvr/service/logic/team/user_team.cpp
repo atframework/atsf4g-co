@@ -435,6 +435,20 @@ const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& user_team_battle_library_func
   return data->battle().matching_team_view();
 }
 
+const PROJECT_NAMESPACE_ID::DMatchingStartData& user_team_battle_library_function::get_matching_start_data(
+    const user_team& team) noexcept {
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule team_shared_data;
+  team_shared_data.mutable_battle()->mutable_matching_start_data();
+
+  const auto* data =
+      user_team_utility::get_team_shared_data(team, user_team_algorithm::make_team_shared_data_key(team_shared_data));
+  if (nullptr == data) {
+    return PROJECT_NAMESPACE_ID::DMatchingStartData::default_instance();
+  }
+
+  return data->battle().matching_start_data();
+}
+
 bool user_team_battle_library_function::is_ready(const user_team_member_cache& team) noexcept {
   PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule member_shared_data;
   member_shared_data.mutable_battle()->set_ready(true);
@@ -1011,8 +1025,9 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
         member_update->set_client_version(user_inst->get_client_info().client_version());
         member_update->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
-        user_inst->get_user_team_manager().pack_team_member_shared_data(child_ctx,
-                                                                        *member_update->mutable_shared_member_data());
+        user_team_battle_library_function::pack_default_member_shared_data(
+            child_ctx, *user_inst, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(team->get_team_type()),
+            *member_update->mutable_shared_member_data());
 
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team->send_action(child_ctx, std::move(*action))));
       });
@@ -1818,7 +1833,6 @@ void user_team::set_matching(rpc::context& ctx, bool value) {
   }
 
   set_flag(team_flag::kMatching, value);
-
 
   // 触发其他关联模块的事件处理
   user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(ctx, *this, value);

@@ -43,14 +43,15 @@ class user_team_battle_library_function {
       const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data);
 
   static void pack_default_team_shared_data(
-      rpc::context& ctx, user& user_inst,
+      rpc::context& ctx, user& user_inst, PROJECT_NAMESPACE_ID::EnTeamType type,
       ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output);
 
   static bool is_matching(const user_team& team) noexcept;
   static const PROJECT_NAMESPACE_ID::DMatchingTeamSyncView& get_matching_team_sync_view(const user_team& team) noexcept;
+  static const PROJECT_NAMESPACE_ID::DMatchingStartData& get_matching_start_data(const user_team& team) noexcept;
 
   static void pack_default_member_shared_data(
-      rpc::context& ctx, user& user_inst,
+      rpc::context& ctx, user& user_inst, PROJECT_NAMESPACE_ID::EnTeamType type,
       ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output);
 
   static bool foreach_member(
@@ -66,6 +67,8 @@ class user_team_battle_library_function {
 
   // ============================ 跨模块胶水层 ============================
   static void auto_check_and_correct_team_data(rpc::context& ctx, user_team& team);
+
+  static void glue_layer_event_on_level_action_level_select(rpc::context& ctx, user_team& team);
 
   static void glue_layer_normalize_team_action_update_matching(
       rpc::context& ctx, user_team& team, bool matching,

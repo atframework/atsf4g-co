@@ -128,12 +128,6 @@ class user_team_manager {
 
   void remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key, atfw::team::EnTeamExitReason exit_reason);
 
-  void pack_team_shared_data(rpc::context& ctx,
-                             ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output);
-
-  void pack_team_member_shared_data(rpc::context& ctx,
-                                    ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output);
-
  private:
   void set_processed_private_chat_channel_sequence(int64_t sequence);
 

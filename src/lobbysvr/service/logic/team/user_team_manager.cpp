@@ -427,7 +427,9 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
   ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充 shared_member_data
-  pack_team_member_shared_data(ctx, *ss_req->mutable_shared_member_data());
+  user_team_battle_library_function::pack_default_member_shared_data(
+      ctx, *owner_, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(invitation->team_type()),
+      *ss_req->mutable_shared_member_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::approve_invitation(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -513,7 +515,8 @@ rpc::result_code_type user_team_manager::send_join_request(rpc::context& ctx, co
   protobuf_copy_message(*join_request->mutable_team_source_data(), team_source_data);
 
   // 填充 member_admission_data
-  pack_team_member_shared_data(ctx, *join_request->mutable_member_admission_data());
+  user_team_battle_library_function::pack_default_member_shared_data(
+      ctx, *owner_, PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL, *join_request->mutable_member_admission_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::add_join_request(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -547,8 +550,10 @@ rpc::result_code_type user_team_manager::create_team(rpc::context& ctx, PROJECT_
   ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
   // 填充初始的共享数据(队伍的和成员的)，各模块按 key 区分自己的数据
-  pack_team_shared_data(ctx, *ss_req->mutable_shared_team_data());
-  pack_team_member_shared_data(ctx, *ss_req->mutable_shared_member_data());
+  user_team_battle_library_function::pack_default_team_shared_data(ctx, *owner_, type,
+                                                                   *ss_req->mutable_shared_team_data());
+  user_team_battle_library_function::pack_default_member_shared_data(ctx, *owner_, type,
+                                                                     *ss_req->mutable_shared_member_data());
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::create(ctx, *ss_req, *ss_rsp));
   if (0 == ret) {
@@ -633,19 +638,6 @@ user_team::ptr_t user_team_manager::get_team_by_team_type(PROJECT_NAMESPACE_ID::
 void user_team_manager::remove_team(rpc::context& ctx, const atfw::team::DTeamKey& team_key,
                                     atfw::team::EnTeamExitReason exit_reason) {
   remove_team(ctx, team_key, true, exit_reason);
-}
-
-void user_team_manager::pack_team_shared_data(
-    rpc::context& ctx, ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
-  // 战斗模块
-  user_team_battle_library_function::pack_default_team_shared_data(ctx, *owner_, output);
-}
-
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-void user_team_manager::pack_team_member_shared_data(
-    rpc::context& ctx, ::google::protobuf::RepeatedPtrField<::atfw::team::DTeamAnyDataWithKey>& output) {
-  // 战斗模块
-  user_team_battle_library_function::pack_default_member_shared_data(ctx, *owner_, output);
 }
 
 void user_team_manager::set_processed_private_chat_channel_sequence(int64_t sequence) {
