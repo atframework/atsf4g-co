@@ -1021,6 +1021,14 @@ void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
     return;
   }
 
+  send_heartbeat(ctx, get_current_unit_id(), get_current_matchsvr_server_id());
+}
+
+void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
+  if (!is_in_matching()) {
+    // 如果不在匹配中，说明是外部系统触发的订阅，首次需要强制发送心跳以同步状态。
+    last_heartbeat_time_ = 0;
+  }
   const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
   time_t heartbeat_interval = static_cast<time_t>(server_cfg.matching().heartbeat_interval().seconds());
   if (heartbeat_interval <= 0) {
@@ -1032,10 +1040,6 @@ void user_matching_manager::try_send_heartbeat(rpc::context& ctx) {
   }
 
   last_heartbeat_time_ = now;
-  send_heartbeat(ctx, get_current_unit_id(), get_current_matchsvr_server_id());
-}
-
-void user_matching_manager::send_heartbeat(rpc::context& ctx, uint64_t unit_id, uint64_t matchsvr_id) {
   periodic_heartbeat_inflight_ = true;
   auto owner = owner_->shared_from_this();
   auto invoke_result = rpc::async_invoke(
