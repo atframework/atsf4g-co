@@ -10,6 +10,7 @@
 #include "data/user.h"
 
 #include "logic/matching/user_matching_manager.h"
+#include "logic/matching/user_matching_team_logic.h"
 #include "logic/team/user_team.h"
 #include "logic/team/user_team_algorithm.h"
 #include "logic/team/user_team_manager.h"
@@ -25,6 +26,7 @@ static std::unordered_set<int64_t>& get_allow_client_update_team_shared_data_set
   static std::unordered_set<int64_t> res = build_allow_client_update_team_shared_data_set();
   return res;
 }
+
 static std::unordered_set<int64_t>& get_allow_client_update_member_shared_data_set() {
   static std::unordered_set<int64_t> res = build_allow_client_update_member_shared_data_set();
   return res;
@@ -50,6 +52,48 @@ static std::unordered_set<int64_t> build_allow_client_update_member_shared_data_
   return ret;
 }
 }  // namespace
+
+bool user_team_battle_library_function::register_glue_layer_callbacks() {
+  user_matching_team_logic::register_start_matching_check_function([](rpc::context& ctx, const user_ptr_t& user_inst) {
+    if (!user_inst) {
+      return;
+    }
+
+    auto team = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
+    if (!team) {
+      return;
+    }
+
+    glue_layer_event_on_matching_action_start_matching_check_function_passed(ctx, *team);
+  });
+
+  user_matching_team_logic::register_matching_finish_function([](rpc::context& ctx, const user_ptr_t& user_inst) {
+    if (!user_inst) {
+      return;
+    }
+
+    auto team = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
+    if (!team) {
+      return;
+    }
+
+    glue_layer_event_on_matching_action_matching_finish_final(ctx, *team);
+  });
+
+  user_matching_team_logic::register_start_matching_finish_function([](rpc::context& ctx, const user_ptr_t& user_inst) {
+    if (!user_inst) {
+      return;
+    }
+
+    auto team = user_inst->get_user_team_manager().get_team_by_team_type(atfw::shared::EN_TEAM_TYPE_NORMAL);
+    if (!team) {
+      return;
+    }
+
+    glue_layer_event_on_matching_action_start_matching_finished(ctx, *team);
+  });
+  return true;
+}
 
 void user_team_battle_library_function::register_allow_client_update_team_shared_data(
     const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
@@ -176,7 +220,7 @@ void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::co
       }
 
       if (matching_mgr.is_in_matching_start()) {
-        // 组队匹配状态正确，但未发起过 start_matching 重试发起callback_start_matching
+        // 组队匹配状态正确，但未发起过 start_matching 重试发起 callback_start_matching
         matching_mgr.callback_start_matching(ctx, true, 0);
         break;
       }
@@ -190,7 +234,7 @@ void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::co
       }
 
       if (matching_mgr.is_in_matching_start()) {
-        // 组队匹配状态正确，但未发起过 start_matching 重试发起callback_start_matching
+        // 组队匹配状态正确，但未发起过 start_matching 重试发起 callback_start_matching
         matching_mgr.callback_start_matching(ctx, false, 0);
         break;
       }
@@ -297,6 +341,7 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_star
   // 收到匹配完成的通知，要通过队伍频道广播给所有队员
   auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
 
+  // 所有人都要发起，有效数据的这一方才会广播匹配完成的状态
   atframework::shared::DTeamSharedDataModule team_data;
   matching_mgr.fetch_team_sync_matching_view(ctx, *team_data.mutable_battle()->mutable_matching_team_view());
 

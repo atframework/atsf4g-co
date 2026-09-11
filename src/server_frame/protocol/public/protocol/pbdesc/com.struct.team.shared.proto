@@ -23,6 +23,7 @@ message DTeamSharedDataTypeBattle {
   oneof data_type {
     bool matching = 1;  // 匹配中
     DMatchingTeamSyncView matching_team_view = 2;
+    DMatchingStartData matching_start_data = 3;
   }
 }
 

@@ -18,11 +18,11 @@ class user;
 // 匹配与组队模块之间的适配层。队伍状态只从 user_team_manager 读取，不在此处重复保存。
 class user_matching_team_logic : public atfw::util::design_pattern::noncopyable {
  public:
-  using start_matching_check_function_t = std::function<void(rpc::context&, user_ptr_t user_inst)>;
+  using start_matching_check_function_t = std::function<void(rpc::context&, const user_ptr_t& user_inst)>;
 
-  using matching_finish_function_t = std::function<void(rpc::context&, user_ptr_t user_inst)>;
+  using matching_finish_function_t = std::function<void(rpc::context&, const user_ptr_t& user_inst)>;
 
-  using start_matching_finish_function_t = std::function<void(rpc::context&, user_ptr_t user_inst)>;
+  using start_matching_finish_function_t = std::function<void(rpc::context&, const user_ptr_t& user_inst)>;
 
   // 开启匹配前的检查
   static void register_start_matching_check_function(start_matching_check_function_t function);

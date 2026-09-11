@@ -30,7 +30,10 @@ struct user_team_member_cache;
 
 class user_team_battle_library_function {
  public:
+  static bool register_glue_layer_callbacks();
+
   static void register_allow_client_update_team_shared_data(const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data);
+
   static void register_allow_client_update_member_shared_data(
       const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data);
 
