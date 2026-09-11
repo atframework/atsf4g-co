@@ -161,22 +161,39 @@ void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::co
   auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
 
   do {
-    // 恢复发起匹配和队伍状态更新的流程仅队长能发起
-    if (!team.is_captain()) {
+    if (!team.is_member()) {
       break;
     }
+    bool team_is_captain = team.is_captain();
 
-    if (team_data_is_matching && !matching_mgr.is_in_matching()) {
-      // 状态已失效,取消队伍的匹配状态
-      atframework::shared::DTeamSharedDataModule team_data;
-      team_data.mutable_battle()->set_matching(false);
-      team.async_send_team_shared_data(ctx, std::move(team_data));
-      break;
-    }
+    if (team_data_is_matching) {
+      if (team_is_captain && !matching_mgr.is_in_matching()) {
+        // 状态已失效,取消队伍的匹配状态
+        atframework::shared::DTeamSharedDataModule team_data;
+        team_data.mutable_battle()->set_matching(false);
+        team.async_send_team_shared_data(ctx, std::move(team_data));
+        break;
+      }
 
-    if (!team_data_is_matching && matching_mgr.is_in_matching()) {
-      // TODO(owent): 重试发起matching
-      break;
+      if (matching_mgr.is_in_matching_start()) {
+        // 组队匹配状态正确，但未发起过 start_matching 重试发起callback_start_matching
+        matching_mgr.callback_start_matching(ctx, true, 0);
+        break;
+      }
+    } else {
+      // 重试补充组队匹配状态
+      if (team_is_captain && matching_mgr.is_in_matching()) {
+        atframework::shared::DTeamSharedDataModule team_data;
+        team_data.mutable_battle()->set_matching(true);
+        team.async_send_team_shared_data(ctx, std::move(team_data));
+        break;
+      }
+
+      if (matching_mgr.is_in_matching_start()) {
+        // 组队匹配状态正确，但未发起过 start_matching 重试发起callback_start_matching
+        matching_mgr.callback_start_matching(ctx, false, 0);
+        break;
+      }
     }
   } while (false);
 
@@ -208,18 +225,48 @@ void user_team_battle_library_function::glue_layer_normalize_team_action_update_
   }
 }
 
+void user_team_battle_library_function::glue_layer_event_on_matching_action_start_matching_check_function_passed(
+    rpc::context& ctx, user_team& team) {
+  // 只有队长允许改变状态
+  if (!team.is_captain()) {
+    FCTXLOGERROR(
+        ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the matching status.",
+        team.get_owner().get_owner().get_user_id(), team.get_team_key().zone_id(), team.get_team_key().team_id());
+    return;
+  }
+
+  atframework::shared::DTeamSharedDataModule team_data;
+  team_data.mutable_battle()->set_matching(true);
+  team.async_send_team_shared_data(ctx, std::move(team_data));
+}
+
+void user_team_battle_library_function::glue_layer_event_on_matching_action_matching_finish_final(rpc::context& ctx,
+                                                                                                  user_team& team) {
+  // 只有队长允许改变状态
+  if (!team.is_captain()) {
+    FCTXLOGERROR(
+        ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the matching status.",
+        team.get_owner().get_owner().get_user_id(), team.get_team_key().zone_id(), team.get_team_key().team_id());
+    return;
+  }
+
+  atframework::shared::DTeamSharedDataModule team_data;
+  team_data.mutable_battle()->set_matching(false);
+  team.async_send_team_shared_data(ctx, std::move(team_data));
+}
+
 void user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(rpc::context& ctx,
                                                                                         user_team& team,
                                                                                         bool matching) {
   auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
 
   do {
-    // 恢复发起匹配和队伍状态更新的流程仅队长能发起
-    if (!team.is_captain()) {
+    if (!team.is_member()) {
       break;
     }
 
-    if (matching && !matching_mgr.is_in_matching()) {
+    // 恢复发起匹配和队伍状态更新的流程仅队长能发起
+    if (matching && team.is_captain() && !matching_mgr.is_in_matching()) {
       // 状态已失效,取消队伍的匹配状态
       atframework::shared::DTeamSharedDataModule team_data;
       team_data.mutable_battle()->set_matching(false);
@@ -228,8 +275,15 @@ void user_team_battle_library_function::glue_layer_event_on_team_action_update_m
     }
 
     // 取消匹配
-    if (!matching && matching_mgr.is_in_matching()) {
-      matching_mgr.callback_start_matching(ctx, false, 0);
+    if (!matching) {
+      if (matching_mgr.is_in_matching_start()) {
+        matching_mgr.callback_start_matching(ctx, false, 0);
+      }
+    } else {
+      // 继续匹配流程
+      if (matching_mgr.is_in_matching_start()) {
+        matching_mgr.callback_start_matching(ctx, true, 0);
+      }
     }
   } while (false);
 }
@@ -257,6 +311,7 @@ void user_team_battle_library_function::glue_layer_event_on_team_action_update_m
 
   auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
 
+  // 所有的队员要订阅匹配单元的更新
   matching_mgr.subscribe_matching_unit(ctx, team_view);
 }
 

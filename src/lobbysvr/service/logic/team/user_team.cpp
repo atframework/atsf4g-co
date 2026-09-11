@@ -282,10 +282,10 @@ class user_team_utility {
       ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
     auto* rule = conditions.empty() ? conditions.Add() : conditions.Mutable(0);
 
-    ::atfw::team::DTeamConditionChecker_DMemberConditionGroup* group = nullptr;
+    ::atfw::team::DTeamConditionChecker::DMemberConditionGroup* group = nullptr;
     for (int i = 0; i < rule->member_condition_group_size(); ++i) {
       if (rule->mutable_member_condition_group(i)->scope_type_case() ==
-          ::atfw::team::DTeamConditionChecker_DMemberConditionGroup::kAllMembers) {
+          ::atfw::team::DTeamConditionChecker::DMemberConditionGroup::kAllMembers) {
         group = rule->mutable_member_condition_group(i);
         break;
       }
@@ -314,6 +314,7 @@ class user_team_utility {
   static std::unordered_map<int64_t, team_shared_data_update_handlers> build_team_shared_data_update_handlers_map() {
     std::unordered_map<int64_t, team_shared_data_update_handlers> handlers_map;
 
+    // 匹配状态变化
     {
       PROJECT_NAMESPACE_ID::DTeamSharedDataModule event;
       event.mutable_battle()->set_matching(true);
@@ -339,6 +340,22 @@ class user_team_utility {
       handles.do_update = [](rpc::context& ctx, user_team& team,
                              const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
         team.set_matching(ctx, data.battle().matching());
+      };
+
+      handles.do_delete = [](rpc::context& ctx, user_team& team, int64_t /*key*/) { team.set_matching(ctx, false); };
+    }
+
+    // 匹配单元变化
+    {
+      PROJECT_NAMESPACE_ID::DTeamSharedDataModule event;
+      event.mutable_battle()->mutable_matching_team_view();
+      int64_t key = user_team_algorithm::make_team_shared_data_key(event);
+
+      auto& handles = handlers_map[key];
+      handles.do_update = [](rpc::context& ctx, user_team& team,
+                             const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
+        user_team_battle_library_function::glue_layer_event_on_team_action_update_matching_team_view(
+            ctx, team, data.battle().matching_team_view());
       };
 
       handles.do_delete = [](rpc::context& ctx, user_team& team, int64_t /*key*/) { team.set_matching(ctx, false); };
@@ -1801,6 +1818,7 @@ void user_team::set_matching(rpc::context& ctx, bool value) {
   }
 
   set_flag(team_flag::kMatching, value);
+
 
   // 触发其他关联模块的事件处理
   user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(ctx, *this, value);
