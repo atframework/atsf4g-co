@@ -1284,7 +1284,7 @@ SERVER_FRAME_API void logic_hpa_controller::remove_on_cleanup_controller_status(
 }
 
 SERVER_FRAME_API void logic_hpa_controller::set_on_setup_custom_policy(const std::string& metrics_name,
-                                                                        on_setup_policy_callback fn) {
+                                                                       on_setup_policy_callback fn) {
   if (!fn) {
     remove_on_setup_custom_policy(metrics_name);
     return;
@@ -1745,12 +1745,11 @@ void logic_hpa_controller::reload_hpa_controller_metadata_filter() {
     hpa_discovery_data_->discovery_filter.set_group(owner_app_->get_metadata().group());
   }
 
+  // scope 默认不加入筛选规则，scope用于区分集群地址可用性，通常和业务功能的数据提取无关
+  // name 默认不加入筛选规则，跨服务提取数据时常见场景
+
   if (!owner_app_->get_metadata().namespace_name().empty()) {
     hpa_discovery_data_->discovery_filter.set_namespace_name(owner_app_->get_metadata().namespace_name());
-  }
-
-  if (!owner_app_->get_metadata().service_subset().empty()) {
-    hpa_discovery_data_->discovery_filter.set_service_subset(owner_app_->get_metadata().service_subset());
   }
 
   const auto& labels = owner_app_->get_metadata().labels();
@@ -3578,7 +3577,8 @@ void logic_hpa_controller::setup_hpa_controller() {
 
   hpa_discovery_data_->discovery_set.reset();
   if (!hpa_discovery_data_->discovery_set) {
-    hpa_discovery_data_->discovery_set = atfw::component::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
+    hpa_discovery_data_->discovery_set =
+        atfw::component::memory::stl::make_strong_rc<atfw::atapp::etcd_discovery_set>();
   }
 
   // 用已有的服务发现初始化节点分布

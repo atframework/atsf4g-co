@@ -282,6 +282,11 @@ void user_team_manager::refresh_feature_limit_minute(rpc::context& ctx) {
     if (group.second.pending_to_exit.empty() && !group.second.current) {
       empty_group_types.emplace(group.first);
     }
+
+    // 定期检查和修复有问题的数据
+    if (group.second.current) {
+      group.second.current->refresh_feature_limit_minute(ctx);
+    }
   }
 
   for (const auto& team_key : wait_member_timeout_team_keys) {

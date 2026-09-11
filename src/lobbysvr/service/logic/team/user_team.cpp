@@ -2,6 +2,8 @@
 
 #include "logic/team/user_team.h"
 
+#include <nostd/function_ref.h>
+
 #include <memory/object_allocator.h>
 
 // clang-format off
@@ -39,6 +41,9 @@
 #include "logic/team/user_team_algorithm.h"
 #include "logic/team/user_team_battle_library_function.h"
 #include "logic/team/user_team_manager.h"
+
+#define __PROJECT_INTERNAL_INCLUDE_GUARD_USER_TEAM_INTERNAL_TYPES_H__
+#include "logic/team/user_team_internal_types.h"
 
 namespace {
 std::chrono::system_clock::duration get_exit_team_request_retry_interval() noexcept {
@@ -131,16 +136,9 @@ static user_team* get_user_team(const rpc::dtmq::client_subscriber::ptr_t& subsc
   return reinterpret_cast<user_team*>(*local_private_data.data());
 }
 
+static constexpr const std::chrono::seconds kCheckAndCorrectInterval = std::chrono::seconds(30);
+
 }  // namespace
-
-// (DUserTeamSnapshot.unpacked_member_data)，不下发内部路由字段
-struct user_team_member_cache {
-  // 共享成员数据由下方的 key-value 索引维护
-  atfw::team::DTeamMember member_data;
-
-  // 成员共享数据(解包后的模块数据，key 算法见 user_team_algorithm::make_team_member_shared_data_key)
-  std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule> shared_member_data;
-};
 
 class user_team_utility {
  public:
@@ -151,8 +149,11 @@ class user_team_utility {
       append_condition_checker (*)(user_team&, const PROJECT_NAMESPACE_ID::DTeamSharedDataModule&);
   using allow_update_team_shared_data = int32_t (*)(rpc::context&, user_team&,
                                                     const PROJECT_NAMESPACE_ID::DTeamSharedDataModule&);
-  using normalize_update_team_shared_data = void (*)(rpc::context&, user_team&,
-                                                     PROJECT_NAMESPACE_ID::DTeamSharedDataModule&);
+  using normalize_mutable_team_shared_data_fn_t =
+      atfw::util::nostd::function_ref<PROJECT_NAMESPACE_ID::DTeamSharedDataModule*(int64_t key)>;
+  using normalize_update_team_shared_data =
+      void (*)(rpc::context&, user_team&, PROJECT_NAMESPACE_ID::DTeamSharedDataModule&,
+               normalize_mutable_team_shared_data_fn_t mutable_team_shared_data_by_key_fn);
   using do_update_team_shared_data = void (*)(rpc::context&, user_team&,
                                               const PROJECT_NAMESPACE_ID::DTeamSharedDataModule&);
   // 模块被删除(删除标记/快照覆盖/缓存重置)时复位派生本地状态; 必须幂等; key 标识被删除的模块
@@ -162,8 +163,11 @@ class user_team_utility {
       append_condition_checker (*)(user_team&, const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
   using allow_update_member_shared_data = int32_t (*)(rpc::context&, user_team&,
                                                       const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
-  using normalize_update_member_shared_data = void (*)(rpc::context&, user_team&,
-                                                       PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
+  using normalize_mutable_member_shared_data_fn_t =
+      atfw::util::nostd::function_ref<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule*(int64_t key)>;
+  using normalize_update_member_shared_data =
+      void (*)(rpc::context&, user_team&, PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&,
+               normalize_mutable_member_shared_data_fn_t mutable_member_shared_data_by_key_fn);
   using do_update_member_shared_data = void (*)(rpc::context&, user_team&, const PROJECT_NAMESPACE_ID::DUserIDKey&,
                                                 const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&);
   // 与 do_update 相同的本地行为 gating(仅自己的数据); key 标识被删除的成员模块
@@ -325,6 +329,13 @@ class user_team_utility {
         return nullptr;
       };
 
+      handles.normalize_update = [](rpc::context& ctx, user_team& team,
+                                    PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data,
+                                    normalize_mutable_team_shared_data_fn_t fn) {
+        user_team_battle_library_function::glue_layer_normalize_team_action_update_matching(
+            ctx, team, data.battle().matching(), fn);
+      };
+
       handles.do_update = [](rpc::context& ctx, user_team& team,
                              const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
         team.set_matching(ctx, data.battle().matching());
@@ -354,6 +365,13 @@ class user_team_utility {
           [](user_team&, const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule&) -> append_condition_checker {
         // 设置ready的条件是团队不在匹配状态
         return append_condition_team_not_matching;
+      };
+
+      handles.normalize_update = [](rpc::context& ctx, user_team& team,
+                                    PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data,
+                                    normalize_mutable_member_shared_data_fn_t fn) {
+        user_team_battle_library_function::glue_layer_normalize_member_action_update_ready(ctx, team,
+                                                                                           data.battle().ready(), fn);
       };
     }
     return handlers_map;
@@ -444,6 +462,7 @@ user_team::user_team(ctor_guard_t&, rpc::context& /*ctx*/, user_team_manager& ow
       last_exit_team_request_timepoint_(std::chrono::system_clock::from_time_t(0)),
       exit_started_timepoint_(std::chrono::system_clock::from_time_t(0)),
       last_exit_team_reason_(atfw::team::EN_TEAM_EXIT_REASON_DEFAULT),
+      last_check_and_correct_data_timepoint_(std::chrono::system_clock::from_time_t(0)),
       cached_permission_role_(atfw::team::EN_TEAM_MEMBER_ROLE_GUEST),
       last_applied_action_sequence_(0),
       last_applied_action_hash_code_(0),
@@ -470,6 +489,14 @@ user_team::ptr_t user_team::create(rpc::context& ctx, user_team_manager& owner, 
 
   return atfw::component::memory::stl::make_strong_rc<user_team>(guard, ctx, owner, std::move(channel_subscriber),
                                                                  team_type, team_key);
+}
+
+void user_team::refresh_feature_limit_minute(rpc::context& ctx) {
+  // 定期检查修复跨模块数据
+  if (last_check_and_correct_data_timepoint_ + kCheckAndCorrectInterval <= ctx.logical_now()) {
+    user_team_battle_library_function::auto_check_and_correct_team_data(ctx, *this);
+    last_check_and_correct_data_timepoint_ = ctx.logical_now();
+  }
 }
 
 void user_team::init_cached_data(const PROJECT_NAMESPACE_ID::DUserIDKey& captain_user_key,
@@ -592,6 +619,14 @@ bool user_team::is_removed_for_client() const noexcept {
 }
 
 bool user_team::is_active_generation() const noexcept { return check_flag(team_flag::kIndexActive); }
+
+bool user_team::is_captain() const noexcept {
+  if (!is_member()) {
+    return false;
+  }
+
+  return owner_->get_owner().is(cached_captain_user_key_);
+}
 
 const atfw::dtmq::DChannelIdKey& user_team::get_channel_key() const noexcept {
   return channel_subscriber_->get_channel_key();
@@ -753,20 +788,37 @@ rpc::result_code_type user_team::update_member_role(rpc::context& ctx, const PRO
 
 rpc::result_code_type user_team::update_team_shared_data(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DTeamSharedDataModule>& data) {
-  std::unordered_set<int64_t> existed_keys;
+  std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamSharedDataModule*> existed_keys;
   std::unordered_set<user_team_utility::append_condition_checker> condition_appenders;
   existed_keys.reserve(static_cast<size_t>(data.size()));
 
   rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
   auto* team_update = action->mutable_team_update();
 
-  const auto& handle_map = user_team_utility::get_team_shared_data_update_handlers_map();
   for (auto& team_data : data) {
     int64_t key = user_team_algorithm::make_team_shared_data_key(team_data);
     if (existed_keys.find(key) != existed_keys.end()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     }
-    existed_keys.insert(key);
+    existed_keys.emplace(key, &team_data);
+  }
+
+  auto mutable_data_by_key_fn = [&existed_keys, &data](int64_t key) -> PROJECT_NAMESPACE_ID::DTeamSharedDataModule* {
+    auto iter = existed_keys.find(key);
+    if (iter != existed_keys.end()) {
+      return iter->second;
+    }
+
+    auto* res = data.Add();
+    existed_keys.emplace(key, res);
+    return res;
+  };
+
+  const auto& handle_map = user_team_utility::get_team_shared_data_update_handlers_map();
+  int input_data_size = data.size();
+  for (int i = 0; i < input_data_size; ++i) {
+    auto& team_data = *data.Mutable(i);
+    int64_t key = user_team_algorithm::make_team_shared_data_key(team_data);
 
     // 未注册处理器的模块数据也要正常透传(处理器只负责附加条件检查与本地行为)，
     // 客户端可写的模块由任务层的 user_team_algorithm::allow_client_update_team_shared_data 把关
@@ -779,7 +831,7 @@ rpc::result_code_type user_team::update_team_shared_data(
         }
       }
       if (iter->second.normalize_update != nullptr) {
-        iter->second.normalize_update(ctx, *this, team_data);
+        iter->second.normalize_update(ctx, *this, team_data, mutable_data_by_key_fn);
       }
 
       if (iter->second.build_append_condition != nullptr) {
@@ -795,7 +847,7 @@ rpc::result_code_type user_team::update_team_shared_data(
     // FIXME: 其他可见性
     data_item->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
     if (!data_item->mutable_value()->mutable_data()->PackFrom(team_data)) {
-      FCTXLOGERROR(ctx, "{} failed to parse shared team data for key {}, error message: {}", owner_->get_owner(), key,
+      FCTXLOGERROR(ctx, "{} failed to pack shared team data for key {}, error message: {}", owner_->get_owner(), key,
                    team_data.InitializationErrorString());
       team_update->mutable_shared_team_data()->RemoveLast();
     }
@@ -812,7 +864,7 @@ rpc::result_code_type user_team::update_team_shared_data(
 
 rpc::result_code_type user_team::update_member_shared_data(
     rpc::context& ctx, ::google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule>& data) {
-  std::unordered_set<int64_t> existed_keys;
+  std::unordered_map<int64_t, PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule*> existed_keys;
   std::unordered_set<user_team_utility::append_condition_checker> condition_appenders;
   existed_keys.reserve(static_cast<size_t>(data.size()));
 
@@ -824,13 +876,31 @@ rpc::result_code_type user_team::update_member_shared_data(
   member_update->set_client_version(owner_->get_owner().get_client_info().client_version());
   member_update->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
-  const auto& handle_map = user_team_utility::get_member_shared_data_update_handlers_map();
   for (auto& member_data : data) {
     int64_t key = user_team_algorithm::make_team_member_shared_data_key(member_data);
     if (existed_keys.find(key) != existed_keys.end()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
     }
-    existed_keys.insert(key);
+    existed_keys.emplace(key, &member_data);
+  }
+
+  auto mutable_data_by_key_fn = [&existed_keys,
+                                 &data](int64_t key) -> PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule* {
+    auto iter = existed_keys.find(key);
+    if (iter != existed_keys.end()) {
+      return iter->second;
+    }
+
+    auto* res = data.Add();
+    existed_keys.emplace(key, res);
+    return res;
+  };
+
+  const auto& handle_map = user_team_utility::get_member_shared_data_update_handlers_map();
+  int input_data_size = data.size();
+  for (int i = 0; i < input_data_size; ++i) {
+    auto& member_data = *data.Mutable(i);
+    int64_t key = user_team_algorithm::make_team_member_shared_data_key(member_data);
 
     // 未注册处理器的模块数据也要正常透传(处理器只负责附加条件检查与本地行为)，
     // 客户端可写的模块由任务层的 user_team_algorithm::allow_client_update_team_member_shared_data 把关
@@ -843,7 +913,7 @@ rpc::result_code_type user_team::update_member_shared_data(
         }
       }
       if (iter->second.normalize_update != nullptr) {
-        iter->second.normalize_update(ctx, *this, member_data);
+        iter->second.normalize_update(ctx, *this, member_data, mutable_data_by_key_fn);
       }
 
       if (iter->second.build_append_condition != nullptr) {
@@ -935,6 +1005,49 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
                  protobuf_mini_dumper_get_error_msg(*result.get_error()));
   }
 }
+
+bool user_team::async_send_team_shared_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DTeamSharedDataModule&& team_data,
+                                            ::atfw::team::EnTeamPermissionType permission) {
+  // 只有队长有权限修改匹配状态
+  if (!is_captain()) {
+    return false;
+  }
+
+  auto self = weak_from_this();
+  auto user_inst = owner_->get_owner().shared_from_this();
+
+  auto result = rpc::async_invoke(
+      ctx, "user_team.async_send_team_shared_data",
+      // ====================================================================================================
+      [self, user_inst, team_data = std::move(team_data),
+       permission](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto team = self.lock();
+        if (!team) {
+          RPC_RETURN_CODE(0);
+        }
+
+        rpc::context::message_holder<atfw::team::DTeamAction> action{child_ctx};
+        auto* team_update = action->mutable_team_update();
+        auto* data_item = team_update->add_shared_team_data();
+        data_item->set_key(user_team_algorithm::make_team_shared_data_key(team_data));
+        // 可见性
+        data_item->mutable_value()->set_permission(permission);
+        if (!data_item->mutable_value()->mutable_data()->PackFrom(team_data)) {
+          FCTXLOGERROR(child_ctx, "{} failed to pack shared team data for key {}, error message: {}",
+                       team->get_owner().get_owner(), data_item->key(), team_data.InitializationErrorString());
+          team_update->mutable_shared_team_data()->RemoveLast();
+        }
+
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team->send_action(child_ctx, std::move(*action))));
+      });
+
+  if (result.is_error()) {
+    FCTXLOGERROR(ctx, "async_send_team_shared_data failed, error code: {}({})", *result.get_error(),
+                 protobuf_mini_dumper_get_error_msg(*result.get_error()));
+  }
+  return !result.is_error();
+}
+
 void user_team::dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output) {
   if (check_flag(team_flag::kPendingDirtySnapshot)) {
     dump(ctx, *output.mutable_team_snapshot());
@@ -1106,6 +1219,9 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
         }
         cached_permission_role_ =
             member_iter != cached_members_.end() ? member_iter->second->member_data.role() : member_data.role();
+
+        // 队长变化后要立即执行一次数据修复
+        user_team_battle_library_function::auto_check_and_correct_team_data(ctx, *this);
       }
       // 入队后不再保留其待处理的加入请求/邀请(与 teamsvr-room apply_add_member 的清理保持一致)
       remove_pending_join_request(member_data.user_key());
@@ -1190,6 +1306,9 @@ bool user_team::load_team_action(rpc::context& ctx, const ::atfw::team::DTeamAct
       cached_captain_user_key_ = election_captain.user_key();
       if (owner_->get_owner().is(cached_captain_user_key_)) {
         cached_permission_role_ = new_role;
+
+        // 队长变化后要立即执行一次数据修复
+        user_team_battle_library_function::auto_check_and_correct_team_data(ctx, *this);
       }
       break;
     }
@@ -1567,6 +1686,7 @@ void user_team::load_snapshot(rpc::context& ctx) {
   FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, load a snapshot, last sequence:{}", owner_->get_owner(),
                team_key_.zone_id(), team_key_.team_id(), channel_subscriber_->get_last_message_sequence());
 
+  bool load_snapshot_for_the_first_time = (channel_saved_sequence_ == 0);
   channel_create_sequence_ = channel_subscriber_->get_create_sequence();
 
   // 在重建前记录成员身份，避免回放压缩点之后的历史入队事件时再次提交默认成员数据。
@@ -1603,6 +1723,16 @@ void user_team::load_snapshot(rpc::context& ctx) {
     FCTXLOGINFO(ctx, "{} wait_to_be_member_but_timeout for team {}:{} after loadsnapshot", owner_->get_owner(),
                 team_key_.zone_id(), team_key_.team_id());
     owner_->remove_team(ctx, team_key_, atfw::team::EN_TEAM_EXIT_REASON_EXPIRED);
+  }
+
+  // 第一次加载完快照要立即触发数据检查
+  if (load_snapshot_for_the_first_time) {
+    last_check_and_correct_data_timepoint_ = std::chrono::system_clock::from_time_t(0);
+  }
+  // 检查修复跨模块数据
+  if (last_check_and_correct_data_timepoint_ + kCheckAndCorrectInterval <= ctx.logical_now()) {
+    user_team_battle_library_function::auto_check_and_correct_team_data(ctx, *this);
+    last_check_and_correct_data_timepoint_ = ctx.logical_now();
   }
 }
 
@@ -1665,14 +1795,15 @@ void user_team::on_receive_raw_message(rpc::context& ctx, const ::atfw::dtmq::DC
   }
 }
 
-void user_team::set_matching(rpc::context& /*ctx*/, bool value) {
+void user_team::set_matching(rpc::context& ctx, bool value) {
   if (check_flag(team_flag::kMatching) == value) {
     return;
   }
 
   set_flag(team_flag::kMatching, value);
 
-  // TODO(owent): 发起匹配流程
+  // 触发其他关联模块的事件处理
+  user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(ctx, *this, value);
 }
 
 void user_team::do_team_shared_data(rpc::context& ctx,

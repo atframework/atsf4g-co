@@ -2,6 +2,8 @@
 
 #include "logic/team/user_team_algorithm.h"
 
+#include "logic/team/user_team_battle_library_function.h"
+
 #ifdef GetMessage
 #  undef GetMessage
 #endif
@@ -60,22 +62,10 @@ int64_t user_team_algorithm::make_team_member_shared_data_key(
 
 bool user_team_algorithm::allow_client_update_team_shared_data(
     const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
-  switch (data.module_type_case()) {
-    case PROJECT_NAMESPACE_ID::DTeamSharedDataModule::kBattle: {
-      return data.battle().data_type_case() == PROJECT_NAMESPACE_ID::DTeamSharedDataTypeBattle::kMatching;
-    }
-    default:
-      return false;
-  }
+  return user_team_battle_library_function::allow_client_update_team_shared_data(data);
 }
 
 bool user_team_algorithm::allow_client_update_team_member_shared_data(
     const PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule& data) {
-  switch (data.module_type_case()) {
-    case PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule::kBattle: {
-      return data.battle().data_type_case() == PROJECT_NAMESPACE_ID::DTeamMemberSharedDataTypeBattle::kReady;
-    }
-    default:
-      return false;
-  }
+  return user_team_battle_library_function::allow_client_update_team_member_shared_data(data);
 }

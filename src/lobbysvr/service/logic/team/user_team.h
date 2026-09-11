@@ -77,6 +77,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   static ptr_t create(rpc::context& ctx, user_team_manager& owner, uint32_t team_type,
                       const atfw::team::DTeamKey& team_key, const atfw::dtmq::DChannelIdKey& channel_key);
 
+  void refresh_feature_limit_minute(rpc::context&);
+
   void init_cached_data(const PROJECT_NAMESPACE_ID::DUserIDKey& captain_user_key,
                         atfw::team::EnTeamPermissionRole permission_role);
 
@@ -106,9 +108,15 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   inline bool is_member() const noexcept { return check_flag(team_flag::kMember); }
 
+  bool is_captain() const noexcept;
+
   inline uint32_t get_team_type() const noexcept { return team_type_; }
 
   inline const atfw::team::DTeamKey& get_team_key() const noexcept { return team_key_; }
+
+  inline user_team_manager& get_owner() noexcept { return *owner_; }
+
+  inline const user_team_manager& get_owner() const noexcept { return *owner_; }
 
   const atfw::dtmq::DChannelIdKey& get_channel_key() const noexcept;
 
@@ -169,6 +177,10 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   void try_load_snapshot(rpc::context& ctx);
 
   void async_flush_all_member_shared_data(rpc::context& ctx);
+
+  bool async_send_team_shared_data(
+      rpc::context& ctx, PROJECT_NAMESPACE_ID::DTeamSharedDataModule&& team_data,
+      ::atfw::team::EnTeamPermissionType permission = ::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
 
   void dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output);
   void clear_dirty_data(rpc::context& ctx);
@@ -266,6 +278,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
   std::chrono::system_clock::time_point last_exit_team_request_timepoint_;
   std::chrono::system_clock::time_point exit_started_timepoint_;
   atfw::team::EnTeamExitReason last_exit_team_reason_;
+
+  std::chrono::system_clock::time_point last_check_and_correct_data_timepoint_;
 
   PROJECT_NAMESPACE_ID::DUserIDKey cached_captain_user_key_;
   atfw::team::EnTeamPermissionRole cached_permission_role_;
