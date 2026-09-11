@@ -1,13 +1,6 @@
-#include "task_action_user_gm_cmd_nomsg.h"
+// Copyright 2026 atframework
 
-#include <fstream>
-#include <memory>
-#include <mutex>
-#include <set>
-#include <sstream>
-#include <string>
-#include <unordered_map>
-#include <vector>
+#include "logic/user/task_action_user_gm_cmd_nomsg.h"
 
 #include <config/compile_optimize.h>
 #include <config/excel/config_easy_api.h>
@@ -43,11 +36,19 @@
 #include <logic/cache/user_cache_manager.h>
 #include <logic/chat/user_chat_manager.h>
 
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
+
 #define DECLARE_UTF8_LITERATE(X) ((const char *)u8##X)
 
-namespace detail {
-static ::util::cli::cmd_option_ci::ptr_type task_action_user_gm_cmd_cmd_set_;
-}  // namespace detail
+namespace {
+static ::util::cli::cmd_option_ci::ptr_type &get_task_action_user_gm_cmd_cmd_set() {
+  static ::util::cli::cmd_option_ci::ptr_type ret = ::util::cli::cmd_option_ci::create();
+  return ret;
+}
+}  // namespace
 
 task_action_user_gm_cmd_nomsg::task_action_user_gm_cmd_nomsg(ctor_param_t &&param)
     : task_action_no_req_base(param), param_(param) {}
@@ -82,11 +83,12 @@ void task_action_user_gm_cmd_nomsg::run_cmd() {
   std::vector<const char *> params;
   params.reserve(param_.args.size());
   for (size_t i = 0; i < param_.args.size(); ++i) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     params.push_back(param_.args[i].c_str());
   }
 
-  detail::task_action_user_gm_cmd_cmd_set_->start(static_cast<int>(params.size()), &params[0], true,
-                                                  reinterpret_cast<void *>(this));
+  get_task_action_user_gm_cmd_cmd_set()->start(static_cast<int>(params.size()), params.data(), true,
+                                               reinterpret_cast<void *>(this));
 }
 task_action_user_gm_cmd_nomsg &task_action_user_gm_cmd_nomsg::get_self(::util::cli::cmd_option_list &params) {
   return *reinterpret_cast<task_action_user_gm_cmd_nomsg *>(params.get_ext_param());
@@ -99,8 +101,6 @@ std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> task_action_user_gm_cm
   return param_.rsp_body;
 }
 
-void task_action_user_gm_cmd_nomsg::set_async_task(task_type_trait::task_type t) { async_task_ = t; }
-
 user_ptr_t task_action_user_gm_cmd_nomsg::get_user_cmd_params(::util::cli::cmd_option_list &params) {
   user_ptr_t user_inst = get_self(params).param_.user_inst;
   if (!user_inst) {
@@ -112,15 +112,16 @@ user_ptr_t task_action_user_gm_cmd_nomsg::get_user_cmd_params(::util::cli::cmd_o
 }
 
 void task_action_user_gm_cmd_nomsg::create_cmd_set() {
-  if (detail::task_action_user_gm_cmd_cmd_set_) {
+  if (get_task_action_user_gm_cmd_cmd_set()) {
     return;
   }
-  detail::task_action_user_gm_cmd_cmd_set_ = ::util::cli::cmd_option_ci::create();
-  ::util::cli::cmd_option_ci::ptr_type cmd_set = detail::task_action_user_gm_cmd_cmd_set_;
+  get_task_action_user_gm_cmd_cmd_set() = ::util::cli::cmd_option_ci::create();
+  ::util::cli::cmd_option_ci::ptr_type cmd_set = get_task_action_user_gm_cmd_cmd_set();
   cmd_set->set_help_cmd_style(0);
   cmd_set->set_help_description_style(0);
   init_gm_cmd("@OnError", task_action_user_gm_cmd_nomsg::on_gm_cmd_invalid);
   init_gm_cmd("help", task_action_user_gm_cmd_nomsg::on_gm_cmd_help,
+              // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
               DECLARE_UTF8_LITERATE("help Display help information, angle brackets in the following "
                                     "commands are "
                                     "<required> parameters, and square brackets are [optional] "
@@ -137,11 +138,13 @@ bool task_action_user_gm_cmd_nomsg::check_params_number(::util::cli::cmd_option_
     const typename util::cli::cmd_option_list::cmd_array_type &cmd_arr = params.get_cmd_array();
     size_t arr_sz = cmd_arr.size();
     for (size_t i = 1; i < arr_sz; ++i) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       if (!cmd_arr[i].first.empty()) {
+        // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
         ss << cmd_arr[i].first << " ";
       }
     }
-    ss << "require " << param_num << " parameter(s), but we only got" << params.get_params_number() << std::endl;
+    ss << "require " << param_num << " parameter(s), but we only got" << params.get_params_number() << '\n';
     rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_GM_CMD_PARAM_NUMBER);
     rsp_body->set_result_message(ss.str());
     return false;
@@ -151,13 +154,13 @@ bool task_action_user_gm_cmd_nomsg::check_params_number(::util::cli::cmd_option_
 
 void task_action_user_gm_cmd_nomsg::init_gm_cmd(
     const std::string &cmd_name,
-    void (*handler)(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
-                    std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
+    void (*handler)(const std::shared_ptr<rpc::context> &ctx, const user_ptr_t &user_inst,
+                    const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp,
                     ::util::cli::cmd_option_list &params),
     const std::string &help_msg) {
   create_cmd_set();
   auto result =
-      detail::task_action_user_gm_cmd_cmd_set_->bind_cmd(cmd_name, [handler](::util::cli::cmd_option_list &params) {
+      get_task_action_user_gm_cmd_cmd_set()->bind_cmd(cmd_name, [handler](::util::cli::cmd_option_list &params) {
         task_action_user_gm_cmd_nomsg &self = get_self(params);
         std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body = self.get_rsp();
         user_ptr_t user_inst = get_user_cmd_params(params);
@@ -172,33 +175,35 @@ void task_action_user_gm_cmd_nomsg::init_gm_cmd(
   }
 }
 
-void task_action_user_gm_cmd_nomsg::on_gm_cmd_help(std::shared_ptr<rpc::context>, user_ptr_t,
-                                                   std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
-                                                   ::util::cli::cmd_option_list &) {
+void task_action_user_gm_cmd_nomsg::on_gm_cmd_help(
+    const std::shared_ptr<rpc::context> &, const user_ptr_t &,
+    const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body, ::util::cli::cmd_option_list &) {
   std::stringstream ss;
 
-  ss << "Usage: <command> [command paraters...]" << std::endl;
-  if (detail::task_action_user_gm_cmd_cmd_set_) {
-    ss << detail::task_action_user_gm_cmd_cmd_set_->get_help_msg() << std::endl;
+  ss << "Usage: <command> [command paraters...]\n";
+  if (get_task_action_user_gm_cmd_cmd_set()) {
+    ss << get_task_action_user_gm_cmd_cmd_set()->get_help_msg() << '\n';
   }
   rsp_body->set_result_message(ss.str());
 }
 
 void task_action_user_gm_cmd_nomsg::on_gm_cmd_invalid(
-    std::shared_ptr<rpc::context>, user_ptr_t, std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp_body,
-    ::util::cli::cmd_option_list &params) {
+    const std::shared_ptr<rpc::context> &, const user_ptr_t &,
+    const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> &rsp_body, ::util::cli::cmd_option_list &params) {
   std::stringstream ss;
-  ss << "Cmd Invalid." << std::endl;
+  ss << "Cmd Invalid.\n";
   const typename util::cli::cmd_option_list::cmd_array_type &cmd_arr = params.get_cmd_array();
   size_t arr_sz = cmd_arr.size();
   for (size_t i = 1; i < arr_sz; ++i) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (!cmd_arr[i].first.empty()) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
       ss << cmd_arr[i].first << " ";
     }
   }
 
-  if (detail::task_action_user_gm_cmd_cmd_set_) {
-    detail::task_action_user_gm_cmd_cmd_set_->dump(ss, "") << std::endl;
+  if (get_task_action_user_gm_cmd_cmd_set()) {
+    get_task_action_user_gm_cmd_cmd_set()->dump(ss, "") << '\n';
   }
 
   rsp_body->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_GM_CMD_INVALID);

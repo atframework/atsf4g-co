@@ -879,9 +879,9 @@ void user_matching_manager::on_client_view_changed(rpc::context& ctx) {
   owner_->send_all_syn_msg(ctx);
 }
 
-void user_matching_manager::on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
-                                                     std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
-                                                     ::util::cli::cmd_option_list& params) {
+void user_matching_manager::on_gm_cmd_start_matching(
+    const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
+    const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp, ::util::cli::cmd_option_list& params) {
   if (!user_inst) {
     rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
     return;

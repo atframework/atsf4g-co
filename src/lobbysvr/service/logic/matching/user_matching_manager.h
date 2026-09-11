@@ -151,8 +151,8 @@ class user_matching_manager : public atfw::util::design_pattern::noncopyable {
       PROJECT_NAMESPACE_ID::DMatchingParameter& output) const;
 
  public:
-  static void on_gm_cmd_start_matching(std::shared_ptr<rpc::context> ctx, user_ptr_t user_inst,
-                                       std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp> rsp,
+  static void on_gm_cmd_start_matching(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
+                                       const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp,
                                        ::util::cli::cmd_option_list& params);
 
  private:
