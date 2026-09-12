@@ -466,6 +466,10 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
     if (res < 0) {
       RPC_RETURN_CODE(res);
     }
+    // 成功响应必须携带 storage：空响应不能把调用方已有数据清空（与复制模式的合并校验保持一致）
+    if (!rsp_body->has_storage()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+    }
 
     protobuf_move_message(out, std::move(*rsp_body->mutable_storage()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -557,6 +561,10 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_transaction(
     if (res < 0) {
       RPC_RETURN_CODE(res);
     }
+    // 成功响应必须携带 metadata：空响应不能把调用方已有数据清空（与复制模式的合并校验保持一致）
+    if (!rsp_body->has_metadata()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+    }
 
     protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -595,6 +603,10 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_transaction(
     int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction::reject(ctx, target_server_id, *req_body, *rsp_body));
     if (res < 0) {
       RPC_RETURN_CODE(res);
+    }
+    // 成功响应必须携带 metadata：空响应不能把调用方已有数据清空（与复制模式的合并校验保持一致）
+    if (!rsp_body->has_metadata()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
     }
 
     protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
@@ -699,6 +711,10 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type commit_participator(
     if (res < 0) {
       RPC_RETURN_CODE(res);
     }
+    // 成功响应必须携带 metadata：空响应不能把调用方已有数据清空（与复制模式的合并校验保持一致）
+    if (!rsp_body->has_metadata()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+    }
 
     protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -740,10 +756,19 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
     if (res < 0) {
       RPC_RETURN_CODE(res);
     }
+    // 成功响应必须携带 metadata：空响应不能把调用方已有数据清空（与复制模式的合并校验保持一致）
+    if (!rsp_body->has_metadata()) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+    }
 
     protobuf_move_message(inout, std::move(*rsp_body->mutable_metadata()));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
+}
+
+DISTRIBUTED_TRANSACTION_SDK_API void merge_metadata(atfw::distributed_system::transaction_metadata& output,
+                                                    const atfw::distributed_system::transaction_metadata& input) {
+  merge_transaction_metadata(output, input);
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(atfw::distributed_system::transaction_blob_storage& output,

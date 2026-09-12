@@ -38,7 +38,7 @@ message transaction_participator {
 }
 
 message transaction_configure {
-  bool force_commit = 1;  // 是否直接强制提交（并执行）事务。可用于实现2PC流程
+  bool force_commit = 1;  // prepare 阶段直接执行；无协调者持久记录，仅支持 best-effort 补偿
 
   uint32 resolve_max_times = 11;                         // 最大重试次数
   google.protobuf.Duration resolve_retry_interval = 12;  // 失败重试间隔
@@ -76,6 +76,7 @@ message transaction_participator_storage {
 
   uint32 resolve_times = 11;                         // 当前重试次数
   google.protobuf.Timestamp resolve_timepoint = 12;  // 下一次重试时间
+  bool finished_callback_completed = 13;             // on_finished 已成功，恢复时只重试 ACK
 
   repeated bytes lock_resource = 21;
 }
@@ -89,6 +90,7 @@ message transaction_participator_failure_reason {
 message transaction_participator_snapshot {
   repeated transaction_participator_storage running_transaction = 2;
   repeated transaction_participator_storage finished_transaction = 3;
+  repeated bytes wounded_transaction_uuid = 4;  // running 中待确认 wound 决议的事务，不改变 metadata.status
 }
 
 // ============ 协调者RPC ============

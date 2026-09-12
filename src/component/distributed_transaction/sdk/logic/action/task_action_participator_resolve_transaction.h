@@ -28,7 +28,7 @@ class task_action_participator_resolve_transaction : public task_action_no_req_b
 
   struct ctor_param_t : public task_action_no_req_base::ctor_param_t {
     atfw::util::memory::strong_rc_ptr<transaction_participator_handle> participantor;
-    std::list<std::string> pending_transactions;
+    std::list<storage_ptr_type> pending_transactions;
     std::vector<storage_ptr_type> submmit_transactions;
   };
 
@@ -49,15 +49,16 @@ class task_action_participator_resolve_transaction : public task_action_no_req_b
  private:
   // trigger_due 在拉起本任务前已移除所有待处理条目的 timer，恢复所有权随任务转移。
   // 已处理条目由 resolve_transcation/handle_finished_transaction_result 自行重新排期或完成清理；
-  // 任务异常退出（不可写/exiting/被 kill/超时）时为未处理条目重新排期定时器，避免恢复流程永久丢失。
+  // 可写性检查失败计入剩余条目的重试次数，达到上限时强制本地清理；其他异常退出只重新排期。
   // 幂等（内部 rearm_done_ 去重），在 operator() 正常收尾和 on_failed 中都会调用
   void rearm_unprocessed_timers();
 
  private:
   ctor_param_t param_;
   size_t submmit_processed_ = 0;
-  std::list<std::string>::iterator pending_iter_;
+  std::list<storage_ptr_type>::iterator pending_iter_;
   bool rearm_done_ = false;
+  bool writable_check_failed_ = false;
 };
 
 }  // namespace distributed_system

@@ -24,6 +24,7 @@
 #include <memory/object_allocator.h>
 
 #include <dispatcher/task_manager.h>
+#include <rpc/rpc_shared_message.h>
 #include <rpc/rpc_utils.h>
 
 #include <logic/logic_server_setup.h>
@@ -47,6 +48,19 @@ static uint32_t get_retry_limit(const transaction_participator_storage& storage)
   return std::max<uint32_t>(1, storage.configure().resolve_max_times());
 }
 
+static bool can_wound(const transaction_metadata& requester, const transaction_metadata& holder) {
+  if (holder.status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+    return false;
+  }
+  if (requester.prepare_timepoint().seconds() != holder.prepare_timepoint().seconds()) {
+    return requester.prepare_timepoint().seconds() < holder.prepare_timepoint().seconds();
+  }
+  if (requester.prepare_timepoint().nanos() != holder.prepare_timepoint().nanos()) {
+    return requester.prepare_timepoint().nanos() < holder.prepare_timepoint().nanos();
+  }
+  return requester.transaction_uuid() < holder.transaction_uuid();
+}
+
 // 每积累 16 个 finished 事务强制启动一次刷新操作（偏移量取 5，避免与定时器边界对齐）
 constexpr size_t kFinishedTransactionAutoTickModulo = 16;
 constexpr size_t kFinishedTransactionAutoTickPhase = 5;
@@ -68,12 +82,12 @@ class inflight_terminal_mark_guard {
  public:
   inflight_terminal_mark_guard(
       std::unordered_map<std::string, transaction_participator_handle::running_transaction_entry>& owner,
-      const std::string& transaction_uuid)
-      : owner_(owner), transaction_uuid_(transaction_uuid) {}
+      const std::string& transaction_uuid, const transaction_participator_handle::storage_ptr_type& storage)
+      : owner_(owner), transaction_uuid_(transaction_uuid), storage_(storage.get()) {}
   ~inflight_terminal_mark_guard() {
     auto iter = owner_.find(transaction_uuid_);
-    if (iter != owner_.end()) {
-      iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED;
+    if (iter != owner_.end() && iter->second.storage.get() == storage_) {
+      iter->second.inflight_terminal_direction = transaction_participator_handle::terminal_direction_type::kNone;
     }
   }
 
@@ -83,6 +97,7 @@ class inflight_terminal_mark_guard {
  private:
   std::unordered_map<std::string, transaction_participator_handle::running_transaction_entry>& owner_;
   const std::string& transaction_uuid_;
+  const transaction_participator_handle::storage_type* storage_;
 };
 }  // namespace
 
@@ -110,18 +125,6 @@ void transaction_participator_handle::resolve_timer_queue_type::erase(const std:
   }
 }
 
-void transaction_participator_handle::resolve_timer_queue_type::erase(const storage_resolve_timer_type& timer) {
-  auto iter = index_.find(timer.transaction_uuid);
-  if (iter == index_.end() || iter->second != timer) {
-    return;
-  }
-  timers_.erase(iter->second);
-  index_.erase(iter);
-  if (nullptr != on_change) {
-    on_change(on_change_handle);
-  }
-}
-
 void transaction_participator_handle::resolve_timer_queue_type::clear() {
   bool had_entries = !timers_.empty();
   timers_.clear();
@@ -134,6 +137,67 @@ void transaction_participator_handle::resolve_timer_queue_type::clear() {
 void transaction_participator_handle::schedule_resolve_retry(resolve_timer_action_type action, storage_type& storage) {
   set_next_retry_timepoint(storage, atfw::util::time::time_utility::now());
   resolve_timer_queue_.insert_or_replace(action, storage);
+}
+
+bool transaction_participator_handle::is_current_transaction(resolve_timer_action_type action,
+                                                             const storage_ptr_type& storage) const noexcept {
+  if (!storage) {
+    return false;
+  }
+  const auto& transaction_uuid = storage->metadata().transaction_uuid();
+  if (action == resolve_timer_action_type::kQuery) {
+    auto current = running_transactions_.find(transaction_uuid);
+    return current != running_transactions_.end() && current->second.storage == storage;
+  }
+  auto current = finished_transactions_.find(transaction_uuid);
+  return current != finished_transactions_.end() && current->second == storage;
+}
+
+void transaction_participator_handle::retry_resolve_transaction(resolve_timer_action_type action,
+                                                                const storage_ptr_type& storage,
+                                                                bool writable_check_failed) {
+  if (!is_current_transaction(action, storage)) {
+    return;
+  }
+
+  if (writable_check_failed) {
+    const auto retry_limit = get_retry_limit(*storage);
+    if (storage->resolve_times() < retry_limit) {
+      storage->set_resolve_times(storage->resolve_times() + 1);
+    }
+    if (storage->resolve_times() >= retry_limit) {
+      const auto& transaction_uuid = storage->metadata().transaction_uuid();
+      FWLOGERROR("participator {} transaction {} exhausted {} attempts while checking writable, consume locally",
+                 get_participator_key(), transaction_uuid, retry_limit);
+      // 不可写时仅清理本地状态，不执行业务或完成回调，也不确认协调者决议。
+      resolve_timer_queue_.erase(transaction_uuid);
+      if (action == resolve_timer_action_type::kQuery) {
+        if (storage->metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+          storage->mutable_metadata()->set_status(
+              atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
+        }
+        unlock(storage);
+        running_transactions_.erase(transaction_uuid);
+      } else {
+        finished_transactions_.erase(transaction_uuid);
+      }
+      return;
+    }
+  }
+
+  schedule_resolve_retry(action, *storage);
+}
+
+rpc::result_code_type transaction_participator_handle::finish_resolve_task(rpc::context& ctx) {
+  if (task_type_trait::get_task_id(auto_resolve_transaction_task_) == ctx.get_task_context().task_id) {
+    auto_resolve_transaction_task_.reset();
+  }
+  if (vtable_ && vtable_->on_resolve_task_finished) {
+    RPC_AWAIT_IGNORE_RESULT(vtable_->on_resolve_task_finished(ctx, *this));
+  }
+  // 补驱动任务执行期间被跳过的 tick。
+  tick(ctx, atfw::util::time::time_utility::now());
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
 DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::resolve_timer_queue_type::trigger_due(
@@ -264,8 +328,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
   running_transactions_.clear();
   transaction_locks_.clear();
   finished_transactions_.clear();
-  // 注意: 尚未结束的 auto resolve task 无法安全取消，但它只通过 resolve_transcation/handle_finished_transaction_result
-  // 按 UUID 或对象标识操作当前容器，对 load 后的新状态是幂等安全的。
+  // 尚未结束的任务通过对象身份校验丢弃旧结果；业务数据与加载的快照须由接入方保持一致。
 
   for (const auto& transaction : storage.running_transaction()) {
     const std::string& transaction_uuid = transaction.metadata().transaction_uuid();
@@ -287,10 +350,9 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
     protobuf_copy_message(*transaction_ptr, transaction);
     auto& running_entry = running_transactions_[transaction_uuid];
     running_entry.storage = transaction_ptr;
-    // A running REJECTING entry is a durable local rejection intent. This is also how a wound survives
-    // snapshot reload, because the runtime-only wounded flag itself is not part of the snapshot schema.
-    running_entry.wounded =
-        transaction.metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
+    running_entry.local_action_stage_entered =
+        transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING ||
+        transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED;
 
     // Restore locks
     for (const auto& lock_resource : transaction.lock_resource()) {
@@ -309,6 +371,15 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
     resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kQuery, *transaction_ptr);
   }
 
+  for (const auto& transaction_uuid : storage.wounded_transaction_uuid()) {
+    auto iter = running_transactions_.find(transaction_uuid);
+    if (iter != running_transactions_.end() &&
+        iter->second.storage->metadata().status() <
+            atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+      iter->second.wounded = true;
+    }
+  }
+
   for (const auto& transaction : storage.finished_transaction()) {
     const std::string& transaction_uuid = transaction.metadata().transaction_uuid();
     if (transaction_uuid.empty()) {
@@ -317,7 +388,7 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::load(const
     }
     if (running_transactions_.end() != running_transactions_.find(transaction_uuid) ||
         finished_transactions_.end() != finished_transactions_.find(transaction_uuid)) {
-      FWLOGERROR("participator {} load snapshot with duplicate finished transaction {}, keep the first one",
+      FWLOGERROR("participator {} load snapshot with finished transaction {} already present, skip it",
                  get_participator_key(), transaction_uuid);
       continue;
     }
@@ -346,6 +417,9 @@ DISTRIBUTED_TRANSACTION_SDK_API void transaction_participator_handle::dump(snaps
   for (auto& transaction : running_transactions_) {
     if (transaction.second.storage) {
       protobuf_copy_message(*storage.add_running_transaction(), *transaction.second.storage);
+      if (transaction.second.wounded) {
+        storage.add_wounded_transaction_uuid(transaction.first);
+      }
     }
   }
 }
@@ -368,7 +442,7 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
     return 0;
   }
 
-  std::list<std::string> pending_transactions;
+  std::list<storage_ptr_type> pending_transactions;
   std::vector<storage_ptr_type> submmit_transactions;
 
   // 统一队列按 action 分发：query 查 running 集合，acknowledge 查 finished 集合，均按截止时间处理。
@@ -386,7 +460,7 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
         return true;
       }
 
-      pending_transactions.push_back(transaction_iter->first);
+      pending_transactions.push_back(transaction_iter->second.storage);
     } else {
       auto transaction_iter = finished_transactions_.find(timer.transaction_uuid);
       if (transaction_iter == finished_transactions_.end() || !transaction_iter->second) {
@@ -404,22 +478,19 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
 
   // trigger_due 已移除这些条目的 timer，任务拉起失败时按退避间隔重新排期，
   // 避免恢复流程永久丢失或立即到期形成空转循环
-  auto rearm_timers = [this, &pending_transactions, &submmit_transactions]() {
-    for (const auto& transaction_uuid : pending_transactions) {
-      auto transaction_iter = running_transactions_.find(transaction_uuid);
-      if (transaction_iter != running_transactions_.end() && transaction_iter->second.storage) {
-        schedule_resolve_retry(resolve_timer_action_type::kQuery, *transaction_iter->second.storage);
-      }
+  auto rearm_timers = [this](const std::list<storage_ptr_type>& pending,
+                             const std::vector<storage_ptr_type>& finished) {
+    for (const auto& transaction_ptr : pending) {
+      retry_resolve_transaction(resolve_timer_action_type::kQuery, transaction_ptr, false);
     }
-    for (const auto& transaction_ptr : submmit_transactions) {
-      if (transaction_ptr) {
-        schedule_resolve_retry(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
-      }
+    for (const auto& transaction_ptr : finished) {
+      retry_resolve_transaction(resolve_timer_action_type::kAcknowledge, transaction_ptr, false);
     }
   };
 
   task_action_participator_resolve_transaction::ctor_param_t params;
   params.participantor = shared_from_this();
+  // 原列表保留给失败分支，任务参数使用副本。
   params.pending_transactions = pending_transactions;
   params.submmit_transactions = submmit_transactions;
 
@@ -428,7 +499,7 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
   if (0 != res || task_type_trait::empty(auto_resolve_transaction_task_)) {
     FWLOGERROR("create task_action_participator_resolve_transaction failed, res: {}({})", res,
                protobuf_mini_dumper_get_error_msg(res));
-    rearm_timers();
+    rearm_timers(pending_transactions, submmit_transactions);
     return res;
   }
 
@@ -439,7 +510,7 @@ transaction_participator_handle::tick(rpc::context&, atfw::util::time::time_util
                task_type_trait::get_task_id(auto_resolve_transaction_task_), res,
                protobuf_mini_dumper_get_error_msg(res));
     task_type_trait::reset_task(auto_resolve_transaction_task_);
-    rearm_timers();
+    rearm_timers(pending_transactions, submmit_transactions);
     return res;
   }
 
@@ -455,7 +526,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/prepare"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/prepare"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -471,9 +543,13 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(
         vtable_->check_prepare(child_ctx, *this, *request.mutable_storage(), *response.mutable_reason()));
     if (res < 0 || response.reason().allow_retry()) {
-      // TODO(owentou): 通知被抢占的事务暂缓执行
       RPC_RETURN_CODE(child_tracer.finish({res, {}}));
     }
+  }
+
+  if (request.storage().metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+    request.mutable_storage()->mutable_metadata()->set_status(
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
   }
 
   if (request.storage().configure().force_commit()) {
@@ -490,6 +566,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
       }
     }
 
+    request.mutable_storage()->mutable_metadata()->set_status(
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
     rpc::result_code_type::value_type event_result = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
     if (vtable_ && vtable_->do_event) {
       event_result = RPC_AWAIT_CODE_RESULT(vtable_->do_event(child_ctx, *this, request.storage()));
@@ -522,6 +600,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
       }
     }
 
+    request.mutable_storage()->mutable_metadata()->set_status(
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
     if (vtable_ && vtable_->on_commited) {
       callback_result = RPC_AWAIT_CODE_RESULT(vtable_->on_commited(child_ctx, *this, request.storage()));
       if (callback_result < 0) {
@@ -532,9 +612,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     }
     RPC_RETURN_CODE(child_tracer.finish({event_result, {}}));
   } else {
-    RPC_RETURN_CODE(child_tracer.finish(
-        {RPC_AWAIT_CODE_RESULT(add_running_transcation(child_ctx, std::move(*request.mutable_storage()), output)),
-         {}}));
+    auto res = RPC_AWAIT_CODE_RESULT(add_running_transcation(child_ctx, std::move(*request.mutable_storage()), output));
+    if (res == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED) {
+      response.mutable_reason()->set_allow_retry(true);
+    }
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   }
 }
 
@@ -542,7 +624,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     rpc::context& ctx, const SSParticipatorTransactionCommitReq& request, SSParticipatorTransactionCommitRsp&) {
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/commit"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/commit"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -564,7 +647,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     rpc::context& ctx, const SSParticipatorTransactionRejectReq& request, SSParticipatorTransactionRejectRsp&) {
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/reject"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/reject"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -577,8 +661,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
   child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.reject", std::move(child_trace_option));
 
   if (request.has_storage() && request.storage().configure().force_commit()) {
-    // 公开 RPC 可能收到畸形/伪造 payload，undo 前必须验证内外 UUID 一致
-    if (!request.storage().metadata().transaction_uuid().empty() &&
+    // 公开 RPC 可能收到畸形/伪造 payload，undo 前必须验证内外 UUID 一致；内部 UUID 缺失同样视为非法
+    if (request.storage().metadata().transaction_uuid().empty() ||
         request.storage().metadata().transaction_uuid() != request.transaction_uuid()) {
       FWLOGERROR("participator {} undo transaction {} but request uuid {} mismatch", get_participator_key(),
                  request.storage().metadata().transaction_uuid(), request.transaction_uuid());
@@ -626,20 +710,11 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type::value_type transaction_pa
       if (!old_holder->second) {
         break;
       }
-
-      bool is_preempted = false;
-      if (old_holder->second->metadata().prepare_timepoint().seconds() != metadata.prepare_timepoint().seconds()) {
-        is_preempted =
-            old_holder->second->metadata().prepare_timepoint().seconds() < metadata.prepare_timepoint().seconds();
-      } else if (old_holder->second->metadata().prepare_timepoint().seconds() ==
-                     metadata.prepare_timepoint().seconds() &&
-                 old_holder->second->metadata().prepare_timepoint().nanos() != metadata.prepare_timepoint().nanos()) {
-        is_preempted =
-            old_holder->second->metadata().prepare_timepoint().nanos() < metadata.prepare_timepoint().nanos();
-      } else {
-        is_preempted = old_holder->second->metadata().transaction_uuid() < metadata.transaction_uuid();
+      if (old_holder->second->metadata().transaction_uuid() == metadata.transaction_uuid()) {
+        break;
       }
-      if (is_preempted) {
+
+      if (!can_wound(metadata, old_holder->second->metadata())) {
         preemption_transaction.push_back(util::memory::const_pointer_cast<const storage_type>(old_holder->second));
       }
     } while (false);
@@ -662,6 +737,37 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
   }
 
+  // check_prepare 可以切出；任一资源不能 wound 时直接返回，不改锁或其他事务。
+  bool has_conflict = false;
+  for (const auto& resource_uuid : resource_uuids) {
+    auto holder = transaction_locks_.find(resource_uuid);
+    if (holder == transaction_locks_.end() || !holder->second || holder->second == transaction_ptr) {
+      continue;
+    }
+    auto wounded_iter = running_transactions_.find(holder->second->metadata().transaction_uuid());
+    if (!can_wound(transaction_ptr->metadata(), holder->second->metadata()) ||
+        wounded_iter == running_transactions_.end() || wounded_iter->second.storage != holder->second ||
+        wounded_iter->second.inflight_terminal_direction != terminal_direction_type::kNone) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED);
+    }
+    has_conflict = true;
+  }
+  if (has_conflict) {
+    for (const auto& resource_uuid : resource_uuids) {
+      auto holder = transaction_locks_.find(resource_uuid);
+      if (holder == transaction_locks_.end() || !holder->second || holder->second == transaction_ptr) {
+        continue;
+      }
+      auto wounded_iter = running_transactions_.find(holder->second->metadata().transaction_uuid());
+      if (!wounded_iter->second.wounded) {
+        wounded_iter->second.wounded = true;
+        // 沿用原超时恢复时间，wound 不提前启动未知决议的重试。
+        resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kQuery, *holder->second);
+      }
+    }
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED);
+  }
+
   for (const auto& resource_uuid : resource_uuids) {
     // resource_uuids is already from lock_resource. there is no need to add again.
     if (&resource_uuids != &transaction_ptr->lock_resource()) {
@@ -677,25 +783,6 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_participator_h
       }
     }
 
-    auto old_holder = transaction_locks_.find(resource_uuid);
-    if (old_holder != transaction_locks_.end() && old_holder->second) {
-      if (old_holder->second != transaction_ptr) {
-        // Wound-Wait: 标记被抢占的事务，其资源所有权已不再完整，禁止后续 commit
-        auto wounded_iter = running_transactions_.find(old_holder->second->metadata().transaction_uuid());
-        if (wounded_iter != running_transactions_.end()) {
-          wounded_iter->second.wounded = true;
-          old_holder->second->mutable_metadata()->set_status(
-              atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
-          // Persist the local rejection intent and ensure the resolve timer cannot be consumed without
-          // eventually moving the wounded transaction out of the running set.
-          schedule_resolve_retry(resolve_timer_action_type::kQuery, *old_holder->second);
-        } else {
-          FWLOGERROR("participator {} wound transaction {} but it is not in running set", get_participator_key(),
-                     old_holder->second->metadata().transaction_uuid());
-        }
-      }
-      unlock(old_holder->second, resource_uuid);
-    }
     transaction_locks_[resource_uuid] = transaction_ptr;
   }
 
@@ -805,7 +892,8 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/add_running_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/add_running_transcation"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -854,7 +942,13 @@ rpc::result_code_type transaction_participator_handle::add_running_transcation(r
 
   // Auto lock resource
   if (!output->lock_resource().empty()) {
-    RPC_AWAIT_IGNORE_RESULT(lock(output, output->lock_resource()));
+    const auto lock_result = RPC_AWAIT_CODE_RESULT(lock(output, output->lock_resource()));
+    if (lock_result < 0) {
+      resolve_timer_queue_.erase(transaction_uuid);
+      running_transactions_.erase(transaction_uuid);
+      output.reset();
+      RPC_RETURN_CODE(child_tracer.finish({lock_result, {}}));
+    }
   }
 
   FWLOGDEBUG("participator {} start run transaction {}", get_participator_key(), output->metadata().transaction_uuid());
@@ -876,8 +970,11 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     storage_ptr_type* output) {
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod,
-       "atframework.transaction_participator_handle/remove_running_transaction"}};
+      {
+          opentelemetry::semconv::rpc::kRpcMethod,
+          "atframework.transaction_participator_handle/remove_running_transaction",
+      },
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -896,8 +993,8 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
 
   auto iter = running_transactions_.find(transaction_uuid);
   if (iter == running_transactions_.end()) {
-    FWLOGWARNING("participator {} try to remove transaction {} but not found", get_participator_key(),
-                 transaction_uuid);
+    FWLOGWARNING("participator {} try to remove transaction {} but not found, maybe already finished before",
+                 get_participator_key(), transaction_uuid);
     RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
   }
 
@@ -905,6 +1002,7 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
   if (nullptr != output) {
     *output = transaction_ptr;
   }
+  const bool is_terminal_transition = iter->second.inflight_terminal_direction != terminal_direction_type::kNone;
 
   resolve_timer_queue_.erase(transaction_uuid);
   // 条目销毁即完成全部运行时标记（wound/action-stage/inflight）的生命周期清理
@@ -916,17 +1014,23 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
     // unlock resources
     unlock(transaction_ptr);
 
-    // change status
-    if (transaction_ptr->metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+    // 仅推进同一方向的状态；迁入 finished 不回退已知的最终决议。
+    const auto current_status = transaction_ptr->metadata().status();
+    if (current_status < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED ||
+        (current_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING &&
+         target_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) ||
+        (current_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
+         target_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED)) {
       transaction_ptr->mutable_metadata()->set_status(target_status);
-    } else if (transaction_ptr->metadata().status() ==
-                   atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING &&
-               target_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
-      transaction_ptr->mutable_metadata()->set_status(target_status);
-    } else if (transaction_ptr->metadata().status() ==
-                   atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
-               target_status == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED) {
-      transaction_ptr->mutable_metadata()->set_status(target_status);
+    }
+
+    // 在生命周期回调切出前登记 finished，避免同 UUID 在两个集合之间的空窗被重新 prepare。
+    // acknowledge 定时器及 on_finished 由 start_finished_transaction 按原顺序触发。
+    if (is_terminal_transition) {
+      transaction_ptr->set_resolve_times(0);
+      protobuf_copy_message(*transaction_ptr->mutable_resolve_timepoint(),
+                            protobuf_from_system_clock(atfw::util::time::time_utility::now()));
+      finished_transactions_[transaction_uuid] = transaction_ptr;
     }
 
     // event callback
@@ -944,7 +1048,7 @@ rpc::result_code_type transaction_participator_handle::remove_running_transactio
   RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
 }
 
-rpc::result_code_type transaction_participator_handle::add_finished_transcation(
+rpc::result_code_type transaction_participator_handle::start_finished_transaction(
     rpc::context& ctx, const storage_ptr_type& transaction_ptr) {
   if (!transaction_ptr) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -955,8 +1059,11 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod,
-       "atframework.transaction_participator_handle/add_finished_transcation"}};
+      {
+          opentelemetry::semconv::rpc::kRpcMethod,
+          "atframework.transaction_participator_handle/start_finished_transaction",
+      },
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -966,27 +1073,68 @@ rpc::result_code_type transaction_participator_handle::add_finished_transcation(
   child_trace_option.kind = atframework::RpcTraceSpan::SPAN_KIND_INTERNAL;
   child_trace_option.attributes = trace_attributes;
 
-  child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.add_finished_transcation",
+  child_ctx.setup_tracer(child_tracer, "transaction_participator_handle.start_finished_transaction",
                          std::move(child_trace_option));
 
-  finished_transactions_[transaction_ptr->metadata().transaction_uuid()] = transaction_ptr;
-  transaction_ptr->set_resolve_times(0);
-  protobuf_copy_message(*transaction_ptr->mutable_resolve_timepoint(),
-                        protobuf_from_system_clock(atfw::util::time::time_utility::now()));
-  resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
+  if (!is_current_transaction(resolve_timer_action_type::kAcknowledge, transaction_ptr)) {
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
+  }
+  if (transaction_ptr->finished_callback_completed()) {
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
+  }
+  resolve_timer_queue_.erase(transaction_ptr->metadata().transaction_uuid());
 
   FWLOGDEBUG("participator {} add finished transaction {}", get_participator_key(),
              transaction_ptr->metadata().transaction_uuid());
 
   // event callback
+  rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (vtable_ && vtable_->on_finished) {
-    rpc::result_code_type::value_type res =
-        RPC_AWAIT_CODE_RESULT(vtable_->on_finished(child_ctx, *this, *transaction_ptr));
-    if (res < 0) {
-      FWLOGERROR("participator {} call on_finished for transaction {} failed, error code: {}({})",
-                 get_participator_key(), transaction_ptr->metadata().transaction_uuid(), res,
-                 protobuf_mini_dumper_get_error_msg(res));
+    res = RPC_AWAIT_CODE_RESULT(vtable_->on_finished(child_ctx, *this, *transaction_ptr));
+  }
+  if (!is_current_transaction(resolve_timer_action_type::kAcknowledge, transaction_ptr)) {
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
+  }
+  if (res < 0) {
+    FWLOGERROR("participator {} call on_finished for transaction {} failed, error code: {}({})", get_participator_key(),
+               transaction_ptr->metadata().transaction_uuid(), res, protobuf_mini_dumper_get_error_msg(res));
+    const auto retry_limit = get_retry_limit(*transaction_ptr);
+    if (transaction_ptr->resolve_times() < retry_limit) {
+      transaction_ptr->set_resolve_times(transaction_ptr->resolve_times() + 1);
     }
+    if (transaction_ptr->resolve_times() >= retry_limit) {
+      FWLOGERROR("participator {} exhausted {} on_finished attempts for transaction {}, consume locally",
+                 get_participator_key(), retry_limit, transaction_ptr->metadata().transaction_uuid());
+      RPC_AWAIT_IGNORE_RESULT(remove_finished_transaction(child_ctx, transaction_ptr));
+    } else {
+      schedule_resolve_retry(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
+    }
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
+  }
+
+  transaction_ptr->set_finished_callback_completed(true);
+  transaction_ptr->set_resolve_times(0);
+  if (vtable_) {
+    const bool committed =
+        transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING ||
+        transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED;
+    auto& callback = committed ? vtable_->on_commited : vtable_->on_rejected;
+    if (callback) {
+      res = RPC_AWAIT_CODE_RESULT(callback(child_ctx, *this, *transaction_ptr));
+      if (res < 0) {
+        FWLOGERROR("participator {} call {} for transaction {} failed, error code: {}({})", get_participator_key(),
+                   committed ? "on_commited" : "on_rejected", transaction_ptr->metadata().transaction_uuid(), res,
+                   protobuf_mini_dumper_get_error_msg(res));
+      }
+    }
+  }
+
+  // 完成通知可能切出；返回前不允许 ACK 改变回调正在观察的状态或清理该事务。
+  // 回调中 load 后，只能为仍属于当前 finished 集合的对象登记定时器。
+  if (is_current_transaction(resolve_timer_action_type::kAcknowledge, transaction_ptr)) {
+    protobuf_copy_message(*transaction_ptr->mutable_resolve_timepoint(),
+                          protobuf_from_system_clock(atfw::util::time::time_utility::now()));
+    resolve_timer_queue_.insert_or_replace(resolve_timer_action_type::kAcknowledge, *transaction_ptr);
   }
 
   RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
@@ -1009,8 +1157,11 @@ rpc::result_code_type transaction_participator_handle::remove_finished_transacti
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod,
-       "atframework.transaction_participator_handle/remove_finished_transaction"}};
+      {
+          opentelemetry::semconv::rpc::kRpcMethod,
+          "atframework.transaction_participator_handle/remove_finished_transaction",
+      },
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -1052,7 +1203,8 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/resolve_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/resolve_transcation"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -1066,8 +1218,38 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
                          std::move(child_trace_option));
 
   if (wounded) {
-    transaction_ptr->mutable_metadata()->set_status(
-        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
+    if (transaction_ptr->resolve_times() >= get_retry_limit(*transaction_ptr)) {
+      RPC_RETURN_CODE(
+          child_tracer.finish({RPC_AWAIT_CODE_RESULT(remove_running_transaction(
+                                   child_ctx, atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                                   transaction_uuid, &transaction_ptr)),
+                               {}}));
+    }
+    transaction_ptr->set_resolve_times(transaction_ptr->resolve_times() + 1);
+    schedule_resolve_retry(resolve_timer_action_type::kQuery, *transaction_ptr);
+    auto decision = rpc::make_shared_message<transaction_metadata>(child_ctx);
+    protobuf_copy_message(*decision, transaction_ptr->metadata());
+    auto res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_transaction(child_ctx, *decision));
+    auto current = running_transactions_.find(transaction_uuid);
+    if (current == running_transactions_.end() || current->second.storage != transaction_ptr ||
+        !current->second.wounded || current->second.inflight_terminal_direction != terminal_direction_type::kNone) {
+      RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
+    }
+    // NOTFOUND 或有效成功响应不足 R 时，使用剩余次数重试，不重置计数。
+    if (res < 0) {
+      RPC_RETURN_CODE(child_tracer.finish({res, {}}));
+    }
+    if (decision->transaction_uuid() != transaction_uuid ||
+        (decision->status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED &&
+         decision->status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED)) {
+      RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_RETRY_TIMES_EXCEED, {}}));
+    }
+    current->second.wounded = false;
+    rpc::transaction_api::merge_metadata(*transaction_ptr->mutable_metadata(), *decision);
+    if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED) {
+      RPC_RETURN_CODE(
+          child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid)), {}}));
+    }
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
@@ -1075,7 +1257,8 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
       transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid)), {}}));
   }
-  if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING) {
+  if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ||
+      transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
@@ -1089,10 +1272,17 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
                transaction_uuid, get_retry_limit(*transaction_ptr));
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
-
   rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> trans_data(child_ctx);
+  const auto queried_status = transaction_ptr->metadata().status();
   rpc::result_code_type::value_type res = RPC_AWAIT_CODE_RESULT(
       rpc::transaction_api::query_transaction(child_ctx, transaction_ptr->metadata(), *trans_data));
+  auto current = running_transactions_.find(transaction_uuid);
+  if (current == running_transactions_.end() || current->second.storage != transaction_ptr ||
+      transaction_ptr->metadata().status() != queried_status || current->second.wounded ||
+      current->second.inflight_terminal_direction != terminal_direction_type::kNone) {
+    // 等待期间可能 load、wound、commit 或 reject；旧响应不能删除或改写当前事务。
+    RPC_RETURN_CODE(child_tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, {}}));
+  }
   if (res == PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND || res == PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_NOT_FOUND) {
     FWLOGWARNING("participator {} resolve transaction {} but not found, just remove it", get_participator_key(),
                  transaction_uuid);
@@ -1114,12 +1304,13 @@ rpc::result_code_type transaction_participator_handle::resolve_transcation(rpc::
   // 进入本地最终状态动作阶段时不再重置 resolve_times：重试次数的重置只由 commit_transcation 的
   // local_action_stage_entered 首次进入逻辑负责。这里清零会让 timer 驱动的每次重入都拿到
   // 全新的重试次数，do_event 的失败重试变成无限重试（DT-020）。
-  if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED == transaction_ptr->metadata().status()) {
+  if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING == transaction_ptr->metadata().status() ||
+      atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED == transaction_ptr->metadata().status()) {
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(commit_transcation(child_ctx, transaction_uuid)), {}}));
-  } else if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
-             transaction_ptr->metadata().status()) {
-    transaction_ptr->mutable_metadata()->set_status(
-        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING);
+  } else if (atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ==
+                 transaction_ptr->metadata().status() ||
+             atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED ==
+                 transaction_ptr->metadata().status()) {
     RPC_RETURN_CODE(child_tracer.finish({RPC_AWAIT_CODE_RESULT(reject_transcation(child_ctx, transaction_uuid)), {}}));
   }
 
@@ -1141,9 +1332,8 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
 
   // 同一事务的最终状态流程互斥：同一事务同一时刻只允许一个方向的流程在执行，
   // 防止 do_event 被重复执行或 commit/reject 方向竞态互相覆盖
-  if (iter->second.inflight_terminal_direction != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED) {
-    if (iter->second.inflight_terminal_direction ==
-        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
+  if (iter->second.inflight_terminal_direction != terminal_direction_type::kNone) {
+    if (iter->second.inflight_terminal_direction == terminal_direction_type::kCommit) {
       // 同方向重复调用：正在执行的流程会完成相同动作，幂等返回
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -1152,16 +1342,15 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
   }
 
-  // Wound-Wait: 锁被抢占的事务资源所有权已不再完整，不允许 commit
-  if (iter->second.wounded) {
-    FWLOGERROR("participator {} commit transaction {} but its lock was preempted by an older transaction",
-               get_participator_key(), transaction_uuid);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED);
+  if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING ||
+      transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/commit_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/commit_transcation"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -1175,22 +1364,27 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
                          std::move(child_trace_option));
 
   // 标记为执行中：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
-  iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING;
-  inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid};
+  iter->second.inflight_terminal_direction = terminal_direction_type::kCommit;
+  iter->second.wounded = false;
+  inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid, transaction_ptr};
 
   FWLOGINFO("participator {} commit transaction {}", get_participator_key(), transaction_uuid);
   rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-  if (transaction_ptr->metadata().status() != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING &&
-      vtable_ && vtable_->do_event) {
-    // resolve_times 只在首次进入本地动作阶段时重置：此前 query 阶段的失败计数不应吃掉本地动作的重试次数，
-    // 阶段内的重复进入（RPC 重发/timer）不再重置，保证动作重试次数在任意触发来源下都有限。
-    // 协调者查询会先把状态推进到 COMMITED，因此不能用状态数值判断是否首次进入动作阶段。
-    // （此处尚未发生协程切换，iter 仍然有效）
-    if (!iter->second.local_action_stage_entered) {
-      iter->second.local_action_stage_entered = true;
-      transaction_ptr->set_resolve_times(0);
-    }
+  // 动作阶段计数只在首次进入时重置，与是否设置 do_event 无关。
+  if (!iter->second.local_action_stage_entered) {
+    iter->second.local_action_stage_entered = true;
+    transaction_ptr->set_resolve_times(0);
+  }
+  if (transaction_ptr->metadata().status() < atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_FINISHED) {
+    transaction_ptr->mutable_metadata()->set_status(
+        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
+  }
+  if (vtable_ && vtable_->do_event) {
     res = RPC_AWAIT_CODE_RESULT(vtable_->do_event(child_ctx, *this, *transaction_ptr));
+    auto current = running_transactions_.find(transaction_uuid);
+    if (current == running_transactions_.end() || current->second.storage != transaction_ptr) {
+      RPC_RETURN_CODE(child_tracer.finish({res, {}}));
+    }
     if (res < 0) {
       FWLOGERROR("participator {} call do_event for transaction {} failed, error code: {}({})", get_participator_key(),
                  transaction_ptr->metadata().transaction_uuid(), res, protobuf_mini_dumper_get_error_msg(res));
@@ -1203,11 +1397,7 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
           "participator {} exhausted {} local commit attempts for transaction {}, consume by coordinator decision",
           get_participator_key(), get_retry_limit(*transaction_ptr), transaction_uuid);
     }
-    transaction_ptr->set_resolve_times(0);
   }
-
-  transaction_ptr->mutable_metadata()->set_status(
-      atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
 
   res = RPC_AWAIT_CODE_RESULT(
       remove_running_transaction(child_ctx, atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
@@ -1216,20 +1406,11 @@ rpc::result_code_type transaction_participator_handle::commit_transcation(rpc::c
     FWLOGERROR("participator {} call remove running transaction for transaction {} failed, error code: {}({})",
                get_participator_key(), transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));
   }
-  res = RPC_AWAIT_CODE_RESULT(add_finished_transcation(child_ctx, transaction_ptr));
+  res = RPC_AWAIT_CODE_RESULT(start_finished_transaction(child_ctx, transaction_ptr));
   if (res < 0) {
-    FWLOGERROR("participator {} call add finished transaction for transaction {} failed, error code: {}({})",
+    FWLOGERROR("participator {} call start finished transaction for transaction {} failed, error code: {}({})",
                get_participator_key(), transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));
-  }
-
-  // event callback
-  if (vtable_ && vtable_->on_commited) {
-    res = RPC_AWAIT_CODE_RESULT(vtable_->on_commited(child_ctx, *this, *transaction_ptr));
-    if (res < 0) {
-      FWLOGERROR("participator {} call on_commited for transaction {} failed, error code: {}({})",
-                 get_participator_key(), transaction_ptr->metadata().transaction_uuid(), res,
-                 protobuf_mini_dumper_get_error_msg(res));
-    }
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   }
 
   // 执行中标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
@@ -1254,11 +1435,14 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
     running_transactions_.erase(iter);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
+  if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED ||
+      transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED);
+  }
 
   // 同一事务的最终状态流程互斥：同一事务同一时刻只允许一个方向的流程在执行
-  if (iter->second.inflight_terminal_direction != atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED) {
-    if (iter->second.inflight_terminal_direction ==
-        atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING) {
+  if (iter->second.inflight_terminal_direction != terminal_direction_type::kNone) {
+    if (iter->second.inflight_terminal_direction == terminal_direction_type::kReject) {
       // 同方向重复调用：正在执行的流程会完成相同动作，幂等返回
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -1269,7 +1453,8 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/reject_transcation"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_participator_handle/reject_transcation"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -1283,8 +1468,9 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
                          std::move(child_trace_option));
 
   // 标记为执行中：此后跨协程边界不得再持有 iter，统一由 guard 析构复位
-  iter->second.inflight_terminal_direction = atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
-  inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid};
+  iter->second.inflight_terminal_direction = terminal_direction_type::kReject;
+  iter->second.wounded = false;
+  inflight_terminal_mark_guard inflight_guard{running_transactions_, transaction_uuid, transaction_ptr};
 
   rpc::result_code_type::value_type res = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   FWLOGINFO("participator {} reject transaction {}", get_participator_key(), transaction_uuid);
@@ -1296,20 +1482,11 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
     FWLOGERROR("participator {} call remove running transaction for transaction {} failed, error code: {}({})",
                get_participator_key(), transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));
   }
-  res = RPC_AWAIT_CODE_RESULT(add_finished_transcation(child_ctx, transaction_ptr));
+  res = RPC_AWAIT_CODE_RESULT(start_finished_transaction(child_ctx, transaction_ptr));
   if (res < 0) {
-    FWLOGERROR("participator {} call add finished transaction for transaction {} failed, error code: {}({})",
+    FWLOGERROR("participator {} call start finished transaction for transaction {} failed, error code: {}({})",
                get_participator_key(), transaction_uuid, res, protobuf_mini_dumper_get_error_msg(res));
-  }
-
-  // event callback
-  if (vtable_ && vtable_->on_rejected) {
-    res = RPC_AWAIT_CODE_RESULT(vtable_->on_rejected(child_ctx, *this, *transaction_ptr));
-    if (res < 0) {
-      FWLOGERROR("participator {} call on_rejected for transaction {} failed, error code: {}({})",
-                 get_participator_key(), transaction_ptr->metadata().transaction_uuid(), res,
-                 protobuf_mini_dumper_get_error_msg(res));
-    }
+    RPC_RETURN_CODE(child_tracer.finish({res, {}}));
   }
 
   // 执行中标记由 guard 析构复位；remove_running_transaction 销毁条目时析构为空操作
@@ -1322,9 +1499,25 @@ rpc::result_code_type transaction_participator_handle::reject_transcation(rpc::c
 }
 
 rpc::result_code_type transaction_participator_handle::handle_finished_transaction_result(
-    rpc::context& ctx, const storage_ptr_type& transaction_ptr, int32_t result) {
+    rpc::context& ctx, const storage_ptr_type& transaction_ptr, int32_t result, const metadata_type& metadata) {
   if (!transaction_ptr) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  if (!is_current_transaction(resolve_timer_action_type::kAcknowledge, transaction_ptr)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  if (result >= 0) {
+    // ACK 成功才完成本地确认；查询或快照中已经获知的终态保持不变。
+    if (transaction_ptr->metadata().status() == atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING) {
+      transaction_ptr->mutable_metadata()->set_status(
+          atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+    } else if (transaction_ptr->metadata().status() ==
+               atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING) {
+      transaction_ptr->mutable_metadata()->set_status(
+          atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+    }
+    rpc::transaction_api::merge_metadata(*transaction_ptr->mutable_metadata(), metadata);
   }
 
   if (result >= 0 || result == PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND ||

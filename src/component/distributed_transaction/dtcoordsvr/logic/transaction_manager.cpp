@@ -109,6 +109,10 @@ static rpc::result_code_type refresh_transaction_ttl(
 
 transaction_manager::transaction_manager() : is_exiting_(false), last_stat_timepoint_(0) {}
 
+void transaction_manager::stop() { is_exiting_ = true; }
+
+void transaction_manager::cleanup() { lru_caches_.clear(); }
+
 int transaction_manager::tick() {
   time_t now = atfw::util::time::time_utility::get_now();
   if (last_stat_timepoint_ != now / atfw::util::time::time_utility::MINITE_SECONDS) {
@@ -125,6 +129,8 @@ int transaction_manager::tick() {
       std::chrono::ceil<std::chrono::seconds>(protobuf_to_chrono_duration(get_dtcoordsvr_cfg().lru_expired_duration()))
           .count();
   size_t max_count = get_dtcoordsvr_cfg().lru_max_cache_count();
+  // 0 表示不限容量（仅按 lru_expired_duration 过期淘汰）：显式配置 0 时不会每个 tick 都清空缓存
+  const bool has_capacity_limit = max_count > 0;
   for (auto iter = lru_caches_.begin(); iter != lru_caches_.end();) {
     if (!iter->second) {
       iter = lru_caches_.erase(iter);
@@ -133,7 +139,7 @@ int transaction_manager::tick() {
     }
 
     const bool is_expired = now > iter->second->last_visit_timepoint + timeout_duration;
-    const bool is_over_capacity = lru_caches_.size() > max_count;
+    const bool is_over_capacity = has_capacity_limit && lru_caches_.size() > max_count;
     if (!is_over_capacity && !is_expired) {
       // LRU 按访问时间排序，之后的缓存更新，都不会到期
       break;
@@ -209,11 +215,17 @@ rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_p
 
 rpc::result_code_type transaction_manager::create_transaction(
     rpc::context& ctx, atfw::distributed_system::transaction_blob_storage&& storage) {
+  if (is_exiting_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
+  }
   if (storage.metadata().transaction_uuid().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
   if (storage.participators().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  if (storage.metadata().memory_only() && lru_caches_.get_cache(storage.metadata().transaction_uuid())) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   auto now = atfw::util::time::time_utility::now();
@@ -251,11 +263,26 @@ rpc::result_code_type transaction_manager::create_transaction(
 
   rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
   if (!storage.metadata().memory_only()) {
-    // client 层保证 UUID 不冲突；相同 UUID 的重复 create 来自 client 重试且数据相同，
-    // 直接 replace（CAS expected_version=0 为无条件写）即可，重放天然幂等
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(ctx, db_data, db_version));
+    // 相同 UUID 的重放不能覆盖已持久化的终态或参与者确认；由 DB 原子判定是否首次创建。
+    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, &db_version));
+    if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
+      // 插入成功后 TTL 设置可能失败或响应丢失；重放补设原记录的 TTL，不覆盖数据。
+      ret = RPC_AWAIT_CODE_RESULT(
+          rpc::db::distribute_transaction::get_all(ctx, get_transaction_zone_id(storage.metadata()),
+                                                   storage.metadata().transaction_uuid(), *db_data, db_version));
+      if (ret < 0) {
+        RPC_RETURN_CODE(ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND
+                            ? PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS
+                            : ret);
+      }
+      rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> existing(ctx);
+      if (!db_data->blob_data().UnpackTo(&*existing)) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+      }
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, *existing)));
+    }
     if (ret < 0) {
-      FWLOGERROR("rpc::db::distribute_transaction::replace({}) failed, res: {}({})",
+      FWLOGERROR("rpc::db::distribute_transaction::insert({}) failed, res: {}({})",
                  storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
       RPC_RETURN_CODE(ret);
     }
@@ -275,9 +302,16 @@ rpc::result_code_type transaction_manager::create_transaction(
     }
   }
 
+  // 创建期间可能停服；完成必要的 DB TTL 设置后不再把对象加入缓存。
+  if (is_exiting_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
+  }
   transaction_cache_ptr->data_version = static_cast<int64_t>(db_version);
   protobuf_move_message(transaction_cache_ptr->data_object, std::move(storage));
-  lru_caches_.set_cache(transaction_cache_ptr);
+  // 创建期间的查询可能已加载并推进同一事务，保留那个缓存对象及其 IO 状态。
+  if (!lru_caches_.get_cache(transaction_cache_ptr->data_key)) {
+    lru_caches_.set_cache(transaction_cache_ptr);
+  }
 
   RPC_RETURN_CODE(ret);
 }
@@ -286,6 +320,7 @@ rpc::result_code_type transaction_manager::mutable_transaction(
     rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata, transaction_ptr_type& out) {
   // 停服时返回nullptr
   if (is_exiting_) {
+    out.reset();
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
   }
 
@@ -328,6 +363,11 @@ rpc::result_code_type transaction_manager::mutable_transaction(
   } else {
     out = lru_caches_.get_cache(metadata.transaction_uuid());
     ret = out ? PROJECT_NAMESPACE_ID::err::EN_SUCCESS : PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+  }
+
+  if (is_exiting_) {
+    out.reset();
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
   }
 
   // 读取失败时清空输出句柄：await_fetch 的出错路径可能留下指向未填充缓存对象的强引用，

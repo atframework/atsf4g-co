@@ -64,6 +64,8 @@ class main_service_module : public atfw::atapp::module_impl {
     transaction_manager::me()->stop();
     return 0;
   }
+
+  void cleanup() override { transaction_manager::me()->cleanup(); }
 };
 
 int main(int argc, char *argv[]) {
@@ -76,12 +78,12 @@ int main(int argc, char *argv[]) {
     atfw::util::log::log_formatter::set_project_directory(proj_dir.c_str(), proj_dir.size());
   }
 
-  logic_config::me()->set_server_instance_config_loader(
-      [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to) {
-        auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
-        app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
-        to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
-      });
+  logic_config::me()->set_server_instance_config_loader([](atfw::atapp::app &app_, logic_config & /*cfg*/,
+                                                           logic_config::server_instance_config_ptr &to) {
+    auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
+    app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
+    to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
+  });
 
   logic_server_common_module_configure logic_mod_conf;
   if (logic_server_setup_common(app, logic_mod_conf) < 0) {

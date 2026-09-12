@@ -33,6 +33,7 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <list>
@@ -203,6 +204,53 @@ SSParticipatorTransactionPrepareReq make_prepare_request(
   return request;
 }
 
+rpc::result_code_type prepare_wound(rpc::context& ctx, const atfw::util::memory::strong_rc_ptr<handle_type>& handle,
+                                    storage_ptr_type& older, storage_ptr_type& younger, bool replicated = false,
+                                    uint32_t retry_limit = 2) {
+  auto older_request = make_prepare_request("wound-older", 2, std::chrono::minutes{20}, {"res-older"});
+  auto younger_request =
+      make_prepare_request("wound-younger", retry_limit, std::chrono::minutes{10}, {"res-younger", "res-extra"});
+  *older_request.mutable_storage()->mutable_metadata()->mutable_prepare_timepoint() =
+      protobuf_from_system_clock(atfw::util::time::time_utility::now() - std::chrono::seconds{1});
+  younger_request.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval()->set_seconds(60);
+  if (replicated) {
+    auto* metadata = younger_request.mutable_storage()->mutable_metadata();
+    metadata->set_replicate_read_count(2);
+    metadata->add_replicate_node_server_id(0x1B0001);
+    metadata->add_replicate_node_server_id(0x1B0002);
+    metadata->add_replicate_node_server_id(0x1B0003);
+  }
+  SSParticipatorTransactionPrepareRsp response;
+  CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(older_request), response, older)));
+  CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(younger_request), response, younger)));
+  if (!older || !younger) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  google::protobuf::RepeatedPtrField<std::string> resources;
+  resources.Add()->assign("res-older");
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                 RPC_AWAIT_CODE_RESULT(handle->lock(younger, resources)));
+  CASE_EXPECT_FALSE(handle->get_running_transactions().at("wound-older").wounded);
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED, older->metadata().status());
+  resources.Clear();
+  resources.Add()->assign("res-free");
+  resources.Add()->assign("res-younger");
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                 RPC_AWAIT_CODE_RESULT(handle->lock(older, resources)));
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                 younger->metadata().status());
+  CASE_EXPECT_TRUE(handle->get_running_transactions().at("wound-younger").wounded);
+  CASE_EXPECT_EQ(older.get(), handle->get_locker("res-older").get());
+  CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-younger").get());
+  CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-extra").get());
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-free"));
+  CASE_EXPECT_EQ(1, older->lock_resource_size());
+  CASE_EXPECT_EQ(2, younger->lock_resource_size());
+  CASE_EXPECT_EQ(protobuf_to_system_clock(younger->metadata().expire_timepoint()),
+                 protobuf_to_system_clock(younger->resolve_timepoint()));
+  RPC_RETURN_CODE(0);
+}
+
 // The participator-side merge only reads the coordinator response when the handle's participator
 // key exists in the storage participator map, so the mock response must contain it.
 atfw::testing::ss_rule_handle register_query_mock(atfw::testing::runtime& test, EnDistibutedTransactionStatus terminal,
@@ -289,7 +337,1255 @@ bool drive_handle(atfw::testing::runtime& test, const atfw::util::memory::strong
       },
       timeout);
 }
+void run_normal_state_lifecycle(bool commit, bool with_do_event, bool exhaust_finished) {
+  const auto pending_status = commit ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING
+                                     : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
+  const auto terminal_status = commit ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
+                                      : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  int ack_calls = 0;
+  std::vector<int32_t> ack_errors = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+  auto ack_rule = register_participator_ack_mock(test, commit ? "commit" : "reject", &ack_calls, &ack_errors);
+  CASE_EXPECT_TRUE(!!ack_rule);
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  if (with_do_event) {
+    vtable->do_event = [&recorder, pending_status](rpc::context&, handle_type&,
+                                                   const handle_type::storage_type& storage) -> rpc::result_code_type {
+      CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+      recorder.events.emplace_back("do_event");
+      RPC_RETURN_CODE(recorder.count("do_event") == 1 ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0);
+    };
+  } else {
+    vtable->do_event = nullptr;
+  }
+  vtable->on_start_running = [&recorder](rpc::context&, handle_type&,
+                                         const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                   storage.metadata().status());
+    recorder.events.emplace_back("on_start_running");
+    RPC_RETURN_CODE(0);
+  };
+  vtable->on_finish_running = [&recorder, pending_status](
+                                  rpc::context&, handle_type& owner,
+                                  const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+    CASE_EXPECT_TRUE(owner.get_running_transactions().empty());
+    CASE_EXPECT_EQ(1, owner.get_finished_transactions().size());
+    CASE_EXPECT_FALSE(!!owner.get_locker("state-resource"));
+    recorder.events.emplace_back("on_finish_running");
+    RPC_RETURN_CODE(0);
+  };
+  bool finish_entered = false;
+  bool release_finish = false;
+  int finish_calls = 0;
+  vtable->on_finished = [&finish_entered, &release_finish, &finish_calls, &ack_calls, pending_status, exhaust_finished](
+                            rpc::context& ctx, handle_type&,
+                            const handle_type::storage_type& storage) -> rpc::result_code_type {
+    ++finish_calls;
+    CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+    CASE_EXPECT_EQ(0, ack_calls);
+    if (finish_calls == 1) {
+      finish_entered = true;
+      while (!release_finish) {
+        auto res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
+        if (res < 0) {
+          RPC_RETURN_CODE(res);
+        }
+      }
+    }
+    CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+    RPC_RETURN_CODE(finish_calls == 1 || exhaust_finished ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0);
+  };
+  auto terminal_callback = [&recorder, pending_status, commit](
+                               rpc::context&, handle_type&,
+                               const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+    recorder.events.emplace_back(commit ? "on_commited" : "on_rejected");
+    RPC_RETURN_CODE(0);
+  };
+  if (commit) {
+    vtable->on_commited = terminal_callback;
+  } else {
+    vtable->on_rejected = terminal_callback;
+  }
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type output;
+  auto task = test.run_task(
+      "normal_state_lifecycle", std::chrono::seconds{4},
+      [handle, &output, commit, with_do_event](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("state-lifecycle", 2, std::chrono::milliseconds{60000}, {"state-resource"});
+        request.mutable_storage()->mutable_metadata()->clear_status();
+        request.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval()->set_seconds(60);
+        SSParticipatorTransactionPrepareRsp response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                       output->metadata().status());
+        if (commit) {
+          SSParticipatorTransactionCommitReq commit_request;
+          commit_request.set_transaction_uuid("state-lifecycle");
+          SSParticipatorTransactionCommitRsp commit_response;
+          if (with_do_event) {
+            CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+                           RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+            CASE_EXPECT_TRUE(!!handle->get_locker("state-resource"));
+            handle_type::snapshot_type snapshot;
+            handle->dump(snapshot);
+            if (!CASE_EXPECT_EQ(1, snapshot.running_transaction_size())) {
+              RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+            }
+            CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                           snapshot.running_transaction(0).metadata().status());
+            CASE_EXPECT_EQ(1, snapshot.running_transaction(0).resolve_times());
+            handle->load(snapshot);
+            output = handle->get_locker("state-resource");
+          }
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        }
+        SSParticipatorTransactionRejectReq reject_request;
+        reject_request.set_transaction_uuid("state-lifecycle");
+        SSParticipatorTransactionRejectRsp reject_response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->reject(ctx, reject_request, reject_response)));
+      });
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&finish_entered]() { return finish_entered; }));
+  auto probe = test.run_task(
+      "probe_pending_finish", std::chrono::seconds{2}, [handle, commit](rpc::context& ctx) -> rpc::result_code_type {
+        if (!commit) {
+          SSParticipatorTransactionCommitReq request;
+          SSParticipatorTransactionCommitRsp response;
+          request.set_transaction_uuid("state-lifecycle");
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, response)));
+          CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                         handle->get_finished_transactions().at("state-lifecycle")->metadata().status());
+        }
+        CASE_EXPECT_EQ(0, handle->tick(ctx, std::chrono::system_clock::now() + std::chrono::hours{1}));
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1})));
+      });
+  auto probe_result = test.wait(probe, std::chrono::seconds{3});
+  CASE_EXPECT_TRUE(probe_result.task_exited);
+  CASE_EXPECT_EQ(0, probe_result.result_code);
+  CASE_EXPECT_EQ(0, ack_calls);
+  release_finish = true;
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, result.result_code);
+  handle_type::snapshot_type snapshot;
+  handle->dump(snapshot);
+  if (!CASE_EXPECT_EQ(1, snapshot.finished_transaction_size())) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(pending_status, snapshot.finished_transaction(0).metadata().status());
+  CASE_EXPECT_EQ(1, snapshot.finished_transaction(0).resolve_times());
+  CASE_EXPECT_FALSE(snapshot.finished_transaction(0).finished_callback_completed());
+  handle->load(snapshot);
+  auto current = handle->get_finished_transactions().find("state-lifecycle");
+  if (!CASE_EXPECT_TRUE(current != handle->get_finished_transactions().end())) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  output = current->second;
+  if (!exhaust_finished) {
+    CASE_EXPECT_TRUE(
+        drive_handle(test, handle, [&ack_calls, &output]() { return ack_calls == 1 && output->resolve_times() == 1; }));
+    CASE_EXPECT_EQ(pending_status, output->metadata().status());
+    CASE_EXPECT_EQ(2, finish_calls);
+    CASE_EXPECT_TRUE(output->finished_callback_completed());
+    handle->dump(snapshot);
+    handle->load(snapshot);
+    current = handle->get_finished_transactions().find("state-lifecycle");
+    if (!CASE_EXPECT_TRUE(current != handle->get_finished_transactions().end())) {
+      CASE_EXPECT_EQ(0, test.stop());
+      return;
+    }
+    output = current->second;
+    CASE_EXPECT_EQ(pending_status, output->metadata().status());
+  }
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return handle->get_finished_transactions().empty(); }));
+  CASE_EXPECT_EQ(2, finish_calls);
+  CASE_EXPECT_EQ(exhaust_finished ? pending_status : terminal_status, output->metadata().status());
+  CASE_EXPECT_EQ(exhaust_finished ? 0 : 2, ack_calls);
+  CASE_EXPECT_EQ(commit && with_do_event ? 2 : 0, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_finish_running"));
+  CASE_EXPECT_EQ(exhaust_finished ? 0 : 1, recorder.count(commit ? "on_commited" : "on_rejected"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("state-resource"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+static void run_snapshot_ack_lifecycle(EnDistibutedTransactionStatus status, bool finished) {
+  const bool commit = status == EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING ||
+                      status == EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED;
+  const auto terminal_status = commit ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
+                                      : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  int ack_calls = 0;
+  std::vector<int32_t> ack_errors = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+  auto ack_rule = register_participator_ack_mock(test, commit ? "commit" : "reject", &ack_calls, &ack_errors);
+  CASE_EXPECT_TRUE(!!ack_rule);
+  int global_reject_calls = 0;
+  auto reject_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_reject(),
+      atfw::distributed_system::SSDistributeTransactionRejectReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionRejectRsp::descriptor()->full_name(),
+      [&global_reject_calls](const atfw::testing::ss_request_view& request,
+                             google::protobuf::Message& response) -> rpc::result_code_type {
+        ++global_reject_calls;
+        const auto& input =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionRejectReq&>(request.body);
+        auto& output = static_cast<atfw::distributed_system::SSDistributeTransactionRejectRsp&>(response);
+        *output.mutable_metadata() = input.metadata();
+        output.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!reject_rule);
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  vtable->do_event = [&recorder, status](rpc::context&, handle_type&,
+                                         const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(status, storage.metadata().status());
+    recorder.events.emplace_back("do_event");
+    RPC_RETURN_CODE(0);
+  };
+  vtable->on_finished = [&recorder, status](rpc::context&, handle_type&,
+                                            const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(status, storage.metadata().status());
+    recorder.events.emplace_back("on_finished");
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  auto request = make_prepare_request("snapshot-ack", 2, std::chrono::milliseconds{60000});
+  request.mutable_storage()->mutable_metadata()->set_status(status);
+  request.mutable_storage()->set_finished_callback_completed(finished);
+  protobuf_copy_message(*request.mutable_storage()->mutable_resolve_timepoint(),
+                        request.storage().metadata().expire_timepoint());
+  // running represents pending local work; finished represents work already awaiting ACK.
+  handle_type::snapshot_type snapshot;
+  protobuf_copy_message(finished ? *snapshot.add_finished_transaction() : *snapshot.add_running_transaction(),
+                        request.storage());
+  handle->load(snapshot);
+  handle_type::snapshot_type restored;
+  handle->dump(restored);
+  CASE_EXPECT_EQ(snapshot.SerializeAsString(), restored.SerializeAsString());
+  storage_ptr_type output = finished ? handle->get_finished_transactions().at("snapshot-ack")
+                                     : handle->get_running_transactions().at("snapshot-ack").storage;
+  if (!commit) {
+    auto task = test.run_task("commit_after_reject_snapshot", std::chrono::seconds{2},
+                              [handle, finished, output, status](rpc::context& ctx) -> rpc::result_code_type {
+                                SSParticipatorTransactionCommitReq request;
+                                SSParticipatorTransactionCommitRsp response;
+                                request.set_transaction_uuid("snapshot-ack");
+                                CASE_EXPECT_EQ(finished ? 0 : PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED,
+                                               RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, response)));
+                                CASE_EXPECT_EQ(status, output->metadata().status());
+                                RPC_RETURN_CODE(0);
+                              });
+    auto result = test.wait(task, std::chrono::seconds{3});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  }
+  CASE_EXPECT_TRUE(
+      drive_handle(test, handle, [&ack_calls, &output]() { return ack_calls == 1 && output->resolve_times() == 1; }));
+  CASE_EXPECT_EQ(status, output->metadata().status());
+  CASE_EXPECT_TRUE(output->finished_callback_completed());
+  CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+  CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+  handle->dump(snapshot);
+  handle->load(snapshot);
+  auto current = handle->get_finished_transactions().find("snapshot-ack");
+  if (!CASE_EXPECT_TRUE(current != handle->get_finished_transactions().end())) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  output = current->second;
+  CASE_EXPECT_EQ(status, output->metadata().status());
+  CASE_EXPECT_EQ(1, output->resolve_times());
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return handle->get_finished_transactions().empty(); }));
+  CASE_EXPECT_EQ(terminal_status, output->metadata().status());
+  CASE_EXPECT_EQ(2, ack_calls);
+  CASE_EXPECT_EQ(0, global_reject_calls);
+  CASE_EXPECT_EQ(!finished && commit ? 1 : 0, recorder.count("do_event"));
+  CASE_EXPECT_EQ(finished ? 0 : 1, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(finished ? 0 : 1, recorder.count(commit ? "on_commited" : "on_rejected"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+void run_wound_decision(bool replicated, bool committed) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  const std::vector<uint64_t> nodes =
+      replicated ? std::vector<uint64_t>{0x1B0001, 0x1B0002, 0x1B0003} : std::vector<uint64_t>{0x1B0001};
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, nodes));
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto original_do = vtable->do_event;
+  vtable->do_event = [original_do](rpc::context& ctx, handle_type& owner,
+                                   const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(&storage, owner.get_locker("res-younger").get());
+    CASE_EXPECT_EQ(&storage, owner.get_locker("res-extra").get());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   storage.metadata().status());
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(original_do(ctx, owner, storage)));
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type older;
+  storage_ptr_type younger;
+  auto prepare_task =
+      test.run_task("prepare_wound", std::chrono::seconds{4},
+                    [handle, &older, &younger, replicated](rpc::context& ctx) -> rpc::result_code_type {
+                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(prepare_wound(ctx, handle, older, younger, replicated, 4)));
+                    });
+  auto prepare_result = test.wait(prepare_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(prepare_result.task_exited);
+  CASE_EXPECT_EQ(0, prepare_result.result_code);
+  if (!younger) {
+    test.stop();
+    return;
+  }
+  int32_t decision_node_error = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+  int global_reject_calls = 0;
+  std::vector<atfw::testing::ss_rule_handle> rules;
+  for (uint64_t node : nodes) {
+    const bool is_decision_node = node == (replicated ? 0x1B0002ULL : 0x1B0001ULL);
+    const bool is_unavailable_node = replicated && node == 0x1B0003;
+    atfw::testing::ss_rule_options rule_options;
+    rule_options.match_node_id = node;
+    rule_options.delay_generations = is_decision_node ? 3 : 0;
+    rules.emplace_back(test.ss().mock(
+        rpc::transaction::packer::get_full_name_of_reject(),
+        atfw::distributed_system::SSDistributeTransactionRejectReq::descriptor()->full_name(),
+        atfw::distributed_system::SSDistributeTransactionRejectRsp::descriptor()->full_name(),
+        [handle, &younger, &recorder, &decision_node_error, &global_reject_calls, is_decision_node, is_unavailable_node,
+         committed, replicated](const atfw::testing::ss_request_view& request,
+                                google::protobuf::Message& response) -> rpc::result_code_type {
+          ++global_reject_calls;
+          CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-younger").get());
+          CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-extra").get());
+          CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+          const auto& in = static_cast<const atfw::distributed_system::SSDistributeTransactionRejectReq&>(request.body);
+          CASE_EXPECT_EQ(std::string("wound-younger"), in.metadata().transaction_uuid());
+          CASE_EXPECT_EQ(replicated ? 2 : 0, in.metadata().replicate_read_count());
+          if (is_unavailable_node) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+          }
+          if (is_decision_node && decision_node_error < 0) {
+            RPC_RETURN_CODE(decision_node_error);
+          }
+          auto& out = static_cast<atfw::distributed_system::SSDistributeTransactionRejectRsp&>(response);
+          *out.mutable_metadata() = in.metadata();
+          out.mutable_metadata()->set_status(
+              committed && is_decision_node
+                  ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
+                  : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+          RPC_RETURN_CODE(0);
+        },
+        rule_options));
+    CASE_EXPECT_TRUE(!!rules.back());
+  }
+  int commit_acks = 0;
+  int reject_acks = 0;
+  auto commit_rule = register_participator_ack_mock(test, "commit", &commit_acks);
+  auto reject_rule = register_participator_ack_mock(test, "reject", &reject_acks);
+  CASE_EXPECT_TRUE(!!commit_rule && !!reject_rule);
+  const int32_t errors[] = {
+      PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+      PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND,
+      PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION,
+  };
+  auto tick_context = atfw::testing::make_context();
+  CASE_EXPECT_EQ(0, handle->tick(tick_context, protobuf_to_system_clock(younger->metadata().expire_timepoint()) -
+                                                   std::chrono::system_clock::duration{1}));
+  CASE_EXPECT_EQ(0, global_reject_calls);
+  CASE_EXPECT_EQ(0, younger->resolve_times());
+  for (size_t attempt = 0; attempt < 3; ++attempt) {
+    decision_node_error = errors[attempt];
+    handle->fire_resolve_custom_timer_for_unit_test(protobuf_to_system_clock(younger->resolve_timepoint()));
+    CASE_EXPECT_TRUE(dt_test::wait_for(
+        test, [&recorder, attempt]() { return recorder.count("on_resolve_task_finished") == attempt + 1; }));
+    CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-younger").get());
+    CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-extra").get());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                   younger->metadata().status());
+    CASE_EXPECT_EQ(attempt + 1, younger->resolve_times());
+    CASE_EXPECT_EQ(replicated ? 2 : 0, younger->metadata().replicate_read_count());
+    CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+    CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+    CASE_EXPECT_EQ(0, commit_acks + reject_acks);
+    handle_type::snapshot_type snapshot;
+    handle->dump(snapshot);
+    CASE_EXPECT_EQ(1, snapshot.wounded_transaction_uuid_size());
+    if (snapshot.wounded_transaction_uuid_size() == 1) {
+      CASE_EXPECT_EQ(std::string("wound-younger"), snapshot.wounded_transaction_uuid(0));
+    }
+    handle->load(snapshot);
+    younger = handle->get_locker("res-younger");
+  }
+  decision_node_error = 0;
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle, &commit_acks, &reject_acks]() {
+    return commit_acks + reject_acks > 0 && handle->get_finished_transactions().empty();
+  }));
+  CASE_EXPECT_EQ(4 * nodes.size(), global_reject_calls);
+  CASE_EXPECT_EQ(committed ? nodes.size() : 0, commit_acks);
+  CASE_EXPECT_EQ(committed ? 0 : nodes.size(), reject_acks);
+  CASE_EXPECT_EQ(committed ? 1 : 0, recorder.count("do_event"));
+  CASE_EXPECT_EQ(committed ? 1 : 0, recorder.count("on_commited"));
+  CASE_EXPECT_EQ(committed ? 0 : 1, recorder.count("on_rejected"));
+  CASE_EXPECT_EQ(1, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(committed ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
+                           : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                 younger->metadata().status());
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-younger"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-extra"));
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+  auto retry_task =
+      test.run_task("wound_retry_lock", std::chrono::seconds{4}, [handle](rpc::context&) -> rpc::result_code_type {
+        auto owner = handle->get_locker("res-older");
+        google::protobuf::RepeatedPtrField<std::string> resources;
+        resources.Add()->assign("res-younger");
+        resources.Add()->assign("res-free");
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->lock(owner, resources)));
+        CASE_EXPECT_EQ(owner.get(), handle->get_locker("res-younger").get());
+        CASE_EXPECT_EQ(owner.get(), handle->get_locker("res-older").get());
+        CASE_EXPECT_EQ(owner.get(), handle->get_locker("res-free").get());
+        RPC_RETURN_CODE(0);
+      });
+  auto retry_result = test.wait(retry_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(retry_result.task_exited);
+  CASE_EXPECT_EQ(0, retry_result.result_code);
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 }  // namespace
+
+CASE_TEST(component_distributed_transaction_participator, resolve_releases_processed_storage_and_completed_owner) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  auto query_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_query(),
+                                         PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  CASE_EXPECT_TRUE(!!query_rule);
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  bool second_entered = false;
+  bool release_second = false;
+  int writable_calls = 0;
+  task_type_trait::task_type observed_task;
+  vtable->check_writable = [&second_entered, &release_second, &writable_calls, &observed_task](
+                               rpc::context& ctx, handle_type&, bool& writable) -> rpc::result_code_type {
+    if (++writable_calls == 3) {
+      observed_task = task_manager::me()->get_task(ctx.get_task_context().task_id);
+      second_entered = true;
+      while (!release_second) {
+        auto result = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
+        if (result < 0) {
+          RPC_RETURN_CODE(result);
+        }
+      }
+    }
+    writable = true;
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  atfw::util::memory::weak_rc_ptr<handle_type> owner_watcher = handle;
+  atfw::util::memory::weak_rc_ptr<handle_type::storage_type> first_watcher;
+  auto expiry = atfw::util::time::time_utility::now() + std::chrono::seconds{60};
+  auto prepare_task = test.run_task(
+      "prepare_release_batch", std::chrono::seconds{4},
+      [&handle, &first_watcher, expiry](rpc::context& ctx) -> rpc::result_code_type {
+        for (const auto* uuid : {"release-a", "release-b"}) {
+          auto request = make_prepare_request(uuid, 2, std::chrono::seconds{60}, {uuid});
+          *request.mutable_storage()->mutable_metadata()->mutable_expire_timepoint() =
+              protobuf_from_system_clock(expiry);
+          SSParticipatorTransactionPrepareRsp response;
+          storage_ptr_type output;
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+          if (std::string(uuid) == "release-a") {
+            first_watcher = output;
+          }
+        }
+        RPC_RETURN_CODE(0);
+      });
+  auto prepare_result = test.wait(prepare_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(prepare_result.task_exited);
+  CASE_EXPECT_EQ(0, prepare_result.result_code);
+  handle->fire_resolve_custom_timer_for_unit_test(expiry);
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&second_entered]() { return second_entered; }));
+  CASE_EXPECT_FALSE(!!handle->get_locker("release-a"));
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+  CASE_EXPECT_TRUE(first_watcher.expired());
+  handle.reset();
+  CASE_EXPECT_FALSE(owner_watcher.expired());  // The active callback still needs its owner.
+  release_second = true;
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  CASE_EXPECT_TRUE(task_type_trait::is_exiting(observed_task));
+  CASE_EXPECT_TRUE(owner_watcher.expired());  // Retaining a completed task must not retain the SDK.
+  CASE_EXPECT_TRUE(first_watcher.expired());
+  task_type_trait::reset_task(observed_task);
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(
+      recorder.events, {"check_prepare", "on_start_running", "check_prepare", "on_start_running", "on_finish_running",
+                        "on_finish_running", "on_resolve_task_finished"}));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, acknowledge_releases_completed_storage_before_next_response) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  handle_type::snapshot_type snapshot;
+  auto expiry = atfw::util::time::time_utility::now() + std::chrono::seconds{60};
+  for (const auto* uuid : {"ack-release-a", "ack-release-b"}) {
+    auto request = make_prepare_request(uuid);
+    auto* storage = snapshot.add_finished_transaction();
+    *storage = request.storage();
+    storage->mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
+    storage->set_finished_callback_completed(true);
+    *storage->mutable_resolve_timepoint() = protobuf_from_system_clock(expiry);
+  }
+  handle->load(snapshot);
+  atfw::util::memory::weak_rc_ptr<handle_type::storage_type> first_watcher =
+      handle->get_finished_transactions().at("ack-release-a");
+  bool second_entered = false;
+  bool release_second = false;
+  int ack_calls = 0;
+  auto ack_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_commit_participator(),
+      atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp::descriptor()->full_name(),
+      [&second_entered, &release_second, &ack_calls](const atfw::testing::ss_request_view& view,
+                                                     google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq&>(view.body);
+        ++ack_calls;
+        if (request.metadata().transaction_uuid() == "ack-release-b") {
+          second_entered = true;
+          if (!CASE_EXPECT_NE(nullptr, view.context)) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+          }
+          while (!release_second) {
+            auto result = RPC_AWAIT_CODE_RESULT(rpc::wait(*view.context, std::chrono::milliseconds{1}));
+            if (result < 0) {
+              RPC_RETURN_CODE(result);
+            }
+          }
+        }
+        auto& output = static_cast<atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp&>(response);
+        *output.mutable_metadata() = request.metadata();
+        output.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!ack_rule);
+  handle->fire_resolve_custom_timer_for_unit_test(expiry);
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&second_entered]() { return second_entered; }));
+  CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+  CASE_EXPECT_TRUE(first_watcher.expired());
+  release_second = true;
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(2, ack_calls);
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"on_resolve_task_finished"}));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, terminal_notification_finishes_before_ack) {
+  for (bool commit : {false, true}) {
+    for (int32_t notification_result : {0, static_cast<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT)}) {
+      atfw::testing::runtime test;
+      atfw::testing::runtime_options options;
+      options.features = {atfw::testing::feature::ss};
+      CASE_EXPECT_EQ(0, test.start(options));
+      if (!test.is_running()) {
+        return;
+      }
+      CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+      participator_event_recorder recorder;
+      auto vtable = recorder.make_vtable();
+      int ack_calls = 0;
+      auto ack_rule = register_participator_ack_mock(test, commit ? "commit" : "reject", &ack_calls);
+      CASE_EXPECT_TRUE(!!ack_rule);
+      const auto pending_status = commit ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING
+                                         : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
+      auto observe = [](const decltype(vtable->do_event)& original, EnDistibutedTransactionStatus expected,
+                        bool running) {
+        return [original, expected, running](rpc::context& ctx, handle_type& owner,
+                                             const handle_type::storage_type& storage) -> rpc::result_code_type {
+          CASE_EXPECT_EQ(expected, storage.metadata().status());
+          CASE_EXPECT_EQ(running ? 1 : 0, owner.get_running_transactions().size());
+          CASE_EXPECT_EQ(running ? 0 : 1, owner.get_finished_transactions().size());
+          CASE_EXPECT_EQ(running ? &storage : nullptr, owner.get_locker("notification-lock").get());
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(original(ctx, owner, storage)));
+        };
+      };
+      vtable->on_start_running = observe(
+          vtable->on_start_running, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED, true);
+      vtable->do_event =
+          observe(vtable->do_event, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING, true);
+      vtable->on_finish_running = observe(vtable->on_finish_running, pending_status, false);
+      vtable->on_finished = observe(vtable->on_finished, pending_status, false);
+      bool notification_entered = false;
+      bool release_notification = false;
+      auto notification = [&recorder, &notification_entered, &release_notification, &ack_calls, pending_status,
+                           notification_result](rpc::context& ctx, handle_type& owner,
+                                                const handle_type::storage_type& storage) -> rpc::result_code_type {
+        recorder.events.emplace_back("notification_enter");
+        CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+        CASE_EXPECT_FALSE(owner.has_resolve_custom_timer_for_unit_test());
+        notification_entered = true;
+        while (!release_notification) {
+          auto res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
+          if (res < 0) {
+            RPC_RETURN_CODE(res);
+          }
+        }
+        CASE_EXPECT_EQ(0, ack_calls);
+        CASE_EXPECT_EQ(pending_status, storage.metadata().status());
+        CASE_EXPECT_EQ(1, owner.get_finished_transactions().size());
+        recorder.events.emplace_back("notification_exit");
+        RPC_RETURN_CODE(notification_result);
+      };
+      if (commit) {
+        vtable->on_commited = notification;
+      } else {
+        vtable->on_rejected = notification;
+      }
+      auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+      atfw::util::memory::weak_rc_ptr<handle_type> handle_watcher = handle;
+      atfw::util::memory::weak_rc_ptr<handle_type::storage_type> storage_watcher;
+      auto task = test.run_task(
+          "notification_before_ack", std::chrono::seconds{4},
+          [&handle, &storage_watcher, commit](rpc::context& ctx) -> rpc::result_code_type {
+            auto request =
+                make_prepare_request("notification-before-ack", 2, std::chrono::seconds{60}, {"notification-lock"});
+            SSParticipatorTransactionPrepareRsp response;
+            storage_ptr_type output;
+            CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+            storage_watcher = output;
+            if (commit) {
+              SSParticipatorTransactionCommitReq terminal_request;
+              SSParticipatorTransactionCommitRsp terminal_response;
+              terminal_request.set_transaction_uuid("notification-before-ack");
+              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, terminal_request, terminal_response)));
+            }
+            SSParticipatorTransactionRejectReq terminal_request;
+            SSParticipatorTransactionRejectRsp terminal_response;
+            terminal_request.set_transaction_uuid("notification-before-ack");
+            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->reject(ctx, terminal_request, terminal_response)));
+          });
+      CASE_EXPECT_TRUE(dt_test::wait_for(test, [&notification_entered]() { return notification_entered; }));
+      auto ctx = atfw::testing::make_context();
+      CASE_EXPECT_EQ(0, handle->tick(ctx, atfw::util::time::time_utility::now() + std::chrono::hours{1}));
+      CASE_EXPECT_EQ(0, recorder.check_writable_calls);
+      release_notification = true;
+      auto result = test.wait(task, std::chrono::seconds{8});
+      CASE_EXPECT_TRUE(result.task_exited);
+      CASE_EXPECT_EQ(0, result.result_code);
+      CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle]() { return handle->get_finished_transactions().empty(); }));
+      std::vector<std::string> expected = {"check_prepare", "on_start_running"};
+      if (commit) {
+        expected.emplace_back("do_event");
+      }
+      expected.insert(expected.end(), {
+                                          "on_finish_running",
+                                          "on_finished",
+                                          "notification_enter",
+                                          "notification_exit",
+                                          "on_resolve_task_finished",
+                                      });
+      CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, expected));
+      CASE_EXPECT_EQ(1, ack_calls);
+      CASE_EXPECT_FALSE(!!handle->get_locker("notification-lock"));
+      CASE_EXPECT_TRUE(storage_watcher.expired());
+      CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+      handle.reset();
+      CASE_EXPECT_TRUE(handle_watcher.expired());
+      CASE_EXPECT_EQ(0, test.stop());
+    }
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, terminal_notification_reload_preserves_recovery_timer) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  handle_type::snapshot_type saved;
+  vtable->on_commited = [&saved, &recorder](rpc::context&, handle_type& owner,
+                                            const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                   storage.metadata().status());
+    recorder.events.emplace_back("on_commited");
+    owner.load(saved);
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  atfw::util::memory::weak_rc_ptr<handle_type::storage_type> old_watcher;
+  auto task = test.run_task(
+      "notification_reload", std::chrono::seconds{4},
+      [&handle, &saved, &old_watcher](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("notification-reload", 2, std::chrono::seconds{60}, {"reload-lock"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type storage;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, storage)));
+        old_watcher = storage;
+        handle->dump(saved);
+        SSParticipatorTransactionCommitReq commit_request;
+        SSParticipatorTransactionCommitRsp commit_response;
+        commit_request.set_transaction_uuid("notification-reload");
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_NE(storage.get(), handle->get_locker("reload-lock").get());
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(old_watcher.expired());
+  handle_type::snapshot_type actual;
+  handle->dump(actual);
+  CASE_EXPECT_EQ(saved.SerializeAsString(), actual.SerializeAsString());
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  if (CASE_EXPECT_EQ(1, saved.running_transaction_size())) {
+    CASE_EXPECT_EQ(protobuf_to_system_clock(saved.running_transaction(0).resolve_timepoint()),
+                   handle->get_resolve_custom_timer_timepoint_for_unit_test());
+  }
+  CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, {"check_prepare", "on_start_running", "do_event",
+                                                                "on_finish_running", "on_finished", "on_commited"}));
+  auto timer_watcher = handle->get_resolve_custom_timer_watcher_for_unit_test();
+  handle.reset();
+  CASE_EXPECT_TRUE(timer_watcher.expired());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, callback_task_timeout_cleans_each_completion_stage) {
+  for (bool force_commit : {false, true}) {
+    for (int stage : {0, 1, 2}) {
+      atfw::testing::runtime test;
+      atfw::testing::runtime_options options;
+      options.features = {atfw::testing::feature::ss};
+      CASE_EXPECT_EQ(0, test.start(options));
+      if (!test.is_running()) {
+        return;
+      }
+      CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+      participator_event_recorder recorder;
+      auto vtable = recorder.make_vtable();
+      int timeout_result = 0;
+      auto* callback = &vtable->do_event;
+      if (stage == 1) {
+        callback = &vtable->on_finished;
+      } else if (stage == 2) {
+        callback = &vtable->on_commited;
+      }
+      auto original = *callback;
+      *callback = [original, &timeout_result, force_commit, stage](
+                      rpc::context& ctx, handle_type& owner,
+                      const handle_type::storage_type& storage) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(force_commit && stage == 2
+                           ? EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED
+                           : EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                       storage.metadata().status());
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(original(ctx, owner, storage)));
+        timeout_result = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::seconds{1}));
+        RPC_RETURN_CODE(timeout_result);
+      };
+      auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+      atfw::util::memory::weak_rc_ptr<handle_type> owner_watcher = handle;
+      atfw::util::memory::weak_rc_ptr<handle_type::storage_type> storage_watcher;
+      int ack_calls = 0;
+      auto ack_rule = register_participator_ack_mock(test, "commit", &ack_calls);
+      CASE_EXPECT_TRUE(!!ack_rule);
+      auto task = test.run_task(
+          "completion_stage_timeout", std::chrono::milliseconds{20},
+          [&handle, &storage_watcher, force_commit](rpc::context& ctx) -> rpc::result_code_type {
+            auto request = make_prepare_request("stage-timeout", 1, std::chrono::seconds{60}, {"stage-lock"});
+            request.mutable_storage()->mutable_configure()->set_force_commit(force_commit);
+            SSParticipatorTransactionPrepareRsp response;
+            storage_ptr_type output;
+            auto prepare_result = RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output));
+            if (force_commit) {
+              RPC_RETURN_CODE(prepare_result);
+            }
+            CASE_EXPECT_EQ(0, prepare_result);
+            storage_watcher = output;
+            SSParticipatorTransactionCommitReq commit_request;
+            SSParticipatorTransactionCommitRsp commit_response;
+            commit_request.set_transaction_uuid("stage-timeout");
+            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+          });
+      auto result = test.wait(task, std::chrono::seconds{8});
+      CASE_EXPECT_TRUE(result.task_exited);
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, result.result_code);
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, timeout_result);
+      const bool acknowledge = !force_commit && stage != 1;
+      if (acknowledge) {
+        CASE_EXPECT_TRUE(
+            drive_handle(test, handle, [&handle]() { return handle->get_finished_transactions().empty(); }));
+      }
+      std::vector<std::string> expected = {"check_prepare", "on_start_running", "do_event", "on_finish_running"};
+      if (!force_commit || stage != 0) {
+        expected.emplace_back("on_finished");
+      }
+      if ((force_commit && stage != 0) || (!force_commit && stage != 1)) {
+        expected.emplace_back("on_commited");
+      }
+      if (acknowledge) {
+        expected.emplace_back("on_resolve_task_finished");
+      }
+      CASE_EXPECT_TRUE(dt_test::expect_event_list(recorder.events, expected));
+      CASE_EXPECT_EQ(acknowledge ? 1 : 0, ack_calls);
+      CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+      CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+      CASE_EXPECT_FALSE(!!handle->get_locker("stage-lock"));
+      CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+      CASE_EXPECT_TRUE(storage_watcher.expired());
+      handle.reset();
+      CASE_EXPECT_TRUE(owner_watcher.expired());
+      CASE_EXPECT_EQ(0, test.stop());
+    }
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, force_commit_events_preserve_state_and_release_owner) {
+  for (bool fail_action : {false, true}) {
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
+    CASE_EXPECT_EQ(0, test.start(options));
+    if (!test.is_running()) {
+      return;
+    }
+    std::vector<std::string> events;
+    auto record = [&events](const char* event, EnDistibutedTransactionStatus expected, int32_t result) {
+      return [&events, event, expected, result](rpc::context&, handle_type& owner,
+                                                const handle_type::storage_type& storage) -> rpc::result_code_type {
+        events.emplace_back(event);
+        CASE_EXPECT_EQ(expected, storage.metadata().status());
+        CASE_EXPECT_TRUE(owner.get_running_transactions().empty());
+        CASE_EXPECT_TRUE(owner.get_finished_transactions().empty());
+        CASE_EXPECT_FALSE(owner.has_resolve_custom_timer_for_unit_test());
+        CASE_EXPECT_FALSE(!!owner.get_locker("force-event-lock"));
+        RPC_RETURN_CODE(result);
+      };
+    };
+    auto vtable = atfw::component::memory::stl::make_strong_rc<handle_type::vtable_type>();
+    vtable->check_prepare =
+        [&events](rpc::context&, handle_type&, handle_type::storage_type& storage,
+                  atfw::distributed_system::transaction_participator_failure_reason&) -> rpc::result_code_type {
+      events.emplace_back("check_prepare");
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_CREATED,
+                     storage.metadata().status());
+      RPC_RETURN_CODE(0);
+    };
+    const auto preparing = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED;
+    const auto committing = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING;
+    const auto committed = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED;
+    const auto rejected = EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED;
+    vtable->on_start_running = record("on_start_running", preparing, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    vtable->do_event = record("do_event", committing, fail_action ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0);
+    vtable->on_finish_running = record("on_finish_running", committing, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    vtable->on_finished = record("on_finished", committing, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    vtable->on_commited = record("on_commited", committed, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    vtable->undo_event = record("undo_event", rejected, 0);
+    vtable->on_rejected = record("on_rejected", rejected, 0);
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+    atfw::util::memory::weak_rc_ptr<handle_type> owner_watcher = handle;
+    auto task = test.run_task(
+        "force_event_sequence", std::chrono::seconds{4},
+        [&handle, fail_action](rpc::context& ctx) -> rpc::result_code_type {
+          auto request = make_prepare_request("force-events", 2, std::chrono::seconds{60}, {"force-event-lock"});
+          request.mutable_storage()->mutable_metadata()->clear_status();
+          request.mutable_storage()->mutable_configure()->set_force_commit(true);
+          SSParticipatorTransactionRejectReq undo;
+          undo.set_transaction_uuid("force-events");
+          *undo.mutable_storage() = request.storage();
+          undo.mutable_storage()->mutable_metadata()->set_status(
+              EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+          SSParticipatorTransactionPrepareRsp response;
+          storage_ptr_type output;
+          CASE_EXPECT_EQ(fail_action ? PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT : 0,
+                         RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+          CASE_EXPECT_FALSE(!!output);
+          if (fail_action) {
+            SSParticipatorTransactionRejectRsp undo_response;
+            CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->reject(ctx, undo, undo_response)));
+          }
+          RPC_RETURN_CODE(0);
+        });
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    std::vector<std::string> expected = {"check_prepare", "on_start_running", "do_event", "on_finish_running"};
+    if (fail_action) {
+      expected.emplace_back("undo_event");
+    } else {
+      expected.insert(expected.end(), {"on_finished", "on_commited"});
+    }
+    CASE_EXPECT_TRUE(dt_test::expect_event_list(events, expected));
+    handle.reset();
+    CASE_EXPECT_TRUE(owner_watcher.expired());
+    CASE_EXPECT_EQ(0, test.stop());
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, wound_follows_confirmed_commit) {
+  run_wound_decision(false, true);
+}
+
+CASE_TEST(component_distributed_transaction_participator, wound_uses_configured_replica_quorum) {
+  run_wound_decision(true, false);
+}
+
+CASE_TEST(component_distributed_transaction_participator, wound_follows_committed_replica) {
+  run_wound_decision(true, true);
+}
+
+CASE_TEST(component_distributed_transaction_participator, wound_timeout_cleanup) {
+  for (bool unwritable : {false, true}) {
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
+    CASE_EXPECT_EQ(0, test.start(options));
+    if (!test.is_running()) {
+      return;
+    }
+    CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+    participator_event_recorder recorder;
+    recorder.check_writable_result = !unwritable;
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+    storage_ptr_type older;
+    storage_ptr_type younger;
+    auto prepare_task =
+        test.run_task("expiring_wound", std::chrono::seconds{4},
+                      [handle, &older, &younger](rpc::context& ctx) -> rpc::result_code_type {
+                        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(prepare_wound(ctx, handle, older, younger)));
+                      });
+    auto prepare_result = test.wait(prepare_task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(prepare_result.task_exited);
+    CASE_EXPECT_EQ(0, prepare_result.result_code);
+    if (!younger) {
+      test.stop();
+      return;
+    }
+    auto reject_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_reject(),
+                                            PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    CASE_EXPECT_TRUE(!!reject_rule);
+    auto ctx = atfw::testing::make_context();
+    const auto expiry = protobuf_to_system_clock(younger->metadata().expire_timepoint());
+    CASE_EXPECT_EQ(0, handle->tick(ctx, expiry - std::chrono::system_clock::duration{1}));
+    CASE_EXPECT_EQ(0, recorder.check_writable_calls);
+    CASE_EXPECT_EQ(0, younger->resolve_times());
+    handle->fire_resolve_custom_timer_for_unit_test(expiry);
+    CASE_EXPECT_TRUE(
+        dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+    CASE_EXPECT_EQ(1, younger->resolve_times());
+    CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-younger").get());
+    CASE_EXPECT_EQ(younger.get(), handle->get_locker("res-extra").get());
+    handle_type::snapshot_type snapshot;
+    handle->dump(snapshot);
+    handle->load(snapshot);
+    younger = handle->get_locker("res-younger");
+    older = handle->get_locker("res-older");
+    CASE_EXPECT_TRUE(handle->get_running_transactions().at("wound-younger").wounded);
+    CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return !handle->get_locker("res-younger"); }));
+    CASE_EXPECT_EQ(2, younger->resolve_times());
+    CASE_EXPECT_EQ(unwritable ? 2 : 3, recorder.count("on_resolve_task_finished"));
+    CASE_EXPECT_EQ(unwritable ? 0 : 2, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()));
+    CASE_EXPECT_FALSE(!!handle->get_locker("res-extra"));
+    CASE_EXPECT_EQ(older.get(), handle->get_locker("res-older").get());
+    CASE_EXPECT_EQ(unwritable ? 0 : 1, recorder.count("on_finish_running"));
+    CASE_EXPECT_EQ(0, recorder.count("do_event"));
+    CASE_EXPECT_EQ(0, recorder.count("on_finished"));
+    CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject_participator()));
+    CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+    CASE_EXPECT_EQ(0, test.stop());
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, wound_terminal_notification_before_expiry) {
+  for (bool commit : {false, true}) {
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
+    CASE_EXPECT_EQ(0, test.start(options));
+    if (!test.is_running()) {
+      return;
+    }
+    CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+    participator_event_recorder recorder;
+    recorder.do_event_script = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+    auto vtable = recorder.make_vtable();
+    auto original_do = vtable->do_event;
+    vtable->do_event = [original_do](rpc::context& ctx, handle_type& owner,
+                                     const handle_type::storage_type& storage) -> rpc::result_code_type {
+      CASE_EXPECT_EQ(&storage, owner.get_locker("res-younger").get());
+      CASE_EXPECT_EQ(&storage, owner.get_locker("res-extra").get());
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                     storage.metadata().status());
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(original_do(ctx, owner, storage)));
+    };
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+    int ack_calls = 0;
+    auto ack_rule = register_participator_ack_mock(test, commit ? "commit" : "reject", &ack_calls);
+    auto global_reject_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_reject(),
+                                                   PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    CASE_EXPECT_TRUE(!!ack_rule && !!global_reject_rule);
+    auto task = test.run_task(
+        "wound_notified", std::chrono::seconds{4}, [handle, commit](rpc::context& ctx) -> rpc::result_code_type {
+          storage_ptr_type older;
+          storage_ptr_type younger;
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(prepare_wound(ctx, handle, older, younger)));
+          handle_type::snapshot_type snapshot;
+          handle->dump(snapshot);
+          handle->load(snapshot);
+          if (commit) {
+            SSParticipatorTransactionCommitReq request;
+            SSParticipatorTransactionCommitRsp response;
+            request.set_transaction_uuid("wound-younger");
+            CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+                           RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, response)));
+            CASE_EXPECT_EQ(1, handle->get_locker("res-younger")->resolve_times());
+            handle->dump(snapshot);
+            handle->load(snapshot);
+            CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, response)));
+          } else {
+            SSParticipatorTransactionRejectReq request;
+            SSParticipatorTransactionRejectRsp response;
+            request.set_transaction_uuid("wound-younger");
+            CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->reject(ctx, request, response)));
+            SSParticipatorTransactionCommitReq commit_request;
+            SSParticipatorTransactionCommitRsp commit_response;
+            commit_request.set_transaction_uuid("wound-younger");
+            for (int attempt = 0; attempt < 2; ++attempt) {
+              CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+              CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                             handle->get_finished_transactions().at("wound-younger")->metadata().status());
+              handle->dump(snapshot);
+              CASE_EXPECT_EQ(0, snapshot.wounded_transaction_uuid_size());
+              handle->load(snapshot);
+            }
+          }
+          CASE_EXPECT_LT(atfw::util::time::time_utility::now(),
+                         protobuf_to_system_clock(younger->metadata().expire_timepoint()));
+          CASE_EXPECT_FALSE(!!handle->get_locker("res-younger"));
+          CASE_EXPECT_FALSE(!!handle->get_locker("res-extra"));
+          CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+          RPC_RETURN_CODE(0);
+        });
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return handle->get_finished_transactions().empty(); }));
+    CASE_EXPECT_EQ(commit ? 2 : 0, recorder.count("do_event"));
+    CASE_EXPECT_EQ(1, recorder.count(commit ? "on_commited" : "on_rejected"));
+    CASE_EXPECT_EQ(1, ack_calls);
+    CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()));
+    CASE_EXPECT_EQ(0, test.stop());
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_wound_response_preserves_reloaded_locks) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  storage_ptr_type older;
+  storage_ptr_type younger;
+  auto prepare_task =
+      test.run_task("stale_wound_prepare", std::chrono::seconds{4},
+                    [handle, &older, &younger](rpc::context& ctx) -> rpc::result_code_type {
+                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(prepare_wound(ctx, handle, older, younger)));
+                    });
+  auto prepare_result = test.wait(prepare_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(prepare_result.task_exited);
+  CASE_EXPECT_EQ(0, prepare_result.result_code);
+  int reject_calls = 0;
+  auto reject_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_reject(),
+      atfw::distributed_system::SSDistributeTransactionRejectReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionRejectRsp::descriptor()->full_name(),
+      [handle, &reject_calls](const atfw::testing::ss_request_view& request,
+                              google::protobuf::Message& response) -> rpc::result_code_type {
+        if (++reject_calls == 1) {
+          handle_type::snapshot_type snapshot;
+          handle->dump(snapshot);
+          handle->load(snapshot);
+        }
+        const auto& in = static_cast<const atfw::distributed_system::SSDistributeTransactionRejectReq&>(request.body);
+        auto& out = static_cast<atfw::distributed_system::SSDistributeTransactionRejectRsp&>(response);
+        *out.mutable_metadata() = in.metadata();
+        out.mutable_metadata()->set_status(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
+        RPC_RETURN_CODE(0);
+      });
+  int reject_acks = 0;
+  auto ack_rule = register_participator_ack_mock(test, "reject", &reject_acks);
+  CASE_EXPECT_TRUE(!!reject_rule && !!ack_rule);
+  if (younger) {
+    handle->fire_resolve_custom_timer_for_unit_test(protobuf_to_system_clock(younger->resolve_timepoint()));
+    CASE_EXPECT_TRUE(
+        dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+    auto restored = handle->get_locker("res-younger");
+    CASE_EXPECT_TRUE(!!restored);
+    CASE_EXPECT_NE(younger.get(), restored.get());
+    CASE_EXPECT_EQ(restored.get(), handle->get_locker("res-extra").get());
+    if (restored) {
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                     restored->metadata().status());
+    }
+    CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+    CASE_EXPECT_EQ(0, reject_acks);
+    CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+    CASE_EXPECT_TRUE(drive_handle(test, handle, [&reject_acks, handle]() {
+      return reject_acks == 1 && handle->get_finished_transactions().empty();
+    }));
+    CASE_EXPECT_EQ(2, reject_calls);
+    CASE_EXPECT_FALSE(!!handle->get_locker("res-younger"));
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, snapshot_ack_preserves_pending_and_terminal_states) {
+  for (auto status : {
+           EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+           EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+           EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+           EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+       }) {
+    for (bool finished : {false, true}) {
+      run_snapshot_ack_lifecycle(status, finished);
+    }
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, normal_state_lifecycle_with_optional_do_event) {
+  for (bool commit : {true, false}) {
+    for (bool with_do_event : {true, false}) {
+      run_normal_state_lifecycle(commit, with_do_event, false);
+    }
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, on_finished_exhaustion_preserves_pending_state) {
+  run_normal_state_lifecycle(true, true, true);
+  run_normal_state_lifecycle(false, false, true);
+}
+
+CASE_TEST(component_distributed_transaction_participator, force_commit_state_lifecycle_keeps_callback_error_semantics) {
+  for (bool with_do_event : {true, false}) {
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
+    CASE_EXPECT_EQ(0, test.start(options));
+    if (!test.is_running()) {
+      return;
+    }
+    participator_event_recorder recorder;
+    auto vtable = recorder.make_vtable();
+    int finish_calls = 0;
+    vtable->on_start_running = [](rpc::context&, handle_type&,
+                                  const handle_type::storage_type& storage) -> rpc::result_code_type {
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                     storage.metadata().status());
+      RPC_RETURN_CODE(0);
+    };
+    vtable->on_finish_running = [](rpc::context&, handle_type&,
+                                   const handle_type::storage_type& storage) -> rpc::result_code_type {
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                     storage.metadata().status());
+      RPC_RETURN_CODE(0);
+    };
+    if (with_do_event) {
+      vtable->do_event = [&recorder](rpc::context&, handle_type&,
+                                     const handle_type::storage_type& storage) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                       storage.metadata().status());
+        recorder.events.emplace_back("do_event");
+        RPC_RETURN_CODE(0);
+      };
+    } else {
+      vtable->do_event = nullptr;
+    }
+    vtable->on_finished = [&finish_calls](rpc::context&, handle_type&,
+                                          const handle_type::storage_type& storage) -> rpc::result_code_type {
+      ++finish_calls;
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                     storage.metadata().status());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    };
+    vtable->on_commited = [&recorder](rpc::context&, handle_type&,
+                                      const handle_type::storage_type& storage) -> rpc::result_code_type {
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                     storage.metadata().status());
+      recorder.events.emplace_back("on_commited");
+      RPC_RETURN_CODE(0);
+    };
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+    auto task = test.run_task(
+        "force_state_lifecycle", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+          auto request = make_prepare_request("force-state-lifecycle");
+          request.mutable_storage()->mutable_metadata()->clear_status();
+          request.mutable_storage()->mutable_configure()->set_force_commit(true);
+          SSParticipatorTransactionPrepareRsp response;
+          storage_ptr_type output;
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+          CASE_EXPECT_FALSE(!!output);
+          RPC_RETURN_CODE(0);
+        });
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_EQ(with_do_event ? 1 : 0, recorder.count("do_event"));
+    CASE_EXPECT_EQ(1, finish_calls);
+    CASE_EXPECT_EQ(1, recorder.count("on_commited"));
+    CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+    CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+    CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+    CASE_EXPECT_EQ(0, test.stop());
+  }
+}
 
 // ============ construction, key fidelity and destroy callback ============
 
@@ -477,8 +1773,7 @@ CASE_TEST(component_distributed_transaction_participator, commit_reject_lifecycl
         SSParticipatorTransactionCommitRsp commit_response;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
 
-        // The transaction moved from running to finished (COMMITING = commit-direction terminal that
-        // still owes the coordinator an ack).
+        // Local callbacks finish before the coordinator ACK confirms COMMITED.
         CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
         CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
         auto finished_iter = handle->get_finished_transactions().find("part-uuid-commit");
@@ -599,7 +1894,7 @@ CASE_TEST(component_distributed_transaction_participator, force_commit_failure_r
 
 // ============ Wound-Wait locks: check_lock tie-break + preemption (DT-022) ============
 
-CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preemption_dt022) {
+CASE_TEST(component_distributed_transaction_participator, prepare_conflict_keeps_original_locks) {
   atfw::testing::runtime test;
   atfw::testing::runtime_options options;
   options.features = {atfw::testing::feature::ss};
@@ -607,139 +1902,125 @@ CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preempt
   if (!test.is_running()) {
     return;
   }
-  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
-
-  // The coordinator answers the reject_participator ack of the wounded transaction.
-  int reject_ack_calls = 0;
-  auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
-  CASE_EXPECT_TRUE(!!reject_ack_rule);
-  auto query_rule =
-      register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
-  CASE_EXPECT_TRUE(!!query_rule);
-
   participator_event_recorder recorder;
-  auto vtable = recorder.make_vtable();
-  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
-  // vtable 的 lambda 按 this 捕获 recorder；自定义定时器自驱动后，reloaded handle 的 resolve 任务
-  // 可能持 strong_rc 越过协程帧结束仍在运行，reload_recorder 必须比在途任务活得更久（测试作用域）
-  participator_event_recorder reload_recorder;
-
-  auto task =
-      test.run_task("lock_wound", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
-        auto older_request = make_prepare_request("part-uuid-older", 2, std::chrono::milliseconds{60000});
-        auto younger_request = make_prepare_request("part-uuid-younger", 2, std::chrono::milliseconds{60000});
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task = test.run_task(
+      "prepare_conflict", std::chrono::seconds{4}, [handle, &recorder](rpc::context& ctx) -> rpc::result_code_type {
+        auto older_request = make_prepare_request("older", 2, std::chrono::minutes{10}, {"free", "held", "held"});
+        auto younger_request = make_prepare_request("younger", 2, std::chrono::minutes{10}, {"held", "extra"});
+        *older_request.mutable_storage()->mutable_metadata()->mutable_prepare_timepoint() =
+            protobuf_from_system_clock(atfw::util::time::time_utility::now() - std::chrono::seconds{1});
+        younger_request.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval()->set_seconds(60);
         SSParticipatorTransactionPrepareRsp response;
-        storage_ptr_type older_output;
-        storage_ptr_type younger_output;
-        CASE_EXPECT_EQ(0,
-                       RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(older_request), response, older_output)));
-        CASE_EXPECT_EQ(
-            0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(younger_request), response, younger_output)));
-
-        // Explicit timestamps on the storage returned by the real prepare flow: older transaction
-        // was prepared earlier.
-        older_output->mutable_metadata()->mutable_prepare_timepoint()->set_seconds(1000);
-        older_output->mutable_metadata()->mutable_prepare_timepoint()->set_nanos(0);
-        younger_output->mutable_metadata()->mutable_prepare_timepoint()->set_seconds(2000);
-        younger_output->mutable_metadata()->mutable_prepare_timepoint()->set_nanos(0);
-
-        // The older transaction holds res-0 first (lock is only called after check_lock per the
-        // contract; lock itself does not re-check ages and always wounds the previous holder).
-        google::protobuf::RepeatedPtrField<std::string> older_resources;
-        older_resources.Add()->assign("res-0");
-        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->lock(older_output, older_resources)));
-
-        // The younger transaction cannot preempt: check_lock reports the older holder of res-0.
-        transaction_metadata younger_metadata;
-        younger_metadata.set_transaction_uuid("part-uuid-younger");
-        younger_metadata.mutable_prepare_timepoint()->set_seconds(2000);
-        std::list<handle_type::storage_const_ptr_type> preemption;
-        std::vector<std::string> check_resources = {"res-0"};
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
-                       handle->check_lock(younger_metadata, check_resources, preemption));
-        CASE_EXPECT_EQ(1, preemption.size());
-        CASE_EXPECT_EQ(std::string("part-uuid-older"), preemption.front()->metadata().transaction_uuid());
-
-        // Wound-Wait: the younger transaction takes the free res-1 first, then the older transaction
-        // (earlier prepare timepoint) preempts and wounds the younger holder.
-        google::protobuf::RepeatedPtrField<std::string> younger_resources;
-        younger_resources.Add()->assign("res-1");
-        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->lock(younger_output, younger_resources)));
-
-        transaction_metadata older_metadata;
-        older_metadata.set_transaction_uuid("part-uuid-older");
-        older_metadata.mutable_prepare_timepoint()->set_seconds(1000);
-        std::vector<std::string> older_check_resources = {"res-1"};
-        std::list<handle_type::storage_const_ptr_type> older_preemption;
-        CASE_EXPECT_EQ(0, handle->check_lock(older_metadata, older_check_resources, older_preemption));
-        google::protobuf::RepeatedPtrField<std::string> wound_resources;
-        wound_resources.Add()->assign("res-1");
-        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->lock(older_output, wound_resources)));
-
-        // The wounded younger transaction is rejected from commit without running do_event.
-        SSParticipatorTransactionCommitReq wounded_commit;
-        wounded_commit.set_transaction_uuid("part-uuid-younger");
-        SSParticipatorTransactionCommitRsp commit_response;
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
-                       RPC_AWAIT_CODE_RESULT(handle->commit(ctx, wounded_commit, commit_response)));
-
-        // The wound is durable: dump keeps the local rejection intent for the younger transaction.
-        atframework::distributed_system::transaction_participator_snapshot snapshot;
-        handle->dump(snapshot);
-        bool younger_rejecting = false;
-        for (const auto& running : snapshot.running_transaction()) {
-          if (running.metadata().transaction_uuid() == "part-uuid-younger") {
-            younger_rejecting = running.metadata().status() ==
-                                EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING;
-          }
+        storage_ptr_type younger;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(younger_request), response, younger)));
+        if (!younger) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
         }
-        CASE_EXPECT_TRUE(younger_rejecting);
+        storage_ptr_type older;
+        SSParticipatorTransactionPrepareReq retry_request = older_request;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                       RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(older_request), response, older)));
+        CASE_EXPECT_TRUE(response.reason().allow_retry());
+        CASE_EXPECT_FALSE(!!older);
+        CASE_EXPECT_FALSE(!!handle->get_locker("free"));
+        CASE_EXPECT_EQ(younger.get(), handle->get_locker("held").get());
+        CASE_EXPECT_EQ(younger.get(), handle->get_locker("extra").get());
+        CASE_EXPECT_EQ(2, younger->lock_resource_size());
+        CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+        CASE_EXPECT_EQ(1, recorder.count("on_start_running"));
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                       younger->metadata().status());
+        const auto resolve_timepoint = protobuf_to_system_clock(younger->resolve_timepoint());
+        response.Clear();
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                       RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(retry_request), response, older)));
+        CASE_EXPECT_TRUE(response.reason().allow_retry());
+        CASE_EXPECT_EQ(resolve_timepoint, protobuf_to_system_clock(younger->resolve_timepoint()));
+        CASE_EXPECT_EQ(younger.get(), handle->get_locker("held").get());
         RPC_RETURN_CODE(0);
       });
   auto result = test.wait(task, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
-  CASE_EXPECT_EQ(0, recorder.count("do_event"));
-
-  // The wound survives the reload: a fresh handle still refuses commit for the younger transaction.
-  auto reload_task = test.run_task(
-      "wound_reload", std::chrono::seconds{4}, [&handle, &reload_recorder](rpc::context& ctx) -> rpc::result_code_type {
-        atframework::distributed_system::transaction_participator_snapshot snapshot;
-        handle->dump(snapshot);
-        // reload_recorder 已提升到测试作用域（在途 resolve 任务可能越过本协程帧仍在运行）
-        auto reloaded = atfw::component::memory::stl::make_strong_rc<handle_type>(reload_recorder.make_vtable(), "p2");
-        reloaded->load(snapshot);
-        CASE_EXPECT_EQ(2, reloaded->get_running_transactions().size());
-
-        SSParticipatorTransactionCommitReq wounded_commit;
-        wounded_commit.set_transaction_uuid("part-uuid-younger");
-        SSParticipatorTransactionCommitRsp commit_response;
-        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
-                       RPC_AWAIT_CODE_RESULT(reloaded->commit(ctx, wounded_commit, commit_response)));
-        RPC_RETURN_CODE(0);
-      });
-  auto reload_result = test.wait(reload_task, std::chrono::seconds{8});
-  CASE_EXPECT_TRUE(reload_result.task_exited);
-  CASE_EXPECT_EQ(0, reload_result.result_code);
-
-  // Due timer on the original handle prefers the local reject: the wounded transaction is moved to
-  // finished (REJECTING) and the reject ack is delivered; it never stays in running forever. The
-  // predicate includes the ack counter because between remove_running and add_finished the entry
-  // is momentarily in neither container.
-  recorder.events.clear();
-  CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle, &reject_ack_calls]() {
-    return reject_ack_calls >= 1 &&
-           handle->get_running_transactions().find("part-uuid-younger") == handle->get_running_transactions().end() &&
-           handle->get_finished_transactions().empty();
-  }));
-  CASE_EXPECT_GE(reject_ack_calls, 1);
-  CASE_EXPECT_EQ(0, recorder.count("do_event"));  // the wounded path never runs do_event
-  CASE_EXPECT_GE(recorder.count("on_rejected"), 1);
-  // The older transaction still owns the resource.
-  CASE_EXPECT_TRUE(!!handle->get_locker("res-1"));
-  CASE_EXPECT_EQ(std::string("part-uuid-older"), handle->get_locker("res-1")->metadata().transaction_uuid());
-
   CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, blocked_prepare_does_not_wound_other_holders) {
+  for (bool blocker_committing : {false, true}) {
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
+    CASE_EXPECT_EQ(0, test.start(options));
+    if (!test.is_running()) {
+      return;
+    }
+    participator_event_recorder recorder;
+    recorder.do_event_script = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+    auto task = test.run_task(
+        "blocked_prepare", std::chrono::seconds{4},
+        [handle, blocker_committing](rpc::context& ctx) -> rpc::result_code_type {
+          auto blocker_request = make_prepare_request("blocker", 2, std::chrono::minutes{10}, {"blocked-resource"});
+          auto victim_request = make_prepare_request("victim", 2, std::chrono::minutes{10}, {"victim-resource"});
+          const auto contender_time =
+              protobuf_to_system_clock(victim_request.storage().metadata().prepare_timepoint()) -
+              std::chrono::seconds{1};
+          if (!blocker_committing) {
+            *blocker_request.mutable_storage()->mutable_metadata()->mutable_prepare_timepoint() =
+                protobuf_from_system_clock(contender_time - std::chrono::seconds{1});
+          }
+          SSParticipatorTransactionPrepareRsp response;
+          storage_ptr_type blocker;
+          storage_ptr_type victim;
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(blocker_request), response, blocker)));
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(victim_request), response, victim)));
+          if (!blocker || !victim) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+          }
+          if (blocker_committing) {
+            SSParticipatorTransactionCommitReq request;
+            SSParticipatorTransactionCommitRsp commit_response;
+            request.set_transaction_uuid("blocker");
+            CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+                           RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, commit_response)));
+          }
+          const auto blocker_before = blocker->SerializeAsString();
+          const auto victim_before = victim->SerializeAsString();
+          for (bool reversed : {false, true}) {
+            const auto resources = reversed ? std::vector<std::string>{"free", "blocked-resource", "victim-resource"}
+                                            : std::vector<std::string>{"free", "victim-resource", "blocked-resource"};
+            auto request = make_prepare_request("contender", 2, std::chrono::minutes{10}, resources);
+            *request.mutable_storage()->mutable_metadata()->mutable_prepare_timepoint() =
+                protobuf_from_system_clock(contender_time);
+            storage_ptr_type output;
+            response.Clear();
+            CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                           RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+            CASE_EXPECT_TRUE(response.reason().allow_retry());
+            CASE_EXPECT_FALSE(!!output);
+            CASE_EXPECT_FALSE(!!handle->get_locker("free"));
+            CASE_EXPECT_EQ(blocker.get(), handle->get_locker("blocked-resource").get());
+            CASE_EXPECT_EQ(victim.get(), handle->get_locker("victim-resource").get());
+            CASE_EXPECT_EQ(blocker_before, blocker->SerializeAsString());
+            CASE_EXPECT_EQ(victim_before, victim->SerializeAsString());
+            handle_type::snapshot_type snapshot;
+            handle->dump(snapshot);
+            CASE_EXPECT_EQ(2, snapshot.running_transaction_size());
+            CASE_EXPECT_EQ(0, snapshot.wounded_transaction_uuid_size());
+          }
+          RPC_RETURN_CODE(0);
+        });
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+    CASE_EXPECT_EQ(0, test.stop());
+  }
+}
+
+CASE_TEST(component_distributed_transaction_participator, lock_wound_and_preemption_dt022) {
+  run_wound_decision(false, false);
 }
 
 // ============ DT-008: appended locks are dumped and released ============
@@ -872,6 +2153,32 @@ CASE_TEST(component_distributed_transaction_participator, check_lock_tiebreak_an
         metadata.set_transaction_uuid("part-uuid-holder");
         preemption.clear();
         CASE_EXPECT_EQ(0, handle->check_lock(metadata, resources, preemption));
+
+        // Reload pending/terminal work: even an older contender cannot change its direction or steal locks.
+        auto contender = atfw::component::memory::stl::make_strong_rc<handle_type::storage_type>();
+        *contender->mutable_metadata() = metadata;
+        contender->mutable_metadata()->set_transaction_uuid("part-uuid-aaa");
+        contender->add_lock_resource("res-1");
+        for (auto status : {
+                 EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                 EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                 EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                 EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+             }) {
+          handle_type::snapshot_type snapshot;
+          *snapshot.add_running_transaction() = *output;
+          snapshot.mutable_running_transaction(0)->mutable_metadata()->set_status(status);
+          handle->load(snapshot);
+          auto restored = handle->get_locker("res-1");
+          const bool was_wounded = handle->get_running_transactions().at("part-uuid-holder").wounded;
+          CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                         handle->check_lock(contender->metadata(), resources, preemption));
+          CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                         RPC_AWAIT_CODE_RESULT(handle->lock(contender, contender->lock_resource())));
+          CASE_EXPECT_EQ(restored.get(), handle->get_locker("res-1").get());
+          CASE_EXPECT_EQ(status, restored->metadata().status());
+          CASE_EXPECT_EQ(was_wounded, handle->get_running_transactions().at("part-uuid-holder").wounded);
+        }
         RPC_RETURN_CODE(0);
       });
   auto result = test.wait(task, std::chrono::seconds{8});
@@ -977,18 +2284,46 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_committe
   int commit_ack_calls = 0;
   auto query_rule = register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
                                         &query_calls);
-  auto commit_ack_rule = register_participator_ack_mock(test, "commit", &commit_ack_calls);
+  auto commit_ack_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_commit_participator(),
+      atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp::descriptor()->full_name(),
+      [&commit_ack_calls](const atfw::testing::ss_request_view& request,
+                          google::protobuf::Message& response) -> rpc::result_code_type {
+        ++commit_ack_calls;
+        const auto& typed_request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq&>(request.body);
+        auto& typed_response =
+            static_cast<atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp&>(response);
+        protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
+        protobuf_copy_message(*typed_response.mutable_metadata()->mutable_finish_timepoint(),
+                              typed_request.metadata().prepare_timepoint());
+        RPC_RETURN_CODE(0);
+      });
   CASE_EXPECT_TRUE(!!query_rule && !!commit_ack_rule);
 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
+  auto do_event = vtable->do_event;
+  vtable->do_event = [do_event](rpc::context& ctx, handle_type& owner,
+                                const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   storage.metadata().status());
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(do_event(ctx, owner, storage)));
+  };
+  vtable->on_finished = [](rpc::context&, handle_type&,
+                           const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   storage.metadata().status());
+    RPC_RETURN_CODE(0);
+  };
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type output;
 
-  auto task =
-      test.run_task("resolve_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+  auto task = test.run_task(
+      "resolve_prepare", std::chrono::seconds{4}, [&handle, &output](rpc::context& ctx) -> rpc::result_code_type {
         auto request = make_prepare_request("part-uuid-resolve-commit", 2, std::chrono::milliseconds{20});
         SSParticipatorTransactionPrepareRsp response;
-        storage_ptr_type output;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
         CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
         RPC_RETURN_CODE(0);
@@ -1007,6 +2342,11 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_committe
 
   CASE_EXPECT_GE(query_calls, 1);
   CASE_EXPECT_GE(commit_ack_calls, 1);
+  CASE_EXPECT_TRUE(!!output);
+  if (output) {
+    CASE_EXPECT_EQ(output->metadata().prepare_timepoint().seconds(), output->metadata().finish_timepoint().seconds());
+    CASE_EXPECT_EQ(output->metadata().prepare_timepoint().nanos(), output->metadata().finish_timepoint().nanos());
+  }
   CASE_EXPECT_EQ(1, recorder.count("do_event"));
   CASE_EXPECT_GE(recorder.count("on_resolve_task_finished"), 1);
 
@@ -1094,20 +2434,36 @@ CASE_TEST(component_distributed_transaction_participator, resolve_budget_exhaust
   int reject_ack_calls = 0;
   auto query_rule = register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
                                         &query_calls);
-  auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
+  auto reject_ack_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_reject_participator(),
+      atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp::descriptor()->full_name(),
+      [&reject_ack_calls](const atfw::testing::ss_request_view& request,
+                          google::protobuf::Message& response) -> rpc::result_code_type {
+        ++reject_ack_calls;
+        const auto& typed_request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq&>(request.body);
+        auto& typed_response =
+            static_cast<atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp&>(response);
+        protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
+        // A participator ack updates participator_status, not the coordinator's global decision.
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED);
+        RPC_RETURN_CODE(0);
+      });
   CASE_EXPECT_TRUE(!!query_rule && !!reject_ack_rule);
 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type output;
 
   auto task = test.run_task(
-      "budget_exhaustion", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+      "budget_exhaustion", std::chrono::seconds{4}, [&handle, &output](rpc::context& ctx) -> rpc::result_code_type {
         // resolve_times == resolve_max_times already: the next resolve entry goes straight to the
         // local reject, with zero coordinator queries.
         auto request = make_prepare_request("part-uuid-budget", 2, std::chrono::milliseconds{20}, {}, 2);
         SSParticipatorTransactionPrepareRsp response;
-        storage_ptr_type output;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
         RPC_RETURN_CODE(0);
       });
@@ -1120,6 +2476,11 @@ CASE_TEST(component_distributed_transaction_participator, resolve_budget_exhaust
   }));
   CASE_EXPECT_EQ(0, query_calls);  // D6: exhausted budget never queries again
   CASE_EXPECT_GE(reject_ack_calls, 1);
+  CASE_EXPECT_TRUE(!!output);
+  if (output) {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   output->metadata().status());
+  }
   CASE_EXPECT_EQ(0, recorder.count("do_event"));
   CASE_EXPECT_GE(recorder.count("on_rejected"), 1);
 
@@ -1177,6 +2538,77 @@ CASE_TEST(component_distributed_transaction_participator, resolve_notfound_clean
 }
 
 // ============ DT-016: finished ack failures are bounded and finally consumed ============
+
+CASE_TEST(component_distributed_transaction_participator, finished_ack_merges_only_confirmed_replica_state) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002}));
+  int reject_ack_calls = 0;
+  auto ack_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_reject_participator(),
+      atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp::descriptor()->full_name(),
+      [&reject_ack_calls](const atfw::testing::ss_request_view& request,
+                          google::protobuf::Message& response) -> rpc::result_code_type {
+        ++reject_ack_calls;
+        const auto& typed_request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq&>(request.body);
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                       typed_request.metadata().status());
+        CASE_EXPECT_EQ(0, typed_request.metadata().finish_timepoint().seconds());
+        if (reject_ack_calls == 2) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+        }
+        auto& typed_response =
+            static_cast<atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp&>(response);
+        protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
+        typed_response.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        protobuf_copy_message(*typed_response.mutable_metadata()->mutable_finish_timepoint(),
+                              typed_request.metadata().prepare_timepoint());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!ack_rule);
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  storage_ptr_type output;
+  auto task = test.run_task(
+      "prepare_ack_replicas", std::chrono::seconds{4}, [handle, &output](rpc::context& ctx) -> rpc::result_code_type {
+        // Query budget exhaustion can precede learning the coordinator's committed decision.
+        auto request = make_prepare_request("ack-replica-decision", 3, std::chrono::milliseconds{20}, {"res-ack"}, 3);
+        auto* metadata = request.mutable_storage()->mutable_metadata();
+        metadata->set_replicate_read_count(2);
+        metadata->add_replicate_node_server_id(0x1B0001);
+        metadata->add_replicate_node_server_id(0x1B0002);
+        SSParticipatorTransactionPrepareRsp response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() {
+    return handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
+  }));
+  CASE_EXPECT_EQ(4, reject_ack_calls);
+  CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_commit_participator()));
+  CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_query()));
+  CASE_EXPECT_TRUE(!!output);
+  if (output) {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                   output->metadata().status());
+    CASE_EXPECT_EQ(output->metadata().prepare_timepoint().seconds(), output->metadata().finish_timepoint().seconds());
+    CASE_EXPECT_EQ(output->metadata().prepare_timepoint().nanos(), output->metadata().finish_timepoint().nanos());
+  }
+  CASE_EXPECT_EQ(1, recorder.count("on_rejected"));
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-ack"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
 
 CASE_TEST(component_distributed_transaction_participator, finished_ack_failure_has_budget_dt016) {
   atfw::testing::runtime test;
@@ -1265,7 +2697,10 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->check_writable(ctx, writable)));
         CASE_EXPECT_FALSE(writable);
 
-        auto request = make_prepare_request("part-uuid-readonly", 2, std::chrono::milliseconds{60000});
+        auto request =
+            make_prepare_request("part-uuid-readonly", 2, std::chrono::milliseconds{60000}, {"res-readonly"});
+        *request.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval() =
+            protobuf_from_chrono_duration(std::chrono::seconds{60});
         SSParticipatorTransactionPrepareRsp response;
         storage_ptr_type output;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
@@ -1294,6 +2729,8 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
   CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
 
   // Recovering writability resumes the flow.
+  CASE_EXPECT_EQ(1, running_iter->second.storage->resolve_times());
+  CASE_EXPECT_TRUE(!!handle->get_locker("res-readonly"));
   recorder.check_writable_result = true;
   running_iter = handle->get_running_transactions().find("part-uuid-readonly");
   CASE_EXPECT_TRUE(running_iter != handle->get_running_transactions().end());
@@ -1309,7 +2746,294 @@ CASE_TEST(component_distributed_transaction_participator, check_writable_defers_
   }));
   CASE_EXPECT_GE(query_calls, 1);
   CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-readonly"));
 
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, unwritable_budget_survives_reload_and_unlocks) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  int query_calls = 0;
+  auto query_rule = register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                                        &query_calls);
+  CASE_EXPECT_TRUE(!!query_rule);
+  participator_event_recorder recorder;
+  recorder.check_writable_values = {0, 1};
+  recorder.check_writable_script = {0, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  storage_ptr_type storage;
+  auto task = test.run_task(
+      "unwritable_prepare", std::chrono::seconds{4}, [handle, &storage](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("unwritable-budget", 2, std::chrono::milliseconds{60000}, {"res-a", "res-b"});
+        *request.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval() =
+            protobuf_from_chrono_duration(std::chrono::seconds{60});
+        SSParticipatorTransactionPrepareRsp response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, storage)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  if (!storage) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto ctx = atfw::testing::make_context();
+  CASE_EXPECT_EQ(0, handle->tick(ctx, protobuf_to_system_clock(storage->resolve_timepoint())));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  CASE_EXPECT_EQ(1, storage->resolve_times());
+  CASE_EXPECT_EQ(storage.get(), handle->get_locker("res-a").get());
+  CASE_EXPECT_EQ(storage.get(), handle->get_locker("res-b").get());
+  handle_type::snapshot_type snapshot;
+  handle->dump(snapshot);
+  handle->load(snapshot);
+  auto restored = handle->get_locker("res-a");
+  CASE_EXPECT_TRUE(!!restored);
+  if (!restored) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(1, restored->resolve_times());
+  CASE_EXPECT_EQ(0, handle->tick(ctx, protobuf_to_system_clock(restored->resolve_timepoint())));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 2; }));
+  CASE_EXPECT_EQ(2, restored->resolve_times());
+  CASE_EXPECT_EQ(0, query_calls);
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+  CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+  CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-a"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-b"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, writable_check_task_timeout_releases_lock) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  int check_calls = 0;
+  int check_result = 0;
+  auto vtable = atfw::component::memory::stl::make_strong_rc<handle_type::vtable_type>();
+  vtable->check_writable = [&check_calls, &check_result](rpc::context& ctx, handle_type&,
+                                                         bool& writable) -> rpc::result_code_type {
+    ++check_calls;
+    writable = false;
+    check_result = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::seconds{1}));
+    RPC_RETURN_CODE(check_result);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type storage;
+  auto task = test.run_task(
+      "writable_timeout_prepare", std::chrono::seconds{4},
+      [handle, &storage](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("writable-timeout", 1, std::chrono::milliseconds{60000}, {"res-timeout"});
+        SSParticipatorTransactionPrepareRsp response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, storage)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  if (!storage) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto timeout_hook = task_manager::mock_create_task(
+      [](gsl::string_view task_name, std::chrono::system_clock::duration& timeout) -> int {
+        if (task_name.find("task_action_participator_resolve_transaction") != gsl::string_view::npos) {
+          timeout = std::chrono::milliseconds{20};
+        }
+        return 0;
+      });
+  CASE_EXPECT_TRUE(static_cast<bool>(timeout_hook));
+  auto ctx = atfw::testing::make_context();
+  CASE_EXPECT_EQ(0, handle->tick(ctx, protobuf_to_system_clock(storage->resolve_timepoint())));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [handle]() { return handle->get_running_transactions().empty(); }));
+  CASE_EXPECT_EQ(1, check_calls);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, check_result);
+  CASE_EXPECT_EQ(1, storage->resolve_times());
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-timeout"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  timeout_hook.reset();
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, unwritable_ack_exhausts_zero_budget_without_rpc) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  int ack_calls = 0;
+  auto ack_rule = register_participator_ack_mock(test, "commit", &ack_calls);
+  CASE_EXPECT_TRUE(!!ack_rule);
+  participator_event_recorder recorder;
+  recorder.check_writable_result = false;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task =
+      test.run_task("unwritable_ack", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("unwritable-ack", 0, std::chrono::milliseconds{60000}, {"res-ack"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type storage;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, storage)));
+        SSParticipatorTransactionCommitReq commit_request;
+        SSParticipatorTransactionCommitRsp commit_response;
+        commit_request.set_transaction_uuid("unwritable-ack");
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return handle->get_finished_transactions().empty(); }));
+  CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_finish_running"));
+  CASE_EXPECT_EQ(0, ack_calls);
+  CASE_EXPECT_EQ(1, recorder.check_writable_calls);
+  CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-ack"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_unwritable_check_preserves_reloaded_transaction) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  handle_type::snapshot_type snapshot;
+  auto vtable = recorder.make_vtable();
+  vtable->check_writable = [&snapshot](rpc::context&, handle_type& owner, bool& writable) -> rpc::result_code_type {
+    owner.load(snapshot);
+    writable = false;
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type storage;
+  auto task = test.run_task(
+      "stale_unwritable_prepare", std::chrono::seconds{4},
+      [handle, &storage](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("stale-unwritable", 1, std::chrono::milliseconds{60000}, {"res-stale"});
+        SSParticipatorTransactionPrepareRsp response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, storage)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  if (!storage) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  handle->dump(snapshot);
+  auto due = protobuf_to_system_clock(storage->resolve_timepoint());
+  auto ctx = atfw::testing::make_context();
+  CASE_EXPECT_EQ(0, handle->tick(ctx, due));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  auto restored = handle->get_locker("res-stale");
+  CASE_EXPECT_TRUE(!!restored);
+  if (restored) {
+    CASE_EXPECT_NE(storage.get(), restored.get());
+    CASE_EXPECT_EQ(0, restored->resolve_times());
+    CASE_EXPECT_EQ(due, protobuf_to_system_clock(restored->resolve_timepoint()));
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, unwritable_timeout_unlocks_inflight_commit) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  bool entered = false;
+  bool release = false;
+  participator_event_recorder recorder;
+  recorder.check_writable_result = false;
+  auto vtable = recorder.make_vtable();
+  vtable->do_event = [&entered, &release](rpc::context& ctx, handle_type&,
+                                          const handle_type::storage_type&) -> rpc::result_code_type {
+    entered = true;
+    while (!release) {
+      auto res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
+      if (res < 0) {
+        RPC_RETURN_CODE(res);
+      }
+    }
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type storage;
+  auto prepare_task = test.run_task(
+      "inflight_unwritable_prepare", std::chrono::seconds{4},
+      [handle, &storage](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("inflight-unwritable", 1, std::chrono::milliseconds{60000}, {"res-inflight"});
+        SSParticipatorTransactionPrepareRsp response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, storage)));
+      });
+  auto result = test.wait(prepare_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  if (!storage) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto commit_task = test.run_task("inflight_unwritable_commit", std::chrono::seconds{4},
+                                   [handle](rpc::context& ctx) -> rpc::result_code_type {
+                                     SSParticipatorTransactionCommitReq request;
+                                     SSParticipatorTransactionCommitRsp response;
+                                     request.set_transaction_uuid("inflight-unwritable");
+                                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, request, response)));
+                                   });
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&entered]() { return entered; }));
+  auto ctx = atfw::testing::make_context();
+  CASE_EXPECT_EQ(0, handle->tick(ctx, protobuf_to_system_clock(storage->resolve_timepoint())));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-inflight"));
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                 storage->metadata().status());
+
+  storage_ptr_type replacement;
+  auto replacement_task = test.run_task(
+      "inflight_unwritable_replacement", std::chrono::seconds{4},
+      [handle, &replacement](rpc::context& context) -> rpc::result_code_type {
+        auto request = make_prepare_request("replacement", 1, std::chrono::milliseconds{60000}, {"res-inflight"});
+        SSParticipatorTransactionPrepareRsp response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(context, std::move(request), response, replacement)));
+      });
+  result = test.wait(replacement_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(!!replacement);
+  release = true;
+  result = test.wait(commit_task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(replacement.get(), handle->get_locker("res-inflight").get());
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+  CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+  CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+  CASE_EXPECT_EQ(0, recorder.count("on_commited"));
   CASE_EXPECT_EQ(0, test.stop());
 }
 
@@ -1374,6 +3098,13 @@ CASE_TEST(component_distributed_transaction_participator, resolve_query_rejected
 
   participator_event_recorder recorder;
   auto vtable = recorder.make_vtable();
+  vtable->on_finish_running = [&recorder](rpc::context&, handle_type&,
+                                          const handle_type::storage_type& storage) -> rpc::result_code_type {
+    recorder.events.emplace_back("on_finish_running");
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED,
+                   storage.metadata().status());
+    RPC_RETURN_CODE(0);
+  };
   auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
 
   auto task = test.run_task(
@@ -1738,8 +3469,8 @@ CASE_TEST(component_distributed_transaction_participator, tick_launch_failure_re
   // Two running transactions with due resolve timers (expire after 20ms, retry interval 10ms).
   auto task =
       test.run_task("seam_prepare", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
-        auto request_a = make_prepare_request("part-uuid-seam-a", 3, std::chrono::milliseconds{20});
-        auto request_b = make_prepare_request("part-uuid-seam-b", 3, std::chrono::milliseconds{20});
+        auto request_a = make_prepare_request("part-uuid-seam-a", 3, std::chrono::milliseconds{20}, {"res-seam-a"});
+        auto request_b = make_prepare_request("part-uuid-seam-b", 3, std::chrono::milliseconds{20}, {"res-seam-b"});
         SSParticipatorTransactionPrepareRsp response;
         storage_ptr_type output;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_a), response, output)));
@@ -1772,13 +3503,17 @@ CASE_TEST(component_distributed_transaction_participator, tick_launch_failure_re
     CASE_EXPECT_EQ(0, test.stop());
     return;
   }
-  auto first_due = protobuf_to_system_clock(seam_a_iter->second.storage->resolve_timepoint());
+  auto batch_due = std::max(protobuf_to_system_clock(seam_a_iter->second.storage->resolve_timepoint()),
+                            protobuf_to_system_clock(seam_b_iter->second.storage->resolve_timepoint()));
 
   // First tick: the collected timers hand over ownership to the task launch, which fails; tick
   // reports the injected error and everything collected must be re-armed with backoff.
-  int tick_result = handle->tick(tick_context, first_due);
+  int tick_result = handle->tick(tick_context, batch_due);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC, tick_result);
   CASE_EXPECT_EQ(2, handle->get_running_transactions().size());
+  CASE_EXPECT_TRUE(!!handle->get_locker("res-seam-a"));
+  CASE_EXPECT_TRUE(!!handle->get_locker("res-seam-b"));
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
   CASE_EXPECT_EQ(0, query_calls);  // infrastructure failure never starts the resolve flow
   CASE_EXPECT_EQ(0, recorder.count("on_resolve_task_finished"));
   CASE_EXPECT_EQ(0, recorder.count("do_event"));
@@ -1809,6 +3544,8 @@ CASE_TEST(component_distributed_transaction_participator, tick_launch_failure_re
   }));
   CASE_EXPECT_GE(query_calls, 2);
   CASE_EXPECT_EQ(2, recorder.count("do_event"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-seam-a"));
+  CASE_EXPECT_FALSE(!!handle->get_locker("res-seam-b"));
   atframework::distributed_system::transaction_participator_snapshot snapshot;
   handle->dump(snapshot);
   CASE_EXPECT_EQ(0, snapshot.running_transaction_size() + snapshot.finished_transaction_size());
@@ -2131,6 +3868,680 @@ CASE_TEST(component_distributed_transaction_participator, custom_timer_cancelled
 }
 
 // ============ §4.3 补充：重复 prepare 幂等，不覆盖 storage/lock/timer，不重复触发生命周期事件 ============
+CASE_TEST(component_distributed_transaction_participator, relock_preserves_snapshot_and_releases_all_resources) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task =
+      test.run_task("relock_snapshot", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("relock-snapshot", 3, std::chrono::milliseconds{60000}, {"res-a"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        if (!CASE_EXPECT_TRUE(!!output)) {
+          RPC_RETURN_CODE(-1);
+        }
+        google::protobuf::RepeatedPtrField<std::string> resources;
+        *resources.Add() = "res-a";
+        *resources.Add() = "res-b";
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->lock(output, resources)));
+        CASE_EXPECT_EQ(2, output->lock_resource_size());
+        handle_type::snapshot_type snapshot;
+        handle->dump(snapshot);
+        handle->load(snapshot);
+        CASE_EXPECT_TRUE(!!handle->get_locker("res-a"));
+        CASE_EXPECT_TRUE(!!handle->get_locker("res-b"));
+        SSParticipatorTransactionRejectReq reject_request;
+        reject_request.set_transaction_uuid("relock-snapshot");
+        SSParticipatorTransactionRejectRsp reject_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->reject(ctx, reject_request, reject_response)));
+        CASE_EXPECT_FALSE(!!handle->get_locker("res-a"));
+        CASE_EXPECT_FALSE(!!handle->get_locker("res-b"));
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, commit_without_do_event_waits_for_ack) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  vtable->do_event = nullptr;
+  vtable->on_finish_running = [](rpc::context&, handle_type& owner,
+                                 const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                   storage.metadata().status());
+    CASE_EXPECT_EQ(0, storage.lock_resource_size());
+    CASE_EXPECT_FALSE(!!owner.get_locker("res-no-do"));
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  auto task =
+      test.run_task("commit_no_do", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("commit-no-do", 3, std::chrono::milliseconds{60000}, {"res-no-do"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("commit-no-do");
+        SSParticipatorTransactionCommitRsp commit_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+        handle_type::snapshot_type snapshot;
+        handle->dump(snapshot);
+        CASE_EXPECT_EQ(1, snapshot.finished_transaction_size());
+        if (snapshot.finished_transaction_size() == 1) {
+          CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                         snapshot.finished_transaction(0).metadata().status());
+        }
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(1, recorder.count("on_commited"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, running_committed_snapshot_preserves_state) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task = test.run_task(
+      "commit_from_commiting", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("commit-from-commiting", 3, std::chrono::milliseconds{60000}, {"res-commiting"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        handle_type::snapshot_type snapshot;
+        handle->dump(snapshot);
+        CASE_EXPECT_EQ(1, snapshot.running_transaction_size());
+        if (snapshot.running_transaction_size() != 1) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+        }
+        // A confirmed coordinator decision may precede completion of the local action.
+        snapshot.mutable_running_transaction(0)->mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        handle->load(snapshot);
+        CASE_EXPECT_TRUE(!!handle->get_locker("res-commiting"));
+        if (handle->get_locker("res-commiting")) {
+          CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                         handle->get_locker("res-commiting")->metadata().status());
+        }
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("commit-from-commiting");
+        SSParticipatorTransactionCommitRsp commit_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+        CASE_EXPECT_FALSE(!!handle->get_locker("res-commiting"));
+        handle->dump(snapshot);
+        CASE_EXPECT_EQ(1, snapshot.finished_transaction_size());
+        if (snapshot.finished_transaction_size() == 1) {
+          CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                         snapshot.finished_transaction(0).metadata().status());
+        }
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_commited"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, reject_waits_for_ack_after_callbacks) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  vtable->on_finish_running = [](rpc::context&, handle_type& owner,
+                                 const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                   storage.metadata().status());
+    CASE_EXPECT_EQ(0, storage.lock_resource_size());
+    CASE_EXPECT_FALSE(!!owner.get_locker("res-local-reject"));
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  auto task = test.run_task(
+      "local_reject_terminal", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("local-reject-terminal", 3, std::chrono::milliseconds{60000}, {"res-local-reject"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        SSParticipatorTransactionRejectReq reject_request;
+        reject_request.set_transaction_uuid("local-reject-terminal");
+        SSParticipatorTransactionRejectRsp reject_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->reject(ctx, reject_request, reject_response)));
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->reject(ctx, reject_request, reject_response)));
+        CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+        handle_type::snapshot_type snapshot;
+        handle->dump(snapshot);
+        CASE_EXPECT_EQ(1, snapshot.finished_transaction_size());
+        if (snapshot.finished_transaction_size() == 1) {
+          CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTING,
+                         snapshot.finished_transaction(0).metadata().status());
+        }
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(1, recorder.count("on_rejected"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, commit_retry_budget_survives_snapshot_reload) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  recorder.do_event_script = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT};
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task = test.run_task(
+      "reload_commit_budget", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("reload-commit-budget", 2, std::chrono::milliseconds{60000}, {"res-budget"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("reload-commit-budget");
+        SSParticipatorTransactionCommitRsp commit_response;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+                       RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        handle_type::snapshot_type snapshot;
+        handle->dump(snapshot);
+        if (!CASE_EXPECT_EQ(1, snapshot.running_transaction_size())) {
+          RPC_RETURN_CODE(-1);
+        }
+        CASE_EXPECT_EQ(1, snapshot.running_transaction(0).resolve_times());
+        handle->load(snapshot);
+        CASE_EXPECT_LT(atfw::util::time::time_utility::now(),
+                       protobuf_to_system_clock(output->metadata().expire_timepoint()));
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+        CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+        CASE_EXPECT_FALSE(!!handle->get_locker("res-budget"));
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(2, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_commited"));
+  CASE_EXPECT_EQ(0, recorder.count("on_rejected"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, commit_failure_keeps_direction_and_lock) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  recorder.do_event_script = {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, 0};
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task = test.run_task(
+      "commit_direction_lock", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("commit-direction-lock", 2, std::chrono::milliseconds{60000}, {"res-commit"});
+        auto contender = atfw::component::memory::stl::make_strong_rc<handle_type::storage_type>(request.storage());
+        contender->mutable_metadata()->set_transaction_uuid("older-contender");
+        contender->mutable_metadata()->mutable_prepare_timepoint()->set_seconds(
+            request.storage().metadata().prepare_timepoint().seconds() - 1);
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("commit-direction-lock");
+        SSParticipatorTransactionCommitRsp commit_response;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT,
+                       RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        std::list<handle_type::storage_const_ptr_type> holders;
+        std::vector<std::string> resources = {"res-commit"};
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                       handle->check_lock(contender->metadata(), resources, holders));
+        CASE_EXPECT_EQ(1, holders.size());
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+                       RPC_AWAIT_CODE_RESULT(handle->lock(contender, contender->lock_resource())));
+        CASE_EXPECT_EQ(output.get(), handle->get_locker("res-commit").get());
+        SSParticipatorTransactionRejectReq reject_request;
+        reject_request.set_transaction_uuid("commit-direction-lock");
+        SSParticipatorTransactionRejectRsp reject_response;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_FINISHED,
+                       RPC_AWAIT_CODE_RESULT(handle->reject(ctx, reject_request, reject_response)));
+        CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_FALSE(!!handle->get_locker("res-commit"));
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(2, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_commited"));
+  CASE_EXPECT_EQ(0, recorder.count("on_rejected"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, finish_callback_reentry_does_not_repeat_business_action) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  bool callback_reentered = false;
+  vtable->on_finish_running = [&callback_reentered](rpc::context& ctx, handle_type& self,
+                                                    const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                   storage.metadata().status());
+    CASE_EXPECT_EQ(0, storage.lock_resource_size());
+    CASE_EXPECT_FALSE(!!self.get_locker("res-finish-reentry"));
+    if (callback_reentered) {
+      RPC_RETURN_CODE(0);
+    }
+    callback_reentered = true;
+    auto request = make_prepare_request(storage.metadata().transaction_uuid(), 3, std::chrono::milliseconds{60000});
+    SSParticipatorTransactionPrepareRsp response;
+    storage_ptr_type output;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(self.prepare(ctx, std::move(request), response, output)));
+    CASE_EXPECT_EQ(&storage, output.get());
+    SSParticipatorTransactionCommitReq commit_request;
+    commit_request.set_transaction_uuid(storage.metadata().transaction_uuid());
+    SSParticipatorTransactionCommitRsp commit_response;
+    CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(self.commit(ctx, commit_request, commit_response)));
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  auto task = test.run_task(
+      "finish_callback_reentry", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("finish-reentry", 3, std::chrono::milliseconds{60000}, {"res-finish-reentry"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("finish-reentry");
+        SSParticipatorTransactionCommitRsp commit_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_TRUE(handle->get_running_transactions().empty());
+        CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_TRUE(callback_reentered);
+  CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_start_running"));
+  CASE_EXPECT_EQ(1, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_query_does_not_remove_reloaded_transaction) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task = test.run_task(
+      "prepare_before_reload", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("stale-query-reload", 3, std::chrono::milliseconds{60000}, {"res-reload"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  handle_type::snapshot_type snapshot;
+  handle->dump(snapshot);
+  if (!CASE_EXPECT_EQ(1, snapshot.running_transaction_size())) {
+    test.stop();
+    return;
+  }
+  auto query_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(),
+      atfw::distributed_system::SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [handle, snapshot](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        // Replace the snapshot while the real resolve RPC is awaiting its response.
+        handle->load(snapshot);
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+      });
+  CASE_EXPECT_TRUE(!!query_rule);
+  auto old_storage = handle->get_locker("res-reload");
+  handle->fire_resolve_custom_timer_for_unit_test(
+      protobuf_to_system_clock(snapshot.running_transaction(0).resolve_timepoint()));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_query()));
+  CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+  CASE_EXPECT_TRUE(!!handle->get_locker("res-reload"));
+  CASE_EXPECT_NE(old_storage.get(), handle->get_locker("res-reload").get());
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_query_does_not_remove_wounded_transaction) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  participator_event_recorder recorder;
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+  auto task = test.run_task(
+      "prepare_before_wound", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("query-victim", 3, std::chrono::minutes{1}, {"query-resource"});
+        request.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval()->set_seconds(60);
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  auto holder = handle->get_locker("query-resource");
+  if (!CASE_EXPECT_TRUE(!!holder)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto query_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(),
+      atfw::distributed_system::SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [handle, holder](const atfw::testing::ss_request_view& request,
+                       google::protobuf::Message&) -> rpc::result_code_type {
+        if (!CASE_EXPECT_TRUE(request.context != nullptr)) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+        }
+        auto contender = make_prepare_request("query-contender", 3, std::chrono::minutes{2}, {"query-resource"});
+        *contender.mutable_storage()->mutable_metadata()->mutable_prepare_timepoint() = protobuf_from_system_clock(
+            protobuf_to_system_clock(holder->metadata().prepare_timepoint()) - std::chrono::seconds{1});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(
+            PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_RESOURCE_PREEMPTED,
+            RPC_AWAIT_CODE_RESULT(handle->prepare(*request.context, std::move(contender), response, output)));
+        CASE_EXPECT_TRUE(response.reason().allow_retry());
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+      });
+  CASE_EXPECT_TRUE(!!query_rule);
+  handle->fire_resolve_custom_timer_for_unit_test(protobuf_to_system_clock(holder->resolve_timepoint()));
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+  CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_query()));
+  CASE_EXPECT_EQ(holder.get(), handle->get_locker("query-resource").get());
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                 holder->metadata().status());
+  CASE_EXPECT_EQ(1, holder->resolve_times());
+  handle_type::snapshot_type snapshot;
+  handle->dump(snapshot);
+  CASE_EXPECT_EQ(1, snapshot.running_transaction_size());
+  CASE_EXPECT_EQ(1, snapshot.wounded_transaction_uuid_size());
+  CASE_EXPECT_EQ(0, snapshot.finished_transaction_size());
+  CASE_EXPECT_TRUE(handle->has_resolve_custom_timer_for_unit_test());
+  CASE_EXPECT_EQ(0, recorder.count("on_finish_running"));
+  handle->load(snapshot);
+  holder = handle->get_locker("query-resource");
+  if (!CASE_EXPECT_TRUE(!!holder)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  CASE_EXPECT_EQ(1, holder->resolve_times());
+  auto reject_rule = test.ss().mock_error(rpc::transaction::packer::get_full_name_of_reject(),
+                                          PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+  CASE_EXPECT_TRUE(!!reject_rule);
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return handle->get_running_transactions().empty(); }));
+  CASE_EXPECT_EQ(2, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject()));
+  CASE_EXPECT_EQ(3, holder->resolve_times());
+  CASE_EXPECT_FALSE(!!handle->get_locker("query-resource"));
+  CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+  CASE_EXPECT_EQ(1, recorder.count("on_finish_running"));
+  CASE_EXPECT_EQ(0, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(0, test.ss().calls(rpc::transaction::packer::get_full_name_of_reject_participator()));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_commit_does_not_consume_reloaded_transaction) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  vtable->do_event = [](rpc::context&, handle_type& self, const handle_type::storage_type&) -> rpc::result_code_type {
+    handle_type::snapshot_type snapshot;
+    self.dump(snapshot);
+    self.load(snapshot);
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  auto task = test.run_task(
+      "stale_commit_reload", std::chrono::seconds{4}, [handle](rpc::context& ctx) -> rpc::result_code_type {
+        auto request =
+            make_prepare_request("stale-commit-reload", 3, std::chrono::milliseconds{60000}, {"res-local-reload"});
+        SSParticipatorTransactionPrepareRsp response;
+        storage_ptr_type output;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("stale-commit-reload");
+        SSParticipatorTransactionCommitRsp commit_response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+        CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+        CASE_EXPECT_TRUE(!!handle->get_locker("res-local-reload"));
+        CASE_EXPECT_NE(output.get(), handle->get_locker("res-local-reload").get());
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, recorder.count("on_finished"));
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_on_finished_does_not_finalize_reloaded_transaction) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  int finish_calls = 0;
+  handle_type::snapshot_type snapshot;
+  vtable->on_finished = [&finish_calls, &snapshot](rpc::context&, handle_type& owner,
+                                                   const handle_type::storage_type& storage) -> rpc::result_code_type {
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                   storage.metadata().status());
+    if (++finish_calls == 1) {
+      owner.dump(snapshot);
+      if (!CASE_EXPECT_EQ(1, snapshot.finished_transaction_size())) {
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+      }
+      protobuf_copy_message(*snapshot.mutable_finished_transaction(0)->mutable_resolve_timepoint(),
+                            storage.metadata().expire_timepoint());
+      owner.load(snapshot);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT);
+    }
+    RPC_RETURN_CODE(0);
+  };
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+  storage_ptr_type old_output;
+  auto task = test.run_task(
+      "stale_finish", std::chrono::seconds{4}, [handle, &old_output](rpc::context& ctx) -> rpc::result_code_type {
+        auto request = make_prepare_request("stale-finish", 2, std::chrono::milliseconds{60000});
+        SSParticipatorTransactionPrepareRsp response;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, old_output)));
+        SSParticipatorTransactionCommitReq commit_request;
+        commit_request.set_transaction_uuid("stale-finish");
+        SSParticipatorTransactionCommitRsp commit_response;
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+      });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, result.result_code);
+  CASE_EXPECT_EQ(0, recorder.count("on_commited"));
+  auto current = handle->get_finished_transactions().find("stale-finish");
+  if (!CASE_EXPECT_TRUE(current != handle->get_finished_transactions().end())) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto new_output = current->second;
+  CASE_EXPECT_NE(old_output.get(), new_output.get());
+  CASE_EXPECT_EQ(0, new_output->resolve_times());
+  CASE_EXPECT_EQ(protobuf_to_system_clock(snapshot.finished_transaction(0).resolve_timepoint()),
+                 handle->get_resolve_custom_timer_timepoint_for_unit_test());
+  int ack_calls = 0;
+  auto ack_rule = register_participator_ack_mock(test, "commit", &ack_calls);
+  CASE_EXPECT_TRUE(!!ack_rule);
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [handle]() { return handle->get_finished_transactions().empty(); }));
+  CASE_EXPECT_EQ(2, finish_calls);
+  CASE_EXPECT_EQ(1, recorder.count("do_event"));
+  CASE_EXPECT_EQ(1, recorder.count("on_commited"));
+  CASE_EXPECT_EQ(1, ack_calls);
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING,
+                 old_output->metadata().status());
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED,
+                 new_output->metadata().status());
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_participator, stale_ack_does_not_replace_reloaded_query_timer) {
+  for (int32_t acknowledge_result :
+       {PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, PROJECT_NAMESPACE_ID::err::EN_SUCCESS}) {
+    atfw::testing::runtime test;
+    atfw::testing::runtime_options options;
+    options.features = {atfw::testing::feature::ss};
+    CASE_EXPECT_EQ(0, test.start(options));
+    if (!test.is_running()) {
+      return;
+    }
+    CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+    participator_event_recorder recorder;
+    auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(recorder.make_vtable(), "p");
+    handle_type::snapshot_type snapshot;
+    storage_ptr_type output;
+    auto task = test.run_task(
+        "prepare_stale_ack", std::chrono::seconds{4},
+        [handle, &snapshot, &output](rpc::context& ctx) -> rpc::result_code_type {
+          auto request =
+              make_prepare_request("stale-ack-reload", 3, std::chrono::milliseconds{60000}, {"res-ack-reload"});
+          SSParticipatorTransactionPrepareRsp response;
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request), response, output)));
+          handle->dump(snapshot);
+          SSParticipatorTransactionCommitReq commit_request;
+          commit_request.set_transaction_uuid("stale-ack-reload");
+          SSParticipatorTransactionCommitRsp commit_response;
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(handle->commit(ctx, commit_request, commit_response)));
+        });
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+    if (!CASE_EXPECT_EQ(1, snapshot.running_transaction_size())) {
+      test.stop();
+      return;
+    }
+    auto ack_rule = test.ss().mock(
+        rpc::transaction::packer::get_full_name_of_commit_participator(),
+        atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq::descriptor()->full_name(),
+        atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp::descriptor()->full_name(),
+        [handle, snapshot, acknowledge_result](const atfw::testing::ss_request_view& request,
+                                               google::protobuf::Message& response) -> rpc::result_code_type {
+          const auto& typed_request =
+              static_cast<const atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq&>(request.body);
+          auto& typed_response =
+              static_cast<atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp&>(response);
+          protobuf_copy_message(*typed_response.mutable_metadata(), typed_request.metadata());
+          protobuf_copy_message(*typed_response.mutable_metadata()->mutable_finish_timepoint(),
+                                typed_request.metadata().prepare_timepoint());
+          handle->load(snapshot);
+          RPC_RETURN_CODE(acknowledge_result);
+        });
+    CASE_EXPECT_TRUE(!!ack_rule);
+    handle->fire_resolve_custom_timer_for_unit_test(handle->get_resolve_custom_timer_timepoint_for_unit_test());
+    CASE_EXPECT_TRUE(
+        dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") == 1; }));
+    CASE_EXPECT_EQ(1, test.ss().calls(rpc::transaction::packer::get_full_name_of_commit_participator()));
+    CASE_EXPECT_TRUE(handle->get_finished_transactions().empty());
+    CASE_EXPECT_EQ(1, handle->get_running_transactions().size());
+    CASE_EXPECT_TRUE(!!output);
+    if (output) {
+      CASE_EXPECT_EQ(0, output->metadata().finish_timepoint().seconds());
+      CASE_EXPECT_EQ(0, output->metadata().finish_timepoint().nanos());
+    }
+    auto locker = handle->get_locker("res-ack-reload");
+    CASE_EXPECT_TRUE(!!locker);
+    if (locker) {
+      CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                     locker->metadata().status());
+    }
+    CASE_EXPECT_EQ(protobuf_to_system_clock(snapshot.running_transaction(0).resolve_timepoint()),
+                   handle->get_resolve_custom_timer_timepoint_for_unit_test());
+    CASE_EXPECT_EQ(0, test.stop());
+  }
+}
+
 CASE_TEST(component_distributed_transaction_participator, repeated_prepare_is_idempotent) {
   atfw::testing::runtime test;
   atfw::testing::runtime_options options;
@@ -2203,7 +4614,7 @@ CASE_TEST(component_distributed_transaction_participator, repeated_prepare_is_id
         storage_ptr_type output_3;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_3), response, output_3)));
         CASE_EXPECT_TRUE(!!output_3);
-        // 同一 finished 对象，状态保持终局，不允许重新进入 running（防止同一 UUID 再次执行 do_event）
+        // 同一 finished 对象保持待 ACK 状态，不允许重新进入 running 或再次执行 do_event。
         auto finished_iter = handle->get_finished_transactions().find("part-uuid-repeat");
         CASE_EXPECT_TRUE(finished_iter != handle->get_finished_transactions().end());
         if (finished_iter == handle->get_finished_transactions().end()) {
@@ -2273,11 +4684,15 @@ CASE_TEST(component_distributed_transaction_participator, writable_loss_mid_batc
   recorder.check_writable_result = false;
   recorder.check_writable_values = {1, 1, 0};
 
-  // 两个 20ms 到期的事务（到期时间相同，pending 顺序按 UUID tie-break：A 先于 B）
+  // 显式推进同一批次的两个到期事务，长重试间隔避免断言期间进入下一轮。
   auto task = test.run_task(
       "writable_batch_seed", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
-        auto request_a = make_prepare_request("part-uuid-wb-a", 2, std::chrono::milliseconds{20});
-        auto request_b = make_prepare_request("part-uuid-wb-b", 2, std::chrono::milliseconds{20});
+        auto request_a = make_prepare_request("part-uuid-wb-a", 2, std::chrono::milliseconds{60000});
+        auto request_b = make_prepare_request("part-uuid-wb-b", 2, std::chrono::milliseconds{60000});
+        *request_a.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval() =
+            protobuf_from_chrono_duration(std::chrono::seconds{60});
+        *request_b.mutable_storage()->mutable_configure()->mutable_resolve_retry_interval() =
+            protobuf_from_chrono_duration(std::chrono::seconds{60});
         SSParticipatorTransactionPrepareRsp response;
         storage_ptr_type output;
         CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(handle->prepare(ctx, std::move(request_a), response, output)));
@@ -2288,27 +4703,38 @@ CASE_TEST(component_distributed_transaction_participator, writable_loss_mid_batc
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  // 纯自驱动：A 完成 query → do_event；B 在批次中途被跳过并随重试退避重新排期；
-  // 等待至少一个后续延后周期结束，确认状态稳定（不再消费任何条目）
+  auto batch_due = std::chrono::system_clock::time_point::min();
+  for (const auto& entry : handle->get_running_transactions()) {
+    batch_due = std::max(batch_due, protobuf_to_system_clock(entry.second.storage->resolve_timepoint()));
+  }
+  auto tick_context = atfw::testing::make_context();
+  CASE_EXPECT_EQ(0, handle->tick(tick_context, batch_due));
+  // A 完成本地动作，B 的检查失败；随后 A 的立即到期 acknowledge 也遇到不可写。
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") >= 2; }));
   CASE_EXPECT_EQ(1, queried_uuids.size());
   CASE_EXPECT_EQ(std::string("part-uuid-wb-a"), queried_uuids[0]);
   CASE_EXPECT_EQ(0, handle->get_running_transactions().count("part-uuid-wb-a"));
   CASE_EXPECT_EQ(1, handle->get_running_transactions().count("part-uuid-wb-b"));
-  // 延后不消耗 B 的 resolve 预算
+  // 只给未处理的 B 增加一次重试计数，已经完成的 A 不再增加 query 阶段的重试计数。
   auto wb_b_iter = handle->get_running_transactions().find("part-uuid-wb-b");
   CASE_EXPECT_TRUE(wb_b_iter != handle->get_running_transactions().end());
   if (wb_b_iter == handle->get_running_transactions().end()) {
     test.stop();
     return;
   }
-  CASE_EXPECT_EQ(0, wb_b_iter->second.storage->resolve_times());
+  CASE_EXPECT_EQ(1, wb_b_iter->second.storage->resolve_times());
   // 批次闸门保持不可写时，A 的 acknowledge 也一并延后
   CASE_EXPECT_EQ(1, handle->get_finished_transactions().count("part-uuid-wb-a"));
   CASE_EXPECT_EQ(1, recorder.count("do_event"));
 
-  // 恢复可写性：定时器自驱动消费全部剩余条目（A 的 acknowledge + B 的 resolve）
+  // 恢复可写性并推进剩余条目的下一次恢复时间。
   recorder.check_writable_result = true;
+  auto retry_due = protobuf_to_system_clock(wb_b_iter->second.storage->resolve_timepoint());
+  for (const auto& entry : handle->get_finished_transactions()) {
+    CASE_EXPECT_EQ(1, entry.second->resolve_times());
+    retry_due = std::max(retry_due, protobuf_to_system_clock(entry.second->resolve_timepoint()));
+  }
+  CASE_EXPECT_EQ(0, handle->tick(tick_context, retry_due));
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&handle]() {
     return handle->get_running_transactions().empty() && handle->get_finished_transactions().empty();
   }));
@@ -2316,6 +4742,153 @@ CASE_TEST(component_distributed_transaction_participator, writable_loss_mid_batc
   CASE_EXPECT_EQ(std::string("part-uuid-wb-b"), queried_uuids[1]);
   CASE_EXPECT_TRUE(commit_ack_calls >= 2);
   CASE_EXPECT_EQ(2, recorder.count("do_event"));
+  CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ force_commit undo：内部 UUID 缺失视为非法，不触发 undo_event ============
+CASE_TEST(component_distributed_transaction_participator, force_commit_undo_rejects_missing_inner_uuid) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  auto task = test.run_task(
+      "undo_missing_inner_uuid", std::chrono::seconds{4}, [&handle](rpc::context& ctx) -> rpc::result_code_type {
+    // 外部 UUID 存在、内部 metadata UUID 为空：不能绕过一致性校验进入 undo_event
+    SSParticipatorTransactionRejectReq undo_request;
+    undo_request.set_transaction_uuid("part-uuid-undo-empty-inner");
+    auto* undo_storage = undo_request.mutable_storage();
+    undo_storage->mutable_configure()->set_force_commit(true);
+    SSParticipatorTransactionRejectRsp undo_response;
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM,
+                   RPC_AWAIT_CODE_RESULT(handle->reject(ctx, undo_request, undo_response)));
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, recorder.undo_calls);
+  CASE_EXPECT_EQ(0, recorder.count("undo_event"));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ resolve 任务退出：ACK 循环退出后不再处理 pending 条目，不增加查询重试计数 ============
+CASE_TEST(component_distributed_transaction_participator, exiting_ack_loop_skips_pending_batch) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  participator_event_recorder recorder;
+  auto vtable = recorder.make_vtable();
+  auto handle = atfw::component::memory::stl::make_strong_rc<handle_type>(vtable, "p");
+
+  // 1 个 finished（回调已完成，直接 ACK）+ 1 个 running（到期查询）事务
+  handle_type::snapshot_type snapshot;
+  auto expiry = atfw::util::time::time_utility::now() + std::chrono::seconds{60};
+  {
+    auto finished_request = make_prepare_request("exiting-finished", 2, std::chrono::seconds{60});
+    auto* finished_storage = snapshot.add_finished_transaction();
+    *finished_storage = finished_request.storage();
+    finished_storage->mutable_metadata()->set_status(
+        EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITING);
+    finished_storage->set_finished_callback_completed(true);
+    *finished_storage->mutable_resolve_timepoint() = protobuf_from_system_clock(expiry);
+    auto running_request = make_prepare_request("exiting-running", 2, std::chrono::seconds{60}, {"exiting-res"});
+    auto* running_storage = snapshot.add_running_transaction();
+    *running_storage = running_request.storage();
+    *running_storage->mutable_resolve_timepoint() = protobuf_from_system_clock(expiry);
+  }
+  handle->load(snapshot);
+
+  int query_calls = 0;
+  auto query_rule = register_query_mock(test, EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                                        &query_calls);
+  CASE_EXPECT_TRUE(!!query_rule);
+  // running 事务查询始终 PREPARED，重试次数超过上限后进入拒绝流程：需要 reject ACK 成功才能清理
+  int reject_ack_calls = 0;
+  auto reject_ack_rule = register_participator_ack_mock(test, "reject", &reject_ack_calls);
+  CASE_EXPECT_TRUE(!!reject_ack_rule);
+
+  // ACK RPC 挂起，直到测试放行
+  bool ack_entered = false;
+  bool release_ack = false;
+  auto ack_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_commit_participator(),
+      atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp::descriptor()->full_name(),
+      [&ack_entered, &release_ack](const atfw::testing::ss_request_view& view,
+                                   google::protobuf::Message& response) -> rpc::result_code_type {
+        ack_entered = true;
+        while (!release_ack) {
+          if (nullptr == view.context) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+          }
+          auto res = RPC_AWAIT_CODE_RESULT(rpc::wait(*view.context, std::chrono::milliseconds{1}));
+          if (res < 0) {
+            RPC_RETURN_CODE(res);
+          }
+        }
+        const auto& request =
+            static_cast<const atfw::distributed_system::SSDistributeTransactionCommitParticipatorReq&>(view.body);
+        auto& output = static_cast<atfw::distributed_system::SSDistributeTransactionCommitParticipatorRsp&>(response);
+        *output.mutable_metadata() = request.metadata();
+        output.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!ack_rule);
+
+  // resolve 任务使用注入的短超时：ACK 挂起期间任务被超时杀死
+  task_manager::mock_create_task_clear();
+  auto timeout_hook = task_manager::mock_create_task(
+      [](gsl::string_view demangled_task_type_name, std::chrono::system_clock::duration& timeout) -> int {
+        if (demangled_task_type_name.find("task_action_participator_resolve_transaction") != gsl::string_view::npos) {
+          timeout = std::chrono::milliseconds{30};
+        }
+        return 0;
+      });
+  CASE_EXPECT_TRUE(static_cast<bool>(timeout_hook));
+
+  handle->fire_resolve_custom_timer_for_unit_test(expiry);
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&ack_entered]() { return ack_entered; }));
+
+  // 等待任务退出并完成 rearm：pending 条目保持原状，没有发起查询，也没有增加重试计数
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&recorder]() { return recorder.count("on_resolve_task_finished") >= 1; }));
+  CASE_EXPECT_EQ(0, query_calls);
+  auto current_running = handle->get_running_transactions().find("exiting-running");
+  if (CASE_EXPECT_TRUE(current_running != handle->get_running_transactions().end())) {
+    CASE_EXPECT_EQ(0, current_running->second.storage->resolve_times());
+    CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                   current_running->second.storage->metadata().status());
+  }
+  // ACK 条目同样未完成：保留在 finished 集合等待重试
+  CASE_EXPECT_EQ(1, handle->get_finished_transactions().size());
+
+  // 解除挂起并移除钩子后，恢复流程正常完成
+  release_ack = true;
+  timeout_hook.reset();
+  task_manager::mock_create_task_clear();
+  CASE_EXPECT_TRUE(drive_handle(test, handle, [&handle, &query_calls]() {
+    return query_calls >= 1 && handle->get_running_transactions().empty() &&
+           handle->get_finished_transactions().empty();
+  }));
+  CASE_EXPECT_GE(query_calls, 1);
+  CASE_EXPECT_FALSE(!!handle->get_locker("exiting-res"));
   CASE_EXPECT_FALSE(handle->has_resolve_custom_timer_for_unit_test());
 
   CASE_EXPECT_EQ(0, test.stop());

@@ -131,6 +131,8 @@ class transaction_client_handle {
 
   /**
    * @brief 执行事务
+   * @note 每个 prepare 派发前及最后一次 prepare 返回后检查原截止时间；超时后对已准备的参与者
+   *   按协调者确认的决议通知，force_commit 则补偿，不延长截止时间。
    *
    * @param ctx RPC context
    * @param input 事务存储结构
@@ -148,6 +150,16 @@ class transaction_client_handle {
   DISTRIBUTED_TRANSACTION_SDK_API int32_t set_transaction_data(rpc::context& ctx, storage_ptr_type& input,
                                                                google::protobuf::Message& data);
 
+  /**
+   * @brief 添加事务参与者
+   * @note participator_key 不允许为空字符串，空 key 返回 EN_SYS_PARAM
+   *
+   * @param ctx RPC context
+   * @param input 事务存储结构
+   * @param participator_key 参与者 key，非空且同事务内唯一
+   * @param data 参与者私有数据
+   * @return 0 or error code
+   */
   DISTRIBUTED_TRANSACTION_SDK_API int32_t add_participator(rpc::context& ctx, storage_ptr_type& input,
                                                            const std::string& participator_key,
                                                            google::protobuf::Message& data);

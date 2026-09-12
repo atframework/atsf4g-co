@@ -64,7 +64,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle/create_transaction"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle/create_transaction"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -137,7 +138,8 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle/submit_transaction"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle/submit_transaction"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;
@@ -172,6 +174,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   if (nullptr == output_prepared_participators) {
     output_prepared_participators = &prepared_participators;
   }
+  // 参与者 key 由 add_participator 保证非空，failed_participator 可以用空串作"无失败"哨兵
   std::string failed_participator;
   // force_commit 下仅当 failed_participator 的 prepare 失败投递结果不确定时才补发一次 undo
   bool is_failed_participator_responded = false;
@@ -191,6 +194,10 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
         if (output_prepared_participators->end() !=
             output_prepared_participators->find(participator.second.participator_key())) {
           continue;
+        }
+        if (atfw::util::time::time_utility::now() >= expired_time) {
+          ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+          break;
         }
         transaction_participator_failure_reason failure_reason;
         ret = RPC_AWAIT_CODE_RESULT(
@@ -254,6 +261,12 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
       break;
     }
 
+    // 最后一个 prepare 也可能在截止时间后返回；已成功的参与者仍需进入拒绝/补偿通知。
+    if (atfw::util::time::time_utility::now() >= expired_time) {
+      ret = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      break;
+    }
+
     prepare_complete = true;
     break;
   }
@@ -263,6 +276,7 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   }
   const rpc::result_code_type::value_type prepare_result = ret;
   bool coordinator_decision_confirmed = input->configure().force_commit();
+  rpc::context::message_holder<transaction_metadata> coordinator_metadata(child_ctx);
 
   if (input->configure().force_commit()) {
     input->mutable_metadata()->set_status(prepare_complete
@@ -271,14 +285,23 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type transaction_client_handle:
   } else if (prepare_complete) {
     // 协调者的最终状态写入是幂等的；OLD_VERSION 说明缓存版本落后(故障转移/扩缩容)，有限次重试后可按幂等的最终状态返回
     for (int32_t left_retry_times = kCoordinatorRpcRetryTimes; left_retry_times-- > 0;) {
-      ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(child_ctx, *input->mutable_metadata()));
+      // 未达到副本要求的调用也可能填入部分终态，只接纳成功调用的结果。
+      protobuf_copy_message(*coordinator_metadata, input->metadata());
+      ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(child_ctx, *coordinator_metadata));
+      if (ret >= 0) {
+        protobuf_copy_message(*input->mutable_metadata(), *coordinator_metadata);
+      }
       if (ret != PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
         break;
       }
     }
   } else {
     for (int32_t left_retry_times = kCoordinatorRpcRetryTimes; left_retry_times-- > 0;) {
-      ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_transaction(child_ctx, *input->mutable_metadata()));
+      protobuf_copy_message(*coordinator_metadata, input->metadata());
+      ret = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_transaction(child_ctx, *coordinator_metadata));
+      if (ret >= 0) {
+        protobuf_copy_message(*input->mutable_metadata(), *coordinator_metadata);
+      }
       if (ret != PROJECT_NAMESPACE_ID::err::EN_DB_OLD_VERSION) {
         break;
       }
@@ -431,13 +454,19 @@ DISTRIBUTED_TRANSACTION_SDK_API int32_t transaction_client_handle::add_participa
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
+  // 参与者 key 不允许为空字符串：failed_participator 以空串作为"无失败"哨兵，空 key 会与其冲突
+  if (participator_key.empty()) {
+    return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
+  }
+
   if (input->metadata().status() >= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     return PROJECT_NAMESPACE_ID::err::EN_TRANSACTION_ALREADY_RUN;
   }
 
   rpc::telemetry::trace_attribute_pair_type trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle/add_participator"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "atframework.transaction_client_handle/add_participator"},
+  };
 
   rpc::context child_ctx{ctx};
   rpc::telemetry::tracer child_tracer;

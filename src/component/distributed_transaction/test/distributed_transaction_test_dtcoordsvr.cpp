@@ -24,6 +24,8 @@
 #include <atframework/testing/runtime.h>
 #include <atframework/testing/ss_action.h>
 
+#include <common/file_system.h>
+
 #include <std/explicit_declare.h>
 
 #include <chrono>
@@ -57,16 +59,57 @@ using op_type = rpc::db::hash_table::unit_test_request::op_type;
 
 constexpr uint32_t kTestZoneId = 0;  // non-replication transactions live in zone 0
 
-// Register the same server-instance config loader as dtcoordsvr_main.cpp. lru_max_cache_count has
-// no CONFIGURE annotation so the explicit value (2, drives the tick eviction assertions) sticks;
-// annotated fields (lru_expired_duration 60s, grace 5s, max TTL 30d, default timeout 10s) are
-// re-applied by parse_configures_into from the annotation defaults and are the effective values
+// dtcoordsvr.lru_max_cache_count 的用例级注入。字段带 CONFIGURE 注解（默认 200000）后，
+// loader 里 set 的 C++ 预设值会被注解默认值覆盖，只有 env/yaml 配置源优先于注解默认值
+// （parse_configures_into 的优先级：env > yaml > 注解默认值），因此用环境变量按用例注入。
+class scoped_dtcoordsvr_capacity {
+ public:
+  explicit scoped_dtcoordsvr_capacity(uint32_t capacity) {
+    std::string old = atfw::util::file_system::getenv(kEnvName);
+    if (!old.empty()) {
+      previous_ = old;
+      has_previous_ = true;
+    }
+    set_env(kEnvName, std::to_string(capacity).c_str());
+  }
+
+  ~scoped_dtcoordsvr_capacity() {
+    if (has_previous_) {
+      set_env(kEnvName, previous_.c_str());
+    } else {
+#if defined(_WIN32) || defined(_WIN64)
+      _putenv_s(kEnvName, "");
+#else
+      unsetenv(kEnvName);
+#endif
+    }
+  }
+
+  scoped_dtcoordsvr_capacity(const scoped_dtcoordsvr_capacity&) = delete;
+  scoped_dtcoordsvr_capacity& operator=(const scoped_dtcoordsvr_capacity&) = delete;
+
+ private:
+  static void set_env(const char* name, const char* value) {
+#if defined(_WIN32) || defined(_WIN64)
+    _putenv_s(name, value);
+#else
+    setenv(name, value, 1);
+#endif
+  }
+
+  static constexpr const char* kEnvName = "ATAPP_DTCOORDSVR_LRU_MAX_CACHE_COUNT";
+  std::string previous_;
+  bool has_previous_ = false;
+};
+
+// Register the same server-instance config loader as dtcoordsvr_main.cpp. Annotated fields
+// (lru_expired_duration 60s, lru_max_cache_count 200000, grace 5s, max TTL 30d, default timeout 10s)
+// are re-applied by parse_configures_into from the annotation defaults and are the effective values
 // asserted below — setting them in C++ here would be silently discarded.
 void setup_dtcoordsvr_config_loader() {
   logic_config::me()->set_server_instance_config_loader([](atfw::atapp::app& app_, logic_config&,
                                                            logic_config::server_instance_config_ptr& to) {
     auto config_ptr = atfw::component::memory::stl::make_strong_rc<atfw::distributed_system::config::dtcoordsvr_cfg>();
-    config_ptr->set_lru_max_cache_count(2);
     app_.parse_configures_into(*config_ptr, "dtcoordsvr", "ATAPP_DTCOORDSVR");
     to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
   });
@@ -111,9 +154,119 @@ atfw::testing::runtime_options make_dtcoordsvr_runtime_options() {
 }
 }  // namespace
 
+CASE_TEST(component_dtcoordsvr, create_replay_preserves_terminal_and_acknowledgements) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_EQ(0, test.start(make_dtcoordsvr_runtime_options()));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+
+  auto task = test.run_task("create_replay", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+    for (bool memory_only : {false, true}) {
+      for (bool commit : {false, true}) {
+        const std::string uuid =
+            std::string("replay-terminal-") + (memory_only ? "memory-" : "db-") + (commit ? "commit" : "reject");
+        transaction_blob_storage original;
+        dt_test::make_prepared_storage(original, uuid, {"pa", "pb"}, memory_only);
+        transaction_blob_storage request = original;
+        CASE_EXPECT_EQ(0,
+                       RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(request))));
+        transaction_manager::transaction_ptr_type trans;
+        CASE_EXPECT_EQ(
+            0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, original.metadata(), trans)));
+        if (!CASE_EXPECT_TRUE(!!trans)) {
+          RPC_RETURN_CODE(-1);
+        }
+        if (commit) {
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans)));
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
+        } else {
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(ctx, trans)));
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_reject(ctx, trans, "pa")));
+        }
+        const auto terminal = trans->data_object.metadata().status();
+        const auto finish = trans->data_object.metadata().finish_timepoint();
+        table_type record;
+        uint64_t version_before = 0;
+        if (!memory_only) {
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, uuid, record, version_before)));
+          transaction_manager::me()->clear_lru_for_unit_test();
+        }
+
+        CASE_EXPECT_EQ(0,
+                       RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(original))));
+        transaction_metadata metadata = trans->data_object.metadata();
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+        if (!CASE_EXPECT_TRUE(!!trans)) {
+          RPC_RETURN_CODE(-1);
+        }
+        CASE_EXPECT_EQ(terminal, trans->data_object.metadata().status());
+        CASE_EXPECT_EQ(finish.seconds(), trans->data_object.metadata().finish_timepoint().seconds());
+        CASE_EXPECT_EQ(finish.nanos(), trans->data_object.metadata().finish_timepoint().nanos());
+        auto participator = trans->data_object.participators().find("pa");
+        if (CASE_EXPECT_TRUE(participator != trans->data_object.participators().end())) {
+          CASE_EXPECT_EQ(terminal, participator->second.participator_status());
+        }
+        if (!memory_only) {
+          uint64_t version_after = 0;
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, uuid, record, version_after)));
+          CASE_EXPECT_EQ(version_before, version_after);
+        }
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_remove(ctx, metadata)));
+      }
+    }
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_dtcoordsvr, create_replay_restores_ttl_without_overwriting_record) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_EQ(0, test.start(make_dtcoordsvr_runtime_options()));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+  std::vector<uint64_t> ttl_values;
+  auto ttl_rule = rpc::db::distribute_transaction::mock::set_ttl(
+      [&ttl_values](rpc::context&, const table_type&, uint64_t ttl,
+                    rpc::unit_test::db_mock_meta&) -> rpc::result_code_type {
+        ttl_values.push_back(ttl);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!ttl_rule);
+  auto task =
+      test.run_task("replay_missing_ttl", std::chrono::seconds{5}, [](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_blob_storage storage;
+        dt_test::make_prepared_storage(storage, "replay-missing-ttl", {"pa"});
+        uint64_t version = 0;
+        // Simulate a process stopping after the insert, before set_ttl completed.
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_write_record(ctx, "replay-missing-ttl", storage, version)));
+        CASE_EXPECT_EQ(0,
+                       RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+        table_type record;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "replay-missing-ttl", record, version)));
+        CASE_EXPECT_EQ(1, version);
+        RPC_RETURN_CODE(0);
+      });
+  auto result = test.wait(task, std::chrono::seconds{10});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  if (CASE_EXPECT_EQ(1, ttl_values.size())) {
+    CASE_EXPECT_EQ(35, ttl_values.front());
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
 // ============ create / mutable / TTL / eviction / DT-007 / DT-009 / DT-019 ============
 
 CASE_TEST(component_dtcoordsvr, manager_create_query_ttl_and_eviction) {
+  // 容量淘汰断言需要小容量：注入 lru_max_cache_count=2（注解默认 200000 不会淘汰）
+  scoped_dtcoordsvr_capacity capacity_override{2};
   atfw::testing::runtime test;
   atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
   CASE_EXPECT_EQ(0, test.start(options));
@@ -150,7 +303,7 @@ CASE_TEST(component_dtcoordsvr, manager_create_query_ttl_and_eviction) {
                            transaction_manager::me()->create_transaction(ctx, std::move(no_participator_storage))));
         CASE_EXPECT_EQ(db_ops_before, test.db().calls("distribute_transaction"));
 
-        // --- create writes the DB once with an unconditional CAS (expected_version=0) and fills the LRU
+        // --- create inserts the DB record once and fills the LRU
         transaction_blob_storage storage_a;
         dt_test::make_prepared_storage(storage_a, "mgr-a", {"pa"}, false, std::chrono::seconds{30});
         CASE_EXPECT_EQ(0,
@@ -1422,6 +1575,8 @@ CASE_TEST(component_dtcoordsvr, actions_raw_dispatcher_stream_remove_no_response
 
 // ============ §4.4 G：tick 容量淘汰 IO 在途的占位条目，IO 完成后不写回、不重新入缓存 ============
 CASE_TEST(component_dtcoordsvr, tick_evicts_inflight_fetch_without_writeback) {
+  // 容量淘汰断言需要小容量：注入 lru_max_cache_count=2（注解默认 200000 不会淘汰）
+  scoped_dtcoordsvr_capacity capacity_override{2};
   atfw::testing::runtime test;
   atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
   CASE_EXPECT_EQ(0, test.start(options));
@@ -1632,6 +1787,139 @@ CASE_TEST(component_dtcoordsvr, ttl_failure_create_rolls_back_and_save_tolerates
   CASE_EXPECT_TRUE(cache_hit_result.task_exited);
   CASE_EXPECT_EQ(0, cache_hit_result.result_code);
   CASE_EXPECT_EQ(db_reads_after_commit, test.db().calls("distribute_transaction", op_type::kv_get_all));
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ 参与者 ACK 删除：DB 删除失败保留缓存，重试命中缓存不拉库；成功后旧句柄不可复活 ============
+CASE_TEST(component_dtcoordsvr, participant_ack_remove_failure_retains_cache_for_retry) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+  transaction_manager::me()->clear_lru_for_unit_test();
+
+  auto seed_task = test.run_task(
+      "remove_retry_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_blob_storage storage;
+        dt_test::make_prepared_storage(storage, "mgr-remove-retry-1", {"pa", "pb"}, false, std::chrono::seconds{3600});
+        CASE_EXPECT_EQ(0,
+                       RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+        RPC_RETURN_CODE(0);
+      });
+  auto seed_result = test.wait(seed_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(seed_result.task_exited);
+  CASE_EXPECT_EQ(0, seed_result.result_code);
+
+  // 首次 remove_all 报错（模拟 DB 抖动），后续调用落回内存后端真实删除
+  int remove_calls = 0;
+  auto remove_rule = test.db().mock_table("distribute_transaction");
+  remove_rule.on(op_type::remove_all, [&remove_calls](atfw::testing::db_table_context& ctx) -> bool {
+    if (++remove_calls == 1) {
+      ctx.return_code = PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT;
+      return true;  // handled: 本次按报错处理，不落库
+    }
+    return false;  // fall through: 后端真实删除
+  });
+  CASE_EXPECT_TRUE(!!remove_rule);
+  const size_t get_all_calls_before_ack = test.db().calls("distribute_transaction", op_type::kv_get_all);
+
+  // 第一次 ACK：最后一个参与者触发 all_resolved 删除，remove_all 失败必须保留缓存条目
+  transaction_manager::transaction_ptr_type stale_handle;
+  auto ack_task = test.run_task(
+      "remove_retry_ack", std::chrono::seconds{10}, [&stale_handle](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_metadata metadata;
+        metadata.set_transaction_uuid("mgr-remove-retry-1");
+        transaction_manager::transaction_ptr_type trans;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+        CASE_EXPECT_TRUE(!!trans);
+        stale_handle = trans;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pa")));
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pb")));
+      });
+  auto ack_result = test.wait(ack_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(ack_result.task_exited);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_TIMEOUT, ack_result.result_code);
+  CASE_EXPECT_EQ(1, remove_calls);
+  // 删除失败：缓存条目保留，供重试与后续请求直接命中（不产生数据库拉取）
+  CASE_EXPECT_EQ(1, transaction_manager::me()->get_lru_size_for_unit_test());
+  CASE_EXPECT_EQ(get_all_calls_before_ack, test.db().calls("distribute_transaction", op_type::kv_get_all));
+
+  // 参与者重复 ACK：mutable_transaction 命中同一缓存对象（零 get_all），重试删除成功后条目才被移除
+  auto retry_task = test.run_task(
+      "remove_retry_ack_again", std::chrono::seconds{10}, [&stale_handle](rpc::context& ctx) -> rpc::result_code_type {
+        transaction_metadata metadata;
+        metadata.set_transaction_uuid("mgr-remove-retry-1");
+        transaction_manager::transaction_ptr_type trans;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, trans)));
+        if (CASE_EXPECT_TRUE(!!trans)) {
+          CASE_EXPECT_EQ(stale_handle.get(), trans.get());
+        }
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(transaction_manager::me()->try_commit(ctx, trans, "pb")));
+      });
+  auto retry_result = test.wait(retry_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(retry_result.task_exited);
+  CASE_EXPECT_EQ(0, retry_result.result_code);
+  CASE_EXPECT_EQ(2, remove_calls);
+  CASE_EXPECT_EQ(0, transaction_manager::me()->get_lru_size_for_unit_test());
+  CASE_EXPECT_EQ(get_all_calls_before_ack, test.db().calls("distribute_transaction", op_type::kv_get_all));
+  remove_rule.reset();
+
+  // 删除成功后旧句柄已置 removed：迟到保存被拒绝，记录不会被复活
+  auto verify_task = test.run_task(
+      "remove_retry_verify", std::chrono::seconds{10},
+      [&stale_handle](rpc::context& ctx) -> rpc::result_code_type {
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND,
+                       RPC_AWAIT_CODE_RESULT(transaction_manager::me()->save(ctx, stale_handle)));
+        stale_handle.reset();
+        table_type gone_record;
+        uint64_t gone_version = 0;
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND,
+                       RPC_AWAIT_CODE_RESULT(db_read_record(ctx, "mgr-remove-retry-1", gone_record, gone_version)));
+        RPC_RETURN_CODE(0);
+      });
+  auto verify_result = test.wait(verify_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(verify_result.task_exited);
+  CASE_EXPECT_EQ(0, verify_result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// ============ lru_max_cache_count=0 表示不限容量：tick 不做容量淘汰 ============
+CASE_TEST(component_dtcoordsvr, tick_capacity_zero_means_unlimited) {
+  // 显式注入 0：代码层将 0 解释为不限容量（仅按 lru_expired_duration 过期淘汰）
+  scoped_dtcoordsvr_capacity capacity_override{0};
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options = make_dtcoordsvr_runtime_options();
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  test.db().register_message_type<table_type>();
+  transaction_manager::me()->clear_lru_for_unit_test();
+
+  auto seed_task =
+      test.run_task("capacity_zero_seed", std::chrono::seconds{10}, [](rpc::context& ctx) -> rpc::result_code_type {
+        for (const auto* uuid : {"mgr-capacity-0-a", "mgr-capacity-0-b", "mgr-capacity-0-c"}) {
+          transaction_blob_storage storage;
+          dt_test::make_prepared_storage(storage, uuid, {"pa"}, false, std::chrono::seconds{3600});
+          CASE_EXPECT_EQ(0,
+                         RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(storage))));
+        }
+        RPC_RETURN_CODE(0);
+      });
+  auto seed_result = test.wait(seed_task, std::chrono::seconds{20});
+  CASE_EXPECT_TRUE(seed_result.task_exited);
+  CASE_EXPECT_EQ(0, seed_result.result_code);
+  CASE_EXPECT_EQ(3, transaction_manager::me()->get_lru_size_for_unit_test());
+
+  // 超出"容量 0"的条目不做容量淘汰；只有超过 lru_expired_duration 的条目才过期
+  int evicted = transaction_manager::me()->tick();
+  CASE_EXPECT_EQ(0, evicted);
+  CASE_EXPECT_EQ(3, transaction_manager::me()->get_lru_size_for_unit_test());
 
   CASE_EXPECT_EQ(0, test.stop());
 }

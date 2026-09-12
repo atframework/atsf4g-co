@@ -31,7 +31,9 @@ class transaction_manager : public atfw::util::design_pattern::singleton<transac
  public:
   int tick();
 
-  inline void stop() { is_exiting_ = true; }
+  void stop();
+
+  void cleanup();
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx, transaction_ptr_type& data);
 

@@ -1292,3 +1292,91 @@ CASE_TEST(component_distributed_transaction_api, remove_no_wait_send_failure_thr
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// ============ 单节点模式：成功响应缺失 payload 时按 UNPACK 失败，不能清空调用方数据 ============
+// 复制模式已经校验 metadata/storage；单节点模式的行为必须一致：空响应返回 EN_SYS_UNPACK 且保留 inout 原值。
+CASE_TEST(component_distributed_transaction_api, single_node_success_response_requires_payload) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001}));
+
+  transaction_blob_storage input;
+  dt_test::make_prepared_storage(input, "api-empty-payload-1", {"pa"});
+  transaction_metadata metadata = input.metadata();
+
+  // 成功但不填任何响应字段（畸形协调者）
+  auto commit_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_commit(), SSDistributeTransactionCommitReq::descriptor()->full_name(),
+      SSDistributeTransactionCommitRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        RPC_RETURN_CODE(0);
+      });
+  auto reject_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_reject(),
+      atfw::distributed_system::SSDistributeTransactionRejectReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionRejectRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        RPC_RETURN_CODE(0);
+      });
+  auto commit_participator_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_commit_participator(),
+      SSDistributeTransactionCommitParticipatorReq::descriptor()->full_name(),
+      SSDistributeTransactionCommitParticipatorRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        RPC_RETURN_CODE(0);
+      });
+  auto reject_participator_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_reject_participator(),
+      atfw::distributed_system::SSDistributeTransactionRejectParticipatorReq::descriptor()->full_name(),
+      atfw::distributed_system::SSDistributeTransactionRejectParticipatorRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        RPC_RETURN_CODE(0);
+      });
+  auto query_rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(), SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [](const atfw::testing::ss_request_view&, google::protobuf::Message&) -> rpc::result_code_type {
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!commit_rule && !!reject_rule && !!commit_participator_rule && !!reject_participator_rule &&
+                   !!query_rule);
+
+  auto task = test.run_task(
+      "api_empty_payload", std::chrono::seconds{4}, [metadata](rpc::context& ctx) -> rpc::result_code_type {
+    // commit/reject：inout 保留原 uuid，返回 UNPACK 而非把 metadata 清空
+    transaction_metadata commit_metadata = metadata;
+    int32_t res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_transaction(ctx, commit_metadata));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK, res);
+    CASE_EXPECT_EQ(metadata.transaction_uuid(), commit_metadata.transaction_uuid());
+
+    transaction_metadata reject_metadata = metadata;
+    res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_transaction(ctx, reject_metadata));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK, res);
+    CASE_EXPECT_EQ(metadata.transaction_uuid(), reject_metadata.transaction_uuid());
+
+    transaction_metadata commit_participator_metadata = metadata;
+    res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::commit_participator(ctx, "pa", commit_participator_metadata));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK, res);
+    CASE_EXPECT_EQ(metadata.transaction_uuid(), commit_participator_metadata.transaction_uuid());
+
+    transaction_metadata reject_participator_metadata = metadata;
+    res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::reject_participator(ctx, "pa", reject_participator_metadata));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK, res);
+    CASE_EXPECT_EQ(metadata.transaction_uuid(), reject_participator_metadata.transaction_uuid());
+
+    transaction_blob_storage query_output;
+    res = RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, metadata, query_output));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK, res);
+    RPC_RETURN_CODE(0);
+  });
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

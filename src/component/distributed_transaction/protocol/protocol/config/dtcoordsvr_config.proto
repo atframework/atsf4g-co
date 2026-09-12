@@ -17,7 +17,8 @@ package atframework.distributed_system.config;
 message dtcoordsvr_cfg {
   google.protobuf.Duration lru_expired_duration = 1
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "60s" min_value: "1s" }];
-  uint32 lru_max_cache_count = 2;
+  // 缓存容量上限；0 表示不限容量（仅按 lru_expired_duration 过期淘汰）
+  uint32 lru_max_cache_count = 2 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "200000" }];
 
   google.protobuf.Duration transaction_default_timeout = 11
       [(atframework.atapp.protocol.CONFIGURE) = { default_value: "10s" min_value: "1s" }];

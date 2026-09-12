@@ -75,6 +75,9 @@ ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_ty
 ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type reject_participator(
     rpc::context& ctx, const std::string& participator_key, atfw::distributed_system::transaction_metadata& inout);
 
+DISTRIBUTED_TRANSACTION_SDK_API void merge_metadata(atfw::distributed_system::transaction_metadata& output,
+                                                    const atfw::distributed_system::transaction_metadata& input);
+
 DISTRIBUTED_TRANSACTION_SDK_API void merge_storage(atfw::distributed_system::transaction_blob_storage& output,
                                                    const atfw::distributed_system::transaction_blob_storage& input);
 
