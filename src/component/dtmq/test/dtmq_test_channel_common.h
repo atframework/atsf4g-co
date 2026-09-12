@@ -114,14 +114,14 @@ inline std::string make_dtmq_channel_type_bytes(uint32_t channel_type, bool memo
   return blocks.SerializeAsString();
 }
 
-// Override dtmq_channel_type with the test rows; every other table comes from the mock's automatic
-// snapshot of the real generated bindir (see mock_resource::bind()), so excel table set changes never
-// require touching this fixture. memory_only controls whether the test channel_type is memory-only
-// (skips DB load) or DB-backed.
+// DTMQ cases have no matching parameter merge rules. Other tables use the generated bindir snapshot.
 inline void seed_resource_tables(atframework::testing::mock_resource& resource, uint32_t channel_type, bool memory_only,
                                  uint32_t readonly_replicate_count) {
   resource.set_file("dtmq_channel_type.bytes",
                     make_dtmq_channel_type_bytes(channel_type, memory_only, readonly_replicate_count));
+  org::xresloader::pb::xresloader_datablocks matching_rules;
+  matching_rules.mutable_header()->set_hash_code("rpc-unit-test");
+  resource.set_file("matching_parameter_merge_rule_template.bytes", matching_rules.SerializeAsString());
 }
 
 // Inject a single dtmq-proxysvr discovery node and replay it into the common-module discovery index.

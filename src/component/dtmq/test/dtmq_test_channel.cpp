@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "logic/action/task_action_transfer_channel.h"
+#include "logic/action/task_action_update.h"
 
 #include "dtmq_test_channel_common.h"  // NOLINT(build/include_subdir)
 
@@ -1401,4 +1402,252 @@ CASE_TEST(component_dtmq_channel, recreate_clears_full_previous_generation_in_sa
     CASE_EXPECT_EQ(0, result.result_code);
   }
   CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_dtmq_channel, update_syncs_data_versions_and_preserves_push_groups) {
+  atframework::testing::runtime test;
+  if (!start_channel_runtime(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto channel_id = find_local_writable_channel_id("update-data-versions", kLocalNodeId);
+  auto task = test.run_task(
+      "update_data_versions", std::chrono::seconds{4}, [&test, channel_id](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::dtmq::DChannelIdKey key;
+        key.set_channel_id(channel_id);
+        key.set_channel_type(kTestChannelType);
+        mq_channel_manager::mq_channel_ptr_type channel;
+        uint64_t forward_server_id = 0;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
+                              ctx, channel, forward_server_id, key, true)));
+        if (!channel || !channel->is_available()) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+        }
+        channel->tick(ctx);
+        for (bool with_private_data : {false, true}) {
+          atfw::dtmq::channel_subscriber subscriber;
+          subscriber.set_subscriber_server_id(kPeerNode1);
+          subscriber.set_subscriber_key(with_private_data ? "UT:private-data" : "UT:public-data");
+          subscriber.set_with_private_data(with_private_data);
+          CASE_EXPECT_EQ(0, channel->subscribe(ctx, subscriber, channel->get_last_message_sequence(),
+                                               channel->get_last_hash_code(), false));
+        }
+        atframework::testing::ss_action_invoke_options action_options{rpc::dtmq::packer::get_full_name_of_update()};
+        action_options.source.node_id = kPeerNode2;
+        action_options.source.source_task_id = 0xD720;
+        action_options.source.sequence = 0xD721;
+        // 覆盖 noop 更新、显式更新日志和通过 noop 清空数据。
+        for (int step = 0; step < 3; ++step) {
+          atfw::dtmq::SSChannelUpdateReq request;
+          request.mutable_channel_key()->CopyFrom(key);
+          request.set_custom_data_skip_notify(step != 1);
+          const std::string custom_value = step == 2 ? "" : "custom-" + std::to_string(step);
+          if (step == 2) {
+            request.set_clear_custom_data_action(true);
+          } else {
+            request.mutable_custom_data()->set_type_url("type.googleapis.com/dtmq.CustomData");
+            request.mutable_custom_data()->set_value(custom_value);
+          }
+          request.mutable_private_data()->set_type_url("type.googleapis.com/dtmq.PrivateData");
+          request.mutable_private_data()->set_value("private-" + std::to_string(step));
+          const auto before_sequence = channel->get_last_message_sequence();
+          const size_t event_begin = test.transport().outbound_count();
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<task_action_update>(
+                                ctx, request, action_options)));
+          CASE_EXPECT_GT(channel->get_last_message_sequence(), before_sequence);
+          CASE_EXPECT_EQ(custom_value, channel->get_custom_data().value());
+          auto events = collect_channel_events(test, event_begin, channel_id);
+          CASE_EXPECT_EQ(2u, events.size());
+          for (const auto& event : events) {
+            CASE_EXPECT_FALSE(event.has_channel_snapshot());
+            CASE_EXPECT_EQ(1, event.channel_message_size());
+            CASE_EXPECT_EQ(1, event.subscriber_keys_size());
+            CASE_EXPECT_TRUE(event.channel_metadata().has_custom_data());
+            CASE_EXPECT_EQ(channel->get_last_message_sequence(), event.channel_metadata().custom_data_sequence());
+            CASE_EXPECT_EQ(custom_value, event.channel_metadata().custom_data().value());
+            if (event.channel_message_size() == 1) {
+              CASE_EXPECT_EQ(step == 1 ? atfw::dtmq::DChannelMessageDetail::kUpdateCustomData
+                                       : atfw::dtmq::DChannelMessageDetail::kNoop,
+                             event.channel_message(0).detail().command_case());
+            }
+            if (event.subscriber_keys_size() == 1) {
+              const bool with_private_data = event.subscriber_keys(0) == "UT:private-data";
+              CASE_EXPECT_EQ(with_private_data, event.channel_runtime().has_private_data());
+              if (with_private_data) {
+                CASE_EXPECT_EQ("private-" + std::to_string(step), event.channel_runtime().private_data().value());
+                CASE_EXPECT_EQ(channel->get_last_message_sequence(), event.channel_runtime().private_data_sequence());
+              }
+            }
+          }
+          // 空更新和重复 flush 不得追加日志或重复推送。
+          atfw::dtmq::SSChannelUpdateReq empty_request;
+          empty_request.mutable_channel_key()->CopyFrom(key);
+          const auto updated_sequence = channel->get_last_message_sequence();
+          const size_t after_flush = test.transport().outbound_count();
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(atframework::testing::invoke_ss_action<task_action_update>(
+                                ctx, empty_request, action_options)));
+          channel->tick(ctx);
+          CASE_EXPECT_EQ(updated_sequence, channel->get_last_message_sequence());
+          CASE_EXPECT_TRUE(collect_channel_events(test, after_flush, channel_id).empty());
+        }
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_dtmq_channel, stale_database_record_keeps_newer_state_pending_save) {
+  atframework::testing::runtime test;
+  if (!start_channel_runtime(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto channel_id = find_local_writable_channel_id("stale-db-record", kLocalNodeId, 200, kTestDbBackedChannelType);
+  auto task = test.run_task(
+      "stale_database_record", std::chrono::seconds{4}, [channel_id](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::dtmq::DChannelIdKey key;
+        key.set_channel_id(channel_id);
+        key.set_channel_type(kTestDbBackedChannelType);
+        mq_channel_manager::mq_channel_ptr_type channel;
+        uint64_t forward_server_id = 0;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
+                              ctx, channel, forward_server_id, key, true)));
+        if (!channel || !channel->is_available()) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+        }
+        auto old_message = append_transfer_message(*channel, ctx, "saved-message");
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->save(ctx)));
+        CASE_EXPECT_FALSE(channel->is_dirty());
+        auto record = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, channel_id, *record)));
+        auto fresh_message = append_transfer_message(*channel, ctx, "unsaved-message");
+        if (!old_message || !fresh_message) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+        }
+        // DB 返回前内存已收到更晚的数据；旧记录不能确认新数据已持久化。
+        channel->load(ctx, *record);
+        CASE_EXPECT_EQ(fresh_message->sequence(), channel->get_last_message_sequence());
+        CASE_EXPECT_TRUE(channel->is_dirty());
+        CASE_EXPECT_TRUE(channel->need_save_db());
+        if (channel->need_save_db()) {
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(channel->save(ctx)));
+        }
+        CASE_EXPECT_FALSE(channel->is_dirty());
+        auto saved = rpc::make_shared_message<PROJECT_NAMESPACE_ID::table_dtmq_channel_record>(ctx);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::db::dtmq_channel_record::get_all(ctx, channel_id, *saved)));
+        CASE_EXPECT_EQ(fresh_message->sequence(), saved->channel_metadata().last_sequence());
+        CASE_EXPECT_EQ(fresh_message->hash_code(), saved->channel_metadata().last_hash_code());
+        bool found_fresh_message = false;
+        for (const auto& message : saved->record_set().record()) {
+          if (message.sequence() == fresh_message->sequence()) {
+            found_fresh_message = message.detail().text() == "unsaved-message";
+          }
+        }
+        CASE_EXPECT_TRUE(found_fresh_message);
+        channel->load(ctx, *record);
+        CASE_EXPECT_FALSE(channel->is_dirty());
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+namespace {
+static void check_non_auto_create_memory_replica(bool destroyed) {
+  atframework::testing::runtime test;
+  if (!start_channel_runtime(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  uint64_t replicate_index = 0;
+  auto channel_id = find_local_readonly_channel_id(
+      destroyed ? "preserve-destroyed-replica" : "promote-existing-replica", kLocalNodeId, replicate_index);
+  CASE_EXPECT_GT(replicate_index, 0u);
+  auto task =
+      test.run_task("promote_existing_replica", std::chrono::seconds{4},
+                    [&test, channel_id, replicate_index, destroyed](rpc::context& ctx) -> rpc::result_code_type {
+                      atfw::dtmq::DChannelIdKey key;
+                      key.set_channel_id(channel_id);
+                      key.set_channel_type(kTestChannelType);
+                      auto source = atfw::component::memory::stl::make_strong_rc<mq_channel>(
+                          *mq_channel_manager::me(), key, get_configure_for(kTestChannelType));
+                      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(source->writable_init(ctx)));
+                      source->ensure_recreate_after_destroyed(ctx);
+                      auto message = append_transfer_message(*source, ctx, "preserved-on-promotion");
+                      if (!message) {
+                        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+                      }
+                      if (destroyed) {
+                        source->set_destroyed(ctx, atfw::util::time::time_utility::now(), 0);
+                      }
+                      atfw::dtmq::channel_snapshot snapshot;
+                      source->dump_snapshot(ctx, snapshot);
+                      const auto create_sequence = snapshot.channel_data().channel_metadata().create_sequence();
+                      const auto last_sequence = snapshot.channel_data().channel_metadata().last_sequence();
+                      snapshot.set_replicate_index(replicate_index);
+                      mq_channel_manager::mq_channel_ptr_type replica;
+                      CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->create_channel(
+                                            ctx, replica, key, get_configure_for(kTestChannelType))));
+                      if (!replica) {
+                        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_INVALID_CHANNEL);
+                      }
+                      CASE_EXPECT_TRUE(replica->load_snapshot(ctx, std::move(snapshot)));
+                      CASE_EXPECT_TRUE(replica->is_readonly());
+                      CASE_EXPECT_EQ(!destroyed, replica->is_available());
+                      test.discovery().remove_node(kPeerNode1);
+                      test.discovery().remove_node(kPeerNode2);
+                      reload_discovery();
+                      MqChannelManagerUnitTest::set_latest_server_etcd_revision(
+                          *mq_channel_manager::me(), mq_channel_manager::me()->get_latest_server_etcd_revision() + 1);
+                      replica->force_refresh_distribution();
+                      CASE_EXPECT_TRUE(replica->should_be_writable());
+                      mq_channel_manager::mq_channel_ptr_type writable;
+                      uint64_t forward_server_id = 0;
+                      CASE_EXPECT_EQ(destroyed ? PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND : 0,
+                                     RPC_AWAIT_CODE_RESULT(mq_channel_manager::me()->make_writable_channel(
+                                         ctx, writable, forward_server_id, key, false)));
+                      CASE_EXPECT_EQ(0u, forward_server_id);
+                      CASE_EXPECT_TRUE(!!writable);
+                      CASE_EXPECT_EQ(!destroyed, replica->is_writable());
+                      CASE_EXPECT_EQ(!destroyed, replica->is_available());
+                      CASE_EXPECT_EQ(destroyed, replica->is_destroyed());
+                      CASE_EXPECT_EQ(replica.get(), writable.get());
+                      CASE_EXPECT_EQ(last_sequence, replica->get_last_message_sequence());
+                      auto retained = replica->get_shared_wal_object()->find_log(message->sequence());
+                      CASE_EXPECT_TRUE(!!retained);
+                      if (retained) {
+                        CASE_EXPECT_EQ("preserved-on-promotion", retained->detail().text());
+                        CASE_EXPECT_EQ(message->hash_code(), retained->hash_code());
+                      }
+                      atfw::dtmq::DChannelMetadata metadata;
+                      replica->dump(metadata, false, false);
+                      CASE_EXPECT_EQ(create_sequence, metadata.create_sequence());
+                      RPC_RETURN_CODE(0);
+                    });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(0, test.stop());
+}
+}  // namespace
+
+CASE_TEST(component_dtmq_channel, non_auto_create_promotes_existing_memory_replica) {
+  check_non_auto_create_memory_replica(false);
+}
+
+CASE_TEST(component_dtmq_channel, non_auto_create_preserves_destroyed_memory_replica) {
+  check_non_auto_create_memory_replica(true);
 }

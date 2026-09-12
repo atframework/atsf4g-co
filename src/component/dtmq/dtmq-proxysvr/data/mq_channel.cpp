@@ -226,11 +226,11 @@ void mq_channel::load(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_dtmq_
     } else {
       get_shared_wal_object()->set_last_removed_key((*get_shared_wal_object()->get_all_logs().begin())->sequence());
     }
-  } while (false);
 
-  ++dirty_version_;
-  saved_version_ = dirty_version_;
-  saved_sequence_ = get_last_message_sequence();
+    ++dirty_version_;
+    saved_version_ = dirty_version_;
+    saved_sequence_ = get_last_message_sequence();
+  } while (false);
 
   // 有可能await后，负载发生变化。本节点被迁出 writable
 
@@ -509,8 +509,8 @@ rpc::result_code_type mq_channel::writable_init(rpc::context& ctx, bool auto_cre
   }
 
   if (configure_.memory_only()) {
-    // 非 auto_create 的纯内存频道不允许隐式创建：本地未创建即不存在，返回 not found 由调用方决定如何上报
-    if (!auto_create) {
+    // 已有可用副本允许提升；非 auto_create 不能创建或重建频道。
+    if (!auto_create && !is_available()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND);
     }
 

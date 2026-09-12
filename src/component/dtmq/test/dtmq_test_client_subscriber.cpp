@@ -92,11 +92,12 @@ std::string make_dtmq_channel_type_bytes() {
   return blocks.SerializeAsString();
 }
 
-// Override dtmq_channel_type with the test row; every other table comes from the mock's automatic
-// snapshot of the real generated bindir (see mock_resource::bind()), so excel table set changes never
-// require touching this fixture.
+// DTMQ cases have no matching parameter merge rules. Other tables use the generated bindir snapshot.
 void seed_resource_tables(atframework::testing::mock_resource& resource) {
   resource.set_file("dtmq_channel_type.bytes", make_dtmq_channel_type_bytes());
+  org::xresloader::pb::xresloader_datablocks matching_rules;
+  matching_rules.mutable_header()->set_hash_code("rpc-unit-test");
+  resource.set_file("matching_parameter_merge_rule_template.bytes", matching_rules.SerializeAsString());
 }
 
 // Inject the dtmq-proxysvr discovery node and replay it into the common-module discovery index.
@@ -1286,6 +1287,127 @@ CASE_TEST(component_dtmq_subscriber, business_rpc_and_cache) {
   }
   CASE_EXPECT_GE(test.ss().calls(rpc::dtmq::packer::get_full_name_of_send_message()), 1u);
 
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_dtmq_subscriber, cached_queries_respect_page_size_and_sequence_bounds) {
+  atframework::testing::runtime test;
+  atframework::testing::runtime_options options;
+  options.features = {atframework::testing::feature::ss, atframework::testing::feature::resource};
+  options.setup_callback = [](atframework::testing::runtime& rt) {
+    seed_resource_tables(rt.resource());
+    rt.resource().set_version("0.10.0.1");
+    return 0;
+  };
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running() || !setup_dtmq_proxy_node(test)) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto subscribe_rule = mock_subscribe_ack(test);
+  auto key = make_channel_key("chan-cached-query-boundaries");
+  auto subscriber = rpc::dtmq::client_subscriber::create(key, make_subscriber_options("UT:query-boundaries"));
+  CASE_EXPECT_TRUE(!!subscriber && !!subscribe_rule);
+  if (!subscriber || !subscribe_rule) {
+    CASE_EXPECT_EQ(0, test.stop());
+    return;
+  }
+  auto snapshot = make_ready_snapshot(key, 10);
+  uint64_t hash_code = 0;
+  for (int64_t sequence = 11; sequence <= 14; ++sequence) {
+    auto* message = snapshot.add_messages();
+    message->set_sequence(sequence);
+    message->set_channel_type(key.channel_type());
+    *message->mutable_create_timepoint() = protobuf_from_system_clock(atfw::util::time::time_utility::now());
+    message->mutable_detail()->set_text("cached-" + std::to_string(sequence));
+    hash_code = rpc::dtmq::calculate_hash_code(hash_code, *message);
+    message->set_hash_code(hash_code);
+  }
+  snapshot.mutable_channel_metadata()->set_last_sequence(14);
+  snapshot.mutable_channel_metadata()->set_last_hash_code(hash_code);
+  atfw::dtmq::SSChannelEventSync event;
+  event.mutable_channel_snapshot()->Swap(&snapshot);
+  event.add_subscriber_keys(shared_subscriber_key_for());
+  CASE_EXPECT_TRUE(push_channel_event(test, "query_boundaries_snapshot", event));
+  CASE_EXPECT_TRUE(subscriber->is_ready());
+  auto task = test.run_task(
+      "cached_query_boundaries", std::chrono::seconds{4}, [subscriber](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::dtmq::channel_page_info page;
+        page.set_page_size(2);
+        page.set_page_start_sequence(11);
+        google::protobuf::RepeatedPtrField<atfw::dtmq::DChannelMessage> messages;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(subscriber->page_query_message(ctx, page, messages)));
+        CASE_EXPECT_EQ(2, messages.size());
+        CASE_EXPECT_TRUE(page.page_more());
+        if (messages.size() == 2) {
+          CASE_EXPECT_EQ(11, messages.Get(0).sequence());
+          CASE_EXPECT_EQ("cached-12", messages.Get(1).detail().text());
+        }
+        page.set_page_start_sequence(13);
+        messages.Clear();
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(subscriber->page_query_message(ctx, page, messages)));
+        CASE_EXPECT_EQ(2, messages.size());
+        CASE_EXPECT_FALSE(page.page_more());
+        if (messages.size() == 2) {
+          CASE_EXPECT_EQ(13, messages.Get(0).sequence());
+          CASE_EXPECT_EQ(14, messages.Get(1).sequence());
+        }
+        page.set_page_start_sequence(15);
+        messages.Clear();
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(subscriber->page_query_message(ctx, page, messages)));
+        CASE_EXPECT_EQ(0, messages.size());
+        CASE_EXPECT_FALSE(page.page_more());
+
+        rpc::dtmq::client_subscriber::query_options query;
+        query.start_sequence = 12;
+        query.end_sequence = 14;
+        query.max_count = 1;
+        std::vector<int64_t> sequences;
+        CASE_EXPECT_TRUE(subscriber->query_cached_message(
+            ctx,
+            [&sequences](const atfw::dtmq::DChannelMessage& message) {
+              sequences.push_back(message.sequence());
+              return true;
+            },
+            query));
+        CASE_EXPECT_EQ(1u, sequences.size());
+        if (!sequences.empty()) {
+          CASE_EXPECT_EQ(12, sequences.front());
+        }
+        query.max_count = 0;
+        sequences.clear();
+        CASE_EXPECT_FALSE(subscriber->query_cached_message(
+            ctx,
+            [&sequences](const atfw::dtmq::DChannelMessage& message) {
+              sequences.push_back(message.sequence());
+              return true;
+            },
+            query));
+        CASE_EXPECT_EQ(2u, sequences.size());
+        if (sequences.size() == 2) {
+          CASE_EXPECT_EQ(12, sequences.front());
+          CASE_EXPECT_EQ(13, sequences.back());
+        }
+        size_t callback_count = 0;
+        query.start_sequence = 11;
+        query.end_sequence = 0;
+        CASE_EXPECT_TRUE(subscriber->query_cached_message(
+            ctx,
+            [&callback_count](const atfw::dtmq::DChannelMessage&) {
+              ++callback_count;
+              return false;
+            },
+            query));
+        CASE_EXPECT_EQ(1u, callback_count);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  if (!task.empty()) {
+    auto result = test.wait(task, std::chrono::seconds{8});
+    CASE_EXPECT_TRUE(result.task_exited);
+    CASE_EXPECT_EQ(0, result.result_code);
+  }
+  CASE_EXPECT_EQ(0u, test.ss().calls(rpc::dtmq::packer::get_full_name_of_page_query_message()));
   CASE_EXPECT_EQ(0, test.stop());
 }
 

@@ -2895,6 +2895,7 @@ bool shared_subscriber::query_message(atfw::util::nostd::function_ref<bool(const
       break;
     }
 
+    --left_count;
     if (!fn(*log)) {
       break;
     }

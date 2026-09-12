@@ -113,8 +113,6 @@ task_action_update::result_type task_action_update::operator()() {
     // 这只是个通知消息，分配失败仅仅导致数据没有及时更新，不影响最终结果。update操作已经正确完成，所以这时候不需要返回错误码。
     if (message) {
       channel->get_wal_publisher().emplace_back_log(std::move(message), param);
-      // 重置一下custom_data_sequence，确保如果只有这一条log，custom_data也能下发
-      channel->reset_custom_data_sequence();
     } else {
       FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed",
                    req_body.channel_key().channel_id());
@@ -138,6 +136,11 @@ task_action_update::result_type task_action_update::operator()() {
       FCTXLOGERROR(get_shared_context(), "malloc wal log for mq channel {} failed",
                    req_body.channel_key().channel_id());
     }
+  }
+
+  if (has_changed_custom_data) {
+    // noop 同样需要携带更新后的数据版本，供副本和订阅者同步。
+    channel->reset_custom_data_sequence();
   }
 
   if (has_changed_private_data) {
