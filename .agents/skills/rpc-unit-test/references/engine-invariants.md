@@ -19,6 +19,14 @@ published design/usage overview is `doc/docs/development/rpc-unit-test.md`.
 success/cancel/fault/timeout via `task_type_trait` and marks the runtime poisoned on hard timeout (`task_manager` only
 exposes `kill_all`, so a hard timeout cannot claim to reclaim just one task).
 
+**Timer-wait freeze footgun (observed, root cause not isolated).** In a `feature::db` runtime, a task started with
+`run_task` that parks on timer-based `rpc::wait(ctx, short)` while a typed DB mock handler is also gated on
+`rpc::wait` stops making progress: both coroutines' timer waits never fire and both die at their task hard timeouts.
+Reproduced deterministically in an ss+db fixture (a gated typed `mock::remove_all` plus a parked probe task). The working
+pattern used by all existing `feature::db` cases: gate inside mock handlers only, and never park a `run_task` task on
+timer-based `rpc::wait` in these fixtures — hand data out through shared flags/holders instead. Timer-based
+`rpc::wait` in `run_task` bodies works in `feature::ss`-only fixtures.
+
 ## Delivery ordering & re-entrancy (the two-phase contract)
 
 - **Due order, not insertion order.** Rules carry different `delay_generations`, so insertion order != due order. Never

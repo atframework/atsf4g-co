@@ -1070,8 +1070,8 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log)
   // 两次重试均失败(达到 member_channel_notification_retry_times 上限): 每次排队故障后
   // 分轮推进驱动，直到该故障被重试的 remove 发送消费(事件次序不确定，以故障消费为准)
   for (int retry_round = 0; retry_round < 2; ++retry_round) {
-    // 每个重试轮次先刷新其他成员心跳：虚拟时钟=真实时钟+偏移，循环内的真实耗时同样消耗
-    // 离线期限预算；不刷新则高负载下 owner/admin 可能先于 normal 到期，误消费故障脚本
+    // 每轮重试前先刷新其他成员心跳：虚拟时钟=真实时钟+偏移，循环内实际经过的时间也计入离线时长。
+    // 不刷新则高负载下 owner/admin 可能先于 normal 达到离线时限，使故障脚本作用于错误的成员。
     CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1001));
     CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
     queue_remove_fault();
@@ -1087,7 +1087,7 @@ CASE_TEST(teamsvr_room_lifecycle, remove_retry_exhaustion_local_remove_with_log)
 
   // 重试耗尽: 本地删除(无泄露) + 尽力而为补写一条 remove 日志(无故障时成功)。
   // 无故障分轮驱动直至重试队列清空(强制移除完成)
-  // 耗尽循环前再刷新一次其他成员心跳(同上，防止真实耗时耗尽他们的离线期限预算)
+  // 循环前再刷新一次其他成员心跳，避免实际经过的时间使他们提前达到离线时限。
   CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.owner, 0x1001));
   CASE_EXPECT_EQ(0, send_heartbeat(env, room, members.admin, 0x1002));
   for (int round = 0; round < 8 && 0 != room->debug_retry_remove_count(); ++round) {

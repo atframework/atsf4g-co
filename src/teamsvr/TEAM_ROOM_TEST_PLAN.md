@@ -272,7 +272,7 @@ team room 服务只建立一个目标，不为场景类别拆分多个 target：
   不需要 DB/HPA 的用例不得隐式依赖其副作用。
 
 `rpc-unit-test` 的 fixture 在一个 executable 内串行运行，Excel/config 等对象带进程级生命周期，CTest `TIMEOUT`
-是整个 executable 的总预算。单目标下用以下方式控制运行粒度和隔离：
+是整个测试进程的超时时间。单目标下用以下方式控制运行粒度和隔离：
 
 - 用 fixture 分组名（如 `teamsvr_room_permission.*`、`teamsvr_room_wal.*`、`teamsvr_room_lifecycle.*`）配合
   `-r` 正则过滤做局部运行；CI 默认全量串行。

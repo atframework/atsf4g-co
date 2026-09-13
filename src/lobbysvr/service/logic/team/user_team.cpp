@@ -222,7 +222,7 @@ class user_team_utility {
     //   get_custom_data_content 读到的是旧快照; 旧快照可能不含本端成员(成员加入只走增量日志、
     //   不落快照), 据此重建会把成员标志误置 false 进而被 wait_to_be_member_but_timeout 踢出
     // - 本地状态收敛不依赖该事件: 快照中 user_team 消费的字段(成员/角色/队长/配置/准入)均由
-    //   增量 action 覆盖; 水位低于压缩边界或 hash 不匹配时 publisher 会强制下发全量快照,
+    //   增量 action 覆盖; 已接收的日志序号低于压缩边界或 hash 不匹配时 publisher 会强制下发全量快照,
     //   由 on_receive_snapshot_finished 经 load_snapshot 重建
     rpc::dtmq::client_subscriber::set_event_callback_on_receive_batch_message_finished(
         *ret, [](rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
