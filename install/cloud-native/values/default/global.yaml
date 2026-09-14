@@ -28,9 +28,8 @@ atapp:
       enable_local_proxy: true
       # remote_proxy: ""
       # gateway:
-      #   - address: "atcp://${ATAPP_EXTERNAL_IP}:{{ $proxy_port }}" // 内网IP scope匹配则连接
-      #     scope: "tencent_cloud"
-      #   - address: "dns://${global_ip}:{{ $proxy_port }}" // 公网IP 不需要配scope
+      #   - address_ip: "dns://global_ip" // 默认端口为 $service_port
+      #   - scope: "tencent_cloud" // 默认 atcp://$atapp_external_ip:$service_port
     configure:
       loop_times: 2048 # max message number in one loop
       ttl: 16 # max ttl when transfer messages

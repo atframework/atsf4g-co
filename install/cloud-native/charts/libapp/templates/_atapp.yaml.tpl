@@ -22,9 +22,21 @@ proxy: "{{ .Values.atapp.atbus.policy.remote_proxy }}" # address of upstream nod
   {{- else }}
 # proxy: "not set" # address of upstream node
   {{- end }}
+  {{- /* Each gateway entry owns scope/address_ip/address_port. address is "<address_ip>:<address_port>", scope is
+       written to match_scope. address_ip defaults to this host's external IP, address_port defaults to the service port. */ -}}
+  {{- $gateways := list }}
   {{- if (dig "policy" "gateway" false .Values.atapp.atbus ) }}
+    {{- range $gateway := .Values.atapp.atbus.policy.gateway }}
+      {{- $gateway_item := dict "address" (printf "%v:%v" (default (printf "atcp://%s" $atapp_external_ip) $gateway.address_ip) (default $service_port $gateway.address_port)) }}
+      {{- if $gateway.scope }}
+        {{- $gateway_item = mergeOverwrite $gateway_item (dict "match_scope" $gateway.scope) }}
+      {{- end }}
+      {{- $gateways = append $gateways $gateway_item }}
+    {{- end }}
+  {{- end }}
+  {{- if $gateways }}
 gateways:
-    {{- toYaml .Values.atapp.atbus.policy.gateway | trim | nindent 2 }}
+    {{- toYaml $gateways | trim | nindent 2 }}
   {{- end -}}
 {{- end -}}
 
