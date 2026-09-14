@@ -291,7 +291,8 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
       last_heartbeat_timepoint_(0),
       last_heartbeat_rsp_timepoint_(0),
       start_client_received_(false),
-      agent_instance_id_mismatch_(false) {
+      agent_instance_id_mismatch_(false),
+      shutdown_finalized_(false) {
   state_.store(OrbitClientRuntimeState::kIdle);
 }
 
@@ -490,6 +491,7 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   last_heartbeat_rsp_timepoint_ = 0;
   start_client_received_ = false;
   agent_instance_id_mismatch_ = false;
+  shutdown_finalized_ = false;
   set_state(OrbitClientRuntimeState::kIdle);
 
   // 将Endpoint 写入 ATAPP_BUS_PROXY
@@ -795,6 +797,7 @@ ORBIT_CLIENT_SDK_API void OrbitClientRuntime::reset() {
   last_heartbeat_rsp_timepoint_ = 0;
   start_client_received_ = false;
   agent_instance_id_mismatch_ = false;
+  shutdown_finalized_ = false;
 }
 
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
@@ -833,11 +836,16 @@ void OrbitClientRuntime::io_tick() {
     app_->run_once(0, std::chrono::seconds{0});
   }
 
-  if (state_.load() == OrbitClientRuntimeState::kRunning) {
+  OrbitClientRuntimeState current_state = state_.load();
+
+  // 收尾等待期间也要继续处理回包、重试与超时，否则在途请求无法结束
+  if (current_state == OrbitClientRuntimeState::kRunning || current_state == OrbitClientRuntimeState::kStopping) {
     execute_pending_request_timeouts();
 
     OrbitRPCDispatcher::me()->tick();
+  }
 
+  if (current_state == OrbitClientRuntimeState::kRunning) {
     do {
       time_t now = ::util::time::time_utility::get_sys_now();
       check_agent_alive(now);
@@ -855,15 +863,20 @@ void OrbitClientRuntime::io_tick() {
     } while (false);
   }
 
-  if (state_.load() == OrbitClientRuntimeState::kStopping && app_->is_closed()) {
-    ORBIT_LOG(OrbitClientLogLevel::kInfo, "stopping finalized");
-    set_state(OrbitClientRuntimeState::kStopped);
-    reset();
-    if (callbacks_.on_request_stop) {
-      if (enabled_io_thread()) {
-        post_to_caller_thread([] { OrbitClientRuntime::me()->callbacks_.on_request_stop(); });
-      } else {
-        callbacks_.on_request_stop();
+  if (state_.load() == OrbitClientRuntimeState::kStopping) {
+    // 兜底：在途请求可能已在重试/超时流程里全部结束
+    try_finalize_shutdown();
+
+    if (app_ && app_->is_closed()) {
+      ORBIT_LOG(OrbitClientLogLevel::kInfo, "stopping finalized");
+      set_state(OrbitClientRuntimeState::kStopped);
+      reset();
+      if (callbacks_.on_request_stop) {
+        if (enabled_io_thread()) {
+          post_to_caller_thread([] { OrbitClientRuntime::me()->callbacks_.on_request_stop(); });
+        } else {
+          callbacks_.on_request_stop();
+        }
       }
     }
   }
@@ -882,6 +895,8 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
 
   OrbitClientRequestOptions request_options;
   request_options.timeout_second = options_.heartbeat_interval_second;
+  // 心跳不阻塞 request_end 的收尾等待
+  request_options.not_count_in_shutdown_wait = true;
   int32_t send_result = rpc_send_client_heartbeat(
       request,
       [this](int32_t result, const ::atframework::orbit::ATDClientHeartbeatRsp &response) {
@@ -983,6 +998,11 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::send_to_server(
 int32_t OrbitClientRuntime::request_end_inner(::atframework::orbit::EnClientExitReason reason, int32_t exit_code,
                                               const std::string &custom_data) {
   OrbitClientRuntimeState previous_state = state_.load();
+  if (previous_state == OrbitClientRuntimeState::kStopping) {
+    // 已在收尾等待中：等回包/重试/超时把在途请求收完，重复调用不再触发结束
+    return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+
   set_state(OrbitClientRuntimeState::kStopping);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
@@ -995,10 +1015,8 @@ int32_t OrbitClientRuntime::request_end_inner(::atframework::orbit::EnClientExit
     request.set_exit_reason(reason);
     request.set_custom_data(custom_data);
     request.set_exit_code(exit_code);
-    auto wrapped_callback = [this](int32_t, const ::atframework::orbit::ATDClientExitRsp &) mutable {
-      finalize_shutdown();
-    };
-    send_result = rpc_send_client_exit(request, std::move(wrapped_callback), request_options);
+    // 不在这里直接结束：等 exit 请求和其他在途/可靠请求都收尾后再 finalize
+    send_result = rpc_send_client_exit(request, nullptr, request_options);
     if (send_result < 0) {
       ORBIT_LOG(OrbitClientLogLevel::kError,
                 LOG_WRAPPER_FWAPI_FORMAT("failed to send client_exit request, code={}", send_result));
@@ -1008,9 +1026,12 @@ int32_t OrbitClientRuntime::request_end_inner(::atframework::orbit::EnClientExit
   if (send_result < 0 ||
       (previous_state != OrbitClientRuntimeState::kConnected && previous_state != OrbitClientRuntimeState::kRunning)) {
     finalize_shutdown();
+    return send_result;
   }
 
-  return send_result;
+  // 在途请求已清空时立即结束，否则由回包/重试/超时驱动收尾
+  try_finalize_shutdown();
+  return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(::atframework::orbit::EnClientExitReason reason,
@@ -1023,13 +1044,36 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(::atframework::orbi
 }
 
 void OrbitClientRuntime::finalize_shutdown() {
+  if (shutdown_finalized_) {
+    return;
+  }
+  shutdown_finalized_ = true;
+
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "finalize shutdown");
   io_thread_running_.store(false);
-  app_->stop();
+  if (app_) {
+    app_->stop();
+  }
   pending_client_request_map_.clear();
   pending_client_request_timeout_map_.clear();
   agent_bus_id_ = 0;
   configured_ = false;
+}
+
+void OrbitClientRuntime::try_finalize_shutdown() {
+  if (state_.load() != OrbitClientRuntimeState::kStopping) {
+    return;
+  }
+
+  // 等所有在途/可靠请求收尾（回包，或重试耗尽/超时）；
+  // 标记为不参与收尾等待的请求（如心跳）不计入
+  for (const auto &pending : pending_client_request_map_) {
+    if (!pending.second.not_count_in_shutdown_wait) {
+      return;
+    }
+  }
+
+  finalize_shutdown();
 }
 
 void OrbitClientRuntime::install_app_callbacks() {

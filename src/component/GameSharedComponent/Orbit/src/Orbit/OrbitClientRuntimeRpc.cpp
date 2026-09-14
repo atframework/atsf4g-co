@@ -327,6 +327,7 @@ int32_t OrbitClientRuntime::send_request_message(const google::protobuf::Message
     pending.timeout_second = normalize_request_timeout_second(request_options.timeout_second);
     pending.retry_times_left = normalize_request_retry_times(request_options.retry_times);
     pending.reliable = reliable;
+    pending.not_count_in_shutdown_wait = request_options.not_count_in_shutdown_wait;
     reschedule_pending_request_timeout(task_id, pending);
     pending_client_request_map_.emplace(task_id, std::move(pending));
   }

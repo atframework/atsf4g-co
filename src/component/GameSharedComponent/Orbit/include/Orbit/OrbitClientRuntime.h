@@ -145,6 +145,8 @@ class OrbitClientRuntime {
     time_t deadline = 0;
     int32_t retry_times_left = 0;
     bool reliable = false;
+    // 不阻塞退出收尾（例如心跳）
+    bool not_count_in_shutdown_wait = false;
   };
 
   int32_t send_request_message(const ::google::protobuf::MessageLite& body,
@@ -176,6 +178,8 @@ class OrbitClientRuntime {
   void execute_pending_request_timeouts();
   uint64_t allocate_sequence();
   void finalize_shutdown();
+  // 等所有在途/可靠请求收尾（回包或重试耗尽）后再真正结束
+  void try_finalize_shutdown();
   OrbitClientLoadSnapshot make_default_load_snapshot();
 
   int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatReq& request,
@@ -216,6 +220,8 @@ class OrbitClientRuntime {
   bool start_client_received_;
   // 心跳响应里的 Agent 实例标识与拉起时不一致
   bool agent_instance_id_mismatch_;
+  // finalize_shutdown 是否已执行，避免收尾期间被重复调用
+  bool shutdown_finalized_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
 

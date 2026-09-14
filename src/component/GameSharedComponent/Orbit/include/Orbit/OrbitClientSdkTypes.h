@@ -65,6 +65,8 @@ struct OrbitClientRequestOptions {
   bool reliable = false;
   int32_t retry_times = 0;
   time_t timeout_second = 4;
+  // 不参与 request_end 的收尾等待（例如周期心跳，不应该阻塞退出）
+  bool not_count_in_shutdown_wait = false;
 };
 
 struct OrbitClientLogRecord {
