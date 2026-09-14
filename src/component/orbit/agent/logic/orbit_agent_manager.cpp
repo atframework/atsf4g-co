@@ -144,8 +144,6 @@ static void append_bus_config_env_arguments(const atbus::node::conf_t& bus_conf,
 }
 
 static bool split_command_line(const std::string& input, std::vector<std::string>& output) {
-  output.clear();
-
   std::string current;
   char quoted = '\0';
   for (size_t i = 0; i < input.size(); ++i) {
@@ -260,10 +258,6 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   seed_startup_timeout_sec_ = config.seed_startup_timeout_sec();
   seed_heartbeat_timeout_sec_ = config.seed_heartbeat_timeout_sec();
 
-  if (config.client_path().empty()) {
-    FWLOGERROR("orbit agent client path is empty");
-    return -1;
-  }
   {
     if (!split_command_line(config.client_path(), client_command_line_)) {
       FWLOGERROR("split_command_line failed for {}", config.client_path());
