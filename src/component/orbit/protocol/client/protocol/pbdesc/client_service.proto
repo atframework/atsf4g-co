@@ -16,6 +16,11 @@ import "protocol/common/orbit.common.proto";
 
 /////////////// Agent -> Client ///////////////
 service AgentToClientService {
+  rpc start_client(ATDStartClientReq) returns (DTAStartClientRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "开始Client"
+    };
+  }
   rpc forward_to_client(ATDForwardToClientReq) returns (DTAForwardToClientRsp) {
     option (atframework.rpc_options) = {
       api_name: "转发Server消息"
@@ -31,6 +36,14 @@ service AgentToClientService {
       api_name: "停止Client"
     };
   };
+}
+
+message ATDStartClientReq {
+  // 真实 client_id。为空表示沿用拉起时下发的 Client 通信标识
+  DClientId client_id = 1;
+}
+message DTAStartClientRsp {
+  int32 error_code = 1;
 }
 
 message ATDForwardToClientReq {
@@ -56,7 +69,7 @@ message ATDStopClientReq {
 /////////////// Client -> Agent ///////////////
 service ClientToAgentService {
   // 上报 Client 心跳
-  rpc client_heartbeat(stream DTAClientHeartbeatNotify) returns (google.protobuf.Empty) {
+  rpc client_heartbeat(DTAClientHeartbeatReq) returns (ATDClientHeartbeatRsp) {
     option (atframework.rpc_options) = {
       api_name: "上报心跳"
     };
@@ -81,13 +94,26 @@ service ClientToAgentService {
   };
 }
 
-message DTAClientHeartbeatNotify {
-  DClientId client_id = 1;
+// Client 通信标识。Agent 拉起进程时分配，进程存活期内不变；
+// 只在本文件（Agent 与 Client 之间）使用，不进入 Server / Controller 协议
+message DClientInstanceId {
+  uint64 instance_id = 1;
+}
+
+message DTAClientHeartbeatReq {
+  DClientInstanceId client_instance_id = 1;
   DClientLoadSnapshot snapshot = 2;
+}
+message ATDClientHeartbeatRsp {
+  int32 error_code = 1;
+  // Agent 实例唯一标识。Client 用于判断自己是否还属于当前 Agent 实例
+  string agent_instance_id = 2;
+  // Client 已被认领时回填真实 client_id
+  DClientId client_id = 3;
 }
 
 message DTASendToServerReq {
-  DClientId client_id = 1;
+  DClientInstanceId client_instance_id = 1;
   bytes payload = 2;
 }
 message ATDSendToServerRsp {
@@ -95,7 +121,7 @@ message ATDSendToServerRsp {
 }
 
 message DTAClientStartReq {
-  DClientId client_id = 1;
+  DClientInstanceId client_instance_id = 1;
   string client_ip = 2;
   int32 client_port = 3;
   bytes custom_data = 4;
@@ -105,7 +131,7 @@ message ATDClientStartRsp {
 }
 
 message DTAClientExitReq {
-  DClientId client_id = 1;
+  DClientInstanceId client_instance_id = 1;
 
   EnClientExitReason exit_reason = 11;
   bytes custom_data = 12;

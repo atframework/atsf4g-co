@@ -2,6 +2,7 @@
 
 #include "logic/orbit_controller_manager.h"
 
+#include <config/excel/config_easy_api.h>
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
@@ -44,6 +45,28 @@
 
 namespace {
 constexpr const char* kEtcdOrbitLoadDir = "orbit_load";
+
+struct orbit_agent_candidate_t {
+  uint64_t agent_server_id = 0;
+  double weight = 0.0;
+};
+
+// 按权重加权随机选出一个 Agent，没有候选时返回 0
+uint64_t pick_orbit_agent_candidate(const std::vector<orbit_agent_candidate_t>& candidates, double total_weight) {
+  if (candidates.empty() || total_weight <= 0.0) {
+    return 0;
+  }
+
+  double dice = atfw::component::random_engine::fast_random_between(0.0, total_weight);
+  double accumulated = 0.0;
+  for (const auto& candidate : candidates) {
+    accumulated += candidate.weight;
+    if (dice <= accumulated) {
+      return candidate.agent_server_id;
+    }
+  }
+  return candidates.back().agent_server_id;
+}
 
 static bool unpack_agent_load_record(atfw::orbit::DAgentEtcdLoadRecord& out, const std::string& /*path*/,
                                      const std::string& json, bool reset_data) {
@@ -202,14 +225,84 @@ void orbit_controller_manager::tick() {
 
 // ===================== private helpers =====================
 
-atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
-    const atfw::orbit::DAgentClientStartArgsResource& resource, const std::string& match_tag) noexcept {
-  // 收集候选 agent 及其权重
-  struct candidate_t {
-    uint64_t agent_server_id;
-    double weight;
-  };
-  std::vector<candidate_t> candidates;
+atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(int32_t client_template_id) noexcept {
+  atfw::orbit::DAgentIdentity result;
+
+  auto template_row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(client_template_id);
+  if (template_row == nullptr) {
+    return result;
+  }
+
+  const std::string& match_tag = template_row->match_tag();
+
+  // 1) 优先选择持有该模板空闲预启动进程的 Agent。远端启动的模板不参与预启动，直接跳过这一段。
+  //    预启动进程的负载已经计入 Agent 上报值，所以这里不再叠加本次启动的预计负载，也不累加预分配。
+  if (!template_row->remote_start_client()) {
+    std::vector<orbit_agent_candidate_t> pre_start_candidates;
+    double pre_start_total_weight = 0.0;
+
+    for (const auto& kv : agents_) {
+      const auto& load = kv.second.load_record;
+      if (!load.agent_online()) {
+        continue;
+      }
+
+      if (!match_tag.empty() && load.tag() != match_tag) {
+        continue;
+      }
+
+      uint32_t idle_pre_start_count = 0;
+      for (const auto& pre_start : load.agent().pre_start_templates()) {
+        if (pre_start.client_template_id() == client_template_id) {
+          idle_pre_start_count = pre_start.idle_count();
+          break;
+        }
+      }
+      // 扣掉已派发、但还未体现在 Agent 上报里的认领数
+      if (idle_pre_start_count <= kv.second.preallocated_pre_start_count) {
+        continue;
+      }
+
+      const double effective_cpu_used = load.agent().cpu_used() + kv.second.preallocated_cpu;
+      const double effective_memory_used = load.agent().memory_used_mb() + kv.second.preallocated_memory_mb;
+
+      if (load.cpu_capacity() > 0.0 && effective_cpu_used > load.cpu_capacity()) {
+        continue;
+      }
+      if (load.memory_capacity_mb() > 0.0 && effective_memory_used > load.memory_capacity_mb()) {
+        continue;
+      }
+      if (load.max_batch_startup_count() > 0 &&
+          kv.second.preallocated_client_count + load.agent().starting_client_count() >=
+              static_cast<uint32_t>(load.max_batch_startup_count())) {
+        continue;
+      }
+
+      // 按 CPU 和内存综合利用率打分（越低越好）
+      double cpu_ratio = (load.cpu_capacity() > 0.0) ? effective_cpu_used / load.cpu_capacity() : 0.0;
+      double mem_ratio = (load.memory_capacity_mb() > 0.0) ? effective_memory_used / load.memory_capacity_mb() : 0.0;
+      double weight = 1.0 / ((cpu_ratio + mem_ratio) * 0.5 + 0.01);
+
+      pre_start_candidates.push_back({kv.first, weight});
+      pre_start_total_weight += weight;
+    }
+
+    uint64_t selected_agent_id = pick_orbit_agent_candidate(pre_start_candidates, pre_start_total_weight);
+    if (0 != selected_agent_id) {
+      auto info_iter = agents_.find(selected_agent_id);
+      if (info_iter != agents_.end()) {
+        ++info_iter->second.preallocated_pre_start_count;
+      }
+
+      result.set_agent_server_id(selected_agent_id);
+      FWLOGINFO("orbit controller select agent {:#x} by pre start client, client_template_id={}", selected_agent_id,
+                client_template_id);
+      return result;
+    }
+  }
+
+  // 2) 没有可用的预启动进程，按利用率加权随机
+  std::vector<orbit_agent_candidate_t> candidates;
   double total_weight = 0.0;
 
   for (const auto& kv : agents_) {
@@ -226,17 +319,16 @@ atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
       }
     }
 
-    // 将预分配量计入已用资源
-    double effective_cpu_used = load.agent().cpu_used() + kv.second.preallocated_cpu;
-    double effective_memory_used = load.agent().memory_used_mb() + kv.second.preallocated_memory_mb;
+    // 本次启动需要的资源
+    const double expect_cpu =
+        kv.second.seed_mode ? template_row->expected_seed_cpu() : template_row->expected_normal_cpu();
+    const double expect_memory_mb = kv.second.seed_mode ? template_row->expected_seed_memory_mb()
+                                                        : template_row->expected_normal_memory_mb();
 
-    if (kv.second.seed_mode) {
-      effective_cpu_used += resource.seed_cpu();
-      effective_memory_used += resource.seed_memory_mb();
-    } else {
-      effective_cpu_used += resource.normal_cpu();
-      effective_memory_used += resource.normal_memory_mb();
-    }
+    // 将预分配量计入已用资源
+    double effective_cpu_used = load.agent().cpu_used() + kv.second.preallocated_cpu + expect_cpu;
+    double effective_memory_used = load.agent().memory_used_mb() + kv.second.preallocated_memory_mb + expect_memory_mb;
+
     // 检查 CPU 余量
     if (load.cpu_capacity() > 0.0 && effective_cpu_used > load.cpu_capacity()) {
       continue;
@@ -263,21 +355,9 @@ atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
     total_weight += weight;
   }
 
-  atfw::orbit::DAgentIdentity result;
-  if (candidates.empty()) {
+  uint64_t selected_id = pick_orbit_agent_candidate(candidates, total_weight);
+  if (0 == selected_id) {
     return result;
-  }
-
-  // 加权随机选择
-  double dice = atfw::component::random_engine::fast_random_between(0.0, total_weight);
-  double accumulated = 0.0;
-  uint64_t selected_id = candidates.back().agent_server_id;
-  for (const auto& c : candidates) {
-    accumulated += c.weight;
-    if (dice <= accumulated) {
-      selected_id = c.agent_server_id;
-      break;
-    }
   }
 
   result.set_agent_server_id(selected_id);
@@ -285,8 +365,10 @@ atfw::orbit::DAgentIdentity orbit_controller_manager::select_agent_for_launch(
   // 更新预分配数据
   auto it = agents_.find(selected_id);
   if (it != agents_.end()) {
-    it->second.preallocated_cpu += it->second.seed_mode ? resource.seed_cpu() : resource.normal_cpu();
-    it->second.preallocated_memory_mb += it->second.seed_mode ? resource.seed_memory_mb() : resource.normal_memory_mb();
+    it->second.preallocated_cpu +=
+        it->second.seed_mode ? template_row->expected_seed_cpu() : template_row->expected_normal_cpu();
+    it->second.preallocated_memory_mb += it->second.seed_mode ? template_row->expected_seed_memory_mb()
+                                                              : template_row->expected_normal_memory_mb();
     ++it->second.preallocated_client_count;
   }
 
@@ -329,6 +411,7 @@ void orbit_controller_manager::update_agent_load(const atfw::orbit::DAgentEtcdLo
   info.preallocated_cpu = 0.0;
   info.preallocated_memory_mb = 0.0;
   info.preallocated_client_count = 0;
+  info.preallocated_pre_start_count = 0;
 
   FWLOGINFO(
       "orbit controller agent {:#x}:{}:tag:{} seed:{} registered/updated: cpu={:.2f}/{:.2f}, mem={:.2f}/{:.2f} MB, "
@@ -535,9 +618,16 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  const std::string& client_id_str = request.args().client_start_args().client_id().client_id();
+  const std::string& client_id_str = request.arg().client_id();
   if (client_id_str.empty()) {
     FWLOGERROR("orbit controller launch_client rejected: client_id is empty");
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  const int32_t client_template_id = request.arg().client_template_id();
+  if (0 == client_template_id) {
+    FWLOGERROR("orbit controller launch_client rejected: client_template_id is 0");
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -549,10 +639,17 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  if (request.args().resource().normal_cpu() <= std::numeric_limits<float>::epsilon() ||
-      request.args().resource().normal_memory_mb() <= std::numeric_limits<float>::epsilon() ||
-      request.args().resource().seed_cpu() <= std::numeric_limits<float>::epsilon() ||
-      request.args().resource().seed_memory_mb() <= std::numeric_limits<float>::epsilon()) {
+  auto template_row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(client_template_id);
+  if (template_row == nullptr) {
+    FWLOGERROR("orbit controller launch_client rejected: client_template_id={} not found", client_template_id);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  if (template_row->expected_normal_cpu() <= std::numeric_limits<float>::epsilon() ||
+      template_row->expected_normal_memory_mb() <= std::numeric_limits<float>::epsilon() ||
+      template_row->expected_seed_cpu() <= std::numeric_limits<float>::epsilon() ||
+      template_row->expected_seed_memory_mb() <= std::numeric_limits<float>::epsilon()) {
     FWLOGERROR("orbit controller launch_client rejected: invalid resource requirements for client_id={}",
                client_id_str);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
@@ -561,7 +658,7 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
 
   int32_t retry_count = 3;
   while (retry_count > 0) {
-    auto agent = select_agent_for_launch(request.args().resource(), request.args().match_tag());
+    auto agent = select_agent_for_launch(client_template_id);
     if (agent.agent_server_id() == 0) {
       FWLOGWARNING("orbit controller launch_client: no available agent");
       RPC_AWAIT_IGNORE_RESULT(rpc::wait(ctx, std::chrono::milliseconds(1000)));
@@ -571,7 +668,8 @@ rpc::result_code_type orbit_controller_manager::handle_launch_client(
 
     auto start_req = rpc::make_shared_message<atfw::orbit::CTAStartClientReq>(ctx);
     auto start_rsp = rpc::make_shared_message<atfw::orbit::ATCStartClientRsp>(ctx);
-    *start_req->mutable_args() = request.args();
+    start_req->mutable_arg()->set_client_id(client_id_str);
+    start_req->mutable_arg()->set_client_template_id(client_template_id);
     *start_req->mutable_server_identity() = request.server_identity();
 
     FWLOGINFO("orbit controller dispatching launch_client to agent {:#x}: client_id={}", agent.agent_server_id(),

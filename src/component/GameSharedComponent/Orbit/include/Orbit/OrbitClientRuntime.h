@@ -126,6 +126,10 @@ class OrbitClientRuntime {
 
   bool wait_connect();
   int32_t send_heartbeat(const OrbitClientLoadSnapshot& snapshot);
+  void on_heartbeat_response(int32_t result, const ::atframework::orbit::ATDClientHeartbeatRsp& response);
+  // 未被 start_client 认领时，根据心跳响应做兜底自检
+  void check_agent_alive(time_t now);
+  time_t get_agent_alive_timeout_second() const;
   void on_received_message(const std::string& message);
 
   int32_t on_received_fork_request(const ::atframework::orbit::ATDForkSeedClientReq& request);
@@ -174,7 +178,9 @@ class OrbitClientRuntime {
   void finalize_shutdown();
   OrbitClientLoadSnapshot make_default_load_snapshot();
 
-  int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatNotify& request);
+  int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatReq& request,
+                                    OrbitClientRpcCallback<::atframework::orbit::ATDClientHeartbeatRsp> callback,
+                                    const OrbitClientRequestOptions& request_options);
   int32_t rpc_send_send_to_server(const ::atframework::orbit::DTASendToServerReq& request,
                                   OrbitClientRpcCallback<::atframework::orbit::ATDSendToServerRsp> callback,
                                   const OrbitClientRequestOptions& request_options);
@@ -190,6 +196,8 @@ class OrbitClientRuntime {
                                        ::atframework::orbit::ATDForkSeedClientReq& request);
   int32_t rpc_receive_stop_client(const ::atframework::SSMsgHead& req_head,
                                   ::atframework::orbit::ATDStopClientReq& request);
+  int32_t rpc_receive_start_client(const ::atframework::SSMsgHead& req_head,
+                                   ::atframework::orbit::ATDStartClientReq& request);
 
  private:
   std::unique_ptr<::atframework::atapp::app> app_;
@@ -202,6 +210,12 @@ class OrbitClientRuntime {
   uint64_t agent_bus_id_;
   uint64_t sequence_allocator_;
   time_t last_heartbeat_timepoint_;
+  // 最近一次心跳响应的时间点，未被认领时用于判断 Agent 是否已经失联
+  time_t last_heartbeat_rsp_timepoint_;
+  // 是否已收到 start_client（预启动进程被认领）
+  bool start_client_received_;
+  // 心跳响应里的 Agent 实例标识与拉起时不一致
+  bool agent_instance_id_mismatch_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
 
@@ -218,6 +232,7 @@ class OrbitClientRuntime {
   bool has_self_usage_sample_ = false;
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+
  public:
   using orbit_client_send_hook_t = std::function<int32_t(
       const std::string& rpc_full_name, const std::string& packed_message, uint64_t task_id, bool reliable)>;

@@ -3,12 +3,6 @@
 
 #pragma once
 
-#include <cstdint>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <vector>
-
 #include <config/extern_service_types.h>
 #include <dispatcher/task_type_traits.h>
 #include <memory/rc_ptr.h>
@@ -28,6 +22,12 @@
 // clang-format on
 
 #include <data/user_key_hash_helper.h>
+
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace rpc {
 class context;
@@ -60,7 +60,7 @@ class orbit_room : public atfw::util::memory::enable_shared_rc_from_this<orbit_r
   const std::string& get_region() const;
 
   int32_t create(rpc::context& ctx, uint64_t match_server_id);
-  rpc::result_code_type start_client(rpc::context& ctx, const atfw::orbit::DAgentClientStartArgs& args);
+  rpc::result_code_type start_client(rpc::context& ctx, int32_t client_template_id);
   int32_t on_client_start(rpc::context& ctx, const std::string& client_addr);
 
   int32_t init_user(const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserInitData>& user_list,

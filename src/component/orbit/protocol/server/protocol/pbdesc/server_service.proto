@@ -113,7 +113,7 @@ service ServerToControllerService {
 
 message STCLaunchClientReq {
   DServerIdentity server_identity = 1;
-  DAgentClientStartArgs args = 2;
+  DOrbitClientLaunchArg arg = 2;
 }
 message CTSLaunchClientRsp {
   int32 error_code = 1;

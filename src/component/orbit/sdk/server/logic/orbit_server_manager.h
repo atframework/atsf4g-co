@@ -97,7 +97,7 @@ class orbit_server_manager {
  public:
   // 启动Client
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API rpc::result_code_type start_client(
-      rpc::context& ctx, const std::string& region, const atfw::orbit::DAgentClientStartArgs& args);
+      rpc::context& ctx, const std::string& region, const std::string& client_id, int32_t client_template_id);
   // 发送消息至Client
   EXPLICIT_NODISCARD_ATTR ORBIT_SERVER_SERVICE_API int32_t send_to_client_no_wait(rpc::context& ctx,
                                                                                   const std::string& client_id,

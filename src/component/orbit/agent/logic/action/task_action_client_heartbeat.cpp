@@ -35,11 +35,10 @@ const char* task_action_client_heartbeat::name() const { return "task_action_cli
 
 task_action_client_heartbeat::result_type task_action_client_heartbeat::operator()() {
   const rpc_request_type& req_body = get_request_body();
-  // Stream request or stream response, just ignore auto response
-  disable_response_message();
+  rpc_response_type& rsp_body = get_response_body();
 
-  int32_t rpc_result =
-      RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->handle_client_heartbeat(get_shared_context(), req_body));
+  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
+      orbit_agent_manager::me()->handle_client_heartbeat(get_shared_context(), req_body, rsp_body));
   TASK_ACTION_RETURN_CODE(rpc_result);
 }
 

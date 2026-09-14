@@ -30,6 +30,8 @@
 
 #include <memory/object_allocator.h>
 
+#include <string>
+
 int orbit_room_manager::init() {
   is_inited_ = true;
   return 0;
@@ -99,9 +101,9 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
     FWLOGERROR("orbit_room_manager create_room failed, match_id is empty");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
-  atfw::orbit::DAgentClientStartArgs args;
-  if (!fill_client_start_args_from_template_id(req.room_data().client_template_id(), client_id, args)) {
-    FWLOGERROR("orbit_room_manager create_room failed, fill_client_start_args_from_template_id failed");
+  if (!is_client_template_exist(req.room_data().client_template_id())) {
+    FWLOGERROR("orbit_room_manager create_room failed, client_template_id {} not found",
+               req.room_data().client_template_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND);
   }
 
@@ -112,7 +114,7 @@ rpc::result_code_type orbit_room_manager::create_room(rpc::context& ctx,
     RPC_RETURN_CODE(ret);
   }
   room_index_by_client_id_[client_id] = room;
-  ret = RPC_AWAIT_CODE_RESULT(room->start_client(ctx, args));
+  ret = RPC_AWAIT_CODE_RESULT(room->start_client(ctx, req.room_data().client_template_id()));
   if (ret != 0) {
     FWLOGERROR("orbit_room {} start_client failed, ret: {}", room->get_client_id(), ret);
     RPC_RETURN_CODE(ret);
@@ -184,21 +186,6 @@ rpc::result_code_type orbit_room_manager::on_user_finish(
   RPC_RETURN_CODE(room->on_user_finish(ctx, results));
 }
 
-bool orbit_room_manager::fill_client_start_args_from_template_id(int32_t template_id, const std::string& client_id,
-                                                                 atfw::orbit::DAgentClientStartArgs& args) {
-  args.mutable_client_start_args()->mutable_client_id()->set_client_id(client_id);
-  auto row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(template_id);
-  if (row == nullptr) {
-    return false;
-  }
-  args.mutable_resource()->set_normal_cpu(row->expected_normal_cpu());
-  args.mutable_resource()->set_normal_memory_mb(row->expected_normal_memory_mb());
-  args.mutable_resource()->set_seed_cpu(row->expected_seed_cpu());
-  args.mutable_resource()->set_seed_memory_mb(row->expected_seed_memory_mb());
-  args.set_startup_timeout_sec(row->startup_timeout_sec());
-  args.set_heartbeat_timeout_sec(row->heartbeat_timeout_sec());
-  *args.mutable_client_start_args()->mutable_custom_args() = row->launch_args();
-  args.set_match_tag(row->match_tag());
-  args.set_remote_start(row->remote_start_client());
-  return true;
+bool orbit_room_manager::is_client_template_exist(int32_t client_template_id) {
+  return excel::get_ExcelOrbitClientTemplate_by_client_template_id(client_template_id) != nullptr;
 }

@@ -8,10 +8,6 @@
 
 #include <memory/object_allocator.h>
 
-#include <cstdlib>
-#include <sstream>
-#include <vector>
-
 #include <config/atframe_service_types.h>
 #include <config/extern_service_types.h>
 #include <config/logic_config.h>
@@ -44,11 +40,17 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <logic/room/orbit_room_manager.h>
+
+#include <cstdlib>
+#include <sstream>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include "app/handle_orbit_rpc_orbitserverrpcservice.atfw.gen.h"
 #include "app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.h"
 #include "app/handle_ss_rpc_orbitsvrservice.atfw.gen.h"
-
-#include <logic/room/orbit_room_manager.h>
 
 namespace {
 static uint64_t make_orbit_server_unique_id() {
@@ -120,34 +122,31 @@ class main_service_module : public atfw::atapp::module_impl {
   }
 
   static int cmd_start_client(atfw::util::cli::callback_param params) {
-    if (params.get_params_number() < 2) {
-      add_command_response(params, "usage: orbit-start-client <region> <client-id> [match-tag]");
+    if (params.get_params_number() < 3) {
+      add_command_response(params, "usage: orbit-start-client <region> <client-id> <client-template-id>");
       return 0;
     }
 
     std::string region = params[0]->to_cpp_string();
     std::string client_id = params[1]->to_cpp_string();
-    std::string match_tag;
-    if (params.get_params_number() > 2) {
-      match_tag = params[2]->to_cpp_string();
-    }
+    int32_t client_template_id = static_cast<int32_t>(params[2]->to_int64());
 
     rpc::context ctx{rpc::context::create_without_task()};
-    auto invoke_result = rpc::async_invoke(
-        ctx, "orbitsvr.orbit_start_client",
-        [region = std::move(region), client_id = std::move(client_id),
-         match_tag = std::move(match_tag)](rpc::context &child_ctx) -> rpc::result_code_type {
-          atfw::orbit::DAgentClientStartArgs request;
-          orbit_room_manager::fill_client_start_args_from_template_id(1, client_id, request);
-          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(child_ctx, region, request)));
-        });
+    auto invoke_result =
+        rpc::async_invoke(ctx, "orbitsvr.orbit_start_client",
+                          [region = std::move(region), client_id = std::move(client_id),
+                           client_template_id](rpc::context &child_ctx) -> rpc::result_code_type {
+                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(
+                                child_ctx, region, client_id, client_template_id)));
+                          });
 
     if (invoke_result.is_error()) {
       add_command_response(params, "orbit-start-client failed to schedule async task");
       return 0;
     }
 
-    add_command_response(params, std::string{"orbit-start-client scheduled for client "} + params[1]->to_cpp_string());
+    add_command_response(
+        params, LOG_WRAPPER_FWAPI_FORMAT("orbit-start-client scheduled for client {}", params[1]->to_cpp_string()));
     return 0;
   }
 

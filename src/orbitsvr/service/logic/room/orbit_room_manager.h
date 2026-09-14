@@ -21,14 +21,14 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include "logic/room/orbit_room.h"
-
 #include <memory/rc_ptr.h>
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <unordered_map>
+
+#include "logic/room/orbit_room.h"
 
 namespace rpc {
 class context;
@@ -57,8 +57,7 @@ class orbit_room_manager : public util::design_pattern::singleton<orbit_room_man
       rpc::context& ctx, const std::string& client_id,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull>& results);
 
-  static bool fill_client_start_args_from_template_id(int32_t template_id, const std::string& client_id,
-                                                      atfw::orbit::DAgentClientStartArgs& args);
+  static bool is_client_template_exist(int32_t client_template_id);
 
  private:
   atfw::util::memory::strong_rc_ptr<orbit_room> get_room(const std::string& client_id) noexcept;

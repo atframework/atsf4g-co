@@ -74,25 +74,23 @@ message DClientMessage {
   bytes payload = 2;
 }
 
+// Fork 种子进程时下发的启动参数
 message DClientStartArgs {
   DClientId client_id = 1;
   repeated string custom_args = 2;
 }
 
-message DAgentClientStartArgsResource {
-  double normal_cpu = 1;
-  double normal_memory_mb = 2;
-  double seed_cpu = 3;
-  double seed_memory_mb = 4;
+// 启动请求参数。接入端只传 client_id 与 client_template_id，其余参数由各进程读 Excel 配置
+message DOrbitClientLaunchArg {
+  string client_id = 1;
+  int32 client_template_id = 2;
 }
 
-message DAgentClientStartArgs {
-  DClientStartArgs client_start_args = 1;
-  uint32 startup_timeout_sec = 2;
-  uint32 heartbeat_timeout_sec = 3;
-  DAgentClientStartArgsResource resource = 4;
-  bool remote_start = 5;
-  string match_tag = 11; // 数据截至到Controller后无用
+// 单个模板的预启动进程数量
+message DAgentPreStartTemplateSnapshot {
+  int32 client_template_id = 1;
+  uint32 idle_count = 2;      // 已 ready 且未被认领
+  uint32 starting_count = 3;  // 已拉起但未 ready
 }
 
 message DAgentLoadSnapshot {
@@ -100,6 +98,8 @@ message DAgentLoadSnapshot {
   double memory_used_mb = 2;
   uint32 running_client_count = 3;
   uint32 starting_client_count = 4;
+
+  repeated DAgentPreStartTemplateSnapshot pre_start_templates = 11;
 }
 
 message DAgentEtcdLoadRecord {

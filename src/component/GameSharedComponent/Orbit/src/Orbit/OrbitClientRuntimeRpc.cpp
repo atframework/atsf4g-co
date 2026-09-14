@@ -32,6 +32,7 @@ namespace {
 constexpr const char *kMethodForwardToClient = "forward_to_client";
 constexpr const char *kMethodForkSeedClient = "fork_seed_client";
 constexpr const char *kMethodStopClient = "stop_client";
+constexpr const char *kMethodStartClient = "start_client";
 constexpr const char *kMethodClientHeartbeat = "client_heartbeat";
 constexpr const char *kMethodSendToServer = "send_to_server";
 constexpr const char *kMethodClientStart = "client_start";
@@ -44,6 +45,7 @@ enum class orbit_receive_rpc_type_t : uint8_t {
   kForwardToClient = 1,
   kForkSeedClient = 2,
   kStopClient = 3,
+  kStartClient = 4,
 };
 
 int64_t get_now_seconds() {
@@ -134,6 +136,7 @@ const std::unordered_map<std::string, orbit_receive_rpc_type_t> &get_receive_rpc
     ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodForwardToClient, kForwardToClient);
     ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodForkSeedClient, kForkSeedClient);
     ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodStopClient, kStopClient);
+    ORBIT_CLIENT_RUNTIME_REG_RECEIVE_RPC(result, kMethodStartClient, kStartClient);
 
     return result;
   }();
@@ -491,6 +494,16 @@ int32_t OrbitClientRuntime::dispatch_received_message(const atframework::SSMsg &
       return rpc_receive_fork_seed_client(message.head(), request);
     }
 
+    case orbit_receive_rpc_type_t::kStartClient: {
+      ::atframework::orbit::ATDStartClientReq request;
+      if (!unpack_body_message(message, request)) {
+        ORBIT_LOG(OrbitClientLogLevel::kError, "failed to parse start_client payload");
+        return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SERIALIZETOSTRING;
+      }
+
+      return rpc_receive_start_client(message.head(), request);
+    }
+
     case orbit_receive_rpc_type_t::kStopClient: {
       ::atframework::orbit::ATDStopClientReq request;
       if (!unpack_body_message(message, request)) {
@@ -605,14 +618,20 @@ void OrbitClientRuntime::execute_pending_request_timeouts() {
   }
 }
 
-int32_t OrbitClientRuntime::rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatNotify &request) {
+int32_t OrbitClientRuntime::rpc_send_client_heartbeat(
+    const ::atframework::orbit::DTAClientHeartbeatReq &request,
+    OrbitClientRpcCallback<::atframework::orbit::ATDClientHeartbeatRsp> callback,
+    const OrbitClientRequestOptions &request_options) {
   const google::protobuf::MethodDescriptor *method = get_client_to_agent_method(kMethodClientHeartbeat);
   if (nullptr == method) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "client_heartbeat method descriptor not found");
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
   }
 
-  return send_stream_message(request, *method);
+  return send_request_message(
+      request, *method,
+      make_typed_request_callback<::atframework::orbit::ATDClientHeartbeatRsp>(*this, *method, std::move(callback)),
+      request_options);
 }
 
 int32_t OrbitClientRuntime::rpc_send_send_to_server(
@@ -716,6 +735,42 @@ int32_t OrbitClientRuntime::rpc_receive_stop_client(const ::atframework::SSMsgHe
   }
 
   on_received_stop_request(request);
+  return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+int32_t OrbitClientRuntime::rpc_receive_start_client(const ::atframework::SSMsgHead &req_head,
+                                                     ::atframework::orbit::ATDStartClientReq &request) {
+  const google::protobuf::MethodDescriptor *method = get_agent_to_client_method(kMethodStartClient);
+  if (nullptr == method) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "start_client method descriptor not found");
+    return ::atframework::orbit::EN_ORBIT_ERROR_CODE_METHOD_NOT_FOUND;
+  }
+
+  // 立刻回包，回调在 Tick 时执行
+  ::atframework::orbit::DTAStartClientRsp rsp;
+  rsp.set_error_code(::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS);
+  send_response_message(req_head, rsp, *method);
+
+  const std::string client_id = request.client_id().client_id();
+  start_client_received_ = true;
+  if (!client_id.empty()) {
+    options_.client_id = client_id;
+  }
+
+  if (enabled_io_thread()) {
+    post_to_caller_thread([this, client_id] {
+      ORBIT_LOG(OrbitClientLogLevel::kInfo, LOG_WRAPPER_FWAPI_FORMAT("start_client received, client_id={}", client_id));
+      if (callbacks_.on_start_client) {
+        callbacks_.on_start_client(client_id);
+      }
+    });
+  } else {
+    ORBIT_LOG(OrbitClientLogLevel::kInfo, LOG_WRAPPER_FWAPI_FORMAT("start_client received, client_id={}", client_id));
+    if (callbacks_.on_start_client) {
+      callbacks_.on_start_client(client_id);
+    }
+  }
+
   return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
 }
 

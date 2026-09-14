@@ -39,6 +39,8 @@ struct orbit_controller_agent_info {
   double preallocated_cpu = 0.0;
   double preallocated_memory_mb = 0.0;
   uint32_t preallocated_client_count = 0;
+  // 已派发但尚未体现在 Agent 上报里的预启动认领数
+  uint32_t preallocated_pre_start_count = 0;
 };
 
 class orbit_controller_manager : public util::design_pattern::singleton<orbit_controller_manager> {
@@ -86,8 +88,9 @@ class orbit_controller_manager : public util::design_pattern::singleton<orbit_co
   static int32_t handle_server_heartbeat(rpc::context& ctx, const atfw::orbit::STCServerHeartbeatNotify& request);
 
  private:
-  atfw::orbit::DAgentIdentity select_agent_for_launch(const atfw::orbit::DAgentClientStartArgsResource& resource,
-                                                      const std::string& match_tag) noexcept;
+  // 按 client_template_id 读 Excel 配置选择 Agent
+  // 优先选择持有该模板空闲预启动进程的 Agent，否则按利用率加权随机
+  atfw::orbit::DAgentIdentity select_agent_for_launch(int32_t client_template_id) noexcept;
   void on_agent_load_event(atfw::atapp::service_discovery_module::node_action_t action_type,
                            const atfw::orbit::DAgentEtcdLoadRecord& record);
   void update_agent_load(const atfw::orbit::DAgentEtcdLoadRecord& record);

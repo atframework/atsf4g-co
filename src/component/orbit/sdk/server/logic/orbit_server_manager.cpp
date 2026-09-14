@@ -18,6 +18,7 @@
 
 #include <memory/object_allocator.h>
 
+#include <config/excel/config_easy_api.h>
 #include <config/logic_config.h>
 
 #include <dispatcher/ss_msg_dispatcher.h>
@@ -69,17 +70,28 @@ ORBIT_SERVER_SERVICE_API void orbit_server_manager::tick() {
   check_client_timeout();
 }
 
-ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_client(
-    rpc::context& ctx, const std::string& region, const atfw::orbit::DAgentClientStartArgs& args) {
-  const std::string& client_id = args.client_start_args().client_id().client_id();
+ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_client(rpc::context& ctx,
+                                                                                  const std::string& region,
+                                                                                  const std::string& client_id,
+                                                                                  int32_t client_template_id) {
   if (client_id.empty()) {
     FWLOGERROR("orbit start_client rejected: client_id is empty");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  if (client_template_id == 0) {
+    FWLOGERROR("orbit start_client rejected: client_template_id is 0");
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
   auto client_info_ptr_ = get_client_info(client_id);
   if (client_info_ptr_ != nullptr) {
     FWLOGERROR("already found client info for client identity {}", client_id);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SERVER_CLIENT_ALREADY_EXISTS);
+  }
+
+  auto template_row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(client_template_id);
+  if (template_row == nullptr) {
+    FWLOGERROR("orbit start_client rejected: client_template_id {} not found", client_template_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
   uint64_t controller_server_id = select_controller_server_id(client_id, region);
@@ -99,7 +111,8 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
   auto rsp = rpc::make_shared_message<atfw::orbit::CTSLaunchClientRsp>(ctx);
 
   *req->mutable_server_identity() = server_identity_;
-  *req->mutable_args() = args;
+  req->mutable_arg()->set_client_id(client_id);
+  req->mutable_arg()->set_client_template_id(client_template_id);
 
   int32_t rpc_result =
       RPC_AWAIT_CODE_RESULT(rpc::servertocontrollerservice::launch_client(ctx, controller_server_id, *req, *rsp));
@@ -117,8 +130,8 @@ ORBIT_SERVER_SERVICE_API rpc::result_code_type orbit_server_manager::start_clien
     client_info_ptr_->status = EnClientStatus::EN_CLIENT_STATUS_STARTING;
   }
   client_info_ptr_->client_identity = rsp->client_identity();
-  if (args.startup_timeout_sec() > 0) {
-    add_client_timeout(client_info_ptr_, args.startup_timeout_sec() + 10);  // 容忍时间
+  if (template_row->startup_timeout_sec() > 0) {
+    add_client_timeout(client_info_ptr_, template_row->startup_timeout_sec() + 10);  // 容忍时间
   } else {
     add_client_timeout(client_info_ptr_);  // 保底超时
   }

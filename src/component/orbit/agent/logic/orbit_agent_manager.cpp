@@ -8,9 +8,11 @@
 
 #include <memory/object_allocator.h>
 
+#include <config/excel/config_easy_api.h>
 #include <config/logic_config.h>
 #include <log/log_wrapper.h>
 #include <logic/logic_server_setup.h>
+#include <random/uuid_generator.h>
 #include <rpc/agenttoclientservice/agenttoclientservice.atfw.gen.h>
 #include <rpc/agenttocontrollerservice/agenttocontrollerservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
@@ -42,6 +44,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <list>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -52,11 +55,15 @@ namespace {
 constexpr time_t kDefaultServerIdentityTimeoutSec = 30;
 constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
 constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
+// 运行情况汇总日志的间隔
+constexpr time_t kAgentRunningSummaryLogIntervalSec = 60;
 
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
 constexpr const char* kOrbitEnabledArg = "--enable_orbit";
 constexpr const char* kOrbitStartTimeout = "--start_timeout";
 constexpr const char* kOrbitSeedMode = "--seed_mode";
+constexpr const char* kOrbitClientInstanceIdArg = "--orbit-client-instance-id";
+constexpr const char* kOrbitAgentInstanceIdArg = "--orbit-agent-instance-id";
 
 static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
   return [expected_server_id](const std::string& checked) -> bool {
@@ -184,7 +191,7 @@ static bool split_command_line(const std::string& input, std::vector<std::string
 }
 
 struct orbit_agent_process_exit_data {
-  std::string client_id;
+  uint64_t client_instance_id = 0;
   uint64_t worker_unique_id = 0;
 };
 
@@ -224,6 +231,9 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   tag_ = config.tag();
 
   (*controller_policy_selector_.mutable_labels())["orbit.region"] = region_;
+
+  // Agent 实例唯一标识，随启动参数下发给 Client，用于让 Client 识别 Agent 重启
+  agent_instance_id_ = atfw::util::random::uuid_generator::generate_string_random();
 
   cpu_capacity_ = config.cpu_capacity();
   memory_capacity_mb_ = config.memory_capacity_mb();
@@ -334,6 +344,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
   client_ip_ = config.client_ip();
   repeated_startup_failures_fatal_error_ = config.repeated_startup_failures_fatal_error();
   remote_agent_endpoint_ = config.remote_agent_addr();
+  enable_pre_start_ = config.enable_pre_start();
 
   if (agent_endpoint_.empty() || remote_agent_endpoint_.empty()) {
     FWLOGERROR("orbit agent failed to resolve agent_endpoint_ {} or remote_agent_endpoint_ {}", agent_endpoint_,
@@ -353,6 +364,15 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
     }
   } else {
     agent_online_ = true;
+  }
+
+  // 预启动需要读 Excel 配置，tag 没有任何匹配模板时不允许启动
+  if (enable_pre_start_) {
+    int pre_start_init_result = init_pre_start_templates();
+    if (pre_start_init_result != 0) {
+      FWLOGERROR("orbit agent failed to init pre start templates, res: {}", pre_start_init_result);
+      return pre_start_init_result;
+    }
   }
 
   // 初始化Record
@@ -448,8 +468,24 @@ int orbit_agent_manager::stop() {
     stop_client_process(seed_client_record_, atfw::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0);
     ret = 1;
   }
-  while (!clients_.empty()) {
-    auto record = clients_.begin()->second;
+
+  // 未被认领的预启动进程由 Agent 负责关闭：先发 stop_client，cleanup 时再强杀
+  for (auto& kv : clients_) {
+    auto record = kv.second;
+    if (record && !record->seed_process && record->pre_start && !record->start_client_sent) {
+      FWLOGINFO("orbit agent stop pre start client {}", record->local_client_id);
+      stop_client_process(record, atfw::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0);
+    }
+  }
+
+  // 其余 Client 不再由 Agent 管理，直接移除并通知退出
+  for (auto iter = clients_.begin(); iter != clients_.end();) {
+    auto record = iter->second;
+    ++iter;
+    if (record && !record->seed_process && record->pre_start && !record->start_client_sent) {
+      // 保留给 cleanup 处理
+      continue;
+    }
     delete_client(record);
     async_notify_client_exit(record);
   }
@@ -474,6 +510,10 @@ void orbit_agent_manager::tick() {
   check_client_timeouts(now);
   check_client_force_kill(now);
 
+  // 按表补齐预启动进程，并周期打印运行情况
+  tick_pre_start(now);
+  log_agent_running_summary(now);
+
   // 定期将负载快照写入 etcd（每5秒更新一次）
   constexpr time_t kAutoLoadUpdateIntervalSec = 5;
   if (now - last_auto_load_etcd_update_timepoint_ >= kAutoLoadUpdateIntervalSec) {
@@ -490,6 +530,27 @@ void orbit_agent_manager::tick() {
 void orbit_agent_manager::cleanup() {
   if (seed_client_record_) {
     kill_client_process(seed_client_record_, SIGKILL, atfw::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0);
+  }
+
+  // 未被认领的预启动进程由 Agent 负责，stop_client 未生效时直接结束进程。
+  // cleanup 阶段 worker 可能已经退出，这里按 pid 结束。
+  for (auto& kv : clients_) {
+    auto record = kv.second;
+    if (!record || record->seed_process || !record->pre_start || record->start_client_sent) {
+      continue;
+    }
+
+    if (record->process_id <= 0) {
+      continue;
+    }
+
+    int uv_result = uv_kill(static_cast<int>(record->process_id), SIGKILL);
+    if (uv_result < 0 && UV_ESRCH != uv_result) {
+      FWLOGWARNING("orbit agent cleanup kill pre start client {} failed: pid={}, error={}",
+                   record->local_client_id, record->process_id, uv_strerror(uv_result));
+    } else {
+      FWLOGINFO("orbit agent cleanup kill pre start client {}, pid={}", record->local_client_id, record->process_id);
+    }
   }
 }
 
@@ -524,20 +585,29 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
   update_etcd_load_snapshot();
   server_heartbeat(request.server_identity());
 
+  const std::string& client_id = request.arg().client_id();
+  if (client_id.empty()) {
+    FWLOGERROR("orbit agent start_client rejected: missing client_id");
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  client_template_t client_template;
+  if (!load_client_template(request.arg().client_template_id(), client_template)) {
+    FWLOGERROR("orbit agent start_client rejected: client_template_id {} not found",
+               request.arg().client_template_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_CLIENT_TEMPLATE_NOT_FOUND);
+  }
+
   if (max_batch_startup_count_ > 0 && batch_startup_count_ >= max_batch_startup_count_) {
     FWLOGWARNING("orbit agent start_client rejected: batch_startup_count={} >= max_batch_startup_count={}",
                  batch_startup_count_, max_batch_startup_count_);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_OVERLOAD);  // 尝试另一个Agent
   }
 
-  bool remote_start = request.args().remote_start();
-
   // 检查负载状态
   {
-    const double expected_cpu =
-        seed_mode_enabled_ ? request.args().resource().seed_cpu() : request.args().resource().normal_cpu();
-    const double expected_memory_mb =
-        seed_mode_enabled_ ? request.args().resource().seed_memory_mb() : request.args().resource().normal_memory_mb();
+    const double expected_cpu = client_template.expected_cpu;
+    const double expected_memory_mb = client_template.expected_memory_mb;
     if (cpu_capacity_ > 0.0 && load_record_.agent().cpu_used() + expected_cpu > cpu_capacity_) {
       FWLOGWARNING(
           "orbit agent start_client rejected (cpu overload): cpu_used={:.2f} + expected={:.2f} > capacity={:.2f}",
@@ -554,9 +624,29 @@ rpc::result_code_type orbit_agent_manager::handle_start_client(rpc::context& ctx
     }
   }
 
+  bool remote_start = client_template.remote_start;
+
+  // 远端启动的模板不参与预启动（init_pre_start_templates 已把它排除在预启动清单外），
+  // 这里再挡一次，避免以后放开过滤时误认领。
+  if (!remote_start) {
+    // 先看同模板是否有空闲的预启动进程：命中则先回包，再异步下发 start_client 并通知 Controller
+    orbit_agent_client_record_ptr pre_start_record = find_idle_pre_start_client(client_template.client_template_id);
+    if (pre_start_record != nullptr) {
+      if (find_client_by_client_id(client_id) != nullptr) {
+        FWLOGERROR("orbit agent start_client rejected for {}: client already exists", client_id);
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_ID_ALREADY_EXISTS);
+      }
+
+      bind_pre_start_client(pre_start_record, request);
+      fill_client_identity(*response.mutable_client_identity(), pre_start_record);
+      schedule_start_claimed_client(pre_start_record);
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+    }
+  }
+
   // 启动Client
   orbit_agent_client_record_ptr client_record = nullptr;
-  int prepare_result = prepare_start_client_record(request, client_record);
+  int prepare_result = prepare_start_client_record(request, client_template, client_record);
   if (prepare_result < 0) {
     delete_client(client_record);
     RPC_RETURN_CODE(prepare_result);
@@ -601,7 +691,7 @@ rpc::result_code_type orbit_agent_manager::handle_forward_to_client(
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto client_record = find_client(client_id);
+  auto client_record = find_client_by_client_id(client_id);
   if (nullptr == client_record || 0 == client_record->client_server_id ||
       (atfw::orbit::EN_CLIENT_STATE_RUNNING != client_record->state &&
        atfw::orbit::EN_CLIENT_STATE_EXITING != client_record->state)) {
@@ -713,23 +803,24 @@ void orbit_agent_manager::check_server_identity_timeouts(time_t now) {
 rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx, uint64_t client_server_id,
                                                                const atfw::orbit::DTAClientStartReq& request,
                                                                atfw::orbit::ATDClientStartRsp& response) {
-  const std::string& client_id = request.client_id().client_id();
-  if (client_id.empty()) {
-    FWLOGERROR("orbit agent client_start rejected: missing client_id");
+  const uint64_t client_instance_id = request.client_instance_id().instance_id();
+  if (0 == client_instance_id) {
+    FWLOGERROR("orbit agent client_start rejected: missing client_instance_id");
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto client_record = find_client(client_id);
+  auto client_record = find_client(client_instance_id);
   if (nullptr == client_record) {
-    FWLOGERROR("orbit agent client_start rejected: client_id {} not found in records", client_id);
+    FWLOGERROR("orbit agent client_start rejected: client_instance_id {} not found in records",
+               client_instance_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (client_record->state != atfw::orbit::EN_CLIENT_STATE_STARTING) {
-    FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected STARTING", client_id,
-                 static_cast<int>(client_record->state));
+    FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected STARTING",
+                 client_record->local_client_id, static_cast<int>(client_record->state));
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -741,7 +832,8 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     // 本地起的Client 用本地的replace_id拼接
     client_record->client_addr = atfw::util::string::format("{}:{}", client_ip_, request.client_port());
   }
-  FWLOGINFO("orbit agent client_start succeeded for {}: client_addr={}", client_id, client_record->client_addr);
+  FWLOGINFO("orbit agent client_start succeeded for {}: client_addr={}", client_record->local_client_id,
+            client_record->client_addr);
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
   client_record->client_server_id = client_server_id;
 
@@ -750,11 +842,20 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
     // 服务启动
     agent_online_ = true;
     update_etcd_load_snapshot();
-  } else {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  if (client_record->pre_start && !client_record->start_client_sent) {
+    // 预启动进程：此处不通知 Controller，等被认领后再由 Agent 通知
+    FWLOGINFO("orbit agent pre start client {} is ready, waiting for claim", client_record->local_client_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
+
+  {
     auto* identity = find_server_identity(client_record->server_unique_id);
     if (identity == nullptr) {
       FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
-                 client_id, client_record->server_unique_id);
+                 client_record->local_client_id, client_record->server_unique_id);
       response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     }
@@ -781,21 +882,33 @@ rpc::result_code_type orbit_agent_manager::handle_client_start(rpc::context& ctx
 }
 
 rpc::result_code_type orbit_agent_manager::handle_client_heartbeat(
-    ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx, const atfw::orbit::DTAClientHeartbeatNotify& request) {
-  const std::string& client_id = request.client_id().client_id();
-  if (client_id.empty()) {
-    FWLOGERROR("orbit agent client_heartbeat rejected: missing client_id");
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx, const atfw::orbit::DTAClientHeartbeatReq& request,
+    atfw::orbit::ATDClientHeartbeatRsp& response) {
+  const uint64_t client_instance_id = request.client_instance_id().instance_id();
+  if (0 == client_instance_id) {
+    FWLOGERROR("orbit agent client_heartbeat rejected: missing client_instance_id");
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto client_record = find_client(client_id);
+  auto client_record = find_client(client_instance_id);
   if (nullptr == client_record) {
-    FWLOGERROR("orbit agent client_heartbeat rejected: client_id {} not found in records", client_id);
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    FWLOGERROR("orbit agent client_heartbeat rejected: client_instance_id {} not found in records",
+               client_instance_id);
+    // 回带 Agent 实例标识，Client 据此判断自己已不属于当前 Agent
+    response.set_agent_instance_id(agent_instance_id_);
+    response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   client_record->load_snapshot = request.snapshot();
   client_record->last_heartbeat_timepoint = util::time::time_utility::get_sys_now();
+
+  response.set_agent_instance_id(agent_instance_id_);
+  if (!client_record->client_id.empty()) {
+    response.mutable_client_id()->set_client_id(client_record->client_id);
+  }
+  response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
@@ -803,23 +916,23 @@ rpc::result_code_type orbit_agent_manager::handle_client_heartbeat(
 rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& ctx,
                                                                  const atfw::orbit::DTASendToServerReq& request,
                                                                  atfw::orbit::ATDSendToServerRsp& response) {
-  const std::string& client_id = request.client_id().client_id();
-  if (client_id.empty()) {
-    FWLOGERROR("orbit agent send_to_server rejected: missing client_id");
+  const uint64_t client_instance_id = request.client_instance_id().instance_id();
+  if (0 == client_instance_id) {
+    FWLOGERROR("orbit agent send_to_server rejected: missing client_instance_id");
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto client_record = find_client(client_id);
+  auto client_record = find_client(client_instance_id);
   if (nullptr == client_record) {
-    FWLOGERROR("orbit agent send_to_server rejected: client_id {} not found in records", client_id);
+    FWLOGERROR("orbit agent send_to_server rejected: client_instance_id {} not found in records", client_instance_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
   if (client_record->state != atfw::orbit::EN_CLIENT_STATE_RUNNING) {
-    FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING", client_id,
-                 static_cast<int>(client_record->state));
+    FWLOGWARNING("orbit agent client_start ignored for {}: invalid state {}, expected RUNNING",
+                 client_record->local_client_id, static_cast<int>(client_record->state));
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_STATE_INVALID);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -829,7 +942,7 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
   auto* identity = find_server_identity(client_record->server_unique_id);
   if (identity == nullptr) {
     FWLOGERROR("orbit agent client_start failed for {}: server_unique_id {:#x} not found in server identities",
-               client_id, client_record->server_unique_id);
+               client_record->local_client_id, client_record->server_unique_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -858,16 +971,17 @@ rpc::result_code_type orbit_agent_manager::handle_send_to_server(rpc::context& c
 rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
                                                               const atfw::orbit::DTAClientExitReq& request,
                                                               atfw::orbit::ATDClientExitRsp& response) {
-  const std::string& client_id = request.client_id().client_id();
-  if (client_id.empty()) {
-    FWLOGERROR("orbit agent client_exit rejected: missing client_id");
+  const uint64_t client_instance_id = request.client_instance_id().instance_id();
+  if (0 == client_instance_id) {
+    FWLOGERROR("orbit agent client_exit rejected: missing client_instance_id");
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  auto client_record = find_client(client_id);
+  auto client_record = find_client(client_instance_id);
   if (nullptr == client_record) {
-    FWLOGERROR("orbit agent handle_client_exit rejected: client_id {} not found in records", client_id);
+    FWLOGERROR("orbit agent handle_client_exit rejected: client_instance_id {} not found in records",
+               client_instance_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_NOT_FOUND);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -882,7 +996,7 @@ rpc::result_code_type orbit_agent_manager::handle_client_exit(rpc::context& ctx,
   }
 
   if (client_record->state == atfw::orbit::EN_CLIENT_STATE_EXITED) {
-    FWLOGWARNING("orbit agent client_exit ignored for {}: already exited", client_id);
+    FWLOGWARNING("orbit agent client_exit ignored for {}: already exited", client_record->local_client_id);
     response.set_error_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
     delete_client(client_record);  // 补充delete
     response.set_error_code(RPC_AWAIT_CODE_RESULT(notify_client_exit(ctx, client_record, request.custom_data())));
@@ -911,10 +1025,12 @@ int orbit_agent_manager::startup_seed_client() {
   std::string client_id = atfw::util::log::format("seed_client_{}_{}", logic_config::me()->get_local_server_id(),
                                                   util::time::time_utility::get_sys_now());
   auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
-  clients_[client_id] = record;
+  record->client_instance_id = ++sequence_allocator_;
+  record->local_client_id = client_id;
+  record->client_id = client_id;
+  clients_[record->client_instance_id] = record;
   seed_client_record_ = record;
   record->seed_process = true;
-  record->client_id = client_id;
   record->startup_timeout_sec = seed_startup_timeout_sec_;
   record->heartbeat_timeout_sec = seed_heartbeat_timeout_sec_;
 
@@ -924,20 +1040,45 @@ int orbit_agent_manager::startup_seed_client() {
   return spawn_client_process(record, seed_client_path_, seed_client_command_line_, true);
 }
 
-orbit_agent_client_record_ptr orbit_agent_manager::find_client(const std::string& client_id) noexcept {
-  auto iter = clients_.find(client_id);
+orbit_agent_client_record_ptr orbit_agent_manager::find_client(uint64_t client_instance_id) noexcept {
+  auto iter = clients_.find(client_instance_id);
   if (clients_.end() == iter) {
     return nullptr;
   }
   return iter->second;
 }
 
-orbit_agent_client_record_ptr orbit_agent_manager::find_client(const std::string& client_id) const noexcept {
-  auto iter = clients_.find(client_id);
+orbit_agent_client_record_ptr orbit_agent_manager::find_client(uint64_t client_instance_id) const noexcept {
+  auto iter = clients_.find(client_instance_id);
   if (clients_.end() == iter) {
     return nullptr;
   }
   return iter->second;
+}
+
+orbit_agent_client_record_ptr orbit_agent_manager::find_client_by_client_id(const std::string& client_id) noexcept {
+  if (client_id.empty()) {
+    return nullptr;
+  }
+
+  auto index_iter = client_id_to_instance_id_.find(client_id);
+  if (client_id_to_instance_id_.end() == index_iter) {
+    return nullptr;
+  }
+  return find_client(index_iter->second);
+}
+
+orbit_agent_client_record_ptr orbit_agent_manager::find_client_by_client_id(
+    const std::string& client_id) const noexcept {
+  if (client_id.empty()) {
+    return nullptr;
+  }
+
+  auto index_iter = client_id_to_instance_id_.find(client_id);
+  if (client_id_to_instance_id_.end() == index_iter) {
+    return nullptr;
+  }
+  return find_client(index_iter->second);
 }
 
 void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& record,
@@ -974,7 +1115,7 @@ void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_cli
   output.emplace_back("-id");
   output.emplace_back(std::to_string(app_id));
   output.emplace_back("--orbit-client-id");
-  output.emplace_back(record.client_id);
+  output.emplace_back(record.local_client_id);
   output.emplace_back("--orbit-agent-endpoint");
   if (remote_start) {
     output.emplace_back(remote_agent_endpoint_);
@@ -988,30 +1129,36 @@ void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_cli
 }
 
 int orbit_agent_manager::prepare_start_client_record(const atfw::orbit::CTAStartClientReq& request,
+                                                     const client_template_t& client_template,
                                                      orbit_agent_client_record_ptr& output) {
-  const std::string& client_id = request.args().client_start_args().client_id().client_id();
+  const std::string& client_id = request.arg().client_id();
   if (client_id.empty()) {
     FWLOGERROR("orbit agent start_client rejected: missing client_id");
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM;
   }
 
-  auto client = find_client(client_id);
-  if (client != nullptr) {
-    FWLOGWARNING("orbit agent start_client rejected for {}: already active pid={}, state={}", client->client_id,
-                 client->process_id, static_cast<int>(client->state));
+  if (find_client_by_client_id(client_id) != nullptr) {
+    FWLOGWARNING("orbit agent start_client rejected for {}: already active", client_id);
     return PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_CLIENT_ID_ALREADY_EXISTS;
   }
 
   auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
-  clients_[client_id] = record;
+  record->client_instance_id = ++sequence_allocator_;
+  record->local_client_id = client_id;
   record->client_id = client_id;
-  record->custom_args = request.args().client_start_args().custom_args();
-  record->expected_cpu =
-      seed_mode_enabled_ ? request.args().resource().seed_cpu() : request.args().resource().normal_cpu();
-  record->expected_memory_mb =
-      seed_mode_enabled_ ? request.args().resource().seed_memory_mb() : request.args().resource().normal_memory_mb();
-  record->startup_timeout_sec = request.args().startup_timeout_sec();
-  record->heartbeat_timeout_sec = request.args().heartbeat_timeout_sec();
+  record->client_template_id = client_template.client_template_id;
+  clients_[record->client_instance_id] = record;
+  client_id_to_instance_id_[client_id] = record->client_instance_id;
+
+  record->custom_args.Clear();
+  for (const std::string& launch_arg : client_template.launch_args) {
+    *record->custom_args.Add() = launch_arg;
+  }
+
+  record->expected_cpu = client_template.expected_cpu;
+  record->expected_memory_mb = client_template.expected_memory_mb;
+  record->startup_timeout_sec = client_template.startup_timeout_sec;
+  record->heartbeat_timeout_sec = client_template.heartbeat_timeout_sec;
   if (record->startup_timeout_sec <= 0) {
     record->startup_timeout_sec = 120;  // 默认120秒保底
   }
@@ -1057,6 +1204,11 @@ void orbit_agent_manager::build_client_launch_arguments(
     output.emplace_back(kOrbitStartTimeout);
     output.emplace_back(std::to_string(record->startup_timeout_sec));
   }
+  // 通信标识与 Agent 实例标识：Client 用它们与 Agent 通信，并识别 Agent 是否已重启
+  output.emplace_back(kOrbitClientInstanceIdArg);
+  output.emplace_back(std::to_string(record->client_instance_id));
+  output.emplace_back(kOrbitAgentInstanceIdArg);
+  output.emplace_back(agent_instance_id_);
   fill_normal_client_start_command(*record, app_id, output, remote_start);
 }
 
@@ -1111,16 +1263,16 @@ void orbit_agent_manager::worker_tick_callback(const atfw::atapp::worker_context
   }
 }
 
-int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, std::vector<std::string>&& command_line,
+int32_t orbit_agent_manager::spawn_client_async(uint64_t client_instance_id, std::vector<std::string>&& command_line,
                                                 bool detached) {
   auto worker_pool = (nullptr != owner_app_) ? owner_app_->get_worker_pool_module() : nullptr;
   if (!worker_pool) {
-    FWLOGERROR("orbit agent spawn client {} failed: worker pool module is not available", client_id);
+    FWLOGERROR("orbit agent spawn client {} failed: worker pool module is not available", client_instance_id);
     return atfw::atapp::EN_ATAPP_ERR_WORKER_POOL_CLOSED;
   }
 
-  auto spawn_func = [client_id_copy = client_id, launch_arguments = std::move(command_line), worker_pool,
-                     detached](const atfw::atapp::worker_context& worker_ctx) mutable {
+  auto spawn_func = [client_instance_id, launch_arguments = std::move(command_line), worker_pool, detached](
+                        const atfw::atapp::worker_context& worker_ctx) mutable {
     uint64_t worker_unique_id = worker_ctx.worker_unique_id;
     tbb::concurrent_hash_map<uint64_t, std::shared_ptr<uv_loop_data>>::accessor accessor;
     std::shared_ptr<uv_loop_data> loop_data_ptr = nullptr;
@@ -1155,7 +1307,7 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
     std::memset(process_handle, 0, sizeof(*process_handle));
 
     auto* exit_data = new orbit_agent_process_exit_data();
-    exit_data->client_id = client_id_copy;
+    exit_data->client_instance_id = client_instance_id;
     exit_data->worker_unique_id = worker_unique_id;
     process_handle->data = exit_data;
 
@@ -1168,11 +1320,11 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
       options.flags = UV_PROCESS_DETACHED;
     }
 
-    FWLOGINFO("orbit agent spawning client {} by command {}", client_id_copy, command_line_str);
+    FWLOGINFO("orbit agent spawning client {} by command {}", client_instance_id, command_line_str);
     int uv_result = uv_spawn(loop_data_ptr->loop_, process_handle, &options);
 
     spawn_completion_t completion;
-    completion.client_id = client_id_copy;  // record is not captured in the lambda anymore
+    completion.client_instance_id = client_instance_id;
     completion.process_handle = process_handle;
     completion.uv_result = uv_result;
     if (uv_result >= 0) {
@@ -1182,14 +1334,14 @@ int32_t orbit_agent_manager::spawn_client_async(const std::string& client_id, st
       }
       // 塞入handle列表
       loop_data_ptr->process_handles_.insert(process_handle);
-      FWLOGINFO("orbit agent started client {} with pid {} by command {}", client_id_copy, completion.process_id,
-                command_line_str);
+      FWLOGINFO("orbit agent started client {} with pid {} by command {}", client_instance_id,
+                completion.process_id, command_line_str);
     } else {
       // 处理失败handle
       delete_uv_process_handle(process_handle);
       completion.process_handle = nullptr;
-      FWLOGERROR("orbit agent start_client failed for {}: {} by command {}", client_id_copy, uv_strerror(uv_result),
-                 command_line_str);
+      FWLOGERROR("orbit agent start_client failed for {}: {} by command {}", client_instance_id,
+                 uv_strerror(uv_result), command_line_str);
     }
     uv_action_t action;
     action.is_spawn_completion_ = true;
@@ -1214,14 +1366,14 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
 
   build_client_launch_arguments(record, render_values, client_path, command_line, launch_arguments, false);
 
-  int32_t spawn_result = spawn_client_async(record->client_id, std::move(launch_arguments), !seed_client);
+  int32_t spawn_result = spawn_client_async(record->client_instance_id, std::move(launch_arguments), !seed_client);
   if (spawn_result < 0) {
-    FWLOGERROR("orbit agent submit spawn client {} to worker pool failed, res: {}({})", record->client_id, spawn_result,
-               protobuf_mini_dumper_get_error_msg(spawn_result));
+    FWLOGERROR("orbit agent submit spawn client {} to worker pool failed, res: {}({})",
+               record->local_client_id, spawn_result, protobuf_mini_dumper_get_error_msg(spawn_result));
     return PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN;
   }
 
-  FWLOGINFO("orbit agent submitted spawn client {} to worker pool", record->client_id);
+  FWLOGINFO("orbit agent submitted spawn client {} to worker pool", record->local_client_id);
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
@@ -1282,9 +1434,9 @@ void orbit_agent_manager::process_uv_actions() {
 }
 
 void orbit_agent_manager::process_spawn_completion(const spawn_completion_t& completion) {
-  auto record = find_client(completion.client_id);
+  auto record = find_client(completion.client_instance_id);
   if (nullptr == record) {
-    FWLOGERROR("orbit agent spawn completion ignored for {}: record not found", completion.client_id);
+    FWLOGERROR("orbit agent spawn completion ignored for {}: record not found", completion.client_instance_id);
     return;
   }
 
@@ -1296,7 +1448,7 @@ void orbit_agent_manager::process_spawn_completion(const spawn_completion_t& com
     return;
   }
   // 启动成功
-  FWLOGINFO("orbit agent spawn completion for {}: pid={}", record->client_id, record->process_id);
+  FWLOGINFO("orbit agent spawn completion for {}: pid={}", record->local_client_id, record->process_id);
 }
 
 void orbit_agent_manager::on_uv_process_exit(uv_process_t* process_handle, int64_t exit_status, int term_signal) {
@@ -1304,7 +1456,7 @@ void orbit_agent_manager::on_uv_process_exit(uv_process_t* process_handle, int64
   action.is_spawn_completion_ = false;
   auto* data = static_cast<orbit_agent_process_exit_data*>(process_handle->data);
   action.process_exit_action_ = {
-      .client_id = data->client_id, .exit_status_ = exit_status, .term_signal_ = term_signal};
+      .client_instance_id = data->client_instance_id, .exit_status_ = exit_status, .term_signal_ = term_signal};
   uint64_t worker_unique_id = data->worker_unique_id;
   // close handle
   delete_uv_process_handle(process_handle);
@@ -1319,7 +1471,7 @@ void orbit_agent_manager::on_uv_process_exit(uv_process_t* process_handle, int64
 }
 
 void orbit_agent_manager::process_exit_action(const process_exit_action_t& action) {
-  auto record = find_client(action.client_id);
+  auto record = find_client(action.client_instance_id);
   if (!record) {
     // 已移除
     return;
@@ -1450,6 +1602,10 @@ void orbit_agent_manager::async_notify_client_exit(const orbit_agent_client_reco
   if (!record) {
     return;
   }
+  if (record->client_id.empty()) {
+    // 未被认领的预启动进程，不需要通知 Controller
+    return;
+  }
   if (record->notify_client_exit) {
     return;
   }
@@ -1496,6 +1652,10 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_agent_manager::notify_client
   if (!client_record) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
+  if (client_record->client_id.empty()) {
+    // 未被认领的预启动进程，不需要通知 Controller
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  }
   if (client_record->notify_client_exit) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
@@ -1528,9 +1688,290 @@ EXPLICIT_NODISCARD_ATTR rpc::result_code_type orbit_agent_manager::notify_client
   RPC_RETURN_CODE(rsp->error_code());
 }
 
+int orbit_agent_manager::init_pre_start_templates() {
+  pre_start_template_ids_.clear();
+
+  if (seed_mode_enabled_) {
+    // 种子模式不参与预启动
+    FWLOGWARNING("orbit agent pre start is disabled in seed mode");
+    return 0;
+  }
+
+  bool has_matched_template = false;
+  const auto& all_templates = excel::get_ExcelOrbitClientTemplate_all_of_client_template_id();
+  for (const auto& kv : all_templates) {
+    if (kv.second == nullptr) {
+      continue;
+    }
+
+    // 预启动只按 tag 匹配，不考虑 region
+    if (tag_ != kv.second->match_tag()) {
+      continue;
+    }
+
+    has_matched_template = true;
+    // 远端启动的模板不由本机预启动
+    if (kv.second->pre_start_count() > 0 && !kv.second->remote_start_client()) {
+      pre_start_template_ids_.push_back(kv.second->client_template_id());
+    }
+  }
+
+  if (!has_matched_template) {
+    FWLOGERROR("orbit agent found no client template matching tag={}", tag_);
+    return -13;
+  }
+
+  FWLOGINFO("orbit agent loaded pre start templates: count={}", pre_start_template_ids_.size());
+  return 0;
+}
+
+bool orbit_agent_manager::load_client_template(int32_t client_template_id, client_template_t& output) const {
+  auto row = excel::get_ExcelOrbitClientTemplate_by_client_template_id(client_template_id);
+  if (row == nullptr) {
+    return false;
+  }
+
+  output.client_template_id = client_template_id;
+  if (seed_mode_enabled_) {
+    output.expected_cpu = row->expected_seed_cpu();
+    output.expected_memory_mb = row->expected_seed_memory_mb();
+  } else {
+    output.expected_cpu = row->expected_normal_cpu();
+    output.expected_memory_mb = row->expected_normal_memory_mb();
+  }
+  output.startup_timeout_sec = row->startup_timeout_sec();
+  output.heartbeat_timeout_sec = row->heartbeat_timeout_sec();
+  output.pre_start_count = row->pre_start_count();
+  output.remote_start = row->remote_start_client();
+  output.match_tag = row->match_tag();
+  output.launch_args.assign(row->launch_args().begin(), row->launch_args().end());
+  return true;
+}
+
+orbit_agent_client_record_ptr orbit_agent_manager::find_idle_pre_start_client(int32_t client_template_id) noexcept {
+  orbit_agent_client_record_ptr selected = nullptr;
+  for (const auto& kv : clients_) {
+    const auto& record = kv.second;
+    if (!record || record->seed_process || !record->pre_start || record->start_client_sent) {
+      continue;
+    }
+
+    if (record->client_template_id != client_template_id ||
+        record->state != atfw::orbit::EN_CLIENT_STATE_RUNNING || 0 == record->client_server_id) {
+      continue;
+    }
+
+    // 先安排拉起最早的进程
+    if (selected == nullptr || record->start_timepoint < selected->start_timepoint) {
+      selected = record;
+    }
+  }
+  return selected;
+}
+
+void orbit_agent_manager::bind_pre_start_client(const orbit_agent_client_record_ptr& client_record,
+                                                const atfw::orbit::CTAStartClientReq& request) {
+  if (!client_record) {
+    return;
+  }
+
+  client_record->client_id = request.arg().client_id();
+  client_record->server_unique_id = request.server_identity().unique_id();
+  client_record->notify_client_exit = false;
+  client_id_to_instance_id_[client_record->client_id] = client_record->client_instance_id;
+  server_unique_id_to_client_ids_[client_record->server_unique_id].insert(client_record->client_id);
+}
+
+void orbit_agent_manager::schedule_start_claimed_client(const orbit_agent_client_record_ptr& client_record) {
+  if (!client_record) {
+    return;
+  }
+
+  auto invoke_result = rpc::async_invoke(
+      logic_server_get_current_tick_context(), "orbit_agent_manager.start_claimed_client",
+      [client_record](rpc::context& sub_ctx) mutable -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(orbit_agent_manager::me()->start_claimed_client(sub_ctx, client_record)));
+      });
+  if (!invoke_result.is_success()) {
+    FWLOGERROR("orbit agent failed to schedule start_claimed_client for {}, res: {}({})",
+               client_record->local_client_id, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
+}
+
+rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ctx,
+                                                               orbit_agent_client_record_ptr client_record) {
+  if (!client_record) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+
+  // 下发真实 client_id；Client 不会重发 client_start，成功后由 Agent 通知 Controller
+  auto req = rpc::make_shared_message<atfw::orbit::ATDStartClientReq>(ctx);
+  auto rsp = rpc::make_shared_message<atfw::orbit::DTAStartClientRsp>(ctx);
+  req->mutable_client_id()->set_client_id(client_record->client_id);
+
+  int32_t rpc_result = RPC_AWAIT_CODE_RESULT(
+      rpc::agenttoclientservice::start_client(ctx, client_record->client_server_id, *req, *rsp));
+  if (rpc_result == 0) {
+    rpc_result = rsp->error_code();
+  }
+  if (rpc_result != 0) {
+    FWLOGERROR("orbit agent start_client failed for {} to client node {:#x}, res: {}",
+               client_record->local_client_id, client_record->client_server_id, rpc_result);
+    // 不重试、不退回预启动池，按启动失败结束该进程并通知 Controller
+    stop_client_process(client_record, atfw::orbit::EN_CLIENT_EXIT_STARTUP_FAILED, rpc_result);
+    RPC_RETURN_CODE(rpc_result);
+  }
+
+  client_record->start_client_sent = true;
+  client_record->pre_start = false;
+  FWLOGINFO("orbit agent client {} claimed, client_id={}", client_record->local_client_id, client_record->client_id);
+
+  auto* identity = find_server_identity(client_record->server_unique_id);
+  if (identity == nullptr) {
+    FWLOGERROR("orbit agent notify_client_started failed for {}: server_unique_id {:#x} not found",
+               client_record->local_client_id, client_record->server_unique_id);
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_AGENT_SERVER_NOT_FOUND);
+  }
+
+  auto notify_request = rpc::make_shared_message<atfw::orbit::ATCNotifyClientStartedReq>(ctx);
+  auto notify_rsp = rpc::make_shared_message<atfw::orbit::CTANotifyClientStartedRsp>(ctx);
+  fill_client_identity(*notify_request->mutable_client_identity(), client_record);
+  notify_request->set_client_addr(client_record->client_addr);
+  *notify_request->mutable_server_identity() = *identity;
+
+  auto controller_server_id = client_record->get_controller_server_id();
+  int32_t notify_result = RPC_AWAIT_CODE_RESULT(
+      rpc::agenttocontrollerservice::notify_client_started(ctx, controller_server_id, *notify_request, *notify_rsp));
+  if (notify_result < 0) {
+    FWLOGERROR("orbit agent notify_client_started failed for {} to controller {:#x}, res: {}",
+               client_record->local_client_id, controller_server_id, notify_result);
+    RPC_RETURN_CODE(notify_result);
+  }
+
+  RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+}
+
+void orbit_agent_manager::tick_pre_start(time_t now) {
+  if (!enable_pre_start_ || !agent_online_ || pre_start_template_ids_.empty()) {
+    return;
+  }
+
+  for (int32_t client_template_id : pre_start_template_ids_) {
+    client_template_t client_template;
+    if (!load_client_template(client_template_id, client_template) || 0 == client_template.pre_start_count) {
+      continue;
+    }
+
+    uint32_t idle_count = 0;
+    uint32_t starting_count = 0;
+    for (const auto& kv : clients_) {
+      const auto& record = kv.second;
+      if (!record || record->seed_process || !record->pre_start || record->start_client_sent ||
+          record->client_template_id != client_template_id) {
+        continue;
+      }
+
+      if (atfw::orbit::EN_CLIENT_STATE_STARTING == record->state) {
+        ++starting_count;
+      } else if (atfw::orbit::EN_CLIENT_STATE_RUNNING == record->state) {
+        ++idle_count;
+      }
+    }
+
+    if (idle_count + starting_count >= client_template.pre_start_count) {
+      continue;
+    }
+
+    // 优先级：实际负载 > max_batch > 预启动；容量不足时不补齐，也不重复打日志
+    if (max_batch_startup_count_ > 0 && batch_startup_count_ >= max_batch_startup_count_) {
+      return;
+    }
+    if (cpu_capacity_ > 0.0 && load_record_.agent().cpu_used() + client_template.expected_cpu > cpu_capacity_) {
+      return;
+    }
+    if (memory_capacity_mb_ > 0.0 &&
+        load_record_.agent().memory_used_mb() + client_template.expected_memory_mb > memory_capacity_mb_) {
+      return;
+    }
+
+    auto record = atfw::component::memory::stl::make_strong_rc<orbit_agent_client_record>();
+    record->client_instance_id = ++sequence_allocator_;
+    record->local_client_id = atfw::util::log::format("prestart_{}_{}", logic_config::me()->get_local_server_id(),
+                                                      record->client_instance_id);
+    record->client_template_id = client_template.client_template_id;
+    record->pre_start = true;
+    record->remote_start = false;
+    record->expected_cpu = client_template.expected_cpu;
+    record->expected_memory_mb = client_template.expected_memory_mb;
+    record->startup_timeout_sec = client_template.startup_timeout_sec > 0 ? client_template.startup_timeout_sec : 120;
+    record->heartbeat_timeout_sec =
+        client_template.heartbeat_timeout_sec > 0 ? client_template.heartbeat_timeout_sec : 60;
+    record->custom_args.Clear();
+    for (const std::string& launch_arg : client_template.launch_args) {
+      *record->custom_args.Add() = launch_arg;
+    }
+    record->start_timepoint = now;
+    set_client_state(record, atfw::orbit::EN_CLIENT_STATE_STARTING);
+    record->client_addr.clear();
+    clients_[record->client_instance_id] = record;
+
+    int spawn_result = spawn_client_process(record, client_path_, client_command_line_, false);
+    if (spawn_result < 0) {
+      FWLOGERROR("orbit agent spawn pre start client for template {} failed, res: {}",
+                 client_template.client_template_id, spawn_result);
+      delete_client(record);
+      continue;
+    }
+
+    FWLOGINFO("orbit agent pre start client {} spawned for template {}, idle={}, starting={}",
+              record->local_client_id, client_template.client_template_id, idle_count, starting_count);
+  }
+}
+
+void orbit_agent_manager::log_agent_running_summary(time_t now) {
+  if (now - last_summary_log_timepoint_ < kAgentRunningSummaryLogIntervalSec) {
+    return;
+  }
+  last_summary_log_timepoint_ = now;
+
+  if (!enable_pre_start_) {
+    return;
+  }
+
+  std::string summary;
+  for (int32_t client_template_id : pre_start_template_ids_) {
+    uint32_t idle_count = 0;
+    uint32_t starting_count = 0;
+    uint32_t claimed_count = 0;
+    for (const auto& kv : clients_) {
+      const auto& record = kv.second;
+      if (!record || record->seed_process || record->client_template_id != client_template_id) {
+        continue;
+      }
+
+      if (record->start_client_sent) {
+        ++claimed_count;
+      } else if (atfw::orbit::EN_CLIENT_STATE_STARTING == record->state) {
+        ++starting_count;
+      } else if (atfw::orbit::EN_CLIENT_STATE_RUNNING == record->state) {
+        ++idle_count;
+      }
+    }
+
+    if (!summary.empty()) {
+      summary += ", ";
+    }
+    summary += atfw::util::log::format("template {}: idle={}, starting={}, claimed={}", client_template_id, idle_count,
+                                       starting_count, claimed_count);
+  }
+
+  FWLOGINFO("orbit agent running summary: clients={}, pre_start=[{}]", clients_.size(), summary);
+}
+
 void orbit_agent_manager::check_client_timeouts(time_t now) {
   struct expire_entry {
-    std::string client_id;
+    uint64_t client_instance_id = 0;
     atfw::orbit::EnClientExitReason reason;
   };
   std::vector<expire_entry> expired;
@@ -1554,13 +1995,13 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
   }
 
   for (auto& entry : expired) {
-    auto record = find_client(entry.client_id);
+    auto record = find_client(entry.client_instance_id);
     if (!record) {
       continue;
     }
 
     FWLOGWARNING(
-        "orbit agent client {} timed out: reason={}, state={}", entry.client_id,
+        "orbit agent client {} timed out: reason={}, state={}", record->local_client_id,
         entry.reason == atfw::orbit::EN_CLIENT_EXIT_REASON_STARTUP_TIMEOUT ? "startup_timeout" : "heartbeat_timeout",
         static_cast<int>(record->state));
     if (record->seed_process) {
@@ -1574,7 +2015,7 @@ void orbit_agent_manager::check_client_timeouts(time_t now) {
 }
 
 void orbit_agent_manager::check_client_force_kill(time_t now) {
-  std::vector<std::string> expired;
+  std::vector<uint64_t> expired;
   expired.reserve(clients_.size());
 
   for (const auto& kv : clients_) {
@@ -1586,12 +2027,13 @@ void orbit_agent_manager::check_client_force_kill(time_t now) {
     expired.emplace_back(kv.first);
   }
 
-  for (const auto& client_id : expired) {
-    auto record = find_client(client_id);
+  for (uint64_t client_instance_id : expired) {
+    auto record = find_client(client_instance_id);
 
     int kill_result = kill_client_process(record, SIGKILL, record->exit_reason, record->exit_code);
     if (kill_result < 0 && UV_ESRCH != kill_result) {
-      FWLOGWARNING("orbit agent client {} cleanup kill returned {}, continue cleanup", client_id, kill_result);
+      FWLOGWARNING("orbit agent client {} cleanup kill returned {}, continue cleanup", client_instance_id,
+                   kill_result);
     }
     // kill后直接删除
     delete_client(record);
@@ -1646,6 +2088,9 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
   cpu_used += self_cpu_used;
   memory_used_mb += self_memory_used_mb;
 
+  // 各模板的预启动进程数量：idle 为已 ready 未被认领，starting 为已拉起但未 ready
+  std::map<int32_t, std::pair<uint32_t, uint32_t>> pre_start_counts;
+
   for (const auto& kv : clients_) {
     auto record = kv.second;
     switch (record->state) {
@@ -1659,6 +2104,16 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
       default:
         break;
     }
+
+    if (!record->seed_process && record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
+      auto& counts = pre_start_counts[record->client_template_id];
+      if (atfw::orbit::EN_CLIENT_STATE_STARTING == record->state) {
+        ++counts.second;
+      } else if (atfw::orbit::EN_CLIENT_STATE_RUNNING == record->state) {
+        ++counts.first;
+      }
+    }
+
     if (record->load_snapshot.cpu_used() > record->expected_cpu) {
       cpu_used += record->load_snapshot.cpu_used();
     } else {
@@ -1680,15 +2135,37 @@ void orbit_agent_manager::update_etcd_load_snapshot() {
 
   double esp = 1e-9;
 
+  // 预启动明细按模板 id 升序排列，便于与上次上报的内容比较
+  bool pre_start_changed = static_cast<int>(pre_start_counts.size()) != load_record_.agent().pre_start_templates_size();
+  if (!pre_start_changed) {
+    size_t index = 0;
+    for (const auto& kv : pre_start_counts) {
+      const auto& reported = load_record_.agent().pre_start_templates(static_cast<int>(index));
+      if (reported.client_template_id() != kv.first || reported.idle_count() != kv.second.first ||
+          reported.starting_count() != kv.second.second) {
+        pre_start_changed = true;
+        break;
+      }
+      ++index;
+    }
+  }
+
   if (std::abs(load_record_.agent().cpu_used() - cpu_used) > esp ||
       std::abs(load_record_.agent().memory_used_mb() - memory_used_mb) > esp ||
       load_record_.agent().running_client_count() != running_client_count ||
       load_record_.agent().starting_client_count() != starting_client_count ||
-      load_record_.agent_online() != agent_online_) {
+      load_record_.agent_online() != agent_online_ || pre_start_changed) {
     load_record_.mutable_agent()->set_cpu_used(cpu_used);
     load_record_.mutable_agent()->set_memory_used_mb(memory_used_mb);
     load_record_.mutable_agent()->set_running_client_count(running_client_count);
     load_record_.mutable_agent()->set_starting_client_count(starting_client_count);
+    load_record_.mutable_agent()->clear_pre_start_templates();
+    for (const auto& kv : pre_start_counts) {
+      auto* pre_start_snapshot = load_record_.mutable_agent()->add_pre_start_templates();
+      pre_start_snapshot->set_client_template_id(kv.first);
+      pre_start_snapshot->set_idle_count(kv.second.first);
+      pre_start_snapshot->set_starting_count(kv.second.second);
+    }
     load_record_.set_agent_online(agent_online_);
     dirty_load_record_ = true;
   }
@@ -1732,7 +2209,14 @@ void orbit_agent_manager::delete_client(const orbit_agent_client_record_ptr& cli
   if (!client_record) {
     return;
   }
-  clients_.erase(client_record->client_id);
+  clients_.erase(client_record->client_instance_id);
+  if (!client_record->client_id.empty()) {
+    auto index_iter = client_id_to_instance_id_.find(client_record->client_id);
+    if (client_id_to_instance_id_.end() != index_iter &&
+        index_iter->second == client_record->client_instance_id) {
+      client_id_to_instance_id_.erase(index_iter);
+    }
+  }
   set_client_state(client_record, atfw::orbit::EN_CLIENT_STATE_EXITED);
   auto& client_ids = server_unique_id_to_client_ids_[client_record->server_unique_id];
   client_ids.erase(client_record->client_id);

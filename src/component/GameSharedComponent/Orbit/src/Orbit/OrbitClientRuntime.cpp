@@ -43,10 +43,15 @@ constexpr const char *kAtappProgramName = "orbit-client-runtime";
 
 constexpr const char *kOrbitArgsAppId = "-id";
 constexpr const char *kOrbitArgsClientIdArgument = "--orbit-client-id";
+constexpr const char *kOrbitArgsClientInstanceIdArgument = "--orbit-client-instance-id";
+constexpr const char *kOrbitArgsAgentInstanceIdArgument = "--orbit-agent-instance-id";
+constexpr const char *kOrbitArgsAgentAliveTimeoutArgument = "--orbit-agent-alive-timeout";
 constexpr const char *kOrbitArgsAgentEndpointArgument = "--orbit-agent-endpoint";
 constexpr const char *kOrbitArgsConfigEnvArgument = "--config_env";
 constexpr const char *kOrbitArgsSeedMode = "--seed_mode";
 constexpr const char *kOrbitEnable = "--enable_orbit";
+// 未被 start_client 认领时，连续丢失多少个心跳响应就认为 Agent 已失联
+constexpr int32_t kDefaultAgentAliveMissingHeartbeatCount = 3;
 
 int64_t get_total_process_cpu_time_us(const uv_rusage_t &usage) {
   int64_t total_us = static_cast<int64_t>(usage.ru_stime.tv_sec) + static_cast<int64_t>(usage.ru_utime.tv_sec);
@@ -55,8 +60,8 @@ int64_t get_total_process_cpu_time_us(const uv_rusage_t &usage) {
   return total_us;
 }
 
-void fill_client_id(::atframework::orbit::DClientId &client_id, const std::string &value) {
-  client_id.set_client_id(value);
+void fill_client_instance_id(::atframework::orbit::DClientInstanceId &client_instance_id, uint64_t value) {
+  client_instance_id.set_instance_id(value);
 }
 
 void emit_log(const OrbitClientCallbacks &callbacks, OrbitClientLogLevel level, const char *file_name, int line_number,
@@ -283,7 +288,10 @@ ORBIT_CLIENT_SDK_API OrbitClientRuntime::OrbitClientRuntime()
       app_callbacks_installed_(false),
       agent_bus_id_(0),
       sequence_allocator_(0),
-      last_heartbeat_timepoint_(0) {
+      last_heartbeat_timepoint_(0),
+      last_heartbeat_rsp_timepoint_(0),
+      start_client_received_(false),
+      agent_instance_id_mismatch_(false) {
   state_.store(OrbitClientRuntimeState::kIdle);
 }
 
@@ -377,6 +385,27 @@ int OrbitClientRuntime::extract_launch_options(int argc, char *argv[], uint64_t 
       continue;
     }
 
+    if (try_consume_argument_value(argc, argv, index, kOrbitArgsClientInstanceIdArgument, parsed_value)) {
+      uint64_t parsed_instance_id = 0;
+      if (try_parse_uint64_argument(parsed_value, parsed_instance_id)) {
+        options.client_instance_id = parsed_instance_id;
+      }
+      continue;
+    }
+
+    if (try_consume_argument_value(argc, argv, index, kOrbitArgsAgentInstanceIdArgument, parsed_value)) {
+      options.agent_instance_id = parsed_value;
+      continue;
+    }
+
+    if (try_consume_argument_value(argc, argv, index, kOrbitArgsAgentAliveTimeoutArgument, parsed_value)) {
+      uint64_t parsed_timeout = 0;
+      if (try_parse_uint64_argument(parsed_value, parsed_timeout)) {
+        options.agent_alive_timeout_second = static_cast<time_t>(parsed_timeout);
+      }
+      continue;
+    }
+
     if (try_consume_argument_value(argc, argv, index, kOrbitArgsConfigEnvArgument, parsed_value)) {
       if (!parsed_value.empty()) {
         options.config_env.push_back(parsed_value);
@@ -410,6 +439,10 @@ int OrbitClientRuntime::extract_launch_options(int argc, char *argv[], uint64_t 
     return -5;
   }
 
+  if (0 == options.client_instance_id) {
+    return -6;
+  }
+
   return 0;
 }
 
@@ -433,6 +466,11 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
     return -3;
   }
 
+  if (0 == options.client_instance_id) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "init rejected: client_instance_id is zero");
+    return -9;
+  }
+
   if (options.heartbeat_interval_second <= 0) {
     ORBIT_LOG(OrbitClientLogLevel::kError, "init rejected: heartbeat_interval must be positive");
     return -4;
@@ -449,6 +487,9 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
   configured_ = false;
   agent_bus_id_ = 0;
   sequence_allocator_ = make_initial_sequence_allocator();
+  last_heartbeat_rsp_timepoint_ = 0;
+  start_client_received_ = false;
+  agent_instance_id_mismatch_ = false;
   set_state(OrbitClientRuntimeState::kIdle);
 
   // 将Endpoint 写入 ATAPP_BUS_PROXY
@@ -575,7 +616,7 @@ ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::is_seed_process() const { return o
 
 int32_t OrbitClientRuntime::notify_seed_process_ready_inner() {
   ::atframework::orbit::DTAClientStartReq request;
-  fill_client_id(*request.mutable_client_id(), options_.client_id);
+  fill_client_instance_id(*request.mutable_client_instance_id(), options_.client_instance_id);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
   request_options.retry_times = 3;
@@ -705,7 +746,7 @@ ORBIT_CLIENT_SDK_API const std::string &OrbitClientRuntime::find_custom_launch_a
 
 int32_t OrbitClientRuntime::notify_process_ready_inner(int32_t port, const std::string &custom_data) {
   ::atframework::orbit::DTAClientStartReq request;
-  fill_client_id(*request.mutable_client_id(), options_.client_id);
+  fill_client_instance_id(*request.mutable_client_instance_id(), options_.client_instance_id);
   request.set_client_ip(get_global_ip());
   request.set_client_port(port);
   request.set_custom_data(custom_data);
@@ -750,6 +791,10 @@ ORBIT_CLIENT_SDK_API void OrbitClientRuntime::reset() {
   if (app_) {
     app_.reset();
   }
+
+  last_heartbeat_rsp_timepoint_ = 0;
+  start_client_received_ = false;
+  agent_instance_id_mismatch_ = false;
 }
 
 ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
@@ -795,6 +840,12 @@ void OrbitClientRuntime::io_tick() {
 
     do {
       time_t now = ::util::time::time_utility::get_sys_now();
+      check_agent_alive(now);
+
+      if (state_.load() != OrbitClientRuntimeState::kRunning) {
+        break;
+      }
+
       if (now - last_heartbeat_timepoint_ < options_.heartbeat_interval_second) {
         break;
       }
@@ -824,12 +875,19 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_PARAM_ERROR;
   }
 
-  ::atframework::orbit::DTAClientHeartbeatNotify request;
-  fill_client_id(*request.mutable_client_id(), options_.client_id);
+  ::atframework::orbit::DTAClientHeartbeatReq request;
+  request.mutable_client_instance_id()->set_instance_id(options_.client_instance_id);
   request.mutable_snapshot()->set_cpu_used(snapshot.cpu_used);
   request.mutable_snapshot()->set_memory_used_mb(snapshot.memory_used_mb);
 
-  int32_t send_result = rpc_send_client_heartbeat(request);
+  OrbitClientRequestOptions request_options;
+  request_options.timeout_second = options_.heartbeat_interval_second;
+  int32_t send_result = rpc_send_client_heartbeat(
+      request,
+      [this](int32_t result, const ::atframework::orbit::ATDClientHeartbeatRsp &response) {
+        on_heartbeat_response(result, response);
+      },
+      request_options);
   if (send_result < 0) {
     ORBIT_LOG(OrbitClientLogLevel::kError,
               LOG_WRAPPER_FWAPI_FORMAT("failed to send client_heartbeat request, code={}", send_result));
@@ -838,6 +896,66 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
 
   last_heartbeat_timepoint_ = ::util::time::time_utility::get_sys_now();
   return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+}
+
+void OrbitClientRuntime::on_heartbeat_response(int32_t result,
+                                               const ::atframework::orbit::ATDClientHeartbeatRsp &response) {
+  if (result < 0) {
+    ORBIT_LOG(OrbitClientLogLevel::kWarning,
+              LOG_WRAPPER_FWAPI_FORMAT("client_heartbeat failed, code={}", result));
+    return;
+  }
+
+  last_heartbeat_rsp_timepoint_ = ::util::time::time_utility::get_sys_now();
+
+  if (response.agent_instance_id().empty() || options_.agent_instance_id.empty()) {
+    return;
+  }
+
+  if (response.agent_instance_id() != options_.agent_instance_id) {
+    agent_instance_id_mismatch_ = true;
+  }
+}
+
+time_t OrbitClientRuntime::get_agent_alive_timeout_second() const {
+  if (options_.agent_alive_timeout_second > 0) {
+    return options_.agent_alive_timeout_second;
+  }
+
+  time_t interval = options_.heartbeat_interval_second;
+  if (interval <= 0) {
+    interval = 5;
+  }
+  return interval * static_cast<time_t>(kDefaultAgentAliveMissingHeartbeatCount);
+}
+
+void OrbitClientRuntime::check_agent_alive(time_t now) {
+  // 已认领的 Client 不再做该自检
+  if (start_client_received_ || state_.load() != OrbitClientRuntimeState::kRunning) {
+    return;
+  }
+
+  if (agent_instance_id_mismatch_) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "agent instance changed, stopping orbit client");
+    request_end_inner(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "agent instance changed");
+    return;
+  }
+
+  const time_t alive_timeout = get_agent_alive_timeout_second();
+  if (alive_timeout <= 0) {
+    return;
+  }
+
+  if (last_heartbeat_rsp_timepoint_ <= 0) {
+    // 还没有收到过心跳响应，以当前时间为起点
+    last_heartbeat_rsp_timepoint_ = now;
+    return;
+  }
+
+  if (now >= last_heartbeat_rsp_timepoint_ + alive_timeout) {
+    ORBIT_LOG(OrbitClientLogLevel::kError, "agent heartbeat response timeout, stopping orbit client");
+    request_end_inner(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "agent heartbeat timeout");
+  }
 }
 
 ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::send_to_server(
@@ -849,7 +967,7 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::send_to_server(
   }
 
   ::atframework::orbit::DTASendToServerReq request;
-  fill_client_id(*request.mutable_client_id(), options_.client_id);
+  fill_client_instance_id(*request.mutable_client_instance_id(), options_.client_instance_id);
   request.set_payload(payload);
 
   int32_t send_result = rpc_send_send_to_server(request, std::move(callback), request_options);
@@ -873,7 +991,7 @@ int32_t OrbitClientRuntime::request_end_inner(::atframework::orbit::EnClientExit
   int32_t send_result = ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   if (previous_state == OrbitClientRuntimeState::kConnected || previous_state == OrbitClientRuntimeState::kRunning) {
     ::atframework::orbit::DTAClientExitReq request;
-    fill_client_id(*request.mutable_client_id(), options_.client_id);
+    fill_client_instance_id(*request.mutable_client_instance_id(), options_.client_instance_id);
     request.set_exit_reason(reason);
     request.set_custom_data(custom_data);
     request.set_exit_code(exit_code);

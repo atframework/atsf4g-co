@@ -36,7 +36,7 @@ service ControllerToAgentService {
 message CTAStartClientReq {
   DServerIdentity server_identity = 1;
 
-  DAgentClientStartArgs args = 2;
+  DOrbitClientLaunchArg arg = 2;
 }
 message ATCStartClientRsp {
   DAgentEtcdLoadRecord load_record = 1;

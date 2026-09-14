@@ -41,6 +41,9 @@
 
 #include <memory/object_allocator.h>
 
+#include <string>
+#include <utility>
+
 namespace {
 static const PROJECT_NAMESPACE_ID::config::orbitsvr_cfg& get_orbitsvr_cfg() noexcept {
   return logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::orbitsvr_cfg>();
@@ -171,12 +174,13 @@ int32_t orbit_room::create(rpc::context& ctx, uint64_t match_server_id) {
   return 0;
 }
 
-rpc::result_code_type orbit_room::start_client(rpc::context& ctx, const atfw::orbit::DAgentClientStartArgs& args) {
+rpc::result_code_type orbit_room::start_client(rpc::context& ctx, int32_t client_template_id) {
   if (PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_STATUS_CREATED != room_status_) {
     FWLOGERROR("orbit_room {} start_client failed, status: {}", get_client_id(), static_cast<int32_t>(room_status_));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_STATUS_INVALID);
   }
-  int32_t ret = RPC_AWAIT_CODE_RESULT(orbit_server_manager::me()->start_client(ctx, get_region(), args));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(
+      orbit_server_manager::me()->start_client(ctx, get_region(), get_client_id(), client_template_id));
   if (ret != 0) {
     FWLOGERROR("orbit_room {} start_client failed, ret: {}", get_client_id(), ret);
     room_finish(ctx, PROJECT_NAMESPACE_ID::EN_ORBIT_ROOM_EXIT_REASON_LOAD_FAILED);
@@ -425,7 +429,8 @@ int32_t orbit_room::on_client_end(rpc::context& ctx, atfw::orbit::EnClientExitRe
   return room_finish(ctx, room_exit_reason);
 }
 
-rpc::result_code_type orbit_room::on_remote_start_client(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg) {
+rpc::result_code_type orbit_room::on_remote_start_client(rpc::context& ctx,
+                                                         const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg) {
   // 通知一个User启动Client
   if (room_data_.remote_start_user_key().user_id() == 0 || room_data_.remote_start_user_key().zone_id() == 0) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
