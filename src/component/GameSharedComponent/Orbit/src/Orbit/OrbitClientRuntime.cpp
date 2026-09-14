@@ -818,6 +818,8 @@ ORBIT_CLIENT_SDK_API void OrbitClientRuntime::tick() {
 
 void OrbitClientRuntime::io_tick() {
   if (!app_) {
+    // app 已释放（如已收尾）时直接完成收尾
+    finish_stopping_if_ready();
     return;
   }
 
@@ -864,21 +866,9 @@ void OrbitClientRuntime::io_tick() {
   }
 
   if (state_.load() == OrbitClientRuntimeState::kStopping) {
-    // 兜底：在途请求可能已在重试/超时流程里全部结束
-    try_finalize_shutdown();
-
-    if (app_ && app_->is_closed()) {
-      ORBIT_LOG(OrbitClientLogLevel::kInfo, "stopping finalized");
-      set_state(OrbitClientRuntimeState::kStopped);
-      reset();
-      if (callbacks_.on_request_stop) {
-        if (enabled_io_thread()) {
-          post_to_caller_thread([] { OrbitClientRuntime::me()->callbacks_.on_request_stop(); });
-        } else {
-          callbacks_.on_request_stop();
-        }
-      }
-    }
+    // 兜底：在途请求可能已在重试/超时流程里全部结束；
+    // app_->stop() 之后需要继续跑 run_once（由外层 tick/io 线程驱动）才能等到 kStopped
+    finish_stopping_if_ready();
   }
 }
 
@@ -1003,6 +993,12 @@ int32_t OrbitClientRuntime::request_end_inner(::atframework::orbit::EnClientExit
     return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
   }
 
+  if (previous_state == OrbitClientRuntimeState::kStopped) {
+    // 已经收尾完成：避免重复触发 on_request_stop；需要重新使用请先 init
+    ORBIT_LOG(OrbitClientLogLevel::kWarning, "request_end ignored: runtime already stopped");
+    return ::atframework::orbit::EN_ORBIT_ERROR_CODE_SUCCESS;
+  }
+
   set_state(OrbitClientRuntimeState::kStopping);
   OrbitClientRequestOptions request_options;
   request_options.reliable = true;
@@ -1050,7 +1046,8 @@ void OrbitClientRuntime::finalize_shutdown() {
   shutdown_finalized_ = true;
 
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "finalize shutdown");
-  io_thread_running_.store(false);
+  // 只请求停止：app::stop() 仅置 kStoping 并 uv_stop，kStopped 要等下一次 run_once 里 uv_run 返回后才置位。
+  // 这里不能停 io 线程，否则没人再跑 run_once，收尾会永远卡在 kStopping。
   if (app_) {
     app_->stop();
   }
@@ -1074,6 +1071,31 @@ void OrbitClientRuntime::try_finalize_shutdown() {
   }
 
   finalize_shutdown();
+}
+
+void OrbitClientRuntime::finish_stopping_if_ready() {
+  if (state_.load() != OrbitClientRuntimeState::kStopping) {
+    return;
+  }
+
+  try_finalize_shutdown();
+
+  // app 未初始化或已关闭时，收尾已完成；否则还要再跑一轮 run_once 才能观察到 kStopped
+  if (nullptr != app_ && app_->is_inited() && !app_->is_closed()) {
+    return;
+  }
+
+  ORBIT_LOG(OrbitClientLogLevel::kInfo, "stopping finalized");
+  set_state(OrbitClientRuntimeState::kStopped);
+  io_thread_running_.store(false);
+  reset();
+  if (callbacks_.on_request_stop) {
+    if (enabled_io_thread()) {
+      post_to_caller_thread([] { OrbitClientRuntime::me()->callbacks_.on_request_stop(); });
+    } else {
+      callbacks_.on_request_stop();
+    }
+  }
 }
 
 void OrbitClientRuntime::install_app_callbacks() {

@@ -180,6 +180,8 @@ class OrbitClientRuntime {
   void finalize_shutdown();
   // 等所有在途/可靠请求收尾（回包或重试耗尽）后再真正结束
   void try_finalize_shutdown();
+  // 确认 app 已停止后完成收尾（置 kStopped、停 io 线程、回调 on_request_stop）
+  void finish_stopping_if_ready();
   OrbitClientLoadSnapshot make_default_load_snapshot();
 
   int32_t rpc_send_client_heartbeat(const ::atframework::orbit::DTAClientHeartbeatReq& request,
