@@ -35,6 +35,8 @@ class dispatcher_implement;
 
 namespace rpc {
 
+class context;
+
 namespace telemetry {
 
 using trace_link_pair_type = std::pair<

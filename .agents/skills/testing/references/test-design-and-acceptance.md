@@ -39,6 +39,11 @@ actual framework, contracts, fixtures, and commands; do not substitute generic t
 - Assert behavior, not text: run the generated code, template render, or script against controlled inputs and assert
   outputs, exit codes, or side effects. Do not grep artifact source for an expected line when the artifact can be built
   or executed.
+- For coroutine lifecycle changes, assert state at callback entry and after resumption, and compare the event order.
+  Exercise reentry and snapshot replacement while a callback is suspended. Check weak references immediately after
+  cleanup while later batch work or completion callbacks remain blocked; an empty owner map alone does not prove release.
+- When an API accepts a smart pointer by reference or a reusable protobuf output, test replacement and reuse across an
+  await or between transactions. Assert that the original operation cannot mutate a replacement object or retain old data.
 - Keep one coherent behavior per case, but assert all material outcomes of that behavior. Reuse setup only when it hides
   irrelevant plumbing, not the scenario inputs or expected result. Prefer a small table only for genuinely equivalent
   input classes; do not hide branch-specific failures behind one loop.

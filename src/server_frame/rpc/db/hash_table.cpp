@@ -1175,6 +1175,9 @@ SERVER_FRAME_API result_type remove_all(rpc::context &ctx, uint32_t channel, gsl
   // 协程操作
   db_message_t db_message;
   res = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, db_message, await_options));
+  if (res < 0) {
+    RPC_DB_RETURN_CODE(__tracer.finish({res, __trace_attributes}));
+  }
   FWCLOGINFO(log_categorize_t::DB, "table [key={}] all data removed", key);
 
   RPC_DB_RETURN_CODE(__tracer.finish({PROJECT_NAMESPACE_ID::err::EN_SUCCESS, __trace_attributes}));

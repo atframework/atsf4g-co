@@ -445,14 +445,23 @@ DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type query_transaction(
 
   // Read-Your-Writes 一致性实现
   if (is_replication_mode(metadata)) {
+    bool received_storage = false;
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(invoke_replication_rpc_call(
-        ctx, metadata, req_body, rsp_body, "query", rpc::transaction::query,
-        [&out, &rsp_body](uint64_t, const atframework::SSMsg& received_message) -> bool {
+        ctx, req_body->metadata(), req_body, rsp_body, "query", rpc::transaction::query,
+        [&out, &rsp_body, &received_storage](uint64_t, const atframework::SSMsg& received_message) -> bool {
           if (!rpc::transaction::packer::unpack_query(received_message.body_bin(), *rsp_body) ||
               !rsp_body->has_storage()) {
             return false;
           }
-          merge_transaction_storage(out, rsp_body->storage());
+          if (received_storage) {
+            // 多个只读副本获取到数据时，要Merge数据，取状态最晚的那一个。
+            // 这样才能保证Read Your Write可见性有效。
+            merge_transaction_storage(out, rsp_body->storage());
+          } else {
+            // 输出可被重复使用，只合并本次查询收到的副本，不保留上次事务的数据。
+            protobuf_copy_message(out, rsp_body->storage());
+            received_storage = true;
+          }
           return true;
         })));
   } else {
@@ -813,6 +822,8 @@ DISTRIBUTED_TRANSACTION_SDK_API void pack_participator_request(
 
     protobuf_copy_message(*output.mutable_storage()->mutable_participator_data(),
                           input_participator.participator_data());
+  } else {
+    output.clear_storage();
   }
 }
 

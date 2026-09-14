@@ -17,6 +17,7 @@
 
 #include <rpc/rpc_lru_cache_map.h>
 
+#include <functional>
 #include <string>
 
 class transaction_manager : public atfw::util::design_pattern::singleton<transaction_manager> {
@@ -35,7 +36,7 @@ class transaction_manager : public atfw::util::design_pattern::singleton<transac
 
   void cleanup();
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx, transaction_ptr_type& data);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context& ctx, transaction_ptr_type& input);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type create_transaction(
       rpc::context& ctx, atfw::distributed_system::transaction_blob_storage&& storage);
@@ -43,15 +44,15 @@ class transaction_manager : public atfw::util::design_pattern::singleton<transac
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type mutable_transaction(
       rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata, transaction_ptr_type& out);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& trans,
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& input,
                                                                 const std::string& participator_key);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& trans,
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& input,
                                                                 const std::string& participator_key);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& trans);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_commit(rpc::context& ctx, transaction_ptr_type& input);
 
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& trans);
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_reject(rpc::context& ctx, transaction_ptr_type& input);
 
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type try_remove(
       rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata);
@@ -66,6 +67,17 @@ class transaction_manager : public atfw::util::design_pattern::singleton<transac
 #endif
 
  private:
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_task(rpc::context& ctx,
+                                                                   const std::string& transaction_uuid);
+
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type run_io_task(
+      rpc::context& ctx, transaction_ptr_type data, std::function<rpc::result_code_type(rpc::context&)> action,
+      bool invalidate_on_error = false);
+
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type remove_transaction(
+      rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata,
+      transaction_ptr_type expected_cache);
+
   bool is_exiting_;
   time_t last_stat_timepoint_;
   transaction_lru_map_type lru_caches_;

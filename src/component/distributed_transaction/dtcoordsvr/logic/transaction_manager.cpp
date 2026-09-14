@@ -4,6 +4,7 @@
 #include "logic/transaction_manager.h"
 
 #include <common/string_oprs.h>
+#include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
 #include <time/time_utility.h>
 
@@ -113,6 +114,69 @@ void transaction_manager::stop() { is_exiting_ = true; }
 
 void transaction_manager::cleanup() { lru_caches_.clear(); }
 
+rpc::result_code_type transaction_manager::await_io_task(rpc::context& ctx, const std::string& transaction_uuid) {
+  while (auto data = lru_caches_.get_cache(transaction_uuid, false)) {
+    if (task_type_trait::empty(data->io_task)) {
+      break;
+    }
+    if (task_type_trait::is_exiting(data->io_task)) {
+      task_type_trait::reset_task(data->io_task);
+      break;
+    }
+    if (task_type_trait::get_task_id(data->io_task) == ctx.get_task_context().task_id) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_CALL_NOT_READY);
+    }
+    int result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, data->io_task));
+    if (result != 0) {
+      RPC_RETURN_CODE(result);
+    }
+    // IO 自行清除句柄。醒来后重新查找，不能清除其他等待者刚登记的新任务。
+  }
+  RPC_RETURN_CODE(0);
+}
+
+rpc::result_code_type transaction_manager::run_io_task(rpc::context& ctx, transaction_ptr_type data,
+                                                       std::function<rpc::result_code_type(rpc::context&)> action,
+                                                       bool invalidate_on_error) {
+  auto invoked = rpc::async_invoke(
+      ctx, "transaction_manager.io",
+      [data, action = std::move(action), invalidate_on_error](rpc::context& subctx) -> rpc::result_code_type {
+        int result = PROJECT_NAMESPACE_ID::err::EN_SYS_RPC_TASK_EXITING;
+        auto release = gsl::finally([data, invalidate_on_error, &result, task_id = subctx.get_task_context().task_id] {
+          if (task_type_trait::get_task_id(data->io_task) == task_id) {
+            task_type_trait::reset_task(data->io_task);
+          }
+
+          if (transaction_manager::is_instance_destroyed()) {
+            return;
+          }
+
+          auto& lru_caches = transaction_manager::me()->lru_caches_;
+
+          // 调用者超时不移除在途 IO。只有子任务收尾时才清除失败的数据或空占位。
+          if (((invalidate_on_error && result != 0) || data->data_object.metadata().transaction_uuid().empty()) &&
+              lru_caches.get_cache(data->data_key, false) == data) {
+            lru_caches.remove_cache(data->data_key);
+          }
+        });
+        result = RPC_AWAIT_CODE_RESULT(action(subctx));
+        RPC_RETURN_CODE(result);
+      });
+  if (invoked.is_error()) {
+    if ((invalidate_on_error || data->data_object.metadata().transaction_uuid().empty()) &&
+        lru_caches_.get_cache(data->data_key, false) == data) {
+      lru_caches_.remove_cache(data->data_key);
+    }
+    RPC_RETURN_CODE(*invoked.get_error());
+  }
+  auto task = *invoked.get_success();
+  if (!task_type_trait::is_exiting(task)) {
+    data->io_task = task;
+  }
+  int result = RPC_AWAIT_CODE_RESULT(rpc::wait_task(ctx, task));
+  RPC_RETURN_CODE(result == 0 ? task_type_trait::get_result(task) : result);
+}
+
 int transaction_manager::tick() {
   time_t now = atfw::util::time::time_utility::get_now();
   if (last_stat_timepoint_ != now / atfw::util::time::time_utility::MINITE_SECONDS) {
@@ -145,8 +209,11 @@ int transaction_manager::tick() {
       break;
     }
 
-    // 不跳过有仍在执行的拉取/保存任务的缓存，不随意延长缓存生命周期：
-    // 置 removed 标记后淘汰，未完成的 IO 任务结束后缓存立即失效且不会写回或重新入缓存
+    // 同 UUID 的操作通过此 io_task 串行执行，IO 完成前不能淘汰它的缓存入口。
+    if (!task_type_trait::empty(iter->second->io_task) && !task_type_trait::is_exiting(iter->second->io_task)) {
+      ++iter;
+      continue;
+    }
     if (is_over_capacity && !is_expired && iter->second->data_object.metadata().memory_only()) {
       // memory_only 事务允许容量淘汰（设计如此：允许一定程度不一致，client 端会重新提交状态），但记录日志
       FWLOGWARNING("Evict memory_only transaction {} by capacity, active transaction state will be lost",
@@ -160,57 +227,53 @@ int transaction_manager::tick() {
   return ret;
 }
 
-rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_ptr_type& data) {
+rpc::result_code_type transaction_manager::save(rpc::context& ctx, transaction_ptr_type& input) {
+  transaction_ptr_type data = input;
   if (!data) {
-    // Passing a null handle to the LRU save would dereference it inside await_save; reject early.
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  if (data->removed) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  int result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, data->data_key));
+  if (result != 0) {
+    RPC_RETURN_CODE(result);
+  }
+  if (data->removed || lru_caches_.get_cache(data->data_key, false) != data) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
   if (data->data_object.metadata().memory_only()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
 
-  transaction_ptr_type saved_data = data;
-  rpc::result_code_type::value_type ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_save(
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(run_io_task(
       ctx, data,
-      [](rpc::context& subctx, const atfw::distributed_system::transaction_blob_storage& in,
-         int64_t* out_version) -> rpc::result_code_type {
-        uint64_t data_version = 0;
-        if (nullptr != out_version) {
-          data_version = static_cast<uint64_t>(*out_version);
-        }
+      [data](rpc::context& subctx) -> rpc::result_code_type {
+        uint64_t data_version = static_cast<uint64_t>(data->data_version);
+        const auto& input = data->data_object;
         rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
-        storage->set_zone_id(get_transaction_zone_id(in.metadata()));
-        storage->set_transaction_uuid(in.metadata().transaction_uuid());
-        if (false == storage->mutable_blob_data()->PackFrom(in)) {
-          FWLOGERROR("Serialize transaction_blob_storage failed, {}", storage->blob_data().InitializationErrorString());
+        storage->set_zone_id(get_transaction_zone_id(input.metadata()));
+        storage->set_transaction_uuid(input.metadata().transaction_uuid());
+        if (!storage->mutable_blob_data()->PackFrom(input)) {
+          FCTXLOGERROR(subctx, "Serialize transaction_blob_storage failed, {}",
+                       storage->blob_data().InitializationErrorString());
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
         }
-        int sub_ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
-        if (nullptr != out_version) {
-          *out_version = static_cast<int64_t>(data_version);
+        int result = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(subctx, storage, data_version));
+        if (result < 0) {
+          RPC_RETURN_CODE(result);
         }
+        data->data_version = static_cast<int64_t>(data_version);
 
-        if (sub_ret < 0) {
-          RPC_RETURN_CODE(sub_ret);
+        // 创建已设置 TTL；刷新失败不改变此次持久化成功的结果。
+        int ttl_result = RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(subctx, input));
+        if (ttl_result < 0) {
+          FCTXLOGERROR(subctx, "Refresh transaction {} TTL failed after save, res: {}({})",
+                       input.metadata().transaction_uuid(), ttl_result, protobuf_mini_dumper_get_error_msg(ttl_result));
         }
-
-        // TTL 刷新失败不影响已持久化的数据，创建时已保证设置过 TTL，这里仅记录日志
-        rpc::result_code_type::value_type ttl_ret = RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(subctx, in));
-        if (ttl_ret < 0) {
-          FWLOGERROR("Refresh transaction {} TTL failed after save, res: {}({})", in.metadata().transaction_uuid(),
-                     ttl_ret, protobuf_mini_dumper_get_error_msg(ttl_ret));
-        }
-        RPC_RETURN_CODE(sub_ret);
-      }));
-
-  if (ret != 0 && saved_data) {
-    transaction_ptr_type current_data = lru_caches_.get_cache(saved_data->data_key);
-    if (current_data == saved_data) {
-      lru_caches_.remove_cache(saved_data->data_key);
-    }
-  }
-
-  RPC_RETURN_CODE(ret);
+        RPC_RETURN_CODE(result);
+      },
+      true)));
 }
 
 rpc::result_code_type transaction_manager::create_transaction(
@@ -223,6 +286,11 @@ rpc::result_code_type transaction_manager::create_transaction(
   }
   if (storage.participators().empty()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  const std::string transaction_uuid = storage.metadata().transaction_uuid();
+  int wait_result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, transaction_uuid));
+  if (wait_result != 0 || is_exiting_) {
+    RPC_RETURN_CODE(is_exiting_ ? PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN : wait_result);
   }
   if (storage.metadata().memory_only() && lru_caches_.get_cache(storage.metadata().transaction_uuid())) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
@@ -245,93 +313,113 @@ rpc::result_code_type transaction_manager::create_transaction(
                           protobuf_from_system_clock(now + std::chrono::seconds{10}));
   }
 
-  transaction_lru_map_type::cache_ptr_type transaction_cache_ptr =
-      atfw::component::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(
-          storage.metadata().transaction_uuid());
+  auto transaction_cache_ptr = lru_caches_.get_cache(transaction_uuid);
   if (!transaction_cache_ptr) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
-  }
-
-  uint64_t db_version = 0;
-  rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
-  db_data->set_zone_id(get_transaction_zone_id(storage.metadata()));
-  db_data->set_transaction_uuid(storage.metadata().transaction_uuid());
-  if (false == db_data->mutable_blob_data()->PackFrom(storage)) {
-    FWLOGERROR("Serialize transaction_blob_storage failed, {}", db_data->blob_data().InitializationErrorString());
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
-  }
-
-  rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
-  if (!storage.metadata().memory_only()) {
-    // 相同 UUID 的重放不能覆盖已持久化的终态或参与者确认；由 DB 原子判定是否首次创建。
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, &db_version));
-    if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
-      // 插入成功后 TTL 设置可能失败或响应丢失；重放补设原记录的 TTL，不覆盖数据。
-      ret = RPC_AWAIT_CODE_RESULT(
-          rpc::db::distribute_transaction::get_all(ctx, get_transaction_zone_id(storage.metadata()),
-                                                   storage.metadata().transaction_uuid(), *db_data, db_version));
-      if (ret < 0) {
-        RPC_RETURN_CODE(ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND
-                            ? PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS
-                            : ret);
-      }
-      rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> existing(ctx);
-      if (!db_data->blob_data().UnpackTo(&*existing)) {
-        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
-      }
-      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, *existing)));
+    transaction_cache_ptr =
+        atfw::component::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(transaction_uuid);
+    if (!transaction_cache_ptr) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
     }
-    if (ret < 0) {
-      FWLOGERROR("rpc::db::distribute_transaction::insert({}) failed, res: {}({})",
-                 storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
-      RPC_RETURN_CODE(ret);
-    }
-
-    ret = RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, storage));
-    if (ret < 0) {
-      FWLOGERROR("Set transaction {} TTL failed after create, res: {}({})", storage.metadata().transaction_uuid(), ret,
-                 protobuf_mini_dumper_get_error_msg(ret));
-      rpc::result_code_type::value_type remove_result =
-          RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(
-              ctx, get_transaction_zone_id(storage.metadata()), storage.metadata().transaction_uuid()));
-      if (remove_result < 0 && remove_result != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-        FWLOGERROR("Remove transaction {} after TTL failure failed, res: {}({})", storage.metadata().transaction_uuid(),
-                   remove_result, protobuf_mini_dumper_get_error_msg(remove_result));
-      }
-      RPC_RETURN_CODE(ret);
-    }
-  }
-
-  // 创建期间可能停服；完成必要的 DB TTL 设置后不再把对象加入缓存。
-  if (is_exiting_) {
-    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
-  }
-  transaction_cache_ptr->data_version = static_cast<int64_t>(db_version);
-  protobuf_move_message(transaction_cache_ptr->data_object, std::move(storage));
-  // 创建期间的查询可能已加载并推进同一事务，保留那个缓存对象及其 IO 状态。
-  if (!lru_caches_.get_cache(transaction_cache_ptr->data_key)) {
     lru_caches_.set_cache(transaction_cache_ptr);
   }
 
-  RPC_RETURN_CODE(ret);
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(run_io_task(
+      ctx, transaction_cache_ptr,
+      [transaction_cache_ptr, storage = std::move(storage)](rpc::context& ctx) mutable -> rpc::result_code_type {
+        uint64_t db_version = 0;
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> db_data{ctx};
+        db_data->set_zone_id(get_transaction_zone_id(storage.metadata()));
+        db_data->set_transaction_uuid(storage.metadata().transaction_uuid());
+        if (false == db_data->mutable_blob_data()->PackFrom(storage)) {
+          FCTXLOGERROR(ctx, "Serialize transaction_blob_storage failed, {}",
+                       db_data->blob_data().InitializationErrorString());
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PACK);
+        }
+
+        rpc::result_code_type::value_type ret = PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
+        if (!storage.metadata().memory_only()) {
+          // 相同 UUID 的重放不能覆盖已持久化的终态或参与者确认；由 DB 原子判定是否首次创建。
+          ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::insert(ctx, db_data, &db_version));
+          if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS) {
+            // 插入成功后 TTL 设置可能失败或响应丢失；重放补设原记录的 TTL，不覆盖数据。
+            ret = RPC_AWAIT_CODE_RESULT(
+                rpc::db::distribute_transaction::get_all(ctx, get_transaction_zone_id(storage.metadata()),
+                                                         storage.metadata().transaction_uuid(), *db_data, db_version));
+            if (ret < 0) {
+              RPC_RETURN_CODE(ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND
+                                  ? PROJECT_NAMESPACE_ID::err::EN_DB_KEY_EXISTS
+                                  : ret);
+            }
+            rpc::context::message_holder<atfw::distributed_system::transaction_blob_storage> existing(ctx);
+            if (!db_data->blob_data().UnpackTo(&*existing)) {
+              RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+            }
+            if (existing->metadata().transaction_uuid() != transaction_cache_ptr->data_key) {
+              RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+            }
+            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, *existing)));
+          }
+          if (ret < 0) {
+            FCTXLOGERROR(ctx, "rpc::db::distribute_transaction::insert({}) failed, res: {}({})",
+                         storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
+            RPC_RETURN_CODE(ret);
+          }
+
+          ret = RPC_AWAIT_CODE_RESULT(refresh_transaction_ttl(ctx, storage));
+          if (ret < 0) {
+            FCTXLOGERROR(ctx, "Set transaction {} TTL failed after create, res: {}({})",
+                         storage.metadata().transaction_uuid(), ret, protobuf_mini_dumper_get_error_msg(ret));
+            rpc::result_code_type::value_type remove_result =
+                RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(
+                    ctx, get_transaction_zone_id(storage.metadata()), storage.metadata().transaction_uuid()));
+            if (remove_result < 0 && remove_result != PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+              FCTXLOGERROR(ctx, "Remove transaction {} after TTL failure failed, res: {}({})",
+                           storage.metadata().transaction_uuid(), remove_result,
+                           protobuf_mini_dumper_get_error_msg(remove_result));
+            }
+            RPC_RETURN_CODE(ret);
+          }
+        }
+
+        // 创建期间可能停服；完成 DB TTL 设置后返回错误，由 IO 收尾清除空占位。
+        if (transaction_manager::is_instance_destroyed() || transaction_manager::me()->is_exiting_) {
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
+        }
+        transaction_cache_ptr->data_version = static_cast<int64_t>(db_version);
+        protobuf_move_message(transaction_cache_ptr->data_object, std::move(storage));
+
+        RPC_RETURN_CODE(ret);
+      })));
 }
 
 rpc::result_code_type transaction_manager::mutable_transaction(
     rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata, transaction_ptr_type& out) {
-  // 停服时返回nullptr
+  const std::string transaction_uuid = metadata.transaction_uuid();
+  const bool memory_only = metadata.memory_only();
+  const uint32_t zone_id = get_transaction_zone_id(metadata);
+  out.reset();
   if (is_exiting_) {
-    out.reset();
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
   }
-
-  uint32_t zone_id = get_transaction_zone_id(metadata);
-  int ret = 0;
-  if (!metadata.memory_only()) {
-    ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_fetch(
-        ctx, metadata.transaction_uuid(), out,
-        [zone_id](rpc::context& subctx, const std::string& key,
-                  atfw::distributed_system::transaction_blob_storage& output,
-                  int64_t* out_version) -> rpc::result_code_type {
+  if (transaction_uuid.empty()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
+  }
+  int ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, transaction_uuid));
+  if (ret != 0 || is_exiting_) {
+    RPC_RETURN_CODE(is_exiting_ ? PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN : ret);
+  }
+  auto data = lru_caches_.get_cache(transaction_uuid);
+  if (!data && !memory_only) {
+    data = atfw::component::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(transaction_uuid);
+    if (!data) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    }
+    lru_caches_.set_cache(data);
+    ret = RPC_AWAIT_CODE_RESULT(run_io_task(
+        ctx, data,
+        [data, zone_id](rpc::context& subctx) -> rpc::result_code_type {
+          const auto& key = data->data_key;
+          auto& output = data->data_object;
           uint64_t data_version = 0;
           rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> storage{subctx};
           int sub_ret = RPC_AWAIT_CODE_RESULT(
@@ -346,58 +434,74 @@ rpc::result_code_type transaction_manager::mutable_transaction(
               error_msg = "type mismatch, expect: " + std::string(output.GetDescriptor()->full_name()) +
                           " , got: " + std::string(storage->blob_data().type_url());
             }
-            FWLOGERROR("ParseFromString transaction_blob_storage failed, {}", error_msg);
+            FCTXLOGERROR(subctx, "ParseFromString transaction_blob_storage failed, {}", error_msg);
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
+          }
+          if (output.metadata().transaction_uuid() != key) {
+            FCTXLOGERROR(subctx, "Transaction record {} contains mismatched UUID {}", key,
+                         output.metadata().transaction_uuid());
             RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
           }
 
-          if (nullptr != out_version) {
-            *out_version = static_cast<int64_t>(data_version);
-          }
+          data->data_version = static_cast<int64_t>(data_version);
 
           RPC_RETURN_CODE(sub_ret);
-        }));
-
+        },
+        true));
     if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
       ret = PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
     }
-  } else {
-    out = lru_caches_.get_cache(metadata.transaction_uuid());
-    ret = out ? PROJECT_NAMESPACE_ID::err::EN_SUCCESS : PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND;
+    if (ret == 0) {
+      ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, transaction_uuid));
+    }
   }
-
   if (is_exiting_) {
-    out.reset();
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN);
   }
-
-  // 读取失败时清空输出句柄：await_fetch 的出错路径可能留下指向未填充缓存对象的强引用，
-  // 调用方不应在错误返回时拿到可用的伪记录。
-  if (0 != ret) {
-    out.reset();
+  if (ret != 0) {
+    RPC_RETURN_CODE(ret);
+  }
+  if (!data || data->removed || lru_caches_.get_cache(transaction_uuid, false) != data) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
   // 超时且未提交的视为事务失败。
-  // 只在读取成功时执行：读取失败（DB 错误、记录损坏、Any 类型不符等）时 out 可能仍指向
-  // 未填充的缓存对象，对其做超时判定会把空数据伪造成 REJECTED 并写回 DB，吞掉原始错误。
-  if (out &&
-      out->data_object.metadata().status() <= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
+  if (data->data_object.metadata().status() <= atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED) {
     auto now = util::time::time_utility::now();
     if (now >
-        protobuf_to_system_clock(out->data_object.metadata().expire_timepoint()) + get_transaction_expire_grace()) {
-      out->data_object.mutable_metadata()->set_status(
+        protobuf_to_system_clock(data->data_object.metadata().expire_timepoint()) + get_transaction_expire_grace()) {
+      data->data_object.mutable_metadata()->set_status(
           atfw::distributed_system::EN_DISTRIBUTED_TRANSACTION_STATUS_REJECTED);
-      protobuf_copy_message(*out->data_object.mutable_metadata()->mutable_finish_timepoint(),
+      protobuf_copy_message(*data->data_object.mutable_metadata()->mutable_finish_timepoint(),
                             protobuf_from_system_clock(now));
-      ret = RPC_AWAIT_CODE_RESULT(save(ctx, out));
+      ret = RPC_AWAIT_CODE_RESULT(save(ctx, data));
     }
   }
 
+  if (ret == 0) {
+    ret = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, transaction_uuid));
+  }
+  if (is_exiting_ || ret != 0) {
+    RPC_RETURN_CODE(is_exiting_ ? PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN : ret);
+  }
+  if (data->removed || lru_caches_.get_cache(transaction_uuid, false) != data) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  out = std::move(data);
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transaction_ptr_type& trans,
+rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transaction_ptr_type& input,
                                                       const std::string& participator_key) {
-  if (!trans) {
+  transaction_ptr_type trans = input;
+  if (!trans || trans->removed) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  int wait_result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, trans->data_key));
+  if (wait_result != 0) {
+    RPC_RETURN_CODE(wait_result);
+  }
+  if (trans->removed || lru_caches_.get_cache(trans->data_key, false) != trans) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
@@ -448,35 +552,12 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
 
   // 所有的角色都已经处理完事务，可以删除了
   if (all_resolved) {
-    if (trans->data_object.metadata().memory_only()) {
-      ret = 0;
-    } else {
-      // 删除前先等待该记录所有未完成的 IO（拉取/保存）结束，避免晚到的 IO 在删除后复活记录；
-      // 记录已被并发删除时继续幂等删除
-      if (lru_caches_.is_io_task_running(trans->data_object.metadata().transaction_uuid())) {
-        ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, trans->data_object.metadata().transaction_uuid()));
-      }
-      if (ret != 0) {
-        FWLOGERROR("Transaction {} commit participator {} and drain pending IO failed, res: {}({})",
-                   trans->data_object.metadata().transaction_uuid(), participator_key, ret,
-                   protobuf_mini_dumper_get_error_msg(ret));
-        RPC_RETURN_CODE(ret);
-      }
-
-      ret = RPC_AWAIT_CODE_RESULT(
-          rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(trans->data_object.metadata()),
-                                                      trans->data_object.metadata().transaction_uuid()));
-      if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-        ret = 0;
-      }
-    }
+    ret = RPC_AWAIT_CODE_RESULT(remove_transaction(ctx, trans->data_object.metadata(), trans));
 
     if (ret != 0) {
       FWLOGERROR("Transaction {} commit participator {} and remove transaction failed, res: {}({})",
                  trans->data_object.metadata().transaction_uuid(), participator_key, ret,
                  protobuf_mini_dumper_get_error_msg(ret));
-    } else {
-      lru_caches_.remove_cache(trans->data_object.metadata().transaction_uuid());
     }
   } else if (has_changed && !trans->data_object.metadata().memory_only()) {
     ret = RPC_AWAIT_CODE_RESULT(save(ctx, trans));
@@ -493,9 +574,17 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transaction_ptr_type& trans,
+rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transaction_ptr_type& input,
                                                       const std::string& participator_key) {
-  if (!trans) {
+  transaction_ptr_type trans = input;
+  if (!trans || trans->removed) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  int wait_result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, trans->data_key));
+  if (wait_result != 0) {
+    RPC_RETURN_CODE(wait_result);
+  }
+  if (trans->removed || lru_caches_.get_cache(trans->data_key, false) != trans) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
@@ -546,35 +635,12 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
 
   // 所有的角色都已经处理完事务，可以删除了
   if (all_resolved) {
-    if (trans->data_object.metadata().memory_only()) {
-      ret = 0;
-    } else {
-      // 删除前先等待该记录所有未完成的 IO（拉取/保存）结束，避免晚到的 IO 在删除后复活记录；
-      // 记录已被并发删除时继续幂等删除
-      if (lru_caches_.is_io_task_running(trans->data_object.metadata().transaction_uuid())) {
-        ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, trans->data_object.metadata().transaction_uuid()));
-      }
-      if (ret != 0) {
-        FWLOGERROR("Transaction {} reject participator {} and drain pending IO failed, res: {}({})",
-                   trans->data_object.metadata().transaction_uuid(), participator_key, ret,
-                   protobuf_mini_dumper_get_error_msg(ret));
-        RPC_RETURN_CODE(ret);
-      }
-
-      ret = RPC_AWAIT_CODE_RESULT(
-          rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(trans->data_object.metadata()),
-                                                      trans->data_object.metadata().transaction_uuid()));
-      if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-        ret = 0;
-      }
-    }
+    ret = RPC_AWAIT_CODE_RESULT(remove_transaction(ctx, trans->data_object.metadata(), trans));
 
     if (ret != 0) {
       FWLOGERROR("Transaction {} reject participator {} and remove transaction failed, res: {}({})",
                  trans->data_object.metadata().transaction_uuid(), participator_key, ret,
                  protobuf_mini_dumper_get_error_msg(ret));
-    } else {
-      lru_caches_.remove_cache(trans->data_object.metadata().transaction_uuid());
     }
   } else if (has_changed && !trans->data_object.metadata().memory_only()) {
     ret = RPC_AWAIT_CODE_RESULT(save(ctx, trans));
@@ -591,8 +657,16 @@ rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transac
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transaction_ptr_type& trans) {
-  if (!trans) {
+rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transaction_ptr_type& input) {
+  transaction_ptr_type trans = input;
+  if (!trans || trans->removed) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  int wait_result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, trans->data_key));
+  if (wait_result != 0) {
+    RPC_RETURN_CODE(wait_result);
+  }
+  if (trans->removed || lru_caches_.get_cache(trans->data_key, false) != trans) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
@@ -623,8 +697,16 @@ rpc::result_code_type transaction_manager::try_commit(rpc::context& ctx, transac
   RPC_RETURN_CODE(ret);
 }
 
-rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transaction_ptr_type& trans) {
-  if (!trans) {
+rpc::result_code_type transaction_manager::try_reject(rpc::context& ctx, transaction_ptr_type& input) {
+  transaction_ptr_type trans = input;
+  if (!trans || trans->removed) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  int wait_result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, trans->data_key));
+  if (wait_result != 0) {
+    RPC_RETURN_CODE(wait_result);
+  }
+  if (trans->removed || lru_caches_.get_cache(trans->data_key, false) != trans) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
   }
 
@@ -661,34 +743,58 @@ rpc::result_code_type transaction_manager::try_remove(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_PARAM);
   }
 
-  int ret = 0;
-  if (!metadata.memory_only()) {
-    // 删除前先等待该记录所有未完成的 IO 结束，避免删除后晚到的 IO 复活记录；
-    // 强制删除语义下即使等待 IO 结束失败也继续删除（缓存会被 remove_cache 置 removed 并移出池，旧句柄禁止再写回）
-    rpc::result_code_type::value_type drain_ret = 0;
-    if (lru_caches_.is_io_task_running(metadata.transaction_uuid())) {
-      drain_ret = RPC_AWAIT_CODE_RESULT(lru_caches_.await_io_task(ctx, metadata.transaction_uuid()));
-    }
-    if (drain_ret != 0) {
-      FWLOGWARNING("Transaction {} drain pending IO before remove failed, res: {}({}), remove anyway",
-                   metadata.transaction_uuid(), drain_ret, protobuf_mini_dumper_get_error_msg(drain_ret));
-    }
-
-    ret = RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(ctx, get_transaction_zone_id(metadata),
-                                                                            metadata.transaction_uuid()));
-    if (ret == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
-      ret = 0;
-    }
-  }
-
+  int ret = RPC_AWAIT_CODE_RESULT(remove_transaction(ctx, metadata, nullptr));
   if (ret != 0) {
-    FWLOGERROR("Transaction {} remove failed, res: {}({})", metadata.transaction_uuid(), ret,
-               protobuf_mini_dumper_get_error_msg(ret));
-  } else {
-    lru_caches_.remove_cache(metadata.transaction_uuid());
+    FCTXLOGERROR(ctx, "Transaction {} remove failed, res: {}({})", metadata.transaction_uuid(), ret,
+                 protobuf_mini_dumper_get_error_msg(ret));
   }
-
   RPC_RETURN_CODE(ret);
+}
+
+rpc::result_code_type transaction_manager::remove_transaction(
+    rpc::context& ctx, const atfw::distributed_system::transaction_metadata& metadata,
+    transaction_ptr_type expected_cache) {
+  const std::string transaction_uuid = metadata.transaction_uuid();
+  bool memory_only = metadata.memory_only();
+  int result = RPC_AWAIT_CODE_RESULT(await_io_task(ctx, transaction_uuid));
+  if (result != 0) {
+    RPC_RETURN_CODE(result);
+  }
+  auto data = lru_caches_.get_cache(transaction_uuid, false);
+  if (expected_cache && (expected_cache->removed || data != expected_cache)) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_NOTFOUND);
+  }
+  // 如果本地有数据一定要以本地数据为准
+  uint32_t zone_id = 0;
+  if (data) {
+    memory_only = data->data_object.metadata().memory_only();
+    zone_id = get_transaction_zone_id(data->data_object.metadata());
+  } else {
+    zone_id = get_transaction_zone_id(metadata);
+  }
+  if (memory_only) {
+    lru_caches_.remove_cache(transaction_uuid);
+    RPC_RETURN_CODE(0);
+  }
+  if (!data) {
+    data = atfw::component::memory::stl::make_strong_rc<transaction_lru_map_type::value_cache_type>(transaction_uuid);
+    if (!data) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
+    }
+    lru_caches_.set_cache(data);
+  }
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+      run_io_task(ctx, data, [this, data, zone_id](rpc::context& subctx) -> rpc::result_code_type {
+        int result =
+            RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::remove_all(subctx, zone_id, data->data_key));
+        if (result == PROJECT_NAMESPACE_ID::err::EN_DB_RECORD_NOT_FOUND) {
+          result = 0;
+        }
+        if (result == 0 && lru_caches_.get_cache(data->data_key, false) == data) {
+          lru_caches_.remove_cache(data->data_key);
+        }
+        RPC_RETURN_CODE(result);
+      })));
 }
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS

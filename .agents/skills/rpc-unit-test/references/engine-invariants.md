@@ -37,6 +37,8 @@ timer-based `rpc::wait` in these fixtures — hand data out through shared flags
   `detail::drain_due_events(queue, current_generation)` (in `src/detail/pending_drain.h`) first **moves the due batch
   out**, then the engine delivers from the local batch. This is the single canonical implementation — both
   `mock_dns::deliver_pending` and `mock_ss::deliver_pending` call it; do not re-implement per engine.
+- `custom_wait` / `custom_resume` use `waiting_resume_index_` keyed by `(message_type, sequence)`, without `task_id`;
+  concurrent gates sharing a message type need distinct sequences, such as their task IDs.
 - `delay_generations`: `deliver_at = queue_gen + 1 + delay`. The `+1` matches the "increment counter first, then deliver
   everything `<= current`" model, so `delay == 0` completes in the pump that observed the request and every extra
   generation is one more full pump. SS and DNS must stay consistent (the DNS comment cross-references the SS engine).

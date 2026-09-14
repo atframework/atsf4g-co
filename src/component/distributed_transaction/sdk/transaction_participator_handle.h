@@ -72,8 +72,8 @@ class transaction_participator_handle
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, storage_type&,
                                         transaction_participator_failure_reason&)>
         check_prepare;
-    // 恢复任务中，检查报错或不可写计入未处理事务当前阶段的重试次数；达到上限后仅清理 SDK 本地状态。
-    std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, bool&)> check_writable;
+    // 同步检查，不切出协程。恢复任务中报错或不可写计入当前阶段重试次数；耗尽后仅清理 SDK 本地状态。
+    std::function<int32_t(rpc::context&, transaction_participator_handle&, bool&)> check_writable;
 
     // 两种模型的新事务准备成功后均从 PREPARED 开始；普通事务重复 prepare 不重放本回调。
     std::function<rpc::result_code_type(rpc::context&, transaction_participator_handle&, const storage_type&)>
@@ -130,20 +130,20 @@ class transaction_participator_handle
   /**
    * @brief Check writable of current transaction participator
    *
-   * @param ctx rpc context used to create new task
+   * @param ctx current callback context
    * @param writable output if it's writable now
-   * @return future of 0 or error code
+   * @return 0 or error code; this check does not suspend
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API rpc::result_code_type check_writable(rpc::context& ctx,
-                                                                                                    bool& writable);
+  ATFW_EXPLICIT_NODISCARD_ATTR DISTRIBUTED_TRANSACTION_SDK_API int32_t check_writable(rpc::context& ctx,
+                                                                                      bool& writable);
 
   /**
    * @brief Prepare for transaction
    * @note If force_commit = true, then vtable.do_event(...) will be called immediately
-   *   when 0 == vtable.check_prepare(...).
+   *   after check_prepare succeeds without allow_retry and all requested resources are locked.
    *   force_commit 是 best-effort 模型，不是可容灾 2PC：
    *   - 参与者不进入 running/finished 集合，不创建 resolve timer，也没有协调者记录；
-   *   - SDK 资源锁（lock_resource/check_lock/lock）对 force_commit 事务不生效；
+   *   - lock_resource 在启动回调前加锁，do_event 返回后、on_finish_running 前解锁；退出时也会清理；
    *   - 生命周期回调顺序为 on_start_running -> do_event -> on_finish_running，
    *     仅当 do_event 成功时才追加 on_finished -> on_commited，do_event 失败时不触发 on_finished/on_rejected；
    *   - 补偿（undo）只存在于 client 本次调用的有限次重试内，client/参与者故障可能永久部分执行，
@@ -212,6 +212,8 @@ class transaction_participator_handle
    * @param resource_uuids resource uuids to lock
    *
    * @note 冲突时保留原有锁并返回 EN_TRANSACTION_RESOURCE_PREEMPTED，不登记任何新资源。
+   *   普通事务必须使用当前 running 集合内的 storage；未登记或 load 后的旧对象不能加锁或 wound。
+   *   force_commit 允许本次调用持锁；直接调用 lock 的接入方须在调用结束前用 storage 句柄 unlock。
    *   任一资源不可抢占时不 wound 其他事务；全部检查通过后才登记 wound。
    *   wound 保留原恢复时间和重试计数；收到决议或超时恢复后，在剩余重试次数内完成处理，达到上限则清理。
    * @see http://www.mathcs.emory.edu/~cheung/Courses/554/Syllabus/8-recv+serial/deadlock-compare.html
@@ -276,6 +278,9 @@ class transaction_participator_handle
   // 避免多个平行容器（wound/action-stage/inflight 标记）与 running 集合之间的隐式生命周期关联
   struct running_transaction_entry {
     storage_ptr_type storage;
+    // on_start_running 返回前不启动恢复，commit/reject 返回 EN_SYS_BUSY，保证生命周期事件顺序。
+    // 仅为当前回调保留的运行时标记；load 恢复的事务不重放 on_start_running。
+    bool start_callback_running = false;
     // 正在执行的最终状态流程（do_event/迁移到 finished）方向，用于同一事务内的流程互斥；
     // kNone 表示当前没有正在执行的流程，与 metadata 中的事务状态独立。
     terminal_direction_type inflight_terminal_direction = terminal_direction_type::kNone;

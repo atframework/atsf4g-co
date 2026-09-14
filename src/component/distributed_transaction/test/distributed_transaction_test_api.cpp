@@ -342,6 +342,35 @@ CASE_TEST(component_distributed_transaction_api, pack_participator_request_varia
   CASE_EXPECT_EQ(9, force_reject_req.storage().configure().resolve_max_times());
 }
 
+CASE_TEST(component_distributed_transaction_api, reused_reject_request_clears_force_commit_undo_data) {
+  transaction_blob_storage storage;
+  dt_test::make_prepared_storage(storage, "pack-force-transaction", {"pa"});
+  storage.mutable_configure()->set_force_commit(true);
+  CASE_EXPECT_TRUE(storage.mutable_transaction_data()->PackFrom(storage.metadata()));
+  transaction_participator participator;
+  participator.set_participator_key("pa");
+  CASE_EXPECT_TRUE(participator.mutable_participator_data()->PackFrom(storage.configure()));
+
+  atfw::distributed_system::SSParticipatorTransactionRejectReq request;
+  rpc::transaction_api::pack_participator_request(request, storage, participator);
+  CASE_EXPECT_TRUE(request.has_storage());
+  CASE_EXPECT_TRUE(request.storage().configure().force_commit());
+  CASE_EXPECT_FALSE(request.storage().transaction_data().value().empty());
+  CASE_EXPECT_FALSE(request.storage().participator_data().value().empty());
+
+  // A reused output must select normal rejection and cannot carry another transaction's undo data.
+  storage.mutable_metadata()->set_transaction_uuid("pack-normal-transaction");
+  storage.mutable_configure()->set_force_commit(false);
+  rpc::transaction_api::pack_participator_request(request, storage, participator);
+  CASE_EXPECT_EQ("pack-normal-transaction", request.transaction_uuid());
+  CASE_EXPECT_FALSE(request.has_storage());
+
+  storage.mutable_configure()->set_force_commit(true);
+  rpc::transaction_api::pack_participator_request(request, storage, participator);
+  CASE_EXPECT_EQ("pack-normal-transaction", request.storage().metadata().transaction_uuid());
+  CASE_EXPECT_TRUE(request.storage().configure().force_commit());
+}
+
 // ============ generated packer round trip ============
 
 CASE_TEST(component_distributed_transaction_api, generated_packer_round_trip) {
@@ -984,6 +1013,82 @@ CASE_TEST(component_distributed_transaction_api, query_transaction_replication_m
   CASE_EXPECT_TRUE(conflict_result.task_exited);
   CASE_EXPECT_EQ(0, conflict_result.result_code);
 
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+CASE_TEST(component_distributed_transaction_api, query_replaces_previous_transaction_output) {
+  atfw::testing::runtime test;
+  atfw::testing::runtime_options options;
+  options.features = {atfw::testing::feature::ss};
+  CASE_EXPECT_EQ(0, test.start(options));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(dt_test::inject_coordinators(test, {0x1B0001, 0x1B0002}));
+
+  transaction_blob_storage current;
+  dt_test::make_prepared_storage(current, "query-current-transaction", {"current-participator"});
+  auto rule = test.ss().mock(
+      rpc::transaction::packer::get_full_name_of_query(), SSDistributeTransactionQueryReq::descriptor()->full_name(),
+      SSDistributeTransactionQueryRsp::descriptor()->full_name(),
+      [&current](const atfw::testing::ss_request_view& request,
+                 google::protobuf::Message& response) -> rpc::result_code_type {
+        const auto& typed_request = static_cast<const SSDistributeTransactionQueryReq&>(request.body);
+        CASE_EXPECT_EQ(current.metadata().transaction_uuid(), typed_request.metadata().transaction_uuid());
+        auto& typed_response = static_cast<SSDistributeTransactionQueryRsp&>(response);
+        protobuf_copy_message(*typed_response.mutable_storage(), current);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(!!rule);
+
+  auto task = test.run_task(
+      "query_replaces_previous_output", std::chrono::seconds{4},
+      [&current](rpc::context& ctx) -> rpc::result_code_type {
+        for (bool replicated : {false, true}) {
+          transaction_metadata metadata = current.metadata();
+          if (replicated) {
+            metadata.set_replicate_read_count(2);
+            metadata.add_replicate_node_server_id(0x1B0001);
+            metadata.add_replicate_node_server_id(0x1B0002);
+          }
+          transaction_blob_storage output;
+          dt_test::make_prepared_storage(output, "query-previous-transaction", {"previous-participator"});
+          output.mutable_metadata()->set_status(
+              EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+          output.mutable_configure()->set_force_commit(true);
+          CASE_EXPECT_TRUE(output.mutable_transaction_data()->PackFrom(output.metadata()));
+          CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::transaction_api::query_transaction(ctx, metadata, output)));
+          CASE_EXPECT_EQ("query-current-transaction", output.metadata().transaction_uuid());
+          CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                         output.metadata().status());
+          CASE_EXPECT_FALSE(output.configure().force_commit());
+          CASE_EXPECT_EQ(1, output.participators_size());
+          CASE_EXPECT_EQ(1, output.participators().count("current-participator"));
+          CASE_EXPECT_FALSE(output.has_transaction_data());
+        }
+
+        transaction_blob_storage aliased_output;
+        dt_test::make_prepared_storage(aliased_output, "query-current-transaction", {"previous-participator"});
+        aliased_output.mutable_metadata()->set_status(
+            EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_COMMITED);
+        aliased_output.mutable_metadata()->set_replicate_read_count(2);
+        aliased_output.mutable_metadata()->add_replicate_node_server_id(0x1B0001);
+        aliased_output.mutable_metadata()->add_replicate_node_server_id(0x1B0002);
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(
+                              rpc::transaction_api::query_transaction(ctx, aliased_output.metadata(), aliased_output)));
+        CASE_EXPECT_EQ("query-current-transaction", aliased_output.metadata().transaction_uuid());
+        CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                       aliased_output.metadata().status());
+        CASE_EXPECT_EQ(0, aliased_output.metadata().replicate_read_count());
+        CASE_EXPECT_EQ(1, aliased_output.participators_size());
+        CASE_EXPECT_EQ(1, aliased_output.participators().count("current-participator"));
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_FALSE(task.empty());
+  auto result = test.wait(task, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(result.task_exited);
+  CASE_EXPECT_EQ(0, result.result_code);
+  CASE_EXPECT_EQ(5, test.ss().calls(rpc::transaction::packer::get_full_name_of_query()));
   CASE_EXPECT_EQ(0, test.stop());
 }
 

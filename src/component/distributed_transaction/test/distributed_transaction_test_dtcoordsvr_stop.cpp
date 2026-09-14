@@ -30,6 +30,26 @@
 #include "rpc/rpc_utils.h"
 
 namespace {
+rpc::result_code_type wait_for_io(rpc::context& ctx, std::vector<task_type_trait::id_type>& waiting_tasks) {
+  waiting_tasks.push_back(ctx.get_task_context().task_id);
+  auto options = dispatcher_make_default<dispatcher_await_options>();
+  // The resume registry indexes message type and sequence, independently of the target task ID.
+  options.sequence = ctx.get_task_context().task_id;
+  options.timeout = std::chrono::seconds{4};
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rpc::custom_wait(ctx, &waiting_tasks, options)));
+}
+
+void release_io(std::vector<task_type_trait::id_type>& waiting_tasks) {
+  auto tasks = waiting_tasks;
+  waiting_tasks.clear();
+  for (auto task_id : tasks) {
+    auto data = dispatcher_make_default<dispatcher_resume_data_type>();
+    data.sequence = task_id;
+    data.message.message_type = reinterpret_cast<uintptr_t>(&waiting_tasks);
+    CASE_EXPECT_EQ(0, rpc::custom_resume(task_id, data));
+  }
+}
+
 void setup_dtcoordsvr_config_loader() {
   logic_config::me()->set_server_instance_config_loader([](atfw::atapp::app& app_, logic_config&,
                                                            logic_config::server_instance_config_ptr& to) {
@@ -75,6 +95,15 @@ CASE_TEST(component_dtcoordsvr_stop, stop_drains_existing_transactions_before_cl
         CASE_EXPECT_EQ(
             0, RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(memory_storage))));
         CASE_EXPECT_EQ(2, transaction_manager::me()->get_lru_size_for_unit_test());
+        atfw::distributed_system::transaction_blob_storage expired_storage;
+        dt_test::make_prepared_storage(expired_storage, "dtcoordsvr-inflight-auto-reject", {"pa"}, false,
+                                       std::chrono::seconds{-10});
+        rpc::shared_message<PROJECT_NAMESPACE_ID::table_distribute_transaction> record{ctx};
+        record->set_zone_id(0);
+        record->set_transaction_uuid(expired_storage.metadata().transaction_uuid());
+        CASE_EXPECT_TRUE(record->mutable_blob_data()->PackFrom(expired_storage));
+        uint64_t version = 0;
+        CASE_EXPECT_EQ(0, RPC_AWAIT_CODE_RESULT(rpc::db::distribute_transaction::replace(ctx, record, version)));
         RPC_RETURN_CODE(0);
       });
   auto prepared = test.wait(prepare, std::chrono::seconds{8});
@@ -82,20 +111,27 @@ CASE_TEST(component_dtcoordsvr_stop, stop_drains_existing_transactions_before_cl
   CASE_EXPECT_EQ(0, prepared.result_code);
 
   bool ttl_entered = false;
-  bool release_io = false;
-  auto ttl_rule = rpc::db::distribute_transaction::mock::set_ttl(
-      [&ttl_entered, &release_io](rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_distribute_transaction& input,
-                                  uint64_t ttl, rpc::unit_test::db_mock_meta&) -> rpc::result_code_type {
-        CASE_EXPECT_EQ(std::string("dtcoordsvr-inflight-create"), input.transaction_uuid());
+  bool auto_reject_ttl_entered = false;
+  std::vector<task_type_trait::id_type> waiting_io;
+  rpc::unit_test::mock_rule_handle ttl_rule;
+  ttl_rule = rpc::db::distribute_transaction::mock::set_ttl(
+      [&ttl_rule, &ttl_entered, &auto_reject_ttl_entered, &waiting_io](
+          rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_distribute_transaction& input, uint64_t ttl,
+          rpc::unit_test::db_mock_meta&) -> rpc::result_code_type {
         CASE_EXPECT_GT(ttl, 0);
-        ttl_entered = true;
-        while (!release_io) {
-          auto result = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
-          if (result < 0) {
-            RPC_RETURN_CODE(result);
-          }
+        if (input.transaction_uuid() == "dtcoordsvr-inflight-create") {
+          ttl_entered = true;
+        } else {
+          CASE_EXPECT_EQ(std::string("dtcoordsvr-inflight-auto-reject"), input.transaction_uuid());
+          auto_reject_ttl_entered = true;
         }
-        RPC_RETURN_CODE(0);
+        int result = RPC_AWAIT_CODE_RESULT(wait_for_io(ctx, waiting_io));
+        if (result < 0) {
+          RPC_RETURN_CODE(result);
+        }
+        ttl_rule.reset();
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+            rpc::db::distribute_transaction::set_ttl(ctx, input.zone_id(), input.transaction_uuid(), ttl)));
       });
   CASE_EXPECT_TRUE(!!ttl_rule);
   auto creating = test.run_task(
@@ -106,17 +142,27 @@ CASE_TEST(component_dtcoordsvr_stop, stop_drains_existing_transactions_before_cl
       });
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&ttl_entered]() { return ttl_entered; }));
 
+  auto auto_rejecting = test.run_task(
+      "dtcoordsvr_inflight_auto_reject", std::chrono::seconds{4}, [](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::distributed_system::transaction_metadata metadata;
+        metadata.set_transaction_uuid("dtcoordsvr-inflight-auto-reject");
+        transaction_manager::transaction_ptr_type output;
+        auto result = RPC_AWAIT_CODE_RESULT(transaction_manager::me()->mutable_transaction(ctx, metadata, output));
+        CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN, result);
+        CASE_EXPECT_FALSE(!!output);
+        RPC_RETURN_CODE(0);
+      });
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&auto_reject_ttl_entered]() { return auto_reject_ttl_entered; }));
+
   bool fetch_entered = false;
   auto fetch_rule = rpc::db::distribute_transaction::mock::get_all(
-      [&fetch_entered, &release_io](rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_distribute_transaction& input,
+      [&fetch_entered, &waiting_io](rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_distribute_transaction& input,
                                     PROJECT_NAMESPACE_ID::table_distribute_transaction& output,
                                     rpc::unit_test::db_mock_meta& meta) -> rpc::result_code_type {
         fetch_entered = true;
-        while (!release_io) {
-          auto result = RPC_AWAIT_CODE_RESULT(rpc::wait(ctx, std::chrono::milliseconds{1}));
-          if (result < 0) {
-            RPC_RETURN_CODE(result);
-          }
+        auto result = RPC_AWAIT_CODE_RESULT(wait_for_io(ctx, waiting_io));
+        if (result < 0) {
+          RPC_RETURN_CODE(result);
         }
         atfw::distributed_system::transaction_blob_storage storage;
         dt_test::make_prepared_storage(storage, input.transaction_uuid(), {"pa"});
@@ -159,7 +205,7 @@ CASE_TEST(component_dtcoordsvr_stop, stop_drains_existing_transactions_before_cl
         // stop() is idempotent and leaves both ready records and the pending fetch cached for draining.
         transaction_manager::me()->stop();
         transaction_manager::me()->stop();
-        CASE_EXPECT_EQ(3, transaction_manager::me()->get_lru_size_for_unit_test());
+        CASE_EXPECT_EQ(5, transaction_manager::me()->get_lru_size_for_unit_test());
 
         const auto db_calls_before = test.db().calls("distribute_transaction");
         for (size_t i = 0; i < transactions.size(); ++i) {
@@ -181,7 +227,7 @@ CASE_TEST(component_dtcoordsvr_stop, stop_drains_existing_transactions_before_cl
           CASE_EXPECT_EQ(
               PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN,
               RPC_AWAIT_CODE_RESULT(transaction_manager::me()->create_transaction(ctx, std::move(late_storage))));
-          CASE_EXPECT_EQ(3, transaction_manager::me()->get_lru_size_for_unit_test());
+          CASE_EXPECT_EQ(5, transaction_manager::me()->get_lru_size_for_unit_test());
         }
         CASE_EXPECT_EQ(db_calls_before, test.db().calls("distribute_transaction"));
 
@@ -191,14 +237,17 @@ CASE_TEST(component_dtcoordsvr_stop, stop_drains_existing_transactions_before_cl
   CASE_EXPECT_TRUE(result.task_exited);
   CASE_EXPECT_EQ(0, result.result_code);
 
-  release_io = true;
+  release_io(waiting_io);
   auto create_result = test.wait(creating, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(create_result.task_exited);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SYS_SERVER_SHUTDOWN, create_result.result_code);
   auto fetch_result = test.wait(fetching, std::chrono::seconds{8});
   CASE_EXPECT_TRUE(fetch_result.task_exited);
   CASE_EXPECT_EQ(0, fetch_result.result_code);
-  CASE_EXPECT_EQ(3, transaction_manager::me()->get_lru_size_for_unit_test());
+  auto auto_reject_result = test.wait(auto_rejecting, std::chrono::seconds{8});
+  CASE_EXPECT_TRUE(auto_reject_result.task_exited);
+  CASE_EXPECT_EQ(0, auto_reject_result.result_code);
+  CASE_EXPECT_EQ(4, transaction_manager::me()->get_lru_size_for_unit_test());
   ttl_rule.reset();
   fetch_rule.reset();
 

@@ -37,9 +37,21 @@ class context;
 namespace atframework {
 namespace distributed_system {
 
-class transaction_client_handle {
+class ATFW_UTIL_SYMBOL_VISIBLE transaction_client_handle {
  public:
-  using storage_type = atfw::distributed_system::transaction_blob_storage;
+  struct ATFW_UTIL_SYMBOL_VISIBLE storage_type {
+    DISTRIBUTED_TRANSACTION_SDK_API storage_type();
+    DISTRIBUTED_TRANSACTION_SDK_API ~storage_type();
+
+    storage_type(const storage_type&) = delete;
+    storage_type& operator=(const storage_type&) = delete;
+
+    atfw::distributed_system::transaction_blob_storage data;
+
+   private:
+    friend class transaction_client_handle;
+    bool is_submitting_;
+  };
   using metadata_type = atfw::distributed_system::transaction_metadata;
   using configure_type = atfw::distributed_system::transaction_configure;
   using storage_ptr_type = atfw::util::memory::strong_rc_ptr<storage_type>;
@@ -73,7 +85,7 @@ class transaction_client_handle {
     // 是否直接强制提交（并执行）事务。
     // 注意：force_commit 是 best-effort 模型，不是可容灾 2PC：
     // - 不创建协调者记录，参与者不进入 running/finished，也没有定时恢复；
-    // - SDK 资源锁对 force_commit 事务不生效；
+    // - 参与者在 do_event 返回后、on_finish_running 前释放资源锁；
     // - 补偿（undo）只存在于本次 submit 调用的有限次重试内，client/参与者故障可能永久部分执行；
     // - 参与者的 do_event/undo_event 必须幂等，undo_event 必须支持 no-op（未执行过时成功返回）和重放。
     bool force_commit = false;
@@ -98,7 +110,7 @@ class transaction_client_handle {
   transaction_client_handle& operator=(const transaction_client_handle&) = delete;
   transaction_client_handle& operator=(transaction_client_handle&&) = delete;
 
-  DISTRIBUTED_TRANSACTION_SDK_API transaction_client_handle(
+  DISTRIBUTED_TRANSACTION_SDK_API explicit transaction_client_handle(
       const atfw::util::memory::strong_rc_ptr<vtable_type>& vtable);
   DISTRIBUTED_TRANSACTION_SDK_API ~transaction_client_handle();
 
@@ -131,8 +143,12 @@ class transaction_client_handle {
 
   /**
    * @brief 执行事务
-   * @note 每个 prepare 派发前及最后一次 prepare 返回后检查原截止时间；超时后对已准备的参与者
+   * @note 每次 create/commit/prepare 派发前及最后一次 prepare 返回后检查原截止时间；超时后对已准备的参与者
    *   按协调者确认的决议通知，force_commit 则补偿，不延长截止时间。
+   *   同一 storage 在本次调用返回前再次 submit 返回 EN_TRANSACTION_ALREADY_RUN，不修改事务和输出集合，
+   *   包括通过不同 handle 提交。同一 handle 可同时提交不同 storage。
+   *   本次调用持有入口 storage；回调替换调用方 input 不影响当前事务，返回后释放该引用。
+   *   调用方须保证 client handle 和输出集合在调用完成前有效。
    *
    * @param ctx RPC context
    * @param input 事务存储结构

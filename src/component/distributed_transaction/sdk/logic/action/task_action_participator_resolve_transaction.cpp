@@ -58,8 +58,7 @@ task_action_participator_resolve_transaction::operator()() {
   // 进度状态保存在任务对象成员上，供 operator() 收尾与 on_failed 兜底共用 rearm_unprocessed_timers。
   do {
     bool is_writable = false;
-    auto writable_result =
-        RPC_AWAIT_CODE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
+    auto writable_result = param_.participantor->check_writable(get_shared_context(), is_writable);
     if (writable_result < 0 || !is_writable) {
       writable_check_failed_ = true;
       break;
@@ -70,6 +69,15 @@ task_action_participator_resolve_transaction::operator()() {
     bool task_exiting = false;
     for (; submmit_processed_ < param_.submmit_transactions.size();
          param_.submmit_transactions.at(submmit_processed_).reset(), ++submmit_processed_) {
+      // 首条沿用批次入口检查；上一条回调或 ACK 切出后，下一条须重新确认可写性。
+      if (submmit_processed_ > 0) {
+        is_writable = false;
+        writable_result = param_.participantor->check_writable(get_shared_context(), is_writable);
+        if (writable_result < 0 || !is_writable) {
+          writable_check_failed_ = true;
+          break;
+        }
+      }
       auto& trans_data = param_.submmit_transactions.at(submmit_processed_);
       if (!param_.participantor->is_current_transaction(
               transaction_participator_handle::resolve_timer_action_type::kAcknowledge, trans_data)) {
@@ -124,10 +132,10 @@ task_action_participator_resolve_transaction::operator()() {
 
     // 检查所有的过期事务，准备resolve
     // 每个已处理条目立即释放；后续事务的 IO/回调等待不能延长它的生命周期。
-    for (; !task_exiting && pending_iter_ != param_.pending_transactions.end();
+    for (; !task_exiting && !writable_check_failed_ && pending_iter_ != param_.pending_transactions.end();
          pending_iter_ = param_.pending_transactions.erase(pending_iter_)) {
       is_writable = false;
-      writable_result = RPC_AWAIT_CODE_RESULT(param_.participantor->check_writable(get_shared_context(), is_writable));
+      writable_result = param_.participantor->check_writable(get_shared_context(), is_writable);
       if (writable_result < 0 || !is_writable) {
         writable_check_failed_ = true;
         break;
@@ -204,6 +212,10 @@ void task_action_participator_resolve_transaction::rearm_unprocessed_timers() {
     param_.participantor->retry_resolve_transaction(transaction_participator_handle::resolve_timer_action_type::kQuery,
                                                     *pending_iter_, writable_check_failed_);
   }
+  // 剩余条目已清理或交还定时器；任务完成回调可能切出，不能继续持有这些 storage。
+  param_.submmit_transactions.clear();
+  param_.pending_transactions.clear();
+  pending_iter_ = param_.pending_transactions.end();
 }
 
 }  // namespace distributed_system
