@@ -67,6 +67,8 @@ constexpr const char* kOrbitStartTimeout = "--start_timeout";
 constexpr const char* kOrbitSeedMode = "--seed_mode";
 constexpr const char* kOrbitClientInstanceIdArg = "--orbit-client-instance-id";
 constexpr const char* kOrbitAgentInstanceIdArg = "--orbit-agent-instance-id";
+// atapp_conf 中 metadata.scope 对应的环境变量名
+constexpr const char* kAtappMetadataScopeEnvKey = "ATAPP_METADATA_SCOPE";
 
 static atapp::etcd_keepalive::checker_fn_t make_orbit_load_checker(uint64_t expected_server_id) {
   return [expected_server_id](const std::string& checked) -> bool {
@@ -140,6 +142,14 @@ static void append_bus_config_env_arguments(const atbus::node::conf_t& bus_conf,
     append_config_env_line(output, env_key.c_str(),
                            std::string{reinterpret_cast<const char*>(bus_conf.access_tokens[index].data()),
                                        bus_conf.access_tokens[index].size()});
+  }
+}
+
+// 将 atapp metadata 中需要继承给子进程的配置打入环境变量（与 atapp_conf 的 env 映射一致）
+static void append_atapp_metadata_env_arguments(const atapp::protocol::atapp_metadata& metadata,
+                                                std::vector<std::string>& output) {
+  if (!metadata.scope().empty()) {
+    append_config_env_line(output, kAtappMetadataScopeEnvKey, metadata.scope());
   }
 }
 
@@ -1157,6 +1167,11 @@ void orbit_agent_manager::fill_normal_client_start_command(const orbit_agent_cli
 
   if (nullptr != owner_app_ && nullptr != owner_app_->get_bus_node()) {
     append_bus_config_env_arguments(owner_app_->get_bus_node()->get_conf(), output);
+  }
+  // 非远端启动时，把本进程的 atapp metadata.scope 一并传给子进程，保持作用域一致；
+  // 远端启动的进程不在本机拉起，不使用本机的 scope
+  if (!remote_start && nullptr != owner_app_) {
+    append_atapp_metadata_env_arguments(owner_app_->get_metadata(), output);
   }
 }
 

@@ -25,4 +25,8 @@ labels:
 labels:
   # deployment.environment is deprecated by otel, but keep it for compatibility
   "deployment.environment.name": "{{ .Values.atapp.deployment.deployment_environment | default "" }}" # formal-qq/formal-wx/daily/qatest*/t-*
+{{- if .Values.atapp.deployment.scope }}
+scope:
+  {{ .Values.atapp.deployment.scope }}
+{{- end }}
 {{- end }}
