@@ -213,7 +213,7 @@ user_team_manager::user_team_manager(user& owner)
 
     user_team_battle_library_function::register_glue_layer_callbacks();
     return true;
-  };
+  }();
 }
 
 user_team_manager::~user_team_manager() {}

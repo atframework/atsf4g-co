@@ -282,7 +282,7 @@ void user_team_battle_library_function::glue_layer_event_on_level_action_level_s
   // 只有队长允许改变状态
   if (!team.is_captain()) {
     FCTXLOGERROR(
-        ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the matching status.",
+        ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the level select data.",
         team.get_owner().get_owner().get_user_id(), team.get_team_key().zone_id(), team.get_team_key().team_id());
     return;
   }

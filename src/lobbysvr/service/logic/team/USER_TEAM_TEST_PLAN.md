@@ -1,6 +1,7 @@
 # lobbysvr 用户组队单元测试执行计划
 
-> 状态：2026-09-08 完成新 CS 协议下的整体审查，新增通知与修复回归见 §5.8，最新执行证据见 §7。
+> 状态：2026-09-14 起队伍共享数据不再有任何客户端可写模块（匹配只能由内部匹配流程经 glue 回调发起），
+> CS-DATA-02 契约已同步；2026-09-08 完成新 CS 协议下的整体审查，新增通知与修复回归见 §5.8，最新执行证据见 §7。
 > §2/§3 描述当前契约；旧平台记录仅说明当时的执行结果，不代表当前代码已在这些平台验证。
 >
 > 2026-09-05 起 CS 通知流程迁移到新版 `DUserTeamDirty` 协议:脏数据按 `team_snapshot/team_increase/team_remove`
@@ -317,7 +318,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | CS-MEMBER-01 | exit/remove/role | self remove 走 manager exit，reason=`EXIT_TEAM`；移除他人需权限且 action reason=`REMOVE_MEMBER`；set-role 权限/role 边界及 payload |
 | CS-CAPTAIN-01 | transfer captain | 当前队长可转移，非队长需 OWNER；action 目标完整，最终角色语义由 ROLE-02 验证 |
 | CS-DATA-01 | update member data | 空列表、不可写模块零上行；payload 自动填 self user/channel/version/router、key 唯一、permission=MEMBER、ready 更新附加 team-not-matching condition |
-| CS-DATA-02 | update team data | 空列表、角色不足、不可写模块、同批重复 key 零上行；matching=true 附加 all-members-ready condition；client_result 透传 |
+| CS-DATA-02 | update team data | 空列表、角色不足零上行；队伍共享数据没有客户端可写模块（匹配只能由内部匹配流程经 glue 回调发起），任何模块（含 battle.matching，不论 true/false）一律权限拒绝零上行 |
 
 ### 5.6 P2：健壮性
 
@@ -452,7 +453,25 @@ add/remove)迁移期关闭的缺陷：
 
 ## 7. 完成证据
 
-### 7.1 本次验证（2026-09-08）
+### 7.1 本次验证（2026-09-14）
+
+- 背景：组队匹配流程变更（匹配只能由内部匹配流程经 `glue_layer_event_on_matching_action_start_matching_check_function_passed`
+  发起，队伍共享数据不再有任何客户端可写模块）后，按新契约调整 CS 用例并修复执行期发现的注册缺陷。
+- 修复：`user_team_manager.cpp` 构造体内的注册 lambda 未调用（`};` 缺 `()`），导致 `need_user_team` get-info
+  handle 与 `register_glue_layer_callbacks()` 从未注册 → 约 40 例挂在 `team.pull_data`（-1000004），
+  `cs_data_02` 在零上行后访问空 `send_message_reqs.back()` 崩溃 → 改为 `}();`。
+- 契约调整：`cs_data_02` 改为队伍不存在/空列表/角色不足分支 + 任何队伍模块（含 battle.matching，不论
+  true/false）一律权限拒绝零上行；create/approve/join_request 上行 payload 断言同步为 3 条队伍默认共享数据
+  （battle.matching=false + 空 matching_team_view + 空 matching_start_data，空数据只打 key）+ 2 条成员默认
+  共享数据（battle.ready=false + 空 matching_parameter）。
+- 环境：Windows 11 amd64、MSVC 14.51 工具集（VS 18 Community）、Debug、Ninja，构建目录
+  `build_jobs_cmake_tools`，并行度 8（构建前加载 `vcvars64.bat`）。
+- 构建：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 8` 通过。
+- 执行：组结果 `-r lobbysvr_user_team` → 86 选中 / 86 通过 / 0 失败；全量 suite → 101 选中 / 101 通过 /
+  0 失败；`ctest --test-dir build_jobs_cmake_tools -L "service:lobbysvr" --output-on-failure` → 1/1 Passed。
+- 本次改动不触及 teamsvr，teamsvr-room 用例未重跑；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
+
+### 7.2 历史验证（2026-09-08）
 
 - 复核提交 `9a845101153dd342fc62579b4a3153530e54844e`（Team模块新的CS通知流程）及后续协议调用，
   检查 Lobby team 全目录、Room 成员/邀请错误语义及 DTMQ 的 raw-message、batch、snapshot 回调顺序。
@@ -476,7 +495,7 @@ add/remove)迁移期关闭的缺陷：
   新 `team` Skill 通过元数据校验。人工检查 8 个应触发和 8 个近似不应触发的请求，未测量客户端调用率。
 - 本次未运行 Linux、Release 配置；下方旧记录仅表示当时的结果。
 
-### 7.2 历史验证与命令参考
+### 7.3 历史验证与命令参考
 
 回归验证命令（`<BUILD_DIR>` 按仓库 build/test Skill 解析，注意 Windows DLL PATH; 测试二进制在
 `<BUILD_DIR>\test`, DLL 在 `<BUILD_DIR>\test`、`<BUILD_DIR>\publish\bin` 与 third_party install 的 bin）;

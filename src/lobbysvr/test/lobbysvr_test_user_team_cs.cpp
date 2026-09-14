@@ -114,6 +114,62 @@ void expect_packed_team_matching_entry(const atfw::team::DTeamAnyDataWithKey& en
   }
 }
 
+// Expected keys of the empty module entries produced by the production pack helpers. The empty payload only
+// carries the key to mark the module as a valid DTeamSharedDataModule/DTeamMemberSharedDataModule.
+int64_t team_matching_team_view_data_key() {
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
+  module.mutable_battle()->mutable_matching_team_view();
+  return user_team_algorithm::make_team_shared_data_key(module);
+}
+
+int64_t team_matching_start_data_key() {
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
+  module.mutable_battle()->mutable_matching_start_data();
+  return user_team_algorithm::make_team_shared_data_key(module);
+}
+
+int64_t member_matching_parameter_data_key() {
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule module;
+  module.mutable_battle()->mutable_matching_parameter();
+  return user_team_algorithm::make_team_member_shared_data_key(module);
+}
+
+void expect_packed_team_matching_team_view_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(team_matching_team_view_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_team_view());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_team_view().ByteSizeLong()));
+  }
+}
+
+void expect_packed_team_matching_start_data_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(team_matching_start_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_start_data());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_start_data().ByteSizeLong()));
+  }
+}
+
+void expect_packed_member_matching_parameter_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(member_matching_parameter_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_parameter());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_parameter().ByteSizeLong()));
+  }
+}
+
 // Join a team through the personal-channel notification, then make the team channel ready with a snapshot whose
 // member list contains the captain (kCaptainUserId as OWNER unless self is the captain) and self with self_role.
 // Reused for re-configure: pass a higher custom_data_sequence so the subscriber accepts the new custom data.
@@ -315,14 +371,18 @@ CASE_TEST(lobbysvr_user_team, cs_invite_01_send_invitation_contract) {
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), create_req.user_router_server_id());
     // configure 保持默认空值(默认门槛由 room 修订)
     CASE_EXPECT_FALSE(create_req.has_configure());
-    // 初始队伍/成员共享数据: battle matching=false / ready=false
-    CASE_EXPECT_EQ(1, create_req.shared_team_data_size());
-    if (1 == create_req.shared_team_data_size()) {
+    // 初始队伍共享数据: battle matching=false + 空 matching_team_view + 空 matching_start_data(只打 key);
+    // 初始成员共享数据: battle ready=false + 空 matching_parameter
+    CASE_EXPECT_EQ(3, create_req.shared_team_data_size());
+    if (3 == create_req.shared_team_data_size()) {
       expect_packed_team_matching_entry(create_req.shared_team_data(0), false);
+      expect_packed_team_matching_team_view_entry(create_req.shared_team_data(1));
+      expect_packed_team_matching_start_data_entry(create_req.shared_team_data(2));
     }
-    CASE_EXPECT_EQ(1, create_req.shared_member_data_size());
-    if (1 == create_req.shared_member_data_size()) {
+    CASE_EXPECT_EQ(2, create_req.shared_member_data_size());
+    if (2 == create_req.shared_member_data_size()) {
       expect_packed_member_ready_entry(create_req.shared_member_data(0), false);
+      expect_packed_member_matching_parameter_entry(create_req.shared_member_data(1));
     }
   }
   if (1 == ss_capture.add_invitation_reqs.size()) {
@@ -515,9 +575,11 @@ CASE_TEST(lobbysvr_user_team, cs_invite_02_approve_reject_invitation_contract) {
     CASE_EXPECT_EQ(team_test::kZoneId, approve_req.invitee().zone_id());
     CASE_EXPECT_EQ(std::string(kCsClientVersion), approve_req.client_version());
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), approve_req.user_router_server_id());
-    CASE_EXPECT_EQ(1, approve_req.shared_member_data_size());
-    if (1 == approve_req.shared_member_data_size()) {
+    // 成员共享数据: battle ready=false + 空 matching_parameter(只打 key 表示模块有效)
+    CASE_EXPECT_EQ(2, approve_req.shared_member_data_size());
+    if (2 == approve_req.shared_member_data_size()) {
       expect_packed_member_ready_entry(approve_req.shared_member_data(0), false);
+      expect_packed_member_matching_parameter_entry(approve_req.shared_member_data(1));
     }
     CASE_EXPECT_TRUE(nullptr ==
                      user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(820101)));
@@ -666,9 +728,11 @@ CASE_TEST(lobbysvr_user_team, cs_join_01_send_join_request_contract) {
                    join_request.team_source_data().SerializeAsString());
     CASE_EXPECT_EQ(std::string(kCsClientVersion), join_request.client_version());
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), join_request.user_router_server_id());
-    CASE_EXPECT_EQ(1, join_request.member_admission_data_size());
-    if (1 == join_request.member_admission_data_size()) {
+    // 准入成员共享数据: battle ready=false + 空 matching_parameter(只打 key 表示模块有效)
+    CASE_EXPECT_EQ(2, join_request.member_admission_data_size());
+    if (2 == join_request.member_admission_data_size()) {
       expect_packed_member_ready_entry(join_request.member_admission_data(0), false);
+      expect_packed_member_matching_parameter_entry(join_request.member_admission_data(1));
     }
     // 缓存只由个人频道 apply_join_request 建立: send 成功本身不提前插入
     CASE_EXPECT_TRUE(nullptr ==
@@ -1400,9 +1464,10 @@ CASE_TEST(lobbysvr_user_team, cs_data_01_update_member_data_contract) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// CS-DATA-02: team_update_team_data — empty list / role-denied / non-writable module / duplicate key zero-uplink
-// branches; matching=true appends the all-members-ready condition, matching=false appends none, and the business
-// result passes through.
+// CS-DATA-02: team_update_team_data — team-not-found / empty list / role-denied branches and the client-writable
+// gate: no team shared data module is client-writable (matching is only switched by the internal matching flow
+// through glue callbacks), so any module including battle.matching is rejected with EN_ERR_TEAM_NO_PERMISSION and
+// zero uplink.
 CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
@@ -1466,7 +1531,8 @@ CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
   }
 
-  // 门槛放开后(configure 默认空): 空列表 / 不可写模块 / 同批重复 key 均零上行
+  // 门槛放开后(configure 默认空): 空列表显式拒绝; 队伍共享数据当前没有客户端可写模块
+  // (匹配只能由内部匹配流程经 glue 回调发起), 任何模块一律权限拒绝且零上行
   CASE_EXPECT_TRUE(join_team_with_snapshot(test, user_inst, private_chain, kTeamId,
                                            atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, false, nullptr, {}, 2));
   {
@@ -1484,87 +1550,18 @@ CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
     CASE_EXPECT_TRUE(post_update(req, rsp_msg));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, rsp_msg.head().error_code());
   }
+
+  // battle.matching 客户端不可写: 无论写 true/false 都权限拒绝, 不上行任何消息
   {
     atframework::shared::CSTeamUpdateTeamDataReq req;
     protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
     protobuf_copy_message(*req.add_data(), team_test::make_team_matching_module(true));
-    protobuf_copy_message(*req.add_data(), team_test::make_team_matching_module(false));
-    atframework::CSMsg rsp_msg;
-    CASE_EXPECT_TRUE(post_update(req, rsp_msg));
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, rsp_msg.head().error_code());
-    CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
-  }
-
-  // matching=true: 附加 all-members-ready 条件
-  {
-    atframework::shared::CSTeamUpdateTeamDataReq req;
-    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
-    protobuf_copy_message(*req.add_data(), team_test::make_team_matching_module(true));
-    atframework::CSMsg rsp_msg;
-    CASE_EXPECT_TRUE(post_update(req, rsp_msg));
-    CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
-    CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate)));
-    const auto& action_req = ss_capture.send_message_reqs.back();
-    expect_send_message_envelope(action_req, kTeamId, kUserId);
-    const auto& team_update = action_req.action().team_update();
-    CASE_EXPECT_EQ(1, team_update.shared_team_data_size());
-    if (1 == team_update.shared_team_data_size()) {
-      expect_packed_team_matching_entry(team_update.shared_team_data(0), true);
-    }
-    CASE_EXPECT_EQ(1, team_update.condition_size());
-    if (1 == team_update.condition_size()) {
-      const auto& rule = team_update.condition(0);
-      CASE_EXPECT_EQ(1, rule.member_condition_group_size());
-      if (1 == rule.member_condition_group_size()) {
-        const auto& group = rule.member_condition_group(0);
-        CASE_EXPECT_TRUE(group.all_members());
-        CASE_EXPECT_EQ(1, group.member_condition().shared_member_data_size());
-        if (1 == group.member_condition().shared_member_data_size()) {
-          const auto& checked_item = group.member_condition().shared_member_data(0);
-          CASE_EXPECT_EQ(member_ready_data_key(), checked_item.key());
-          PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule checked;
-          CASE_EXPECT_TRUE(checked_item.value().UnpackTo(&checked));
-          CASE_EXPECT_TRUE(checked.has_battle());
-          if (checked.has_battle()) {
-            CASE_EXPECT_TRUE(checked.battle().ready());
-          }
-        }
-      }
-    }
-  }
-
-  // matching=false: 不附加条件
-  {
-    atframework::shared::CSTeamUpdateTeamDataReq req;
-    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
-    protobuf_copy_message(*req.add_data(), team_test::make_team_matching_module(false));
-    atframework::CSMsg rsp_msg;
-    CASE_EXPECT_TRUE(post_update(req, rsp_msg));
-    CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
-    const auto& action_req = ss_capture.send_message_reqs.back();
-    CASE_EXPECT_TRUE(action_req.action().has_team_update());
-    CASE_EXPECT_EQ(0, action_req.action().team_update().condition_size());
-    CASE_EXPECT_EQ(1, action_req.action().team_update().shared_team_data_size());
-    if (1 == action_req.action().team_update().shared_team_data_size()) {
-      expect_packed_team_matching_entry(action_req.action().team_update().shared_team_data(0), false);
-    }
-  }
-
-  // 业务失败透传
-  ss_capture.send_message_responder = [](const atfw::team::SSTeamRoomSendMessageReq&,
-                                         atfw::team::SSTeamRoomSendMessageRsp&) {
-    return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION;
-  };
-  {
-    atframework::shared::CSTeamUpdateTeamDataReq req;
-    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
     protobuf_copy_message(*req.add_data(), team_test::make_team_matching_module(false));
     atframework::CSMsg rsp_msg;
     CASE_EXPECT_TRUE(post_update(req, rsp_msg));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, rsp_msg.head().error_code());
-    CASE_EXPECT_EQ(3, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate)));
+    CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
   }
-  ss_capture.send_message_responder = nullptr;
 
   CASE_EXPECT_EQ(0, test.stop());
 }

@@ -571,8 +571,9 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), req.user_router_server_id());
     // configure 保持默认空值(由 room 修订默认门槛)
     CASE_EXPECT_TRUE(!req.has_configure());
-    // 两类初始 shared data: 队伍 battle.matching=false + 成员 battle.ready=false
-    CASE_EXPECT_EQ(1, req.shared_team_data_size());
+    // 初始 shared data: 队伍 battle.matching=false + 空的 battle.matching_team_view + 空的
+    // battle.matching_start_data(只打 key 表示模块有效); 成员 battle.ready=false + 空的 battle.matching_parameter
+    CASE_EXPECT_EQ(3, req.shared_team_data_size());
     if (req.shared_team_data_size() > 0) {
       const auto& team_data = req.shared_team_data(0);
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, team_data.value().permission());
@@ -582,7 +583,27 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
       CASE_EXPECT_TRUE(!module.battle().matching());
       CASE_EXPECT_EQ(user_team_algorithm::make_team_shared_data_key(module), team_data.key());
     }
-    CASE_EXPECT_EQ(1, req.shared_member_data_size());
+    if (req.shared_team_data_size() > 1) {
+      const auto& team_data = req.shared_team_data(1);
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, team_data.value().permission());
+      PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
+      CASE_EXPECT_TRUE(team_data.value().data().UnpackTo(&module));
+      CASE_EXPECT_TRUE(module.has_battle());
+      CASE_EXPECT_TRUE(module.battle().has_matching_team_view());
+      CASE_EXPECT_EQ(0, static_cast<int>(module.battle().matching_team_view().ByteSizeLong()));
+      CASE_EXPECT_EQ(user_team_algorithm::make_team_shared_data_key(module), team_data.key());
+    }
+    if (req.shared_team_data_size() > 2) {
+      const auto& team_data = req.shared_team_data(2);
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, team_data.value().permission());
+      PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
+      CASE_EXPECT_TRUE(team_data.value().data().UnpackTo(&module));
+      CASE_EXPECT_TRUE(module.has_battle());
+      CASE_EXPECT_TRUE(module.battle().has_matching_start_data());
+      CASE_EXPECT_EQ(0, static_cast<int>(module.battle().matching_start_data().ByteSizeLong()));
+      CASE_EXPECT_EQ(user_team_algorithm::make_team_shared_data_key(module), team_data.key());
+    }
+    CASE_EXPECT_EQ(2, req.shared_member_data_size());
     if (req.shared_member_data_size() > 0) {
       const auto& member_data = req.shared_member_data(0);
       CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, member_data.value().permission());
@@ -590,6 +611,16 @@ CASE_TEST(lobbysvr_user_team, create_team_registers_owner_and_clears_pending) {
       CASE_EXPECT_TRUE(member_data.value().data().UnpackTo(&module));
       CASE_EXPECT_TRUE(module.has_battle());
       CASE_EXPECT_TRUE(!module.battle().ready());
+      CASE_EXPECT_EQ(user_team_algorithm::make_team_member_shared_data_key(module), member_data.key());
+    }
+    if (req.shared_member_data_size() > 1) {
+      const auto& member_data = req.shared_member_data(1);
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, member_data.value().permission());
+      PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule module;
+      CASE_EXPECT_TRUE(member_data.value().data().UnpackTo(&module));
+      CASE_EXPECT_TRUE(module.has_battle());
+      CASE_EXPECT_TRUE(module.battle().has_matching_parameter());
+      CASE_EXPECT_EQ(0, static_cast<int>(module.battle().matching_parameter().ByteSizeLong()));
       CASE_EXPECT_EQ(user_team_algorithm::make_team_member_shared_data_key(module), member_data.key());
     }
   }
