@@ -22,14 +22,21 @@ proxy: "{{ .Values.atapp.atbus.policy.remote_proxy }}" # address of upstream nod
   {{- else }}
 # proxy: "not set" # address of upstream node
   {{- end }}
-  {{- /* Each gateway entry owns scope/address_ip/address_port. address is "<address_ip>:<address_port>", scope is
-       written to match_scope. address_ip defaults to this host's external IP, address_port defaults to the service port. */ -}}
+  {{- /* Each gateway entry accepts these chart keys:
+         address_ip: address prefix, defaults to atcp://<external IP> of this instance
+         address_port: address port, defaults to the service port
+         scope: written to match_scope
+         address: a complete address, used as-is and skips address_ip/address_port
+       Every other field(match_hosts/match_namespaces/match_labels/...) is passed through to atapp_gateway as-is. */ -}}
   {{- $gateways := list }}
   {{- if (dig "policy" "gateway" false .Values.atapp.atbus ) }}
     {{- range $gateway := .Values.atapp.atbus.policy.gateway }}
-      {{- $gateway_item := dict "address" (printf "%v:%v" (default (printf "atcp://%s" $atapp_external_ip) $gateway.address_ip) (default $service_port $gateway.address_port)) }}
+      {{- $gateway_item := omit $gateway "scope" "address_ip" "address_port" }}
+      {{- if not $gateway_item.address }}
+        {{- $gateway_item = set $gateway_item "address" (printf "%v:%v" (default (printf "atcp://%s" $atapp_external_ip) $gateway.address_ip) (default $service_port $gateway.address_port)) }}
+      {{- end }}
       {{- if $gateway.scope }}
-        {{- $gateway_item = mergeOverwrite $gateway_item (dict "match_scope" $gateway.scope) }}
+        {{- $gateway_item = set $gateway_item "match_scope" $gateway.scope }}
       {{- end }}
       {{- $gateways = append $gateways $gateway_item }}
     {{- end }}

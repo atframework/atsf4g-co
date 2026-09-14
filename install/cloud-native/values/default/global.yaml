@@ -28,8 +28,11 @@ atapp:
       enable_local_proxy: true
       # remote_proxy: ""
       # gateway:
-      #   - address_ip: "dns://global_ip" // 默认端口为 $service_port
-      #   - scope: "tencent_cloud" // 默认 atcp://$atapp_external_ip:$service_port
+      #   - address_ip: "dns://global_ip" # 地址前缀, 默认 atcp://${ATAPP_EXTERNAL_IP}
+      #     address_port: 7311 # 地址端口, 默认 $service_port
+      #     scope: "tencent_cloud" # 写入 match_scope, 只有 metadata.scope 相同的节点会连这个地址
+      #   - address: "atcp://1.2.3.4:7311" # 直接给出完整地址, 不再拼接 address_ip/address_port
+      #     # 其余字段(match_hosts/match_namespaces/match_labels)原样透传
     configure:
       loop_times: 2048 # max message number in one loop
       ttl: 16 # max ttl when transfer messages
