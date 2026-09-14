@@ -55,9 +55,10 @@ struct orbit_agent_client_record {
   std::string client_id;
   // 拉起时使用的模板
   int32_t client_template_id = 0;
-  bool seed_process = false;       // 是否为种子进程
-  bool pre_start = false;          // 是否预启动
-  bool start_client_sent = false;  // 是否已向 Client 下发 start_client
+  bool seed_process = false;  // 是否为种子进程
+  bool pre_start = false;     // 是否预启动
+  // 是否已被认领（认领时即置位，表示 Agent 已开始向 Client 下发 start_client）
+  bool start_client_sent = false;
 
   // Client 启动参数
   ::google::protobuf::RepeatedPtrField<::std::string> custom_args;  // 来自模板的启动参数
@@ -176,6 +177,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   bool load_client_template(int32_t client_template_id, client_template_t& output) const;
   // tick 内按表补齐预启动进程
   void tick_pre_start(time_t now);
+  // 连续启动失败后停掉某个模板的预启动
+  void disable_pre_start_template(int32_t client_template_id);
   // 找出该模板下已 ready 且未被认领的预启动进程
   orbit_agent_client_record_ptr find_idle_pre_start_client(int32_t client_template_id) noexcept;
   // 把预启动进程绑定到本次启动请求
@@ -297,6 +300,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   bool enable_pre_start_ = false;
   std::vector<int32_t> pre_start_template_ids_;  // 本 Agent tag 匹配且需要预启动的模板
   time_t last_summary_log_timepoint_ = 0;        // 上次打印运行情况的时间点
+  // 未认领的预启动进程连续启动失败次数，按 client_template_id 统计
+  std::unordered_map<int32_t, uint32_t> pre_start_repeated_failures_;
 
   std::string client_path_;
   std::vector<std::string> client_command_line_;

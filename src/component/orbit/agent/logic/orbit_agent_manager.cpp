@@ -43,6 +43,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <algorithm>
 #include <list>
 #include <map>
 #include <memory>
@@ -57,6 +58,8 @@ constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
 constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 // 运行情况汇总日志的间隔
 constexpr time_t kAgentRunningSummaryLogIntervalSec = 60;
+// 未认领的预启动进程连续启动失败达到该次数后，停止该模板的预启动
+constexpr uint32_t kPreStartRepeatedStartupFailuresLimit = 2;
 
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
 constexpr const char* kOrbitEnabledArg = "--enable_orbit";
@@ -212,6 +215,15 @@ static uint64_t make_initial_sequence_allocator() {
              << 23) +
          static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3) +
          static_cast<uint64_t>(logic_config::me()->get_local_server_id());
+}
+
+// local_client_id 与 client_id 建立映射时打印，便于在日志里把两个 id 串联起来
+static void log_client_id_mapping(const char* scene, const orbit_agent_client_record& record) {
+  FWLOGINFO(
+      "orbit agent client id mapping[{}]: local_client_id={}, client_id={}, client_instance_id={}, "
+      "client_template_id={}, pre_start={}",
+      scene, record.local_client_id, record.client_id, record.client_instance_id, record.client_template_id,
+      record.pre_start);
 }
 
 }  // namespace
@@ -1101,8 +1113,8 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
   if (record->state == state) {
     return;
   }
-  FWLOGDEBUG("orbit agent client {} state changed: {} -> {}", record->client_id, static_cast<int>(record->state),
-             static_cast<int>(state));
+  FWLOGDEBUG("orbit agent client {} (client_id={}) state changed: {} -> {}", record->local_client_id,
+             record->client_id, static_cast<int>(record->state), static_cast<int>(state));
   if (record->state == atfw::orbit::EN_CLIENT_STATE_STARTING) {
     batch_startup_count_--;
   }
@@ -1112,6 +1124,17 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
   if (record->state == atfw::orbit::EN_CLIENT_STATE_STARTING && !record->seed_process) {
     if (state == atfw::orbit::EN_CLIENT_STATE_RUNNING) {
       repeated_startup_failures_ = 0;
+      pre_start_repeated_failures_.erase(record->client_template_id);
+    } else if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
+      // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
+      // 连续失败到上限只停掉该模板的预启动
+      uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
+      ++failures;
+      FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
+                   record->local_client_id, record->client_template_id, failures);
+      if (failures >= kPreStartRepeatedStartupFailuresLimit) {
+        disable_pre_start_template(record->client_template_id);
+      }
     } else {
       ++repeated_startup_failures_;
       if (repeated_startup_failures_fatal_error_ > 0 &&
@@ -1164,6 +1187,7 @@ int orbit_agent_manager::prepare_start_client_record(const atfw::orbit::CTAStart
   record->client_template_id = client_template.client_template_id;
   clients_[record->client_instance_id] = record;
   client_id_to_instance_id_[client_id] = record->client_instance_id;
+  log_client_id_mapping("start", *record);
 
   record->custom_args.Clear();
   for (const std::string& launch_arg : client_template.launch_args) {
@@ -1371,9 +1395,9 @@ int orbit_agent_manager::spawn_client_process(const orbit_agent_client_record_pt
                                               const std::vector<std::string>& command_line, bool seed_client) {
   std::vector<std::string> launch_arguments;
 
-  // 渲染启动参数中占位符的取值来源，当前从 record 上取出 client_id
+  // 渲染启动参数中占位符的取值来源
   std::unordered_map<std::string, std::string> render_values;
-  render_values.emplace("client_id", record->client_id);
+  render_values.emplace("client_id", record->local_client_id);
   std::tm tm_local = atfw::util::time::time_utility::get_local_tm(atfw::util::time::time_utility::get_sys_now());
   char buf[64] = {0};
   std::strftime(buf, sizeof(buf), "%Y-%m-%d_%H-%M-%S", &tm_local);
@@ -1793,8 +1817,11 @@ void orbit_agent_manager::bind_pre_start_client(const orbit_agent_client_record_
   client_record->client_id = request.arg().client_id();
   client_record->server_unique_id = request.server_identity().unique_id();
   client_record->notify_client_exit = false;
+  // 认领即视为已脱离预启动池，避免在 start_client 回包前被第二个请求重复认领
+  client_record->start_client_sent = true;
   client_id_to_instance_id_[client_record->client_id] = client_record->client_instance_id;
   server_unique_id_to_client_ids_[client_record->server_unique_id].insert(client_record->client_id);
+  log_client_id_mapping("claim", *client_record);
 }
 
 void orbit_agent_manager::schedule_start_claimed_client(const orbit_agent_client_record_ptr& client_record) {
@@ -1838,7 +1865,7 @@ rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ct
     RPC_RETURN_CODE(rpc_result);
   }
 
-  client_record->start_client_sent = true;
+  // start_client_sent 在认领时已置位，这里只需清掉预启动标记
   client_record->pre_start = false;
   FWLOGINFO("orbit agent client {} claimed, client_id={}", client_record->local_client_id, client_record->client_id);
 
@@ -1867,12 +1894,28 @@ rpc::result_code_type orbit_agent_manager::start_claimed_client(rpc::context& ct
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 
+void orbit_agent_manager::disable_pre_start_template(int32_t client_template_id) {
+  auto iter = std::find(pre_start_template_ids_.begin(), pre_start_template_ids_.end(), client_template_id);
+  if (pre_start_template_ids_.end() == iter) {
+    return;
+  }
+
+  pre_start_template_ids_.erase(iter);
+  pre_start_repeated_failures_.erase(client_template_id);
+  FWLOGERROR(
+      "orbit agent disabled pre start for client_template_id={} after {} consecutive startup failures, "
+      "remaining pre start template count={}",
+      client_template_id, kPreStartRepeatedStartupFailuresLimit, pre_start_template_ids_.size());
+}
+
 void orbit_agent_manager::tick_pre_start(time_t now) {
   if (!enable_pre_start_ || !agent_online_ || pre_start_template_ids_.empty()) {
     return;
   }
 
-  for (int32_t client_template_id : pre_start_template_ids_) {
+  // 按索引遍历：拉起失败时可能触发 disable_pre_start_template 删除元素，用迭代器会失效
+  for (size_t template_index = 0; template_index < pre_start_template_ids_.size(); ++template_index) {
+    int32_t client_template_id = pre_start_template_ids_[template_index];
     client_template_t client_template;
     if (!load_client_template(client_template_id, client_template) || 0 == client_template.pre_start_count) {
       continue;
