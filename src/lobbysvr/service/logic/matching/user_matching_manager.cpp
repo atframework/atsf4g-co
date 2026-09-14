@@ -282,8 +282,7 @@ bool user_matching_manager::is_in_orbit_or_matching() const {
   return is_in_matching() || owner_->get_user_orbit_manager().is_orbit_room_exist();
 }
 
-rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
-                                                            const PROJECT_NAMESPACE_ID::CSMatchingStartReq& request) {
+rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx) {
   if (is_in_matching()) {
     FWLOGERROR("{} start matching rejected by active matching, unit_id={}, status={}", *owner_, get_current_unit_id(),
                static_cast<int>(data_.view().status()));
@@ -296,17 +295,18 @@ rpc::result_code_type user_matching_manager::start_matching(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_USER_IN_BATTLE);
   }
   data_.set_is_start_matching(atfw::util::time::time_utility::get_now());
-  FWLOGDEBUG("{} start matching, level_select={}, level_count={}, request={}", *owner_,
-             request.data().level_select().DebugString(), request.data().battle_version(), request.DebugString());
-  // protobuf_copy_message(matching_start_data_, request.data());
+  FWLOGDEBUG("{} start matching, level_select={}, level_count={}, data={}", *owner_,
+             data_.level_data().level_select().DebugString(), data_.level_data().battle_version(),
+             data_.level_data().DebugString());
   if (team_logic_.is_in_team()) {
     // team存在异步检查操作，team需要先完成相关操作，再由team发起匹配
     team_logic_.start_matching_check(ctx);
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   }
   set_matching_state(ctx, true);
-  int32_t ret = RPC_AWAIT_CODE_RESULT(start_matching_inner_(
-      ctx, request.data().level_select(), request.data().battle_version(), request.data().faction_fill_policy()));
+  int32_t ret = RPC_AWAIT_CODE_RESULT(start_matching_inner_(ctx, data_.level_data().level_select(),
+                                                            data_.level_data().battle_version(),
+                                                            data_.level_data().faction_fill_policy()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
     set_matching_state(ctx, false);
     RPC_RETURN_CODE(ret);
@@ -327,8 +327,8 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
       ctx, "user_matching_manager.heartbeat", [owner](rpc::context& child_ctx) -> rpc::result_code_type {
         auto& manager = owner->get_user_matching_manager();
         int32_t result = RPC_AWAIT_CODE_RESULT(manager.start_matching_inner_(
-            child_ctx, manager.matching_start_data_.level_select(), manager.matching_start_data_.battle_version(),
-            manager.matching_start_data_.faction_fill_policy()));
+            child_ctx, manager.data_.level_data().level_select(), manager.data_.level_data().battle_version(),
+            manager.data_.level_data().faction_fill_policy()));
         if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
           manager.set_matching_state(child_ctx, false);
         }
@@ -906,11 +906,9 @@ void user_matching_manager::on_gm_cmd_start_matching(
   auto invoke_result = rpc::async_invoke(
       *ctx, "user_matching_manager.gm_start_matching",
       [user_ptr, rsp, level_id, region](rpc::context& child_ctx) -> rpc::result_code_type {
-        auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::CSMatchingStartReq>(child_ctx);
-        auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SCMatchingStartRsp>(child_ctx);
-        auto* data = rpc_request->mutable_data();
-        data->set_battle_version("gm_test");
-        auto* level_select = data->mutable_level_select();
+        PROJECT_NAMESPACE_ID::DMatchingStartData data;
+        data.set_battle_version("gm_test");
+        auto* level_select = data.mutable_level_select();
         auto cfg = excel::get_ExcelLevel_by_level_id(level_id);
         if (!cfg) {
           FWLOGERROR("{} gm_start_matching failed to find level cfg, level_id={}", *user_ptr, level_id);
@@ -918,8 +916,11 @@ void user_matching_manager::on_gm_cmd_start_matching(
         }
         level_select->add_level_ids(level_id);
         level_select->set_region(region);
-        const int32_t ret =
-            RPC_AWAIT_CODE_RESULT(user_ptr->get_user_matching_manager().start_matching(child_ctx, *rpc_request));
+        data.set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_DISABLE);
+
+        user_ptr->get_user_matching_manager().set_level_select_data(child_ctx, data);
+
+        int32_t ret = RPC_AWAIT_CODE_RESULT(user_ptr->get_user_matching_manager().start_matching(child_ctx));
         if (ret != 0) {
           rsp->set_result_code(ret);
         }

@@ -8,9 +8,22 @@ import (
 	user_data "github.com/atframework/robot-go/data"
 )
 
-func MatchingStartTask(task *user_data.TaskActionUser, levelIds []int32, region string,
+func MatchingLevelSelectTask(task *user_data.TaskActionUser, levelIds []int32, region string,
 	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) error {
-	errCode, rspHolder, rpcErr := protocol.MatchingStartRpc(task, task.User, levelIds, region, factionFillPolicy)
+	errCode, _, rpcErr := protocol.MatchingLevelSelectRpc(task, task.User, levelIds, region, factionFillPolicy)
+	if rpcErr != nil {
+		return rpcErr
+	}
+	if errCode < 0 {
+		return fmt.Errorf("matching level select failed, errCode: %d", errCode)
+	}
+	task.Log("matching level select success, level_ids=%v region=%s fill_policy=%s", levelIds, region,
+		factionFillPolicy.String())
+	return nil
+}
+
+func MatchingStartTask(task *user_data.TaskActionUser) error {
+	errCode, rspHolder, rpcErr := protocol.MatchingStartRpc(task, task.User)
 	if rpcErr != nil {
 		return rpcErr
 	}

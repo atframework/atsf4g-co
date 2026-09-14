@@ -3,6 +3,7 @@ package atsf4g_go_robot_case
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	protocol "github.com/atframework/atsf4g-co-robot/rpc"
@@ -13,15 +14,16 @@ import (
 )
 
 func init() {
+	robot_case.RegisterCase("matching_level_select", MatchingLevelSelectCase, time.Second*30)
 	robot_case.RegisterCase("matching_start", MatchingStartCase, time.Second*30)
 	robot_case.RegisterCase("matching_wait", MatchingWaitCase, time.Minute*5)
 	robot_case.RegisterCase("matching_confirm", MatchingConfirmCase, time.Second*30)
 	robot_case.RegisterCase("matching_assert_faction", MatchingAssertFactionCase, time.Second*30)
 }
 
-func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
+func MatchingLevelSelectCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("need level_type")
+		return fmt.Errorf("need level_id")
 	}
 	levelId, err := strconv.ParseInt(args[0], 10, 32)
 	if err != nil {
@@ -40,14 +42,35 @@ func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.User
 		factionFillPolicy = public_protocol_pbdesc.EnMatchingFactionFillPolicy(fillPolicyValue)
 	}
 	levelIds := []int32{int32(levelId)}
+	if len(args) > 3 {
+		levelIds = levelIds[:0]
+		for _, value := range strings.Split(args[3], ",") {
+			parsed, parseErr := strconv.ParseInt(value, 10, 32)
+			if parseErr != nil {
+				return parseErr
+			}
+			levelIds = append(levelIds, int32(parsed))
+		}
+	}
 
 	user := holder.GetUser()
 	if user == nil {
 		return fmt.Errorf("user not initialized, run login first")
 	}
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, levelIds, region, factionFillPolicy)
-	}, "Matching Start Task"))
+		return task.MatchingLevelSelectTask(taskAction, levelIds, region, factionFillPolicy)
+	}, "Matching Level Select Task"))
+}
+
+func MatchingStartCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {
+	if len(args) > 0 {
+		return fmt.Errorf("matching_start does not accept arguments; run matching_level_select first")
+	}
+	user := holder.GetUser()
+	if user == nil {
+		return fmt.Errorf("user not initialized, run login first")
+	}
+	return action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingStartTask, "Matching Start Task"))
 }
 
 func MatchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {

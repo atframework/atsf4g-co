@@ -10,16 +10,23 @@ import (
 	user_data "github.com/atframework/robot-go/data"
 )
 
-func MatchingStartRpc(action base.TaskActionImpl, user user_data.User, levelIds []int32, region string,
-	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
-	csBody := &public_protocol_pbdesc.CSMatchingStartReq{
-		LevelSelect: &public_protocol_pbdesc.DLevelSelect{
-			LevelIds: levelIds,
-			Region:   region,
+func MatchingLevelSelectRpc(action base.TaskActionImpl, user user_data.User, levelIds []int32, region string,
+	factionFillPolicy public_protocol_pbdesc.EnMatchingFactionFillPolicy) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingLevelSelectRsp], error) {
+	csBody := &public_protocol_pbdesc.CSMatchingLevelSelectReq{
+		Data: &public_protocol_pbdesc.DMatchingStartData{
+			LevelSelect: &public_protocol_pbdesc.DLevelSelect{
+				LevelIds: levelIds,
+				Region:   region,
+			},
+			BattleVersion:     "0.0.0.1",
+			FactionFillPolicy: factionFillPolicy,
 		},
-		BattleVersion:     "0.0.0.1",
-		FactionFillPolicy: factionFillPolicy,
 	}
+	return lobbysvr_rpc_handle.SendMatchingLevelSelect(action, user, csBody, true)
+}
+
+func MatchingStartRpc(action base.TaskActionImpl, user user_data.User) (int32, *pu.LazyUnmarshalProtobufMessageSpecific[*public_protocol_pbdesc.SCMatchingStartRsp], error) {
+	csBody := &public_protocol_pbdesc.CSMatchingStartReq{}
 	return lobbysvr_rpc_handle.SendMatchingStart(action, user, csBody, true)
 }
 

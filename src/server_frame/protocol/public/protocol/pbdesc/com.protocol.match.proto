@@ -13,11 +13,6 @@ package atframework.shared;
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 message CSMatchingStartReq {
-  string battle_version = 1;
-  DLevelSelect level_select = 2;
-  int32 client_ds_ping = 3;
-  EnMatchingFactionFillPolicy faction_fill_policy = 5;
-  DMatchingStartData data = 6;
 }
 
 message SCMatchingStartRsp {

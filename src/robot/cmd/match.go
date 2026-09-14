@@ -13,36 +13,38 @@ import (
 )
 
 func init() {
-	robot_cmd.RegisterUserCommand([]string{"matching", "start"}, MatchingStartCmd, "<level_type> [level_id] [region] [fill_policy] [level_ids_csv]", "开始匹配", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"matching", "level_select"}, MatchingLevelSelectCmd,
+		"<level_id> [region] [fill_policy] [level_ids_csv]", "选择匹配关卡", nil, cmdDefaultTimeout)
+	robot_cmd.RegisterUserCommand([]string{"matching", "start"}, MatchingStartCmd, "", "开始匹配", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"matching", "check"}, MatchingCheckCmd, "", "查询匹配状态", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"matching", "cancel"}, MatchingCancelCmd, "", "取消匹配", nil, cmdDefaultTimeout)
 	robot_cmd.RegisterUserCommand([]string{"matching", "confirm"}, MatchingConfirmCmd, "<true|false>", "确认匹配", nil, cmdDefaultTimeout)
 }
 
-func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
+func MatchingLevelSelectCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
 	if len(cmd) < 1 {
-		return fmt.Errorf("need level_type")
+		return fmt.Errorf("need level_id")
 	}
 	levelId, err := strconv.ParseInt(cmd[0], 10, 32)
 	if err != nil {
 		return err
 	}
 	region := "default"
-	if len(cmd) > 2 {
-		region = cmd[2]
+	if len(cmd) > 1 {
+		region = cmd[1]
 	}
 	factionFillPolicy := public_protocol_pbdesc.EnMatchingFactionFillPolicy_EN_MATCHING_FACTION_FILL_POLICY_DISABLE
-	if len(cmd) > 3 {
-		fillPolicyValue, parseErr := strconv.ParseInt(cmd[3], 10, 32)
+	if len(cmd) > 2 {
+		fillPolicyValue, parseErr := strconv.ParseInt(cmd[2], 10, 32)
 		if parseErr != nil {
 			return parseErr
 		}
 		factionFillPolicy = public_protocol_pbdesc.EnMatchingFactionFillPolicy(fillPolicyValue)
 	}
 	levelIds := []int32{int32(levelId)}
-	if len(cmd) > 4 {
+	if len(cmd) > 3 {
 		levelIds = levelIds[:0]
-		for _, value := range strings.Split(cmd[4], ",") {
+		for _, value := range strings.Split(cmd[3], ",") {
 			parsed, parseErr := strconv.ParseInt(value, 10, 32)
 			if parseErr != nil {
 				return parseErr
@@ -52,8 +54,15 @@ func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []str
 	}
 
 	return action.AwaitTask(user.RunTaskDefaultTimeout(func(taskAction *user_data.TaskActionUser) error {
-		return task.MatchingStartTask(taskAction, levelIds, region, factionFillPolicy)
-	}, "Matching Start Task"))
+		return task.MatchingLevelSelectTask(taskAction, levelIds, region, factionFillPolicy)
+	}, "Matching Level Select Task"))
+}
+
+func MatchingStartCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
+	if len(cmd) > 0 {
+		return fmt.Errorf("matching start does not accept arguments; run matching level_select first")
+	}
+	return action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingStartTask, "Matching Start Task"))
 }
 
 func MatchingCheckCmd(action base.TaskActionImpl, user user_data.User, cmd []string) error {
