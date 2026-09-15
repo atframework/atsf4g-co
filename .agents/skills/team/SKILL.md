@@ -16,8 +16,8 @@ description: "Use when: developing, diagnosing, or reviewing Lobby team integrat
   [user RPCs](../../../src/server_frame/protocol/public/protocol/pbdesc/com.protocol.user.proto).
   For Room RPC changes, also read
   [the Room service schema](../../../src/teamsvr/protocol/room/protocol/pbdesc/team_room_service.proto).
-- Keep acceptance and case mappings in
-  [USER_TEAM_TEST_PLAN.md](../../../src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md).
+- Keep current behavior and case mappings in
+  [the Lobby team README](../../../src/lobbysvr/service/logic/team/README.md).
   Recheck current source before reusing historical test results or protocol descriptions.
 - Use [engineering-guidelines](../engineering-guidelines/SKILL.md) for C++/protobuf changes and
   [rpc-unit-test](../rpc-unit-test/SKILL.md) for runtime fixtures and RPC validation.
@@ -47,5 +47,5 @@ description: "Use when: developing, diagnosing, or reviewing Lobby team integrat
   no action, repeated cleanup, remove followed by reentry, and repair with pending removals. Use controlled time and
   expected outbound RPCs to detect unsolicited state writes during recovery.
 - Build and run the affected Lobby and Team Room targets using the selected workspace build tree and CTest environment.
-  Record actual case counts, platform/configuration, and unrun checks in the test plan. A discovered or empty suite
-  is not executed coverage.
+  Record actual case counts, platform/configuration, and unrun checks in the active change record or test README.
+  A discovered or empty suite is not executed coverage.

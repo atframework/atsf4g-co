@@ -1,12 +1,12 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-# ============ Lobbysvr user_chat_manager unit tests (rpc-unit-test based) ============
+# ============ Lobbysvr service unit tests (rpc-unit-test based) ============
 
 # Case sources link service::lobbysvr::private; the service include directory, SDK/protocol dependencies and the
 # generated-flow build order propagate from it. The cases call
-# handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice() directly, and the registration TU
-# belongs to the service executable, so this target compiles that one generated file itself.
+# handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice() directly, and the registration TU belongs
+# to the service executable, so this target compiles that one generated file itself.
 project_service_get_target_root_dir(service::lobbysvr::private LOBBYSVR_ROOT_DIR)
 
 project_add_rpc_unit_test(
@@ -28,6 +28,8 @@ project_add_rpc_unit_test(
   "${LOBBYSVR_ROOT_DIR}/app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_robust.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_dirty.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_matching_sync.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_user_team_contract.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/lobbysvr_test_async_jobs_db_contract.cpp"
   LINK_LIBRARIES
   service::lobbysvr::private

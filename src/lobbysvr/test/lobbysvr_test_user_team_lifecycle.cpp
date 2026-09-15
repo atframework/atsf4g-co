@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 // Offline regression tests for lobbysvr user_team/user_team_manager:
 // - JOIN/CREATE lifecycle, sequence/hash guards (SEQ), heartbeat (HB), exit retry (EXIT)
-//   and table dump/init round trips (DUMP). See src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md §3.
+//   and table dump/init round trips (DUMP). See src/lobbysvr/service/logic/team/README.md.
 
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>

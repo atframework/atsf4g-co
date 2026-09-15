@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 //
 // Offline robustness tests for lobbysvr user_team/user_team_manager
-// (plan: src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md §3, §5.6).
+// (see src/lobbysvr/service/logic/team/README.md).
 //
 // Covered here:
 // - ROBUST-01: 重复事件等幂(同一 WAL 消息重投去重, 缓存/dirty/SS 调用数不重复叠加);

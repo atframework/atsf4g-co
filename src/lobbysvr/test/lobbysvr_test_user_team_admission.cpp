@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 //
 // Offline regression tests for lobbysvr user_team_manager self pending invitation/join-request cache
-// (plan: src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md §5.3).
+// (see src/lobbysvr/service/logic/team/README.md).
 //
 // Covered here:
 // - ADM-TEAM-01..07 (§5.2): team-level pending invitation/join-request cache — snapshot load filters

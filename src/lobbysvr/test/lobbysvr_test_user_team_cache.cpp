@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 //
 // Offline regression tests for lobbysvr user_team channel-event cache semantics
-// (plan: src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md §5.1).
+// (see src/lobbysvr/service/logic/team/README.md).
 //
 // Covered here:
 // - ROLE-02: election_captain role resolution must mirror teamsvr-room change_captain.

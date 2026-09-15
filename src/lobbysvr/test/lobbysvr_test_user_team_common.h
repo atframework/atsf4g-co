@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 //
 // Shared offline fixture for lobbysvr user_team / user_team_manager / team task-action unit tests
-// (plan: src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md).
+// (see src/lobbysvr/service/logic/team/README.md).
 //
 // Building blocks:
 //   - channel event injection: make_snapshot_event / make_incremental_event /
@@ -203,6 +203,96 @@ inline atfw::team::DTeamAnyDataWithKey pack_member_module(
   entry.mutable_value()->set_permission(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
   CASE_EXPECT_TRUE(entry.mutable_value()->mutable_data()->PackFrom(module));
   return entry;
+}
+
+// ---- Shared-data key helpers (mirroring the production pack helpers) --------------------
+inline int64_t member_ready_data_key() {
+  return user_team_algorithm::make_team_member_shared_data_key(make_member_ready_module(false));
+}
+
+inline int64_t team_matching_data_key() {
+  return user_team_algorithm::make_team_shared_data_key(make_team_matching_module(false));
+}
+
+// Keys of the empty module entries produced by the production pack helpers. The empty payload only carries the
+// key to mark the module as a valid DTeamSharedDataModule/DTeamMemberSharedDataModule.
+inline int64_t team_matching_team_view_data_key() {
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
+  module.mutable_battle()->mutable_matching_team_view();
+  return user_team_algorithm::make_team_shared_data_key(module);
+}
+
+inline int64_t team_matching_start_data_key() {
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule module;
+  module.mutable_battle()->mutable_matching_start_data();
+  return user_team_algorithm::make_team_shared_data_key(module);
+}
+
+inline int64_t member_matching_parameter_data_key() {
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule module;
+  module.mutable_battle()->mutable_matching_parameter();
+  return user_team_algorithm::make_team_member_shared_data_key(module);
+}
+
+// ---- Packed-entry expectations (key + MEMBER permission + unpacked content) --------------
+// Assert one DTeamAnyDataWithKey entry carries the battle module with the given flag and unpacks back to the
+// same module content.
+inline void expect_packed_member_ready_entry(const atfw::team::DTeamAnyDataWithKey& entry, bool ready) {
+  CASE_EXPECT_EQ(member_ready_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_EQ(ready, unpacked.battle().ready());
+  }
+}
+
+inline void expect_packed_team_matching_entry(const atfw::team::DTeamAnyDataWithKey& entry, bool matching) {
+  CASE_EXPECT_EQ(team_matching_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_EQ(matching, unpacked.battle().matching());
+  }
+}
+
+inline void expect_packed_team_matching_team_view_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(team_matching_team_view_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_team_view());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_team_view().ByteSizeLong()));
+  }
+}
+
+inline void expect_packed_team_matching_start_data_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(team_matching_start_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_start_data());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_start_data().ByteSizeLong()));
+  }
+}
+
+inline void expect_packed_member_matching_parameter_entry(const atfw::team::DTeamAnyDataWithKey& entry) {
+  CASE_EXPECT_EQ(member_matching_parameter_data_key(), entry.key());
+  CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, entry.value().permission());
+  PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule unpacked;
+  CASE_EXPECT_TRUE(entry.value().data().UnpackTo(&unpacked));
+  CASE_EXPECT_TRUE(unpacked.has_battle());
+  if (unpacked.has_battle()) {
+    CASE_EXPECT_TRUE(unpacked.battle().has_matching_parameter());
+    CASE_EXPECT_EQ(0, static_cast<int>(unpacked.battle().matching_parameter().ByteSizeLong()));
+  }
 }
 
 // ---- DTeamStorage / join-data builders ----------------------------------------------
@@ -735,6 +825,53 @@ inline bool apply_team_snapshot(atfw::testing::runtime& test, int64_t team_id, c
                                 int64_t create_sequence = 1) {
   return receive_channel_event(test, make_snapshot_event(make_team_channel_key(team_id), create_sequence,
                                                          storage.saved_action_sequence(), &storage));
+}
+
+// Join a team through the personal-channel notification, then make the team channel ready with a snapshot whose
+// member list contains the captain (kCaptainUserId as OWNER unless self is the captain) and self with self_role.
+// Reused for re-configure: pass a higher custom_data_sequence so the subscriber accepts the new custom data.
+inline bool join_team_with_snapshot(atfw::testing::runtime& test, const user::ptr_t& user_inst,
+                                    channel_event_chain& private_chain, int64_t team_id,
+                                    atfw::team::EnTeamPermissionRole self_role, bool self_captain,
+                                    const atfw::team::DTeamConfigure* configure,
+                                    const std::vector<uint64_t>& other_members, int64_t custom_data_sequence = 1) {
+  if (!join_team_via_notification(test, user_inst, private_chain, team_id)) {
+    return false;
+  }
+  auto storage = make_team_storage(team_id);
+  uint64_t captain_id = self_captain ? user_inst->get_user_id() : kCaptainUserId;
+  protobuf_copy_message(*storage.mutable_captain_user_key(), make_user_key(captain_id));
+  if (!self_captain) {
+    add_storage_member(storage, kCaptainUserId, role_options(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER));
+  }
+  add_storage_member(storage, user_inst->get_user_id(), role_options(self_role));
+  for (uint64_t other_id : other_members) {
+    add_storage_member(storage, other_id, role_options(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL));
+  }
+  if (nullptr != configure) {
+    protobuf_copy_message(*storage.mutable_configure(), *configure);
+  }
+  if (!receive_channel_event(
+          test, make_snapshot_event(make_team_channel_key(team_id), 1, storage.saved_action_sequence(), &storage,
+                                    custom_data_sequence))) {
+    return false;
+  }
+  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(make_team_key(team_id));
+  CASE_EXPECT_TRUE(!!team_ptr);
+  if (!team_ptr) {
+    return false;
+  }
+  // Observable readiness: the applied snapshot drives the cached permission role.
+  return pump_until(test, [&] { return team_ptr->get_cached_permission_role() == self_role; });
+}
+
+// Full identity assertion for a send_message uplink envelope (team_key + sender).
+inline void expect_send_message_envelope(const atfw::team::SSTeamRoomSendMessageReq& req, int64_t team_id,
+                                         uint64_t sender_id) {
+  CASE_EXPECT_EQ(kZoneId, req.team_key().zone_id());
+  CASE_EXPECT_EQ(team_id, req.team_key().team_id());
+  CASE_EXPECT_EQ(kZoneId, req.sender_user_key().zone_id());
+  CASE_EXPECT_EQ(sender_id, req.sender_user_key().user_id());
 }
 
 // ---- Typed SS capture (atframework.team.TeamRoomService) ------------------------------

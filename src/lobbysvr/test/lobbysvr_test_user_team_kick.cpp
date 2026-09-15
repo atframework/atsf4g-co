@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 //
 // Offline regression tests for lobbysvr team-removal convergence and client notification
-// (plan: src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md §3, §5.1).
+// (see src/lobbysvr/service/logic/team/README.md).
 //
 // Covered here:
 // - KICK-01: both personal-notification / team-channel orderings and the common final state (§3.1);

@@ -1,7 +1,7 @@
 // Copyright 2026 atframework
 
 // Offline regression tests for lobbysvr user_team_manager / user_team (see
-// src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md):
+// src/lobbysvr/service/logic/team/README.md):
 // - rejoining a team that is still in the pending-exit queue must restore it as the current team (the previous
 //   current team moves into the pending-exit queue) instead of leaking it in the exit queue forever;
 // - the per-minute cleanup walks team_group_ with a range-for, so a current team that never became a member must
@@ -957,7 +957,7 @@ CASE_TEST(lobbysvr_user_team, member_events_manage_pending_admissions) {
     *invited->mutable_start_timepoint() = protobuf_from_system_clock(now);
     *invited->mutable_expired_timepoint() = protobuf_from_system_clock(valid_expiry());
     invited->set_team_source_type(atfw::team::EN_TEAM_SOURCE_TYPE_FRIEND);
-    // room 在 invited 通知中重填全部 PUBLIC admission 数据(见 USER_TEAM_TEST_PLAN §2.2)
+    // 使用 Room invited 通知提供的完整 PUBLIC admission 数据作为输入。
     *invited->add_team_admission_data() = team_test::pack_team_module(team_test::make_team_matching_module(false));
     auto* member_admission = invited->add_member_admission_data();
     protobuf_copy_message(*member_admission->mutable_user_key(), team_test::make_user_key(team_test::kCaptainUserId));

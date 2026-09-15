@@ -95,7 +95,7 @@ These illustrate wording choices, not changes to runtime behavior. Recheck the s
   written as “使用 client 提供的时间戳”.
 - In `src/teamsvr/service/room/logic/room/team_room.h`, “按数量维度压缩” can be written as “按日志数量压缩”, and
   “按时间维度压缩” as “按日志保留时长压缩”.
-- In `src/lobbysvr/service/logic/team/USER_TEAM_TEST_PLAN.md`, “这两个用例是 P0 门禁” can be written as
+- In test acceptance notes, “这两个用例是 P0 门禁” can be written as
   “这两个 P0 用例必须通过”.
 
 ## Sources

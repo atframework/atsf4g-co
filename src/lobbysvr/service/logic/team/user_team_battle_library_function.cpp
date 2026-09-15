@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <unordered_set>
+#include <utility>
 
 #include "data/user.h"
 
@@ -309,7 +310,7 @@ void user_team_battle_library_function::glue_layer_normalize_team_action_update_
     matching_mgr.fetch_team_sync_matching_view(ctx, *autocomplete_data->mutable_battle()->mutable_matching_team_view());
   } else {
     // 不在匹配则清空数据
-    autocomplete_data->mutable_battle()->mutable_matching_team_view();
+    autocomplete_data->mutable_battle()->mutable_matching_team_view()->Clear();
   }
 }
 
@@ -419,6 +420,6 @@ void user_team_battle_library_function::glue_layer_normalize_member_action_updat
     matching_mgr.fetch_team_matching_parameter(ctx, *autocomplete_data->mutable_battle()->mutable_matching_parameter());
   } else {
     // 不在匹配则清空数据
-    autocomplete_data->mutable_battle()->mutable_matching_parameter();
+    autocomplete_data->mutable_battle()->mutable_matching_parameter()->Clear();
   }
 }
