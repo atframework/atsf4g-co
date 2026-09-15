@@ -11,6 +11,8 @@ orbit_agent:
   seed_startup_timeout_sec: 30
   seed_heartbeat_timeout_sec: 10
   enable_pre_start: false
+  # 未认领的预启动进程连续启动失败达到该次数后停止该模板的预启动，0 表示不限制
+  pre_start_repeated_failures_limit: 3
 
   client_path: ..\..\orbit-auto-client\bin\orbit-auto-client.exe
   seed_client_path: ..\..\orbit-auto-client\bin\orbit-auto-client.exe

@@ -14,6 +14,7 @@ orbit_agent:
   remote_agent_addr: dns://{{ .Values.orbit_agent.host_name }}:{{ $service_port }}
   local_agent_addr: atcp://127.0.0.1:{{ $service_port }}
   enable_pre_start: {{ .Values.orbit_agent.enable_pre_start }}
+  pre_start_repeated_failures_limit: {{ .Values.orbit_agent.pre_start_repeated_failures_limit }}
   enable_seed_mode: {{ .Values.orbit_agent.enable_seed_mode }}
   seed_startup_timeout_sec: {{ .Values.orbit_agent.seed_startup_timeout_sec }}
   seed_heartbeat_timeout_sec: {{ .Values.orbit_agent.seed_heartbeat_timeout_sec }}

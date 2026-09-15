@@ -58,8 +58,6 @@ constexpr time_t kDefaultServerIdentityCheckIntervalSec = 5;
 constexpr time_t kDefaultClientForceCleanupDelaySec = 5;
 // 运行情况汇总日志的间隔
 constexpr time_t kAgentRunningSummaryLogIntervalSec = 60;
-// 未认领的预启动进程连续启动失败达到该次数后，停止该模板的预启动
-constexpr uint32_t kPreStartRepeatedStartupFailuresLimit = 2;
 
 constexpr const char* kOrbitArgsConfigEnvPrefix = "--config_env";
 constexpr const char* kOrbitEnabledArg = "--enable_orbit";
@@ -376,6 +374,7 @@ int orbit_agent_manager::init(atfw::atapp::app* app) {
 
   client_ip_ = config.client_ip();
   repeated_startup_failures_fatal_error_ = config.repeated_startup_failures_fatal_error();
+  pre_start_repeated_failures_limit_ = config.pre_start_repeated_failures_limit();
   remote_agent_endpoint_ = config.remote_agent_addr();
   enable_pre_start_ = config.enable_pre_start();
 
@@ -1131,12 +1130,12 @@ void orbit_agent_manager::set_client_state(const orbit_agent_client_record_ptr& 
       pre_start_repeated_failures_.erase(record->client_template_id);
     } else if (record->pre_start && !record->start_client_sent && record->client_template_id != 0) {
       // 预启动是 Agent 主动拉起的，失败不能走 agent_fatal_error（否则会把整个 Agent 置为不可用），
-      // 连续失败到上限只停掉该模板的预启动
+      // 连续失败到上限只停掉该模板的预启动；上限为 0 时不限制
       uint32_t& failures = pre_start_repeated_failures_[record->client_template_id];
       ++failures;
       FWLOGWARNING("orbit agent pre start client {} for client_template_id={} failed {} time(s)",
                    record->local_client_id, record->client_template_id, failures);
-      if (failures >= kPreStartRepeatedStartupFailuresLimit) {
+      if (pre_start_repeated_failures_limit_ > 0 && failures >= pre_start_repeated_failures_limit_) {
         disable_pre_start_template(record->client_template_id);
       }
     } else {
@@ -1914,7 +1913,7 @@ void orbit_agent_manager::disable_pre_start_template(int32_t client_template_id)
   FWLOGERROR(
       "orbit agent disabled pre start for client_template_id={} after {} consecutive startup failures, "
       "remaining pre start template count={}",
-      client_template_id, kPreStartRepeatedStartupFailuresLimit, pre_start_template_ids_.size());
+      client_template_id, pre_start_repeated_failures_limit_, pre_start_template_ids_.size());
 }
 
 void orbit_agent_manager::tick_pre_start(time_t now) {

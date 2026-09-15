@@ -302,6 +302,8 @@ class orbit_agent_manager : public util::design_pattern::singleton<orbit_agent_m
   time_t last_summary_log_timepoint_ = 0;        // 上次打印运行情况的时间点
   // 未认领的预启动进程连续启动失败次数，按 client_template_id 统计
   std::unordered_map<int32_t, uint32_t> pre_start_repeated_failures_;
+  // 连续失败到该次数后停止该模板的预启动，0 表示不限制
+  uint32_t pre_start_repeated_failures_limit_ = 0;
 
   std::string client_path_;
   std::vector<std::string> client_command_line_;

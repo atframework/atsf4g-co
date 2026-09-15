@@ -22,6 +22,8 @@ message orbit_agent_cfg {
 
   string remote_agent_addr = 12;
   string local_agent_addr = 13;
+  // 未认领的预启动进程连续启动失败达到该次数后，停止该模板的预启动；0 表示不限制
+  uint32 pre_start_repeated_failures_limit = 14;
 
   bool enable_seed_mode = 21;
   uint32 seed_startup_timeout_sec = 22;
