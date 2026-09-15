@@ -9,6 +9,7 @@
 
 #define UI UI_ST
 #include <atframe/atapp.h>
+#include <atframe/atapp_module_impl.h>
 #undef UI
 
 #include <design_pattern/singleton.h>
@@ -94,6 +95,10 @@ class OrbitClientRuntime {
   ORBIT_CLIENT_SDK_API void log(OrbitClientLogLevel level, const char* file_name, int line_number,
                                 ::atframework::util::nostd::string_view message) const;
   ORBIT_CLIENT_SDK_API static std::string protobuf_mini_dumper_get_readable(const ::google::protobuf::Message& msg);
+
+  // 在途/可靠请求是否已收尾完成（finalize_shutdown 已置位）；
+  // atapp 的 stop module 靠它决定能否继续停止
+  ORBIT_CLIENT_SDK_API bool is_shutdown_finalized() const noexcept;
 
   using client_request_raw_callback_t = std::function<void(int32_t, const ::atframework::SSMsg&)>;
 
@@ -206,6 +211,17 @@ class OrbitClientRuntime {
                                    ::atframework::orbit::ATDStartClientReq& request);
 
  private:
+  // 把 atapp 的停止流程接到 Orbit 的退出流程：
+  // atapp 收到 stop 后（含被 kill）会调用各 module 的 stop()，
+  // 返回 > 0 时 atapp 会保留 kStopped=false，并在后续 run_ev_loop 中再次调用，直到返回 <= 0 或 stop_timeout 超时
+  class stop_module_t : public ::atframework::atapp::module_impl {
+   public:
+    int init() override;
+    int stop() override;
+    int timeout() override;
+    const char* name() const override;
+  };
+
   std::unique_ptr<::atframework::atapp::app> app_;
   bool enabled_;
   OrbitClientCallbacks callbacks_;
@@ -222,8 +238,9 @@ class OrbitClientRuntime {
   bool start_client_received_;
   // 心跳响应里的 Agent 实例标识与拉起时不一致
   bool agent_instance_id_mismatch_;
-  // finalize_shutdown 是否已执行，避免收尾期间被重复调用
-  bool shutdown_finalized_;
+  // finalize_shutdown 是否已执行，避免收尾期间被重复调用。
+  // 写入在 io 线程（finalize_shutdown），读取在 atapp 的 stop 流程（run_once 调用栈内），因此用原子量
+  std::atomic<bool> shutdown_finalized_;
   std::unordered_map<uint64_t, pending_client_request_t> pending_client_request_map_;
   std::multimap<time_t, uint64_t> pending_client_request_timeout_map_;
 

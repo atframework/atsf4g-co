@@ -520,6 +520,8 @@ ORBIT_CLIENT_SDK_API int OrbitClientRuntime::init(uint64_t app_id, const OrbitCl
 
   app_ = std::make_unique<::atframework::atapp::app>();
   install_app_callbacks();
+  // 把 atapp 的停止流程接到 Orbit 的退出流程（进程被 kill 时 atapp 会走 module stop）
+  app_->add_module(std::make_shared<stop_module_t>());
   app_->add_log_sink_maker("orbit_client", atapp_log_maker_for_orbit(callbacks.on_log));
   int app_init_result =
       app_->init(uv_default_loop(), static_cast<int>(launch_argv.size()), launch_argv.data(), nullptr);
@@ -906,8 +908,7 @@ int32_t OrbitClientRuntime::send_heartbeat(const OrbitClientLoadSnapshot &snapsh
 void OrbitClientRuntime::on_heartbeat_response(int32_t result,
                                                const ::atframework::orbit::ATDClientHeartbeatRsp &response) {
   if (result < 0) {
-    ORBIT_LOG(OrbitClientLogLevel::kWarning,
-              LOG_WRAPPER_FWAPI_FORMAT("client_heartbeat failed, code={}", result));
+    ORBIT_LOG(OrbitClientLogLevel::kWarning, LOG_WRAPPER_FWAPI_FORMAT("client_heartbeat failed, code={}", result));
     return;
   }
 
@@ -1040,10 +1041,10 @@ ORBIT_CLIENT_SDK_API int32_t OrbitClientRuntime::request_end(::atframework::orbi
 }
 
 void OrbitClientRuntime::finalize_shutdown() {
-  if (shutdown_finalized_) {
+  // 检查并置位一次完成，避免并发下重复执行收尾
+  if (shutdown_finalized_.exchange(true)) {
     return;
   }
-  shutdown_finalized_ = true;
 
   ORBIT_LOG(OrbitClientLogLevel::kInfo, "finalize shutdown");
   // 只请求停止：app::stop() 仅置 kStoping 并 uv_stop，kStopped 要等下一次 run_once 里 uv_run 返回后才置位。
@@ -1097,6 +1098,35 @@ void OrbitClientRuntime::finish_stopping_if_ready() {
     }
   }
 }
+
+ORBIT_CLIENT_SDK_API bool OrbitClientRuntime::is_shutdown_finalized() const noexcept {
+  return shutdown_finalized_.load();
+}
+
+// ---- stop_module_t ----
+// 该 module 只在 atapp 的停止流程里被调用，此时已经在 app::run_ev_loop 的调用栈内，
+// 因此这里不能触发 finish_stopping_if_ready（它会 reset() 释放 app_），只做两件事：
+// 1. 把停止串到 Orbit 的 request_end，让在途/可靠请求继续收尾
+// 2. 未收尾完成时返回 > 0，让 atapp 保留 kStopped=false 并继续驱动 uv_run
+int OrbitClientRuntime::stop_module_t::init() { return 0; }
+
+int OrbitClientRuntime::stop_module_t::stop() {
+  OrbitClientRuntime::me()->request_end(::atframework::orbit::EN_CLIENT_EXIT_REASON_NORMAL, 0, "atapp stopped");
+  if (!OrbitClientRuntime::me()->is_shutdown_finalized()) {
+    // 还有在途/可靠请求没结束，阻止本次 stop，由 atapp 后续轮次继续调用
+    return 1;
+  }
+
+  return 0;
+}
+
+int OrbitClientRuntime::stop_module_t::timeout() {
+  OrbitClientRuntime::me()->log(OrbitClientLogLevel::kError, __FILE__, __LINE__,
+                                "orbit client stop timeout, in-flight requests are still pending, stop will be forced");
+  return 0;
+}
+
+const char *OrbitClientRuntime::stop_module_t::name() const { return "orbit_client_stop"; }
 
 void OrbitClientRuntime::install_app_callbacks() {
   if (app_callbacks_installed_ || nullptr == app_) {
