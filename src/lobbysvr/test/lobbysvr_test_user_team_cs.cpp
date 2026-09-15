@@ -1810,10 +1810,12 @@ CASE_TEST(lobbysvr_user_team, cs_invite_03_approve_dirty_snapshot_flushed_with_c
   team_test::team_room_ss_capture ss_capture;
   CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
 
-  constexpr int64_t kTeamId = 890101;
-  constexpr uint64_t kCaptainId = 99002;
-  constexpr uint64_t kInviteeId = 99001;
-  constexpr uint64_t kInviteeSessionId = 9900101;
+  // 本用例的频道/会话 id 必须与其他用例不同: client_subscriber 的管理器是进程级单例, 跨 runtime 复用
+  // 相同 channel_id 的共享订阅实例(旧快照/WAL 会被新用例命中, 结果取决于共享 GC 定时器是否先触发)
+  constexpr int64_t kTeamId = 890103;
+  constexpr uint64_t kCaptainId = 99003;
+  constexpr uint64_t kInviteeId = 99004;
+  constexpr uint64_t kInviteeSessionId = 9900401;
   team_test::now_offset_guard time_guard;
 
   // 同节点队长: 恢复队伍并应用快照, 让 team 频道的共享订阅实例进入 ready;

@@ -354,8 +354,11 @@ class user_team_utility {
       auto& handles = handlers_map[key];
       handles.do_update = [](rpc::context& ctx, user_team& team,
                              const PROJECT_NAMESPACE_ID::DTeamSharedDataModule& data) {
-        user_team_battle_library_function::glue_layer_event_on_team_action_update_matching_team_view(
-            ctx, team, data.battle().matching_team_view());
+        // 触发其他关联模块的事件处理，如果未加载过快照，则应该在快照结束后统一处理，而不是按事件重放
+        if (team.check_flag(user_team::team_flag::kSnapshotLoaded)) {
+          user_team_battle_library_function::glue_layer_event_on_team_action_update_matching_team_view(
+              ctx, team, data.battle().matching_team_view());
+        }
       };
 
       handles.do_delete = [](rpc::context& ctx, user_team& team, int64_t /*key*/) { team.set_matching(ctx, false); };
@@ -1726,7 +1729,6 @@ void user_team::load_snapshot(rpc::context& ctx) {
   FCTXLOGDEBUG(ctx, "{} channel for team {}:{}, load a snapshot, last sequence:{}", owner_->get_owner(),
                team_key_.zone_id(), team_key_.team_id(), channel_subscriber_->get_last_message_sequence());
 
-  bool load_snapshot_for_the_first_time = (channel_saved_sequence_ == 0);
   channel_create_sequence_ = channel_subscriber_->get_create_sequence();
 
   // 在重建前记录成员身份，避免回放压缩点之后的历史入队事件时再次提交默认成员数据。
@@ -1766,9 +1768,11 @@ void user_team::load_snapshot(rpc::context& ctx) {
   }
 
   // 第一次加载完快照要立即触发数据检查
-  if (load_snapshot_for_the_first_time) {
+  if (!check_flag(team_flag::kSnapshotLoaded)) {
+    set_flag(team_flag::kSnapshotLoaded, true);
     last_check_and_correct_data_timepoint_ = std::chrono::system_clock::from_time_t(0);
   }
+
   // 检查修复跨模块数据
   if (last_check_and_correct_data_timepoint_ + kCheckAndCorrectInterval <= ctx.logical_now()) {
     user_team_battle_library_function::auto_check_and_correct_team_data(ctx, *this);
@@ -1842,8 +1846,10 @@ void user_team::set_matching(rpc::context& ctx, bool value) {
 
   set_flag(team_flag::kMatching, value);
 
-  // 触发其他关联模块的事件处理
-  user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(ctx, *this, value);
+  // 触发其他关联模块的事件处理，如果未加载过快照，则应该在快照结束后统一处理，而不是按事件重放
+  if (check_flag(team_flag::kSnapshotLoaded)) {
+    user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(ctx, *this, value);
+  }
 }
 
 void user_team::do_team_shared_data(rpc::context& ctx,

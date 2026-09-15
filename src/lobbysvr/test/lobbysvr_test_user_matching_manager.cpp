@@ -4,6 +4,7 @@
 
 #include <config/compiler/protobuf_prefix.h>
 
+#include <protocol/config/lobbysvr_config.pb.h>
 #include <protocol/pbdesc/match_service.pb.h>
 #include <protocol/pbdesc/svr.local.table.pb.h>
 
@@ -21,6 +22,7 @@
 #include <vector>
 
 #include "config/extern_service_types.h"
+#include "config/logic_config.h"
 #include "data/user.h"
 #include "frame/test_macros.h"
 #include "logic/logic_server_setup.h"
@@ -330,7 +332,12 @@ CASE_TEST(lobbysvr_user_matching, sends_acknowledgement_in_periodic_matching_hea
   }
   CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::matching::packer::get_full_name_of_matching_heart_bear())));
 
-  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{2});
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+  auto heartbeat_interval = std::chrono::seconds{server_cfg.matching().heartbeat_interval().seconds()};
+  if (heartbeat_interval <= std::chrono::seconds{0}) {
+    heartbeat_interval = std::chrono::seconds{2};
+  }
+  atfw::util::time::time_utility::set_global_now_offset(heartbeat_interval + std::chrono::seconds{1});
   CASE_EXPECT_TRUE(run_refresh("matching.periodic_heartbeat.second"));
   CASE_EXPECT_TRUE(pump_until_calls(2));
   CASE_EXPECT_EQ(2, static_cast<int>(captured_requests->size()));

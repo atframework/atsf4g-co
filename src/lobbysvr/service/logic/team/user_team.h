@@ -61,6 +61,8 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
     kClientAnnounced,
     // 对象已登记在 manager 的 team_index_ 中(由 user_team_manager 经 manager_accessor 维护)
     kIndexActive,
+    // 是否已经加载过快照(首次加载快照时，某些动作不用)
+    kSnapshotLoaded,
     kMax,
   };
 
