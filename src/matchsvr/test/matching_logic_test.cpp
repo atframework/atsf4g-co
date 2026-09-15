@@ -112,8 +112,17 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   dynamic_ready_pool.add_rule_group_ids(50);
   dynamic_ready_pool.set_search_timeout_seconds(120);
   dynamic_ready_pool.set_confirm_timeout_seconds(15);
-  resource.set_file("matching_pool.bytes", make_table_bytes({pool, convergence_pool, faction_pool,
-                                                             incompatible_unit_pool, dynamic_ready_pool}));
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingPool partial_template_pool;
+  partial_template_pool.set_id(6);
+  partial_template_pool.set_user_lower(2);
+  partial_template_pool.set_user_upper(3);
+  partial_template_pool.set_unit_max_size(1);
+  partial_template_pool.add_rule_group_ids(60);
+  partial_template_pool.set_search_timeout_seconds(120);
+  partial_template_pool.set_confirm_timeout_seconds(15);
+  resource.set_file("matching_pool.bytes",
+                    make_table_bytes({pool, convergence_pool, faction_pool, incompatible_unit_pool, dynamic_ready_pool,
+                                      partial_template_pool}));
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRuleGroup group;
   group.set_group_id(10);
@@ -144,8 +153,14 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   dynamic_ready_group.set_global_user_upper(100);
   dynamic_ready_group.add_pool_rules(500);
   dynamic_ready_group.add_pool_rules(501);
-  resource.set_file("matching_rule_group.bytes", make_table_bytes({group, convergence_group, faction_group,
-                                                                   incompatible_unit_group, dynamic_ready_group}));
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRuleGroup partial_template_group;
+  partial_template_group.set_group_id(60);
+  partial_template_group.set_global_user_lower(0);
+  partial_template_group.set_global_user_upper(100);
+  partial_template_group.add_pool_rules(600);
+  resource.set_file("matching_rule_group.bytes",
+                    make_table_bytes({group, convergence_group, faction_group, incompatible_unit_group,
+                                      dynamic_ready_group, partial_template_group}));
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingRule rule;
   rule.set_id(100);
@@ -219,9 +234,15 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   dynamic_ready_relaxed_rule.add_result_template_ids(5000);
   dynamic_ready_relaxed_rule.set_start_battle_min_user(2);
   dynamic_ready_relaxed_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingRule partial_template_rule;
+  partial_template_rule.set_id(600);
+  partial_template_rule.mutable_time_limit()->set_min(0);
+  partial_template_rule.add_result_template_ids(6000);
+  partial_template_rule.add_rules()->set_type(PROJECT_NAMESPACE_ID::config::EN_MATCHING_RULE_NONE);
   resource.set_file("matching_rule.bytes",
                     make_table_bytes({rule, strict_rule, relaxed_rule, faction_strict_rule, faction_relaxed_rule,
-                                      incompatible_unit_rule, dynamic_ready_strict_rule, dynamic_ready_relaxed_rule}));
+                                      incompatible_unit_rule, dynamic_ready_strict_rule, dynamic_ready_relaxed_rule,
+                                      partial_template_rule}));
 
   PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate result_template;
   result_template.set_id(1000);
@@ -273,19 +294,25 @@ void seed_matching_tables(atframework::testing::mock_resource& resource) {
   auto* dynamic_ready_two_faction = dynamic_ready_two_factions.add_faction_template();
   dynamic_ready_two_faction->set_user_number(1);
   dynamic_ready_two_faction->set_count(2);
+  PROJECT_NAMESPACE_ID::config::ExcelMatchingResultTemplate partial_result_template;
+  partial_result_template.set_id(6000);
+  auto* partial_result_faction = partial_result_template.add_faction_template();
+  partial_result_faction->set_user_number(1);
+  partial_result_faction->set_count(3);
   resource.set_file(
       "matching_result_template.bytes",
       make_table_bytes({result_template, alternate_result_template, convergence_template, faction_template,
                         mixed_faction_template, two_user_template, incompatible_unit_template,
-                        dynamic_ready_three_factions, dynamic_ready_two_factions}));
+                        dynamic_ready_three_factions, dynamic_ready_two_factions, partial_result_template}));
 
   resource.set_file("const.bytes", make_empty_table_bytes());
   resource.set_file("dtmq_channel_type.bytes", make_empty_table_bytes());
   resource.set_file("item_type.bytes", make_empty_table_bytes());
-  resource.set_file("level.bytes",
-                    make_table_bytes({make_level(101, 1, 1), make_level(201, 1, 2), make_level(202, 1, 2),
-                                      make_level(203, 1, 2), make_level(207, 1, 2), make_level(208, 2, 2),
-                                      make_level(301, 1, 3), make_level(401, 1, 4), make_level(501, 1, 5)}));
+  resource.set_file(
+      "level.bytes",
+      make_table_bytes({make_level(101, 1, 1), make_level(201, 1, 2), make_level(202, 1, 2), make_level(203, 1, 2),
+                        make_level(207, 1, 2), make_level(208, 2, 2), make_level(301, 1, 3), make_level(401, 1, 4),
+                        make_level(501, 1, 5), make_level(601, 1, 6)}));
   resource.set_file("rank_define.bytes", make_empty_table_bytes());
   resource.set_file("rank_period_reward_pool.bytes", make_empty_table_bytes());
   resource.set_file("rank_rule.bytes", make_empty_table_bytes());
@@ -423,9 +450,10 @@ void set_request_levels(PROJECT_NAMESPACE_ID::SSMatchingCreateReq& request,
   }
 }
 
-PROJECT_NAMESPACE_ID::SSMatchingCheckReq make_heartbeat_request(
-    uint64_t unit_id, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, int64_t acknowledge_event_id = 0,
-    uint64_t subscriber_server_id = 0x160001) {
+PROJECT_NAMESPACE_ID::SSMatchingCheckReq make_heartbeat_request(uint64_t unit_id,
+                                                                const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,
+                                                                int64_t acknowledge_event_id = 0,
+                                                                uint64_t subscriber_server_id = 0x160001) {
   PROJECT_NAMESPACE_ID::SSMatchingCheckReq result;
   result.set_unit_id(unit_id);
   result.set_subscriber_server_id(subscriber_server_id);
@@ -487,7 +515,7 @@ CASE_TEST(matchsvr_matching_wal, advances_subscriber_cursor_only_after_successfu
 
   failed_send_rule.reset();
   atfw::util::time::time_utility::set_global_now_offset(atfw::util::time::time_utility::get_global_now_offset() +
-                                                         std::chrono::seconds{2});
+                                                        std::chrono::seconds{2});
   CASE_EXPECT_EQ(1, runtime.transport().outbound_count_to(kLobbyServerId));
   PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat heartbeat;
   protobuf_copy_message(*heartbeat.mutable_user_key(), unit.users(0).user_key());
@@ -693,6 +721,48 @@ CASE_TEST(matchsvr_matching_logic, keeps_template_eligible_until_room_start_thre
   CASE_EXPECT_EQ(0, ready.result());
   CASE_EXPECT_TRUE(ready.ready());
   CASE_EXPECT_EQ(5001, ready.result_template_id());
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_logic, accepts_result_template_subset_after_pool_lower_bound) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  PROJECT_NAMESPACE_ID::DMatchingScope scope;
+  scope.set_level_type(1);
+  scope.set_region("cn");
+  scope.set_battle_version("1.0");
+  scope.set_matching_pool_id(6);
+
+  auto first_unit = make_unit(26, 28001, 10);
+  auto created = matching_logic::check_unit_can_create_room(scope, first_unit, 100, 1);
+  CASE_EXPECT_TRUE(created.evaluation.can_join());
+  if (!created.evaluation.can_join()) {
+    CASE_EXPECT_EQ(0, runtime.stop());
+    return;
+  }
+
+  matching_room room{"partial-template", scope, 601, 100, 500};
+  CASE_EXPECT_TRUE(add_unit(room, first_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(created.evaluation.faction_assignments()));
+
+  auto ready = matching_logic::check_room_ready(room, 100, 1);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_FALSE(ready.ready());
+
+  auto second_unit = make_unit(27, 28002, 10);
+  auto joined = matching_logic::check_unit_can_join(room, second_unit, 100, 2);
+  CASE_EXPECT_TRUE(joined.evaluation.can_join());
+  CASE_EXPECT_TRUE(add_unit(room, second_unit));
+  CASE_EXPECT_TRUE(room.set_faction_assignments(joined.evaluation.faction_assignments()));
+
+  ready = matching_logic::check_room_ready(room, 100, 2);
+  CASE_EXPECT_EQ(0, ready.result());
+  CASE_EXPECT_TRUE(ready.ready());
+  CASE_EXPECT_EQ(6000, ready.result_template_id());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }
@@ -1258,7 +1328,8 @@ CASE_TEST(matchsvr_matching_manager, fails_after_confirmation_when_orbitsvr_is_u
   auto second_request = make_create_request(2, 10002, 14, 2);
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, second_request, second_response));
   CASE_EXPECT_EQ(first_response.matching_id(), second_response.matching_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, second_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 second_response.snapshot().status());
 
   PROJECT_NAMESPACE_ID::SSMatchingConfirmReq confirm;
   confirm.set_unit_id(1);
@@ -1267,7 +1338,8 @@ CASE_TEST(matchsvr_matching_manager, fails_after_confirmation_when_orbitsvr_is_u
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot confirm_response;
   const int64_t last_event_id_before_confirm = second_response.snapshot().last_event_id();
   CASE_EXPECT_EQ(0, manager->confirm_matching(ctx, confirm, confirm_response));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, confirm_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 confirm_response.snapshot().status());
   CASE_EXPECT_EQ(last_event_id_before_confirm, confirm_response.snapshot().last_event_id());
 
   confirm.set_unit_id(2);
@@ -1456,7 +1528,8 @@ CASE_TEST(matchsvr_matching_manager, confirms_a_source_that_becomes_ready_before
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot checked_response;
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, checked_response));
   CASE_EXPECT_EQ(source_matching_id, checked_response.matching_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, checked_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 checked_response.snapshot().status());
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(source_matching_id));
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(target_matching_id));
 
@@ -1494,7 +1567,8 @@ CASE_TEST(matchsvr_matching_manager, skips_a_target_that_is_already_ready_during
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot checked_response;
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, checked_response));
   CASE_EXPECT_EQ(source_matching_id, checked_response.matching_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, checked_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING,
+                 checked_response.snapshot().status());
   CASE_EXPECT_EQ(1, manager->get_room_unit_count(source_matching_id));
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(target_matching_id));
 
@@ -1529,22 +1603,24 @@ CASE_TEST(matchsvr_matching_manager, fills_an_older_target_with_multiple_atoms_i
   const std::string donor_matching_id = larger_response.matching_id();
   CASE_EXPECT_TRUE(target_matching_id != donor_matching_id);
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(donor_matching_id));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, larger_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING,
+                 larger_response.snapshot().status());
 
   // 规则在 60 秒后扩散；先在租约窗口内刷新三个 Unit，避免本用例把“在线 donor 重平衡”
   // 和失联 Unit 摘除混为一谈。
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{55});
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot heartbeat_response;
-  CASE_EXPECT_EQ(0, manager->check_matching(
-                        ctx, make_heartbeat_request(isolated_request.unit().unit_id(), isolated_request.operator_user()),
-                        heartbeat_response));
+  CASE_EXPECT_EQ(0,
+                 manager->check_matching(
+                     ctx, make_heartbeat_request(isolated_request.unit().unit_id(), isolated_request.operator_user()),
+                     heartbeat_response));
   CASE_EXPECT_EQ(0, manager->check_matching(
                         ctx, make_heartbeat_request(larger_request.unit().unit_id(), larger_request.operator_user()),
                         heartbeat_response));
-  CASE_EXPECT_EQ(0, manager->check_matching(ctx,
-                                            make_heartbeat_request(second_donor_request.unit().unit_id(),
-                                                                   second_donor_request.operator_user()),
-                                            heartbeat_response));
+  CASE_EXPECT_EQ(
+      0, manager->check_matching(
+             ctx, make_heartbeat_request(second_donor_request.unit().unit_id(), second_donor_request.operator_user()),
+             heartbeat_response));
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{62});
   CASE_EXPECT_EQ(0, manager->tick());
@@ -1555,7 +1631,8 @@ CASE_TEST(matchsvr_matching_manager, fills_an_older_target_with_multiple_atoms_i
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot migrated_response;
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, migrated_response));
   CASE_EXPECT_EQ(target_matching_id, migrated_response.matching_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, migrated_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 migrated_response.snapshot().status());
   CASE_EXPECT_EQ(2, manager->get_room_count());
 
   auto stale_source_check = make_heartbeat_request(larger_request.unit().unit_id(), larger_request.operator_user());
@@ -1604,7 +1681,8 @@ CASE_TEST(matchsvr_matching_manager, rebalances_from_oldest_compatible_donor_fir
   auto target_check = make_heartbeat_request(target_request.unit().unit_id(), target_request.operator_user());
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot target_checked_response;
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, target_check, target_checked_response));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, target_checked_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 target_checked_response.snapshot().status());
 
   auto older_donor_check =
       make_heartbeat_request(older_donor_request.unit().unit_id(), older_donor_request.operator_user());
@@ -1681,7 +1759,8 @@ CASE_TEST(matchsvr_matching_manager, rebalances_a_complete_faction_atomically) {
   CASE_EXPECT_EQ(0, manager->create_matching(ctx, target_solo_one, target_response));
   const std::string target_matching_id = target_response.matching_id();
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(target_matching_id));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, target_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING,
+                 target_response.snapshot().status());
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{1});
   auto source_duo_one = make_party_create_request(104, 90101, 2, 100);
@@ -1698,16 +1777,17 @@ CASE_TEST(matchsvr_matching_manager, rebalances_a_complete_faction_atomically) {
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot moved_response;
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check_moved, moved_response));
   CASE_EXPECT_EQ(target_matching_id, moved_response.matching_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, moved_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 moved_response.snapshot().status());
   CASE_EXPECT_EQ(4, manager->get_room_unit_count(target_matching_id));
   CASE_EXPECT_EQ(2, manager->get_room_faction_count(target_matching_id));
 
-  auto check_faction_member =
-      make_heartbeat_request(source_solo_one.unit().unit_id(), source_solo_one.operator_user());
+  auto check_faction_member = make_heartbeat_request(source_solo_one.unit().unit_id(), source_solo_one.operator_user());
   PROJECT_NAMESPACE_ID::SSMatchingSnapshot faction_member_response;
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check_faction_member, faction_member_response));
   CASE_EXPECT_EQ(target_matching_id, faction_member_response.matching_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING, faction_member_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+                 faction_member_response.snapshot().status());
 
   atfw::util::time::time_utility::reset_global_now_offset();
   manager->clear();
@@ -1750,7 +1830,8 @@ CASE_TEST(matchsvr_matching_manager, rejects_rebalance_when_level_candidate_inte
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, check, checked_response));
   CASE_EXPECT_EQ(source_matching_id, checked_response.matching_id());
   CASE_EXPECT_EQ(202, checked_response.snapshot().selected_level_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING, checked_response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_SEARCHING,
+                 checked_response.snapshot().status());
   CASE_EXPECT_EQ(2, manager->get_room_count());
 
   atfw::util::time::time_utility::reset_global_now_offset();
@@ -1808,14 +1889,13 @@ CASE_TEST(matchsvr_matching_manager, expires_whole_searching_unit_when_one_membe
   const std::string matching_id = response.matching_id();
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{6});
-  auto first_user_heartbeat =
-      make_heartbeat_request(request.unit().unit_id(), request.unit().users(0).user_key(), 0,
-                             request.subscriber_routes(0).server_id());
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
-                 manager->check_matching(ctx, first_user_heartbeat, response,
-                                         first_user_heartbeat.subscriber_server_id() + 1));
-  CASE_EXPECT_EQ(0, manager->check_matching(ctx, first_user_heartbeat, response,
-                                            first_user_heartbeat.subscriber_server_id()));
+  auto first_user_heartbeat = make_heartbeat_request(request.unit().unit_id(), request.unit().users(0).user_key(), 0,
+                                                     request.subscriber_routes(0).server_id());
+  CASE_EXPECT_EQ(
+      PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
+      manager->check_matching(ctx, first_user_heartbeat, response, first_user_heartbeat.subscriber_server_id() + 1));
+  CASE_EXPECT_EQ(
+      0, manager->check_matching(ctx, first_user_heartbeat, response, first_user_heartbeat.subscriber_server_id()));
 
   atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{11});
   CASE_EXPECT_EQ(0, manager->tick());
@@ -1862,8 +1942,7 @@ CASE_TEST(matchsvr_matching_manager, does_not_evict_units_after_matching_state) 
   CASE_EXPECT_EQ(0, manager->tick());
   CASE_EXPECT_EQ(2, manager->get_room_unit_count(matching_id));
   CASE_EXPECT_EQ(0, manager->check_matching(ctx, heartbeat, response));
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE,
-                 response.snapshot().status());
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE, response.snapshot().status());
 
   atfw::util::time::time_utility::reset_global_now_offset();
   manager->clear();

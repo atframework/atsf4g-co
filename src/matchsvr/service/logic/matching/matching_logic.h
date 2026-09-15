@@ -152,9 +152,6 @@ class matching_logic {
   // 检查结果模板的总人数和 faction 容量是否可以容纳当前候选布局。
   static bool template_can_contain_layout(const faction_layout& layout, size_t total_users,
                                           const excel::matching_result_template_index_t& result_template);
-  // 判断结果模板是否与当前已填满的 faction 布局完全一致。
-  static bool template_exactly_matches_layout(const faction_layout& layout,
-                                              const excel::matching_result_template_index_t& result_template);
   // 检查已有候选关卡与所有待加入 Unit 是否仍存在非空交集。
   static bool incoming_levels_are_compatible(const std::vector<int32_t>& existing_level_ids,
                                              const unit_view& incoming_units);

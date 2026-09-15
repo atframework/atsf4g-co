@@ -320,12 +320,6 @@ bool matching_logic::template_can_contain_layout(const faction_layout& layout, s
          template_contains_layout(layout, result_template);
 }
 
-bool matching_logic::template_exactly_matches_layout(const faction_layout& layout,
-                                                     const excel::matching_result_template_index_t& result_template) {
-  return layout.pending_user_count == 0 &&
-         layout.faction_count_by_capacity == result_template.faction_count_by_capacity;
-}
-
 bool matching_logic::incoming_levels_are_compatible(const std::vector<int32_t>& existing_level_ids,
                                                     const unit_view& incoming_units) {
   std::vector<int32_t> compatible_level_ids = existing_level_ids;
@@ -701,9 +695,11 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
       return result;
     }
 
-    const size_t required_user_count = static_cast<size_t>(std::max(0, rule->start_battle_min_user()));
+    const int32_t configured_required_user_count =
+        rule->start_battle_min_user() > 0 ? rule->start_battle_min_user() : pool->user_lower();
+    const size_t required_user_count = static_cast<size_t>(std::max(0, configured_required_user_count));
     bool rule_contains_layout = false;
-    int32_t exact_template_id = 0;
+    int32_t selected_template_id = 0;
     for (int32_t template_id : rule->result_template_ids()) {
       auto result_template = excel::get_matching_result_template_index(template_id);
       if (!result_template || total_users > static_cast<size_t>(result_template->total_user_count) ||
@@ -711,8 +707,8 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
         continue;
       }
       rule_contains_layout = true;
-      if (total_users >= required_user_count && template_exactly_matches_layout(layout, *result_template)) {
-        exact_template_id = template_id;
+      if (required_user_count > 0 && total_users >= required_user_count && layout.pending_user_count == 0) {
+        selected_template_id = template_id;
         break;
       }
     }
@@ -720,9 +716,9 @@ PROJECT_NAMESPACE_ID::DMatchingRoomReadyEvaluation matching_logic::check_room_re
       continue;
     }
     result.set_result(0);
-    if (exact_template_id != 0) {
+    if (selected_template_id != 0) {
       result.set_ready(true);
-      result.set_result_template_id(exact_template_id);
+      result.set_result_template_id(selected_template_id);
       return result;
     }
   }
