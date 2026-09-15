@@ -18,6 +18,8 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <rpc/rpc_shared_message.h>
+
 #include <string>
 #include <utility>
 #include <vector>
@@ -1441,9 +1443,22 @@ CASE_TEST(lobbysvr_user_team, cs_data_01_update_member_data_contract) {
     CASE_EXPECT_EQ(private_channel_key.channel_type(), member_update.user_channel().channel_type());
     CASE_EXPECT_EQ(std::string(kCsClientVersion), member_update.client_version());
     CASE_EXPECT_EQ(logic_config::me()->get_local_server_id(), member_update.user_router_server_id());
-    CASE_EXPECT_EQ(1, member_update.shared_member_data_size());
-    if (1 == member_update.shared_member_data_size()) {
+    // ready 更新的 normalize 会追加 battle.matching_parameter 条目(从匹配管理器自动补全), 一并下发
+    CASE_EXPECT_EQ(2, member_update.shared_member_data_size());
+    if (2 == member_update.shared_member_data_size()) {
       expect_packed_member_ready_entry(member_update.shared_member_data(0), true);
+      const auto& autocomplete_entry = member_update.shared_member_data(1);
+      CASE_EXPECT_EQ(member_matching_parameter_data_key(), autocomplete_entry.key());
+      CASE_EXPECT_EQ(atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER, autocomplete_entry.value().permission());
+      PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModule autocomplete_unpacked;
+      CASE_EXPECT_TRUE(autocomplete_entry.value().data().UnpackTo(&autocomplete_unpacked));
+      CASE_EXPECT_TRUE(autocomplete_unpacked.has_battle());
+      if (autocomplete_unpacked.has_battle()) {
+        CASE_EXPECT_TRUE(autocomplete_unpacked.battle().has_matching_parameter());
+        if (autocomplete_unpacked.battle().has_matching_parameter()) {
+          CASE_EXPECT_GT(autocomplete_unpacked.battle().matching_parameter().parameter().search_start_time(), 0);
+        }
+      }
     }
     // ready 更新附加 "队伍不在匹配中" 条件
     CASE_EXPECT_EQ(1, member_update.condition_size());
@@ -1459,6 +1474,25 @@ CASE_TEST(lobbysvr_user_team, cs_data_01_update_member_data_contract) {
           CASE_EXPECT_FALSE(checked.battle().matching());
         }
       }
+    }
+  }
+
+  // 取消 ready: normalize 同样追加 battle.matching_parameter 条目, 内容为清空后的空模块
+  {
+    atframework::shared::CSTeamUpdateMemberDataReq req;
+    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
+    protobuf_copy_message(*req.add_data(), team_test::make_member_ready_module(false));
+    atframework::CSMsg rsp_msg;
+    CASE_EXPECT_TRUE(post_update(req, rsp_msg));
+    CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
+    CASE_EXPECT_EQ(3, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kMemberUpdate)));
+    const auto& action_req = ss_capture.send_message_reqs.back();
+    expect_send_message_envelope(action_req, kTeamId, kUserId);
+    const auto& member_update = action_req.action().member_update();
+    CASE_EXPECT_EQ(2, member_update.shared_member_data_size());
+    if (2 == member_update.shared_member_data_size()) {
+      expect_packed_member_ready_entry(member_update.shared_member_data(0), false);
+      expect_packed_member_matching_parameter_entry(member_update.shared_member_data(1));
     }
   }
 
@@ -1562,6 +1596,107 @@ CASE_TEST(lobbysvr_user_team, cs_data_02_update_team_data_contract) {
     CASE_EXPECT_TRUE(post_update(req, rsp_msg));
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, rsp_msg.head().error_code());
     CASE_EXPECT_EQ(0, static_cast<int>(ss_capture.send_message_reqs.size()));
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// CS-DATA-03: update_team_shared_data 的 normalize 自动补全下发 — 队伍共享数据没有客户端可写模块
+// (见 cs_data_02), battle.matching 只能由内部匹配流程发起, 因此本用例经同步任务直接调用
+// user_team::update_team_shared_data(与 dirty_room_error 用例同一 test seam), 锁定 normalize 经
+// mutable_data_by_key_fn 追加的 battle.matching_team_view 条目随原条目一起上行 send_message。
+CASE_TEST(lobbysvr_user_team, cs_data_03_update_team_data_normalize_autocomplete) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
+  if (!test.is_running()) {
+    return;
+  }
+  // The CS dispatcher registrations live in the generated handle unit and are per-runtime (dispatcher state resets
+  // on each runtime start), so every case must register them explicitly like the chat manager cases do.
+  CASE_EXPECT_EQ(0, handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice());
+  CASE_EXPECT_TRUE(team_test::setup_team_room_node(test));
+  team_test::team_room_ss_capture ss_capture;
+  CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
+
+  constexpr uint64_t kUserId = 99001;
+  constexpr int64_t kTeamId = 890101;
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(team_test::setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+  set_cs_client_version(user_inst);
+
+  atfw::testing::mock_client client;
+  CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, 9900101, client));
+
+  team_test::channel_event_chain private_chain;
+  private_chain.channel_key = std::move(private_channel_key);
+
+  // 自己是队长(OWNER): 内部匹配流程只允许队长改变匹配状态
+  CASE_EXPECT_TRUE(join_team_with_snapshot(test, user_inst, private_chain, kTeamId,
+                                           atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, true, nullptr, {}));
+
+  auto update_matching = [&](bool matching) {
+    return team_test::run_sync_task(
+        test, "team.cs_data_03_update", [&](rpc::context& ctx) -> rpc::result_code_type {
+          auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
+          CASE_EXPECT_TRUE(!!team_ptr);
+          if (!team_ptr) {
+            RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+          }
+          auto data = rpc::make_shared_message<atframework::shared::CSTeamUpdateTeamDataReq>(ctx);
+          protobuf_copy_message(*data->add_data(), team_test::make_team_matching_module(matching));
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team_ptr->update_team_shared_data(ctx, *data->mutable_data())));
+        });
+  };
+
+  // 开始匹配: 上行恰好 2 条 shared_team_data — battle.matching(true) 与 normalize 追加的
+  // battle.matching_team_view(未在匹配中时补全为空视图); 附加全员 ready 更新条件
+  CASE_EXPECT_TRUE(update_matching(true));
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate)));
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
+  if (1 == ss_capture.send_message_reqs.size()) {
+    const auto& action_req = ss_capture.send_message_reqs.back();
+    expect_send_message_envelope(action_req, kTeamId, kUserId);
+    const auto& team_update = action_req.action().team_update();
+    CASE_EXPECT_EQ(2, team_update.shared_team_data_size());
+    if (2 == team_update.shared_team_data_size()) {
+      expect_packed_team_matching_entry(team_update.shared_team_data(0), true);
+      expect_packed_team_matching_team_view_entry(team_update.shared_team_data(1));
+    }
+    CASE_EXPECT_EQ(1, team_update.condition_size());
+    if (1 == team_update.condition_size()) {
+      const auto& rule = team_update.condition(0);
+      CASE_EXPECT_EQ(1, rule.member_condition_group_size());
+      if (1 == rule.member_condition_group_size()) {
+        const auto& group = rule.member_condition_group(0);
+        CASE_EXPECT_TRUE(group.all_members());
+        CASE_EXPECT_EQ(1, group.member_condition().shared_member_data_size());
+        if (1 == group.member_condition().shared_member_data_size()) {
+          CASE_EXPECT_EQ(member_ready_data_key(), group.member_condition().shared_member_data(0).key());
+        }
+      }
+    }
+  }
+
+  // 取消匹配: 同样携带 2 条 shared_team_data, matching_team_view 被清空下发
+  CASE_EXPECT_TRUE(update_matching(false));
+  CASE_EXPECT_EQ(2, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate)));
+  CASE_EXPECT_EQ(2, static_cast<int>(ss_capture.send_message_reqs.size()));
+  if (2 == ss_capture.send_message_reqs.size()) {
+    const auto& action_req = ss_capture.send_message_reqs.back();
+    expect_send_message_envelope(action_req, kTeamId, kUserId);
+    const auto& team_update = action_req.action().team_update();
+    CASE_EXPECT_EQ(2, team_update.shared_team_data_size());
+    if (2 == team_update.shared_team_data_size()) {
+      expect_packed_team_matching_entry(team_update.shared_team_data(0), false);
+      expect_packed_team_matching_team_view_entry(team_update.shared_team_data(1));
+    }
+    CASE_EXPECT_EQ(0, team_update.condition_size());
   }
 
   CASE_EXPECT_EQ(0, test.stop());

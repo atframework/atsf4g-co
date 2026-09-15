@@ -847,28 +847,30 @@ rpc::result_code_type user_team::update_team_shared_data(
 
   const auto& handle_map = user_team_utility::get_team_shared_data_update_handlers_map();
   int input_data_size = data.size();
-  for (int i = 0; i < input_data_size; ++i) {
+  for (int i = 0; i < data.size(); ++i) {
     auto& team_data = *data.Mutable(i);
     int64_t key = user_team_algorithm::make_team_shared_data_key(team_data);
 
     // 未注册处理器的模块数据也要正常透传(处理器只负责附加条件检查与本地行为)，
     // 客户端可写的模块由任务层的 user_team_algorithm::allow_client_update_team_shared_data 把关
-    auto iter = handle_map.find(key);
-    if (iter != handle_map.end()) {
-      if (iter->second.allow_update != nullptr) {
-        int32_t res = iter->second.allow_update(ctx, *this, team_data);
-        if (res < 0) {
-          RPC_RETURN_CODE(res);
+    if (i < input_data_size) {
+      auto iter = handle_map.find(key);
+      if (iter != handle_map.end()) {
+        if (iter->second.allow_update != nullptr) {
+          int32_t res = iter->second.allow_update(ctx, *this, team_data);
+          if (res < 0) {
+            RPC_RETURN_CODE(res);
+          }
         }
-      }
-      if (iter->second.normalize_update != nullptr) {
-        iter->second.normalize_update(ctx, *this, team_data, mutable_data_by_key_fn);
-      }
+        if (iter->second.normalize_update != nullptr) {
+          iter->second.normalize_update(ctx, *this, team_data, mutable_data_by_key_fn);
+        }
 
-      if (iter->second.build_append_condition != nullptr) {
-        auto handle = iter->second.build_append_condition(*this, team_data);
-        if (handle != nullptr) {
-          condition_appenders.insert(std::move(handle));
+        if (iter->second.build_append_condition != nullptr) {
+          auto handle = iter->second.build_append_condition(*this, team_data);
+          if (handle != nullptr) {
+            condition_appenders.insert(std::move(handle));
+          }
         }
       }
     }
@@ -929,28 +931,30 @@ rpc::result_code_type user_team::update_member_shared_data(
 
   const auto& handle_map = user_team_utility::get_member_shared_data_update_handlers_map();
   int input_data_size = data.size();
-  for (int i = 0; i < input_data_size; ++i) {
+  for (int i = 0; i < data.size(); ++i) {
     auto& member_data = *data.Mutable(i);
     int64_t key = user_team_algorithm::make_team_member_shared_data_key(member_data);
 
     // 未注册处理器的模块数据也要正常透传(处理器只负责附加条件检查与本地行为)，
     // 客户端可写的模块由任务层的 user_team_algorithm::allow_client_update_team_member_shared_data 把关
-    auto iter = handle_map.find(key);
-    if (iter != handle_map.end()) {
-      if (iter->second.allow_update != nullptr) {
-        int32_t res = iter->second.allow_update(ctx, *this, member_data);
-        if (res < 0) {
-          RPC_RETURN_CODE(res);
+    if (i < input_data_size) {
+      auto iter = handle_map.find(key);
+      if (iter != handle_map.end()) {
+        if (iter->second.allow_update != nullptr) {
+          int32_t res = iter->second.allow_update(ctx, *this, member_data);
+          if (res < 0) {
+            RPC_RETURN_CODE(res);
+          }
         }
-      }
-      if (iter->second.normalize_update != nullptr) {
-        iter->second.normalize_update(ctx, *this, member_data, mutable_data_by_key_fn);
-      }
+        if (iter->second.normalize_update != nullptr) {
+          iter->second.normalize_update(ctx, *this, member_data, mutable_data_by_key_fn);
+        }
 
-      if (iter->second.build_append_condition != nullptr) {
-        auto handle = iter->second.build_append_condition(*this, member_data);
-        if (handle != nullptr) {
-          condition_appenders.insert(std::move(handle));
+        if (iter->second.build_append_condition != nullptr) {
+          auto handle = iter->second.build_append_condition(*this, member_data);
+          if (handle != nullptr) {
+            condition_appenders.insert(std::move(handle));
+          }
         }
       }
     }

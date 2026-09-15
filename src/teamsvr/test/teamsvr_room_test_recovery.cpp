@@ -1,11 +1,15 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 日志压缩、快照恢复与锁转移用例(TEAM_ROOM_TEST_PLAN.md §4.5 CMP/RCV/LCK)。
+// teamsvr-room 快照压缩、状态恢复与锁持有者变化用例。
 // 通过 fake journal 的真实 sequence/hash chain 与 global_now_offset_guard 驱动定时维护。
 
 #include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
+#include <algorithm>
+#include <functional>
+#include <random>
 #include <string>
+#include <vector>
 
 namespace {
 using teamsvr_room_test::add_team_any_data_entry;
@@ -52,6 +56,75 @@ const atfw::dtmq::SSChannelUpdateReq* find_compact_update(const fake_team_room_c
   return nullptr;
 }
 }  // namespace
+
+// ============ CMP-00: 枚举 send_update 调用点: 初始创建无历史日志; 后续 update 必经压缩选择或证明无可压缩日志 ============
+// 生产仅两个 send_update 调用点: create_team 初始快照(无 pick, 无历史可裁)与 do_maintenance
+// (每次先 pick_compact_sequence 再合并续租+压缩+快照)。本用例按 update 请求序列锁定该结构,
+// 新增绕过压缩选择的调用点会打破形状枚举而红灯。
+CASE_TEST(teamsvr_room_compact, update_call_sites_compact_selection_coverage) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  // 调用点 1: 初始 create update —— 频道无任何历史日志, 保存快照但不携带压缩边界
+  CASE_EXPECT_GE(fake.update_requests().size(), 1u);
+  if (fake.update_requests().empty()) {
+    room_test_env::clear_rooms();
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  const auto& create_update = fake.update_requests().front().request;
+  CASE_EXPECT_TRUE(create_update.save());
+  CASE_EXPECT_EQ(0, create_update.compact_sequence());
+  CASE_EXPECT_TRUE(create_update.has_custom_data());
+  size_t updates_after_create = fake.update_requests().size();
+
+  // 调用点 2: 无新日志时的续租 update —— pick 运行但证明无可压缩日志(compact=0, 不带快照)
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  CASE_EXPECT_GT(fake.update_requests().size(), updates_after_create);
+  updates_after_create = fake.update_requests().size();
+  CASE_EXPECT_TRUE(nullptr == find_compact_update(fake));
+
+  // 调用点 2(可压缩分支): 写入足量日志并推进时间后, 维护 update 必须携带 pick 选择的压缩边界
+  CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, 8));
+  {
+    global_now_offset_guard guard(std::chrono::seconds{12});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(fake);
+  CASE_EXPECT_TRUE(nullptr != compact_update);
+
+  // 全序列形状: create 之后的每个 update 要么是无可压缩日志的续租(compact=0 且不裁日志),
+  // 要么是携带快照的压缩 update(compact>0 且 save); 携带压缩的 update 边界单调不回退
+  int64_t last_compact_sequence = 0;
+  for (size_t index = 1; index < fake.update_requests().size(); ++index) {
+    const auto& req = fake.update_requests()[index].request;
+    if (req.compact_sequence() > 0) {
+      CASE_EXPECT_GT(req.compact_sequence(), last_compact_sequence);
+      last_compact_sequence = req.compact_sequence();
+      CASE_EXPECT_TRUE(req.save());
+    }
+  }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
 
 // ============ CMP-01: 无可压缩日志时维护仍发送续租 update，但不设置 compact/快照 ============
 CASE_TEST(teamsvr_room_compact, maintenance_without_compactable_logs) {
@@ -440,6 +513,284 @@ CASE_TEST(teamsvr_room_compact, combined_policy_picks_conservative_cutoff) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
+// ============ CMP-05(partial): keep 边界值准确 —— 未压缩数 == keep 时不裁; == keep+1 起按第 delete 条为边界精确裁剪 ============
+// 默认配置 gc=10/percent=50/keep_count=2 -> keep=max(5,2)=5(percent 分支); 裁剪边界是数量维度的第
+// delete_by_count 条未压缩日志(边界日志保留、严格小于边界的日志移除), 与时间维度取较小者。
+CASE_TEST(teamsvr_room_compact, keep_percent_boundary_exact) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+  const int64_t keep = 5;
+
+  // 阶段 1: 补足到恰好 keep 条未压缩日志, 推进到时间窗口之外 -> 数量维度放行 0 条, 不压缩
+  {
+    int64_t uncompacted = static_cast<int64_t>(fake.journal().size());
+    if (uncompacted < keep) {
+      CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, static_cast<int>(keep - uncompacted)));
+    }
+    CASE_EXPECT_EQ(static_cast<size_t>(keep), fake.journal().size());
+  }
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  CASE_EXPECT_TRUE(nullptr == find_compact_update(fake));
+  CASE_EXPECT_EQ(0, fake.last_removed_sequence());
+
+  // 阶段 2: 再写 3 条, 数量维度放行 delete=total-keep 条 -> 边界精确落在第 delete 条
+  CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, 3));
+  // 维护前的 journal 快照(含上一轮续租日志): 动态计算边界, 不假设日志构成
+  std::vector<atfw::dtmq::DChannelMessage> journal_before;
+  for (const auto& message : fake.journal()) {
+    journal_before.push_back(message);
+  }
+  const int64_t delete_by_count = static_cast<int64_t>(journal_before.size()) - keep;
+  CASE_EXPECT_GT(delete_by_count, 0);
+  const int64_t expected_boundary = journal_before[static_cast<size_t>(delete_by_count - 1)].sequence();
+  {
+    global_now_offset_guard guard(std::chrono::seconds{12});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+
+  const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(fake);
+  CASE_EXPECT_TRUE(nullptr != compact_update);
+  if (nullptr != compact_update) {
+    CASE_EXPECT_EQ(expected_boundary, compact_update->compact_sequence());
+  }
+  CASE_EXPECT_EQ(expected_boundary, fake.last_removed_sequence());
+  // 严格小于边界的日志全部移除; 边界及之后的日志(含边界本身)全部保留
+  for (const auto& message : journal_before) {
+    bool expect_retained = message.sequence() >= expected_boundary;
+    bool found = false;
+    for (const auto& after : fake.journal()) {
+      if (after.sequence() == message.sequence()) {
+        found = true;
+        break;
+      }
+    }
+    CASE_EXPECT_EQ(expect_retained, found);
+  }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ CMP-05(partial): keep_count 大于 percent 时取较大者, 边界同样精确 ============
+CASE_TEST(teamsvr_room_compact, keep_count_dominates_boundary_exact) {
+  room_test_cfg_values cfg;
+  cfg.compact_log_keep_count = 7;  // max(10*50%, 7) = 7
+  room_test_env env(cfg);
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+  const int64_t keep = 7;
+
+  // 恰好 keep 条: 不压缩
+  {
+    int64_t uncompacted = static_cast<int64_t>(fake.journal().size());
+    if (uncompacted < keep) {
+      CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, static_cast<int>(keep - uncompacted)));
+    }
+    CASE_EXPECT_EQ(static_cast<size_t>(keep), fake.journal().size());
+  }
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  CASE_EXPECT_TRUE(nullptr == find_compact_update(fake));
+  CASE_EXPECT_EQ(0, fake.last_removed_sequence());
+
+  // 再写 4 条: delete=total-7, 边界精确落在第 delete 条
+  CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, 4));
+  std::vector<atfw::dtmq::DChannelMessage> journal_before;
+  for (const auto& message : fake.journal()) {
+    journal_before.push_back(message);
+  }
+  const int64_t delete_by_count = static_cast<int64_t>(journal_before.size()) - keep;
+  CASE_EXPECT_GT(delete_by_count, 0);
+  const int64_t expected_boundary = journal_before[static_cast<size_t>(delete_by_count - 1)].sequence();
+  {
+    global_now_offset_guard guard(std::chrono::seconds{12});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+
+  const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(fake);
+  CASE_EXPECT_TRUE(nullptr != compact_update);
+  if (nullptr != compact_update) {
+    CASE_EXPECT_EQ(expected_boundary, compact_update->compact_sequence());
+  }
+  CASE_EXPECT_EQ(expected_boundary, fake.last_removed_sequence());
+  for (const auto& message : journal_before) {
+    bool expect_retained = message.sequence() >= expected_boundary;
+    bool found = false;
+    for (const auto& after : fake.journal()) {
+      if (after.sequence() == message.sequence()) {
+        found = true;
+        break;
+      }
+    }
+    CASE_EXPECT_EQ(expect_retained, found);
+  }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ CMP-12(partial): 数量加速 —— 三重门控放行且未压缩数超过 gc*over% 时立即触发维护 ============
+// fake 模式锁租约固定 10s(续租点 5s)。start=5s 时 oldest+start 晚于当前点, 立即触发只可能来自
+// over-percent 分支, 从而隔离数量加速方向。
+CASE_TEST(teamsvr_room_compact, acceleration_over_percent_immediate) {
+  room_test_cfg_values cfg;
+  cfg.compact_log_start_seconds = 5;  // keep_time=2.5s
+  cfg.compact_log_over_percent = 60;  // 数量加速阈值 = 10*60% = 6
+  room_test_env env(cfg);
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  // T0 写 5 条(未压缩 > keep 5 且 > 阈值 6); 首次续租点 T0+5, 尚无任何维护(last_maintenance=0)
+  CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, 5));
+
+  // T0+2: 点火一次仅重排定时器(不到续租点不维护), 清掉 setup 期“立即接管”定时器对后续断言的遮蔽
+  {
+    global_now_offset_guard guard(std::chrono::seconds{2});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  size_t updates_before = fake.update_calls();
+
+  // T0+3: 再写 1 条触发重调度。时间加速目标 oldest+start=T0+5 晚于当前点,
+  // 立即触发(timeout<=now)只可能来自 over-percent 数量加速分支
+  {
+    global_now_offset_guard guard(std::chrono::seconds{3});
+    CASE_EXPECT_TRUE(write_member_update_logs(env, room, members.normal, 1));
+    CASE_EXPECT_LE(room->debug_timer_timeout(), atfw::util::time::time_utility::now());
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  // 维护已在 T0+3 执行(早于续租点 T0+5): 发生压缩
+  CASE_EXPECT_GT(fake.update_calls(), updates_before);
+  CASE_EXPECT_TRUE(nullptr != find_compact_update(fake));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ CMP-12(partial): 时间加速 —— 最早未压缩日志超过 start_time 时维护立即触发(不等续租点);
+// 对照组证明时间维度未放行时不加速; 压缩推进后增量门控阻止加速点停留过去 ============
+// 机制说明: 事件回环仅在未压缩数越过 max(gc*over%, keep) 触发线时重算定时器(与 over 分支同阈值),
+// 因此时间加速的独立可观测路径是恢复时的 0->有效 oldest 迁移调度。over=200 关闭数量加速分支,
+// 老日志队伍恢复后立即维护只能来自时间加速方向。
+CASE_TEST(teamsvr_room_compact, acceleration_start_time_direction) {
+  room_test_cfg_values cfg;
+  cfg.compact_log_start_seconds = 5;   // keep_time=2.5s
+  cfg.compact_log_over_percent = 200;  // 数量加速阈值 = 20, 本用例各阶段均不达到
+  room_test_env env(cfg);
+  if (!env.start()) {
+    return;
+  }
+
+  const int64_t team_old = next_test_team_id();
+  const int64_t team_fresh = next_test_team_id();
+  auto key_owner = make_user_key(1, 8801);
+  // 两支队伍构造相同日志: add owner + 12 轮 member_update; old 队全部日志时间为 now-100s
+  auto inject_logs = [&env, &key_owner](int64_t team_id) {
+    env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* add_member = action.mutable_add_member();
+      protobuf_copy_message(*add_member->mutable_user_key(), key_owner);
+      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+      return action;
+    }());
+    for (int index = 0; index < 12; ++index) {
+      env.inject_team_action(team_id, [&key_owner, index]() {
+        atfw::team::DTeamAction action;
+        auto* update = action.mutable_member_update();
+        protobuf_copy_message(*update->mutable_user_key(), key_owner);
+        update->set_client_version("v" + std::to_string(index));
+        return action;
+      }());
+    }
+  };
+  {
+    global_now_offset_guard guard(std::chrono::seconds{-100});
+    inject_logs(team_old);
+  }
+  inject_logs(team_fresh);
+
+  team_room::ptr_t room_old = env.setup_ready_room(team_old);
+  team_room::ptr_t room_fresh = env.setup_ready_room(team_fresh);
+  CASE_EXPECT_TRUE(!!room_old && !!room_fresh);
+  if (!room_old || !room_fresh) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake_old = env.channel(team_old);
+  auto& fake_fresh = env.channel(team_fresh);
+  // 一次点火完成接管; old 队恢复后 oldest=now-100 -> 三重门控放行 -> 时间加速到期(now-95)。
+  // reset_room_timer 把过期时刻收敛到时间轮 last_tick+1, 需要虚拟时间再前进 1s 以上才会点火维护;
+  // fresh 队 oldest=now -> 时间维度未放行 -> 仅接管, 定时器停在续租点(now+5, +2s 窗口内不触发)
+  env.drive_timer_ticks();
+  {
+    global_now_offset_guard guard(std::chrono::seconds{2});
+    env.drive_timer_ticks();
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_old));
+  CASE_EXPECT_EQ(0, env.sync(team_fresh));
+
+  CASE_EXPECT_TRUE(room_old->is_lock_holder());
+  CASE_EXPECT_TRUE(room_fresh->is_lock_holder());
+  // old 队: 维护已在接管后立即执行(续租点之前), 发生压缩
+  CASE_EXPECT_TRUE(nullptr != find_compact_update(fake_old));
+  CASE_EXPECT_GT(fake_old.last_removed_sequence(), 0);
+  // 压缩推进后无新增: 增量门控关闭, 加速点不得停留过去, 下一轮回到续租点
+  CASE_EXPECT_GT(room_old->debug_timer_timeout(),
+                 atfw::util::time::time_utility::now() + std::chrono::seconds{3});
+  // fresh 队: 时间维度未放行 -> 不加速, 无压缩, 定时器指向续租点
+  CASE_EXPECT_TRUE(nullptr == find_compact_update(fake_fresh));
+  CASE_EXPECT_GT(room_fresh->debug_timer_timeout(),
+                 atfw::util::time::time_utility::now() + std::chrono::seconds{3});
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
 // ============ CMP-09: 压缩提交成功但 update 响应丢失 -> 旧主控本地边界滞后但不回退/不覆盖，恢复等价 ============
 CASE_TEST(teamsvr_room_compact, compact_committed_response_lost) {
   room_test_env env;
@@ -705,6 +1056,163 @@ CASE_TEST(teamsvr_room_compact, keep_count_floor_protects_old_logs) {
   CASE_EXPECT_TRUE(nullptr != compact_update);
   // 压缩后未压缩日志仍不少于 keep_count(30) 条(最小保留条数是硬保证)
   CASE_EXPECT_GE(fake.journal().size(), 30u);
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ CMP-11: 快照覆盖(saved)超过裁剪边界(compact)时, 重叠日志不参与重放, 恢复幂等且不回退 ============
+CASE_TEST(teamsvr_room_compact, snapshot_coverage_beyond_compact_replay_idempotent) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto key_owner = make_user_key(1, 8601);
+  auto key_admin = make_user_key(1, 8602);
+  auto invitee = make_user_key(1, 8603);
+  int64_t compact_sequence = 0;
+  int64_t saved_sequence = 0;
+  {
+    auto& fake = env.channel(team_id);
+    fake.ensure_created();
+    // 快照覆盖范围内日志: add owner / add admin / 两轮 member_update / 一条邀请
+    auto* add_owner_log = env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* add_member = action.mutable_add_member();
+      protobuf_copy_message(*add_member->mutable_user_key(), key_owner);
+      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+      return action;
+    }());
+    CASE_EXPECT_TRUE(nullptr != add_owner_log);
+    compact_sequence = nullptr != add_owner_log ? add_owner_log->sequence() : 0;
+    env.inject_team_action(team_id, [&key_admin]() {
+      atfw::team::DTeamAction action;
+      auto* add_member = action.mutable_add_member();
+      protobuf_copy_message(*add_member->mutable_user_key(), key_admin);
+      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+      return action;
+    }());
+    env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), key_owner);
+      update->set_client_version("v1-owner");
+      return action;
+    }());
+    env.inject_team_action(team_id, [&key_admin]() {
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), key_admin);
+      update->set_client_version("v2-admin");
+      return action;
+    }());
+    auto* invite_log = env.inject_team_action(team_id, [&key_owner, &invitee]() {
+      atfw::team::DTeamAction action;
+      auto* invitation = action.mutable_add_invitation();
+      protobuf_copy_message(*invitation->mutable_inviter(), key_owner);
+      protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+      protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
+      *invitation->mutable_expired_timepoint() =
+          protobuf_from_system_clock(atfw::util::time::time_utility::now() + std::chrono::seconds{3600});
+      return action;
+    }());
+    CASE_EXPECT_TRUE(nullptr != invite_log);
+    saved_sequence = nullptr != invite_log ? invite_log->sequence() : 0;
+    // 快照之后日志: 两轮新 member_update
+    env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), key_owner);
+      update->set_client_version("post-owner");
+      return action;
+    }());
+    env.inject_team_action(team_id, [&key_admin]() {
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), key_admin);
+      update->set_client_version("post-admin");
+      return action;
+    }());
+
+    // 快照覆盖到 saved_sequence(含邀请), 但裁剪边界停在更早的 compact_sequence:
+    // 日志 (compact, saved] 既在快照里又留在 journal 中(重叠区), 重放必须从 saved+1 开始
+    atfw::team::DTeamStorage storage;
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
+    protobuf_copy_message(*storage.mutable_captain_user_key(), key_owner);
+    auto now_tp = protobuf_from_system_clock(atfw::util::time::time_utility::now());
+    auto* owner_member = storage.add_member();
+    protobuf_copy_message(*owner_member->mutable_user_key(), key_owner);
+    owner_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    owner_member->set_client_version("v1-owner");
+    *owner_member->mutable_joined_timepoint() = now_tp;
+    *owner_member->mutable_last_heartbeat_timepoint() = now_tp;
+    auto* admin_member = storage.add_member();
+    protobuf_copy_message(*admin_member->mutable_user_key(), key_admin);
+    admin_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+    admin_member->set_client_version("v2-admin");
+    *admin_member->mutable_joined_timepoint() = now_tp;
+    *admin_member->mutable_last_heartbeat_timepoint() = now_tp;
+    auto* pending = storage.add_pending_invitation();
+    protobuf_copy_message(*pending->mutable_inviter(), key_owner);
+    protobuf_copy_message(*pending->mutable_invitee(), invitee);
+    protobuf_copy_message(*pending->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
+    *pending->mutable_start_timepoint() = now_tp;
+    *pending->mutable_expired_timepoint() =
+        protobuf_from_system_clock(atfw::util::time::time_utility::now() + std::chrono::seconds{3600});
+    storage.set_saved_action_sequence(saved_sequence);
+    storage.set_acknowledge_action_sequence(saved_sequence);
+    fake.set_custom_data(storage);
+    atfw::team::DTeamRoomPrivateData private_data;
+    private_data.set_team_created(true);
+    private_data.set_last_compact_sequence(compact_sequence);
+    *private_data.mutable_last_compact_timepoint() = now_tp;
+    fake.set_private_data(private_data);
+  }
+
+  size_t personal_before = env.personal_message_count();
+  team_room::ptr_t room = env.setup_ready_room(team_id);
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  // 裁剪边界与覆盖范围不混用(CMP-08): compact 保持更早边界, saved 覆盖快照
+  CASE_EXPECT_EQ(compact_sequence, room->debug_last_compact_sequence());
+  CASE_EXPECT_EQ(saved_sequence, room->debug_saved_action_sequence());
+  // 重叠区日志不重复应用: 成员恰好 owner+admin(不重复), 状态为快照后增量终态
+  CASE_EXPECT_EQ(2u, room->debug_member_lru_keys().size());
+  auto owner_member = room->find_member(key_owner, false);
+  auto admin_member = room->find_member(key_admin, false);
+  CASE_EXPECT_TRUE(!!owner_member && !!admin_member);
+  if (owner_member) {
+    CASE_EXPECT_EQ("post-owner", owner_member->member_data.client_version());
+  }
+  if (admin_member) {
+    CASE_EXPECT_EQ("post-admin", admin_member->member_data.client_version());
+  }
+  // 恢复期间零个人通知
+  CASE_EXPECT_EQ(personal_before, env.personal_message_count());
+
+  // 快照中的邀请恢复为恰一条: 可批准一次, 重复批准 not-found(无幽灵 admission)
+  CASE_EXPECT_EQ(0,
+                 env.run("approve_restored", [room, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+                   atfw::team::SSTeamRoomApproveInvitationReq req;
+                   protobuf_copy_message(*req.mutable_sender_user_key(), invitee);
+                   protobuf_copy_message(*req.mutable_invitee(), invitee);
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, req)));
+                 }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(nullptr != room->find_member(invitee, false));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
+                 env.run("approve_restored_twice", [room, &invitee](rpc::context& ctx) -> rpc::result_code_type {
+                   atfw::team::SSTeamRoomApproveInvitationReq req;
+                   protobuf_copy_message(*req.mutable_sender_user_key(), invitee);
+                   protobuf_copy_message(*req.mutable_invitee(), invitee);
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, req)));
+                 }));
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1098,6 +1606,91 @@ CASE_TEST(teamsvr_room_recovery, approve_crash_checkpoint_retry) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
+// ============ RCV-09(partial): approve 合并写入预提交失败 -> 零提交零通知, 重试后恰一次生效 ============
+CASE_TEST(teamsvr_room_recovery, approve_crash_before_commit_retry) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto invitee = make_user_key(1, 8217);
+  atfw::team::SSTeamRoomAddInvitationReq invite_req;
+  protobuf_copy_message(*invite_req.mutable_sender_user_key(), members.normal);
+  auto* invitation = invite_req.mutable_invitation();
+  protobuf_copy_message(*invitation->mutable_inviter(), members.normal);
+  protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+  protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
+  CASE_EXPECT_EQ(0, env.run("add_invitation", [room, &invite_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_req)));
+  }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  auto& fake = env.channel(team_id);
+  atfw::team::SSTeamRoomApproveInvitationReq approve_req;
+  protobuf_copy_message(*approve_req.mutable_sender_user_key(), invitee);
+  protobuf_copy_message(*approve_req.mutable_invitee(), invitee);
+
+  // 崩溃点在合并写入提交之前: add_member+approve 均未到达 journal, 无任何成员/通知副作用
+  fake.next_send_fault.present = true;
+  fake.next_send_fault.commit_first = false;
+  fake.next_send_fault.error_code = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
+  int32_t first_ret = env.run("approve_pre_commit_fault", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+  });
+  CASE_EXPECT_NE(0, first_ret);
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(nullptr == room->find_member(invitee, false));
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+  auto count_actions = [&fake](atfw::team::DTeamAction::ActionCase action_case) {
+    size_t ret = 0;
+    fake.foreach_team_action(
+        [&ret, action_case](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+          if (action.action_case() == action_case) {
+            ++ret;
+          }
+          return true;
+        });
+    return ret;
+  };
+  // 邀请本身仍在(只有 add_invitation 一条, approve 系零写入)
+  CASE_EXPECT_EQ(1u, count_actions(atfw::team::DTeamAction::kAddInvitation));
+  CASE_EXPECT_EQ(0u, count_actions(atfw::team::DTeamAction::kApproveInvitation));
+
+  // 重试 approve: 恰一次合并提交(add_member+approve), 恰一次入队通知, 邀请随回环清理
+  size_t sends_before = fake.send_message_calls();
+  CASE_EXPECT_EQ(0, env.run("approve_retry", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+  }));
+  CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(nullptr != room->find_member(invitee, false));
+  CASE_EXPECT_EQ(1u, count_actions(atfw::team::DTeamAction::kApproveInvitation));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+  // 日志中 invitee 的 add_member 只出现一次
+  size_t add_count = 0;
+  fake.foreach_team_action(
+      [&invitee, &add_count](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+        if (action.action_case() == atfw::team::DTeamAction::kAddMember &&
+            action.add_member().user_key().user_id() == invitee.user_id()) {
+          ++add_count;
+        }
+        return true;
+      });
+  CASE_EXPECT_EQ(1u, add_count);
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
 // ============ RCV-10(partial): destroy-team 提交后重建 room 不得恢复为可写未销毁队伍 ============
 CASE_TEST(teamsvr_room_recovery, destroyed_team_not_recreated) {
   room_test_env env;
@@ -1139,6 +1732,85 @@ CASE_TEST(teamsvr_room_recovery, destroyed_team_not_recreated) {
                      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(recovered->create_team(ctx, create_req)));
                    }));
   }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ RCV-10(partial): destroy-channel 已提交但响应丢失 -> 重试幂等, 重启后旧 team id 不得复活 ============
+CASE_TEST(teamsvr_room_recovery, destroy_channel_response_lost_recovery) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 所有成员退出 -> 空房间维护写 destroy_team
+  auto remove_member_fn = [&env, room](const PROJECT_NAMESPACE_ID::DUserIDKey& key) {
+    return env.run("remove_member", [room, &key](rpc::context& ctx) -> rpc::result_code_type {
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_remove_member()->mutable_user_key(), key);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+    });
+  };
+  CASE_EXPECT_EQ(0, remove_member_fn(members.normal));
+  CASE_EXPECT_EQ(0, remove_member_fn(members.admin));
+  CASE_EXPECT_EQ(0, remove_member_fn(members.owner));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // destroy-channel 首次调用: 服务端已销毁但响应丢失(客户端视为失败, 稍后重试)
+  fake.next_destroy_fault.present = true;
+  fake.next_destroy_fault.commit_first = true;
+  fake.next_destroy_fault.error_code = PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE;
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    for (int round = 0; round < 8 && 0 == fake.destroy_calls(); ++round) {
+      global_now_offset_guard::advance(std::chrono::seconds{2});
+      env.drive_timer_ticks();
+      CASE_EXPECT_EQ(0, env.sync(team_id));
+    }
+  }
+  // 服务端已提交销毁(带 kDestroy 日志), 客户端继续重试且幂等(不报错、不重复副作用)
+  CASE_EXPECT_GE(fake.destroy_calls(), 1u);
+  CASE_EXPECT_TRUE(fake.is_destroyed());
+  {
+    global_now_offset_guard guard(std::chrono::seconds{20});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  size_t event_logs_after_destroy = fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent);
+
+  // 真实丢弃旧 room。已销毁频道在 fake 模式下不再向新订阅提供就绪快照(WAL-08 已用真实 mq_channel
+  // 锁定“带 destroy 元数据快照恢复销毁状态 + create 拒绝”语义), 这里锁定重启侧契约:
+  // 旧 team id 无法恢复出可写未销毁队伍, 任何重建尝试零写入。
+  room_test_env::clear_rooms();
+  room.reset();
+  team_room::ptr_t recovered = env.setup_ready_room(team_id);
+  CASE_EXPECT_TRUE(!recovered);
+  auto manager_room = team_room_manager::me()->get_room(make_team_key(team_id));
+  if (manager_room) {
+    CASE_EXPECT_FALSE(manager_room->is_lock_holder());
+    atfw::team::SSTeamRoomCreateReq create_req;
+    protobuf_copy_message(*create_req.mutable_team_key(), make_team_key(team_id));
+    protobuf_copy_message(*create_req.mutable_sender_user_key(), members.owner);
+    CASE_EXPECT_NE(0,
+                   env.run("recreate_after_destroy_channel",
+                           [manager_room, &create_req](rpc::context& ctx) -> rpc::result_code_type {
+                             RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(manager_room->create_team(ctx, create_req)));
+                           }));
+  }
+  // 恢复尝试未产生任何新的队伍事件(重建拒绝零写入)
+  CASE_EXPECT_EQ(event_logs_after_destroy, fake.count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1342,6 +2014,120 @@ CASE_TEST(teamsvr_room_recovery, snapshot_missing_private_data_legacy) {
                    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
                  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ RCV-06(partial): private 快照落后/不同代时 private team data 不静默丢失, 代际按 public 推导愈合 ============
+CASE_TEST(teamsvr_room_recovery, snapshot_stale_private_generation_preserved) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto key_owner = make_user_key(1, 8541);
+  {
+    auto& fake = env.channel(team_id);
+    fake.ensure_created();
+    // 快照覆盖范围内: add owner + 一轮 member_update; 快照之后: 再一轮 member_update
+    auto* add_log = env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* add_member = action.mutable_add_member();
+      protobuf_copy_message(*add_member->mutable_user_key(), key_owner);
+      add_member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+      return action;
+    }());
+    CASE_EXPECT_TRUE(nullptr != add_log);
+    auto* in_snapshot_log = env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), key_owner);
+      update->set_client_version("in-snapshot");
+      return action;
+    }());
+    CASE_EXPECT_TRUE(nullptr != in_snapshot_log);
+    // 立即取 sequence: 继续 append 会使 journal vector 扩容导致指针失效
+    const int64_t saved_sequence = nullptr != in_snapshot_log ? in_snapshot_log->sequence() : 0;
+    env.inject_team_action(team_id, [&key_owner]() {
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), key_owner);
+      update->set_client_version("post-snapshot");
+      return action;
+    }());
+
+    atfw::team::DTeamStorage storage;
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
+    protobuf_copy_message(*storage.mutable_captain_user_key(), key_owner);
+    auto now_tp = protobuf_from_system_clock(atfw::util::time::time_utility::now());
+    auto* member = storage.add_member();
+    protobuf_copy_message(*member->mutable_user_key(), key_owner);
+    member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    member->set_client_version("in-snapshot");
+    *member->mutable_joined_timepoint() = now_tp;
+    *member->mutable_last_heartbeat_timepoint() = now_tp;
+    storage.set_saved_action_sequence(saved_sequence);
+    storage.set_acknowledge_action_sequence(saved_sequence);
+    fake.set_custom_data(storage);
+
+    // 落后/不同代的 private 快照: team_created=false(旧代际)、裁剪边界更早、携带私有 keyed 数据
+    atfw::team::DTeamRoomPrivateData private_data;
+    private_data.set_team_created(false);
+    private_data.set_last_compact_sequence(0);
+    auto* entry = private_data.add_private_team_data();
+    entry->set_key(7);
+    entry->mutable_value()->mutable_data()->set_type_url("type.googleapis.com/atframework.team.ut_private_data");
+    entry->mutable_value()->mutable_data()->set_value("ut-private-7");
+    fake.set_private_data(private_data);
+  }
+
+  team_room::ptr_t room = env.setup_ready_room(team_id);
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  // team_created 由 public 信号推导(快照有成员/队长) -> 房间恢复为可写已创建队伍
+  auto owner_member = room->find_member(key_owner, false);
+  CASE_EXPECT_TRUE(!!owner_member);
+  if (owner_member) {
+    CASE_EXPECT_EQ("post-snapshot", owner_member->member_data.client_version());
+  }
+  CASE_EXPECT_EQ(0,
+                 env.run("write_after_stale_private", [room, &key_owner](rpc::context& ctx) -> rpc::result_code_type {
+                   atfw::team::DTeamAction action;
+                   auto* update = action.mutable_member_update();
+                   protobuf_copy_message(*update->mutable_user_key(), key_owner);
+                   update->set_client_version("post-restore");
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+                 }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // 再写足量日志触发压缩快照: dump 出的 private 快照必须保留原私有数据且 team_created 愈合为 true
+  CASE_EXPECT_TRUE(write_member_update_logs(env, room, key_owner, 6));
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  const atfw::dtmq::SSChannelUpdateReq* compact_update = find_compact_update(env.channel(team_id));
+  CASE_EXPECT_TRUE(nullptr != compact_update);
+  if (nullptr != compact_update) {
+    atfw::team::DTeamRoomPrivateData dumped_private;
+    CASE_EXPECT_TRUE(compact_update->private_data().UnpackTo(&dumped_private));
+    CASE_EXPECT_TRUE(dumped_private.team_created());
+    bool found_private_entry = false;
+    for (const auto& data : dumped_private.private_team_data()) {
+      if (7 == data.key()) {
+        found_private_entry = true;
+        CASE_EXPECT_EQ("ut-private-7", data.value().data().value());
+      }
+    }
+    CASE_EXPECT_TRUE(found_private_entry);
+  }
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1764,6 +2550,113 @@ CASE_TEST(teamsvr_room_lock, concurrent_cas_competitor_no_revive) {
   CASE_EXPECT_EQ(0, env.stop());
 }
 
+// ============ LCK-06(partial): 迟到 CAS 成功响应不得让写副作用逃脱 fencing(锁已易主时写入必被拒且退位) ============
+CASE_TEST(teamsvr_room_lock, late_cas_success_response_fenced_write) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  auto key_member = make_user_key(1, 8571);
+  {
+    // 预置: 已创建频道 + 一名成员 + 已过期的老锁
+    auto& fake = env.channel(team_id);
+    fake.ensure_created();
+    atfw::team::DTeamStorage storage;
+    protobuf_copy_message(*storage.mutable_team_key(), make_team_key(team_id));
+    auto* member = storage.add_member();
+    protobuf_copy_message(*member->mutable_user_key(), key_member);
+    member->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_OWNER);
+    auto now_tp = protobuf_from_system_clock(atfw::util::time::time_utility::now());
+    *member->mutable_joined_timepoint() = now_tp;
+    *member->mutable_last_heartbeat_timepoint() = now_tp;
+    fake.set_custom_data(storage);
+    atfw::team::DTeamRoomPrivateData private_data;
+    private_data.set_team_created(true);
+    fake.set_private_data(private_data);
+    protobuf_copy_message(fake.mutable_lock(), make_foreign_lock("teamsvr-room:crashed-node", -10));
+  }
+
+  team_room::ptr_t room = env.setup_ready_room(team_id);
+  CASE_EXPECT_TRUE(!!room);
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  CASE_EXPECT_FALSE(room->is_lock_holder());
+
+  // 本节点对过期老锁 CAS: 服务端已提交(锁归本节点), 成功响应挂起在途
+  auto& fake = env.channel(team_id);
+  env.reset_lock_response_gate.armed = true;
+  auto write_task = env.runtime().run_task(
+      "write_with_late_cas_success", std::chrono::seconds{8},
+      [room, &key_member](rpc::context& ctx) -> rpc::result_code_type {
+        atfw::team::DTeamAction action;
+        auto* update = action.mutable_member_update();
+        protobuf_copy_message(*update->mutable_user_key(), key_member);
+        update->set_client_version("from-stale-writer");
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      });
+  CASE_EXPECT_FALSE(write_task.empty());
+  if (write_task.empty()) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  CASE_EXPECT_TRUE(env.wait_for([&env, &fake]() {
+    return fake.reset_lock_calls() >= 1 && room_test_env::gate_parked(env.reset_lock_response_gate);
+  }));
+
+  // 挂起窗口内锁易主为竞争者(其 CAS 后到但先生效于订阅视图), 竞争者继续产生业务事件
+  fake.set_lock(make_foreign_lock("teamsvr-room:competitor", 3600));
+  env.inject_team_action(team_id, [&key_member]() {
+    atfw::team::DTeamAction action;
+    auto* update = action.mutable_member_update();
+    protobuf_copy_message(*update->mutable_user_key(), key_member);
+    update->set_client_version("from-competitor");
+    return action;
+  }());
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_FALSE(room->is_lock_holder());
+
+  // 放行迟到成功响应: 即使本地瞬时被加冕, 随后的写入也必须被服务端 fencing 拒绝并退位,
+  // 任何已易主 lock epoch 下本节点不得有副作用逃脱(至多一个副作用生产者)
+  CASE_EXPECT_TRUE(room_test_env::release_gate(env.reset_lock_response_gate));
+  auto write_result = env.runtime().wait(write_task, std::chrono::seconds{15});
+  CASE_EXPECT_TRUE(write_result.task_exited && !write_result.hard_timed_out);
+  CASE_EXPECT_NE(0, write_result.result_code);
+  CASE_EXPECT_FALSE(room->is_lock_holder());
+  CASE_EXPECT_EQ("teamsvr-room:competitor", fake.lock().lock_holder());
+
+  // 零逃脱: 写入请求即使到达服务端也被 fencing 拒绝, journal 中没有任何本节点提交的事件
+  CASE_EXPECT_EQ(0u, fake.update_calls());
+  bool stale_writer_committed = false;
+  fake.foreach_team_action([&stale_writer_committed](const atfw::dtmq::DChannelMessage&,
+                                                     const atfw::team::DTeamAction& action) {
+    if (action.has_member_update() && "from-stale-writer" == action.member_update().client_version()) {
+      stale_writer_committed = true;
+    }
+    return true;
+  });
+  CASE_EXPECT_FALSE(stale_writer_committed);
+  auto member = room->find_member(key_member, false);
+  CASE_EXPECT_TRUE(!!member);
+  if (member) {
+    CASE_EXPECT_EQ("from-competitor", member->member_data.client_version());
+  }
+
+  // 竞争者租约到期后接管仍可用: 迟到响应没有腐蚀锁状态
+  {
+    global_now_offset_guard guard(std::chrono::seconds{3601});
+    env.drive_timer_ticks();
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+  CASE_EXPECT_TRUE(room->is_lock_holder());
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
 // ============ LCK-07(partial): 同一 runtime 泵内续租 update 与业务 send 交错时边界不回退 ============
 CASE_TEST(teamsvr_room_lock, concurrent_renew_and_send_monotonic) {
   room_test_env env;
@@ -1961,4 +2854,506 @@ CASE_TEST(teamsvr_room_lock, reset_lock_response_loss_idempotent) {
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ RCV-11: 固定 seed 混合 action trace, 各压缩/重启点恢复后规范化终态与全量日志 oracle 相同 ============
+namespace {
+constexpr uint32_t kMixedTraceSeed = 20260915;
+constexpr int32_t kMixedTraceOpCount = 24;
+// 压缩/重启点: 第 8/16 条之后(op 下标 7/15)
+constexpr int32_t kMixedTraceCheckpointA = 8;
+constexpr int32_t kMixedTraceCheckpointB = 16;
+
+// 单条 trace 操作: 结构固定(操作类型/操作者/目标), 数据值由固定 seed 的 rng 生成。
+// 权限与存在性均由结构保证: 邀请角色固定 NORMAL、队长独享操作只由 owner 发起、
+// 审批/拒绝目标都在前序操作中显式加入、被移除成员不再参与后续操作。
+bool apply_mixed_trace_op(room_test_env& env, const team_room::ptr_t& room, int32_t op_index,
+                          const standard_team_members& members,
+                          const std::vector<PROJECT_NAMESPACE_ID::DUserIDKey>& extras, std::mt19937& rng) {
+  // 每条操作固定消费一次 rng, 保证两次运行的数据值序列一致
+  const std::string value = "trace-" + std::to_string(op_index) + "-" + std::to_string(rng());
+  const auto& extra = [&extras](size_t idx) -> const PROJECT_NAMESPACE_ID::DUserIDKey& { return extras[idx]; };
+
+  switch (op_index) {
+    case 0: {  // team_update: 配置替换(抬高成员上限) + 共享数据 101
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_team_update();
+      update->mutable_configure()->set_max_member_count(8);
+      update->mutable_configure()->set_invite_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+      add_team_any_data_entry(update->mutable_shared_team_data(), 101, value);
+      CASE_EXPECT_EQ(0, env.run("op0_team_update", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 1: {  // member_update(normal): client_version
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.normal);
+      action.mutable_member_update()->set_client_version(value);
+      CASE_EXPECT_EQ(0, env.run("op1_member_update", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 2: {  // 邀请 u1(normal 发起, 携带 admission 数据)
+      atfw::team::SSTeamRoomAddInvitationReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.normal);
+      auto* invitation = req.mutable_invitation();
+      protobuf_copy_message(*invitation->mutable_inviter(), members.normal);
+      protobuf_copy_message(*invitation->mutable_invitee(), extra(0));
+      protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
+                            make_personal_channel(extra(0).user_id()));
+      add_team_any_data_entry(invitation->mutable_team_admission_data(), 201, value);
+      CASE_EXPECT_EQ(0, env.run("op2_invite_u1", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+      }));
+      break;
+    }
+    case 3: {  // 申请 u2(携带 admission 数据)
+      atfw::team::SSTeamRoomAddJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), extra(1));
+      auto* join_request = req.mutable_join_request();
+      protobuf_copy_message(*join_request->mutable_requester(), extra(1));
+      protobuf_copy_message(*join_request->mutable_requester_private_channel(),
+                            make_personal_channel(extra(1).user_id()));
+      add_team_any_data_entry(join_request->mutable_member_admission_data(), 202, value);
+      CASE_EXPECT_EQ(0, env.run("op3_join_u2", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 4: {  // owner 批准 u2 入队
+      atfw::team::SSTeamRoomApproveJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+      protobuf_copy_message(*req.mutable_applicant(), extra(1));
+      CASE_EXPECT_EQ(0, env.run("op4_approve_u2", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 5: {  // u2 提为 ADMIN
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_member_set_role()->mutable_user_key(), extra(1));
+      action.mutable_member_set_role()->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+      CASE_EXPECT_EQ(0, env.run("op5_role_u2", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 6: {  // team_update: 共享数据 102
+      atfw::team::DTeamAction action;
+      add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 102, value);
+      CASE_EXPECT_EQ(0, env.run("op6_team_update", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 7: {  // member_update(u2): 成员共享数据 7
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), extra(1));
+      add_team_any_data_entry(update->mutable_shared_member_data(), 7, value);
+      CASE_EXPECT_EQ(0, env.run("op7_member_data_u2", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 8: {  // 邀请 u3(admin 发起)
+      atfw::team::SSTeamRoomAddInvitationReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.admin);
+      auto* invitation = req.mutable_invitation();
+      protobuf_copy_message(*invitation->mutable_inviter(), members.admin);
+      protobuf_copy_message(*invitation->mutable_invitee(), extra(2));
+      protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
+                            make_personal_channel(extra(2).user_id()));
+      CASE_EXPECT_EQ(0, env.run("op8_invite_u3", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+      }));
+      break;
+    }
+    case 9: {  // owner 撤回 u1 邀请
+      atfw::team::SSTeamRoomRejectInvitationReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+      protobuf_copy_message(*req.mutable_invitee(), extra(0));
+      CASE_EXPECT_EQ(0, env.run("op9_reject_invite_u1", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_invitation(ctx, req)));
+      }));
+      break;
+    }
+    case 10: {  // 申请 u4
+      atfw::team::SSTeamRoomAddJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), extra(3));
+      auto* join_request = req.mutable_join_request();
+      protobuf_copy_message(*join_request->mutable_requester(), extra(3));
+      protobuf_copy_message(*join_request->mutable_requester_private_channel(),
+                            make_personal_channel(extra(3).user_id()));
+      CASE_EXPECT_EQ(0, env.run("op10_join_u4", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 11: {  // owner 拒绝 u4
+      atfw::team::SSTeamRoomRejectJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+      protobuf_copy_message(*req.mutable_applicant(), extra(3));
+      CASE_EXPECT_EQ(0, env.run("op11_reject_u4", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 12: {  // 申请 u5
+      atfw::team::SSTeamRoomAddJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), extra(4));
+      auto* join_request = req.mutable_join_request();
+      protobuf_copy_message(*join_request->mutable_requester(), extra(4));
+      protobuf_copy_message(*join_request->mutable_requester_private_channel(),
+                            make_personal_channel(extra(4).user_id()));
+      CASE_EXPECT_EQ(0, env.run("op12_join_u5", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 13: {  // owner 批准 u5 入队
+      atfw::team::SSTeamRoomApproveJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+      protobuf_copy_message(*req.mutable_applicant(), extra(4));
+      CASE_EXPECT_EQ(0, env.run("op13_approve_u5", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 14: {  // owner 移除 u5
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_remove_member()->mutable_user_key(), extra(4));
+      action.mutable_remove_member()->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
+      CASE_EXPECT_EQ(0, env.run("op14_remove_u5", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 15: {  // member_update(admin): client_version
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members.admin);
+      action.mutable_member_update()->set_client_version(value);
+      CASE_EXPECT_EQ(0, env.run("op15_member_update_admin", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 16: {  // team_update: 共享数据 103 + 删除 101(空 value 表示删除)
+      atfw::team::DTeamAction action;
+      auto* shared = action.mutable_team_update()->mutable_shared_team_data();
+      add_team_any_data_entry(shared, 103, value);
+      auto* deletion = shared->Add();
+      deletion->set_key(101);
+      CASE_EXPECT_EQ(0, env.run("op16_team_update_delete", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 17: {  // normal 提为 ADMIN
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_member_set_role()->mutable_user_key(), members.normal);
+      action.mutable_member_set_role()->set_role(atfw::team::EN_TEAM_MEMBER_ROLE_ADMIN);
+      CASE_EXPECT_EQ(0, env.run("op17_role_normal", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 18: {  // 邀请 u6(admin 发起, 携带 admission 数据)
+      atfw::team::SSTeamRoomAddInvitationReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.admin);
+      auto* invitation = req.mutable_invitation();
+      protobuf_copy_message(*invitation->mutable_inviter(), members.admin);
+      protobuf_copy_message(*invitation->mutable_invitee(), extra(5));
+      protobuf_copy_message(*invitation->mutable_invitee_private_channel(),
+                            make_personal_channel(extra(5).user_id()));
+      add_team_any_data_entry(invitation->mutable_team_admission_data(), 203, value);
+      CASE_EXPECT_EQ(0, env.run("op18_invite_u6", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+      }));
+      break;
+    }
+    case 19: {  // u1 改为走申请
+      atfw::team::SSTeamRoomAddJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), extra(0));
+      auto* join_request = req.mutable_join_request();
+      protobuf_copy_message(*join_request->mutable_requester(), extra(0));
+      protobuf_copy_message(*join_request->mutable_requester_private_channel(),
+                            make_personal_channel(extra(0).user_id()));
+      CASE_EXPECT_EQ(0, env.run("op19_join_u1", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 20: {  // owner 批准 u1 入队
+      atfw::team::SSTeamRoomApproveJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+      protobuf_copy_message(*req.mutable_applicant(), extra(0));
+      CASE_EXPECT_EQ(0, env.run("op20_approve_u1", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, req)));
+      }));
+      break;
+    }
+    case 21: {  // member_update(u1): 成员共享数据 9
+      atfw::team::DTeamAction action;
+      auto* update = action.mutable_member_update();
+      protobuf_copy_message(*update->mutable_user_key(), extra(0));
+      add_team_any_data_entry(update->mutable_shared_member_data(), 9, value);
+      CASE_EXPECT_EQ(0, env.run("op21_member_data_u1", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    case 22: {  // team_update: 共享数据 104
+      atfw::team::DTeamAction action;
+      add_team_any_data_entry(action.mutable_team_update()->mutable_shared_team_data(), 104, value);
+      CASE_EXPECT_EQ(0, env.run("op22_team_update", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+    default: {  // case 23: member_update(u2): client_version 覆盖
+      atfw::team::DTeamAction action;
+      protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), extra(1));
+      action.mutable_member_update()->set_client_version(value);
+      CASE_EXPECT_EQ(0, env.run("op23_member_update_u2", [room, &action](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, action)));
+      }));
+      break;
+    }
+  }
+  return true;
+}
+
+bool apply_mixed_trace_block(room_test_env& env, const std::function<team_room::ptr_t()>& current_room,
+                             int32_t begin, int32_t end, const standard_team_members& members,
+                             const std::vector<PROJECT_NAMESPACE_ID::DUserIDKey>& extras, std::mt19937& rng) {
+  for (int32_t op_index = begin; op_index < end; ++op_index) {
+    if (!apply_mixed_trace_op(env, current_room(), op_index, members, extras, rng)) {
+      CASE_EXPECT_TRUE(false);
+      return false;
+    }
+    int32_t sync_ret = env.sync(current_room()->get_team_key());
+    CASE_EXPECT_EQ(0, sync_ret);
+    if (0 != sync_ret) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool user_key_order_less(const PROJECT_NAMESPACE_ID::DUserIDKey& left, const PROJECT_NAMESPACE_ID::DUserIDKey& right) {
+  if (left.zone_id() != right.zone_id()) {
+    return left.zone_id() < right.zone_id();
+  }
+  return left.user_id() < right.user_id();
+}
+
+// 驱动时间轮直到出现本轮新增的 compact update(恢复后的房间先点火接管定时器,
+// 维护到期被 reset_room_timer 收敛到 last_tick+1; 续租间隔 5s, 每轮推进 4s 保证下一轮维护点火;
+// 总推进不超过 18s, 低于成员离线过期 30s 不会误踢)
+bool drive_until_fresh_compact(room_test_env& env, fake_team_room_channel& fake, size_t updates_before) {
+  global_now_offset_guard guard(std::chrono::seconds{6});
+  for (int32_t round = 0; round < 4; ++round) {
+    env.drive_timer_ticks();
+    for (size_t idx = updates_before; idx < fake.update_requests().size(); ++idx) {
+      if (fake.update_requests()[idx].request.compact_sequence() > 0) {
+        return true;
+      }
+    }
+    guard.advance(std::chrono::seconds{4});
+  }
+  return false;
+}
+
+// 驱动一次真实维护产生 compact update, 取其快照内容规范化并序列化:
+// 剔除随运行环境/压缩进度变化的游标、压缩点与时间戳, repeated 字段按稳定 key 排序,
+// 使"全量日志直连"与"压缩+快照恢复"两种路径的业务终态可直接比较
+std::string capture_compact_snapshot_state(room_test_env& env, fake_team_room_channel& fake, int64_t team_id) {
+  const size_t updates_before = fake.update_requests().size();
+  CASE_EXPECT_TRUE(drive_until_fresh_compact(env, fake, updates_before));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // 取本轮维护的 compact update(快照为 dump_public_data/dump_private_data 的全量状态)
+  const atfw::dtmq::SSChannelUpdateReq* compact_update = nullptr;
+  for (size_t idx = updates_before; idx < fake.update_requests().size(); ++idx) {
+    if (fake.update_requests()[idx].request.compact_sequence() > 0) {
+      compact_update = &fake.update_requests()[idx].request;
+    }
+  }
+  CASE_EXPECT_TRUE(nullptr != compact_update);
+  if (nullptr == compact_update) {
+    return std::string();
+  }
+
+  atfw::team::DTeamStorage storage;
+  atfw::team::DTeamRoomPrivateData private_data;
+  CASE_EXPECT_TRUE(compact_update->custom_data().UnpackTo(&storage));
+  CASE_EXPECT_TRUE(compact_update->private_data().UnpackTo(&private_data));
+
+  // 消费游标/保存边界/压缩点与 team_key(两遍运行取不同 team id)不属于业务终态
+  storage.clear_team_key();
+  storage.clear_acknowledge_action_sequence();
+  storage.clear_acknowledge_action_hash_code();
+  storage.clear_saved_action_sequence();
+  private_data.clear_last_compact_sequence();
+  private_data.clear_last_compact_timepoint();
+
+  const auto sort_any_by_key = [](google::protobuf::RepeatedPtrField<atfw::team::DTeamAnyDataWithKey>* list) {
+    std::sort(list->begin(), list->end(),
+              [](const atfw::team::DTeamAnyDataWithKey& left, const atfw::team::DTeamAnyDataWithKey& right) {
+                return left.key() < right.key();
+              });
+  };
+
+  auto* member_list = storage.mutable_member();
+  std::sort(member_list->begin(), member_list->end(),
+            [](const atfw::team::DTeamMember& left, const atfw::team::DTeamMember& right) {
+              return user_key_order_less(left.user_key(), right.user_key());
+            });
+  for (auto& member : *member_list) {
+    member.clear_joined_timepoint();
+    member.clear_last_heartbeat_timepoint();
+    member.clear_acknowledge_action_sequence();
+    member.clear_acknowledge_action_hash_code();
+    member.clear_user_router_server_id();
+    sort_any_by_key(member.mutable_shared_member_data());
+  }
+
+  auto* invitation_list = storage.mutable_pending_invitation();
+  std::sort(invitation_list->begin(), invitation_list->end(),
+            [](const atfw::team::DTeamInvitation& left, const atfw::team::DTeamInvitation& right) {
+              return user_key_order_less(left.invitee(), right.invitee());
+            });
+  for (auto& invitation : *invitation_list) {
+    invitation.clear_team_key();
+    invitation.clear_start_timepoint();
+    invitation.clear_expired_timepoint();
+    sort_any_by_key(invitation.mutable_team_admission_data());
+  }
+
+  auto* join_request_list = storage.mutable_pending_join_request();
+  std::sort(join_request_list->begin(), join_request_list->end(),
+            [](const atfw::team::DTeamJoinRequest& left, const atfw::team::DTeamJoinRequest& right) {
+              return user_key_order_less(left.requester(), right.requester());
+            });
+  for (auto& join_request : *join_request_list) {
+    join_request.clear_team_key();
+    join_request.clear_expired_timepoint();
+    join_request.clear_user_router_server_id();
+    sort_any_by_key(join_request.mutable_member_admission_data());
+  }
+
+  sort_any_by_key(storage.mutable_shared_team_data());
+  sort_any_by_key(private_data.mutable_private_team_data());
+
+  // DebugString 比较: 等价性与序列化一致, 失败时输出可读差异
+  return storage.DebugString() + "|" + private_data.DebugString();
+}
+
+std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> make_mixed_trace_extras() {
+  std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> extras;
+  for (uint64_t index = 0; index < 6; ++index) {
+    extras.push_back(make_user_key(kTestZoneId, 9101 + index));
+  }
+  return extras;
+}
+}  // namespace
+
+CASE_TEST(teamsvr_room_recovery, seeded_mixed_trace_restore_oracle) {
+  // 准入有效期拉长: 压缩需推进时钟, 不能顺带让准入过期; 两次运行配置一致
+  room_test_cfg_values cfg;
+  cfg.invitation_expire_seconds = 3600;
+  cfg.join_request_expire_seconds = 3600;
+
+  // team id 依赖 discovery 就绪且不同 env 的哈希环可能不同, 每遍各自在 env.start 之后取号;
+  // 规范化时剔除 team_key, 两遍业务状态可直接比较
+
+  // 第一遍: 全量日志直连(不驱动维护、不压缩), 产出规范化终态 oracle
+  std::string oracle_state;
+  {
+    room_test_env env(cfg);
+    if (!env.start()) {
+      return;
+    }
+    const int64_t team_id = next_test_team_id();
+    CASE_EXPECT_NE(0, team_id);
+    team_room::ptr_t room;
+    standard_team_members members;
+    CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+    if (!room) {
+      CASE_EXPECT_EQ(0, env.stop());
+      return;
+    }
+    auto extras = make_mixed_trace_extras();
+    std::mt19937 rng(kMixedTraceSeed);
+    const auto current_room = [&room]() { return room; };
+    CASE_EXPECT_TRUE(apply_mixed_trace_block(env, current_room, 0, kMixedTraceOpCount, members, extras, rng));
+    oracle_state = capture_compact_snapshot_state(env, env.channel(team_id), team_id);
+    CASE_EXPECT_FALSE(oracle_state.empty());
+    room_test_env::clear_rooms();
+    CASE_EXPECT_EQ(0, env.stop());
+  }
+
+  // 第二遍: 同一 team 同一 trace; 两个检查点经真实维护压缩 + 丢弃房间从快照和剩余日志恢复,
+  // 恢复后继续后续操作, 终态必须与全量 oracle 相同
+  std::string restored_state;
+  {
+    room_test_env env(cfg);
+    if (!env.start()) {
+      return;
+    }
+    const int64_t team_id = next_test_team_id();
+    CASE_EXPECT_NE(0, team_id);
+    team_room::ptr_t room;
+    standard_team_members members;
+    CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+    if (!room) {
+      CASE_EXPECT_EQ(0, env.stop());
+      return;
+    }
+    auto& fake = env.channel(team_id);
+    auto extras = make_mixed_trace_extras();
+    std::mt19937 rng(kMixedTraceSeed);
+    const auto current_room = [&room]() { return room; };
+
+    const auto compact_and_restore = [&]() -> bool {
+      // 只认本轮新增的 compact update, 避免把上一检查点的陈旧快照当作本次压缩证据
+      const size_t updates_before = fake.update_requests().size();
+      CASE_EXPECT_TRUE(drive_until_fresh_compact(env, fake, updates_before));
+      CASE_EXPECT_EQ(0, env.sync(team_id));
+      CASE_EXPECT_GT(fake.last_removed_sequence(), 0);
+      room_test_env::clear_rooms();
+      room.reset();
+      room = env.setup_ready_room(team_id);
+      CASE_EXPECT_TRUE(!!room);
+      if (!room) {
+        return false;
+      }
+      CASE_EXPECT_EQ(0, env.sync(team_id, true));
+      return true;
+    };
+
+    CASE_EXPECT_TRUE(apply_mixed_trace_block(env, current_room, 0, kMixedTraceCheckpointA, members, extras, rng));
+    CASE_EXPECT_TRUE(compact_and_restore());
+    if (!room) {
+      CASE_EXPECT_EQ(0, env.stop());
+      return;
+    }
+    CASE_EXPECT_TRUE(apply_mixed_trace_block(env, current_room, kMixedTraceCheckpointA, kMixedTraceCheckpointB,
+                                             members, extras, rng));
+    CASE_EXPECT_TRUE(compact_and_restore());
+    if (!room) {
+      CASE_EXPECT_EQ(0, env.stop());
+      return;
+    }
+    CASE_EXPECT_TRUE(apply_mixed_trace_block(env, current_room, kMixedTraceCheckpointB, kMixedTraceOpCount, members,
+                                             extras, rng));
+    restored_state = capture_compact_snapshot_state(env, fake, team_id);
+    room_test_env::clear_rooms();
+    CASE_EXPECT_EQ(0, env.stop());
+  }
+
+  CASE_EXPECT_EQ(oracle_state, restored_state);
 }

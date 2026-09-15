@@ -724,11 +724,23 @@ const atfw::dtmq::DChannelIdKey& team_room::get_channel_key() const noexcept { r
 
 bool team_room::is_subscriber_ready() const noexcept { return subscriber_->is_ready(); }
 
-bool team_room::is_lock_holder() const noexcept { return lock_acquired_ && !subscriber_->is_destroyed(); }
+bool team_room::is_lock_holder() const noexcept { return !removed_ && lock_acquired_ && !subscriber_->is_destroyed(); }
 
-void team_room::on_remove() { timer_watcher_.reset(); }
+void team_room::on_remove() {
+  timer_watcher_.reset();
+  // 在途维护仍持有房间；完成后不得发送旧通知或重新安排维护。
+  removed_ = true;
+  destroyed_ = true;
+  snapshot_restored_ = false;
+  lock_acquired_ = false;
+  pending_member_channel_actions_.clear();
+  member_retry_remove_.clear();
+}
 
 rpc::result_code_type team_room::await_ready(rpc::context& ctx) {
+  if (removed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
   if (!subscriber_) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
@@ -1031,7 +1043,7 @@ rpc::result_code_type team_room::create_team(rpc::context& ctx, const atfw::team
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION);
   }
   // GAP-11: 创建请求携带的 keyed 共享数据同样要求 key 唯一(重复即拒绝且零写入)
-  if (!team_any_data_keys_unique(req.shared_team_data())) {
+  if (!team_any_data_keys_unique(req.shared_team_data()) || !team_any_data_keys_unique(req.shared_member_data())) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
   }
 
@@ -1465,6 +1477,9 @@ rpc::result_code_type team_room::reject_join_request(rpc::context& ctx,
 }
 
 bool team_room::restore_snapshot(rpc::context& ctx) {
+  if (removed_) {
+    return false;
+  }
   // 恢复开始时清除就绪标记: 恢复失败(损坏/矛盾快照或回放失败)后房间保持不可写，
   // 不允许基于残留的半恢复状态执行权威写入，直到一份完整快照成功恢复
   snapshot_restored_ = false;
@@ -3041,6 +3056,9 @@ int32_t team_room::make_acquire_lock_checker(
 }
 
 rpc::result_code_type team_room::acquire_lock(rpc::context& ctx) {
+  if (removed_) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+  }
   if (!subscriber_ || !subscriber_->is_ready()) {
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_SERVICE_NOT_AVAILABLE);
   }
@@ -3070,6 +3088,9 @@ rpc::result_code_type team_room::acquire_lock(rpc::context& ctx) {
     auto rsp_checker = atfw::component::memory::stl::make_strong_rc<::atfw::dtmq::channel_lock_checker>();
 
     auto ret = RPC_AWAIT_CODE_RESULT(subscriber_->send_reset_lock(ctx, checker, rsp_checker));
+    if (removed_) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_DESTROYED);
+    }
     if (0 == ret) {
       current_lock_ = std::move(self_lock);
       lock_acquired_ = true;
@@ -3775,7 +3796,7 @@ void team_room::on_update_optimistic_lock(ATFW_EXPLICIT_UNUSED_ATTR rpc::context
                                           const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                                           ATFW_EXPLICIT_UNUSED_ATTR const ::atfw::dtmq::DChannelOptimisticLock& from,
                                           const ::atfw::dtmq::DChannelOptimisticLock& to) {
-  if (subscriber != subscriber_) {
+  if (removed_ || subscriber != subscriber_) {
     return;
   }
   current_lock_ = to;
@@ -3943,4 +3964,8 @@ size_t team_room::debug_pending_notification_count() const {
 bool team_room::debug_maintenance_task_running() const noexcept {
   return !task_type_trait::empty(maintenance_task_) && !task_type_trait::is_exiting(maintenance_task_);
 }
+
+std::chrono::system_clock::duration team_room::debug_lock_lease() const { return get_lock_lease(); }
+
+std::chrono::system_clock::duration team_room::debug_lock_renew_interval() const { return get_lock_renew_interval(); }
 #endif

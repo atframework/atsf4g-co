@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 并发/故障窗口用例(TEAM_ROOM_TEST_PLAN.md §4.7 CON/FLT 与 §4.5 LCK-07 乱序回包)。
+// teamsvr-room 并发、故障窗口与锁响应乱序用例。
 // 响应挂起用 response_gate_t(custom_wait/custom_resume 确定性放行)，一次性坏包用
 // inject_*_response_fault_once(mock_ss preempt 语义)，均不依赖真实 sleep 或固定 pump 次数。
 
@@ -1291,6 +1291,118 @@ CASE_TEST(teamsvr_room_concurrency, captain_transfer_races_exit_and_offline_kick
       }
     }
   }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ CON-06: 多 room 同轮 timer/event-sync/pending flush, 请求/个人频道/定时器不串 room ============
+CASE_TEST(teamsvr_room_concurrency, multi_room_timer_event_flush_isolation) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  constexpr size_t kRoomCount = 3;
+  constexpr uint64_t kInviteeIdBase = 9600;
+  std::vector<int64_t> team_ids(kRoomCount);
+  std::vector<team_room::ptr_t> rooms(kRoomCount);
+  std::vector<standard_team_members> members(kRoomCount);
+  for (size_t idx = 0; idx < kRoomCount; ++idx) {
+    team_ids[idx] = next_test_team_id();
+    CASE_EXPECT_TRUE(setup_standard_team(env, team_ids[idx], rooms[idx], members[idx],
+                                         7000 + static_cast<uint64_t>(idx) * 100));
+    if (!rooms[idx]) {
+      CASE_EXPECT_EQ(0, env.stop());
+      return;
+    }
+  }
+
+  // room0/room1 各自邀请不同 invitee(同一轮 run 块内形成多 room pending flush); room2 保持无活动对照
+  const size_t room2_events_at_setup =
+      env.channel(team_ids[2]).count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent);
+  for (size_t idx = 0; idx < 2; ++idx) {
+    auto invitee = make_user_key(1, kInviteeIdBase + idx);
+    atfw::team::SSTeamRoomAddInvitationReq req;
+    protobuf_copy_message(*req.mutable_sender_user_key(), members[idx].normal);
+    auto* invitation = req.mutable_invitation();
+    protobuf_copy_message(*invitation->mutable_inviter(), members[idx].normal);
+    protobuf_copy_message(*invitation->mutable_invitee(), invitee);
+    protobuf_copy_message(*invitation->mutable_invitee_private_channel(), make_personal_channel(invitee.user_id()));
+    CASE_EXPECT_EQ(0, env.run("invite", [rooms, idx, &req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rooms[idx]->add_invitation(ctx, req)));
+    }));
+  }
+  for (size_t idx = 0; idx < 2; ++idx) {
+    CASE_EXPECT_EQ(0, env.sync(team_ids[idx]));
+  }
+
+  // 个人通知按 invitee 个人频道精确投递, 不串 room: 每个 invitee 恰一条 invited, 对照 invitee 零条
+  for (size_t idx = 0; idx < 2; ++idx) {
+    CASE_EXPECT_EQ(1u, count_personal_actions(env, make_personal_channel(kInviteeIdBase + idx),
+                                              atfw::team::DTeamMemberAction::kInvited));
+  }
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, make_personal_channel(kInviteeIdBase + 2),
+                                            atfw::team::DTeamMemberAction::kInvited));
+
+  // 状态隔离: 各 room 只有自己的标准队成员; 邀请不串(经各自权限路径查验对方用户非成员)
+  for (size_t idx = 0; idx < kRoomCount; ++idx) {
+    CASE_EXPECT_TRUE(!!rooms[idx]->find_member(members[idx].owner, false));
+    CASE_EXPECT_TRUE(!!rooms[idx]->find_member(members[idx].admin, false));
+    CASE_EXPECT_TRUE(!!rooms[idx]->find_member(members[idx].normal, false));
+    for (size_t other = 0; other < kRoomCount; ++other) {
+      if (other != idx) {
+        CASE_EXPECT_TRUE(nullptr == rooms[idx]->find_member(members[other].owner, false));
+      }
+    }
+  }
+
+  // event-sync 交错: room0/room1 各写 member_update, 只 sync room0 -> room1 事件未送达不应用
+  for (size_t idx = 0; idx < 2; ++idx) {
+    atfw::team::DTeamAction action;
+    protobuf_copy_message(*action.mutable_member_update()->mutable_user_key(), members[idx].normal);
+    action.mutable_member_update()->set_client_version("room" + std::to_string(idx) + "-v1");
+    CASE_EXPECT_EQ(0, env.run("member_update", [rooms, idx, &action](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(rooms[idx]->send_action(ctx, action)));
+    }));
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_ids[0]));
+  auto room0_normal = rooms[0]->find_member(members[0].normal, false);
+  CASE_EXPECT_TRUE(!!room0_normal);
+  if (room0_normal) {
+    CASE_EXPECT_EQ("room0-v1", room0_normal->member_data.client_version());
+  }
+  auto room1_normal = rooms[1]->find_member(members[1].normal, false);
+  CASE_EXPECT_TRUE(!!room1_normal);
+  if (room1_normal) {
+    CASE_EXPECT_NE("room1-v1", room1_normal->member_data.client_version());
+  }
+  CASE_EXPECT_EQ(0, env.sync(team_ids[1]));
+  if (room1_normal) {
+    CASE_EXPECT_EQ("room1-v1", room1_normal->member_data.client_version());
+  }
+
+  // 多 room 同轮定时器: +6s 一次点火, 所有 room 各自完成续租维护并按各自频道记录 update, 定时器各自重订
+  std::vector<size_t> updates_before(kRoomCount);
+  for (size_t idx = 0; idx < kRoomCount; ++idx) {
+    updates_before[idx] = env.channel(team_ids[idx]).update_requests().size();
+  }
+  int32_t fired = 0;
+  {
+    global_now_offset_guard guard(std::chrono::seconds{6});
+    fired = env.drive_timer_ticks();
+  }
+  CASE_EXPECT_TRUE(fired >= static_cast<int32_t>(kRoomCount));
+  for (size_t idx = 0; idx < kRoomCount; ++idx) {
+    CASE_EXPECT_TRUE(env.channel(team_ids[idx]).update_requests().size() > updates_before[idx]);
+    CASE_EXPECT_GT(rooms[idx]->debug_timer_timeout(), atfw::util::time::time_utility::now());
+  }
+
+  // room2 对照: setup 后不再新增事件日志, 维护只产生续租
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, make_personal_channel(kInviteeIdBase + 2),
+                                            atfw::team::DTeamMemberAction::kInvited));
+  CASE_EXPECT_EQ(room2_events_at_setup,
+                 env.channel(team_ids[2]).count_logs_by_command(atfw::dtmq::DChannelMessageDetail::kEvent));
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

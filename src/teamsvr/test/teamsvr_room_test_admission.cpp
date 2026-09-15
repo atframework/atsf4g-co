@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 邀请、加入请求与个人通知用例(TEAM_ROOM_TEST_PLAN.md §4.3 ADM-01~16)。
+// teamsvr-room 邀请、加入请求与个人通知用例。
 // 断言维度: 频道日志形状(add_member/approve/reject 顺序与完整负载)、新成员数据完整性(版本/路由/
 // 共享成员数据/入队来源)、可观察快照完整性(create custom_data+journal 与压缩后 custom_data)、
 // 个人频道 DTeamMemberAction 的目标/类型/内容、PUBLIC 数据过滤(ADM-03)、通知频道以 room 本地记录为准、
@@ -2138,6 +2138,184 @@ CASE_TEST(teamsvr_room_admission, config_shrink_trims_overlimit_members_via_main
     CASE_EXPECT_EQ(static_cast<uint64_t>(8742), removed_ids[0]);
     CASE_EXPECT_EQ(static_cast<uint64_t>(8743), removed_ids[1]);
   }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-15: 多个 invitee/requester 并存时按 user key 独立更新、批准、拒绝与清理 ============
+CASE_TEST(teamsvr_room_admission, multiple_pending_admissions_isolated) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  const uint64_t user_base = 8800;
+  auto invitee_a = make_user_key(1, user_base + 1);
+  auto invitee_b = make_user_key(1, user_base + 2);
+  auto invitee_c = make_user_key(1, user_base + 3);
+  auto requester_x = make_user_key(1, user_base + 4);
+  auto requester_y = make_user_key(1, user_base + 5);
+  auto requester_z = make_user_key(1, user_base + 6);
+
+  auto invite = [&](const PROJECT_NAMESPACE_ID::DUserIDKey& target, int64_t data_key, const std::string& data_value,
+                    int64_t explicit_expire_seconds) {
+    auto req = make_add_invitation_req(members.owner, members.owner, target, explicit_expire_seconds);
+    add_admission_data_entry(req.mutable_invitation()->mutable_team_admission_data(), data_key, data_value);
+    CASE_EXPECT_EQ(0, env.run("multi_invite", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+                          }));
+  };
+  auto join = [&](const PROJECT_NAMESPACE_ID::DUserIDKey& target, int64_t explicit_expire_seconds) {
+    auto req = make_add_join_request_req(target, explicit_expire_seconds);
+    CASE_EXPECT_EQ(0, env.run("multi_join", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+                          }));
+  };
+  auto approve_invitation = [&](const PROJECT_NAMESPACE_ID::DUserIDKey& target) {
+    return env.run("multi_approve_inv", [room, target](rpc::context& ctx) -> rpc::result_code_type {
+      atfw::team::SSTeamRoomApproveInvitationReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), target);
+      protobuf_copy_message(*req.mutable_invitee(), target);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, req)));
+    });
+  };
+  auto approve_join = [&](const PROJECT_NAMESPACE_ID::DUserIDKey& target) {
+    return env.run("multi_approve_join", [room, target, &members](rpc::context& ctx) -> rpc::result_code_type {
+      atfw::team::SSTeamRoomApproveJoinRequestReq req;
+      protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+      protobuf_copy_message(*req.mutable_applicant(), target);
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, req)));
+    });
+  };
+  auto count_journal_actions = [&](atfw::team::DTeamAction::ActionCase action_case) {
+    size_t ret = 0;
+    fake.foreach_team_action(
+        [&ret, action_case](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+          if (action.action_case() == action_case) {
+            ++ret;
+          }
+          return true;
+        });
+    return ret;
+  };
+
+  // 1. 三名邀请(默认过期) + 三名申请(x 显式长有效期,y/z 默认)
+  invite(invitee_a, 101, "ut-adm-a", 0);
+  invite(invitee_b, 102, "ut-adm-b", 0);
+  invite(invitee_c, 103, "ut-adm-c", 0);
+  join(requester_x, 60);
+  join(requester_y, 0);
+  join(requester_z, 0);
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // 每个 user key 恰好一条本人的通知,不串频道
+  for (const auto& target : {invitee_a, invitee_b, invitee_c}) {
+    CASE_EXPECT_EQ(1u, count_personal_actions(env, target.user_id(), atfw::team::DTeamMemberAction::kInvited));
+  }
+  for (const auto& target : {requester_x, requester_y, requester_z}) {
+    CASE_EXPECT_EQ(1u, count_personal_actions(env, target.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
+  }
+
+  // 2. 刷新 invitee_b: admission 全量覆盖 + 显式顺延; 只追加 b 的一条日志,只补发 b 的一次 invited
+  size_t send_before_refresh = fake.send_message_calls();
+  invite(invitee_b, 202, "ut-adm-b-refresh", 60);
+  CASE_EXPECT_EQ(send_before_refresh + 1, fake.send_message_calls());
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(4u, count_journal_actions(atfw::team::DTeamAction::kAddInvitation));
+  CASE_EXPECT_EQ(2u, count_personal_actions(env, invitee_b.user_id(), atfw::team::DTeamMemberAction::kInvited));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee_a.user_id(), atfw::team::DTeamMemberAction::kInvited));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee_c.user_id(), atfw::team::DTeamMemberAction::kInvited));
+  // b 的刷新携带新 admission 数据(全量覆盖)
+  {
+    atfw::team::DTeamInvitation latest;
+    bool found_latest = false;
+    fake.foreach_team_action(
+        [&latest, &found_latest, &invitee_b](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+          if (action.action_case() == atfw::team::DTeamAction::kAddInvitation &&
+              action.add_invitation().invitee().user_id() == invitee_b.user_id()) {
+            latest = action.add_invitation();
+            found_latest = true;
+          }
+          return true;
+        });
+    CASE_EXPECT_TRUE(found_latest);
+    if (found_latest) {
+      CASE_EXPECT_EQ(1, latest.team_admission_data_size());
+      if (1 == latest.team_admission_data_size()) {
+        CASE_EXPECT_EQ(static_cast<int64_t>(202), latest.team_admission_data(0).key());
+      }
+    }
+  }
+
+  // 3. 批准 invitee_a: 独立入队,不影响 b/c 与申请列表
+  CASE_EXPECT_EQ(0, approve_invitation(invitee_a));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_TRUE(nullptr != room->find_member(invitee_a, false));
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee_a.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+  CASE_EXPECT_EQ(0u, count_personal_actions(env, invitee_b.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+
+  // 4. 拒绝 requester_y: y 收拒绝回执,x/z 不受影响
+  CASE_EXPECT_EQ(0, env.run("multi_reject_y", [room, &members, requester_y](rpc::context& ctx) -> rpc::result_code_type {
+                          atfw::team::SSTeamRoomRejectJoinRequestReq req;
+                          protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+                          protobuf_copy_message(*req.mutable_applicant(), requester_y);
+                          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, req)));
+                        }));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(1u,
+                 count_personal_actions(env, requester_y.user_id(), atfw::team::DTeamMemberAction::kRejectJoinRequest));
+  CASE_EXPECT_EQ(0u,
+                 count_personal_actions(env, requester_x.user_id(), atfw::team::DTeamMemberAction::kRejectJoinRequest));
+  CASE_EXPECT_EQ(0u,
+                 count_personal_actions(env, requester_z.user_id(), atfw::team::DTeamMemberAction::kRejectJoinRequest));
+
+  // 日志维度复核(必须在时间推进前断言: 维护压缩可能裁剪早期日志, 之后的精确条数不再是稳定契约):
+  // 每个 user key 的日志独立(4 邀请含一次刷新、3 申请、setup 2+1 入队、1 批准邀请、1 拒绝申请)
+  CASE_EXPECT_EQ(4u, count_journal_actions(atfw::team::DTeamAction::kAddInvitation));
+  CASE_EXPECT_EQ(3u, count_journal_actions(atfw::team::DTeamAction::kAddJoinRequest));
+  CASE_EXPECT_EQ(3u, count_journal_actions(atfw::team::DTeamAction::kAddMember));
+  CASE_EXPECT_EQ(1u, count_journal_actions(atfw::team::DTeamAction::kApproveInvitation));
+  CASE_EXPECT_EQ(1u, count_journal_actions(atfw::team::DTeamAction::kRejectJoinRequest));
+
+  // 5. 推进时间越过默认有效期: invitee_c/requester_z 被维护清理; 顺延的 b 与长有效期的 x 保留
+  {
+    global_now_offset_guard guard;
+    for (int round = 0; round < 4; ++round) {
+      global_now_offset_guard::advance(std::chrono::seconds{2});
+      env.drive_timer_ticks();
+      CASE_EXPECT_EQ(0, env.sync(team_id));
+    }
+  }
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND, approve_invitation(invitee_c));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND, approve_join(requester_z));
+  // 过期清理不向 c/z 新增任何个人通知
+  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee_c.user_id(), atfw::team::DTeamMemberAction::kInvited));
+  CASE_EXPECT_EQ(1u,
+                 count_personal_actions(env, requester_z.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
+
+  // 6. 保留项仍可独立受理
+  CASE_EXPECT_EQ(0, approve_invitation(invitee_b));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+  CASE_EXPECT_EQ(0, approve_join(requester_x));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  for (const auto& target : {invitee_a, invitee_b, requester_x}) {
+    CASE_EXPECT_TRUE(nullptr != room->find_member(target, false));
+  }
+  CASE_EXPECT_TRUE(nullptr == room->find_member(invitee_c, false));
+  CASE_EXPECT_TRUE(nullptr == room->find_member(requester_y, false));
+  CASE_EXPECT_TRUE(nullptr == room->find_member(requester_z, false));
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

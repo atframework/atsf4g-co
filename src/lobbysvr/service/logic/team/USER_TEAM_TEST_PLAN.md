@@ -317,8 +317,9 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | CS-JOIN-02 | accept/reject join request | team 不存在/角色不足零上行；正常 action 含 team_key/requester，业务结果透传 |
 | CS-MEMBER-01 | exit/remove/role | self remove 走 manager exit，reason=`EXIT_TEAM`；移除他人需权限且 action reason=`REMOVE_MEMBER`；set-role 权限/role 边界及 payload |
 | CS-CAPTAIN-01 | transfer captain | 当前队长可转移，非队长需 OWNER；action 目标完整，最终角色语义由 ROLE-02 验证 |
-| CS-DATA-01 | update member data | 空列表、不可写模块零上行；payload 自动填 self user/channel/version/router、key 唯一、permission=MEMBER、ready 更新附加 team-not-matching condition |
+| CS-DATA-01 | update member data | 空列表、不可写模块零上行；payload 自动填 self user/channel/version/router、key 唯一、permission=MEMBER、ready 更新附加 team-not-matching condition；normalize 自动补全的 `battle.matching_parameter` 条目随 ready 条目一起下发（ready=true 填充 `search_start_time`，ready=false 下发清空后的空模块） |
 | CS-DATA-02 | update team data | 空列表、角色不足零上行；队伍共享数据没有客户端可写模块（匹配只能由内部匹配流程经 glue 回调发起），任何模块（含 battle.matching，不论 true/false）一律权限拒绝零上行 |
+| CS-DATA-03 | update team data normalize 自动补全 | 队伍模块无客户端入口，经同步任务直调 `user_team::update_team_shared_data`：battle.matching 更新上行的 shared_team_data 恰好 2 条——原 matching 条目与 normalize 经 `mutable_data_by_key_fn` 追加的 matching_team_view 条目（未在匹配中时为空视图，取消匹配时清空下发）；matching=true 附加全员 ready 条件、false 无附加条件 |
 | CS-MATCHING-01 | matching_level_select（队长） | 未登录拒绝零上行；队长选择经 glue 回调上行 team_update：恰好一条 battle.matching_start_data 条目（key 精确、permission=MEMBER、解包内容与请求 data 一致）；room 广播回频道后缓存按 key 合并（`get_matching_start_data` 可读回），客户端恰好收到一次该 team_update 的 team_increase，初始快照不重复下发 |
 | CS-MATCHING-02 | matching_level_select（非队长） | 响应仍成功（选择落本地匹配数据），但 glue 队长校验拒绝同步：零 send_message 上行、队伍缓存无 matching_start_data、除初始快照外无新增脏数据推送 |
 
@@ -333,7 +334,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 
 ### 5.7 既有用例覆盖映射
 
-既有 88 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
+既有 89 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
 矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 12 例，cs 文件）。
 
 | 矩阵 ID | 覆盖用例 |
@@ -361,7 +362,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | HB-01/02 | lifecycle.`heartbeat_reports_watermark_and_throttles`、`heartbeat_suppressed_outside_running_member_state` |
 | EXIT-01/02 | lifecycle.`exit_team_request_then_channel_remove_converges`、`exit_retry_timeout_cleanup_and_channel_destroy` |
 | DUMP-01/02 | lifecycle.`table_dump_init_round_trip_restores_watermark_team_and_pendings`、`user_get_info_exports_only_running_team_with_trimming`；manager.`dump_snapshot_exports_cached_state` |
-| CS-INVITE/JOIN/MEMBER/CAPTAIN/DATA | cs.`cs_invite_01/02/03`、`cs_join_01/02`、`cs_member_01`、`cs_captain_01`、`cs_data_01/02`（共 9 例） |
+| CS-INVITE/JOIN/MEMBER/CAPTAIN/DATA | cs.`cs_invite_01/02/03`、`cs_join_01/02`、`cs_member_01`、`cs_captain_01`、`cs_data_01/02/03`（共 10 例） |
 | CS-MATCHING-01/02 | cs.`cs_matching_level_select_01_captain_pushes_level_data`、`cs_matching_level_select_02_non_captain_no_push` |
 | ROBUST-01..04 | robust.`robust_bad_any_personal_event_ignored`、`robust_bad_any_team_snapshot_preserves_cache`、`robust_bad_shared_data_any_skips_only_that_key`、`robust_fixture_time_and_runtime_hygiene` |
 | §3 场景补充 | robust.`robust_duplicate_events_idempotent`、`robust_out_of_order_events_converge`、`robust_late_events_after_channel_destroy_ignored`、`robust_snapshot_rebuild_cleans_pendings_and_indexes` |
@@ -492,7 +493,26 @@ add/remove)迁移期关闭的缺陷：
   `level-select-group.log`、`level-select-full.log`、`level-select-ctest.log`；不纳入源码。
 - 本次改动不触及 teamsvr，teamsvr-room 用例未重跑；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
 
-### 7.3 历史验证（2026-09-08）
+### 7.3 本次验证（2026-09-15，共享数据 normalize 自动补全下发回归）
+
+- 背景：`user_team::update_team_shared_data`/`update_member_shared_data` 的打包循环以入参条数为上界，
+  normalize 经 `mutable_data_by_key_fn` 追加的 shared_team_data/shared_member_data（battle.matching 附带
+  matching_team_view、battle.ready 附带 matching_parameter）从不下发。生产修复为按动态 `data.size()` 遍历、
+  处理器只对原始入参生效；本轮回补测试覆盖。
+- 用例：`cs_data_01_update_member_data_contract` 的 ready=true 成功分支断言上行 2 条（ready + 填充
+  `search_start_time` 的 matching_parameter），新增 ready=false 成功分支断言 2 条（ready + 清空的
+  matching_parameter）；新增 `cs_data_03_update_team_data_normalize_autocomplete`（CS-DATA-03），队伍模块无
+  客户端可写入口，经同步任务直调 `update_team_shared_data`，matching=true/false 均断言上行 shared_team_data
+  恰好 2 条（matching + matching_team_view 空视图）及 matching=true 的全员 ready 条件。修复前基线
+  `cs_data_01` 断言 `shared_member_data_size()==1`，在修复后代码上失败（实测 2），证明缺口锁定有效。
+- 环境同 §7.1（Windows 11 amd64、MSVC、Debug、Ninja、`build_jobs_cmake_tools`）。
+- 构建：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 12` 通过。
+- 执行：三例 cs_data 定向运行通过；全量 suite → 104 选中 / 104 通过 / 0 失败（组队 89 例）；
+  `ctest --test-dir build_jobs_cmake_tools -R '^atf4g-co-lobbysvr-unit-test\.unit$' --output-on-failure --no-tests=error`
+  → 1/1 Passed。
+- 本次改动不触及 teamsvr，teamsvr-room 用例未重跑；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
+
+### 7.4 历史验证（2026-09-08）
 
 - 复核提交 `9a845101153dd342fc62579b4a3153530e54844e`（Team模块新的CS通知流程）及后续协议调用，
   检查 Lobby team 全目录、Room 成员/邀请错误语义及 DTMQ 的 raw-message、batch、snapshot 回调顺序。
@@ -516,7 +536,7 @@ add/remove)迁移期关闭的缺陷：
   新 `team` Skill 通过元数据校验。人工检查 8 个应触发和 8 个近似不应触发的请求，未测量客户端调用率。
 - 本次未运行 Linux、Release 配置；下方旧记录仅表示当时的结果。
 
-### 7.4 历史验证与命令参考
+### 7.5 历史验证与命令参考
 
 回归验证命令（`<BUILD_DIR>` 按仓库 build/test Skill 解析，注意 Windows DLL PATH; 测试二进制在
 `<BUILD_DIR>\test`, DLL 在 `<BUILD_DIR>\test`、`<BUILD_DIR>\publish\bin` 与 third_party install 的 bin）;

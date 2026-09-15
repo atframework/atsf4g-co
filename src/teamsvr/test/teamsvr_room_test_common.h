@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// Shared offline fixture for the teamsvr-room service unit tests (see src/teamsvr/TEAM_ROOM_TEST_PLAN.md).
+// Shared offline fixture for the teamsvr-room service unit tests (see src/teamsvr/test/README.md).
 //
 // The fixture boots one atfw::testing::runtime (SS + RESOURCE + DB + HPA) per case and emulates the
 // dtmq-proxysvr server side on top of the typed SS mock engine:
@@ -810,7 +810,9 @@ class room_test_env {
     room_test_cfg_values cfg_copy = cfg_;
     options.setup_callback = [cfg_copy](atframework::testing::runtime& rt) -> int {
       rt.resource().set_file("dtmq_channel_type.bytes", make_team_room_channel_type_bytes(cfg_copy));
-      rt.resource().set_version("0.10.0.1");
+      // 版本标识包含 Excel seed 的可变字段，确保不同场景实际重载频道配置。
+      rt.resource().set_version("0.10.0.1." + std::to_string(cfg_copy.lock_lease_seconds) + "." +
+                                std::to_string(cfg_copy.channel_gc_log_count));
       register_teamsvr_room_config_loader(cfg_copy);
       return 0;
     };
@@ -860,7 +862,8 @@ class room_test_env {
     bool has_unconsumed_fault = !personal_send_plan_.empty() || subscribe_fail_times_ > 0;
     has_unconsumed_fault = has_unconsumed_fault || update_response_gate.armed || reset_lock_response_gate.armed ||
                            send_message_response_gate.armed || gate_parked(update_response_gate) ||
-                           gate_parked(reset_lock_response_gate) || gate_parked(send_message_response_gate);
+                           gate_parked(reset_lock_response_gate) || gate_parked(send_message_response_gate) ||
+                           personal_send_gate.armed || gate_parked(personal_send_gate);
     for (const auto& channel_pair : channels_) {
       if (!channel_pair.second) {
         continue;
@@ -952,6 +955,7 @@ class room_test_env {
   response_gate_t update_response_gate;
   response_gate_t reset_lock_response_gate;
   response_gate_t send_message_response_gate;
+  response_gate_t personal_send_gate;
 
   static bool gate_parked(const response_gate_t& gate) noexcept { return 0 != gate.parked_task; }
 
@@ -1548,6 +1552,7 @@ class room_test_env {
             fake = self->find_channel_by_key(typed_request.channel_key());
           }
           if (nullptr == fake) {
+            RPC_AWAIT_IGNORE_RESULT(self->await_response_gate(request.context, self->personal_send_gate));
             // 个人频道发送使用 no-wait stream，没有业务响应。这里编排的是远端处理结果:
             // commit_first=false 表示处理前丢弃；commit_first=true 表示先接收消息、随后处理失败。
             if (!self->personal_send_plan_.empty()) {
@@ -1814,6 +1819,8 @@ class room_test_env {
       if (!fake->check_lock(checker)) {
         protobuf_copy_message(*typed_response.mutable_compare_and_maybe_reset_lock(), checker);
         typed_response.set_client_result(PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_LOCK_FAILED);
+        // 冲突响应同样经挂起门: 用例可编排“冲突已发生、响应迟到”的交错
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(await_response_gate(ctx, reset_lock_response_gate)));
         RPC_RETURN_CODE(0);
       }
       protobuf_copy_message(*typed_response.mutable_compare_and_maybe_reset_lock(), checker);

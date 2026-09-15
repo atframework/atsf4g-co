@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 心跳、过期与房间生命周期用例(TEAM_ROOM_TEST_PLAN.md §4.8 LIFE-01~14)。
+// teamsvr-room 心跳、过期与房间生命周期用例。
 // 通过 global_now_offset_guard + drive_timer_ticks 精确触发定时事件，不依赖真实 sleep。
 
 #include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir

@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 事件应用、成员与队长用例(TEAM_ROOM_TEST_PLAN.md §4.4 EVT-01~11)。
+// teamsvr-room 事件应用、成员与队长用例。
 // 通过 fake journal 直接注入 DTeamAction/非 event 日志验证 apply 语义的幂等性与确定性。
 
 #include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
@@ -1291,6 +1291,70 @@ CASE_TEST(teamsvr_room_event, update_shared_data_delete_marker) {
     CASE_EXPECT_EQ(0, check_condition(make_member_condition(102, "m-102")));
     CASE_EXPECT_EQ(0, check_condition(make_team_condition(202, "t-202")));
   }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ EVT-10e/FLT-08: 显式 sequence 乱序批 -> 严格前缀保留、乱序及后续日志丢弃,快照自愈 ============
+CASE_TEST(teamsvr_room_event, event_sync_out_of_order_sequence_then_snapshot) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // journal 中注入 3 条有序日志: A -> B -> C
+  auto user_a = make_user_key(1, 9231);
+  auto user_b = make_user_key(1, 9232);
+  auto user_c = make_user_key(1, 9233);
+  env.inject_team_action(team_id, make_injected_add_member(user_a, 9231, 0, 0));
+  env.inject_team_action(team_id, make_injected_add_member(user_b, 9232, 0, 0));
+  env.inject_team_action(team_id, make_injected_add_member(user_c, 9233, 0, 0));
+
+  int64_t last = fake.last_sequence();
+  const atfw::dtmq::DChannelMessage* msg_a = fake.find_journal_message(last - 2);
+  const atfw::dtmq::DChannelMessage* msg_b = fake.find_journal_message(last - 1);
+  const atfw::dtmq::DChannelMessage* msg_c = fake.find_journal_message(last);
+  CASE_EXPECT_TRUE(nullptr != msg_a && nullptr != msg_b && nullptr != msg_c);
+  if (nullptr == msg_a || nullptr == msg_b || nullptr == msg_c) {
+    room_test_env::clear_rooms();
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  // 自定义批次: A 正常, 随后显式乱序(C 在 B 之前) -> C 处哈希链断裂,严格前缀保留
+  atfw::dtmq::SSChannelEventSync event_sync;
+  fake.fill_event_sync_metadata(event_sync);
+  *event_sync.add_channel_message() = *msg_a;
+  *event_sync.add_channel_message() = *msg_c;
+  *event_sync.add_channel_message() = *msg_b;
+
+  CASE_EXPECT_EQ(0, env.sync_custom_event_sync(event_sync));
+
+  // 前缀 A 已应用,乱序的 C 与其后的 B 均未应用; room 保持主控
+  CASE_EXPECT_TRUE(room->find_member(user_a, false) != nullptr);
+  CASE_EXPECT_EQ(nullptr, room->find_member(user_b, false).get());
+  CASE_EXPECT_EQ(nullptr, room->find_member(user_c, false).get());
+  CASE_EXPECT_TRUE(room->is_lock_holder());
+  CASE_EXPECT_EQ(msg_a->sequence(), room->debug_acknowledge_action_sequence());
+
+  // 快照自愈: 强制快照重推后 B/C 均按序恢复,ack 推进到最新
+  CASE_EXPECT_EQ(0, env.sync(team_id, true));
+  CASE_EXPECT_TRUE(room->find_member(user_b, false) != nullptr);
+  CASE_EXPECT_TRUE(room->find_member(user_c, false) != nullptr);
+  CASE_EXPECT_TRUE(room->is_lock_holder());
+  CASE_EXPECT_EQ(fake.last_sequence(), room->debug_acknowledge_action_sequence());
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

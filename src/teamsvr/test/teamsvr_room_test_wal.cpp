@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// WAL-layer contract cases for the teamsvr-room service (see src/teamsvr/TEAM_ROOM_TEST_PLAN.md §4.6).
+// Channel-event and snapshot contract cases for the teamsvr-room service (see src/teamsvr/test/README.md).
 //
 // The fixture (teamsvr_room_test_common.h, wal_journal_mode) compiles the real mq_channel sources and
 // drives the real wal_publisher/wal_object: journal commits use allocate_log/emplace_back_log with the
@@ -1876,4 +1876,43 @@ CASE_TEST(teamsvr_room_wal, multi_subscriber_checkpoint_gc_and_fallback) {
   }
 
   CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ LCK-09: 锁租约配置契约: 租约不短于 subscriber_timeout, 续租为租约一半且不低于 1s ============
+// WAL 模式下房间 subscriber configure 来自夹具 excel seed(teamsvr_room_test_common.h:229)，
+// 可逐场景变化 subscriber_timeout 验证推导; fake 模式租约固定 10s 不覆盖此契约
+CASE_TEST(teamsvr_room_lock, lock_lease_configuration_contract) {
+  struct lease_scenario {
+    int32_t subscriber_timeout_seconds;
+    std::chrono::seconds expected_lease;
+    std::chrono::seconds expected_renew;
+  };
+  // 夹具 excel seed: heartbeat=300s, retry=60s; subscriber_timeout 缺省(0)时按 2*心跳+重试 推导 660s
+  const lease_scenario scenarios[] = {
+      {10, std::chrono::seconds{10}, std::chrono::seconds{5}},
+      {30, std::chrono::seconds{30}, std::chrono::seconds{15}},
+      // 租约 1s 时折半 500ms 低于 1s, 续租间隔抬到 1s(此时续租必然晚于锁过期, 属必须红灯的配置,
+      // 推导规则仍按契约锁定)
+      {1, std::chrono::seconds{1}, std::chrono::seconds{1}},
+      {0, std::chrono::seconds{660}, std::chrono::seconds{330}},
+  };
+  for (const auto& scenario : scenarios) {
+    teamsvr_room_test::room_test_cfg_values cfg;
+    cfg.lock_lease_seconds = scenario.subscriber_timeout_seconds;
+    room_test_env env(cfg);
+    env.wal_journal_mode = true;
+    if (!env.start()) {
+      CASE_EXPECT_TRUE(false);
+      return;
+    }
+    int64_t team_id = teamsvr_room_test::next_test_team_id();
+    auto room = env.setup_ready_room(team_id);
+    CASE_EXPECT_TRUE(!!room);
+    if (room) {
+      CASE_EXPECT_EQ(scenario.expected_lease, room->debug_lock_lease());
+      CASE_EXPECT_EQ(scenario.expected_renew, room->debug_lock_renew_interval());
+    }
+    room_test_env::clear_rooms();
+    CASE_EXPECT_EQ(0, env.stop());
+  }
 }

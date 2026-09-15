@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 //
-// teamsvr-room 基础设施、创建与路由用例(TEAM_ROOM_TEST_PLAN.md §4.1):
+// teamsvr-room 基础设施、创建与路由用例：
 //   INF-01~04: fixture 启动/就绪快照/manager 清理/typed action 驱动
 //   CRT-01~04: 创建队伍/UUID 路径/非法参数与重复创建/响应丢失恢复
 //   ROU-01~02: 本地路由/远端转发

@@ -241,6 +241,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   size_t debug_retry_remove_count() const;
   size_t debug_pending_notification_count() const;
   bool debug_maintenance_task_running() const noexcept;
+  // 测试钩子: 锁租约/续租间隔推导契约(LCK-09 配置场景断言)
+  std::chrono::system_clock::duration debug_lock_lease() const;
+  std::chrono::system_clock::duration debug_lock_renew_interval() const;
 #endif
 
  private:
@@ -410,6 +413,7 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
   ::atfw::dtmq::DChannelOptimisticLock current_lock_;
   bool lock_acquired_ = false;
   bool destroyed_ = false;
+  bool removed_ = false;
   bool channel_destroy_sent_ = false;
   bool team_created_ = false;
   bool snapshot_restored_ = false;
