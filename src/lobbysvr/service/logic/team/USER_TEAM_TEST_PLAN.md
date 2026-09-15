@@ -319,6 +319,8 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | CS-CAPTAIN-01 | transfer captain | 当前队长可转移，非队长需 OWNER；action 目标完整，最终角色语义由 ROLE-02 验证 |
 | CS-DATA-01 | update member data | 空列表、不可写模块零上行；payload 自动填 self user/channel/version/router、key 唯一、permission=MEMBER、ready 更新附加 team-not-matching condition |
 | CS-DATA-02 | update team data | 空列表、角色不足零上行；队伍共享数据没有客户端可写模块（匹配只能由内部匹配流程经 glue 回调发起），任何模块（含 battle.matching，不论 true/false）一律权限拒绝零上行 |
+| CS-MATCHING-01 | matching_level_select（队长） | 未登录拒绝零上行；队长选择经 glue 回调上行 team_update：恰好一条 battle.matching_start_data 条目（key 精确、permission=MEMBER、解包内容与请求 data 一致）；room 广播回频道后缓存按 key 合并（`get_matching_start_data` 可读回），客户端恰好收到一次该 team_update 的 team_increase，初始快照不重复下发 |
+| CS-MATCHING-02 | matching_level_select（非队长） | 响应仍成功（选择落本地匹配数据），但 glue 队长校验拒绝同步：零 send_message 上行、队伍缓存无 matching_start_data、除初始快照外无新增脏数据推送 |
 
 ### 5.6 P2：健壮性
 
@@ -331,8 +333,8 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 
 ### 5.7 既有用例覆盖映射
 
-既有 76 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
-矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 10 例，cs 文件）。
+既有 88 例位于 `src/lobbysvr/test/lobbysvr_test_user_team_*.cpp`，组名 `lobbysvr_user_team`。下表只列
+矩阵 ID 与用例名（同文件省略前缀）；§5.5 的 CS 用例名与矩阵 ID 同名（`cs_invite_01_*` 等 12 例，cs 文件）。
 
 | 矩阵 ID | 覆盖用例 |
 | --- | --- |
@@ -360,6 +362,7 @@ CS 请求层用例经真实 dispatcher 入口执行。不要新建第二个 serv
 | EXIT-01/02 | lifecycle.`exit_team_request_then_channel_remove_converges`、`exit_retry_timeout_cleanup_and_channel_destroy` |
 | DUMP-01/02 | lifecycle.`table_dump_init_round_trip_restores_watermark_team_and_pendings`、`user_get_info_exports_only_running_team_with_trimming`；manager.`dump_snapshot_exports_cached_state` |
 | CS-INVITE/JOIN/MEMBER/CAPTAIN/DATA | cs.`cs_invite_01/02/03`、`cs_join_01/02`、`cs_member_01`、`cs_captain_01`、`cs_data_01/02`（共 9 例） |
+| CS-MATCHING-01/02 | cs.`cs_matching_level_select_01_captain_pushes_level_data`、`cs_matching_level_select_02_non_captain_no_push` |
 | ROBUST-01..04 | robust.`robust_bad_any_personal_event_ignored`、`robust_bad_any_team_snapshot_preserves_cache`、`robust_bad_shared_data_any_skips_only_that_key`、`robust_fixture_time_and_runtime_hygiene` |
 | §3 场景补充 | robust.`robust_duplicate_events_idempotent`、`robust_out_of_order_events_converge`、`robust_late_events_after_channel_destroy_ignored`、`robust_snapshot_rebuild_cleans_pendings_and_indexes` |
 | 生命周期收编对照 | manager.`minute_refresh_removes_never_member_current_team`、`minute_refresh_keeps_member_current_team` |
@@ -471,7 +474,25 @@ add/remove)迁移期关闭的缺陷：
   0 失败；`ctest --test-dir build_jobs_cmake_tools -L "service:lobbysvr" --output-on-failure` → 1/1 Passed。
 - 本次改动不触及 teamsvr，teamsvr-room 用例未重跑；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
 
-### 7.2 历史验证（2026-09-08）
+### 7.2 本次验证（2026-09-14，关卡选择链路补测）
+
+- 背景：issue atframework/atsf4g-co#233 第二条（test_adequacy）指出关卡选择共享数据链路（create 初始载荷
+  第 3 条 `battle.matching_start_data` 与 `register_level_select_function` 的"选择→队长校验→推送"链路）
+  无测试覆盖。create 载荷计数与内容断言已在上一节修复中落地；本节补齐推送链路用例。
+- 新增 CS-MATCHING-01/02 两例（`cs_matching_level_select_01_captain_pushes_level_data`、
+  `cs_matching_level_select_02_non_captain_no_push`）：队长选择的上行 payload（team_update 恰好一条
+  matching_start_data 条目且解包内容与请求一致）与 delivery（room 广播回频道后缓存按 key 合并、客户端
+  恰好一次 team_increase、初始快照不重复下发）；非队长零上行、无脏数据推送；未登录拒绝零上行。
+- 环境同 §7.1（Windows 11 amd64、MSVC 14.51、Debug、Ninja、`build_jobs_cmake_tools`）。
+- 构建：`cmake --build build_jobs_cmake_tools --target atf4g-co-lobbysvr-unit-test --parallel 8` 通过。
+- 执行：两例定向运行通过；组结果 `-r lobbysvr_user_team` → 88 选中 / 88 通过 / 0 失败；全量 suite →
+  103 选中 / 103 通过 / 0 失败；`ctest --test-dir build_jobs_cmake_tools -R atf4g-co-lobbysvr-unit-test
+  --output-on-failure` → 1/1 Passed。
+- 本地日志：`<BUILD_DIR>/_agent_tmp/level-select-test-build.log`、`level-select-cases.log`、
+  `level-select-group.log`、`level-select-full.log`、`level-select-ctest.log`；不纳入源码。
+- 本次改动不触及 teamsvr，teamsvr-room 用例未重跑；未验证平台：Linux、Release 配置（本仓库 CI 覆盖）。
+
+### 7.3 历史验证（2026-09-08）
 
 - 复核提交 `9a845101153dd342fc62579b4a3153530e54844e`（Team模块新的CS通知流程）及后续协议调用，
   检查 Lobby team 全目录、Room 成员/邀请错误语义及 DTMQ 的 raw-message、batch、snapshot 回调顺序。
@@ -495,7 +516,7 @@ add/remove)迁移期关闭的缺陷：
   新 `team` Skill 通过元数据校验。人工检查 8 个应触发和 8 个近似不应触发的请求，未测量客户端调用率。
 - 本次未运行 Linux、Release 配置；下方旧记录仅表示当时的结果。
 
-### 7.3 历史验证与命令参考
+### 7.4 历史验证与命令参考
 
 回归验证命令（`<BUILD_DIR>` 按仓库 build/test Skill 解析，注意 Windows DLL PATH; 测试二进制在
 `<BUILD_DIR>\test`, DLL 在 `<BUILD_DIR>\test`、`<BUILD_DIR>\publish\bin` 与 third_party install 的 bin）;

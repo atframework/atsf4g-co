@@ -27,6 +27,16 @@ pattern used by all existing `feature::db` cases: gate inside mock handlers only
 timer-based `rpc::wait` in these fixtures — hand data out through shared flags/holders instead. Timer-based
 `rpc::wait` in `run_task` bodies works in `feature::ss`-only fixtures.
 
+## Coroutine wake order
+
+Multiple coroutines that `co_await` the same task (`rpc::wait_task` / `rpc::wait_tasks`, or several tasks queued
+behind one in-flight `io_task`) resume in an **unspecified order** on the C++20 coroutine backend: libcopp's
+`promise_caller_manager` stores callers in a hash set keyed by coroutine frame address, so the resume sequence
+depends on allocation layout and standard library (MSVC vs libstdc++ differ; only the legacy stackful backend is
+FIFO via `next_list`). Never let an assertion depend on which waiter resumes first. Start the sensitive operation
+only after the previous one has observably registered its next in-flight IO (gate inside the mock handler), or keep
+the concurrent waiters side-effect-free so every resume order yields the same observable state.
+
 ## Delivery ordering & re-entrancy (the two-phase contract)
 
 - **Due order, not insertion order.** Rules carry different `delay_generations`, so insertion order != due order. Never

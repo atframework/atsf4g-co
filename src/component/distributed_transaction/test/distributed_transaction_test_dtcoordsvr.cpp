@@ -1167,6 +1167,17 @@ CASE_TEST(component_dtcoordsvr, queued_ack_keeps_original_handle_and_query_waits
       });
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&ack_started]() { return ack_started; }));
   reusable = replacement;
+  // Release the first save so the queued ack applies to the original handle and registers the next
+  // save before the query starts. Multiple co_await callers of the same task resume in an
+  // unspecified order (libcopp promise_caller_manager keeps callers in a hash set), so a query that
+  // was already waiting could observe the empty io_task window before the ack registers its save.
+  CASE_EXPECT_EQ(0, first_save.release());
+  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&next_save]() { return next_save.entered(); }));
+  CASE_EXPECT_FALSE(task_type_trait::empty(original->io_task));
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                 replacement->data_object.participators().at("pa").participator_status());
+  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
+                 replacement->data_object.metadata().status());
   bool query_started = false;
   bool query_finished = false;
   auto querying = test.run_task(
@@ -1187,14 +1198,6 @@ CASE_TEST(component_dtcoordsvr, queued_ack_keeps_original_handle_and_query_waits
       });
   CASE_EXPECT_TRUE(dt_test::wait_for(test, [&query_started]() { return query_started; }));
   CASE_EXPECT_FALSE(query_finished);
-  CASE_EXPECT_EQ(0, first_save.release());
-  CASE_EXPECT_TRUE(dt_test::wait_for(test, [&next_save]() { return next_save.entered(); }));
-  CASE_EXPECT_FALSE(query_finished);
-  CASE_EXPECT_FALSE(task_type_trait::empty(original->io_task));
-  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
-                 replacement->data_object.participators().at("pa").participator_status());
-  CASE_EXPECT_EQ(EnDistibutedTransactionStatus::EN_DISTRIBUTED_TRANSACTION_STATUS_PREPARED,
-                 replacement->data_object.metadata().status());
   CASE_EXPECT_EQ(0, next_save.release());
   for (auto* task : {&committing, &acknowledging, &querying}) {
     auto result = test.wait(*task, std::chrono::seconds{10});
@@ -2419,7 +2422,8 @@ CASE_TEST(component_dtcoordsvr, participant_ack_drains_inflight_io_before_delete
   }
   test.db().register_message_type<table_type>();
 
-  // The first get_all waits behind an explicit gate so the LRU fetch is still in flight when the ack arrives.
+  // The first get_all waits behind an explicit gate so the LRU fetch is still in flight when the
+  // concurrent reader arrives.
   bool slow_get_consumed = false;
   bool release_slow_get = false;
   auto slow_get_rule = rpc::db::distribute_transaction::mock::get_all(
