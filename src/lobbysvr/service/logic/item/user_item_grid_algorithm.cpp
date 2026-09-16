@@ -104,9 +104,9 @@ void user_item_grid_algorithm::destroy() {
 }
 
 int32_t user_item_grid_algorithm::on_item_not_enough(int32_t type_id) const {
-  return on_item_not_enough_static(type_id);
+  return get_grid_item_not_enough_error_code(type_id);
 }
 
-int32_t user_item_grid_algorithm::on_item_not_enough_static(int32_t) {
+int32_t user_item_grid_algorithm::get_grid_item_not_enough_error_code(int32_t) {
   return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
 }

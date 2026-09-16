@@ -108,7 +108,7 @@ item_operation_result user_grid_item_operation_handler::sub(rpc::context&, user&
 
 int32_t user_grid_item_operation_handler::on_item_not_enough(rpc::context& ctx, user& user_inst,
                                                              int32_t type_id) const {
-  return user_inst.get_user_item_grid_manager().on_item_not_enough(ctx, type_id);
+  return user_inst.get_user_item_grid_manager().get_item_not_enough_error_code(ctx, type_id);
 }
 
 int64_t user_grid_item_operation_handler::get_count(rpc::context& ctx, user& user_inst, int32_t type_id) const {
@@ -365,8 +365,8 @@ bool user_item_grid_manager::find_position(
   return true;
 }
 
-int32_t user_item_grid_manager::on_item_not_enough(rpc::context&, int32_t type_id) const {
-  return user_item_grid_algorithm::on_item_not_enough_static(type_id);
+int32_t user_item_grid_manager::get_item_not_enough_error_code(rpc::context&, int32_t type_id) const {
+  return user_item_grid_algorithm::get_grid_item_not_enough_error_code(type_id);
 }
 
 int64_t user_item_grid_manager::get_count(rpc::context&, int32_t type_id) const {

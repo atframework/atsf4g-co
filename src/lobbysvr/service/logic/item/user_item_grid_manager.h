@@ -123,7 +123,7 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
       item_algorithm::ItemGridContainerReplaceCheckedRequest& checked_request);
   item_algorithm::ItemGridOperationResult check_has(const item_algorithm::ItemGridHasRequest& requests) const;
   bool find_position(rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&) const;
-  int32_t on_item_not_enough(rpc::context&, int32_t type_id) const;
+  int32_t get_item_not_enough_error_code(rpc::context&, int32_t type_id) const;
   int64_t get_count(rpc::context&, int32_t type_id) const;
 
  public:

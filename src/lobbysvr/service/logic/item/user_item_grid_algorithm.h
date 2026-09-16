@@ -33,7 +33,7 @@ class user_item_grid_algorithm : public item_algorithm::ItemGridAlgorithm {
   void destroy();
 
  public:
-  static int32_t on_item_not_enough_static(int32_t type_id);
+  static int32_t get_grid_item_not_enough_error_code(int32_t type_id);
 
  protected:
   void on_item_data_changed(const item_algorithm::item_grid_entry_ptr_t& entry,
