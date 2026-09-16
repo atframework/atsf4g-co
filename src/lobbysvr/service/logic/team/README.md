@@ -61,8 +61,12 @@ bool 的 false 值仍保留 oneof 类型及其 key。
 内部批量更新先按 key 拒绝重复项，再完成规范化，最后统一打包。
 matching 更新附带 matching_team_view，ready 更新附带 matching_parameter。
 关闭状态时清空旧派生数据，派生条目排在状态字段之前或之后都必须得到相同结果。
-ready 更新附加队伍未匹配条件；开始 matching 附加全员 ready 条件。
-glue 直接发送的共享数据仍保留自身入口的权限和条件约定，不能与批量更新混用断言。
+ready 更新附加队伍未匹配条件；开始 matching 附加全员 ready 条件；
+取消 matching 附加队伍匹配中条件，matching 未变化时整笔更新被拒绝，避免意外重置 matching_team_view。
+glue 与 CS 任务的上行统一经 `async_update_team_shared_data` / `async_update_member_shared_data` 走批量更新，
+同样完成规范化和条件附加；两个入口显式拒绝空数组，角色/权限门槛由 glue 各入口与 CS 任务自行把关。
+非队长发起匹配时 glue 以 `EN_ERR_TEAM_PERMISSION_DENY` 取消本地待匹配状态；
+权威广播 matching=false 取消本地待匹配时使用 `EN_ERR_TEAM_MEMBER_NOT_READY`。
 
 ## 用例入口
 
@@ -74,7 +78,7 @@ glue 直接发送的共享数据仍保留自身入口的权限和条件约定，
 | `cache.cpp`、`admission.cpp` | 成员/队长/共享数据、两层邀请申请、更新/删除/到期及数据裁剪 |
 | `kick.cpp`、`dirty.cpp` | 个人通知缺失后的本地恢复、移除去重、首拉门槛、通知内容和实际下发边界 |
 | `cs.cpp` | 组队 CS 参数、权限、完整上行 payload、业务错误及本目录关卡回调 |
-| `matching_sync.cpp` | 本目录匹配 glue 的门槛、上行、频道回调、定期修复和缓存读取 |
+| `matching_sync.cpp` | 本目录匹配 glue 的门槛、上行、频道回调、待匹配取消、async_update 批量契约、定期修复和缓存读取 |
 | `robust.cpp` | 非法输入、重复/乱序/迟到事件和缓存恢复 |
 | `contract.cpp` | 独立 key 编码检查，已有派生条目的清空、输入顺序、上行和客户端通知 |
 
@@ -90,6 +94,24 @@ ctest --test-dir build_jobs_cmake_tools -V -R '^atf4g-co-lobbysvr-unit-test\.uni
 直接运行可执行程序时，先复用 CTest 的工作目录、`RPC_UNIT_TEST_WORKDIR` 和 DLL PATH，再使用
 `-r lobbysvr_user_team` 或 `-r lobbysvr_user_team.<case>`。
 以实际执行的用例数、失败数、跳过项和退出码为准；发现用例或运行空组不算通过。
+
+## 验收记录（2026-09-16）
+
+glue 上行修复（`async_send_team_shared_data` 拆分为 `async_update_team_shared_data` /
+`async_update_member_shared_data`，统一走批量更新的规范化与条件附加）后，在 Windows/MSVC Debug、Ninja、
+`build_jobs_cmake_tools` 中重建并通过实际执行：
+
+| 范围 | 通过数 |
+| --- | --- |
+| `lobbysvr_user_team` | 101/101 |
+| Lobby 全量（包含组队） | 116/116 |
+
+`matching_sync.cpp` 的 MTS-01~05 按新的上行形状改写断言（matching=true 带空/种子 matching_team_view 与全员
+ready 条件，matching=false 带清空视图与队伍匹配中条件），新增 MTS-08（权威 matching=false 以
+`EN_ERR_TEAM_MEMBER_NOT_READY` 取消本地待匹配）与 MTS-09（`async_update_member_shared_data` 的 normalize、
+条件与空数组拒绝）。随后为 matching=false 补充队伍匹配中条件（防止 matching 未变化时意外重置
+matching_team_view）后，同步修订 MTS-02/03/04/08、`cs.cpp` CS-DATA-03 与 `contract.cpp` 归一化用例的条件断言
+并复测通过。Team Room 本轮无改动未回归；Linux 和 Release 未执行。
 
 ## 验收记录（2026-09-15）
 

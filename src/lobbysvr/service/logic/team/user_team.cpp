@@ -262,19 +262,31 @@ class user_team_utility {
     return ret;
   }
 
-  static void append_condition_team_not_matching(
-      rpc::context& ctx, user_team&,
+  static void append_condition_team_matching_state(
+      rpc::context& ctx, bool matching,
       ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
     auto* rule = conditions.empty() ? conditions.Add() : conditions.Mutable(0);
 
     rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> checked_value{ctx};
-    checked_value->mutable_battle()->set_matching(false);
+    checked_value->mutable_battle()->set_matching(matching);
     auto* checked_item = rule->add_shared_team_data();
     checked_item->set_key(user_team_algorithm::make_team_shared_data_key(*checked_value));
     if (!checked_item->mutable_value()->PackFrom(*checked_value)) {
       FCTXLOGERROR(ctx, "Failed to pack checked_value into checked_item");
       rule->mutable_shared_team_data()->RemoveLast();
     }
+  }
+
+  static void append_condition_team_not_matching(
+      rpc::context& ctx, user_team&,
+      ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
+    append_condition_team_matching_state(ctx, false, conditions);
+  }
+
+  static void append_condition_team_is_matching(
+      rpc::context& ctx, user_team&,
+      ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
+    append_condition_team_matching_state(ctx, true, conditions);
   }
 
   static void append_condition_all_member_ready(
@@ -327,7 +339,9 @@ class user_team_utility {
         if (data.battle().matching()) {
           return append_condition_all_member_ready;
         }
-        return nullptr;
+
+        // 取消匹配的条件是队伍正处于匹配中, 防止 matching 未变化时意外重置 matching_team_view
+        return append_condition_team_is_matching;
       };
 
       handles.normalize_update = [](rpc::context& ctx, user_team& team,
@@ -882,8 +896,8 @@ rpc::result_code_type user_team::update_team_shared_data(
     int64_t key = user_team_algorithm::make_team_shared_data_key(team_data);
     auto* data_item = team_update->add_shared_team_data();
     data_item->set_key(key);
-    // FIXME: 其他可见性
-    data_item->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+    // 默认可见性就是EN_TEAM_PERMISSION_TYPE_MEMBER
+    // data_item->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
     if (!data_item->mutable_value()->mutable_data()->PackFrom(team_data)) {
       FCTXLOGERROR(ctx, "{} failed to pack shared team data for key {}, error message: {}", owner_->get_owner(), key,
                    team_data.InitializationErrorString());
@@ -968,8 +982,8 @@ rpc::result_code_type user_team::update_member_shared_data(
     int64_t key = user_team_algorithm::make_team_member_shared_data_key(member_data);
     auto* data_item = member_update->add_shared_member_data();
     data_item->set_key(key);
-    // FIXME: 其他可见性
-    data_item->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+    // 默认可见性就是EN_TEAM_PERMISSION_TYPE_MEMBER
+    // data_item->mutable_value()->set_permission(::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
     if (!data_item->mutable_value()->mutable_data()->PackFrom(member_data)) {
       FCTXLOGERROR(ctx, "{} failed to parse shared member data for key {}, error message: {}", owner_->get_owner(), key,
                    member_data.InitializationErrorString());
@@ -1049,10 +1063,9 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
   }
 }
 
-bool user_team::async_send_team_shared_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DTeamSharedDataModule&& team_data,
-                                            ::atfw::team::EnTeamPermissionType permission) {
-  // 只有队长有权限修改匹配状态
-  if (!is_captain()) {
+bool user_team::async_update_team_shared_data(
+    rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data) {
+  if (data->element_size() <= 0) {
     return false;
   }
 
@@ -1062,32 +1075,51 @@ bool user_team::async_send_team_shared_data(rpc::context& ctx, PROJECT_NAMESPACE
   auto result = rpc::async_invoke(
       ctx, "user_team.async_send_team_shared_data",
       // ====================================================================================================
-      [self, user_inst, team_data = std::move(team_data),
-       permission](rpc::context& child_ctx) -> rpc::result_code_type {
+      [self, user_inst, data = std::move(data)](rpc::context& child_ctx) -> rpc::result_code_type {
         auto team = self.lock();
         if (!team) {
           RPC_RETURN_CODE(0);
         }
 
-        rpc::context::message_holder<atfw::team::DTeamAction> action{child_ctx};
-        auto* team_update = action->mutable_team_update();
-        auto* data_item = team_update->add_shared_team_data();
-        data_item->set_key(user_team_algorithm::make_team_shared_data_key(team_data));
-        // 可见性
-        data_item->mutable_value()->set_permission(permission);
-        if (!data_item->mutable_value()->mutable_data()->PackFrom(team_data)) {
-          FCTXLOGERROR(child_ctx, "{} failed to pack shared team data for key {}, error message: {}",
-                       team->get_owner().get_owner(), data_item->key(), team_data.InitializationErrorString());
-          team_update->mutable_shared_team_data()->RemoveLast();
-        }
-
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team->send_action(child_ctx, std::move(*action))));
+        auto ret = RPC_AWAIT_CODE_RESULT(team->update_team_shared_data(child_ctx, *data->mutable_element()));
+        RPC_RETURN_CODE(ret);
       });
 
   if (result.is_error()) {
-    FCTXLOGERROR(ctx, "async_send_team_shared_data failed, error code: {}({})", *result.get_error(),
+    FCTXLOGERROR(ctx, "async_update_team_shared_data failed, error code: {}({})", *result.get_error(),
                  protobuf_mini_dumper_get_error_msg(*result.get_error()));
   }
+
+  return !result.is_error();
+}
+
+bool user_team::async_update_member_shared_data(
+    rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data) {
+  if (data->element_size() <= 0) {
+    return false;
+  }
+
+  auto self = weak_from_this();
+  auto user_inst = owner_->get_owner().shared_from_this();
+
+  auto result = rpc::async_invoke(
+      ctx, "user_team.async_update_member_shared_data",
+      // ====================================================================================================
+      [self, user_inst, data = std::move(data)](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto team = self.lock();
+        if (!team) {
+          RPC_RETURN_CODE(0);
+        }
+
+        auto ret = RPC_AWAIT_CODE_RESULT(team->update_member_shared_data(child_ctx, *data->mutable_element()));
+        RPC_RETURN_CODE(ret);
+      });
+
+  if (result.is_error()) {
+    FCTXLOGERROR(ctx, "async_update_member_shared_data failed, error code: {}({})", *result.get_error(),
+                 protobuf_mini_dumper_get_error_msg(*result.get_error()));
+  }
+
   return !result.is_error();
 }
 

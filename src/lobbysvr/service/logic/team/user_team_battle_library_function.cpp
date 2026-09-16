@@ -241,9 +241,9 @@ void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::co
     if (team_data_is_matching) {
       if (team_is_captain && !matching_mgr.is_in_matching()) {
         // 状态已失效,取消队伍的匹配状态
-        atframework::shared::DTeamSharedDataModule team_data;
-        team_data.mutable_battle()->set_matching(false);
-        team.async_send_team_shared_data(ctx, std::move(team_data));
+        auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
+        team_data->add_element()->mutable_battle()->set_matching(false);
+        team.async_update_team_shared_data(ctx, std::move(team_data));
         break;
       }
 
@@ -255,9 +255,9 @@ void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::co
     } else {
       // 重试补充组队匹配状态
       if (team_is_captain && matching_mgr.is_in_matching()) {
-        atframework::shared::DTeamSharedDataModule team_data;
-        team_data.mutable_battle()->set_matching(true);
-        team.async_send_team_shared_data(ctx, std::move(team_data));
+        auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
+        team_data->add_element()->mutable_battle()->set_matching(true);
+        team.async_update_team_shared_data(ctx, std::move(team_data));
         break;
       }
 
@@ -288,11 +288,11 @@ void user_team_battle_library_function::glue_layer_event_on_level_action_level_s
     return;
   }
 
-  atframework::shared::DTeamSharedDataModule team_data;
+  auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
   team.get_owner().get_owner().get_user_matching_manager().fetch_level_select_data(
-      ctx, *team_data.mutable_battle()->mutable_matching_start_data());
+      ctx, *team_data->add_element()->mutable_battle()->mutable_matching_start_data());
 
-  team.async_send_team_shared_data(ctx, std::move(team_data));
+  team.async_update_team_shared_data(ctx, std::move(team_data));
 }
 
 void user_team_battle_library_function::glue_layer_normalize_team_action_update_matching(
@@ -321,12 +321,15 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_star
     FCTXLOGERROR(
         ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the matching status.",
         team.get_owner().get_owner().get_user_id(), team.get_team_key().zone_id(), team.get_team_key().team_id());
+
+    auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
+    matching_mgr.callback_start_matching(ctx, false, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_PERMISSION_DENY);
     return;
   }
 
-  atframework::shared::DTeamSharedDataModule team_data;
-  team_data.mutable_battle()->set_matching(true);
-  team.async_send_team_shared_data(ctx, std::move(team_data));
+  auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
+  team_data->add_element()->mutable_battle()->set_matching(true);
+  team.async_update_team_shared_data(ctx, std::move(team_data));
 }
 
 void user_team_battle_library_function::glue_layer_event_on_matching_action_matching_finish_final(rpc::context& ctx,
@@ -339,9 +342,9 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_matc
     return;
   }
 
-  atframework::shared::DTeamSharedDataModule team_data;
-  team_data.mutable_battle()->set_matching(false);
-  team.async_send_team_shared_data(ctx, std::move(team_data));
+  auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
+  team_data->add_element()->mutable_battle()->set_matching(false);
+  team.async_update_team_shared_data(ctx, std::move(team_data));
 }
 
 void user_team_battle_library_function::glue_layer_event_on_team_action_update_matching(rpc::context& ctx,
@@ -357,16 +360,16 @@ void user_team_battle_library_function::glue_layer_event_on_team_action_update_m
     // 恢复发起匹配和队伍状态更新的流程仅队长能发起
     if (matching && team.is_captain() && !matching_mgr.is_in_matching()) {
       // 状态已失效,取消队伍的匹配状态
-      atframework::shared::DTeamSharedDataModule team_data;
-      team_data.mutable_battle()->set_matching(false);
-      team.async_send_team_shared_data(ctx, std::move(team_data));
+      auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
+      team_data->add_element()->mutable_battle()->set_matching(false);
+      team.async_update_team_shared_data(ctx, std::move(team_data));
       break;
     }
 
     // 取消匹配
     if (!matching) {
       if (matching_mgr.is_in_matching_start()) {
-        matching_mgr.callback_start_matching(ctx, false, 0);
+        matching_mgr.callback_start_matching(ctx, false, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MEMBER_NOT_READY);
       }
     } else {
       // 继续匹配流程
@@ -387,10 +390,11 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_star
   auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
 
   // 所有人都要发起，有效数据的这一方才会广播匹配完成的状态
-  atframework::shared::DTeamSharedDataModule team_data;
-  matching_mgr.fetch_team_sync_matching_view(ctx, *team_data.mutable_battle()->mutable_matching_team_view());
+  auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
+  matching_mgr.fetch_team_sync_matching_view(ctx,
+                                             *team_data->add_element()->mutable_battle()->mutable_matching_team_view());
 
-  team.async_send_team_shared_data(ctx, std::move(team_data));
+  team.async_update_team_shared_data(ctx, std::move(team_data));
 }
 
 void user_team_battle_library_function::glue_layer_event_on_team_action_update_matching_team_view(

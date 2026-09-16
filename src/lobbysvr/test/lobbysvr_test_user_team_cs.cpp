@@ -1557,7 +1557,7 @@ CASE_TEST(lobbysvr_user_team, cs_data_03_update_team_data_normalize_autocomplete
     }
   }
 
-  // 取消匹配: 同样携带 2 条 shared_team_data, matching_team_view 被清空下发
+  // 取消匹配: 同样携带 2 条 shared_team_data, matching_team_view 被清空下发; 附加 "队伍匹配中" 条件
   CASE_EXPECT_TRUE(update_matching(false));
   CASE_EXPECT_EQ(2, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate)));
   CASE_EXPECT_EQ(2, static_cast<int>(ss_capture.send_message_reqs.size()));
@@ -1570,7 +1570,20 @@ CASE_TEST(lobbysvr_user_team, cs_data_03_update_team_data_normalize_autocomplete
       expect_packed_team_matching_entry(team_update.shared_team_data(0), false);
       expect_packed_team_matching_team_view_entry(team_update.shared_team_data(1));
     }
-    CASE_EXPECT_EQ(0, team_update.condition_size());
+    CASE_EXPECT_EQ(1, team_update.condition_size());
+    if (1 == team_update.condition_size()) {
+      const auto& rule = team_update.condition(0);
+      CASE_EXPECT_EQ(1, rule.shared_team_data_size());
+      if (1 == rule.shared_team_data_size()) {
+        CASE_EXPECT_EQ(team_matching_data_key(), rule.shared_team_data(0).key());
+        PROJECT_NAMESPACE_ID::DTeamSharedDataModule checked;
+        CASE_EXPECT_TRUE(rule.shared_team_data(0).value().UnpackTo(&checked));
+        CASE_EXPECT_TRUE(checked.has_battle());
+        if (checked.has_battle()) {
+          CASE_EXPECT_TRUE(checked.battle().matching());
+        }
+      }
+    }
   }
 
   CASE_EXPECT_EQ(0, test.stop());

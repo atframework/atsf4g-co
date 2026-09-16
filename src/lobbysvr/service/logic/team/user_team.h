@@ -22,6 +22,7 @@
 #include <config/server_frame_build_feature.h>
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
+#include <rpc/rpc_shared_message.h>
 
 #include <data/user_key_hash_helper.h>
 
@@ -180,9 +181,11 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void async_flush_all_member_shared_data(rpc::context& ctx);
 
-  bool async_send_team_shared_data(
-      rpc::context& ctx, PROJECT_NAMESPACE_ID::DTeamSharedDataModule&& team_data,
-      ::atfw::team::EnTeamPermissionType permission = ::atfw::team::EN_TEAM_PERMISSION_TYPE_MEMBER);
+  bool async_update_team_shared_data(rpc::context& ctx,
+                                     rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data);
+
+  bool async_update_member_shared_data(
+      rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data);
 
   void dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output);
   void clear_dirty_data(rpc::context& ctx);

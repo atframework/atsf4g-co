@@ -38,6 +38,10 @@ message DTeamSharedDataModule {
   }
 }
 
+message DTeamSharedDataModuleArray {
+  repeated DTeamSharedDataModule element = 1;
+}
+
 // ======================== 队伍成员数据内容定义 ========================
 message DTeamMemberSharedDataTypeBattle {
   oneof data_type {
@@ -55,6 +59,10 @@ message DTeamMemberSharedDataModule {
   oneof module_type {
     DTeamMemberSharedDataTypeBattle battle = 1;
   }
+}
+
+message DTeamMemberSharedDataModuleArray {
+  repeated DTeamMemberSharedDataModule element = 1;
 }
 
 // ======================== 队伍脏数据下发数据 ========================

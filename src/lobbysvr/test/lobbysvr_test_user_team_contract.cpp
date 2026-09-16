@@ -128,7 +128,18 @@ CASE_TEST(lobbysvr_user_team, normalize_team_update_clears_existing_view_indepen
     const auto request = fixture.room.send_message_reqs.back();
     team_test::expect_send_message_envelope(request, fixture.team_id, fixture.player->get_user_id());
     CASE_EXPECT_EQ(2, request.action().team_update().shared_team_data_size());
-    CASE_EXPECT_EQ(0, request.action().team_update().condition_size());
+    // matching=false 附加 "队伍匹配中" 更新条件
+    CASE_EXPECT_EQ(1, request.action().team_update().condition_size());
+    if (request.action().team_update().condition_size() == 1) {
+      CASE_EXPECT_EQ(1, request.action().team_update().condition(0).shared_team_data_size());
+      if (request.action().team_update().condition(0).shared_team_data_size() == 1) {
+        CASE_EXPECT_EQ(kStateKey, request.action().team_update().condition(0).shared_team_data(0).key());
+        PROJECT_NAMESPACE_ID::DTeamSharedDataModule condition;
+        CASE_EXPECT_TRUE(request.action().team_update().condition(0).shared_team_data(0).value().UnpackTo(&condition));
+        CASE_EXPECT_TRUE(condition.has_battle());
+        CASE_EXPECT_TRUE(condition.battle().matching());
+      }
+    }
     const auto* state = find_entry(request.action().team_update().shared_team_data(), kStateKey);
     const auto* derived = find_entry(request.action().team_update().shared_team_data(), kDerivedKey);
     if (nullptr == state || nullptr == derived) {
@@ -143,7 +154,9 @@ CASE_TEST(lobbysvr_user_team, normalize_team_update_clears_existing_view_indepen
     }
     CASE_EXPECT_EQ(initial_pushes + delivered,
                    team_test::collect_dirty_sync_pushes(fixture.runtime, fixture.client.session_id()).size());
-    CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.runtime, fixture.channel, request.action()));
+    auto committed = request.action();
+    committed.mutable_team_update()->clear_condition();
+    CASE_EXPECT_TRUE(team_test::inject_event_message(fixture.runtime, fixture.channel, committed));
     ++delivered;
     CASE_EXPECT_EQ(initial_pushes + delivered,
                    team_test::collect_dirty_sync_pushes(fixture.runtime, fixture.client.session_id()).size());
@@ -151,7 +164,7 @@ CASE_TEST(lobbysvr_user_team, normalize_team_update_clears_existing_view_indepen
     CASE_EXPECT_EQ(initial_view.snapshots.size(), view.snapshots.size());
     CASE_EXPECT_EQ(initial_view.actions.size() + delivered, view.actions.size());
     if (!view.actions.empty()) {
-      CASE_EXPECT_EQ(request.action().SerializeAsString(), view.actions.back().action().SerializeAsString());
+      CASE_EXPECT_EQ(committed.SerializeAsString(), view.actions.back().action().SerializeAsString());
     }
     CASE_EXPECT_FALSE(fixture.team->is_matching());
     CASE_EXPECT_EQ(0u, user_team_battle_library_function::get_matching_team_sync_view(*fixture.team).ByteSizeLong());
