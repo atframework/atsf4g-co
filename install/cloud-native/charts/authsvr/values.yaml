@@ -21,11 +21,12 @@ volumeMounts:
 vector:
   enabled: false
   log_path: /data/atframework/publish/authsvr/log
+
 redis:
-  enable: true
+  enabled: true
 
 cs_session:
-  enable: true
+  enabled: true
 
 authsvr:
   version_conf: ../cfg/cfg_version.xml # version file

@@ -21,6 +21,3 @@ volumeMounts:
 vector:
   enabled: false
   log_path: /data/atframework/publish/echosvr/log
-
-redis:
-  enable: true

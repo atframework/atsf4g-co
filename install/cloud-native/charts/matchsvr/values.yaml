@@ -28,13 +28,10 @@ vector:
   log_path: /data/atframework/publish/matchsvr/log
 
 redis:
-  enable: true
+  enabled: true
 
 cachesvr_shared:
-  enable: true
-
-cs_session:
-  enable: true
+  enabled: true
 
 httproute:
   port: 7001

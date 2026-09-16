@@ -23,4 +23,4 @@ vector:
   log_path: /data/atframework/publish/cachesvr/log
 
 redis:
-  enable: true
+  enabled: true

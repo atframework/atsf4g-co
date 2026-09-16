@@ -23,6 +23,6 @@ vector:
   log_path: /data/atframework/publish/teamsvr-match/log
 
 redis:
-  enable: true
+  enabled: true
 
 enable_excel_config: true

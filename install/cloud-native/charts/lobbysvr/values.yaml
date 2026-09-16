@@ -27,13 +27,13 @@ vector:
   log_path: /data/atframework/publish/lobbysvr/log
 
 redis:
-  enable: true
+  enabled: true
 
 cachesvr_shared:
-  enable: true
+  enabled: true
 
 cs_session:
-  enable: true
+  enabled: true
 
 httproute:
   port: 7001

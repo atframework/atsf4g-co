@@ -29,7 +29,7 @@ service:
   protocol: TCP
 
 redis:
-  enable: true
+  enabled: true
 
 ranksvr_settlement:
   settle_interval: 60

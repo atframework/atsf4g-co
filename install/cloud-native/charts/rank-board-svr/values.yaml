@@ -30,7 +30,7 @@ service:
   protocol: TCP
 
 redis:
-  enable: true
+  enabled: true
 
 ranksvr_ranking:
   rank_slave_num: 1

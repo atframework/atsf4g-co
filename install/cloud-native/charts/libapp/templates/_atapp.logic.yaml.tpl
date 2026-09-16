@@ -36,7 +36,7 @@ logic:
         number: 3
         size: 20MB
       flush_interval: 1s
-  {{- if and .Values.redis .Values.redis.enable }}
+  {{- if .Values.redis }}
   db:
   {{- if and .Values.redis.cluster_mode }}
     cluster:
@@ -59,11 +59,11 @@ logic:
       timeout: {{ .Values.redis.timeout_duration }}
       proc: {{ .Values.redis.proc_duration }}
   {{- end -}}
-  {{- if and .Values.cachesvr_shared .Values.cachesvr_shared.enable }}
+  {{- if and .Values.cachesvr_shared }}
   cache:
     {{- toYaml .Values.cachesvr_shared | trim | nindent 4 }}
   {{- end -}}
-  {{- if and .Values.cs_session .Values.cs_session.enable }}
+  {{- if and .Values.cs_session }}
   session:
     {{- toYaml .Values.cs_session | trim | nindent 4 }}
   {{- end }}

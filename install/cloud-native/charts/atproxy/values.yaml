@@ -28,9 +28,6 @@ service:
   targetPort: 7101
   protocol: TCP
 
-redis:
-  enable: true
-
 atproxy:
   activity_connecttion:
     enabled: true

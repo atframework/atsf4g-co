@@ -23,7 +23,7 @@ vector:
   log_path: /data/atframework/publish/dtcoordsvr/log
 
 redis:
-  enable: true
+  enabled: true
 
 dtcoordsvr:
   lru_expired_duration: 1800s # 30min for lru cache expired
