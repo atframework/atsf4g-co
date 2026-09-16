@@ -64,21 +64,13 @@ fi
 
 mkdir -p "${OUTPUT_DIR}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-OUTPUT_FILE="${OUTPUT_DIR}/svr-${TIMESTAMP}.tar.zst"
+OUTPUT_PACKAGE_FILE="${OUTPUT_DIR}/@PROJECT_NAME@-${TIMESTAMP}.package.tar.zst"
+OUTPUT_DEBUG_FILE="${OUTPUT_DIR}/@PROJECT_NAME@-${TIMESTAMP}.debug.tar.zst"
 
 # Locate objcopy: GNU objcopy first, then llvm-objcopy (same probing order as the
 # project_tool_split_target_debug_sybmol CMake helper).
-SPLIT_DEBUG_OBJCOPY=""
-if command -v objcopy >/dev/null 2>&1; then
-    SPLIT_DEBUG_OBJCOPY="$(command -v objcopy)"
-elif command -v llvm-objcopy >/dev/null 2>&1; then
-    SPLIT_DEBUG_OBJCOPY="$(command -v llvm-objcopy)"
-fi
-if command -v readelf >/dev/null 2>&1; then
-    SPLIT_DEBUG_READELF="$(command -v readelf)"
-else
-    SPLIT_DEBUG_READELF=""
-fi
+SPLIT_DEBUG_OBJCOPY="@PROJECT_TOOL_OBJCOPY@"
+SPLIT_DEBUG_READELF="@PROJECT_TOOL_READELF@"
 
 # Split debug symbols of every .so under <deploy_base>/lib that still has debug
 # sections. Mirrors project_tool_split_target_debug_sybmol: keep debug into
@@ -146,14 +138,11 @@ EXCLUDES=(
     --exclude='*.dbg'
 )
 
-echo "[INFO] Packing ${DEPLOY_DIR} -> ${OUTPUT_FILE}"
-if tar --help 2>/dev/null | grep -q -- '--zstd'; then
-    tar --zstd -cf "${OUTPUT_FILE}" "${EXCLUDES[@]}" -C "${DEPLOY_DIR}" .
-else
-    if ! command -v zstd >/dev/null 2>&1; then
-        echo "[ERROR] tar does not support --zstd and 'zstd' is not installed" >&2
-        exit 1
-    fi
-    tar -cf - "${EXCLUDES[@]}" -C "${DEPLOY_DIR}" . | zstd -T0 -o "${OUTPUT_FILE}"
-fi
-echo "[INFO] Done: ${OUTPUT_FILE}"
+echo "[INFO] Packing ${DEPLOY_DIR} -> ${OUTPUT_PACKAGE_FILE}/${OUTPUT_DEBUG_FILE}"
+cd "${DEPLOY_DIR}"
+tar "${EXCLUDES[@]}" -cvf- . | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_PACKAGE_FILE}" -
+tar -cvf- $(find . -name "*.dbg") | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_DEBUG_FILE}" -
+
+echo "[INFO] Done.
+- ${OUTPUT_PACKAGE_FILE}
+- ${OUTPUT_DEBUG_FILE}"

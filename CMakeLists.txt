@@ -224,44 +224,32 @@ endif()
 
 # Windows .bat scripts for the deploy base directory (installed only on Windows builds)
 if(WIN32)
-  set(PROJECT_WINDOWS_BAT_WRAPPERS
-      "start_all.bat"
-      "stop_all.bat"
-      "kill_all.bat"
-      "start_local_test_env.bat"
-      "stop_local_test_env.bat"
-      "pack_logs.bat")
+  set(PROJECT_WINDOWS_BAT_WRAPPERS "start_all.bat" "stop_all.bat" "kill_all.bat" "start_local_test_env.bat"
+                                   "stop_local_test_env.bat" "pack_logs.bat")
   foreach(PROJECT_WINDOWS_BAT_WRAPPER IN LISTS PROJECT_WINDOWS_BAT_WRAPPERS)
     configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/${PROJECT_WINDOWS_BAT_WRAPPER}"
                    "${PROJECT_GENERATED_TOOLS_DIR}/${PROJECT_WINDOWS_BAT_WRAPPER}" @ONLY)
   endforeach()
   add_custom_target(
     "tools-windows-bat-wrappers" ALL
-    COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different"
-            "${PROJECT_GENERATED_TOOLS_DIR}/start_all.bat"
-            "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.bat"
-            "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.bat"
-            "${PROJECT_GENERATED_TOOLS_DIR}/start_local_test_env.bat"
-            "${PROJECT_GENERATED_TOOLS_DIR}/stop_local_test_env.bat"
-            "${PROJECT_GENERATED_TOOLS_DIR}/pack_logs.bat"
-            "${PROJECT_INSTALL_BAS_DIR}"
-    BYPRODUCTS
-            "${PROJECT_INSTALL_BAS_DIR}/start_all.bat"
-            "${PROJECT_INSTALL_BAS_DIR}/stop_all.bat"
-            "${PROJECT_INSTALL_BAS_DIR}/kill_all.bat"
-            "${PROJECT_INSTALL_BAS_DIR}/start_local_test_env.bat"
-            "${PROJECT_INSTALL_BAS_DIR}/stop_local_test_env.bat"
-            "${PROJECT_INSTALL_BAS_DIR}/pack_logs.bat")
+    COMMAND
+      "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/start_all.bat"
+      "${PROJECT_GENERATED_TOOLS_DIR}/stop_all.bat" "${PROJECT_GENERATED_TOOLS_DIR}/kill_all.bat"
+      "${PROJECT_GENERATED_TOOLS_DIR}/start_local_test_env.bat" "${PROJECT_GENERATED_TOOLS_DIR}/stop_local_test_env.bat"
+      "${PROJECT_GENERATED_TOOLS_DIR}/pack_logs.bat" "${PROJECT_INSTALL_BAS_DIR}"
+    BYPRODUCTS "${PROJECT_INSTALL_BAS_DIR}/start_all.bat" "${PROJECT_INSTALL_BAS_DIR}/stop_all.bat"
+               "${PROJECT_INSTALL_BAS_DIR}/kill_all.bat" "${PROJECT_INSTALL_BAS_DIR}/start_local_test_env.bat"
+               "${PROJECT_INSTALL_BAS_DIR}/stop_local_test_env.bat" "${PROJECT_INSTALL_BAS_DIR}/pack_logs.bat")
   set_property(TARGET "tools-windows-bat-wrappers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 endif()
 
-# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst.
-# Before packing it splits debug symbols of shared libraries (.so) under <publish>/lib
-# into sibling ".dbg" files with objcopy, then excludes every "log" directory,
-# <publish>/tools/go-task and <publish>/tools/helm, and "*.a"/"*.dbg" files. Generated
-# into the build root next to the publish tree.
-configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/pack_publish.sh"
+# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst. Before packing it splits debug
+# symbols of shared libraries (.so) under <publish>/lib into sibling ".dbg" files with objcopy, then excludes every
+# "log" directory, <publish>/tools/go-task and <publish>/tools/helm, and "*.a"/"*.dbg" files. Generated into the build
+# root next to the publish tree.
+configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/pack_publish.sh.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh" @ONLY)
+
 add_custom_target(
   "tools-pack-publish" ALL
   COMMAND "${CMAKE_COMMAND}" "-E" "copy_if_different" "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh"
