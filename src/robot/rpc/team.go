@@ -15,6 +15,9 @@ import (
 // 由 SCUserDirtyChgSync 的 dirty_team 推送或 user_get_info(need_user_team) 维护，用于自测时核对服务端下发内容。
 type TeamViewData struct {
 	Snapshot *public_protocol_pbdesc.DUserTeamSnapshot // 最近一次完整快照
+	// 未入队时，邀请位于 DTeamUserData 顶层，不在队伍快照中。
+	PendingInvitations  []*public_protocol_pbdesc.DTeamInvitation
+	PendingJoinRequests []*public_protocol_pbdesc.DTeamJoinRequest
 	// 之后收到的增量动作(仅保留最近若干条，便于回放检查)
 	LastActions  []*public_protocol_pbdesc.DTeamAction
 	DirtySyncSeq int64 // 收到过的 dirty_team 推送次数(快照+增量)
@@ -59,6 +62,23 @@ func GetTeamView(user user_data.User) *TeamViewData {
 // ClearTeamView 清空本地队伍视图(退出队伍/被移出队伍时使用)。
 func ClearTeamView(user user_data.User) {
 	user.SetExtralData("TeamView", &TeamViewData{})
+}
+
+// ReplaceTeamPullData 保存 user_get_info 返回的队伍数据。顶层邀请在用户尚未入队时也必须保留。
+func ReplaceTeamPullData(user user_data.User, data *public_protocol_pbdesc.DTeamUserData) {
+	view := GetTeamView(user)
+	view.Snapshot = nil
+	view.LastActions = nil
+	view.PendingInvitations = nil
+	view.PendingJoinRequests = nil
+	if data != nil {
+		view.PendingInvitations = data.GetPendingInvitation()
+		view.PendingJoinRequests = data.GetPendingJoinRequest()
+		if teams := data.GetTeam(); len(teams) > 0 {
+			view.Snapshot = teams[len(teams)-1]
+		}
+	}
+	user.SetExtralData("TeamView", view)
 }
 
 // BuildTeamKey 构造队伍 Key。zoneId 传 0 时使用当前用户所在区服。

@@ -311,6 +311,11 @@ CASE_TEST(lobbysvr_user_matching, sends_acknowledgement_in_periodic_matching_hea
 
   atfw::util::time::time_utility::reset_global_now_offset();
   atfw::util::time::time_utility::update();
+  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
+  int64_t heartbeat_interval_seconds = server_cfg.matching().heartbeat_interval().seconds();
+  if (heartbeat_interval_seconds <= 0) {
+    heartbeat_interval_seconds = 2;
+  }
   CASE_EXPECT_TRUE(run_refresh("matching.periodic_heartbeat.first"));
   CASE_EXPECT_TRUE(pump_until_calls(1));
   CASE_EXPECT_EQ(1, static_cast<int>(captured_requests->size()));
@@ -326,23 +331,24 @@ CASE_TEST(lobbysvr_user_matching, sends_acknowledgement_in_periodic_matching_hea
     }
   }
 
-  CASE_EXPECT_TRUE(run_refresh("matching.periodic_heartbeat.throttled"));
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{heartbeat_interval_seconds - 1});
+  atfw::util::time::time_utility::update();
+  CASE_EXPECT_TRUE(run_refresh("matching.periodic_heartbeat.before_interval"));
   for (int i = 0; i < 4; ++i) {
     test.pump_once();
   }
   CASE_EXPECT_EQ(1, static_cast<int>(test.ss().calls(rpc::matching::packer::get_full_name_of_matching_heart_bear())));
 
-  const auto& server_cfg = logic_config::me()->get_server_instance_config<PROJECT_NAMESPACE_ID::config::lobbysvr_cfg>();
-  auto heartbeat_interval = std::chrono::seconds{server_cfg.matching().heartbeat_interval().seconds()};
-  if (heartbeat_interval <= std::chrono::seconds{0}) {
-    heartbeat_interval = std::chrono::seconds{2};
+  if (heartbeat_interval_seconds <= 0) {
+    heartbeat_interval_seconds = 2;
   }
-  atfw::util::time::time_utility::set_global_now_offset(heartbeat_interval + std::chrono::seconds{1});
+  atfw::util::time::time_utility::set_global_now_offset(std::chrono::seconds{heartbeat_interval_seconds + 1});
   CASE_EXPECT_TRUE(run_refresh("matching.periodic_heartbeat.second"));
   CASE_EXPECT_TRUE(pump_until_calls(2));
   CASE_EXPECT_EQ(2, static_cast<int>(captured_requests->size()));
 
   atfw::util::time::time_utility::reset_global_now_offset();
+  atfw::util::time::time_utility::update();
   CASE_EXPECT_EQ(0, test.stop());
 }
 

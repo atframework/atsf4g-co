@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <set>
+#include <utility>
 
 #include "logic/matching/matching_room.h"
 #include "logic/matching/matching_utility.h"
@@ -106,7 +107,7 @@ bool matching_unit::initialize_subscribers(
 
 bool matching_unit::validate_subscriber_routes(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes) const {
-  if (routes.size() != data_.users_size()) {
+  if (routes.size() == 0) {
     return false;
   }
   std::set<std::pair<uint64_t, uint32_t>> subscribed_users;
@@ -154,14 +155,15 @@ bool matching_unit::subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUs
 bool matching_unit::heartbeat(rpc::context& ctx, uint64_t server_id,
                               const PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat& heartbeat_data) {
   if (!wal_publisher_ || server_id == 0 || heartbeat_data.user_key().user_id() == 0 ||
-      heartbeat_data.acknowledge_event_id() < 0 || heartbeat_data.acknowledge_event_id() > last_event_id_) {
+      !has_user(heartbeat_data.user_key()) || heartbeat_data.acknowledge_event_id() < 0 ||
+      heartbeat_data.acknowledge_event_id() > last_event_id_) {
     return false;
   }
   int32_t result = 0;
   matching_wal_context wal_ctx{ctx, result};
   auto subscriber = wal_publisher_->find_subscriber(heartbeat_data.user_key(), wal_ctx);
   if (!subscriber || !subscriber->get_private_data()) {
-    return false;
+    return subscribe(ctx, heartbeat_data.user_key(), server_id, heartbeat_data.acknowledge_event_id());
   }
   const auto now = atfw::util::time::time_utility::now();
   const int64_t now_unix = atfw::util::time::time_utility::get_now();
@@ -177,8 +179,8 @@ bool matching_unit::heartbeat(rpc::context& ctx, uint64_t server_id,
     FCTXLOGWARNING(ctx,
                    "matching heartbeat accepted but replay delivery failed, unit_id={}, server_id={:#x}, user={}:{}, "
                    "result={}({})",
-                   get_unit_id(), server_id, heartbeat_data.user_key().user_id(),
-                   heartbeat_data.user_key().zone_id(), result, protobuf_mini_dumper_get_error_msg(result));
+                   get_unit_id(), server_id, heartbeat_data.user_key().user_id(), heartbeat_data.user_key().zone_id(),
+                   result, protobuf_mini_dumper_get_error_msg(result));
   }
   // 心跳的路由、ACK 和活跃时间已经提交。重放发送失败由下一次心跳再次触发，不能拒绝本次续约。
   return true;

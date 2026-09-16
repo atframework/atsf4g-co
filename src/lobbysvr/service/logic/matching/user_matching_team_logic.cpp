@@ -20,6 +20,11 @@ bool user_matching_team_logic::is_in_team() const noexcept {
   return !!owner_->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
 }
 
+bool user_matching_team_logic::is_team_captain() const noexcept {
+  auto team = owner_->get_user_team_manager().get_team_by_team_type(PROJECT_NAMESPACE_ID::EN_TEAM_TYPE_NORMAL);
+  return team && team->is_captain();
+}
+
 void user_matching_team_logic::register_start_matching_check_function(start_matching_check_function_t function) {
   if (start_matching_check_function_) {
     FWLOGERROR("Start matching check function is already registered");

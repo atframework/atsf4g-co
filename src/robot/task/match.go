@@ -46,9 +46,22 @@ func MatchingStartTask(task *user_data.TaskActionUser) error {
 }
 
 func MatchingCheckTask(task *user_data.TaskActionUser) error {
+	return matchingCheckTask(task, false)
+}
+
+// MatchingCheckForWaitTask allows the short window before a team member receives the unit subscription event.
+// Other business errors still fail the case immediately.
+func MatchingCheckForWaitTask(task *user_data.TaskActionUser) error {
+	return matchingCheckTask(task, true)
+}
+
+func matchingCheckTask(task *user_data.TaskActionUser, allowNotFound bool) error {
 	errCode, rspHolder, rpcErr := protocol.MatchingCheckRpc(task, task.User)
 	if rpcErr != nil {
 		return rpcErr
+	}
+	if allowNotFound && errCode == int32(public_protocol_pbdesc.EnErrorCode_EN_MATCHING_RESULT_NOT_FOUND) {
+		return nil
 	}
 	if errCode < 0 {
 		return fmt.Errorf("matching check failed, errCode: %d", errCode)

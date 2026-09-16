@@ -563,22 +563,34 @@ CASE_TEST(matchsvr_matching_wal, routes_unit_members_to_their_own_lobbysvr) {
   auto unit_data = make_party_unit(10, 20001, 2, 10, true);
   matching_unit unit{unit_data};
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute> routes;
-  for (int index = 0; index < unit_data.users_size(); ++index) {
-    auto* route = routes.Add();
-    protobuf_copy_message(*route->mutable_user_key(), unit_data.users(index).user_key());
-    route->set_server_id(index == 0 ? kFirstLobby : kSecondLobby);
-  }
+  auto* route = routes.Add();
+  protobuf_copy_message(*route->mutable_user_key(), unit_data.users(0).user_key());
+  route->set_server_id(kFirstLobby);
   rpc::context ctx{rpc::context::create_without_task()};
   CASE_EXPECT_TRUE(unit.initialize_subscribers(ctx, routes));
   runtime.transport().clear_history();
   unit.publish(ctx, PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_EVENT_TYPE_CREATED);
   CASE_EXPECT_EQ(1, runtime.transport().outbound_count_to(kFirstLobby));
-  CASE_EXPECT_EQ(1, runtime.transport().outbound_count_to(kSecondLobby));
+  CASE_EXPECT_EQ(0, runtime.transport().outbound_count_to(kSecondLobby));
 
   PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat second_heartbeat;
   protobuf_copy_message(*second_heartbeat.mutable_user_key(), unit_data.users(1).user_key());
-  second_heartbeat.set_acknowledge_event_id(1);
+  second_heartbeat.set_acknowledge_event_id(0);
   CASE_EXPECT_TRUE(unit.heartbeat(ctx, kSecondLobby, second_heartbeat));
+  auto second_route = unit.get_subscriber_route(unit_data.users(1).user_key());
+  CASE_EXPECT_TRUE(second_route.has_value());
+  if (second_route.has_value()) {
+    CASE_EXPECT_EQ(kSecondLobby, second_route->server_id);
+    CASE_EXPECT_EQ(0, second_route->acknowledge_event_id);
+  }
+  CASE_EXPECT_EQ(1, runtime.transport().outbound_count_to(kSecondLobby));
+
+  PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat outsider_heartbeat;
+  outsider_heartbeat.mutable_user_key()->set_user_id(30001);
+  outsider_heartbeat.mutable_user_key()->set_zone_id(1);
+  outsider_heartbeat.set_acknowledge_event_id(0);
+  CASE_EXPECT_FALSE(unit.heartbeat(ctx, kSecondLobby, outsider_heartbeat));
+  CASE_EXPECT_FALSE(unit.get_subscriber_route(outsider_heartbeat.user_key()).has_value());
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 

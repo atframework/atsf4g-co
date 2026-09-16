@@ -55,8 +55,8 @@ func UnitIdFromUser(user user_data.User) uint64 {
 	return unitId
 }
 
-func MatchingStatusFromUser(user user_data.User) public_protocol_pbdesc.EnMatchingRoomStatus {
-	status, _ := user.GetExtralData("MatchingStatus").(public_protocol_pbdesc.EnMatchingRoomStatus)
+func MatchingStatusFromUser(user user_data.User) public_protocol_pbdesc.EnMatchingUnitLifecycleStatus {
+	status, _ := user.GetExtralData("MatchingStatus").(public_protocol_pbdesc.EnMatchingUnitLifecycleStatus)
 	return status
 }
 

@@ -51,7 +51,7 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
   void mark_terminal(PROJECT_NAMESPACE_ID::EnMatchingUnitLifecycleStatus status, int32_t result, int64_t now);
   void set_terminal_time(int64_t value) noexcept { terminal_time_ = value; }
 
-  // 创建时的路由必须且只覆盖 Unit 全部成员。
+  // 创建时至少提供一个 Unit 成员路由；其余成员在首次心跳时注册自己的路由。
   bool initialize_subscribers(
       rpc::context& ctx,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes);
@@ -59,7 +59,7 @@ class matching_unit : public std::enable_shared_from_this<matching_unit> {
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingSubscriberRoute>& routes) const;
   bool subscribe(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, uint64_t server_id,
                  int64_t acknowledge_event_id);
-  // 心跳更新单个玩家的路由、业务 ACK 和活跃时间，并立即触发该玩家缺失 WAL 的重放。
+  // Unit 成员首次心跳创建订阅；后续心跳更新路由、业务 ACK 和活跃时间，并触发缺失 WAL 的重放。
   bool heartbeat(rpc::context& ctx, uint64_t server_id,
                  const PROJECT_NAMESPACE_ID::DMatchingUserHeartbeat& heartbeat_data);
   // Unit 是匹配原子；任一成员订阅超过阈值未续约时，整个 Unit 失效。

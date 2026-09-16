@@ -22,7 +22,9 @@ func LoginCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, 
 		if user == nil {
 			return fmt.Errorf("failed to create user: %s", holder.OpenId)
 		}
-		holder.InitUser(user)
+		if err := action.InitUserOnRunning(user); err != nil {
+			return fmt.Errorf("failed to initialize user %s for login case: %w", holder.OpenId, err)
+		}
 	}
 	if user.IsLogin() {
 		protocol.RegisterMatchingLogSyncHandler(user)

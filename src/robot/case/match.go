@@ -98,26 +98,25 @@ func MatchingWaitCase(action *robot_case.TaskActionCase, holder *user_data.UserH
 	}
 	deadline := time.Now().Add(time.Duration(timeoutSeconds) * time.Second)
 	for time.Now().Before(deadline) {
-		err := action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingCheckTask, "Matching Check Task"))
+		err := action.AwaitTask(user.RunTaskDefaultTimeout(task.MatchingCheckForWaitTask, "Matching Check Task"))
 		if err != nil {
 			return err
 		}
 		status := protocol.MatchingStatusFromUser(user)
 		switch status {
-		case public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CONFIRMING,
-			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CREATING_BATTLE,
-			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_FINISHED,
-			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_CANCELLED,
-			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_TIMEOUT,
-			public_protocol_pbdesc.EnMatchingRoomStatus_EN_MATCHING_ROOM_STATUS_FAILED:
+		case public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_CONFIRMING,
+			public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_CREATING_BATTLE,
+			public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_FINISHED,
+			public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED,
+			public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_TIMEOUT,
+			public_protocol_pbdesc.EnMatchingUnitLifecycleStatus_EN_MATCHING_UNIT_LIFECYCLE_STATUS_FAILED:
 			action.Log("matching wait finished, status: %s", status.String())
 			return nil
 		}
 		time.Sleep(time.Duration(intervalSeconds) * time.Second)
 	}
-	action.Log("matching wait timeout after %d seconds, status: %s",
+	return fmt.Errorf("matching wait timeout after %d seconds, status: %s",
 		timeoutSeconds, protocol.MatchingStatusFromUser(user).String())
-	return nil
 }
 
 func MatchingAssertFactionCase(action *robot_case.TaskActionCase, holder *user_data.UserHolder, args []string) error {

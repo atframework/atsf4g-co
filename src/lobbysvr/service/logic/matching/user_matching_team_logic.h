@@ -45,6 +45,7 @@ class user_matching_team_logic : public atfw::util::design_pattern::noncopyable 
   explicit user_matching_team_logic(user& owner) noexcept;
 
   bool is_in_team() const noexcept;
+  bool is_team_captain() const noexcept;
 
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DMatchingTeamParameter>
   get_team_member_matching_team_parameter(rpc::context& ctx) const;
