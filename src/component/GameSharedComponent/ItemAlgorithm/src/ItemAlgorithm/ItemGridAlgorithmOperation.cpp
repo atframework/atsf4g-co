@@ -1,15 +1,19 @@
 // Copyright 2026 atframework
 
-#include "ItemAlgorithm/ItemGridAlgorithm.h"
+#include <ItemAlgorithm/ItemGridAlgorithm.h>
 
-#include "config/excel/item_type_config.h"
+#include <config/excel/item_type_config.h>
+
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 
 ITEM_ALGORITHM_NAMESPACE_BEGIN
 
 namespace item_algorithm {
 
 ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddCheckedRequest& checked_request,
-                                               ItemGridOperationReason reason) {
+                                                                  ItemGridOperationReason reason) {
   if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("add called with failed checked request, error={} ({})",
                                  checked_request.result.error_code,
@@ -53,9 +57,10 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddChe
           auto& existing = *group_it->second.begin();
           int64_t old_count = existing->item_instance().item_basic().count();
           existing->mutable_item_basic().set_count(old_count + add_count);
-          item_count_cache_[type_id] += add_count;
+          auto& cached_count = item_count_cache_[type_id];
+          cached_count += add_count;
           on_item_count_changed(type_id, existing, 0, ItemGridPosition{}, old_count, old_count + add_count,
-                                item_count_cache_[type_id], reason);
+                                cached_count, reason);
           on_item_data_changed(existing, reason);
           ITEM_ALGORITHM_LOG_DEBUG_FMT("add merge ungrid type={} count={} entry_id={} total={}", type_id, add_count,
                                        existing->entry_id(), old_count + add_count);
@@ -73,8 +78,9 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddChe
       if (guid != 0) {
         guid_index_[guid] = entry;
       }
-      item_count_cache_[type_id] += add_count;
-      on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, item_count_cache_[type_id], reason);
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count += add_count;
+      on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, cached_count, reason);
       on_item_data_changed(entry, reason);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("add new ungrid type={} count={} guid={} entry_id={}", type_id, add_count, guid,
                                    entry->entry_id());
@@ -90,9 +96,10 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddChe
       auto& existing = pos_it->second;
       int64_t old_count = existing->item_instance().item_basic().count();
       existing->mutable_item_basic().set_count(old_count + add_count);
-      item_count_cache_[type_id] += add_count;
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count += add_count;
       on_item_count_changed(type_id, existing, existing->item_instance().item_basic().guid(), target_pos, old_count,
-                            old_count + add_count, item_count_cache_[type_id], reason);
+                            old_count + add_count, cached_count, reason);
       on_item_data_changed(existing, reason);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("add stack grid type={} count={} at ({},{}) entry_id={} total={}", type_id,
                                    add_count, target_pos.x, target_pos.y, existing->entry_id(), old_count + add_count);
@@ -109,9 +116,10 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddChe
           add_count, guid, target_pos.x, target_pos.y, entry->entry_id());
     }
     add_entry_index(*get_item_position_cfg(checked_request.config_group, entry->item_instance().item_basic()), entry);
-    item_count_cache_[type_id] += add_count;
+    auto& cached_count = item_count_cache_[type_id];
+    cached_count += add_count;
     on_item_count_changed(type_id, entry, entry->item_instance().item_basic().guid(), target_pos, 0, add_count,
-                          item_count_cache_[type_id], reason);
+                          cached_count, reason);
     on_item_data_changed(entry, reason);
     ITEM_ALGORITHM_LOG_DEBUG_FMT("add new grid type={} count={} guid={} at ({},{}) entry_id={}", type_id, add_count,
                                  entry->item_instance().item_basic().guid(), target_pos.x, target_pos.y,
@@ -122,9 +130,9 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::add(ItemGridAddChe
   return result;
 }
 
-ITEM_ALGORITHM_API ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    ItemGridAddRequest&& in_requests) const {
+ITEM_ALGORITHM_API ItemGridAddCheckedRequest
+ItemGridAlgorithm::check_add(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+                             ItemGridAddRequest&& in_requests) const {
   ItemGridAddCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
   auto& result = checked_request.result;
   if (!init_) {
@@ -203,7 +211,7 @@ ITEM_ALGORITHM_API ItemGridAddCheckedRequest ItemGridAlgorithm::check_add(
     }
 
     {
-      int64_t current_total = get_item_count(type_id) + pending_type_add_count[type_id];
+      int64_t current_total = get_cached_item_count(type_id) + pending_type_add_count[type_id];
       int32_t limit_ret = on_check_item_count_limit(type_id, current_total, add_count);
       if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
         result.error_code = limit_ret;
@@ -450,7 +458,7 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::replace(ItemGridRe
 }
 
 ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubCheckedRequest& checked_request,
-                                               ItemGridOperationReason reason) {
+                                                                  ItemGridOperationReason reason) {
   if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("sub called with failed checked request, error={} ({})",
                                  checked_request.result.error_code,
@@ -502,20 +510,22 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubChe
       }
       remove_entry_from_group(entry);
       entry->mutable_item_basic().set_count(0);
-      item_count_cache_[type_id] -= current_count;
-      if (item_count_cache_[type_id] <= 0) {
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count -= current_count;
+      if (cached_count <= 0) {
         item_count_cache_.erase(type_id);
       }
-      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, 0, get_item_count(type_id), reason);
+      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, 0, cached_count, reason);
       on_item_data_changed(entry, reason);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("sub remove all type={} count={} guid={} entry_id={} at ({},{})", type_id,
                                    current_count, guid, entry->entry_id(), entry_pos.x, entry_pos.y);
     } else {
       // 部分扣减
       entry->mutable_item_basic().set_count(current_count - sub_count);
-      item_count_cache_[type_id] -= sub_count;
-      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, current_count - sub_count,
-                            item_count_cache_[type_id], reason);
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count -= sub_count;
+      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, current_count - sub_count, cached_count,
+                            reason);
       on_item_data_changed(entry, reason);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("sub partial type={} count={} guid={} entry_id={} remaining={}", type_id, sub_count,
                                    guid, entry->entry_id(), current_count - sub_count);
@@ -526,9 +536,9 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubChe
   return result;
 }
 
-ITEM_ALGORITHM_API ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    ItemGridSubRequest&& in_requests) const {
+ITEM_ALGORITHM_API ItemGridSubCheckedRequest
+ItemGridAlgorithm::check_sub(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+                             ItemGridSubRequest&& in_requests) const {
   ItemGridSubCheckedRequest checked_request{config_group, std::move(in_requests), container_guid_, ++operate_id_};
   auto& result = checked_request.result;
   if (!init_) {
@@ -730,9 +740,9 @@ ITEM_ALGORITHM_API ItemGridSubCheckedRequest ItemGridAlgorithm::check_sub(
   return checked_request;
 }
 
-ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::check_has(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-    const ItemGridHasRequest& requests) const {
+ITEM_ALGORITHM_API ItemGridOperationResult
+ItemGridAlgorithm::check_has(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+                             const ItemGridHasRequest& requests) const {
   ItemGridOperationResult result;
   if (!init_) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("check_has called before init, container_guid={}", container_guid_);
@@ -857,11 +867,12 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveC
       remove_entry_index(*position_cfg, sub_req.entry);
       remove_entry_from_group(sub_req.entry);
       sub_req.entry->mutable_item_basic().set_count(0);
-      item_count_cache_[type_id] -= source_count;
-      if (item_count_cache_[type_id] <= 0) {
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count -= source_count;
+      if (cached_count <= 0) {
         item_count_cache_.erase(type_id);
       }
-      on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count, 0, get_item_count(type_id),
+      on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count, 0, cached_count,
                             ItemGridOperationReason::kMoveSub);
       on_item_data_changed(sub_req.entry, ItemGridOperationReason::kMoveSub);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("move sub all type={} count={} guid={} entry_id={} from ({},{})", type_id,
@@ -870,10 +881,10 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveC
     } else {
       // 部分扣减
       sub_req.entry->mutable_item_basic().set_count(source_count - sub_req.op_count);
-      item_count_cache_[type_id] -= sub_req.op_count;
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count -= sub_req.op_count;
       on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count,
-                            source_count - sub_req.op_count, item_count_cache_[type_id],
-                            ItemGridOperationReason::kMoveSub);
+                            source_count - sub_req.op_count, cached_count, ItemGridOperationReason::kMoveSub);
       on_item_data_changed(sub_req.entry, ItemGridOperationReason::kMoveSub);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("move sub partial type={} count={} guid={} entry_id={} remaining={}", type_id,
                                    sub_req.op_count, guid, sub_req.entry->entry_id(), source_count - sub_req.op_count);
@@ -895,10 +906,10 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveC
       auto& target_entry = target_it->second;
       int64_t target_old = target_entry->item_instance().item_basic().count();
       target_entry->mutable_item_basic().set_count(target_old + add_req.op_count);
-      item_count_cache_[type_id] += add_req.op_count;
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count += add_req.op_count;
       on_item_count_changed(type_id, target_entry, target_entry->item_instance().item_basic().guid(), add_req.position,
-                            target_old, target_old + add_req.op_count, item_count_cache_[type_id],
-                            ItemGridOperationReason::kMoveAdd);
+                            target_old, target_old + add_req.op_count, cached_count, ItemGridOperationReason::kMoveAdd);
       on_item_data_changed(target_entry, ItemGridOperationReason::kMoveAdd);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("move add merge type={} count={} at ({},{}) entry_id={} total={}", type_id,
                                    add_req.op_count, add_req.position.x, add_req.position.y, target_entry->entry_id(),
@@ -916,9 +927,10 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveC
             new_entry->entry_id());
       }
       add_entry_index(*position_cfg, new_entry);
-      item_count_cache_[type_id] += add_req.op_count;
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count += add_req.op_count;
       on_item_count_changed(type_id, new_entry, new_entry->item_instance().item_basic().guid(), add_req.position, 0,
-                            add_req.op_count, item_count_cache_[type_id], ItemGridOperationReason::kMoveAdd);
+                            add_req.op_count, cached_count, ItemGridOperationReason::kMoveAdd);
       on_item_data_changed(new_entry, ItemGridOperationReason::kMoveAdd);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("move add new type={} count={} guid={} at ({},{}) entry_id={}", type_id,
                                    add_req.op_count, new_entry->item_instance().item_basic().guid(), add_req.position.x,
@@ -1124,7 +1136,7 @@ bool ItemGridAlgorithm::check_move_request(
   // ============================================================
   for (const auto& delta_pair : type_count_delta) {
     if (delta_pair.second > 0) {
-      int64_t current_total = get_item_count(delta_pair.first);
+      int64_t current_total = get_cached_item_count(delta_pair.first);
       int32_t limit_ret = on_check_item_count_limit(delta_pair.first, current_total, delta_pair.second);
       if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
         error_code = limit_ret;
@@ -1301,8 +1313,9 @@ ITEM_ALGORITHM_API ItemGridMoveCheckedRequest ItemGridAlgorithm::check_move(
   return checked_request;
 }
 
-ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
-                             const PROJECT_NAMESPACE_ID::DItemInstance& item_instance) {
+ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(
+    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& config_group,
+    const PROJECT_NAMESPACE_ID::DItemInstance& item_instance) {
   if (!init_) {
     ITEM_ALGORITHM_LOG_ERROR_FMT("load called before init, container_guid={} operate_id={}", container_guid_,
                                  operate_id_);
@@ -1345,7 +1358,7 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(const ::excel::excel_config_type
   }
 
   // 数量上限检查
-  int64_t current_total = get_item_count(type_id);
+  int64_t current_total = get_cached_item_count(type_id);
   int32_t limit_ret = on_check_item_count_limit(type_id, current_total, add_count);
   if (limit_ret != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
     ITEM_ALGORITHM_LOG_WARNING_FMT("load failed: count limit exceeded type={} current={} add={}, error={} ({})",
@@ -1363,9 +1376,10 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(const ::excel::excel_config_type
         auto& existing = *group_it->second.begin();
         int64_t old_count = existing->item_instance().item_basic().count();
         existing->mutable_item_basic().set_count(old_count + add_count);
-        item_count_cache_[type_id] += add_count;
-        on_item_count_changed(type_id, existing, 0, ItemGridPosition{}, old_count, old_count + add_count,
-                              item_count_cache_[type_id], ItemGridOperationReason::kLoad);
+        auto& cached_count = item_count_cache_[type_id];
+        cached_count += add_count;
+        on_item_count_changed(type_id, existing, 0, ItemGridPosition{}, old_count, old_count + add_count, cached_count,
+                              ItemGridOperationReason::kLoad);
         on_item_data_changed(existing, ItemGridOperationReason::kLoad);
         ITEM_ALGORITHM_LOG_INFO_FMT("load success: merge ungrid type={} count={} entry_id={} total={}", type_id,
                                     add_count, existing->entry_id(), old_count + add_count);
@@ -1384,8 +1398,9 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(const ::excel::excel_config_type
     if (guid != 0) {
       guid_index_[guid] = entry;
     }
-    item_count_cache_[type_id] += add_count;
-    on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, item_count_cache_[type_id],
+    auto& cached_count = item_count_cache_[type_id];
+    cached_count += add_count;
+    on_item_count_changed(type_id, entry, guid, ItemGridPosition{}, 0, add_count, cached_count,
                           ItemGridOperationReason::kLoad);
     on_item_data_changed(entry, ItemGridOperationReason::kLoad);
     ITEM_ALGORITHM_LOG_INFO_FMT("load success: new ungrid type={} count={} guid={} entry_id={}", type_id, add_count,
@@ -1415,9 +1430,10 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(const ::excel::excel_config_type
     auto& existing = pos_it->second;
     int64_t old_count = existing->item_instance().item_basic().count();
     existing->mutable_item_basic().set_count(old_count + add_count);
-    item_count_cache_[type_id] += add_count;
+    auto& cached_count = item_count_cache_[type_id];
+    cached_count += add_count;
     on_item_count_changed(type_id, existing, existing->item_instance().item_basic().guid(), target_pos, old_count,
-                          old_count + add_count, item_count_cache_[type_id], ItemGridOperationReason::kLoad);
+                          old_count + add_count, cached_count, ItemGridOperationReason::kLoad);
     on_item_data_changed(existing, ItemGridOperationReason::kLoad);
     ITEM_ALGORITHM_LOG_INFO_FMT("load success: stack grid type={} count={} at ({},{}) entry_id={} total={}", type_id,
                                 add_count, target_pos.x, target_pos.y, existing->entry_id(), old_count + add_count);
@@ -1456,9 +1472,10 @@ ITEM_ALGORITHM_API bool ItemGridAlgorithm::load(const ::excel::excel_config_type
         add_count, guid, target_pos.x, target_pos.y, entry->entry_id());
   }
   add_entry_index(*position_cfg, entry);
-  item_count_cache_[type_id] += add_count;
+  auto& cached_count = item_count_cache_[type_id];
+  cached_count += add_count;
   on_item_count_changed(type_id, entry, entry->item_instance().item_basic().guid(), target_pos, 0, add_count,
-                        item_count_cache_[type_id], ItemGridOperationReason::kLoad);
+                        cached_count, ItemGridOperationReason::kLoad);
   on_item_data_changed(entry, ItemGridOperationReason::kLoad);
   ITEM_ALGORITHM_LOG_INFO_FMT("load success: new grid type={} count={} guid={} at ({},{}) entry_id={}", type_id,
                               add_count, entry->item_instance().item_basic().guid(), target_pos.x, target_pos.y,
@@ -1510,13 +1527,13 @@ ITEM_ALGORITHM_API void ItemGridAlgorithm::apply_entries(
 
     remove_entry_from_group(found);
     found->mutable_item_basic().set_count(0);
-    item_count_cache_[type_id] -= old_count;
-    if (item_count_cache_[type_id] <= 0) {
+    auto& cached_count = item_count_cache_[type_id];
+    cached_count -= old_count;
+    if (cached_count <= 0) {
       item_count_cache_.erase(type_id);
     }
 
-    on_item_count_changed(type_id, found, guid, pos, old_count, 0, get_item_count(type_id),
-                          ItemGridOperationReason::kApplyRemove);
+    on_item_count_changed(type_id, found, guid, pos, old_count, 0, cached_count, ItemGridOperationReason::kApplyRemove);
     on_item_data_changed(found, ItemGridOperationReason::kApplyRemove);
     ITEM_ALGORITHM_LOG_INFO_FMT("apply remove entry_id={} type={} count={} guid={}", remove_id, type_id, old_count,
                                 guid);
@@ -1584,14 +1601,15 @@ ITEM_ALGORITHM_API void ItemGridAlgorithm::apply_entries(
 
       // 更新 count cache
       int64_t count_delta = new_count - old_count;
+      auto& cached_count = item_count_cache_[type_id];
       if (count_delta != 0) {
-        item_count_cache_[type_id] += count_delta;
-        if (item_count_cache_[type_id] <= 0) {
+        cached_count += count_delta;
+        if (cached_count <= 0) {
           item_count_cache_.erase(type_id);
         }
       }
 
-      on_item_count_changed(type_id, existing, guid, new_pos, old_count, new_count, get_item_count(type_id),
+      on_item_count_changed(type_id, existing, guid, new_pos, old_count, new_count, cached_count,
                             ItemGridOperationReason::kApplyUpdate);
       on_item_data_changed(existing, ItemGridOperationReason::kApplyUpdate);
       ITEM_ALGORITHM_LOG_INFO_FMT("apply update entry_id={} type={} count={} guid={}", update.entry_id(), type_id,
@@ -1623,10 +1641,11 @@ ITEM_ALGORITHM_API void ItemGridAlgorithm::apply_entries(
         }
       }
 
-      item_count_cache_[type_id] += new_count;
+      auto& cached_count = item_count_cache_[type_id];
+      cached_count += new_count;
       ItemGridPosition pos = extract_position(item_basic.position().grid_position());
 
-      on_item_count_changed(type_id, new_entry, guid, pos, 0, new_count, get_item_count(type_id),
+      on_item_count_changed(type_id, new_entry, guid, pos, 0, new_count, cached_count,
                             ItemGridOperationReason::kApplyUpdate);
       on_item_data_changed(new_entry, ItemGridOperationReason::kApplyUpdate);
       ITEM_ALGORITHM_LOG_INFO_FMT("apply add entry_id={} type={} count={} guid={}", update.entry_id(), type_id,
