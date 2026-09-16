@@ -182,9 +182,11 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   PROJECT_NAMESPACE_ID::table_login_lock &login_blob_data = obj->get_login_lock();
 
   // 更新登录锁信息
-  login_blob_data.mutable_access_token_expired()->set_seconds(
-      static_cast<int64_t>(atfw::util::time::time_utility::get_sys_now()) +
-      logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration().seconds());
+  protobuf_copy_message(*login_blob_data.mutable_access_token_expired(),
+                        protobuf_from_system_clock(
+                            atfw::util::time::time_utility::sys_now() +
+                            protobuf_to_chrono_duration<>(
+                                (logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration()))));
   login_blob_data.set_login_zone_id(get_key().zone_id);
 
   uint64_t old_router_server_id = login_blob_data.router_server_id();
@@ -300,9 +302,12 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
         obj->get_login_lock().set_router_version(old_router_ver + 1);
       }
 
-      obj->get_login_lock().mutable_access_token_expired()->set_seconds(
-          static_cast<int64_t>(atfw::util::time::time_utility::get_sys_now()) +
-          logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration().seconds());
+      protobuf_copy_message(
+          *obj->get_login_lock().mutable_access_token_expired(),
+          protobuf_from_system_clock(
+              atfw::util::time::time_utility::sys_now() +
+              protobuf_to_chrono_duration<>(
+                  (logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration()))));
 
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, obj->get_login_lock());
