@@ -18,11 +18,6 @@ volumeMounts:
   configMountPath: /etc/atframework/publish/matchsvr/cfg
   logMountPath: /data/atframework/publish/matchsvr/log
 
-# vector:
-#   enabled: true
-#   log_path: /data/atframework/publish/matchsvr/log
-
-
 vector:
   enabled: false
   log_path: /data/atframework/publish/matchsvr/log
@@ -32,12 +27,5 @@ redis:
 
 cachesvr_shared:
   enabled: true
-
-httproute:
-  port: 7001
-  parentRefsName: project-x-tls-gateway
-
-matchsvr:
-  rank_auto_update_interval: 3600s
 
 enable_excel_config: true
