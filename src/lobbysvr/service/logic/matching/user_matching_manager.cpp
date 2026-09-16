@@ -386,17 +386,20 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   subscriber_route->set_server_id(logic_config::me()->get_local_server_id());
   const uint64_t matchsvr_id = rpc::matching_api::get_matchsvr_server_id();
   if (matchsvr_id == 0) {
+    clear_matching_state(ctx);
     FWLOGERROR("{} start matching failed, no ready matchsvr, unit_id={}", *owner_, rpc_request->unit().unit_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
   }
 
   int32_t result = RPC_AWAIT_CODE_RESULT(rpc::matching::create_matching(ctx, matchsvr_id, *rpc_request, *rpc_response));
   if (result < 0) {
+    clear_matching_state(ctx);
     FWLOGERROR("{} start matching RPC failed, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_, matchsvr_id,
                rpc_request->unit().unit_id(), result, protobuf_mini_dumper_get_error_msg(result));
     RPC_RETURN_CODE(result);
   }
   if (rpc_response->result() != 0) {
+    clear_matching_state(ctx);
     FWLOGERROR("{} start matching rejected by matchsvr, matchsvr_id={:#x}, unit_id={}, result={}({})", *owner_,
                matchsvr_id, rpc_request->unit().unit_id(), rpc_response->result(),
                protobuf_mini_dumper_get_error_msg(rpc_response->result()));
