@@ -370,24 +370,37 @@ function(project_tool_clang_format_generate_cmake_commands OUTPUT_VAR SCRIPT_BAS
   endif()
 endfunction()
 
-function project_tool_detect_build_tools()
-  foreach(_PROJECT_TOOL_CHECK_OBJTOOL objcopy objdump ranlib readelf nm ar addr2line)
+function(project_tool_detect_build_tools)
+  foreach(
+    _PROJECT_TOOL_CHECK_OBJTOOL
+    objcopy
+    objdump
+    ranlib
+    readelf
+    nm
+    ar
+    addr2line)
     string(TOUPPER "${_PROJECT_TOOL_CHECK_OBJTOOL}" _PROJECT_TOOL_CHECK_OBJTOOL_UPPER)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
       find_program(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} NAMES ${_PROJECT_TOOL_CHECK_OBJTOOL})
       if(NOT PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} AND CMAKE_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER})
-        set(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} "${CMAKE_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}}" PARENT_SCOPE)
+        set(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}
+            "${CMAKE_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}}"
+            PARENT_SCOPE)
         continue()
       endif()
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
       if(CMAKE_CXX_COMPILER MATCHES "-([0-9]+)")
-        find_program(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} NAMES "llvm-${_PROJECT_TOOL_CHECK_OBJTOOL}-${CMAKE_MATCH_1}")
+        find_program(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}
+                     NAMES "llvm-${_PROJECT_TOOL_CHECK_OBJTOOL}-${CMAKE_MATCH_1}")
       endif()
       if(NOT PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER})
         find_program(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} NAMES "llvm-${_PROJECT_TOOL_CHECK_OBJTOOL}")
       endif()
       if(NOT PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} AND CMAKE_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER})
-        set(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER} "${CMAKE_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}}" PARENT_SCOPE)
+        set(PROJECT_TOOL_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}
+            "${CMAKE_${_PROJECT_TOOL_CHECK_OBJTOOL_UPPER}}"
+            PARENT_SCOPE)
       endif()
     endif()
   endforeach()

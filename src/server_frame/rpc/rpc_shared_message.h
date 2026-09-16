@@ -150,7 +150,7 @@ SERVER_FRAME_API const std::shared_ptr<::google::protobuf::Arena> &get_shared_ar
 
 SERVER_FRAME_API void report_shared_message_defer_after_moved(const std::string &demangle_name);
 
-enum __shared_message_flag : uint32_t {
+enum class __shared_message_flag : uint32_t {
   kDefault = 0,
   kMoved = 0x01,
 };
@@ -168,7 +168,7 @@ template <class FromMessageType>
 struct ATFW_UTIL_SYMBOL_VISIBLE __shared_message_convertor<FromMessageType, FromMessageType> {
   static inline atfw::util::memory::strong_rc_ptr<FromMessageType> convert(
       atfw::util::memory::strong_rc_ptr<FromMessageType> &&from) {
-    return {std::move(from)};
+    return std::move(from);
   }
   static inline atfw::util::memory::strong_rc_ptr<FromMessageType> convert(
       const atfw::util::memory::strong_rc_ptr<FromMessageType> &from) {
@@ -179,11 +179,11 @@ template <class FromMessageType, class ToMessageType>
 struct ATFW_UTIL_SYMBOL_VISIBLE __shared_message_convertor {
   static inline atfw::util::memory::strong_rc_ptr<ToMessageType> convert(
       atfw::util::memory::strong_rc_ptr<FromMessageType> &&from) {
-    return {atfw::util::memory::static_pointer_cast<ToMessageType>(from)};
+    return atfw::util::memory::static_pointer_cast<ToMessageType>(from);
   }
   static inline atfw::util::memory::strong_rc_ptr<ToMessageType> convert(
       const atfw::util::memory::strong_rc_ptr<FromMessageType> &from) {
-    return {atfw::util::memory::static_pointer_cast<ToMessageType>(from)};
+    return atfw::util::memory::static_pointer_cast<ToMessageType>(from);
   }
 };
 
