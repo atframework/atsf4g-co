@@ -141,8 +141,16 @@ EXCLUDES=(
 echo "[INFO] Packing ${DEPLOY_DIR} -> ${OUTPUT_PACKAGE_FILE}/${OUTPUT_DEBUG_FILE}"
 cd "${DEPLOY_DIR}"
 tar "${EXCLUDES[@]}" -cvf- . | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_PACKAGE_FILE}" -
-tar -cvf- $(find . -name "*.dbg") | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_DEBUG_FILE}" -
+DBG_FILES=($(find . -name "*.dbg"))
+if [[ ${#DBG_FILES[@]} -gt 0 ]]; then
+    tar -cvf- $(find . -name "*.dbg") | zstd -T0 -B0 -13 --format=zstd -r -f -o "${OUTPUT_DEBUG_FILE}" -
+else
+    rm -f "${OUTPUT_DEBUG_FILE}"
+fi
 
 echo "[INFO] Done.
-- ${OUTPUT_PACKAGE_FILE}
-- ${OUTPUT_DEBUG_FILE}"
+- ${OUTPUT_PACKAGE_FILE}"
+
+if [[ -e "{OUTPUT_DEBUG_FILE}" ]]; then
+    echo "- ${OUTPUT_DEBUG_FILE}"
+fi
