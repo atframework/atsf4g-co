@@ -115,6 +115,7 @@ SERVER_FRAME_API router_object_base::io_task_guard::~io_task_guard() {
     return;
   }
 
+  owner->io_task_id_ = 0;
   owner->wakeup_io_task_awaiter();
 }
 
