@@ -73,6 +73,9 @@ class user_grid_item_operation_handler : public item_operation_handler {
   item_operation_result add(rpc::context&, user&, item_operation_handle_checked_add_request&&) override;
   item_operation_result sub(rpc::context&, user&, item_operation_handle_checked_sub_request&&) override;
 
+  int32_t on_item_not_enough(rpc::context&, user&, int32_t type_id) const override;
+  int64_t get_count(rpc::context&, user&, int32_t type_id) const override;
+
   bool find_position(rpc::context&, user&,
                      google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&) override;
 
@@ -120,6 +123,8 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
       item_algorithm::ItemGridContainerReplaceCheckedRequest& checked_request);
   item_algorithm::ItemGridOperationResult check_has(const item_algorithm::ItemGridHasRequest& requests) const;
   bool find_position(rpc::context&, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&) const;
+  int32_t on_item_not_enough(rpc::context&, int32_t type_id) const;
+  int64_t get_count(rpc::context&, int32_t type_id) const;
 
  public:
   int64_t allocate_container_guid();
@@ -135,6 +140,7 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
 
   void on_item_changed(int64_t container_guid, const item_algorithm::item_grid_entry_ptr_t& entry,
                        item_algorithm::ItemGridOperationReason reason);
+  void on_item_count_changed(int32_t type_id, int64_t delta_count);
 
   /// @brief 构建脏同步消息 (user dirty handle 的 build_fn 调用, 填充 SCUserDirtyChgSync)
   void build_dirty_sync(PROJECT_NAMESPACE_ID::SCUserDirtyChgSync& output);
@@ -148,6 +154,8 @@ class user_item_grid_manager : public atfw::util::design_pattern::noncopyable,
   user* ATFW_UTIL_MACRO_NONNULL owner_;
   PROJECT_NAMESPACE_ID::DUserItemManagerData manager_data_;
   user_virtual_inventory virtual_inventory_;
+
+  std::unordered_map<int32_t, int64_t> item_type_to_count_cache_;
 
   std::unordered_map<int64_t, atfw::util::memory::weak_rc_ptr<user_item_grid_algorithm>> container_guid_to_grid_;
   std::unordered_set<std::pair<int64_t, uint64_t>, dirty_entry_hash> dirty_entries_;

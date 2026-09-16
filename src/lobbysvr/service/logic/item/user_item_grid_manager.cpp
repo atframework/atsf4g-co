@@ -106,6 +106,15 @@ item_operation_result user_grid_item_operation_handler::sub(rpc::context&, user&
   return {result.error_code, result.failed_index};
 }
 
+int32_t user_grid_item_operation_handler::on_item_not_enough(rpc::context& ctx, user& user_inst,
+                                                             int32_t type_id) const {
+  return user_inst.get_user_item_grid_manager().on_item_not_enough(ctx, type_id);
+}
+
+int64_t user_grid_item_operation_handler::get_count(rpc::context& ctx, user& user_inst, int32_t type_id) const {
+  return user_inst.get_user_item_grid_manager().get_count(ctx, type_id);
+}
+
 bool user_grid_item_operation_handler::find_position(
     rpc::context& ctx, user& user_inst, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& data) {
   return user_inst.get_user_item_grid_manager().find_position(ctx, data);
@@ -209,6 +218,10 @@ void user_item_grid_manager::on_item_changed(int64_t container_guid, const item_
         };
         return handle;
       });
+}
+
+void user_item_grid_manager::on_item_count_changed(int32_t type_id, int64_t delta_count) {
+  item_type_to_count_cache_[type_id] += delta_count;
 }
 
 void user_item_grid_manager::build_dirty_sync(PROJECT_NAMESPACE_ID::SCUserDirtyChgSync& output) {
@@ -350,4 +363,16 @@ bool user_item_grid_manager::find_position(
     }
   }
   return true;
+}
+
+int32_t user_item_grid_manager::on_item_not_enough(rpc::context&, int32_t type_id) const {
+  return user_item_grid_algorithm::on_item_not_enough_static(type_id);
+}
+
+int64_t user_item_grid_manager::get_count(rpc::context&, int32_t type_id) const {
+  auto iter = item_type_to_count_cache_.find(type_id);
+  if (iter == item_type_to_count_cache_.end()) {
+    return 0;
+  }
+  return iter->second;
 }

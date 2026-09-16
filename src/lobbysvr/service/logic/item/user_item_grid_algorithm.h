@@ -32,9 +32,16 @@ class user_item_grid_algorithm : public item_algorithm::ItemGridAlgorithm {
   user* get_owner() const { return const_cast<user*>(owner_); }
   void destroy();
 
+ public:
+  static int32_t on_item_not_enough_static(int32_t type_id);
+
  protected:
-  virtual void on_item_data_changed(const item_algorithm::item_grid_entry_ptr_t& entry,
-                            item_algorithm::ItemGridOperationReason reason);
+  void on_item_data_changed(const item_algorithm::item_grid_entry_ptr_t& entry,
+                            item_algorithm::ItemGridOperationReason reason) override;
+  void on_item_count_changed(int32_t type_id, const item_algorithm::item_grid_entry_ptr_t& entry, int64_t guid,
+                             const item_algorithm::ItemGridPosition& position, int64_t old_count, int64_t new_count,
+                             int64_t type_total_count, item_algorithm::ItemGridOperationReason reason) override;
+  int32_t on_item_not_enough(int32_t type_id) const override;
 
  private:
   user* owner_ = nullptr;

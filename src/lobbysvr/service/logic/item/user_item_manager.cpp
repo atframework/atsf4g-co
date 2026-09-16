@@ -212,6 +212,30 @@ item_operation_result user_item_manager::check_has(
   return item_operation_result{PROJECT_NAMESPACE_ID::EN_SUCCESS, -1};
 }
 
+int32_t user_item_manager::on_item_not_enough(rpc::context& ctx, int32_t type_id) {
+  auto type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
+  if (type_config == nullptr) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+  }
+  auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
+  if (handler_id_it == item_type_handler_id_.end()) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
+  }
+  return item_type_handler_.find(handler_id_it->second)->second->on_item_not_enough(ctx, *owner_, type_id);
+}
+
+int64_t user_item_manager::get_count(rpc::context& ctx, int32_t type_id) {
+  auto type_config = ItemAlgorithmTypeOption::GetItemType(type_id);
+  if (type_config == nullptr) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND;
+  }
+  auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
+  if (handler_id_it == item_type_handler_id_.end()) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND;
+  }
+  return item_type_handler_.find(handler_id_it->second)->second->get_count(ctx, *owner_, type_id);
+}
+
 rpc::result_code_type user_item_manager::generate_item_from_offset_cfg(
     rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
     google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out_instances, int32_t multiple) const {

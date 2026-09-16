@@ -50,6 +50,9 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
       int32_t multiple = 1) const;
   item_operation_result check_has(rpc::context&,
                                   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&&);
+  int32_t on_item_not_enough(rpc::context&, int32_t type_id);
+  // 小于0为错误码
+  int64_t get_count(rpc::context&, int32_t type_id);
 
  public:
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type generate_item_from_offset_cfg(

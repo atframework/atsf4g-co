@@ -35,7 +35,7 @@ user_item_grid_algorithm::user_item_grid_algorithm(user* owner, const std::strin
       WDTLOGGETCAT(::ATFRAMEWORK_UTILS_NAMESPACE_ID::log::log_wrapper::categorize_t::DEFAULT)
           ->format_log(::ATFRAMEWORK_UTILS_NAMESPACE_ID::log::log_wrapper::caller_info_t(
                            lv, {}, record.file_name, static_cast<uint32_t>(record.line_number), ""),
-                        "[{}][{}] {}", *owner_, record.category, record.message);
+                       "[{}][{}] {}", *owner_, record.category, record.message);
   };
   set_log_handler(handler);
 }
@@ -87,9 +87,26 @@ void user_item_grid_algorithm::on_item_data_changed(const item_algorithm::item_g
   }
 }
 
+void user_item_grid_algorithm::on_item_count_changed(int32_t type_id, const item_algorithm::item_grid_entry_ptr_t&,
+                                                     int64_t, const item_algorithm::ItemGridPosition&,
+                                                     int64_t old_count, int64_t new_count, int64_t,
+                                                     item_algorithm::ItemGridOperationReason) {
+  if (register_grid_) {
+    owner_->get_user_item_grid_manager().on_item_count_changed(type_id, new_count - old_count);
+  }
+}
+
 void user_item_grid_algorithm::destroy() {
   if (register_grid_) {
     owner_->get_user_item_grid_manager().unregister_item_grid_algorithm(this);
     register_grid_ = false;
   }
+}
+
+int32_t user_item_grid_algorithm::on_item_not_enough(int32_t type_id) const {
+  return on_item_not_enough_static(type_id);
+}
+
+int32_t user_item_grid_algorithm::on_item_not_enough_static(int32_t) {
+  return PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NOT_ENOUGH;
 }
