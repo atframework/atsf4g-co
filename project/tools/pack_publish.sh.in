@@ -151,6 +151,6 @@ fi
 echo "[INFO] Done.
 - ${OUTPUT_PACKAGE_FILE}"
 
-if [[ -e "{OUTPUT_DEBUG_FILE}" ]]; then
+if [[ -e "${OUTPUT_DEBUG_FILE}" ]]; then
     echo "- ${OUTPUT_DEBUG_FILE}"
 fi
