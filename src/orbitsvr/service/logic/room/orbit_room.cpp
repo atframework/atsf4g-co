@@ -266,8 +266,8 @@ int32_t orbit_room::init_user(
   for (const auto& user_init_data : user_list) {
     orbit_room_user_data_ptr_t user_data = atfw::component::memory::stl::make_strong_rc<orbit_room_user_data>();
     user_data->init_data_ = user_init_data;
-    user_data->user_key_ = user_init_data.user_key().user_key();
-    user_data_index_[user_init_data.user_key().user_key()] = user_data;
+    user_data->user_key_ = user_init_data.common().user_key().user_key();
+    user_data_index_[user_init_data.common().user_key().user_key()] = user_data;
   }
   init_user_finish_ = is_last_one;
   if (is_last_one) {
@@ -320,16 +320,16 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
         if (ret != 0) {
           FWLOGERROR("orbit_room {} user_init failed, ret: {}", room_ptr->get_client_id(), ret);
           for (const auto& user_data : req->user_data()) {
-            auto user_iter = room_ptr->user_data_index_.find(user_data.user_key().user_key());
+            auto user_iter = room_ptr->user_data_index_.find(user_data.common().user_key().user_key());
             if (user_iter == room_ptr->user_data_index_.end()) {
               FWLOGERROR("orbit_room {} user_init failed, user not found, user_key: {}", room_ptr->get_client_id(),
-                         user_data.user_key().user_key().user_id());
+                         user_data.common().user_key().user_key().user_id());
               continue;
             }
             user_iter->second->init_retry_count_++;
             if (user_iter->second->init_retry_count_ >= 3) {
               FWLOGERROR("orbit_room {} user_init failed, user init retry count exceeded, user_key: {}",
-                         room_ptr->get_client_id(), user_data.user_key().user_key().user_id());
+                         room_ptr->get_client_id(), user_data.common().user_key().user_key().user_id());
               user_iter->second->finish_ = true;
               user_iter->second->finish_timepoint_ = util::time::time_utility::get_now();
               room_ptr->init_to_client_finish_count_++;
@@ -395,6 +395,7 @@ int32_t orbit_room::on_user_finish(
     }
 
     user_ptr->finish_result_ = result;
+    *user_ptr->finish_result_common_.mutable_basic_data() = result.common_data();
     user_ptr->finish_ = true;
     user_ptr->finish_timepoint_ = util::time::time_utility::get_now();
     finish_user_list_.push_back(result.common_data().user_key().user_key());
@@ -561,22 +562,22 @@ void orbit_room::async_user_settlement(rpc::context& ctx, orbit_room_user_data_p
 rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_user_data_ptr_t user_ptr) {
   if (!user_ptr->finish_) {
     FWLOGERROR("orbit_room {} user_settlement failed, user not finish, user_key: {}:{}", get_client_id(),
-               user_ptr->init_data_.user_key().user_key().user_id(),
-               user_ptr->init_data_.user_key().user_key().zone_id());
+               user_ptr->init_data_.common().user_key().user_key().user_id(),
+               user_ptr->init_data_.common().user_key().user_key().zone_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_STATUS_INVALID);
   }
   if (user_ptr->settlement_finish_) {
     FWLOGERROR("orbit_room {} user_settlement failed, user settlement already done, user_key: {}:{}", get_client_id(),
-               user_ptr->init_data_.user_key().user_key().user_id(),
-               user_ptr->init_data_.user_key().user_key().zone_id());
+               user_ptr->init_data_.common().user_key().user_key().user_id(),
+               user_ptr->init_data_.common().user_key().user_key().zone_id());
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ORBIT_ROOM_USER_SETTLEMENT_ALREADY_FINISH);
   }
 
   auto req = rpc::make_shared_message<PROJECT_NAMESPACE_ID::user_async_jobs_blob_data>(ctx);
   PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& async_data = *req->mutable_orbit_finish()->mutable_data();
   req->set_action_uuid(atfw::util::string::format("{}-{}-{}", get_client_id(),
-                                                  user_ptr->init_data_.user_key().user_key().user_id(),
-                                                  user_ptr->init_data_.user_key().user_key().zone_id()));
+                                                  user_ptr->init_data_.common().user_key().user_key().user_id(),
+                                                  user_ptr->init_data_.common().user_key().user_key().zone_id()));
   *async_data.mutable_room_key() = room_key_;
   async_data.set_start_timepoint(create_timepoint_);
   async_data.set_finish_timepoint(user_ptr->finish_timepoint_);
@@ -585,7 +586,7 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
   if (user_ptr->init_) {
     // 没有init成功就不需要其余数据了
     for (const auto& pair : user_data_index_) {
-      *async_data.add_user_init_datas() = pair.second->init_data_;
+      *async_data.add_user_init_datas() = pair.second->init_data_.common();
     }
 
     bool self_find = false;
@@ -593,8 +594,8 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
       if (self_find) {
         break;
       }
-      if (user_key.user_id() == user_ptr->init_data_.user_key().user_key().user_id() &&
-          user_key.zone_id() == user_ptr->init_data_.user_key().user_key().zone_id()) {
+      if (user_key.user_id() == user_ptr->init_data_.common().user_key().user_key().user_id() &&
+          user_key.zone_id() == user_ptr->init_data_.common().user_key().user_key().zone_id()) {
         self_find = true;
       }
       auto user_iter = user_data_index_.find(user_key);
@@ -606,23 +607,23 @@ rpc::result_code_type orbit_room::user_settlement(rpc::context& ctx, orbit_room_
       if (self_find) {
         *async_data.mutable_user_finish_result_self() = user_iter->second->finish_result_;
       } else {
-        *async_data.add_user_finish_results() = user_iter->second->finish_result_.common_data();
+        *async_data.add_user_finish_results() = user_iter->second->finish_result_common_;
       }
     }
   }
 
   int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::async_jobs::add_jobs(
-      ctx, PROJECT_NAMESPACE_ID::EN_PAJT_NORMAL, user_ptr->init_data_.user_key().user_key().user_id(),
-      user_ptr->init_data_.user_key().user_key().zone_id(), req));
+      ctx, PROJECT_NAMESPACE_ID::EN_PAJT_NORMAL, user_ptr->init_data_.common().user_key().user_key().user_id(),
+      user_ptr->init_data_.common().user_key().user_key().zone_id(), req));
   if (ret != 0) {
     FWLOGERROR("orbit_room {} add orbit_finish async job failed for user {},{} ret: {}", get_client_id(),
-               user_ptr->init_data_.user_key().user_key().user_id(),
-               user_ptr->init_data_.user_key().user_key().zone_id(), ret);
+               user_ptr->init_data_.common().user_key().user_key().user_id(),
+               user_ptr->init_data_.common().user_key().user_key().zone_id(), ret);
     user_ptr->settlement_retry_count_++;
     if (user_ptr->settlement_retry_count_ >= 3) {
       FWLOGERROR("orbit_room {} user_settlement failed too many times for user {},{}", get_client_id(),
-                 user_ptr->init_data_.user_key().user_key().user_id(),
-                 user_ptr->init_data_.user_key().user_key().zone_id());
+                 user_ptr->init_data_.common().user_key().user_key().user_id(),
+                 user_ptr->init_data_.common().user_key().user_key().zone_id());
       user_ptr->settlement_finish_ = true;
       PROJECT_NAMESPACE_ID::DOrbitRoomEventLog event_log;
       event_log.set_orbit_room_status(room_status_);

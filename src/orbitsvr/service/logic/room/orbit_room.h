@@ -37,6 +37,7 @@ struct orbit_room_user_data {
   PROJECT_NAMESPACE_ID::DOrbitUserInitData init_data_;
   PROJECT_NAMESPACE_ID::DOrbitUserInitResult init_result_;
   PROJECT_NAMESPACE_ID::DOrbitUserFinishResultFull finish_result_;
+  PROJECT_NAMESPACE_ID::DOrbitUserFinishResultCommon finish_result_common_;
   PROJECT_NAMESPACE_ID::DUserIDKey user_key_;
   bool init_ = false;
   int32_t init_retry_count_ = 0;

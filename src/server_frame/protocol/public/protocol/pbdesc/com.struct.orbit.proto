@@ -35,10 +35,6 @@ message DOrbitUserInitDataDetail {
   // 用户初始化数据
 }
 
-message DOrbitUserFinishResultCommonDetail {
-  // 用户完成数据
-}
-
 message DOrbitUserFinishResultSelfDetail {
   // 用户自己完成数据
 }
@@ -49,15 +45,19 @@ message DOrbitUserFinishAsyncData {
   int64 finish_timepoint = 3;
   DOrbitRoomExitInfo exit_info = 4;
   bool init_success = 5;
-  repeated DOrbitUserInitData user_init_datas = 11;                // 参与用户
+  repeated DOrbitUserInitDataCommon user_init_datas = 11;          // 参与用户
   repeated DOrbitUserFinishResultCommon user_finish_results = 12;  // 参与用户完成结果
   DOrbitUserFinishResultFull user_finish_result_self = 13;         // 用户自己完成结果
 }
 
-message DOrbitUserInitData {
+message DOrbitUserInitDataCommon {
   DOrbitUserKey user_key = 1;
   int32 faction_id = 2;
-  DOrbitUserInitDataDetail data = 3;
+}
+
+message DOrbitUserInitData {
+  DOrbitUserInitDataCommon common = 1;
+  DOrbitUserInitDataDetail data = 2;
 }
 
 message DOrbitUserInitResult {
@@ -65,16 +65,26 @@ message DOrbitUserInitResult {
   string token = 2;
 }
 
-message DOrbitUserFinishResultCommon {
+message DOrbitUserFinishResultBasic {
   DOrbitUserKey user_key = 1;
   int32 index = 2;
   EnOrbitUserStatusType status = 3;
-  DOrbitUserFinishResultCommonDetail data = 4;
+  int32 faction_id = 4;
 }
 
+message DOrbitUserFinishResultDetail {
+  // 用户完成数据
+}
+
+// 参与基础数据
+message DOrbitUserFinishResultCommon {
+  DOrbitUserFinishResultBasic basic_data = 1;
+}
+
+// 完整数据
 message DOrbitUserFinishResultFull {
-  DOrbitUserFinishResultCommon common_data = 1;
-  DOrbitUserFinishResultSelfDetail self_data = 2;
+  DOrbitUserFinishResultBasic common_data = 1;
+  DOrbitUserFinishResultSelfDetail self_data = 3;
 }
 
 message DOrbitRoomInitData {

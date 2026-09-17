@@ -656,11 +656,12 @@ rpc::result_code_type matching_manager::orbit_room_ready(
     const int32_t faction_id = room->get_unit_faction_id(unit_value.first);
     for (const auto& matching_user : runtime_unit->get_data().users()) {
       auto* orbit_user = init_request->add_user_list();
-      protobuf_copy_message(*orbit_user->mutable_user_key()->mutable_user_key(), matching_user.user_key());
+      auto* orbit_user_common = orbit_user->mutable_common();
+      protobuf_copy_message(*orbit_user_common->mutable_user_key()->mutable_user_key(), matching_user.user_key());
       auto match_orbit_user_data = room->get_match_orbit_user_init_detail(matching_user.user_key());
-      orbit_user->mutable_user_key()->set_orbit_user_key(match_orbit_user_data.user_open_id());  // openid_id
+      orbit_user_common->mutable_user_key()->set_orbit_user_key(match_orbit_user_data.user_open_id());  // openid_id
+      orbit_user_common->set_faction_id(faction_id);
       protobuf_copy_message(*orbit_user->mutable_data(), match_orbit_user_data.orbit_init_data());
-      orbit_user->set_faction_id(faction_id);
       const auto route = runtime_unit ? runtime_unit->get_subscriber_route(matching_user.user_key()) : std::nullopt;
       if (!route.has_value()) {
         ++skipped_notify_user_count;
