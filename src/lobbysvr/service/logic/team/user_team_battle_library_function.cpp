@@ -331,8 +331,8 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_star
   team_data->add_element()->mutable_battle()->set_matching(true);
   auto callback_fn = [](rpc::context& child_ctx, user& user_inst, const user_team::ptr_t&, int32_t result) {
     if (result < 0) {
-      FCTXLOGERROR(child_ctx, "Failed to update team shared data for {}: result code {}({})", user_inst, result,
-                   protobuf_mini_dumper_get_error_msg(result));
+      FCTXLOGWARNING(child_ctx, "Failed to update team shared data for {}: result code {}({})", user_inst, result,
+                     protobuf_mini_dumper_get_error_msg(result));
       auto& matching_mgr = user_inst.get_user_matching_manager();
       matching_mgr.callback_start_matching(child_ctx, false, result);
     }
