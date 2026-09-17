@@ -12,10 +12,21 @@ cmake_minimum_required(VERSION 3.24.0)
 # 1. Locate go-task (never fatal; download the latest release as a fallback)
 # ============================================================================
 
+# Prefer the build-time tools directory. A cache entry from an older build tree may still point into the deploy tree's
+# tools directory, which no longer carries go-task; drop it so the new location is resolved.
+if(TASK_EXECUTABLE)
+  string(FIND "${TASK_EXECUTABLE}" "${PROJECT_INSTALL_TOOLS_DIR}" _ROBOT_TASK_LEGACY_PATH_POS)
+  if(_ROBOT_TASK_LEGACY_PATH_POS EQUAL 0)
+    unset(TASK_EXECUTABLE CACHE)
+    unset(TASK_EXECUTABLE)
+  endif()
+  unset(_ROBOT_TASK_LEGACY_PATH_POS)
+endif()
+
 find_program(
   TASK_EXECUTABLE
   NAMES task task.exe
-  HINTS "${PROJECT_INSTALL_TOOLS_DIR}/go-task"
+  HINTS "${PROJECT_BUILD_TOOLS_DIR}/go-task"
   DOC "go-task runner")
 
 set(ROBOT_TASK_READY FALSE)
@@ -37,7 +48,7 @@ endif()
 
 if(NOT ROBOT_TASK_READY)
   # Fallback: query the latest go-task release and download the binary for this host. Trust note: this fetches whatever
-  # upstream publishes as "latest"; pin PROJECT_INSTALL_TOOLS_DIR/go-task for a hermetic build.
+  # upstream publishes as "latest"; pin PROJECT_BUILD_TOOLS_DIR/go-task for a hermetic build.
   if(CMAKE_HOST_WIN32)
     set(ROBOT_TASK_HOST_OS "windows")
     set(ROBOT_TASK_ARCHIVE_EXT "zip")
@@ -89,7 +100,7 @@ if(NOT ROBOT_TASK_READY)
       SHOW_PROGRESS)
     list(GET ROBOT_TASK_ARCHIVE_STATUS 0 ROBOT_TASK_ARCHIVE_CODE)
     if(ROBOT_TASK_ARCHIVE_CODE EQUAL 0)
-      set(ROBOT_TASK_INSTALL_DIR "${PROJECT_INSTALL_TOOLS_DIR}/go-task")
+      set(ROBOT_TASK_INSTALL_DIR "${PROJECT_BUILD_TOOLS_DIR}/go-task")
       execute_process(COMMAND "${CMAKE_COMMAND}" -E make_directory "${ROBOT_TASK_INSTALL_DIR}"
                       RESULT_VARIABLE ROBOT_TASK_MAKE_DIR_RESULT)
       if(ROBOT_TASK_MAKE_DIR_RESULT EQUAL 0)
@@ -145,7 +156,7 @@ if(TASK_EXECUTABLE AND NOT ROBOT_TASK_READY)
   unset(_ROBOT_TASK_VERSION_RESULT)
 endif()
 string(CONCAT ROBOT_TASK_MISSING_MESSAGE "go-task (task) not found. The robot-build target is unavailable. "
-              "Install go-task (https://taskfile.dev/) or set PROJECT_INSTALL_TOOLS_DIR, then re-run CMake.")
+              "Install go-task (https://taskfile.dev/) or set PROJECT_BUILD_TOOLS_DIR, then re-run CMake.")
 if(NOT ROBOT_TASK_READY)
   unset(TASK_EXECUTABLE CACHE)
   unset(TASK_EXECUTABLE)

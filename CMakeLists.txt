@@ -48,6 +48,14 @@ set(PROJECT_INSTALL_SHARED_DIR "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 set(PROJECT_INSTALL_RES_PBD_DIR "${PROJECT_INSTALL_RES_DIR}/pbdesc")
 file(MAKE_DIRECTORY "${PROJECT_INSTALL_TOOLS_DIR}/bin")
 
+# Build-time host tools (go-task, helm, ...) are only used while configuring and building, so they live next to the
+# deploy tree in <PROJECT_BINARY_DIR>/tools instead of inside it. Shipping them in the deploy tree would put them in
+# every published package.
+if(NOT PROJECT_BUILD_TOOLS_DIR)
+  set(PROJECT_BUILD_TOOLS_DIR "${PROJECT_BINARY_DIR}/tools")
+endif()
+file(MAKE_DIRECTORY "${PROJECT_BUILD_TOOLS_DIR}")
+
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_SHARED_DIR})
 file(MAKE_DIRECTORY ${PROJECT_INSTALL_RES_PBD_DIR})
 
@@ -243,10 +251,11 @@ if(WIN32)
   set_property(TARGET "tools-windows-bat-wrappers" PROPERTY FOLDER "${PROJECT_NAME}/tools")
 endif()
 
-# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst. Before packing it splits debug
-# symbols of shared libraries (.so) under <publish>/lib into sibling ".dbg" files with objcopy, then excludes every
-# "log" directory, <publish>/tools/go-task and <publish>/tools/helm, and "*.a"/"*.dbg" files. Generated into the build
-# root next to the publish tree.
+# pack_publish.sh: pack the deploy base directory (publish) into svr-<timestamp>.tar.zst. Before packing it refreshes
+# the chart dependencies through <publish>/tools/script/update_dependency.sh, splits debug symbols of shared libraries
+# (.so) under <publish>/lib into sibling ".dbg" files with objcopy, then excludes every "log" directory and
+# "*.a"/"*.dbg" files. The archive does not carry go-task/helm: they live in <PROJECT_BUILD_TOOLS_DIR>, not in the
+# deploy tree. Generated into the build root next to the publish tree.
 configure_file("${CMAKE_CURRENT_LIST_DIR}/project/tools/pack_publish.sh.in"
                "${PROJECT_GENERATED_TOOLS_DIR}/pack_publish.sh" @ONLY)
 

@@ -3,8 +3,23 @@ $PSDefaultParameterValues['*:Encoding'] = 'utf8'
 
 Set-Location -LiteralPath $PSScriptRoot
 
-$HelmDir = Join-Path $PSScriptRoot '..\..\tools\helm'
-$env:PATH = "$HelmDir;$env:PATH"
+# helm is installed by the CMake build into <build>/tools/helm, next to the deploy tree (<build>/publish).
+# Probe that location first, then the legacy in-tree <publish>/tools/helm for older build trees.
+$HelmDirCandidates = @(
+    (Join-Path $PSScriptRoot '..\..\..\tools\helm'),
+    (Join-Path $PSScriptRoot '..\..\tools\helm')
+)
+foreach ($HelmDirCandidate in $HelmDirCandidates) {
+    if (Test-Path -LiteralPath $HelmDirCandidate -PathType Container) {
+        $env:PATH = "$HelmDirCandidate;$env:PATH"
+        break
+    }
+}
+
+if (-not (Get-Command helm -ErrorAction SilentlyContinue)) {
+    Write-Host '[ERROR] helm not found. Expected under <build>/tools/helm or on PATH.'
+    exit 1
+}
 
 $Failed = $false
 Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot '..\..\cloud-native\charts') -Directory |

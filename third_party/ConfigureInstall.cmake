@@ -22,10 +22,12 @@ unset(PROJECT_COPY_EXECUTABLES)
 project_link_or_copy_files(${PROJECT_THIRD_PARTY_CFSSL_PREBUILT_FILES} "${PROJECT_INSTALL_TOOLS_DIR}/cfssl")
 # atdtool
 project_link_or_copy_files(${PROJECT_THIRD_PARTY_ATDTOOL_PREBUILT_FILES} "${PROJECT_INSTALL_TOOLS_DIR}/atdtool")
+# go-task and helm are build-time host tools: they are only needed while configuring/building and must stay out of the
+# published deploy tree, so they are installed into <PROJECT_BINARY_DIR>/tools instead of the deploy tools directory.
 # go-task
-project_link_or_copy_files(${PROJECT_THIRD_PARTY_GOTASK_PREBUILT_FILES} "${PROJECT_INSTALL_TOOLS_DIR}/go-task")
+project_link_or_copy_files(${PROJECT_THIRD_PARTY_GOTASK_PREBUILT_FILES} "${PROJECT_BUILD_TOOLS_DIR}/go-task")
 # helm
-project_link_or_copy_files(${PROJECT_THIRD_PARTY_HELM_PREBUILT_FILES} "${PROJECT_INSTALL_TOOLS_DIR}/helm")
+project_link_or_copy_files(${PROJECT_THIRD_PARTY_HELM_PREBUILT_FILES} "${PROJECT_BUILD_TOOLS_DIR}/helm")
 
 # otelcol
 file(MAKE_DIRECTORY "${PROJECT_INSTALL_BAS_DIR}/otelcol/bin")

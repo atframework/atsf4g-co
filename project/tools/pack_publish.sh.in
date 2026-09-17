@@ -6,14 +6,17 @@
 #   * Deploy base directory : <script-dir>/publish
 #   * Output directory      : <script-dir>
 #   * Output file           : svr-<yyyyMMdd_HHmmss>.tar.zst
+#   * Before packing, refresh the chart dependencies by running
+#     <deploy>/tools/script/update_dependency.sh (helm dependency update per chart).
 #   * Before packing, split debug symbols: every shared library (.so) under
 #     <deploy>/lib that still carries debug sections has its debug info separated
 #     into a sibling ".dbg" file with objcopy (same steps as the
 #     project_tool_split_target_debug_sybmol CMake helper) and is stripped, so the
 #     archive does not carry debug info.
 #   * Excluded from archive : every directory named "log" (including otelcol/log),
-#                             <deploy>/tools/go-task and <deploy>/tools/helm,
 #                             and every "*.a" / "*.dbg" file.
+#     go-task and helm are not part of the deploy tree (they live in <build>/tools),
+#     so they do not appear in the archive and need no exclusion.
 #
 # Usage:
 #   ./pack_publish.sh
@@ -61,6 +64,16 @@ if [ ! -d "${DEPLOY_DIR}" ]; then
     echo "[ERROR] Deploy base directory does not exist: ${DEPLOY_DIR}" >&2
     exit 1
 fi
+
+# Vendor the chart dependencies before packing so the archive always carries the resolved charts. helm itself lives in
+# the build-time tools directory (<build>/tools/helm); the update_dependency script locates it.
+UPDATE_DEPENDENCY_SCRIPT="${DEPLOY_DIR}/tools/script/update_dependency.sh"
+if [ ! -f "${UPDATE_DEPENDENCY_SCRIPT}" ]; then
+    echo "[ERROR] update_dependency script not found: ${UPDATE_DEPENDENCY_SCRIPT}" >&2
+    exit 1
+fi
+echo "[INFO] Updating chart dependencies"
+bash "${UPDATE_DEPENDENCY_SCRIPT}"
 
 mkdir -p "${OUTPUT_DIR}"
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
@@ -119,21 +132,12 @@ split_lib_debug_symbols() {
 
 split_lib_debug_symbols "${DEPLOY_DIR}"
 
-# A matched directory (named "log", "tools/go-task" or "tools/helm") is not
-# descended into, so its whole tree is skipped.
+# A matched directory (named "log") is not descended into, so its whole tree is skipped.
 EXCLUDES=(
     --exclude='log'
     --exclude='*/log'
     --exclude='log/*'
     --exclude='*/log/*'
-    --exclude='tools/go-task'
-    --exclude='*/tools/go-task'
-    --exclude='tools/go-task/*'
-    --exclude='*/tools/go-task/*'
-    --exclude='tools/helm'
-    --exclude='*/tools/helm'
-    --exclude='tools/helm/*'
-    --exclude='*/tools/helm/*'
     --exclude='*.a'
     --exclude='*.dbg'
 )
