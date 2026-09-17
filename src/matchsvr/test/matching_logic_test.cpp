@@ -331,7 +331,6 @@ PROJECT_NAMESPACE_ID::DMatchingUnit make_unit(uint64_t unit_id, uint64_t user_id
   auto* user = result.add_users();
   user->mutable_user_key()->set_user_id(user_id);
   user->mutable_user_key()->set_zone_id(1);
-  protobuf_copy_message(*result.mutable_captain_user_key(), user->user_key());
   return result;
 }
 
@@ -348,7 +347,6 @@ PROJECT_NAMESPACE_ID::DMatchingUnit make_party_unit(uint64_t unit_id, uint64_t f
     user->mutable_user_key()->set_user_id(first_user_id + static_cast<uint64_t>(index));
     user->mutable_user_key()->set_zone_id(1);
   }
-  protobuf_copy_message(*result.mutable_captain_user_key(), result.users(0).user_key());
   return result;
 }
 
@@ -414,7 +412,7 @@ PROJECT_NAMESPACE_ID::SSMatchingCreateReq make_create_request(uint64_t unit_id, 
   protobuf_copy_message(*result.mutable_unit(), make_unit(unit_id, user_id, rank_level, force_type));
   const int32_t default_level_id = matching_pool_id * 100 + 1;
   result.mutable_unit()->set_acceptable_level_ids(0, default_level_id);
-  protobuf_copy_message(*result.mutable_operator_user(), result.unit().captain_user_key());
+  protobuf_copy_message(*result.mutable_operator_user(), result.unit().users(0).user_key());
   auto* route = result.add_subscriber_routes();
   protobuf_copy_message(*route->mutable_user_key(), result.operator_user());
   route->set_server_id(0x160001);
@@ -432,7 +430,7 @@ PROJECT_NAMESPACE_ID::SSMatchingCreateReq make_party_create_request(uint64_t uni
   protobuf_copy_message(*result.mutable_unit(),
                         make_party_unit(unit_id, first_user_id, user_count, rank_level, allow_faction_fill));
   result.mutable_unit()->set_acceptable_level_ids(0, 301);
-  protobuf_copy_message(*result.mutable_operator_user(), result.unit().captain_user_key());
+  protobuf_copy_message(*result.mutable_operator_user(), result.unit().users(0).user_key());
   uint64_t server_id = 0x160001;
   for (const auto& user : result.unit().users()) {
     auto* route = result.add_subscriber_routes();
@@ -594,7 +592,7 @@ CASE_TEST(matchsvr_matching_wal, routes_unit_members_to_their_own_lobbysvr) {
   CASE_EXPECT_EQ(0, runtime.stop());
 }
 
-CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_and_captain_contract) {
+CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_contract) {
   atframework::testing::runtime runtime;
   if (!start_runtime(runtime)) {
     return;
@@ -608,9 +606,6 @@ CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_and_captain_cont
   invalid.set_unit_id(0);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
   invalid = valid;
-  invalid.mutable_captain_user_key()->set_user_id(99999);
-  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
-  invalid = valid;
   protobuf_copy_message(*invalid.add_users(), invalid.users(0));
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
   invalid = valid;
@@ -622,6 +617,33 @@ CASE_TEST(matchsvr_matching_logic, validates_units_against_pool_and_captain_cont
   invalid = valid;
   invalid.set_faction_fill_policy(PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_UNSPECIFIED);
   CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT, matching_logic::validate_unit(1, invalid));
+
+  CASE_EXPECT_EQ(0, runtime.stop());
+}
+
+CASE_TEST(matchsvr_matching_manager, validates_create_operator_as_unit_member) {
+  atframework::testing::runtime runtime;
+  if (!start_runtime(runtime)) {
+    return;
+  }
+
+  auto manager = matching_manager::me();
+  manager->clear();
+  rpc::context ctx{rpc::context::create_without_task()};
+  auto request = make_party_create_request(9, 19001, 2, 10);
+  protobuf_copy_message(*request.mutable_operator_user(), request.unit().users(1).user_key());
+
+  PROJECT_NAMESPACE_ID::SSMatchingSnapshot response;
+  CASE_EXPECT_EQ(0, manager->create_matching(ctx, request, response));
+  CASE_EXPECT_EQ(2, manager->get_total_matching_user_count());
+
+  manager->clear();
+  request = make_party_create_request(10, 19101, 2, 10);
+  request.mutable_operator_user()->set_user_id(19999);
+  request.mutable_operator_user()->set_zone_id(1);
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT,
+                 manager->create_matching(ctx, request, response));
+  CASE_EXPECT_EQ(0, manager->get_total_matching_user_count());
 
   CASE_EXPECT_EQ(0, runtime.stop());
 }

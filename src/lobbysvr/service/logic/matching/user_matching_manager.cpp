@@ -382,6 +382,11 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
     operator_is_member = operator_is_member || (matching_user.user_key().user_id() == operator_user.user_id() &&
                                                 matching_user.user_key().zone_id() == operator_user.zone_id());
   }
+  if (!operator_is_member) {
+    FWLOGERROR("{} start matching failed because operator is not a Unit member, unit_id={}", *owner_,
+               rpc_request->unit().unit_id());
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
+  }
 
   auto* subscriber_route = rpc_request->add_subscriber_routes();
   protobuf_copy_message(*subscriber_route->mutable_user_key(), rpc_request->operator_user());
@@ -482,6 +487,14 @@ rpc::result_code_type user_matching_manager::cancel_matching(rpc::context& ctx,
                                                              PROJECT_NAMESPACE_ID::SCMatchingCancelRsp& response) {
   auto rpc_request = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingCancelReq>(ctx);
   auto rpc_response = rpc::make_shared_message<PROJECT_NAMESPACE_ID::SSMatchingSnapshot>(ctx);
+
+  if (team_logic_.is_in_team()) {
+    if (!team_logic_.is_team_captain()) {
+      FWLOGERROR("{} cancel matching rejected by non-captain team member, unit_id={}", *owner_, get_current_unit_id());
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_NOT_TEAM_CAPTAIN);
+    }
+  }
+
   const uint64_t unit_id = get_current_unit_id();
   FWLOGDEBUG("{} cancel matching, request_unit_id={}, current_unit_id={}", *owner_, request.unit_id(), unit_id);
   if (request.unit_id() == 0 || request.unit_id() != unit_id) {
@@ -859,8 +872,6 @@ rpc::result_code_type user_matching_manager::fill_matching_unit(rpc::context& ct
   }
 
   output.set_client_version(owner_->get_client_info().client_version());
-  // 组队未接入前，队长固定为当前玩家，unit 只包含当前玩家。
-  fill_user_key(*output.mutable_captain_user_key());
   RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
 }
 

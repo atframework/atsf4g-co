@@ -436,9 +436,6 @@ int32_t matching_logic::validate_unit(int32_t matching_pool_id, const PROJECT_NA
        unit.faction_fill_policy() != PROJECT_NAMESPACE_ID::EN_MATCHING_FACTION_FILL_POLICY_ENABLE)) {
     return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
   }
-  if (unit.captain_user_key().user_id() == 0 || !matching_utility::unit_has_user(unit, unit.captain_user_key())) {
-    return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;
-  }
   for (int left = 0; left < unit.users_size(); ++left) {
     if (unit.users(left).user_key().user_id() == 0) {
       return PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT;

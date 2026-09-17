@@ -114,7 +114,7 @@ message DMatchingUnit {
   repeated DUserIDKey ban_users = 5;
   string client_version = 6;
   string resource_version = 7;
-  DUserIDKey captain_user_key = 8;  // 成员顺序不表达队长或操作权限。
+  // DUserIDKey captain_user_key = 8;  // 成员顺序不表达队长或操作权限。
   // 未满编时是否允许和其他 Unit 组成最终 faction；人数正好等于 faction 容量时不受此字段限制。
   EnMatchingFactionFillPolicy faction_fill_policy = 9;
   // Unit 接受的关卡集合；同一房间全部 Unit 的集合交集必须非空。

@@ -235,8 +235,7 @@ int32_t matching_manager::create_matching(rpc::context& ctx, const PROJECT_NAMES
     }
   }
   // 操作人合法检查
-  if (request.operator_user().user_id() == 0 ||
-      !matching_utility::same_user(request.operator_user(), unit.captain_user_key())) {
+  if (request.operator_user().user_id() == 0 || !matching_utility::unit_has_user(unit, request.operator_user())) {
     response.set_result(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_INVALID_ARGUMENT);
     FCTXLOGERROR(ctx, "create matching rejected by invalid operator, unit_id={}, user={}:{}, result={}", unit.unit_id(),
                  request.operator_user().user_id(), request.operator_user().zone_id(), response.result());
