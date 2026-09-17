@@ -157,6 +157,8 @@ void user_item_grid_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context&
   if (manager_data_.next_container_guid() <= 0) {
     manager_data_.set_next_container_guid(1);
   }
+  // 初始化虚拟道具仓库网格
+  virtual_inventory_.init_grid();
 }
 
 void user_item_grid_manager::register_find_position_handle(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
