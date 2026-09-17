@@ -166,8 +166,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_01_start_check_captain_gate) {
   // normalize 追加空 matching_team_view 并附加全员 ready 条件
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.mts01_start_captain", [captain_inst](rpc::context& ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::CSMatchingStartReq req;
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(captain_inst->get_user_matching_manager().start_matching(ctx, req)));
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(captain_inst->get_user_matching_manager().start_matching(ctx)));
       }));
   CASE_EXPECT_TRUE(captain_inst->get_user_matching_manager().is_in_matching_start());
   CASE_EXPECT_TRUE(team_test::pump_until(
@@ -188,8 +187,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_01_start_check_captain_gate) {
   // 非队长: 响应仍成功, glue 队长校验拒绝并以 EN_ERR_TEAM_PERMISSION_DENY 取消本地待匹配状态, 零上行
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.mts01_start_member", [member_inst](rpc::context& ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::CSMatchingStartReq req;
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(member_inst->get_user_matching_manager().start_matching(ctx, req)));
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(member_inst->get_user_matching_manager().start_matching(ctx)));
       }));
   CASE_EXPECT_FALSE(member_inst->get_user_matching_manager().is_in_matching_start());
   team_test::pump_rounds(test, 8);
@@ -887,8 +885,7 @@ CASE_TEST(lobbysvr_user_team, matching_sync_08_channel_matching_false_cancels_pe
   // start_matching 进入待匹配状态: 队长校验通过, 上行 matching=true(含全员 ready 条件)
   CASE_EXPECT_TRUE(
       team_test::run_sync_task(test, "team.mts08_start", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
-        PROJECT_NAMESPACE_ID::CSMatchingStartReq req;
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().start_matching(ctx, req)));
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().start_matching(ctx)));
       }));
   CASE_EXPECT_TRUE(user_inst->get_user_matching_manager().is_in_matching_start());
   CASE_EXPECT_TRUE(team_test::pump_until(
