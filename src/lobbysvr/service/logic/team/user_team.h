@@ -43,6 +43,7 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
  public:
   using ptr_t = atfw::util::memory::strong_rc_ptr<user_team>;
   using member_cache_ptr_t = atfw::util::memory::strong_rc_ptr<user_team_member_cache>;
+  using async_action_callback_t = void (*)(rpc::context& ctx, user&, const ptr_t&, int32_t result_code);
 
  private:
   struct ctor_guard_t;
@@ -179,13 +180,15 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void try_load_snapshot(rpc::context& ctx);
 
-  void async_flush_all_member_shared_data(rpc::context& ctx);
+  void async_flush_all_member_shared_data(rpc::context& ctx, async_action_callback_t callback = nullptr);
 
   bool async_update_team_shared_data(rpc::context& ctx,
-                                     rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data);
+                                     rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data,
+                                     async_action_callback_t callback = nullptr);
 
   bool async_update_member_shared_data(
-      rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data);
+      rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data,
+      async_action_callback_t callback = nullptr);
 
   void dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output);
   void clear_dirty_data(rpc::context& ctx);

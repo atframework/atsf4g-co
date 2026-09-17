@@ -1029,16 +1029,19 @@ void user_team::try_load_snapshot(rpc::context& ctx) {
   load_snapshot(ctx);
 }
 
-void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
+void user_team::async_flush_all_member_shared_data(rpc::context& ctx, async_action_callback_t callback) {
   auto self = weak_from_this();
   auto user_inst = owner_->get_owner().shared_from_this();
 
   auto result = rpc::async_invoke(
       ctx, "user_team.async_flush_all_member_shared_data",
       // ====================================================================================================
-      [self, user_inst](rpc::context& child_ctx) -> rpc::result_code_type {
+      [self, user_inst, callback](rpc::context& child_ctx) -> rpc::result_code_type {
         auto team = self.lock();
         if (!team) {
+          if (callback != nullptr) {
+            callback(child_ctx, *user_inst, team, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+          }
           RPC_RETURN_CODE(0);
         }
 
@@ -1054,7 +1057,11 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
             child_ctx, *user_inst, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(team->get_team_type()),
             *member_update->mutable_shared_member_data());
 
-        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(team->send_action(child_ctx, std::move(*action))));
+        auto ret = RPC_AWAIT_CODE_RESULT(team->send_action(child_ctx, std::move(*action)));
+        if (callback != nullptr) {
+          callback(child_ctx, *user_inst, team, ret);
+        }
+        RPC_RETURN_CODE(ret);
       });
 
   if (result.is_error()) {
@@ -1064,7 +1071,8 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx) {
 }
 
 bool user_team::async_update_team_shared_data(
-    rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data) {
+    rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data,
+    async_action_callback_t callback) {
   if (data->element_size() <= 0) {
     return false;
   }
@@ -1075,13 +1083,19 @@ bool user_team::async_update_team_shared_data(
   auto result = rpc::async_invoke(
       ctx, "user_team.async_send_team_shared_data",
       // ====================================================================================================
-      [self, user_inst, data = std::move(data)](rpc::context& child_ctx) -> rpc::result_code_type {
+      [self, user_inst, data = std::move(data), callback](rpc::context& child_ctx) -> rpc::result_code_type {
         auto team = self.lock();
         if (!team) {
+          if (callback != nullptr) {
+            callback(child_ctx, *user_inst, team, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+          }
           RPC_RETURN_CODE(0);
         }
 
         auto ret = RPC_AWAIT_CODE_RESULT(team->update_team_shared_data(child_ctx, *data->mutable_element()));
+        if (callback != nullptr) {
+          callback(child_ctx, *user_inst, team, ret);
+        }
         RPC_RETURN_CODE(ret);
       });
 
@@ -1094,7 +1108,8 @@ bool user_team::async_update_team_shared_data(
 }
 
 bool user_team::async_update_member_shared_data(
-    rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data) {
+    rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data,
+    async_action_callback_t callback) {
   if (data->element_size() <= 0) {
     return false;
   }
@@ -1105,13 +1120,19 @@ bool user_team::async_update_member_shared_data(
   auto result = rpc::async_invoke(
       ctx, "user_team.async_update_member_shared_data",
       // ====================================================================================================
-      [self, user_inst, data = std::move(data)](rpc::context& child_ctx) -> rpc::result_code_type {
+      [self, user_inst, data = std::move(data), callback](rpc::context& child_ctx) -> rpc::result_code_type {
         auto team = self.lock();
         if (!team) {
+          if (callback != nullptr) {
+            callback(child_ctx, *user_inst, team, PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+          }
           RPC_RETURN_CODE(0);
         }
 
         auto ret = RPC_AWAIT_CODE_RESULT(team->update_member_shared_data(child_ctx, *data->mutable_element()));
+        if (callback != nullptr) {
+          callback(child_ctx, *user_inst, team, ret);
+        }
         RPC_RETURN_CODE(ret);
       });
 

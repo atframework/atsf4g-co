@@ -329,7 +329,18 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_star
 
   auto team_data = rpc::make_shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>(ctx);
   team_data->add_element()->mutable_battle()->set_matching(true);
-  team.async_update_team_shared_data(ctx, std::move(team_data));
+  auto callback_fn = [](rpc::context& child_ctx, user& user_inst, const user_team::ptr_t&, int32_t result) {
+    if (result < 0) {
+      FCTXLOGERROR(child_ctx, "Failed to update team shared data for {}: result code {}({})", user_inst, result,
+                   protobuf_mini_dumper_get_error_msg(result));
+      auto& matching_mgr = user_inst.get_user_matching_manager();
+      matching_mgr.callback_start_matching(child_ctx, false, result);
+    }
+  };
+  if (!team.async_update_team_shared_data(ctx, std::move(team_data), callback_fn)) {
+    auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();
+    matching_mgr.callback_start_matching(ctx, false, PROJECT_NAMESPACE_ID::EN_ERR_SYSTEM_BUSY);
+  }
 }
 
 void user_team_battle_library_function::glue_layer_event_on_matching_action_matching_finish_final(rpc::context& ctx,
