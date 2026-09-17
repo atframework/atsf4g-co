@@ -232,6 +232,9 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
  private:
   // 打包队伍事件并按 team_key 一致性哈希路由发送到 teamsvr-room，返回透传的业务结果
   rpc::result_code_type send_action(rpc::context& ctx, atfw::team::DTeamAction&& action);
+  rpc::result_code_type send_action(
+      rpc::context& ctx, atfw::team::DTeamAction&& action,
+      ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>&& conditions);
 
   void repair_from_room_error(rpc::context& ctx, int32_t result_code);
 

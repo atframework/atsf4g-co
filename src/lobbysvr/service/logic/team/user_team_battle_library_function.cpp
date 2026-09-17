@@ -228,6 +228,21 @@ atfw::util::memory::strong_rc_ptr<user_team_member_cache> user_team_battle_libra
   return team.find_member(user_key);
 }
 
+void user_team_battle_library_function::append_condition_team_matching_state(
+    rpc::context& ctx, bool matching,
+    ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
+  auto* rule = conditions.empty() ? conditions.Add() : conditions.Mutable(0);
+
+  rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> checked_value{ctx};
+  checked_value->mutable_battle()->set_matching(matching);
+  auto* checked_item = rule->add_shared_team_data();
+  checked_item->set_key(user_team_algorithm::make_team_shared_data_key(*checked_value));
+  if (!checked_item->mutable_value()->PackFrom(*checked_value)) {
+    FCTXLOGERROR(ctx, "Failed to pack checked_value into checked_item");
+    rule->mutable_shared_team_data()->RemoveLast();
+  }
+}
+
 void user_team_battle_library_function::auto_check_and_correct_team_data(rpc::context& ctx, user_team& team) {
   bool team_data_is_matching = team.is_matching();
   auto& matching_mgr = team.get_owner().get_owner().get_user_matching_manager();

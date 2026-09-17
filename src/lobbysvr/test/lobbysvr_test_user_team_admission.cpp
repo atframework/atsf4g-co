@@ -16,8 +16,9 @@
 //   plus the expired-record reapply pre-check through the real CS entry, and the private-channel sequence
 //   watermark dedup with dirty landing;
 // - ADM-SELF-04: invalid/expired invitation records must be rejected at insert (team_id validation gap);
-// - ADM-SELF-06: approve/reject invitation uplink payload, success cleanup, ordinary failure retention and
-//   room-not-found cleanup of the local pending record;
+// - ADM-SELF-06: approve/reject invitation uplink payload (including the not-matching condition checker on
+//   approve), success cleanup, ordinary failure and condition-denied (EN_ERR_TEAM_CONDITION_NOT_MATCH)
+//   retention of the local pending record, and room-not-found cleanup;
 // - ADM-SELF-07: registering a team (joined_team / create / login restore) must clear the same-team pending
 //   invitation and join request.
 
@@ -76,6 +77,27 @@ int32_t run_manager_admission_call(atfw::testing::runtime& test, const char* nam
   });
   CASE_EXPECT_TRUE(ran);
   return ret;
+}
+
+// 断言 approve_invitation 上行携带"队伍不在匹配中"条件: 恰好一个 checker、一个共享队伍数据
+// 等值条目(key 为 battle.matching 模块 key, Any 解包回 matching=false)
+void expect_approve_invitation_not_matching_condition(const atfw::team::SSTeamRoomApproveInvitationReq& req) {
+  CASE_EXPECT_EQ(1, static_cast<int>(req.condition_size()));
+  if (1 != static_cast<int>(req.condition_size())) {
+    return;
+  }
+  const auto& checker = req.condition().Get(0);
+  CASE_EXPECT_EQ(1, checker.shared_team_data_size());
+  if (1 == checker.shared_team_data_size()) {
+    const auto& entry = checker.shared_team_data(0);
+    CASE_EXPECT_EQ(team_test::team_matching_data_key(), entry.key());
+    PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+    CASE_EXPECT_TRUE(entry.value().UnpackTo(&unpacked));
+    if (entry.value().UnpackTo(&unpacked)) {
+      CASE_EXPECT_TRUE(unpacked.has_battle());
+      CASE_EXPECT_FALSE(unpacked.battle().matching());
+    }
+  }
 }
 
 }  // namespace
@@ -201,6 +223,8 @@ CASE_TEST(lobbysvr_user_team, approve_reject_invitation_result_contract) {
     CASE_EXPECT_EQ(user_inst->get_client_info().client_version(), req.client_version());
     CASE_EXPECT_TRUE(0 != req.user_router_server_id());
     CASE_EXPECT_TRUE(req.shared_member_data_size() > 0);
+    // 影响成员变化的指令携带"队伍不在匹配中"条件
+    expect_approve_invitation_not_matching_condition(req);
   }
   CASE_EXPECT_FALSE(
       !!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamSuccess)));
@@ -277,6 +301,30 @@ CASE_TEST(lobbysvr_user_team, approve_reject_invitation_result_contract) {
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NO_PERMISSION, ret);
   }
   CASE_EXPECT_TRUE(!!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamBusy)));
+  ss_capture.approve_invitation_responder = nullptr;
+
+  // 5. 房间否决条件(队伍匹配中): EN_ERR_TEAM_CONDITION_NOT_MATCH 透传, 本地 pending 保留
+  //    (条件随匹配结束解除, 邀请本身仍有效, 不得当作邀请失效删除)
+  constexpr int64_t kTeamConditionDenied = 415;
+  CASE_EXPECT_TRUE(inject_invited_event(test, private_chain, kUserId, kTeamConditionDenied, valid_expiry));
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+    return !!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamConditionDenied));
+  }));
+  ss_capture.approve_invitation_responder = [](const atfw::team::SSTeamRoomApproveInvitationReq&,
+                                               atfw::team::SSTeamRoomApproveInvitationRsp&) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
+  };
+  {
+    int32_t ret = run_manager_admission_call(
+        test, "team.approve_invitation.condition_denied", [&](rpc::context& ctx) -> rpc::result_code_type {
+          auto pending =
+              user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamConditionDenied));
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(user_inst->get_user_team_manager().approve_invitation(ctx, pending)));
+        });
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, ret);
+  }
+  CASE_EXPECT_TRUE(
+      !!user_inst->get_user_team_manager().get_pending_invitation(team_test::make_team_key(kTeamConditionDenied)));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

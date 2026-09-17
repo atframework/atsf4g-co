@@ -166,8 +166,10 @@ SERVER_FRAME_API ss_msg_dispatcher::~ss_msg_dispatcher() {}
 SERVER_FRAME_API int32_t ss_msg_dispatcher::init() {
   sequence_allocator_ =
       static_cast<uint64_t>(
+          // NOLINTNEXTLINE(bugprone-signed-bitwise)
           (util::time::time_utility::get_sys_now() - PROJECT_NAMESPACE_ID::EN_SL_TIMESTAMP_FOR_ID_ALLOCATOR_OFFSET)
           << 23) +
+      // NOLINTNEXTLINE(bugprone-signed-bitwise)
       static_cast<uint64_t>(util::time::time_utility::get_now_usec() << 3);
   return 0;
 }
@@ -278,22 +280,21 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, atfra
   auto tls_buffer =
       atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
   if (msg_buf_len > tls_buffer.size()) {
-    FWLOGERROR("send to proc [{:#x}: {}] failed: require {}, only have {}", node_id,
+    FWLOGERROR("send to service instance [{:#x}: {}] failed: require {}, only have {}", node_id,
                get_app()->convert_app_id_to_string(node_id), msg_buf_len, tls_buffer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   auto *next_buffer = ss_msg.SerializeWithCachedSizesToArray(buf_start);
-  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
-    FWLOGERROR("send to proc [{:#x}: {}] failed: serialize size mismatch, expect {}, actual {}", node_id,
-               get_app()->convert_app_id_to_string(node_id), msg_buf_len,
-               next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+  if (next_buffer - buf_start != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send to service instance [{:#x}: {}] failed: serialize size mismatch, expect {}, actual {}", node_id,
+               get_app()->convert_app_id_to_string(node_id), msg_buf_len, next_buffer - buf_start);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes\n{}", node_id, get_app()->convert_app_id_to_string(node_id),
-             msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
+  FWLOGDEBUG("send message to service instance [{:#x}: {}] {} bytes\n{}", node_id,
+             get_app()->convert_app_id_to_string(node_id), msg_buf_len, protobuf_mini_dumper_get_readable(ss_msg));
 
   return send_to_proc(node_id, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
 }
@@ -320,11 +321,11 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(uint64_t node_id, const
       node_id, static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
       gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(msg_buf), msg_len}, &sequence));
   if (res < 0) {
-    FWLOGERROR("send msg to proc [{:#x}: {}] {} bytes failed, res: {}", node_id,
+    FWLOGERROR("send message to service instance [{:#x}: {}] {} bytes failed, res: {}", node_id,
                get_app()->convert_app_id_to_string(node_id), msg_len, res);
   } else {
-    FWLOGDEBUG("send msg to proc [{:#x}: {}] {} bytes success", node_id, get_app()->convert_app_id_to_string(node_id),
-               msg_len);
+    FWLOGDEBUG("send message to service instance [{:#x}: {}] {} bytes success", node_id,
+               get_app()->convert_app_id_to_string(node_id), msg_len);
   }
 
   return res;
@@ -340,7 +341,7 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const std::string &node
 
   atfw::atapp::etcd_discovery_node::ptr_t node_ptr = owner->get_discovery_node_by_name(node_name);
   if (!node_ptr) {
-    FWLOGERROR("send msg to proc {} failed: not found", node_name);
+    FWLOGERROR("send message to service instance {} failed: not found", node_name);
     return PROJECT_NAMESPACE_ID::err::EN_ATBUS_ERR_ATNODE_NOT_FOUND;
   }
 
@@ -361,21 +362,20 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd
   auto tls_buffer =
       atfw::gateway::libatgw_protocol_api::get_tls_buffer(atfw::gateway::libatgw_protocol_api::tls_buffer_t::kCustom);
   if (msg_buf_len > tls_buffer.size()) {
-    FWLOGERROR("send to proc {} failed: require {}, only have {}", node.get_discovery_info().name(), msg_buf_len,
-               tls_buffer.size());
+    FWLOGERROR("send to service instance {} failed: require {}, only have {}", node.get_discovery_info().name(),
+               msg_buf_len, tls_buffer.size());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_BUFF_EXTEND;
   }
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   auto *next_buffer = ss_msg.SerializeWithCachedSizesToArray(buf_start);
-  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
-    FWLOGERROR("send to proc {} failed: serialize size mismatch, expect {}, actual {}",
-               node.get_discovery_info().name(), msg_buf_len,
-               next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+  if (next_buffer - buf_start != static_cast<ptrdiff_t>(msg_buf_len)) {
+    FWLOGERROR("send to service instance {} failed: serialize size mismatch, expect {}, actual {}",
+               node.get_discovery_info().name(), msg_buf_len, next_buffer - buf_start);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  FWLOGDEBUG("send msg to proc {} {} bytes\n{}", node.get_discovery_info().name(), msg_buf_len,
+  FWLOGDEBUG("send message to service instance {} {} bytes\n{}", node.get_discovery_info().name(), msg_buf_len,
              protobuf_mini_dumper_get_readable(ss_msg));
 
   return send_to_proc(node, buf_start, msg_buf_len, ss_msg.head().sequence(), ignore_discovery);
@@ -398,10 +398,11 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::send_to_proc(const atfw::atapp::etcd
       node.get_discovery_info().name(), static_cast<int32_t>(::atfw::component::message_type::kInServerMessage),
       gsl::span<const unsigned char>{reinterpret_cast<const unsigned char *>(msg_buf), msg_len}, &sequence));
   if (res < 0) {
-    FWLOGERROR("{} send msg to proc {} {} bytes failed, res: {}", name(), node.get_discovery_info().name(), msg_len,
-               res);
+    FWLOGERROR("{} send message to service instance {} {} bytes failed, res: {}", name(),
+               node.get_discovery_info().name(), msg_len, res);
   } else {
-    FWLOGDEBUG("{} send msg to proc {} {} bytes success", name(), node.get_discovery_info().name(), msg_len);
+    FWLOGDEBUG("{} send message to service instance {} {} bytes success", name(), node.get_discovery_info().name(),
+               msg_len);
   }
 
   return res;
@@ -501,9 +502,9 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::broadcast(atframework::SSMsg &ss_msg
 
   ::google::protobuf::uint8 *buf_start = reinterpret_cast< ::google::protobuf::uint8 *>(tls_buffer.data());
   auto *next_buffer = ss_msg.SerializeWithCachedSizesToArray(buf_start);
-  if (next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start) != static_cast<ptrdiff_t>(msg_buf_len)) {
+  if (next_buffer - buf_start != static_cast<ptrdiff_t>(msg_buf_len)) {
     FWLOGERROR("broadcast message {} failed: serialize size mismatch, expect {}, actual {}", pick_rpc_name(ss_msg),
-               msg_buf_len, next_buffer - reinterpret_cast< ::google::protobuf::uint8 *>(buf_start));
+               msg_buf_len, next_buffer - buf_start);
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
@@ -604,7 +605,8 @@ SERVER_FRAME_API int32_t ss_msg_dispatcher::dispatch(const atfw::atapp::app::mes
   }
   rpc::telemetry::trace_attribute_pair_type internal_rpc_trace_attributes[] = {
       {opentelemetry::semconv::rpc::kRpcSystemName, "internal"},
-      {opentelemetry::semconv::rpc::kRpcMethod, "ss_msg_dispatcher/dispatch"}};
+      {opentelemetry::semconv::rpc::kRpcMethod, "ss_msg_dispatcher/dispatch"},
+  };
   trace_start_option.attributes = internal_rpc_trace_attributes;
   ctx.setup_tracer(tracer, "ss_msg_dispatcher", std::move(trace_start_option));
 
@@ -799,7 +801,8 @@ void ss_msg_dispatcher::setup_metrics() {
         for (auto &method : report->rpc_metrics) {
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
               {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
+              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name},
+          };
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
               result, static_cast<int64_t>(method.second.min_delay.count()), internal_attributes);
@@ -818,7 +821,8 @@ void ss_msg_dispatcher::setup_metrics() {
         for (auto &method : report->rpc_metrics) {
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
               {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
+              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name},
+          };
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
               result, static_cast<int64_t>(method.second.max_delay.count()), internal_attributes);
@@ -840,7 +844,8 @@ void ss_msg_dispatcher::setup_metrics() {
           }
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
               {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
+              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name},
+          };
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
               result,
@@ -860,7 +865,8 @@ void ss_msg_dispatcher::setup_metrics() {
         for (auto &method : report->rpc_metrics) {
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
               {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
+              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name},
+          };
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
               result, static_cast<int64_t>(method.second.total_count), internal_attributes);
@@ -878,7 +884,8 @@ void ss_msg_dispatcher::setup_metrics() {
         for (auto &method : report->rpc_metrics) {
           rpc::telemetry::trace_attribute_pair_type internal_attributes[] = {
               {opentelemetry::semconv::rpc::kRpcSystemName, "atrpc.ss"},
-              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name}};
+              {opentelemetry::semconv::rpc::kRpcMethod, method.second.rpc_name},
+          };
 
           rpc::telemetry::opentelemetry_utility::global_metics_observe_record_extend_attrubutes(
               result, static_cast<int64_t>(method.second.total_bytes), internal_attributes);
@@ -959,8 +966,8 @@ SERVER_FRAME_API void ss_msg_dispatcher::set_dns_lookup_hook_for_unit_test(dns_l
   dns_lookup_hook_for_unit_test_ = std::move(hook);
 }
 
-SERVER_FRAME_API const ss_msg_dispatcher::dns_lookup_hook_t &
-ss_msg_dispatcher::get_dns_lookup_hook_for_unit_test() const noexcept {
+SERVER_FRAME_API const ss_msg_dispatcher::dns_lookup_hook_t &ss_msg_dispatcher::get_dns_lookup_hook_for_unit_test()
+    const noexcept {
   return dns_lookup_hook_for_unit_test_;
 }
 #endif

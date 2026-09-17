@@ -4,7 +4,9 @@
 // 断言维度: 频道日志形状(add_member/approve/reject 顺序与完整负载)、新成员数据完整性(版本/路由/
 // 共享成员数据/入队来源)、可观察快照完整性(create custom_data+journal 与压缩后 custom_data)、
 // 个人频道 DTeamMemberAction 的目标/类型/内容、PUBLIC 数据过滤(ADM-03)、通知频道以 room 本地记录为准、
-// 准入内存缓存清理(approve/reject 后 not-found 且零写入)、重复请求幂等(ADM-02/10/16)。
+// 准入内存缓存清理(approve/reject 后 not-found 且零写入)、重复请求幂等(ADM-02/10/16)、
+// 专用准入 RPC 的 condition 门禁(ADM-22: 不满足精确错误码且零写入、pending 不被消耗、
+// checker 或关系、条件满足后重试生效)。
 
 #include "teamsvr_room_test_common.h"  // NOLINT: build/include_subdir
 
@@ -12,14 +14,15 @@
 
 namespace {
 using teamsvr_room_test::add_team_any_data_entry;
+using teamsvr_room_test::add_team_any_value_entry;
 using teamsvr_room_test::count_personal_actions;
 using teamsvr_room_test::fake_team_room_channel;
 using teamsvr_room_test::global_now_offset_guard;
 using teamsvr_room_test::kTestZoneId;
 using teamsvr_room_test::make_personal_channel;
+using teamsvr_room_test::make_standard_team_configure;
 using teamsvr_room_test::make_team_key;
 using teamsvr_room_test::make_user_key;
-using teamsvr_room_test::make_standard_team_configure;
 using teamsvr_room_test::next_test_team_id;
 using teamsvr_room_test::room_test_cfg_values;
 using teamsvr_room_test::room_test_env;
@@ -110,10 +113,9 @@ void expect_complete_member_fields(const atfw::team::DTeamMember& member, const 
   CASE_EXPECT_EQ(data.personal_channel.channel_id(), member.user_channel().channel_id());
   CASE_EXPECT_GT(member.joined_timepoint().seconds(), 0);
   CASE_EXPECT_GT(member.last_heartbeat_timepoint().seconds(), 0);
-  auto shared_it = std::find_if(member.shared_member_data().begin(), member.shared_member_data().end(),
-                                [&data](const atfw::team::DTeamAnyDataWithKey& entry) {
-                                  return entry.key() == data.shared_data_key;
-                                });
+  auto shared_it = std::find_if(
+      member.shared_member_data().begin(), member.shared_member_data().end(),
+      [&data](const atfw::team::DTeamAnyDataWithKey& entry) { return entry.key() == data.shared_data_key; });
   CASE_EXPECT_TRUE(shared_it != member.shared_member_data().end());
   if (shared_it != member.shared_member_data().end()) {
     CASE_EXPECT_EQ(data.shared_data_value, shared_it->value().data().value());
@@ -124,16 +126,16 @@ void expect_complete_member_fields(const atfw::team::DTeamMember& member, const 
 bool expect_journal_add_member_complete(const fake_team_room_channel& fake, const admission_member_data& data,
                                         atfw::team::EnTeamPermissionRole role) {
   bool found = false;
-  fake.foreach_team_action([&found, &data, role](const atfw::dtmq::DChannelMessage&,
-                                                 const atfw::team::DTeamAction& action) {
-    if (action.action_case() != atfw::team::DTeamAction::kAddMember ||
-        action.add_member().user_key().user_id() != data.user_key.user_id()) {
-      return true;
-    }
-    found = true;
-    expect_complete_member_fields(action.add_member(), data, role);
-    return true;
-  });
+  fake.foreach_team_action(
+      [&found, &data, role](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
+        if (action.action_case() != atfw::team::DTeamAction::kAddMember ||
+            action.add_member().user_key().user_id() != data.user_key.user_id()) {
+          return true;
+        }
+        found = true;
+        expect_complete_member_fields(action.add_member(), data, role);
+        return true;
+      });
   return found;
 }
 
@@ -227,9 +229,9 @@ void expect_joined_team_notification(const room_test_env& env, const admission_m
 // 通过真实准入流程搭建每个成员都携带完整数据的队伍:
 // owner 经 create_team 上报；member_a 经 邀请-同意 入队；member_b 经 申请-批准 入队。
 // 之后用例聚焦目标成员的准入流程、日志/通知/快照断言
-bool setup_full_data_team(room_test_env& env, int64_t team_id, team_room::ptr_t& out_room,
-                          admission_member_data& owner, admission_member_data& member_a,
-                          admission_member_data& member_b, uint64_t user_id_base = 7000) {
+bool setup_full_data_team(room_test_env& env, int64_t team_id, team_room::ptr_t& out_room, admission_member_data& owner,
+                          admission_member_data& member_a, admission_member_data& member_b,
+                          uint64_t user_id_base = 7000) {
   owner = make_admission_member_data(kTestZoneId, user_id_base + 1, "owner");
   member_a = make_admission_member_data(kTestZoneId, user_id_base + 2, "member-a");
   member_b = make_admission_member_data(kTestZoneId, user_id_base + 3, "member-b");
@@ -284,8 +286,8 @@ bool setup_full_data_team(room_test_env& env, int64_t team_id, team_room::ptr_t&
     join_req.mutable_join_request()->set_client_version(member_b.client_version);
     join_req.mutable_join_request()->set_user_router_server_id(member_b.user_router_server_id);
     join_req.mutable_join_request()->mutable_member_admission_data()->Clear();
-    add_admission_data_entry(join_req.mutable_join_request()->mutable_member_admission_data(),
-                            member_b.shared_data_key, member_b.shared_data_value);
+    add_admission_data_entry(join_req.mutable_join_request()->mutable_member_admission_data(), member_b.shared_data_key,
+                             member_b.shared_data_value);
     if (0 != env.run("setup_join_member_b", [room, &join_req](rpc::context& ctx) -> rpc::result_code_type {
           RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, join_req)));
         })) {
@@ -608,8 +610,8 @@ CASE_TEST(teamsvr_room_admission, approve_invitation_writes_and_notifies) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
   // B 的个人频道恰好收到一次 invited 通知
-  CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee_data.user_key.user_id(),
-                                            atfw::team::DTeamMemberAction::kInvited));
+  CASE_EXPECT_EQ(1u,
+                 count_personal_actions(env, invitee_data.user_key.user_id(), atfw::team::DTeamMemberAction::kInvited));
 
   // 从 add_invitation 日志取房间规范化后的过期时间，供 approve 事件负载断言(事件负载必须与本地记录一致)
   auto& fake = env.channel(team_id);
@@ -804,10 +806,10 @@ CASE_TEST(teamsvr_room_admission, reject_invitation_notify) {
       CASE_EXPECT_EQ(0, rejected.team_admission_data_size());
       CASE_EXPECT_EQ(0, rejected.member_admission_data_size());
     }
-    CASE_EXPECT_EQ(0u, count_personal_actions(env, members.normal.user_id(),
-                                              atfw::team::DTeamMemberAction::kRejectInvitation));
-    CASE_EXPECT_EQ(0u, count_personal_actions(env, members.owner.user_id(),
-                                              atfw::team::DTeamMemberAction::kRejectInvitation));
+    CASE_EXPECT_EQ(
+        0u, count_personal_actions(env, members.normal.user_id(), atfw::team::DTeamMemberAction::kRejectInvitation));
+    CASE_EXPECT_EQ(
+        0u, count_personal_actions(env, members.owner.user_id(), atfw::team::DTeamMemberAction::kRejectInvitation));
 
     // 否决生效后邀请内存缓存已清理: approve 返回 not-found、重复 reject 幂等成功，均零写入
     size_t sends_after_reject = fake.send_message_calls();
@@ -980,7 +982,7 @@ CASE_TEST(teamsvr_room_admission, approve_and_reject_join_request) {
       req.mutable_join_request()->set_user_router_server_id(applicant_data.user_router_server_id);
       req.mutable_join_request()->mutable_member_admission_data()->Clear();
       add_admission_data_entry(req.mutable_join_request()->mutable_member_admission_data(),
-                              applicant_data.shared_data_key, applicant_data.shared_data_value);
+                               applicant_data.shared_data_key, applicant_data.shared_data_value);
       CASE_EXPECT_EQ(0, env.run("add_join", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
         RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
       }));
@@ -1154,10 +1156,10 @@ CASE_TEST(teamsvr_room_admission, approve_and_reject_join_request) {
         CASE_EXPECT_EQ(record_expired.seconds(), rejected.expired_timepoint().seconds());
         CASE_EXPECT_EQ(0, rejected.member_admission_data_size());
       }
-      CASE_EXPECT_EQ(0u, count_personal_actions(env, members.owner.user_id(),
-                                                atfw::team::DTeamMemberAction::kRejectJoinRequest));
-      CASE_EXPECT_EQ(0u, count_personal_actions(env, members.normal.user_id(),
-                                                atfw::team::DTeamMemberAction::kRejectJoinRequest));
+      CASE_EXPECT_EQ(
+          0u, count_personal_actions(env, members.owner.user_id(), atfw::team::DTeamMemberAction::kRejectJoinRequest));
+      CASE_EXPECT_EQ(
+          0u, count_personal_actions(env, members.normal.user_id(), atfw::team::DTeamMemberAction::kRejectJoinRequest));
 
       // 否决生效后申请内存缓存已清理: approve 返回 not-found、重复 reject 幂等成功，均零写入
       size_t sends_after_reject = fake.send_message_calls();
@@ -1408,16 +1410,14 @@ CASE_TEST(teamsvr_room_admission, approve_when_already_member) {
       CASE_EXPECT_EQ(1u, add_member_count);
 
       // 已是成员: 申请人仍收到一次 joined_team 通知(与邀请路径契约一致)
-      CASE_EXPECT_EQ(1u,
-                     count_personal_actions(env, applicant.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+      CASE_EXPECT_EQ(1u, count_personal_actions(env, applicant.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
 
       // 加入请求内存缓存已清理: 重复 approve 返回 not-found 且零写入
       size_t sends_after_approve = fake.send_message_calls();
-      CASE_EXPECT_EQ(
-          PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND,
-          env.run("approve_join_again", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
-            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
-          }));
+      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND,
+                     env.run("approve_join_again", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
+                     }));
       CASE_EXPECT_EQ(sends_after_approve, fake.send_message_calls());
 
       room_test_env::clear_rooms();
@@ -1467,16 +1467,16 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
   add_admission_data_entry(req.mutable_join_request()->mutable_member_admission_data(), 8, "ut-data-1");
   size_t sends_before = fake.send_message_calls();
   CASE_EXPECT_EQ(0, env.run("join_first", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
   size_t personal_after_first = env.personal_message_count();
 
   // 完全重复: 不追加日志、不重复发送受理回执
   CASE_EXPECT_EQ(0, env.run("join_duplicate", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+  }));
   CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
   CASE_EXPECT_EQ(personal_after_first, env.personal_message_count());
 
@@ -1488,8 +1488,8 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
   add_admission_data_entry(refresh.mutable_join_request()->mutable_member_admission_data(), 8, "ut-data-1");
   add_admission_data_entry(refresh.mutable_join_request()->mutable_member_admission_data(), 9, "ut-data-9");
   CASE_EXPECT_EQ(0, env.run("join_refresh", [room, &refresh](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, refresh)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, refresh)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(sends_before + 2, fake.send_message_calls());
   // 事件回环后重发一次受理回执(apply_add_join_request 每次应用都通知申请人)
@@ -1523,8 +1523,8 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
     add_admission_data_entry(reorder.mutable_join_request()->mutable_member_admission_data(), 9, "ut-data-9");
     add_admission_data_entry(reorder.mutable_join_request()->mutable_member_admission_data(), 8, "ut-data-1");
     CASE_EXPECT_EQ(0, env.run("join_reorder_nochange", [room, &reorder](rpc::context& ctx) -> rpc::result_code_type {
-                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, reorder)));
-                   }));
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, reorder)));
+    }));
     CASE_EXPECT_EQ(sends_before + 2, fake.send_message_calls());
     CASE_EXPECT_EQ(personal_after_first + 1, env.personal_message_count());
   }
@@ -1534,8 +1534,8 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
   del_req.mutable_join_request()->mutable_member_admission_data()->Clear();
   add_admission_data_entry(del_req.mutable_join_request()->mutable_member_admission_data(), 9, "ut-data-9");
   CASE_EXPECT_EQ(0, env.run("join_delete_key", [room, &del_req](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, del_req)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, del_req)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(sends_before + 3, fake.send_message_calls());
   {
@@ -1565,8 +1565,8 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
     add_admission_data_entry(member_data->mutable_member_admission_data(), 22, "ut-inv-m-22");
   }
   CASE_EXPECT_EQ(0, env.run("invite_first", [room, &invite_first](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_first)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_first)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   size_t invite_sends_after_first = fake.send_message_calls();
 
@@ -1581,8 +1581,8 @@ CASE_TEST(teamsvr_room_admission, admission_refresh_updates_mutable_fields) {
     add_admission_data_entry(member_data->mutable_member_admission_data(), 21, "ut-inv-m-21");
   }
   CASE_EXPECT_EQ(0, env.run("invite_refresh", [room, &invite_refresh](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_refresh)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_refresh)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(invite_sends_after_first, fake.send_message_calls());
   {
@@ -1635,15 +1635,15 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
   auto invitee = make_user_key(1, 8961);
   auto invite_req = make_add_invitation_req(members.normal, members.normal, invitee, 3);
   CASE_EXPECT_EQ(0, env.run("add_short_invitation", [room, &invite_req](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_req)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_req)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
   auto applicant = make_user_key(1, 8962);
   auto join_req = make_add_join_request_req(applicant, 60);
   CASE_EXPECT_EQ(0, env.run("add_long_join_request", [room, &join_req](rpc::context& ctx) -> rpc::result_code_type {
-                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, join_req)));
-                 }));
+    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, join_req)));
+  }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
 
   // 在邀请仍有效时触发一次压缩保存: 快照携带(当时)有效的邀请与加入请求
@@ -1684,22 +1684,22 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
     atfw::team::SSTeamRoomApproveInvitationReq approve_req;
     protobuf_copy_message(*approve_req.mutable_sender_user_key(), invitee);
     protobuf_copy_message(*approve_req.mutable_invitee(), invitee);
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
-                   env.run("approve_expired_after_restore",
-                           [restored, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
-                             RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->approve_invitation(ctx, approve_req)));
-                           }));
+    CASE_EXPECT_EQ(
+        PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
+        env.run("approve_expired_after_restore", [restored, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->approve_invitation(ctx, approve_req)));
+        }));
     CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
 
     // 长有效期加入请求仍可被批准(成员数据来自原申请)
     atfw::team::SSTeamRoomApproveJoinRequestReq approve_join;
     protobuf_copy_message(*approve_join.mutable_sender_user_key(), members.owner);
     protobuf_copy_message(*approve_join.mutable_applicant(), applicant);
-    CASE_EXPECT_EQ(0, env.run("approve_valid_after_restore",
-                               [restored, &approve_join](rpc::context& ctx) -> rpc::result_code_type {
-                                 RPC_RETURN_CODE(
-                                     RPC_AWAIT_CODE_RESULT(restored->approve_join_request(ctx, approve_join)));
-                               }));
+    CASE_EXPECT_EQ(
+        0,
+        env.run("approve_valid_after_restore", [restored, &approve_join](rpc::context& ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(restored->approve_join_request(ctx, approve_join)));
+        }));
     CASE_EXPECT_EQ(0, env.sync(team_id));
     CASE_EXPECT_TRUE(nullptr != restored->find_member(applicant, false));
   }
@@ -1732,11 +1732,11 @@ CASE_TEST(teamsvr_room_admission, expired_admission_snapshot_filtering) {
       atfw::team::SSTeamRoomApproveInvitationReq approve_no_expiry;
       protobuf_copy_message(*approve_no_expiry.mutable_sender_user_key(), no_expiry_invitee);
       protobuf_copy_message(*approve_no_expiry.mutable_invitee(), no_expiry_invitee);
-      CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
-                     env.run("approve_no_expiry",
-                             [room2, &approve_no_expiry](rpc::context& ctx) -> rpc::result_code_type {
-                       RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room2->approve_invitation(ctx, approve_no_expiry)));
-                     }));
+      CASE_EXPECT_EQ(
+          PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
+          env.run("approve_no_expiry", [room2, &approve_no_expiry](rpc::context& ctx) -> rpc::result_code_type {
+            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room2->approve_invitation(ctx, approve_no_expiry)));
+          }));
       CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
 
       // 维护后的压缩快照不携带任何 admission(无有效期记录未进入 dump)。
@@ -1815,11 +1815,11 @@ CASE_TEST(teamsvr_room_admission, add_invitation_count_limit_gate) {
   CASE_EXPECT_TRUE(room->find_member(invitee_a, false) != nullptr);
 
   // 受理后名额释放, 可再次邀请
-  CASE_EXPECT_EQ(0, env.run("invite_b_after_slot_freed",
-                            [room, &owner, &invitee_b](rpc::context& ctx) -> rpc::result_code_type {
-                              auto req = make_add_invitation_req(owner, owner, invitee_b);
-                              RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
-                            }));
+  CASE_EXPECT_EQ(
+      0, env.run("invite_b_after_slot_freed", [room, &owner, &invitee_b](rpc::context& ctx) -> rpc::result_code_type {
+        auto req = make_add_invitation_req(owner, owner, invitee_b);
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+      }));
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1852,7 +1852,8 @@ CASE_TEST(teamsvr_room_admission, add_join_request_count_limit_gate) {
     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
   }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
-  CASE_EXPECT_EQ(1u, count_personal_actions(env, applicant_a.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
+  CASE_EXPECT_EQ(1u,
+                 count_personal_actions(env, applicant_a.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
 
   // 超过上限: 精确错误码、零写入、无受理回执
   size_t sends_before = fake.send_message_calls();
@@ -1875,10 +1876,11 @@ CASE_TEST(teamsvr_room_admission, add_join_request_count_limit_gate) {
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_TRUE(room->find_member(applicant_a, false) != nullptr);
 
-  CASE_EXPECT_EQ(0, env.run("join_b_after_slot_freed", [room, &applicant_b](rpc::context& ctx) -> rpc::result_code_type {
-    auto req = make_add_join_request_req(applicant_b);
-    RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
-  }));
+  CASE_EXPECT_EQ(0,
+                 env.run("join_b_after_slot_freed", [room, &applicant_b](rpc::context& ctx) -> rpc::result_code_type {
+                   auto req = make_add_join_request_req(applicant_b);
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+                 }));
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());
@@ -1939,12 +1941,11 @@ CASE_TEST(teamsvr_room_admission, approve_invitation_team_full_gate) {
   {
     atfw::team::DTeamAction approve_action;
     protobuf_copy_message(*approve_action.mutable_approve_invitation()->mutable_invitee(), invitee);
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
-                   env.run("check_approve_full",
-                           [room, &invitee, &approve_action](rpc::context& ctx) -> rpc::result_code_type {
-                             RPC_RETURN_CODE(
-                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, invitee, approve_action)));
-                           }));
+    CASE_EXPECT_EQ(
+        PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+        env.run("check_approve_full", [room, &invitee, &approve_action](rpc::context& ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, invitee, approve_action)));
+        }));
   }
   CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
   CASE_EXPECT_TRUE(room->find_member(invitee, false) == nullptr);
@@ -2026,12 +2027,11 @@ CASE_TEST(teamsvr_room_admission, approve_join_request_team_full_gate) {
   {
     atfw::team::DTeamAction approve_action;
     protobuf_copy_message(*approve_action.mutable_approve_join_request()->mutable_requester(), applicant);
-    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
-                   env.run("check_approve_full",
-                           [room, &owner, &approve_action](rpc::context& ctx) -> rpc::result_code_type {
-                             RPC_RETURN_CODE(
-                                 RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, owner, approve_action)));
-                           }));
+    CASE_EXPECT_EQ(
+        PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED,
+        env.run("check_approve_full", [room, &owner, &approve_action](rpc::context& ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->check_action_permission(ctx, owner, approve_action)));
+        }));
   }
   CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
   CASE_EXPECT_TRUE(room->find_member(applicant, false) == nullptr);
@@ -2173,14 +2173,14 @@ CASE_TEST(teamsvr_room_admission, multiple_pending_admissions_isolated) {
     auto req = make_add_invitation_req(members.owner, members.owner, target, explicit_expire_seconds);
     add_admission_data_entry(req.mutable_invitation()->mutable_team_admission_data(), data_key, data_value);
     CASE_EXPECT_EQ(0, env.run("multi_invite", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
-                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
-                          }));
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+    }));
   };
   auto join = [&](const PROJECT_NAMESPACE_ID::DUserIDKey& target, int64_t explicit_expire_seconds) {
     auto req = make_add_join_request_req(target, explicit_expire_seconds);
     CASE_EXPECT_EQ(0, env.run("multi_join", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
-                            RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
-                          }));
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+    }));
   };
   auto approve_invitation = [&](const PROJECT_NAMESPACE_ID::DUserIDKey& target) {
     return env.run("multi_approve_inv", [room, target](rpc::context& ctx) -> rpc::result_code_type {
@@ -2240,15 +2240,15 @@ CASE_TEST(teamsvr_room_admission, multiple_pending_admissions_isolated) {
   {
     atfw::team::DTeamInvitation latest;
     bool found_latest = false;
-    fake.foreach_team_action(
-        [&latest, &found_latest, &invitee_b](const atfw::dtmq::DChannelMessage&, const atfw::team::DTeamAction& action) {
-          if (action.action_case() == atfw::team::DTeamAction::kAddInvitation &&
-              action.add_invitation().invitee().user_id() == invitee_b.user_id()) {
-            latest = action.add_invitation();
-            found_latest = true;
-          }
-          return true;
-        });
+    fake.foreach_team_action([&latest, &found_latest, &invitee_b](const atfw::dtmq::DChannelMessage&,
+                                                                  const atfw::team::DTeamAction& action) {
+      if (action.action_case() == atfw::team::DTeamAction::kAddInvitation &&
+          action.add_invitation().invitee().user_id() == invitee_b.user_id()) {
+        latest = action.add_invitation();
+        found_latest = true;
+      }
+      return true;
+    });
     CASE_EXPECT_TRUE(found_latest);
     if (found_latest) {
       CASE_EXPECT_EQ(1, latest.team_admission_data_size());
@@ -2266,12 +2266,13 @@ CASE_TEST(teamsvr_room_admission, multiple_pending_admissions_isolated) {
   CASE_EXPECT_EQ(0u, count_personal_actions(env, invitee_b.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
 
   // 4. 拒绝 requester_y: y 收拒绝回执,x/z 不受影响
-  CASE_EXPECT_EQ(0, env.run("multi_reject_y", [room, &members, requester_y](rpc::context& ctx) -> rpc::result_code_type {
-                          atfw::team::SSTeamRoomRejectJoinRequestReq req;
-                          protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
-                          protobuf_copy_message(*req.mutable_applicant(), requester_y);
-                          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, req)));
-                        }));
+  CASE_EXPECT_EQ(0,
+                 env.run("multi_reject_y", [room, &members, requester_y](rpc::context& ctx) -> rpc::result_code_type {
+                   atfw::team::SSTeamRoomRejectJoinRequestReq req;
+                   protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+                   protobuf_copy_message(*req.mutable_applicant(), requester_y);
+                   RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, req)));
+                 }));
   CASE_EXPECT_EQ(0, env.sync(team_id));
   CASE_EXPECT_EQ(1u,
                  count_personal_actions(env, requester_y.user_id(), atfw::team::DTeamMemberAction::kRejectJoinRequest));
@@ -2316,6 +2317,219 @@ CASE_TEST(teamsvr_room_admission, multiple_pending_admissions_isolated) {
   CASE_EXPECT_TRUE(nullptr == room->find_member(invitee_c, false));
   CASE_EXPECT_TRUE(nullptr == room->find_member(requester_y, false));
   CASE_EXPECT_TRUE(nullptr == room->find_member(requester_z, false));
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ ADM-22: 六个专用准入 RPC 的 condition 门禁 ============
+// 请求携带 condition 时按 check_update_conditions 判定(checker 之间或关系、checker 内部与关系)。
+// 契约: 不满足返回 EN_ERR_TEAM_CONDITION_NOT_MATCH 且零写入(不追加频道日志、不发个人通知、
+// pending 记录不被消耗、成员不入队)，条件满足后同一操作可重试生效；
+// checker 之间任一匹配即通过。未携带 condition 的准入行为由其余 ADM 用例覆盖。
+CASE_TEST(teamsvr_room_admission, dedicated_rpc_condition_gate) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+  auto& fake = env.channel(team_id);
+
+  // 预置队伍共享数据 {301: "adm-cond-a", 302: "adm-cond-b"}(真实 team_update 写路径)
+  {
+    atfw::team::DTeamAction preset;
+    add_team_any_data_entry(preset.mutable_team_update()->mutable_shared_team_data(), 301, "adm-cond-a");
+    add_team_any_data_entry(preset.mutable_team_update()->mutable_shared_team_data(), 302, "adm-cond-b");
+    CASE_EXPECT_EQ(0, env.run("preset_team_data", [room, &preset](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->send_action(ctx, preset)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+  }
+
+  // 向请求追加一个"队伍共享数据 key 等值"checker
+  auto append_condition = [](google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>* conditions,
+                             int64_t key, const std::string& value) {
+    add_team_any_value_entry(conditions->Add()->mutable_shared_team_data(), key, value);
+  };
+
+  const uint64_t user_base = 8820;
+  auto invitee = make_user_key(1, user_base + 1);
+  auto applicant = make_user_key(1, user_base + 2);
+  auto invitee_b = make_user_key(1, user_base + 3);
+  auto applicant_b = make_user_key(1, user_base + 4);
+
+  // 1. add_invitation: 值不匹配拒绝且零写入; checker 之间或关系(其一匹配)通过
+  {
+    size_t sends_before = fake.send_message_calls();
+    size_t personal_before = env.personal_message_count();
+    auto req = make_add_invitation_req(members.normal, members.normal, invitee);
+    append_condition(req.mutable_condition(), 301, "cond-mismatch");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("invite_condition_fail", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+    CASE_EXPECT_EQ(personal_before, env.personal_message_count());
+
+    auto req_or = make_add_invitation_req(members.normal, members.normal, invitee);
+    append_condition(req_or.mutable_condition(), 301, "cond-mismatch");
+    append_condition(req_or.mutable_condition(), 302, "adm-cond-b");
+    CASE_EXPECT_EQ(0, env.run("invite_condition_or_pass", [room, &req_or](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, req_or)));
+    }));
+    CASE_EXPECT_EQ(sends_before + 1, fake.send_message_calls());
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kInvited));
+  }
+
+  // 2. add_join_request: 条件 key 不存在拒绝且零写入; 匹配条件申请生效
+  {
+    size_t sends_before = fake.send_message_calls();
+    size_t personal_before = env.personal_message_count();
+    auto req = make_add_join_request_req(applicant);
+    append_condition(req.mutable_condition(), 999, "adm-cond-a");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("join_condition_fail", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+    CASE_EXPECT_EQ(personal_before, env.personal_message_count());
+
+    auto req_pass = make_add_join_request_req(applicant);
+    append_condition(req_pass.mutable_condition(), 301, "adm-cond-a");
+    CASE_EXPECT_EQ(0, env.run("join_condition_pass", [room, &req_pass](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req_pass)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    CASE_EXPECT_EQ(1u,
+                   count_personal_actions(env, applicant.user_id(), atfw::team::DTeamMemberAction::kApplyJoinRequest));
+  }
+
+  // 3. approve_invitation: 条件失败成员不入队且邀请保留(可重试); 匹配条件重试成功
+  {
+    size_t sends_before = fake.send_message_calls();
+    size_t personal_before = env.personal_message_count();
+    atfw::team::SSTeamRoomApproveInvitationReq req;
+    protobuf_copy_message(*req.mutable_sender_user_key(), invitee);
+    protobuf_copy_message(*req.mutable_invitee(), invitee);
+    append_condition(req.mutable_condition(), 301, "cond-mismatch");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("approve_inv_condition_fail", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+    CASE_EXPECT_EQ(personal_before, env.personal_message_count());
+    CASE_EXPECT_TRUE(nullptr == room->find_member(invitee, false));
+
+    append_condition(req.mutable_condition(), 301, "adm-cond-a");  // 第二个 checker 匹配 -> 或关系通过
+    CASE_EXPECT_EQ(0, env.run("approve_inv_condition_retry", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, req)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    CASE_EXPECT_TRUE(nullptr != room->find_member(invitee, false));
+    CASE_EXPECT_EQ(1u, count_personal_actions(env, invitee.user_id(), atfw::team::DTeamMemberAction::kJoinedTeam));
+  }
+
+  // 4. approve_join_request: 条件失败申请保留; 匹配条件重试成功
+  {
+    size_t sends_before = fake.send_message_calls();
+    atfw::team::SSTeamRoomApproveJoinRequestReq req;
+    protobuf_copy_message(*req.mutable_sender_user_key(), members.owner);
+    protobuf_copy_message(*req.mutable_applicant(), applicant);
+    append_condition(req.mutable_condition(), 301, "cond-mismatch");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("approve_join_condition_fail", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+    CASE_EXPECT_TRUE(nullptr == room->find_member(applicant, false));
+
+    req.clear_condition();
+    append_condition(req.mutable_condition(), 302, "adm-cond-b");
+    CASE_EXPECT_EQ(0, env.run("approve_join_condition_retry", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, req)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    CASE_EXPECT_TRUE(nullptr != room->find_member(applicant, false));
+  }
+
+  // 5. reject_invitation: 条件失败邀请保留(重试可拒绝成功); 拒绝生效后缓存清理
+  {
+    auto invite_req = make_add_invitation_req(members.normal, members.normal, invitee_b);
+    CASE_EXPECT_EQ(0, env.run("invite_b", [room, &invite_req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_invitation(ctx, invite_req)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+
+    size_t sends_before = fake.send_message_calls();
+    atfw::team::SSTeamRoomRejectInvitationReq req;
+    protobuf_copy_message(*req.mutable_sender_user_key(), invitee_b);
+    protobuf_copy_message(*req.mutable_invitee(), invitee_b);
+    append_condition(req.mutable_condition(), 301, "cond-mismatch");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("reject_inv_condition_fail", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_invitation(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+
+    // 邀请仍在: 匹配条件的重试拒绝成功, 之后 approve 返回 not-found
+    req.clear_condition();
+    append_condition(req.mutable_condition(), 301, "adm-cond-a");
+    CASE_EXPECT_EQ(0, env.run("reject_inv_condition_retry", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_invitation(ctx, req)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    atfw::team::SSTeamRoomApproveInvitationReq approve_req;
+    protobuf_copy_message(*approve_req.mutable_sender_user_key(), invitee_b);
+    protobuf_copy_message(*approve_req.mutable_invitee(), invitee_b);
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_INVITATION_NOT_FOUND,
+                   env.run("approve_b_after_reject", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_invitation(ctx, approve_req)));
+                   }));
+  }
+
+  // 6. reject_join_request: 条件失败申请保留; 匹配条件重试成功
+  {
+    auto join_req = make_add_join_request_req(applicant_b);
+    CASE_EXPECT_EQ(0, env.run("join_b", [room, &join_req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, join_req)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+
+    size_t sends_before = fake.send_message_calls();
+    atfw::team::SSTeamRoomRejectJoinRequestReq req;
+    protobuf_copy_message(*req.mutable_sender_user_key(), members.normal);
+    protobuf_copy_message(*req.mutable_applicant(), applicant_b);
+    append_condition(req.mutable_condition(), 301, "cond-mismatch");
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
+                   env.run("reject_join_condition_fail", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(sends_before, fake.send_message_calls());
+
+    req.clear_condition();
+    append_condition(req.mutable_condition(), 302, "adm-cond-b");
+    CASE_EXPECT_EQ(0, env.run("reject_join_condition_retry", [room, &req](rpc::context& ctx) -> rpc::result_code_type {
+      RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->reject_join_request(ctx, req)));
+    }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    atfw::team::SSTeamRoomApproveJoinRequestReq approve_req;
+    protobuf_copy_message(*approve_req.mutable_sender_user_key(), members.owner);
+    protobuf_copy_message(*approve_req.mutable_applicant(), applicant_b);
+    CASE_EXPECT_EQ(
+        PROJECT_NAMESPACE_ID::EN_ERR_TEAM_JOIN_REQUEST_NOT_FOUND,
+        env.run("approve_join_b_after_reject", [room, &approve_req](rpc::context& ctx) -> rpc::result_code_type {
+          RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->approve_join_request(ctx, approve_req)));
+        }));
+  }
 
   room_test_env::clear_rooms();
   CASE_EXPECT_EQ(0, env.stop());

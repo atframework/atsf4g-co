@@ -78,3 +78,10 @@ CTest 提供离线资源工作目录和运行环境；验收以可执行程序�
 
 2026-09-15 在 Windows、MSVC Debug 配置下运行：Team Room 174/174，相关 Lobby 回归 104/104。
 本次新增 17 个 Room 用例；这些结果不代表其他平台或多进程环境已验证。
+
+2026-09-17 在 Windows、MSVC Debug 配置下运行：Team Room 176/176，Lobby 116/117。
+本次新增 `admission.cpp` ADM-22（六个专用准入 RPC 的 condition 门禁：不满足精确错误码且零写入、
+pending 不被消耗、checker 或关系、条件满足后重试生效）与 `permission.cpp` COND-07
+（`SSTeamRoomSendMessageReq` 顶层 condition 的 member_update 门禁与 admission 动作转发）。
+Lobby 唯一失败 `matching_sync_02_callback_view_broadcast_then_finish` 为分支既有失败：
+已验证在不含任何未提交改动的 HEAD 上同样失败，与本批条件检查改动无关。Linux 和 Release 未执行。

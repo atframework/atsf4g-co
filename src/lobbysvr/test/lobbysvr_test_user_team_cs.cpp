@@ -107,6 +107,31 @@ size_t count_pending_invitation_removals(const team_test::team_dirty_view& view,
   return ret;
 }
 
+// 断言一条 uplink 请求携带"队伍不在匹配中"条件: 恰好一个 checker、一个共享队伍数据等值条目,
+// key 为 battle.matching 模块 key 且 Any 解包回 matching=false(与 lobbysvr 生产打包一致),
+// 不携带成员条件组/成员数量等其他维度
+void expect_not_matching_condition(
+    const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& condition) {
+  CASE_EXPECT_EQ(1, static_cast<int>(condition.size()));
+  if (1 != static_cast<int>(condition.size())) {
+    return;
+  }
+  const auto& checker = condition.Get(0);
+  CASE_EXPECT_EQ(1, checker.shared_team_data_size());
+  CASE_EXPECT_EQ(0, static_cast<int>(checker.member_condition_group_size()));
+  CASE_EXPECT_FALSE(checker.has_members_count());
+  if (1 == checker.shared_team_data_size()) {
+    const auto& entry = checker.shared_team_data(0);
+    CASE_EXPECT_EQ(team_matching_data_key(), entry.key());
+    PROJECT_NAMESPACE_ID::DTeamSharedDataModule unpacked;
+    CASE_EXPECT_TRUE(entry.value().UnpackTo(&unpacked));
+    if (entry.value().UnpackTo(&unpacked)) {
+      CASE_EXPECT_TRUE(unpacked.has_battle());
+      CASE_EXPECT_FALSE(unpacked.battle().matching());
+    }
+  }
+}
+
 // An unbound session (no user attached) drives every task action into the not-logined branch.
 template <class TRequest>
 bool expect_not_logined(atfw::testing::runtime& test, uint64_t session_id, gsl::string_view rpc_full_name,
@@ -1042,6 +1067,102 @@ CASE_TEST(lobbysvr_user_team, cs_member_01_exit_remove_role_contract) {
     CASE_EXPECT_EQ(atfw::team::EN_TEAM_EXIT_REASON_EXIT_TEAM,
                    ss_capture.send_message_reqs.back().action().remove_member().remove_member_reason());
   }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// CS-MEMBER-02: 影响成员变化的操作(team_accept_join_request / team_remove_member 他人)上行必须携带
+// "队伍不在匹配中"条件(单个 checker 的 battle.matching=false 等值条目, 由 teamsvr-room 执行前判定);
+// 房间否决条件时 EN_ERR_TEAM_CONDITION_NOT_MATCH 原样透传给客户端。
+CASE_TEST(lobbysvr_user_team, cs_member_02_member_change_ops_carry_not_matching_condition) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
+  if (!test.is_running()) {
+    return;
+  }
+  // The CS dispatcher registrations live in the generated handle unit and are per-runtime (dispatcher state resets
+  // on each runtime start), so every case must register them explicitly like the chat manager cases do.
+  CASE_EXPECT_EQ(0, handle::lobbysvrclientservice::register_handles_for_lobbysvrclientservice());
+  CASE_EXPECT_TRUE(team_test::setup_team_room_node(test));
+  team_test::team_room_ss_capture ss_capture;
+  CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
+
+  constexpr uint64_t kUserId = 91061;
+  constexpr uint64_t kMemberB = 91062;
+  constexpr uint64_t kRequesterA = 91063;
+  constexpr uint64_t kRequesterB = 91064;
+  constexpr int64_t kTeamId = 810201;
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(team_test::setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+  set_cs_client_version(user_inst);
+
+  atfw::testing::mock_client client;
+  CASE_EXPECT_TRUE(team_test::bind_client_session(test, user_inst, 9106101, client));
+
+  // NORMAL 即可批准申请与移除成员, 聚焦条件载荷而非权限分支
+  atfw::team::DTeamConfigure configure;
+  configure.set_approve_join_request_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+  configure.set_manage_member_role(atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL);
+  team_test::channel_event_chain private_chain;
+  private_chain.channel_key = std::move(private_channel_key);
+  CASE_EXPECT_TRUE(join_team_with_snapshot(test, user_inst, private_chain, kTeamId,
+                                           atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, false, &configure, {kMemberB}));
+
+  // 1. accept_join_request: 上行 approve_join_request 动作并携带不匹配条件
+  {
+    atframework::shared::CSTeamAcceptJoinRequestReq req;
+    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
+    protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kRequesterA));
+    atframework::CSMsg rsp_msg;
+    CASE_EXPECT_TRUE(post_team_cs_request(
+        test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_accept_join_request(), req, rsp_msg));
+    CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
+    CASE_EXPECT_EQ(
+        1, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kApproveJoinRequest)));
+    const auto& action_req = ss_capture.send_message_reqs.back();
+    expect_send_message_envelope(action_req, kTeamId, kUserId);
+    expect_not_matching_condition(action_req.condition());
+  }
+
+  // 2. remove_member(他人): 上行 remove_member 动作并携带同一条件
+  {
+    atframework::shared::CSTeamRemoveMemberReq req;
+    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
+    protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kMemberB));
+    atframework::CSMsg rsp_msg;
+    CASE_EXPECT_TRUE(post_team_cs_request(
+        test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_remove_member(), req, rsp_msg));
+    CASE_EXPECT_EQ(0, rsp_msg.head().error_code());
+    const auto& action_req = ss_capture.send_message_reqs.back();
+    CASE_EXPECT_TRUE(action_req.action().has_remove_member());
+    expect_send_message_envelope(action_req, kTeamId, kUserId);
+    expect_not_matching_condition(action_req.condition());
+  }
+
+  // 3. 房间否决条件: 请求仍上行(带条件), EN_ERR_TEAM_CONDITION_NOT_MATCH 原样透传给客户端
+  ss_capture.send_message_responder = [](const atfw::team::SSTeamRoomSendMessageReq&,
+                                         atfw::team::SSTeamRoomSendMessageRsp&) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
+  };
+  {
+    atframework::shared::CSTeamAcceptJoinRequestReq req;
+    protobuf_copy_message(*req.mutable_team_key(), team_test::make_team_key(kTeamId));
+    protobuf_copy_message(*req.mutable_user_key(), team_test::make_user_key(kRequesterB));
+    atframework::CSMsg rsp_msg;
+    CASE_EXPECT_TRUE(post_team_cs_request(
+        test, client, rpc::lobbysvrclientservice::packer::get_full_name_of_team_accept_join_request(), req, rsp_msg));
+    CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH, rsp_msg.head().error_code());
+    CASE_EXPECT_EQ(
+        2, static_cast<int>(ss_capture.send_message_action_count(atfw::team::DTeamAction::kApproveJoinRequest)));
+    expect_not_matching_condition(ss_capture.send_message_reqs.back().condition());
+  }
+  ss_capture.send_message_responder = nullptr;
 
   CASE_EXPECT_EQ(0, test.stop());
 }

@@ -262,31 +262,16 @@ class user_team_utility {
     return ret;
   }
 
-  static void append_condition_team_matching_state(
-      rpc::context& ctx, bool matching,
-      ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
-    auto* rule = conditions.empty() ? conditions.Add() : conditions.Mutable(0);
-
-    rpc::context::message_holder<PROJECT_NAMESPACE_ID::DTeamSharedDataModule> checked_value{ctx};
-    checked_value->mutable_battle()->set_matching(matching);
-    auto* checked_item = rule->add_shared_team_data();
-    checked_item->set_key(user_team_algorithm::make_team_shared_data_key(*checked_value));
-    if (!checked_item->mutable_value()->PackFrom(*checked_value)) {
-      FCTXLOGERROR(ctx, "Failed to pack checked_value into checked_item");
-      rule->mutable_shared_team_data()->RemoveLast();
-    }
-  }
-
   static void append_condition_team_not_matching(
       rpc::context& ctx, user_team&,
       ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
-    append_condition_team_matching_state(ctx, false, conditions);
+    user_team_battle_library_function::append_condition_team_matching_state(ctx, false, conditions);
   }
 
   static void append_condition_team_is_matching(
       rpc::context& ctx, user_team&,
       ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
-    append_condition_team_matching_state(ctx, true, conditions);
+    user_team_battle_library_function::append_condition_team_matching_state(ctx, true, conditions);
   }
 
   static void append_condition_all_member_ready(
@@ -787,6 +772,34 @@ rpc::result_code_type user_team::send_action(rpc::context& ctx, atfw::team::DTea
   RPC_RETURN_CODE(ret);
 }
 
+rpc::result_code_type user_team::send_action(
+    rpc::context& ctx, atfw::team::DTeamAction&& action,
+    ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>&& conditions) {
+  if (!is_active_generation() || is_exiting() || is_destroyed()) {
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM);
+  }
+  rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageReq> req_body{ctx};
+  rpc::context::message_holder<atfw::team::SSTeamRoomSendMessageRsp> rsp_body{ctx};
+  protobuf_copy_message(*req_body->mutable_team_key(), team_key_);
+  owner_->get_owner().dump_user_key(*req_body->mutable_sender_user_key());
+  *req_body->mutable_action() = std::move(action);
+
+  if (!conditions.empty()) {
+    protobuf_move_message(*req_body->mutable_condition(), std::move(conditions));
+  }
+
+  int32_t ret = RPC_AWAIT_CODE_RESULT(rpc::team::team_api::send_message(ctx, *req_body, *rsp_body));
+  if (0 == ret) {
+    ret = rsp_body->client_result();
+  }
+  repair_from_room_error(ctx, ret);
+  if (PROJECT_NAMESPACE_ID::EN_ERR_DTMQ_CHANNEL_NOT_FOUND == ret) {
+    // 目标频道已不存在(队伍已解散或数据链路失效)，对客户端表现为已不在队伍中
+    ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
+  }
+  RPC_RETURN_CODE(ret);
+}
+
 rpc::result_code_type user_team::accept_join_request(rpc::context& ctx,
                                                      const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
   rpc::context::message_holder<atfw::team::DTeamAction> action{ctx};
@@ -794,7 +807,11 @@ rpc::result_code_type user_team::accept_join_request(rpc::context& ctx,
   protobuf_copy_message(*join_request->mutable_team_key(), team_key_);
   protobuf_copy_message(*join_request->mutable_requester(), user_key);
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+  // 影响成员变化的指令，不允许在匹配中
+  rpc::context::message_holder<::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>> conditions{ctx};
+  user_team_battle_library_function::append_condition_team_matching_state(ctx, false, *conditions);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action), std::move(*conditions))));
 }
 
 rpc::result_code_type user_team::reject_join_request(rpc::context& ctx,
@@ -814,7 +831,11 @@ rpc::result_code_type user_team::remove_member(rpc::context& ctx, const PROJECT_
   protobuf_copy_message(*remove_data->mutable_user_key(), user_key);
   remove_data->set_remove_member_reason(atfw::team::EN_TEAM_EXIT_REASON_REMOVE_MEMBER);
 
-  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action))));
+  // 影响成员变化的指令，不允许在匹配中
+  rpc::context::message_holder<::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>> conditions{ctx};
+  user_team_battle_library_function::append_condition_team_matching_state(ctx, false, *conditions);
+
+  RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(send_action(ctx, std::move(*action), std::move(*conditions))));
 }
 
 rpc::result_code_type user_team::transfer_captain(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {

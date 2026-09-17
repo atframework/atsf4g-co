@@ -4,6 +4,8 @@
 // COND-01~06 覆盖 member_update/team_update 的 DTeamConditionChecker 数据条件检查
 // (共享队伍/成员数据等值含 Any 语义比较、成员数量/百分比范围、成员条件组 scope、checker 或关系/内部
 // 与关系)与通过后裁剪。
+// COND-07 覆盖 SSTeamRoomSendMessageReq 顶层 condition 门禁(member_update 直接写路径与
+// admission 动作转发)。
 // 所有失败断言均带统一零写入门禁: team 房间频道 send/update/reset_lock/destroy 调用数与
 // 个人频道通知数保持不变。
 
@@ -2083,6 +2085,103 @@ CASE_TEST(teamsvr_room_permission, condition_any_semantic_equal) {
     write_any_data(44, int64_type_url, "");
     CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH,
                    check_any_condition(44, int64_type_url, five.SerializeAsString()));
+  }
+
+  room_test_env::clear_rooms();
+  CASE_EXPECT_EQ(0, env.stop());
+}
+
+// ============ COND-07: SSTeamRoomSendMessageReq 顶层 condition 门禁与转发 ============
+// 顶层 condition 由 action 层判定: member_update 等直接写路径在提交前以 room->check_conditions
+// 检查，admission 动作转发给专用流程检查。契约: 条件不满足时全链路零写入且 pending 记录保留，
+// 条件满足(或请求不带条件)时行为与既有路径一致。checker 内部语义由 COND-01~06 覆盖，
+// 专用流程的精确错误码由 ADM-22 覆盖，这里聚焦 action 层的门禁位置与转发。
+CASE_TEST(teamsvr_room_permission, send_message_top_level_condition_gate) {
+  room_test_env env;
+  if (!env.start()) {
+    return;
+  }
+
+  int64_t team_id = next_test_team_id();
+  team_room::ptr_t room;
+  standard_team_members members;
+  CASE_EXPECT_TRUE(setup_standard_team(env, team_id, room, members));
+  if (!room) {
+    CASE_EXPECT_EQ(0, env.stop());
+    return;
+  }
+
+  auto& fake = env.channel(team_id);
+
+  // 预置队伍共享数据 {42: "ut-team-data"}(不带条件, 与 COND-02 同款写路径)
+  CASE_EXPECT_EQ(0, run_send_message_action(env, team_id, members.normal, make_team_update_action()));
+  CASE_EXPECT_EQ(0, env.sync(team_id));
+
+  // 携带顶层 condition 经真实 task_action_send_message 驱动
+  auto run_conditioned_action = [&env, team_id](const PROJECT_NAMESPACE_ID::DUserIDKey& sender,
+                                                const atfw::team::DTeamAction& action, int64_t cond_key,
+                                                const std::string& cond_value) {
+    return env.run("send_message_with_condition",
+                   [team_id, sender, action, cond_key, cond_value](rpc::context& ctx) -> rpc::result_code_type {
+                     atframework::testing::ss_action_invoke_options invoke_options{
+                         rpc::team::packer::get_full_name_of_send_message()};
+                     invoke_options.source.node_id = kDtmqProxyNodeId;
+                     atfw::team::SSTeamRoomSendMessageReq request;
+                     protobuf_copy_message(*request.mutable_team_key(), make_team_key(team_id));
+                     protobuf_copy_message(*request.mutable_sender_user_key(), sender);
+                     protobuf_copy_message(*request.mutable_action(), action);
+                     add_team_any_value_entry(request.add_condition()->mutable_shared_team_data(), cond_key,
+                                              cond_value);
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(
+                         atframework::testing::invoke_ss_action<task_action_send_message>(ctx, request,
+                                                                                          invoke_options)));
+                   });
+  };
+
+  // 1. member_update 分支: 条件不匹配 -> 零写入; 匹配 -> 更新生效
+  {
+    auto action = make_member_update_data_action(members.normal, 8, "cond-pass");
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(0, run_conditioned_action(members.normal, action, 42, "cond-mismatch"));
+    expect_no_write(fake, env, before);
+
+    CASE_EXPECT_EQ(0, run_conditioned_action(members.normal, action, 42, "ut-team-data"));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    auto member = room->find_member(members.normal, false);
+    CASE_EXPECT_TRUE(!!member);
+    if (member) {
+      auto it = member->shared_member_data.find(8);
+      CASE_EXPECT_TRUE(it != member->shared_member_data.end());
+      if (it != member->shared_member_data.end()) {
+        CASE_EXPECT_EQ(std::string("cond-pass"), it->second.data().value());
+      }
+    }
+  }
+
+  // 2. approve_join_request 分支: 顶层 condition 转发给专用流程, 不匹配 -> 零写入且申请保留;
+  //    匹配 -> 申请人入队
+  {
+    // 经专用入口建立 pending 申请(不带条件)
+    auto applicant = make_user_key(1, 7301);
+    CASE_EXPECT_EQ(0, env.run("setup_join_request", [room, &applicant](rpc::context& ctx) -> rpc::result_code_type {
+                     atfw::team::SSTeamRoomAddJoinRequestReq req;
+                     protobuf_copy_message(*req.mutable_sender_user_key(), applicant);
+                     protobuf_copy_message(*req.mutable_join_request()->mutable_requester(), applicant);
+                     protobuf_copy_message(*req.mutable_join_request()->mutable_requester_private_channel(),
+                                           make_personal_channel(applicant.user_id()));
+                     RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(room->add_join_request(ctx, req)));
+                   }));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+
+    auto action = make_approve_join_request_action(applicant);
+    auto before = snapshot_counters(env, fake);
+    CASE_EXPECT_EQ(0, run_conditioned_action(members.owner, action, 42, "cond-mismatch"));
+    expect_no_write(fake, env, before);
+    CASE_EXPECT_TRUE(nullptr == room->find_member(applicant, false));
+
+    CASE_EXPECT_EQ(0, run_conditioned_action(members.owner, action, 42, "ut-team-data"));
+    CASE_EXPECT_EQ(0, env.sync(team_id));
+    CASE_EXPECT_TRUE(nullptr != room->find_member(applicant, false));
   }
 
   room_test_env::clear_rooms();

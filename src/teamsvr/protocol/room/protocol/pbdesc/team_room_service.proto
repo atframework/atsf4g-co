@@ -51,6 +51,10 @@ message SSTeamRoomSendMessageReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   DTeamAction action = 3;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 }
 
 message SSTeamRoomSendMessageRsp {
@@ -87,6 +91,10 @@ message DTeamRoomPrivateData {
 message SSTeamRoomAddInvitationReq {
   DTeamInvitation invitation = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 }
 
 message SSTeamRoomAddInvitationRsp {
@@ -97,6 +105,10 @@ message SSTeamRoomApproveInvitationReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   atframework.shared.DUserIDKey invitee = 3;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 
   string client_version = 6;
   uint64 user_router_server_id = 7;
@@ -114,6 +126,10 @@ message SSTeamRoomRejectInvitationReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   atframework.shared.DUserIDKey invitee = 3;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 }
 
 message SSTeamRoomRejectInvitationRsp {
@@ -123,6 +139,10 @@ message SSTeamRoomRejectInvitationRsp {
 message SSTeamRoomAddJoinRequestReq {
   DTeamJoinRequest join_request = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 }
 
 message SSTeamRoomAddJoinRequestRsp {
@@ -133,6 +153,10 @@ message SSTeamRoomApproveJoinRequestReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   atframework.shared.DUserIDKey applicant = 3;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 }
 
 message SSTeamRoomApproveJoinRequestRsp {
@@ -143,6 +167,10 @@ message SSTeamRoomRejectJoinRequestReq {
   DTeamKey team_key = 1;
   atframework.shared.DUserIDKey sender_user_key = 2;
   atframework.shared.DUserIDKey applicant = 3;
+
+  // 条件检查器，每个condition是或关系，内部的各项数据是与关系
+  // 本字段仅作条件检查使用。如果不通过，当前操作会被否决
+  repeated DTeamConditionChecker condition = 5;
 }
 
 message SSTeamRoomRejectJoinRequestRsp {

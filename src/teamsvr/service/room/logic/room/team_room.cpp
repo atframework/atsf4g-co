@@ -1161,6 +1161,12 @@ rpc::result_code_type team_room::add_invitation(rpc::context& ctx, const atfw::t
     RPC_RETURN_CODE(0);
   }
 
+  if (req.condition_size() > 0) {
+    if (!check_update_conditions(ctx, req.condition())) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH);
+    }
+  }
+
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
   auto* add_data = action->mutable_add_invitation();
   auto existing = pending_invitation_by_invitee_.find(invitee);
@@ -1236,6 +1242,12 @@ rpc::result_code_type team_room::approve_invitation(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED);
   }
 
+  if (req.condition_size() > 0) {
+    if (!check_update_conditions(ctx, req.condition())) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH);
+    }
+  }
+
   // 入队事件与接受邀请事件合并为一次写入，日志按列表顺序追加(add_member 先于 approve_invitation)
   rpc::context::message_holder<atfw::team::DTeamAction> add_action(ctx);
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
@@ -1295,6 +1307,12 @@ rpc::result_code_type team_room::reject_invitation(rpc::context& ctx,
     RPC_RETURN_CODE(0);
   }
 
+  if (req.condition_size() > 0) {
+    if (!check_update_conditions(ctx, req.condition())) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH);
+    }
+  }
+
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
   protobuf_copy_message(*action->mutable_reject_invitation(), invitation);
   protobuf_copy_message(*action->mutable_reject_invitation()->mutable_team_key(), team_key_);
@@ -1342,6 +1360,12 @@ rpc::result_code_type team_room::add_join_request(rpc::context& ctx,
     FCTXLOGDEBUG(ctx, "team_room {}:{} received a expired join request and ignored", team_key_.zone_id(),
                  team_key_.team_id());
     RPC_RETURN_CODE(0);
+  }
+
+  if (req.condition_size() > 0) {
+    if (!check_update_conditions(ctx, req.condition())) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH);
+    }
   }
 
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
@@ -1416,6 +1440,12 @@ rpc::result_code_type team_room::approve_join_request(rpc::context& ctx,
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_MAX_MEMBER_COUNT_REACHED);
   }
 
+  if (req.condition_size() > 0) {
+    if (!check_update_conditions(ctx, req.condition())) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH);
+    }
+  }
+
   // 入队事件与批准申请事件合并为一次写入，日志按列表顺序追加(add_member 先于 approve_join_request)
   rpc::context::message_holder<atfw::team::DTeamAction> add_action(ctx);
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
@@ -1468,6 +1498,12 @@ rpc::result_code_type team_room::reject_join_request(rpc::context& ctx,
   if (join_request.expired_timepoint().seconds() > 0 &&
       protobuf_to_system_clock(join_request.expired_timepoint()) <= atfw::util::time::time_utility::now()) {
     RPC_RETURN_CODE(0);
+  }
+
+  if (req.condition_size() > 0) {
+    if (!check_update_conditions(ctx, req.condition())) {
+      RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH);
+    }
   }
 
   rpc::context::message_holder<atfw::team::DTeamAction> action(ctx);
@@ -2234,6 +2270,11 @@ team_room::member_ptr_t team_room::find_member(const PROJECT_NAMESPACE_ID::DUser
     return nullptr;
   }
   return iter->second;
+}
+
+bool team_room::check_conditions(
+    rpc::context& ctx, const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions) {
+  return check_update_conditions(ctx, conditions);
 }
 
 bool team_room::remove_member(rpc::context& /*ctx*/, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key,

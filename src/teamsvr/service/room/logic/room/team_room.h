@@ -227,6 +227,9 @@ class team_room : public atfw::util::memory::enable_shared_rc_from_this<team_roo
 
   member_ptr_t find_member(const PROJECT_NAMESPACE_ID::DUserIDKey& user_key, bool update_visit);
 
+  bool check_conditions(rpc::context& ctx,
+                        const google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions);
+
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   // 测试钩子: 成员 LRU 从 front(最久未访问)到 back 的 user key 顺序(RCV-01 恢复顺序断言)
   std::vector<PROJECT_NAMESPACE_ID::DUserIDKey> debug_member_lru_keys() const;

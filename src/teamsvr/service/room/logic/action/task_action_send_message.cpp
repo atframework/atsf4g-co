@@ -92,6 +92,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
         protobuf_move_message(*translated_req->mutable_invitation(),
                               std::move(*req_body.mutable_action()->mutable_add_invitation()));
         protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
+        if (req_body.condition_size() > 0) {
+          protobuf_move_message(*translated_req->mutable_condition(), std::move(*req_body.mutable_condition()));
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->add_invitation(get_shared_context(), *translated_req));
         break;
       }
@@ -111,6 +114,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
                                 std::move(*member_admission.mutable_member_admission_data()));
           break;
         }
+        if (req_body.condition_size() > 0) {
+          protobuf_move_message(*translated_req->mutable_condition(), std::move(*req_body.mutable_condition()));
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->approve_invitation(get_shared_context(), *translated_req));
         break;
       }
@@ -120,6 +126,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
         protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
         protobuf_move_message(*translated_req->mutable_invitee(),
                               std::move(*req_body.mutable_action()->mutable_reject_invitation()->mutable_invitee()));
+        if (req_body.condition_size() > 0) {
+          protobuf_move_message(*translated_req->mutable_condition(), std::move(*req_body.mutable_condition()));
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->reject_invitation(get_shared_context(), *translated_req));
         break;
       }
@@ -128,6 +137,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
         protobuf_copy_message(*translated_req->mutable_sender_user_key(), req_body.sender_user_key());
         protobuf_move_message(*translated_req->mutable_join_request(),
                               std::move(*req_body.mutable_action()->mutable_add_join_request()));
+        if (req_body.condition_size() > 0) {
+          protobuf_move_message(*translated_req->mutable_condition(), std::move(*req_body.mutable_condition()));
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->add_join_request(get_shared_context(), *translated_req));
         break;
       }
@@ -139,6 +151,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
         protobuf_move_message(
             *translated_req->mutable_applicant(),
             std::move(*req_body.mutable_action()->mutable_approve_join_request()->mutable_requester()));
+        if (req_body.condition_size() > 0) {
+          protobuf_move_message(*translated_req->mutable_condition(), std::move(*req_body.mutable_condition()));
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->approve_join_request(get_shared_context(), *translated_req));
         break;
       }
@@ -150,6 +165,9 @@ task_action_send_message::result_type task_action_send_message::operator()() {
         protobuf_move_message(
             *translated_req->mutable_applicant(),
             std::move(*req_body.mutable_action()->mutable_reject_join_request()->mutable_requester()));
+        if (req_body.condition_size() > 0) {
+          protobuf_move_message(*translated_req->mutable_condition(), std::move(*req_body.mutable_condition()));
+        }
         ret = RPC_AWAIT_CODE_RESULT(room->reject_join_request(get_shared_context(), *translated_req));
         break;
       }
@@ -161,6 +179,13 @@ task_action_send_message::result_type task_action_send_message::operator()() {
             (req_body.action().member_update().user_key().zone_id() != req_body.sender_user_key().zone_id() ||
              req_body.action().member_update().user_key().user_id() != req_body.sender_user_key().user_id())) {
           req_body.mutable_action()->mutable_member_update()->set_user_router_server_id(0);
+        }
+
+        if (req_body.condition_size() > 0) {
+          if (!room->check_conditions(get_shared_context(), req_body.condition())) {
+            ret = PROJECT_NAMESPACE_ID::EN_ERR_TEAM_CONDITION_NOT_MATCH;
+            break;
+          }
         }
         ret = RPC_AWAIT_CODE_RESULT(room->send_action(get_shared_context(), req_body.action()));
         break;

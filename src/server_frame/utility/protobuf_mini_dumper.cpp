@@ -60,7 +60,7 @@ SERVER_FRAME_API std::string protobuf_mini_dumper_get_readable(const ::google::p
 
   ::google::protobuf::TextFormat::Printer printer;
   printer.SetUseUtf8StringEscaping(true);
-  // printer.SetExpandAny(true);
+  printer.SetExpandAny(true);
   printer.SetUseShortRepeatedPrimitives(true);
   printer.SetSingleLineMode(false);
   printer.SetTruncateStringFieldLongerThan(MSG_DISPATCHER_DEBUG_PRINT_BOUND);
@@ -76,7 +76,7 @@ SERVER_FRAME_API std::string protobuf_mini_dumper_get_readable(const ::google::p
 }
 
 SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_code) {
-  const char *ret = "Unknown Error Code";
+  gsl::string_view ret = "Unknown Error Code";
 
   using error_code_desc_map_t = std::unordered_map<int, std::string>;
   static error_code_desc_map_t cs_error_desc;
@@ -91,26 +91,26 @@ SERVER_FRAME_API gsl::string_view protobuf_mini_dumper_get_error_msg(int error_c
 
   error_code_desc_map_t::const_iterator iter = cs_error_desc.find(error_code);
   if (iter != cs_error_desc.end()) {
-    return iter->second.c_str();
+    return iter->second;
   }
 
   iter = ss_error_desc.find(error_code);
   if (iter != ss_error_desc.end()) {
-    return iter->second.c_str();
+    return iter->second;
   }
 
   const ::google::protobuf::EnumValueDescriptor *desc =
       PROJECT_NAMESPACE_ID::EnErrorCode_descriptor()->FindValueByNumber(error_code);
   if (nullptr != desc) {
     cs_error_desc[error_code] = build_error_code_msg(*desc);
-    ret = cs_error_desc[error_code].c_str();
+    ret = cs_error_desc[error_code];
     return ret;
   }
 
   desc = PROJECT_NAMESPACE_ID::err::EnSysErrorType_descriptor()->FindValueByNumber(error_code);
   if (nullptr != desc) {
     ss_error_desc[error_code] = build_error_code_msg(*desc);
-    ret = ss_error_desc[error_code].c_str();
+    ret = ss_error_desc[error_code];
     return ret;
   }
 

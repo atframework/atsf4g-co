@@ -426,6 +426,9 @@ rpc::result_code_type user_team_manager::approve_invitation(rpc::context& ctx,
   // 成员通知路由到当前持有会话的 lobbysvr 节点
   ss_req->set_user_router_server_id(logic_config::me()->get_local_server_id());
 
+  // 影响成员变化的指令，不允许在匹配中
+  user_team_battle_library_function::append_condition_team_matching_state(ctx, false, *ss_req->mutable_condition());
+
   // 填充 shared_member_data
   user_team_battle_library_function::pack_default_member_shared_data(
       ctx, *owner_, static_cast<PROJECT_NAMESPACE_ID::EnTeamType>(invitation->team_type()),

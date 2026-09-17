@@ -95,6 +95,24 @@ ctest --test-dir build_jobs_cmake_tools -V -R '^atf4g-co-lobbysvr-unit-test\.uni
 `-r lobbysvr_user_team` 或 `-r lobbysvr_user_team.<case>`。
 以实际执行的用例数、失败数、跳过项和退出码为准；发现用例或运行空组不算通过。
 
+## 验收记录（2026-09-17）
+
+队伍成员变化操作的条件检查上行（`accept_join_request` / `remove_member` 走 `SSTeamRoomSendMessageReq.condition`，
+`approve_invitation` 走专用请求的 `condition` 字段，均为"队伍不在匹配中"等值 checker）补充用例后，
+在 Windows/MSVC Debug、Ninja、`build_jobs_cmake_tools` 中重建并通过实际执行：
+
+| 范围 | 通过数 |
+| --- | --- |
+| `lobbysvr_user_team` | 101/102 |
+| Lobby 全量（包含组队） | 116/117 |
+| Team Room 回归 | 176/176 |
+
+新增 `cs.cpp` CS-MEMBER-02（accept_join_request / remove_member 他人上行携带不匹配条件、
+`EN_ERR_TEAM_CONDITION_NOT_MATCH` 透传给客户端），扩展 `admission.cpp` ADM-SELF-06
+（approve_invitation 上行条件载荷；房间否决条件时错误码透传且本地 pending 保留）。
+`matching_sync_02_callback_view_broadcast_then_finish` 为分支既有失败：已验证在不含任何未提交改动的
+HEAD 上同样失败，与本批改动无关；Linux 和 Release 未执行。
+
 ## 验收记录（2026-09-16）
 
 glue 上行修复（`async_send_team_shared_data` 拆分为 `async_update_team_shared_data` /

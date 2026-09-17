@@ -65,6 +65,10 @@ class user_team_battle_library_function {
   static const PROJECT_NAMESPACE_ID::DMatchingTeamParameter& get_matching_team_parameter(
       const user_team_member_cache& team) noexcept;
 
+  static void append_condition_team_matching_state(
+      rpc::context& ctx, bool matching,
+      ::google::protobuf::RepeatedPtrField<atfw::team::DTeamConditionChecker>& conditions);
+
   // ============================ 跨模块胶水层 ============================
   static void auto_check_and_correct_team_data(rpc::context& ctx, user_team& team);
 
