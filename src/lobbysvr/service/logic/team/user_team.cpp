@@ -1029,7 +1029,8 @@ void user_team::try_load_snapshot(rpc::context& ctx) {
   load_snapshot(ctx);
 }
 
-void user_team::async_flush_all_member_shared_data(rpc::context& ctx, async_action_callback_t callback) {
+void user_team::async_flush_all_member_shared_data(rpc::context& ctx,
+                                                   async_action_callback_t ATFW_UTIL_MACRO_NULLABLE callback) {
   auto self = weak_from_this();
   auto user_inst = owner_->get_owner().shared_from_this();
 
@@ -1072,7 +1073,7 @@ void user_team::async_flush_all_member_shared_data(rpc::context& ctx, async_acti
 
 bool user_team::async_update_team_shared_data(
     rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data,
-    async_action_callback_t callback) {
+    async_action_callback_t ATFW_UTIL_MACRO_NULLABLE callback) {
   if (data->element_size() <= 0) {
     return false;
   }
@@ -1109,7 +1110,7 @@ bool user_team::async_update_team_shared_data(
 
 bool user_team::async_update_member_shared_data(
     rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data,
-    async_action_callback_t callback) {
+    async_action_callback_t ATFW_UTIL_MACRO_NULLABLE callback) {
   if (data->element_size() <= 0) {
     return false;
   }

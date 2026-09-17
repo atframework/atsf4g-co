@@ -180,15 +180,16 @@ class user_team : public atfw::util::memory::enable_shared_rc_from_this<user_tea
 
   void try_load_snapshot(rpc::context& ctx);
 
-  void async_flush_all_member_shared_data(rpc::context& ctx, async_action_callback_t callback = nullptr);
+  void async_flush_all_member_shared_data(rpc::context& ctx,
+                                          async_action_callback_t ATFW_UTIL_MACRO_NULLABLE callback = nullptr);
 
   bool async_update_team_shared_data(rpc::context& ctx,
                                      rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamSharedDataModuleArray>&& data,
-                                     async_action_callback_t callback = nullptr);
+                                     async_action_callback_t ATFW_UTIL_MACRO_NULLABLE callback = nullptr);
 
   bool async_update_member_shared_data(
       rpc::context& ctx, rpc::shared_message<PROJECT_NAMESPACE_ID::DTeamMemberSharedDataModuleArray>&& data,
-      async_action_callback_t callback = nullptr);
+      async_action_callback_t ATFW_UTIL_MACRO_NULLABLE callback = nullptr);
 
   void dump_dirty_data(rpc::context& ctx, PROJECT_NAMESPACE_ID::DUserTeamDirty& output);
   void clear_dirty_data(rpc::context& ctx);
