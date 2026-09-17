@@ -328,6 +328,7 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
             user_iter->second->finish_ = true;
             user_iter->second->finish_timepoint_ = util::time::time_utility::get_now();
             room.init_to_client_finish_count_++;
+            room.need_retry_settlement_ = true;
           }
         };
 
