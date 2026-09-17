@@ -512,10 +512,12 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::sub(ItemGridSubChe
       entry->mutable_item_basic().set_count(0);
       auto& cached_count = item_count_cache_[type_id];
       cached_count -= current_count;
+      int64_t total_count = cached_count;
       if (cached_count <= 0) {
         item_count_cache_.erase(type_id);
+        total_count = 0;
       }
-      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, 0, cached_count, reason);
+      on_item_count_changed(type_id, entry, guid, entry_pos, current_count, 0, total_count, reason);
       on_item_data_changed(entry, reason);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("sub remove all type={} count={} guid={} entry_id={} at ({},{})", type_id,
                                    current_count, guid, entry->entry_id(), entry_pos.x, entry_pos.y);
@@ -869,10 +871,12 @@ ITEM_ALGORITHM_API ItemGridOperationResult ItemGridAlgorithm::move(ItemGridMoveC
       sub_req.entry->mutable_item_basic().set_count(0);
       auto& cached_count = item_count_cache_[type_id];
       cached_count -= source_count;
+      int64_t total_count = cached_count;
       if (cached_count <= 0) {
         item_count_cache_.erase(type_id);
+        total_count = 0;
       }
-      on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count, 0, cached_count,
+      on_item_count_changed(type_id, sub_req.entry, guid, sub_req.position, source_count, 0, total_count,
                             ItemGridOperationReason::kMoveSub);
       on_item_data_changed(sub_req.entry, ItemGridOperationReason::kMoveSub);
       ITEM_ALGORITHM_LOG_DEBUG_FMT("move sub all type={} count={} guid={} entry_id={} from ({},{})", type_id,
@@ -1529,11 +1533,13 @@ ITEM_ALGORITHM_API void ItemGridAlgorithm::apply_entries(
     found->mutable_item_basic().set_count(0);
     auto& cached_count = item_count_cache_[type_id];
     cached_count -= old_count;
+    int64_t total_count = cached_count;
     if (cached_count <= 0) {
       item_count_cache_.erase(type_id);
+      total_count = 0;
     }
 
-    on_item_count_changed(type_id, found, guid, pos, old_count, 0, cached_count, ItemGridOperationReason::kApplyRemove);
+    on_item_count_changed(type_id, found, guid, pos, old_count, 0, total_count, ItemGridOperationReason::kApplyRemove);
     on_item_data_changed(found, ItemGridOperationReason::kApplyRemove);
     ITEM_ALGORITHM_LOG_INFO_FMT("apply remove entry_id={} type={} count={} guid={}", remove_id, type_id, old_count,
                                 guid);
@@ -1602,14 +1608,17 @@ ITEM_ALGORITHM_API void ItemGridAlgorithm::apply_entries(
       // 更新 count cache
       int64_t count_delta = new_count - old_count;
       auto& cached_count = item_count_cache_[type_id];
+      int64_t total_count = cached_count;
       if (count_delta != 0) {
         cached_count += count_delta;
+        total_count = cached_count;
         if (cached_count <= 0) {
           item_count_cache_.erase(type_id);
+          total_count = 0;
         }
       }
 
-      on_item_count_changed(type_id, existing, guid, new_pos, old_count, new_count, cached_count,
+      on_item_count_changed(type_id, existing, guid, new_pos, old_count, new_count, total_count,
                             ItemGridOperationReason::kApplyUpdate);
       on_item_data_changed(existing, ItemGridOperationReason::kApplyUpdate);
       ITEM_ALGORITHM_LOG_INFO_FMT("apply update entry_id={} type={} count={} guid={}", update.entry_id(), type_id,
