@@ -42,6 +42,7 @@
 #include <memory/object_allocator.h>
 
 #include <string>
+#include <unordered_set>
 #include <utility>
 
 namespace {
@@ -312,6 +313,24 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
           req->set_init_finish(true);
         }
 
+        // 用户注册失败统一走重试计数，重试次数用尽后按已结束处理，不再参与后续注册
+        auto handle_user_init_failed = [](orbit_room& room, const PROJECT_NAMESPACE_ID::DUserIDKey& user_key) {
+          auto user_iter = room.user_data_index_.find(user_key);
+          if (user_iter == room.user_data_index_.end()) {
+            FWLOGERROR("orbit_room {} user_init failed, user not found in room, user_key: {}", room.get_client_id(),
+                       user_key.user_id());
+            return;
+          }
+          user_iter->second->init_retry_count_++;
+          if (user_iter->second->init_retry_count_ >= 3) {
+            FWLOGERROR("orbit_room {} user_init failed, user init retry count exceeded, user_key: {}",
+                       room.get_client_id(), user_key.user_id());
+            user_iter->second->finish_ = true;
+            user_iter->second->finish_timepoint_ = util::time::time_utility::get_now();
+            room.init_to_client_finish_count_++;
+          }
+        };
+
         int32_t ret =
             RPC_AWAIT_CODE_RESULT(rpc::orbit_client_rpc::user_init(child_ctx, room_ptr->get_client_id(), *req, *rsp));
         if (ret == 0) {
@@ -320,32 +339,29 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
         if (ret != 0) {
           FWLOGERROR("orbit_room {} user_init failed, ret: {}", room_ptr->get_client_id(), ret);
           for (const auto& user_data : req->user_data()) {
-            auto user_iter = room_ptr->user_data_index_.find(user_data.common().user_key().user_key());
-            if (user_iter == room_ptr->user_data_index_.end()) {
-              FWLOGERROR("orbit_room {} user_init failed, user not found, user_key: {}", room_ptr->get_client_id(),
-                         user_data.common().user_key().user_key().user_id());
-              continue;
-            }
-            user_iter->second->init_retry_count_++;
-            if (user_iter->second->init_retry_count_ >= 3) {
-              FWLOGERROR("orbit_room {} user_init failed, user init retry count exceeded, user_key: {}",
-                         room_ptr->get_client_id(), user_data.common().user_key().user_key().user_id());
-              user_iter->second->finish_ = true;
-              user_iter->second->finish_timepoint_ = util::time::time_utility::get_now();
-              room_ptr->init_to_client_finish_count_++;
-            }
+            handle_user_init_failed(*room_ptr, user_data.common().user_key().user_key());
           }
           RPC_RETURN_CODE(ret);
         }
+        // 服务器与Client的PB结构不一致时，user_init 可能返回成功但回包缺少部分用户，甚至 user_key 被解析成0，
+        // 因此先记录回包中匹配到的用户，再用请求的用户做差集找出这次注册失败的用户。
+        std::unordered_set<PROJECT_NAMESPACE_ID::DUserIDKey, user_key_hash_t, user_key_equal_t> inited_user_keys;
         for (int i = 0; i < rsp->data_size(); ++i) {
           auto& data = rsp->data(i);
           auto user_iter = room_ptr->user_data_index_.find(data.user_key().user_key());
           if (user_iter == room_ptr->user_data_index_.end()) {
-            FWLOGERROR("orbit_room {} user_init_to_client failed, user not found, user_key: {}",
+            FWLOGERROR("orbit_room {} user_init_to_client failed, user not found in room, user_key: {}",
                        room_ptr->get_client_id(), data.user_key().user_key().user_id());
             continue;
           }
           auto user_ptr = user_iter->second;
+          inited_user_keys.insert(data.user_key().user_key());
+          if (user_ptr->init_) {
+            // 该用户之前已经注册成功，回包中重复返回时不重复计数
+            FWLOGWARNING("orbit_room {} user_init_to_client, user already init, user_key: {}",
+                         room_ptr->get_client_id(), data.user_key().user_key().user_id());
+            continue;
+          }
           user_ptr->init_result_ = data;
           user_ptr->init_ = true;
           room_ptr->init_to_client_finish_count_++;
@@ -355,6 +371,16 @@ int32_t orbit_room::init_user_to_client(rpc::context& ctx) {
           *event_log.mutable_room_key() = room_ptr->room_key_;
           *event_log.mutable_user_init_success()->mutable_init_result() = user_ptr->init_result_;
           room_ptr->add_event_log(child_ctx, std::move(event_log));
+        }
+        // 回包中没有返回的用户按注册失败处理，未达到重试上限的用户会在下一轮tick重新注册
+        for (const auto& user_data : req->user_data()) {
+          auto user_key = user_data.common().user_key().user_key();
+          if (inited_user_keys.find(user_key) != inited_user_keys.end()) {
+            continue;
+          }
+          FWLOGERROR("orbit_room {} user_init_to_client failed, user not found in client response, user_key: {}",
+                     room_ptr->get_client_id(), user_key.user_id());
+          handle_user_init_failed(*room_ptr, user_key);
         }
         RPC_RETURN_CODE(0);
       });
