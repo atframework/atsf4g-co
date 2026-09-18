@@ -19,13 +19,18 @@
 
 #include <ItemInitialize/ItemInitialize.h>
 #include <logic/item/user_item_grid_manager.h>
+#include <logic/user/task_action_user_gm_cmd_nomsg.h>
 #include <rpc/db/uuid.h>
+#include <rpc/rpc_async_invoke.h>
+#include <rpc/rpc_context.h>
+#include <std/explicit_declare.h>
 #include <utility/protobuf_mini_dumper.h>
 
 #include <data/user.h>
 
 #include <algorithm>
 #include <list>
+#include <memory>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -34,7 +39,17 @@ std::unordered_map<PROJECT_NAMESPACE_ID::EnItemType, int32_t> user_item_manager:
 std::unordered_map<int32_t, atfw::util::memory::strong_rc_ptr<item_operation_handler>>
     user_item_manager::item_type_handler_;
 
-user_item_manager::user_item_manager(user& owner) : owner_(&owner) {}
+namespace {
+static bool init_user_item_manager_gm_handle() {
+  task_action_user_gm_cmd_nomsg::init_gm_cmd("add_item", user_item_manager::on_gm_cmd_add_item,
+                                             "add_item <type_id> <count> [<type_id> <count> ...]");
+  return true;
+}
+}  // namespace
+
+user_item_manager::user_item_manager(user& owner) : owner_(&owner) {
+  ATFW_EXPLICIT_UNUSED_ATTR static bool init_gm_handle = init_user_item_manager_gm_handle();
+}
 
 void user_item_manager::register_item_type_handler(gsl::span<const PROJECT_NAMESPACE_ID::EnItemType> item_type,
                                                    atfw::util::memory::strong_rc_ptr<item_operation_handler> handler) {
@@ -325,4 +340,93 @@ bool user_item_manager::check_offset_instance_match(
     }
   }
   return offset_count.empty();
+}
+
+void user_item_manager::on_gm_cmd_add_item(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
+                                           const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp,
+                                           ::util::cli::cmd_option_list& params) {
+  if (!user_inst) {
+    rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_NOT_FOUND);
+    return;
+  }
+  if (!task_action_user_gm_cmd_nomsg::check_params_number(params, 2)) {
+    return;
+  }
+  const size_t params_number = params.get_params_number();
+  if (params_number % 2 != 0) {
+    rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_USER_GM_CMD_PARAM_NUMBER);
+    rsp->set_result_message("add_item requires <type_id> <count> pairs");
+    return;
+  }
+
+  // 按 type_id count 成对读取
+  std::vector<std::pair<int32_t, int64_t>> item_requests;
+  item_requests.reserve(params_number / 2);
+  for (size_t i = 0; i < params_number; i += 2) {
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    int32_t type_id = params[i]->to_int32();
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
+    int64_t count = params[i + 1]->to_int64();
+    if (type_id <= 0 || count <= 0) {
+      rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM);
+      rsp->set_result_message("add_item requires positive type_id and count");
+      return;
+    }
+    if (ItemAlgorithmTypeOption::GetItemType(type_id) == nullptr) {
+      rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND);
+      rsp->set_result_message("add_item type_id not found in item type config");
+      return;
+    }
+    item_requests.emplace_back(type_id, count);
+  }
+
+  auto invoke_result = rpc::async_invoke(
+      *ctx, "user_item_manager.gm_add_item",
+      [user_inst, rsp, item_requests](rpc::context& child_ctx) -> rpc::result_code_type {
+        auto& item_manager = user_inst->get_user_item_manager();
+
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset> offset_cfg;
+        for (const auto& request : item_requests) {
+          auto* offset = offset_cfg.Add();
+          offset->mutable_item_offset()->set_type_id(request.first);
+          offset->mutable_item_offset()->set_count(request.second);
+        }
+
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> item_instances;
+        int32_t result =
+            RPC_AWAIT_CODE_RESULT(item_manager.generate_item_from_offset_cfg(child_ctx, offset_cfg, item_instances));
+        if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+          rsp->set_result_code(result);
+          FWLOGERROR("{} gm add_item failed to generate items, result={}({})", *user_inst, result,
+                     protobuf_mini_dumper_get_error_msg(result));
+          RPC_RETURN_CODE(result);
+        }
+
+        const int32_t instance_count = static_cast<int32_t>(item_instances.size());
+        if (!item_manager.find_position(child_ctx, item_instances)) {
+          // find_position 返回 false 表示道具未配置或没有可用位置
+          rsp->set_result_code(PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NO_EMPTY_POSITION);
+          FWLOGERROR("{} gm add_item failed to find position, instance_count={}", *user_inst, instance_count);
+          RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_ERR_ITEM_NO_EMPTY_POSITION);
+        }
+
+        auto checked_request = item_manager.check_add(child_ctx, std::move(item_instances));
+        auto add_result = checked_request.do_operation(child_ctx);
+        if (add_result.error_code != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+          rsp->set_result_code(add_result.error_code);
+          FWLOGERROR("{} gm add_item failed, result={}({}), failed_index={}", *user_inst, add_result.error_code,
+                     protobuf_mini_dumper_get_error_msg(add_result.error_code), add_result.failed_index);
+          RPC_RETURN_CODE(add_result.error_code);
+        }
+
+        rsp->set_result_code(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+        FWLOGDEBUG("{} gm add_item finish, request_count={}, instance_count={}", *user_inst, item_requests.size(),
+                   instance_count);
+        RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+      });
+  if (invoke_result.is_error()) {
+    rsp->set_result_code(*invoke_result.get_error());
+    FWLOGERROR("{} dispatch gm add_item failed, result={}({})", *user_inst, *invoke_result.get_error(),
+               protobuf_mini_dumper_get_error_msg(*invoke_result.get_error()));
+  }
 }

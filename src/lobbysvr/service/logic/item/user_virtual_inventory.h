@@ -32,9 +32,8 @@ class user_virtual_inventory {
  public:
   explicit user_virtual_inventory(user* owner);
 
-  // 分配容器GUID并初始化网格。容器GUID不持久化, 创建或登录时分配一次
+  // 分配容器GUID并初始化网格。容器GUID不持久化
   void init_grid();
-  // 加载持久化数据, 可重复调用
   void init(const PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& data);
   void dump(PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& out) const;
   void dump(google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out) const;
@@ -46,5 +45,4 @@ class user_virtual_inventory {
  private:
   user* owner_ = nullptr;
   atfw::util::memory::strong_rc_ptr<user_virtual_inventory_grid> virtual_grid_;
-  bool grid_inited_ = false;
 };

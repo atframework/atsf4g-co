@@ -15,13 +15,21 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
+#include <cli/cmd_option_list.h>
+#include <data/user_type_define.h>
 #include <gsl/select-gsl.h>
 #include <logic/item/user_item_operation_handler.h>
 #include <memory/rc_ptr.h>
 #include <rpc/rpc_utils.h>
 
+#include <memory>
 #include <unordered_map>
 #include <utility>
+
+namespace PROJECT_NAMESPACE_ID {
+class SCUserGMCommandRsp;
+}  // namespace PROJECT_NAMESPACE_ID
+
 namespace rpc {
 class context;
 }
@@ -68,6 +76,11 @@ class user_item_manager : public atfw::util::design_pattern::noncopyable {
   static bool check_offset_instance_match(
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& offset_cfg,
       const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& instances, int32_t multiple = 1);
+
+  // GM: add_item <type_id> <count> [<type_id> <count> ...]，按 type_id count 成对读取
+  static void on_gm_cmd_add_item(const std::shared_ptr<rpc::context>& ctx, const user_ptr_t& user_inst,
+                                 const std::shared_ptr<PROJECT_NAMESPACE_ID::SCUserGMCommandRsp>& rsp,
+                                 ::util::cli::cmd_option_list& params);
 
  private:
   user* ATFW_UTIL_MACRO_NONNULL owner_;

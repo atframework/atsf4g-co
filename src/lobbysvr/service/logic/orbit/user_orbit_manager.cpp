@@ -94,13 +94,14 @@ static bool init_user_orbit_manager_handle() {
                                auto& orbit_mgr = user_inst.get_user_orbit_manager();
                                orbit_mgr.fetch_user_data(*rsp.mutable_user_orbit_room());
                              });
-  task_action_user_remote_patch_jobs::register_sync_callbacks(
+  task_action_user_remote_patch_jobs::register_async_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitFinish),
       [](rpc::context& ctx, user& user_inst, int32_t /*job_type*/,
-         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> int32_t {
-        const PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = job_data->orbit_finish();
-        user_inst.get_user_orbit_manager().receive_orbit_settlement(ctx, orbit_finish_data.data());
-        return 0;
+         task_action_user_remote_patch_jobs::async_job_ptr_type job_data) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::user_async_job_orbit_finish& orbit_finish_data = *job_data->mutable_orbit_finish();
+        RPC_AWAIT_IGNORE_VOID(
+            user_inst.get_user_orbit_manager().receive_orbit_settlement(ctx, *orbit_finish_data.mutable_data()));
+        RPC_RETURN_CODE(0);
       });
   task_action_user_remote_patch_jobs::register_sync_callbacks(
       static_cast<int32_t>(PROJECT_NAMESPACE_ID::user_async_jobs_blob_data::kOrbitRemoteStart),
@@ -293,30 +294,31 @@ void user_orbit_manager::load_orbit_room_snapshot(rpc::context& ctx, rpc::dtmq::
   });
 }
 
-void user_orbit_manager::receive_orbit_settlement(
+rpc::result_void_type user_orbit_manager::receive_orbit_settlement(
     ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
-    ATFW_EXPLICIT_UNUSED_ATTR const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data) {
+    ATFW_EXPLICIT_UNUSED_ATTR PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data) {
   // 收到结算的时候 一定存在key 否则丢弃
   if (!is_orbit_room_exist()) {
     FWLOGERROR("{} user_orbit_manager receive_orbit_settlement missing orbit room key {}", *owner_,
                room_key_.client_id());
-    return;
+    RPC_RETURN_VOID;
   }
   // 结算不匹配 丢弃
   if (finish_data.room_key().client_id() != room_key_.client_id()) {
     FWLOGERROR("{} user_orbit_manager receive_orbit_settlement room key mismatch: {}", *owner_,
                finish_data.room_key().client_id());
-    return;
+    RPC_RETURN_VOID;
   }
   if (!finish_data.init_success()) {
     // 没有成功直接删除
     FWLOGERROR("{} user_orbit_manager receive_orbit_settlement init failed, clear orbit room data {}", *owner_,
                room_key_.client_id());
     clear_orbit_room_data();
-    return;
+    RPC_RETURN_VOID;
   }
   // TODO(yousongyang) 处理结果
   clear_orbit_room_data();
+  RPC_RETURN_VOID;
 }
 
 void user_orbit_manager::receive_orbit_remote_start(rpc::context& ctx,

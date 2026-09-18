@@ -47,7 +47,8 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   int32_t join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
                           int64_t end_join_timepoint);
   // 收到结算消息
-  void receive_orbit_settlement(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
+  rpc::result_void_type receive_orbit_settlement(rpc::context& ctx,
+                                                 PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
   // 远端启动Client
   void receive_orbit_remote_start(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRemoteStartArg& arg);
   // 组装历史数据

@@ -27,21 +27,13 @@ user_virtual_inventory::user_virtual_inventory(user* owner)
     : owner_(owner), virtual_grid_(atfw::component::memory::stl::make_strong_rc<user_virtual_inventory_grid>(owner)) {}
 
 void user_virtual_inventory::init_grid() {
-  if (grid_inited_) {
-    return;
-  }
-  grid_inited_ = true;
-
-  // 虚拟道具仓库只有一个无位置网格, 容器GUID不持久化, 创建或登录时分配
+  // 虚拟道具仓库只有一个无位置网格, 容器GUID不持久化, 创建时分配
   virtual_grid_->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
                       owner_->get_user_item_grid_manager().allocate_container_guid());
 }
 
 void user_virtual_inventory::init(const PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& data) {
-  init_grid();
-
-  // 本接口可重复调用, 载入前先清理旧数据
-  virtual_grid_->clear();
+  virtual_grid_->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, data.container_guid());
   for (const auto& item : data.items()) {
     virtual_grid_->load(excel::get_current_config_group(), item);
   }
@@ -50,6 +42,7 @@ void user_virtual_inventory::init(const PROJECT_NAMESPACE_ID::DUserVirtualInvent
 void user_virtual_inventory::dump(PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& out) const {
   out.Clear();
   dump(*out.mutable_items());
+  out.set_container_guid(virtual_grid_->get_container_guid());
 }
 
 void user_virtual_inventory::dump(google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out) const {
