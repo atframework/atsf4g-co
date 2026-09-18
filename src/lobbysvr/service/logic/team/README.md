@@ -66,7 +66,10 @@ ready 更新附加队伍未匹配条件；开始 matching 附加全员 ready 条
 glue 与 CS 任务的上行统一经 `async_update_team_shared_data` / `async_update_member_shared_data` 走批量更新，
 同样完成规范化和条件附加；两个入口显式拒绝空数组，角色/权限门槛由 glue 各入口与 CS 任务自行把关。
 非队长发起匹配时 glue 以 `EN_ERR_TEAM_PERMISSION_DENY` 取消本地待匹配状态；
-权威广播 matching=false 取消本地待匹配时使用 `EN_ERR_TEAM_MEMBER_NOT_READY`。
+权威广播 matching=false 取消本地待匹配时使用 `EN_ERR_TEAM_MEMBER_NOT_READY`；
+start_matching 的队伍上行被 room 以负数 client_result 否决时，失败 callback 以同一错误码回滚本地待匹配
+状态，调度失败以 `EN_ERR_SYSTEM_BUSY` 回滚。回滚保证再次 start_matching 不被
+`EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING` 拒绝；缺少回滚时待匹配状态只能等 60 秒超时清理。
 
 ## 用例入口
 
@@ -78,7 +81,7 @@ glue 与 CS 任务的上行统一经 `async_update_team_shared_data` / `async_up
 | `cache.cpp`、`admission.cpp` | 成员/队长/共享数据、两层邀请申请、更新/删除/到期及数据裁剪 |
 | `kick.cpp`、`dirty.cpp` | 个人通知缺失后的本地恢复、移除去重、首拉门槛、通知内容和实际下发边界 |
 | `cs.cpp` | 组队 CS 参数、权限、完整上行 payload、业务错误及本目录关卡回调 |
-| `matching_sync.cpp` | 本目录匹配 glue 的门槛、上行、频道回调、待匹配取消、async_update 批量契约、定期修复和缓存读取 |
+| `matching_sync.cpp` | 本目录匹配 glue 的门槛、上行、频道回调、待匹配取消（含队伍上行失败回滚）、async_update 批量契约、定期修复和缓存读取 |
 | `robust.cpp` | 非法输入、重复/乱序/迟到事件和缓存恢复 |
 | `contract.cpp` | 独立 key 编码检查，已有派生条目的清空、输入顺序、上行和客户端通知 |
 
@@ -94,6 +97,23 @@ ctest --test-dir build_jobs_cmake_tools -V -R '^atf4g-co-lobbysvr-unit-test\.uni
 直接运行可执行程序时，先复用 CTest 的工作目录、`RPC_UNIT_TEST_WORKDIR` 和 DLL PATH，再使用
 `-r lobbysvr_user_team` 或 `-r lobbysvr_user_team.<case>`。
 以实际执行的用例数、失败数、跳过项和退出码为准；发现用例或运行空组不算通过。
+
+## 验收记录（2026-09-18）
+
+补充 issue #248（AICR）指出的缺失回归用例：start_matching 队伍上行失败经新增失败 callback 回滚本地待匹配
+状态。新增 `matching_sync.cpp` MTS-10（`send_message_responder` 注入 `EN_ERR_TEAM_NOT_IN_TEAM` 的
+client_result，断言 `is_in_matching_start()` 复位、除被否决上行外零上行、再次 start_matching 不被
+`EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING` 拒绝）。变异验证：临时移除 glue 失败 callback 的回滚调用后
+MTS-10 在 5 处断言失败（含重试被拒），恢复后通过。在 Windows/MSVC Debug、Ninja、`build_jobs_cmake_tools`
+中重建并通过实际执行：
+
+| 范围 | 通过数 |
+| --- | --- |
+| `lobbysvr_user_team` | 103/103 |
+| Lobby 全量（包含组队） | 118/118 |
+
+上一轮记录的 MTS-02 既有失败（2026-09-17）在本轮全部通过。C++ 格式与 cpplint、`git diff --check` 通过；
+Linux 和 Release 未执行。
 
 ## 验收记录（2026-09-17）
 

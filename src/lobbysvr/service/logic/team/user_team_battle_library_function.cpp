@@ -360,11 +360,8 @@ void user_team_battle_library_function::glue_layer_event_on_matching_action_star
 
 void user_team_battle_library_function::glue_layer_event_on_matching_action_matching_finish_final(rpc::context& ctx,
                                                                                                   user_team& team) {
-  // 只有队长允许改变状态
+  // 只有队长允许改变状态，队员的finish直接忽略
   if (!team.is_captain()) {
-    FCTXLOGERROR(
-        ctx, "{} is not the captain of team {}:{}. Only the team captain is allowed to change the matching status.",
-        team.get_owner().get_owner().get_user_id(), team.get_team_key().zone_id(), team.get_team_key().team_id());
     return;
   }
 

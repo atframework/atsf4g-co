@@ -1,7 +1,8 @@
 // Copyright 2026 atframework
 // Offline regression tests for the lobbysvr team <-> matching glue in
 // src/lobbysvr/service/logic/team/user_team_battle_library_function.cpp (see the adjacent README.md):
-//   - start_matching_check / start_matching_finish / matching_finish glue entries (captain gate + uplink payload);
+//   - start_matching_check / start_matching_finish / matching_finish glue entries (captain gate + uplink payload,
+//   and room-vetoed start-matching uplink rolling back the pending local start);
 //   - channel battle.matching / matching_team_view reactions (captain repair, pending-start cancel, member
 //   subscription);
 //   - auto_check_and_correct_team_data immediate (election) and periodic (minute refresh) repairs;
@@ -997,6 +998,93 @@ CASE_TEST(lobbysvr_user_team, matching_sync_09_async_update_member_shared_data_c
       }
     }
   }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}
+
+// MTS-10: start_matching 队伍上行失败的回滚 — 队长 start_matching 通过队长校验后上行 matching=true 的
+// team_update, room 以 EN_ERR_TEAM_NOT_IN_TEAM 否决(client_result 注入); send_action 的本地修复先移除
+// 队伍缓存(room 已确认不在队伍中, 不再补发退出), glue 新增的失败 callback 再以同一错误码回滚本地待匹配
+// 状态(is_in_matching_start() 复位), 除被否决的这笔上行外零上行。回滚后再次 start_matching 不被
+// EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING 拒绝(回滚缺失时队长会滞留待匹配状态直到 60 秒超时清理)。
+CASE_TEST(lobbysvr_user_team, matching_sync_10_start_check_uplink_failure_rolls_back_pending_start) {
+  atfw::testing::runtime test;
+  CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(team_test::setup_team_room_node(test));
+  team_test::team_room_ss_capture ss_capture;
+  CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
+
+  constexpr uint64_t kUserId = 30088;
+  constexpr int64_t kTeamId = 586;
+  team_test::now_offset_guard time_guard;
+
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(team_test::setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+
+  // 自己是队长(OWNER)入队
+  team_test::channel_event_chain private_chain;
+  private_chain.channel_key = private_channel_key;
+  CASE_EXPECT_TRUE(team_test::join_team_with_snapshot(test, user_inst, private_chain, kTeamId,
+                                                      atfw::team::EN_TEAM_MEMBER_ROLE_OWNER, true, nullptr, {}));
+
+  // room 否决所有 send_message: client_result 注入 EN_ERR_TEAM_NOT_IN_TEAM(如队长已被移出队伍)
+  ss_capture.send_message_responder = [](const atfw::team::SSTeamRoomSendMessageReq&,
+                                         atfw::team::SSTeamRoomSendMessageRsp&) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_TEAM_NOT_IN_TEAM;
+  };
+
+  // start_matching: 队长校验通过, glue 上行 matching=true 后被 room 否决, 失败 callback 回滚本地待匹配状态
+  CASE_EXPECT_TRUE(
+      team_test::run_sync_task(test, "team.mts10_start", [user_inst](rpc::context& ctx) -> rpc::result_code_type {
+        RPC_RETURN_CODE(RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().start_matching(ctx)));
+      }));
+  CASE_EXPECT_TRUE(user_inst->get_user_matching_manager().is_in_matching_start());
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] {
+    return !user_inst->get_user_matching_manager().is_in_matching_start() &&
+           ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate) >= 1;
+  }));
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
+  if (1 == ss_capture.send_message_reqs.size()) {
+    const auto& start_req = ss_capture.send_message_reqs.back();
+    team_test::expect_send_message_envelope(start_req, kTeamId, kUserId);
+    // 被否决的仍是 start_matching 的标准上行: matching=true + 空 matching_team_view + 全员 ready 条件
+    const auto& team_update = start_req.action().team_update();
+    CASE_EXPECT_EQ(2, team_update.shared_team_data_size());
+    if (2 == team_update.shared_team_data_size()) {
+      team_test::expect_packed_team_matching_entry(team_update.shared_team_data(0), true);
+      team_test::expect_packed_team_matching_team_view_entry(team_update.shared_team_data(1));
+    }
+    expect_all_member_ready_condition(team_update);
+  }
+
+  // 回滚后不在任何匹配流程; room 已确认不在队伍中, 本地队伍缓存被修复移除, 不补发退出也不再上行
+  CASE_EXPECT_FALSE(user_inst->get_user_matching_manager().is_in_matching_start());
+  CASE_EXPECT_FALSE(user_inst->get_user_matching_manager().is_in_matching());
+  CASE_EXPECT_FALSE(!!user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId)));
+  team_test::pump_rounds(test, 8);
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
+
+  // 再次 start_matching: 回滚已生效, 不再被 EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING 拒绝
+  // (队伍已移除, 走单人路径, 测试环境缺少匹配配置在 fill_matching_scope 失败, 与本断言无关)
+  int32_t retry_result = 0;
+  CASE_EXPECT_TRUE(team_test::run_sync_task(
+      test, "team.mts10_retry", [user_inst, &retry_result](rpc::context& ctx) -> rpc::result_code_type {
+        retry_result = RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().start_matching(ctx));
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_NE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_USER_ALREADY_IN_MATCHING, retry_result);
+  CASE_EXPECT_FALSE(user_inst->get_user_matching_manager().is_in_matching_start());
+  team_test::pump_rounds(test, 8);
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
 
   CASE_EXPECT_EQ(0, test.stop());
 }
