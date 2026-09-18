@@ -85,6 +85,7 @@ SERVER_FRAME_API bool router_object_base::key_t::operator>=(const key_t &r) cons
 }
 
 SERVER_FRAME_API router_object_base::flag_guard::flag_guard(router_object_base &owner, int f) : owner_(&owner), f_(f) {
+  // NOLINTNEXTLINE(bugprone-signed-bitwise)
   if (f_ & owner_->get_flags()) {
     f_ = 0;
   } else if (0 != f_) {
@@ -294,6 +295,7 @@ SERVER_FRAME_API int router_object_base::downgrade() {
   return 0;
 }
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 SERVER_FRAME_API int router_object_base::send_transfer_msg_failed(atframework::SSMsg &&req) {
   task_action_ss_req_base::message_type rsp_msg;
   uint64_t dst_pd = req.head().node_id();
@@ -303,6 +305,7 @@ SERVER_FRAME_API int router_object_base::send_transfer_msg_failed(atframework::S
     dst_node_name = req.head().router().router_source_node_name();
   }
 
+  // NOLINTNEXTLINE(readability-suspicious-call-argument)
   task_action_ss_req_base::init_msg(rsp_msg, dst_pd, dst_node_name, req);
 
   // 如果没有task_id则要不复制路由信息，防止触发路由转发
@@ -319,7 +322,7 @@ SERVER_FRAME_API int router_object_base::send_transfer_msg_failed(atframework::S
 SERVER_FRAME_API void router_object_base::trace_router(rpc::context &ctx, uint32_t type_id, uint32_t zone_id,
                                                        uint64_t object_id) {
   ctx.update_task_context_reference_object(type_id, zone_id, object_id);
-  auto &trace_span = ctx.get_trace_span();
+  const auto &trace_span = ctx.get_trace_span();
   if (!trace_span) {
     return;
   }
@@ -342,8 +345,7 @@ SERVER_FRAME_API void router_object_base::wakeup_io_task_awaiter() {
         !task_type_trait::equal(failed_task, wake_task)) {
       // iter will be erased in task
       dispatcher_resume_data_type callback_data = dispatcher_make_default<dispatcher_resume_data_type>();
-      callback_data.message.message_type =
-          reinterpret_cast<uintptr_t>(reinterpret_cast<const void *>(&io_task_awaiter_));
+      callback_data.message.message_type = reinterpret_cast<uintptr_t>(&io_task_awaiter_);
       callback_data.sequence = task_type_trait::get_task_id(wake_task);
 
       if (rpc::custom_resume(wake_task, callback_data) < 0) {
@@ -635,7 +637,7 @@ void router_object_base::check_and_remove_timer_ref(std::list<router_system_time
   timer_list_ = nullptr;
 }
 
-void router_object_base::unset_timer_ref() {
+SERVER_FRAME_API void router_object_base::unset_timer_ref() {
   // 清理掉timer
   if (timer_list_ != nullptr && timer_iter_ != timer_list_->end()) {
     timer_list_->erase(timer_iter_);

@@ -135,6 +135,7 @@ message table_user {
   user_team_data team_data = 204;                          // 队伍数据
   DUserItemManagerData user_item_grid_manager_data = 205;  // 道具管理模块数据
   DUserVirtualInventoryData virtual_inventory = 206;       // 用户仓库数据
+  user_friend_data friend_data = 207;                      // 好友数据
 
   // 业务逻辑开始
 }
@@ -377,25 +378,37 @@ message table_friend {
   // clang-format off
   option (atframework.database_table) = {
     index: {
-      name: "friend"
+      name: "user_friend"
       type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
       enable_cas: true
       key_fields: "zone_id"
       key_fields: "user_id"
+      partly_get: {
+        name: "basic_info"
+        fields: "router_server_id"
+        fields: "router_version"
+        fields: "router_save_timepoint"
+      }
     }
   };
   // clang-format on
   uint32 zone_id = 1;
   uint64 user_id = 2;
+  uint64 router_server_id = 3;                          // 路由系统 - 登入进程id
+  uint64 router_version = 4;                            // 路由系统 - 登入进程变更版本号
+  google.protobuf.Timestamp router_save_timepoint = 5;  // 路由系统 - 数据保存时间点
 
   atframework.friends.DFriendStatistics statistics = 11;  // 统计数据，限频数据
   int64 event_id_allocator = 12;                          // 事件ID分配器
   int64 global_finished_event_id = 13;                    // 全局已完成事务ID
 
-  repeated atframework.friends.DFriendInfo friend_list = 21;
-  repeated atframework.friends.DFriendInvitationInfo inviter_list = 22;
-  repeated atframework.friends.DFriendInvitationInfo invitee_list = 23;
-  repeated atframework.friends.DFriendGift gift_list = 24;
+  message friend_detail_data {
+    repeated atframework.friends.DFriendInfo friend_list = 21;
+    repeated atframework.friends.DFriendInvitationInfo inviter_list = 22;
+    repeated atframework.friends.DFriendInvitationInfo invitee_list = 23;
+    repeated atframework.friends.DFriendGift gift_list = 24;
+  }
+  friend_detail_data friend_detail_data = 14;
 
   // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
   google.protobuf.Any transaction_storage = 99;

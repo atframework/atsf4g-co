@@ -174,3 +174,5 @@ message user_team_data {
   // 待处理的加入请求(同上)
   repeated atframework.team.DTeamJoinRequest pending_join_request = 13;
 }
+
+message user_friend_data {}

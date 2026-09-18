@@ -183,10 +183,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
                                                                    router_object_base::io_task_guard &io_guard) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
-      int res;
+      rpc::result_code_type::value_type res{};
       out = get_cache(key);
       if (!out) {
-        out = atfw::memory::stl::make_shared<cache_t>(key);
+        out = atfw::memory::stl::make_shared<cache_t>(ctx, key);
         if (!out) {
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
@@ -225,8 +225,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
               RPC_RETURN_CODE(res);
             case PROJECT_NAMESPACE_ID::err::EN_ROUTER_EAGAIN: {
               time_t wait_interval_ms =
-                  static_cast<time_t>(logic_config::me()->get_cfg_router().cache_retry_interval().seconds() * 1000 +
-                                      logic_config::me()->get_cfg_router().cache_retry_interval().nanos() / 1000000);
+                  static_cast<time_t>((logic_config::me()->get_cfg_router().cache_retry_interval().seconds() * 1000) +
+                                      (logic_config::me()->get_cfg_router().cache_retry_interval().nanos() / 1000000));
               if (wait_interval_ms <= 0) {
                 wait_interval_ms = 512;
               }
@@ -335,10 +335,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
                                                                     router_object_base::io_task_guard &io_guard) {
     size_t left_ttl = logic_config::me()->get_cfg_router().retry_max_ttl();
     for (; left_ttl > 0; --left_ttl) {
-      rpc::result_code_type::value_type res;
+      rpc::result_code_type::value_type res{};
       out = get_cache(key);
       if (!out) {
-        out = atfw::memory::stl::make_shared<cache_t>(key);
+        out = atfw::memory::stl::make_shared<cache_t>(ctx, key);
         if (!out) {
           RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC);
         }
@@ -383,8 +383,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
             RPC_RETURN_CODE(res);
           case PROJECT_NAMESPACE_ID::err::EN_ROUTER_EAGAIN: {
             time_t wait_interval_ms =
-                static_cast<time_t>(logic_config::me()->get_cfg_router().object_retry_interval().seconds() * 1000 +
-                                    logic_config::me()->get_cfg_router().object_retry_interval().nanos() / 1000000);
+                static_cast<time_t>((logic_config::me()->get_cfg_router().object_retry_interval().seconds() * 1000) +
+                                    (logic_config::me()->get_cfg_router().object_retry_interval().nanos() / 1000000));
             if (wait_interval_ms <= 0) {
               wait_interval_ms = 512;
             }
@@ -533,7 +533,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_manager : public router_manager_base {
         std::list<atframework::SSMsg> all_msgs;
         all_msgs.swap(obj->get_transfer_pending_list());
 
-        uint64_t rpc_sequence;
+        uint64_t rpc_sequence = 0;
         for (atframework::SSMsg &msg : all_msgs) {
           auto res = RPC_AWAIT_CODE_RESULT(send_msg_raw(ctx, *obj, std::move(msg), rpc_sequence));
           if (res < 0) {

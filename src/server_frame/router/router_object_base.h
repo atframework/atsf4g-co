@@ -36,6 +36,7 @@
 #include "router/router_system_defs.h"
 
 // 路由对象基类，支持共享指针
+// NOLINTNEXTLINE(cppcoreguidelines-virtual-class-destructor)
 class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_from_this<router_object_base> {
   // 禁止拷贝构造和赋值操作
   UTIL_DESIGN_PATTERN_NOCOPYABLE(router_object_base)
@@ -95,7 +96,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
     SERVER_FRAME_API ~flag_guard();
 
     // 转换为bool类型检测标志位是否为真
-    ATFW_UTIL_FORCEINLINE operator bool() { return !!f_; }
+    ATFW_UTIL_FORCEINLINE explicit operator bool() { return f_ != 0; }
 
    private:
     router_object_base *owner_;
@@ -108,7 +109,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
     SERVER_FRAME_API io_task_guard();
     SERVER_FRAME_API ~io_task_guard();
 
-    ATFW_UTIL_FORCEINLINE operator bool() { return !owner_.expired() && 0 != await_task_id_; }
+    ATFW_UTIL_FORCEINLINE explicit operator bool() { return !owner_.expired() && 0 != await_task_id_; }
 
     SERVER_FRAME_API rpc::result_code_type take(rpc::context &ctx, router_object_base &owner) noexcept;
 
@@ -134,11 +135,20 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
   // 获取对象键
   ATFW_UTIL_FORCEINLINE const key_t &get_key() const { return key_; }
   // 检查某个标志位是否被设置
-  ATFW_UTIL_FORCEINLINE bool check_flag(int32_t v) const { return (flags_ & v) == v; }
+  ATFW_UTIL_FORCEINLINE bool check_flag(int32_t v) const {
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
+    return (flags_ & v) == v;
+  }
   // 设置某个标志位
-  ATFW_UTIL_FORCEINLINE void set_flag(int32_t v) { flags_ |= v; }
+  ATFW_UTIL_FORCEINLINE void set_flag(int32_t v) {
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
+    flags_ |= v;
+  }
   // 清除某个标志位
-  ATFW_UTIL_FORCEINLINE void unset_flag(int32_t v) { flags_ &= ~v; }
+  ATFW_UTIL_FORCEINLINE void unset_flag(int32_t v) {
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
+    flags_ &= ~v;
+  }
   // 获取所有标志位
   ATFW_UTIL_FORCEINLINE int32_t get_flags() const { return flags_; }
 
@@ -435,7 +445,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object_base : public std::enable_shared_fr
   void check_and_remove_timer_ref(std::list<router_system_timer_t> *timer_list,
                                   const std::list<router_system_timer_t>::iterator &it);
   // 取消定时器引用
-  void unset_timer_ref();
+  SERVER_FRAME_API void unset_timer_ref();
 
   // 等待IO调度订单任务
   ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type await_io_schedule_order_task(rpc::context &ctx);
@@ -476,9 +486,9 @@ namespace std {
 template <>
 struct ATFW_UTIL_SYMBOL_VISIBLE hash<router_object_base::key_t> {
   ATFW_UTIL_FORCEINLINE size_t operator()(const router_object_base::key_t &k) const noexcept {
-    size_t first = hash<uint64_t>()((static_cast<uint64_t>(k.type_id) << 32) | k.zone_id);
+    size_t first = hash<uint64_t>()((static_cast<uint64_t>(k.type_id) << 32U) | k.zone_id);
     size_t second = hash<uint64_t>()(k.object_id);
-    return first ^ (second << 1);
+    return first ^ (second << 1U);
   }
 };
 }  // namespace std

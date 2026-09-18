@@ -14,7 +14,7 @@
 #include <config/compiler/protobuf_suffix.h>
 // clang-format on
 
-#include <assert.h>
+#include <cassert>
 #include <memory>
 
 #include "router/router_object_base.h"
@@ -28,8 +28,8 @@
 template <typename TObj, typename TChild>
 class ATFW_UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
  public:
-  using key_t = router_object_base::key_t;
-  using flag_t = router_object_base::flag_t;
+  using router_object_base::flag_t;
+  using router_object_base::key_t;
   using value_type = TObj;
   using self_type = TChild;
   using object_ptr_t = std::shared_ptr<value_type>;
@@ -97,8 +97,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @param guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR SERVER_FRAME_API rpc::result_code_type save(rpc::context &ctx, void *priv_data,
-                                                                           io_task_guard &guard) override {
+  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context &ctx, void *priv_data,
+                                                          io_task_guard &guard) override {
     if (!is_writable()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
     }

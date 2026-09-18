@@ -32,6 +32,7 @@ enum EnRouterObjectType {
   EN_ROT_USER = 1;
   // Reserved for unit tests (src/tools/rpc-unit-test), never used by production services.
   EN_ROT_UNIT_TEST = 2;
+  EN_ROT_FRIEND = 3;
 }
 
 // 路由表更新通知

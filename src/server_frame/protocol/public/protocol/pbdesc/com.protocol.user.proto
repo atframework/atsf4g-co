@@ -13,6 +13,7 @@ import "protocol/common/com.struct.item.common.proto";
 import "protocol/pbdesc/com.struct.orbit.proto";
 import "protocol/pbdesc/com.struct.team.shared.proto";
 import "protocol/pbdesc/com.struct.match.proto";
+import "protocol/pbdesc/com.struct.friend.proto";
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
@@ -72,6 +73,7 @@ message SCUserDirtyChgSync {
   DOrbitRoomDirty dirty_orbit_rooms = 1;
   repeated DUserTeamDirty dirty_team = 2;
   repeated DUserItemDirtyChg dirty_item_chgs = 3;
+  repeated atframework.friends.DFriendEvent dirty_friend_event = 4;
 
   // 业务ditry开始
   DMatchingClientViewDirtyChg dirty_matching_chg = 32;

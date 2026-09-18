@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+import "protocol/pbdesc/com.struct.friend.proto";
+import "protocol/pbdesc/com.struct.proto";
+
+package atframework.friends;
+
+// 获取好友数据
+message CSFriendGetAllReq {}
+
+message SCFriendGetAllRsp {                          // 统计数据，限频数据
+  repeated DFriendInfo friend_list = 11;             // 游戏好友
+  repeated DFriendInvitationInfo inviter_list = 12;  // 好友请求
+}
+
+// 发送好友申请
+message CSFriendInvitationReq {
+  atframework.shared.DUserIDKey user_key = 1;
+
+  // 也可以不填上面的参数使用account_id
+  uint64 account_id = 3;
+}
+
+message SCFriendInvitationRsp {}
+
+// 接受好友申请
+message CSFriendAcceptInvitationReq {
+  atframework.shared.DUserIDKey user_key = 1;
+}
+
+message SCFriendAcceptInvitationRsp {}
+
+// 拒绝好友申请
+message CSFriendRejectInvitationReq {
+  atframework.shared.DUserIDKey user_key = 1;
+}
+
+message SCFriendRejectInvitationRsp {}
+
+// 删除好友
+message CSFriendRemoveReq {
+  atframework.shared.DUserIDKey user_key = 1;
+}
+
+message SCFriendRemoveRsp {}
+
+message CSFriendSendGiftReq {
+  atframework.shared.DUserIDKey user_key = 1;
+  int32 gift_type_id = 3;
+}
+
+message SCFriendSendGiftRsp {}
+
+message CSFriendReceiveGiftReq {
+  repeated int64 gift_ids = 1;
+}
+
+message SCFriendReceiveGiftRsp {
+  repeated DFriendGift receive_gifts = 1;
+}
+
+message CSFriendGetSuggestReq {
+  // EnForceType force_type = 1;
+}
+
+message SCFriendGetSuggestRsp {
+  // repeated DTeamSuggestData suggest_users = 1;
+}
+
+// 一键同意所有好友
+message CSFriendAcceptAllInvitationReq {}
+
+message SCFriendAcceptAllInvitationRsp {}
+
+// 一键拒绝所有好友
+message CSFriendRejectAllInvitationReq {}
+
+message SCFriendRejectAllInvitationRsp {}

@@ -27,12 +27,13 @@ SERVER_FRAME_API router_user_private_type::router_user_private_type(
     : login_lock_tb(login_lock_tb_t), login_lock_cas_ver(login_lock_cas_ver_t), openid(openid_t) {}
 SERVER_FRAME_API router_user_private_type::~router_user_private_type() {}
 
-SERVER_FRAME_API router_user_cache::router_user_cache(uint64_t user_id, uint32_t zone_id, const std::string &openid)
+SERVER_FRAME_API router_user_cache::router_user_cache(rpc::context &, uint64_t user_id, uint32_t zone_id,
+                                                      const std::string &openid)
     : base_type(router_user_manager::me()->create_user_object(user_id, zone_id, openid),
                 key_t(router_user_manager::me()->get_type_id(), zone_id, user_id)) {}
 
 // 这个时候openid无效，后面需要再init一次
-SERVER_FRAME_API router_user_cache::router_user_cache(const key_t &key)
+SERVER_FRAME_API router_user_cache::router_user_cache(rpc::context &, const key_t &key)
     : base_type(router_user_manager::me()->create_user_object(key.object_id, key.zone_id, ""), key) {}
 
 SERVER_FRAME_API const char *router_user_cache::name() const { return "[user  router cache]"; }
@@ -182,11 +183,11 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::pull_object(rpc::conte
   PROJECT_NAMESPACE_ID::table_login_lock &login_blob_data = obj->get_login_lock();
 
   // 更新登录锁信息
-  protobuf_copy_message(*login_blob_data.mutable_access_token_expired(),
-                        protobuf_from_system_clock(
-                            atfw::util::time::time_utility::sys_now() +
-                            protobuf_to_chrono_duration<>(
-                                (logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration()))));
+  protobuf_copy_message(
+      *login_blob_data.mutable_access_token_expired(),
+      protobuf_from_system_clock(
+          atfw::util::time::time_utility::sys_now() +
+          protobuf_to_system_clock(logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration())));
   login_blob_data.set_login_zone_id(get_key().zone_id);
 
   uint64_t old_router_server_id = login_blob_data.router_server_id();
@@ -302,12 +303,11 @@ SERVER_FRAME_API rpc::result_code_type router_user_cache::save_object(rpc::conte
         obj->get_login_lock().set_router_version(old_router_ver + 1);
       }
 
-      protobuf_copy_message(
-          *obj->get_login_lock().mutable_access_token_expired(),
-          protobuf_from_system_clock(
-              atfw::util::time::time_utility::sys_now() +
-              protobuf_to_chrono_duration<>(
-                  (logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration()))));
+      protobuf_copy_message(*obj->get_login_lock().mutable_access_token_expired(),
+                            protobuf_from_system_clock(
+                                atfw::util::time::time_utility::sys_now() +
+                                protobuf_to_system_clock(
+                                    logic_config::me()->get_logic_cfg().session().access_token_code_valid_duration())));
 
       auto save_login_blob_data =
           rpc::clone_shared_message<PROJECT_NAMESPACE_ID::table_login_lock>(ctx, obj->get_login_lock());
