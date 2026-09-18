@@ -34,6 +34,10 @@ enum class logic_service_type : uint32_t {
   kOrbitSvr = 25,            // Orbit 服务
   kOrbitAgentSvr = 26,       // Orbit Agent 服务
   kOrbitControllerSvr = 27,  // Orbit Controller 服务
+
+  // 好友 相关服务 === 保留一部分31-32
+  kFriendManagementSvr = 31,  // 好友管理服务
+  kFriendRecommendSvr = 32,   // 好友推荐服务
 };
 }  // namespace component
 }  // namespace atframework

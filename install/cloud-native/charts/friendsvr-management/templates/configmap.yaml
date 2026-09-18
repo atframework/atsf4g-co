@@ -1,0 +1,5 @@
+{{- template "libapp.configmap" (list . "friendsvr-management.configmap") -}}
+{{- define "friendsvr-management.configmap" -}}
+data:
+  {{ include "friendsvr-management.name" . }}.yaml: {{ tpl (.Files.Get "cfg/friendsvr-management.yaml.tpl") . | quote }}
+{{- end -}}

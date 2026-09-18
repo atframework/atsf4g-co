@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+import "protocol/pbdesc/com.struct.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
+
+// 不要用friend作为名字，避免关键字冲突
+package atframework.friends;
+
+// 用户好友礼物数据
+message DFriendGift {
+  int64 gift_id = 1;
+  atframework.shared.DUserIDKey from_user = 2;
+
+  repeated google.protobuf.Any gift_item = 4;
+  int32 gift_type_id = 5;
+
+  google.protobuf.Timestamp created_time = 11;  // 该条记录产生时间
+  google.protobuf.Timestamp removed_time = 12;  // 该条记录被移除的时间
+  google.protobuf.Timestamp expired_time = 13;  // 该条记录失效时间
+
+  int64 event_id = 21;  // (服务器内部使用) 最后操作的事件ID
+}
+
+// 用户好友赠送记录
+message DFriendStatistics {
+  google.protobuf.Timestamp next_daily_reset_time = 1;
+  google.protobuf.Timestamp next_weekly_reset_time = 2;
+
+  int32 daily_inviter = 11;
+  int32 weekly_inviter = 12;
+  int32 sum_inviter = 13;
+
+  int32 daily_invitee = 21;
+  int32 weekly_invitee = 22;
+  int32 sum_invitee = 23;
+
+  int32 daily_send_gift_times = 31;
+  int32 weekly_send_gift_times = 32;
+  int32 sum_send_gift_times = 33;
+  int32 daily_receive_gift_times = 34;
+  int32 weekly_receive_gift_times = 35;
+  int32 sum_receive_gift_times = 36;
+}
+
+// 用户好友数据
+message DFriendInvitationInfo {
+  atframework.shared.DUserIDKey from_user = 1;
+  atframework.shared.DUserIDKey to_user = 2;
+
+  int64 created_time = 11;  // 该条记录产生时间
+  int64 removed_time = 12;  // 该条记录被移除的时间
+  int64 expired_time = 13;  // 该条记录失效时间
+
+  int64 event_id = 21;  // (服务器内部使用) 最后操作的事件ID
+}
+
+message DFriendInfo {
+  atframework.shared.DUserIDKey user_key = 1;
+
+  int64 created_time = 11;  // 该条记录产生时间
+  int64 removed_time = 12;  // 该条记录被移除的时间
+  int64 expired_time = 13;  // 该条记录失效时间
+
+  int64 event_id = 21;  // (服务器内部使用) 最后操作的事件ID
+}
+
+message DFriendSNSInfo {
+  atframework.shared.DUserIDKey user_key = 1;
+
+  atframework.shared.DUserProfile profile = 6;
+}
+
+// 好友通知数据
+message DFriendEvent {
+  int64 event_id = 1;          // 事件ID
+  int64 create_timepoint = 2;  // 创建时间
+
+  oneof event {
+    DFriendInvitationInfo add_inviter = 11;     // 添加被邀请
+    DFriendInvitationInfo remove_inviter = 12;  // 删除被邀请
+    DFriendInvitationInfo add_invitee = 13;
+    DFriendInvitationInfo remove_invitee = 14;
+
+    DFriendInfo add_friend_data = 17;     // 添加好友
+    DFriendInfo remove_friend_data = 18;  // 删除好友
+
+    bool clear_all_data = 101;
+  }
+}

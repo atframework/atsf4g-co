@@ -1,0 +1,28 @@
+# Default values for friendsvr-recommend.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: friendsvr-recommendd
+
+type_id: 32
+type_name: "friendsvr-recommend"
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/friendsvr-recommend
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/friendsvr-recommend/cfg
+  logMountPath: /data/atframework/publish/friendsvr-recommend/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/friendsvr-recommend/log
+
+redis:
+  enabled: true
+
+enable_excel_config: true

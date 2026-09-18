@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "protocol/extension/atframework.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/friendsvr/protocol/recommend/protocol/pbdesc";
+
+// 不要用 friend 作为名字，避免关键字冲突
+package atframework.friends;
+
+message SSFriendRecommendSearchReq {
+  // TODO(owent): implement me
+}
+
+message SSFriendRecommendSearchRsp {
+  int32 client_result = 1;
+  // TODO(owent): implement me
+}
+
+service FriendRecommendService {
+  option (atframework.service_options) = {
+    module_name: "friends"
+  };
+
+  rpc recommend_search(SSFriendRecommendSearchReq) returns (SSFriendRecommendSearchRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "搜索推荐好友"
+    };
+  };
+}

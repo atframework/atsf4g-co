@@ -1,0 +1,3 @@
+{{- template "libapp.pvc" (list . "friendsvr-recommend.pvc") -}}
+{{- define "friendsvr-recommend.pvc" -}}
+{{- end -}}

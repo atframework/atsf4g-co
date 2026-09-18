@@ -48,6 +48,7 @@ add_subdirectory(lobbysvr/sdk)
 
 add_subdirectory(cachesvr)
 add_subdirectory(teamsvr)
+add_subdirectory(friendsvr)
 add_subdirectory(authsvr)
 add_subdirectory(rank_settlement_svr)
 add_subdirectory(orbitsvr)

@@ -1,0 +1,28 @@
+# Default values for friendsvr-management.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+proc_name: friendsvr-managementd
+
+type_id: 31
+type_name: "friendsvr-management"
+
+image:
+  repository: harbor.atframe.work/atsf4g-co/friendsvr-management
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: latest
+  secrets: harbor-regcred
+
+volumeMounts:
+  configMountPath: /etc/atframework/publish/friendsvr-management/cfg
+  logMountPath: /data/atframework/publish/friendsvr-management/log
+
+vector:
+  enabled: false
+  log_path: /data/atframework/publish/friendsvr-management/log
+
+redis:
+  enabled: true
+
+enable_excel_config: true

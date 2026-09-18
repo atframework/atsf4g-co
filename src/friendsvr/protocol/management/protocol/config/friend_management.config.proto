@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-co/friendsvr/protocol/management/protocol/config";
+
+package atframework.friends.config;
+
+message friendsvr_management_cfg {}

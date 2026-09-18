@@ -20,6 +20,7 @@ import "protocol/pbdesc/svr.struct.rank.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 import "protocol/pbdesc/com.struct.match.proto";
+import "protocol/pbdesc/com.struct.friend.proto";
 
 package atframework.shared;
 
@@ -370,4 +371,32 @@ message table_dtmq_channel_record {
   google.protobuf.Any subscriber_cache = 12;
 
   atframework.dtmq.DChannelOptimisticLock lock = 13;
+}
+
+message table_friend {
+  // clang-format off
+  option (atframework.database_table) = {
+    index: {
+      name: "friend"
+      type: EN_ATFRAMEWORK_DB_INDEX_TYPE_KV
+      enable_cas: true
+      key_fields: "zone_id"
+      key_fields: "user_id"
+    }
+  };
+  // clang-format on
+  uint32 zone_id = 1;
+  uint64 user_id = 2;
+
+  atframework.friends.DFriendStatistics statistics = 11;  // 统计数据，限频数据
+  int64 event_id_allocator = 12;                          // 事件ID分配器
+  int64 global_finished_event_id = 13;                    // 全局已完成事务ID
+
+  repeated atframework.friends.DFriendInfo friend_list = 21;
+  repeated atframework.friends.DFriendInvitationInfo inviter_list = 22;
+  repeated atframework.friends.DFriendInvitationInfo invitee_list = 23;
+  repeated atframework.friends.DFriendGift gift_list = 24;
+
+  // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
+  google.protobuf.Any transaction_storage = 99;
 }

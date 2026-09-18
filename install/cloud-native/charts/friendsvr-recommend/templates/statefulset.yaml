@@ -1,0 +1,3 @@
+{{- template "libapp.statefulset" (list . "friendsvr-recommend.statefulset") -}}
+{{- define "friendsvr-recommend.statefulset" -}}
+{{- end -}}

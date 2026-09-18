@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+option cc_generic_services = true;
+
+import "protocol/extension/atframework.proto";
+
+option go_package = "github.com/atframework/atsf4g-co/friendsvr/protocol/management/protocol/pbdesc";
+
+// 不要用 friend 作为名字，避免关键字冲突
+package atframework.friends;
+
+message SSFriendManagementGetAllReq {
+  // TODO(owent): implement me
+}
+
+message SSFriendManagementGetAllRsp {
+  int32 client_result = 1;
+  // TODO(owent): implement me
+}
+
+service FriendManagementService {
+  option (atframework.service_options) = {
+    module_name: "friends"
+  };
+
+  rpc management_get_all(SSFriendManagementGetAllReq) returns (SSFriendManagementGetAllRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "获取全部好友"
+    };
+  };
+}

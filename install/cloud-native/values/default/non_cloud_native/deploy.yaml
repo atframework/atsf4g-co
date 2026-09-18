@@ -94,3 +94,15 @@ proc_desc:
     instance_count: 1
     start_instance_id: 1
     group: 2
+
+  - chart_name: "friendsvr-management"
+    world_instance: false
+    instance_count: 1
+    start_instance_id: 1
+    group: 2
+
+  - chart_name: "friendsvr-recommend"
+    world_instance: false
+    instance_count: 0
+    start_instance_id: 1
+    group: 2

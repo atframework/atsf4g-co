@@ -1,0 +1,3 @@
+{{- template "libapp.service" (list . "friendsvr-management.service") -}}
+{{- define "friendsvr-management.service" -}}
+{{- end -}}
