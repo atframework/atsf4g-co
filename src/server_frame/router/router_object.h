@@ -97,7 +97,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_object : public router_object_base {
    * @param guard IO任务保护
    * @return rpc::result_code_type 结果代码
    */
-  ATFW_EXPLICIT_NODISCARD_ATTR rpc::result_code_type save(rpc::context &ctx, void *priv_data,
+  ATFW_EXPLICIT_NODISCARD_ATTR inline rpc::result_code_type save(rpc::context &ctx, void *priv_data,
                                                           io_task_guard &guard) override {
     if (!is_writable()) {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);

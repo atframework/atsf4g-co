@@ -408,7 +408,7 @@ message table_friend {
     repeated atframework.friends.DFriendInvitationInfo invitee_list = 23;
     repeated atframework.friends.DFriendGift gift_list = 24;
   }
-  friend_detail_data friend_detail_data = 14;
+  friend_detail_data friend_data = 14;
 
   // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
   google.protobuf.Any transaction_storage = 99;
