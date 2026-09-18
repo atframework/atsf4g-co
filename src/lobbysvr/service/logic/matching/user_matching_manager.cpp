@@ -537,6 +537,12 @@ rpc::result_code_type user_matching_manager::confirm_matching(rpc::context& ctx,
   rpc_request->set_subscriber_server_id(logic_config::me()->get_local_server_id());
   rpc_request->set_acknowledge_event_id(get_acknowledge_event_id());
   rpc_request->set_user_open_id(owner_->get_open_id());
+  int32_t dump_result = owner_->get_user_orbit_manager().dump_orbit_init_data(*rpc_request->mutable_orbit_init_data());
+  if (dump_result < 0) {
+    FWLOGERROR("{} confirm matching failed to dump orbit init data, unit_id={}, result={}({})", *owner_, unit_id,
+               dump_result, protobuf_mini_dumper_get_error_msg(dump_result));
+    RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+  }
   const uint64_t matchsvr_id = get_current_matchsvr_server_id();
   if (matchsvr_id == 0) {
     FWLOGERROR("{} confirm matching failed, Unit has no owning matchsvr, unit_id={}", *owner_, unit_id);

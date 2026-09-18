@@ -45,7 +45,7 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   bool is_orbit_room_exist() const;
   // Orbitsvr已经创建并塞入了User 开始真正进入Orbitsvr
   int32_t join_orbit_room(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitRoomKey& room_key,
-                       int64_t end_join_timepoint);
+                          int64_t end_join_timepoint);
   // 收到结算消息
   void receive_orbit_settlement(rpc::context& ctx, const PROJECT_NAMESPACE_ID::DOrbitUserFinishAsyncData& finish_data);
   // 远端启动Client
@@ -55,6 +55,8 @@ class user_orbit_manager : public atfw::util::design_pattern::noncopyable {
   // 收到事件消息
   void on_receive_event(rpc::context& ctx, const rpc::dtmq::client_subscriber::ptr_t& subscriber,
                         const ::atfw::dtmq::DChannelMessage& data);
+
+  int32_t dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& init_data);
 
  private:
   void clear_orbit_room_data();

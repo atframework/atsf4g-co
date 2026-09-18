@@ -315,7 +315,7 @@ void user_orbit_manager::receive_orbit_settlement(
     clear_orbit_room_data();
     return;
   }
-  // TODO 处理结果
+  // TODO(yousongyang) 处理结果
   clear_orbit_room_data();
 }
 
@@ -353,6 +353,10 @@ void user_orbit_manager::on_receive_event(rpc::context& ctx, const rpc::dtmq::cl
     return;
   }
   on_receive_event(ctx, event_log);
+}
+
+int32_t user_orbit_manager::dump_orbit_init_data(PROJECT_NAMESPACE_ID::DOrbitUserInitDataDetail& /*init_data*/) {
+  return PROJECT_NAMESPACE_ID::EN_SUCCESS;
 }
 
 void user_orbit_manager::on_receive_event(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx,
