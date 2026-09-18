@@ -1,0 +1,23 @@
+{
+  "repo_url": "https://github.com/microsoft/tgrep.git",
+  "source_commit": "239711cfb6e69e8780cabf912a8987162a223ff1",
+  "declared_version": "1.0.9",
+  "rust_edition": "2024",
+  "patches": [
+    "patches/0001-serve-add-private-stdio-transport.patch"
+  ],
+  "build_command": ["cargo", "build", "--release", "-p", "tgrep-cli"],
+  "artifact_relative_path": {
+    "windows": "target/release/tgrep.exe",
+    "posix": "target/release/tgrep"
+  },
+  "api_contract": {
+    "internal_rpc_methods_wrapped": ["search", "files", "status"],
+    "not_exposed": ["reload"],
+    "not_ready_error_code": -32001,
+    "index_invalid_error_code": -32002,
+    "lock_conflict": "serve.lock exclusive lock fails at startup",
+    "max_count_semantics": "per-file limit, not a global result cap",
+    "transport": "serve --transport stdio (integration patch); newline-delimited JSON-RPC over private pipes; stdin EOF stops the server"
+  }
+}

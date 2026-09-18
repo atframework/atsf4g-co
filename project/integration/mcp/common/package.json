@@ -1,0 +1,16 @@
+{
+  "name": "@atsf4g/mcp-common",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared library and workflow tools for the atsf4g-co tgrep/CodeGraph MCP wrappers",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "^2.0.0"
+  },
+  "scripts": {
+    "test": "node --test test/agents.test.mjs test/limits.test.mjs test/lineRpc.test.mjs test/paths.test.mjs test/state.test.mjs test/supervisor.test.mjs"
+  }
+}

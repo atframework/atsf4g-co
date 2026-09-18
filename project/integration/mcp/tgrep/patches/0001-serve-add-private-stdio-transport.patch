@@ -1,0 +1,224 @@
+diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
+index 447fb5d..8def457 100644
+--- a/tgrep-cli/src/main.rs
++++ b/tgrep-cli/src/main.rs
+@@ -691,6 +691,14 @@ enum Command {
+             value_parser = clap::value_parser!(u64).range(1..=usize::MAX as u64)
+         )]
+         watcher_queue_cap: Option<u64>,
++
++        /// RPC transport: TCP listener (default) or private stdio pipes.
++        ///
++        /// stdio serves the same JSON-RPC over inherited pipes without
++        /// binding a listener or publishing serve.json; stdin EOF stops the
++        /// server. Used by embedding integrations that own the process.
++        #[arg(long, value_enum, default_value = "tcp", value_name = "TRANSPORT")]
++        transport: serve::ServeTransport,
+     },
+ 
+     /// Search for a pattern.
+@@ -1146,6 +1154,7 @@ fn run_cli() {
+             exclude,
+             auto_save_mutations,
+             watcher_queue_cap,
++            transport,
+         }) => {
+             let memory_cap = max_memory_mb
+                 .map(|mb| mb.saturating_mul(1024 * 1024))
+@@ -1156,6 +1165,7 @@ fn run_cli() {
+                 cli.index_path.as_deref(),
+                 serve::ServeOptions {
+                     no_watch,
++                    transport,
+                     watch_mode,
+                     poll_interval: Duration::from_secs(poll_interval),
+                     watch_budget: watch_budget as usize,
+diff --git a/tgrep-cli/src/serve.rs b/tgrep-cli/src/serve.rs
+index a41e24d..cb4fb60 100644
+--- a/tgrep-cli/src/serve.rs
++++ b/tgrep-cli/src/serve.rs
+@@ -134,6 +134,14 @@ pub enum WatchMode {
+     Poll,
+ }
+ 
++/// RPC transport for `serve`: TCP listener (default) or private stdio pipes.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, clap::ValueEnum)]
++pub enum ServeTransport {
++    #[default]
++    Tcp,
++    Stdio,
++}
++
+ struct RefreshControl {
+     requested: WatchMode,
+     poll_interval: Duration,
+@@ -776,6 +784,7 @@ impl SearchOpts {
+ 
+ pub struct ServeOptions<'a> {
+     pub no_watch: bool,
++    pub transport: ServeTransport,
+     pub watch_mode: WatchMode,
+     pub poll_interval: Duration,
+     pub watch_budget: usize,
+@@ -796,6 +805,7 @@ pub struct ServeOptions<'a> {
+ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) -> Result<()> {
+     let ServeOptions {
+         no_watch,
++        transport,
+         watch_mode,
+         poll_interval,
+         watch_budget,
+@@ -929,23 +939,34 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         stale_refresh_hook: Mutex::new(None),
+     });
+ 
+-    // Bind TCP listener on a random port
+-    let listener = TcpListener::bind("127.0.0.1:0")?;
+-    let port = listener.local_addr()?.port();
+-
+-    // Write server info
+-    let info = ServerInfo {
+-        pid: std::process::id(),
+-        port,
++    // Bind TCP listener on a random port. stdio mode binds nothing and
++    // publishes no serve.json: the private pipes are the only channel. The
++    // index exclusivity lock (serve.lock) is held either way.
++    let (listener, port) = match transport {
++        ServeTransport::Tcp => {
++            let listener = TcpListener::bind("127.0.0.1:0")?;
++            let port = listener.local_addr()?.port();
++
++            // Write server info
++            let info = ServerInfo {
++                pid: std::process::id(),
++                port,
++            };
++            info.save(&index_dir)?;
++            (Some(listener), port)
++        }
++        ServeTransport::Stdio => (None, 0),
+     };
+-    info.save(&index_dir)?;
+ 
+     eprintln!(
+-        "[trace] serve ready in {:.1}ms. TCP on port {}. Cache: max {} entries / {} MiB \
++        "[trace] serve ready in {:.1}ms. {}. Cache: max {} entries / {} MiB \
+          (entries over {} MiB not cached). \
+          Memory cap: {} MB. Index threads: {}. Watcher queue cap: {}.",
+         serve_start.elapsed().as_secs_f64() * 1000.0,
+-        port,
++        match transport {
++            ServeTransport::Tcp => format!("TCP on port {port}"),
++            ServeTransport::Stdio => "stdio (private pipes; EOF stops the server)".to_string(),
++        },
+         CACHE_CAPACITY,
+         CACHE_MAX_BYTES / (1024 * 1024),
+         CACHE_MAX_ENTRY_BYTES / (1024 * 1024),
+@@ -1025,22 +1046,27 @@ pub fn run(root: &Path, index_path: Option<&Path>, options: ServeOptions<'_>) ->
+         });
+     }
+ 
+-    // Accept connections
+-    for stream in listener.incoming() {
+-        match stream {
+-            Ok(stream) => {
+-                let state = Arc::clone(&state);
+-                thread::spawn(move || {
+-                    if let Err(e) = handle_connection(stream, &state) {
+-                        eprintln!("[trace] connection error: {e}");
++    // Serve requests
++    match transport {
++        ServeTransport::Tcp => {
++            let listener = listener.expect("tcp transport binds a listener");
++            for stream in listener.incoming() {
++                match stream {
++                    Ok(stream) => {
++                        let state = Arc::clone(&state);
++                        thread::spawn(move || {
++                            if let Err(e) = handle_connection(stream, &state) {
++                                eprintln!("[trace] connection error: {e}");
++                            }
++                        });
+                     }
+-                });
++                    Err(e) => eprintln!("[trace] accept error: {e}"),
++                }
+             }
+-            Err(e) => eprintln!("[trace] accept error: {e}"),
++            Ok(())
+         }
++        ServeTransport::Stdio => serve_stdio(state),
+     }
+-
+-    Ok(())
+ }
+ 
+ #[derive(Default)]
+@@ -1392,6 +1418,46 @@ fn handle_connection(stream: TcpStream, state: &Arc<ServerState>) -> Result<()>
+     Ok(())
+ }
+ 
++/// Maximum accepted stdin request line, in bytes. The private client caps
++/// its frames far below this; the limit only bounds a malformed peer.
++const STDIN_MAX_LINE_BYTES: usize = 1024 * 1024;
++
++/// Global search row cap applied before serialization. The per-file
++/// `max_count` never bounds the whole reply; private-protocol integrations
++/// need a hard ceiling on accumulated rows.
++const SEARCH_RESULT_ROW_CAP: usize = 20_000;
++
++/// Serve requests over private stdio pipes.
++///
++/// One request at a time, newline-delimited JSON-RPC, dispatched by the same
++/// `process_request` as TCP. stdin EOF (or a stdout write failure) returns
++/// `Ok(())` so `run` unwinds: the server lock is dropped and the process
++/// exits, stopping the watcher, auto-save and reconcile threads with the
++/// same semantics as the SIGINT handler.
++fn serve_stdio(state: Arc<ServerState>) -> Result<()> {
++    let stdin = std::io::stdin();
++    let mut reader = BufReader::new(stdin.lock());
++    let stdout = std::io::stdout();
++    let mut writer = stdout.lock();
++    let mut line = String::new();
++    loop {
++        line.clear();
++        let read = reader.read_line(&mut line)?;
++        if read == 0 {
++            return Ok(());
++        }
++        if line.len() > STDIN_MAX_LINE_BYTES {
++            let response = json_rpc_error(None, -32600, "request frame too large");
++            writeln!(writer, "{response}")?;
++            writer.flush()?;
++            continue;
++        }
++        let response = process_request(line.trim_end_matches(['\n', '\r']), &state);
++        writeln!(writer, "{response}")?;
++        writer.flush()?;
++    }
++}
++
+ fn process_request(request: &str, state: &Arc<ServerState>) -> String {
+     let req: serde_json::Value = match serde_json::from_str(request) {
+         Ok(v) => v,
+@@ -1942,6 +2008,12 @@ fn handle_search(
+         matches.extend(file.rows);
+         file_stats.extend(file.stats);
+     }
++    // Backend-side accumulation cap: applied before building the response so
++    // neither the server nor a private client buffers an unbounded reply.
++    let truncated = matches.len() > SEARCH_RESULT_ROW_CAP;
++    if truncated {
++        matches.truncate(SEARCH_RESULT_ROW_CAP);
++    }
+ 
+     let search_ms = t_search.elapsed().as_secs_f64() * 1000.0;
+     let elapsed = start.elapsed();
+@@ -1969,6 +2041,7 @@ fn handle_search(
+         "num_matches": matches.len(),
+         "elapsed_ms": elapsed_ms,
+         "hidden_complete": true,
++        "truncated": truncated,
+     });
+     if opts.stats {
+         result["file_stats"] = serde_json::json!(file_stats);

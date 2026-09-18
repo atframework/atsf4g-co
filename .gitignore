@@ -33,6 +33,12 @@
 /*.sln
 /rpc-unit-test.yaml
 
+# codegraph index directories (mcp integration, per-platform)
+/.codegraph*
+
+# node packages
+node_modules/
+
 # external libs
 ## libiniloader
 

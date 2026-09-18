@@ -19,6 +19,7 @@ Skill metadata and should not preload this file. Open only the matching `SKILL.m
 | `atgateway-protocol/`     | atgateway v2 wire protocol, handshake, crypto, compression, and reconnection          |
 | `docs-site/`              | Docusaurus content/build, zh-CN/en i18n, navigation, and theme styling                |
 | `ai-agent-maintenance/`   | Repository AI guidance, Skill triggers, progressive disclosure, and bridges           |
+| `mcp-integration-maintenance/` | tgrep/CodeGraph MCP wrappers, `setup.js` installer, agent config writers, and their indexes |
 | `shell-tooling/`            | Modern CLI tool inventory, shell selection, and PowerShell authoring rules            |
 
 ## Maintenance rules

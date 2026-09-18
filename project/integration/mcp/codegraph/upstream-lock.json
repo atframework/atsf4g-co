@@ -1,0 +1,61 @@
+{
+  "npm_package": "@colbymchenry/codegraph",
+  "npm_platform_prefix": "@colbymchenry/codegraph",
+  "version": "1.6.0",
+  "source_commit": "ba3c21e50d9129d2f5f3843ec3728868ae6d47a1",
+  "dist_shasum": "d04bc0c93a86186d3ebcb55c74cc15166a50b46e",
+  "dist_shasum_note": "the main npm package is a thin installer: dist/ ships only .d.ts types, the compiled app lives in per-platform optionalDependencies",
+  "platform_packages": "@colbymchenry/codegraph-<platform>-<arch>",
+  "platform_dist_shasums": {
+    "win32-x64": "6d49e4421b96a5e6dfec90f7efbddbc1b69652f2",
+    "linux-x64": "3f3c67189914a93ddf9b643233bd0163920c3cdd",
+    "linux-x64": "3f3c67189914a93ddf9b643233bd0163920c3cdd"
+  },
+  "platform_dist_shasums_note": "linux-x64 / darwin-arm64 / other targets: add shasums here when first prepared on that platform",
+  "engines_note": "every platform bundle vendors a general-purpose Node 24 at its root (node.exe / node); the wrapper runs BOTH the serve child and the first-index helper on it because the library needs the built-in node:sqlite module (Node 22.5+). The system Node (>=20) only runs this wrapper and the thin npm fetch.",
+  "bundle_layout": {
+    "common": {
+      "runtime": "node.exe (windows) / node (posix), bundle root",
+      "cli_entry": "lib/dist/bin/codegraph.js",
+      "library_entry": "lib/dist/index.js",
+      "invocation": ["<bundled-node>", "--liftoff-only", "--disable-warning=ExperimentalWarning", "lib/dist/bin/codegraph.js", "<args>"]
+    },
+    "posix_note": "bin/codegraph is a POSIX shell wrapper that execs the same command; the wrapper never uses it (it would re-inject CODEGRAPH_HOST_PPID)"
+  },
+  "mcp_invocation": ["serve", "--mcp", "--path", "<root>"],
+  "mcp_protocol_version": "2024-11-05",
+  "tools_upstream": [
+    "codegraph_explore",
+    "codegraph_search",
+    "codegraph_callers",
+    "codegraph_callees",
+    "codegraph_impact",
+    "codegraph_node",
+    "codegraph_status",
+    "codegraph_files"
+  ],
+  "tools_default_in_wrapper": ["codegraph_explore", "codegraph_status"],
+  "env_forced": {
+    "CODEGRAPH_NO_DAEMON": "1",
+    "DO_NOT_TRACK": "1",
+    "CODEGRAPH_TELEMETRY": "0",
+    "CODEGRAPH_NO_UPDATE_CHECK": "1",
+    "CODEGRAPH_NO_DOWNLOAD": "1",
+    "CODEGRAPH_STARTUP_HANDSHAKE_TIMEOUT_MS": "0",
+    "CODEGRAPH_DIR": "<single directory name under repo root, chosen by wrapper>",
+    "CODEGRAPH_MCP_TOOLS": "<allowlist from local static config>"
+  },
+  "env_cleared": [
+    "CODEGRAPH_DAEMON_INTERNAL",
+    "CODEGRAPH_MCP_DEBUG",
+    "CODEGRAPH_TELEMETRY_ENDPOINT",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "CODEGRAPH_HOST_PPID"
+  ],
+  "index_dir_naming": {
+    "reuse": ".codegraph",
+    "wrapper_created": ".codegraph-atsf4g-<platform>",
+    "constraint": "CODEGRAPH_DIR accepts a single directory name under the project root only"
+  }
+}
