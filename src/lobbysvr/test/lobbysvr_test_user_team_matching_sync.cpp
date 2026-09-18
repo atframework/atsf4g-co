@@ -1017,8 +1017,9 @@ CASE_TEST(lobbysvr_user_team, matching_sync_10_start_check_uplink_failure_rolls_
   team_test::team_room_ss_capture ss_capture;
   CASE_EXPECT_TRUE(team_test::setup_team_room_ss_capture(test, ss_capture));
 
-  constexpr uint64_t kUserId = 30088;
-  constexpr int64_t kTeamId = 586;
+  // dtmq 订阅者按频道 id 进程级缓存且跨用例保留, 各用例的 user_id/team_id 不得与其它用例重复
+  constexpr uint64_t kUserId = 30089;
+  constexpr int64_t kTeamId = 587;
   team_test::now_offset_guard time_guard;
 
   user::ptr_t user_inst;

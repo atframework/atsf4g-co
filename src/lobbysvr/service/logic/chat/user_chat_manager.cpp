@@ -2,6 +2,7 @@
 
 #include "logic/chat/user_chat_manager.h"
 
+#include <std/explicit_declare.h>
 #include <string/string_format.h>
 
 // clang-format off
@@ -542,8 +543,12 @@ int32_t user_chat_manager::login_init(rpc::context& ctx) {
 void user_chat_manager::foreach_channel(
     atfw::util::nostd::function_ref<bool(const atfw::util::nostd::nonnull<rpc::dtmq::client_subscriber::ptr_t>&)>
         callback) const {
-  const rpc::dtmq::client_subscriber::ptr_t* channels[] = {&world_chat_channel_, &private_chat_channel_,
-                                                           &sys_notification_channel_, &sys_announcement_channel_};
+  const rpc::dtmq::client_subscriber::ptr_t* channels[] = {
+      &world_chat_channel_,
+      &private_chat_channel_,
+      &sys_notification_channel_,
+      &sys_announcement_channel_,
+  };
   for (const auto* channel_ptr : channels) {
     if (*channel_ptr) {
       if (!callback(*channel_ptr)) {
@@ -894,3 +899,25 @@ user_chat_manager::global_setup_private_channel_event_set_handle(uintptr_t uniqu
     fn(ctx, chat_mgr->get_owner(), data);
   };
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_case_cleanup.h>
+
+// 用例边界自动清理：待推送消息缓存是进程级 static，跨用例残留会让下一用例的会话收到上一用例的
+// 频道数据。channel-type 的 guard 集合与回调集合按函数指针去重且有界，订阅者销毁后由新用例重新
+// 挂载，不在清理范围。
+namespace {
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+static const bool user_chat_manager_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+  server_frame_unit_test_register_case_cleanup("lobbysvr.user_chat_manager_pending_data",
+                                               kUnitTestCaseCleanupLevelServiceCache, []() {
+                                                 auto& mgr = get_global_chat_manager_private_data();
+                                                 mgr.reuse_pending_incremental_message.clear();
+                                                 mgr.reuse_pending_snapshot_message.clear();
+                                                 mgr.pending_sync_message_queue.clear();
+                                                 mgr.last_push_message_tick = 0;
+                                               });
+  return true;
+}();
+}  // namespace
+#endif

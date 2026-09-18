@@ -6,9 +6,14 @@
 #include <common/string_oprs.h>
 #include <gsl/select-gsl.h>
 #include <log/log_wrapper.h>
+#include <std/explicit_declare.h>
 #include <time/time_utility.h>
 
 #include <config/logic_config.h>
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_case_cleanup.h>
+#endif
 
 #include <memory/object_allocator.h>
 
@@ -804,4 +809,24 @@ size_t transaction_manager::get_lru_size_for_unit_test() noexcept {
 }
 
 void transaction_manager::clear_lru_for_unit_test() noexcept { lru_caches_.clear(); }
+
+void transaction_manager::reset_for_unit_test() noexcept {
+  clear_lru_for_unit_test();
+  is_exiting_ = false;
+}
+
+namespace {
+// 用例边界自动清理：协调者是进程级单例，LRU 与退出标志跨用例存活；stop() 置位后不复位会让同进程
+// 后续用例全部拿到 EN_SYS_SERVER_SHUTDOWN。
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+static const bool transaction_manager_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+  server_frame_unit_test_register_case_cleanup("distributed_transaction.transaction_manager",
+                                               kUnitTestCaseCleanupLevelBusiness, []() {
+                                                 if (!transaction_manager::is_instance_destroyed()) {
+                                                   transaction_manager::me()->reset_for_unit_test();
+                                                 }
+                                               });
+  return true;
+}();
+}  // namespace
 #endif

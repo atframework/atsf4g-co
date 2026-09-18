@@ -3,6 +3,8 @@
 
 #include "logic/mq_channel_manager.h"
 
+#include <std/explicit_declare.h>
+
 #include <atframe/modules/service_discovery_module.h>
 
 // clang-format off
@@ -907,3 +909,34 @@ void mq_channel_manager::report_channel_qty_oss() {
   // oss_log->set_running_io_qty(static_cast<int32_t>(running_io_channels_.size()));
   // telemetry::oss::send_dtmq_channel_qty(ctx, user_inst, std::move(*oss_log));
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_case_cleanup.h>
+
+void mq_channel_manager::clear_for_unit_test() noexcept {
+  // 先清空 IO 队列引用，再清空频道表，避免析构时回调访问已失效结构
+  pending_io_channels_.clear();
+  running_io_channels_.clear();
+  reactive_io_channels_.clear();
+  channels_.clear();
+
+  pending_transfer_ = pending_transfer_info{};
+  iterating_pending_io_channels_ = false;
+  more_transfer_now_ = false;
+  is_stoping_ = false;
+  is_pre_stoping_ = false;
+}
+
+namespace {
+// 用例边界自动清理：manager 是进程级单例，频道表与停机/转移标记跨用例存活，由清理流程统一复位。
+static const bool mq_channel_manager_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+  server_frame_unit_test_register_case_cleanup("dtmq-proxysvr.mq_channel_manager", kUnitTestCaseCleanupLevelBusiness,
+                                               []() {
+                                                 if (!mq_channel_manager::is_instance_destroyed()) {
+                                                   mq_channel_manager::me()->clear_for_unit_test();
+                                                 }
+                                               });
+  return true;
+}();
+}  // namespace
+#endif

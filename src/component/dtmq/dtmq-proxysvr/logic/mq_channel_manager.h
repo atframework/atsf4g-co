@@ -143,6 +143,10 @@ class mq_channel_manager : public atfw::util::design_pattern::singleton<mq_chann
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   // 单元测试专用访问器集中定义在测试代码的 MqChannelManagerUnitTest 中，避免在业务代码里散落 test-only 接口。
   friend class MqChannelManagerUnitTest;
+
+  // 用例边界清理入口：清空频道表/IO 队列/停机与转移标记，供跨用例清理注册流程调用。定时器随频道析构
+  // 移除，时间轮本身跨用例存活(测试侧用 manager_tick_safe_offset 补偿)，不在此重建。
+  void clear_for_unit_test() noexcept;
 #endif
 
  private:

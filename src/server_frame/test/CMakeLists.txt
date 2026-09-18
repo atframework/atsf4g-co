@@ -28,6 +28,7 @@ project_add_rpc_unit_test(
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_cs_session.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_resource.cpp"
           "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_rpc_lru_cache.cpp"
+          "${CMAKE_CURRENT_LIST_DIR}/server_frame_test_unit_test_case_cleanup.cpp"
   LINK_LIBRARIES ${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_LUA_LINK_NAME}
   FEATURES SS DB CS RESOURCE DNS
   LABELS fast

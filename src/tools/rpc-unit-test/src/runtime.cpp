@@ -15,6 +15,7 @@
 #include <dispatcher/task_manager.h>
 #include <frame/test_case_base.h>
 #include <logic/logic_server_setup.h>
+#include <testing/unit_test_case_cleanup.h>
 #include <testing/unit_test_reset.h>
 
 #include <atframework/testing/mock_connector.h>
@@ -357,6 +358,7 @@ int runtime::start(const runtime_options &options) {
     }
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
     server_frame_unit_test_reset_dispatcher_registrations();
+    server_frame_unit_test_run_case_cleanups();
 #endif
     impl_->state = runtime_state::constructed;
     runtime *expected_self = this;
@@ -449,6 +451,9 @@ int runtime::start(const runtime_options &options) {
   // Defensive: a previous fixture may have aborted without stop() and left registered handles in the
   // process-lifetime dispatcher singletons.
   server_frame_unit_test_reset_dispatcher_registrations();
+  // The same abort can leave process-lifetime component state behind; component cleanups are idempotent, so
+  // run them here too to give this fixture a clean slate.
+  server_frame_unit_test_run_case_cleanups();
 #endif
 
   logic_server_common_module_configure logic_mod_conf;
@@ -585,6 +590,8 @@ int runtime::stop() noexcept {
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
   server_frame_unit_test_reset_dispatcher_registrations();
+  // 运行各组件注册的跨用例清理：此处 app 已销毁、任务已全部 kill，是清理进程级单例的安全时机。
+  server_frame_unit_test_run_case_cleanups();
 #endif
 
   impl_->state = runtime_state::stopped;

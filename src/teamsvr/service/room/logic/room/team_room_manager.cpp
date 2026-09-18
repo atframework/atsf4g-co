@@ -236,3 +236,21 @@ rpc::result_code_type team_room_manager::flush_pending_channel_message(rpc::cont
   }
   RPC_RETURN_CODE(0);
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_case_cleanup.h>
+
+// 用例边界自动清理：房间管理器是进程级单例，房间表与待刷写表跨用例存活，由清理流程统一清空。
+// 时间轮重建与虚拟时间基线联动，仍由测试环境自己负责(teamsvr_room_test_common.h)。
+namespace {
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+static const bool team_room_manager_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+  server_frame_unit_test_register_case_cleanup("teamsvr.team_room_manager", kUnitTestCaseCleanupLevelBusiness, []() {
+    if (!team_room_manager::is_instance_destroyed()) {
+      team_room_manager::me()->clear();
+    }
+  });
+  return true;
+}();
+}  // namespace
+#endif

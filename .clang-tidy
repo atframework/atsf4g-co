@@ -68,6 +68,7 @@ Checks:
   # 存在误判，先关闭
   - "-readability-make-member-function-const"
   - "-cppcoreguidelines-special-member-functions"
+  - "-cppcoreguidelines-pro-bounds-avoid-unchecked-container-access" # 误判过于严重
   # 由于C++标准版本兼容性考虑而忽略的checks
   - "-modernize-use-ranges"
   - "-modernize-use-starts-ends-with"

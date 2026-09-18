@@ -77,9 +77,17 @@ CASE_TEST(rpc_unit_test, framework_flow) {
 
 - Only one runtime may be active in a process. Cases in one executable run serially, but process-global state can
   survive a runtime restart; reset it or separate incompatible cases into different executables.
+- The runtime runs registered case cleanups at every fixture boundary — defensively on `start()` and finally on
+  `stop()` after the app is destroyed. Register a component's reset through
+  `server_frame_unit_test_register_case_cleanup(name, level, fn)` from a hooks-gated file-scope static registrar in
+  the singleton's own translation unit (`testing/unit_test_case_cleanup.h`); cleanups must be idempotent and only
+  touch quiescent state, and `level` orders business managers (0) before service-local caches (100) before
+  infrastructure layers (200). Find current registrations by searching for the registration call; add a component's
+  reset together with the first tests that exercise it, not speculatively.
 - Telemetry provider configuration is process-lifetime. Put conflicting configurations in separate executables.
-- The DTMQ subscriber manager and mock WAL are process-global, and a channel watermark never decreases. Use distinct
-  channel identifiers for cases that inject or replay events, including cases separated only by a runtime restart.
+- The DTMQ subscriber manager cleanup releases per-channel WAL sequence and hash state at case boundaries, but a
+  channel watermark still never decreases within a case and runtime-less executables get no cleanup. Keep distinct
+  channel identifiers inside a case, and across cases whenever a suite runs without the registry.
 - A DTMQ channel snapshot clears that channel's WAL. Start the next incremental-log hash chain from zero.
 - DTMQ typed callbacks dispatch by `Any` message type. A mismatched `type_url` is filtered before the callback and does
   not advance the watermark; a matching type with a corrupt payload reaches the callback and advances the watermark
@@ -87,7 +95,8 @@ CASE_TEST(rpc_unit_test, framework_flow) {
 - Register required dispatcher handles once per runtime. Explicitly consume responses captured by a downstream mock so
   stale-response cleanup does not fail teardown.
 - Treat global clock offsets and monotonic timer wheels as process-wide state. Restore offsets with RAII and never make
-  a later case observe time below an earlier case's high-water mark.
+  a later case observe time below an earlier case's high-water mark. Wheels not rebuilt by a registered cleanup still
+  need the existing floor compensation.
 
 ## Target and timeout rules
 

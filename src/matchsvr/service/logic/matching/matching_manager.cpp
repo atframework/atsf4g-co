@@ -1514,3 +1514,18 @@ matching_manager::candidate_evaluation matching_manager::evaluate_candidate(
   result.accepted = true;
   return result;
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_case_cleanup.h>
+
+// 用例边界自动清理：匹配管理器是进程级单例，房间/单元/用户索引跨用例存活，由清理流程统一清空。
+static const bool matching_manager_case_cleanup_registered = []() {
+  server_frame_unit_test_register_case_cleanup("matchsvr.matching_manager", kUnitTestCaseCleanupLevelBusiness,
+                                               []() {
+                                                 if (!matching_manager::is_instance_destroyed()) {
+                                                   matching_manager::me()->clear();
+                                                 }
+                                               });
+  return true;
+}();
+#endif

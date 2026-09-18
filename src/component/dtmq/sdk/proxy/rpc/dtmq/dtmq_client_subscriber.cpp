@@ -7,6 +7,7 @@
 
 #include <gsl/select-gsl.h>
 #include <nostd/function_ref.h>
+#include <std/explicit_declare.h>
 
 #include <lock/lock_holder.h>
 #include <lock/spin_rw_lock.h>
@@ -38,6 +39,10 @@
 #include <utility/random_engine.h>
 
 #include <dispatcher/task_type_traits.h>
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_case_cleanup.h>
+#endif
 #include <rpc/dtmq/dtmqproxysvrservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
 #include <rpc/rpc_context.h>
@@ -3641,6 +3646,47 @@ mq_client_subscriber_delegate_helper::wal_result_code mq_client_subscriber_deleg
   });
   return wal_result_code::kOk;
 }
+
+#if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+namespace {
+// 用例边界清理：重置进程级订阅者管理器。先清空待处理集合并释放任务句柄(运行中的任务已被 runtime
+// teardown kill)，再销毁缓存的共享订阅者(其析构会先从时间轮摘除自身定时器)，最后以新对象整体替换
+// 时间轮。init() 不可重入，重建只能整体替换；替换后下一次 global_tick 以当前时间重新锚定，跨用例
+// 不再继承已推进过的 last_tick。identify 分配器保持单调，跨用例不复用 id。
+static void internal_subscriber_manager_reset_for_unit_test() {
+  if (is_internal_subscriber_manager_destroyed()) {
+    return;
+  }
+
+  auto& mgr = get_internal_subscriber_manager();
+
+  mgr.pending_heartbeat_subscriber.clear();
+  mgr.retry_heartbeat_subscriber.clear();
+  mgr.retry_setup_timer_list.clear();
+  mgr.pending_unsubscribe_subscriber.clear();
+  task_type_trait::reset_task(mgr.running_heartbeat_task);
+  task_type_trait::reset_task(mgr.running_unsubscribe_task);
+  mgr.timer_running = false;
+  mgr.is_in_callback_global_receive_channel_event = false;
+  mgr.is_in_callback_global_tick = false;
+
+  mgr.cached_subscriber_by_channel_id.clear();
+  mgr.cached_subscriber_by_raw_pointer.clear();
+
+  mgr.timer_set = mq_client_subscriber_timer_type{};
+}
+
+// 用例边界自动清理：订阅者管理器是进程级单例，按频道 id 缓存的订阅者携带 WAL 序列/哈希状态跨用例
+// 存活，后续用例向同 id 频道重放的事件会被静默去重。此处属于基础设施层，在业务清理之后执行。
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+static const bool dtmq_client_subscriber_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+  server_frame_unit_test_register_case_cleanup("dtmq-sdk.client_subscriber_manager",
+                                               kUnitTestCaseCleanupLevelInfrastructure,
+                                               internal_subscriber_manager_reset_for_unit_test);
+  return true;
+}();
+}  // namespace
+#endif
 
 }  // namespace dtmq
 }  // namespace rpc

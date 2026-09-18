@@ -64,6 +64,9 @@ class transaction_manager : public atfw::util::design_pattern::singleton<transac
   size_t get_lru_size_for_unit_test() noexcept;
 
   void clear_lru_for_unit_test() noexcept;
+
+  // 跨用例完整复位：清空 LRU 并复位 stop() 置位的 is_exiting_，供用例边界清理流程调用。
+  void reset_for_unit_test() noexcept;
 #endif
 
  private:
