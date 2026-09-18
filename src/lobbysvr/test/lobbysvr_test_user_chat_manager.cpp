@@ -54,7 +54,8 @@
 #include "frame/test_macros.h"
 #include "lobbysvr_test_runtime_helper.h"  // NOLINT: build/include_subdir
 #include "logic/chat/user_chat_manager.h"
-#include "logic/item/user_item_grid_manager.h"
+#include "logic/item/user_item_container_manager.h"
+#include "logic/item/user_virtual_inventory.h"
 #include "logic/logic_server_setup.h"
 #include "logic/session_manager.h"
 #include "rpc/dtmq/dtmq_algorithm.h"
@@ -1053,32 +1054,32 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
   const size_t dirty_baseline = find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size();
 
   // A dirty item marked outside any CS task (the dtmq dispatch path) has no CS epilogue to flush it.
-  // The item grid manager registers its dirty handle through the real add flow: create_init resets the container
-  // guid allocator, so the first allocate_container_guid hands out the container guid for the test grid, and
-  // adding a coin-type item fires on_item_changed. The grid runs in no-position (virtual inventory) mode because
+  // The item container manager registers its dirty handle through the real add flow: create_init resets the container
+  // guid allocator, so the first allocate_container_guid hands out the container guid for the test container, and
+  // adding a coin-type item fires on_item_changed. The container runs in no-position (virtual inventory) mode because
   // non-occupying item types may only be placed there; they need no excel rows, which keeps the case independent
-  // of the (empty) item tables in the test bindir. The grid is held by the test body because the manager only
+  // of the (empty) item tables in the test bindir. The container is held by the test body because the manager only
   // keeps a weak reference per container guid.
-  atfw::util::memory::strong_rc_ptr<user_item_grid_algorithm> test_inventory_grid;
+  atfw::util::memory::strong_rc_ptr<user_virtual_inventory_container> test_inventory_container;
   CASE_EXPECT_TRUE(run_sync_task(
-      test, "chat.mark_dirty_item", [&user3, &test_inventory_grid](rpc::context &ctx) -> rpc::result_code_type {
-        auto &item_mgr = user3.user_inst->get_user_item_grid_manager();
+      test, "chat.mark_dirty_item", [&user3, &test_inventory_container](rpc::context &ctx) -> rpc::result_code_type {
+        auto &item_mgr = user3.user_inst->get_user_item_container_manager();
         item_mgr.create_init(ctx);
         const int64_t container_guid = item_mgr.allocate_container_guid();
 
-        test_inventory_grid = atfw::util::memory::make_strong_rc<user_item_grid_algorithm>(user3.user_inst.get(),
-                                                                                           "Item.TestUserInventory");
-        test_inventory_grid->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, container_guid);
+        test_inventory_container =
+            atfw::util::memory::make_strong_rc<user_virtual_inventory_container>(user3.user_inst.get());
+        test_inventory_container->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
+                                       container_guid);
 
         PROJECT_NAMESPACE_ID::DItemInstance dirty_item;
         auto *basic = dirty_item.mutable_item_basic();
         basic->set_type_id(1001);  // coin range: no grid occupancy, no excel row required
         basic->set_count(7);
         basic->mutable_position()->set_container_guid(container_guid);
-
-        item_algorithm::ItemGridAddRequest add_requests;
-        *add_requests.Add() = dirty_item;
-        auto checked = item_mgr.check_add(std::move(add_requests));
+        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> items;
+        *items.Add() = std::move(dirty_item);
+        auto checked = item_mgr.check_add(item_algorithm::make_item_readable_iterable(items));
         if (PROJECT_NAMESPACE_ID::EN_SUCCESS != checked.get_error_code()) {
           RPC_RETURN_CODE(checked.get_error_code());
         }
@@ -1129,13 +1130,13 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
   flush_pending_chat_messages(test);
   CASE_EXPECT_EQ(dirty_baseline + 1, find_stream_post_indices(test, user3.session_id, dirty_rpc_name).size());
 
-  if (test_inventory_grid) {
-    CASE_EXPECT_TRUE(run_sync_task(test, "chat.destroy_inventory_grid",
-                                   [&test_inventory_grid](rpc::context &) -> rpc::result_code_type {
-                                     test_inventory_grid->destroy();
+  if (test_inventory_container) {
+    CASE_EXPECT_TRUE(run_sync_task(test, "chat.destroy_inventory_container",
+                                   [&test_inventory_container](rpc::context &) -> rpc::result_code_type {
+                                     test_inventory_container->destroy();
                                      RPC_RETURN_CODE(0);
                                    }));
-    test_inventory_grid.reset();
+    test_inventory_container.reset();
   }
 
   CASE_EXPECT_EQ(0, test.stop());

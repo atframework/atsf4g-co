@@ -128,14 +128,14 @@ message table_user {
   bool create_init = 103;     // 是否已经执行过创建初始化
 
   // 业务逻辑数据
-  user_option_private_data option_data_private = 200;      // 用户选项
-  DRankUserData rank_data = 201;                           // 用户排行榜数据
-  user_orbit_room_data orbit_room_data = 202;              // 用户房间数据
-  DUserMatchingData matching_data = 203;                   // 匹配临时数据
-  user_team_data team_data = 204;                          // 队伍数据
-  DUserItemManagerData user_item_grid_manager_data = 205;  // 道具管理模块数据
-  DUserVirtualInventoryData virtual_inventory = 206;       // 用户仓库数据
-  user_friend_data friend_data = 207;                      // 好友数据
+  user_option_private_data option_data_private = 200;           // 用户选项
+  DRankUserData rank_data = 201;                                // 用户排行榜数据
+  user_orbit_room_data orbit_room_data = 202;                   // 用户房间数据
+  DUserMatchingData matching_data = 203;                        // 匹配临时数据
+  user_team_data team_data = 204;                               // 队伍数据
+  DUserItemManagerData user_item_container_manager_data = 205;  // 道具管理模块数据
+  DUserVirtualInventoryData virtual_inventory = 206;            // 用户仓库数据
+  user_friend_data friend_data = 207;                           // 好友数据
 
   // 业务逻辑开始
 }

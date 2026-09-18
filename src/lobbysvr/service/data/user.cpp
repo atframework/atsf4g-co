@@ -21,7 +21,7 @@
 #include <logic/async_jobs/user_async_jobs_manager.h>
 #include <logic/cache/user_cache_manager.h>
 #include <logic/chat/user_chat_manager.h>
-#include <logic/item/user_item_grid_manager.h>
+#include <logic/item/user_item_container_manager.h>
 #include <logic/item/user_item_manager.h>
 #include <logic/matching/user_matching_manager.h>
 #include <logic/orbit/user_orbit_manager.h>
@@ -118,11 +118,11 @@ user::user(fake_constructor &ctor)
       user_matching_manager_(atfw::component::memory::stl::make_strong_rc<user_matching_manager>(*this)),
       user_team_manager_(atfw::component::memory::stl::make_strong_rc<user_team_manager>(*this)),
       user_item_manager_(atfw::component::memory::stl::make_strong_rc<user_item_manager>(*this)),
-      user_item_grid_manager_(atfw::component::memory::stl::make_strong_rc<user_item_grid_manager>(*this))
+      user_item_container_manager_(atfw::component::memory::stl::make_strong_rc<user_item_container_manager>(*this))
 ////////////////// 业务Manager开始 ////////////////////
 
 ////////////////// 业务Manager结束 ////////////////////
-{
+{  // NOLINT [whitespace/braces]
   heartbeat_data_.continue_error_times = 0;
   heartbeat_data_.last_recv_time = 0;
   heartbeat_data_.sum_error_times = 0;
@@ -188,11 +188,10 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
   user_team_manager_->create_init(ctx);
-  user_item_grid_manager_->create_init(ctx);
+  user_item_container_manager_->create_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
-  // TODO init all interval checkpoint
+  // TODO(all) init all interval checkpoint
 
-  // TODO init items
   // if (PROJECT_NAMESPACE_ID::EN_VERSION_GM != version_type) {
   //     excel::user_init_items::me()->foreach ([this](const excel::user_init_items::value_type &v) {
   //         if (0 != v->id()) {
@@ -249,7 +248,7 @@ rpc::result_code_type user::login_init(rpc::context &parent_ctx) {
     RPC_RETURN_CODE(trace.finish({ret, {}}));
   }
 
-  user_item_grid_manager_->login_init(ctx);
+  user_item_container_manager_->login_init(ctx);
   ////////////////// 业务Manager开始 ////////////////////
 
   set_inited();
@@ -346,7 +345,7 @@ void user::on_login(rpc::context &parent_ctx) {
 
   ////////////////// 业务Manager开始 ////////////////////
 
-  // TODO sync messages
+  // TODO(all) sync messages
   internal_flags_.set(internal_flag::EN_IFT_IS_LOGIN, true);
   trace.finish({0, {}});
 }
@@ -399,7 +398,7 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
 
   base_type::init_from_table_data(ctx, tb_user);
 
-  // TODO data patch, 这里用于版本升级时可能需要升级用户数据库，做版本迁移
+  // TODO(owent) data patch, 这里用于版本升级时可能需要升级用户数据库，做版本迁移
   // PROJECT_NAMESPACE_ID::table_user tb_patch;
   // const PROJECT_NAMESPACE_ID::table_user *src_tb = &tb_user;
   // if (data_version_ < USER_DATA_LOGIC_VERSION) {
@@ -430,8 +429,8 @@ void user::init_from_table_data(rpc::context &parent_ctx, const PROJECT_NAMESPAC
     user_team_manager_->init_from_table_data(ctx, tb_user);
   }
 
-  if (tb_user.has_user_item_grid_manager_data()) {
-    user_item_grid_manager_->init_from_table_data(ctx, tb_user);
+  if (tb_user.has_user_item_container_manager_data()) {
+    user_item_container_manager_->init_from_table_data(ctx, tb_user);
   }
 
   ////////////////// 业务Manager开始 ////////////////////
@@ -486,9 +485,9 @@ int user::dump(rpc::context &parent_ctx, PROJECT_NAMESPACE_ID::table_user &table
     return trace.finish({ret, {}});
   }
 
-  ret = user_item_grid_manager_->dump(ctx, table);
+  ret = user_item_container_manager_->dump(ctx, table);
   if (ret < 0) {
-    FWLOGERROR("{} dump user_item_grid_manager_ failed, res: {}({})", *this, ret,
+    FWLOGERROR("{} dump user_item_container_manager_ failed, res: {}({})", *this, ret,
                protobuf_mini_dumper_get_error_msg(ret));
     return trace.finish({ret, {}});
   }

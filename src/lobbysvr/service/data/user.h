@@ -36,7 +36,7 @@ class user_orbit_manager;
 class user_matching_manager;
 class user_team_manager;
 class user_item_manager;
-class user_item_grid_manager;
+class user_item_container_manager;
 
 ////////////////// 业务Manager开始 ////////////////////
 
@@ -253,7 +253,7 @@ class user : public user_cache {
   REG_USER_MGR_PTR_DEF(user_matching_manager)
   REG_USER_MGR_PTR_DEF(user_team_manager)
   REG_USER_MGR_PTR_DEF(user_item_manager)
-  REG_USER_MGR_PTR_DEF(user_item_grid_manager)
+  REG_USER_MGR_PTR_DEF(user_item_container_manager)
 
   ////////////////// 业务Manager开始 ////////////////////
 };

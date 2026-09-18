@@ -24,8 +24,8 @@ class user;
 
 struct item_operation_result {
   int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS;
-  // 操作失败时, 表示第几个请求失败(从0开始), -1表示整体失败
-  int32_t failed_index = -1;
+  // 操作失败时, 第一个失败的道具类型 ID; 0 表示与具体道具无关的整体失败
+  int32_t failed_type_id = 0;
 };
 
 class item_operation_checked_add_private_data {
@@ -42,8 +42,8 @@ class user_item_manager;
 struct item_operation_handle_checked_add_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request;
-  explicit item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_index = -1)
-      : check_result{error_code, failed_index} {}
+  explicit item_operation_handle_checked_add_request(int32_t error_code, int32_t failed_type_id = 0)
+      : check_result{error_code, failed_type_id} {}
   explicit item_operation_handle_checked_add_request(
       atfw::util::memory::strong_rc_ptr<item_operation_checked_add_private_data> checked_request)
       : checked_request(std::move(checked_request)) {}
@@ -57,8 +57,8 @@ struct item_operation_handle_checked_add_request {
 struct item_operation_handle_checked_sub_request {
   item_operation_result check_result;
   atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request;
-  explicit item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_index = -1)
-      : check_result{error_code, failed_index} {}
+  explicit item_operation_handle_checked_sub_request(int32_t error_code, int32_t failed_type_id = 0)
+      : check_result{error_code, failed_type_id} {}
   explicit item_operation_handle_checked_sub_request(
       atfw::util::memory::strong_rc_ptr<item_operation_checked_sub_private_data> checked_request)
       : checked_request(std::move(checked_request)) {}
@@ -80,8 +80,8 @@ struct item_operation_checked_add_request {
 
  private:
   item_operation_checked_add_request(user* ATFW_UTIL_MACRO_NONNULL owner,
-                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_index = -1)
-      : owner_(owner), check_result{error_code, failed_index} {}
+                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_type_id = 0)
+      : owner_(owner), check_result{error_code, failed_type_id} {}
   item_operation_checked_add_request(
       user* ATFW_UTIL_MACRO_NONNULL owner,
       std::list<std::pair<int32_t, item_operation_handle_checked_add_request>>&& checked_request)
@@ -102,8 +102,8 @@ struct item_operation_checked_sub_request {
 
  private:
   item_operation_checked_sub_request(user* ATFW_UTIL_MACRO_NONNULL owner,
-                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_index = -1)
-      : owner_(owner), check_result{error_code, failed_index} {}
+                                     int32_t error_code = PROJECT_NAMESPACE_ID::EN_SUCCESS, int32_t failed_type_id = 0)
+      : owner_(owner), check_result{error_code, failed_type_id} {}
   item_operation_checked_sub_request(
       user* ATFW_UTIL_MACRO_NONNULL owner,
       std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>>&& checked_request)

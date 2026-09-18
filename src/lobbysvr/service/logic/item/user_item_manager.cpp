@@ -18,7 +18,7 @@
 #include <config/excel/item_type_config.h>
 
 #include <ItemInitialize/ItemInitialize.h>
-#include <logic/item/user_item_grid_manager.h>
+#include <logic/item/user_item_container_manager.h>
 #include <logic/user/task_action_user_gm_cmd_nomsg.h>
 #include <rpc/db/uuid.h>
 #include <rpc/rpc_async_invoke.h>
@@ -81,10 +81,10 @@ item_operation_result item_operation_checked_add_request::do_operation(rpc::cont
   for (auto& group : checked_request) {
     auto handler_it = user_item_manager::item_type_handler_.find(group.first);
     if (handler_it == user_item_manager::item_type_handler_.end()) {
-      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, -1};
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, 0};
     }
     if (group.second.checked_request == nullptr) {
-      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN, -1};
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN, 0};
     }
     auto& handler = handler_it->second;
     auto result = handler->add(ctx, *owner_, std::move(group.second));
@@ -101,10 +101,10 @@ item_operation_result item_operation_checked_sub_request::do_operation(rpc::cont
   for (auto& group : checked_request) {
     auto handler_it = user_item_manager::item_type_handler_.find(group.first);
     if (handler_it == user_item_manager::item_type_handler_.end()) {
-      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, -1};
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, 0};
     }
     if (group.second.checked_request == nullptr) {
-      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN, -1};
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN, 0};
     }
     auto& handler = handler_it->second;
     auto result = handler->sub(ctx, *owner_, std::move(group.second));
@@ -119,19 +119,19 @@ item_operation_checked_add_request user_item_manager::check_add(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>&& input) const {
   // 首先分组
   std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>> grouped_requests;
-  int32_t index = 0;
   std::list<std::pair<int32_t, item_operation_handle_checked_add_request>> checked_request;
   for (auto& item : input) {
     auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.item_basic().type_id()));
     if (type_config == nullptr) {
-      return item_operation_checked_add_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, index);
+      return item_operation_checked_add_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND,
+                                                item.item_basic().type_id());
     }
     auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
     if (handler_id_it == item_type_handler_id_.end()) {
-      return item_operation_checked_add_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, index);
+      return item_operation_checked_add_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND,
+                                                item.item_basic().type_id());
     }
     grouped_requests[handler_id_it->second].Add(std::move(item));
-    index++;
   }
   for (auto& group : grouped_requests) {
     auto& handler = item_type_handler_.find(group.first)->second;
@@ -139,7 +139,7 @@ item_operation_checked_add_request user_item_manager::check_add(
     auto result = handler->check_add(ctx, *owner_, std::move(group.second));
     if (result.check_result.error_code != 0) {
       return item_operation_checked_add_request(owner_, result.check_result.error_code,
-                                                result.check_result.failed_index);
+                                                result.check_result.failed_type_id);
     }
     checked_request.push_back(std::make_pair(group.first, std::move(result)));
   }
@@ -150,19 +150,19 @@ item_operation_checked_sub_request user_item_manager::check_sub(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) const {
   // 首先分组
   std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
-  int32_t index = 0;
   std::list<std::pair<int32_t, item_operation_handle_checked_sub_request>> checked_request;
   for (auto& item : input) {
     auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.type_id()));
     if (type_config == nullptr) {
-      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, index);
+      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND,
+                                                item.type_id());
     }
     auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
     if (handler_id_it == item_type_handler_id_.end()) {
-      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, index);
+      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND,
+                                                item.type_id());
     }
     grouped_requests[handler_id_it->second].Add(std::move(item));
-    index++;
   }
   for (auto& group : grouped_requests) {
     auto& handler = item_type_handler_.find(group.first)->second;
@@ -170,7 +170,7 @@ item_operation_checked_sub_request user_item_manager::check_sub(
     auto result = handler->check_sub(ctx, *owner_, std::move(group.second));
     if (result.check_result.error_code != 0) {
       return item_operation_checked_sub_request(owner_, result.check_result.error_code,
-                                                result.check_result.failed_index);
+                                                result.check_result.failed_type_id);
     }
     checked_request.push_back(std::make_pair(group.first, std::move(result)));
   }
@@ -181,19 +181,19 @@ item_operation_checked_sub_request user_item_manager::check_sub(
     rpc::context& ctx, const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemScopeOffset>& input,
     int32_t multiple) const {
   if (multiple <= 0) {
-    return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, -1);
+    return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0);
   }
   // 只支持虚拟仓库
   google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> basic_input;
   for (auto& item : input) {
     if (ItemAlgorithmTypeOption::IsNeedOccupyTheGrid(static_cast<int32_t>(item.item_offset().type_id()))) {
-      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, -1);
+      return item_operation_checked_sub_request(owner_, PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0);
     }
     auto& basic = *basic_input.Add();
     basic.set_type_id(item.item_offset().type_id());
     basic.set_count(item.item_offset().count() * multiple);
     basic.mutable_position()->set_container_guid(
-        owner_->get_user_item_grid_manager().get_virtual_inventory_container_guid());
+        owner_->get_user_item_container_manager().get_virtual_inventory_container_guid());
     basic.mutable_position()->mutable_grid_position()->set_virtual_inventory(true);
   }
   return check_sub(ctx, std::move(basic_input));
@@ -203,18 +203,16 @@ item_operation_result user_item_manager::check_has(
     rpc::context& ctx, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>&& input) {
   // 首先分组
   std::unordered_map<int32_t, google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>> grouped_requests;
-  int32_t index = 0;
   for (auto& item : input) {
     auto type_config = ItemAlgorithmTypeOption::GetItemType(static_cast<int32_t>(item.type_id()));
     if (type_config == nullptr) {
-      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, index};
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_NOT_FOUND, item.type_id()};
     }
     auto handler_id_it = item_type_handler_id_.find(type_config->item_type);
     if (handler_id_it == item_type_handler_id_.end()) {
-      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, index};
+      return item_operation_result{PROJECT_NAMESPACE_ID::EN_ERR_ITEM_TYPE_HANDLE_NOT_FOUND, item.type_id()};
     }
     grouped_requests[handler_id_it->second].Add(std::move(item));
-    index++;
   }
   for (auto& group : grouped_requests) {
     auto& handler = item_type_handler_.find(group.first)->second;
@@ -224,7 +222,7 @@ item_operation_result user_item_manager::check_has(
       return result;
     }
   }
-  return item_operation_result{PROJECT_NAMESPACE_ID::EN_SUCCESS, -1};
+  return item_operation_result{PROJECT_NAMESPACE_ID::EN_SUCCESS, 0};
 }
 
 int32_t user_item_manager::on_item_not_enough(rpc::context& ctx, int32_t type_id) {
@@ -414,8 +412,8 @@ void user_item_manager::on_gm_cmd_add_item(const std::shared_ptr<rpc::context>& 
         auto add_result = checked_request.do_operation(child_ctx);
         if (add_result.error_code != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
           rsp->set_result_code(add_result.error_code);
-          FWLOGERROR("{} gm add_item failed, result={}({}), failed_index={}", *user_inst, add_result.error_code,
-                     protobuf_mini_dumper_get_error_msg(add_result.error_code), add_result.failed_index);
+          FWLOGERROR("{} gm add_item failed, result={}({}), failed_type_id={}", *user_inst, add_result.error_code,
+                     protobuf_mini_dumper_get_error_msg(add_result.error_code), add_result.failed_type_id);
           RPC_RETURN_CODE(add_result.error_code);
         }
 
