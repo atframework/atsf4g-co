@@ -10,8 +10,8 @@ orbit_agent:
   server_identity_timeout_sec: {{ .Values.orbit_agent.server_identity_timeout_sec }}
   server_identity_check_interval_sec: {{ .Values.orbit_agent.server_identity_check_interval_sec }}
   max_batch_startup_count: {{ .Values.orbit_agent.max_batch_startup_count }}
-  client_ip: {{ .Values.orbit_agent.host_name }}
-  remote_agent_addr: dns://{{ .Values.orbit_agent.host_name }}:{{ $service_port }}
+  client_ip: {{ .Values.orbit_agent.client_ip }}
+  remote_agent_addr: dns://{{ .Values.orbit_agent.remote_agent_host_name }}:{{ $service_port }}
   local_agent_addr: atcp://127.0.0.1:{{ $service_port }}
   enable_pre_start: {{ .Values.orbit_agent.enable_pre_start }}
   pre_start_repeated_failures_limit: {{ .Values.orbit_agent.pre_start_repeated_failures_limit }}

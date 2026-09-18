@@ -344,7 +344,7 @@ CASE_TEST(teamsvr_room_contract, invalid_snapshots_recover_without_partial_write
     const int64_t team_id = next_test_team_id();
     auto& channel = env.channel(team_id);
     channel.ensure_created();
-    auto owner = make_user_key(1, 49100 + variant);
+    auto owner = make_user_key(1, static_cast<uint64_t>(49100 + variant));
     atfw::team::DTeamStorage valid;
     *valid.mutable_team_key() = make_team_key(team_id);
     *valid.mutable_captain_user_key() = owner;

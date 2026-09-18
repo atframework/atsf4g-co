@@ -1000,3 +1000,115 @@ CASE_TEST(lobbysvr_user_team, matching_sync_09_async_update_member_shared_data_c
 
   CASE_EXPECT_EQ(0, test.stop());
 }
+
+// MTS-10: 取消匹配按操作时的实时队长身份鉴权。相同 Unit 下，普通成员取消时不得向 matchsvr 发包；
+// 该成员当选队长后无需重建 Unit，即可发送取消请求。
+CASE_TEST(lobbysvr_user_team, matching_sync_10_cancel_uses_current_captain) {
+  constexpr uint64_t kMatchsvrId = 0x1E0012;
+  constexpr uint64_t kUserId = 30088;
+  constexpr uint64_t kUnitId = 91088;
+  constexpr int64_t kTeamId = 586;
+
+  atfw::testing::runtime test;
+  CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
+  if (!test.is_running()) {
+    return;
+  }
+  CASE_EXPECT_TRUE(team_test::setup_team_room_node(test));
+
+  atfw::testing::mock_node node;
+  node.set_id(kMatchsvrId)
+      .set_name("unit-test-matchsvr-captain-cancel")
+      .set_type_id(static_cast<uint32_t>(atframework::component::logic_service_type::kMatchSvr))
+      .set_type_name("matchsvr")
+      .set_zone_id(team_test::kZoneId)
+      .add_label("hpa_scaling_ready", "1");
+  CASE_EXPECT_TRUE(!!test.discovery().add_node(node));
+  if (nullptr != logic_server_last_common_module()) {
+    logic_server_last_common_module()->reload();
+  }
+
+  auto captured_cancels = std::make_shared<std::vector<PROJECT_NAMESPACE_ID::SSMatchingCancelReq>>();
+  rpc::unit_test::ss_mock_rule_options cancel_rule_options;
+  cancel_rule_options.match_node_id = kMatchsvrId;
+  cancel_rule_options.times = 1;
+  auto cancel_rule = rpc::matching::mock::cancel_matching(
+      [captured_cancels](rpc::context&, const PROJECT_NAMESPACE_ID::SSMatchingCancelReq& request,
+                         PROJECT_NAMESPACE_ID::SSMatchingSnapshot& response) -> rpc::result_code_type {
+        captured_cancels->push_back(request);
+        response.set_result(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+        response.set_matching_id("current-captain-cancel");
+        response.mutable_snapshot()->set_status(PROJECT_NAMESPACE_ID::EN_MATCHING_UNIT_LIFECYCLE_STATUS_CANCELLED);
+        response.mutable_snapshot()->mutable_unit()->set_unit_id(request.unit_id());
+        RPC_RETURN_CODE(0);
+      },
+      cancel_rule_options);
+  CASE_EXPECT_TRUE(!!cancel_rule);
+  if (!cancel_rule) {
+    test.stop();
+    return;
+  }
+
+  user::ptr_t user_inst;
+  std::string subscriber_key;
+  atframework::dtmq::DChannelIdKey private_channel_key;
+  CASE_EXPECT_TRUE(team_test::setup_team_user(test, kUserId, user_inst, subscriber_key, private_channel_key));
+  if (!user_inst) {
+    test.stop();
+    return;
+  }
+
+  team_test::channel_event_chain private_chain;
+  private_chain.channel_key = private_channel_key;
+  CASE_EXPECT_TRUE(team_test::join_team_with_snapshot(test, user_inst, private_chain, kTeamId,
+                                                      atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, false, nullptr, {}));
+  auto team_ptr = user_inst->get_user_team_manager().get_team_by_team_key(team_test::make_team_key(kTeamId));
+  CASE_EXPECT_TRUE(!!team_ptr);
+  if (!team_ptr) {
+    test.stop();
+    return;
+  }
+  CASE_EXPECT_TRUE(seed_in_matching_state(test, user_inst, kUnitId, kMatchsvrId));
+
+  auto member_cancel_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
+  CASE_EXPECT_TRUE(team_test::run_sync_task(
+      test, "team.mts10_member_cancel", [user_inst, member_cancel_result](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::CSMatchingCancelReq request;
+        PROJECT_NAMESPACE_ID::SCMatchingCancelRsp response;
+        request.set_unit_id(kUnitId);
+        *member_cancel_result =
+            RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().cancel_matching(ctx, request, response));
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::EN_MATCHING_NOT_TEAM_CAPTAIN, *member_cancel_result);
+  CASE_EXPECT_TRUE(captured_cancels->empty());
+
+  team_test::channel_event_chain team_chain;
+  team_chain.channel_key = team_test::make_team_channel_key(kTeamId);
+  atfw::team::DTeamAction election_action;
+  protobuf_copy_message(*election_action.mutable_election_captain()->mutable_user_key(),
+                        team_test::make_user_key(kUserId));
+  CASE_EXPECT_TRUE(team_test::inject_event_message(test, team_chain, election_action));
+  CASE_EXPECT_TRUE(team_test::pump_until(test, [&] { return team_ptr->is_captain(); }));
+
+  auto captain_cancel_result = std::make_shared<int32_t>(PROJECT_NAMESPACE_ID::EN_MATCHING_RESULT_NOT_FOUND);
+  CASE_EXPECT_TRUE(team_test::run_sync_task(
+      test, "team.mts10_captain_cancel",
+      [user_inst, captain_cancel_result](rpc::context& ctx) -> rpc::result_code_type {
+        PROJECT_NAMESPACE_ID::CSMatchingCancelReq request;
+        PROJECT_NAMESPACE_ID::SCMatchingCancelRsp response;
+        request.set_unit_id(kUnitId);
+        *captain_cancel_result =
+            RPC_AWAIT_CODE_RESULT(user_inst->get_user_matching_manager().cancel_matching(ctx, request, response));
+        RPC_RETURN_CODE(0);
+      }));
+  CASE_EXPECT_EQ(PROJECT_NAMESPACE_ID::err::EN_SUCCESS, *captain_cancel_result);
+  CASE_EXPECT_EQ(1, static_cast<int>(captured_cancels->size()));
+  if (1 == captured_cancels->size()) {
+    CASE_EXPECT_EQ(kUnitId, captured_cancels->front().unit_id());
+    CASE_EXPECT_EQ(kUserId, captured_cancels->front().operator_user().user_id());
+    CASE_EXPECT_EQ(team_test::kZoneId, captured_cancels->front().operator_user().zone_id());
+  }
+
+  CASE_EXPECT_EQ(0, test.stop());
+}

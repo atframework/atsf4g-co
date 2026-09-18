@@ -6,7 +6,8 @@ orbit_agent:
   server_identity_timeout_sec: 30
   server_identity_check_interval_sec: 5
   max_batch_startup_count: 3
-  host_name: localhost
+  client_ip: 127.0.0.1
+  remote_agent_host_name: localhost
   enable_seed_mode: false
   seed_startup_timeout_sec: 30
   seed_heartbeat_timeout_sec: 10

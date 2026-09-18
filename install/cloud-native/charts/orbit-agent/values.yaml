@@ -28,7 +28,6 @@ atapp:
     worker_number_min: 4
     worker_number_max: 4
 
-
 etcd:
   cluster_name: atsf4g-co-orbit-agent
   watcher:
