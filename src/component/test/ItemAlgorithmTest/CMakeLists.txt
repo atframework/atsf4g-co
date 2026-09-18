@@ -9,7 +9,7 @@ project_add_normal_unit_test(
   COMPONENT
   component-item-algorithm
   SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/item_grid_algorithm_test.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/item_container_test.cpp"
   LINK_LIBRARIES
   components::ItemAlgorithmSDK
   COMPILE_DEFINITIONS

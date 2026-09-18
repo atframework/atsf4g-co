@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "ItemAlgorithm/ItemAlgorithmConfig.h"
+#include <ItemAlgorithm/ItemAlgorithmConfig.h>
 
 #include <cstdint>
 #include <vector>
@@ -11,15 +11,15 @@ ITEM_ALGORITHM_NAMESPACE_BEGIN
 
 namespace item_algorithm {
 
-/// @brief 背包占用位图 (多行打成一行, 每 64 列一个 uint64)
+/// @brief 容器占用位图 (多行打成一行, 每 64 列一个 uint64)
 ///
 /// 内部以单个 uint64 数组按行优先存储位图, 支持按 (x, y) 快速检查/设置占用,
-/// 便于后续寻位优化 (位运算找空位)。
-class ItemGridOccupyFlag {
+/// 便于后续寻位优化 (位运算找空位)。仅有限格子模式使用。
+class ATFW_UTIL_SYMBOL_VISIBLE ItemGridOccupancy {
  public:
-  ITEM_ALGORITHM_API ItemGridOccupyFlag();
-  ITEM_ALGORITHM_API ItemGridOccupyFlag(const ItemGridOccupyFlag&);
-  ITEM_ALGORITHM_API ItemGridOccupyFlag& operator=(const ItemGridOccupyFlag&);
+  ITEM_ALGORITHM_API ItemGridOccupancy();
+  ITEM_ALGORITHM_API ItemGridOccupancy(const ItemGridOccupancy&);
+  ITEM_ALGORITHM_API ItemGridOccupancy& operator=(const ItemGridOccupancy&);
 
   /// @brief 初始化位图 (rows 行, cols 列), 全部清零
   ITEM_ALGORITHM_API void resize(size_t rows, size_t cols);

@@ -18,20 +18,33 @@ project_game_shared_component_declare_sdk(
   HEADERS
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemAlgorithmConfig.h"
   "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemAlgorithmLog.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridAlgorithm.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridContainer.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridOccupyFlag.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridAlgorithmFindPosition.h"
-  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridData.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemContainer.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemContainerEntry.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemContainerGroup.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemContainerTypes.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemIterable.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/Container/ItemFiniteGridContainer.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/Container/ItemInfiniteGridContainer.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/Container/ItemNoPositionContainer.h"
+  "${CMAKE_CURRENT_LIST_DIR}/include/ItemAlgorithm/ItemGridOccupancy.h"
   SOURCES
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridAlgorithm.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridContainer.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridOccupyFlag.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridAlgorithmFindPosition.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridAlgorithmOperation.cpp"
-  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridData.cpp")
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemAlgorithmLog.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemContainer.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemContainerEntry.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemContainerGroup.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemContainerTypes.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemFiniteGridContainer.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemFiniteGridContainerOperation.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemFiniteGridFindPosition.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemContainerOperation.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemInfiniteGridContainer.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemInfiniteGridContainerOperation.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemNoPositionContainer.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/Container/ItemNoPositionContainerOperation.cpp"
+  "${CMAKE_CURRENT_LIST_DIR}/src/ItemAlgorithm/ItemGridOccupancy.cpp")
 
 target_link_libraries(${TARGET_FULL_NAME} PRIVATE xxHash::xxhash)
+
 if(TARGET ${PROJECT_NAME}::ConfigLoader)
   target_link_libraries(${TARGET_FULL_NAME} PRIVATE ${PROJECT_NAME}::ConfigLoader)
 elseif(PROJECT_SERVER_FRAME_LIB_LINK AND TARGET ${PROJECT_SERVER_FRAME_LIB_LINK}-config)
