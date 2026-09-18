@@ -194,7 +194,7 @@ ${rpc_dllexport_decl} rpc::always_ready_code_type ${rpc.get_name()}(
 
   res = internal::pack_rpc_body(
     request_body, req_msg.mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    internal::to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
+    internal::to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()), false);
   if (res < 0) {
     ${rpc_return_always_ready_code_sentense('res')}
   }
@@ -224,6 +224,7 @@ ${rpc_dllexport_decl} rpc::always_ready_code_type ${rpc.get_name()}(
 %   endif
 
   res = ss_msg_dispatcher::me()->broadcast(req_msg, index, metadata);
+  FWLOGDEBUG("{}", protobuf_mini_dumper_get_readable(request_body));
 
   if (res < 0) {
 %     if rpc.get_extension_field('atframework.rpc_options', lambda x: x.warning_log_response_code, []):
@@ -316,7 +317,7 @@ static ${rpc_return_type} __${rpc.get_name()}(
 
   res = internal::pack_rpc_body(
     request_body, req_msg.mutable_body_bin(), "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    internal::to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()));
+    internal::to_string_view(${rpc.get_request().get_cpp_class_name()}::descriptor()->full_name()), false);
   if (res < 0) {
     ${rpc_return_sentense('res')}
   }
@@ -385,6 +386,8 @@ static ${rpc_return_type} __${rpc.get_name()}(
   res = ss_msg_dispatcher::me()->send_to_proc(destination_server, req_msg);
 %     endif
 %   endif
+  FWLOGDEBUG("{}", protobuf_mini_dumper_get_readable(request_body));
+
 %   if rpc_is_stream_mode:
 %     if rpc_is_router_api:
   if (res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_FOUND || res == PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_IN_SERVER) {

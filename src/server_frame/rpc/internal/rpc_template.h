@@ -38,15 +38,17 @@ ATFW_UTIL_FORCEINLINE atfw::util::nostd::string_view to_string_view(const String
 template <class TBodyType>
 ATFW_UTIL_FORCEINLINE int pack_rpc_body(TBodyType &&input,  // NOLINT(cppcoreguidelines-missing-std-forward)
                                         std::string *output, atfw::util::nostd::string_view rpc_full_name,
-                                        atfw::util::nostd::string_view type_full_name) {
+                                        atfw::util::nostd::string_view type_full_name, bool debug_body = true) {
   if (false == input.SerializeToString(output)) {
     FWLOGERROR("rpc {} serialize message {} failed, msg: {}", rpc_full_name, type_full_name,
                input.InitializationErrorString());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
-             protobuf_mini_dumper_get_readable(input));
+  if (debug_body) {
+    FWLOGDEBUG("rpc {} serialize message {} success:\n{}", rpc_full_name, type_full_name,
+               protobuf_mini_dumper_get_readable(input));
+  }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 
@@ -54,15 +56,17 @@ template <class TBodyType>
 ATFW_UTIL_FORCEINLINE int unpack_rpc_body(TBodyType &&output,        // NOLINT(cppcoreguidelines-missing-std-forward)
                                           const std::string &input,  // NOLINT(cppcoreguidelines-missing-std-forward)
                                           atfw::util::nostd::string_view rpc_full_name,
-                                          atfw::util::nostd::string_view type_full_name) {
+                                          atfw::util::nostd::string_view type_full_name, bool debug_body = true) {
   if (false == output.ParseFromString(input)) {
     FWLOGERROR("rpc {} parse message {} failed, msg: {}", rpc_full_name, type_full_name,
                output.InitializationErrorString());
     return PROJECT_NAMESPACE_ID::err::EN_SYS_PACK;
   }
 
-  FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
-             protobuf_mini_dumper_get_readable(output));
+  if (debug_body) {
+    FWLOGDEBUG("rpc {} parse message {} success:\n{}", rpc_full_name, type_full_name,
+               protobuf_mini_dumper_get_readable(output));
+  }
   return PROJECT_NAMESPACE_ID::err::EN_SUCCESS;
 }
 

@@ -196,13 +196,11 @@ CASE_TEST(lobbysvr_user_team, matching_sync_01_start_check_captain_gate) {
   CASE_EXPECT_EQ(0, test.stop());
 }
 
-// MTS-02: start_matching_finish / matching_finish glue — callback_start_matching(true) 是生产上 room 广播
-// matching=true 后 glue 继续匹配流程的同一入口: 置位本地匹配状态并经 start_matching_finish 回调广播一次
-// matching_team_view(未进入匹配单元时为空视图); 后续真实匹配请求失败(无可用 matchsvr/参数无效)时,
-// matching_finish 回调由队长上行一条 battle.matching=false 复位队伍状态(normalize 追加清空的
-// matching_team_view, 附加队伍匹配中条件)。非队长的 start_matching_finish 入口无队长门槛(所有人都要发起,
-// 有效数据的这一方才会广播完成状态), 同样上行一次空视图; matching_finish 入口仍仅队长可达, 不再上行。
-CASE_TEST(lobbysvr_user_team, matching_sync_02_callback_view_broadcast_then_finish) {
+// MTS-02: callback_start_matching(true) 驱动真实匹配发起流程 — 队长经 start_matching_inner_ 实际发起匹配请求;
+// 测试环境缺少匹配配置, 请求在 fill_matching_scope 失败, 经 clear_matching_state 清理本地匹配状态并由
+// matching_finish 上行一条 battle.matching=false 复位队伍(normalize 追加清空的 matching_team_view,
+// 附加队伍匹配中条件)。非队长入口直接返回: 不发起匹配流程也不改本地状态(切换队长后由新队长发起), 零上行。
+CASE_TEST(lobbysvr_user_team, matching_sync_02_callback_captain_request_failure_notifies_team) {
   atfw::testing::runtime test;
   CASE_EXPECT_TRUE(team_test::start_team_runtime(test));
   if (!test.is_running()) {
@@ -242,24 +240,19 @@ CASE_TEST(lobbysvr_user_team, matching_sync_02_callback_view_broadcast_then_fini
   CASE_EXPECT_TRUE(team_test::join_team_with_snapshot(test, member_inst, member_private_chain, kMemberTeamId,
                                                       atfw::team::EN_TEAM_MEMBER_ROLE_NORMAL, false, nullptr, {}));
 
-  // 队长: callback_start_matching(true) -> start_matching_finish 广播空视图 -> 内部匹配请求失败 ->
-  // matching_finish 上行 matching=false, 恰好两次上行且顺序确定(视图广播先于复位)
+  // 队长: callback_start_matching(true) 经 start_matching_inner_ 真实发起匹配请求; 测试环境缺少匹配配置,
+  // 请求在 fill_matching_scope 失败, 经 clear_matching_state 清理本地匹配状态并由 matching_finish 上行一条
+  // matching=false 复位队伍(normalize 追加清空的 matching_team_view, 附加队伍匹配中条件)
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.mts02_callback_captain", [captain_inst](rpc::context& ctx) -> rpc::result_code_type {
         captain_inst->get_user_matching_manager().callback_start_matching(ctx, true, 0);
         RPC_RETURN_CODE(0);
       }));
   CASE_EXPECT_TRUE(team_test::pump_until(
-      test, [&] { return ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate) >= 2; }));
-  CASE_EXPECT_EQ(2, static_cast<int>(ss_capture.send_message_reqs.size()));
-  if (2 == ss_capture.send_message_reqs.size()) {
-    const auto& view_req = ss_capture.send_message_reqs[0];
-    team_test::expect_send_message_envelope(view_req, kCaptainTeamId, kCaptainUserId);
-    CASE_EXPECT_EQ(1, view_req.action().team_update().shared_team_data_size());
-    if (1 == view_req.action().team_update().shared_team_data_size()) {
-      team_test::expect_packed_team_matching_team_view_entry(view_req.action().team_update().shared_team_data(0));
-    }
-    const auto& finish_req = ss_capture.send_message_reqs[1];
+      test, [&] { return ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate) >= 1; }));
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
+  if (1 == ss_capture.send_message_reqs.size()) {
+    const auto& finish_req = ss_capture.send_message_reqs.back();
     team_test::expect_send_message_envelope(finish_req, kCaptainTeamId, kCaptainUserId);
     // matching=false 的 normalize 追加清空后的 matching_team_view, 一并下发; 附加队伍匹配中条件
     CASE_EXPECT_EQ(2, finish_req.action().team_update().shared_team_data_size());
@@ -278,28 +271,16 @@ CASE_TEST(lobbysvr_user_team, matching_sync_02_callback_view_broadcast_then_fini
     CASE_EXPECT_FALSE(captain_team->is_matching());
   }
 
-  // 非队长: 同一入口的 start_matching_finish 广播不被队长门槛拦截(该入口按设计所有成员都发起),
-  // 上行一次空 matching_team_view; 内部匹配请求失败后的 matching_finish 仅队长可达, 不再上行
+  // 非队长: callback_start_matching 直接返回, 不发起匹配流程也不改本地状态(切换队长后由新队长发起),
+  // 因此零上行且匹配态保持复位
   CASE_EXPECT_TRUE(team_test::run_sync_task(
       test, "team.mts02_callback_member", [member_inst](rpc::context& ctx) -> rpc::result_code_type {
         member_inst->get_user_matching_manager().callback_start_matching(ctx, true, 0);
         RPC_RETURN_CODE(0);
       }));
-  CASE_EXPECT_TRUE(team_test::pump_until(
-      test, [&] { return ss_capture.send_message_action_count(atfw::team::DTeamAction::kTeamUpdate) >= 3; }));
-  CASE_EXPECT_FALSE(member_inst->get_user_matching_manager().is_in_matching());
   team_test::pump_rounds(test, 8);
-  CASE_EXPECT_EQ(3, static_cast<int>(ss_capture.send_message_reqs.size()));
-  if (3 == ss_capture.send_message_reqs.size()) {
-    const auto& member_view_req = ss_capture.send_message_reqs[2];
-    team_test::expect_send_message_envelope(member_view_req, kMemberTeamId, kMemberUserId);
-    CASE_EXPECT_EQ(1, member_view_req.action().team_update().shared_team_data_size());
-    if (1 == member_view_req.action().team_update().shared_team_data_size()) {
-      team_test::expect_packed_team_matching_team_view_entry(
-          member_view_req.action().team_update().shared_team_data(0));
-    }
-    CASE_EXPECT_EQ(0, member_view_req.action().team_update().condition_size());
-  }
+  CASE_EXPECT_FALSE(member_inst->get_user_matching_manager().is_in_matching());
+  CASE_EXPECT_EQ(1, static_cast<int>(ss_capture.send_message_reqs.size()));
 
   CASE_EXPECT_EQ(0, test.stop());
 }

@@ -79,14 +79,17 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
+  auto __type_full_name = internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   int res = internal::pack_cs_stream_message(
     *msg_ptr, __body, "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
+    __type_full_name);
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
   __session.write_actor_log_body(__ctx, __body, *msg_ptr->mutable_head(), false);
   res = __session.send_msg_to_client(__ctx, *msg_ptr);
+  FWLOGDEBUG("{}", protobuf_mini_dumper_get_readable(__body));
+
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
                "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
@@ -107,14 +110,17 @@ ${service_dllexport_decl} rpc::always_ready_code_type send_${rpc.get_name()}(
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
+  auto __type_full_name = internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   int res = internal::pack_cs_stream_message(
     *msg_ptr, __body, "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
+    __type_full_name);
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
   __session.write_actor_log_body(__ctx, __body, *msg_ptr->mutable_head(), false);
   res = __session.send_msg_to_client(__ctx, *msg_ptr, server_sequence);
+  FWLOGDEBUG("{}", protobuf_mini_dumper_get_readable(__body));
+
   if (res < 0) {
     FWLOGERROR("rpc {} send message to session [{:#x}, {}] failed, result: {}({})",
                "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
@@ -135,13 +141,16 @@ ${service_dllexport_decl} rpc::always_ready_code_type broadcast_${rpc.get_name()
     return {static_cast<rpc::always_ready_code_type::value_type>(PROJECT_NAMESPACE_ID::err::EN_SYS_MALLOC)};
   }
 
+  auto __type_full_name = internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name());
   int res = internal::pack_cs_stream_message(
     *msg_ptr, __body, "${service.get_full_name()}", "${rpc.get_service().get_full_name()}/${rpc.get_name()}",
-    internal::to_string_view(${rpc.get_response().get_cpp_class_name()}::descriptor()->full_name()));
+    __type_full_name);
   if (res < 0) {
     return {static_cast<rpc::always_ready_code_type::value_type>(res)};
   }
   res = session::broadcast_msg_to_client(service_id, *msg_ptr);
+  FWLOGDEBUG("{}", protobuf_mini_dumper_get_readable(__body));
+
   if (res < 0) {
     FWLOGERROR("rpc {} broadcast message  failed, result: {}({})",
                "${rpc.get_service().get_full_name()}/${rpc.get_name()}",

@@ -320,8 +320,8 @@ void user_matching_manager::callback_start_matching(rpc::context& ctx, bool is_s
     FWLOGDEBUG("{} callback start matching rejected, reason={}", *owner_, reason);
     return;
   }
-  // 此处不需要通知team
   if (!team_logic_.is_team_captain()) {
+    // 非队长不发起匹配流程也不改本地状态（切换队长后由新队长发起）
     return;
   }
   auto owner = owner_->shared_from_this();
@@ -354,6 +354,7 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   std::vector<int32_t> acceptable_level_ids;
   int32_t ret = fill_matching_scope(level_select, battle_version, *rpc_request->mutable_scope(), acceptable_level_ids);
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+    clear_matching_state(ctx);
     FWLOGERROR("{} fill_matching_scope failed, ret={}, level_select={},battle_version={}", *owner_, ret,
                level_select.DebugString(), battle_version);
     RPC_RETURN_CODE(ret);
@@ -361,6 +362,7 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
 
   ret = RPC_AWAIT_CODE_RESULT(fill_matching_unit(ctx, *rpc_request->mutable_unit()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+    clear_matching_state(ctx);
     FWLOGERROR("{} fill_matching_unit failed, ret={}, level_count={}, battle_version={}", *owner_, ret,
                level_select.DebugString(), battle_version);
     RPC_RETURN_CODE(ret);

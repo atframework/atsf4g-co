@@ -17,8 +17,7 @@
 
 namespace rpc {
 namespace internal {
-SERVER_FRAME_API int setup_cs_rpc_request_header(atframework::CSMsgHead& head,
-                                                 atfw::util::nostd::string_view version,
+SERVER_FRAME_API int setup_cs_rpc_request_header(atframework::CSMsgHead& head, atfw::util::nostd::string_view version,
                                                  atfw::util::nostd::string_view caller,
                                                  atfw::util::nostd::string_view callee,
                                                  atfw::util::nostd::string_view rpc_full_name,
@@ -42,7 +41,7 @@ ATFW_UTIL_SYMBOL_VISIBLE int pack_cs_stream_message(atframework::CSMsg& msg,
     return res;
   }
 
-  res = pack_rpc_body(std::forward<TBodyType>(body), msg.mutable_body_bin(), rpc_full_name, type_full_name);
+  res = pack_rpc_body(std::forward<TBodyType>(body), msg.mutable_body_bin(), rpc_full_name, type_full_name, false);
   if (res < 0) {
     return res;
   }
