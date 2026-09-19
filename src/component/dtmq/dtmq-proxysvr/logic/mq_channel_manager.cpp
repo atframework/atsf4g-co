@@ -912,6 +912,7 @@ void mq_channel_manager::report_channel_qty_oss() {
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 #  include <testing/unit_test_case_cleanup.h>
+#  include <testing/unit_test_global_register.h>
 
 void mq_channel_manager::clear_for_unit_test() noexcept {
   // 先清空 IO 队列引用，再清空频道表，避免析构时回调访问已失效结构
@@ -929,14 +930,13 @@ void mq_channel_manager::clear_for_unit_test() noexcept {
 
 namespace {
 // 用例边界自动清理：manager 是进程级单例，频道表与停机/转移标记跨用例存活，由清理流程统一复位。
-static const bool mq_channel_manager_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+ATFW_SERVER_FRAME_TESTING_SETUP(mq_channel_manager_case_cleanup_registered) {
   server_frame_unit_test_register_case_cleanup("dtmq-proxysvr.mq_channel_manager", kUnitTestCaseCleanupLevelBusiness,
-                                               []() {
+                                               [] {
                                                  if (!mq_channel_manager::is_instance_destroyed()) {
                                                    mq_channel_manager::me()->clear_for_unit_test();
                                                  }
                                                });
-  return true;
-}();
+}
 }  // namespace
 #endif

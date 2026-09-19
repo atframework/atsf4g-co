@@ -14,8 +14,10 @@
 #include <dispatcher/ss_msg_dispatcher.h>
 #include <dispatcher/task_manager.h>
 #include <frame/test_case_base.h>
+#include <frame/test_macros.h>
 #include <logic/logic_server_setup.h>
 #include <testing/unit_test_case_cleanup.h>
+#include <testing/unit_test_global_register.h>
 #include <testing/unit_test_reset.h>
 
 #include <atframework/testing/mock_connector.h>
@@ -56,7 +58,7 @@ namespace {
 // the per-fixture reload (the provider version always differs from the preloaded one).
 // NOTE: CASE_TEST_EVENT_ON_START is not usable here because its empty __VA_ARGS__ expansion does not
 // compile under /Zc:preprocessor, so the same registration is done directly.
-void rpc_unit_test_event_on_start_excel_config_loader() {
+static void rpc_unit_test_event_on_load_excel_config() {
 #  if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
   auto bindirs = atfw::testing::detail::get_excel_resource_bindirs();
   if (!bindirs.empty()) {
@@ -70,15 +72,21 @@ void rpc_unit_test_event_on_start_excel_config_loader() {
   excel_config_wrapper_reload_all(true);
 }
 
-// NOLINTNEXTLINE(misc-use-anonymous-namespace)
-static atfw::util::testing::test_on_start_base rpc_unit_test_obj_on_start_excel_config_loader(
-    "rpc_unit_test_event_on_start_excel_config_loader", &rpc_unit_test_event_on_start_excel_config_loader);
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+CASE_TEST_EVENT_ON_START(rpc_unit_test_event_on_start_initialization) {
+  rpc_unit_test_event_on_load_excel_config();
+
+  server_frame_unit_test_run_setup_action();
+}
 }  // namespace
 #endif
 
 namespace {
 
-static std::atomic<atfw::testing::runtime *> g_active_runtime{nullptr};
+static std::atomic<atfw::testing::runtime *> &get_global_active_runtime() {
+  static std::atomic<atfw::testing::runtime *> ret{nullptr};
+  return ret;
+}
 
 enum class runtime_state : int32_t {
   constructed = 0,
@@ -283,7 +291,7 @@ runtime::~runtime() {
     stop();
   }
   runtime *expected = this;
-  g_active_runtime.compare_exchange_strong(expected, nullptr);
+  get_global_active_runtime().compare_exchange_strong(expected, nullptr);
 }
 
 int runtime::start(const runtime_options &options) {
@@ -297,7 +305,7 @@ int runtime::start(const runtime_options &options) {
   }
 
   runtime *expected = nullptr;
-  if (!g_active_runtime.compare_exchange_strong(expected, this)) {
+  if (!get_global_active_runtime().compare_exchange_strong(expected, this)) {
     impl_->diagnostic = "another atfw::testing::runtime is active in this process";
     return -1;
   }
@@ -324,7 +332,7 @@ int runtime::start(const runtime_options &options) {
                           " (use telemetry_otlp_file_pattern or telemetry_ostream_stderr)";
       impl_->state = runtime_state::constructed;
       runtime *expected_self = this;
-      g_active_runtime.compare_exchange_strong(expected_self, nullptr);
+      get_global_active_runtime().compare_exchange_strong(expected_self, nullptr);
       return -1;
     }
   } while (false);
@@ -362,7 +370,7 @@ int runtime::start(const runtime_options &options) {
 #endif
     impl_->state = runtime_state::constructed;
     runtime *expected_self = this;
-    g_active_runtime.compare_exchange_strong(expected_self, nullptr);
+    get_global_active_runtime().compare_exchange_strong(expected_self, nullptr);
     return error_code;
   };
 
@@ -396,6 +404,7 @@ int runtime::start(const runtime_options &options) {
     impl_->config_file_path = workdir + "/rpc-unit-test.yaml";
     std::string old_content;
     {
+      // NOLINTNEXTLINE(bugprone-signed-bitwise)
       std::ifstream old_file(impl_->config_file_path.c_str(), std::ios::in | std::ios::binary);
       if (old_file) {
         std::stringstream buffer;
@@ -404,6 +413,7 @@ int runtime::start(const runtime_options &options) {
       }
     }
     if (old_content != config_content) {
+      // NOLINTNEXTLINE(bugprone-signed-bitwise)
       std::ofstream config_file(impl_->config_file_path.c_str(), std::ios::out | std::ios::binary | std::ios::trunc);
       if (!config_file) {
         impl_->diagnostic = "can not write config file: " + impl_->config_file_path;
@@ -519,13 +529,13 @@ int runtime::start(const runtime_options &options) {
 int runtime::stop() noexcept {
   if (!impl_) {
     runtime *expected = this;
-    g_active_runtime.compare_exchange_strong(expected, nullptr);
+    get_global_active_runtime().compare_exchange_strong(expected, nullptr);
     return 0;
   }
   if (impl_->state == runtime_state::constructed || impl_->state == runtime_state::stopped) {
     impl_->state = runtime_state::stopped;
     runtime *expected = this;
-    g_active_runtime.compare_exchange_strong(expected, nullptr);
+    get_global_active_runtime().compare_exchange_strong(expected, nullptr);
     return 0;
   }
 
@@ -596,7 +606,7 @@ int runtime::stop() noexcept {
 
   impl_->state = runtime_state::stopped;
   runtime *expected = this;
-  g_active_runtime.compare_exchange_strong(expected, nullptr);
+  get_global_active_runtime().compare_exchange_strong(expected, nullptr);
   return ret;
 }
 
@@ -626,16 +636,16 @@ task_handle runtime::run_task(gsl::string_view name, std::chrono::system_clock::
 
   rpc::async_invoke_result invoke_result = rpc::async_invoke("atfw::testing::runtime", name, std::move(fn), timeout);
   if (!invoke_result.is_success()) {
-    auto error = invoke_result.get_error();
+    auto *error = invoke_result.get_error();
     ret.diagnostic_ = "rpc::async_invoke failed";
-    if (error) {
+    if (error != nullptr) {
       ret.diagnostic_ += " with " + std::to_string(*error);
     }
     return ret;
   }
 
-  auto task_ptr = invoke_result.get_success();
-  if (!task_ptr) {
+  auto *task_ptr = invoke_result.get_success();
+  if (task_ptr == nullptr) {
     ret.diagnostic_ = "rpc::async_invoke returns empty task";
     return ret;
   }

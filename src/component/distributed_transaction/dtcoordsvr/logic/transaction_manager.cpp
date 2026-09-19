@@ -803,6 +803,8 @@ rpc::result_code_type transaction_manager::remove_transaction(
 }
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
+#  include <testing/unit_test_global_register.h>
+
 size_t transaction_manager::get_lru_size_for_unit_test() noexcept {
   // remove_cache/clear 会把条目真正移出池，池内不存在 removed 条目，可见条目数即池大小
   return lru_caches_.size();
@@ -819,14 +821,13 @@ namespace {
 // 用例边界自动清理：协调者是进程级单例，LRU 与退出标志跨用例存活；stop() 置位后不复位会让同进程
 // 后续用例全部拿到 EN_SYS_SERVER_SHUTDOWN。
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization)
-static const bool transaction_manager_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+ATFW_SERVER_FRAME_TESTING_SETUP(transaction_manager_case_cleanup_registered) {
   server_frame_unit_test_register_case_cleanup("distributed_transaction.transaction_manager",
-                                               kUnitTestCaseCleanupLevelBusiness, []() {
+                                               kUnitTestCaseCleanupLevelBusiness, [] {
                                                  if (!transaction_manager::is_instance_destroyed()) {
                                                    transaction_manager::me()->reset_for_unit_test();
                                                  }
                                                });
-  return true;
-}();
+}
 }  // namespace
 #endif

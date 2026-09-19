@@ -13,13 +13,21 @@
 
 namespace {
 
+#  if defined(__cpp_lib_scoped_lock) && __cpp_lib_scoped_lock >= 201703L
+template <class T>
+using lock_guard = std::scoped_lock<T>;
+#  else
+template <class T>
+using lock_guard = std::lock_guard<T>;
+#  endif
+
 struct cleanup_registry_entry {
   int level;
   unit_test_case_cleanup_fn fn;
 };
 
-std::mutex& get_cleanup_registry_mutex() {
-  static std::mutex ret;
+std::recursive_mutex& get_cleanup_registry_mutex() {
+  static std::recursive_mutex ret;
   return ret;
 }
 
@@ -37,7 +45,7 @@ SERVER_FRAME_API void server_frame_unit_test_register_case_cleanup(const char* n
     return;
   }
 
-  std::lock_guard<std::mutex> lock_guard{get_cleanup_registry_mutex()};
+  lock_guard<std::recursive_mutex> lock_guard{get_cleanup_registry_mutex()};
   get_cleanup_registry()[name] = cleanup_registry_entry{level, std::move(fn)};
 }
 
@@ -46,7 +54,7 @@ SERVER_FRAME_API bool server_frame_unit_test_unregister_case_cleanup(const char*
     return false;
   }
 
-  std::lock_guard<std::mutex> lock_guard{get_cleanup_registry_mutex()};
+  lock_guard<std::recursive_mutex> lock_guard{get_cleanup_registry_mutex()};
   return get_cleanup_registry().erase(name) > 0;
 }
 
@@ -54,7 +62,7 @@ SERVER_FRAME_API void server_frame_unit_test_run_case_cleanups() {
   // 先在锁内拷贝快照，锁外执行回调：清理函数自身不得再改注册表，这里仅防御重入死锁。
   std::vector<std::pair<std::string, cleanup_registry_entry>> snapshots;
   {
-    std::lock_guard<std::mutex> lock_guard{get_cleanup_registry_mutex()};
+    lock_guard<std::recursive_mutex> lock_guard{get_cleanup_registry_mutex()};
     snapshots.assign(get_cleanup_registry().begin(), get_cleanup_registry().end());
   }
 

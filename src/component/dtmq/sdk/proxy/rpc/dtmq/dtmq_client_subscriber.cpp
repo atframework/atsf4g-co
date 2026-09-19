@@ -42,6 +42,7 @@
 
 #if defined(PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS) && PROJECT_SERVER_FRAME_ENABLE_UNIT_TEST_HOOKS
 #  include <testing/unit_test_case_cleanup.h>
+#  include <testing/unit_test_global_register.h>
 #endif
 #include <rpc/dtmq/dtmqproxysvrservice.atfw.gen.h>
 #include <rpc/rpc_async_invoke.h>
@@ -3679,12 +3680,11 @@ static void internal_subscriber_manager_reset_for_unit_test() {
 // 用例边界自动清理：订阅者管理器是进程级单例，按频道 id 缓存的订阅者携带 WAL 序列/哈希状态跨用例
 // 存活，后续用例向同 id 频道重放的事件会被静默去重。此处属于基础设施层，在业务清理之后执行。
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization)
-static const bool dtmq_client_subscriber_case_cleanup_registered ATFW_EXPLICIT_UNUSED_ATTR = [] {
+ATFW_SERVER_FRAME_TESTING_SETUP(dtmq_client_subscriber_case_cleanup_registered) {
   server_frame_unit_test_register_case_cleanup("dtmq-sdk.client_subscriber_manager",
                                                kUnitTestCaseCleanupLevelInfrastructure,
                                                internal_subscriber_manager_reset_for_unit_test);
-  return true;
-}();
+}
 }  // namespace
 #endif
 

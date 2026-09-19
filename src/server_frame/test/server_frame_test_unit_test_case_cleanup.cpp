@@ -2,23 +2,25 @@
 
 #include <atframework/testing/runtime.h>
 
-#include <cstdint>
 #include <vector>
 
 #include "frame/test_macros.h"
 #include "testing/unit_test_case_cleanup.h"
+#include "testing/unit_test_global_register.h"
 
 namespace {
 
 // 探针清理只追加执行序号，用 level 本身作为序号可以直接校验升序。
 struct case_cleanup_probe {
   static std::vector<int> fired_levels;
+  static bool is_registered;
 
   static void record(int level) { fired_levels.push_back(level); }
 
   static void reset() { fired_levels.clear(); }
 };
 std::vector<int> case_cleanup_probe::fired_levels;
+bool case_cleanup_probe::is_registered = false;
 
 void register_case_cleanup_probes() {
   server_frame_unit_test_register_case_cleanup(
@@ -31,6 +33,10 @@ void register_case_cleanup_probes() {
 void unregister_case_cleanup_probes() {
   server_frame_unit_test_unregister_case_cleanup("server_frame.test_probe_business");
   server_frame_unit_test_unregister_case_cleanup("server_frame.test_probe_service_cache");
+}
+
+ATFW_SERVER_FRAME_TESTING_SETUP(dtmq_client_subscriber_case_cleanup_registered) {
+  case_cleanup_probe::is_registered = true;
 }
 
 }  // namespace
@@ -81,7 +87,7 @@ CASE_TEST(server_frame_unit_test_case_cleanup, fires_on_runtime_boundaries_in_le
       // 四轮边界(start/stop × 两个 runtime)，每轮两条记录按 level 升序
       for (size_t round = 0; round < 4; ++round) {
         CASE_EXPECT_EQ(kUnitTestCaseCleanupLevelBusiness, case_cleanup_probe::fired_levels[round * 2]);
-        CASE_EXPECT_EQ(kUnitTestCaseCleanupLevelServiceCache, case_cleanup_probe::fired_levels[round * 2 + 1]);
+        CASE_EXPECT_EQ(kUnitTestCaseCleanupLevelServiceCache, case_cleanup_probe::fired_levels[(round * 2) + 1]);
       }
     }
   }
@@ -94,4 +100,10 @@ CASE_TEST(server_frame_unit_test_case_cleanup, fires_on_runtime_boundaries_in_le
   case_cleanup_probe::reset();
   server_frame_unit_test_run_case_cleanups();
   CASE_EXPECT_TRUE(case_cleanup_probe::fired_levels.empty());
+}
+
+CASE_TEST(server_frame_unit_test_case_cleanup, global_register) {
+  CASE_EXPECT_TRUE(case_cleanup_probe::is_registered);
+  CASE_EXPECT_TRUE(server_frame_unit_test_is_setup_action_already_run());
+  CASE_EXPECT_GT(server_frame_unit_test_get_setup_action_count(), 0);
 }
