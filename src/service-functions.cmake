@@ -381,10 +381,20 @@ function(project_service_declare_protocol TARGET_NAME PROTOCOL_DIR)
         "${__GENERATED_PB_FILE_NAME}"
         PARENT_SCOPE)
   endif()
+  # configure 阶段先生成一次描述文件，供后面依赖它的生成器使用。protoc 失败必须立刻中断 configure，
+  # 否则会沿用上一次的 ${__GENERATED_PB_FILE_NAME} 继续配置，把 proto 错误推迟到构建期才暴露。
   execute_process(
     COMMAND "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" ${PROTOBUF_PROTO_PATHS} -o
             "${__GENERATED_PB_FILE_NAME}" ${project_service_declare_protocol_PROTOCOLS}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    RESULT_VARIABLE __GENERATED_PB_FILE_RESULT
+    ERROR_VARIABLE __GENERATED_PB_FILE_ERROR)
+  if(NOT __GENERATED_PB_FILE_RESULT EQUAL 0)
+    message(FATAL_ERROR "Generate ${__GENERATED_PB_FILE_NAME} failed:\n${__GENERATED_PB_FILE_ERROR}")
+  endif()
+  unset(__GENERATED_PB_FILE_RESULT)
+  unset(__GENERATED_PB_FILE_ERROR)
+
   add_custom_command(
     OUTPUT ${__FINAL_GENERATED_SOURCE_FILES} ${__FINAL_GENERATED_HEADER_FILES} "${__GENERATED_PB_FILE_NAME}"
     COMMAND

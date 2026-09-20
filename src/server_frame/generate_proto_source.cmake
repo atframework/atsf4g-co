@@ -288,6 +288,8 @@ project_server_frame_create_protocol_target(
   ${PROJECT_SERVER_FRAME_PROTO_LIBRARY_NET})
 
 # 定义 SERVER_FRAME_BASE_PROTOCOLS Target
+# 这里在 configure 阶段就生成一次 serverframe_all.pb。protoc 失败时必须立刻中断 configure：否则会沿用上一次的
+# 描述文件继续配置，把 proto 的错误推迟到后面才暴露，甚至被构建期的其他产物掩盖。
 execute_process(
   COMMAND
     "${ATFRAMEWORK_CMAKE_TOOLSET_THIRD_PARTY_PROTOBUF_BIN_PROTOC}" --proto_path
@@ -307,7 +309,17 @@ execute_process(
     "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/duration.proto"
     "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/timestamp.proto"
     "${PROJECT_THIRD_PARTY_PROTOBUF_PROTO_DIR}/google/protobuf/descriptor.proto"
-  WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}")
+  WORKING_DIRECTORY "${PROJECT_SERVER_FRAME_PROTO_SANDBOX_PBDESC_DIR}"
+  RESULT_VARIABLE PROJECT_SERVER_FRAME_GENERATE_SERVERFRAME_ALL_PB_RESULT
+  ERROR_VARIABLE PROJECT_SERVER_FRAME_GENERATE_SERVERFRAME_ALL_PB_ERROR)
+
+if(NOT PROJECT_SERVER_FRAME_GENERATE_SERVERFRAME_ALL_PB_RESULT EQUAL 0)
+  message(FATAL_ERROR "Generate ${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb failed:\n"
+                      "${PROJECT_SERVER_FRAME_GENERATE_SERVERFRAME_ALL_PB_ERROR}")
+endif()
+unset(PROJECT_SERVER_FRAME_GENERATE_SERVERFRAME_ALL_PB_RESULT)
+unset(PROJECT_SERVER_FRAME_GENERATE_SERVERFRAME_ALL_PB_ERROR)
+
 add_custom_command(
   OUTPUT "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
   COMMAND "${CMAKE_COMMAND}" -E remove -f "${PROJECT_GENERATED_PBD_DIR}/serverframe_all.pb"
