@@ -74,6 +74,7 @@ project_service_declare_instance(
   "matchsvr-sdk"
   "team-common-sdk"
   "team-sdk-room"
+  "friend-sdk-management"
   USE_SERVICE_PROTOCOL
   "lobbysvr-config"
   GENERATED_FLOW_NAMES

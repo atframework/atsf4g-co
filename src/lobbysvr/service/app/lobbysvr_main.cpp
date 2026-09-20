@@ -23,6 +23,8 @@
 #include <logic/logic_server_setup.h>
 #include <router/router_user_manager.h>
 
+#include <router/router_friend_manager.h>
+
 // clang-format off
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
@@ -35,6 +37,9 @@
 
 #include <rpc/dtmq/dtmq_client_subscriber.h>
 #include <rpc/rpc_common_types.h>
+
+#include <memory>
+#include <string>
 
 #include "app/handle_cs_rpc_lobbysvrclientservice.atfw.gen.h"
 #include "app/handle_ss_rpc_dtmqproxysvrnotifyservice.atfw.gen.h"
@@ -49,8 +54,7 @@
 namespace {
 class main_service_module : public atfw::atapp::module_impl {
  private:
-  static router_user_cache::object_ptr_t create_user_fn(uint64_t user_id, uint32_t zone_id,
-                                                            const std::string &openid) {
+  static router_user_cache::object_ptr_t create_user_fn(uint64_t user_id, uint32_t zone_id, const std::string &openid) {
     return std::static_pointer_cast<user_cache>(user::create(user_id, zone_id, openid));
   }
 
@@ -86,7 +90,7 @@ class main_service_module : public atfw::atapp::module_impl {
   }
 
   static rpc::result_code_type task_cs_action_prepare_for_user_initialization(rpc::context &ctx,
-                                                                                task_action_cs_req_base &action) {
+                                                                              task_action_cs_req_base &action) {
     std::shared_ptr<user_cache> user_cache = action.get_user_cache();
     if (!user_cache) {
       RPC_RETURN_CODE(0);
@@ -107,6 +111,7 @@ class main_service_module : public atfw::atapp::module_impl {
     {
       // register all router managers
       router_user_manager::me();
+      atfw::friend_api::router_friend_manager::me();
     }
 
     // register handles

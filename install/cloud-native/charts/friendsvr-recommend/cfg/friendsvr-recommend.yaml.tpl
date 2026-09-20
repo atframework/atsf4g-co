@@ -1,7 +1,7 @@
 {{ include "atapp.yaml" . }}
 {{ include "atapp.logic.yaml" . }}
 
-{{- with .Values.teamsvr_match }}
-teamsvr_match:
+{{- with .Values.friendsvr_recommend }}
+friendsvr_recommend:
   {{- toYaml . | trim | nindent 2 }}
 {{- end }}

@@ -56,8 +56,6 @@ namespace {
 // fixture's app init later clears logic_config and reloads it from the generated YAML, so this seeding
 // does not leak into fixtures; fixtures with the resource feature still get their mock-provider group via
 // the per-fixture reload (the provider version always differs from the preloaded one).
-// NOTE: CASE_TEST_EVENT_ON_START is not usable here because its empty __VA_ARGS__ expansion does not
-// compile under /Zc:preprocessor, so the same registration is done directly.
 static void rpc_unit_test_event_on_load_excel_config() {
 #  if defined(RPC_UNIT_TEST_EXCEL_RESOURCE_DIR)
   auto bindirs = atfw::testing::detail::get_excel_resource_bindirs();

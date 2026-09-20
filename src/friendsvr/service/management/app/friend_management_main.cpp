@@ -29,7 +29,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
-#include <chrono>
+#include <router/router_friend_manager.h>
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -43,6 +44,7 @@ class main_service_module : public atfw::atapp::module_impl {
   int init() override {
     {
       // register all router managers
+      atfw::friend_api::router_friend_manager::me();
     }
 
     // register handles
