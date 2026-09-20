@@ -13,34 +13,18 @@
 #include <algorithm>
 #include <utility>
 
-user_virtual_inventory_container::user_virtual_inventory_container(user* owner)
-    : base_type(owner, "Item.UserVirtualInventory") {}
-user_virtual_inventory_container::~user_virtual_inventory_container() = default;
-
-void user_virtual_inventory_container::init(int32_t /*row_size*/, int32_t /*column_size*/,
-                                            PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
-                                            int64_t container_guid) {
-  if (this->is_initialized()) {
-    FWLOGERROR("user_virtual_inventory_container::init called twice, container_guid: {}", container_guid);
-    return;
-  }
-  // 无位置模式不落位, 行列参数无意义, 直接忽略
-  this->mode_container_type::init(position_type, container_guid);
-  this->finish_init();
-}
-
 user_virtual_inventory::user_virtual_inventory(user* owner)
     : owner_(owner),
       virtual_container_(atfw::component::memory::stl::make_strong_rc<user_virtual_inventory_container>(owner)) {}
 
 void user_virtual_inventory::init_container() {
   // 虚拟道具仓库只有一个无位置网格, 容器GUID不持久化, 创建时分配
-  virtual_container_->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
+  virtual_container_->init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
                            owner_->get_user_item_container_manager().allocate_container_guid());
 }
 
 void user_virtual_inventory::init(const PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& data) {
-  virtual_container_->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, data.container_guid());
+  virtual_container_->init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory, data.container_guid());
   for (const auto& item : data.items()) {
     virtual_container_->load(excel::get_current_config_group(), item);
   }

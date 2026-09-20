@@ -21,20 +21,9 @@
 class user;
 
 /// @brief 虚拟道具仓库容器: 只按道具类型记录数量 (无位置模式)
-class user_virtual_inventory_container
-    : public user_item_container<item_algorithm::ItemNoPositionContainer, user_virtual_inventory_container> {
+class user_virtual_inventory_container : public user_item_no_position_container {
  public:
-  using base_type = user_item_container<item_algorithm::ItemNoPositionContainer, user_virtual_inventory_container>;
-
-  explicit user_virtual_inventory_container(user* owner);
-  ~user_virtual_inventory_container() override;
-
-  /// @brief 初始化虚拟仓库容器
-  ///
-  /// 容器 GUID 由调用方传入 (创建时新分配, 登录时用持久化值);
-  /// 本模式不关心行列, row_size / column_size 会被忽略。
-  void init(int32_t row_size, int32_t column_size,
-            PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
+  using user_item_no_position_container::user_item_no_position_container;
 };
 
 class user_virtual_inventory {

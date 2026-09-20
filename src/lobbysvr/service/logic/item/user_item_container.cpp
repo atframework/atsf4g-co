@@ -16,8 +16,7 @@
 // ============================================================
 
 template <typename ModeContainerT, typename DerivedT>
-user_item_container<ModeContainerT, DerivedT>::user_item_container(user* owner,
-                                                                  const std::string& log_category_prefix)
+user_item_container<ModeContainerT, DerivedT>::user_item_container(user* owner, const std::string& log_category_prefix)
     : owner_(owner), log_category_prefix_(log_category_prefix) {
   item_algorithm::ItemLogHandler handler;
   // SDK 直接给出框架日志级别与调用点, 这里只负责转给本服务的日志分类
@@ -186,14 +185,12 @@ user_item_no_position_container::user_item_no_position_container(user* owner, co
     : base_type(owner, log_category_prefix) {}
 user_item_no_position_container::~user_item_no_position_container() = default;
 
-void user_item_no_position_container::init(int32_t /*row_size*/, int32_t /*column_size*/,
-                                           PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
+void user_item_no_position_container::init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type,
                                            int64_t container_guid) {
   if (this->is_initialized()) {
     FWLOGERROR("user_item_no_position_container::init called twice, container_guid: {}", container_guid);
     return;
   }
-  // 无位置模式不落位, 行列参数无意义, 直接忽略
   this->mode_container_type::init(position_type, container_guid);
   this->finish_init();
 }
@@ -208,5 +205,3 @@ void user_item_no_position_container::init(int32_t /*row_size*/, int32_t /*colum
 template class user_item_container<item_algorithm::ItemFiniteGridContainer, user_item_finite_container>;
 template class user_item_container<item_algorithm::ItemInfiniteGridContainer, user_item_infinite_container>;
 template class user_item_container<item_algorithm::ItemNoPositionContainer, user_item_no_position_container>;
-// 虚拟仓库容器 (user_virtual_inventory_container) 也派生自本模板, 同样要显式实例化
-template class user_item_container<item_algorithm::ItemNoPositionContainer, user_virtual_inventory_container>;

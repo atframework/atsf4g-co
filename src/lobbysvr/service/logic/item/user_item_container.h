@@ -58,8 +58,7 @@ class user_item_container : public ModeContainerT {
                             const item_algorithm::ItemOperationContext& context) override;
   void on_item_count_changed(int32_t type_id, const item_algorithm::item_entry_ptr_t& entry, int64_t guid,
                              const item_algorithm::ItemGridPosition& position, int64_t old_count, int64_t new_count,
-                             int64_t type_total_count,
-                             const item_algorithm::ItemOperationContext& context) override;
+                             int64_t type_total_count, const item_algorithm::ItemOperationContext& context) override;
 
  private:
   user* owner_ = nullptr;
@@ -98,14 +97,9 @@ class user_item_no_position_container
  public:
   using base_type = user_item_container<item_algorithm::ItemNoPositionContainer, user_item_no_position_container>;
 
-  explicit user_item_no_position_container(user* owner,
-                                           const std::string& log_category_prefix = "Item.UserNoPosition");
+  explicit user_item_no_position_container(user* owner, const std::string& log_category_prefix = "Item.UserNoPosition");
   ~user_item_no_position_container() override;
 
   /// @brief 初始化无位置容器
-  ///
-  /// 与传统格子容器保持同样的调用形状, 方便调用方用同一份代码初始化任意模式;
-  /// 本模式不关心行列, row_size / column_size 会被忽略。
-  void init(int32_t row_size, int32_t column_size,
-            PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
+  void init(PROJECT_NAMESPACE_ID::DItemGridPosition::PositionTypeCase position_type, int64_t container_guid);
 };

@@ -1069,7 +1069,7 @@ CASE_TEST(lobbysvr_user_chat, chat_channel_sync_flushes_pending_user_dirty) {
 
         test_inventory_container =
             atfw::util::memory::make_strong_rc<user_virtual_inventory_container>(user3.user_inst.get());
-        test_inventory_container->init(0, 0, PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
+        test_inventory_container->init(PROJECT_NAMESPACE_ID::DItemGridPosition::kVirtualInventory,
                                        container_guid);
 
         PROJECT_NAMESPACE_ID::DItemInstance dirty_item;
