@@ -65,7 +65,7 @@ class matching_logic {
   static constexpr const int64_t kDefaultSearchTimeout = 120;
   static constexpr const int64_t kDefaultConfirmTimeout = 15;
   static constexpr const int64_t kTerminalRetention = 60;
-  static constexpr const int64_t kUnitHeartbeatTimeout = 10;
+  static constexpr const int64_t kUnitHeartbeatTimeout = 15;
   static constexpr const size_t kMaxRebalanceMigrationsPerTarget = 8;
   static constexpr const size_t kMaxRebalanceMigrationsPerTick = 64;
 

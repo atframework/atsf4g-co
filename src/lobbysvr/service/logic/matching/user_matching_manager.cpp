@@ -203,7 +203,7 @@ void user_matching_manager::init_from_table_data(rpc::context&, const PROJECT_NA
   data_.Clear();
   if (user_table.has_matching_data()) {
     protobuf_copy_message(data_, user_table.matching_data());
-
+    data_.mutable_matched_users()->Clear();
     matched_users_.clear();
     matched_users_.reserve(static_cast<size_t>(user_table.matching_data().matched_users_size()));
     for (const auto& matched_user : user_table.matching_data().matched_users()) {
