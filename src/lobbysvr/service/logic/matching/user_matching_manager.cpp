@@ -354,17 +354,17 @@ rpc::result_code_type user_matching_manager::start_matching_inner_(
   std::vector<int32_t> acceptable_level_ids;
   int32_t ret = fill_matching_scope(level_select, battle_version, *rpc_request->mutable_scope(), acceptable_level_ids);
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-    clear_matching_state(ctx);
     FWLOGERROR("{} fill_matching_scope failed, ret={}, level_select={},battle_version={}", *owner_, ret,
                level_select.DebugString(), battle_version);
+    clear_matching_state(ctx);
     RPC_RETURN_CODE(ret);
   }
 
   ret = RPC_AWAIT_CODE_RESULT(fill_matching_unit(ctx, *rpc_request->mutable_unit()));
   if (ret != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
-    clear_matching_state(ctx);
     FWLOGERROR("{} fill_matching_unit failed, ret={}, level_count={}, battle_version={}", *owner_, ret,
                level_select.DebugString(), battle_version);
+    clear_matching_state(ctx);
     RPC_RETURN_CODE(ret);
   }
   for (int32_t level_id : acceptable_level_ids) {
