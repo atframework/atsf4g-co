@@ -33,8 +33,36 @@
 /*.sln
 /rpc-unit-test.yaml
 
+# AI agent,RAG and other tools
 # codegraph index directories (mcp integration, per-platform)
-/.codegraph*
+.codegraph*
+.omp
+.codex
+.kilo
+.kilocode
+.zcode
+
+# AI agent project-level MCP configs (written by project/integration/mcp/setup.js
+# with machine-specific absolute paths; not meant to be committed)
+.mcp.json
+/mcp.json
+opencode.json
+opencode.jsonc
+/kilo.json
+/kilo.jsonc
+/mimocode.json
+/mimocode.jsonc
+.cursor
+.zed
+.roo
+.gemini
+.kimi-code
+.qwen
+.mimocode
+.workbuddy
+.cline
+.pi
+/.agents/mcp.json
 
 # node packages
 node_modules/
@@ -62,10 +90,6 @@ __pycache__
 /atframework/service/atgateway/protocols/libatgw_server_config.pb.cc
 
 # editors
-.codex/*
-.kilo/kilo.json
-.kilo/kilo.jsonc
-.zcode
 .vscode/*
 !.vscode/tasks.json
 .idea

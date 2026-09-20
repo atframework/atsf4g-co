@@ -27,15 +27,19 @@ or call the MCP tools do not need this Skill.
      reuse, or upstream upgrades → read `references/backends-and-lifecycle.md`.
 4. Preserve the load-bearing contracts (details in Plan.md): pinned upstream
    commits/versions with hash checks; dependency preparation must fully succeed
-   before any agent config is touched; agent configs are project-level files in
-   the repository and foreign entries must survive; backends run with no
-   listening port and no telemetry, and stop via the stdin lifeline
-   (EOF → SIGTERM → SIGKILL).
-5. Validate what changed: run the three `node --test` suites
-   (`common`, `tgrep`, `codegraph` under `project/integration/mcp`); for
-   lifecycle, spawn, or index changes also run a real-backend smoke and check
-   for leftover processes/locks. Windows x64 and Linux x64 (WSL) are verified
-   platforms; report anything else as untested.
+   before any agent config is touched; `--dry-run` and `--help`/`--list-agents`
+   are side-effect-free; damaged config files abort the whole batch with zero
+   writes; agent configs are project-level files in the repository and foreign
+   entries must survive; backends run with no listening port and no telemetry,
+   and stop via the stdin lifeline (EOF → SIGTERM → SIGKILL).
+5. Validate what changed: run the four component test suites (each `npm test`,
+   or `node --test` with explicit `test/*.test.mjs` file lists — directory
+   arguments fail) for `agents`, `common`, `tgrep`, `codegraph` under
+   `project/integration/mcp`; for installer changes also smoke the CLI
+   (`--dry-run` install/uninstall variants with a `git status --porcelain`
+   before/after); for lifecycle, spawn, or index changes also run a
+   real-backend smoke and check for leftover processes/locks. Windows x64 and
+   Linux x64 (WSL) are verified platforms; report anything else as untested.
 
 ## Boundaries
 

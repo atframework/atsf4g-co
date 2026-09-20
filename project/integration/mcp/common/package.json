@@ -11,6 +11,6 @@
     "@modelcontextprotocol/server": "^2.0.0"
   },
   "scripts": {
-    "test": "node --test test/agents.test.mjs test/limits.test.mjs test/lineRpc.test.mjs test/paths.test.mjs test/state.test.mjs test/supervisor.test.mjs"
+    "test": "node --test test/limits.test.mjs test/lineRpc.test.mjs test/paths.test.mjs test/shim.test.mjs test/state.test.mjs test/supervisor.test.mjs"
   }
 }

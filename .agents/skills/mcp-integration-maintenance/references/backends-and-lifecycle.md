@@ -34,7 +34,10 @@ under `project/integration/mcp/{tgrep,codegraph,common}`.
    the new patch sha.
 2. Re-verify Plan.md section 2 claims against the new sources before changing
    wrapper code (especially stdin-EOF behavior, `CODEGRAPH_DIR` semantics, tool
-   schemas, and the internal RPC shapes).
+   schemas, and the internal RPC shapes). The pinned npm artifacts are the
+   authority when they differ from the inspected source tree (the tree has
+   been ahead of the release before: 1.6.0 artifacts lack the `ui` subcommand
+   the source has) — check the actual artifact's `--help`, not only the repo.
 3. Run `node project/integration/mcp/setup.js` (or the prepare library) and the
    three test suites; then a real-backend smoke per README platform table.
 4. Update Plan.md section 2/9 and the README verified-platform table with what
@@ -47,7 +50,10 @@ under `project/integration/mcp/{tgrep,codegraph,common}`.
   index/serve/watch or the index can drop members.
 - CodeGraph index: repository-root `.codegraph-atsf4g-<platform>` (gitignored
   via `/.codegraph*`); an existing valid `.codegraph/` is reused in place.
-  Windows and WSL must keep separate directories.
+  Windows and WSL must keep separate directories. Manual CLI/SQLite access
+  (including the `CODEGRAPH_DIR` incantation and the no-concurrent-writers
+  rule) is documented in the README section "手动查询或操作 CodeGraph 索引" —
+  keep that section accurate when index handling changes.
 - Wrapper state/locks: `wrapper-state.json` (atomic replace) and the O_EXCL
   instance lock with pid-liveness steal; backends' own locks (`serve.lock`,
   `writer.pid`) are the final exclusivity. Never kill by process name or stale

@@ -1,0 +1,17 @@
+{
+  "name": "jsonc-parser",
+  "version": "3.3.1",
+  "license": "MIT",
+  "source": "https://github.com/microsoft/node-jsonc-parser",
+  "artifact": "https://registry.npmjs.org/jsonc-parser/-/jsonc-parser-3.3.1.tgz",
+  "integrity_sha512": "sha512-HUgH65KyejrUFPvHFPbqOY0rsFip3Bo5wb4ngvdi1EpCYWUQDC5V+Y7mZws+DLkr4M//zQJoanu1SP+87Dv1oQ==",
+  "integrity_sha256": "4a0315b8671e7463bae7af7c142cdf19e9aa7ba39eb36dc2df383b8648e3cbc9",
+  "vendored_on": "2026-09-20",
+  "verification": "npm registry 实查 integrity 与下载制品 sha512 一致后解包",
+  "notes": [
+    "随源码分发，避免菜单/dry-run/卸载依赖 npm install（Plan.md 11.2）。",
+    "仅收录 lib/umd（Node 经 createRequire 加载）与许可证/元数据；lib/esm 未收录——",
+    "其内部 import 无 .js 扩展名，Node ESM 无法直接加载（bundler 专用构建）。",
+    "升级时重下制品、校验 integrity、同步本清单与 LICENSE.md。"
+  ]
+}

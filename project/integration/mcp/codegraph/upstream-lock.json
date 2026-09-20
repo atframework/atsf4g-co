@@ -3,6 +3,7 @@
   "npm_platform_prefix": "@colbymchenry/codegraph",
   "version": "1.6.0",
   "source_commit": "ba3c21e50d9129d2f5f3843ec3728868ae6d47a1",
+  "source_commit_note": "source tree inspected as the behavior reference for the pinned 1.6.0 artifacts; it is AHEAD of the 1.6.0 release, so installed-binary behavior wins on differences (verified example: no `ui` subcommand in the 1.6.0 platform package while the source tree has one). Re-check `--help` output of the actual artifact when upgrading.",
   "dist_shasum": "d04bc0c93a86186d3ebcb55c74cc15166a50b46e",
   "dist_shasum_note": "the main npm package is a thin installer: dist/ ships only .d.ts types, the compiled app lives in per-platform optionalDependencies",
   "platform_packages": "@colbymchenry/codegraph-<platform>-<arch>",
