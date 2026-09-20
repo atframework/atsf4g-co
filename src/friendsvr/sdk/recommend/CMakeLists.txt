@@ -1,8 +1,8 @@
 # Copyright 2026 atframework
 # Licensed under the Apache License, Version 2.0 (the "License");
 
-set(CURRENT_SERVICE_SOURCES rpc/friends/friendrecommendservice.atfw.gen.cpp)
-set(CURRENT_SERVICE_HEADERS rpc/friends/friendrecommendservice.atfw.gen.h)
+set(CURRENT_SERVICE_SOURCES rpc/friend_api/friendrecommendservice.atfw.gen.cpp)
+set(CURRENT_SERVICE_HEADERS rpc/friend_api/friendrecommendservice.atfw.gen.h)
 
 project_service_declare_sdk(
   "friend-sdk-recommend"
@@ -18,4 +18,4 @@ project_service_declare_sdk(
   SOURCES
   ${CURRENT_SERVICE_SOURCES}
   GENERATED_FLOW_NAMES
-  "atframework.friends.FriendRecommendService")
+  "atframework.friend_api.FriendRecommendService")

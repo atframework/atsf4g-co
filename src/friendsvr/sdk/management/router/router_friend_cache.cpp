@@ -15,10 +15,13 @@
 #include <rpc/db/local_db_interface.atfw.gen.h>
 #include <rpc/rpc_utils.h>
 
+#include <memory>
+#include <utility>
+
 #include "router/router_friend_manager.h"
 
 namespace atframework {
-namespace friends {
+namespace friend_api {
 FRIEND_SDK_MANAGEMENT_API router_friend_private_type::router_friend_private_type() : friend_tb(NULL), friend_ver(0) {}
 
 FRIEND_SDK_MANAGEMENT_API router_friend_private_type::router_friend_private_type(
@@ -335,5 +338,5 @@ void router_friend_cache::fix_router_timeout(rpc::context &ctx, PROJECT_NAMESPAC
   }
 }
 
-}  // namespace friends
+}  // namespace friend_api
 }  // namespace atframework

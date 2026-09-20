@@ -15,11 +15,11 @@
 #include <dispatcher/task_action_ss_req_base.h>
 
 class task_action_management_get_all
-    : public task_action_ss_rpc_base<atframework::friends::SSFriendManagementGetAllReq,
-                                     atframework::friends::SSFriendManagementGetAllRsp> {
+    : public task_action_ss_rpc_base<atframework::friend_api::SSFriendManagementGetAllReq,
+                                     atframework::friend_api::SSFriendManagementGetAllRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<atframework::friends::SSFriendManagementGetAllReq,
-                                            atframework::friends::SSFriendManagementGetAllRsp>;
+  using base_type = task_action_ss_rpc_base<atframework::friend_api::SSFriendManagementGetAllReq,
+                                            atframework::friend_api::SSFriendManagementGetAllRsp>;
   using base_type::operator();
 
   explicit task_action_management_get_all(dispatcher_start_data_type&& param);

@@ -23,4 +23,4 @@ project_service_declare_instance(
   USE_SERVICE_PROTOCOL
   "friend-protocol-recommend-config"
   GENERATED_FLOW_NAMES
-  "atframework.friends.FriendRecommendService")
+  "atframework.friend_api.FriendRecommendService")

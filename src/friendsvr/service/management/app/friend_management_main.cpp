@@ -46,7 +46,7 @@ class main_service_module : public atfw::atapp::module_impl {
     }
 
     // register handles
-    INIT_CALL_FN(handle::friends::register_handles_for_friendmanagementservice);
+    INIT_CALL_FN(handle::friend_api::register_handles_for_friendmanagementservice);
     return 0;
   };
 
@@ -86,7 +86,7 @@ int main(int argc, char *argv[]) {
   logic_config::me()->set_server_instance_config_loader(
       [](atfw::atapp::app &app_, logic_config & /*cfg*/, logic_config::server_instance_config_ptr &to) {
         auto config_ptr =
-            atfw::component::memory::stl::make_strong_rc<atframework::friends::config::friendsvr_management_cfg>();
+            atfw::component::memory::stl::make_strong_rc<atframework::friend_api::config::friendsvr_management_cfg>();
         app_.parse_configures_into(*config_ptr, "friendsvr_management", "ATAPP_FRIENDSVR_MANAGEMENT");
         to = atfw::util::memory::static_pointer_cast<google::protobuf::Message>(config_ptr);
       });

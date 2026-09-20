@@ -13,6 +13,8 @@
 
 #include <config/server_frame_build_feature.h>
 
+#include <memory>
+
 namespace rpc {
 class context;
 }
@@ -23,7 +25,7 @@ class DUserIDKey;
 PROJECT_NAMESPACE_END
 
 namespace atframework {
-namespace friends {
+namespace friend_api {
 
 class DFriendStatistics;
 
@@ -92,15 +94,15 @@ class ATFW_UTIL_SYMBOL_VISIBLE friend_cache {
   atfw::util::memory::strong_rc_ptr<friend_internal_data_t> data_;
 };
 
-}  // namespace friends
+}  // namespace friend_api
 }  // namespace atframework
 
 namespace LOG_WRAPPER_FWAPI_NAMESPACE_ID {
 template <class CharT>
 struct ATFW_UTIL_SYMBOL_VISIBLE
-formatter<atfw::friends::friend_cache, CharT> : formatter<basic_string_view<CharT>, CharT> {
+formatter<atfw::friend_api::friend_cache, CharT> : formatter<basic_string_view<CharT>, CharT> {
   template <class FormatContext>
-  ATFW_UTIL_FORCEINLINE auto format(const atfw::friends::friend_cache& friend_object, FormatContext& ctx) const {
+  ATFW_UTIL_FORCEINLINE auto format(const atfw::friend_api::friend_cache& friend_object, FormatContext& ctx) const {
     return LOG_WRAPPER_FWAPI_FORMAT_TO(ctx.out(), "friend {}:{}", friend_object.get_zone_id(),
                                        friend_object.get_user_id());
   }

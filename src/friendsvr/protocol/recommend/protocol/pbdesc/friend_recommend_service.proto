@@ -12,7 +12,7 @@ import "protocol/extension/atframework.proto";
 option go_package = "github.com/atframework/atsf4g-co/friendsvr/protocol/recommend/protocol/pbdesc";
 
 // 不要用 friend 作为名字，避免关键字冲突
-package atframework.friends;
+package atframework.friend_api;
 
 message SSFriendRecommendSearchReq {
   // TODO(owent): implement me
@@ -25,7 +25,7 @@ message SSFriendRecommendSearchRsp {
 
 service FriendRecommendService {
   option (atframework.service_options) = {
-    module_name: "friends"
+    module_name: "friend_api"
   };
 
   rpc recommend_search(SSFriendRecommendSearchReq) returns (SSFriendRecommendSearchRsp) {

@@ -20,7 +20,7 @@ import "protocol/pbdesc/svr.struct.rank.proto";
 import "protocol/pbdesc/com.struct.dtmq.proto";
 import "protocol/pbdesc/com.struct.rank.proto";
 import "protocol/pbdesc/com.struct.match.proto";
-import "protocol/pbdesc/com.struct.friend.proto";
+import "protocol/pbdesc/svr.struct.friend_api.proto";
 
 package atframework.shared;
 
@@ -398,18 +398,5 @@ message table_friend {
   uint64 router_version = 4;                            // 路由系统 - 登入进程变更版本号
   google.protobuf.Timestamp router_save_timepoint = 5;  // 路由系统 - 数据保存时间点
 
-  atframework.friends.DFriendStatistics statistics = 11;  // 统计数据，限频数据
-  int64 event_id_allocator = 12;                          // 事件ID分配器
-  int64 global_finished_event_id = 13;                    // 全局已完成事务ID
-
-  message friend_detail_data {
-    repeated atframework.friends.DFriendInfo friend_list = 21;
-    repeated atframework.friends.DFriendInvitationInfo inviter_list = 22;
-    repeated atframework.friends.DFriendInvitationInfo invitee_list = 23;
-    repeated atframework.friends.DFriendGift gift_list = 24;
-  }
-  friend_detail_data friend_data = 14;
-
-  // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
-  google.protobuf.Any transaction_storage = 99;
+  atframework.friend_api.table_friend_blob_data blob_data = 6;
 }

@@ -14,7 +14,7 @@ import "protocol/pbdesc/com.struct.proto";
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
 // 不要用friend作为名字，避免关键字冲突
-package atframework.friends;
+package atframework.friend_api;
 
 // 用户好友礼物数据
 message DFriendGift {

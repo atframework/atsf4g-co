@@ -2,7 +2,8 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 
 project_service_declare_protocol(
-  "friend-protocol-management-pbdesc" "${CMAKE_CURRENT_LIST_DIR}/protocol/management" PROTOCOLS
+  "friend-protocol-management-pbdesc" "${CMAKE_CURRENT_LIST_DIR}/protocol/management" USE_COMPONENTS
+  "distributed-transaction-protocol" PROTOCOLS
   "${CMAKE_CURRENT_LIST_DIR}/protocol/management/protocol/pbdesc/friend_management_service.proto")
 
 project_service_declare_protocol(
@@ -10,7 +11,7 @@ project_service_declare_protocol(
   "${CMAKE_CURRENT_LIST_DIR}/protocol/management/protocol/config/friend_management.config.proto")
 
 generate_for_pb_add_ss_service(
-  "atframework.friends.FriendManagementService"
+  "atframework.friend_api.FriendManagementService"
   "${CMAKE_CURRENT_LIST_DIR}/service/management"
   TASK_PATH_PREFIX
   "logic"
@@ -27,7 +28,7 @@ generate_for_pb_add_ss_service(
   INCLUDE_HEADERS
   "protocol/pbdesc/friend_management_service.pb.h"
   GENERATED_FLOW_NAME
-  "atframework.friends.FriendManagementService")
+  "atframework.friend_api.FriendManagementService")
 
 project_service_declare_protocol(
   "friend-protocol-recommend-pbdesc" "${CMAKE_CURRENT_LIST_DIR}/protocol/recommend" PROTOCOLS
@@ -38,7 +39,7 @@ project_service_declare_protocol(
   "${CMAKE_CURRENT_LIST_DIR}/protocol/recommend/protocol/config/friend_recommend.config.proto")
 
 generate_for_pb_add_ss_service(
-  "atframework.friends.FriendRecommendService"
+  "atframework.friend_api.FriendRecommendService"
   "${CMAKE_CURRENT_LIST_DIR}/service/recommend"
   TASK_PATH_PREFIX
   "logic"
@@ -55,7 +56,7 @@ generate_for_pb_add_ss_service(
   INCLUDE_HEADERS
   "protocol/pbdesc/friend_recommend_service.pb.h"
   GENERATED_FLOW_NAME
-  "atframework.friends.FriendRecommendService")
+  "atframework.friend_api.FriendRecommendService")
 
 add_subdirectory(sdk)
 

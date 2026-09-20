@@ -25,8 +25,8 @@
 
 #include "frame/test_macros.h"
 
-#include "logic/action/task_action_management_get_all.h"
-#include "rpc/friends/friendmanagementservice.atfw.gen.h"
+#include "logic/action/task_action_management_get_all.h"      // IWYU pragma: keep
+#include "rpc/friend_api/friendmanagementservice.atfw.gen.h"  // IWYU pragma: keep
 
 namespace {
 // Synthetic upstream node that "sent" the inbound request; any non-zero id works for the placeholder action.
@@ -42,9 +42,10 @@ CASE_TEST(friendsvr_management, management_get_all_placeholder) {
     return;
   }
 
-  atframework::friends::SSFriendManagementGetAllReq request;
+  atframework::friend_api::SSFriendManagementGetAllReq request;
 
-  atfw::testing::ss_action_invoke_options invoke_options{rpc::friends::packer::get_full_name_of_management_get_all()};
+  atfw::testing::ss_action_invoke_options invoke_options{
+      rpc::friend_api::packer::get_full_name_of_management_get_all()};
   invoke_options.source.node_id = kUpstreamSourceNodeId;
   invoke_options.source.node_name = "friendsvr-management-test";
 

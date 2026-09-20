@@ -8,10 +8,10 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/component/public/protocol/pbdesc";
 
-import "protocol/pbdesc/com.struct.friend.proto";
+import "protocol/pbdesc/com.struct.friend_api.proto";
 import "protocol/pbdesc/com.struct.proto";
 
-package atframework.friends;
+package atframework.friend_api;
 
 // 获取好友数据
 message CSFriendGetAllReq {}

@@ -10,10 +10,13 @@
 #include <logic/hpa/logic_hpa_easy_api.h>
 #include <logic/logic_server_setup.h>
 
+#include <memory>
+#include <utility>
+
 #include "data/friend_cache.h"
 
 namespace atframework {
-namespace friends {
+namespace friend_api {
 
 #if defined(FRIEND_SDK_MANAGEMENT_DLL) && FRIEND_SDK_MANAGEMENT_DLL
 #  if defined(FRIEND_SDK_MANAGEMENT_NATIVE) && FRIEND_SDK_MANAGEMENT_NATIVE
@@ -28,10 +31,7 @@ ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DATA_DEFINITION(router_friend_manager
 FRIEND_SDK_MANAGEMENT_API router_friend_manager::router_friend_manager()
     : base_type(PROJECT_NAMESPACE_ID::EN_ROT_FRIEND) {}
 
-FRIEND_SDK_MANAGEMENT_API const char *router_friend_manager::name() const {
-  return "[friend router manager]";
-  ;
-}
+FRIEND_SDK_MANAGEMENT_API const char *router_friend_manager::name() const { return "[friend router manager]"; }
 
 FRIEND_SDK_MANAGEMENT_API bool router_friend_manager::is_auto_mutable_object() const { return true; }
 
@@ -154,5 +154,5 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_manager::pull_onli
   RPC_RETURN_CODE(ret);
 }
 
-}  // namespace friends
+}  // namespace friend_api
 }  // namespace atframework

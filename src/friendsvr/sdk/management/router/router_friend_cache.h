@@ -21,7 +21,7 @@
 #include <router/router_object.h>
 
 namespace atframework {
-namespace friends {
+namespace friend_api {
 struct ATFW_UTIL_SYMBOL_VISIBLE router_friend_private_type {
   FRIEND_SDK_MANAGEMENT_API router_friend_private_type();
   FRIEND_SDK_MANAGEMENT_API router_friend_private_type(rpc::shared_message<PROJECT_NAMESPACE_ID::table_friend> *tb,
@@ -63,5 +63,5 @@ class ATFW_UTIL_SYMBOL_VISIBLE router_friend_cache : public router_object<friend
   void fix_router_timeout(rpc::context &ctx, PROJECT_NAMESPACE_ID::table_friend &table);
 };
 
-}  // namespace friends
+}  // namespace friend_api
 }  // namespace atframework

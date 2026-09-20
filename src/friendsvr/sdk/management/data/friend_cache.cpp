@@ -17,8 +17,12 @@
 
 #include <memory/object_allocator.h>
 
+#include <utility/protobuf_mini_dumper.h>
+
+#include <utility>
+
 namespace atframework {
-namespace friends {
+namespace friend_api {
 
 struct ATFW_UTIL_SYMBOL_VISIBLE friend_cache::ctor_guard_t {
   uint32_t zone_id = 0;
@@ -105,16 +109,16 @@ FRIEND_SDK_MANAGEMENT_API uint64_t friend_cache::get_db_version() const noexcept
 FRIEND_SDK_MANAGEMENT_API void friend_cache::set_db_version(uint64_t v) noexcept { data_->db_version = v; }
 
 FRIEND_SDK_MANAGEMENT_API DFriendStatistics& friend_cache::mutable_statistics() {
-  return *data_->db_data.mutable_statistics();
+  return *data_->db_data.mutable_blob_data()->mutable_statistics();
 }
 
 FRIEND_SDK_MANAGEMENT_API const DFriendStatistics& friend_cache::get_statistics() const noexcept {
-  return data_->db_data.statistics();
+  return data_->db_data.blob_data().statistics();
 }
 
 FRIEND_SDK_MANAGEMENT_API PROJECT_NAMESPACE_ID::table_friend& friend_cache::mutable_db_data() noexcept {
   return data_->db_data;
 }
 
-}  // namespace friends
+}  // namespace friend_api
 }  // namespace atframework

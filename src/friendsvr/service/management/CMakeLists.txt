@@ -23,4 +23,4 @@ project_service_declare_instance(
   USE_SERVICE_PROTOCOL
   "friend-protocol-management-config"
   GENERATED_FLOW_NAMES
-  "atframework.friends.FriendManagementService")
+  "atframework.friend_api.FriendManagementService")

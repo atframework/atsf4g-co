@@ -1,0 +1,32 @@
+syntax = "proto3";
+// 后台数据结构定义
+
+option optimize_for = SPEED;
+// option optimize_for = LITE_RUNTIME;
+// option optimize_for = CODE_SIZE;
+// --cpp_out=lite:,--cpp_out=
+option cc_enable_arenas = true;
+
+option go_package = "github.com/atframework/atsf4g-go/component-protocol-private/pbdesc/protocol/pbdesc";
+
+import "google/protobuf/any.proto";
+
+import "protocol/pbdesc/com.struct.proto";
+
+import "protocol/pbdesc/com.struct.friend_api.proto";
+
+package atframework.friend_api;
+
+message table_friend_blob_data {
+  atframework.friend_api.DFriendStatistics statistics = 1;  // 统计数据，限频数据
+  int64 event_id_allocator = 2;                          // 事件ID分配器
+  int64 global_finished_event_id = 3;                    // 全局已完成事务ID
+
+  repeated atframework.friend_api.DFriendInfo friend_list = 11;
+  repeated atframework.friend_api.DFriendInvitationInfo inviter_list = 12;
+  repeated atframework.friend_api.DFriendInvitationInfo invitee_list = 13;
+  repeated atframework.friend_api.DFriendGift gift_list = 14;
+
+  // 事务离线数据,指向 atframework.distributed_system.transaction_participator_snapshot
+  google.protobuf.Any transaction_storage = 99;
+}

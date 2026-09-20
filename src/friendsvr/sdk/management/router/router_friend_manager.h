@@ -5,10 +5,12 @@
 
 #include <router/router_manager.h>
 
+#include <memory>
+
 #include "router/router_friend_cache.h"
 
 namespace atframework {
-namespace friends {
+namespace friend_api {
 
 class router_friend_manager : public router_manager<router_friend_cache, friend_cache, router_friend_private_type *> {
 #if defined(FRIEND_SDK_MANAGEMENT_DLL) && FRIEND_SDK_MANAGEMENT_DLL
@@ -20,6 +22,7 @@ class router_friend_manager : public router_manager<router_friend_cache, friend_
 #else
   ATFW_UTIL_DESIGN_PATTERN_SINGLETON_VISIBLE_DECL(router_friend_manager)
 #endif
+
  public:
   using base_type = router_manager<router_friend_cache, friend_cache, router_friend_private_type *>;
   using base_type::cache_t;
@@ -68,5 +71,5 @@ class router_friend_manager : public router_manager<router_friend_cache, friend_
   create_object_fn_t create_fn_;
 };
 
-}  // namespace friends
+}  // namespace friend_api
 }  // namespace atframework

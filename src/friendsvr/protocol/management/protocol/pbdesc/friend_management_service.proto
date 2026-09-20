@@ -9,28 +9,172 @@ option cc_generic_services = true;
 
 import "protocol/extension/atframework.proto";
 
+import "protocol/pbdesc/com.struct.proto";
+import "protocol/pbdesc/svr.struct.friend_api.proto";
+
+import "protocol/pbdesc/distributed_transaction.proto";
+
 option go_package = "github.com/atframework/atsf4g-co/friendsvr/protocol/management/protocol/pbdesc";
 
 // 不要用 friend 作为名字，避免关键字冲突
-package atframework.friends;
+package atframework.friend_api;
+
+message DFriendSubscribeCheckpoint {
+  int64 sequence = 1;
+  uint64 hash_code = 2;
+}
+
+message DFriendSubscribeKey {
+  atframework.shared.DUserIDKey subscriber_user_key = 1;
+  DFriendSubscribeCheckpoint last_received = 2;
+}
 
 message SSFriendManagementGetAllReq {
-  // TODO(owent): implement me
+  bool need_allocate_event_id = 1;
+  DFriendSubscribeKey with_subscriber = 2;
 }
 
 message SSFriendManagementGetAllRsp {
-  int32 client_result = 1;
-  // TODO(owent): implement me
+  table_friend_blob_data raw_data = 1;
+  uint64 router_target_server_id = 2;
+  uint64 router_target_server_version = 3;
 }
+
+// ====== 事务准备阶段 ======
+message SSFriendTransactionPrepareReq {
+  atframework.distributed_system.SSParticipatorTransactionPrepareReq transaction_request = 1;
+}
+
+// ====== 事务准备阶段 ======
+message SSFriendTransactionPrepareRsp {
+  int32 client_result = 1;
+  atframework.distributed_system.SSParticipatorTransactionPrepareRsp transaction_response = 2;
+}
+
+// ====== 事务提交（成功完成）请求 ======
+message SSFriendTransactionCommitReq {
+  atframework.distributed_system.SSParticipatorTransactionCommitReq transaction_request = 1;
+}
+
+// ====== 事务提交（成功完成）回包 ======
+message SSFriendTransactionCommitRsp {
+  atframework.distributed_system.SSParticipatorTransactionCommitRsp transaction_response = 2;
+}
+
+// ====== 事务拒绝（失败）请求 ======
+message SSFriendTransactionRejectReq {
+  atframework.distributed_system.SSParticipatorTransactionRejectReq transaction_request = 1;
+}
+
+// ====== 事务拒绝（失败）回包 ======
+message SSFriendTransactionRejectRsp {
+  atframework.distributed_system.SSParticipatorTransactionRejectRsp transaction_response = 2;
+}
+
+message SSFriendGMResetLimitReq {}
+
+message SSFriendGMResetLimitRsp {}
+
+message SSFriendSubscribeReq {
+  DFriendSubscribeKey subscriber = 1;
+}
+
+message SSFriendSubscribeRsp {
+}
+
+message SSFriendUnsubscribeReq {
+  DFriendSubscribeKey subscriber = 1;
+}
+
+message SSFriendUnsubscribeRsp {
+}
+
+message SSFriendRemoveOneInviterReq {
+  atframework.shared.DUserIDKey inviter_user_key = 1;
+}
+
+message SSFriendRemoveOneInviterRsp {}
+
+message SSFriendRemoveAllInviterReq {}
+
+message SSFriendRemoveAllInviterRsp {}
 
 service FriendManagementService {
   option (atframework.service_options) = {
-    module_name: "friends"
+    module_name: "friend_api"
   };
 
   rpc management_get_all(SSFriendManagementGetAllReq) returns (SSFriendManagementGetAllRsp) {
     option (atframework.rpc_options) = {
-      api_name: "获取全部好友"
+      api_name: "获取全部好友数据"
+    };
+  };
+
+
+  rpc management_transaction_prepare(SSFriendTransactionPrepareReq) returns (SSFriendTransactionPrepareRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "事务准备阶段(Try)"
+      router_rpc: true
+      user_rpc: true
+      allow_no_wait: true
+    };
+  };
+
+  rpc management_transaction_commit(SSFriendTransactionCommitReq) returns (SSFriendTransactionCommitRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "事务提交(Commit)"
+      router_rpc: true
+      user_rpc: true
+      allow_no_wait: true
+    };
+  };
+
+  rpc management_transaction_reject(SSFriendTransactionRejectReq) returns (SSFriendTransactionRejectRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "事务拒绝(Commit)"
+      router_rpc: true
+      user_rpc: true
+      allow_no_wait: true
+    };
+  };
+
+  rpc management_gm_reset_limit(SSFriendGMResetLimitReq) returns (SSFriendGMResetLimitRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "GM接口-重置好友限制类资源"
+      router_rpc: true
+      user_rpc: true
+    };
+  };
+
+  rpc management_subscribe(SSFriendSubscribeReq) returns (SSFriendSubscribeRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "订阅好友信息"
+      router_rpc: true
+      user_rpc: true
+    };
+  };
+
+  rpc management_unsubscribe(SSFriendUnsubscribeReq) returns (SSFriendUnsubscribeRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "反订阅好友信息"
+      router_rpc: true
+      user_rpc: true
+    };
+  };
+
+  rpc management_remove_one_inviter(SSFriendRemoveOneInviterReq) returns (SSFriendRemoveOneInviterRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "移除单个邀请者"
+      router_rpc: true
+      user_rpc: true
+    };
+  };
+
+  rpc management_remove_all_inviter(SSFriendRemoveAllInviterReq) returns (SSFriendRemoveAllInviterRsp) {
+    option (atframework.rpc_options) = {
+      api_name: "移除全部邀请"
+      router_rpc: true
+      user_rpc: true
     };
   };
 }

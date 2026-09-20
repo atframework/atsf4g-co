@@ -14,11 +14,12 @@
 
 #include <dispatcher/task_action_ss_req_base.h>
 
-class task_action_recommend_search : public task_action_ss_rpc_base<atframework::friends::SSFriendRecommendSearchReq,
-                                                                    atframework::friends::SSFriendRecommendSearchRsp> {
+class task_action_recommend_search
+    : public task_action_ss_rpc_base<atframework::friend_api::SSFriendRecommendSearchReq,
+                                     atframework::friend_api::SSFriendRecommendSearchRsp> {
  public:
-  using base_type = task_action_ss_rpc_base<atframework::friends::SSFriendRecommendSearchReq,
-                                            atframework::friends::SSFriendRecommendSearchRsp>;
+  using base_type = task_action_ss_rpc_base<atframework::friend_api::SSFriendRecommendSearchReq,
+                                            atframework::friend_api::SSFriendRecommendSearchRsp>;
   using base_type::operator();
 
   explicit task_action_recommend_search(dispatcher_start_data_type&& param);

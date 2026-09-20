@@ -8,6 +8,6 @@ option cc_enable_arenas = true;
 
 option go_package = "github.com/atframework/atsf4g-co/friendsvr/protocol/management/protocol/config";
 
-package atframework.friends.config;
+package atframework.friend_api.config;
 
 message friendsvr_management_cfg {}
