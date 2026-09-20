@@ -309,7 +309,7 @@ item_algorithm::item_container_ptr_t user_item_container_manager::find_item_cont
 // 组的路由 — 按 position.container_guid 找登记的容器
 //
 // 分片与批量执行都在 SDK 的 ItemContainerGroup 里, 本层只提供路由表:
-// 组先按 position 把请求分给容器, 再逐容器 check_* / add / sub / move / replace。
+// 组先按 position 把请求分给容器, 再逐容器 check_* / add / sub / move。
 // ============================================================
 
 item_algorithm::item_container_ptr_t user_item_container_manager::select_container(
