@@ -163,43 +163,12 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemContainerGroupMoveCheckedRequest {
   bool apply = false;
 };
 
-/// @brief 组级 replace checked request (跨容器不保证原子性, 与旧实现一致)
-struct ATFW_UTIL_SYMBOL_VISIBLE ItemContainerGroupReplaceCheckedRequest {
-  friend class ItemContainerGroup;
-
-  ITEM_ALGORITHM_API explicit ItemContainerGroupReplaceCheckedRequest(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group);
-  ATFW_UTIL_FORCEINLINE int32_t get_error_code() const { return result.error_code; }
-  ATFW_UTIL_FORCEINLINE int32_t get_failed_type_id() const { return result.failed_type_id; }
-  ATFW_UTIL_FORCEINLINE const ItemOperationResult& get_result() const { return result; }
-
-  ItemContainerGroupReplaceCheckedRequest(const ItemContainerGroupReplaceCheckedRequest&) = delete;
-  ItemContainerGroupReplaceCheckedRequest& operator=(const ItemContainerGroupReplaceCheckedRequest&) = delete;
-  ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest(ItemContainerGroupReplaceCheckedRequest&&) noexcept;
-  ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest&
-  operator=(ItemContainerGroupReplaceCheckedRequest&&) noexcept;
-
- private:
-  struct PerContainerData {
-    ITEM_ALGORITHM_API explicit PerContainerData(item_container_ptr_t in_container);
-
-    item_container_ptr_t container;
-    item_container_group_request_list<PROJECT_NAMESPACE_ID::DItemInstance> requests;
-    std::unique_ptr<ItemReplaceCheckedRequest> checked;
-  };
-
-  ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
-  ItemOperationResult result;
-  std::vector<atfw::util::memory::strong_rc_ptr<PerContainerData>> container_data;
-  bool apply = false;
-};
-
 // ============================================================
 // 容器组 — 按 DItemPosition 路由, 把一次批量请求拆给多个容器
 //
 // 这一层只做编排:
 //   - select_container 由接入层实现 (按 position 找到目标容器);
-//   - 请求按 position 分片, 每片交给对应容器的 check_* / add / sub / move / replace;
+//   - 请求按 position 分片, 每片交给对应容器的 check_* / add / sub / move;
 //   - check 阶段任一容器失败即整体失败 (不产生变更), 执行阶段按分片顺序执行, 第一个失败即返回。
 //
 // 组级请求只接迭代器视图 (与容器层一致); 分片数据由 checked request 自己持有, 因此
@@ -237,11 +206,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainerGroup {
   check_move(const excel_config_group_ptr_t& config_group, std::vector<ItemContainerGroupMoveRequest>&& requests,
              const ItemOperationSource& source = ItemOperationSource{}) const;
   ITEM_ALGORITHM_API ItemOperationResult move(ItemContainerGroupMoveCheckedRequest& checked_request);
-
-  ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest
-  check_replace(const excel_config_group_ptr_t& config_group, const item_instance_readable_iterable& requests,
-                const ItemOperationSource& source = ItemOperationSource{}) const;
-  ITEM_ALGORITHM_API ItemOperationResult replace(ItemContainerGroupReplaceCheckedRequest& checked_request);
 
   ITEM_ALGORITHM_API ItemOperationResult check_has(const excel_config_group_ptr_t& config_group,
                                                    const item_basic_readable_iterable& requests) const;

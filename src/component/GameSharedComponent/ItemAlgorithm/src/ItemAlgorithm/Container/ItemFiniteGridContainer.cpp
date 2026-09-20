@@ -130,21 +130,6 @@ ITEM_ALGORITHM_API void ItemFiniteGridContainer::on_update_grid_occupancy(
   }
 }
 
-ITEM_ALGORITHM_API void ItemFiniteGridContainer::copy_empty_config_to(ItemContainer& out) const {
-  auto* finite_out = dynamic_cast<ItemFiniteGridContainer*>(&out);
-  if (nullptr == finite_out) {
-    FWINSTLOGERROR(logger(), "copy_empty_config_to target is not ItemFiniteGridContainer, container_guid={}",
-                   get_container_guid());
-    return;
-  }
-
-  finite_out->init_container(get_container_guid());
-  finite_out->row_size_ = row_size_;
-  finite_out->column_size_ = column_size_;
-  finite_out->position_type_ = position_type_;
-  finite_out->occupy_grid_flag_.resize(static_cast<size_t>(row_size_), static_cast<size_t>(column_size_));
-}
-
 // ============================================================
 // 位置与身份索引
 // ============================================================

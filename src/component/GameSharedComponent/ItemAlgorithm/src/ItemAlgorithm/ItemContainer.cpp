@@ -10,6 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #ifdef _MSC_VER
 #  include <intrin.h>
@@ -37,11 +38,60 @@ ITEM_ALGORITHM_API void ItemContainer::init_container(int64_t container_guid) {
 }
 
 ITEM_ALGORITHM_API void ItemContainer::clear() {
-  item_groups_.clear();
-  entry_id_index_.clear();
+  if (!is_operation_allowed("ItemContainer::clear")) {
+    return;
+  }
+
+  // clear 与 sub 的整体移除走同一套变更流程, 区别只是不做任何校验 (调用方已经决定要清空):
+  // 先摘掉模式自己的索引, 再逐条摘分组 / 数量归零, 并触发
+  // on_item_count_changed (new_count == 0) 与 on_item_data_changed, 让上层同步感知被清掉的条目。
+  const ItemOperationContext context{ItemOperationReason::kClear, ItemOperationSource{}};
+
+  // 通知回调可能改写容器, 先把待清空的条目快照出来 (remove_entry_from_group 会改动分组)
+  std::vector<item_entry_ptr_t> all_entries;
+  all_entries.reserve(get_entry_count());
+  for (const auto& group_pair : item_groups_) {
+    for (const auto& entry : group_pair.second.entries) {
+      if (entry) {
+        all_entries.push_back(entry);
+      }
+    }
+  }
+
+  // 先摘索引 (位置 / GUID / 位图), 与 sub 完全移除时的顺序一致
   on_clear();
 
-  FWINSTLOGDEBUG(logger(), "clear container container_guid={}", container_guid_);
+  size_t removed_count = 0;
+  for (const auto& entry : all_entries) {
+    int64_t old_count = entry->item_instance().item_basic().count();
+    if (old_count <= 0) {
+      continue;
+    }
+    // 与 sub 的完全移除同序: 摘分组 -> 数量归零 -> 通知
+    remove_entry_from_group(entry);
+    set_entry_count(entry, 0);
+    notify_entry_count_changed(entry, old_count, 0, context);
+    ++removed_count;
+  }
+
+  // 快照里的条目应已逐条摘除, 基类里不应再有数据。
+  // 仍有残留说明 entries 与分组的对应关系被破坏 (例如遍历期间改写了 type_id), 记 ERROR 便于定位。
+  if (!item_groups_.empty()) {
+    FWINSTLOGERROR(logger(),
+                   "clear container leftover groups after per-entry removal, container_guid={}, leftover_groups={}",
+                   container_guid_, item_groups_.size());
+  }
+
+  // 兜底清理 (通知期间产生的空条目 / 数量项) 与 entry_id 索引
+  item_groups_.clear();
+  if (!entry_id_index_.empty()) {
+    FWINSTLOGERROR(logger(),
+                   "clear container leftover entry_id index after per-entry removal, container_guid={}, leftover={}",
+                   container_guid_, entry_id_index_.size());
+  }
+  entry_id_index_.clear();
+
+  FWINSTLOGDEBUG(logger(), "clear container container_guid={}, {} entries removed", container_guid_, removed_count);
 }
 
 ITEM_ALGORITHM_API void ItemContainer::on_clear() {}
@@ -198,10 +248,6 @@ ITEM_ALGORITHM_API const PROJECT_NAMESPACE_ID::DItemPositionCfg* ItemContainer::
 ITEM_ALGORITHM_API void ItemContainer::on_item_data_changed(const item_entry_ptr_t& /*entry*/,
                                                             const ItemOperationContext& /*context*/) {
   // 默认空实现, 业务按需覆盖
-}
-
-ITEM_ALGORITHM_API void ItemContainer::copy_empty_config_to(ItemContainer& /*out*/) const {
-  // 基类没有自己的模式配置; 有行列 / 位图等配置的模式覆盖本函数
 }
 
 // ============================================================

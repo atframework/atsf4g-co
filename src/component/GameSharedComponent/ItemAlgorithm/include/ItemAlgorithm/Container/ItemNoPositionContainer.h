@@ -19,11 +19,11 @@ namespace item_algorithm {
 /// 也没有位置语义, 因此不接入 move: check_move / move 继承基类流程, 但基类默认的
 /// on_check_move / on_move_sub_one / on_move_add_one 会直接以 EN_ERR_INVALID_PARAM 拒绝。
 ///
-/// 增删改查的批次流程 (check_add / add / check_sub / sub / check_replace / replace / check_has /
+/// 增删改查的批次流程 (check_add / add / check_sub / sub / check_has /
 /// load / apply_entries / find_positions_*) 都由基类 ItemContainer 实现, 本类只提供单条钩子:
 /// 落位方式只有"合入同类型的计数条目"与"新建计数条目"两种, 单条校验只剩 is_item_valid 的字段规则。
-/// 位置字段映射 (extract_position / apply_position) 与 create_empty_clone 由最上层接入按自己的
-/// 位置字段实现, 因此本类不是可以直接实例化的最终容器。
+/// 位置字段映射 (extract_position / apply_position) 由最上层接入按自己的位置字段实现,
+/// 因此本类不是可以直接实例化的最终容器。
 class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
  public:
   ITEM_ALGORITHM_API ItemNoPositionContainer();
@@ -64,15 +64,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
                                         const PROJECT_NAMESPACE_ID::DItemBasic& basic) const override;
 
   // ============================================================
-  // 空克隆配置 (create_empty_clone 由接入层实现, 本模式只复制自己的配置)
-  // ============================================================
-
-  /// @brief 把本容器的配置 (位置字段 / 容器 GUID) 复制到空容器
-  ///
-  /// 被调用时机: 接入层实现的 create_empty_clone 内部, 对本模式新建的空容器调用。
-  ITEM_ALGORITHM_API void copy_empty_config_to(ItemContainer& out) const override;
-
-  // ============================================================
   // 单条校验钩子
   //
   // 基类的通用校验 (字段 / 归属 / 位置 / 类型存在 / GUID 唯一 / 数量上限 / 按类型总数对账)
@@ -82,7 +73,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
   /// @brief 本条放入请求是否直接跳过
   ///
   /// 本模式只按类型计数, count == 0 的请求没有可加的数量, 属于空请求:
-  /// check_add 不校验它, add / replace 也不执行它 (is_item_valid 仍然要求 count > 0,
+  /// check_add 不校验它, add 也不执行它 (is_item_valid 仍然要求 count > 0,
   /// 因此 load / apply_entries 这些同步路径上的 count == 0 依旧按非法数据处理)。
   ITEM_ALGORITHM_API bool should_skip_add_request(const PROJECT_NAMESPACE_ID::DItemInstance& request) const override;
 
@@ -114,7 +105,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
 
   /// @brief 放入一件道具 (合入同类型的计数条目, 或新建计数条目)
   ///
-  /// 被调用时机: 基类 add / replace(kReplaceAdd) 逐条循环时, 每条一次;
+  /// 被调用时机: 基类 add 逐条循环时, 每条一次; load 也走这里 (载入时同样要落位)。
   /// 基类已确认 checked request 合法并置上 apply。
   /// 本条不合法 (类型缺失 / 需要占格 / 带 GUID) 或条目没能进分组时只记日志并返回成功,
   /// 让整批继续 (这些分支没有可回滚的数据, 与基类"单条失败即整体失败"的钩子语义不同)。
@@ -126,7 +117,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemNoPositionContainer : public ItemContainer {
 
   /// @brief 扣减一件道具 (按类型逐个条目扣到满足为止)
   ///
-  /// 被调用时机: 基类 sub / replace(kReplaceSub) 逐条循环时, 每条一次。
+  /// 被调用时机: 基类 sub 逐条循环时, 每条一次。
   /// 同类型可能有多个条目, 逐个扣; 被扣光的条目从分组移除并把数量归零。
   /// 条目扣不满只记错误日志 (check_sub 已保证总量够扣), 不影响整批返回。
   /// @param request 本条待扣减的请求 (只读)

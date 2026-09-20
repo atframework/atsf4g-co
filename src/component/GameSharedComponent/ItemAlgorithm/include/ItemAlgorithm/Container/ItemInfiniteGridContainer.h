@@ -25,7 +25,7 @@ namespace item_algorithm {
 ///   * 槽位索引 / GUID 索引的维护与占用判断 (position_index_ / guid_index_);
 ///   * 单条校验与单条落位的 on_*_one 钩子;
 ///   * 本模式特有的 move / check_move (基类没有腾挪流程)。
-/// check_add / add / check_sub / sub / check_replace / replace / check_has / load /
+/// check_add / add / check_sub / sub / check_has / load /
 /// apply_entries / find_positions_for_basics / find_positions_for_instances 的**流程**都在
 /// ItemContainer 基类里, 基类做完通用校验与循环后把每条交给下面的钩子。
 ///
@@ -126,7 +126,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
 
   /// @brief 放入一件道具 (合入已有槽位条目, 或新建条目并挂上槽位索引)
   ///
-  /// 被调用时机: 基类 add / replace(kReplaceAdd) 逐条循环, checked request 已校验通过。
+  /// 被调用时机: 基类 add 逐条循环, checked request 已校验通过; load 也走这里。
   /// @param instance 本条待放入的道具 (只读)
   /// @param context 钩子上下文 (容器判定的原因 + 调用方透传的来源)
   ITEM_ALGORITHM_API ItemOperationResult on_add_one(ItemAddCheckedRequest& checked_request,
@@ -135,7 +135,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
 
   /// @brief 扣减一件道具 (扣完为 0 就整体移除条目并摘掉槽位与 GUID 索引)
   ///
-  /// 被调用时机: 基类 sub / replace(kReplaceSub) 逐条循环, checked request 已校验通过。
+  /// 被调用时机: 基类 sub 逐条循环, checked request 已校验通过。
   /// @param request 本条待扣减的请求 (只读)
   ITEM_ALGORITHM_API ItemOperationResult on_sub_one(ItemSubCheckedRequest& checked_request,
                                                    const PROJECT_NAMESPACE_ID::DItemBasic& request,
@@ -238,15 +238,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   ITEM_ALGORITHM_API virtual bool on_find_position_for_infinite(const excel_config_group_ptr_t& config_group,
                                                                 const PROJECT_NAMESPACE_ID::DItemBasic& basic,
                                                                 PROJECT_NAMESPACE_ID::DItemGridPosition& out_pos) const;
-
-  // ============================================================
-  // 空克隆 (create_empty_clone 由接入层实现, 这里只补齐本模式的配置)
-  // ============================================================
-
-  /// @brief 把本容器的配置 (位置字段 / 容器 GUID) 复制到空容器
-  ///
-  /// 被调用时机: 接入层的 create_empty_clone 建好同类型空容器之后调用。
-  ITEM_ALGORITHM_API void copy_empty_config_to(ItemContainer& out) const override;
 
   // ---- 位置与身份索引 (单槽位: 每个位置最多一个条目) ----
   /// @brief 取槽位上的条目

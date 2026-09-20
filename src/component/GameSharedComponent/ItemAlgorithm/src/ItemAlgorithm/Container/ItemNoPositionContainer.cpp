@@ -12,8 +12,7 @@ namespace item_algorithm {
 // 无位置容器 — 本模式的单条行为与数据结构
 //
 // 增删改查的批次流程在基类 ItemContainer, 基类逐条路由到本文件的钩子;
-// proto 位置字段的读写由接入层实现 (extract_position / apply_position), 库内不做映射;
-// 空容器也由接入层创建 (create_empty_clone), 因此本类不实现这两个接口。
+// proto 位置字段的读写由接入层实现 (extract_position / apply_position), 库内不做映射。
 // ============================================================
 
 ITEM_ALGORITHM_API ItemNoPositionContainer::ItemNoPositionContainer() {}
@@ -61,22 +60,6 @@ ITEM_ALGORITHM_API bool ItemNoPositionContainer::should_skip_add_request(
   // 本模式只按类型计数: count == 0 的请求没有可加的数量, 属于空请求, check 与执行都跳过。
   // (count < 0 仍按非法数据处理, 由 is_item_valid 拒绝)
   return request.item_basic().count() == 0;
-}
-
-// ============================================================
-// 空克隆配置 (由接入层的 create_empty_clone 调用)
-// ============================================================
-
-ITEM_ALGORITHM_API void ItemNoPositionContainer::copy_empty_config_to(ItemContainer& out) const {
-  auto* no_position_out = dynamic_cast<ItemNoPositionContainer*>(&out);
-  if (nullptr == no_position_out) {
-    FWINSTLOGERROR(logger(), "copy_empty_config_to target is not ItemNoPositionContainer, container_guid={}",
-                   get_container_guid());
-    return;
-  }
-
-  no_position_out->init_container(get_container_guid());
-  no_position_out->position_type_ = position_type_;
 }
 
 }  // namespace item_algorithm

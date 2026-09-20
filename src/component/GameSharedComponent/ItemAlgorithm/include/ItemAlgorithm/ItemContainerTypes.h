@@ -51,8 +51,8 @@ enum class ItemOperationReason : int32_t {
   kApplyRemove = 5,         ///< apply_entries 的删除阶段
   kApplyUpdate = 6,         ///< apply_entries 的更新阶段
   kModifyInstanceData = 7,  ///< 修改 Entry 的数据, 例如修改 Guid/Count 等
-  kReplaceSub = 8,          ///< Replace 操作的 Sub 阶段 (整体移除现有条目)
-  kReplaceAdd = 9,          ///< Replace 操作的 Add 阶段 (整体放入新列表)
+  kReplaceLoad = 8,         ///< 整体替换时 clear 之后逐条 load (由 load 传入)
+  kClear = 9,               ///< clear() 整体清空 (逐条移除并通知, 与 sub 的整体移除一致)
 };
 
 // ============================================================
@@ -68,7 +68,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemOperationSource {
 
 /// @brief 钩子收到的操作上下文
 ///
-/// 第一个字段是容器判定的操作原因 (add / sub / load / move / replace / apply ...),
+/// 第一个字段是容器判定的操作原因 (add / sub / load / move / apply ...),
 /// 其余三个字段是调用方通过操作接口传入的 ItemOperationSource。
 struct ATFW_UTIL_SYMBOL_VISIBLE ItemOperationContext {
   ItemOperationReason reason = ItemOperationReason::kAdd;
@@ -165,7 +165,7 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemOperationResult {
 };
 
 // ============================================================
-// 容器级 Checked Request (check 通过后交给 add/sub/move/replace 执行)
+// 容器级 Checked Request (check 通过后交给 add/sub/move 执行)
 // ============================================================
 
 struct ATFW_UTIL_SYMBOL_VISIBLE ItemAddCheckedRequest {
@@ -225,26 +225,6 @@ struct ATFW_UTIL_SYMBOL_VISIBLE ItemMoveCheckedRequest {
   ItemMoveCheckedRequest& operator=(const ItemMoveCheckedRequest&) = delete;
   ITEM_ALGORITHM_API ItemMoveCheckedRequest(ItemMoveCheckedRequest&&) noexcept;
   ITEM_ALGORITHM_API ItemMoveCheckedRequest& operator=(ItemMoveCheckedRequest&&) = delete;
-};
-
-struct ATFW_UTIL_SYMBOL_VISIBLE ItemReplaceCheckedRequest {
-  ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t> config_group;
-  /// @brief 调用方传入的请求视图 (只引用, 不复制数据; 调用方需保证它活到 replace 执行完)
-  item_instance_readable_iterable& requests;
-  ItemOperationResult result;
-  ItemOperationSource source;  ///< 调用方通过 check_replace 传入, replace 时透传给钩子
-  bool apply = false;
-  int64_t container_guid = 0;
-  int64_t operate_id = 0;
-
-  ITEM_ALGORITHM_API ItemReplaceCheckedRequest(
-      const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-      item_instance_readable_iterable& in_requests, int64_t in_container_guid, int64_t in_operate_id,
-      const ItemOperationSource& in_source = ItemOperationSource{});
-  ItemReplaceCheckedRequest(const ItemReplaceCheckedRequest&) = delete;
-  ItemReplaceCheckedRequest& operator=(const ItemReplaceCheckedRequest&) = delete;
-  ITEM_ALGORITHM_API ItemReplaceCheckedRequest(ItemReplaceCheckedRequest&&) noexcept;
-  ITEM_ALGORITHM_API ItemReplaceCheckedRequest& operator=(ItemReplaceCheckedRequest&&) = delete;
 };
 
 }  // namespace item_algorithm

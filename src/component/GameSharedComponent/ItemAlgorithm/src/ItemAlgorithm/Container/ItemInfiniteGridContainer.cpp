@@ -23,18 +23,6 @@ ITEM_ALGORITHM_API void ItemInfiniteGridContainer::init(
                  static_cast<int>(position_type_), container_guid);
 }
 
-ITEM_ALGORITHM_API void ItemInfiniteGridContainer::copy_empty_config_to(ItemContainer& out) const {
-  auto* infinite_out = dynamic_cast<ItemInfiniteGridContainer*>(&out);
-  if (nullptr == infinite_out) {
-    FWINSTLOGERROR(logger(), "copy_empty_config_to target is not ItemInfiniteGridContainer, container_guid={}",
-                   get_container_guid());
-    return;
-  }
-
-  infinite_out->init_container(get_container_guid());
-  infinite_out->position_type_ = position_type_;
-}
-
 // ============================================================
 // 位置与身份索引 (单槽位: 每个位置最多一个条目)
 // ============================================================

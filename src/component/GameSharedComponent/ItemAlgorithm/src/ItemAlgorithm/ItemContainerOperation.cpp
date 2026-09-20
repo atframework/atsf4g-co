@@ -467,90 +467,9 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainer::check_has(const excel_conf
   return result;
 }
 
-ITEM_ALGORITHM_API ItemReplaceCheckedRequest ItemContainer::check_replace(const excel_config_group_ptr_t& config_group,
-                                                                          item_instance_readable_iterable& requests,
-                                                                          const ItemOperationSource& source) const {
-  // 入参是具名视图 (非 const 引用, 临时视图传不进来), checked request 只引用它, 不复制请求数据
-  ItemReplaceCheckedRequest checked_request{config_group, requests, get_container_guid(), issue_operate_id(), source};
-  if (!is_initialized()) {
-    FWINSTLOGERROR(logger(), "check_replace called before init, container_guid={} operate_id={}", get_container_guid(),
-                   get_operate_id());
-    checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_UNKNOWN;
-    return checked_request;
-  }
-
-  // Replace = 全部移除现有条目 + 放入新列表。
-  // 因此新建一个同配置的空容器, 直接复用基类的 check_add 校验新列表
-  // (GUID 唯一 / 数量上限 / 本模式规则), 不必为 replace 再写一套校验。
-  item_container_ptr_t tmp_container = create_empty_clone();
-  if (!tmp_container) {
-    FWINSTLOGERROR(logger(), "check_replace failed: create_empty_clone returned null, container_guid={}",
-                   get_container_guid());
-    checked_request.result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-    return checked_request;
-  }
-
-  // 空容器校验的是同一份视图 (checked request 只持有视图, 不需要把请求搬过来)
-  ItemAddCheckedRequest add_checked = tmp_container->check_add(config_group, checked_request.requests, source);
-  checked_request.result = add_checked.result;
-  return checked_request;
-}
-
-ITEM_ALGORITHM_API ItemOperationResult ItemContainer::replace(ItemReplaceCheckedRequest& checked_request) {
-  if (!is_operation_allowed("ItemContainer::replace")) {
-    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0};
-  }
-
-  ItemOperationResult result =
-      validate_checked_request(checked_request.result, checked_request.apply, checked_request.container_guid,
-                               checked_request.operate_id, "replace");
-  if (result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-    return result;
-  }
-  checked_request.apply = true;
-
-  // ============================================================
-  // Phase 1: 先把现有条目全部扣掉 (原因 kReplaceSub)
-  // ============================================================
-  size_t old_entry_count = 0;
-  google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic> sub_requests;
-  sub_requests.Reserve(static_cast<int>(get_entry_count()));
-  for (const auto& group_pair : get_all_groups()) {
-    for (const auto& entry : group_pair.second.entries) {
-      if (entry) {
-        ++old_entry_count;
-        *sub_requests.Add() = entry->item_instance().item_basic();
-      }
-    }
-  }
-
-  if (!sub_requests.empty()) {
-    // 视图要具名: checked request 只持有它, sub() 调用期间必须存活
-    auto sub_view = make_item_readable_iterable(sub_requests);
-    ItemSubCheckedRequest sub_checked{checked_request.config_group, sub_view, get_container_guid(), get_operate_id(),
-                                      checked_request.source};
-    sub(sub_checked, ItemOperationReason::kReplaceSub);
-  }
-
-  // ============================================================
-  // Phase 2: 再放入新列表 (原因 kReplaceAdd)
-  // ============================================================
-  size_t new_request_count = checked_request.requests.size();
-  if (new_request_count > 0) {
-    // 同一份视图交给 add 的 checked request; 视图由 replace checked request 持有, 这里一直有效
-    ItemAddCheckedRequest add_checked{checked_request.config_group, checked_request.requests, get_container_guid(),
-                                      get_operate_id(), checked_request.source};
-    add(add_checked, ItemOperationReason::kReplaceAdd);
-  }
-
-  FWINSTLOGINFO(logger(), "replace success, {} old entries removed, {} requests applied, next_entry_id={}",
-                old_entry_count, new_request_count, peek_next_entry_id());
-  return result;
-}
-
 ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& config_group,
                                             const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
-                                            const ItemOperationSource& source) {
+                                            ItemOperationReason reason, const ItemOperationSource& source) {
   if (!is_operation_allowed("ItemContainer::load")) {
     return false;
   }
@@ -586,8 +505,8 @@ ITEM_ALGORITHM_API bool ItemContainer::load(const excel_config_group_ptr_t& conf
     return false;
   }
 
-  // 钩子上下文: 本接口固定是 kLoad, 来源由调用方传入
-  const ItemOperationContext context{ItemOperationReason::kLoad, source};
+  // 钩子上下文: 原因由调用方指定 (默认 kLoad), 来源由调用方传入
+  const ItemOperationContext context{reason, source};
   return on_load_one(config_group, item_instance, context);
 }
 

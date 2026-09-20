@@ -44,13 +44,13 @@ using item_placement_reservation_ptr_t = std::unique_ptr<ItemPlacementReservatio
 /// 本类只提供有限格子自己的行为与数据结构: 批次检查钩子 (on_check_add / on_check_sub /
 /// on_check_has)、单条执行钩子 (on_add_one / on_sub_one / on_load_one / on_apply_remove_one /
 /// on_apply_update_one / on_find_positions)、格子与占用判断、位置与 GUID 索引, 以及没有批次语义的
-/// move / check_move。增删改查的批次流程 (check_add / add / sub / check_has / replace / load /
+/// move / check_move。增删改查的批次流程 (check_add / add / sub / check_has / load /
 /// apply_entries / find_positions_*) 全部在基类 ItemContainer 里实现; 基类完成通用校验后一次调用
 /// 本模式的批次检查钩子, 单条执行钩子在 ItemFiniteGridContainerOperation.cpp, 寻位在
 /// ItemFiniteGridFindPosition.cpp。
 ///
 /// 库内不做 proto 位置字段的映射: 位置字段由接入层读取 (extract_position / apply_position),
-/// 空容器也由接入层创建 (create_empty_clone), 本类推不出最终容器类型。
+/// 本类推不出最终容器类型。
 class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
  public:
   using position_index_type =
@@ -186,16 +186,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
   friend class ItemFiniteGridFindPositionHelper;
 
   // ============================================================
-  // 空容器配置 (create_empty_clone 由接入层实现, 本模式只补自己的配置)
-  // ============================================================
-
-  /// @brief 把本模式的配置 (行列 / 位置字段 / 占用位图尺寸) 复制到空容器
-  ///
-  /// 被调用时机: 接入层的 create_empty_clone 建好同类型空容器之后立即调用;
-  /// 目标不是 ItemFiniteGridContainer 时记错误日志并返回。
-  ITEM_ALGORITHM_API void copy_empty_config_to(ItemContainer& out) const override;
-
-  // ============================================================
   // 批次检查钩子 — 基类已经完成通用字段校验与按类型的数量校验
   // ============================================================
 
@@ -224,7 +214,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
 
   /// @brief 放入一件道具 (合入锚点上的已有条目, 或新建条目并挂上位置索引与位图占用)
   ///
-  /// 被调用时机: 基类 add / replace(kReplaceAdd) 逐条循环, checked request 已校验通过。
+  /// 被调用时机: 基类 add 逐条循环, checked request 已校验通过; load 也走这里。
   /// 本条不合法 (类型缺失 / 不占格 / 位置配置缺失) 或条目没能进分组时只记日志并返回成功,
   /// 让整批继续 (这些分支都没动数量缓存, 与旧实现的 continue 一致)。
   /// @param instance 本条待放入的道具 (只读)
@@ -235,7 +225,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
 
   /// @brief 扣减一件道具 (扣完为 0 就整体移除条目, 摘掉位置索引、位图占用与 GUID 索引)
   ///
-  /// 被调用时机: 基类 sub / replace(kReplaceSub) 逐条循环, checked request 已校验通过。
+  /// 被调用时机: 基类 sub 逐条循环, checked request 已校验通过。
   /// 条目定位不到或位置配置缺失时只记日志并返回成功, 让整批继续。
   /// @param request 本条待扣减的请求 (只读)
   ITEM_ALGORITHM_API ItemOperationResult on_sub_one(ItemSubCheckedRequest& checked_request,
@@ -355,7 +345,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
                                           const item_entry_ptr_t& entry);
   /// @brief 解除条目的位置索引 / 位图占用 / GUID 索引 (操作流程调用)
   ///
-  /// 被调用时机: sub / move / replace / apply_entries 在条目整体移出容器之前调用。
+  /// 被调用时机: sub / move / apply_entries 在条目整体移出容器之前调用。
   ITEM_ALGORITHM_API void remove_entry_index(const PROJECT_NAMESPACE_ID::DItemPositionCfg& position_cfg,
                                              const item_entry_ptr_t& entry);
 

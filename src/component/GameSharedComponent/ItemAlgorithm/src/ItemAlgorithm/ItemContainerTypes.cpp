@@ -69,25 +69,6 @@ ITEM_ALGORITHM_API ItemMoveCheckedRequest::ItemMoveCheckedRequest(ItemMoveChecke
       container_guid(other.container_guid),
       operate_id(other.operate_id) {}
 
-ITEM_ALGORITHM_API ItemReplaceCheckedRequest::ItemReplaceCheckedRequest(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group,
-    item_instance_readable_iterable& in_requests, int64_t in_container_guid, int64_t in_operate_id,
-    const ItemOperationSource& in_source)
-    : config_group(in_config_group),
-      requests(in_requests),
-      source(in_source),
-      container_guid(in_container_guid),
-      operate_id(in_operate_id) {}
-
-ITEM_ALGORITHM_API ItemReplaceCheckedRequest::ItemReplaceCheckedRequest(ItemReplaceCheckedRequest&& other) noexcept
-    : config_group(std::move(other.config_group)),
-      requests(other.requests),
-      result(other.result),
-      source(other.source),
-      apply(other.apply),
-      container_guid(other.container_guid),
-      operate_id(other.operate_id) {}
-
 }  // namespace item_algorithm
 
 ITEM_ALGORITHM_NAMESPACE_END

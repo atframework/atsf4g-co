@@ -24,7 +24,7 @@ namespace item_algorithm {
 // ============================================================
 // 物品请求序列的只读 / 可写视图
 //
-// 容器的操作接口 (check_add / add / check_sub / sub / replace / check_has ...) 不再直接吃
+// 容器的操作接口 (check_add / add / check_sub / sub / check_has ...) 不再直接吃
 // google::protobuf::RepeatedPtrField<T>, 而是接收这层视图:
 //   - 调用方可以用任何"可遍历的容器" (RepeatedPtrField / std::vector / 数组 / gsl::span)
 //     通过 make_item_readable_iterable / make_item_writable_iterable 构造视图;

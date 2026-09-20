@@ -60,10 +60,6 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest::PerContainerData::PerCo
     item_container_ptr_t in_container)
     : container(std::move(in_container)) {}
 
-ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest::PerContainerData::PerContainerData(
-    item_container_ptr_t in_container)
-    : container(std::move(in_container)) {}
-
 // ============================================================
 // 组级 checked request 的特殊成员 (导出符号, 供 DLL 外构造/移动)
 // ============================================================
@@ -130,28 +126,6 @@ ITEM_ALGORITHM_API ItemContainerGroupMoveCheckedRequest& ItemContainerGroupMoveC
   if (this != &other) {
     config_group = std::move(other.config_group);
     requests = std::move(other.requests);
-    result = other.result;
-    container_data = std::move(other.container_data);
-    apply = other.apply;
-  }
-  return *this;
-}
-
-ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest::ItemContainerGroupReplaceCheckedRequest(
-    const ::excel::excel_config_type_traits::shared_ptr<::excel::config_group_t>& in_config_group)
-    : config_group(in_config_group) {}
-
-ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest::ItemContainerGroupReplaceCheckedRequest(
-    ItemContainerGroupReplaceCheckedRequest&& other) noexcept
-    : config_group(std::move(other.config_group)),
-      result(other.result),
-      container_data(std::move(other.container_data)),
-      apply(other.apply) {}
-
-ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest& ItemContainerGroupReplaceCheckedRequest::operator=(
-    ItemContainerGroupReplaceCheckedRequest&& other) noexcept {
-  if (this != &other) {
-    config_group = std::move(other.config_group);
     result = other.result;
     container_data = std::move(other.container_data);
     apply = other.apply;
@@ -453,66 +427,6 @@ ITEM_ALGORITHM_API ItemOperationResult ItemContainerGroup::move(ItemContainerGro
   // 分片顺序 = 容器第一次出现的顺序: 跨容器移动时来源容器先扣, 目标容器再放
   for (const auto& part : checked_request.container_data) {
     ItemOperationResult part_result = part->container->move(*part->checked);
-    if (part_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-      return part_result;
-    }
-  }
-
-  return checked_request.result;
-}
-
-// ---- Replace ----
-
-ITEM_ALGORITHM_API ItemContainerGroupReplaceCheckedRequest ItemContainerGroup::check_replace(
-    const excel_config_group_ptr_t& config_group, const item_instance_readable_iterable& requests,
-    const ItemOperationSource& source) const {
-  ItemContainerGroupReplaceCheckedRequest checked_request(config_group);
-  auto& result = checked_request.result;
-
-  container_part_collector<ItemContainerGroupReplaceCheckedRequest::PerContainerData> collector;
-  bool group_ok = requests.foreach ([&](const PROJECT_NAMESPACE_ID::DItemInstance& request) -> bool {
-    int32_t type_id = request.item_basic().type_id();
-    item_container_ptr_t container = select_container(request.item_basic().position());
-    if (container == nullptr) {
-      result.error_code = PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM;
-      result.failed_type_id = type_id;
-      return false;
-    }
-
-    *collector.get_or_create(container)->requests.Add() = request;
-    return true;
-  });
-  if (!group_ok) {
-    return checked_request;
-  }
-
-  checked_request.container_data = std::move(collector.parts());
-  for (auto& part : checked_request.container_data) {
-    auto container_checked = part->container->check_replace(config_group, part->requests, source);
-    if (container_checked.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-      result.error_code = container_checked.result.error_code;
-      result.failed_type_id = container_checked.result.failed_type_id;
-      checked_request.container_data.clear();
-      return checked_request;
-    }
-    part->checked.reset(new ItemReplaceCheckedRequest(std::move(container_checked)));
-  }
-
-  return checked_request;
-}
-
-ITEM_ALGORITHM_API ItemOperationResult
-ItemContainerGroup::replace(ItemContainerGroupReplaceCheckedRequest& checked_request) {
-  if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-    return checked_request.result;
-  }
-  if (checked_request.apply) {
-    return {PROJECT_NAMESPACE_ID::EN_ERR_INVALID_PARAM, 0};
-  }
-  checked_request.apply = true;
-
-  for (const auto& part : checked_request.container_data) {
-    ItemOperationResult part_result = part->container->replace(*part->checked);
     if (part_result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
       return part_result;
     }

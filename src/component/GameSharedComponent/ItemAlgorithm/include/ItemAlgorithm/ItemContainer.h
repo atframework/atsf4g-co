@@ -33,8 +33,8 @@ using item_container_ptr_t = atfw::util::memory::strong_rc_ptr<ItemContainer>;
 ///   1. 自己私有的条目存储与索引: item_groups_ (按 type_id 分组, 每个分组保存该类型排好序
 ///      的条目与数量缓存, 之后所有按 type_id 统计的数据也放这里)、entry_id_index_、
 ///      日志处理器、自增 entry_id 与操作流水号, 以及这些数据的生命周期与查询接口。
-///   2. 增删改查的**批次流程**: check_add / check_sub / check_replace / check_has / add /
-///      sub / replace / load / apply_entries / find_positions_* 全部在基类实现。
+///   2. 增删改查的**批次流程**: check_add / check_sub / check_has / add /
+///      sub / load / apply_entries / find_positions_* 全部在基类实现。
 ///      基类负责持有入参视图、初始化检查、通用校验、循环与结果汇总; 子类只实现单条钩子。
 ///   3. 给子类提供条目级原语 (建条目 / 入分组 / 改数量 / 改数据 / 刷排序键) 与
 ///      数量变化通知 (notify_entry_count_changed) 等公共收尾。
@@ -82,7 +82,12 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ItemContainer& operator=(ItemContainer&&) = delete;
 
  public:
-  // 清空
+  /// @brief 清空容器: 逐条移除现有条目, 并像 sub 那样触发变更通知
+  ///
+  /// 与 sub 的整体移除共用同一套流程 (摘索引 -> 摘分组 -> 数量归零 -> 通知),
+  /// 区别只是不做任何校验 (调用方已经决定要清空)。每条现存条目都会触发一次
+  /// on_item_count_changed (new_count == 0) 与 on_item_data_changed, 原因 kClear;
+  /// 容器为空时不产生通知。
   ITEM_ALGORITHM_API void clear();
 
  public:
@@ -99,7 +104,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   // ---- 查询接口 ----
   /// @brief 遍历容器内的所有道具实例
   ///
-  /// 遍历期间容器处于"只读"状态: add / sub / move / replace / load / apply_entries 会直接失败
+  /// 遍历期间容器处于"只读"状态: add / sub / move / load / apply_entries 会直接失败
   /// (见 is_operation_allowed), 避免迭代器失效或边遍历边改数据。
   /// 回调返回 false 会中断遍历。
   /// @return true 表示所有条目都被访问过 (回调没有提前中断)
@@ -132,8 +137,8 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   //                       每条再调子类的 on_check_*_one 补本模式规则。
   // add / sub / load    : 单物品语义。基类校验 checked request 后遍历请求视图,
   //                       子类只实现 on_add_one / on_sub_one / on_load_one。
-  // replace             : 基类 = 移除全部现有条目 + 逐条放入新列表, 复用单条钩子。
   // apply_entries       : 基类 = 逐条删除 + 逐条新增/更新, 复用 on_apply_*_one。
+  // 整体替换            : 库不再提供 replace 接口, 由调用方用 clear() + 逐条 load() 组合实现。
   // find_positions_*    : 基类做入参校验与输出预留, 子类实现 on_find_positions。
   // ============================================================
 
@@ -177,15 +182,6 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// 两个阶段各自逐条调用子类的 on_move_sub_one / on_move_add_one; 任一条失败即结束并返回该错误。
   ITEM_ALGORITHM_API ItemOperationResult move(ItemMoveCheckedRequest& checked_request);
 
-  /// @brief 校验整体替换: 基类用同配置的空容器复用 check_add 校验新列表
-  /// @param requests 具名请求视图 (checked request 会引用它, 所以不能传临时视图; 调用方需保证它活到 replace 执行完)
-  ITEM_ALGORITHM_API ItemReplaceCheckedRequest
-  check_replace(const excel_config_group_ptr_t& config_group, item_instance_readable_iterable& requests,
-                const ItemOperationSource& source = ItemOperationSource{}) const;
-
-  /// @brief 执行整体替换: 基类先清空全部现有条目 (kReplaceSub), 再逐条放入新列表 (kReplaceAdd)
-  ITEM_ALGORITHM_API ItemOperationResult replace(ItemReplaceCheckedRequest& checked_request);
-
   /// @brief 两个 proto 位置是否落在同一个坐标上 (按本模式的字段映射判断)
   ///
   /// 位置字段的映射 (extract_position) 是接入层实现、库内不对外暴露, 需要比较位置时用本接口:
@@ -197,10 +193,14 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   ITEM_ALGORITHM_API ItemOperationResult check_has(const excel_config_group_ptr_t& config_group,
                                                    const item_basic_readable_iterable& requests) const;
 
-  /// @brief 载入一条持久化数据 (单物品; 与 add 的区别是固定 kLoad 原因且不校验 GUID 唯一)
+  /// @brief 载入一条持久化数据 (单物品; 与 add 的区别是不校验 GUID 唯一)
+  /// @param reason 传给钩子的操作原因 (默认 kLoad; 整体替换等场景由调用方指定, 如 kReplaceLoad)
+  /// @param source 调用方透传的操作来源
+  /// @return false 表示本条载入失败 (调用方决定跳过还是中止)
   ITEM_ALGORITHM_API bool load(const excel_config_group_ptr_t& config_group,
-                               const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
-                               const ItemOperationSource& source = ItemOperationSource{});
+                              const PROJECT_NAMESPACE_ID::DItemInstance& item_instance,
+                              ItemOperationReason reason = ItemOperationReason::kLoad,
+                              const ItemOperationSource& source = ItemOperationSource{});
 
   /// @brief 应用客户端同步包: 基类逐条删除 + 逐条新增/更新
   ITEM_ALGORITHM_API void apply_entries(const excel_config_group_ptr_t& config_group,
@@ -230,10 +230,10 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
  protected:
   // 钩子开始
-  /// @brief 清空子类自己维护的索引 (位置索引 / GUID 索引)
+  /// @brief 清空子类自己维护的索引 (位置索引 / GUID 索引 / 占用位图)
   ///
-  /// clear() 只清空基类持有的条目存储, 跟踪位置的模式必须覆盖本函数,
-  /// 否则清空后位置索引会残留已删除条目。
+  /// 被调用时机: clear() 在逐条触发变更通知之前调用一次 (与 sub 完全移除时的摘索引同序)。
+  /// 跟踪位置的模式必须覆盖本函数, 否则清空后索引会残留已删除条目。
   ITEM_ALGORITHM_API virtual void on_clear();
 
   // ============================================================
@@ -292,7 +292,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
   /// @brief 本条放入请求是否直接跳过 (即不校验也不执行)
   ///
   /// 被调用时机: check_add / add 的逐条循环开头, 在通用校验之前。默认不跳过;
-  /// 无位置容器把 count == 0 的请求当成空请求跳过 (add 与 replace 的新列表都走这条)。
+  /// 无位置容器把 count == 0 的请求当成空请求跳过。
   ITEM_ALGORITHM_API virtual bool should_skip_add_request(const PROJECT_NAMESPACE_ID::DItemInstance& request) const;
 
   /// @brief 道具数量上限检查
@@ -379,18 +379,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
       const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const = 0;
   /// @brief 把容器内部坐标写回 proto 位置字段 (由接入层按自己的位置字段实现)
   ITEM_ALGORITHM_API virtual void apply_position(PROJECT_NAMESPACE_ID::DItemGridPosition& position,
-                                                 const ItemGridPosition& grid_pos) const = 0;
-
-  /// @brief 创建一个同配置的空容器 (由接入层实现, 库内不知道最终容器类型)
-  ///
-  /// 被调用时机: check_replace 为了复用 check_add 的校验流程而调用。
-  /// 实现要点: 必须返回同类型容器, 并把本容器的配置 (行列 / 位置字段 / 业务配置表) 复制过去,
-  /// 否则 check_replace 会用错配置去校验。库内不提供默认实现。
-  ITEM_ALGORITHM_API virtual item_container_ptr_t create_empty_clone() const = 0;
-  /// @brief 把本容器的配置复制到空容器 (由各模式实现自己那部分)
-  ///
-  /// 被调用时机: 具体容器的 create_empty_clone 内部调用, 用于补齐模式自己持有的配置。
-  ITEM_ALGORITHM_API virtual void copy_empty_config_to(ItemContainer& out) const;
+                                                const ItemGridPosition& grid_pos) const = 0;
 
   // ============================================================
   // 子类可覆盖的变更通知钩子 (默认空实现)
@@ -412,7 +401,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 放入一件道具
   ///
-  /// 被调用时机: add / replace(kReplaceAdd) 逐条循环时, 每条一次。
+  /// 被调用时机: add 逐条循环时, 每条一次。
   /// 基类已确认 checked request 合法 (无错误码 / 未 apply / 容器 GUID 与流水号匹配);
   /// 子类只需在本条上做落位: 合并到已有条目, 或新建条目并挂上自己的索引。
   /// @param checked_request 批次请求
@@ -424,7 +413,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 扣减一件道具
   ///
-  /// 被调用时机: sub / replace(kReplaceSub) 逐条循环时, 每条一次。基类的保证同 on_add_one。
+  /// 被调用时机: sub 逐条循环时, 每条一次。基类的保证同 on_add_one。
   /// @param request 本条待扣减的请求 (只读)
   ITEM_ALGORITHM_API virtual ItemOperationResult on_sub_one(ItemSubCheckedRequest& checked_request,
                                                             const PROJECT_NAMESPACE_ID::DItemBasic& request,
@@ -542,7 +531,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 批次操作执行前的 checked request 校验 (错误码 / apply 标记 / 容器 GUID / 流水号)
   ///
-  /// 被调用时机: add / sub / replace 的开头, 由基类统一调用; 通过后调用方把 apply 置为 true。
+  /// 被调用时机: add / sub 的开头, 由基类统一调用; 通过后调用方把 apply 置为 true。
   /// @param check_result check_* 得到的 result (失败时原样返回, 保留 failed_type_id)
   /// @return EN_SUCCESS 表示可以执行; 其他值由调用方直接返回给上层
   ITEM_ALGORITHM_API ItemOperationResult validate_checked_request(const ItemOperationResult& check_result, bool apply,
@@ -567,7 +556,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemContainer : public atfw::util::memory::enable
 
   /// @brief 迭代期间禁止的容器操作统一入口
   ///
-  /// 每个模式的 add / sub / move / replace / load / apply_entries 在入口先调本函数;
+  /// 每个模式的 add / sub / move / load / apply_entries 在入口先调本函数;
   /// 返回 false 表示当前正在 foreach_instance 中, 调用方应直接返回
   /// EN_ERR_INVALID_PARAM (函数内部已记错误日志)。
   /// @param operation_name 操作名, 仅用于日志

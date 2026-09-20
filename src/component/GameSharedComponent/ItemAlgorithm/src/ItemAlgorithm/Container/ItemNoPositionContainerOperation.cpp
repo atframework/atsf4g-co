@@ -15,14 +15,14 @@ namespace item_algorithm {
 // ============================================================
 // 无位置容器的单条操作实现
 //
-// 增删改查的批次流程 (check_add / add / check_sub / sub / check_replace / replace / check_has /
+// 增删改查的批次流程 (check_add / add / check_sub / sub / check_has /
 // load / apply_entries / find_positions_*) 都在基类 ItemContainer 里, 本文件只实现基类路由过来的
 // 单条钩子。
 //
 // 本模式不关心位置: 道具按类型合并计数, 没有位置索引、没有 GUID、没有格子与占用判断,
 // 也没有 move (无从谈起把道具从哪个位置挪到哪个位置)。
 // 同类型可能存在多个条目 (客户端同步会新建条目), 因此按类型扣减时要逐个扣到满足为止。
-// 位置字段的读写 (extract_position / apply_position) 与 create_empty_clone 由接入层实现。
+// 位置字段的读写 (extract_position / apply_position) 由接入层实现。
 // ============================================================
 
 // ============================================================
@@ -47,7 +47,7 @@ ItemNoPositionContainer::on_check_add(const ItemAddCheckedRequest& /*checked_req
 ITEM_ALGORITHM_API ItemOperationResult ItemNoPositionContainer::on_add_one(
     ItemAddCheckedRequest& /*checked_request*/, const PROJECT_NAMESPACE_ID::DItemInstance& req,
     const ItemOperationContext& context) {
-  // 被调用时机: 基类 add / replace(kReplaceAdd) 逐条循环, 每条一次。
+  // 被调用时机: 基类 add 逐条循环, 每条一次; load 也走这里 (载入时同样要落位)。
   ItemOperationResult result;
 
   const auto& item_basic = req.item_basic();
@@ -112,7 +112,7 @@ ItemNoPositionContainer::on_check_sub(const ItemSubCheckedRequest& /*checked_req
 ITEM_ALGORITHM_API ItemOperationResult ItemNoPositionContainer::on_sub_one(ItemSubCheckedRequest& /*checked_request*/,
                                                                            const PROJECT_NAMESPACE_ID::DItemBasic& req,
                                                                            const ItemOperationContext& context) {
-  // 被调用时机: 基类 sub / replace(kReplaceSub) 逐条循环, 每条一次。
+  // 被调用时机: 基类 sub 逐条循环, 每条一次。
   ItemOperationResult result;
 
   int64_t sub_count = req.count();
