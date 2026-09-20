@@ -68,13 +68,6 @@ void user_item_container<ModeContainerT, DerivedT>::destroy() {
 }
 
 template <typename ModeContainerT, typename DerivedT>
-item_algorithm::item_container_ptr_t user_item_container<ModeContainerT, DerivedT>::create_empty_clone() const {
-  auto clone = atfw::component::memory::stl::make_strong_rc<DerivedT>(owner_);
-  this->copy_empty_config_to(*clone);
-  return clone;
-}
-
-template <typename ModeContainerT, typename DerivedT>
 item_algorithm::ItemGridPosition user_item_container<ModeContainerT, DerivedT>::extract_position(
     const PROJECT_NAMESPACE_ID::DItemGridPosition& position) const {
   item_algorithm::ItemGridPosition result;

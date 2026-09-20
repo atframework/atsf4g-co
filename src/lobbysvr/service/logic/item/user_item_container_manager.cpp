@@ -359,17 +359,6 @@ item_algorithm::ItemOperationResult user_item_container_manager::move(
   return item_algorithm::ItemContainerGroup::move(checked_request);
 }
 
-item_algorithm::ItemContainerGroupReplaceCheckedRequest user_item_container_manager::check_replace(
-    const item_algorithm::item_instance_readable_iterable& requests,
-    const item_algorithm::ItemOperationSource& source) const {
-  return item_algorithm::ItemContainerGroup::check_replace(excel::get_current_config_group(), requests, source);
-}
-
-item_algorithm::ItemOperationResult user_item_container_manager::replace(
-    item_algorithm::ItemContainerGroupReplaceCheckedRequest& checked_request) {
-  return item_algorithm::ItemContainerGroup::replace(checked_request);
-}
-
 item_algorithm::ItemOperationResult user_item_container_manager::check_has(
     const item_algorithm::item_basic_readable_iterable& requests) const {
   return item_algorithm::ItemContainerGroup::check_has(excel::get_current_config_group(), requests);

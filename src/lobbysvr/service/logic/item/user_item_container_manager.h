@@ -104,7 +104,7 @@ class user_container_item_operation_handler : public item_operation_handler {
 ///
 /// 本身就是 SDK 的容器组 (ItemContainerGroup):
 ///   - select_container 按 position.container_guid 在登记表里选容器;
-///   - check_add / add / check_sub / sub / check_move / move / check_replace / replace / check_has
+///   - check_add / add / check_sub / sub / check_move / move / check_has
 ///     都由组实现 (按 position 分片、逐容器校验与执行、第一个失败即返回);
 ///   - 本层只补上配置组 (excel::get_current_config_group) 与操作来源, 以及容器登记、脏数据同步。
 class user_item_container_manager : public atfw::util::design_pattern::noncopyable,
@@ -151,11 +151,6 @@ class user_item_container_manager : public atfw::util::design_pattern::noncopyab
       std::vector<item_algorithm::ItemContainerGroupMoveRequest>&& requests,
       const item_algorithm::ItemOperationSource& source = item_algorithm::ItemOperationSource{}) const;
   item_algorithm::ItemOperationResult move(item_algorithm::ItemContainerGroupMoveCheckedRequest& checked_request);
-
-  item_algorithm::ItemContainerGroupReplaceCheckedRequest check_replace(
-      const item_algorithm::item_instance_readable_iterable& requests,
-      const item_algorithm::ItemOperationSource& source = item_algorithm::ItemOperationSource{}) const;
-  item_algorithm::ItemOperationResult replace(item_algorithm::ItemContainerGroupReplaceCheckedRequest& checked_request);
 
   item_algorithm::ItemOperationResult check_has(const item_algorithm::item_basic_readable_iterable& requests) const;
 

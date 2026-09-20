@@ -46,19 +46,15 @@ void user_virtual_inventory::dump(google::protobuf::RepeatedPtrField<PROJECT_NAM
 
 void user_virtual_inventory::replace(
     const google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& items) {
-  // check_replace 只引用传入的视图 (且参数是非 const 引用, 临时视图传不进来),
-  // 所以这里先落地一个具名视图, 保证它活到 replace 执行完
-  auto requests = item_algorithm::make_item_readable_iterable(items);
-  auto checked_request = virtual_container_->check_replace(excel::get_current_config_group(), requests);
-  if (checked_request.result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-    FWLOGERROR("user_virtual_inventory replace check_replace failed, error: {}({})", checked_request.result.error_code,
-               PROJECT_NAMESPACE_ID::EnErrorCode_Name(checked_request.result.error_code));
-    return;
-  }
+  // 整体替换 = 先清空现有条目, 再逐条载入新列表。
+  // 单条载入失败 (数据非法 / 数量超限) 只记日志并跳过, 不影响其余数据落地。
+  virtual_container_->clear();
 
-  auto result = virtual_container_->replace(checked_request);
-  if (result.error_code != PROJECT_NAMESPACE_ID::EN_SUCCESS) {
-    FWLOGERROR("user_virtual_inventory replace failed, error: {}({})", result.error_code,
-               PROJECT_NAMESPACE_ID::EnErrorCode_Name(result.error_code));
+  auto config_group = excel::get_current_config_group();
+  for (const auto& item : items) {
+    if (!virtual_container_->load(config_group, item, item_algorithm::ItemOperationReason::kReplaceLoad)) {
+      FWLOGWARNING("user_virtual_inventory replace skip invalid item, type_id: {}, count: {}",
+                   item.item_basic().type_id(), item.item_basic().count());
+    }
   }
 }

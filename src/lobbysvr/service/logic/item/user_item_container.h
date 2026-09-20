@@ -17,12 +17,11 @@ class user;
 namespace item_algorithm = ITEM_ALGORITHM_NAMESPACE_ID::item_algorithm;
 
 /// 负责: 持有 owner / 注册日志处理器 / 把条目变化转发给 user_item_container_manager /
-/// 提供同业务类型的空克隆 (check_replace 复用 check_add 校验) / 销毁时注销登记。
-/// 批量操作 (check_add / add / check_sub / sub / check_move / move / check_replace / replace /
-/// check_has) 直接用 SDK 容器基类 ItemContainer 与组 ItemContainerGroup 的流程, 接入层只负责
-/// 位置字段映射 (extract_position / apply_position) 与条目变化通知。
-/// 格子语义由 ModeContainerT 提供 (三种模式容器之一); DerivedT 是最终业务类型,
-/// 空克隆按它创建, 因此派生类 (如虚拟仓库) 不需要自己再写 create_empty_clone。
+/// 销毁时注销登记。
+/// 批量操作 (check_add / add / check_sub / sub / check_move / move / check_has) 直接用 SDK
+/// 容器基类 ItemContainer 与组 ItemContainerGroup 的流程, 接入层只负责位置字段映射
+/// (extract_position / apply_position) 与条目变化通知。
+/// 格子语义由 ModeContainerT 提供 (三种模式容器之一); DerivedT 是最终业务类型。
 template <typename ModeContainerT, typename DerivedT>
 class user_item_container : public ModeContainerT {
  public:
@@ -40,8 +39,6 @@ class user_item_container : public ModeContainerT {
   void destroy();
 
  protected:
-  item_algorithm::item_container_ptr_t create_empty_clone() const override;
-
   /// @brief proto 位置字段 → 通用坐标 (接入层的字段映射)
   ///
   /// 组件不映射 proto 位置字段, 这里按 init 声明的位置字段读写:
