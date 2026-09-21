@@ -57,9 +57,9 @@ message DFriendInvitationInfo {
   atframework.shared.DUserIDKey from_user = 1;
   atframework.shared.DUserIDKey to_user = 2;
 
-  int64 created_time = 11;  // 该条记录产生时间
-  int64 removed_time = 12;  // 该条记录被移除的时间
-  int64 expired_time = 13;  // 该条记录失效时间
+  google.protobuf.Timestamp created_time = 11;  // 该条记录产生时间
+  google.protobuf.Timestamp removed_time = 12;  // 该条记录被移除的时间
+  google.protobuf.Timestamp expired_time = 13;  // 该条记录失效时间
 
   int64 event_id = 21;  // (服务器内部使用) 最后操作的事件ID
 }
@@ -67,9 +67,9 @@ message DFriendInvitationInfo {
 message DFriendInfo {
   atframework.shared.DUserIDKey user_key = 1;
 
-  int64 created_time = 11;  // 该条记录产生时间
-  int64 removed_time = 12;  // 该条记录被移除的时间
-  int64 expired_time = 13;  // 该条记录失效时间
+  google.protobuf.Timestamp created_time = 11;  // 该条记录产生时间
+  google.protobuf.Timestamp removed_time = 12;  // 该条记录被移除的时间
+  google.protobuf.Timestamp expired_time = 13;  // 该条记录失效时间
 
   int64 event_id = 21;  // (服务器内部使用) 最后操作的事件ID
 }
@@ -83,7 +83,7 @@ message DFriendSNSInfo {
 // 好友通知数据
 message DFriendEvent {
   int64 event_id = 1;          // 事件ID
-  int64 create_timepoint = 2;  // 创建时间
+  google.protobuf.Timestamp create_timepoint = 2;  // 创建时间
 
   oneof event {
     DFriendInvitationInfo add_inviter = 11;     // 添加被邀请

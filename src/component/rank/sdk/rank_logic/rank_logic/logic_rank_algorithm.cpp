@@ -1,6 +1,6 @@
 // Copyright 2026 atframework
 
-#include "logic_rank_algorithm.h"
+#include "rank_logic/logic_rank_algorithm.h"
 
 #include <gsl/select-gsl.h>
 #include <lock/lock_holder.h>
@@ -35,7 +35,9 @@
 #include <dispatcher/task_action_ss_req_base.h>
 
 #include <cmath>
-#include <limits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #ifdef max
 #  undef max
@@ -84,7 +86,8 @@ logic_rank_get_current_settlement_daily_id(const PROJECT_NAMESPACE_ID::config::E
 
 RANK_LOGIC_SDK_API time_t logic_rank_get_current_settlement_daily_start_time(
     const PROJECT_NAMESPACE_ID::config::ExcelRankRule& incfg, time_t now) {
-  return logic_datetime_cache_get_day_start_timepoint(now, incfg.content().settlement_time_offset().seconds());
+  return std::chrono::system_clock::to_time_t(
+      logic_datetime_cache_get_day_start_timepoint(now, incfg.content().settlement_time_offset().seconds()));
 }
 
 RANK_LOGIC_SDK_API int64_t logic_rank_get_current_settlement_custom_season_id(

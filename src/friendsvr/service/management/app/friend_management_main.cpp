@@ -29,7 +29,10 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <router/router_friend_cache.h>
 #include <router/router_friend_manager.h>
+
+#include <rpc/rpc_context.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -37,15 +40,26 @@
 #include <string>
 
 #include "app/handle_ss_rpc_friendmanagementservice.atfw.gen.h"
+#include "data/friend_object.h"
 
 namespace {
 class main_service_module : public atfw::atapp::module_impl {
+ private:
+  static atfw::friend_api::router_friend_cache::object_ptr_t create_friend_fn(rpc::context &ctx, uint32_t zone_id,
+                                                                              uint64_t user_id) {
+    return std::static_pointer_cast<atfw::friend_api::friend_cache>(
+        atfw::friend_api::friend_object::create(ctx, zone_id, user_id));
+  }
+
  public:
   int init() override {
     {
       // register all router managers
       atfw::friend_api::router_friend_manager::me();
     }
+
+    // setup how to create friend
+    atfw::friend_api::router_friend_manager::me()->set_create_object_fn(create_friend_fn);
 
     // register handles
     INIT_CALL_FN(handle::friend_api::register_handles_for_friendmanagementservice);

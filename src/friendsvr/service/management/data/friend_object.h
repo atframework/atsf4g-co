@@ -10,10 +10,14 @@
 
 #include <rpc/rpc_common_types.h>
 
-#include <list>
+#include <memory/lru_map.h>
+
+#include <chrono>
+#include <functional>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "data/friend_transaction_participator_handle.h"
 #include "data/friend_wal_handle.h"
@@ -64,9 +68,13 @@ class friend_object : public friend_cache {
 
   bool remove_inviter(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src);
 
-  bool add_invitee(int64_t event_id, DFriendInvitationInfo& src);
+  bool add_invitee(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src);
 
-  bool remove_invitee(int64_t event_id, DFriendInvitationInfo& src);
+  bool remove_invitee(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src);
+
+  bool add_gift(rpc::context& ctx, int64_t event_id, DFriendGift& src);
+
+  bool remove_gift(rpc::context& ctx, int64_t event_id, DFriendGift& src);
 
   void refresh_feature_limit(rpc::context& ctx);
 
@@ -88,39 +96,50 @@ class friend_object : public friend_cache {
   const friend_transaction_participator_handle& get_transaction_handle() const noexcept;
 
   atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data>
-  mutable_transaction_participator_data(const std::string& transaction_uuid, friend_key_type key,
+  mutable_transaction_participator_data(rpc::context& ctx, const std::string& transaction_uuid, friend_key_type key,
                                         const google::protobuf::Any& data);
-  void remove_transaction_data(const std::string& transaction_uuid);
+  void remove_transaction_data(rpc::context& ctx, const std::string& transaction_uuid);
 
-  void cleanup_invalid_friends(time_t now, time_t max_expire_timepoint, int32_t& friend_number_cache);
-  void cleanup_invalid_invitees(time_t now, time_t max_expire_timepoint, int32_t& invitee_number_cache);
-  int32_t get_current_friend_num() const;
-  int32_t get_current_inviter_num() const;
+  void cleanup_invalid_friends(rpc::context& ctx, std::chrono::system_clock::time_point now);
+  void cleanup_invalid_inviters(rpc::context& ctx, std::chrono::system_clock::time_point now);
+  void cleanup_invalid_invitees(rpc::context& ctx, std::chrono::system_clock::time_point now);
+  void cleanup_invalid_gifts(rpc::context& ctx, std::chrono::system_clock::time_point now);
+
+  size_t get_current_friend_count() const noexcept;
+  size_t get_current_inviter_count() const noexcept;
 
   const std::unordered_map<friend_key_type, DFriendInvitationInfo, friend_key_hash_type>& get_all_inviters() const {
     return inviters_;
   }
 
  private:
-  void check_inviter_num_exceed(rpc::context& ctx, int64_t event_id);
+  void check_inviter_count_exceed(rpc::context& ctx, int64_t event_id);
   void set_quick_save() const;
 
  private:
+  mutable bool already_setup_quick_save_;
   int64_t event_id_allocator_;
   atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> wal_publisher_;
   atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle> transaction_handle_;
 
+  std::unordered_map<int64_t, DFriendGift> gifts_;
+  std::unordered_map<friend_key_type, std::unordered_set<int64_t>, friend_key_hash_type> gift_sender_index_;
   std::unordered_map<friend_key_type, DFriendInvitationInfo, friend_key_hash_type> inviters_;
-  // std::unordered_map<friend_key_type, DFriendInvitationInfo, friend_key_hash_type> invitees_;
+  std::unordered_map<friend_key_type, DFriendInvitationInfo, friend_key_hash_type> invitees_;
   std::unordered_map<friend_key_type, DFriendInfo, friend_key_hash_type> friends_;
 
-  std::unordered_map<
-      std::string,                         // transaction_uuid
-      std::unordered_map<friend_key_type,  // participator key
-                         atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data>,
-                         friend_key_hash_type>>
+  struct transaction_participator_data_cache_t {
+    std::chrono::system_clock::time_point timeout;
+    std::unordered_map<friend_key_type,  // participator key
+                       atfw::util::memory::strong_rc_ptr<PROJECT_NAMESPACE_ID::friend_transaction_data>,
+                       friend_key_hash_type>
+        participator_data;
+  };
+
+  atfw::util::memory::lru_map<std::string, transaction_participator_data_cache_t, std::hash<std::string>,
+                              std::equal_to<>,
+                              atfw::util::memory::lru_map_option<atfw::util::memory::compat_strong_ptr_mode::kStrongRc>>
       transaction_participator_data_cache_;
-  std::list<std::pair<std::string, time_t>> transaction_participator_data_cache_expire_timepoint_;
 };
 
 }  // namespace friend_api

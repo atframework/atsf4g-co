@@ -7,6 +7,9 @@
 namespace atframework {
 namespace friend_api {
 
+friend_wal_publisher_context::friend_wal_publisher_context(rpc::context& ctx, int32_t& output_result)
+    : context(std::ref(ctx)), result_code(std::ref(output_result)) {}
+
 DFriendEvent::EventCase friend_wal_publisher_log_action_getter::operator()(
     const DFriendEvent& event_data) const noexcept {
   return event_data.event_case();

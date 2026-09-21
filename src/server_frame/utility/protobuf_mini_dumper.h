@@ -149,7 +149,9 @@ ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_copy_message(::google::protobuf::M
  * @param src 拷贝源
  */
 template <class TMsg>
-ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(TMsg &dst, TMsg &&src) {
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_move_message(TMsg &dst,
+                                                           // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
+                                                           TMsg &&src) {
   if (&src == &dst) {
     return;
   }
@@ -239,6 +241,7 @@ ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_at(::google::protobuf::Rep
  */
 template <class TEle, class TCheckFn>
 ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedPtrField<TEle> &arr,
+                                                         // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
                                                          TCheckFn &&fn) {
   int new_index = 0;
   int old_index = 0;
@@ -270,7 +273,9 @@ ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::Rep
  * @return 删除的元素个数
  */
 template <class TEle, class TCheckFn>
-ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedField<TEle> &arr, TCheckFn &&fn) {
+ATFW_UTIL_SYMBOL_VISIBLE int protobuf_remove_repeated_if(::google::protobuf::RepeatedField<TEle> &arr,
+                                                         // NOLINTNEXTLINE(cppcoreguidelines-missing-std-forward)
+                                                         TCheckFn &&fn) {
   int new_index = 0;
   int old_index = 0;
   int ret = 0;
@@ -305,6 +310,15 @@ SERVER_FRAME_API std::chrono::system_clock::time_point protobuf_to_system_clock(
 SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chrono::system_clock::time_point tp);
 
 /**
+ * @brief 系统时间转Prototbuf well known 时间点类型
+ * @param dst 写入目标
+ * @param tp 时间点
+ * @return Prototbuf well known 时间点类型
+ */
+SERVER_FRAME_API void protobuf_from_system_clock(google::protobuf::Timestamp &dst,
+                                                 std::chrono::system_clock::time_point tp);
+
+/**
  * @brief Prototbuf well known 时间周期类型转标准时间
  * @param dur 时间周期
  * @return 标准时间周期
@@ -319,16 +333,27 @@ SERVER_FRAME_API std::chrono::system_clock::duration protobuf_to_system_clock(co
 
 /**
  * @brief 标准时间转Prototbuf well known 时间周期类型
+ * @param dst 写入目标
+ * @param dur 时间周期
+ * @return Prototbuf well known 时间周期类型
+ */
+template <class DurationType = std::chrono::system_clock::duration>
+ATFW_UTIL_SYMBOL_VISIBLE inline void protobuf_from_chrono_duration(google::protobuf::Duration &dst, DurationType dur) {
+  dst.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(dur).count()));
+  dst.set_nanos(static_cast<int32_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(dur - std::chrono::seconds{dst.seconds()}).count() %
+      1000000000));
+}
+
+/**
+ * @brief 标准时间转Prototbuf well known 时间周期类型
  * @param dur 时间周期
  * @return Prototbuf well known 时间周期类型
  */
 template <class DurationType = std::chrono::system_clock::duration>
 ATFW_UTIL_SYMBOL_VISIBLE inline google::protobuf::Duration protobuf_from_chrono_duration(DurationType dur) {
   google::protobuf::Duration ret;
-  ret.set_seconds(static_cast<int64_t>(std::chrono::duration_cast<std::chrono::seconds>(dur).count()));
-  ret.set_nanos(static_cast<int32_t>(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(dur - std::chrono::seconds{ret.seconds()}).count() %
-      1000000000));
+  protobuf_from_chrono_duration(ret, dur);
   return ret;
 }
 

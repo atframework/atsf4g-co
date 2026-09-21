@@ -185,7 +185,7 @@ enum EnErrorCode {
   EN_ERR_OPENAPI_PAY_MAINTAIN = -207
   [(error_code.description) = "支付服务器维护中，暂不可用"];
 
-  EN_ERR_TEXT_HAS_DIRTY_WORD = -301
+  EN_ERR_TEXT_HAS_DIRTY_WORD = -131
   [(error_code.description) = "检测到脏字"];
 
   // 登录服务的返回错误码
@@ -399,6 +399,45 @@ enum EnErrorCode {
   [(error_code.description) = "没有组队操作权限"];
   EN_ERR_TEAM_MEMBER_NOT_READY = -1216
   [(error_code.description) = "队伍成员未准备"];
+
+  // 好友错误码[1301-1400]
+  EN_ERR_FRIEND_NOT_FOUND = -1301
+  [(error_code.description) = "该玩家不是好友"];
+  EN_ERR_FRIEND_ALREADY_FRIEND = -1302
+  [(error_code.description) = "该玩家已经是好友"];
+  EN_ERR_FRIEND_ALREADY_SEND_INVITE = -1303
+  [(error_code.description) = "已经给该玩家发过好友请求"];
+  EN_ERR_FRIEND_ALREADY_BE_INVITED = -1304
+  [(error_code.description) = "该玩家已经向您发过申请"];
+  EN_ERR_FRIEND_INVITE_NOT_FOUND = -1305
+  [(error_code.description) = "好友请求不存在"];
+  EN_ERR_FRIEND_GIFT_CONFIG_NOT_FOUND = -1306
+  [(error_code.description) = "好友礼物配置不存在"];
+  EN_ERR_FRIEND_GIFT_DAILY_SEND_LIMIT = -1307
+  [(error_code.description) = "已达每日发送好友礼物上限"];
+  EN_ERR_FRIEND_GIFT_DAILY_RECEIVE_LIMIT = -1308
+  [(error_code.description) = "已达每日接收好友礼物上限"];
+  EN_ERR_FRIEND_GIFT_ALREAD_SEND = -1309
+  [(error_code.description) = "已经向改好友发送过礼物"];
+  EN_ERR_FRIEND_GIFT_NOT_FOUND = -1310
+  [(error_code.description) = "好友礼物不存在"];
+  EN_ERR_FRIEND_MAX_NUMBER_LIMIT = -1311
+  [(error_code.description) = "达到好友数量上限"];
+  EN_ERR_FRIEND_MAX_NUMBER_LIMIT_OTHER = -1312
+  [(error_code.description) = "对方已达到好友数量上限"];
+  EN_ERR_FRIEND_INVITE_DAILY_LIMIT = -1313
+  [(error_code.description) = "达到每日邀请数量上限"];
+  EN_ERR_FRIEND_CAN_NOT_INVITE_CORSS_ZONE = -1314
+  [(error_code.description) = "不允许跨大区加好友"];
+  EN_ERR_FRIEND_CAN_NOT_INVITE_SELF = -1315
+  [(error_code.description) = "不允许加自己为好友"];
+  EN_ERR_FRIEND_INVITEE_TOTAL_LIMIT = -1316
+  [(error_code.description) = "邀请数量达到上限"];
+  EN_ERR_FRIEND_INVITER_TOTAL_LIMIT = -1317
+  [(error_code.description) = "对方有过多的未处理邀请"];
+  EN_ERR_FRIEND_SNS_SHARE_CFG_NOT_FOUND = -1351
+  [(error_code.description) = "分享类型错误"];
+
   // 新错误码只能追加在已发布值之后，不能改动已有数值(客户端按值解释错误码)
   // 注意错误码不能小于 -999999，便于区分服务器错误码和客户端错误码
 }

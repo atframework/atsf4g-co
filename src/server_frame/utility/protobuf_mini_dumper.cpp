@@ -163,15 +163,20 @@ SERVER_FRAME_API std::chrono::system_clock::time_point protobuf_to_system_clock(
 
 SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chrono::system_clock::time_point tp) {
   google::protobuf::Timestamp ret;
+  protobuf_from_system_clock(ret, tp);
+  return ret;
+}
+
+SERVER_FRAME_API void protobuf_from_system_clock(google::protobuf::Timestamp &dst,
+                                                 std::chrono::system_clock::time_point tp) {
   auto seconds = std::chrono::duration_cast<std::chrono::seconds>(tp.time_since_epoch());
   auto nanos = std::chrono::duration_cast<std::chrono::nanoseconds>(tp.time_since_epoch() - seconds);
   if (nanos < std::chrono::nanoseconds::zero()) {
     seconds -= std::chrono::seconds{1};
     nanos += std::chrono::seconds{1};
   }
-  ret.set_seconds(seconds.count());
-  ret.set_nanos(static_cast<int32_t>(nanos.count()));
-  return ret;
+  dst.set_seconds(seconds.count());
+  dst.set_nanos(static_cast<int32_t>(nanos.count()));
 }
 
 SERVER_FRAME_API std::chrono::system_clock::duration protobuf_to_system_clock(const google::protobuf::Duration &dur) {
@@ -203,6 +208,13 @@ SERVER_FRAME_API const std::string &__protobuf_get_any_type_url_with_cache(const
   std::string type_url = type_url_getter();
 
   atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> write_guard(s_lock);
+
+  // 双检
+  auto it = s_cache.find(desc);
+  if (it != s_cache.end()) {
+    return it->second;
+  }
+
   s_cache[desc] = type_url;
   return s_cache[desc];
 }
