@@ -30,6 +30,57 @@ test('removing absent configs is a no-op for every product and creates no metada
   assert.deepEqual(fs.readdirSync(w.repoRoot), []);
 });
 
+test('IDE export failure restores earlier configs and preserves concurrent snippet edits', (t) => {
+  const w = workspace(t);
+  const exportsDir = path.join(w.repoRoot, 'build/exports');
+  const options = {
+    ...w, operations: [{ type: 'configure', agentId: 'claude', backend: 'codegraph' }],
+    codegraphGuidance: true, ideExports: [{ exportsDir, agentId: 'cline-ide', backend: 'codegraph' }],
+  };
+  const plan = planAgentConfigChanges(options);
+  assert.equal(plan.problems.length, 0);
+  const snippet = path.join(exportsDir, 'cline-ide-mcp-servers.json');
+  fs.mkdirSync(exportsDir, { recursive: true });
+  fs.writeFileSync(snippet, 'concurrent user change');
+  assert.throws(() => applyAgentConfigChanges({ ...w, plan }), /concurrently/);
+  assert.equal(fs.existsSync(path.join(w.repoRoot, '.mcp.json')), false);
+  assert.equal(fs.existsSync(path.join(w.repoRoot, 'AGENTS.md')), false);
+  assert.equal(fs.readFileSync(snippet, 'utf8'), 'concurrent user change');
+});
+
+test('IDE export rename failures roll back configs and earlier snippets', (t) => {
+  const w = workspace(t);
+  const exportsDir = path.join(w.repoRoot, 'build/exports');
+  const rename = fs.renameSync;
+  t.mock.method(fs, 'renameSync', (source, destination) => {
+    if (destination.endsWith('codebuddy-ide-mcp-servers.json')) throw new Error('injected export failure');
+    return rename(source, destination);
+  });
+  assert.throws(() => runAgentConfigBatch({
+    ...w, operations: [{ type: 'configure', agentId: 'claude', backend: 'codegraph' }],
+    codegraphGuidance: true,
+    ideExports: ['cline-ide', 'codebuddy-ide'].map((agentId) => ({ exportsDir, agentId, backend: 'codegraph' })),
+  }), /injected export failure/);
+  assert.equal(fs.existsSync(path.join(w.repoRoot, '.mcp.json')), false);
+  assert.equal(fs.existsSync(path.join(w.repoRoot, 'AGENTS.md')), false);
+  assert.deepEqual(fs.readdirSync(exportsDir), []);
+});
+
+test('IDE export preflight refuses junctions outside the repository', (t) => {
+  const w = workspace(t);
+  const external = workspace(t);
+  const exportsDir = path.join(w.repoRoot, 'exports');
+  fs.symlinkSync(external.repoRoot, exportsDir, process.platform === 'win32' ? 'junction' : 'dir');
+  const result = runAgentConfigBatch({
+    ...w, operations: [{ type: 'configure', agentId: 'claude', backend: 'tgrep' }],
+    ideExports: [{ exportsDir, agentId: 'cline-ide', backend: 'tgrep' }],
+  });
+  assert.equal(result.applied, false);
+  assert.equal(result.plan.problems[0].error.kind, 'outside-repo');
+  assert.equal(fs.existsSync(path.join(w.repoRoot, '.mcp.json')), false);
+  assert.deepEqual(fs.readdirSync(external.repoRoot), []);
+});
+
 test('state scan recognizes generated Codex blocks and tolerates absent legacy files', (t) => {
   const w = workspace(t);
   for (const agentId of ['codex', 'roo', 'kilo']) configureAgent({ ...w, agentId, backend: 'tgrep' });
@@ -197,11 +248,11 @@ test('Kilo layers coexist, root managed entries migrate using their declared for
   assert.deepEqual(agentStates(w.repoRoot).kilo.configured, ['atsf4g-tgrep']);
 });
 
-test('legacy migration refuses to discard custom fields, but explicit uninstall can remove them', (t) => {
+test('switching backends refuses to discard legacy custom fields, but uninstall can remove them', (t) => {
   const w = workspace(t);
   const original = JSON.stringify({ mcpServers: { 'atsf4g-tgrep': { command: 'node', args: [path.join(w.repoRoot, 'project/integration/mcp/tgrep/src/server.mjs')], env: { KEEP: 'value' } } } });
   const file = w.write('.roo/mcp_settings.json', original);
-  assert.throws(() => configureAgent({ ...w, agentId: 'roo', backend: 'tgrep' }), (error) => error.kind === 'legacy-options-conflict');
+  assert.throws(() => configureAgent({ ...w, agentId: 'roo', backend: 'codegraph' }), (error) => error.kind === 'legacy-options-conflict');
   assert.equal(fs.readFileSync(file, 'utf8'), original);
   assert.equal(fs.existsSync(path.join(w.repoRoot, '.roo/mcp.json')), false);
   removeAgentServers({ ...w, agentId: 'roo' });

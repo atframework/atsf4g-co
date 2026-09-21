@@ -1,6 +1,6 @@
 /** Conservative lexical boundaries for surgical TOML edits; not a full TOML validator. */
 import { AgentConfigError } from '../errors.mjs';
-import { managedServerIds } from '../registry.mjs';
+import { managedServerIds } from '../backends.mjs';
 
 export const TOML_BEGIN = '# BEGIN atsf4g-mcp (managed by project/integration/mcp/setup.js; keep the marker lines)';
 export const TOML_END = '# END atsf4g-mcp';

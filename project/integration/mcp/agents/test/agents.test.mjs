@@ -21,6 +21,10 @@ test('configureAgent writes every supported agent shape', () => {
   const repo = tmpRepo();
   try {
     for (const agent of agentDefinitions()) {
+      if (!agent.targetId) {
+        assert.throws(() => configureAgent({ repoRoot: repo, agentId: agent.id, backend: 'tgrep' }), /no project config file/);
+        continue;
+      }
       const result = configureAgent({ repoRoot: repo, agentId: agent.id, backend: 'tgrep' });
       assert.ok(fs.existsSync(result.file), `${agent.id} config file exists`);
     }

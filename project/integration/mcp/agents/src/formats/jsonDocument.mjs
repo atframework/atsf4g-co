@@ -52,7 +52,7 @@ function findDuplicateJsonKey(text) {
 }
 
 /** True when the text contains a `//` or `/*` comment (outside strings, conservatively). */
-function hasComments(text) {
+export function hasComments(text) {
   let i = 0;
   while (i < text.length) {
     const char = text[i];
@@ -112,6 +112,37 @@ export function walkServerMap(root, format, filePath) {
     container = value;
   }
   return container;
+}
+
+/**
+ * The single root key holding the server map, for formats that keep it at the
+ * document root (candidate consolidation skips this key during the generic
+ * top-level merge and handles its entries per server id instead).
+ */
+export function serverMapRootKey(format) {
+  const segments = ROOT_PATHS[format];
+  if (!segments || segments.length !== 1) {
+    throw new AgentConfigError(`format ${format} does not keep its server map at the document root`, 'map-not-object');
+  }
+  return segments[0];
+}
+
+/** Insert one top-level property (foreign-content carry-over during consolidation). */
+export function upsertJsonValue(text, segments, value) {
+  return jsonc.applyEdits(text, jsonc.modify(text, segments, value, {}));
+}
+
+/** Extract comment tokens without mistaking comment-like strings for comments. */
+export function commentsIn(text) {
+  const comments = [];
+  const stripped = text.replace(/^\uFEFF/, '');
+  const scanner = jsonc.createScanner(stripped, false);
+  for (let token = scanner.scan(); token !== jsonc.SyntaxKind.EOF; token = scanner.scan()) {
+    if (token === jsonc.SyntaxKind.LineCommentTrivia || token === jsonc.SyntaxKind.BlockCommentTrivia) {
+      comments.push(stripped.slice(scanner.getTokenOffset(), scanner.getTokenOffset() + scanner.getTokenLength()));
+    }
+  }
+  return comments;
 }
 
 /** Set (create or replace) one server entry; returns the new document text. */

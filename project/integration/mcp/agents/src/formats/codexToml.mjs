@@ -1,6 +1,6 @@
 /** Codex TOML editing over shared lexical boundaries. */
 import { AgentConfigError } from '../errors.mjs';
-import { BACKENDS } from '../registry.mjs';
+import { BACKENDS } from '../backends.mjs';
 import { isOurServerEntry } from '../entries.mjs';
 import { scanDocument, TOML_BEGIN, TOML_END, parseTableHeader } from './tomlDocument.mjs';
 export { TOML_BEGIN, TOML_END, parseTableHeader, tomlMultilineAfter } from './tomlDocument.mjs';

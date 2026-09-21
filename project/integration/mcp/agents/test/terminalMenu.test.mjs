@@ -1,0 +1,316 @@
+import assert from 'node:assert/strict';
+import { PassThrough } from 'node:stream';
+import test, { beforeEach } from 'node:test';
+
+import { MenuCancelled, MenuInputError, arrowsSupported, createInteractiveUi } from '../src/ui/terminalMenu.mjs';
+
+beforeEach((t) => {
+  const previous = process.env.TERM;
+  process.env.TERM = 'xterm';
+  t.after(() => {
+    if (previous === undefined) delete process.env.TERM;
+    else process.env.TERM = previous;
+  });
+});
+
+function fakeStreams({ columns = 100, rows = 24 } = {}) {
+  const input = new PassThrough();
+  Object.defineProperty(input, 'isTTY', { value: true });
+  const rawModeStates = [];
+  input.setRawMode = (state) => { rawModeStates.push(Boolean(state)); };
+  const output = new PassThrough();
+  Object.defineProperty(output, 'isTTY', { value: true });
+  Object.defineProperty(output, 'columns', { value: columns, writable: true });
+  Object.defineProperty(output, 'rows', { value: rows, writable: true });
+  let captured = '';
+  output.on('data', (chunk) => { captured += chunk.toString('utf8'); });
+  output.resume();
+  return { input, output, rawModeStates, read: () => captured };
+}
+
+async function withTimeout(promise, milliseconds = 4000) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('menu did not settle')), milliseconds);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+test('EOF without stream close cancels both modes and future questions', async () => {
+  for (const forceLine of [false, true]) {
+    const { input, output } = fakeStreams();
+    const ui = createInteractiveUi({ input, output, forceLine });
+    const pending = withTimeout(ui.singleSelect('choose', ['a']));
+    input.emit('end');
+    await assert.rejects(pending, MenuCancelled);
+    await assert.rejects(withTimeout(ui.singleSelect('again', ['a'])), MenuCancelled);
+    ui.close();
+  }
+});
+
+test('line Ctrl+C and Ctrl+D cancel without requiring stdin close', async () => {
+  for (const key of ['\x03', '\x04']) {
+    const { input, output } = fakeStreams();
+    const ui = createInteractiveUi({ input, output, forceLine: true });
+    const pending = withTimeout(ui.confirm('remove?'));
+    input.write(key);
+    await assert.rejects(pending, MenuCancelled);
+    ui.close();
+  }
+});
+
+test('line Escape cancels without accepting a default choice', async () => {
+  const { input, output } = fakeStreams();
+  const ui = createInteractiveUi({ input, output, forceLine: true });
+  const pending = withTimeout(ui.singleSelect('choose', ['a']));
+  input.write('\x1b');
+  await assert.rejects(pending, MenuCancelled);
+  ui.close();
+});
+
+test('closing an active menu cancels and releases the input stream', async () => {
+  for (const forceLine of [false, true]) {
+    const { input, output } = fakeStreams();
+    const ui = createInteractiveUi({ input, output, forceLine });
+    const pending = withTimeout(ui.singleSelect('choose', ['a']));
+    ui.close();
+    await assert.rejects(pending, MenuCancelled);
+    assert.equal(input.isPaused(), true);
+    assert.equal(input.listenerCount('keypress'), 0);
+  }
+});
+
+test('completed arrow menu releases stdin so the installer can exit', async () => {
+  const { input, output } = fakeStreams();
+  const ui = createInteractiveUi({ input, output });
+  const pending = ui.singleSelect('choose', ['a']);
+  input.write('\r');
+  await pending;
+  ui.close();
+  assert.equal(input.isPaused(), true);
+});
+
+test('arrowsSupported requires TTYs, raw mode, cursor control, and no --ui=line', () => {
+  const { input, output } = fakeStreams();
+  assert.equal(arrowsSupported({ input, output }), true);
+  assert.equal(arrowsSupported({ input, output, forceLine: true }), false);
+  assert.equal(arrowsSupported({ input: new PassThrough(), output }), false);
+  const previous = process.env.TERM;
+  process.env.TERM = 'dumb';
+  try {
+    assert.equal(arrowsSupported({ input, output }), false);
+  } finally {
+    if (previous === undefined) delete process.env.TERM;
+    else process.env.TERM = previous;
+  }
+});
+
+test('arrow single select moves and confirms, then restores raw mode', async () => {
+  const { input, output, rawModeStates, read } = fakeStreams();
+  const ui = createInteractiveUi({ input, output });
+  const chosen = withTimeout(ui.singleSelect('后端', ['tgrep', 'codegraph'], { defaultIndex: 0 }));
+  input.write('\x1b[B'); // down
+  input.write('\r'); // enter
+  assert.equal(await chosen, 1);
+  assert.match(read(), /已选择：codegraph/);
+  assert.deepEqual(rawModeStates, [true, false]);
+  ui.close();
+});
+
+test('arrow single select keeps the default on plain Enter', async () => {
+  const { input } = fakeStreams();
+  const ui = createInteractiveUi({ input, output: fakeStreams().output });
+  const chosen = withTimeout(ui.singleSelect('镜像', ['cn', 'official'], { defaultIndex: 1 }));
+  input.write('\r');
+  assert.equal(await chosen, 1);
+  ui.close();
+});
+
+test('arrow single select cancels on Escape/Ctrl+C/EOF with raw mode restored', async () => {
+  for (const cancel of ['\x1b', '\x03', 'EOF']) {
+    const streams = fakeStreams();
+    const ui = createInteractiveUi({ input: streams.input, output: streams.output });
+    const pending = withTimeout(ui.singleSelect('后端', ['tgrep', 'codegraph']));
+    if (cancel === 'EOF') streams.input.end();
+    else streams.input.write(cancel);
+    await assert.rejects(pending, MenuCancelled);
+    assert.deepEqual(streams.rawModeStates, [true, false], `raw mode restored after ${cancel}`);
+    ui.close();
+  }
+});
+
+test('arrow multi select toggles, wraps, selects all, and clears', async () => {
+  const { input, output, read } = fakeStreams();
+  const ui = createInteractiveUi({ input, output });
+  const entries = [
+    { key: 'a', label: 'A' },
+    { key: 'b', label: 'B' },
+    { key: 'c', label: 'C' },
+  ];
+
+  const first = withTimeout(ui.multiSelect('选择', entries, []));
+  input.write(' '); // toggle first
+  input.write('\x1b[A'); // up from index 0 wraps to last
+  input.write(' '); // toggle last
+  input.write('\r');
+  assert.deepEqual([...(await first)].sort(), ['a', 'c']);
+  assert.match(read(), /已选 2 项：a, c/);
+
+  const all = withTimeout(ui.multiSelect('选择', entries, []));
+  input.write('a');
+  input.write('\r');
+  assert.equal((await all).size, 3);
+
+  const none = withTimeout(ui.multiSelect('选择', entries, ['a']));
+  input.write('n');
+  input.write('\r');
+  assert.equal((await none).size, 0);
+  ui.close();
+});
+
+test('arrow menus render marks and clip long labels for narrow terminals', async () => {
+  const wide = fakeStreams();
+  const wideUi = createInteractiveUi({ input: wide.input, output: wide.output });
+  const pending = withTimeout(wideUi.multiSelect('选择', [
+    { key: 'a', label: '短标签', note: '备注' },
+    { key: 'b', label: 'B'.repeat(120) },
+  ], []));
+  wide.input.write(' ');
+  wide.input.write('\r');
+  await pending;
+  assert.match(wide.read(), /\[x\] 短标签 — 备注/);
+  wideUi.close();
+
+  const narrow = fakeStreams({ columns: 30 });
+  const narrowUi = createInteractiveUi({ input: narrow.input, output: narrow.output });
+  const narrowPending = withTimeout(narrowUi.singleSelect('后端', ['X'.repeat(80), 'codegraph']));
+  narrow.input.write('\r');
+  await narrowPending;
+  assert.match(narrow.read(), /…/);
+  narrowUi.close();
+});
+
+test('line mode select reads numbers, keeps defaults on Enter, and rejects garbage', async () => {
+  const { input, output, read } = fakeStreams();
+  const ui = createInteractiveUi({ input, output, forceLine: true });
+  assert.equal(ui.mode, 'line');
+
+  const first = withTimeout(ui.singleSelect('后端', ['tgrep', 'codegraph'], { defaultIndex: 0 }));
+  input.write('2\n');
+  assert.equal(await first, 1);
+
+  const second = withTimeout(ui.singleSelect('后端', ['tgrep', 'codegraph'], { defaultIndex: 1 }));
+  input.write('\n');
+  assert.equal(await second, 1);
+
+  const third = withTimeout(ui.singleSelect('后端', ['tgrep', 'codegraph'], { defaultIndex: 0 }));
+  input.write('x\n');
+  await new Promise((resolve) => setImmediate(resolve));
+  input.write('1\n');
+  assert.equal(await third, 0);
+  assert.match(read(), /请输入 1-2 的编号/);
+  ui.close();
+});
+
+test('line mode multi select supports lists, a/n, defaults, and EOF cancels', async () => {
+  const { input } = fakeStreams();
+  const output = fakeStreams().output;
+  const ui = createInteractiveUi({ input, output, forceLine: true });
+  const entries = [
+    { key: 'a', label: 'A' },
+    { key: 'b', label: 'B' },
+    { key: 'c', label: 'C' },
+  ];
+
+  const first = withTimeout(ui.multiSelect('选择', entries, []));
+  input.write('1,3\n');
+  assert.deepEqual([...(await first)].sort(), ['a', 'c']);
+
+  const all = withTimeout(ui.multiSelect('选择', entries, []));
+  input.write('a\n');
+  assert.equal((await all).size, 3);
+
+  const none = withTimeout(ui.multiSelect('选择', entries, ['b']));
+  input.write('n\n');
+  assert.equal((await none).size, 0);
+
+  const keep = withTimeout(ui.multiSelect('选择', entries, ['b', 'c']));
+  input.write('\n');
+  assert.deepEqual([...(await keep)].sort(), ['b', 'c']);
+
+  // A closed stdin never resolves a question as a default confirmation.
+  const eof = withTimeout(ui.multiSelect('选择', entries, ['a']));
+  input.end();
+  await assert.rejects(eof, MenuCancelled);
+  ui.close();
+});
+
+test('confirm accepts only explicit y/yes and declines everything else', async () => {
+  const cases = [
+    { input: 'y\n', expected: true },
+    { input: 'yes\n', expected: true },
+    { input: '\n', expected: false },
+    { input: 'no\n', expected: false },
+  ];
+  for (const { input: typed, expected } of cases) {
+    const streams = fakeStreams();
+    const ui = createInteractiveUi({ input: streams.input, output: streams.output, forceLine: true });
+    const pending = withTimeout(ui.confirm('确认移除？'));
+    streams.input.write(typed);
+    assert.equal(await pending, expected, `answer ${JSON.stringify(typed)}`);
+    ui.close();
+  }
+});
+
+test('menus without choices fail immediately without reading input', async () => {
+  const { input, output } = fakeStreams();
+  const ui = createInteractiveUi({ input, output });
+  await assert.rejects(ui.singleSelect('空', []), MenuInputError);
+  await assert.rejects(ui.multiSelect('空', [], []), MenuInputError);
+  const lineUi = createInteractiveUi({ input, output, forceLine: true });
+  await assert.rejects(lineUi.singleSelect('空', []), MenuInputError);
+  ui.close();
+  lineUi.close();
+});
+
+test('short terminals keep the active choice visible and redraw on resize', async () => {
+  const { input, output, read } = fakeStreams({ columns: 12, rows: 8 });
+  const ui = createInteractiveUi({ input, output });
+  const choices = Array.from({ length: 20 }, (_, i) => `项目${i} 名称很长`);
+  const pending = ui.singleSelect('选择', choices);
+  for (let i = 0; i < 19; i += 1) input.write('\x1b[B');
+  const lastFrame = () => read().split('\r\x1b[J').at(-1).trimEnd().split('\n');
+  assert.equal(lastFrame().length, 4);
+  assert.ok(lastFrame().some((line) => line.includes('❯ 项目19')));
+  for (const line of lastFrame()) {
+    assert.ok([...line].reduce((width, char) => width + (char.codePointAt(0) > 0x7f ? 2 : 1), 0) <= 12);
+  }
+  output.rows = 6;
+  output.columns = 40;
+  output.emit('resize');
+  assert.equal(lastFrame().length, 2);
+  assert.ok(lastFrame().some((line) => line.includes('❯ 项目19 名称很长')));
+  input.write('\r');
+  assert.equal(await pending, 19);
+  ui.close();
+  assert.equal(output.listenerCount('resize'), 0);
+});
+
+test('stream and rendering errors settle the menu and restore raw mode', async () => {
+  for (const failure of ['input', 'output', 'render']) {
+    const { input, output, rawModeStates } = fakeStreams();
+    const ui = createInteractiveUi({ input, output });
+    const pending = withTimeout(ui.singleSelect('choose', ['a', 'b']));
+    if (failure === 'render') {
+      output.write = () => { throw new Error('render failed'); };
+      input.write('\x1b[B');
+      await assert.rejects(pending, /render failed/);
+    } else {
+      (failure === 'input' ? input : output).emit('error', new Error('stream failed'));
+      await assert.rejects(pending, MenuCancelled);
+    }
+    assert.deepEqual(rawModeStates, [true, false]);
+    ui.close();
+  }
+});

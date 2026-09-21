@@ -11,6 +11,21 @@ import {
   configureAgent,
   removeAgentServers,
 } from '../src/writers.mjs';
+import { GUIDED_IMPORTS } from '../src/guidance/ideExports.mjs';
+import { autoConfigurableAgents, guidedAgents } from '../src/registry.mjs';
+
+test('registry and guided-import descriptors stay consistent', () => {
+  for (const agent of autoConfigurableAgents()) {
+    assert.ok(agent.targetId, `${agent.id} declares a target`);
+  }
+  const guided = guidedAgents().map((agent) => agent.id).sort();
+  assert.deepEqual(Object.keys(GUIDED_IMPORTS).sort(), guided, 'every guided product has snippet metadata and vice versa');
+  for (const agent of guidedAgents()) {
+    assert.equal(agentStates(fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-registry-')))[agent.id].configured.length, 0);
+    const operations = buildAgentOperations({ states: {}, selectedIds: new Set([agent.id]), backend: 'tgrep' });
+    assert.equal(operations.length, 0, 'guided products never produce repo operations');
+  }
+});
 
 function tmpRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-targets-'));
@@ -39,18 +54,19 @@ function ourLegacyEntry(repo, backend = 'tgrep') {
 
 // -- candidate discovery (Plan.md 11.3.3) -------------------------------------------------------
 
-test('exclusive candidates: same-directory json/jsonc files conflict', () => {
+test('exclusive candidates: same-directory json/jsonc files consolidate', () => {
   const repo = tmpRepo();
   try {
     write(repo, path.join('.kilo', 'kilo.jsonc'), '{\n  "mcp": { "user": { "type": "local", "command": ["x"] } } }\n');
     write(repo, path.join('.kilo', 'kilo.json'), '{}\n');
-    assert.throws(
-      () => configureAgent({ repoRoot: repo, agentId: 'kilo', backend: 'tgrep' }),
-      (error) => error.kind === 'candidate-conflict',
-    );
-    assert.equal(read(repo, path.join('.kilo', 'kilo.jsonc')), '{\n  "mcp": { "user": { "type": "local", "command": ["x"] } } }\n');
-    assert.equal(read(repo, path.join('.kilo', 'kilo.json')), '{}\n');
-    assert.match(agentStates(repo).kilo.error, /多个候选/);
+    configureAgent({ repoRoot: repo, agentId: 'kilo', backend: 'tgrep' });
+    const merged = JSON.parse(read(repo, path.join('.kilo', 'kilo.json')));
+    assert.ok(merged.mcp.user, 'foreign entry from the redundant candidate carried over');
+    assert.equal(merged.mcp[SERVER_IDS.tgrep].type, 'local', 'managed entry written');
+    assert.equal(fs.existsSync(path.join(repo, path.join('.kilo', 'kilo.jsonc'))), false, 'redundant candidate deleted after the merged write');
+    const states = agentStates(repo);
+    assert.equal(states.kilo.error, undefined);
+    assert.deepEqual(states.kilo.configured, [SERVER_IDS.tgrep]);
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }

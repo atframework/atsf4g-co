@@ -22,7 +22,9 @@ or call the MCP tools do not need this Skill.
    `node project/integration/mcp/common/tools/doctor.mjs` for live state.
 3. Route to one reference, not both:
    - Installer, agent selection/uninstall, mirror behavior, or per-agent config
-     formats → read `references/installer-and-agents.md`.
+     formats → read `references/installer-and-agents.md`. Keep product-specific
+     targets, prerequisites, import steps, and launch notes in that product's
+     `agents/src/agents/` module; reuse the shared format and migration engines.
    - Wrapper servers, the tgrep stdio patch, backend spawn/lifecycle, index
      reuse, or upstream upgrades → read `references/backends-and-lifecycle.md`.
 4. Preserve the load-bearing contracts (details in Plan.md): pinned upstream
@@ -49,3 +51,6 @@ or call the MCP tools do not need this Skill.
   Plan.md section 2 against the new sources.
 - Keep `Plan.md` and `README.md` in sync with implemented behavior; use the
   `<PROJECT_DIR>` placeholder for repository paths in docs and examples.
+- Check remaining implementation and client-acceptance items before declaring
+  the plan complete. `common/src/paths.mjs` currently uses `Plan.md` as a root
+  marker; retiring the plan also requires replacing that marker and its fixtures.

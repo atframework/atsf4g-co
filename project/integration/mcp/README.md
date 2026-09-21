@@ -8,9 +8,11 @@
   [CodeGraph](https://github.com/colbymchenry/codegraph) direct 模式（禁 daemon、禁遥测）。
 
 设计、验收边界与上游事实见 [Plan.md](Plan.md)。公共库与流程工具在 `common/`；
-Agent 配置组件（产品注册表、纯变更规划、安全文件存储、批量写入）在 `agents/`；
+Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents/*.mjs` + 共享基类
+`base.mjs`、纯变更规划、安全文件存储、批量写入）在 `agents/`；
 各组件目录独立（源码、测试、包管理信息、上游固定清单都在自己目录内，
-`agents/vendor/jsonc-parser/` 随源码分发）。
+`agents/vendor/jsonc-parser/` 随源码分发）。新增一个 Agent 通常只需新增一个配置器模块
+并在 `agents/src/agents/index.mjs` 注册。
 
 ## 安装（推荐入口）
 
@@ -22,9 +24,18 @@ node <PROJECT_DIR>/project/integration/mcp/setup.js
 → 依赖就绪后把 MCP 服务写入所选 Agent 的**项目级**配置。依赖准备失败时不会改动任何
 Agent 配置。可重复执行，用于切换后端、升级固定制品、为更多 Agent 接入或卸载。
 
-常用选项：`--backend=tgrep|codegraph`、`--agents=<id,...>|all`、`--mirror=cn|official`
-（未指定时按系统地区建议）、`--offline`、`--skip-prepare`（仅调整 Agent 配置）、
-`--uninstall [--agents=...|--all-agents]`、`--yes`、`--dry-run`、`--help`、`--list-agents`。
+常用选项：`--backend=tgrep|codegraph`、`--agents=<id,...>|all`（`all` 只含可自动写入项目配置的
+目标，面板导入类需显式指定）、`--mirror=cn|official`（未指定时按系统地区建议）、`--offline`、
+`--skip-prepare`（仅调整 Agent 配置）、`--uninstall [--agents=...|--all-agents]`、`--yes`、
+`--ui=line`（交互菜单用编号行模式，缺省在支持的终端用方向键）、`--dry-run`、`--help`、
+`--list-agents`。
+
+交互菜单：支持的终端使用方向键（↑/↓ 移动、空格勾选、回车确认，多选 a 全选、n 清空，
+Esc/Ctrl+C 取消，Agent 配置保持不变，已准备的依赖保留）；不支持时回退编号行输入。安装时空选择不会静默卸载——会先列出
+将移除的已配置条目并要求 y/N 确认；非交互模式（`--yes`/CI/非 TTY）不打开交互输入，
+未使用 `--yes` 且缺少后续菜单需要的选项时，在准备依赖前报错。
+`--yes` 可沿用上次准备的后端与已有配置/导入片段选择。菜单结束会释放 stdin；EOF、流错误与取消
+不会被视为默认确认，选项较多时只显示当前终端容得下的部分，保持当前选项可见。
 
 `--dry-run` 完全只读：打印拟准备的依赖与拟写入/移除的配置动作，但不下载、不安装、
 不写状态文件、不写任何 Agent 配置。`--help` 与 `--list-agents` 无副作用，后者列出
@@ -49,7 +60,7 @@ jsonc-parser 的局部修改（`agents/vendor/jsonc-parser/`，固定 3.3.1）�
 
 ### CodeGraph 提示词补丁
 
-选择 `--backend=codegraph` 并配置至少一个 Agent 时，安装器同时更新根 `AGENTS.md` 中的
+选择 `--backend=codegraph` 并写入至少一个 Agent 项目配置时，安装器同时更新根 `AGENTS.md` 中的
 `<!-- CODEGRAPH_START -->` / `<!-- CODEGRAPH_END -->` 段落。`CLAUDE.md` 继续引用根说明，
 不复制这段正文。提示词模板在 `agents/src/guidance/codegraph.mjs`。
 
@@ -80,7 +91,7 @@ jsonc-parser 的局部修改（`agents/vendor/jsonc-parser/`，固定 3.3.1）�
 | Agent | 配置文件 | 格式要点 |
 | --- | --- | --- |
 | Claude Code / pi / CodeBuddy Code CLI（共用一个文件） | `.mcp.json` | `mcpServers`；选任一 id 即保留整组，卸载任一 id 影响全组（输出会标注） |
-| Codex CLI | `.codex/config.toml` | `[mcp_servers.<name>]` + `cwd` |
+| Codex | `.codex/config.toml` | `[mcp_servers.<name>]` + `cwd`；CLI 与 IDE 扩展共用 |
 | VS Code / GitHub Copilot | `.vscode/mcp.json` | `servers` + `${workspaceFolder}` |
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
 | Gemini CLI | `.gemini/settings.json` | `mcpServers` |
@@ -90,28 +101,82 @@ jsonc-parser 的局部修改（`agents/vendor/jsonc-parser/`，固定 3.3.1）�
 | ZCode | `.zcode/config.json` | `mcp.servers` |
 | oh-my-pi (omp) | `.omp/mcp.json` | `mcpServers` |
 | Zed | `.zed/settings.json`（JSONC，保留注释） | `context_servers` / 扁平 `command` + `args` |
-| Kimi Code CLI | `.kimi-code/mcp.json` | `mcpServers` + `cwd` + 相对 args |
+| Kimi Code | `.kimi-code/mcp.json` | `mcpServers` + `cwd` + 相对 args；使用当前 Kimi Code 运行时 |
 | Qwen Code | `.qwen/settings.json` | `mcpServers` + `cwd` + 相对 args |
 | WorkBuddy | `.workbuddy/mcp.json` | `mcpServers` |
 | MiMo Code | `mimocode.json(c)` 或 `.mimocode/mimocode.json(c)`；新建默认后者 | 同 OpenCode 形状 |
+| Cline CLI | `.cline/atsf4g-mcp.json`（安装器自定义导出文件） | `mcpServers`；Cline 不自动发现它，需经下方启动器显式接入 |
+
+Codex CLI 与 IDE 扩展在同一 Codex 主机上共享 MCP 配置，项目配置仍要求项目信任，因此统一显示为
+Codex（id `codex`）。见 [官方 MCP 配置说明](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。
+Kimi Code（id `kimi-code`）统一使用产品名；IDE 通过同一新版运行时的 `kimi acp` 接入时可复用配置。
+官方 VS Code 扩展仍有新旧运行时兼容限制，不能据此认定所有插件版本都会读取 `.kimi-code/mcp.json`。
+见 [IDE 接入说明](https://moonshotai.github.io/kimi-code/en/guides/ides.html) 和
+[VS Code 扩展兼容说明](https://www.kimi.com/en/help/kimi-code/vscode-getting-started)。
 
 pi 需要先安装 `nicobailon/pi-mcp-adapter` 扩展才会读取项目 `.mcp.json`（pi 本体不内置 MCP）；
-选择 pi 时安装器会提示该前置条件，配置生成不等于扩展已连接。
+选择 pi 时安装器会提示该前置条件，配置生成不等于扩展已连接。若存在 `.pi/mcp.json`，
+安装器只做只读的同名条目冲突提示，不修改该文件。
+
+**Cline CLI 的显式接入**（`.cline/atsf4g-mcp.json` 不是 Cline 的原生项目配置；已对发布版
+`cline@3.0.62` 核实其 MCP 设置只读用户级文件或 `CLINE_MCP_SETTINGS_PATH` 指向的文件）：
+
+```bash
+node <PROJECT_DIR>/project/integration/mcp/agents/tools/launch.mjs --agent=cline -- [cline 参数...]
+# Cline CLI 未在常见全局目录时：
+node ... --agent=cline --cline <cline 包 bin/cline 脚本或原生可执行文件> -- [cline 参数...]
+```
+
+启动器仅对子进程设置绝对 `CLINE_MCP_SETTINGS_PATH` 与仓库 cwd，以参数数组调用入口
+（禁用 shell；Windows 的 npm `.cmd` shim 不可用，需 `--cline` 指向脚本或原生二进制）。
+`--cline` 与 `CLINE_BIN_PATH` 使用相同的文件校验：JS 文件和带 Node shebang 的无扩展名
+`bin/cline` 用当前 Node 运行，`.cmd/.bat` 拒绝；显式覆盖无效时报错，不回退其他安装。
+入口确定后不再向子进程传 `CLINE_BIN_PATH`，避免 npm resolver 重复解析覆盖变量。
+显式路径替换 Cline 本次进程的默认 MCP 配置源，不合并全局服务器；导出文件中的用户补充
+条目会被保留。这是显式接入，不等于已自动接入。
+
+**面板导入类（无已核实项目级写入路径，不写任何项目配置文件）**：Cline IDE（`cline-ide`）、
+CodeBuddy IDE（`codebuddy-ide`）。选择它们时安装器在
+`<BUILD_DIR>/integration/mcp/exports/` 生成本机导入片段（只含本次条目与绝对路径），
+并打印各家面板的导入步骤；卸载/取消选择时删除片段。它们不参与 `--agents=all`。
+片段与项目配置一起预检、写入和失败回滚；片段被手工修改、不可读或经链接指向仓库外时，整批中止。
+修改过的片段需先移走再生成。省略 `--agents` 的更新会保留已有片段选择；重复生成无写入。
+卸载片段不会移除已经手动导入 IDE 的条目，后者需在对应面板清理。
 
 以下工具只有用户级（仓库外）配置文件，不自动写入，参考文末示例手工添加：
-Windsurf（`~/.codeium/windsurf/mcp_config.json`，支持变量插值）、
-Cline（VS Code 面板内配置或 CLI 的 `~/.cline/data/settings/cline_mcp_settings.json`）。
+Windsurf（`~/.codeium/windsurf/mcp_config.json`，支持变量插值）。
+
+### 客户端信任与批准（2026-09-20 实测记录）
+
+多数客户端在“读到了项目配置”和“真正连接”之间还有一步用户确认。实测各家的步骤与门槛：
+
+| 客户端 | 实测版本 | 项目配置被发现 | 连接前需要的用户步骤 | 连接验收 |
+| --- | --- | --- | --- | --- |
+| Qwen Code | 0.24.1 | 是 | `qwen mcp approve atsf4g-tgrep`（批准后绑定当前配置） | ✓ `mcp list` 显示 Connected（真实握手） |
+| Cline CLI | 3.0.62 | 是（经 `launch.mjs` 显式路径，Windows/WSL 双平台） | 无（导出文件即配置源）；会话需登录模型供应商 | `cline config` MCP 标签显示已加载（双平台）；会话内调用未验收 |
+| Codex CLI | 0.155.1 | 是（需项目信任） | 用户级 `config.toml` 写 `project_config_enabled = true` + `[projects.'<仓库绝对路径>'] trust_level = "trusted"`（或交互式首跑的信任对话） | `mcp list`/`get` 正确解析；会话内连接需 ChatGPT 登录，未验收 |
+| Gemini CLI | 0.60.0 | 是 | 目录信任（未信任目录按官方行为禁用项目 MCP）+ 模型认证 | 认证门槛（rc=41）后停止，未验收 |
+| Claude Code | 2.1.278 | 是 | 交互式运行 `claude` 批准项目 `.mcp.json`（官方帮助：未批准的服务器不会被连接；离线写 `enabledMcpjsonServers` 等状态实测无效） | Pending approval 后停止，未验收 |
+
+隔离工程中的实测详情、SDK 冒烟与双平台终端菜单验收见 [Plan.md](Plan.md) 11.14。
 
 ### 候选文件与旧格式迁移
 
-- **多候选限制**：安装器对 OpenCode 根 json/jsonc、Kilo 的 `.kilo/kilo.json` 与
-  `.kilo/kilo.jsonc`、MiMo 的根/目录候选采用保守的多文件中止策略；这是安装器支持范围，
-  不表示客户端无法合并配置。Kilo 根配置与 `.kilo/` 配置分层加载，允许同时存在。
+- **同目录候选整合**：OpenCode、Kilo、MiMo 的同目录 json/jsonc 并存时，保留声明顺序中
+  首个存在的文件，递归合并兼容对象字段。数组或叶值不同会中止整批操作，包括本集成条目的
+  自定义选项。目标文件局部编辑，保留 BOM、换行和原有注释；来源注释移到目标末尾的标注区块。
+  成功写入合并结果后才删除来源文件，各步都有备份、日志和失败回滚。`--dry-run` 展示目标更新
+  与冗余文件删除；卸载只原地清理托管条目，不整合文件。
+- **不同目录保持分层**：Kilo 根配置与 `.kilo/`，以及 MiMo 根配置与 `.mimocode/`，
+  都可以同时存在。外来字段、插件和服务器留在各自层级，仅迁移已确认属于本集成的条目。
+  MiMo 优先在已有 `.mimocode/` 层写入；只有根候选存在时原地编辑根文件。
 - **Kilo / Roo 迁移**：旧 `.kilocode/mcp.json`、`.roo/mcp_settings.json` 中的本集成条目
   会在新目标写入成功后被清理（先验证条目的 command/args 确实指向本仓库包装层；同名但
   指向其他程序的用户条目保留不动并提示）。旧文件里的外来条目始终保留。
-  根 `kilo.json(c)` 使用其实际的 OpenCode 形状清理。旧托管条目含额外参数或自定义字段时，
-  自动迁移中止并保留原文；需要先人工完成字段迁移并移除旧托管条目，再重跑。显式卸载仍可清理这些条目。
+  根 `kilo.json(c)` 按其实际 OpenCode 形状迁移。同格式迁移保留自定义选项；旧 Kilo stdio
+  的 `env`、`disabled` 转为 `environment`、`enabled`，附加启动参数一并保留。
+  不同值冲突、未知跨格式字段、自定义工作目录、`{file:...}` 引用以及其他后端的自定义选项
+  会中止整批写入并指出来源，需要人工处理后重跑。显式卸载仍可清理这些托管条目。
 - **CodeBuddy 旧根 `mcp.json`**：仅它存在且只选 CodeBuddy 时原地编辑；需要创建
   `.mcp.json` 而旧文件含外来服务器时会中止（避免新文件遮蔽旧配置，预览式迁移未实现）；
   旧文件只含本集成条目时创建 `.mcp.json` 并清理旧条目；两文件并存时按官方优先级只编辑
@@ -122,7 +187,7 @@ Cline（VS Code 面板内配置或 CLI 的 `~/.cline/data/settings/cline_mcp_set
 `<PROJECT_DIR>` 表示本仓库的绝对路径；`<PROJECT_DIR>/build_jobs_cmake_tools` 为默认
 `<BUILD_DIR>`。运行 `setup.js` 时会写入解析后的实际路径（见下节的路径策略）。
 
-### 通用 `mcpServers` 家族（Claude Code / pi / CodeBuddy / Cursor / Gemini CLI / Roo Code / WorkBuddy / oh-my-pi / Windsurf / Cline）
+### 通用 `mcpServers` 家族（Claude Code / pi / CodeBuddy / Cursor / Gemini CLI / Roo Code / WorkBuddy / oh-my-pi / Cline / Windsurf）
 
 以 Claude Code / pi 的 `.mcp.json` 为例（其余工具同结构，见上表文件位置）：
 
@@ -158,7 +223,7 @@ claude mcp add --transport stdio --scope project atsf4g-tgrep -- node <PROJECT_D
 }
 ```
 
-### Codex CLI（`.codex/config.toml`，项目级仅在受信任项目中生效）
+### Codex（`.codex/config.toml`，项目级仅在受信任项目中生效）
 
 ```toml
 [mcp_servers.atsf4g-tgrep]
@@ -204,7 +269,7 @@ cwd = "<PROJECT_DIR>"
 | 客户端 | 官方支持 | setup.js 写入 |
 | --- | --- | --- |
 | VS Code / Copilot | `cwd` 字段与 `${workspaceFolder}` 等变量 | `${workspaceFolder}` + 相对路径（可提交共享） |
-| Codex CLI / Kimi Code / Qwen Code | `cwd` 字段 | 本机绝对 `cwd` + 相对 args（仍是本机配置） |
+| Codex / Kimi Code / Qwen Code | `cwd` 字段 | 本机绝对 `cwd` + 相对 args（仍是本机配置） |
 | Cursor | `${workspaceFolder}` 等变量插值 | 当前使用本机绝对 args |
 | Gemini CLI | `cwd` 字段 | 当前使用本机绝对 args |
 | Windsurf | `command/args/env` 变量插值（具体变量见官方文档） | 不自动写；示例用绝对路径 |
@@ -368,11 +433,17 @@ Agent 配置写入的回归测试在 `agents/`（JSON/JSONC 损坏零写入、Co
 `tgrep/patches/` 重新生成并重放回归。维护指引见 Agent Skill
 `mcp-integration-maintenance`（仅在维护本集成时加载）。
 
+组件 `package-lock.json` 保持与镜像无关（不含 `resolved` 或仅指向 npmjs/npmmirror）：
+npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`npm ci` 直接失败。
+`common/test/lockfiles.test.mjs` 守护此约束；在私有镜像环境重新生成 lockfile 后请确认
+没有把镜像域名写进 `resolved`。
+
 ## 已验证平台
 
 | 平台 | 单元测试 | 真实后端冒烟 |
 | --- | --- | --- |
-| Windows x64（Node 24） | 127/127（2026-09-20，agents 88 + common 23 + tgrep 8 + codegraph 8） | 历史 P0–P8：tgrep 首次索引 ~2s、codegraph ~22s；本轮未重跑真实后端/客户端连接 |
-| Linux x64（WSL/Debian，Node 20 + 捆绑 Node 24） | 43/43（P9.0 基线；P9.1 起新增测试的 WSL 复验待后续阶段一并执行） | tgrep 首次索引 ~1s、codegraph 首次索引 ~14s，均通过 |
+| Windows x64（Node 24.21.0 / npm 12.0.2） | 191/191（2026-09-21，agents 151 + common 24 + tgrep 8 + codegraph 8；零跳过） | 本轮 CLI 迁移/完整周期、固定 Cline 3.0.62 启动和真实工作区候选整合 dry-run 通过（11.17）；ConPTY 记录见 11.15，真实 prepare/SDK 后端冒烟与客户端实测仍为 2026-09-20 记录（11.14） |
+| Linux x64（WSL/Debian，Node 20.19.2） | 191/191（2026-09-21，同上分布，ext4 隔离工程；零跳过） | 本轮套件含实际 CLI 迁移/完整周期；PTY 记录见 11.15，真实后端冒烟为 2026-09-18 P0–P8 记录（tgrep ~1s、codegraph ~14s） |
 
-macOS 及 arm64 平台未验证。
+macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）与登录后
+Agent 会话内的工具调用未验收（认证/交互门槛，见 Plan.md 11.14 保留清单）。

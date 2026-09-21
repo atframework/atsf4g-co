@@ -6,7 +6,7 @@
 
 import path from 'node:path';
 
-import { BACKENDS } from './registry.mjs';
+import { BACKENDS } from './backends.mjs';
 
 /** A server id alone is not ownership evidence. Resolve only documented paths. */
 export function isOurServerEntry(entry, repoRoot) {

@@ -1,8 +1,10 @@
 # tgrep / CodeGraph MCP 集成计划（Node.js 实现）
 
-状态：P0–P8 已完成并验收（2026-09-18）；P9 进行中——P9.0–P9.3 已完成（2026-09-20，
-证据摘要见 11.9），P9.4–P9.6 待实施（见 11.8）。本文件是实施与验收依据；已完成部分仅保留
-简要记录与仍然生效的契约，未实施部分保留完整设计。历史 Python 方案差异见第 10 节。
+状态：P0–P8 已完成；P9 主体实现和部分平台/客户端验收已完成，剩余实现与验收见 11.4、11.14。
+2026-09-21 初次审查见 11.15；候选整合与配置器架构见 11.16（P10），复审修复和当前迁移契约见 11.17。
+历史阶段勾选不代表所有验收面均已覆盖。
+本文件是实施与验收依据；已完成部分仅保留简要记录与仍然生效的契约。
+历史 Python 方案差异见第 10 节。
 
 ## 1. 目标与验收边界
 
@@ -116,9 +118,8 @@ P9 不新增 Codebuff；CodeBuddy Code CLI、CodeBuddy IDE 和 WorkBuddy 分别�
 | Claude Code / `claude` | 项目根 `.mcp.json` | `mcpServers` / 绝对 args | 保留。与 pi、CodeBuddy CLI 共用一个物理目标；客户端的项目信任/启用由用户完成 |
 | pi / `pi` | 安装 `nicobailon/pi-mcp-adapter` 后读取项目根 `.mcp.json` | `mcpServers` / 绝对 args | pi 本体明确不内置 MCP。新增可选 id 与前置条件说明；`.pi/mcp.json` 可覆盖共享条目，需提示冲突 |
 | 腾讯 CodeBuddy Code CLI / `codebuddy` | 项目根 `.mcp.json`；旧候选为根 `mcp.json` | `mcpServers` / 绝对 args | 新增可选 id。官方读取首个存在候选，不能忽略旧文件而新建高优先级文件遮蔽其他服务器；共享文件规则见 11.3 |
-| 腾讯 CodeBuddy IDE / `codebuddy-ide` | Settings → MCP → Add MCP 打开的配置文件 | `mcpServers` / 导出绝对 args | 官方 IDE 页面确认面板与格式，未确认固定项目路径；列为引导导入，不套用 CLI 路径 |
 | WorkBuddy / `workbuddy` | `.workbuddy/mcp.json` | `mcpServers` / 绝对 args | 官方明确区分用户级和项目级；新增项目配置写入 |
-| Codex CLI / `codex` | `.codex/config.toml` | `[mcp_servers.<id>]` / 绝对 `cwd` + 相对 args | 保留路径策略 |
+| Codex / `codex` | `.codex/config.toml` | `[mcp_servers.<id>]` / 绝对 `cwd` + 相对 args | CLI 与 IDE 扩展共享同一主机配置，项目层要求信任 |
 | VS Code / Copilot / `vscode` | `.vscode/mcp.json` | `servers`、`type:"stdio"` / `${workspaceFolder}` | 保留；配置编辑必须保留已有非托管内容 |
 | Cursor / `cursor` | `.cursor/mcp.json` | `mcpServers`、`type:"stdio"` / `${workspaceFolder}` | 已有 writer；官方明确支持 args 变量插值，纠正“无变量支持”的旧描述 |
 | Gemini CLI / `gemini` | `.gemini/settings.json` | `mcpServers` / 绝对 `cwd` + 相对 args | 已有 writer；官方支持 `cwd`，可与 Qwen 统一路径策略，不再声称它不支持 |
@@ -128,11 +129,12 @@ P9 不新增 Codebuff；CodeBuddy Code CLI、CodeBuddy IDE 和 WorkBuddy 分别�
 | ZCode / `zcode` | `.zcode/config.json` | `mcp.servers` / 绝对 args | 保留；不能覆盖 `mcp` 下其他设置 |
 | oh-my-pi / `omp` | `.omp/mcp.json` | `mcpServers` / 绝对 args | 保留；OMP 与 pi 不是同一产品，其兼容导入可能读到其他客户端文件 |
 | Zed / `zed` | `.zed/settings.json` | `context_servers`，扁平 `command` + `args` + 可选 `env` | 新增；官方示例不要求 `source`，始终写 args；JSONC 与工作区信任必须纳入验收 |
-| Kimi Code CLI / `kimi-code` | `.kimi-code/mcp.json` | `mcpServers` / 绝对 `cwd` + 相对 args | 依据 MoonshotAI/kimi-code；不将此路径套给 MoonshotAI/kimi-cli，不自动迁移旧产品用户配置 |
+| Kimi Code / `kimi-code` | `.kimi-code/mcp.json` | `mcpServers` / 绝对 `cwd` + 相对 args | 依据 MoonshotAI/kimi-code；同运行时 IDE 接入复用，旧 kimi-cli/VS Code 扩展需区分版本，不自动迁移旧配置 |
 | Qwen Code / `qwen` | `.qwen/settings.json` | `mcpServers` / 绝对 `cwd` + 相对 args | 新增；不写 `trust:true` 或修改用户工具许可 |
 | MiMo Code / `mimocode` | 根 `mimocode.json(c)` 或 `.mimocode/mimocode.json(c)`；新建默认后者 `.json` | 同 OpenCode 形状 / 绝对 args | 依据 XiaomiMiMo/MiMo-Code 的配置加载器；不能只检查一个 `.json` 文件 |
-| Cline CLI / `cline` | 默认用户配置；源码支持 `CLINE_MCP_SETTINGS_PATH` 显式指定文件 | `mcpServers` / 绝对 args | 未确认原生项目自动发现。仓库内导出文件 + 仅当前进程设置该变量的启动入口见 11.6；这是显式接入，不是原生项目配置 |
-| Cline IDE / `cline-ide` | 面板 MCP Servers → Configure MCP Servers | `mcpServers` / 引导导入 | 不猜 IDE 存储路径，也不将 CLI 环境变量方案声称适用于已运行的扩展宿主 |
+| Cline CLI / `cline` | 仓库导出文件 `.cline/atsf4g-mcp.json` + `CLINE_MCP_SETTINGS_PATH` 显式启动器 | `mcpServers` / 绝对 args | 已对发布版 `cline@3.0.62` 二进制核实：resolver 读该环境变量且无项目级 `.cline/mcp.json` 自动发现（官方 CLI 参考中的项目 mcp.json 行是已知文档错误，cline/cline#11671）。这是显式接入，不能称为已自动接入（见 11.6/11.13） |
+| Cline IDE / `cline-ide` | 面板 MCP Servers → Configure MCP Servers | `mcpServers` / 引导导入 | 不猜 IDE 存储路径，也不将 CLI 环境变量方案声称适用于已运行的扩展宿主；生成本机片段供面板导入 |
+| 腾讯 CodeBuddy IDE / `codebuddy-ide` | Settings → MCP → Add MCP 打开的配置文件 | `mcpServers` / 导出绝对 args | 官方 IDE 页面确认面板与格式，未确认固定项目路径；列为引导导入，不套用 CLI 路径；生成本机片段供面板导入 |
 
 只有 VS Code/Cursor 的 `${workspaceFolder}` 方案不需要仓库绝对路径；绝对 `cwd` + 相对 args
 仍然是本机配置，不能标注为可直接跨机器提交。其他客户端继续用绝对 args 是安装器的保守选择，
@@ -365,7 +367,7 @@ STARTING → INITIALIZING（仅 CodeGraph 首建）/OPENING → READY 或 DEGRAD
   发现并修复 node:sqlite 运行时约束（见 2.3/5.3）。
 - [x] P7 安装器与 Agent 接入：`setup.js` 统一入口 + 10 个配置目标写入。
 - [x] P8 维护 Skill：`.agents/skills/mcp-integration-maintenance/`。
-- [ ] P9 Agent 接入扩展与交互重构（进行中）：
+- [ ] P9 Agent 接入扩展与交互重构（主体实现完成，剩余验收见 11.14）：
   - [x] P9.0 调研固定与本地复现记录；jsonc-parser 制品确定并固定（见 11.2）。
   - [x] P9.1 安装器数据保护与 CLI 修复：JSON 读取错误分类与损坏零写入、Codex 旧表边界/
     引号键/子表/多行字符串/未闭合与重叠标记、真实 `--dry-run`、两阶段批量写入、
@@ -377,10 +379,16 @@ STARTING → INITIALIZING（仅 CodeGraph 首建）/OPENING → READY 或 DEGRAD
     MiMo、Kilo 现行格式+`kilocode` 别名、Roo 修正路径）；候选发现（exclusive 冲突中止 /
     priority 首个存在）；Kilo/Roo/CodeBuddy 旧文件迁移清理（验证 command/args 指向本仓库、
     先写新目标后清理、遮蔽冲突中止）；共享组选择/移除规则；.gitignore 补根文件规则（见 11.3）。
-  - [ ] P9.4 方向键菜单、行模式、非交互校验、引导导入（含 CodeBuddy IDE/Cline IDE）、
-    Cline 显式启动（见 11.5/11.6）。
-  - [ ] P9.5 README/Skill/help 与 registry 的一致性终检与执行证据（见 11.7 剩余项）。
-  - [ ] P9.6 隔离工程与实际客户端验收（见 11.8 验收矩阵）。
+  - [x] P9.4 方向键菜单、行模式、非交互校验、引导导入（含 CodeBuddy IDE/Cline IDE）、
+    Cline 显式启动（见 11.5/11.6/11.13；真实终端与实际客户端验收归 P9.6）。
+  - [x] P9.5 README/Skill/help 与 registry 的一致性终检与执行证据（help/列表↔registry
+    自动化回归、候选路径逐项 check-ignore、文档覆盖核对，见 11.7/11.14）。
+  - [ ] P9.6 隔离工程与实际客户端验收（Windows+WSL 双平台组件测试与隔离周期、真实
+    prepare、pty/ConPTY 菜单、cline/codex/qwen/gemini/claude 实测与信任步骤记录、
+    lockfile 与跨平台 shim 缺陷修复已完成；GUI/部分客户端连接仍未验收，见 11.8/11.14）。
+- [x] P10 exclusive 候选整合与每产品独立配置器架构（2026-09-21）：多候选并存从整批
+  中止改为合并整合（冲突仍中止、先写后删、备份/回滚）；`agents/src/agents/` 每产品
+  一个配置器模块 + 共享基类，registry.mjs 保留兼容 re-export（见 11.16）。
 
 ## 10. 相对旧 Python 计划的变更记录（简要）
 
@@ -439,9 +447,9 @@ JSONC 编辑采用 Microsoft `jsonc-parser` 的语法树与 `modify`/`applyEdits
 扩展名、Node ESM 无法加载，故未收录）。升级 = 重下制品、校验 integrity、同步 VENDOR.json 与
 LICENSE；不为首次菜单执行 `npx`。`agents/package.json` 只承担测试入口。
 
-### 11.3 配置目标、候选与迁移（P9.3 已实施，2026-09-20）
+### 11.3 配置目标、候选与迁移（P9.3 实施 2026-09-20；当前整合语义见 11.17）
 
-实施记录（契约仍生效；实现见 `agents/src/registry.mjs`、`configPlan.mjs`、`writers.mjs`）：
+实施记录（契约仍生效；实现见 `agents/src/agents/`（每产品一个配置器模块）、`configPlan.mjs`、`writers.mjs`）：
 
 - 产品 17 个。Claude Code/pi/CodeBuddy CLI 共用 `.mcp.json` 一个目标组：任一 id 选中即保留
   整组（未选中的组员不触发移除），卸载任一 id 影响全组且输出标注全部消费者；
@@ -449,19 +457,23 @@ LICENSE；不为首次菜单执行 `npx`。`agents/package.json` 只承担测试
   （capability=extension），配置生成不等于扩展已连接。
 - 候选发现：OpenCode（根 json/jsonc）、Kilo（`.kilo/` 的 json(c)，新建默认
   `.kilo/kilo.json`）、MiMo（根与 `.mimocode/` 的 json(c)，新建默认 `.mimocode/mimocode.json`）
-  为 exclusive 模式——多个候选并存时中止该轮全部写入。这是安装器的保守限制，客户端加载顺序与合并
-  不等同于此限制。Kilo 根 `kilo.json(c)` 与 `.kilo/` 是可共存的层级；根托管条目按 OpenCode 形状迁移
-  清理，外来内容不动。单个目标候选原地编辑（JSONC 注释保留）。
+  为 exclusive 模式。配置类操作仅合并同目录候选，保留声明顺序中首个存在者；兼容对象字段
+  递归合并，叶值/数组冲突（含托管选项）按 `consolidation-conflict` 中止。目标局部编辑，
+  来源注释移到目标末尾；保留 BOM/换行。写入成功后才删除来源，有备份、日志和回滚。
+  Kilo/MiMo 根配置与隐藏目录配置保持分层，外来内容不移动；仅迁移本集成托管条目。
+  MiMo 优先已有隐藏目录层，否则原地编辑已有根层。卸载逐个原地清理，不合并候选。
 - CodeBuddy 旧根 `mcp.json`（priority 模式，官方顺序 `.mcp.json` 优先、只读首个存在文件）：
   仅它存在且只选 CodeBuddy 时原地编辑；需创建 `.mcp.json` 而旧文件含外来服务器时按
-  `legacy-shadow-conflict` 中止（预览式迁移未实现，列为 P9.4 交互确认的候选增强）；旧文件
+  `legacy-shadow-conflict` 中止（预览式迁移未实现，列为后续交互确认的候选增强）；旧文件
   只含本集成条目时创建 `.mcp.json` 并清理旧条目；两文件并存时只编辑 `.mcp.json`，
   旧文件字节不动。仅旧文件存在时，卸载原地移除本集成，保留外来服务且不新建配置。
 - 旧格式迁移（`kilocode`→`kilo` 别名、`.roo/mcp_settings.json`→`.roo/mcp.json`）：新目标
   写入成功后才清理旧文件中的托管条目；清理前验证条目 command/args 指向本仓库包装层，
   同名但非本集成的条目保留并输出提示；旧文件中的外来条目始终保留。`agentStates` 扫描
-  候选+legacy：缺失 legacy 是正常状态；仅 legacy 有托管条目时卸载也能清理；多候选并存报 error。
-  自动迁移遇到自定义字段/额外参数时中止，先人工迁移并删除旧托管条目再重跑，避免丢失设置；显式卸载可清理。
+  全部存在候选（取并集）+legacy：缺失 legacy 是正常状态；仅 legacy 有托管条目时卸载也能清理；
+  多候选并存不再是扫描错误。同格式保留自定义字段和附加参数；旧 Kilo stdio 的 env/disabled
+  转换为 environment/enabled。字段冲突、未知跨格式选项、自定义 cwd、file 替换引用和其他后端
+  的自定义选项中止整批写入，需人工迁移；显式卸载可清理。
 - 新增条目形状实施前已按官方文档实时复核（Zed `context_servers` 扁平 command/args；Kimi/Qwen
   `mcpServers` 支持 `cwd`；Kilo/MiMo 为 OpenCode 形状；CodeBuddy 优先级规则），来源见 11.11。
 - 安装/切换仍是“所选目标作为最终集合”语义；`.gitignore` 已补根文件规则并逐项
@@ -488,23 +500,26 @@ P9.2 已实现（契约仍生效）：损坏分类中止且零写入（语法/�
 `--dry-run` 完全只读（不 prepare、不写状态、不联网、动作以“拟”前缀打印）；两阶段 plan/apply；
 readline 在 finally 中关闭；菜单输出走 stdout、诊断走 stderr。
 
-待实施（P9.4）：方向键选择（Node 内置 `readline.emitKeypressEvents`；TTY+raw mode+ANSI 为
-↑↓移动、空格勾选、Enter 确认，多选 a 全选、n 清空；终端不支持光标控制或 `--ui=line` 时编号行
-模式；stdin 非 TTY/CI/`--yes` 不打开交互输入，选项不足立即报错且管道 EOF 不能当作默认确认；
-Ctrl+C/Escape/EOF/渲染异常在 finally 恢复终端并取消退出非零）。空选择不能静默卸载：TTY 显示
-移除摘要确认；非交互只有显式卸载参数才允许清空全部。`--agents=all` 只处理本轮可自动写入的
-目标组；需要扩展/启动/面板导入的客户端明确列为待用户操作。显式选择不存在已核实写入路径的
+已实现（P9.4，模块 `agents/src/ui/terminalMenu.mjs`，实现记录见 11.13）：方向键选择
+（Node 内置 `readline.emitKeypressEvents`；TTY+raw mode+ANSI 为 ↑↓移动、空格勾选、Enter 确认，
+多选 a 全选、n 清空；终端不支持光标控制或 `--ui=line` 时编号行模式；stdin 非 TTY/CI/`--yes`
+不打开交互输入，选项不足立即报错且管道 EOF 不能当作默认确认；Ctrl+C/Escape/EOF/渲染异常在
+finally 恢复终端并取消退出非零）。空选择不能静默卸载：TTY 显示移除摘要确认（y/N，空输入为否）；
+非交互只有显式卸载参数才允许清空全部。`--agents=all` 只处理本轮可自动写入的目标组；
+需要扩展/启动/面板导入的客户端明确列为待用户操作。显式选择不存在已核实写入路径的
 IDE id 时输出引导，不伪造项目配置文件。
 
-### 11.6 pi / Cline / IDE 的接入交付（P9.4 待实施）
+### 11.6 pi / Cline / IDE 的接入交付（P9.4 已实施，实现记录见 11.13）
 
 pi 选择项注明需要 `pi-mcp-adapter`，链接扩展作者 README 和安装步骤；setup 不自动安装第三方
 扩展，也不写未经核实的 pi 配置开关。完成共享文件写入后显示“配置已生成，扩展加载/连接待验证”。
-检查高优先级 `.pi/mcp.json` 中本集成条目的冲突，但不自动覆盖用户的 adapter 设置。
+检查高优先级 `.pi/mcp.json` 中本集成条目的冲突（同名命中与无法解析都输出提示），
+但不自动覆盖用户的 adapter 设置。
 
-Cline CLI 的 `CLINE_MCP_SETTINGS_PATH` 由上游 `resolveMcpSettingsPath()` 明确读取，可作为
-不改全局配置的显式接入方式。计划在用户选择 `cline` 时生成 `.cline/atsf4g-mcp.json`，
-再给出 `node <PROJECT_DIR>/project/integration/mcp/agents/tools/launch.mjs --agent=cline -- ...`
+Cline CLI 的 `CLINE_MCP_SETTINGS_PATH` 由上游 `resolveMcpSettingsPath()` 明确读取，且已对
+发布版 `cline@3.0.62` 二进制核实（见 2.6），可作为不改全局配置的显式接入方式。在用户选择
+`cline` 时生成 `.cline/atsf4g-mcp.json`，再给出
+`node <PROJECT_DIR>/project/integration/mcp/agents/tools/launch.mjs --agent=cline -- ...`
 的启动命令；这个文件名是本安装器自定义导出路径，Cline 不会自动发现它。启动器仅对子进程
 设置绝对 `CLINE_MCP_SETTINGS_PATH`、仓库 cwd，以参数数组调用经验证的 Cline CLI 入口，
 不修改用户环境、不生成平台 shell 脚本，也不在 setup 结束后自动启动 Agent。
@@ -512,21 +527,25 @@ Cline CLI 的 `CLINE_MCP_SETTINGS_PATH` 由上游 `resolveMcpSettingsPath()` 明
 Windows 的原生可执行文件与 npm shim 必须分别验证，不把 `.cmd` 当可直接 `shell:false` 执行。
 若实际发布版不支持此环境变量，保持引导导入状态，不能输出“已自动接入”。
 
-Cline IDE、CodeBuddy IDE 通过各自官方面板导入生成的片段；可以把片段放在
+Cline IDE、CodeBuddy IDE 通过各自官方面板导入生成的片段；片段放在
 `<BUILD_DIR>/integration/mcp/exports/`，只含本次条目与本机路径。不读取/改写 IDE 全局文件，
 不假定它们会读取 CLI 项目配置。Cline CLI 的默认路径按源码是
 `~/.cline/data/settings/cline_mcp_settings.json`，还受 `CLINE_DATA_DIR`/显式路径影响；
 官方 MCP 概览仍写 `~/.cline/mcp.json`，此处以实际 resolver 为准，不将这一默认路径套给所有 IDE。
 
-### 11.7 `.gitignore` 与相关文档（ignore 规则已随 P9.3 补齐；终检待 P9.5）
+### 11.7 `.gitignore` 与相关文档（P9.3 补规则，P9.5 终检完成）
 
 已补齐并 `git check-ignore --no-index -v` 逐项验证：根 `/mcp.json`、`/kilo.json`、
 `/kilo.jsonc`、`/mimocode.json`、`/mimocode.jsonc`（限定仓库根，不影响 vendored 子项目；
 `.vscode/mcp.json` 已被 `.vscode/*` 覆盖且 `!.vscode/tasks.json` 例外保留；目录类候选
 `.zed/`、`.kimi-code/`、`.qwen/`、`.workbuddy/`、`.kilo/`、`.mimocode/` 等此前已覆盖）。
-负向检查 `project/integration/mcp/` 源码与 Skill 文件仍可提交。README 矩阵/迁移说明与
-维护 Skill references 已随 P9.3 同步。P9.5 剩余：`--help`/`--list-agents` 输出与 registry
-的一致性终检、客户端实测后的一次性文档核对；ignore 不移除已被跟踪的文件。
+负向检查 `project/integration/mcp/` 源码与 Skill 文件仍可提交。P9.5 终检（2026-09-20）：
+从 registry 程序化枚举 27 个目标/候选/legacy 路径（含只读检查的 `.pi/mcp.json`）逐项
+check-ignore 全部命中；同一批路径无任何已被 Git 跟踪的文件（ignore 不移除已跟踪内容）；
+`--help`/`--list-agents` 输出与 registry 的一致性固化为 `agents/test/setup.test.mjs`
+回归（列出 id 集合与目标位置逐一核对、help 选项面与 parseArgv 一致）；README/Skill
+矩阵覆盖全部 20 个产品且无“导出=已连接”类措辞（SKILL.md 为路由面按设计不逐产品列出）。
+客户端实测后的文档核对随 P9.6 完成并记入 11.14。
 
 ### 11.8 分阶段执行与验收
 
@@ -536,9 +555,9 @@ Cline IDE、CodeBuddy IDE 通过各自官方面板导入生成的片段；可以
 | P9.1 | 已完成（2026-09-20） | 原错误用例先失败后通过；损坏输入零写入；完整 dry-run 无 prepare 调用和文件变化 |
 | P9.2 | 已完成（2026-09-20） | 原 10 个目标行为有回归覆盖；变更计划与 I/O 分离；批量失败和共享目标去重通过；JSONC 注释保留编辑落地 |
 | P9.3 | 已完成（2026-09-20） | 官方文档实时复核后实施；候选/迁移/共享组各有独立测试；多候选与遮蔽冲突中止零写入 |
-| P9.4 | 待实施 | 状态机测试 + Windows/Linux 终端验证；未装客户端/扩展可解释退出；取消和 EOF 不挂住 |
-| P9.5 | 待实施 | 实际候选路径逐项 check-ignore；帮助/文档与 registry 一致；没有将导出称为连接成功 |
-| P9.6 | 待实施 | 按下表记录操作系统、Node/客户端版本、加载文件、工具发现、调用、关闭结果；未测条目标未验收 |
+| P9.4 | 已完成（2026-09-20） | 菜单/导出/启动器有状态机测试（11 项菜单 + 5 项启动器 + 7 项 CLI/registry 流程）；EOF 与取消不挂住、raw mode 恢复有断言；未装客户端可解释退出。真实终端与实际客户端验收归 P9.6 |
+| P9.5 | 已完成（2026-09-20） | help/`--list-agents`↔registry 自动化回归进组件测试；27 个实际候选/legacy 路径逐项 check-ignore 命中且无被跟踪冲突；README/Skill 覆盖 20 产品、无“导出=已连接”措辞（见 11.7/11.14） |
+| P9.6 | 部分完成 | 2026-09-20 Windows+WSL：四组件 150/150、隔离工程完整周期与损坏末目标零写入；真实 prepare（tgrep）+ SDK 冒烟；pty/ConPTY 菜单三场景。GUI 和部分客户端连接仍未验收（见 11.14）；本轮复验见 11.15 |
 
 P9.6 客户端验收矩阵（必测场景 → 预期）：
 
@@ -593,6 +612,22 @@ CLI 集成测试在隔离工程运行完整 install → 重跑 → 切换两次 
   行为符合设计。.gitignore 补 5 条根文件规则并逐项 check-ignore（含子项目不误伤负向检查）。
   未执行：真实客户端写入/连接验收（P9.6）、WSL 复验、CodeBuddy 旧文件含外来条目的预览式
   迁移（按设计中止）。
+- 2026-09-20 第五轮（P9.4，继 11.10 审查与 11.12 补丁轮之后）：发布版 `cline@3.0.62`
+  二进制取证（`CLINE_MCP_SETTINGS_PATH` 存在；无项目级 `.cline/mcp.json` 读取器；官方 CLI
+  参考的项目 mcp.json 行为已知文档错误）；registry 17→20 产品（`cline` 导出目标 + `cline-ide`/
+  `codebuddy-ide` 引导导入）；`agents/src/ui/terminalMenu.mjs`（方向键/行模式/确认/取消）；
+  `agents/src/guidance/ideExports.mjs`（构建目录片段）；`agents/tools/launch.mjs`（显式启动器）；
+  `setup.js` 接入 `--ui=line`、空选择确认、all 过滤、待用户操作汇总与 `.pi/mcp.json` 冲突提示。
+  四组件 **148/148**（agents 109 + common 23 + tgrep 8 + codegraph 8，Windows x64/Node 24.21.0）。
+  CLI 冒烟：`--help`/`--list-agents`/新组合 dry-run/非法 `--ui` 与未知 id，18 个配置/状态路径
+  哈希与 `git status` 前后一致；安装 dry-run 在真实工作区仍因 Kilo 双候选中止（既有限制）。
+  未执行：真实终端方向键操作、真实 Cline/IDE 连接、WSL 复验（归 P9.6）。
+- 2026-09-20 第六轮（P9.5/P9.6，详见 11.7/11.14）：一致性终检（27 路径 check-ignore、
+  help/列表↔registry 回归、文档覆盖）全部通过；修复 npm 12 `EALLOWREMOTE` lockfile 阻断
+  与 launch.mjs 跨平台 shim 判定（均先失败后通过）；双平台四组件 150/150；隔离工程完整
+  周期双平台 ALL CHECKS PASSED；Windows 真实 prepare 全流程 + SDK 冒烟；WSL pty 与
+  Windows ConPTY 菜单三场景；qwen ✓Connected、cline/codex 配置加载与信任步骤实测，
+  gemini/claude 到认证门槛如实标未验收。
 
 ### 11.10 未提交代码审查（2026-09-20）
 
@@ -652,6 +687,11 @@ WorkBuddy 页面通过官方 URL 直接读取正文；网页工具超时时用 P
   [resolveMcpSettingsPath 源码](https://github.com/cline/cline/blob/main/sdk/packages/shared/src/storage/paths.ts)、
   [文档错误报告 #11671](https://github.com/cline/cline/issues/11671)、
   [项目作用域需求 #13596](https://github.com/cline/cline/issues/13596)。
+  P9.4 补充（2026-09-20）：发布版 `cline@3.0.62`（npm `cline`，平台包 `@cline/cli-<platform>-<arch>`
+  捆绑原生二进制）直接取证——exe 内确认 `CLINE_MCP_SETTINGS_PATH` resolver 与全局默认
+  `cline_mcp_settings.json`，未发现项目级 `.cline/mcp.json` 读取器；官方 CLI 参考
+  （docs.cline.bot/cli/cli-reference.md）配置文件树中的项目 mcp.json 行与 config 文档/源码矛盾，
+  属 #11671 所述文档错误。
 - JSONC：[Microsoft node-jsonc-parser](https://github.com/microsoft/node-jsonc-parser)，
   parse 错误列表与 modify/applyEdits API；制品已固定（见 11.2）。
 - TOML：[官方 1.0 规范](https://toml.io/en/v1.0.0)，引用键、字符串转义、多行字符串与表边界。
@@ -684,9 +724,273 @@ Windows x64 / Node 24.21.0）。新增 8 项补丁/恢复测试和 2 项 CLI 流
 全 Agent 预览仍因现存两份 Kilo 候选配置中止（见 11.10）。固定版本 CLI `explore --help` 已实测；
 当前 MCP 探索返回 `INDEX_IN_USE`，未停止其他实例或修改索引。真实客户端连接和 Linux/macOS 本轮未验收。
 
+### 11.13 P9.4 交互与显式接入实现记录（2026-09-20）
+
+实现模块与契约（设计依据 11.5/11.6，测试见 11.8/11.9 第五轮）：
+
+- **终端菜单 `agents/src/ui/terminalMenu.mjs`**：`createInteractiveUi({input, output, forceLine})`
+  提供 `singleSelect`/`multiSelect`/`confirm`/`close`。方向键模式要求双侧 TTY、`setRawMode`
+  可用且 `TERM !== 'dumb'`（`--ui=line` 强制行模式）；↑/↓ 循环移动、空格勾选、Enter 确认，
+  多选 a 全选、n 清空，Esc/Ctrl+C/Ctrl+D/EOF 抛 `MenuCancelled` 并在所有退出路径恢复
+  raw mode、移除监听；渲染异常同样取消。行模式保留编号输入语义（a/n/编号列表/回车保持默认），
+  每次 question 才创建 readline 接口（避免空闲接口把按键回显进方向键重绘），question 与
+  stdin close 事件竞速，EOF 不当作默认确认。选项为空立即抛 `MenuInputError`。窄终端按
+  显示宽度（CJK 记 2）截断加 `…`。确认提示仅显式 y/yes 为真。
+- **setup.js 接入**：交互 UI 仅在 `--yes` 未设、无 `CI` 环境变量且双侧 TTY 时创建；其余一律
+  拒绝提问并要求显式选项。安装路径空选择先列将移除的已配置条目再 y/N 确认（拒绝则零修改退出）；
+  非交互空选择直接报错。`--agents=all` 只含可自动写入目标（17+cline），面板导入类与待用户操作
+  在汇总中列出。`MenuCancelled` 走非零退出。
+- **registry 20 产品**：`cline` → 目标 `cline-export-json`（`.cline/atsf4g-mcp.json`，标准
+  `mcpServers` 形状，进入与既有目标相同的两阶段写入/备份/归属/回滚机制）；`cline-ide`、
+  `codebuddy-ide` 无 `targetId`（`agentStates` 恒未配置、`buildAgentOperations` 不产生仓库
+  操作、兼容 API `configureAgent`/`removeAgentServers` 拒绝并说明）。
+- **IDE 片段 `agents/src/guidance/ideExports.mjs`**：`<BUILD_DIR>/integration/mcp/exports/` 下
+  每客户端一个片段文件（只含本轮条目与本机绝对路径），apply 阶段写入、幂等重写，卸载/取消选择
+  时删除；dry-run 只打印拟生成。输出面板导入步骤，不读不改 IDE 全局文件。
+- **Cline 启动器 `agents/tools/launch.mjs`**：`--agent=cline [--cline <入口>] -- <透传参数>`。
+  仅对子进程注入绝对 `CLINE_MCP_SETTINGS_PATH` 与仓库 cwd，`shell:false` 参数数组；入口解析
+  顺序 `--cline`（拒绝 Windows `.cmd`/`.bat` shim）> `CLINE_BIN_PATH`（存在时）> npm 全局
+  `cline/bin/cline` 解析脚本（用当前 Node 执行，探测常见全局 node_modules 目录，不派生 npm）>
+  平台包原生二进制（`@cline/cli-<platform>-<arch>/bin/cline[.exe]`）> 报错并提示
+  `npm install -g cline`。导出文件缺失时提示先运行 setup。setup 只打印启动命令，不自动启动，
+  汇总明确“显式接入，不等于已自动接入”。
+- **pi 交付**：选择 pi 时输出 adapter 前置条件与作者 README 链接；`.pi/mcp.json` 存在时只读
+  检查同名条目（命中或无法解析都提示，不修改该文件）。
+- `.cline/` 已被根 `.gitignore` 覆盖（本轮 `git check-ignore --no-index -v
+  .cline/atsf4g-mcp.json` 验证命中 `.gitignore:63:.cline`）；导出文件含本机绝对路径，不提交。
+
+已知边界：方向键菜单经模拟 TTY 流测试（真实终端手感与 Windows conhost/VT、WSL 终端验证归
+P9.6）；Cline 启动器的 npm 全局探测覆盖常见布局，未覆盖的安装方式用 `--cline` 显式指定；
+`cline mcp install` 向导是另一条用户级接入路径，本集成不调用它。
+
+### 11.14 P9.5/P9.6 执行记录（2026-09-20）
+
+**本轮发现并修复的缺陷（先失败后通过）**：
+
+1. `common/tgrep/codegraph` 的 `package-lock.json` 内 `resolved` 指向腾讯镜像 tarball
+   域名。Node 24.21 自带的 npm 12.0.2 以 `EALLOWREMOTE`（“Fetching non-root packages of
+   type remote have been disabled”）拒绝此类 `npm ci`，全新环境下依赖准备必然失败——
+   此前未暴露只因各组件 `node_modules` 已存在。修复：移除全部 `resolved` 字段使 lockfile
+   与镜像无关（`npm ci` 按当前 registry 解析；官方源与 npmmirror 双 registry 实测通过）；
+   新增 `common/test/lockfiles.test.mjs` 回归防止再次引入非 registry 的 `resolved`。
+2. `agents/tools/launch.mjs` 的 `.cmd/.bat` shim 判定带 `win32` 条件，Linux 上退化为
+   “文件不存在”，与帮助文本“不能是 .cmd/.bat shim”（无条件）不符，且 WSL 复验实际失败
+   （agents 109/110）。修复：改为全平台按扩展名拒绝（从 WSL 传 Windows 风格路径同样受益），
+   测试断言在双平台一致。
+
+**P9.5 终检**（详见 11.7）：27 个路径 check-ignore 全命中、无被跟踪冲突；help/列表↔registry
+一致性测试进入组件套件（agents 110 项）；README/Skill 覆盖 20 产品、措辞检查通过。
+
+**P9.6 验收**：
+
+- 单元/集成（Windows x64/Node 24.21.0 与 WSL/Debian/Node 20.19.2 双平台各跑一遍）：
+  四组件 **150/150**（agents 110 + common 24 + tgrep 8 + codegraph 8）。
+- 隔离工程完整 CLI 周期（双平台，脚本 `<BUILD_DIR>/_agent_tmp/mcp/run-cli-cycle.mjs`，
+  快照逐字节比对仓库+隔离 HOME，全程死代理+不可达 registry 证明无下载子进程）：
+  install(tgrep,all) → 幂等重跑零写入 → 切 codegraph → 切回 tgrep → uninstall --all-agents →
+  重复 uninstall 零写入 → 三组 dry-run 零写入 → 重装后损坏 registry 末目标
+  （`.cline/atsf4g-mcp.json`）整批 rc=1 零改写；仓库侧外来 JSONC/JSON 条目、注释与用户级
+  哨兵（`~/.gemini`、`~/.codex`、`~/.cline`）全程逐字节保持；AGENTS.md 提示词卸载后保留。
+  两平台均 `ALL CHECKS PASSED`。
+- 真实 prepare（Windows，scratch 工程第二次全量执行）：npm ci（镜像）→ clone 固定提交 →
+  补丁 → `cargo build --release`（tgrep 1.0.9）→ 5 个目标配置写入，全流程成功。
+- SDK 客户端冒烟（真实 tgrep 后端）：initialize/tools/list 即时响应；索引期查询返回
+  `INDEX_NOT_READY`；就绪后 `sample_add` 命中 `src/sample/sample.h:3`、无匹配返回空结果
+  （与错误可区分）；客户端 close 后干净退出。
+- 真实终端菜单（11.8 终端行）：WSL `script`(pty) 与 Windows ConPTY（node-pty）各跑
+  multi（↓+空格+回车 → `RESULT:multi:a+b`）、single（↓+回车 → `RESULT:single:1`）、
+  cancel（Esc → `MenuCancelled`）三场景，均含 `ISRAW:restored`（raw mode 恢复）。
+  winpty 在本受管管道环境下尺寸断言崩溃不可用；node-pty 退出钩子的 `AttachConsole failed`
+  报错是其伴随进程的噪音，不影响子进程结果标记。
+- 实际客户端（隔离工程、隔离 HOME、各自官方包；连接验收限于无认证门槛的命令）：
+  - **qwen-code 0.24.1**：`qwen mcp list` 发现项目条目（cwd+相对 args 生效）→
+    `qwen mcp approve atsf4g-tgrep`（用户批准步骤，绑定当前配置）→ `qwen mcp list`
+    显示 **✓ Connected**（真实 initialize 握手通过）。
+  - **cline 3.0.62（Windows + WSL 双平台）**：经 `agents/tools/launch.mjs`（显式
+    `CLINE_MCP_SETTINGS_PATH`）+ 真实 TTY（Windows ConPTY / WSL pty）运行 `cline config`，
+    MCP 标签均显示 `● atsf4g-tgrep — stdio, local`（导出文件被真实加载，Linux 原生
+    `@cline/cli-linux-x64` 二进制同样通过）；`cline doctor` 经启动器 rc=0。
+    Agent 会话内工具调用需登录模型供应商，未验收。
+  - **codex 0.155.1**：默认只读用户级配置；实测项目级 `.codex/config.toml` 生效需用户
+    侧 `project_config_enabled = true` + `[projects.'<绝对路径>'] trust_level = "trusted"`
+    （或交互式首次运行的信任对话）。满足后 `codex mcp list`/`get` 正确发现
+    `atsf4g-tgrep`（stdio、cwd 正确）。会话内连接需 ChatGPT 登录，未验收。
+  - **gemini 0.60.0**：`gemini mcp list` 发现项目条目，但未信任目录中按官方行为禁用
+    （"MCP servers are configured but disabled because this folder is untrusted"）；
+    `--skip-trust` 路径要求认证（rc=41，需 GEMINI_API_KEY/OAuth）。信任+登录后的连接
+    未验收。
+  - **claude code 2.1.278**：`claude mcp list`（平台包原生 exe）发现 `.mcp.json` 条目并
+    尝试健康检查，报告 ⏸ Pending approval——官方帮助明确未批准的项目服务器不会被连接，
+    批准需交互式运行 `claude`（且离线写 `enabledMcpjsonServers` 等状态无效）。连接未验收。
+    附注：npmmirror 分发的 `@anthropic-ai/claude-code` `bin/claude.exe` 为约 500 字节的
+    损坏 stub，实测改用平台包 `claude-code-win32-x64/claude.exe` 可运行（版本 2.1.278）。
+- 环境注意事项（记录供后续复用）：`TGREP_EXCLUDE_DIRS` 按**目录名**排除
+  （含 `build_jobs_cmake_tools`、`build` 等），嵌在构建目录下的 scratch 工程会整树被排除
+  导致 0 文件入索引——真实后端 scratch 必须放在不含排除名的目录（本轮置于 OS 临时目录）；
+  这不是真实仓库场景的缺陷。
+
+仍未验收（如实保留）：macOS/arm64；gemini/claude/codex/cline 的登录后会话内工具调用；
+cline-ide/codebuddy-ide 的 IDE 面板导入；VS Code/Cursor 等 GUI 客户端；OpenCode/Kilo/
+Roo/Zed/Kimi/WorkBuddy/MiMo/omp 的真实客户端连接（其配置形状由单元测试与官方文档覆盖）。
+WSL 侧未重跑真实 prepare 与其余客户端连接（cline 已在 WSL 验收；Windows 已覆盖安装
+全流程；WSL 有独立工具链，行为差异风险主要在 prepare，其代码自 P4/P6 验收后未改动，
+本轮仅 lockfile 修复）。
+
+### 11.15 代码审查与回归（2026-09-21）
+
+本轮限于安装器、菜单、Cline 启动器和导入片段，未改动后端协议与索引实现。
+Windows 基线为 145/150：菜单测试继承 `TERM=dumb`，模拟 TTY 没有固定终端能力。
+新增回归先复现 11 项失败，再修复：
+
+- 菜单只监听 stdin close，end、UI close 和 readline 自身关闭不能可靠结束问题；方向键选择
+  完成后 stdin 仍在流动，真实终端进程不能自然退出。统一取消与流清理，恢复 raw mode、暂停 stdin；
+  补流/渲染错误、行模式 Escape 和窄屏/resize 检查，长选项列表只显示当前屏幕容得下的部分。
+- 非交互缺少 Agent 选择时可能先准备依赖再报错。将必要选项检查前置，保留 `--yes` 的既有默认值。
+- IDE 片段在配置批次之后直接写入，失败可留下已更新配置；未取消选择清理，已有片段不进入默认选择，
+  dry-run 仍打印“已生成”。片段现在与配置/提示词同批预检和回滚，复用路径、并发修改和备份保护；
+  修改过的片段中止而不覆盖。卸载本地片段不会清理用户已导入 IDE 的条目。
+- Cline 显式无扩展名 `bin/cline` 被当作原生程序；环境覆盖绕过 shim/JS 校验。统一入口校验并识别
+  Node shebang。固定 `cline@3.0.62` npm resolver 还会再次读取 `CLINE_BIN_PATH`，因此启动器解析后
+  不再把该覆盖变量传给子进程，避免再次覆盖 `--cline` 或递归执行脚本。
+
+Windows Node 24.21.0 与 WSL/Debian Node 20.19.2 四组件均 **166/166**
+（agents 126 + common 24 + tgrep 8 + codegraph 8），无跳过。
+新增 16 项回归还覆盖片段写失败回滚、并发修改不覆盖和仓库外 junction 拒绝。
+ConPTY 单选到末项、Esc、行模式 Ctrl+C 三个子进程均自然退出且 raw mode 恢复；node-pty 测试驱动
+自身的辅助句柄仍需关闭，不将驱动清理误记为安装器进程退出。
+WSL 真实 PTY 同样通过单选到末项、Esc、行模式 Ctrl+C 的自然退出检查。
+首次直接在 `/mnt/d` 执行时，文件操作耗时触发测试驱动的 90 秒截止时间；改用既有 Linux
+构建目录的独立 ext4 工程后通过，未修改测试断言或放宽超时。Windows 使用四个 `npm test`；
+Linux 按四个 package script 的相同显式文件列表执行 `node --test`。
+
+隔离 CLI 完整周期（安装、无写入重跑、两次切换、卸载两次、预览、损坏末目标全批中止）通过；
+真实工作区 help/list 及安装/卸载 dry-run 的配置哈希和 `git status` 前后一致。实际工作区仍有
+`.kilo/kilo.json` 与 `.kilo/kilo.jsonc` 双候选，相关预览按保护规则退出 1，没有覆盖这两份配置。
+固定 `cline@3.0.62` 的真实无扩展名 npm resolver，经修改后的启动器 `--version` 返回 3.0.62；
+该检查在隔离 HOME 下执行，未验证登录后的工具调用。本轮未重启或重建正在使用的 CodeGraph 索引。
+日志和验收驱动在 `<BUILD_DIR>/_agent_tmp/mcp/review-20260921/`。
+
+外部行为依据：[Node readline close/end/SIGINT 文档](https://nodejs.org/api/readline.html#event-close)、
+[Cline MCP 路径 resolver](https://github.com/cline/cline/blob/main/sdk/packages/shared/src/storage/paths.ts)，
+启动脚本优先级另以本地固定 3.0.62 的 `bin/cline` 制品核实。
+
+当前仍保留 11.4 的崩溃后自动恢复与 11.14 的客户端验收缺口，因此不移除本计划。
+后续确实退休本文件时，先把 `common/src/paths.mjs` 的仓库标记改为持久入口并更新相关测试夹具，
+否则安装器、doctor、启动器和包装层都会因找不到 `Plan.md` 拒绝启动。
+
+### 11.16 候选整合与配置器架构重构（2026-09-21）
+
+本节记录首次实现；其中跨目录合并、忽略托管选项冲突和整体格式化的做法已由 11.17 修正。
+当前行为以 11.3、11.17 和 README 为准，下列测试数量属于首次实现记录。
+
+动机：真实工作区 `.kilo/kilo.json` 与 `.kilo/kilo.jsonc` 并存触发旧的
+`candidate-conflict` 整批中止，用户无法继续；同时按维护性要求把“每个 Agent 的接入”从
+集中式 registry 拆成独立模块。本轮两项交付：
+
+**1) exclusive 候选整合（迁移/合并）**（实现：`configPlan.mjs` `planTarget`/
+`mergeCandidateDocuments`）：
+
+- 触发：exclusive 目标（OpenCode 根 json/jsonc、Kilo `.kilo/` 对、MiMo 根/目录候选）
+  存在多个候选文件且本轮为配置类操作。保留目标 = 候选声明顺序中首个存在者
+  （与单候选原地编辑的优先级一致）。
+- 合并语义：冗余候选的外来内容并入保留目标——服务器表（`mcp` 等）内按服务器 id 粒度
+  合入，其余顶层键按键粒度合入；两处出现同名同值则忽略，同名不同值按
+  `consolidation-conflict` 中止整批（托管条目例外：planner 统一改写为所选后端，
+  不算冲突；同名但非本集成的条目仍走 `server-conflict` 保护）。损坏候选维持
+  invalid-json 等损坏分类中止。TOML 目标不支持整合（显式 `consolidation-unsupported`）。
+- 落盘顺序与安全：先写保留目标（其 `before` 保持磁盘原始字节，写入前并发比对、备份、
+  journal、可回滚），成功后才删除冗余候选文件（同样备份 + journal + 回滚；删除不要求
+  归属记录——内容已合并、冲突已中止、dry-run 有预览）。无注释的保留目标做一次整文件
+  2 空格格式化（与新文件一致）；有注释的走 jsonc 局部编辑保注释。
+- 卸载类操作不做合并：对每个存在候选原地清理托管条目（空骨架 + 归属记录才整删）。
+- `agentStates` 改为扫描全部存在候选取并集，多候选不再是扫描错误。
+- 输出：dry-run 打印 `拟更新：X（合并了 Y 的内容）` + `拟删除冗余候选：Y`；实际执行
+  相应加“已”。回滚在后续目标失败时同时恢复保留目标原字节与被删冗余文件
+  （consolidation.test.mjs 注入 rename 失败验证）。
+
+**2) 每产品独立配置器架构**（新目录 `agents/src/agents/`）：
+
+- `base.mjs`：`AgentConfigurator`（产品元数据 + 物理目标声明）及共享基类
+  `JsonServerMapConfigurator`（单 JSON 文档服务器表族）、`OpenCodeShapeConfigurator`
+  （OpenCode 形状，exclusive 候选）、`CodexTomlConfigurator`（TOML 表）、
+  `GuidedImportConfigurator`（无项目文件的引导导入产品）。
+- 每个产品一个模块（`claude.mjs` … `codebuddy-ide.mjs` 共 20 个），只声明自身元数据、
+  目标/候选/legacy 布局与官方证据链接；`.mcp.json` 共用组的目标在 `mcp-json-group.mjs`
+  声明一次，三个组员引用同一冻结对象（`index.mjs` 校验同 id 描述必须一致）。
+- `agents/index.mjs` 聚合出 REGISTRY/TARGETS 等原有表面；`registry.mjs` 保留为兼容
+  re-export（setup.js/测试/common shim 的导入路径不变）。后端定义拆到 `backends.mjs`。
+- 引擎（configPlan/formats/fileStore/writers）保持产品无关；新增一个 Agent 通常只需
+  新增一个模块 + 注册到 `index.mjs`。
+
+测试：新增 `agents/test/consolidation.test.mjs`（11 项：真实 `.kilo` 双 `$schema` 文件
+形状、dry-run 预览、注释保留、键/服务器条目冲突中止、托管条目归一、同名外来中止、
+损坏中止、卸载多候选清理、后续目标失败回滚、OpenCode/MiMo 布局、备份与 journal 记录），
+旧 `candidate-conflict` 契约测试改写为整合契约。四组件 **177/177**（agents 137 +
+common 24 + tgrep 8 + codegraph 8，Windows x64/Node 24.21.0 与 WSL/Debian/Node 20.19.2
+双平台）；隔离工程完整 CLI 周期双平台 ALL CHECKS PASSED；真实工作区 dry-run 预览
+（`.kilo/kilo.jsonc` → `.kilo/kilo.json` 合并 + 删除冗余）零写入。
+
+### 11.17 迁移实现复审与产品边界（2026-09-21）
+
+本轮基线 agents 137/137。复审发现 11.16 实现可能在合并后误判 unchanged 并删除来源，丢失来源注释、
+目标 BOM/换行及重复托管条目的自定义字段；MiMo 跨目录整合还会改变相对文件/插件路径的含义。
+以下接受条件已实施：
+
+- 同目录 json/jsonc 合并兼容对象字段，保留所有注释、目标 BOM/换行；叶值或数组冲突全批次零写入，
+  包括托管条目的自定义字段。目标动作按磁盘原文与最终结果重新判断，目标写入成功后才清理来源。
+  清理前再次校验目标仍含迁移结果，目标动作是 unchanged 时也不跳过此校验。
+- 根配置与隐藏目录配置保持独立层级，外来内容不跨目录搬迁；只迁移指向本仓库包装层的托管条目。
+  旧 Kilo 标准 stdio 的 env/disabled 转为当前 environment/enabled；已知可保留的参数随条目迁移，
+  未知跨格式字段、冲突和相对文件引用不猜测转换。迁移前后均保留备份、并发校验和失败恢复。
+- 20 个产品各自维护目标、前置条件、导入步骤与后续提示；公共引擎只消费描述与接口。
+  共享配置组保留一个物理目标。公开 registry/兼容 writer 路径保持不变。
+- 回归覆盖上述数据丢失、失败回滚、幂等和 CLI dry-run；四组件 Windows/WSL 复验。
+  实际工作区配置只做预览，实际迁移通过隔离工程验证。
+
+最新加载规则复核：Kilo 的 `config/paths.ts` 与 `config/config.ts` 区分根文件和配置目录；
+MiMo 的 `config/config.ts` 同样先加载根文件再加载 `.mimocode`。本安装器对同名不同值保持显式冲突，
+不把上游加载优先级当作丢弃用户配置的授权。本轮重新读取的来源：
+[Kilo 加载器](https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/config/config.ts)、
+[Kilo 路径选择](https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/config/paths.ts)、
+[MiMo 加载器](https://github.com/XiaomiMiMo/MiMo-Code/blob/main/packages/opencode/src/config/config.ts)。
+
+实现位于 `agents/src/migration/`、`configPlan.mjs` 和各产品配置器。产品的 `installNotes` 与
+IDE `importSpec` 由各自模块提供，`setup.js` 不再按 pi/Cline 产品名编排特殊说明。
+来源注释在目标末尾标注来源后保留；不会维持来源文件中已经消失的原始注释位置。
+
+新增回归覆盖合并后目标必须写入、注释/BOM/CRLF、嵌套字段与选项、跨目录层级、旧格式选项、
+错误/未知选项全批次零写入、并发编辑保护、失败回滚及实际 CLI 的预览/迁移/幂等重跑。
+真实工作区仅执行预览，未实际迁移用户配置。
+
+验收结果：新增 14 项回归；Windows x64/Node 24.21.0 与 WSL/Debian/Node 20.19.2
+四组件均 **191/191**（agents 151、common 24、tgrep 8、codegraph 8），零失败、取消或跳过。
+先用 6 项失败测试复现主要缺陷后修复；最终又复现并修复了切换后端丢弃旧自定义 cwd，
+以及目标原本 unchanged、随后被并发修改时仍清理来源的缺口。
+Agent 套件包含实际 setup.js 子进程的双候选与旧配置同时迁移、预览零写入和幂等重跑；
+Windows 另跑隔离 CLI 完整周期及固定 Cline 3.0.62 启动，均通过。
+真实工作区 help/list、两种后端 all 预览、IDE 导入片段预览和全量卸载预览均成功，
+配置/状态文件哈希与 git status 前后一致。Skill 验证与 scoped diff 检查通过。
+日志位于 `<BUILD_DIR>/_agent_tmp/mcp/review-migration/`。
+
+未重跑后端索引或真实客户端连接：本轮未改动这些执行路径，已有 CodeGraph 实例 PID 20964
+仍持锁，未停止或解锁。11.4 的崩溃后自动恢复、CodeBuddy 外来配置迁移及 11.14 的客户端
+验收仍未完成，保留本计划；根 AGENTS.md/CLAUDE.md 无需新增安装器内部规则，维护知识放在专用 Skill。
+
+### 11.18 产品名称与 CLI/IDE 配置范围（2026-09-21）
+
+安装器菜单和列表统一显示 `Codex`、`Kimi Code`，保持 id、目标路径和格式不变。
+Codex 的 CLI/IDE 共享配置已按官方 MCP 文档确认；Kimi IDE 通过同一运行时接入时复用配置，
+官方 VS Code 扩展仍有新旧运行时兼容限制，未将改名视为所有插件版本已验收。来源链接见 README
+“支持的 Agent”。历史客户端实测记录保留 CLI 字样，避免把终端验收扩大为 IDE 验收。
+
+命名调整后 Windows 四组件 191/191 通过，零失败或跳过；实际 `--list-agents` 显示
+`codex → Codex`、`kimi-code → Kimi Code`，git status 前后一致。Skill 验证和 diff 检查通过。
+此次仅调整展示名称与说明，未新增名称字符串单测，未重跑 WSL 或实际 IDE 连接验收。
+
 ## 参考来源
 
 固定到本轮调研的提交与包版本：
+
 
 - tgrep 源码：`https://github.com/microsoft/tgrep/tree/239711cfb6e69e8780cabf912a8987162a223ff1`
   （`tgrep-cli/src/main.rs`、`tgrep-cli/src/serve.rs`）
@@ -694,6 +998,6 @@ Windows x64 / Node 24.21.0）。新增 8 项补丁/恢复测试和 2 项 CLI 流
   （`src/mcp/index.ts`、`src/mcp/engine.ts`、`src/mcp/stdin-teardown.ts`、`src/mcp/liveness-watchdog.ts`、
   `src/mcp/tools.ts`、`src/directory.ts`、`src/index.ts`）
 - npm：`@colbymchenry/codegraph@1.6.0`、`@modelcontextprotocol/server@2.0.0`、
-  `@modelcontextprotocol/client@2.0.0`、`jsonc-parser@3.3.1`
-  （`packages/client/src/client/stdio.ts` 行为已核对）
+  `@modelcontextprotocol/client@2.0.0`、`jsonc-parser@3.3.1`、`cline@3.0.62`
+  （`packages/client/src/client/stdio.ts` 行为已核对；cline 为二进制字符串取证，见 11.11/11.13）
 - MCP 规范与 SDK 文档：`https://github.com/modelcontextprotocol/typescript-sdk`（v2 文档）

@@ -3,11 +3,16 @@
  *
  * planConfigChanges receives injectable `readFile` / `ownsFile` accessors and
  * groups operations by TARGET (several products may share one physical file).
- * Per target it resolves the effective candidate file (exclusive candidates
- * conflict when several exist; priority candidates use the first existing
- * one), computes the primary edit, and appends legacy-cleanup steps that run
- * only after the primary write succeeded (migration rules in Plan.md 11.3):
+ * Per target it resolves the effective candidate file, computes the primary
+ * edit, and appends cleanup steps that run only after the primary write
+ * succeeded (migration rules in Plan.md 11.3/11.15):
  *
+ * - Same-directory JSON/JSONC candidates combine compatible nested fields
+ *   and preserve comments, BOM and EOL. Conflicting leaves (including managed
+ *   options) abort the batch. Different directories remain separate layers;
+ *   only verified managed entries migrate between them. Redundant files are
+ *   deleted after the merged destination write, with backup and rollback.
+ *   Removal-only batches instead edit every existing candidate in place.
  * - Legacy cleanup removes only managed entries that verifiably point at this
  *   repository's wrappers (server id alone never claims a user-built server).
  * - The deprecated root `mcp.json` (CodeBuddy) is edited in place only when
@@ -23,9 +28,12 @@ import path from 'node:path';
 
 import { AgentConfigError } from './errors.mjs';
 import { serverEntry, isOurServerEntry } from './entries.mjs';
-import { REGISTRY, TARGETS, managedServerIds, BACKENDS, legacyLocations } from './registry.mjs';
+import { REGISTRY, TARGETS, legacyLocations } from './agents/index.mjs';
+import { BACKENDS, managedServerIds } from './backends.mjs';
 import * as jsonDocument from './formats/jsonDocument.mjs';
 import * as codexToml from './formats/codexToml.mjs';
+import { appendMigratedComments, mergeCandidateDocuments, mergeJsonValues, removedComments } from './migration/jsonMerge.mjs';
+import { hasCustomOptions, migrateLegacyEntry } from './migration/legacyEntry.mjs';
 
 export function planConfigChanges({ repoRoot, operations, readFile, ownsFile = () => false, registry = REGISTRY, targets = TARGETS }) {
   const groups = new Map();
@@ -62,20 +70,9 @@ export function planConfigChanges({ repoRoot, operations, readFile, ownsFile = (
   return { steps, problems, notes };
 }
 
-/** Resolve the effective candidate file for a target (see module doc). Returns the file, its current text (null = missing), and legacy files needing cleanup. */
-function resolveTargetFile({ repoRoot, target, group, readFile }) {
-  const candidates = target.candidates ?? [target.file];
-  const contents = new Map(candidates.map((candidate) => [candidate, readFile(path.join(repoRoot, candidate))]));
-  const existing = candidates.filter((candidate) => contents.get(candidate) !== null);
-
-  if ((target.candidatesMode ?? 'single') === 'exclusive' && existing.length > 1) {
-    throw new AgentConfigError(
-      `multiple config candidates exist (${existing.map((candidate) => candidate.split(path.sep).join('/')).join(', ')}); decide which one is effective and remove the others, or edit manually — no file was written`,
-      'candidate-conflict',
-    );
-  }
-
-  if (target.candidatesMode === 'priority' && target.legacyFallback && existing.length === 1 && existing[0] === target.legacyFallback.candidate) {
+/** Resolve the effective candidate file for a target (see module doc). Returns the file, its current text (null = missing), and legacy files needing cleanup. Multi-existing exclusive candidates are handled by the consolidation path in planTarget and never reach here. */
+function resolveTargetFile({ repoRoot, target, group, contents, existing }) {
+  if ((target.candidatesMode ?? 'single') === 'priority' && target.legacyFallback && existing.length === 1 && existing[0] === target.legacyFallback.candidate) {
     const selected = group.ops.filter((op) => op.type === 'configure').map((op) => op.agent.id);
     const soleLegacyOwner = selected.length > 0 && selected.every((id) => target.legacyFallback.inPlaceOwnerIds.includes(id));
     const legacyRoot = jsonDocument.parseJsonDocument(contents.get(existing[0]), existing[0]).root;
@@ -98,17 +95,93 @@ function resolveTargetFile({ repoRoot, target, group, readFile }) {
 
 function planTarget({ repoRoot, group, readFile, ownsFile }) {
   const target = { ...group.target, targetId: group.targetId };
-  const { file: effective, before: primaryBefore, legacyCleanups } = resolveTargetFile({ repoRoot, target, group, readFile });
-  const primary = planFileEdit({ repoRoot, relative: effective.split(path.sep).join('/'), filePath: path.join(repoRoot, effective), target, group, before: primaryBefore, ownsFile });
-
-  const steps = [primary];
+  const candidates = target.candidates ?? [target.file];
+  const contents = new Map(candidates.map((candidate) => [candidate, readFile(path.join(repoRoot, candidate))]));
+  const existing = candidates.filter((candidate) => contents.get(candidate) !== null);
+  const configuring = group.ops.some((op) => op.type === 'configure');
+  const backends = new Set(group.ops.filter((op) => op.type === 'configure').map((op) => op.backend));
+  if (backends.size > 1) throw new AgentConfigError('conflicting backends requested for one file', 'conflict');
+  const backend = [...backends][0];
+  const steps = [];
   const notes = [];
-  for (const { file: legacyRelative, format } of [...legacyLocations(target), ...legacyCleanups.map((file) => ({ file, format: target.format }))]) {
-    const step = planLegacyCleanup({ repoRoot, format, configuring: group.ops.some((op) => op.type === 'configure'), relative: legacyRelative.split(path.sep).join('/'), filePath: path.join(repoRoot, legacyRelative), readFile, ownsFile, notes });
+  const legacy = legacyLocations(target).slice();
+  let effective;
+  let before;
+  let input;
+  let sources = [];
+  if (target.candidatesMode === 'exclusive') {
+    if (!configuring) {
+      if (existing.length === 0) {
+        effective = target.file;
+        before = input = null;
+      }
+      for (const file of existing) {
+        steps.push(planFileEdit({ repoRoot, relative: file.split(path.sep).join('/'), filePath: path.join(repoRoot, file), target, group, before: contents.get(file), ownsFile }));
+      }
+    } else {
+      // Different directories are separate upstream configuration layers.
+      // Prefer the declared target's layer when it already exists; otherwise
+      // edit the existing layer in place. Consolidate only within that layer.
+      const directory = existing.some((file) => path.dirname(file) === path.dirname(target.file))
+        ? path.dirname(target.file) : path.dirname(existing[0] ?? target.file);
+      const sameLayer = existing.filter((file) => path.dirname(file) === directory);
+      effective = sameLayer[0] ?? target.file;
+      before = contents.get(effective) ?? null;
+      sources = sameLayer.slice(1);
+      input = sources.length ? mergeCandidateDocuments({ target, destination: effective, sources, contents }) : before;
+      for (const file of existing.filter((file) => path.dirname(file) !== directory)) legacy.push({ file, format: target.format });
+    }
+  } else {
+    const resolved = resolveTargetFile({ repoRoot, target, group, contents, existing });
+    effective = resolved.file;
+    before = resolved.before;
+    input = before;
+    for (const file of resolved.legacyCleanups) legacy.push({ file, format: target.format });
+  }
+
+  // Prepare migrations before computing the final destination edit. Cleanup
+  // steps stay after that write in the same guarded, rollback-capable batch.
+  const cleanupSteps = [];
+  for (const { file, format } of legacy) {
+    const relative = file.split(path.sep).join('/');
+    const step = planLegacyCleanup({
+      repoRoot, format, configuring, relative, filePath: path.join(repoRoot, file), readFile, ownsFile, notes,
+      migrate(id, entry) {
+        if (id !== BACKENDS[backend]?.serverId) {
+          if (hasCustomOptions(entry, repoRoot)) throw new AgentConfigError(`${relative}: ${id} has custom settings for a different backend; migrate them manually (no files written)`, 'legacy-options-conflict');
+          return;
+        }
+        const migrated = migrateLegacyEntry({ entry, from: format, to: target.format, repoRoot, backend, relative });
+        const document = jsonDocument.parseJsonDocument(input ?? '{\n}\n', effective);
+        jsonDocument.walkServerMap(document.root, target.format, effective);
+        const mapKey = jsonDocument.serverMapRootKey(target.format);
+        const merged = mergeJsonValues(document.text, { [mapKey]: { [id]: migrated } }, { destination: effective, source: relative });
+        input = `${document.hadBom ? '\uFEFF' : ''}${merged}`;
+        notes.push(`${relative}: 将 ${id} 的兼容选项迁移到 ${effective}，成功写入后清理旧条目`);
+      },
+    });
     if (step) {
-      steps.push(step);
+      if (configuring) input = appendMigratedComments(input ?? '{\n}\n', relative, removedComments(step.before, step.after));
+      cleanupSteps.push(step);
     }
   }
+  if (effective !== undefined) {
+    const primary = planFileEdit({ repoRoot, relative: effective.split(path.sep).join('/'), filePath: path.join(repoRoot, effective), target, group, before: input, ownsFile });
+    // Both the action and concurrency/rollback bytes must refer to the real
+    // destination, not the temporary merged document used as edit input.
+    primary.before = before;
+    if (!primary.deleteFile) primary.action = primary.after === before ? 'unchanged' : before === null ? 'create' : 'update';
+    if (sources.length) primary.consolidatedFrom = sources.map((file) => file.split(path.sep).join('/'));
+    steps.push(primary);
+    const destinationGuard = { file: primary.file, relative: primary.relative, expected: primary.after };
+    for (const source of sources) {
+      steps.push({ target, relative: source.split(path.sep).join('/'), file: path.join(repoRoot, source), agents: [...group.agents], ops: group.ops,
+        before: contents.get(source), after: null, action: 'delete', deleteFile: true, consolidation: true, destinationGuard });
+    }
+    if (configuring) for (const step of cleanupSteps) step.destinationGuard = destinationGuard;
+    if (sources.length) notes.push(`${effective}: 将合并 ${sources.join('、')} 的兼容字段和注释；写入成功后删除来源文件（有备份，可回滚）`);
+  }
+  steps.push(...cleanupSteps);
   return { steps, notes };
 }
 
@@ -174,7 +247,7 @@ function planFileEdit({ repoRoot, relative, filePath, target, group, before, own
   return { target, relative, file: filePath, agents: [...group.agents], ops: group.ops, before, after, action: before === null ? 'create' : 'update', deleteFile: false };
 }
 
-function planLegacyCleanup({ repoRoot, format, configuring, relative, filePath, readFile, ownsFile, notes }) {
+function planLegacyCleanup({ repoRoot, format, configuring, relative, filePath, readFile, ownsFile, notes, migrate }) {
   const before = readFile(filePath);
   if (before === null) {
     return null;
@@ -194,13 +267,7 @@ function planLegacyCleanup({ repoRoot, format, configuring, relative, filePath, 
       notes.push(`${relative}: 同名条目 ${id} 不是本集成的包装层（command/args 不指向本仓库），已保留不动`);
       continue;
     }
-    const entry = map[id];
-    const custom = Object.keys(entry).some((key) => !['type', 'command', 'args', 'cwd', 'enabled'].includes(key))
-      || entry.enabled === false || (Array.isArray(entry.args) && entry.args.length > 1)
-      || (Array.isArray(entry.command) && entry.command.length > 2);
-    if (configuring && custom) {
-      throw new AgentConfigError(`${relative}: ${id} has custom settings; migrate those settings to the new target before retrying (no files written)`, 'legacy-options-conflict');
-    }
+    if (configuring) migrate(id, map[id]);
     after = jsonDocument.removeServerEntry(after, format, id);
     touched = true;
   }
