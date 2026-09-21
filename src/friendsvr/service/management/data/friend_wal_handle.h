@@ -12,7 +12,7 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
-#include <protocol/pbdesc/com.struct.friend.pb.h>
+#include <protocol/pbdesc/com.struct.friend_api.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
