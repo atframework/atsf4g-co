@@ -25,7 +25,7 @@
 
 namespace {
 
-// 2020-01-05 00:00:00+08:00(Mon)
+// 2026-01-05 00:00+08:00(Mon)
 static constexpr const time_t kTimestampStartPoint = 1767542400;
 struct ATFW_UTIL_SYMBOL_LOCAL next_timepoint_cache_t {
   time_t current_day_start;

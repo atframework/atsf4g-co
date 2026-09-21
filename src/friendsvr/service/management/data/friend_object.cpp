@@ -102,9 +102,7 @@ void friend_object::on_loaded(rpc::context& ctx) {
   invitees_.clear();
   friends_.clear();
 
-  auto max_expire_timepoint = ctx.logical_now();
-  max_expire_timepoint += get_configure_transaction_timeout() * 2;
-  max_expire_timepoint += std::chrono::seconds(1);
+  auto now = ctx.logical_now();
 
   // 注意不要直接重载 load(db_data), 基类的 friend_cache::load(db_data) 和 friend_cache::load_and_move_db(db_data,
   // db_version) 都会触发这个事件 这时候数据已经被存入 db_data_ , 可通过 get_db_blob() 提取和转移数据
@@ -140,10 +138,8 @@ void friend_object::on_loaded(rpc::context& ctx) {
     const auto& friend_data = blob_data.friend_list(i);
 
     // 过期数据忽略
-    if ((friend_data.removed_time().seconds() > 0 &&
-         protobuf_to_system_clock(friend_data.removed_time()) >= max_expire_timepoint) ||
-        (friend_data.expired_time().seconds() > 0 &&
-         protobuf_to_system_clock(friend_data.expired_time()) >= max_expire_timepoint)) {
+    if ((friend_data.removed_time().seconds() > 0 && protobuf_to_system_clock(friend_data.removed_time()) <= now) ||
+        (friend_data.expired_time().seconds() > 0 && protobuf_to_system_clock(friend_data.expired_time()) <= now)) {
       continue;
     }
 
@@ -158,10 +154,8 @@ void friend_object::on_loaded(rpc::context& ctx) {
     const auto& inviter_data = blob_data.inviter_list(i);
 
     // 过期数据忽略
-    if ((inviter_data.removed_time().seconds() > 0 &&
-         protobuf_to_system_clock(inviter_data.removed_time()) >= max_expire_timepoint) ||
-        (inviter_data.expired_time().seconds() > 0 &&
-         protobuf_to_system_clock(inviter_data.expired_time()) >= max_expire_timepoint)) {
+    if ((inviter_data.removed_time().seconds() > 0 && protobuf_to_system_clock(inviter_data.removed_time()) <= now) ||
+        (inviter_data.expired_time().seconds() > 0 && protobuf_to_system_clock(inviter_data.expired_time()) <= now)) {
       continue;
     }
 
@@ -176,10 +170,8 @@ void friend_object::on_loaded(rpc::context& ctx) {
     const auto& invitee_data = blob_data.invitee_list(i);
 
     // 过期数据忽略
-    if ((invitee_data.removed_time().seconds() > 0 &&
-         protobuf_to_system_clock(invitee_data.removed_time()) >= max_expire_timepoint) ||
-        (invitee_data.expired_time().seconds() > 0 &&
-         protobuf_to_system_clock(invitee_data.expired_time()) >= max_expire_timepoint)) {
+    if ((invitee_data.removed_time().seconds() > 0 && protobuf_to_system_clock(invitee_data.removed_time()) <= now) ||
+        (invitee_data.expired_time().seconds() > 0 && protobuf_to_system_clock(invitee_data.expired_time()) <= now)) {
       continue;
     }
 
@@ -194,8 +186,8 @@ void friend_object::on_loaded(rpc::context& ctx) {
     const auto& gift = blob_data.gift_list(i);
 
     // 过期数据忽略
-    if ((gift.removed_time().seconds() > 0 && protobuf_to_system_clock(gift.removed_time()) >= max_expire_timepoint) ||
-        (gift.expired_time().seconds() > 0 && protobuf_to_system_clock(gift.expired_time()) >= max_expire_timepoint)) {
+    if ((gift.removed_time().seconds() > 0 && protobuf_to_system_clock(gift.removed_time()) <= now) ||
+        (gift.expired_time().seconds() > 0 && protobuf_to_system_clock(gift.expired_time()) <= now)) {
       continue;
     }
 

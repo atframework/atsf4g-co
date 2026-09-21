@@ -185,7 +185,7 @@ enum EnErrorCode {
   EN_ERR_OPENAPI_PAY_MAINTAIN = -207
   [(error_code.description) = "支付服务器维护中，暂不可用"];
 
-  EN_ERR_TEXT_HAS_DIRTY_WORD = -131
+  EN_ERR_TEXT_HAS_DIRTY_WORD = -301
   [(error_code.description) = "检测到脏字"];
 
   // 登录服务的返回错误码
