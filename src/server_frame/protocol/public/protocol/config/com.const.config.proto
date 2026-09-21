@@ -45,4 +45,18 @@ message ExcelConstConfig {
   int32 global_mail_max_count_per_major_type = 5;
   string i18n_system_admin = 6;
   google.protobuf.Duration daily_reset_time_offset = 7;  // 默认每日重置时间
+
+  google.protobuf.Duration friend_invite_expire = 301;
+  google.protobuf.Duration friend_gift_expire = 302;
+  int32 friend_daily_send_gift_limit = 303;
+  int32 friend_daily_receive_gift_limit = 304;
+  int32 friend_max_number = 305;
+  int32 friend_suggest_level_down = 306;
+  int32 friend_suggest_level_up = 307;
+  int32 friend_suggest_number = 308;
+  bool friend_allow_cross_zone = 310;
+  int32 friend_daily_invite_limit = 311;
+  int32 friend_total_invitee_limit = 312;
+  int32 friend_total_inviter_limit = 313;
+  int32 user_recent_limit = 314;
 }
