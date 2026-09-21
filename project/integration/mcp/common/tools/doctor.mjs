@@ -38,7 +38,7 @@ function main() {
     },
   });
 
-  const repoRoot = deriveRepoRoot(new URL('../../Plan.md', import.meta.url), values['repo-root']);
+  const repoRoot = deriveRepoRoot(new URL('../../setup.js', import.meta.url), values['repo-root']);
   const buildDir = resolveBuildDir(repoRoot, values['build-dir']);
   const paths = new WorkspacePaths(repoRoot, buildDir);
   const checks = [];

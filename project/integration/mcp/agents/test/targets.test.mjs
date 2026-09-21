@@ -52,7 +52,7 @@ function ourLegacyEntry(repo, backend = 'tgrep') {
   };
 }
 
-// -- candidate discovery (Plan.md 11.3.3) -------------------------------------------------------
+// -- candidate discovery ------------------------------------------------------------------------
 
 test('exclusive candidates: same-directory json/jsonc files consolidate', () => {
   const repo = tmpRepo();
@@ -96,7 +96,7 @@ test('a lone existing candidate is edited in place; none uses the target default
   }
 });
 
-// -- Kilo / Roo legacy migration (Plan.md 11.3.5) ----------------------------------------------
+// -- Kilo / Roo legacy migration ---------------------------------------------------------------
 
 test('kilo migrates from .kilocode/mcp.json and cleans only verified entries', () => {
   const repo = tmpRepo();
@@ -155,7 +155,7 @@ test('uninstall reaches managed entries that only exist in legacy locations', ()
   }
 });
 
-// -- CodeBuddy legacy root mcp.json (Plan.md 11.3.4) ---------------------------------------------
+// -- CodeBuddy legacy root mcp.json -------------------------------------------------------------
 
 test('codebuddy alone edits the legacy root mcp.json in place', () => {
   const repo = tmpRepo();
@@ -218,7 +218,7 @@ test('when both files exist the official first-existing candidate wins and the l
   }
 });
 
-// -- shared .mcp.json group (Plan.md 11.3.1) ------------------------------------------------------
+// -- shared .mcp.json group -----------------------------------------------------------------------
 
 test('shared group: selecting any member keeps the group for every consumer', () => {
   const repo = tmpRepo();

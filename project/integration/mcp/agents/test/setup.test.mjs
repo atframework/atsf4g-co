@@ -9,6 +9,7 @@ import test from 'node:test';
 
 import { TARGETS, agentDefinitions, targetFor } from '../src/registry.mjs';
 import { agentStates } from '../src/writers.mjs';
+import { createFileStore, findOpenJournalBatch } from '../src/fileStore.mjs';
 import { parseJsonDocument } from '../src/formats/jsonDocument.mjs';
 
 const source = fileURLToPath(new URL('../../', import.meta.url));
@@ -17,7 +18,7 @@ function fixture(t) {
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const integration = path.join(root, 'project/integration/mcp');
   fs.mkdirSync(integration, { recursive: true });
-  for (const file of ['setup.js', 'Plan.md']) fs.copyFileSync(path.join(source, file), path.join(integration, file));
+  for (const file of ['setup.js']) fs.copyFileSync(path.join(source, file), path.join(integration, file));
   for (const component of ['agents', 'common']) {
     fs.cpSync(path.join(source, component), path.join(integration, component), {
       recursive: true, filter: (file) => !['node_modules', 'test'].includes(path.basename(file)),
@@ -46,6 +47,40 @@ function snapshot(root) {
   visit(root);
   return files;
 }
+
+test('review: CLI recovers before scanning defaults and before the no-agents early return', (t) => {
+  const { root, run } = fixture(t);
+  const installed = run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=cursor']);
+  assert.equal(installed.status, 0, installed.stderr + installed.stdout);
+  const file = path.join(root, '.cursor/mcp.json');
+  const before = fs.readFileSync(file, 'utf8');
+  const dirs = {
+    repoRoot: root,
+    stateDir: path.join(root, 'build_jobs_cmake_tools/integration/mcp/state'),
+    tmpDir: path.join(root, 'build_jobs_cmake_tools/_agent_tmp/mcp'),
+  };
+  const store = createFileStore(dirs);
+  store.remove(file, { relative: '.cursor/mcp.json', expectedBefore: before });
+  const pid = spawnSync(process.execPath, ['-e', '']).pid;
+  const journal = path.join(dirs.tmpDir, 'agent-config-journal.jsonl');
+  fs.writeFileSync(journal, fs.readFileSync(journal, 'utf8').replaceAll(`"pid":${process.pid}`, `"pid":${pid}`));
+
+  const preDryRun = snapshot(root);
+  const invalid = run(['--yes', '--uninstall']);
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr + invalid.stdout, /需要 --agents/);
+  assert.deepEqual(snapshot(root), preDryRun, 'invalid arguments must not trigger recovery');
+  const dryRun = run(['--yes', '--dry-run', '--backend=tgrep']);
+  assert.equal(dryRun.status, 0, dryRun.stderr + dryRun.stdout);
+  assert.match(dryRun.stdout, /尚未恢复/);
+  assert.deepEqual(snapshot(root), preDryRun);
+
+  const resumed = run(['--yes', '--skip-prepare', '--backend=tgrep']);
+  assert.equal(resumed.status, 0, resumed.stderr + resumed.stdout);
+  assert.match(resumed.stdout, /已还原/);
+  assert.equal(fs.readFileSync(file, 'utf8'), before);
+  assert.equal(findOpenJournalBatch(dirs), null);
+});
 
 test('CLI installs all targets, repeats without writes, switches twice and uninstalls', (t) => {
   const { root, run } = fixture(t);

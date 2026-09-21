@@ -5,7 +5,7 @@
  * instance; everything product-specific — metadata, physical target, candidate
  * and legacy layout, evidence links — lives there. Config styles shared by
  * several products are expressed as base classes so the shared knowledge
- * exists once (Plan.md 11.17):
+ * exists once:
  *
  * - `AgentConfigurator`: metadata + declarative physical-target descriptor.
  * - `JsonServerMapConfigurator`: one JSON/JSONC document holding a server map

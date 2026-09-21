@@ -8,6 +8,6 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node --test test/agents.test.mjs test/targets.test.mjs test/consolidation.test.mjs test/jsonDocument.test.mjs test/configPlan.test.mjs test/fileStore.test.mjs test/review.test.mjs test/setup.test.mjs test/guidance.test.mjs test/terminalMenu.test.mjs test/launch.test.mjs"
+    "test": "node --test test/agents.test.mjs test/targets.test.mjs test/consolidation.test.mjs test/jsonDocument.test.mjs test/configPlan.test.mjs test/fileStore.test.mjs test/crashRecovery.test.mjs test/review.test.mjs test/setup.test.mjs test/guidance.test.mjs test/terminalMenu.test.mjs test/launch.test.mjs"
   }
 }

@@ -52,7 +52,7 @@ test('configureAgent writes every supported agent shape', () => {
     const zcode = JSON.parse(fs.readFileSync(path.join(repo, '.zcode', 'config.json'), 'utf8'));
     assert.equal(zcode.mcp.servers['atsf4g-tgrep'].command, 'node');
 
-    // P9.3 shapes (verified against each vendor's docs, Plan.md 11.11).
+    // P9.3 shapes (verified against each vendor's docs).
     const zed = JSON.parse(fs.readFileSync(path.join(repo, '.zed', 'settings.json'), 'utf8'));
     assert.deepEqual(zed.context_servers['atsf4g-tgrep'], { command: 'node', args: [path.join(repo, 'project', 'integration', 'mcp', 'tgrep', 'src', 'server.mjs')] });
 
@@ -185,7 +185,7 @@ test('removeAgentServers deletes skeleton-only files and preserves real ones', (
     const gemini = JSON.parse(fs.readFileSync(geminiFile, 'utf8'));
     assert.deepEqual(gemini, { mcpServers: {}, theme: 'dark' });
 
-    // A PRE-EXISTING empty object is not ours: uninstall keeps the file (Plan.md 11.4).
+    // A PRE-EXISTING empty object is not ours: uninstall keeps the file.
     const ompFile = path.join(repo, '.omp', 'mcp.json');
     fs.mkdirSync(path.dirname(ompFile), { recursive: true });
     fs.writeFileSync(ompFile, '{\n  "mcpServers": {}\n}\n', 'utf8');
@@ -213,7 +213,7 @@ test('dryRun writes nothing', () => {
   }
 });
 
-// -- damaged configs must never be clobbered (Plan.md 11.1/11.4) -------------------------------
+// -- damaged configs must never be clobbered ----------------------------------------------------
 // JSONC with comments or trailing commas is VALID input for the editors (it is edited, not
 // refused — see the JSONC test above); the cases below stay damaged.
 
@@ -310,7 +310,7 @@ test('configureAgent accepts valid JSON with a BOM and preserves it', () => {
   }
 });
 
-// -- legacy marker-less Codex tables must stop at the next real table (Plan.md 11.1) -----------
+// -- legacy marker-less Codex tables must stop at the next real table ---------------------------
 
 test('codex legacy managed table removal stops at the next foreign table', () => {
   const repo = tmpRepo();

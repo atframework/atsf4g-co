@@ -8,7 +8,7 @@
  * - EOF on stdin, SIGINT, SIGTERM, and transport close all enter the same
  *   shutdown: stop the service (backend tree first), close the transport,
  *   exit. If this process is SIGKILLed, the backends observe the stdin pipe
- *   break and exit on their own (Plan.md section 6.1).
+ *   break and exit on their own (stdin-lifeline contract).
  */
 
 import { Server } from '@modelcontextprotocol/server';

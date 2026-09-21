@@ -1,7 +1,7 @@
 /**
  * Service states, atomic state records, and per-tool instance locks.
  *
- * State machine (Plan.md section 6.2):
+ * State machine:
  *   STARTING -> INITIALIZING/OPENING -> READY or DEGRADED
  *   any stage -> STOPPING -> STOPPED
  *   startup failure -> STOPPING -> FAILED

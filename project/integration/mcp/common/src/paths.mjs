@@ -17,8 +17,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const PROJECT_MARKERS = ['Plan.md'];
 const MARKER_SUBPATH = path.join('project', 'integration', 'mcp');
+// The installer entry is the persistent repository marker: it is the one file
+// every consumer of this directory must have, and it never retires.
+const MARKER_FILE = 'setup.js';
+const MARKER_DISPLAY = 'project/integration/mcp/setup.js';
 const DEFAULT_BUILD_DIR = 'build_jobs_cmake_tools';
 
 export function canonicalize(target) {
@@ -50,15 +53,10 @@ export function validateRepoRoot(root) {
     throw new Error(`repository root is not a directory: ${canonical}`);
   }
   const markerDir = path.join(canonical, MARKER_SUBPATH);
-  if (!fs.statSync(path.join(markerDir, 'Plan.md'), { throwIfNoEntry: false })?.isFile()) {
+  if (!fs.statSync(path.join(markerDir, MARKER_FILE), { throwIfNoEntry: false })?.isFile()) {
     throw new Error(
-      'repository root validation failed: project/integration/mcp/Plan.md not found; pass --repo-root explicitly'
+      `repository root validation failed: ${MARKER_DISPLAY} not found; pass --repo-root explicitly`
     );
-  }
-  for (const marker of PROJECT_MARKERS) {
-    if (!fs.statSync(path.join(markerDir, marker), { throwIfNoEntry: false })?.isFile()) {
-      throw new Error(`repository root validation failed: ${marker} missing; pass --repo-root explicitly`);
-    }
   }
   return canonical;
 }
@@ -69,7 +67,7 @@ export function deriveRepoRoot(entryModule, explicit) {
   }
   let probe = path.dirname(canonicalize(fileURLToPath(entryModule)));
   for (let depth = 0; depth < 8; depth += 1) {
-    if (fs.statSync(path.join(probe, MARKER_SUBPATH, 'Plan.md'), { throwIfNoEntry: false })?.isFile()) {
+    if (fs.statSync(path.join(probe, MARKER_SUBPATH, MARKER_FILE), { throwIfNoEntry: false })?.isFile()) {
       return validateRepoRoot(probe);
     }
     const parent = path.dirname(probe);

@@ -1,7 +1,7 @@
 /**
  * Orchestration for agent config writing: batch plan/apply over the pure
  * planner and the safe file store, plus the single-agent compatibility API
- * that common/src/agents.mjs re-exports (Plan.md 11.2).
+ * that common/src/agents.mjs re-exports.
  *
  * A batch either plans completely and applies, or plans and reports problems
  * without touching anything. Applying rolls back already-written files from
@@ -15,7 +15,7 @@ import path from 'node:path';
 import { resolveBuildDir, WorkspacePaths } from '../../common/src/paths.mjs';
 import { AgentConfigError } from './errors.mjs';
 import { planConfigChanges } from './configPlan.mjs';
-import { createFileStore, readConfigFile } from './fileStore.mjs';
+import { createFileStore, readConfigFile, recoverInterruptedBatch, findOpenJournalBatch } from './fileStore.mjs';
 import { planCodegraphGuidance } from './guidance/codegraph.mjs';
 import { planIdeExport } from './guidance/ideExports.mjs';
 import * as jsonDocument from './formats/jsonDocument.mjs';
@@ -25,6 +25,7 @@ import { agentById, agentDefinitions, legacyLocations, productsForTarget, target
 
 export { AgentConfigError };
 export { BACKENDS, SERVER_IDS, agentById, agentDefinitions, productsForTarget, targetFor, managedServerIds };
+export { findOpenJournalBatch };
 export function allManagedServerIds() {
   return managedServerIds();
 }
@@ -48,7 +49,7 @@ function jsonConfiguredIds(text, format, filePath) {
  * Which managed servers does each agent config currently reference? All
  * existing candidates and legacy locations of the product's target are
  * scanned and unioned; several existing exclusive candidates are no longer an
- * error — configure runs consolidate them (Plan.md 11.17) — while damaged
+ * error — configure runs consolidate them — while damaged
  * files still surface as an error.
  */
 export function agentStates(repoRoot) {
@@ -157,11 +158,18 @@ export function applyAgentConfigChanges({ repoRoot, plan, stateDir, tmpDir }) {
         : store.write(step.file, step.after, { relative: step.relative, expectedBefore: step.before });
       results.push({ step, action });
     }
+    // A failure writing batch-end must not leave a committed batch looking
+    // interrupted: let it fall into the catch block and roll back.
+    store.finishBatch('committed');
   } catch (error) {
     const rollback = plan.steps.filter((step) => store.hasMutation(step.file)).reverse().map((step) => {
       try { return { relative: step.relative, restored: store.tryRestore(step) }; }
       catch (restoreError) { return { relative: step.relative, restored: false, error: restoreError.message }; }
     });
+    try { store.finishBatch(rollback.every((entry) => entry.restored) ? 'rolled-back' : 'rolled-back-partial'); } catch {
+      // Journal failure during cleanup: the next run's crash recovery re-verifies
+      // every file against the backups and closes the batch idempotently.
+    }
     const failure = new Error(
       `配置写入失败，已回滚 ${rollback.filter((entry) => entry.restored).length}/${rollback.length} 个已写文件：${error.message}`,
     );
@@ -175,16 +183,23 @@ export function applyAgentConfigChanges({ repoRoot, plan, stateDir, tmpDir }) {
   return results;
 }
 
-/** Plan a batch; apply it unless dry-run. Returns { plan, applied }; problems are in plan.problems. */
+/**
+ * Plan a batch; apply it unless dry-run. Before any mutation, roll back a
+ * batch left open by a crashed run. Dry-run stays fully
+ * read-only and does not recover; `recovery` is null unless a crash was
+ * recovered in this call.
+ */
 export function runAgentConfigBatch({ repoRoot, operations, dryRun = false, stateDir, tmpDir, codegraphGuidance = false, ideExports = [] }) {
+  const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
+  const recovery = dryRun ? null : recoverInterruptedBatch({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
   const plan = planAgentConfigChanges({ repoRoot, operations, stateDir, tmpDir, codegraphGuidance, ideExports });
   if (plan.problems.length > 0) {
-    return { plan, applied: false };
+    return { plan, applied: false, recovery };
   }
   if (!dryRun) {
     applyAgentConfigChanges({ repoRoot, plan, stateDir, tmpDir });
   }
-  return { plan, applied: !dryRun };
+  return { plan, applied: !dryRun, recovery };
 }
 
 const COMPAT_ACTIONS = { create: 'created', update: 'updated', delete: 'removed-file', unchanged: 'unchanged' };
@@ -213,6 +228,8 @@ export function configureAgent({ repoRoot, agentId, backend, dryRun = false, sta
   if (!agent.targetId) {
     throw new Error(`${agent.id} has no project config file; its delivery is guidance only`);
   }
+  const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
+  if (!dryRun) recoverInterruptedBatch({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
   const plan = planAgentConfigChanges({ repoRoot, operations: [{ type: 'configure', agentId, backend }], stateDir, tmpDir });
   if (plan.problems.length > 0) {
     throw plan.problems[0].error;
@@ -239,6 +256,8 @@ export function removeAgentServers({ repoRoot, agentId, dryRun = false, stateDir
   if (!agent.targetId) {
     throw new Error(`${agent.id} has no project config file; its delivery is guidance only`);
   }
+  const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
+  if (!dryRun) recoverInterruptedBatch({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
   const plan = planAgentConfigChanges({ repoRoot, operations: [{ type: 'remove', agentId }], stateDir, tmpDir });
   if (plan.problems.length > 0) {
     throw plan.problems[0].error;

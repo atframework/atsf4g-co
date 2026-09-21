@@ -5,7 +5,7 @@
  * groups operations by TARGET (several products may share one physical file).
  * Per target it resolves the effective candidate file, computes the primary
  * edit, and appends cleanup steps that run only after the primary write
- * succeeded (migration rules in Plan.md 11.3/11.15):
+ * succeeded (see the migration rules in README 候选文件与旧格式迁移):
  *
  * - Same-directory JSON/JSONC candidates combine compatible nested fields
  *   and preserve comments, BOM and EOL. Conflicting leaves (including managed
@@ -239,7 +239,7 @@ function planFileEdit({ repoRoot, relative, filePath, target, group, before, own
   if (!backend && before !== null) {
     const empty = format === 'codexToml' ? after.trim() === '' : jsonDocument.documentIsEmptySkeleton(after, format);
     // A whole-file delete additionally requires the ownership record: a
-    // pre-existing empty object the user wrote is never "ours" (Plan.md 11.4).
+    // pre-existing empty object the user wrote is never "ours".
     if (empty && ownsFile(relative)) {
       return { target, relative, file: filePath, agents: [...group.agents], ops: group.ops, before, after, action: 'delete', deleteFile: true };
     }

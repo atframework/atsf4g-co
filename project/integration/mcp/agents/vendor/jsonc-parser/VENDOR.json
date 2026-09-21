@@ -9,7 +9,7 @@
   "vendored_on": "2026-09-20",
   "verification": "npm registry 实查 integrity 与下载制品 sha512 一致后解包",
   "notes": [
-    "随源码分发，避免菜单/dry-run/卸载依赖 npm install（Plan.md 11.2）。",
+    "随源码分发，避免菜单/dry-run/卸载依赖 npm install。",
     "仅收录 lib/umd（Node 经 createRequire 加载）与许可证/元数据；lib/esm 未收录——",
     "其内部 import 无 .js 扩展名，Node ESM 无法直接加载（bundler 专用构建）。",
     "升级时重下制品、校验 integrity、同步本清单与 LICENSE.md。"

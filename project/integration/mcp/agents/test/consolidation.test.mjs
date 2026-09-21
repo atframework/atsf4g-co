@@ -16,7 +16,7 @@ import {
 } from '../src/writers.mjs';
 
 /**
- * Exclusive-candidate consolidation (Plan.md 11.17): several existing
+ * Exclusive-candidate consolidation: several existing
  * candidates merge into the first existing one; foreign content is carried
  * over, differing values abort before any write, redundant files are deleted
  * only after the merged destination was written, and every mutation is backed

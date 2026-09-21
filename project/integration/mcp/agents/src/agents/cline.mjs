@@ -2,7 +2,7 @@ import { JsonServerMapConfigurator } from './base.mjs';
 
 // Export file consumed through CLINE_MCP_SETTINGS_PATH by the explicit
 // launcher (agents/tools/launch.mjs). Cline does not discover it natively;
-// verified against the released cline@3.0.62 binary (Plan.md 11.11).
+// verified against the released cline@3.0.62 binary.
 export default new JsonServerMapConfigurator({
   id: 'cline',
   label: 'Cline CLI（写入 .cline/atsf4g-mcp.json，经 launch.mjs 显式启动）',

@@ -3,7 +3,12 @@
 Load only for wrapper-server, backend, patch, index, or upstream-upgrade work
 under `project/integration/mcp/{tgrep,codegraph,common}`.
 
-## Verified facts you may rely on (Plan.md section 2 has sources)
+## Verified facts you may rely on
+
+Each fact below was verified against the pinned upstream sources/artifacts
+(see `tgrep/upstream-lock.json` and `codegraph/upstream-lock.json`; the README
+"已验证平台" table records when). Re-verify against the new pinned sources
+before relying on them after an upgrade.
 
 - Both backends exit on stdin EOF; CodeGraph direct mode additionally has a
   PPID watchdog and a liveness-watchdog child that exits on its own stdin
@@ -32,7 +37,7 @@ under `project/integration/mcp/{tgrep,codegraph,common}`.
    tgrep pin, delete `<BUILD_DIR>/integration/mcp/upstream/tgrep-src` so prepare
    re-clones; re-apply the patch (regenerate it if it no longer fits) and record
    the new patch sha.
-2. Re-verify Plan.md section 2 claims against the new sources before changing
+2. Re-verify the facts listed above against the new sources before changing
    wrapper code (especially stdin-EOF behavior, `CODEGRAPH_DIR` semantics, tool
    schemas, and the internal RPC shapes). The pinned npm artifacts are the
    authority when they differ from the inspected source tree (the tree has
@@ -40,8 +45,7 @@ under `project/integration/mcp/{tgrep,codegraph,common}`.
    the source has) — check the actual artifact's `--help`, not only the repo.
 3. Run `node project/integration/mcp/setup.js` (or the prepare library) and the
    three test suites; then a real-backend smoke per README platform table.
-4. Update Plan.md section 2/9 and the README verified-platform table with what
-   was actually measured.
+4. Update the README verified-platform table with what was actually measured.
 
 ## Index and state rules
 

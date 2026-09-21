@@ -1,7 +1,7 @@
 /**
  * The `.mcp.json` physical target shared by Claude Code, pi, and CodeBuddy
  * CLI. Declared once here so the three product modules cannot drift; any
- * member selected keeps the whole group (Plan.md 11.3). Candidates follow
+ * member selected keeps the whole group. Candidates follow
  * CodeBuddy's official priority — `.mcp.json` first, deprecated root
  * `mcp.json` second, only the first existing file is read — so this target is
  * `priority` mode, never consolidated.

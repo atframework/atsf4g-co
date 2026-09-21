@@ -16,7 +16,7 @@ function fixture(t) {
   fs.mkdirSync(path.join(integration, 'common/src'), { recursive: true });
   fs.copyFileSync(path.join(source, 'tools/launch.mjs'), path.join(integration, 'agents/tools/launch.mjs'));
   fs.copyFileSync(path.join(source, '../common/src/paths.mjs'), path.join(integration, 'common/src/paths.mjs'));
-  fs.writeFileSync(path.join(integration, 'Plan.md'), '# placeholder for root validation\n');
+  fs.writeFileSync(path.join(integration, 'setup.js'), '// placeholder for root validation\n');
   fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}');
   const isolatedEnv = {
     ...process.env,

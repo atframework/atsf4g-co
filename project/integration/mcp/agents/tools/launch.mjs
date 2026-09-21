@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 显式启动器：为 Cline CLI 以本仓库的 MCP 导出文件启动 Agent（Plan.md 11.6）。
+ * 显式启动器：为 Cline CLI 以本仓库的 MCP 导出文件启动 Agent。
  *
  * 用法：
  *   node <PROJECT_DIR>/project/integration/mcp/agents/tools/launch.mjs --agent=cline -- [cline 参数...]

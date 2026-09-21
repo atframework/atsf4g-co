@@ -1,6 +1,6 @@
 /**
  * Guided-import delivery for IDE clients without a verified project-level
- * write path (Cline IDE, CodeBuddy IDE — Plan.md 11.6).
+ * write path (Cline IDE, CodeBuddy IDE).
  *
  * Each selection writes a derived JSON snippet under
  * `<BUILD_DIR>/integration/mcp/exports/` containing only this round's entry

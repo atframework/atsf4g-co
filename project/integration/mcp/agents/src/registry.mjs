@@ -3,7 +3,7 @@
  *
  * Products and physical targets now live in per-agent configurator modules
  * under `agents/src/agents/` (one file per product, shared config styles as
- * base classes — Plan.md 11.17); backends live in `backends.mjs`. This module
+ * base classes); backends live in `backends.mjs`. This module
  * only re-exports both surfaces under the import paths the engine, setup.js,
  * and the tests have always used:
  *

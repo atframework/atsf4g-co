@@ -1,5 +1,5 @@
 /**
- * Interactive console menus for the installer (Plan.md 11.5).
+ * Interactive console menus for the installer.
  *
  * Two modes share one interface:
  * - arrows: TTY raw mode + `readline.emitKeypressEvents`; ↑/↓ move, space

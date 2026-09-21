@@ -8,7 +8,7 @@
  * foreign values, key order, and line endings survive. Formatting around an
  * inserted or deleted property can change; unrelated text is retained.
  *
- * Damage taxonomy (Plan.md 11.4): unreadable / invalid-json / duplicate-key /
+ * Damage taxonomy: unreadable / invalid-json / duplicate-key /
  * not-object / map-not-object all refuse the edit and keep the file's bytes.
  */
 
@@ -97,7 +97,7 @@ export function parseJsonDocument(text, filePath) {
 /**
  * Walk to the server map for a format. Returns the map, or null when any
  * container along the path is absent (the edit creates it). Present-but-not-
- * object containers throw instead of being replaced (Plan.md 11.4).
+ * object containers throw instead of being replaced.
  */
 export function walkServerMap(root, format, filePath) {
   let container = root;
@@ -197,7 +197,7 @@ export function removeServerEntry(text, format, serverId) {
  * nothing but the (now empty) server-map containers and no comments — i.e. it
  * is a skeleton this integration could have created. Deletion additionally
  * requires the ownership record (fileStore), so a pre-existing empty object
- * the user wrote is never deleted (Plan.md 11.4).
+ * the user wrote is never deleted.
  */
 export function documentIsEmptySkeleton(text, format) {
   const stripped = text.replace(/^\uFEFF/, '');

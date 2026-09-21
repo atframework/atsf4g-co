@@ -1,7 +1,7 @@
 /**
  * Supervised child processes for the line-protocol backends (tgrep).
  *
- * Lifecycle contract (Plan.md section 6.1): stop() sends stdin EOF first (the
+ * Lifecycle contract (see README 行为要点): stop() sends stdin EOF first (the
  * documented graceful-stop signal for both backends), waits the grace period,
  * then SIGTERM, waits again, then SIGKILL -- only against the pid this
  * instance created. If the wrapper itself is killed, the backend's stdin pipe

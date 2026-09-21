@@ -30,7 +30,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { AgentConfigError, BACKENDS, agentStates, buildAgentOperations, productsForTarget, runAgentConfigBatch } from './agents/src/writers.mjs';
+import { AgentConfigError, BACKENDS, agentStates, buildAgentOperations, findOpenJournalBatch, productsForTarget, runAgentConfigBatch } from './agents/src/writers.mjs';
+import { recoverInterruptedBatch } from './agents/src/fileStore.mjs';
 import { SERVER_IDS, autoConfigurableAgents, agentById, agentDefinitions, guidedAgents, targetFor } from './agents/src/registry.mjs';
 import { GUIDED_IMPORTS, exportsDirFor, guidedImportGuidance, ideExportStates } from './agents/src/guidance/ideExports.mjs';
 import { agentInstallNotes } from './agents/src/agents/index.mjs';
@@ -141,7 +142,7 @@ function suggestMirror() {
 /**
  * Installer output + menu surface. Menu output always goes through
  * process.stdout directly; the interactive menu adds raw-mode arrow
- * selection with a numbered-line fallback (Plan.md 11.5). Non-interactive
+ * selection with a numbered-line fallback. Non-interactive
  * runs never open an interactive question — missing options fail fast.
  */
 function createUi(options) {
@@ -170,7 +171,7 @@ function agentEntries(states) {
 /** Resolve --agents=... to concrete ids; rejects unknown ids before any prompt or download. */
 function resolveAgentIds(value) {
   // `all` covers only targets this installer can auto-write; guided-import
-  // clients stay opt-in (Plan.md 11.5).
+  // clients stay opt-in.
   if (!value || value === 'all') {
     return autoConfigurableAgents().map((agent) => agent.id);
   }
@@ -193,13 +194,33 @@ function preparedBackend(paths) {
   }
 }
 
-/**
- * Plan every config change first (read-only), then apply. A target that cannot
- * be parsed safely aborts the whole batch before any file is written; returns
- * false after printing the diagnostics.
- */
+function reportRecovery(ui, recovery) {
+  if (recovery) {
+    ui.line(`检测到上次运行中断的配置批次，已按备份自动恢复（批次 ${recovery.batchId.slice(0, 8)}…）：`);
+    for (const file of recovery.restored) ui.line(`  已还原到写入前内容：${file}`);
+    for (const file of recovery.removed) ui.line(`  已删除中断前新建的文件：${file}`);
+    for (const skipped of recovery.skipped) ui.line(`  跳过：${skipped.file}（${skipped.reason}）`);
+    if (recovery.ownershipRestored !== null) {
+      ui.line(recovery.ownershipRestored ? '  归属记录已恢复，文件标识按恢复结果更新。' : '  归属记录未能完整还原，请检查备份。');
+    }
+    if (recovery.skipped.length || recovery.ownershipRestored === false) ui.line(`  备份目录：${recovery.backupDir}`);
+  }
+}
+
+function recoverBeforeScan(ui, paths, dryRun) {
+  if (dryRun) {
+    const open = findOpenJournalBatch({ tmpDir: paths.agentTmpDir });
+    if (open) {
+      ui.line(`提示：存在上次运行中断、尚未恢复的配置批次（pid ${open.pid}）。--dry-run 只读不执行恢复；实际执行时会先自动恢复。`);
+    }
+  } else {
+    reportRecovery(ui, recoverInterruptedBatch({ repoRoot: paths.repoRoot, stateDir: paths.stateDir, tmpDir: paths.agentTmpDir }));
+  }
+}
+
+/** Plan/apply a batch, print its actions, and return false on preflight problems. */
 function runConfigBatch(ui, paths, operations, { dryRun, ideExports = [] }) {
-  const { plan } = runAgentConfigBatch({
+  const { plan, recovery } = runAgentConfigBatch({
     repoRoot: paths.repoRoot,
     operations,
     dryRun,
@@ -208,6 +229,7 @@ function runConfigBatch(ui, paths, operations, { dryRun, ideExports = [] }) {
     codegraphGuidance: operations.some((op) => op.type === 'configure' && op.backend === 'codegraph'),
     ideExports,
   });
+  reportRecovery(ui, recovery);
   if (plan.problems.length > 0) {
     ui.line('');
     for (const problem of plan.problems) {
@@ -255,6 +277,9 @@ function runConfigBatch(ui, paths, operations, { dryRun, ideExports = [] }) {
 }
 
 async function runSetup(options, ui) {
+  if (options.uninstall && options.yes && !options.agents && !options.allAgents) {
+    throw new Error('--uninstall --yes 需要 --agents=... 或 --all-agents');
+  }
   // Fail before preparation when a noninteractive run would need a later menu.
   // --yes retains its documented prepared-backend / existing-selection defaults.
   if (!ui.interactive && !options.yes) {
@@ -276,12 +301,11 @@ async function runSetup(options, ui) {
 
   // -- 卸载模式（不准备依赖，只读扫描配置） ----------------------------------------
   if (options.uninstall) {
+    recoverBeforeScan(ui, paths, options.dryRun);
     const states = scanStates();
     let targets;
     if (options.agents || options.allAgents) {
       targets = options.allAgents && !options.agents ? agentDefinitions().map((agent) => agent.id) : resolveAgentIds(options.agents);
-    } else if (options.yes) {
-      throw new Error('--uninstall --yes 需要 --agents=... 或 --all-agents');
     } else {
       const damaged = Object.entries(states).filter(([, state]) => state.error);
       if (damaged.length) throw new Error(damaged.map(([id, state]) => `${id}: ${state.error}`).join('\n'));
@@ -371,6 +395,7 @@ async function runSetup(options, ui) {
   }
 
   // -- 选择 Agent（可多选；已配置的默认保持）——依赖就绪后才扫描配置 ------------------
+  recoverBeforeScan(ui, paths, options.dryRun);
   const states = scanStates();
   let selectedIds;
   if (options.agents) {
@@ -390,7 +415,7 @@ async function runSetup(options, ui) {
     selectedIds = selected;
   }
 
-  // -- 空选择不能静默卸载：先确认再移除（Plan.md 11.5） ------------------------------
+  // -- 空选择不能静默卸载：先确认再移除 ------------------------------------------------
   if (selectedIds.size === 0) {
     const configuredNow = agentDefinitions().filter((agent) => (states[agent.id]?.configured ?? []).length > 0);
     if (configuredNow.length === 0) {

@@ -1,6 +1,6 @@
 /**
  * stdio server entry serialization per client format. Only fields verified
- * against each client's official docs are written (Plan.md 2.6/11.2); see
+ * against each client's official docs are written; see
  * formats/codexToml.mjs for the TOML section variant.
  */
 

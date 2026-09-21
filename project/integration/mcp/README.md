@@ -7,7 +7,7 @@
 - **CodeGraph**（`codegraph/`）：结构化代码导航（符号、引用、影响面），后端为固定版本的
   [CodeGraph](https://github.com/colbymchenry/codegraph) direct 模式（禁 daemon、禁遥测）。
 
-设计、验收边界与上游事实见 [Plan.md](Plan.md)。公共库与流程工具在 `common/`；
+公共库与流程工具在 `common/`；
 Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents/*.mjs` + 共享基类
 `base.mjs`、纯变更规划、安全文件存储、批量写入）在 `agents/`；
 各组件目录独立（源码、测试、包管理信息、上游固定清单都在自己目录内，
@@ -56,7 +56,21 @@ jsonc-parser 的局部修改（`agents/vendor/jsonc-parser/`，固定 3.3.1）�
 （`<BUILD_DIR>/integration/mcp/state/agent-config-state.json`）证明文件由本安装器创建、
 且文件标识仍匹配、卸载后只剩空托管骨架时才整体删除该文件；预存在的空对象不会被删。
 旧归属记录若没有文件标识，则保留卸载后的空文件。路径检查也用于预览和恢复，拒绝仓库外链接及
-配置文件本身的符号链接。进程崩溃后的自动恢复尚未实现。
+配置文件本身的符号链接。
+
+**崩溃后自动恢复**：每次写入批次在操作日志（`<BUILD_DIR>/_agent_tmp/mcp/agent-config-journal.jsonl`）
+中记录开始、逐文件计划（含目标内容摘要、原文件权限与标识）、结束。安装器被强杀等中断后，
+下一次运行在依赖准备成功后、读取 Agent 默认选择前恢复；卸载则直接进入恢复。确认原进程已退出后，
+按备份把涉及的文件回滚到批次前状态，打印恢复摘要，再继续本次操作。同一文件的多次修改也恢复到
+批次开始前。配置写入和恢复共用互斥检查，已有安装或恢复进程活动时中止。
+
+归属备份在替换配置前记录；恢复替换前记录新文件标识，使恢复再次中断后仍能继续。归属记录仅保留
+身份可验证的文件，用户后来替换的文件即使内容与原文相同，也不会因此取得安装器归属。缺失归属备份时
+清除受影响文件的归属，保留其他文件的记录；清除失败则中止，不继续写配置。
+崩溃后被编辑、删除或路径不安全的文件会被跳过，输出原因与备份目录。`--dry-run` 只提示待恢复批次，
+不执行恢复。完整日志行的语法或必需字段损坏会中止；只有未以换行结束的残缺尾行可以在确认无活动写入后丢弃。
+Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次需回到原平台恢复。此恢复针对进程中断，
+不承诺机器断电后的落盘顺序。
 
 ### CodeGraph 提示词补丁
 
@@ -81,7 +95,9 @@ jsonc-parser 的局部修改（`agents/vendor/jsonc-parser/`，固定 3.3.1）�
 - Git；选择 tgrep 后端还需要 Rust 工具链（edition 2024，rustc 1.98 验证过）。
 - 首次准备需要联网拉取固定版本制品；之后可用 `--offline` 离线复用。
 - 国内网络建议 `--mirror=cn`（npm 用 npmmirror、cargo 用 rsproxy；tgrep 源码仍从
-  GitHub 固定提交拉取并校验提交号）。安装器不会修改全局 npm/cargo 配置。
+  GitHub 固定提交拉取并校验提交号）。注意 npmmirror 尚未同步 CodeGraph 的平台包
+  （`@colbymchenry/codegraph-<platform>-<arch>` 1.6.0），选择 codegraph 后端时若
+  `cn` 镜像报“无匹配版本”，请改用 `--mirror=official`。安装器不会修改全局 npm/cargo 配置。
 
 ## 支持的 Agent
 
@@ -153,12 +169,20 @@ Windsurf（`~/.codeium/windsurf/mcp_config.json`，支持变量插值）。
 | 客户端 | 实测版本 | 项目配置被发现 | 连接前需要的用户步骤 | 连接验收 |
 | --- | --- | --- | --- | --- |
 | Qwen Code | 0.24.1 | 是 | `qwen mcp approve atsf4g-tgrep`（批准后绑定当前配置） | ✓ `mcp list` 显示 Connected（真实握手） |
+| OpenCode | 1.18.31 | 是（根 `opencode.json`） | 无 | ✓ `opencode mcp list` 显示 connected（真实握手） |
+| Kilo CLI | 7.7.6 | 是（`.kilo/kilo.json`） | 无 | ✓ `kilo mcp list` 显示 connected（真实握手） |
+| MiMo CLI | 0.1.14 | 是（`.mimocode/mimocode.json`，列表还标注配置来源文件） | 无 | ✓ `mimo mcp list` 显示 connected（真实握手） |
 | Cline CLI | 3.0.62 | 是（经 `launch.mjs` 显式路径，Windows/WSL 双平台） | 无（导出文件即配置源）；会话需登录模型供应商 | `cline config` MCP 标签显示已加载（双平台）；会话内调用未验收 |
 | Codex CLI | 0.155.1 | 是（需项目信任） | 用户级 `config.toml` 写 `project_config_enabled = true` + `[projects.'<仓库绝对路径>'] trust_level = "trusted"`（或交互式首跑的信任对话） | `mcp list`/`get` 正确解析；会话内连接需 ChatGPT 登录，未验收 |
 | Gemini CLI | 0.60.0 | 是 | 目录信任（未信任目录按官方行为禁用项目 MCP）+ 模型认证 | 认证门槛（rc=41）后停止，未验收 |
 | Claude Code | 2.1.278 | 是 | 交互式运行 `claude` 批准项目 `.mcp.json`（官方帮助：未批准的服务器不会被连接；离线写 `enabledMcpjsonServers` 等状态实测无效） | Pending approval 后停止，未验收 |
 
-隔离工程中的实测详情、SDK 冒烟与双平台终端菜单验收见 [Plan.md](Plan.md) 11.14。
+Kimi Code（2.0.2）与 oh-my-pi（18.2.7）当前版本没有免登录的非交互 MCP 查看命令
+（Kimi 仅 TUI 内 `/mcp` 且需 `/login`、项目配置另有目录信任提示；omp 仅 TUI 内
+`/mcp list`），无法在无凭据环境验收连接，其配置形状由单元测试与官方文档覆盖。
+Roo/Zed/WorkBuddy 为 GUI 客户端，同样只在文档层覆盖。
+
+隔离工程实测详情与环境注意事项由维护 Skill `mcp-integration-maintenance` 的参考页保存。
 
 ### 候选文件与旧格式迁移
 
@@ -442,8 +466,8 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 
 | 平台 | 单元测试 | 真实后端冒烟 |
 | --- | --- | --- |
-| Windows x64（Node 24.21.0 / npm 12.0.2） | 191/191（2026-09-21，agents 151 + common 24 + tgrep 8 + codegraph 8；零跳过） | 本轮 CLI 迁移/完整周期、固定 Cline 3.0.62 启动和真实工作区候选整合 dry-run 通过（11.17）；ConPTY 记录见 11.15，真实 prepare/SDK 后端冒烟与客户端实测仍为 2026-09-20 记录（11.14） |
-| Linux x64（WSL/Debian，Node 20.19.2） | 191/191（2026-09-21，同上分布，ext4 隔离工程；零跳过） | 本轮套件含实际 CLI 迁移/完整周期；PTY 记录见 11.15，真实后端冒烟为 2026-09-18 P0–P8 记录（tgrep ~1s、codegraph ~14s） |
+| Windows x64（Node 24.21.0） | 237 项（235 通过，2 个 POSIX 权限/文件符号链接用例跳过；2026-09-22，agents 193 + common 28 + tgrep 8 + codegraph 8） | 本轮含真实子进程强杀恢复、恢复再次中断、并发排斥与完整 CLI 周期。既有验收：2026-09-21 OpenCode/Kilo/MiMo 真实连接、ConPTY 菜单；2026-09-20 prepare/SDK 后端冒烟与其他客户端实测 |
+| Linux x64（WSL/Debian，Node 20.19.2） | 237/237（2026-09-22，同上分布，Linux 原生临时文件系统；零跳过） | 本轮含相同恢复/CLI 回归及 POSIX 权限、符号链接验证。既有验收：2026-09-21 真实 prepare、chmod/EXDEV 与 PTY；2026-09-18 真实后端冒烟（tgrep ~1s、codegraph ~14s） |
 
-macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）与登录后
-Agent 会话内的工具调用未验收（认证/交互门槛，见 Plan.md 11.14 保留清单）。
+macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）、Kimi/omp（无非交互
+命令面）与登录后 Agent 会话内的工具调用未验收（认证/交互门槛）。

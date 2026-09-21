@@ -15,9 +15,9 @@ or call the MCP tools do not need this Skill.
 1. Confirm the task is maintenance of this integration (install/upgrade/uninstall
    behavior, wrapper code, the tgrep patch, agent config writing, index/lifecycle
    issues). Otherwise stop; ordinary repository work does not load this Skill.
-2. Read the current state before editing: `project/integration/mcp/Plan.md`
-   (design contracts, verified upstream facts, phase status) and
-   `project/integration/mcp/README.md` (user-facing install/config surface).
+2. Read the current state before editing: `project/integration/mcp/README.md`
+   (user-facing install/config surface and acceptance records) plus the two
+   reference pages below (design contracts and verified upstream facts).
    Check the dirty tree, then run
    `node project/integration/mcp/common/tools/doctor.mjs` for live state.
 3. Route to one reference, not both:
@@ -27,7 +27,7 @@ or call the MCP tools do not need this Skill.
      `agents/src/agents/` module; reuse the shared format and migration engines.
    - Wrapper servers, the tgrep stdio patch, backend spawn/lifecycle, index
      reuse, or upstream upgrades → read `references/backends-and-lifecycle.md`.
-4. Preserve the load-bearing contracts (details in Plan.md): pinned upstream
+4. Preserve the load-bearing contracts (details in the reference pages): pinned upstream
    commits/versions with hash checks; dependency preparation must fully succeed
    before any agent config is touched; `--dry-run` and `--help`/`--list-agents`
    are side-effect-free; damaged config files abort the whole batch with zero
@@ -48,9 +48,9 @@ or call the MCP tools do not need this Skill.
 - Do not edit agent config files by hand when `setup.js` can produce them; fix
   the installer instead.
 - Do not upgrade pinned upstream versions without re-verifying the facts in
-  Plan.md section 2 against the new sources.
-- Keep `Plan.md` and `README.md` in sync with implemented behavior; use the
+  `references/backends-and-lifecycle.md` against the new sources.
+- Keep `README.md` in sync with implemented behavior; use the
   `<PROJECT_DIR>` placeholder for repository paths in docs and examples.
-- Check remaining implementation and client-acceptance items before declaring
-  the plan complete. `common/src/paths.mjs` currently uses `Plan.md` as a root
-  marker; retiring the plan also requires replacing that marker and its fixtures.
+- The repository marker used by `common/src/paths.mjs` is the installer entry
+  `project/integration/mcp/setup.js`; keep it resolvable or every entry point
+  (installer, doctor, launcher, wrappers) refuses to start.

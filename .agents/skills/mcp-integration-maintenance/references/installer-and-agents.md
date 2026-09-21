@@ -12,8 +12,8 @@ mirrors, agent config writing, switching, and uninstall.
   opt-in), `--mirror=cn|official`, `--offline`, `--skip-prepare`,
   `--all-agents`, `--yes`, `--ui=line` (numbered-line menus instead of arrow
   keys), `--dry-run`, `--help`, `--list-agents`.
-- `agents/` — the agent auto-configuration component (P9.2; per-agent
-  configurators since 2026-09-21, Plan.md 11.16):
+- `agents/` — the agent auto-configuration component (per-agent
+  configurators since 2026-09-21):
   `src/agents/` holds ONE module per product (`claude.mjs` … `codebuddy-ide.mjs`,
   20 total) exporting a configurator built from shared base classes in
   `src/agents/base.mjs` (`AgentConfigurator`, `JsonServerMapConfigurator`,
@@ -110,7 +110,31 @@ mirrors, agent config writing, switching, and uninstall.
   rewrite the whole file. State discovery and editing share the same scanner.
 - Config changes run two-phase through `runAgentConfigBatch`: every target is
   planned read-only first (problems abort with zero writes), only a fully
-  successful plan is applied. Apply writes via temp-file+rename from the build
+  successful plan is applied. Before planning, a non-dry-run call runs
+  `recoverInterruptedBatch` (fileStore): the journal's last batch left open by
+  a crashed run is rolled back to pre-batch bytes from the recorded backups
+  after the recorded owner pid proves dead (alive owner or journal damage
+  aborts with zero writes; files edited after the crash are skipped with their
+  backups kept; ownership is restored from the batch's snapshot; the batch is
+  closed as crash-recovered and re-runs are idempotent). Dry-run only reports
+  the pending batch via `findOpenJournalBatch` and stays read-only. The CLI
+  performs this check after successful preparation and before scanning default
+  selections (including early returns); uninstall checks before its scan.
+  `configLock.mjs` excludes overlapping writers/recoveries with atomically
+  published, uniquely named process claims. Never steal an unreadable or
+  foreign-platform claim. Batch records also identify their platform; recover
+  foreign-platform batches on the original platform, not by guessing pid liveness.
+  Validate complete journal lines and required plan/backup fields before
+  recovery; only an unterminated malformed tail may be dropped, after owner
+  checks and under exclusion. Keep the first pre-batch state and all possible
+  intermediate results when a file is changed more than once.
+  Snapshot ownership before config replacement. Journal restore identities
+  before rename so recovery can itself be interrupted. Refresh ownership only
+  for proven file identities; identical user replacements remain unowned.
+  If the ownership snapshot is unavailable, drop affected claims and preserve
+  unrelated ones; failure to save this fallback aborts without closing the batch.
+  This covers process interruption, not power-loss durability. Apply
+  writes via temp-file+rename from the build
   directory (EXDEV fails before replacement), re-compares against the planned original bytes (concurrent edits
   abort), backs up pre-write bytes under `<BUILD_DIR>/_agent_tmp/mcp/
   agent-config-backups/`, and rolls back already-written files when a later
@@ -119,7 +143,9 @@ mirrors, agent config writing, switching, and uninstall.
   order, reporting individual failures and the backup directory. Concurrent edits
   or deletions keep the backup and are not overwritten. Planning and restoration
   validate containment too; file symlinks require manual editing. Not a cross-file
-  transaction; crash recovery on the next run is still unimplemented.
+  transaction; the journal's batch markers (begin with pid/Linux start ticks,
+  end with committed/rolled-back/crash-recovered) are what make the next run's
+  recovery possible.
 - Whole-file deletion on uninstall requires the ownership record
   (`<BUILD_DIR>/integration/mcp/state/agent-config-state.json`) proving this
   integration created the file, its recorded file identity still matching, AND the
@@ -207,7 +233,7 @@ the project `.mcp.json`; setup prints that prerequisite when pi is selected and
 also reports same-name conflicts (or unparsable content) in a higher-priority
 `.pi/mcp.json` without ever writing that file.
 
-Shared-file and migration rules (Plan.md 11.3/11.17): selecting any member of
+Shared-file and migration rules: selecting any member of
 the `.mcp.json` group keeps the group (no removal is planned for unselected
 members while another member is selected); uninstalling any member affects the
 whole group and the summary labels the consumers. OpenCode, Kilo and MiMo
@@ -246,7 +272,7 @@ the vendor's current docs, and update this table plus the README examples
 together. `--list-agents` output vs. the registry and the `--help` option
 surface are guarded by a dedicated regression in `agents/test/setup.test.mjs`.
 
-## Client acceptance notes (2026-09-20, Plan.md 11.14)
+## Client acceptance notes (2026-09-20)
 
 Verified against released clients in an isolated repo + isolated HOME (both
 configs and connection semantics):
@@ -254,6 +280,11 @@ configs and connection semantics):
 - qwen-code 0.24.1: project entry discovered; `qwen mcp approve atsf4g-tgrep`
   is the user step; afterwards `qwen mcp list` reports **Connected** (live
   initialize handshake).
+- opencode-ai 1.18.31 / @kilocode/cli 7.7.6 / @mimo-ai/cli 0.1.14 (bin `mimo`;
+  2026-09-21): `<bin> mcp list` discovers the project entry and reports
+  **✓ connected** with no login (mimo also labels the config source file).
+  Kimi Code 2.x and oh-my-pi 18.x have no login-free non-interactive MCP
+  surface (TUI-only `/mcp`), so their connections stay unverified.
 - cline 3.0.62: `cline config` under a real TTY (launcher + ConPTY) shows the
   export file loaded on the MCP tab; `cline doctor` exits 0 through the
   launcher. In-session tool calls need a model provider login (not verified).
@@ -276,6 +307,18 @@ nested under the build directory indexes zero files — place real-backend
 scratch projects outside those names (e.g. the OS temp dir). Windows ConPTY
 drives fine via `node-pty` (its exit helper prints a harmless
 `AttachConsole failed`); `winpty` cannot run under piped harness shells.
+Windows notes: SIGKILL maps to TerminateProcess (the parent sees a bare
+nonzero exit, no signal — prove crash points via the open journal batch and
+partial file state); spawning `.cmd` shims needs `cmd.exe /c` or the package's
+bin script under Node; opencode-ai ships a native exe as its bin. WSL notes:
+npm only exists in login shells (corepack/nvm PATH) — drive scripts through
+`bash -lc`; multiline commands get mangled through `wsl.exe`, always copy a
+script file under `/mnt/d` instead; a leftover client hub daemon (e.g. an
+orphaned `cline --cline-hub-daemon`) keeps wrapper+backend alive and makes
+tgrep runtime copies fail with ETXTBSY — trace holders via `/proc/*/maps`,
+SIGTERM the daemon root, and the stdin lifeline cascades. npmmirror does not
+carry `@colbymchenry/codegraph-<platform>-<arch>` 1.6.0: codegraph prepare
+under `--mirror=cn` fails with ETARGET; use `--mirror=official`.
 
 ## Lockfile policy
 
@@ -316,6 +359,12 @@ client lacks cwd/variable support from the serializer's current choice.
    consolidation merges, deletes after the write, and rolls both back on a
    later injected failure. Real-backend scratch projects go in the OS temp
    dir, never under the build directory (see Client acceptance notes).
+   Crash/permission coverage (2026-09-21): `run-crash-cycle.mjs`
+   SIGKILLs real setup.js processes mid-apply (NODE_OPTIONS --require hook)
+   and must pass on both platforms; `run-acl-cycle.mjs` (Windows read-only
+   attribute; ACL deny ACEs are NOT enforced in this sandbox — verified) and
+   `run-perm-cycle.mjs` (WSL chmod 0555/0640/0444 semantics + ext4↔DrvFs EXDEV
+   abort and same-filesystem retry) cover the real permission surface.
 4. `git check-ignore --no-index -v` sweep over every target/candidate/legacy
    path enumerated from `agents/src/agents/index.mjs` after changing targets
    or `.gitignore`; also confirm none of them is tracked and that
