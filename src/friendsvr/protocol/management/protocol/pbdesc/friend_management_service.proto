@@ -110,6 +110,7 @@ service FriendManagementService {
     };
   };
 
+  // ======== 增减好友和邀请以外的操作不应该使用分布式事务来执行，以降低开销 ========
 
   rpc management_transaction_prepare(SSFriendTransactionPrepareReq) returns (SSFriendTransactionPrepareRsp) {
     option (atframework.rpc_options) = {
@@ -137,6 +138,8 @@ service FriendManagementService {
       allow_no_wait: true
     };
   };
+
+  // ======== 增减好友和邀请以外的操作不应该使用分布式事务来执行，以降低开销 ========
 
   rpc management_gm_reset_limit(SSFriendGMResetLimitReq) returns (SSFriendGMResetLimitRsp) {
     option (atframework.rpc_options) = {

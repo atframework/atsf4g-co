@@ -8,6 +8,8 @@
 #include <config/compiler/protobuf_prefix.h>
 // clang-format on
 
+#include <google/protobuf/any.h>
+
 #include <protocol/pbdesc/com.const.pb.h>
 #include <protocol/pbdesc/svr.const.err.pb.h>
 
@@ -20,6 +22,7 @@
 
 #include <lock/lock_holder.h>
 #include <lock/spin_lock.h>
+#include <lock/spin_rw_lock.h>
 
 #include <config/server_frame_build_feature.h>
 
@@ -173,4 +176,33 @@ SERVER_FRAME_API google::protobuf::Timestamp protobuf_from_system_clock(std::chr
 
 SERVER_FRAME_API std::chrono::system_clock::duration protobuf_to_system_clock(const google::protobuf::Duration &dur) {
   return protobuf_to_chrono_duration<std::chrono::system_clock::duration>(dur);
+}
+
+SERVER_FRAME_API std::string __protobuf_get_any_type_url_parse(const ::google::protobuf::Message &msg) {
+  ::google::protobuf::Any any;
+  if (!any.PackFrom(msg)) {
+    return "";
+  }
+
+  return any.type_url();
+}
+
+SERVER_FRAME_API const std::string &__protobuf_get_any_type_url_with_cache(const ::google::protobuf::Descriptor *desc,
+                                                                           std::string (*type_url_getter)()) {
+  static atfw::util::lock::spin_rw_lock s_lock;
+  static std::unordered_map<const ::google::protobuf::Descriptor *, std::string> s_cache;
+
+  {
+    atfw::util::lock::read_lock_holder<atfw::util::lock::spin_rw_lock> read_guard(s_lock);
+    auto it = s_cache.find(desc);
+    if (it != s_cache.end()) {
+      return it->second;
+    }
+  }
+
+  std::string type_url = type_url_getter();
+
+  atfw::util::lock::write_lock_holder<atfw::util::lock::spin_rw_lock> write_guard(s_lock);
+  s_cache[desc] = type_url;
+  return s_cache[desc];
 }

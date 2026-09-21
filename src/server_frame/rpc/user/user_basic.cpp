@@ -40,9 +40,11 @@ SERVER_FRAME_API rpc::rpc_result<int64_t> allocate_user_id(::rpc::context& ctx) 
 
   int64_t suffix = prefix_id;
   while (suffix >= 8) {
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
     suffix = (suffix >> 3) ^ (suffix & 0x07);
   }
 
+  // NOLINTNEXTLINE(bugprone-signed-bitwise)
   int64_t out = static_cast<int64_t>((static_cast<uint64_t>(prefix_id) << 3) | static_cast<uint64_t>(suffix));
   assert(is_valid_user_id(out));
   RPC_RETURN_CODE(out);
@@ -54,6 +56,7 @@ SERVER_FRAME_API bool is_valid_user_id(int64_t in) noexcept {
   }
 
   while (in >= 8) {
+    // NOLINTNEXTLINE(bugprone-signed-bitwise)
     in = (in >> 3) ^ (in & 0x07);
   }
 

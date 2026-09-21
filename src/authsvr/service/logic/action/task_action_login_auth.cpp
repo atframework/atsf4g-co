@@ -28,8 +28,9 @@
 
 #include <dispatcher/cs_msg_dispatcher.h>
 
-#include "rpc/rpc_common_types.h"
-#include "rpc/rpc_context.h"
+#include <rpc/rpc_common_types.h>
+#include <rpc/rpc_context.h>
+#include <rpc/user/user_basic.h>
 
 #include "data/session.h"
 
@@ -71,8 +72,7 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
 
   // 如果是新用户，需要创建user_id
   if (login_auth_tb->user_id() == 0) {
-    int64_t new_user_id = RPC_AWAIT_CODE_RESULT(rpc::db::uuid::generate_global_unique_id(
-        get_shared_context(), PROJECT_NAMESPACE_ID::EN_GLOBAL_UUID_MAT_USER_ID, 0, 0));
+    int64_t new_user_id = RPC_AWAIT_CODE_RESULT(rpc::user::allocate_user_id(get_shared_context()));
     if (new_user_id <= 0) {
       FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to allocate user_id failed, error code: {}({})",
                    session_key.node_id, session_key.session_id, req_body.open_id(), new_user_id,
@@ -84,8 +84,8 @@ task_action_login_auth::result_type task_action_login_auth::operator()() {
 
     login_auth_tb->set_user_id(static_cast<uint64_t>(new_user_id));
 
-    res =
-        RPC_AWAIT_CODE_RESULT(rpc::db::login_auth::insert(get_shared_context(), login_auth_tb, &login_auth_cas_version));
+    res = RPC_AWAIT_CODE_RESULT(
+        rpc::db::login_auth::insert(get_shared_context(), login_auth_tb, &login_auth_cas_version));
     if (res < 0) {
       FCTXLOGERROR(get_shared_context(), "session {}:{}, user {} try to save user_id failed, error code: {}({})",
                    session_key.node_id, session_key.session_id, req_body.open_id(), res,

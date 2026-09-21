@@ -20,10 +20,11 @@
 #include <config/server_frame_build_feature.h>
 
 #include <gsl/select-gsl.h>
+#include <nostd/type_traits.h>
 
-#include <stdint.h>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -329,4 +330,18 @@ ATFW_UTIL_SYMBOL_VISIBLE inline google::protobuf::Duration protobuf_from_chrono_
       std::chrono::duration_cast<std::chrono::nanoseconds>(dur - std::chrono::seconds{ret.seconds()}).count() %
       1000000000));
   return ret;
+}
+
+SERVER_FRAME_API std::string __protobuf_get_any_type_url_parse(const ::google::protobuf::Message &msg);
+
+SERVER_FRAME_API const std::string &__protobuf_get_any_type_url_with_cache(const ::google::protobuf::Descriptor *desc,
+                                                                           std::string (*type_url_getter)());
+
+template <class MessageType,
+          class = atfw::util::nostd::enable_if_t<std::is_base_of<google::protobuf::Message, MessageType>::value>>
+ATFW_UTIL_SYMBOL_VISIBLE inline const std::string &protobuf_get_any_type_url() {
+  return __protobuf_get_any_type_url_with_cache(MessageType::descriptor(), [] {
+    MessageType msg;
+    return __protobuf_get_any_type_url_parse(msg);
+  });
 }

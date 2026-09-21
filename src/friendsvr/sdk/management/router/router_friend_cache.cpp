@@ -201,12 +201,11 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_object
   obj->load_and_move_db(ctx, std::move(*friend_tb_ptr), *friend_tb_ver_ptr);
 
   if (0 == get_router_server_id()) {
-    uint64_t old_router_server_id = obj->mutable_db_data().router_server_id();
-    uint64_t old_router_ver = obj->mutable_db_data().router_version();
+    uint64_t old_router_server_id = obj->get_router_server_id();
+    uint64_t old_router_ver = obj->get_router_server_version();
+    auto old_router_save_timepoint = obj->get_router_server_save_timepoint();
 
-    obj->mutable_db_data().set_router_server_id(self_node_id);
-    obj->mutable_db_data().set_router_version(obj->mutable_db_data().router_version() + 1);
-    *obj->mutable_db_data().mutable_router_save_timepoint() = protobuf_from_system_clock(ctx.logical_now());
+    obj->set_router_server(self_node_id, old_router_ver + 1, ctx.logical_now());
 
     *friend_tb_ver_ptr = obj->get_db_version();
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_friend> db_data{ctx};
@@ -220,12 +219,11 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::pull_object
       FWLOGERROR("save friend data for {}:{} failed, msg:\n{}", get_key().zone_id, get_key().object_id,
                  obj->mutable_db_data().DebugString());
       // 失败则恢复路由信息
-      obj->mutable_db_data().set_router_server_id(old_router_server_id);
-      obj->mutable_db_data().set_router_version(old_router_ver);
+      obj->set_router_server(old_router_server_id, old_router_ver, old_router_save_timepoint);
       RPC_RETURN_CODE(res);
     }
 
-    set_router_server_id(obj->get_db_data().router_server_id(), obj->get_db_data().router_version());
+    set_router_server_id(obj->get_router_server_id(), obj->get_router_server_version());
   } else if (self_node_id != get_router_server_id()) {
     // 不在这个进程上
     FWLOGERROR("friend router object {}:{} is in server {:#x} but try to pull in server {:#x}", get_key().zone_id,
@@ -254,11 +252,11 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
   uint64_t db_version = obj->get_db_version();
   uint64_t old_router_server_id = get_router_server_id();
   uint64_t old_router_version = get_router_version();
-  obj->mutable_db_data().set_router_server_id(get_router_server_id());
-  obj->mutable_db_data().set_router_version(get_router_version());
-  *obj->mutable_db_data().mutable_router_save_timepoint() = protobuf_from_system_clock(ctx.logical_now());
+  auto old_router_save_timepoint = obj->get_router_server_save_timepoint();
 
   uint64_t self_node_id = logic_config::me()->get_local_server_id();
+  obj->set_router_server(self_node_id, old_router_version + 1, ctx.logical_now());
+
   {
     rpc::shared_message<PROJECT_NAMESPACE_ID::table_friend> db_data{ctx};
     obj->dump(ctx, *db_data);
@@ -303,7 +301,7 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
                    fake_db_data->DebugString().c_str());
         obj->load_and_move_db(ctx, std::move(*fake_db_data), db_version);
 
-        set_router_server_id(obj->get_db_data().router_server_id(), obj->get_db_data().router_version());
+        set_router_server_id(obj->get_router_server_id(), obj->get_router_server_version());
         // 降级为缓存
         downgrade();
         RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_ACCESS_DENY);
@@ -314,8 +312,7 @@ FRIEND_SDK_MANAGEMENT_API rpc::result_code_type router_friend_cache::save_object
   }
 
   if (res < 0) {
-    obj->mutable_db_data().set_router_server_id(old_router_server_id);
-    obj->mutable_db_data().set_router_version(old_router_version);
+    obj->set_router_server(old_router_server_id, old_router_version, old_router_save_timepoint);
     FWLOGERROR("friend router object {}:{} try save db failed. res: {}, version: {}", get_key().zone_id,
                get_key().object_id, res, obj->get_db_version());
   } else {
