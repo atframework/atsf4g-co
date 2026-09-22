@@ -18,6 +18,93 @@ function workspace(t) {
   return { root, entry, write, run };
 }
 
+for (const [agentId, relative, mapKey, flag, enabledValue] of [
+  ['roo', '.roo/mcp.json', 'mcpServers', 'disabled', false],
+  ['cline', '.cline/mcp.json', 'mcpServers', 'disabled', false],
+  ['zed', '.zed/settings.json', 'context_servers', 'enabled', true],
+  ['omp', '.omp/mcp.json', 'mcpServers', 'enabled', true],
+  ['opencode', 'opencode.json', 'mcp', 'enabled', true],
+  ['kilo', '.kilo/kilo.jsonc', 'mcp', 'enabled', true],
+  ['mimocode', '.mimocode/mimocode.json', 'mcp', 'enabled', true],
+]) {
+  test(`${agentId}: default activation fills missing fields and preserves explicit disable`, t => {
+    const w = workspace(t);
+    assert.equal(w.run(agentId).applied, true);
+    const file = path.join(w.root, relative);
+    const config = JSON.parse(fs.readFileSync(file));
+    assert.equal(config[mapKey]['workspace-tgrep'][flag], enabledValue);
+
+    delete config[mapKey]['workspace-tgrep'][flag];
+    config[mapKey].external = { command: 'external-server' };
+    w.write(relative, JSON.stringify(config, null, 2));
+    assert.equal(w.run(agentId).applied, true);
+    assert.equal(JSON.parse(fs.readFileSync(file))[mapKey]['workspace-tgrep'][flag], enabledValue);
+
+    config[mapKey]['workspace-tgrep'][flag] = !enabledValue;
+    const disabled = JSON.stringify(config, null, 2).replace(`"${flag}":`, `/* keep disabled */ "${flag}":`);
+    w.write(relative, disabled);
+    const mtime = fs.statSync(file).mtimeMs;
+    assert.equal(w.run(agentId).applied, true);
+    assert.equal(fs.readFileSync(file, 'utf8'), disabled);
+    assert.equal(fs.statSync(file).mtimeMs, mtime);
+    assert.deepEqual(parseJsonDocument(disabled, file).root[mapKey].external, { command: 'external-server' });
+  });
+}
+
+test('Codex defaults enabled in the parent table and retains explicit disable and tool permissions', t => {
+  const w = workspace(t);
+  assert.equal(w.run('codex').applied, true);
+  const file = path.join(w.root, '.codex/config.toml');
+  const fresh = fs.readFileSync(file, 'utf8');
+  assert.match(fresh, /^enabled = true$/m);
+  w.write('.codex/config.toml', [
+    '[mcp_servers.workspace-tgrep]', 'command = "node"', `args = ${JSON.stringify(w.entry.args)}`,
+    'disabled_tools = ["tool_to_keep_disabled"]', '[mcp_servers.workspace-tgrep.env]', 'KEEP = "yes"', '',
+  ].join('\n'));
+  assert.equal(w.run('codex').applied, true);
+  const upgraded = fs.readFileSync(file, 'utf8');
+  assert.match(upgraded, /enabled = true\n\[mcp_servers.workspace-tgrep.env\]/);
+  const disabled = upgraded.replace('enabled = true', 'enabled = false # keep disabled');
+  w.write('.codex/config.toml', disabled);
+  const mtime = fs.statSync(file).mtimeMs;
+  assert.equal(w.run('codex').applied, true);
+  assert.equal(fs.readFileSync(file, 'utf8'), disabled);
+  assert.equal(fs.statSync(file).mtimeMs, mtime);
+  assert.match(disabled, /disabled_tools = \["tool_to_keep_disabled"\]/);
+});
+
+test('shared JSON formats do not gain another client activation field', t => {
+  const w = workspace(t);
+  for (const [agentId, relative, mapKey] of [
+    ['vscode', '.vscode/mcp.json', 'servers'],
+    ['claude', '.mcp.json', 'mcpServers'],
+    ['gemini', '.gemini/settings.json', 'mcpServers'],
+  ]) {
+    assert.equal(w.run(agentId).applied, true);
+    const entry = JSON.parse(fs.readFileSync(path.join(w.root, relative)))[mapKey]['workspace-tgrep'];
+    assert.equal(Object.hasOwn(entry, 'enabled'), false);
+    assert.equal(Object.hasOwn(entry, 'disabled'), false);
+  }
+});
+
+test('Cline IDE upgrades an old generated snippet but rejects an edited activation flag before writes', t => {
+  const w = workspace(t);
+  const relative = 'build/integration/mcp/exports/cline-ide-mcp-servers.json';
+  const file = w.write(relative, `${JSON.stringify({ mcpServers: { 'workspace-tgrep': w.entry } }, null, 2)}\n`);
+  const options = { ideExports: [{ agentId: 'cline-ide', exportsDir: path.dirname(file), backend: 'tgrep' }] };
+  assert.equal(w.run('claude', options).applied, true);
+  const fresh = fs.readFileSync(file, 'utf8');
+  assert.equal(JSON.parse(fresh).mcpServers['workspace-tgrep'].disabled, false);
+  const mtime = fs.statSync(file).mtimeMs;
+  assert.equal(w.run('claude', options).applied, true);
+  assert.equal(fs.statSync(file).mtimeMs, mtime);
+  const edited = fresh.replace('"disabled": false', '"disabled": true');
+  w.write(relative, edited);
+  assert.equal(w.run('trae', options).applied, false);
+  assert.equal(fs.readFileSync(file, 'utf8'), edited);
+  assert.equal(fs.existsSync(path.join(w.root, '.trae/mcp.json')), false);
+});
+
 test('default API writes the actual toolkit path and an explicit workspace', t => {
   const w = workspace(t);
   assert.equal(w.run('trae').applied, true);
@@ -101,7 +188,7 @@ test('Cline legacy exports retain user servers when switching to the generic fil
   assert.equal(result.applied, true, JSON.stringify(result.plan.problems));
   const active = JSON.parse(fs.readFileSync(path.join(w.root, '.cline/mcp.json'))).mcpServers;
   assert.deepEqual(active.company, { command: 'company-tool' });
-  assert.deepEqual(active['workspace-tgrep'], w.entry);
+  assert.deepEqual(active['workspace-tgrep'], { ...w.entry, disabled: false });
   assert.deepEqual(JSON.parse(fs.readFileSync(old)).mcpServers, { company: { command: 'company-tool' } });
 });
 

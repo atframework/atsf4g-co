@@ -6,6 +6,7 @@ export default new JsonServerMapConfigurator({
   target: {
     id: 'roo-mcp-json',
     file: ['.roo', 'mcp.json'],
+    entryDefaults: { disabled: false },
     legacyFiles: [['.roo', 'mcp_settings.json']],
     evidence: 'https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo/',
   },

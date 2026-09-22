@@ -3,7 +3,7 @@
  * CodeGraph MCP wrapper server (stdio).
  *
  * Bridges an MCP client (the agent) to a supervised CodeGraph direct-mode
- * backend (pinned bundle runtime). Security-relevant behavior:
+ * backend (verified local or npx-cached runtime). Security-relevant behavior:
  *
  *   * The tool list is the fixed allowlist (default codegraph_explore plus a
  *     wrapped codegraph_status). Extra tools come from local static
@@ -17,7 +17,7 @@
  *
  * Only MCP JSON-RPC is written to stdout; diagnostics go to stderr.
  *
- * Usage (after common/tools/prepare.mjs):
+ * Usage (after setup.js prepares dependencies):
  *   node codegraph/src/server.mjs [--repo-root R] [--build-dir B]
  */
 
@@ -163,6 +163,8 @@ class CodeGraphService {
     this.state = ServiceState.STARTING;
     this.stateDetail = '';
     this.backend = null;
+    this.startupAbort = new AbortController();
+    this.startupTask = null;
     this.lockError = null;
     this.backendSchemas = new Map();
     this.schemaSource = 'static';
@@ -199,14 +201,18 @@ class CodeGraphService {
       }
       throw error;
     }
-    this.startBackend().catch((error) => {
+    this.startupTask = this.startBackend().catch((error) => {
+      if (this.startupAbort.signal.aborted) return;
+      this.state = ServiceState.DEGRADED;
+      this.stateDetail = error?.message ?? String(error);
+      this.publishState();
       process.stderr.write(`codegraph-mcp: background startup failed: ${error?.message ?? error}\n`);
     });
   }
 
   async startBackend() {
     const { runtime, cliEntry, libraryDir, argvOverride } = this.backendArgs;
-    let dirName = indexDirName();
+    let dirName = indexDirName(this.paths.repoRoot);
     if (!argvOverride) {
       const selection = resolveIndexSelection(this.paths.repoRoot);
       dirName = selection.dirName;
@@ -221,9 +227,11 @@ class CodeGraphService {
             libraryDir,
             dirName,
             stderrLog: path.join(this.paths.toolStateDir('codegraph'), 'init.stderr.log'),
+            signal: this.startupAbort.signal,
           });
           this.stateDetail = `first index done (${result.done.stats?.files ?? '?'} files)`;
         } catch (error) {
+          if (this.startupAbort.signal.aborted) return;
           this.state = ServiceState.DEGRADED;
           this.stateDetail = `first index failed: ${error.message}`;
           this.publishState();
@@ -232,6 +240,7 @@ class CodeGraphService {
       }
     }
 
+    if (this.startupAbort.signal.aborted) return;
     this.state = ServiceState.OPENING;
     this.publishState();
     const backend = new CodeGraphBackend({
@@ -244,18 +253,24 @@ class CodeGraphService {
       stderrLog: path.join(this.paths.toolStateDir('codegraph'), 'backend.stderr.log'),
     });
     backend.onExit = () => this.onBackendExit();
+    backend.onSyncChange = () => this.publishState();
+    this.backend = backend;
     try {
       await backend.start();
     } catch (error) {
+      if (this.startupAbort.signal.aborted) return;
+      await backend.stop();
+      this.backend = null;
       this.state = ServiceState.DEGRADED;
       this.stateDetail = error.message;
       this.publishState();
       return;
     }
-    this.backend = backend;
+    if (this.startupAbort.signal.aborted) return;
 
     try {
       const listed = await backend.listTools();
+      if (this.startupAbort.signal.aborted) return;
       const byName = new Map((listed.tools ?? []).map((tool) => [tool.name, tool]));
       // Pinned 1.6.0 hides status from tools/list for projects below 500 files,
       // even with an explicit allowlist, while retaining its read-only handler.
@@ -280,7 +295,7 @@ class CodeGraphService {
       this.state = ServiceState.DEGRADED;
       this.stateDetail = `backend tools/list failed: ${error?.message ?? error}`;
     }
-    this.publishState();
+    if (!this.startupAbort.signal.aborted) this.publishState();
   }
 
   onBackendExit() {
@@ -302,6 +317,8 @@ class CodeGraphService {
       index_dir_name: this.backendArgs.argvOverride ? null : this.currentDirName(),
       allowlist: this.allowlist,
       schema_source: this.schemaSource,
+      auto_sync: this.backend?.syncStatus() ?? null,
+      dependency_source: this.backendArgs.acquisition ?? 'legacy',
       error_code: errorCode,
       updated_unix: Math.floor(Date.now() / 1000),
     };
@@ -387,10 +404,12 @@ class CodeGraphService {
     }
     this.state = ServiceState.STOPPING;
     this.publishState();
+    this.startupAbort.abort();
     if (this.backend) {
       await this.backend.stop();
       this.backend = null;
     }
+    await this.startupTask;
     this.state = ServiceState.STOPPED;
     this.publishState();
     this.lock.release();
@@ -424,6 +443,8 @@ function makeTools(service) {
       index_dir_name: service.currentDirName(),
       allowlist: service.allowlist,
       schema_source: service.schemaSource,
+      auto_sync: service.backend?.syncStatus() ?? null,
+      dependency_source: service.backendArgs.acquisition ?? 'legacy',
     };
     if (service.lockError) {
       payload.error = service.lockError.toPayload();
@@ -475,10 +496,10 @@ function resolveBundle(paths, runtimeArg, cliArg) {
     libraryDir = path.dirname(prepared.codegraph.library_entry);
   }
   if (!runtime || !cliEntry || !libraryDir) {
-    process.stderr.write('codegraph-mcp: pinned CodeGraph bundle not found; run common/tools/prepare.mjs first\n');
+    process.stderr.write('codegraph-mcp: prepared CodeGraph runtime/library not found; run setup.js first\n');
     process.exit(2);
   }
-  return { runtime: path.resolve(runtime), cliEntry: path.resolve(cliEntry), libraryDir: path.resolve(libraryDir) };
+  return { runtime: path.resolve(runtime), cliEntry: path.resolve(cliEntry), libraryDir: path.resolve(libraryDir), acquisition: prepared?.codegraph?.acquisition ?? 'legacy' };
 }
 
 function main() {

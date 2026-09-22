@@ -174,11 +174,28 @@ test('CLI help and list-agents stay consistent with the registry', (t) => {
   // flag surface of setup.js; extend this list when adding an option).
   const help = run(['--help']);
   assert.equal(help.status, 0, help.stderr + help.stdout);
-  for (const flag of ['--repo-root=', '--build-dir=', '--backend=', '--agents=', '--mirror=', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui=line', '--dry-run', '--help', '-h', '--list-agents']) {
+  for (const flag of ['--repo-root=', '--build-dir=', '--backend=', '--agents=', '--mirror=', '--npm-mirror=', '--cargo-mirror=', '--tgrep-bin=', '--codegraph-path=', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui=line', '--dry-run', '--help', '-h', '--list-agents', '--list-mirrors']) {
     assert.ok(help.stdout.includes(flag), `help documents ${flag}`);
   }
   const documentedFlags = [...help.stdout.matchAll(/^\s{2}(--[a-z-]+)/gm)].map((match) => match[1]);
-  assert.deepEqual(documentedFlags, ['--repo-root', '--build-dir', '--backend', '--agents', '--mirror', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui', '--dry-run', '--help', '--list-agents'], 'help lists exactly the accepted options');
+  assert.deepEqual(documentedFlags, ['--repo-root', '--build-dir', '--backend', '--agents', '--mirror', '--npm-mirror', '--cargo-mirror', '--tgrep-bin', '--codegraph-path', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui', '--dry-run', '--help', '--list-agents', '--list-mirrors'], 'help lists exactly the accepted options');
+});
+
+test('CLI mirror choices are validated and listing/dry-run never prepares tools', t => {
+  const { root, run } = fixture(t);
+  const before = snapshot(root);
+  const listed = run(['--list-mirrors']);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /npmmirror/);
+  assert.match(listed.stdout, /tuna/);
+  for (const flag of ['--npm-mirror=missing', '--cargo-mirror=missing', '--npm-mirror=']) {
+    const result = run([flag]);
+    assert.equal(result.status, 1);
+  }
+  const planned = run(['--dry-run', '--yes', '--backend=codegraph', '--agents=trae', '--mirror=cn', '--npm-mirror=huawei', '--codegraph-path=not-present']);
+  assert.equal(planned.status, 0, planned.stderr);
+  assert.match(planned.stdout, /npm：huawei/);
+  assert.deepEqual(snapshot(root), before);
 });
 
 test('CLI cannot silently succeed when default selection encounters damaged configs', (t) => {
@@ -384,8 +401,8 @@ test('unreadable IDE export aborts config writes during preflight', (t) => {
 
 test('CLI previews and applies Kilo consolidation plus legacy options, then reruns without writes', (t) => {
   const { root, run } = fixture(t);
-  const native = path.join(root, '.kilo/kilo.json');
-  const candidate = path.join(root, '.kilo/kilo.jsonc');
+  const native = path.join(root, '.kilo/kilo.jsonc');
+  const candidate = path.join(root, '.kilo/kilo.json');
   const legacy = path.join(root, '.kilocode/mcp.json');
   fs.mkdirSync(path.dirname(native), { recursive: true });
   fs.mkdirSync(path.dirname(legacy), { recursive: true });

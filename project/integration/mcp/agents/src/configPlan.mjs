@@ -238,6 +238,10 @@ function planFileEdit({ repoRoot, relative, filePath, target, group, before, own
       // seeded only when there is an entry to add.
       const entry = serverEntry(format, repoRoot, backend, launch);
       const existing = after && jsonDocument.walkServerMap(jsonDocument.parseJsonDocument(after, filePath).root, format, filePath)?.[BACKENDS[backend].serverId];
+      // Product defaults fill absent fields; an explicit client preference wins.
+      for (const [key, value] of Object.entries(target.entryDefaults ?? {})) {
+        if (!existing || !Object.hasOwn(existing, key)) entry[key] = value;
+      }
       if (existing && Object.hasOwn(existing, 'enabled')) entry.enabled = existing.enabled;
       if (existing && entry.args) entry.args.push(...entryExtraArgs(existing, repoRoot, launch));
       if (existing && Array.isArray(entry.command)) entry.command.push(...entryExtraArgs(existing, repoRoot, launch));

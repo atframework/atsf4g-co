@@ -28,8 +28,10 @@ or call the MCP tools do not need this Skill.
    - Wrapper servers, the tgrep stdio patch, backend spawn/lifecycle, index
      reuse, or upstream upgrades → read `references/backends-and-lifecycle.md`.
 4. Preserve the load-bearing contracts (details in the reference pages): pinned upstream
-   commits/versions with hash checks; dependency preparation must fully succeed
-   before any agent config is touched; `--dry-run` and `--help`/`--list-agents`
+   commits/versions with dependency integrity checks; prefer verified local tools,
+   otherwise prepare CodeGraph through pinned npx with an offline/library probe;
+   dependency preparation must fully succeed before any agent config is touched;
+   `--dry-run` and `--help`/`--list-agents`/`--list-mirrors`
    are side-effect-free; damaged config files abort the whole batch with zero
    writes; agent configs are project-level files in the repository and foreign
    entries must survive; backends run with no listening port and no telemetry,

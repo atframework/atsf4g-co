@@ -239,8 +239,8 @@ test('same-named foreign JSON and TOML servers abort a batch without any writes'
 test('Kilo layers coexist, root managed entries migrate using their declared format and retain BOM', (t) => {
   const w = workspace(t);
   const command = ['node', path.join(w.repoRoot, 'tools/mcp/tgrep/src/server.mjs')];
-  const root = w.write('kilo.json', '\uFEFF' + JSON.stringify({ model: 'keep', mcp: { 'workspace-tgrep': { type: 'local', command, enabled: true }, user: { type: 'local', command: ['x'] } } }));
-  w.write('.kilo/kilo.json', '{}');
+  const root = w.write('kilo.jsonc', '\uFEFF' + JSON.stringify({ model: 'keep', mcp: { 'workspace-tgrep': { type: 'local', command, enabled: true }, user: { type: 'local', command: ['x'] } } }));
+  w.write('.kilo/kilo.jsonc', '{}');
   configureAgent({ ...w, agentId: 'kilocode', backend: 'tgrep' });
   const text = fs.readFileSync(root, 'utf8');
   assert.equal(text[0], '\uFEFF');

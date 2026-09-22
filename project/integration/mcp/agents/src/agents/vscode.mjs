@@ -14,8 +14,9 @@ export default new JsonServerMapConfigurator({
   installNotes: () => ({
     guidance: [
       'VS Code 与 Visual Studio 共用 .vscode/mcp.json；请从解决方案目录执行 setup.js（Visual Studio 2022 17.14+ / 2026）。',
-      'Visual Studio：在 Copilot Agent 的工具列表中启用服务器；此接入项不代表 Rider 的 Copilot 插件。',
+      'Visual Studio 的 MCP 工具默认关闭；需在 Copilot Agent → 工具 → 已添加中打开 workspace-tgrep / workspace-codegraph，并按提示信任服务器。mcp.json 没有官方支持的默认启用字段。',
+      'VS Code：如服务器已被禁用，请运行 MCP: List Servers → 选择服务器 → Enable；首次使用按提示信任服务器。自动启动不会重新启用已禁用的服务器。',
     ],
-    pending: [],
+    pending: ['Visual Studio 用户：仍需在 Copilot Agent 工具列表手动启用；写入 .vscode/mcp.json 不等于工具已开启'],
   }),
 });

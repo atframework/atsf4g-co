@@ -67,6 +67,7 @@ export class StderrSink {
   }
 
   write(chunk) {
+    if (typeof chunk === 'string') chunk = Buffer.from(chunk, 'utf8');
     this.chunks.push(chunk);
     this.total += chunk.length;
     while (this.total > this.maxTailBytes && this.chunks.length > 1) {

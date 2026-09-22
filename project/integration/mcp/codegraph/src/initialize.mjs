@@ -13,13 +13,24 @@
  *   {"type":"done","ok":false,"error":"..."}
  *
  * Usage: node initialize.mjs <library-dist-dir> <project-root>
- * The library path is fixed by common/tools/prepare.mjs; it is never resolved from
- * the workspace's node_modules or the user's global modules.
+ * The library path is verified by setup.js and recorded in prepared-state.json;
+ * runtime startup does not repeat discovery or download missing dependencies.
  */
 
 import { pathToFileURL } from 'node:url';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
+
+// This helper belongs to the MCP session too. A closed parent pipe must not
+// leave a full-repository index running after the user closes the Agent.
+let activeInstance = null;
+function hostClosed() {
+  try { activeInstance?.close(); } catch { /* process exit releases remaining resources */ }
+  process.exit(0);
+}
+process.stdin.once('end', hostClosed);
+process.stdin.once('error', hostClosed);
+process.stdin.resume();
 
 function emit(message) {
   process.stdout.write(JSON.stringify(message) + '\n');
@@ -64,6 +75,7 @@ async function main() {
   let instance = null;
   try {
     instance = await CodeGraph.init(root, { index: false });
+    activeInstance = instance;
     const result = await instance.indexAll({
       onProgress: (progress) => {
         emit({
@@ -93,4 +105,10 @@ async function main() {
 main().catch((error) => {
   emit({ type: 'done', ok: false, error: `unhandled: ${error && error.message}` });
   process.exitCode = 3;
+}).finally(() => {
+  activeInstance = null;
+  process.stdin.removeListener('end', hostClosed);
+  process.stdin.removeListener('error', hostClosed);
+  process.stdin.pause();
+  process.stdin.unref?.();
 });

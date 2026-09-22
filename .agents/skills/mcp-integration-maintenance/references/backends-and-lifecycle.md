@@ -18,8 +18,9 @@ before relying on them after an upgrade.
   `common/src/supervisor.mjs` does it for tgrep).
 - CodeGraph's library needs the built-in `node:sqlite` module (Node 22.5+ even
   though its package.json says >=20). Both the serve child and the first-index
-  helper (`codegraph/src/initialize.mjs`) must run on the platform bundle's own
-  Node (`node.exe` / `node`) with `--liftoff-only --disable-warning=ExperimentalWarning`.
+  helper (`codegraph/src/initialize.mjs`) must run on the same verified Node
+  with `--liftoff-only --disable-warning=ExperimentalWarning`. Platform packages
+  use their own Node; compiled source checkouts use a probed system Node.
   The POSIX `bin/codegraph` shell wrapper is never spawned (it re-injects
   `CODEGRAPH_HOST_PPID`).
 - CodeGraph `serve --mcp` never creates the first index; the wrapper runs the
@@ -27,6 +28,11 @@ before relying on them after an upgrade.
   (or a valid `.codegraph/`) is missing. Tool schemas are taken from the
   backend's `tools/list` with `projectPath` stripped; the pinned static schemas
   are only the pre-ready fallback.
+- The direct-mode MCP engine owns file watching and reconnect catch-up. Do not
+  start a second writer or detached daemon. Report watcher diagnostics through
+  status.auto_sync rather than inferring successful watching from a handshake.
+  Initialization obeys abort and stdin EOF too; closing during first indexing
+  must stop its helper before releasing the wrapper lock.
 - CodeGraph 1.6.0 hides `codegraph_status` from `tools/list` for indexes with
   fewer than 500 files, even with an explicit tool allowlist. The wrapper
   probes that read-only handler before using its pinned schema; a missing
@@ -49,7 +55,7 @@ before relying on them after an upgrade.
    been ahead of the release before: 1.6.0 artifacts lack the `ui` subcommand
    the source has) — check the actual artifact's `--help`, not only the repo.
 3. Run `node project/integration/mcp/setup.js` (or the prepare library) and the
-   three test suites; then a real-backend smoke per README platform table.
+   four test suites; then a real-backend smoke per README platform table.
 4. Update the README verified-platform table with what was actually measured.
 
 ## Index and state rules
@@ -81,11 +87,13 @@ before relying on them after an upgrade.
 
 ## Validation checklist
 
-1. Unit tests in all three packages; protocol tests spawn the real server
+1. Unit tests in all four packages; protocol tests spawn the real server
    entry with a fake backend — keep them free of real-index dependencies.
 2. Real-backend smoke (scratch script pattern under
    `<BUILD_DIR>/_agent_tmp/mcp/smoke.mjs`): first index, reuse start, one real
    query, client close → server and backend exit, no leftover processes, locks
-   released.
+   released. Check add/edit/delete refresh and offline edits caught up after
+   reconnect. Dependency changes also require a real npx cache warm-up plus
+   offline execution/library verification, and existing-local-tool reuse.
 3. For lifecycle changes, also verify the forced-kill path (kill the wrapper,
    observe backends exit via their stdin lifeline) and report timings.

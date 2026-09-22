@@ -9,6 +9,7 @@ export default new JsonServerMapConfigurator({
   target: {
     id: 'zed-settings-json',
     file: ['.zed', 'settings.json'],
+    entryDefaults: { enabled: true },
     evidence: 'https://zed.dev/docs/ai/mcp + https://zed.dev/docs/migrate/vs-code',
   },
 });

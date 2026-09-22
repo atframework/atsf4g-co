@@ -26,7 +26,7 @@ export function exportsDirFor(integrationDir) {
 /** Native snippet text: only this round's entry, machine-local paths. */
 export function ideExportSnippetText(repoRoot, backend, agentId = null, launch = {}) {
   const spec = GUIDED_IMPORTS[agentId] ?? {};
-  const entry = serverEntry('mcpServers', repoRoot, backend, launch);
+  const entry = { ...serverEntry('mcpServers', repoRoot, backend, launch), ...spec.entryDefaults };
   const serverId = BACKENDS[backend].serverId;
   if (spec.render) return spec.render({ entry, serverId, repoRoot });
   return `${JSON.stringify({ [spec.format ?? 'mcpServers']: { [serverId]: entry } }, null, 2)}\n`;

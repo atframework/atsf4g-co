@@ -80,6 +80,8 @@ test('StderrSink keeps a bounded tail and rotates the log file', async () => {
     assert.ok(!sink.excerpt().includes('line-0\n'));
     assert.ok(statSync(path.join(dir, 'backend.stderr.log')).size <= 2048);
     assert.ok(readFileSync(path.join(dir, 'backend.stderr.log.old'), 'utf8').length > 0);
+    sink.write('decoded stderr from a child: 同步失败\n');
+    assert.match(sink.excerpt(), /同步失败/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

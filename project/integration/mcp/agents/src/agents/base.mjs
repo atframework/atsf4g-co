@@ -47,6 +47,7 @@ function normalizeTarget(target) {
       : { ...entry, file: toPlatformFile(entry.file) }));
   }
   if (target.evidence) descriptor.evidence = target.evidence;
+  if (target.entryDefaults) descriptor.entryDefaults = Object.freeze({ ...target.entryDefaults });
   return Object.freeze(descriptor);
 }
 

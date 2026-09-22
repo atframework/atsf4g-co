@@ -9,11 +9,11 @@
   "platform_packages": "@colbymchenry/codegraph-<platform>-<arch>",
   "platform_dist_shasums": {
     "win32-x64": "6d49e4421b96a5e6dfec90f7efbddbc1b69652f2",
-    "linux-x64": "3f3c67189914a93ddf9b643233bd0163920c3cdd",
     "linux-x64": "3f3c67189914a93ddf9b643233bd0163920c3cdd"
   },
-  "platform_dist_shasums_note": "linux-x64 / darwin-arm64 / other targets: add shasums here when first prepared on that platform",
-  "engines_note": "every platform bundle vendors a general-purpose Node 24 at its root (node.exe / node); the wrapper runs BOTH the serve child and the first-index helper on it because the library needs the built-in node:sqlite module (Node 22.5+). The system Node (>=20) only runs this wrapper and the thin npm fetch.",
+  "platform_dist_shasums_note": "historical verified artifact references; current acquisition uses pinned npm exec and npm integrity checks, never manual binary extraction",
+  "acquisition": "compatible local compiled library/runtime first; otherwise npm exec --package=@colbymchenry/codegraph@1.6.0, offline verification and library probe; CODEGRAPH_NO_DOWNLOAD=1 disables the shim's GitHub binary fallback",
+  "engines_note": "the library needs node:sqlite (Node 22.5+). Both serve and initialize use the same verified runtime: bundled Node for platform packages, system Node for a compiled source checkout. Wrapper/setup require Node >=20.",
   "bundle_layout": {
     "common": {
       "runtime": "node.exe (windows) / node (posix), bundle root",

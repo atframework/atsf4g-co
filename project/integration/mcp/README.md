@@ -57,8 +57,64 @@ Agent 配置。可重复执行，用于切换后端、升级固定制品、为�
 目标，面板导入类需显式指定）、`--mirror=cn|official`（未指定时按系统地区建议）、`--offline`、
 `--skip-prepare`（仅调整 Agent 配置）、`--uninstall [--agents=...|--all-agents]`、`--yes`、
 `--ui=line`（交互菜单用编号行模式，缺省在支持的终端用方向键）、`--dry-run`、`--help`、
-`--list-agents`。
+`--list-agents`、`--list-mirrors`。镜像和本地工具选项见下节。
 
+### 镜像与本地依赖
+
+交互安装分别显示 npm 和 Cargo 的来源列表，每个列表均含官方源、国内站点和实际地址。
+即使只有一个候选也显示选择过程；CodeGraph 同样显示 Cargo 列表，并注明本次不使用。
+`--mirror=cn` 将默认项设为 npmmirror / RsProxy，`--mirror=official` 将默认项设为各自官方源，
+两者均允许在菜单中分别改选。以下覆盖 9 个国内站点，阿里云与淘宝 npmmirror 合并展示，
+USTC 即中科大，不重复计数；上交同时提供 npm 和 Cargo 服务。
+
+| 类型 | id | 站点 |
+| --- | --- | --- |
+| npm | `npmmirror`（推荐） | [阿里云 / 淘宝 npmmirror](https://developer.aliyun.com/mirror/NPM) |
+| npm | `huawei` | [华为云](https://www.huaweicloud.com/zhishi/npm.html) |
+| npm | `sjtug` | [上海交通大学 SJTUG](https://mirrors.sjtug.sjtu.edu.cn/docs/npm-registry) |
+| npm | `tencent` | [腾讯云](https://cloud.tencent.cn/document/product/213/8623) |
+| Cargo | `rsproxy`（推荐） | [RsProxy](https://rsproxy.cn/) |
+| Cargo | `tuna` | [清华大学 TUNA](https://mirrors.tuna.tsinghua.edu.cn/help/crates.io-index/)（索引镜像，包仍从官方源下载） |
+| Cargo | `ustc` | [中国科学技术大学 USTC](https://mirrors.ustc.edu.cn/help/crates.io-index.html) |
+| Cargo | `sjtug` | [上海交通大学 SJTUG](https://mirrors.sjtug.sjtu.edu.cn/crates.io-index/config.json) |
+| Cargo | `nju` | [南京大学 NJU](https://mirrors.nju.edu.cn/crates.io-index/config.json) |
+| Cargo | `bfsu` | [北京外国语大学 BFSU](https://mirrors.bfsu.edu.cn/help/crates.io-index/)（索引镜像，包仍从官方源下载） |
+
+两类均可独立选 `official`。npm 显式使用官方 registry；Cargo 官方源使用
+`<BUILD_DIR>/integration/mcp/cargo-home-official` 缓存及独立配置环境，避免继承用户或工程的
+源替换设置。国内 Cargo 源仅通过本次构建参数指定。不改写全局 npm/Cargo 配置。
+`--npm-mirror` / `--cargo-mirror` 分别固定对应选项并跳过该项菜单；准备前仍显示两者名称和地址。
+`--list-mirrors` 列出全部实际地址。`--yes` / `--offline` / 非 TTY 不弹出菜单，使用指定项或默认项。
+镜像仅覆盖表中对应服务，不把 Rust 工具链下载站当作 Cargo 包源。站点可能只镜像索引，
+包下载地址由其 `config.json` 决定；缺少依赖版本时可单独将对应来源切回 `official`。
+
+```bash
+node <MCP_DIR>/setup.js --backend=tgrep --mirror=cn --npm-mirror=huawei --cargo-mirror=tuna --agents=trae --yes
+node <MCP_DIR>/setup.js --backend=tgrep --npm-mirror=tencent --cargo-mirror=official --agents=kilo --yes
+node <MCP_DIR>/setup.js --backend=tgrep --npm-mirror=official --cargo-mirror=ustc --agents=kilo --yes
+node <MCP_DIR>/setup.js --backend=codegraph --npm-mirror=official --agents=vscode --yes
+```
+
+依赖优先复用本地文件。`--tgrep-bin=<可执行文件>` 和 `--codegraph-path=<目录或入口>` 显式指定
+时必须通过检查，不匹配即报错。自动发现依次检查已准备记录、PATH、工程中的安装和旧缓存；
+CodeGraph 还检查 npm 全局安装、用户 npx 缓存与本工作空间 npx 缓存。
+
+- tgrep 需要固定版本及 `serve --transport stdio` 支持；普通 TCP-only 安装不会被误用。
+  无可用本地文件才从固定提交拉源码、打补丁、用 Cargo 构建，并记录二进制 SHA-256。
+- CodeGraph 支持已编译的同版本源码仓库、npm 安装和历史平台包；必须同时具备 CLI、
+  `dist/index.js` 库及兼容运行时，检查版本、库接口和 `node:sqlite`，不会只凭 PATH 名称接受。
+  已编译源码使用系统 Node 22.5+，平台包使用其自带运行时。
+- 无本地 CodeGraph 时，通过 `npm exec`（[npx 的执行机制](https://docs.npmjs.com/cli/v11/commands/npm-exec/)）
+  准备 `@colbymchenry/codegraph@1.6.0`，随后以 `--offline` 再执行一次，再检查实际库依赖。
+  缓存在 `<BUILD_DIR>/integration/mcp/npm-cache/<platform>-<arch>`；失败时不写 Agent 配置。
+  正常 MCP 启动直接运行验证后的缓存入口，避免每个会话再次调用 npm。
+
+CodeGraph npm 包依赖平台包，npm 仍可能下载其中的 Node 和编译制品；集成工具不再自行
+下载、解压二进制，也不启用上游的 GitHub 二进制下载回退。准备和运行阶段均设置
+`CODEGRAPH_NO_DOWNLOAD=1`。某镜像缺少固定版本平台包时，请选择 `--npm-mirror=official`，
+或指定完整本地安装。`--offline` 失败不会转为在线下载。无需为接入 MCP 拉取或编译一份上游仓库。
+
+Agent 选项和 `--list-agents` 按显示名称排序，忽略大小写；同名产品的不同 IDE 接入项相邻。
 交互菜单：支持的终端使用方向键（↑/↓ 移动、空格勾选、回车确认，多选 a 全选、n 清空，
 Esc/Ctrl+C 取消，Agent 配置保持不变，已准备的依赖保留）；不支持时回退编号行输入。安装时空选择不会静默卸载——会先列出
 将移除的已配置条目并要求 y/N 确认；非交互模式（`--yes`/CI/非 TTY）不打开交互输入，
@@ -118,15 +174,10 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
 
 ### 前置条件
 
-- Node.js >= 20 + npm（包装层与安装器；Windows 开发机 Node 24、WSL/Debian Node 20
-  均已验证）。CodeGraph 的首次索引与后端服务运行在平台包捆绑的 Node 24 上，不依赖
-  系统 Node 版本（其库需要 Node 22.5+ 的内置 `node:sqlite` 模块）。
-- Git；选择 tgrep 后端还需要 Rust 工具链（edition 2024，rustc 1.98 验证过）。
-- 首次准备需要联网拉取固定版本制品；之后可用 `--offline` 离线复用。
-- 国内网络建议 `--mirror=cn`（npm 用 npmmirror、cargo 用 rsproxy；tgrep 源码仍从
-  GitHub 固定提交拉取并校验提交号）。注意 npmmirror 尚未同步 CodeGraph 的平台包
-  （`@colbymchenry/codegraph-<platform>-<arch>` 1.6.0），选择 codegraph 后端时若
-  `cn` 镜像报“无匹配版本”，请改用 `--mirror=official`。安装器不会修改全局 npm/cargo 配置。
+- Node.js >= 20 + npm（包装层与安装器）。CodeGraph 的实际运行时需支持 `node:sqlite`
+  （Node 22.5+）；发现本地安装或准备 npx 缓存时验证，平台包可提供自己的 Node。
+- 无可复用的 tgrep 时才需要 Git 和 Rust 工具链（edition 2024，rustc 1.98 验证过）。
+- 缺少依赖时需要联网准备固定版本；本地文件和缓存齐全时可用 `--offline`。
 
 ## 支持的 Agent
 
@@ -141,7 +192,7 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
 | Gemini CLI | `.gemini/settings.json` | `mcpServers` |
 | OpenCode | `opencode.json` 或 `opencode.jsonc` | `mcp` / `type:local` / `command` 数组 |
-| Kilo Code（id `kilo`，兼容旧 id `kilocode`） | `.kilo/kilo.json(c)`；根 `kilo.json(c)` 的托管条目迁入此目录 | 同 OpenCode 形状；根与目录配置可分层共存 |
+| Kilo Code（id `kilo`，兼容旧 id `kilocode`） | 默认 `.kilo/kilo.jsonc`，兼容 `.kilo/kilo.json`；根 `kilo.json(c)` 的托管条目迁入此目录 | 同 OpenCode 形状；两种格式并存时合并到 JSONC；仅有 JSON 时原地更新，保留设置与注释 |
 | Roo Code | `.roo/mcp.json` | `mcpServers` |
 | ZCode | `.zcode/config.json` | `mcp.servers` |
 | oh-my-pi (omp) | `.omp/mcp.json` | `mcpServers` |
@@ -169,6 +220,26 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
 本次最终集合，添加时请同时列出需要保留的其他客户端。DSH 的 `--patch` 是原生显式加载，
 不会覆盖用户 YAML 或自动安装 DSH 插件。移除导出文件后，已导入 IDE 的服务器仍需在 IDE 中移除。
 这些客户端的配置生成与本地包装层测试不代表已验收登录后的 GUI 会话。
+
+### 默认启用与客户端开关
+
+安装器对支持启用字段的客户端写入“默认启用”。已有条目缺少字段时补齐，明确设置的
+`enabled: false` / `disabled: true` 保留。服务器启用、工具选择和调用授权是不同设置；
+安装器不修改自动批准规则、工具禁用列表、Agent profile 或 IDE 全局设置。
+
+| 客户端 | 安装器行为 / 仍需操作 |
+| --- | --- |
+| Codex | 写入 `enabled = true`；项目配置仍需项目受信任。见 [配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)。 |
+| Zed、oh-my-pi | 分别在 `context_servers` / `mcpServers` 条目写入 `enabled: true`；Zed 的 Agent profile 工具选择、OMP profile 的禁用列表仍生效。见 [Zed 配置源](https://github.com/zed-industries/zed/blob/main/crates/project/src/project_settings.rs)、[OMP 文档](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md)。 |
+| OpenCode、Kilo、MiMo | 保持原有 `enabled: true` 默认配置，保留用户明确关闭的状态。 |
+| Roo、Cline CLI / IDE | 写入 `disabled: false`；Cline CLI 仍须通过启动器加载，IDE 仍须导入片段。见 [Roo 文档](https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo/)、[Cline 文档](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx)。 |
+| Visual Studio Copilot | 官方规定新发现的 MCP 工具默认关闭，且没有文档化的项目配置字段打开该开关。进入 Copilot **Agent → 工具 → 已添加**，打开 `workspace-tgrep` / `workspace-codegraph`，按提示信任服务器；工具列表变化后可能需要重新确认。见 [Microsoft 文档](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers?view=visualstudio#tool-lifecycle)。 |
+| VS Code Copilot | 与 Visual Studio 共用 `.vscode/mcp.json`，但启用状态另行保存。已禁用时运行 **MCP: List Servers → 服务器 → Enable**；`chat.mcp.autostart` 不会重新启用已禁用服务器，首次使用仍有信任提示。见 [VS Code 文档](https://code.visualstudio.com/docs/agent-customization/mcp-servers#enable-or-disable-mcp-servers)。 |
+| JetBrains AI Assistant（含 Rider） | 导入项目服务器并 Apply；如需自动启用后续新增或修改的服务器，可在 MCP 设置页勾选 **Automatically enable new and changed MCP servers**。见 [JetBrains 文档](https://www.jetbrains.com/help/ai-assistant/mcp.html)。 |
+
+其他客户端沿用原生配置和安装器输出的加载步骤，不写入未经核验的启用字段。TRAE 的
+项目级 MCP 开关、Rider Copilot 的插件导入、DSH 的 `--patch` 等仍需按相应接入项操作。
+“配置已写入”不代表客户端已加载、服务器已连接或工具已获授权。
 
 ### Unreal Engine / Perforce 工作空间
 
@@ -317,6 +388,7 @@ claude mcp add --transport stdio --scope project workspace-tgrep -- node <MCP_DI
 command = "node"
 args = ["<MCP_DIR>/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
 cwd = "<PROJECT_DIR>"
+enabled = true
 ```
 
 ### OpenCode / Kilo / MiMo（以下以 `opencode.json` 为例）
@@ -379,6 +451,22 @@ cwd = "<PROJECT_DIR>"
 - 固定 CodeGraph 1.6.0 对不足 500 个索引文件的工程隐藏状态工具的发现条目，但保留处理器。
   包装层会验证该只读处理器后使用自己的状态 schema；真正缺失或失败仍报告降级。
 
+### CodeGraph 自动刷新与后台进程
+
+MCP 入口拥有后台子进程：首次通过库 API 建索引，然后启动同版本 `serve --mcp`。
+该服务自带文件监听和连接时的补同步，因此无需额外启动一个写同一数据库的 watcher/daemon。
+文件增删改由这个服务增量同步；重连后先补齐离线变更，再响应代码查询。
+这是固定 1.6.0 制品的实测行为，升级时需重新验证。
+
+后台进程随 MCP 会话退出，首次索引也支持取消；全部 Agent 关闭期间不常驻。
+这保留 stdio 的进程清理和单写者约束。上游独立 daemon 会跨会话存活，不用于本接入。
+源码仓库接入可以通过 `--codegraph-path` 指向已编译仓库，但不需要自行重写上游监听逻辑。
+
+`codegraph_status.auto_sync` 报告 `mode: session`、`watcher`、`catch_up_on_connect`、
+`last_sync_unix` 和 `last_error`；只有收到后端确认才显示 `watcher: active`。
+监听不可用或降级时状态会说明原因；此时不能把查询成功等同于索引已跟随所有变更。
+`dependency_source` 标识本次准备来自本地文件还是 npx。后台进程不监听网络端口。
+
 ## 手动查询或操作 CodeGraph 索引
 
 索引是标准 SQLite 数据（`codegraph.db` + WAL），可以用上游 CLI 或任何 SQLite 客户端
@@ -397,14 +485,14 @@ CODEGRAPH_DIR=.codegraph-<project>-posix <codegraph入口> status .
 $env:CODEGRAPH_DIR = '.codegraph-<project>-windows'; <codegraph入口> status .
 ```
 
-**`<codegraph入口>`**：若已全局安装与固定版本一致的 `codegraph` 可直接使用；否则用
-prepare 下来的捆绑入口（与创建索引的程序同版本，避免 schema 迁移意外）：
+**`<codegraph入口>`**：若已全局安装与固定版本一致的 `codegraph` 可直接使用；否则读取
+`<BUILD_DIR>/integration/mcp/state/prepared-state.json` 的 `codegraph.runtime` 和 `cli_entry`：
 
 ```text
-<BUILD_DIR>/integration/mcp/upstream/codegraph-bundle/node.exe --liftoff-only --disable-warning=ExperimentalWarning <BUILD_DIR>/integration/mcp/upstream/codegraph-bundle/lib/dist/bin/codegraph.js <子命令>
+<runtime> --liftoff-only --disable-warning=ExperimentalWarning <cli_entry> <子命令>
 ```
 
-以上为 Windows；POSIX 使用同一捆绑目录中的 `node`。`CODEGRAPH_DIR` 必须是根目录下的单段
+路径可能来自本地源码、npm 安装或 npx 缓存，不假定固定 bundle 目录。`CODEGRAPH_DIR` 必须是根目录下的单段
 目录名，例如 `.codegraph-<project>-windows`，不接受绝对路径或尾部斜杠。优先与当前包装层的
 `codegraph_status` / `doctor.mjs` 所报告的索引保持一致，不打开另一个平台的索引。
 
@@ -447,9 +535,7 @@ codegraph explore "<symbol names or question>"
 | `index [path]` | **全量重建**索引（先删后建，等价重新 init） |
 | `unlock [path]` | 清理阻塞索引的残留锁 |
 
-查看完整的可用选项：`npx @colbymchenry/codegraph --help`（拉取的是 registry 最新版，
-命令面可能与本集成固定的 1.6.0 不同——例如新版可能有 `ui` 浏览器查看器而 1.6.0
-制品没有；操作本集成索引时仍请用同版本入口）。
+查看完整选项时使用上述已验证入口加 `--help`，保持与创建索引的固定版本一致。
 
 **直接查 SQLite**（表结构见捆绑包内 `lib/dist/db/schema.sql`，核心表 `nodes`/`edges`/`files`）：
 
@@ -539,12 +625,13 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 
 | 平台 | 单元测试 | 真实后端冒烟 |
 | --- | --- | --- |
-| Windows x64（Node 24.21.0） | 266 项（264 通过，2 个 POSIX 权限/文件符号链接用例跳过；2026-09-22，agents 213 + common 35 + tgrep 9 + codegraph 9） | 通用工具副本放在任意含空格目录，UE 小型源码样例从不同 cwd 启动；首次索引/复用/查询/退出：tgrep 891/374ms，CodeGraph 3673/745ms；生成及资源目录均被排除。单元回归覆盖自动检测、完整 CLI 周期、迁移、范围冲突、缓存 junction 越界与事务保护。既有验收：2026-09-21 OpenCode/Kilo/MiMo 真实连接与 ConPTY 菜单 |
-| Linux x64（WSL/Debian，Node 20.19.2） | 266/266，零跳过（2026-09-22）；独立工具副本在 ext4 上运行上述四套测试，包括 POSIX 权限与符号链接 | 本轮未复跑真实后端；既有验收：2026-09-21 真实 prepare、chmod/EXDEV 与 PTY；2026-09-18 后端冒烟（tgrep ~1s、codegraph ~14s） |
+| Windows x64（Node 24.21.0） | 298 项（296 通过，2 个 POSIX 权限/文件符号链接用例跳过；2026-09-22，agents 225 + common 52 + tgrep 9 + codegraph 12） | 实际 npx 缓存在线准备、离线启动和库检查；本地 tgrep 复用。UE 小型样例从不同 cwd 首次索引、查询、退出；CodeGraph 验证文件新增/修改/删除、离线修改后的补同步；两个后端正常退出及强杀 wrapper 后均无剩余进程。首次索引取消另有确定性协议测试。镜像及 Kilo 改造：全部 12 个服务端点元数据有效；真实 Cargo 离线验证官方源不继承工程镜像配置（未逐站点下载全部依赖） |
+| Linux x64（WSL/Debian，Node 20.19.2） | 默认启用改造前：281/281，零跳过（2026-09-22）；本次新增用例未在 WSL 复跑。独立 ext4 工具副本运行四套测试，包括 POSIX 权限与符号链接 | 本轮未复跑真实后端；既有验收：2026-09-21 真实 prepare、chmod/EXDEV 与 PTY；2026-09-18 后端冒烟 |
 
 macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）、Kimi/omp（无非交互
 命令面）与登录后 Agent 会话内的工具调用未验收（认证/交互门槛）。
 本轮 DSH、TRAE、Visual Studio 与 JetBrains 两种插件验证到官方格式、安装器和 MCP 协议层；
 未启动登录后的客户端会话，也未对完整 UE 引擎执行首次索引。单元测试日志位于
-`<BUILD_DIR>/_agent_tmp/mcp-generic-verified/`（Windows）及
-`<BUILD_DIR>/_agent_tmp/mcp-generic-work/test-logs/`（WSL）。
+`<BUILD_DIR>/_agent_tmp/mcp-refresh-windows/`（Windows，新增首次索引取消用例另行运行）及
+`<BUILD_DIR>/_agent_tmp/mcp-refresh-work/test-logs/`（WSL）。镜像目录的地址已核对官方说明，
+未对所有站点的每个包执行下载验收；实际缓存准备使用 npm 官方 registry。

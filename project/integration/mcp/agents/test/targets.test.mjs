@@ -57,13 +57,13 @@ function ourLegacyEntry(repo, backend = 'tgrep') {
 test('exclusive candidates: same-directory json/jsonc files consolidate', () => {
   const repo = tmpRepo();
   try {
-    write(repo, path.join('.kilo', 'kilo.jsonc'), '{\n  "mcp": { "user": { "type": "local", "command": ["x"] } } }\n');
-    write(repo, path.join('.kilo', 'kilo.json'), '{}\n');
+    write(repo, path.join('.kilo', 'kilo.json'), '{\n  "mcp": { "user": { "type": "local", "command": ["x"] } } }\n');
+    write(repo, path.join('.kilo', 'kilo.jsonc'), '{}\n');
     configureAgent({ repoRoot: repo, agentId: 'kilo', backend: 'tgrep' });
-    const merged = JSON.parse(read(repo, path.join('.kilo', 'kilo.json')));
+    const merged = JSON.parse(read(repo, path.join('.kilo', 'kilo.jsonc')));
     assert.ok(merged.mcp.user, 'foreign entry from the redundant candidate carried over');
     assert.equal(merged.mcp[SERVER_IDS.tgrep].type, 'local', 'managed entry written');
-    assert.equal(fs.existsSync(path.join(repo, path.join('.kilo', 'kilo.jsonc'))), false, 'redundant candidate deleted after the merged write');
+    assert.equal(fs.existsSync(path.join(repo, path.join('.kilo', 'kilo.json'))), false, 'redundant candidate deleted after the merged write');
     const states = agentStates(repo);
     assert.equal(states.kilo.error, undefined);
     assert.deepEqual(states.kilo.configured, [SERVER_IDS.tgrep]);
@@ -87,7 +87,7 @@ test('a lone existing candidate is edited in place; none uses the target default
     const fresh = tmpRepo();
     try {
       configureAgent({ repoRoot: fresh, agentId: 'kilo', backend: 'tgrep' });
-      assert.ok(fs.existsSync(path.join(fresh, '.kilo', 'kilo.json')), 'default .kilo/kilo.json created');
+      assert.ok(fs.existsSync(path.join(fresh, '.kilo', 'kilo.jsonc')), 'default .kilo/kilo.jsonc created');
     } finally {
       fs.rmSync(fresh, { recursive: true, force: true });
     }
@@ -97,6 +97,18 @@ test('a lone existing candidate is edited in place; none uses the target default
 });
 
 // -- Kilo / Roo legacy migration ---------------------------------------------------------------
+
+test('Kilo retains a lone existing JSON file while new installations prefer JSONC', t => {
+  const repo = tmpRepo();
+  t.after(() => fs.rmSync(repo, { recursive: true, force: true }));
+  const existing = write(repo, '.kilo/kilo.json', '{\n  // user settings\n  "snapshot": false\n}\n');
+  configureAgent({ repoRoot: repo, agentId: 'kilo', backend: 'tgrep' });
+  const after = fs.readFileSync(existing, 'utf8');
+  assert.match(after, /user settings/);
+  assert.match(after, /"snapshot": false/);
+  assert.match(after, /"workspace-tgrep"/);
+  assert.equal(fs.existsSync(path.join(repo, '.kilo/kilo.jsonc')), false);
+});
 
 test('kilo migrates from .kilocode/mcp.json and cleans only verified entries', () => {
   const repo = tmpRepo();
@@ -108,7 +120,7 @@ test('kilo migrates from .kilocode/mcp.json and cleans only verified entries', (
     );
     configureAgent({ repoRoot: repo, agentId: 'kilo', backend: 'tgrep' });
 
-    const kilo = JSON.parse(read(repo, path.join('.kilo', 'kilo.json')));
+    const kilo = JSON.parse(read(repo, path.join('.kilo', 'kilo.jsonc')));
     assert.equal(kilo.mcp[SERVER_IDS.tgrep].type, 'local', 'new target written in the current shape');
     const legacy = JSON.parse(read(repo, path.join('.kilocode', 'mcp.json')));
     assert.equal(legacy.mcpServers[SERVER_IDS.tgrep], undefined, 'managed entry removed from legacy');
@@ -149,7 +161,7 @@ test('uninstall reaches managed entries that only exist in legacy locations', ()
     assert.notEqual(result.action, 'unchanged');
     const legacy = JSON.parse(read(repo, path.join('.kilocode', 'mcp.json')));
     assert.deepEqual(legacy, { mcpServers: {} }, 'legacy cleaned, file kept (no ownership record)');
-    assert.equal(fs.existsSync(path.join(repo, '.kilo', 'kilo.json')), false, 'no new file created on uninstall');
+    assert.equal(fs.existsSync(path.join(repo, '.kilo', 'kilo.jsonc')), false, 'no new file created on uninstall');
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }

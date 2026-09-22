@@ -45,6 +45,10 @@ export const CONFIGURATORS = Object.freeze([
 
 export const REGISTRY = Object.freeze(CONFIGURATORS.map((configurator) => configurator.definition()));
 
+// Sort presentation independently of shared-target ownership and write order.
+const DISPLAY_AGENTS = Object.freeze([...REGISTRY]
+  .sort((left, right) => left.label.localeCompare(right.label, 'en', { sensitivity: 'base' })));
+
 export const GUIDED_IMPORTS = Object.freeze(Object.fromEntries(CONFIGURATORS
   .filter((configurator) => configurator.importSpec)
   .map((configurator) => [configurator.id, configurator.importSpec])));
@@ -70,7 +74,7 @@ for (const configurator of CONFIGURATORS) {
 export const TARGETS = Object.freeze(Object.fromEntries(targetDescriptors));
 
 export function agentDefinitions() {
-  return REGISTRY;
+  return DISPLAY_AGENTS;
 }
 
 export function agentById(agentId) {

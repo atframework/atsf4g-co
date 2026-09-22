@@ -13,7 +13,7 @@ export function codexTomlSection(repoRoot, backend, launch = {}) {
   const entry = serverEntry('mcpServersCwd', repoRoot, backend, launch);
   return [TOML_BEGIN, `[mcp_servers.${BACKENDS[backend].serverId}]`, 'command = "node"',
     `args = [${entry.args.map(tomlQuote).join(', ')}]`,
-    `cwd = ${tomlQuote(repoRoot)}`, TOML_END].join('\n');
+    `cwd = ${tomlQuote(repoRoot)}`, 'enabled = true', TOML_END].join('\n');
 }
 
 export function removeCodexTomlServers(text) {
@@ -118,6 +118,7 @@ export function configureCodexToml(text, repoRoot, backend, launch = {}) {
   }
   const fields = new Map([
     ['cwd', tomlQuote(repoRoot)],
+    ['enabled', 'true'],
   ]);
   const start = records.findIndex((r) => r.header && r.table?.length === 2 && r.table[1] === selected);
   if (start < 0) throw new AgentConfigError('managed Codex server has only subtables; repair its parent table first', 'toml-syntax');

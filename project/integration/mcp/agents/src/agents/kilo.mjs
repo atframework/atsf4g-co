@@ -11,8 +11,8 @@ export default new OpenCodeShapeConfigurator({
   aliases: ['kilocode'],
   target: {
     id: 'kilo-json',
-    file: ['.kilo', 'kilo.json'],
-    candidates: [['.kilo', 'kilo.json'], ['.kilo', 'kilo.jsonc']],
+    file: ['.kilo', 'kilo.jsonc'],
+    candidates: [['.kilo', 'kilo.jsonc'], ['.kilo', 'kilo.json']],
     legacyFiles: [
       { file: 'kilo.json', format: 'opencode' },
       { file: 'kilo.jsonc', format: 'opencode' },

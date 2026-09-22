@@ -4,8 +4,8 @@
  * reusable steps.
  *
  * Downloads are tool dependencies only (pinned upstream sources and npm
- * packages); nothing here uploads repository source code. Every artifact is
- * hash-recorded into <BUILD_DIR>/integration/mcp/state/prepared-state.json
+ * packages); nothing here uploads repository source code. Verified tool paths are
+ * recorded into <BUILD_DIR>/integration/mcp/state/prepared-state.json
  * and reused as-is on later runs.
  *
  * Mirror support: `npmRegistry` is passed to every npm invocation (e.g.
@@ -18,8 +18,10 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { commandPaths, readJson, probeTgrep, codegraphLayouts, probeCodegraph, npxPackageRoots, sameVersion, CODEGRAPH_LOCAL_ENV } from './localTools.mjs';
 
-import { WorkspacePaths, INTEGRATION_ROOT } from './paths.mjs';
+import { WorkspacePaths, INTEGRATION_ROOT, validateWorkspaceBuildDir } from './paths.mjs';
 
 export function makeLogger(write) {
   return (message) => write(`prepare: ${message}\n`);
@@ -28,13 +30,14 @@ export function makeLogger(write) {
 const silentLog = () => {};
 
 /** Run a command with an argument array, shell disabled. */
-export function run(argv, { cwd = null, env = null, check = true } = {}) {
+export function run(argv, { cwd = null, env = null, check = true, timeout = undefined } = {}) {
   const result = spawnSync(argv[0], argv.slice(1), {
     cwd,
     env,
     shell: false,
     encoding: 'utf8',
     windowsHide: true,
+    timeout,
   });
   if (check && result.status !== 0) {
     const out = `${result.stdout ?? ''}`.slice(-2000);
@@ -114,12 +117,52 @@ export function prepareNodeModules(mcpRoot, { offline = false, registry = null, 
 
 // -- tgrep --------------------------------------------------------------------
 
-export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs = [], log = silentLog } = {}) {
+/** Official Cargo must not inherit a user's crates-io replacement. Cargo cannot
+ * override replace-with back to crates-io (that creates a source cycle). Use a
+ * workspace cache and a neutral cwd; --manifest-path keeps all build output local.
+ */
+export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], cargoIsolated = false, execute = run } = {}) {
+  if (!cargoIsolated) return execute([...command, ...cargoConfigArgs], { cwd: srcDir, env: process.env });
+  const cargoHome = path.join(paths.integrationDir, 'cargo-home-official');
+  validateWorkspaceBuildDir(paths.repoRoot, cargoHome);
+  const cwd = path.parse(path.resolve(srcDir)).root;
+  for (const directory of [cargoHome, path.join(cwd, '.cargo')]) {
+    for (const name of ['config', 'config.toml']) {
+      const config = path.join(directory, name);
+      if (fs.existsSync(config)) throw new Error(`official Cargo source would inherit ${config}; resolve this config before preparing dependencies`);
+    }
+  }
+  fs.mkdirSync(cargoHome, { recursive: true });
+  return execute([...command, '--manifest-path', path.join(srcDir, 'Cargo.toml'), ...cargoConfigArgs], {
+    cwd,
+    env: { ...process.env, CARGO_HOME: cargoHome, CARGO_REGISTRIES_CRATES_IO_PROTOCOL: 'sparse',
+      CARGO_REGISTRIES_CRATES_IO_INDEX: 'sparse+https://index.crates.io/', CARGO_TARGET_DIR: path.join(srcDir, 'target') },
+  });
+}
+
+export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs = [], cargoIsolated = false, binary = null, execute = run, log = silentLog } = {}) {
   const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tgrep', 'upstream-lock.json'), 'utf8'));
   const srcDir = path.join(paths.upstreamDir, 'tgrep-src');
   const patchPath = path.join(mcpRoot, 'tgrep', lock.patches[0]);
   const binaryName = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
   const runtimeBinary = path.join(paths.runtimeDir, binaryName);
+
+  const prepared = readJson(paths.preparedStatePath());
+  const candidates = binary ? [path.resolve(binary)] : [
+    prepared?.tgrep?.binary, ...commandPaths('tgrep'), runtimeBinary,
+    path.join(srcDir, 'target/release', binaryName),
+  ];
+  for (const candidate of new Set(candidates.filter(Boolean))) {
+    if (!binary && !fs.existsSync(candidate)) continue;
+    try {
+      const version = probeTgrep(candidate, lock.declared_version, execute);
+      log('reusing local tgrep: ' + candidate);
+      return { binary: fs.realpathSync(candidate), version, sha256: shaOf(candidate), acquisition: 'local' };
+    } catch (error) {
+      if (binary) throw error;
+      log('skipping incompatible local tgrep: ' + candidate + ' (' + error.message + ')');
+    }
+  }
 
   if (!fs.existsSync(srcDir)) {
     if (offline) {
@@ -152,7 +195,7 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
       throw new Error('tgrep build output missing and --offline given');
     }
     log('building tgrep (cargo release); this can take several minutes');
-    run([...lock.build_command, ...cargoConfigArgs], { cwd: srcDir, env: process.env });
+    runCargoBuild(paths, srcDir, lock.build_command, { cargoConfigArgs, cargoIsolated });
   }
   if (!fs.existsSync(buildOutput)) {
     throw new Error('cargo build finished without producing the binary');
@@ -160,9 +203,10 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
 
   fs.mkdirSync(paths.runtimeDir, { recursive: true });
   fs.copyFileSync(buildOutput, runtimeBinary);
-  const version = run([runtimeBinary, '--version']).stdout.trim();
+  const version = probeTgrep(runtimeBinary, lock.declared_version, execute);
   return {
     binary: runtimeBinary,
+    acquisition: 'build',
     sha256: shaOf(runtimeBinary),
     version,
     source_commit: head,
@@ -182,87 +226,102 @@ export function platformTarget() {
   return `${platform}-${arch}`;
 }
 
-export function prepareCodegraph(paths, mcpRoot, { offline = false, registry = null, log = silentLog } = {}) {
-  const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'codegraph', 'upstream-lock.json'), 'utf8'));
+/** Reuse local code/library layouts, then warm and verify the official npx package. */
+export function prepareCodegraph(paths, mcpRoot, {
+  offline = false, registry = null, localPath = null, execute = run, log = silentLog,
+} = {}) {
+  const lock = readJson(path.join(mcpRoot, 'codegraph/upstream-lock.json'));
   const target = platformTarget();
-  const expectedSha1 = lock.platform_dist_shasums?.[target] ?? null;
-  const extractDir = path.join(paths.upstreamDir, 'codegraph-bundle');
-
-  // Every platform bundle ships the same layout: a general-purpose bundled
-  // Node at the root (node.exe / node) plus the app under lib/dist. Both the
-  // serve child and the first-index helper run on that Node -- the library
-  // needs the built-in node:sqlite module (Node 22.5+), which the wrapper must
-  // not demand from the system Node.
-  const entries = {
-    cli: path.join(extractDir, 'lib', 'dist', 'bin', 'codegraph.js'),
-    library: path.join(extractDir, 'lib', 'dist', 'index.js'),
-    runtime: path.join(extractDir, process.platform === 'win32' ? 'node.exe' : 'node'),
-  };
-
-  if (!fs.existsSync(entries.cli)) {
-    if (offline) {
-      throw new Error('codegraph platform bundle missing and --offline given');
-    }
-    fs.mkdirSync(paths.upstreamDir, { recursive: true });
-    const pkg = `${lock.npm_platform_prefix}-${target}@${lock.version}`;
-    log(`fetching ${pkg}`);
-    const { command, args, shell } = npmCommand(['pack', pkg, '--pack-destination', paths.upstreamDir], { registry });
-    const result = spawnSync(command, args, {
-      shell,
-      cwd: paths.upstreamDir,
-      stdio: 'inherit',
-      env: process.env,
-      windowsHide: true,
-    });
-    if (result.status !== 0) {
-      throw new Error(`npm pack failed for ${pkg} (exit ${result.status})`);
-    }
-    const tarball = fs
-      .readdirSync(paths.upstreamDir)
-      .filter((name) => name.endsWith('.tgz') && name.includes(target))
-      .map((name) => path.join(paths.upstreamDir, name))
-      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
-    if (!tarball) {
-      throw new Error('npm pack produced no platform tarball');
-    }
-    const actualSha1 = shaOf(tarball, 'sha1');
-    if (expectedSha1) {
-      if (actualSha1 !== expectedSha1) {
-        throw new Error(`codegraph ${target} tarball shasum mismatch: ${actualSha1} != ${expectedSha1}`);
+  const prepared = readJson(paths.preparedStatePath());
+  const checked = new Set();
+  function select(candidates) {
+    for (const candidate of candidates.filter(Boolean)) {
+      for (const layout of codegraphLayouts(candidate, target)) {
+        const key = path.resolve(layout.library_entry);
+        if (checked.has(key)) continue;
+        checked.add(key);
+        try { return probeCodegraph(layout, lock.version, execute); }
+        catch (error) { log('skipping local CodeGraph: ' + layout.package_root + ' (' + error.message + ')'); }
       }
-    } else {
-      log(`note: no committed shasum for ${target}; add "${target}": "${actualSha1}" to codegraph/upstream-lock.json`);
     }
-    log('extracting platform bundle');
-    const tempDir = fs.mkdtempSync(path.join(paths.upstreamDir, 'extract-'));
-    try {
-      run(['tar', '-xzf', tarball, '-C', tempDir]);
-      const packageRoot = path.join(tempDir, 'package');
-      if (!fs.statSync(packageRoot, { throwIfNoEntry: false })?.isDirectory()) {
-        throw new Error('unexpected tarball layout: no package/ root');
-      }
-      fs.mkdirSync(extractDir, { recursive: true });
-      fs.cpSync(packageRoot, extractDir, { recursive: true });
-    } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    return null;
+  }
+  function state(layout, acquisition, extra = {}) {
+    return { ...layout, platform_target: target, acquisition, ...extra };
+  }
+  if (localPath) {
+    const selected = select([path.resolve(localPath)]);
+    if (!selected) throw new Error('explicit CodeGraph path has no compatible compiled ' + lock.version + ' library/runtime; use a prepared source checkout, npm installation or bundle');
+    log('reusing local CodeGraph: ' + selected.package_root);
+    return state(selected, 'local');
   }
 
-  for (const [role, entry] of Object.entries(entries)) {
-    if (!fs.statSync(entry, { throwIfNoEntry: false })?.isFile()) {
-      throw new Error(`codegraph bundle missing ${role} entry: ${entry}`);
+  let selected = select([
+    prepared?.codegraph?.package_root, prepared?.codegraph?.cli_entry,
+    ...commandPaths('codegraph'),
+    path.join(mcpRoot, 'node_modules/@colbymchenry/codegraph'),
+    path.join(paths.repoRoot, 'node_modules/@colbymchenry/codegraph'),
+    path.join(paths.upstreamDir, 'codegraph-bundle'),
+    path.join(process.env.CODEGRAPH_INSTALL_DIR || path.join(os.homedir(), '.codegraph'), 'bundles', target + '-' + lock.version),
+  ]);
+  if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
+
+  function npmRead(args) {
+    const spec = npmCommand(args);
+    const result = execute([spec.command, ...spec.args], { check: false, timeout: 15000 });
+    return result.status === 0 ? result.stdout.trim().split(/\r?\n/).at(-1) : null;
+  }
+  const globalRoot = npmRead(['root', '--global']);
+  const userCache = npmRead(['config', 'get', 'cache']);
+  const cache = path.join(paths.integrationDir, 'npm-cache', target);
+  selected = select([
+    globalRoot && path.join(globalRoot, '@colbymchenry/codegraph'),
+    ...(userCache ? npxPackageRoots(userCache) : []),
+    ...npxPackageRoots(cache),
+  ]);
+  if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
+
+  const cached = prepareCodegraphNpxCache(paths, lock, { offline, registry, execute, log });
+  checked.clear(); // Re-check a previously incomplete cache after npm preparation.
+  selected = select(npxPackageRoots(cached.npm_cache));
+  if (!selected) throw new Error('npx returned successfully but its cached CodeGraph library/runtime is missing or incompatible');
+  log('npx cache verified offline: ' + selected.package_root);
+  return state(selected, 'npx', cached);
+}
+
+/** Equivalent to npx --yes @colbymchenry/codegraph@<pin> --version, then offline verification. */
+export function prepareCodegraphNpxCache(paths, lock, { offline = false, registry = null, execute = run, log = silentLog } = {}) {
+  const target = platformTarget();
+  const cache = path.join(paths.integrationDir, 'npm-cache', target);
+  const cwd = path.join(paths.integrationDir, 'npm-run');
+  validateWorkspaceBuildDir(paths.repoRoot, cache);
+  validateWorkspaceBuildDir(paths.repoRoot, cwd);
+  const packageSpec = lock.npm_package + '@' + lock.version;
+  const env = { ...process.env, ...CODEGRAPH_LOCAL_ENV };
+  delete env.NODE_OPTIONS;
+  delete env.NODE_PATH;
+  delete env.CODEGRAPH_HOST_PPID;
+  delete env.CODEGRAPH_DAEMON_INTERNAL;
+  fs.mkdirSync(cwd, { recursive: true });
+  function invokeNpx(onlyCache) {
+    const args = ['exec', '--yes', '--ignore-scripts', '--include=optional', '--no-audit', '--no-fund', '--cache', cache,
+      '--package=' + packageSpec, ...(onlyCache ? ['--offline'] : ['--prefer-offline'])];
+    const command = npmCommand(args, { registry: registry ?? 'https://registry.npmjs.org' });
+    command.args.push('--', 'codegraph', '--version');
+    // npm owns package acquisition. Disable the npm shim's independent binary
+    // download, so a mirror missing optional dependencies fails before config writes.
+    const result = execute([command.command, ...command.args], { cwd, env, check: false, timeout: onlyCache ? 60000 : 600000 });
+    if (result.status !== 0 || !sameVersion(result.stdout ?? '', lock.version)) {
+      throw new Error('npx CodeGraph ' + (onlyCache ? 'offline cache verification' : 'cache preparation') +
+        ' failed; confirm the chosen registry provides ' + lock.npm_platform_prefix + '-' + target +
+        '@' + lock.version + ', or choose --npm-mirror=official. The GitHub binary fallback is disabled.\n' +
+        String(result.stderr ?? result.error?.message ?? '').slice(-2000));
     }
   }
-  const nodeVersion = run([entries.runtime, '--version']).stdout.trim();
-  return {
-    platform_target: target,
-    extract_dir: extractDir,
-    cli_entry: entries.cli,
-    library_entry: entries.library,
-    runtime: entries.runtime,
-    runtime_version: nodeVersion,
-    version: lock.version,
-  };
+  log((offline ? 'checking cached ' : 'preparing npx cache for ') + packageSpec);
+  invokeNpx(offline);
+  if (!offline) invokeNpx(true);
+  return { npm_package: packageSpec, npm_cache: cache, npm_registry: registry ?? 'https://registry.npmjs.org', offline_verified: true };
 }
 
 // -- orchestration ------------------------------------------------------------
@@ -272,7 +331,7 @@ export function prepareCodegraph(paths, mcpRoot, { offline = false, registry = n
  * payload; the caller (setup.js) serializes it. Throws on any failure --
  * callers must not touch agent configuration when this fails.
  */
-export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], log = silentLog }) {
+export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], cargoIsolated = false, tgrepBinary = null, codegraphPath = null, log = silentLog }) {
   const mcpRoot = integrationRoot ?? INTEGRATION_ROOT;
   const paths = new WorkspacePaths(repoRoot, buildDir);
   paths.ensureDirs();
@@ -290,10 +349,10 @@ export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null
   state.npm = prepareNodeModules(mcpRoot, { offline, registry: npmRegistry, only: nodeDirs, log });
 
   if (backend === 'tgrep') {
-    state.tgrep = prepareTgrep(paths, mcpRoot, { offline, cargoConfigArgs, log });
+    state.tgrep = prepareTgrep(paths, mcpRoot, { offline, cargoConfigArgs, cargoIsolated, binary: tgrepBinary, log });
     log(`tgrep ready: ${state.tgrep.version}`);
   } else {
-    state.codegraph = prepareCodegraph(paths, mcpRoot, { offline, registry: npmRegistry, log });
+    state.codegraph = prepareCodegraph(paths, mcpRoot, { offline, registry: npmRegistry, localPath: codegraphPath, log });
     log(`codegraph ready: ${state.codegraph.version} on ${state.codegraph.platform_target} (${state.codegraph.runtime_version})`);
   }
   return { paths, state };

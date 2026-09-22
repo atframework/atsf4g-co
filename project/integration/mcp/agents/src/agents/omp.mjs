@@ -6,6 +6,7 @@ export default new JsonServerMapConfigurator({
   target: {
     id: 'omp-mcp-json',
     file: ['.omp', 'mcp.json'],
+    entryDefaults: { enabled: true },
     evidence: 'https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md',
   },
 });

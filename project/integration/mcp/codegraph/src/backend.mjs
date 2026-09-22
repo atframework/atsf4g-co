@@ -9,9 +9,9 @@
  * SIGTERM -> SIGKILL (2s/2s) built into transport.close().
  *
  * First-run indexing runs through initialize.mjs (library init + indexAll, no
- * CLI git-hook fallback) on the SAME bundled Node as the serve child: the
+ * CLI git-hook fallback) on the SAME verified Node as the serve child: the
  * library needs the built-in node:sqlite module (Node 22.5+), which the
- * system Node is not required to provide.
+ * system Node need not provide when a platform package supplies its own runtime.
  */
 
 import fs from 'node:fs';
@@ -25,13 +25,14 @@ import { BackendError, ErrorCodes } from '../../common/src/errors.mjs';
 import { LIMITS } from '../../common/src/limits.mjs';
 import { defaultIndexDirName, selectCodegraphIndex, projectInfo } from '../../common/src/paths.mjs';
 import { StderrSink, minimalEnvironment, supervise } from '../../common/src/supervisor.mjs';
+import { CODEGRAPH_NODE_FLAGS } from '../../common/src/localTools.mjs';
 
 const INITIALIZER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'initialize.mjs');
 
 // Mirror the bundle's own launchers (npm shim / bin/codegraph): the bundled
 // Node runs with the WASM turboshaft guard and the node:sqlite warning muted,
 // for both the serve child and the first-index helper.
-export const BUNDLED_NODE_FLAGS = ['--liftoff-only', '--disable-warning=ExperimentalWarning'];
+export const BUNDLED_NODE_FLAGS = CODEGRAPH_NODE_FLAGS;
 
 export const DEFAULT_TOOL_ALLOWLIST = ['codegraph_explore', 'codegraph_status'];
 export const EXTRA_TOOLS = [
@@ -77,10 +78,11 @@ export function resolveIndexSelection(repoRoot) {
 
 /**
  * Run the one-shot first-index helper (library init + indexAll) as a
- * supervised child on the bundled Node (node:sqlite needs Node 22.5+).
+ * supervised child on the verified runtime (node:sqlite needs Node 22.5+).
  * Resolves with the final parsed progress/done line.
  */
-export async function runInitializer({ runtime, repoRoot, libraryDir, dirName, stderrLog }) {
+export async function runInitializer({ runtime, repoRoot, libraryDir, dirName, stderrLog, signal }) {
+  signal?.throwIfAborted();
   const stderrSink = new StderrSink({ filePath: stderrLog });
   const env = minimalEnvironment({
     ...FORCED_ENV_BASE,
@@ -95,9 +97,15 @@ export async function runInitializer({ runtime, repoRoot, libraryDir, dirName, s
   });
   let lastProgress = null;
   let doneLine = null;
+  let pendingOutput = '';
+  const abort = () => { void proc.stop(); };
+  signal?.addEventListener('abort', abort, { once: true });
   proc.child.stdout.setEncoding('utf8');
   proc.child.stdout.on('data', (chunk) => {
-    for (const line of chunk.split('\n')) {
+    pendingOutput += chunk;
+    const lines = pendingOutput.split('\n');
+    pendingOutput = lines.pop();
+    for (const line of lines) {
       if (!line.trim()) {
         continue;
       }
@@ -114,6 +122,8 @@ export async function runInitializer({ runtime, repoRoot, libraryDir, dirName, s
     }
   });
   const exit = await proc.exited;
+  signal?.removeEventListener('abort', abort);
+  signal?.throwIfAborted();
   if (exit.code !== 0 || !doneLine?.ok) {
     throw new BackendError(ErrorCodes.BACKEND_FAILED, 'CodeGraph first-index helper failed', {
       exit_code: exit.code,
@@ -128,8 +138,8 @@ export class CodeGraphBackend {
   /**
    * @param {object} options
    * @param {import('../../common/src/paths.mjs').WorkspacePaths} options.paths
-   * @param {string} options.runtime bundled node.exe / bin/codegraph
-   * @param {string|null} options.cliEntry lib/dist/bin/codegraph.js (Windows)
+   * @param {string} options.runtime verified Node executable
+   * @param {string|null} options.cliEntry compiled dist/bin/codegraph.js entry
    * @param {string[]|null} [options.argvOverride] test double argv (not upstream code)
    * @param {string[]|null} [options.extraTools]
    * @param {string|null} [options.dirName] CODEGRAPH_DIR value or null for default
@@ -146,6 +156,32 @@ export class CodeGraphBackend {
     this.transport = null;
     this.client = null;
     this.onExit = null;
+    this.onSyncChange = null;
+    this.sync = { watcher: 'starting', catch_up_on_connect: true, last_sync_unix: null, last_error: null };
+    this.pendingDiagnostics = '';
+  }
+
+  syncStatus() { return { mode: 'session', ...this.sync }; }
+
+  observeDiagnostics(chunk) {
+    this.pendingDiagnostics += chunk.toString();
+    const lines = this.pendingDiagnostics.split('\n');
+    this.pendingDiagnostics = lines.pop().slice(-4096);
+    for (const line of lines) {
+      if (!line.startsWith('[CodeGraph MCP] ')) continue;
+      let changed = true;
+      if (line.includes('File watcher active')) this.sync.watcher = 'active';
+      else if (line.includes('File watcher disabled')) { this.sync.watcher = 'disabled'; this.sync.last_error = line.trim(); }
+      else if (line.includes('File watcher unavailable')) { this.sync.watcher = 'unavailable'; this.sync.last_error = line.trim(); }
+      else if (line.includes('File watcher degraded')) { this.sync.watcher = 'degraded'; this.sync.last_error = line.trim(); }
+      else if (line.includes('Auto-sync error:') || line.includes('Catch-up sync failed:')) this.sync.last_error = line.trim();
+      else if (line.includes('Auto-synced ') || line.includes('Caught up ')) {
+        this.sync.last_sync_unix = Math.floor(Date.now() / 1000);
+        this.sync.last_sync_message = line.trim();
+        this.sync.last_error = null;
+      } else changed = false;
+      if (changed) this.onSyncChange?.();
+    }
   }
 
   allowlist() {
@@ -190,7 +226,7 @@ export class CodeGraphBackend {
       maxBufferSize: LIMITS.maxBackendFrameBytes,
     });
     this.transport.stderr?.setEncoding('utf8');
-    this.transport.stderr?.on('data', (chunk) => this.stderrSink.write(chunk));
+    this.transport.stderr?.on('data', (chunk) => { this.stderrSink.write(chunk); this.observeDiagnostics(chunk); });
     this.transport.onclose = () => this.onExit?.();
     this.client = new Client({ name: `${projectInfo(this.paths.repoRoot).slug}-codegraph-wrapper`, version: '0.1.0' });
     try {

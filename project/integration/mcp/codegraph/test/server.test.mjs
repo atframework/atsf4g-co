@@ -13,6 +13,56 @@ const SERVER = path.join(HERE, '..', 'src', 'server.mjs');
 const FAKE = path.join(HERE, 'fake-codegraph.mjs');
 const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..', '..');
 
+test('closing MCP during the first index cancels the helper and releases the session', async () => {
+  const { WorkspacePaths } = await import('../../common/src/paths.mjs');
+  const root = tmpBuildDir();
+  const paths = new WorkspacePaths(root, path.join(root, 'build'));
+  paths.ensureDirs();
+  const pidFile = path.join(root, 'initializer.pid');
+  const cli = path.join(root, 'cli.js');
+  fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}');
+  fs.writeFileSync(cli, 'throw new Error("backend must never start after cancellation");');
+  fs.writeFileSync(path.join(root, 'index.js'), `
+    import fs from 'node:fs';
+    export class CodeGraph {
+      static isInitialized() { return false; }
+      static async init() {
+        const file = ${JSON.stringify(pidFile)};
+        fs.writeFileSync(file + '.tmp', String(process.pid));
+        fs.renameSync(file + '.tmp', file);
+        return new Promise(() => setInterval(() => {}, 1000));
+      }
+    }
+  `);
+  fs.writeFileSync(paths.preparedStatePath(), JSON.stringify({ codegraph: {
+    runtime: process.execPath, cli_entry: cli, library_entry: path.join(root, 'index.js'), acquisition: 'local',
+  } }));
+  const transport = new StdioClientTransport({ command: process.execPath,
+    args: [SERVER, '--repo-root', root, '--build-dir', paths.buildDir], cwd: root,
+    env: { SYSTEMROOT: process.env.SYSTEMROOT, TEMP: process.env.TEMP, TMP: process.env.TMP } });
+  const client = new Client({ name: 'cancel-index-test', version: '1.0.0' });
+  try {
+    await client.connect(transport);
+    for (const end = Date.now() + 10000; !fs.existsSync(pidFile) && Date.now() < end;) await new Promise(resolve => setTimeout(resolve, 25));
+    assert.ok(fs.existsSync(pidFile), 'first-index helper reached the controlled library');
+    const childPid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(Number.isInteger(childPid) && childPid > 0, 'ready record must contain the actual child PID');
+    const wrapperPid = transport.pid;
+    const status = textOf(await client.callTool({ name: 'codegraph_status', arguments: {} }));
+    assert.equal(status.wrapper_state, 'initializing');
+    await client.close();
+    assert.ok(await waitForPidExit(wrapperPid));
+    assert.ok(await waitForPidExit(childPid));
+    const state = JSON.parse(fs.readFileSync(path.join(paths.toolStateDir('codegraph'), 'wrapper-state.json')));
+    assert.equal(state.state, 'stopped');
+    assert.equal(state.auto_sync, null);
+    assert.ok(!fs.existsSync(path.join(paths.toolStateDir('codegraph'), 'backend.stderr.log')));
+  } finally {
+    await client.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 function tmpBuildDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-cg-server-'));
 }

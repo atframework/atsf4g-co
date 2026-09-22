@@ -7,7 +7,7 @@
  *   node <MCP_DIR>/setup.js --uninstall         从 Agent 配置移除本集成
  *
  * 流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖
- * （npm + cargo / npm pack，全部固定版本）→ 全部成功后才写入所选 Agent 的
+ * （优先复用本地程序，否则 Cargo 构建 / npx 缓存，全部固定版本）→ 全部成功后才写入所选 Agent 的
  * 项目级 MCP 配置。依赖准备失败时不会改动任何 Agent 配置。
  * CodeGraph 同批更新根 AGENTS.md 的条件式提示词；等价正文不重复写入。
  *
@@ -38,20 +38,10 @@ import { GUIDED_IMPORTS, exportsDirFor, guidedImportGuidance, ideExportStates } 
 import { agentInstallNotes } from './agents/src/agents/index.mjs';
 import { createInteractiveUi } from './agents/src/ui/terminalMenu.mjs';
 import { runPrepare, writePreparedState } from './common/src/prepare.mjs';
+import { NPM_MIRRORS, CARGO_MIRRORS, mirrorSettings, selectMirrors, mirrorSummary } from './common/src/mirrors.mjs';
 import { WorkspacePaths, detectWorkspace, projectInfo, resolveBuildDir, validateWorkspaceBuildDir } from './common/src/paths.mjs';
 
 const integrationRoot = path.dirname(fileURLToPath(import.meta.url));
-
-const NPM_MIRRORS = {
-  cn: 'https://registry.npmmirror.com',
-  official: null,
-};
-const CARGO_MIRROR_ARGS = [
-  '--config',
-  'source.crates-io.replace-with="rsproxy"',
-  '--config',
-  'source.rsproxy.registry="sparse+https://rsproxy.cn/index/"',
-];
 
 function parseArgv(argv) {
   const options = { help: false, listAgents: false, uninstall: false, allAgents: false, yes: false, dryRun: false, offline: false, skipPrepare: false, backend: null, agents: null, mirror: null, ui: null };
@@ -64,6 +54,7 @@ function parseArgv(argv) {
   for (const arg of argv.slice(2)) {
     if (arg === '--help' || arg === '-h') options.help = true;
     else if (arg === '--list-agents') options.listAgents = true;
+    else if (arg === '--list-mirrors') options.listMirrors = true;
     else if (arg === '--uninstall') options.uninstall = true;
     else if (arg === '--all-agents') options.allAgents = true;
     else if (arg === '--yes' || arg === '-y') options.yes = true;
@@ -73,6 +64,10 @@ function parseArgv(argv) {
     else if (arg.startsWith('--backend=')) options.backend = requireValue('--backend', arg.slice('--backend='.length));
     else if (arg.startsWith('--agents=')) options.agents = requireValue('--agents', arg.slice('--agents='.length));
     else if (arg.startsWith('--mirror=')) options.mirror = requireValue('--mirror', arg.slice('--mirror='.length));
+    else if (arg.startsWith('--npm-mirror=')) options.npmMirror = requireValue('--npm-mirror', arg.slice('--npm-mirror='.length));
+    else if (arg.startsWith('--cargo-mirror=')) options.cargoMirror = requireValue('--cargo-mirror', arg.slice('--cargo-mirror='.length));
+    else if (arg.startsWith('--tgrep-bin=')) options.tgrepBinary = requireValue('--tgrep-bin', arg.slice('--tgrep-bin='.length));
+    else if (arg.startsWith('--codegraph-path=')) options.codegraphPath = requireValue('--codegraph-path', arg.slice('--codegraph-path='.length));
     else if (arg.startsWith('--repo-root=')) options.repoRoot = requireValue('--repo-root', arg.slice('--repo-root='.length));
     else if (arg.startsWith('--build-dir=')) options.buildDir = requireValue('--build-dir', arg.slice('--build-dir='.length));
     else if (arg.startsWith('--ui=')) {
@@ -86,9 +81,7 @@ function parseArgv(argv) {
   if (options.backend && !Object.hasOwn(BACKENDS, options.backend)) {
     throw new Error(`--backend 仅支持：${Object.keys(BACKENDS).join(' | ')}`);
   }
-  if (options.mirror && !Object.hasOwn(NPM_MIRRORS, options.mirror)) {
-    throw new Error(`--mirror 仅支持：${Object.keys(NPM_MIRRORS).join(' | ')}`);
-  }
+  mirrorSettings({ mirror: options.mirror ?? 'official', npmMirror: options.npmMirror, cargoMirror: options.cargoMirror });
   return options;
 }
 
@@ -108,7 +101,11 @@ function printHelp() {
     '  --backend=tgrep|codegraph   指定后端（跳过交互）',
     '  --agents=<id1,id2,...>|all  指定要接入的 Agent（跳过交互；--list-agents 查看可选 id；',
     '                              all 只含可自动写入项目配置的目标，面板导入类需显式指定）',
-    '  --mirror=cn|official        指定下载镜像（缺省按地区建议并交互确认）',
+    '  --mirror=cn|official        npm/Cargo 的推荐默认组合；交互时仍各自选择来源',
+    '  --npm-mirror=<id>           指定 npm 站点，--list-mirrors 查看选项',
+    '  --cargo-mirror=<id>         指定 Cargo 站点（仅 tgrep 源码编译使用）',
+    '  --tgrep-bin=<file>          优先使用指定 tgrep 程序（需兼容版本和 stdio 补丁）',
+    '  --codegraph-path=<path>     本地 CodeGraph 包、可执行入口或已编译源码目录',
     '  --offline                   只使用已缓存的制品',
     '  --skip-prepare              跳过依赖准备，仅调整 Agent 配置',
     '  --uninstall                 移除 Agent 配置中的本集成条目（配合 --agents/--all-agents）',
@@ -118,6 +115,7 @@ function printHelp() {
     '  --dry-run                   只打印动作，不写任何文件、不准备依赖、不联网',
     '  --help, -h                  显示本帮助（无副作用）',
     '  --list-agents               列出可配置的 Agent 及其配置文件（无副作用）',
+    '  --list-mirrors              列出 npm / Cargo 镜像站点及地址（无副作用）',
     '',
     '安装语义：所选目标构成最终集合——已配置但未选中的托管目标会被移除。',
     '卸载用 --uninstall [--agents=...|--all-agents]；两者都不影响索引与已下载制品。',
@@ -134,6 +132,14 @@ function printAgentList() {
     process.stdout.write(`  ${agent.id.padEnd(14)} ${agent.label}  (${location})\n`);
   }
   process.stdout.write('用 --agents=<id,...> 选择；all 只覆盖可自动写入的目标；docs-only 客户端（Windsurf）见 README 手工配置示例。\n');
+}
+
+function printMirrorList() {
+  for (const [name, catalog] of [['npm', NPM_MIRRORS], ['Cargo', CARGO_MIRRORS]]) {
+    process.stdout.write(name + ' 站点：\n');
+    for (const [id, site] of Object.entries(catalog)) process.stdout.write('  ' + id.padEnd(12) + site.label + '  ' + (site.url ?? 'Cargo 现有配置 / 官方默认') + '\n');
+  }
+  process.stdout.write('国内推荐：npmmirror + rsproxy；选项仅对本次准备生效，不修改全局配置。\n');
 }
 
 /** 国内环境建议使用国内镜像：按时区/语言给出建议值，最终由用户确认。 */
@@ -295,7 +301,7 @@ async function runSetup(options, ui) {
   if (!ui.interactive && !options.yes) {
     const missing = options.uninstall
       ? !options.agents && !options.allAgents
-      : !options.backend || !options.agents || (!options.mirror && !options.offline && !options.skipPrepare && !options.dryRun);
+      : !options.backend || !options.agents || (!options.mirror && !(options.npmMirror && (options.backend === 'codegraph' || options.cargoMirror)) && !options.offline && !options.skipPrepare && !options.dryRun);
     if (missing) throw new Error('非交互执行缺少必要选项，请显式指定 --backend、--agents、--mirror，或用 --yes 接受已有默认选择');
   }
   const workspace = detectWorkspace(process.cwd(), { explicit: options.repoRoot });
@@ -365,25 +371,13 @@ async function runSetup(options, ui) {
 
   // -- 准备依赖（失败则绝不触碰 Agent 配置；dry-run 完全跳过准备） -------------------
   if (options.dryRun) {
-    const mirror = options.mirror ?? suggestMirror();
-    ui.line(`dry-run：拟准备依赖（后端：${backend}${mirror ? `，镜像：${mirror}` : ''}），不执行下载、安装或状态写入。`);
+    const mirrors = mirrorSettings({ mirror: options.mirror ?? suggestMirror(), npmMirror: options.npmMirror, cargoMirror: options.cargoMirror });
+    ui.line(`dry-run：拟准备依赖（后端：${backend}，${mirrorSummary(mirrors, backend)}），不执行下载、安装或状态写入。`);
   } else if (!options.skipPrepare) {
-    let mirror = options.mirror;
-    if (!mirror && !options.offline) {
-      const suggested = suggestMirror();
-      if (options.yes) {
-        mirror = suggested;
-      } else {
-        const index = await ui.menu.singleSelect('选择下载镜像（npm / cargo）：', ['cn — 国内镜像（npmmirror + rsproxy）', 'official — 官方源'], {
-          defaultIndex: suggested === 'cn' ? 0 : 1,
-        });
-        mirror = index === 0 ? 'cn' : 'official';
-      }
-    }
-    const npmRegistry = mirror && mirror in NPM_MIRRORS ? NPM_MIRRORS[mirror] : null;
-    const cargoConfigArgs = mirror === 'cn' ? CARGO_MIRROR_ARGS : [];
+    const mirrors = await selectMirrors({ options, backend, suggested: suggestMirror(), menu: ui.menu, interactive: ui.interactive });
+    const { npmRegistry, cargoConfigArgs, cargoIsolated } = mirrors;
     ui.line('');
-    ui.line(`准备依赖（后端：${backend}${npmRegistry ? `，镜像：${mirror}` : ''}）…`);
+    ui.line(`准备依赖（后端：${backend}，${mirrorSummary(mirrors, backend)}）…`);
     try {
       const result = runPrepare({
         repoRoot,
@@ -393,8 +387,12 @@ async function runSetup(options, ui) {
         offline: options.offline,
         npmRegistry,
         cargoConfigArgs,
+        cargoIsolated,
+        tgrepBinary: options.tgrepBinary,
+        codegraphPath: options.codegraphPath,
         log: (message) => ui.line(message),
       });
+      result.state.mirrors = { npm: mirrors.npmId, cargo: mirrors.cargoId };
       const statePath = writePreparedState(result.paths, result.state);
       ui.line(`状态已写入 ${statePath}`);
     } catch (error) {
@@ -510,6 +508,10 @@ async function main() {
   }
   if (options.listAgents) {
     printAgentList();
+    return 0;
+  }
+  if (options.listMirrors) {
+    printMirrorList();
     return 0;
   }
   // Unknown agent ids must fail before any prompt, download, or config scan.

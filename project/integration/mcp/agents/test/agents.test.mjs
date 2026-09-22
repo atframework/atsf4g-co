@@ -56,7 +56,7 @@ test('configureAgent writes every supported agent shape', () => {
 
     // P9.3 shapes (verified against each vendor's docs).
     const zed = JSON.parse(fs.readFileSync(path.join(repo, '.zed', 'settings.json'), 'utf8'));
-    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: 'node', args: [path.join(repo, 'tools', 'mcp', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo] });
+    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: 'node', args: [path.join(repo, 'tools', 'mcp', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo], enabled: true });
 
     const kimi = JSON.parse(fs.readFileSync(path.join(repo, '.kimi-code', 'mcp.json'), 'utf8'));
     assert.equal(kimi.mcpServers['workspace-tgrep'].command, 'node');
@@ -74,7 +74,7 @@ test('configureAgent writes every supported agent shape', () => {
     assert.equal(mimo.mcp['workspace-tgrep'].type, 'local');
     assert.deepEqual(mimo.mcp['workspace-tgrep'].command.slice(0, 1), ['node']);
 
-    const kilo = JSON.parse(fs.readFileSync(path.join(repo, '.kilo', 'kilo.json'), 'utf8'));
+    const kilo = JSON.parse(fs.readFileSync(path.join(repo, '.kilo', 'kilo.jsonc'), 'utf8'));
     assert.equal(kilo.mcp['workspace-tgrep'].type, 'local');
     assert.deepEqual(kilo.mcp['workspace-tgrep'].command.slice(0, 1), ['node']);
 

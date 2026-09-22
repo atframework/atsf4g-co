@@ -6,10 +6,60 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import { WorkspacePaths } from '../../common/src/paths.mjs';
-import { CodeGraphBackend, indexDirName, resolveIndexSelection } from '../src/backend.mjs';
+import { CodeGraphBackend, indexDirName, resolveIndexSelection, runInitializer } from '../src/backend.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FAKE = path.join(HERE, 'fake-codegraph.mjs');
+
+test('watcher diagnostics preserve partial lines and expose degraded refresh', () => {
+  const backend = new CodeGraphBackend({ paths: { repoRoot: HERE }, runtime: 'unused', cliEntry: 'unused', dirName: null });
+  backend.observeDiagnostics('[CodeGraph MCP] File watcher act');
+  assert.equal(backend.syncStatus().watcher, 'starting');
+  backend.observeDiagnostics('ive — graph will auto-sync on changes\n');
+  assert.equal(backend.syncStatus().watcher, 'active');
+  backend.observeDiagnostics('[CodeGraph MCP] Auto-synced 2 file(s) in 20ms\n');
+  assert.ok(backend.syncStatus().last_sync_unix);
+  backend.observeDiagnostics('[CodeGraph MCP] File watcher degraded — test failure\n');
+  assert.equal(backend.syncStatus().watcher, 'degraded');
+  assert.match(backend.syncStatus().last_error, /test failure/);
+  assert.equal(backend.syncStatus().mode, 'session');
+});
+
+test('cancelling the first index stops its child before returning', async () => {
+  const paths = makePaths();
+  const controller = new AbortController();
+  const pidFile = path.join(paths.repoRoot, 'initializer.pid');
+  fs.writeFileSync(path.join(paths.repoRoot, 'package.json'), '{"type":"module"}');
+  fs.writeFileSync(path.join(paths.repoRoot, 'index.js'), `
+    import fs from 'node:fs';
+    export class CodeGraph {
+      static isInitialized() { return false; }
+      static async init() {
+        const file = ${JSON.stringify(pidFile)};
+        fs.writeFileSync(file + '.tmp', String(process.pid));
+        fs.renameSync(file + '.tmp', file);
+        return new Promise(() => setInterval(() => {}, 1000));
+      }
+    }
+  `);
+  const task = runInitializer({ runtime: process.execPath, repoRoot: paths.repoRoot, libraryDir: paths.repoRoot, dirName: null, signal: controller.signal });
+  // Attach the rejection handler before abort, including when startup itself fails.
+  const settled = task.then(value => ({ value }), error => ({ error }));
+  try {
+    const deadline = Date.now() + 10000;
+    while (!fs.existsSync(pidFile) && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+    assert.ok(fs.existsSync(pidFile), 'initializer must start the controlled library');
+    const pid = Number(fs.readFileSync(pidFile, 'utf8'));
+    assert.ok(Number.isInteger(pid) && pid > 0, 'ready record must contain the actual child PID');
+    controller.abort();
+    assert.equal((await settled).error?.name, 'AbortError');
+    assert.throws(() => process.kill(pid, 0), 'the initializer must exit before cancellation resolves');
+  } finally {
+    controller.abort();
+    await settled;
+    fs.rmSync(paths.repoRoot, { recursive: true, force: true });
+  }
+});
 
 function makePaths() {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-cg-repo-'));

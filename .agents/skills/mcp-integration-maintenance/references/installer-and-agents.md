@@ -9,7 +9,8 @@ mirrors, agent config writing, switching, and uninstall.
   (tgrep XOR CodeGraph) → mirror choice → dependency preparation → agent config
   write. `--uninstall` removes managed entries. Flags: `--backend=`,
   `--agents=<ids>|all` (all = auto-writable targets only; guided imports stay
-  opt-in), `--mirror=cn|official`, `--offline`, `--skip-prepare`,
+  opt-in), `--mirror=cn|official`, `--npm-mirror=`, `--cargo-mirror=`,
+  `--list-mirrors`, `--tgrep-bin=`, `--codegraph-path=`, `--offline`, `--skip-prepare`,
   `--all-agents`, `--yes`, `--repo-root=<dir>`, `--build-dir=<dir>`, `--ui=line` (numbered-line menus instead of arrow
   keys), `--dry-run`, `--help`, `--list-agents`.
 - `agents/` — the agent auto-configuration component (per-agent
@@ -79,9 +80,21 @@ mirrors, agent config writing, switching, and uninstall.
   `createRequire`; the package's ESM build has extensionless imports and cannot
   be loaded by Node ESM. Upgrade = re-download, verify integrity, refresh
   VENDOR.json + LICENSE.
-- `common/src/prepare.mjs` — dependency preparation library (npm install/ci,
-  tgrep clone+patch+cargo build, CodeGraph `npm pack`+verify+extract, mirror
-  parameters passed per invocation; no global npm/cargo config is modified).
+- `common/src/prepare.mjs` — dependency preparation library. Reuse compatible
+  local tools first (`localTools.mjs` probes versions, tgrep stdio, CodeGraph
+  runtime/library). Otherwise tgrep clones+patches+builds; CodeGraph uses pinned
+  npm exec, verifies its offline cache, then probes the library. Never manually
+  fetch/extract CodeGraph binaries; force CODEGRAPH_NO_DOWNLOAD=1 so a missing
+  npm platform dependency cannot trigger the upstream GitHub download fallback.
+  `mirrors.mjs` owns nine domestic sites (four npm / six Cargo entries, SJTUG shared).
+  npm and Cargo each show their own official/domestic list with addresses, including
+  Cargo under CodeGraph (marked unused). Even a single candidate must be confirmed.
+  --mirror sets defaults, not a shared decision; explicit per-tool flags skip only
+  that menu. Pass actual UI interactivity; never prompt on CI/non-TTY/--yes/offline.
+  Official Cargo builds use a workspace CARGO_HOME and a neutral root cwd plus
+  --manifest-path, avoiding inherited source replacement. Refuse config files in
+  that isolated cache/root rather than silently using a different source. Domestic
+  Cargo uses per-command source replacement. No global npm/Cargo config is modified.
 - `common/src/agents.mjs` — compatibility shim re-exporting `agents/src/writers.mjs`
   (server ids `workspace-tgrep`, `workspace-codegraph`; `AgentConfigError` kinds:
   `unreadable`, `invalid-json`, `duplicate-key`, `not-object`, `map-not-object`,
@@ -118,6 +131,13 @@ mirrors, agent config writing, switching, and uninstall.
   the optional formatter on existing files: it reformats neighboring user entries.
   Plain JSON clients never gain comments from us. Same-backend updates preserve
   optional settings and extra arguments; primary same-name foreign entries abort.
+- Enable defaults are product-specific: target/import `entryDefaults` supply Roo/Cline
+  `disabled: false` and Zed/OMP `enabled: true`; Codex TOML supplies `enabled = true`.
+  OpenCode-shaped entries already default to enabled. Fill missing fields only;
+  preserve explicit disable, tool restrictions and approval settings. Do not inject
+  another client's flags into the shared JSON format. Visual Studio tools require
+  manual enablement; VS Code enablement is stored outside mcp.json. Product modules
+  own these pending actions and JetBrains AI Assistant's automatic-enable UI hint.
 - Codex `.codex/config.toml` is edited textually between
   `# BEGIN/END atsf4g-mcp` markers; legacy marker-less `[mcp_servers.atsf4g-*]`
   tables (quoted keys and sub-tables included) end at the next real table
@@ -222,7 +242,7 @@ mirrors, agent config writing, switching, and uninstall.
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
 | Gemini CLI | `.gemini/settings.json` | `mcpServers` |
 | OpenCode | `opencode.json(c)` (multiple existing candidates abort) | `mcp`, `type: "local"`, `command: [prog, ...args]`, `environment`, `enabled` |
-| Kilo (id `kilo`, alias `kilocode`; migrates from `.kilocode/mcp.json`) | `.kilo/kilo.json(c)`; root `kilo.json(c)` entries migrate into this directory | OpenCode shape; root and directory layers may coexist |
+| Kilo (id `kilo`, alias `kilocode`; migrates from `.kilocode/mcp.json`) | Default `.kilo/kilo.jsonc`, then `.kilo/kilo.json`; root managed entries migrate here | Prefer JSONC for new/dual candidates; edit a lone JSON in place; root and directory layers may coexist |
 | Roo Code (migrates from `.roo/mcp_settings.json`) | `.roo/mcp.json` | `mcpServers` |
 | ZCode | `.zcode/config.json` | `mcp.servers` |
 | oh-my-pi | `.omp/mcp.json` | `mcpServers` |

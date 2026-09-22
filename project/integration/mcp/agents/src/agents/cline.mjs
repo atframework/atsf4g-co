@@ -22,6 +22,7 @@ export default new JsonServerMapConfigurator({
   target: {
     id: 'cline-export-json',
     file: ['.cline', 'mcp.json'],
+    entryDefaults: { disabled: false },
     legacyDirectory: '.cline',
     legacyFileSuffix: '-mcp.json',
     copyLegacyRemainder: true,
