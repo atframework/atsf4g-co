@@ -109,7 +109,7 @@ test('default API writes the actual toolkit path and an explicit workspace', t =
   const w = workspace(t);
   assert.equal(w.run('trae').applied, true);
   const entry = JSON.parse(fs.readFileSync(path.join(w.root, '.trae/mcp.json'))).mcpServers['workspace-tgrep'];
-  assert.deepEqual(entry, { ...w.entry, command: process.execPath });
+  assert.deepEqual(entry, { ...w.entry, args: [path.join(INTEGRATION_ROOT, 'tools/tgrep/src/server.mjs'), ...w.entry.args.slice(1)], command: process.execPath });
 });
 
 test('legacy JSON ids migrate without changing user options, comments or foreign servers', t => {
@@ -122,7 +122,7 @@ test('legacy JSON ids migrate without changing user options, comments or foreign
   const after = fs.readFileSync(file, 'utf8');
   const map = parseJsonDocument(after, file).root.mcpServers;
   assert.equal(map['former-project-tgrep'], undefined);
-  assert.deepEqual(map['workspace-tgrep'], { ...old, command: process.execPath });
+  assert.deepEqual(map['workspace-tgrep'], { ...old, args: [path.join(INTEGRATION_ROOT, 'tools/tgrep/src/server.mjs'), ...old.args.slice(1)], command: process.execPath });
   assert.deepEqual(map['company-tgrep'], { command: 'uvx', args: ['company'] });
   assert.ok(after.startsWith('\uFEFF'));
   assert.match(after, /preserve this option/);
@@ -188,7 +188,7 @@ test('Cline legacy exports retain user servers when switching to the generic fil
   assert.equal(result.applied, true, JSON.stringify(result.plan.problems));
   const active = JSON.parse(fs.readFileSync(path.join(w.root, '.cline/mcp.json'))).mcpServers;
   assert.deepEqual(active.company, { command: 'company-tool' });
-  assert.deepEqual(active['workspace-tgrep'], { ...w.entry, command: process.execPath, disabled: false });
+  assert.deepEqual(active['workspace-tgrep'], { ...w.entry, args: [path.join(INTEGRATION_ROOT, 'tools/tgrep/src/server.mjs'), ...w.entry.args.slice(1)], command: process.execPath, disabled: false });
   assert.deepEqual(JSON.parse(fs.readFileSync(old)).mcpServers, { company: { command: 'company-tool' } });
 });
 
@@ -214,5 +214,5 @@ test('managed root arguments do not block switching a plain legacy export to ano
   assert.equal(result.applied, true, JSON.stringify(result.plan.problems));
   const active = JSON.parse(fs.readFileSync(path.join(w.root, '.cline/mcp.json'))).mcpServers;
   assert.deepEqual(Object.keys(active), ['workspace-codegraph']);
-  assert.deepEqual(active['workspace-codegraph'].args, [path.join(INTEGRATION_ROOT, 'codegraph/src/server.mjs'), '--repo-root', w.root]);
+  assert.deepEqual(active['workspace-codegraph'].args, [path.join(INTEGRATION_ROOT, 'tools/codegraph/src/server.mjs'), '--repo-root', w.root]);
 });

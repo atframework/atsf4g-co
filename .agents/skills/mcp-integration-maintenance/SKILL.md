@@ -1,12 +1,12 @@
 ---
 name: mcp-integration-maintenance
-description: "Use only when implementing, upgrading, configuring, debugging, or testing the tgrep/CodeGraph MCP wrappers, the setup.js installer, their agent config writers, or their indexes under project/integration/mcp. Do not use for ordinary code search, calling these MCP tools, C++ work, or unrelated MCP services."
+description: "Use only when implementing, upgrading, configuring, debugging, or testing the tgrep/CodeGraph/Sirchmunk MCP wrappers, the setup.js installer, their agent config writers, or their indexes under project/integration/mcp. Do not use for ordinary code search, calling these MCP tools, C++ work, or unrelated MCP services."
 ---
 
 # MCP Integration Maintenance
 
-Maintain the two stdio MCP wrappers (tgrep text search, CodeGraph structural
-navigation), their installer, and their agent integrations under
+Maintain the three stdio MCP wrappers (tgrep text search, CodeGraph structural
+navigation, Sirchmunk LLM search), their installer, and their agent integrations under
 `project/integration/mcp`. Users who only run `node project/integration/mcp/setup.js`
 or call the MCP tools do not need this Skill.
 
@@ -36,9 +36,9 @@ or call the MCP tools do not need this Skill.
    writes; agent configs are project-level files in the repository and foreign
    entries must survive; backends run with no listening port and no telemetry,
    and stop via the stdin lifeline (EOF → SIGTERM → SIGKILL).
-5. Validate what changed: run the four component test suites (each `npm test`,
+5. Validate what changed: run the five component test suites (each `npm test`,
    or `node --test` with explicit `test/*.test.mjs` file lists — directory
-   arguments fail) for `agents`, `common`, `tgrep`, `codegraph` under
+   arguments fail) for `agents`, `common`, `tools/tgrep`, `tools/codegraph`, `tools/sirchmunk` under
    `project/integration/mcp`; for installer changes also smoke the CLI
    (`--dry-run` install/uninstall variants with a `git status --porcelain`
    before/after); for lifecycle, spawn, or index changes also run a
@@ -46,6 +46,17 @@ or call the MCP tools do not need this Skill.
    Linux x64 (WSL) are verified platforms; report anything else as untested.
 
 ## Boundaries
+
+- Sirchmunk 0.2.0 uses `tools/sirchmunk/python/bridge.py` behind the JS stdio wrapper.
+  Validate all three LLM settings before preparation; keep the key only in the
+  workspace's ignored `integration/mcp/private/` directory. It may send search
+  content to that explicitly configured LLM and download the pinned embedding model.
+  Enable knowledge evolution only after model load and warm-up succeed. Model
+  preparation can outlive setup; the serving backend and native children cannot
+  outlive MCP stdin. Run `tools/sirchmunk/test/bridge_test.py` as well as the JS suites.
+- Put new downloads under `<BUILD_DIR>/integration/mcp/downloads/`; SDK loading
+  resolves the selected workspace's prepared packages. Keep verified old artifact
+  paths usable. Old `tgrep/src/*.mjs` and `codegraph/src/*.mjs` only forward to `tools/`.
 
 - Do not edit agent config files by hand when `setup.js` can produce them; fix
   the installer instead.
@@ -62,6 +73,6 @@ or call the MCP tools do not need this Skill.
   without that argument detect the project enclosing the toolkit, then fall back
   to cwd discovery. No installer marker or fixed project path is required.
 - Project names, build/cache defaults and CodeGraph directory names come from
-  local metadata. Client keys remain `workspace-tgrep` / `workspace-codegraph`.
+  local metadata. Client keys are `workspace-tgrep`, `workspace-codegraph`, `workspace-sirchmunk`.
   Migrate old prefixes only after verifying the backend, wrapper path and scope;
   preserve options/comments, and abort on old/new key collisions.

@@ -87,7 +87,7 @@ test('an external setup configures its cwd and repeats/switches/uninstalls safel
   fs.mkdirSync(kit, { recursive: true });
   fs.copyFileSync(path.join(integrationRoot, 'setup.js'), path.join(kit, 'setup.js'));
   fs.copyFileSync(path.join(integrationRoot, 'package.json'), path.join(kit, 'package.json'));
-  for (const component of ['agents', 'common']) fs.cpSync(path.join(integrationRoot, component), path.join(kit, component), {
+  for (const component of ['agents', 'common', 'tools/sirchmunk']) fs.cpSync(path.join(integrationRoot, component), path.join(kit, component), {
     recursive: true, filter: (file) => !['node_modules', 'test'].includes(path.basename(file)),
   });
   const run = (args) => spawnSync(process.execPath, [path.join(kit, 'setup.js'), ...args], {
@@ -102,7 +102,7 @@ test('an external setup configures its cwd and repeats/switches/uninstalls safel
   const file = path.join(root, '.trae/mcp.json');
   const before = fs.readFileSync(file, 'utf8');
   const entry = JSON.parse(before).mcpServers[SERVER_IDS.tgrep];
-  assert.equal(entry.args[0], path.join(kit, 'tgrep/src/server.mjs'));
+  assert.equal(entry.args[0], path.join(kit, 'tools/tgrep/src/server.mjs'));
   assert.deepEqual(entry.args.slice(1), ['--repo-root', root]);
   const mtime = fs.statSync(file).mtimeMs;
   const repeated = run(args);
@@ -131,7 +131,7 @@ test('external JSON, command-array and TOML clients keep scope and optional argu
   const repeated = runAgentConfigBatch({ repoRoot: root, launch, operations });
   assert.equal(repeated.applied, true, JSON.stringify(repeated.plan.problems));
   const command = JSON.parse(fs.readFileSync(file)).mcp[SERVER_IDS.tgrep].command;
-  assert.deepEqual(command, [process.execPath, path.join(integrationRoot, 'tgrep/src/server.mjs'), '--repo-root', root, '--build-dir', launch.buildDir, '--test-option']);
+  assert.deepEqual(command, [process.execPath, path.join(integrationRoot, 'tools/tgrep/src/server.mjs'), '--repo-root', root, '--build-dir', launch.buildDir, '--test-option']);
   assert.deepEqual(JSON.parse(fs.readFileSync(file)).mcp[SERVER_IDS.tgrep].environment, { CUSTOM_VALUE: 'kept' });
   const toml = fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8');
   assert.ok(toml.includes(JSON.stringify(root)));

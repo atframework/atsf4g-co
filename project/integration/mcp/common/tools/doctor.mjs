@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Read-only diagnostics for the tgrep/CodeGraph MCP integrations.
+ * Read-only diagnostics for the tgrep/CodeGraph/Sirchmunk MCP integrations.
  *
  * Checks the Node version, prepared artifacts, lock state, index directories,
  * and wrapper state records; prints a JSON report. Never mutates anything,
@@ -49,9 +49,9 @@ function main() {
   check(checks, 'wrapper-runtime', runtimeSupported(runtime), `${runtime.kind} ${runtime.version}: ${runtime.executable}`);
 
   const prepared = readJson(paths.preparedStatePath());
-  check(checks, 'prepared-state', prepared !== null, prepared ? new Date(prepared.prepared_unix * 1).toISOString() : 'run common/tools/prepare.mjs');
+  check(checks, 'prepared-state', prepared !== null, prepared ? new Date(prepared.prepared_unix * 1).toISOString() : 'run setup.js');
 
-  for (const tool of ['tgrep', 'codegraph']) {
+  for (const tool of ['tgrep', 'codegraph', 'sirchmunk']) {
     const toolDir = paths.toolStateDir(tool);
     const wrapperState = new StateStore(path.join(toolDir, 'wrapper-state.json')).read();
     check(
@@ -67,6 +67,15 @@ function main() {
     } else {
       check(checks, `${tool}.lock-holder`, true, 'no live wrapper instance');
     }
+  }
+
+  if (prepared?.sirchmunk) {
+    check(checks, 'sirchmunk.python', fs.existsSync(prepared.sirchmunk.python), prepared.sirchmunk.python);
+    const model = readJson(path.join(prepared.sirchmunk.model_dir, 'download-state.json'));
+    check(checks, 'sirchmunk.embedding', model?.state === 'ready', model?.state ?? 'not downloaded');
+    const state = readJson(path.join(paths.toolStateDir('sirchmunk'), 'wrapper-state.json'));
+    check(checks, 'sirchmunk.knowledge-evolution', state?.enable_knowledge_evolution === true, state?.state ?? 'never started');
+    check(checks, 'sirchmunk.credentials', fs.existsSync(path.join(paths.privateDir, 'sirchmunk.json')), 'local private configuration (contents omitted)');
   }
 
   if (prepared?.tgrep?.binary) {

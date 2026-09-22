@@ -1,11 +1,14 @@
-# 通用工作空间 MCP 集成（tgrep / CodeGraph）
+# 通用工作空间 MCP 集成（tgrep / CodeGraph / Sirchmunk）
 
-本目录提供两个面向 AI Agent 的 stdio MCP 服务，安装时二选一，均只作用于安装时指定的工作空间：
+本目录提供三个面向 AI Agent 的 stdio MCP 服务，安装时选择一个，均只作用于安装时指定的工作空间：
 
-- **tgrep**（`tgrep/`）：快速文本/正则检索，后端为打过 stdio 传输补丁的固定版本
+- **tgrep**（`tools/tgrep/`）：快速文本/正则检索，后端为打过 stdio 传输补丁的固定版本
   [microsoft/tgrep](https://github.com/microsoft/tgrep)。
-- **CodeGraph**（`codegraph/`）：结构化代码导航（符号、引用、影响面），后端为固定版本的
+- **CodeGraph**（`tools/codegraph/`）：结构化代码导航（符号、引用、影响面），后端为固定版本的
   [CodeGraph](https://github.com/colbymchenry/codegraph) direct 模式（禁 daemon、禁遥测）。
+- **Sirchmunk**（`tools/sirchmunk/`）：通过配置的 LLM 检索源代码和文档，后台准备 embedding，
+  就绪后启用知识复用与演化。固定 [Sirchmunk 0.2.0](https://pypi.org/project/sirchmunk/0.2.0/)，
+  对 Agent 仅提供 stdio MCP，不启动 HTTP 服务。
 
 公共库与流程工具在 `common/`；
 Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents/*.mjs` + 共享基类
@@ -13,6 +16,10 @@ Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents
 各组件目录独立（源码、测试、包管理信息、上游固定清单都在自己目录内，
 `agents/vendor/jsonc-parser/` 随源码分发）。新增一个 Agent 通常只需新增一个配置器模块
 并在 `agents/src/agents/index.mjs` 注册。
+
+原 `tgrep/src/*.mjs` 和 `codegraph/src/*.mjs` 保留为转发入口，已有启动配置和 JS 导入可继续使用。
+重跑安装器会把确认属于当前工作区的配置迁移到 `tools/`，保留额外参数、注释和显式禁用设置。
+旧目录的 `npm test` 也会转发到新目录。实现、测试、补丁与依赖清单只维护新目录的一份。
 
 ## 安装（推荐入口）
 
@@ -58,7 +65,7 @@ Agent 勾选。旧的 `command: "node"` 配置可以迁移，卸载也可以换�
 
 工程显示名依次取唯一 `.uproject` 文件名、npm 包名、CMake 字面量工程名、Cargo/Python/Go
 清单名称、唯一解决方案名，最后使用目录名。无法解析的名称不执行求值。索引目录使用经过
-规范化的工程名；客户端服务键固定为通用的 `workspace-tgrep` / `workspace-codegraph`。
+规范化的工程名；客户端服务键固定为 `workspace-tgrep`、`workspace-codegraph`、`workspace-sirchmunk`。
 新配置始终带绝对 `--repo-root`；wrapper 的工作空间不随 IDE 的启动 cwd 改变。
 旧的无此参数配置从 wrapper 所在工具的外层工程推导，找不到时才回到执行目录检测。
 
@@ -75,11 +82,11 @@ Agent 勾选。旧的 `command: "node"` 配置可以迁移，卸载也可以换�
 仅在完全符合历史生成格式且指向当前工具时重新生成；额外字段或修改过的内容仍中止写入。
 改换工具目录后，指向其他副本的条目不作为本次工具接管，需先处理旧条目。
 
-安装器会依次完成：选择检索后端（二选一）→ 选择下载镜像 → 准备本地依赖（全部固定版本）
+安装器会依次完成：选择检索后端（三选一）→ 选择下载镜像 → 准备本地依赖（全部固定版本）
 → 依赖就绪后把 MCP 服务写入所选 Agent 的**项目级**配置。依赖准备失败时不会改动任何
 Agent 配置。可重复执行，用于切换后端、升级固定制品、为更多 Agent 接入或卸载。
 
-常用选项：`--backend=tgrep|codegraph`、`--agents=<id,...>|all`（`all` 只含可自动写入项目配置的
+常用选项：`--backend=tgrep|codegraph|sirchmunk`、`--agents=<id,...>|all`（`all` 只含可自动写入项目配置的
 目标，面板导入类需显式指定）、`--mirror=cn|official`（未指定时按系统地区建议）、`--offline`、
 `--skip-prepare`（仅调整 Agent 配置）、`--uninstall [--agents=...|--all-agents]`、`--yes`、
 `--ui=line`（交互菜单用编号行模式，缺省在支持的终端用方向键）、`--dry-run`、`--help`、
@@ -132,7 +139,7 @@ CodeGraph 还检查 npm 全局安装、用户 npx 缓存与本工作空间 npx �
   已编译源码使用系统 Node 22.5+，平台包使用其自带运行时。
 - 无本地 CodeGraph 时，通过 `npm exec`（[npx 的执行机制](https://docs.npmjs.com/cli/v11/commands/npm-exec/)）
   准备 `@colbymchenry/codegraph@1.6.0`，随后以 `--offline` 再执行一次，再检查实际库依赖。
-  缓存在 `<BUILD_DIR>/integration/mcp/npm-cache/<platform>-<arch>`；失败时不写 Agent 配置。
+  缓存在 `<BUILD_DIR>/integration/mcp/downloads/cache/npm/<platform>-<arch>`；失败时不写 Agent 配置。
   正常 MCP 启动直接运行验证后的缓存入口，避免每个会话再次调用 npm。
 
 CodeGraph npm 包依赖平台包，npm 仍可能下载其中的 Node 和编译制品；集成工具不再自行
@@ -208,6 +215,72 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
 - 无可复用的 tgrep 时才需要 Git 和 Rust 工具链（edition 2024，rustc 1.98 验证过）。
 - 缺少依赖时需要联网准备固定版本；本地文件和缓存齐全时可用 `--offline`。
 
+## Sirchmunk 安装与模型准备
+
+在 Agent 工作区运行 `node <MCP_DIR>/setup.js --backend=sirchmunk`（也支持前面的 Bun/Deno 命令）。
+安装器依次要求输入 LLM 的 **baseURL、API Key、模型名**；API Key 输入不回显。
+LLM 必须提供 OpenAI 兼容接口。FAST/DEEP 检索会将相关内容发送到该接口，可能产生调用费用。
+
+非交互安装使用 `--llm-base-url=<url>`、`--llm-model=<name>` 和环境变量
+`SIRCHMUNK_LLM_API_KEY`；也可通过 `SIRCHMUNK_LLM_BASE_URL` / `SIRCHMUNK_LLM_MODEL` 提供另两项。
+不提供 API Key 命令行参数，避免出现在进程参数中。重跑可保持已保存的值，或输入新值替换。
+设置保存在 `<BUILD_DIR>/integration/mcp/private/sirchmunk.json`，不会复制进 IDE 配置、
+prepared-state、诊断输出或导入片段；POSIX 新建文件权限为 `0600`。
+
+首次准备需要本地 Python >= 3.10（优先发现 3.12/3.13），可用 `--sirchmunk-python=<file>` 指定。
+在工作区创建独立 venv，校验固定 Sirchmunk wheel 的 SHA256，执行 `pip check` 和 SDK 导入检查。
+`rg`、`rga`、`rga-preproc` 优先复用本地可执行文件，否则下载锁定清单中的平台制品并校验 SHA256。
+Windows 使用仍提供 Windows 包的 rga 0.10.9；不调用上游会写用户全局目录的自动安装器。
+Python 依赖默认使用 PyPI，可通过 `--pip-index-url=https://mirrors.aliyun.com/pypi/simple/`
+选择 [阿里云镜像](https://developer.aliyun.com/mirror/pypi)，不改全局 pip 配置。
+依赖准备日志和解析后的包版本记录保留在下载目录的 Python 环境旁。
+
+Agent 配置成功后，安装器默认启动一个只负责模型下载和验证的后台任务，完成即退出。
+它不读取 LLM 凭据、不调用 LLM。默认模型为
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，固定到 `upstream-lock.json`
+记录的 Hugging Face 提交，只获取配置、分词器和 safetensors，不获取 ONNX/OpenVINO/重复权重。
+模型缓存使用进程间文件锁；下载失败可重跑安装器，已下载内容可以复用。
+
+MCP 启动不等待模型下载：初始化后可先执行基础检索；模型完成下载、加载和预热后，
+包装层在请求之间启用 embedding 与知识演化，不重启 MCP，也不在查询过程中替换知识存储。
+若下载或加载失败，保留基础检索并报告失败，不把“已下载”误报成“可用”。
+`sirchmunk_status` 返回 `embedding`、`embedding_error` 和 `enable_knowledge_evolution`；
+`common/tools/doctor.mjs` 可只读查看后台下载状态和包装层状态。
+
+固定 0.2.0 的官方 MCP 服务没有传入 SDK 的 `enable_knowledge_evolution`。
+本集成在 Python SDK 外增加受控 stdio 包装层，按该版本的初始化逻辑延迟建立知识演化器。
+源码依据：[AgenticSearch](https://github.com/modelscope/sirchmunk/blob/b314e11fcea87cf8146b2844cf2f991208c021d9/src/sirchmunk/search.py)、
+[官方 MCP 服务](https://github.com/modelscope/sirchmunk/blob/b314e11fcea87cf8146b2844cf2f991208c021d9/src/sirchmunk_mcp/service.py)。
+升级 Sirchmunk 时必须重新核对此处 SDK 契约。
+
+暴露 `sirchmunk_search`、`sirchmunk_get_cluster`、`sirchmunk_list_clusters`、`sirchmunk_status`。
+搜索路径只接受当前工作区内的相对路径；默认 FAST，可选 DEEP 或 FILENAME_ONLY。
+`--offline` 禁止依赖和模型联网获取；缓存不齐时失败或报告模型不可用。
+`--dry-run` 不询问密钥、不写私有配置、不下载模型；`--skip-prepare` 不启动安装阶段下载任务。
+卸载移除 Agent 接入，保留模型、知识数据和私有设置，便于再次安装。
+
+## 下载与运行数据目录
+
+所有新下载都位于工作区构建目录内，安装器不把运行依赖写入 toolkit 源码目录：
+
+| 路径（相对 `<BUILD_DIR>/integration/mcp/`） | 内容 |
+| --- | --- |
+| `downloads/node/<platform>-<arch>/` | MCP JavaScript 依赖及安装完成标记 |
+| `downloads/cache/` | npm、Cargo、pip 缓存及下载临时文件 |
+| `downloads/sources/` | tgrep 固定源码和构建输出 |
+| `downloads/bin/<platform>-<arch>/` | 准备的 tgrep、rg/rga 等程序 |
+| `downloads/archives/`、`downloads/wheels/` | 校验过的原生压缩包和 Python wheel |
+| `downloads/python/<platform>-<arch>/` | Sirchmunk venv、准备日志、已安装版本记录 |
+| `downloads/models/sirchmunk/` | 固定 embedding 模型、后台下载日志和状态 |
+| `private/` | 本机 LLM 设置及 API Key |
+| `state/`、`exports/` | 后端状态、tgrep/Sirchmunk 数据、Agent 归属记录与 IDE 片段 |
+
+CodeGraph 数据库仍位于工程根目录 `.codegraph*`，以兼容上游仓库接入。
+旧的 `runtime/`、`upstream/`、`npm-cache/` 和 toolkit `node_modules/` 可继续复用；
+不会移动正在使用的文件或删除旧缓存。准备时可将已验证版本的旧 JavaScript 依赖复制到新目录。
+Git/P4 排除规则按 `integration/mcp/{downloads,private,state,exports}` 路径生效，
+兼容自定义工作区构建目录；不排除 `tools/` 源码、补丁、锁定清单和测试。
+
 ## 支持的 Agent
 
 以下 Agent 的配置由 `setup.js` 自动写入（均为仓库内项目级文件，保留其中已有的其他条目；
@@ -262,7 +335,7 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
 | Zed、oh-my-pi | 分别在 `context_servers` / `mcpServers` 条目写入 `enabled: true`；Zed 的 Agent profile 工具选择、OMP profile 的禁用列表仍生效。见 [Zed 配置源](https://github.com/zed-industries/zed/blob/main/crates/project/src/project_settings.rs)、[OMP 文档](https://github.com/can1357/oh-my-pi/blob/main/docs/mcp-config.md)。 |
 | OpenCode、Kilo、MiMo | 保持原有 `enabled: true` 默认配置，保留用户明确关闭的状态。 |
 | Roo、Cline CLI / IDE | 写入 `disabled: false`；Cline CLI 仍须通过启动器加载，IDE 仍须导入片段。见 [Roo 文档](https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo/)、[Cline 文档](https://github.com/cline/cline/blob/main/docs/mcp/mcp-overview.mdx)。 |
-| Visual Studio Copilot | 官方规定新发现的 MCP 工具默认关闭，且没有文档化的项目配置字段打开该开关。进入 Copilot **Agent → 工具 → 已添加**，打开 `workspace-tgrep` / `workspace-codegraph`，按提示信任服务器；工具列表变化后可能需要重新确认。见 [Microsoft 文档](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers?view=visualstudio#tool-lifecycle)。 |
+| Visual Studio Copilot | 官方规定新发现的 MCP 工具默认关闭，且没有文档化的项目配置字段打开该开关。进入 Copilot **Agent → 工具 → 已添加**，打开所选的 `workspace-tgrep` / `workspace-codegraph` / `workspace-sirchmunk`，按提示信任服务器；工具列表变化后可能需要重新确认。见 [Microsoft 文档](https://learn.microsoft.com/en-us/visualstudio/ide/mcp-servers?view=visualstudio#tool-lifecycle)。 |
 | VS Code Copilot | 与 Visual Studio 共用 `.vscode/mcp.json`，但启用状态另行保存。已禁用时运行 **MCP: List Servers → 服务器 → Enable**；`chat.mcp.autostart` 不会重新启用已禁用服务器，首次使用仍有信任提示。见 [VS Code 文档](https://code.visualstudio.com/docs/agent-customization/mcp-servers#enable-or-disable-mcp-servers)。 |
 | JetBrains AI Assistant（含 Rider） | 导入项目服务器并 Apply；如需自动启用后续新增或修改的服务器，可在 MCP 设置页勾选 **Automatically enable new and changed MCP servers**。见 [JetBrains 文档](https://www.jetbrains.com/help/ai-assistant/mcp.html)。 |
 
@@ -384,7 +457,7 @@ Roo/Zed/WorkBuddy 为 GUI 客户端，同样只在文档层覆盖。
     "workspace-tgrep": {
       "type": "stdio",
       "command": "node",
-      "args": ["<MCP_DIR>/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
+      "args": ["<MCP_DIR>/tools/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
     }
   }
 }
@@ -393,7 +466,7 @@ Roo/Zed/WorkBuddy 为 GUI 客户端，同样只在文档层覆盖。
 命令行等价（Claude Code）：
 
 ```bash
-claude mcp add --transport stdio --scope project workspace-tgrep -- node <MCP_DIR>/tgrep/src/server.mjs --repo-root <PROJECT_DIR>
+claude mcp add --transport stdio --scope project workspace-tgrep -- node <MCP_DIR>/tools/tgrep/src/server.mjs --repo-root <PROJECT_DIR>
 ```
 
 ### GitHub Copilot：VS Code / Visual Studio（`.vscode/mcp.json`，键名为 `servers`）
@@ -404,7 +477,7 @@ claude mcp add --transport stdio --scope project workspace-tgrep -- node <MCP_DI
     "workspace-codegraph": {
       "type": "stdio",
       "command": "node",
-      "args": ["<MCP_DIR>/codegraph/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
+      "args": ["<MCP_DIR>/tools/codegraph/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
     }
   }
 }
@@ -415,7 +488,7 @@ claude mcp add --transport stdio --scope project workspace-tgrep -- node <MCP_DI
 ```toml
 [mcp_servers.workspace-tgrep]
 command = "node"
-args = ["<MCP_DIR>/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
+args = ["<MCP_DIR>/tools/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
 cwd = "<PROJECT_DIR>"
 enabled = true
 ```
@@ -427,7 +500,7 @@ enabled = true
   "mcp": {
     "workspace-tgrep": {
       "type": "local",
-      "command": ["node", "<MCP_DIR>/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"],
+      "command": ["node", "<MCP_DIR>/tools/tgrep/src/server.mjs", "--repo-root", "<PROJECT_DIR>"],
       "enabled": true
     }
   }
@@ -443,7 +516,7 @@ enabled = true
       "workspace-codegraph": {
         "type": "stdio",
         "command": "node",
-        "args": ["<MCP_DIR>/codegraph/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
+        "args": ["<MCP_DIR>/tools/codegraph/src/server.mjs", "--repo-root", "<PROJECT_DIR>"]
       }
     }
   }
@@ -616,8 +689,8 @@ console.log('digraph G { rankdir=LR;'); for (const r of rows) console.log(JSON.s
 - 结果带 `truncated` 标记的截断发生在完整记录边界；错误带稳定错误码
   （`INDEX_NOT_READY`、`INDEX_IN_USE`、`INVALID_PARAMS`、`BACKEND_FAILED` 等）。
 - 客户端断开（stdin EOF）、SIGINT/SIGTERM 都会停止后端进程树；包装层被强杀时，
-  两个后端都会因 stdin 管道断开自行退出（上游已验证的生命线行为）。
-- 后端不监听任何端口、不启用遥测/更新检查/下载；CodeGraph 强制 direct 模式。
+  后端因 stdin 管道断开退出；Sirchmunk 在 Windows 还使用 Job Object，在 POSIX 使用专用进程组清理原生子进程。
+- 后端不监听端口、关闭遥测/更新检查；CodeGraph 强制 direct 模式。Sirchmunk 允许后台准备固定模型，并按用户配置调用 LLM。
 - 诊断：用相同运行时执行 `<MCP_DIR>/common/tools/doctor.mjs`（只读；Deno 加安装示例中的
   `run` 参数）。报告显示实际运行时名称、版本和可执行文件位置。
 
@@ -626,16 +699,22 @@ console.log('digraph G { rankdir=LR;'); for (const r of rows) console.log(JSON.s
 2026-09-22 多运行时改造在 Windows x64 验证：Node 24.21.0、Bun 1.4.2、Deno 2.9.7。
 三者均完成 setup 安装、重复安装不改配置、dry-run、换用 Node 卸载、两个真实后端的离线
 本地制品准备，以及隔离 UE 小样例的索引、MCP 握手、查询和关闭后无存活包装进程/实例锁。
-四套 Node 回归共 305 项：303 通过，2 项 Windows 不适用的既有用例跳过。Bun/Deno 验证的是
-实际安装和服务调用流程，未声称其 Node 测试运行器兼容；本轮多运行时变更未在 Linux/macOS 验证。
+目录迁移和 Sirchmunk 改造后，两份工具各通过五套 Node 回归共 315 项：313 通过，2 项 Windows 不适用的既有用例跳过。
+另有 9 项 Python 回归覆盖模型就绪切换、下载失败、路径范围、离线模式、原生程序探测、管道、持久化、锁和进程树清理。Bun/Deno 验证的是
+实际安装和服务调用流程，未声称其 Node 测试运行器兼容；本轮变更未在 Linux/macOS 验证。
+Sirchmunk 的真实安装、固定模型下载/加载、文件名搜索、知识列表和自动开启知识演化已在上述三种运行时验证。
+FAST/DEEP 的真实 LLM 调用与知识生成质量未验收。验收日志位于 `<BUILD_DIR>/_agent_tmp/mcp-tools-acceptance-*`
+及 `<BUILD_DIR>/_agent_tmp/sirchmunk-real/`，不会提交到版本库。
 
 每个组件目录内 `npm install` 后：
 
 ```bash
 npm --prefix <MCP_DIR>/agents test
 npm --prefix <MCP_DIR>/common test
-npm --prefix <MCP_DIR>/tgrep test
-npm --prefix <MCP_DIR>/codegraph test
+npm --prefix <MCP_DIR>/tools/tgrep test
+npm --prefix <MCP_DIR>/tools/codegraph test
+npm --prefix <MCP_DIR>/tools/sirchmunk test
+python <MCP_DIR>/tools/sirchmunk/test/bridge_test.py
 ```
 
 （或进入各组件目录执行 `npm test`。`node --test` 需显式传入 `test/*.test.mjs` 文件列表，
@@ -649,7 +728,7 @@ Agent 配置写入的回归测试在 `agents/`（JSON/JSONC 损坏零写入、Co
 
 升级固定版本：改对应工具目录的 `upstream-lock.json`（版本、提交、哈希），重跑
 `setup.js`（或 `--skip-prepare` 只调配置），重新执行测试。tgrep 补丁如不适用需在
-`tgrep/patches/` 重新生成并重放回归。维护指引见 Agent Skill
+`tools/tgrep/patches/` 重新生成并重放回归。维护指引见 Agent Skill
 `mcp-integration-maintenance`（仅在维护本集成时加载）。
 
 组件 `package-lock.json` 保持与镜像无关（不含 `resolved` 或仅指向 npmjs/npmmirror）：
@@ -661,7 +740,7 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 
 | 平台 | 单元测试 | 真实后端冒烟 |
 | --- | --- | --- |
-| Windows x64（Node 24.21.0） | 305 项（303 通过，2 个 POSIX 权限/文件符号链接用例跳过；2026-09-22，agents 231 + common 53 + tgrep 9 + codegraph 12） | 实际 npx 缓存在线准备、离线启动和库检查；本地 tgrep 复用。UE 小型样例从不同 cwd 首次索引、查询、退出；CodeGraph 验证文件新增/修改/删除、离线修改后的补同步；两个后端正常退出及强杀 wrapper 后均无剩余进程。首次索引取消另有确定性协议测试。镜像及 Kilo 改造：全部 12 个服务端点元数据有效；真实 Cargo 离线验证官方源不继承工程镜像配置（未逐站点下载全部依赖） |
+| Windows x64（Node 24.21.0、Bun 1.4.2、Deno 2.9.7） | 两份工具各 315 项 JS（313 通过、2 个既有 POSIX 用例跳过）及 9 项 Python 通过；2026-09-22 | 三种运行时均验证三个后端的 setup、stdio 握手和查询。tgrep/CodeGraph 复用真实本地制品，验证隔离 UE 样例；Sirchmunk 验证真实 venv、固定 embedding 下载/加载、文件名搜索、知识列表及自动开启知识演化。强杀 Deno wrapper 后 Python 后代全部退出，再连接和正常关闭通过。 |
 | Linux x64（WSL/Debian，Node 20.19.2） | 默认启用改造前：281/281，零跳过（2026-09-22）；本次新增用例未在 WSL 复跑。独立 ext4 工具副本运行四套测试，包括 POSIX 权限与符号链接 | 本轮未复跑真实后端；既有验收：2026-09-21 真实 prepare、chmod/EXDEV 与 PTY；2026-09-18 后端冒烟 |
 
 macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）、Kimi/omp（无非交互

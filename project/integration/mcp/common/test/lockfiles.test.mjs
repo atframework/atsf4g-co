@@ -16,7 +16,7 @@ const componentsRoot = fileURLToPath(new URL('../..', import.meta.url));
 const REGISTRY_URL = /^https:\/\/registry\.(npmjs\.org|npmmirror\.com)\//;
 
 test('component lockfiles keep registry-neutral resolved URLs', () => {
-  for (const component of ['common', 'tgrep', 'codegraph']) {
+  for (const component of ['common', 'tools/tgrep', 'tools/codegraph']) {
     const file = path.join(componentsRoot, component, 'package-lock.json');
     if (!fs.existsSync(file)) continue;
     const lock = JSON.parse(fs.readFileSync(file, 'utf8'));

@@ -290,7 +290,7 @@ test('legacy Kilo stdio options migrate into the current native format', (t) => 
   } }));
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
   const migrated = parseJsonDocument(w.read('.kilo/kilo.jsonc'), 'test').root.mcp[SERVER_IDS.tgrep];
-  assert.deepEqual(migrated.command, [process.execPath, args[0], '--repo-root', w.repoRoot, ...args.slice(1)]);
+  assert.deepEqual(migrated.command, [process.execPath, path.join(w.repoRoot, 'tools/mcp/tools/tgrep/src/server.mjs'), '--repo-root', w.repoRoot, ...args.slice(1)]);
   assert.deepEqual(migrated.environment, { LIMIT: 'one' });
   assert.equal(migrated.enabled, false);
   assert.deepEqual(JSON.parse(w.read('.kilocode/mcp.json')).mcpServers, { foreign: { command: 'company-tool' } });
@@ -393,7 +393,7 @@ test('a concurrently edited consolidation source survives and the destination ro
 test('cleanup requires the merged destination even when its planned action is unchanged', (t) => {
   for (const legacy of [false, true]) {
     const w = workspace(t);
-    const entry = { ...ourEntry(w), command: [process.execPath, ...ourEntry(w).command.slice(1), '--repo-root', w.repoRoot] };
+    const entry = { ...ourEntry(w), command: [process.execPath, path.join(w.repoRoot, 'tools/mcp/tools/tgrep/src/server.mjs'), '--repo-root', w.repoRoot] };
     w.write('.kilo/kilo.jsonc', JSON.stringify({ snapshot: false, mcp: { [SERVER_IDS.tgrep]: entry } }));
     const source = legacy ? 'kilo.jsonc' : '.kilo/kilo.json';
     const sourceText = legacy ? JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: entry } }) : '{"snapshot":false}';

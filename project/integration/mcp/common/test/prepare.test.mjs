@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { INTEGRATION_ROOT, WorkspacePaths } from '../src/paths.mjs';
-import { prepareTgrep, prepareCodegraph, prepareCodegraphNpxCache, runCargoBuild } from '../src/prepare.mjs';
+import { prepareTgrep, prepareCodegraph, prepareCodegraphNpxCache, runCargoBuild, prepareNodeModules } from '../src/prepare.mjs';
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-prepare-'));
@@ -19,6 +19,22 @@ function fixture(t) {
   };
   return { root, paths, write };
 }
+
+test('moving tools preserves offline reuse of matching legacy npm dependencies', t => {
+  const w = fixture(t);
+  const kit = path.join(w.root, 'kit');
+  w.write('kit/tools/codegraph/package.json', '{"name":"fixture","dependencies":{"fixture-dependency":"1.0.0"}}');
+  w.write('kit/tools/codegraph/package-lock.json', JSON.stringify({ packages: { 'node_modules/fixture-dependency': { version: '1.0.0' } } }));
+  w.write('kit/codegraph/node_modules/fixture-dependency/package.json', '{"name":"fixture-dependency","version":"1.0.0"}');
+  w.write('kit/codegraph/node_modules/fixture-dependency/index.js', 'export default 42;');
+  prepareNodeModules(kit, { paths: w.paths, offline: true, only: ['tools/codegraph'], install: (directory, options) => {
+    assert.equal(options.force, false, 'matching legacy packages should not require an offline npm download');
+    assert.equal(options.offline, true);
+    assert.equal(fs.readFileSync(path.join(directory, 'node_modules/fixture-dependency/index.js'), 'utf8'), 'export default 42;');
+    return false;
+  } });
+  assert.ok(fs.existsSync(path.join(w.paths.nodePackageDir('tools/codegraph'), '.prepared-manifest')));
+});
 
 test('a compiled local CodeGraph tries another Node runtime after rejecting an incompatible one', t => {
   const w = fixture(t);
@@ -68,7 +84,7 @@ test('official Cargo uses a separate cache and manifest without inheriting proje
 
 test('official Cargo refuses a replacement config in its isolated cache before invoking Cargo', t => {
   const w = fixture(t);
-  const config = w.write(path.relative(w.root, path.join(w.paths.integrationDir, 'cargo-home-official/config.toml')), '[source.crates-io]\nreplace-with="other"\n');
+  const config = w.write(path.relative(w.root, path.join(w.paths.cacheDir, 'cargo-official/config.toml')), '[source.crates-io]\nreplace-with="other"\n');
   const before = fs.readFileSync(config);
   assert.throws(() => runCargoBuild(w.paths, path.join(w.paths.upstreamDir, 'tgrep-src'), ['cargo', 'build'], {
     cargoIsolated: true, execute: () => assert.fail('must not execute Cargo with an inherited replacement'),
@@ -85,10 +101,31 @@ test('domestic Cargo source arguments reach the build without changing npm or gl
     calls++;
     assert.deepEqual(argv, ['cargo', 'build', '--locked', ...args]);
     assert.equal(options.cwd, srcDir);
-    assert.equal(options.env, process.env);
+    assert.equal(options.env.CARGO_HOME, path.join(w.paths.cacheDir, 'cargo'));
+    assert.equal(options.env.CARGO_TARGET_DIR, path.join(srcDir, 'target'));
   } });
   assert.equal(calls, 1);
   assert.equal(fs.existsSync(path.join(w.paths.integrationDir, 'cargo-home-official')), false);
+});
+
+test('npm artifacts stay in downloads and an interrupted install cannot become a prepared cache', t => {
+  const w = fixture(t);
+  const kit = path.join(w.root, 'kit');
+  w.write('kit/common/package.json', '{"name":"fixture","private":true}');
+  const target = w.paths.nodePackageDir('common');
+  const options = { paths: w.paths, only: ['common'], install: (directory, options) => {
+    assert.equal(directory, target);
+    assert.equal(options.force, true);
+    fs.mkdirSync(path.join(directory, 'node_modules'), { recursive: true });
+    throw new Error('interrupted install');
+  } };
+  assert.throws(() => prepareNodeModules(kit, options), /interrupted install/);
+  assert.equal(fs.existsSync(path.join(kit, 'common/node_modules')), false);
+  assert.equal(fs.existsSync(path.join(target, '.prepared-manifest')), false);
+  let calls = 0;
+  prepareNodeModules(kit, { ...options, install: (directory, settings) => { calls++; assert.equal(settings.force, true); return true; } });
+  assert.equal(calls, 1);
+  prepareNodeModules(kit, { ...options, install: (directory, settings) => { assert.equal(settings.force, false); return false; } });
 });
 
 test('an existing patched tgrep can be prepared offline without a source checkout or copying it', t => {

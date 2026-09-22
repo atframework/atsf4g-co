@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { WorkspacePaths } from '../../common/src/paths.mjs';
+import { WorkspacePaths } from '../../../common/src/paths.mjs';
 import { CodeGraphBackend, indexDirName, resolveIndexSelection, runInitializer } from '../src/backend.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));

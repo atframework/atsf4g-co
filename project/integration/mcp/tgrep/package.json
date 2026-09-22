@@ -1,16 +1,8 @@
 {
-  "name": "mcp-tgrep",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "description": "tgrep MCP wrapper for any workspace (stdio, supervised patched tgrep serve)",
-  "engines": {
-    "node": ">=20"
-  },
-  "devDependencies": {
-    "@modelcontextprotocol/client": "^2.0.0"
-  },
+  "name": "mcp-tgrep-compat",
   "scripts": {
-    "test": "node --test test/backend.test.mjs test/server.test.mjs"
-  }
+    "test": "node --test ../tools/tgrep/test/backend.test.mjs ../tools/tgrep/test/server.test.mjs"
+  },
+  "private": true,
+  "type": "module"
 }

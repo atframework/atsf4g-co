@@ -1,12 +1,12 @@
 # Backend Wrapper and Lifecycle Maintenance
 
 Load only for wrapper-server, backend, patch, index, or upstream-upgrade work
-under `project/integration/mcp/{tgrep,codegraph,common}`.
+under `project/integration/mcp/tools/{tgrep,codegraph,sirchmunk}` and `common/`.
 
 ## Verified facts you may rely on
 
 Each fact below was verified against the pinned upstream sources/artifacts
-(see `tgrep/upstream-lock.json` and `codegraph/upstream-lock.json`; the README
+(see `tools/tgrep/upstream-lock.json` and `tools/codegraph/upstream-lock.json`; the README
 "已验证平台" table records when). Re-verify against the new pinned sources
 before relying on them after an upgrade.
 
@@ -18,7 +18,7 @@ before relying on them after an upgrade.
   `common/src/supervisor.mjs` does it for tgrep).
 - CodeGraph's library needs the built-in `node:sqlite` module (Node 22.5+ even
   though its package.json says >=20). Both the serve child and the first-index
-  helper (`codegraph/src/initialize.mjs`) must run on the same verified Node
+  helper (`tools/codegraph/src/initialize.mjs`) must run on the same verified Node
   with `--liftoff-only --disable-warning=ExperimentalWarning`. Platform packages
   use their own Node; compiled source checkouts use a probed system Node.
   The POSIX `bin/codegraph` shell wrapper is never spawned (it re-injects
@@ -45,7 +45,7 @@ before relying on them after an upgrade.
 ## Upgrade flow (pinned upstream)
 
 1. Update the tool's `upstream-lock.json` (commit, version, shasums). For a new
-   tgrep pin, delete `<BUILD_DIR>/integration/mcp/upstream/tgrep-src` so prepare
+   tgrep pin, delete `<BUILD_DIR>/integration/mcp/downloads/sources/tgrep-src` so prepare
    re-clones; re-apply the patch (regenerate it if it no longer fits) and record
    the new patch sha.
 2. Re-verify the facts listed above against the new sources before changing
@@ -55,10 +55,25 @@ before relying on them after an upgrade.
    been ahead of the release before: 1.6.0 artifacts lack the `ui` subcommand
    the source has) — check the actual artifact's `--help`, not only the repo.
 3. Run `node project/integration/mcp/setup.js` (or the prepare library) and the
-   four test suites; then a real-backend smoke per README platform table.
+   five test suites; then a real-backend smoke per README platform table.
 4. Update the README verified-platform table with what was actually measured.
 
 ## Index and state rules
+
+- Sirchmunk 0.2.0: the official MCP layer does not forward
+  `enable_knowledge_evolution`. The private Python bridge uses the pinned SDK,
+  starts without knowledge reuse, then attaches its embedding client and
+  `KnowledgeEvolver` between serialized requests after `EmbeddingUtil.is_ready()`.
+  Failures keep basic search available. Model snapshots pin a Hugging Face commit;
+  offline mode must not fall back to network. Native dependencies are prepared
+  before config writes; never invoke the upstream global rg/rga auto-installer.
+  Its MCP example's `list_all()` is absent from the wheel: use bounded `find('', limit)`.
+  Flush completed search storage before returning, and close storage on graceful shutdown.
+  On Windows, blocking stdin reads stall NumPy initialization; peek the pipe and
+  read only available bytes while monitoring EOF, including during native imports.
+  `bridge_test.py` covers state transitions, scoped paths, OS download locks,
+  EOF cleanup and Windows Job Object cleanup on forced exit. Its installer-only
+  model worker intentionally survives setup and exits after preparation.
 
 - tgrep index: `<BUILD_DIR>/integration/mcp/state/tgrep/<workspace-id>/<platform>/index`
   with one workspace-selected exclude list (UE layouts omit generated/resource
@@ -87,7 +102,7 @@ before relying on them after an upgrade.
 
 ## Validation checklist
 
-1. Unit tests in all four packages; protocol tests spawn the real server
+1. Unit tests in all five packages; protocol tests spawn the real server
    entry with a fake backend — keep them free of real-index dependencies.
 2. Real-backend smoke (scratch script pattern under
    `<BUILD_DIR>/_agent_tmp/mcp/smoke.mjs`): first index, reuse start, one real

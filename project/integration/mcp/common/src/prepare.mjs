@@ -21,31 +21,16 @@ import path from 'node:path';
 import os from 'node:os';
 import { commandPaths, nodeExecutables, readJson, probeTgrep, codegraphLayouts, probeCodegraph, npxPackageRoots, sameVersion, CODEGRAPH_LOCAL_ENV } from './localTools.mjs';
 
-import { WorkspacePaths, INTEGRATION_ROOT, validateWorkspaceBuildDir } from './paths.mjs';
+import { WorkspacePaths, INTEGRATION_ROOT, validateWorkspaceBuildDir, isWithin } from './paths.mjs';
+import { prepareSirchmunk } from '../../tools/sirchmunk/src/prepare.mjs';
+import { run } from './command.mjs';
+export { run } from './command.mjs';
 
 export function makeLogger(write) {
   return (message) => write(`prepare: ${message}\n`);
 }
 
 const silentLog = () => {};
-
-/** Run a command with an argument array, shell disabled. */
-export function run(argv, { cwd = null, env = null, check = true, timeout = undefined } = {}) {
-  const result = spawnSync(argv[0], argv.slice(1), {
-    cwd,
-    env,
-    shell: false,
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout,
-  });
-  if (check && result.status !== 0) {
-    const out = `${result.stdout ?? ''}`.slice(-2000);
-    const err = `${result.stderr ?? ''}`.slice(-2000);
-    throw new Error(`command failed (${result.status}): ${argv.slice(0, 3).join(' ')}...\nstdout: ${out}\nstderr: ${err}`);
-  }
-  return result;
-}
 
 export function shaOf(filePath, algorithm = 'sha256') {
   return createHash(algorithm).update(fs.readFileSync(filePath)).digest('hex');
@@ -83,12 +68,13 @@ export function npmCommand(extraArgs = [], { registry = null } = {}) {
   return { command: argv[0], args, shell };
 }
 
-export function npmInstall(pkgDir, { offline = false, registry = null, log = silentLog } = {}) {
-  if (fs.existsSync(path.join(pkgDir, 'node_modules'))) {
+export function npmInstall(pkgDir, { offline = false, registry = null, cache = null, force = false, log = silentLog } = {}) {
+  if (!force && fs.existsSync(path.join(pkgDir, 'node_modules'))) {
     return false;
   }
   const verb = fs.existsSync(path.join(pkgDir, 'package-lock.json')) ? 'ci' : 'install';
   const extra = offline ? ['--offline', '--no-audit', '--no-fund'] : ['--no-audit', '--no-fund'];
+  if (cache) extra.push('--cache', cache);
   const { command, args, shell } = npmCommand([verb, ...extra], { registry });
   log(`npm ${verb} in ${path.basename(pkgDir)}${registry ? ' (mirror)' : ''}`);
   const result = spawnSync(command, args, {
@@ -104,13 +90,72 @@ export function npmInstall(pkgDir, { offline = false, registry = null, log = sil
   return true;
 }
 
-export function prepareNodeModules(mcpRoot, { offline = false, registry = null, only = null, log = silentLog } = {}) {
-  const dirs = only ?? ['common', 'tgrep', 'codegraph'];
+/** Deno's Windows cpSync applies chmod to long paths, which can fail after copy.
+ * Copy files directly; preserve modes only on platforms that use executable bits.
+ * A development symlink is reusable only if it resolves inside this dependency tree.
+ */
+export function copyNodeModules(source, destination, root = fs.realpathSync(source), ancestors = new Set()) {
+  const actual = fs.realpathSync(source);
+  if (!isWithin(actual, root)) throw new Error('cached npm dependency links outside its package tree');
+  const stat = fs.statSync(actual);
+  if (stat.isDirectory()) {
+    if (ancestors.has(actual)) throw new Error('cached npm dependency has a directory symlink cycle');
+    const next = new Set([...ancestors, actual]);
+    fs.mkdirSync(destination, { recursive: true });
+    for (const item of fs.readdirSync(actual)) {
+      if (item !== '.bin') copyNodeModules(path.join(actual, item), path.join(destination, item), root, next);
+    }
+  } else if (stat.isFile()) {
+    fs.copyFileSync(actual, destination);
+    if (process.platform !== 'win32') fs.chmodSync(destination, stat.mode);
+  }
+}
+
+export function prepareNodeModules(mcpRoot, { paths = null, offline = false, registry = null, only = null, install = npmInstall, log = silentLog } = {}) {
+  const dirs = only ?? ['common', 'tools/tgrep', 'tools/codegraph'];
   const installed = [];
   for (const dir of dirs) {
-    if (npmInstall(path.join(mcpRoot, dir), { offline, registry, log })) {
+    const source = path.join(mcpRoot, dir);
+    const target = paths ? paths.nodePackageDir(dir) : source;
+    let changed = false;
+    if (paths) {
+      validateWorkspaceBuildDir(paths.repoRoot, target);
+      fs.mkdirSync(target, { recursive: true });
+      for (const name of ['package.json', 'package-lock.json']) {
+        const original = path.join(source, name);
+        const copy = path.join(target, name);
+        if (!fs.existsSync(original)) continue;
+        const content = fs.readFileSync(original);
+        if (!fs.existsSync(copy) || !fs.readFileSync(copy).equals(content)) {
+          fs.writeFileSync(copy, content);
+          changed = true;
+        }
+      }
+    }
+    const digest = createHash('sha256');
+    for (const name of ['package.json', 'package-lock.json']) {
+      const file = path.join(target, name);
+      if (fs.existsSync(file)) digest.update(fs.readFileSync(file));
+    }
+    const fingerprint = digest.digest('hex');
+    const receipt = path.join(target, '.prepared-manifest');
+    const verified = fs.existsSync(receipt) && fs.readFileSync(receipt, 'utf8') === fingerprint;
+    let reused = false;
+    if (paths && !verified) {
+      const lock = readJson(path.join(source, 'package-lock.json'));
+      const packages = Object.entries(lock?.packages ?? {}).filter(([name]) => name.startsWith('node_modules/'));
+      const candidates = [source, ...(dir.startsWith('tools/') ? [path.join(mcpRoot, dir.slice(6))] : [])];
+      const cached = candidates.find(directory => packages.length && packages.every(([name, info]) => readJson(path.join(directory, name, 'package.json'))?.version === info.version));
+      if (cached) {
+        log(`reusing installed ${dir} dependencies in the workspace download directory`);
+        copyNodeModules(path.join(cached, 'node_modules'), path.join(target, 'node_modules'));
+        reused = true;
+      }
+    }
+    if (install(target, { offline, registry, cache: paths && path.join(paths.cacheDir, 'npm'), force: paths ? !reused && (changed || !verified) : false, log })) {
       installed.push(dir);
     }
+    if (paths && (!verified || changed)) fs.writeFileSync(receipt, fingerprint);
   }
   return { installed };
 }
@@ -122,8 +167,13 @@ export function prepareNodeModules(mcpRoot, { offline = false, registry = null, 
  * workspace cache and a neutral cwd; --manifest-path keeps all build output local.
  */
 export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], cargoIsolated = false, execute = run } = {}) {
-  if (!cargoIsolated) return execute([...command, ...cargoConfigArgs], { cwd: srcDir, env: process.env });
-  const cargoHome = path.join(paths.integrationDir, 'cargo-home-official');
+  if (!cargoIsolated) {
+    const cargoHome = path.join(paths.cacheDir, 'cargo');
+    validateWorkspaceBuildDir(paths.repoRoot, cargoHome);
+    fs.mkdirSync(cargoHome, { recursive: true });
+    return execute([...command, ...cargoConfigArgs], { cwd: srcDir, env: { ...process.env, CARGO_HOME: cargoHome, CARGO_TARGET_DIR: path.join(srcDir, 'target') } });
+  }
+  const cargoHome = path.join(paths.cacheDir, 'cargo-official');
   validateWorkspaceBuildDir(paths.repoRoot, cargoHome);
   const cwd = path.parse(path.resolve(srcDir)).root;
   for (const directory of [cargoHome, path.join(cwd, '.cargo')]) {
@@ -141,15 +191,17 @@ export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], ca
 }
 
 export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs = [], cargoIsolated = false, binary = null, execute = run, log = silentLog } = {}) {
-  const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tgrep', 'upstream-lock.json'), 'utf8'));
-  const srcDir = path.join(paths.upstreamDir, 'tgrep-src');
-  const patchPath = path.join(mcpRoot, 'tgrep', lock.patches[0]);
+  const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tools/tgrep', 'upstream-lock.json'), 'utf8'));
+  const legacySource = path.join(paths.integrationDir, 'upstream/tgrep-src');
+  const srcDir = fs.existsSync(legacySource) ? legacySource : path.join(paths.upstreamDir, 'tgrep-src');
+  const patchPath = path.join(mcpRoot, 'tools/tgrep', lock.patches[0]);
   const binaryName = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
   const runtimeBinary = path.join(paths.runtimeDir, binaryName);
 
   const prepared = readJson(paths.preparedStatePath());
   const candidates = binary ? [path.resolve(binary)] : [
     prepared?.tgrep?.binary, ...commandPaths('tgrep'), runtimeBinary,
+    path.join(paths.integrationDir, 'runtime', binaryName),
     path.join(srcDir, 'target/release', binaryName),
   ];
   for (const candidate of new Set(candidates.filter(Boolean))) {
@@ -230,7 +282,7 @@ export function platformTarget() {
 export function prepareCodegraph(paths, mcpRoot, {
   offline = false, registry = null, localPath = null, execute = run, log = silentLog,
 } = {}) {
-  const lock = readJson(path.join(mcpRoot, 'codegraph/upstream-lock.json'));
+  const lock = readJson(path.join(mcpRoot, 'tools/codegraph/upstream-lock.json'));
   const target = platformTarget();
   const prepared = readJson(paths.preparedStatePath());
   const checked = new Set();
@@ -262,6 +314,7 @@ export function prepareCodegraph(paths, mcpRoot, {
     path.join(mcpRoot, 'node_modules/@colbymchenry/codegraph'),
     path.join(paths.repoRoot, 'node_modules/@colbymchenry/codegraph'),
     path.join(paths.upstreamDir, 'codegraph-bundle'),
+    path.join(paths.integrationDir, 'upstream/codegraph-bundle'),
     path.join(process.env.CODEGRAPH_INSTALL_DIR || path.join(os.homedir(), '.codegraph'), 'bundles', target + '-' + lock.version),
   ]);
   if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
@@ -273,11 +326,12 @@ export function prepareCodegraph(paths, mcpRoot, {
   }
   const globalRoot = npmRead(['root', '--global']);
   const userCache = npmRead(['config', 'get', 'cache']);
-  const cache = path.join(paths.integrationDir, 'npm-cache', target);
+  const cache = path.join(paths.cacheDir, 'npm', target);
   selected = select([
     globalRoot && path.join(globalRoot, '@colbymchenry/codegraph'),
     ...(userCache ? npxPackageRoots(userCache) : []),
     ...npxPackageRoots(cache),
+    ...npxPackageRoots(path.join(paths.integrationDir, 'npm-cache', target)),
   ]);
   if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
 
@@ -292,8 +346,8 @@ export function prepareCodegraph(paths, mcpRoot, {
 /** Equivalent to npx --yes @colbymchenry/codegraph@<pin> --version, then offline verification. */
 export function prepareCodegraphNpxCache(paths, lock, { offline = false, registry = null, execute = run, log = silentLog } = {}) {
   const target = platformTarget();
-  const cache = path.join(paths.integrationDir, 'npm-cache', target);
-  const cwd = path.join(paths.integrationDir, 'npm-run');
+  const cache = path.join(paths.cacheDir, 'npm', target);
+  const cwd = path.join(paths.agentTmpDir, 'npm-run');
   validateWorkspaceBuildDir(paths.repoRoot, cache);
   validateWorkspaceBuildDir(paths.repoRoot, cwd);
   const packageSpec = lock.npm_package + '@' + lock.version;
@@ -331,7 +385,7 @@ export function prepareCodegraphNpxCache(paths, lock, { offline = false, registr
  * payload; the caller (setup.js) serializes it. Throws on any failure --
  * callers must not touch agent configuration when this fails.
  */
-export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], cargoIsolated = false, tgrepBinary = null, codegraphPath = null, log = silentLog }) {
+export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], cargoIsolated = false, tgrepBinary = null, codegraphPath = null, sirchmunkPython = null, pipIndexURL = 'https://pypi.org/simple', log = silentLog }) {
   const mcpRoot = integrationRoot ?? INTEGRATION_ROOT;
   const paths = new WorkspacePaths(repoRoot, buildDir);
   paths.ensureDirs();
@@ -344,13 +398,16 @@ export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null
     backend,
   };
 
-  const nodeDirs = backend === 'codegraph' ? ['common', 'codegraph'] : ['common', 'tgrep'];
+  const nodeDirs = backend === 'codegraph' ? ['common', 'tools/codegraph'] : ['common'];
   log('installing npm dependencies');
-  state.npm = prepareNodeModules(mcpRoot, { offline, registry: npmRegistry, only: nodeDirs, log });
+  state.npm = prepareNodeModules(mcpRoot, { paths, offline, registry: npmRegistry, only: nodeDirs, log });
 
   if (backend === 'tgrep') {
     state.tgrep = prepareTgrep(paths, mcpRoot, { offline, cargoConfigArgs, cargoIsolated, binary: tgrepBinary, log });
     log(`tgrep ready: ${state.tgrep.version}`);
+  } else if (backend === 'sirchmunk') {
+    state.sirchmunk = prepareSirchmunk(paths, mcpRoot, { offline, python: sirchmunkPython, indexURL: pipIndexURL, log });
+    log(`Sirchmunk ready: ${state.sirchmunk.version}`);
   } else {
     state.codegraph = prepareCodegraph(paths, mcpRoot, { offline, registry: npmRegistry, localPath: codegraphPath, log });
     log(`codegraph ready: ${state.codegraph.version} on ${state.codegraph.platform_target} (${state.codegraph.runtime_version})`);

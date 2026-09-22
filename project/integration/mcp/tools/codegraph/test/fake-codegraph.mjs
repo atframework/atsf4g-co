@@ -12,8 +12,9 @@
  */
 
 import fs from 'node:fs';
-import { Server } from '@modelcontextprotocol/server';
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { loadSdk } from '../../../common/src/sdk.mjs';
+const { Server } = await loadSdk('tools/codegraph', '@modelcontextprotocol/server');
+const { StdioServerTransport } = await loadSdk('tools/codegraph', '@modelcontextprotocol/server/stdio');
 
 const recordPath = process.env.CODEGRAPH_FAKE_RECORD;
 const noStatus = process.env.CODEGRAPH_FAKE_NO_STATUS === '1';

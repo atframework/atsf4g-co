@@ -270,11 +270,27 @@ export class WorkspacePaths {
   }
 
   get runtimeDir() {
-    return path.join(this.integrationDir, 'runtime');
+    return path.join(this.downloadsDir, 'bin', `${process.platform}-${process.arch}`);
   }
 
   get upstreamDir() {
-    return path.join(this.integrationDir, 'upstream');
+    return path.join(this.downloadsDir, 'sources');
+  }
+
+  get downloadsDir() {
+    return path.join(this.integrationDir, 'downloads');
+  }
+
+  get cacheDir() {
+    return path.join(this.downloadsDir, 'cache');
+  }
+
+  get privateDir() {
+    return path.join(this.integrationDir, 'private');
+  }
+
+  nodePackageDir(component) {
+    return path.join(this.downloadsDir, 'node', `${process.platform}-${process.arch}`, component);
   }
 
   get agentTmpDir() {

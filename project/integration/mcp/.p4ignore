@@ -1,0 +1,5 @@
+# Tool sources and lockfiles are versioned. Only development artifacts are local.
+**/node_modules/**
+**/__pycache__/**
+*.pyc
+*.log

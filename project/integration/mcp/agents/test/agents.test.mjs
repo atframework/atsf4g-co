@@ -39,11 +39,11 @@ test('configureAgent writes every supported agent shape', () => {
     const vscode = JSON.parse(fs.readFileSync(path.join(repo, '.vscode', 'mcp.json'), 'utf8'));
     // Visual Studio and VS Code share this file; use the common absolute path
     // form instead of relying on an IDE-specific variable expansion contract.
-    assert.equal(vscode.servers['workspace-tgrep'].args[0], path.join(repo, 'tools/mcp/tgrep/src/server.mjs'));
+    assert.equal(vscode.servers['workspace-tgrep'].args[0], path.join(repo, 'tools/mcp/tools/tgrep/src/server.mjs'));
 
     const codex = fs.readFileSync(path.join(repo, '.codex', 'config.toml'), 'utf8');
     assert.match(codex, /\[mcp_servers\.workspace-tgrep\]/);
-    assert.deepEqual(JSON.parse(codex.match(/^args = (.+)$/m)[1]), ['tools/mcp/tgrep/src/server.mjs', '--repo-root', repo]);
+    assert.deepEqual(JSON.parse(codex.match(/^args = (.+)$/m)[1]), ['tools/mcp/tools/tgrep/src/server.mjs', '--repo-root', repo]);
     assert.match(codex, /^cwd = /m);
 
     const opencode = JSON.parse(fs.readFileSync(path.join(repo, 'opencode.json'), 'utf8'));
@@ -56,12 +56,12 @@ test('configureAgent writes every supported agent shape', () => {
 
     // P9.3 shapes (verified against each vendor's docs).
     const zed = JSON.parse(fs.readFileSync(path.join(repo, '.zed', 'settings.json'), 'utf8'));
-    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: process.execPath, args: [path.join(repo, 'tools', 'mcp', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo], enabled: true });
+    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: process.execPath, args: [path.join(repo, 'tools', 'mcp', 'tools', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo], enabled: true });
 
     const kimi = JSON.parse(fs.readFileSync(path.join(repo, '.kimi-code', 'mcp.json'), 'utf8'));
     assert.equal(kimi.mcpServers['workspace-tgrep'].command, process.execPath);
     assert.equal(kimi.mcpServers['workspace-tgrep'].cwd, repo);
-    assert.equal(kimi.mcpServers['workspace-tgrep'].args[0], 'tools/mcp/tgrep/src/server.mjs');
+    assert.equal(kimi.mcpServers['workspace-tgrep'].args[0], 'tools/mcp/tools/tgrep/src/server.mjs');
 
     const qwen = JSON.parse(fs.readFileSync(path.join(repo, '.qwen', 'settings.json'), 'utf8'));
     assert.equal(qwen.mcpServers['workspace-tgrep'].cwd, repo);

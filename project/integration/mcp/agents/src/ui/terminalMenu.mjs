@@ -119,6 +119,35 @@ export function createInteractiveUi({ input, output, forceLine = false }) {
   }
 
   /** Write the block once; the returned callback rewrites it in place. */
+  async function textInput(prompt, { defaultValue = '', secret = false } = {}) {
+    if (!secret) return (await ask(`${prompt}${defaultValue ? ` [${defaultValue}]` : ''}> `)).trim() || defaultValue;
+    ensureOpen();
+    if (!input.isTTY || typeof input.setRawMode !== 'function') throw new MenuInputError('API Key 隐藏输入需要支持 raw mode 的终端；也可用 SIRCHMUNK_LLM_API_KEY 非交互配置。');
+    output.write(`${prompt}${defaultValue ? ' [回车保持已保存的值]' : ''}（输入不显示）> `);
+    const previousRaw = Boolean(input.isRaw);
+    let value = '';
+    let cleanup;
+    try {
+      return await new Promise((resolve, reject) => {
+        const keypress = (text, key) => {
+          if (isCancelKey(key)) { reject(new MenuCancelled()); return; }
+          if (isEnterKey(key)) { resolve(value.trim() || defaultValue); return; }
+          if (key?.name === 'backspace') value = [...value].slice(0, -1).join('');
+          else if (!key?.ctrl && !key?.meta && text && !/[\r\n\0\x1b]/.test(text)) value += text;
+        };
+        cleanup = () => { closeRejections.delete(reject); input.removeListener('keypress', keypress); };
+        closeRejections.add(reject);
+        readline.emitKeypressEvents(input);
+        input.on('keypress', keypress);
+        input.setRawMode(true);
+        input.resume();
+      });
+    } finally {
+      cleanup?.(); input.setRawMode(previousRaw); input.pause(); output.write('\n');
+    }
+  }
+
+  /** Write the block once; the returned callback rewrites it in place. */
   function beginBlock(lines) {
     const write = (block) => {
       for (const line of block) output.write(`${clip(line, columns())}\n`);
@@ -319,6 +348,7 @@ export function createInteractiveUi({ input, output, forceLine = false }) {
 
   return {
     mode,
+    textInput,
     close: () => {
       onInputClose();
       input.removeListener('close', onInputClose);

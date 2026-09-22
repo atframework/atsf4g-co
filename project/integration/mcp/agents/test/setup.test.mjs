@@ -19,7 +19,7 @@ function fixture(t) {
   const integration = path.join(root, 'tools/mcp');
   fs.mkdirSync(integration, { recursive: true });
   for (const file of ['setup.js']) fs.copyFileSync(path.join(source, file), path.join(integration, file));
-  for (const component of ['agents', 'common']) {
+  for (const component of ['agents', 'common', 'tools/sirchmunk']) {
     fs.cpSync(path.join(source, component), path.join(integration, component), {
       recursive: true, filter: (file) => !['node_modules', 'test'].includes(path.basename(file)),
     });
@@ -174,11 +174,11 @@ test('CLI help and list-agents stay consistent with the registry', (t) => {
   // flag surface of setup.js; extend this list when adding an option).
   const help = run(['--help']);
   assert.equal(help.status, 0, help.stderr + help.stdout);
-  for (const flag of ['--repo-root=', '--build-dir=', '--backend=', '--agents=', '--mirror=', '--npm-mirror=', '--cargo-mirror=', '--tgrep-bin=', '--codegraph-path=', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui=line', '--dry-run', '--help', '-h', '--list-agents', '--list-mirrors']) {
+  for (const flag of ['--repo-root=', '--build-dir=', '--backend=', '--agents=', '--mirror=', '--npm-mirror=', '--cargo-mirror=', '--tgrep-bin=', '--codegraph-path=', '--sirchmunk-python=', '--pip-index-url=', '--llm-base-url=', '--llm-model=', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui=line', '--dry-run', '--help', '-h', '--list-agents', '--list-mirrors']) {
     assert.ok(help.stdout.includes(flag), `help documents ${flag}`);
   }
   const documentedFlags = [...help.stdout.matchAll(/^\s{2}(--[a-z-]+)/gm)].map((match) => match[1]);
-  assert.deepEqual(documentedFlags, ['--repo-root', '--build-dir', '--backend', '--agents', '--mirror', '--npm-mirror', '--cargo-mirror', '--tgrep-bin', '--codegraph-path', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui', '--dry-run', '--help', '--list-agents', '--list-mirrors'], 'help lists exactly the accepted options');
+  assert.deepEqual(documentedFlags, ['--repo-root', '--build-dir', '--backend', '--agents', '--mirror', '--npm-mirror', '--cargo-mirror', '--tgrep-bin', '--codegraph-path', '--sirchmunk-python', '--pip-index-url', '--llm-base-url', '--llm-model', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui', '--dry-run', '--help', '--list-agents', '--list-mirrors'], 'help lists exactly the accepted options');
 });
 
 test('CLI mirror choices are validated and listing/dry-run never prepares tools', t => {

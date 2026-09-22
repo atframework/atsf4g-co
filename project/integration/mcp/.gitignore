@@ -1,0 +1,5 @@
+# Development installs only; setup.js writes production dependencies under BUILD_DIR.
+**/node_modules/
+**/__pycache__/
+*.pyc
+*.log

@@ -8,14 +8,14 @@
  *   deno run -A --no-config --no-lock --node-modules-dir=manual <MCP_DIR>/setup.js
  *   node <MCP_DIR>/setup.js --uninstall         从 Agent 配置移除本集成
  *
- * 流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖
+ * 流程：选择检索后端（tgrep / CodeGraph / Sirchmunk 三选一）→ 选择下载镜像 → 准备本地依赖
  * （优先复用本地程序，否则 Cargo 构建 / npx 缓存，全部固定版本）→ 全部成功后才写入所选 Agent 的
  * 项目级 MCP 配置。依赖准备失败时不会改动任何 Agent 配置。
  * CodeGraph 同批更新根 AGENTS.md 的条件式提示词；等价正文不重复写入。
  *
  * 可重复执行：用于切换后端、升级固定制品、为更多 Agent 接入或卸载。
  * 常用选项：
- *   --backend=tgrep|codegraph   指定后端（跳过交互）
+ *   --backend=tgrep|codegraph|sirchmunk   指定后端（跳过交互）
  *   --agents=<id1,id2,...>|all  指定要接入的 Agent（跳过交互，--list-agents 查看可选 id；
  *                               all 只含可自动写入项目配置的目标，面板导入类需显式指定）
  *   --mirror=cn|official        指定下载镜像（缺省按地区建议并交互确认）
@@ -43,6 +43,8 @@ import { runPrepare, writePreparedState } from './common/src/prepare.mjs';
 import { NPM_MIRRORS, CARGO_MIRRORS, mirrorSettings, selectMirrors, mirrorSummary } from './common/src/mirrors.mjs';
 import { WorkspacePaths, detectWorkspace, projectInfo, resolveBuildDir, validateWorkspaceBuildDir } from './common/src/paths.mjs';
 import { currentRuntime, runtimeSupported } from './common/src/runtime.mjs';
+import { collectConfig, writeConfig as writeSirchmunkConfig } from './tools/sirchmunk/src/config.mjs';
+import { startModelDownload } from './tools/sirchmunk/src/prepare.mjs';
 
 const integrationRoot = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,6 +73,14 @@ function parseArgv(argv) {
     else if (arg.startsWith('--cargo-mirror=')) options.cargoMirror = requireValue('--cargo-mirror', arg.slice('--cargo-mirror='.length));
     else if (arg.startsWith('--tgrep-bin=')) options.tgrepBinary = requireValue('--tgrep-bin', arg.slice('--tgrep-bin='.length));
     else if (arg.startsWith('--codegraph-path=')) options.codegraphPath = requireValue('--codegraph-path', arg.slice('--codegraph-path='.length));
+    else if (arg.startsWith('--sirchmunk-python=')) options.sirchmunkPython = requireValue('--sirchmunk-python', arg.slice('--sirchmunk-python='.length));
+    else if (arg.startsWith('--pip-index-url=')) {
+      options.pipIndexURL = requireValue('--pip-index-url', arg.slice('--pip-index-url='.length));
+      const url = new URL(options.pipIndexURL);
+      if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('--pip-index-url 需要不含凭据的 HTTPS 地址');
+    }
+    else if (arg.startsWith('--llm-base-url=')) options.llmBaseURL = requireValue('--llm-base-url', arg.slice('--llm-base-url='.length));
+    else if (arg.startsWith('--llm-model=')) options.llmModel = requireValue('--llm-model', arg.slice('--llm-model='.length));
     else if (arg.startsWith('--repo-root=')) options.repoRoot = requireValue('--repo-root', arg.slice('--repo-root='.length));
     else if (arg.startsWith('--build-dir=')) options.buildDir = requireValue('--build-dir', arg.slice('--build-dir='.length));
     else if (arg.startsWith('--ui=')) {
@@ -94,7 +104,7 @@ function printHelp() {
     'Deno：deno run -A --no-config --no-lock --node-modules-dir=manual <MCP_DIR>/setup.js [选项]',
     'MCP 配置使用本次运行时的绝对路径；Deno 的启动权限参数由安装器生成。',
     '',
-    '流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖',
+    '流程：选择检索后端（tgrep / CodeGraph / Sirchmunk 三选一）→ 选择下载镜像 → 准备本地依赖',
     '（全部固定版本）→ 依赖就绪后把 MCP 服务写入所选 Agent 的项目级配置。',
     '依赖准备失败时不会改动任何 Agent 配置。可重复执行，用于切换后端、升级固定',
     '制品、为更多 Agent 接入或卸载。',
@@ -103,7 +113,7 @@ function printHelp() {
     '选项：',
     '  --repo-root=<dir>          显式工作区；缺省从执行目录向上检测工程根，未找到时使用执行目录',
     '  --build-dir=<dir>          工作区内的构建/缓存目录（缺省按 .vscode/settings.json 解析）',
-    '  --backend=tgrep|codegraph   指定后端（跳过交互）',
+    '  --backend=tgrep|codegraph|sirchmunk   指定后端（跳过交互）',
     '  --agents=<id1,id2,...>|all  指定要接入的 Agent（跳过交互；--list-agents 查看可选 id；',
     '                              all 只含可自动写入项目配置的目标，面板导入类需显式指定）',
     '  --mirror=cn|official        npm/Cargo 的推荐默认组合；交互时仍各自选择来源',
@@ -111,6 +121,10 @@ function printHelp() {
     '  --cargo-mirror=<id>         指定 Cargo 站点（仅 tgrep 源码编译使用）',
     '  --tgrep-bin=<file>          优先使用指定 tgrep 程序（需兼容版本和 stdio 补丁）',
     '  --codegraph-path=<path>     本地 CodeGraph 包、可执行入口或已编译源码目录',
+    '  --sirchmunk-python=<file>   Python >= 3.10 可执行文件（缺省优先本地 Python 3.12/3.13）',
+    '  --pip-index-url=<url>       Sirchmunk Python 依赖源；默认 PyPI，支持 HTTPS 镜像',
+    '  --llm-base-url=<url>        Sirchmunk 的 OpenAI 兼容 LLM baseURL',
+    '  --llm-model=<name>          Sirchmunk 模型名；API Key 用隐藏输入或 SIRCHMUNK_LLM_API_KEY',
     '  --offline                   只使用已缓存的制品',
     '  --skip-prepare              跳过依赖准备，仅调整 Agent 配置',
     '  --uninstall                 移除 Agent 配置中的本集成条目（配合 --agents/--all-agents）',
@@ -372,10 +386,15 @@ async function runSetup(options, ui) {
         const mark = id === prepared ? '（上次准备）' : '';
         return `${def.label}${mark}`;
       });
-      const index = await ui.menu.singleSelect('选择检索后端（同类工具二选一）：', choices, { defaultIndex: prepared ? Object.keys(BACKENDS).indexOf(prepared) : 0 });
+      const index = await ui.menu.singleSelect('选择检索后端（检索工具三选一）：', choices, { defaultIndex: prepared ? Object.keys(BACKENDS).indexOf(prepared) : 0 });
       backend = Object.keys(BACKENDS)[index];
     }
   }
+
+  // Credential validation happens before downloads; dry-run never prompts for secrets.
+  const sirchmunkConfig = backend === 'sirchmunk' && !options.dryRun ? await collectConfig(paths, { options, ui }) : null;
+  let preparedSirchmunk = null;
+  if (backend === 'sirchmunk') ui.line('Sirchmunk 的 FAST/DEEP 会把检索内容发送至配置的 LLM；模型下载在后台进行，就绪后自动启用知识演化。');
 
   // -- 准备依赖（失败则绝不触碰 Agent 配置；dry-run 完全跳过准备） -------------------
   if (options.dryRun) {
@@ -398,9 +417,12 @@ async function runSetup(options, ui) {
         cargoIsolated,
         tgrepBinary: options.tgrepBinary,
         codegraphPath: options.codegraphPath,
+        sirchmunkPython: options.sirchmunkPython,
+        pipIndexURL: options.pipIndexURL,
         log: (message) => ui.line(message),
       });
       result.state.mirrors = { npm: mirrors.npmId, cargo: mirrors.cargoId };
+      preparedSirchmunk = result.state.sirchmunk;
       const statePath = writePreparedState(result.paths, result.state);
       ui.line(`状态已写入 ${statePath}`);
     } catch (error) {
@@ -413,6 +435,8 @@ async function runSetup(options, ui) {
   } else {
     ui.line('已按 --skip-prepare 跳过依赖准备。');
   }
+
+  if (sirchmunkConfig) writeSirchmunkConfig(paths, sirchmunkConfig);
 
   // -- 选择 Agent（可多选；已配置的默认保持）——依赖就绪后才扫描配置 ------------------
   recoverBeforeScan(ui, paths, options.dryRun);
@@ -464,13 +488,16 @@ async function runSetup(options, ui) {
   if (!runConfigBatch(ui, paths, operations, { dryRun: options.dryRun, ideExports })) {
     return 1;
   }
+  if (preparedSirchmunk && selectedIds.size && startModelDownload(paths, preparedSirchmunk, integrationRoot)) {
+    ui.line(`Embedding 模型后台下载已启动（无 LLM 调用）；进度：${path.join(preparedSirchmunk.model_dir, 'download-state.json')}`);
+  }
 
   // -- 面板导入类交付：构建目录片段 + 导入步骤（不写项目配置文件） --------------------
   for (const agent of guidedAgents()) {
     if (!selectedIds.has(agent.id)) continue;
     const spec = GUIDED_IMPORTS[agent.id];
     const snippetFile = path.join(exportsDir, spec.snippetFile);
-    for (const guidance of guidedImportGuidance({ agentId: agent.id, snippetFile, relativeEntry: path.join(integrationRoot, backend, 'src/server.mjs'), dryRun: options.dryRun })) {
+    for (const guidance of guidedImportGuidance({ agentId: agent.id, snippetFile, relativeEntry: path.join(integrationRoot, 'tools', backend, 'src/server.mjs'), dryRun: options.dryRun })) {
       ui.line(guidance);
     }
   }

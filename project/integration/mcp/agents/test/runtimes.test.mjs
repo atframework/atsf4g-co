@@ -33,7 +33,7 @@ test('JSON and command-array clients switch runtimes while preserving wrapper op
       assert.equal(argv[0], selected.executable);
       const prefix = kind === 'deno' ? denoArgs : kind === 'bun' ? ['--no-install', '--no-env-file'] : [];
       assert.deepEqual(argv.slice(1, 1 + prefix.length), prefix);
-      assert.ok(argv.includes(path.join(INTEGRATION_ROOT, 'tgrep/src/server.mjs')));
+      assert.ok(argv.includes(path.join(INTEGRATION_ROOT, 'tools/tgrep/src/server.mjs')));
       assert.equal(argv.filter(arg => arg === '--repo-root').length, 1);
       if (kind !== 'node' || entry.env) {
         assert.equal(argv.filter(arg => arg === '--test-option').length, 1);

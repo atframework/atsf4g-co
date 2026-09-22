@@ -5,8 +5,23 @@ mirrors, agent config writing, switching, and uninstall.
 
 ## Layout and ownership
 
+- Implementations live in `tools/{tgrep,codegraph,sirchmunk}`. Agent writers emit
+  these paths and recognize the exact old tgrep/CodeGraph entry locations for
+  migration. Keep all old `src/*.mjs` forwarding entries; do not duplicate implementations.
+- Sirchmunk setup collects baseURL, a hidden API Key, and model name before
+  preparing Python dependencies. Noninteractive settings use `--llm-base-url`,
+  `--llm-model`, and `SIRCHMUNK_LLM_API_KEY`. Never put the key into argv,
+  agent configs, exports, prepared-state, or diagnostic output. `--dry-run`
+  neither asks for secrets nor writes them. Successful setup starts a separate
+  model preparation job; offline and skip-prepare do not start that job.
+- Download layout is defined by `WorkspacePaths`: `downloads/{node,cache,sources,
+  bin,archives,wheels,python,models}`. SDK packages are installed into that workspace,
+  not the toolkit. A manifest receipt is written only after npm installation succeeds.
+  Existing matching toolkit dependencies can be copied for offline migration;
+  old upstream/binary/npx locations remain read candidates and are not moved.
+
 - `project/integration/mcp/setup.js` — the only install entry: backend choice
-  (tgrep XOR CodeGraph) → mirror choice → dependency preparation → agent config
+  (tgrep / CodeGraph / Sirchmunk) → mirror choice → dependency preparation → agent config
   write. `--uninstall` removes managed entries. Flags: `--backend=`,
   `--agents=<ids>|all` (all = auto-writable targets only; guided imports stay
   opt-in), `--mirror=cn|official`, `--npm-mirror=`, `--cargo-mirror=`,
@@ -376,7 +391,7 @@ under `--mirror=cn` fails with ETARGET; use `--mirror=official`.
 
 ## Lockfile policy
 
-`common/tgrep/codegraph/package-lock.json` must stay mirror-neutral: no
+the lockfiles in `common`, `tools/tgrep` and `tools/codegraph` must stay mirror-neutral: no
 `resolved` entries, or ones pointing at `registry.npmjs.org`/`
 `registry.npmmirror.com` only. npm 12 fails `npm ci` with `EALLOWREMOTE` on
 third-party tarball hosts (this broke fresh installs until 2026-09-20 — the
@@ -398,7 +413,8 @@ client lacks cwd/variable support from the serializer's current choice.
 
 1. Each component's `npm test` (or `node --test` with explicit `test/*.test.mjs`
    file lists — directory arguments fail as module paths) in `agents`, `common`,
-   `tgrep`, `codegraph`, on Windows AND WSL/Linux. `agents/package.json` and
+   `tools/tgrep`, `tools/codegraph`, `tools/sirchmunk`, plus the Sirchmunk Python suite.
+   Check Windows and WSL/Linux when available and report untested platforms. `agents/package.json` and
    `common/package.json` must include new regression files;
    setup tests execute an isolated CLI install/repeat/switch/uninstall flow.
 2. `node project/integration/mcp/setup.js --dry-run ...` variants: install with

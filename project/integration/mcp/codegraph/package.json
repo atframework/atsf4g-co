@@ -1,19 +1,8 @@
 {
-  "name": "mcp-codegraph",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "description": "CodeGraph MCP wrapper for any workspace (stdio, supervised direct-mode backend on the pinned bundle)",
-  "engines": {
-    "node": ">=20"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/client": "^2.0.0"
-  },
-  "devDependencies": {
-    "@modelcontextprotocol/server": "^2.0.0"
-  },
+  "name": "mcp-codegraph-compat",
   "scripts": {
-    "test": "node --test test/backend.test.mjs test/server.test.mjs"
-  }
+    "test": "node --test ../tools/codegraph/test/backend.test.mjs ../tools/codegraph/test/server.test.mjs"
+  },
+  "private": true,
+  "type": "module"
 }

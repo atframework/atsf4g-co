@@ -5,16 +5,17 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { Client } from '@modelcontextprotocol/client';
-import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { loadSdk } from '../../../common/src/sdk.mjs';
+const { Client } = await loadSdk('tools/codegraph', '@modelcontextprotocol/client');
+const { StdioClientTransport } = await loadSdk('tools/codegraph', '@modelcontextprotocol/client/stdio');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(HERE, '..', 'src', 'server.mjs');
 const FAKE = path.join(HERE, 'fake-codegraph.mjs');
-const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..', '..');
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..', '..', '..');
 
 test('closing MCP during the first index cancels the helper and releases the session', async () => {
-  const { WorkspacePaths } = await import('../../common/src/paths.mjs');
+  const { WorkspacePaths } = await import('../../../common/src/paths.mjs');
   const root = tmpBuildDir();
   const paths = new WorkspacePaths(root, path.join(root, 'build'));
   paths.ensureDirs();
@@ -67,11 +68,11 @@ function tmpBuildDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-cg-server-'));
 }
 
-async function launchServer(envExtra = {}) {
+async function launchServer(envExtra = {}, entry = SERVER) {
   const buildDir = tmpBuildDir();
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [SERVER, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+    args: [entry, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
     env: {
       ...envExtra,
       SYSTEMROOT: process.env.SYSTEMROOT,
@@ -84,6 +85,21 @@ async function launchServer(envExtra = {}) {
   await client.connect(transport);
   return { client, transport, buildDir };
 }
+
+test('legacy CodeGraph server entry still serves MCP and forwards module exports', async () => {
+  const old = await import('../../../codegraph/src/backend.mjs');
+  const current = await import('../src/backend.mjs');
+  assert.deepEqual(Object.keys(old), Object.keys(current));
+  for (const key of Object.keys(current)) assert.equal(old[key], current[key]);
+  const { client, transport, buildDir } = await launchServer({ CODEGRAPH_MCP_FAKE_SCRIPT: FAKE }, path.resolve(HERE, '../../../codegraph/src/server.mjs'));
+  try {
+    assert.ok((await client.listTools()).tools.some(tool => tool.name === 'codegraph_explore'));
+  } finally {
+    await client.close();
+    assert.ok(await waitForPidExit(transport.pid));
+    fs.rmSync(buildDir, { recursive: true, force: true });
+  }
+});
 
 function textOf(result) {
   assert.equal(result.content[0].type, 'text');
@@ -181,7 +197,7 @@ test('extra-tools config extends the allowlist; dispatch re-checks it', async ()
   const buildDir = tmpBuildDir();
   const extraConfig = path.join(buildDir, 'integration', 'mcp', 'state', 'codegraph');
   // workspaceId is derived from the repo root; write through the same helper the server uses.
-  const { workspaceId, platformName } = await import('../../common/src/paths.mjs');
+  const { workspaceId, platformName } = await import('../../../common/src/paths.mjs');
   const toolDir = path.join(extraConfig, workspaceId(REPO_ROOT), platformName());
   fs.mkdirSync(toolDir, { recursive: true });
   fs.writeFileSync(path.join(toolDir, 'extra-tools.json'), JSON.stringify({ enabled_tools: ['codegraph_callers'] }));

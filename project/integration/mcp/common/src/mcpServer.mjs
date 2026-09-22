@@ -1,5 +1,5 @@
 /**
- * Shared MCP server wiring for both wrappers: a low-level SDK Server with a
+ * Shared MCP server wiring for all wrappers: a low-level SDK Server with a
  * fixed tool table, served over stdio, with one idempotent shutdown path.
  *
  * - The outer stdout carries MCP JSON-RPC only; diagnostics go to stderr.
@@ -11,8 +11,9 @@
  *   break and exit on their own (stdin-lifeline contract).
  */
 
-import { Server } from '@modelcontextprotocol/server';
-import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { loadSdk } from './sdk.mjs';
+const { Server } = await loadSdk('common', '@modelcontextprotocol/server');
+const { StdioServerTransport } = await loadSdk('common', '@modelcontextprotocol/server/stdio');
 
 import { BackendError, ErrorCodes } from './errors.mjs';
 

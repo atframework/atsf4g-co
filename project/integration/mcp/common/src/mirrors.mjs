@@ -40,7 +40,7 @@ export async function selectMirrors({ options, backend, suggested, menu, interac
     for (const [key, catalog, label] of [['npmMirror', NPM_MIRRORS, 'npm'], ['cargoMirror', CARGO_MIRRORS, 'Cargo']]) {
       if (selected[key]) continue;
       const ids = Object.keys(catalog);
-      const note = key === 'cargoMirror' && backend !== 'tgrep' ? '；CodeGraph 本次不使用' : '';
+      const note = key === 'cargoMirror' && backend !== 'tgrep' ? `；${backend === 'codegraph' ? 'CodeGraph' : 'Sirchmunk'} 本次不使用` : '';
       const index = await menu.singleSelect(`选择 ${label} 下载来源（官方源 / 国内镜像${note}）：`,
         ids.map(id => `${id} — ${catalog[id].label} — ${catalog[id].url}`),
         { defaultIndex: ids.indexOf(key === 'npmMirror' ? defaults.npmId : defaults.cargoId) });
@@ -53,5 +53,5 @@ export async function selectMirrors({ options, backend, suggested, menu, interac
 export function mirrorSummary(settings, backend) {
   return `npm：${settings.npmId} — ${NPM_MIRRORS[settings.npmId].label} — ${settings.npmRegistry}；`
     + `Cargo：${settings.cargoId} — ${CARGO_MIRRORS[settings.cargoId].label} — ${CARGO_MIRRORS[settings.cargoId].url}`
-    + (backend === 'codegraph' ? '（本次不使用 Cargo）' : '');
+    + (backend !== 'tgrep' ? '（本次不使用 Cargo）' : '');
 }

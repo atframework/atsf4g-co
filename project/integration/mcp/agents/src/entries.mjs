@@ -52,7 +52,9 @@ export function isOurServerEntry(entry, repoRoot, launch = {}, expectedBackend =
   return Object.keys(BACKENDS).some((backend) => {
     if (expectedBackend && backend !== expectedBackend) return false;
     const expected = path.resolve(absoluteServerEntry(repoRoot, backend, launch));
-    if (!samePath(path.resolve(base, expanded), expected)) return false;
+    const legacy = path.resolve(launch.integrationRoot ?? path.join(path.dirname(expected), '../../..'), backend, 'src/server.mjs');
+    const actual = path.resolve(base, expanded);
+    if (!samePath(actual, expected) && !(['tgrep', 'codegraph'].includes(backend) && samePath(actual, legacy))) return false;
     if (isWithin(expected, repoRoot)) return true;
     // An external script without an explicit root would fall back to the
     // toolkit's own workspace. Its path alone is not ownership evidence.
@@ -61,7 +63,7 @@ export function isOurServerEntry(entry, repoRoot, launch = {}, expectedBackend =
 }
 
 function absoluteServerEntry(repoRoot, backend, launch = {}) {
-  return launch.integrationRoot ? path.join(launch.integrationRoot, backend, 'src', 'server.mjs') : BACKENDS[backend].entry;
+  return launch.integrationRoot ? path.join(launch.integrationRoot, 'tools', backend, 'src', 'server.mjs') : BACKENDS[backend].entry;
 }
 
 export function configuredServerIds(map, repoRoot, launch = {}) {

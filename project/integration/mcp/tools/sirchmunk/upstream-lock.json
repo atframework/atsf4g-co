@@ -1,0 +1,70 @@
+{
+  "native": {
+    "rga": {
+      "darwin-x64": {
+        "filename": "ripgrep_all-v0.10.10-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/phiresky/ripgrep-all/releases/download/v0.10.10/ripgrep_all-v0.10.10-x86_64-apple-darwin.tar.gz",
+        "sha256": "3d9fe75878ddab6a8e7abb66ab13af1bdea2844a02c479fb293b7bfb258ab353"
+      },
+      "linux-x64": {
+        "filename": "ripgrep_all-v0.10.10-x86_64-unknown-linux-musl.tar.gz",
+        "url": "https://github.com/phiresky/ripgrep-all/releases/download/v0.10.10/ripgrep_all-v0.10.10-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "a969c25b182ac84aa672518313b5f741091decf7d93d03a020bcfe517b9ff4e8"
+      },
+      "linux-arm64": {
+        "filename": "ripgrep_all-v0.10.10-aarch64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/phiresky/ripgrep-all/releases/download/v0.10.10/ripgrep_all-v0.10.10-aarch64-unknown-linux-gnu.tar.gz",
+        "sha256": "2cd875ab6c78b27e4830b5bca92c570a8a8dcfb368bc71b189b65ac01fbc3020"
+      },
+      "win32-x64": {
+        "filename": "ripgrep_all-v0.10.9-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/phiresky/ripgrep-all/releases/download/v0.10.9/ripgrep_all-v0.10.9-x86_64-pc-windows-msvc.zip",
+        "sha256": "da03e969ac01839443739c547ca8eb521e648e712251d61a98d34a1521b9f43b"
+      },
+      "darwin-arm64": {
+        "filename": "ripgrep_all-v0.10.10-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/phiresky/ripgrep-all/releases/download/v0.10.10/ripgrep_all-v0.10.10-aarch64-apple-darwin.tar.gz",
+        "sha256": "9deeaa927779078568832b5b69ae57986ca917f24974bb4976c062f632846856"
+      }
+    },
+    "rg": {
+      "darwin-x64": {
+        "filename": "ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
+        "sha256": "af7825fcc69a2afc7a7aea55fc9af90e26421d8f20fe59df32e233c0b8a231c1"
+      },
+      "linux-x64": {
+        "filename": "ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+      },
+      "linux-arm64": {
+        "filename": "ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-gnu.tar.gz",
+        "sha256": "a740b91c82eaf9914cfedd353572f2791cbe0162c84101ee0951058f4dcbc90d"
+      },
+      "win32-x64": {
+        "filename": "ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+      },
+      "darwin-arm64": {
+        "filename": "ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+        "sha256": "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
+      }
+    }
+  },
+  "source": "https://github.com/modelscope/sirchmunk",
+  "embedding": {
+    "revision": "e8f8c211226b894fcb81acc59f3b34ba3efd5f42",
+    "model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "source": "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  },
+  "version": "0.2.0",
+  "wheel": {
+    "filename": "sirchmunk-0.2.0-py3-none-any.whl",
+    "url": "https://files.pythonhosted.org/packages/e4/e2/ab53dabfc06c38b2404ec571677421fb986c62d881bc61680a6596afc8c7/sirchmunk-0.2.0-py3-none-any.whl",
+    "sha256": "87414bc035f7b3d48c4626e3049d644c9e0ac395168c25bc9a74eab9f35480d6"
+  }
+}

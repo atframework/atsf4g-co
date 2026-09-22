@@ -11,18 +11,24 @@ import { INTEGRATION_ROOT } from '../../common/src/paths.mjs';
 export const SERVER_IDS = Object.freeze({
   tgrep: 'workspace-tgrep',
   codegraph: 'workspace-codegraph',
+  sirchmunk: 'workspace-sirchmunk',
 });
 
 export const BACKENDS = Object.freeze({
   tgrep: {
     serverId: SERVER_IDS.tgrep,
-    entry: path.join(INTEGRATION_ROOT, 'tgrep', 'src', 'server.mjs'),
+    entry: path.join(INTEGRATION_ROOT, 'tools', 'tgrep', 'src', 'server.mjs'),
     label: 'tgrep — fast text/regex search',
   },
   codegraph: {
     serverId: SERVER_IDS.codegraph,
-    entry: path.join(INTEGRATION_ROOT, 'codegraph', 'src', 'server.mjs'),
+    entry: path.join(INTEGRATION_ROOT, 'tools', 'codegraph', 'src', 'server.mjs'),
     label: 'CodeGraph — structural code navigation',
+  },
+  sirchmunk: {
+    serverId: SERVER_IDS.sirchmunk,
+    entry: path.join(INTEGRATION_ROOT, 'tools/sirchmunk/src/server.mjs'),
+    label: 'Sirchmunk — LLM document search and knowledge evolution',
   },
 });
 

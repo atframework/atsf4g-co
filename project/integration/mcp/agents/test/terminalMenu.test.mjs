@@ -37,6 +37,22 @@ async function withTimeout(promise, milliseconds = 4000) {
   } finally { clearTimeout(timer); }
 }
 
+test('secret input never echoes input or saved defaults and restores raw mode on cancellation', async () => {
+  for (const cancel of [false, true]) {
+    const streams = fakeStreams();
+    const ui = createInteractiveUi(streams);
+    const pending = withTimeout(ui.textInput('API Key', { defaultValue: 'saved-secret', secret: true }));
+    streams.input.write('new-secret');
+    streams.input.write(cancel ? '\x03' : '\r');
+    if (cancel) await assert.rejects(pending, MenuCancelled);
+    else assert.equal(await pending, 'new-secret');
+    assert.equal(streams.read().includes('secret'), false);
+    assert.equal(streams.rawModeStates.at(-1), false);
+    assert.equal(streams.input.listenerCount('keypress'), 0);
+    ui.close();
+  }
+});
+
 test('EOF without stream close cancels both modes and future questions', async () => {
   for (const forceLine of [false, true]) {
     const { input, output } = fakeStreams();

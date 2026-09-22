@@ -5,23 +5,24 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { Client } from '@modelcontextprotocol/client';
-import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
+import { loadSdk } from '../../../common/src/sdk.mjs';
+const { Client } = await loadSdk('tools/tgrep', '@modelcontextprotocol/client');
+const { StdioClientTransport } = await loadSdk('tools/tgrep', '@modelcontextprotocol/client/stdio');
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SERVER = path.join(HERE, '..', 'src', 'server.mjs');
 const FAKE = path.join(HERE, 'fake-tgrep-serve.mjs');
-const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..', '..');
+const REPO_ROOT = path.resolve(HERE, '..', '..', '..', '..', '..', '..');
 
 function tmpBuildDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-tgrep-server-'));
 }
 
-async function launchServer(envExtra = {}) {
+async function launchServer(envExtra = {}, entry = SERVER) {
   const buildDir = tmpBuildDir();
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [SERVER, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+    args: [entry, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
     env: {
       ...envExtra,
       SYSTEMROOT: process.env.SYSTEMROOT,
@@ -34,6 +35,20 @@ async function launchServer(envExtra = {}) {
   await client.connect(transport);
   return { client, transport, buildDir };
 }
+
+test('legacy tgrep server entry still serves MCP and forwards module exports', async () => {
+  const old = await import('../../../tgrep/src/backend.mjs');
+  const current = await import('../src/backend.mjs');
+  assert.equal(old.TgrepBackend, current.TgrepBackend);
+  const { client, transport, buildDir } = await launchServer({ TGREP_MCP_FAKE_SCRIPT: FAKE }, path.resolve(HERE, '../../../tgrep/src/server.mjs'));
+  try {
+    assert.ok((await client.listTools()).tools.some(tool => tool.name === 'tgrep_search'));
+  } finally {
+    await client.close();
+    assert.ok(await waitForPidExit(transport.pid));
+    fs.rmSync(buildDir, { recursive: true, force: true });
+  }
+});
 
 function textOf(result) {
   assert.equal(result.content[0].type, 'text');
