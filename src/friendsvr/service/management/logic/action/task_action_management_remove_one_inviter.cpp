@@ -74,11 +74,13 @@ task_action_management_remove_one_inviter::operator()() {
   }
 
   atfw::friend_api::friend_object::ptr_t friend_obj =
-      std::dynamic_pointer_cast<atfw::friend_api::friend_object>(router_cache->get_object());
+      std::static_pointer_cast<atfw::friend_api::friend_object>(router_cache->get_object());
   if (!friend_obj) {
     FWLOGERROR("try to get friend_object for {} and friend {}:{} failed.", name(), zone_id, user_id);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
   }
+
+  friend_obj->refresh_feature_limit(get_shared_context());
 
   int32_t result = 0;
   atfw::friend_api::friend_wal_publisher_context param{get_shared_context(), result};

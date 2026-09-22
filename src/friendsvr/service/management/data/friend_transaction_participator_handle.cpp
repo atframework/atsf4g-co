@@ -148,6 +148,7 @@ create_friend_transaction_vtable() {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNKNOWN);
     }
 
+    friend_obj->refresh_feature_limit(ctx);
     RPC_AWAIT_IGNORE_RESULT(friend_obj->send_notification(ctx));
     RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SUCCESS);
   };
