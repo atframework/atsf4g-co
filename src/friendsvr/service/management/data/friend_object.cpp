@@ -681,7 +681,7 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
   }
 }
 
-rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
+rpc::result_code_type friend_object::send_notification(rpc::context& /*ctx*/) {
   // TODO(owent): 打包和下发数据
   RPC_RETURN_CODE(0);
 }
