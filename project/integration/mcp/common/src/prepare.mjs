@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { commandPaths, readJson, probeTgrep, codegraphLayouts, probeCodegraph, npxPackageRoots, sameVersion, CODEGRAPH_LOCAL_ENV } from './localTools.mjs';
+import { commandPaths, nodeExecutables, readJson, probeTgrep, codegraphLayouts, probeCodegraph, npxPackageRoots, sameVersion, CODEGRAPH_LOCAL_ENV } from './localTools.mjs';
 
 import { WorkspacePaths, INTEGRATION_ROOT, validateWorkspaceBuildDir } from './paths.mjs';
 
@@ -54,21 +54,21 @@ export function shaOf(filePath, algorithm = 'sha256') {
 // -- npm ----------------------------------------------------------------------
 
 /**
- * Prefer driving npm through its CLI JS on the current interpreter: no shell,
+ * Prefer driving npm through its CLI JS on Node (even under Bun/Deno): no shell,
  * no .cmd resolution (Windows blocks bare .cmd spawns without a shell).
  */
 export function npmInvocation() {
-  const execDir = path.dirname(process.execPath);
-  const candidates =
-    process.platform === 'win32'
-      ? [path.join(execDir, 'node_modules', 'npm', 'bin', 'npm-cli.js')]
-      : [
-          path.join(execDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-          path.join(execDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
-        ];
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return { argv: [process.execPath, candidate], shell: false };
+  for (const executable of nodeExecutables()) {
+    const execDir = path.dirname(executable);
+    const candidates = [
+      path.join(execDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+      path.join(execDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+      ...commandPaths('npm').filter(file => !/\.(?:cmd|bat|ps1)$/i.test(file)).map(file => fs.realpathSync(file)),
+    ];
+    for (const candidate of candidates) {
+      if (path.basename(candidate) === 'npm-cli.js' && fs.existsSync(candidate)) {
+        return { argv: [executable, candidate], shell: false };
+      }
     }
   }
   return { argv: [process.platform === 'win32' ? 'npm.cmd' : 'npm'], shell: process.platform === 'win32' };
@@ -237,7 +237,7 @@ export function prepareCodegraph(paths, mcpRoot, {
   function select(candidates) {
     for (const candidate of candidates.filter(Boolean)) {
       for (const layout of codegraphLayouts(candidate, target)) {
-        const key = path.resolve(layout.library_entry);
+        const key = JSON.stringify([path.resolve(layout.library_entry), path.resolve(layout.runtime)]);
         if (checked.has(key)) continue;
         checked.add(key);
         try { return probeCodegraph(layout, lock.version, execute); }

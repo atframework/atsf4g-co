@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { currentRuntime } from './runtime.mjs';
 
 export const CODEGRAPH_NODE_FLAGS = ['--liftoff-only', '--disable-warning=ExperimentalWarning'];
 export const CODEGRAPH_LOCAL_ENV = {
@@ -25,6 +26,14 @@ export function commandPaths(name, env = process.env) {
 
 export function sameVersion(text, version) {
   return new RegExp(`(?:^|[\\sv])${version.replaceAll('.', '\\.')}($|\\s)`).test(text.trim());
+}
+
+/** Upstream CodeGraph and npm need Node, independently of the wrapper runtime. */
+export function nodeExecutables() {
+  const own = currentRuntime().kind === 'node' ? [process.execPath] : [];
+  return [...new Set([...own, ...commandPaths('node')]
+    .filter(file => isFile(file) && !/\.(?:cmd|bat|ps1)$/i.test(file))
+    .map(file => fs.realpathSync(file)))];
 }
 
 export function probeTgrep(binary, version, execute) {
@@ -58,7 +67,7 @@ export function codegraphLayouts(candidate, target) {
       if (isFile(runtime)) layouts.push({ version: bundledMetadata.version, runtime, cli_entry: path.join(root, 'lib/dist/bin/codegraph.js'), library_entry: path.join(root, 'lib/dist/index.js'), package_root: root });
     }
     if (metadata?.name === '@colbymchenry/codegraph' && isFile(path.join(root, 'dist/index.js'))) {
-      layouts.push({ version: metadata.version, runtime: process.execPath, cli_entry: path.join(root, 'dist/bin/codegraph.js'), library_entry: path.join(root, 'dist/index.js'), package_root: root });
+      for (const runtime of nodeExecutables()) layouts.push({ version: metadata.version, runtime, cli_entry: path.join(root, 'dist/bin/codegraph.js'), library_entry: path.join(root, 'dist/index.js'), package_root: root });
     }
   }
   return layouts;

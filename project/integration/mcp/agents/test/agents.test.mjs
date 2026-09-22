@@ -33,7 +33,7 @@ test('configureAgent writes every supported agent shape', () => {
     const claudeArgs = claude.mcpServers['workspace-tgrep'].args[0];
     assert.ok(claudeArgs.startsWith(repo), 'absolute server path under the repo');
     assert.ok(claudeArgs.endsWith(path.join('tgrep', 'src', 'server.mjs')));
-    assert.equal(claude.mcpServers['workspace-tgrep'].command, 'node');
+    assert.equal(claude.mcpServers['workspace-tgrep'].command, process.execPath);
     assert.equal(claude.mcpServers['workspace-tgrep'].type, 'stdio');
 
     const vscode = JSON.parse(fs.readFileSync(path.join(repo, '.vscode', 'mcp.json'), 'utf8'));
@@ -48,18 +48,18 @@ test('configureAgent writes every supported agent shape', () => {
 
     const opencode = JSON.parse(fs.readFileSync(path.join(repo, 'opencode.json'), 'utf8'));
     assert.equal(opencode.mcp['workspace-tgrep'].type, 'local');
-    assert.equal(opencode.mcp['workspace-tgrep'].command[0], 'node');
+    assert.equal(opencode.mcp['workspace-tgrep'].command[0], process.execPath);
     assert.equal(opencode.mcp['workspace-tgrep'].enabled, true);
 
     const zcode = JSON.parse(fs.readFileSync(path.join(repo, '.zcode', 'config.json'), 'utf8'));
-    assert.equal(zcode.mcp.servers['workspace-tgrep'].command, 'node');
+    assert.equal(zcode.mcp.servers['workspace-tgrep'].command, process.execPath);
 
     // P9.3 shapes (verified against each vendor's docs).
     const zed = JSON.parse(fs.readFileSync(path.join(repo, '.zed', 'settings.json'), 'utf8'));
-    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: 'node', args: [path.join(repo, 'tools', 'mcp', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo], enabled: true });
+    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: process.execPath, args: [path.join(repo, 'tools', 'mcp', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo], enabled: true });
 
     const kimi = JSON.parse(fs.readFileSync(path.join(repo, '.kimi-code', 'mcp.json'), 'utf8'));
-    assert.equal(kimi.mcpServers['workspace-tgrep'].command, 'node');
+    assert.equal(kimi.mcpServers['workspace-tgrep'].command, process.execPath);
     assert.equal(kimi.mcpServers['workspace-tgrep'].cwd, repo);
     assert.equal(kimi.mcpServers['workspace-tgrep'].args[0], 'tools/mcp/tgrep/src/server.mjs');
 
@@ -72,11 +72,11 @@ test('configureAgent writes every supported agent shape', () => {
 
     const mimo = JSON.parse(fs.readFileSync(path.join(repo, '.mimocode', 'mimocode.json'), 'utf8'));
     assert.equal(mimo.mcp['workspace-tgrep'].type, 'local');
-    assert.deepEqual(mimo.mcp['workspace-tgrep'].command.slice(0, 1), ['node']);
+    assert.deepEqual(mimo.mcp['workspace-tgrep'].command.slice(0, 1), [process.execPath]);
 
     const kilo = JSON.parse(fs.readFileSync(path.join(repo, '.kilo', 'kilo.jsonc'), 'utf8'));
     assert.equal(kilo.mcp['workspace-tgrep'].type, 'local');
-    assert.deepEqual(kilo.mcp['workspace-tgrep'].command.slice(0, 1), ['node']);
+    assert.deepEqual(kilo.mcp['workspace-tgrep'].command.slice(0, 1), [process.execPath]);
 
     const roo = JSON.parse(fs.readFileSync(path.join(repo, '.roo', 'mcp.json'), 'utf8'));
     assert.equal(roo.mcpServers['workspace-tgrep'].type, 'stdio');

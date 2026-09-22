@@ -30,6 +30,7 @@ import {
 } from '../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../common/src/state.mjs';
 import { runWrapperServer, toolText } from '../../common/src/mcpServer.mjs';
+import { scriptInvocation } from '../../common/src/runtime.mjs';
 import { TgrepBackend } from './backend.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -404,7 +405,8 @@ function main() {
   paths.ensureDirs();
 
   const fakeScript = process.env.TGREP_MCP_FAKE_SCRIPT;
-  const argvOverride = fakeScript ? [process.execPath, path.resolve(fakeScript)] : null;
+  const fakeInvocation = fakeScript ? scriptInvocation(path.resolve(fakeScript)) : null;
+  const argvOverride = fakeInvocation ? [fakeInvocation.command, ...fakeInvocation.args] : null;
   const binary = resolveBinary(paths, values['tgrep-binary']);
 
   const service = new TgrepService(paths, { binary, argvOverride });

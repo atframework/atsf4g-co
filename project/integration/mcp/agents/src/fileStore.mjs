@@ -64,8 +64,16 @@ export function readConfigFile(repoRoot, filePath, encoding = 'utf8') {
 const digestOf = (bytes) => (bytes === null || bytes === undefined ? null : crypto.createHash('sha256').update(bytes).digest('hex'));
 const fileId = (file) => {
   const stat = fs.statSync(file);
-  return `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
+  return `${stat.dev}:${stat.ino}:${Math.trunc(stat.birthtimeMs)}`;
 };
+
+// Deno exposes whole milliseconds; Node/Bun may expose fractions for the same
+// file. Retain device + inode + creation time, accepting the older record format.
+function sameFileId(left, right) {
+  if (typeof left !== 'string' || typeof right !== 'string') return false;
+  const normalize = value => value.replace(/^(\d+:\d+:)(\d+(?:\.\d+)?)$/, (_, prefix, time) => prefix + Math.trunc(Number(time)));
+  return normalize(left) === normalize(right);
+}
 
 /** Staging lives under the configured build directory. EXDEV fails before replacement. */
 function atomicReplace(stagingDir, file, bytes, mode = 0o600, beforeRename) {
@@ -311,7 +319,7 @@ function recoverUnlocked({ repoRoot, stateDir, tmpDir, ownerIsDead = defaultOwne
     }
     if (current !== null && before.equals(current)) {
       const currentId = fileId(file);
-      if (currentId === state.beforeFileId || currentId === state.restoredFileId) restoredIds.set(relative, currentId);
+      if (sameFileId(currentId, state.beforeFileId) || sameFileId(currentId, state.restoredFileId)) restoredIds.set(relative, currentId);
       // Already at pre-batch bytes: the batch's write never reached the disk.
       append({ action: 'recovered', file: relative, result: 'already-before-state' });
       continue;
@@ -338,7 +346,7 @@ function recoverUnlocked({ repoRoot, stateDir, tmpDir, ownerIsDead = defaultOwne
         for (const [relative, state] of batch.files) {
           const entry = ownership.files[relative];
           if (!state.operation) continue;
-          if (restoredIds.has(relative) && state.beforeFileId && entry?.file_id === state.beforeFileId) {
+          if (restoredIds.has(relative) && state.beforeFileId && sameFileId(entry?.file_id, state.beforeFileId)) {
             entry.file_id = restoredIds.get(relative);
           } else delete ownership.files[relative];
         }
@@ -426,7 +434,7 @@ export function createFileStore({ repoRoot, stateDir, tmpDir }) {
     const file = path.join(repoRoot, relative);
     if (entry?.created_by !== 'setup' || !entry.file_id) return false;
     if (readFile(file) === null) return false;
-    return entry.file_id === fileId(file);
+    return sameFileId(entry.file_id, fileId(file));
   }
 
   function prepareMutation(file, after, { relative, expectedBefore }) {
@@ -452,7 +460,7 @@ export function createFileStore({ repoRoot, stateDir, tmpDir }) {
       backup: backupName, after_digest: digestOf(after), mode: before === null ? null : mode,
       before_file_id: before === null ? null : fileId(file),
     });
-    return { file, relative, before, after, binary, ownership, mode, wasOwned: before !== null && ownership?.created_by === 'setup' && ownership.file_id === fileId(file) };
+    return { file, relative, before, after, binary, ownership, mode, wasOwned: before !== null && ownership?.created_by === 'setup' && sameFileId(ownership.file_id, fileId(file)) };
   }
 
   function snapshotOwnership() {

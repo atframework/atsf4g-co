@@ -1,7 +1,7 @@
 /** Codex TOML editing over shared lexical boundaries. */
 import { AgentConfigError } from '../errors.mjs';
 import { BACKENDS, managedServerIds, backendForServerId } from '../backends.mjs';
-import { isOurServerEntry, serverEntry } from '../entries.mjs';
+import { isOurServerEntry, serverEntry, entryExtraArgs } from '../entries.mjs';
 import { scanDocument, TOML_BEGIN, TOML_END, parseTableHeader } from './tomlDocument.mjs';
 export { TOML_BEGIN, TOML_END, parseTableHeader, tomlMultilineAfter } from './tomlDocument.mjs';
 
@@ -11,7 +11,7 @@ function tomlQuote(value) {
 
 export function codexTomlSection(repoRoot, backend, launch = {}) {
   const entry = serverEntry('mcpServersCwd', repoRoot, backend, launch);
-  return [TOML_BEGIN, `[mcp_servers.${BACKENDS[backend].serverId}]`, 'command = "node"',
+  return [TOML_BEGIN, `[mcp_servers.${BACKENDS[backend].serverId}]`, `command = ${tomlQuote(entry.command)}`,
     `args = [${entry.args.map(tomlQuote).join(', ')}]`,
     `cwd = ${tomlQuote(repoRoot)}`, 'enabled = true', TOML_END].join('\n');
 }
@@ -124,6 +124,31 @@ export function configureCodexToml(text, repoRoot, backend, launch = {}) {
   if (start < 0) throw new AgentConfigError('managed Codex server has only subtables; repair its parent table first', 'toml-syntax');
   let end = start + 1;
   while (end < records.length && !records[end].header && records[end].bytes.trim() !== TOML_END) end++;
+  const oldEntry = entryFromRecords(records, selected, repoRoot);
+  const nextEntry = serverEntry('mcpServersCwd', repoRoot, backend, launch);
+  nextEntry.args.push(...entryExtraArgs(oldEntry, repoRoot, launch));
+  // Update launch fields even when the backend stays selected. Keep comments
+  // from a multiline args value as standalone comments, and leave other fields
+  // and subtables byte-for-byte intact.
+  const replacements = new Map();
+  if (oldEntry.command !== nextEntry.command) replacements.set('command', tomlQuote(nextEntry.command));
+  if (JSON.stringify(oldEntry.args) !== JSON.stringify(nextEntry.args)) replacements.set('args', `[${nextEntry.args.map(tomlQuote).join(', ')}]`);
+  for (let i = start + 1; i < end; i++) {
+    const field = assignment(records[i]);
+    if (!field || !replacements.has(field.key)) continue;
+    let last = i + 1;
+    while (last < end && !records[last].valueStart && !records[last].header) last++;
+    const raw = records.slice(i, last).map(record => record.bytes).join('');
+    const prefix = raw.match(/^\s*(?:[A-Za-z0-9_-]+|"(?:\\.|[^"\\])*"|'[^']*')\s*=\s*/)[0];
+    if (field.key === 'command') {
+      records[i].bytes = raw.replace(/^(\s*(?:[A-Za-z0-9_-]+|"(?:\\.|[^"\\])*"|'[^']*')\s*=\s*)(?:"(?:\\.|[^"\\])*"|'[^']*')/,
+        (_, before) => before + replacements.get(field.key));
+    } else {
+      const comments = (raw.slice(prefix.length).match(/"(?:\\.|[^"\\])*"|'[^']*'|#[^\r\n]*/g) ?? []).filter(token => token.startsWith('#'));
+      records[i].bytes = comments.map(comment => comment + eol).join('') + prefix + replacements.get(field.key) + (raw.endsWith('\n') ? eol : '');
+    }
+    for (let j = i + 1; j < last; j++) records[j].bytes = '';
+  }
   for (let i = start + 1; i < end; i++) {
     const record = records[i];
     if (!record.valueStart) continue;

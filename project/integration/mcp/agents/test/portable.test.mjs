@@ -131,7 +131,7 @@ test('external JSON, command-array and TOML clients keep scope and optional argu
   const repeated = runAgentConfigBatch({ repoRoot: root, launch, operations });
   assert.equal(repeated.applied, true, JSON.stringify(repeated.plan.problems));
   const command = JSON.parse(fs.readFileSync(file)).mcp[SERVER_IDS.tgrep].command;
-  assert.deepEqual(command, ['node', path.join(integrationRoot, 'tgrep/src/server.mjs'), '--repo-root', root, '--build-dir', launch.buildDir, '--test-option']);
+  assert.deepEqual(command, [process.execPath, path.join(integrationRoot, 'tgrep/src/server.mjs'), '--repo-root', root, '--build-dir', launch.buildDir, '--test-option']);
   assert.deepEqual(JSON.parse(fs.readFileSync(file)).mcp[SERVER_IDS.tgrep].environment, { CUSTOM_VALUE: 'kept' });
   const toml = fs.readFileSync(path.join(root, '.codex/config.toml'), 'utf8');
   assert.ok(toml.includes(JSON.stringify(root)));

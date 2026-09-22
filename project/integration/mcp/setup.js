@@ -4,6 +4,8 @@
  *
  * 用法：
  *   node <MCP_DIR>/setup.js                     交互式安装 / 切换
+ *   bun <MCP_DIR>/setup.js                      使用 Bun 启动 MCP
+ *   deno run -A --no-config --no-lock --node-modules-dir=manual <MCP_DIR>/setup.js
  *   node <MCP_DIR>/setup.js --uninstall         从 Agent 配置移除本集成
  *
  * 流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖
@@ -40,6 +42,7 @@ import { createInteractiveUi } from './agents/src/ui/terminalMenu.mjs';
 import { runPrepare, writePreparedState } from './common/src/prepare.mjs';
 import { NPM_MIRRORS, CARGO_MIRRORS, mirrorSettings, selectMirrors, mirrorSummary } from './common/src/mirrors.mjs';
 import { WorkspacePaths, detectWorkspace, projectInfo, resolveBuildDir, validateWorkspaceBuildDir } from './common/src/paths.mjs';
+import { currentRuntime, runtimeSupported } from './common/src/runtime.mjs';
 
 const integrationRoot = path.dirname(fileURLToPath(import.meta.url));
 
@@ -87,7 +90,9 @@ function parseArgv(argv) {
 
 function printHelp() {
   const usage = [
-    '用法：在 Agent 工作区目录执行 node <MCP_DIR>/setup.js [选项]',
+    '用法：在 Agent 工作区目录执行 node 或 bun <MCP_DIR>/setup.js [选项]',
+    'Deno：deno run -A --no-config --no-lock --node-modules-dir=manual <MCP_DIR>/setup.js [选项]',
+    'MCP 配置使用本次运行时的绝对路径；Deno 的启动权限参数由安装器生成。',
     '',
     '流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖',
     '（全部固定版本）→ 依赖就绪后把 MCP 服务写入所选 Agent 的项目级配置。',
@@ -308,7 +313,9 @@ async function runSetup(options, ui) {
   const repoRoot = workspace.root;
   const buildDir = validateWorkspaceBuildDir(repoRoot, resolveBuildDir(repoRoot, options.buildDir));
   const paths = new WorkspacePaths(repoRoot, buildDir);
-  paths.launch = { integrationRoot, ...(options.buildDir ? { buildDir } : {}) };
+  const runtime = currentRuntime();
+  if (!runtimeSupported(runtime)) throw new Error('需要 Node.js >= 20、Bun >= 1 或 Deno >= 2');
+  paths.launch = { integrationRoot, runtime, ...(options.buildDir ? { buildDir } : {}) };
   const exportsDir = exportsDirFor(paths.integrationDir);
   const scanStates = () => ({ ...agentStates(repoRoot, paths.launch), ...ideExportStates(repoRoot, exportsDir, paths.launch) });
 
@@ -316,6 +323,7 @@ async function runSetup(options, ui) {
   ui.line(`仓库：${repoRoot}`);
   ui.line(`工作空间依据：${workspace.reason}`);
   ui.line(`构建目录：${buildDir}`);
+  ui.line(`MCP 运行时：${runtime.kind} ${runtime.version}（${runtime.executable}）`);
   ui.line('');
 
   // -- 卸载模式（不准备依赖，只读扫描配置） ----------------------------------------
@@ -399,7 +407,7 @@ async function runSetup(options, ui) {
       ui.line('');
       ui.line(`依赖准备失败，未修改任何 Agent 配置。`);
       ui.line(`${error.message}`);
-      ui.line(`排查建议：检查网络/镜像可达性后重试；或用 node "${path.join(integrationRoot, 'common/tools/doctor.mjs')}" 查看当前状态。`);
+      ui.line(`排查建议：检查网络/镜像可达性后重试；或使用同一运行时执行 "${path.join(integrationRoot, 'common/tools/doctor.mjs')}" 查看当前状态（Deno 保留 run 及权限参数）。`);
       return 1;
     }
   } else {

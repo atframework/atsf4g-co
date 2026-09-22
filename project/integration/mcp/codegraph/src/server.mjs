@@ -30,6 +30,7 @@ import { BackendError, ErrorCodes, IndexInUse } from '../../common/src/errors.mj
 import { WorkspacePaths, deriveRepoRoot, resolveBuildDir, validateRelativeScope, projectInfo } from '../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../common/src/state.mjs';
 import { runWrapperServer, toolText } from '../../common/src/mcpServer.mjs';
+import { scriptInvocation } from '../../common/src/runtime.mjs';
 import {
   DEFAULT_TOOL_ALLOWLIST,
   EXTRA_TOOLS,
@@ -520,7 +521,8 @@ function main() {
   const fakeScript = process.env.CODEGRAPH_MCP_FAKE_SCRIPT;
   let backendArgs;
   if (fakeScript) {
-    backendArgs = { runtime: fakeScript, cliEntry: fakeScript, libraryDir: null, argvOverride: [process.execPath, path.resolve(fakeScript)] };
+    const invocation = scriptInvocation(path.resolve(fakeScript));
+    backendArgs = { runtime: fakeScript, cliEntry: fakeScript, libraryDir: null, argvOverride: [invocation.command, ...invocation.args] };
   } else {
     const bundle = resolveBundle(paths, values.runtime, values['cli-entry']);
     backendArgs = { ...bundle, argvOverride: null };

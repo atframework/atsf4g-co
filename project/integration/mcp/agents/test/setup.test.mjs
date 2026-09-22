@@ -321,7 +321,7 @@ test('CLI guided imports write build-dir snippets only and clean up on uninstall
   for (const file of fs.readdirSync(exportsDir)) {
     const parsed = JSON.parse(fs.readFileSync(path.join(exportsDir, file), 'utf8'));
     assert.deepEqual(Object.keys(parsed.mcpServers), ['workspace-codegraph']);
-    assert.equal(parsed.mcpServers['workspace-codegraph'].command, 'node');
+    assert.equal(parsed.mcpServers['workspace-codegraph'].command, process.execPath);
     assert.match(parsed.mcpServers['workspace-codegraph'].args[0], /codegraph[\\/]src[\\/]server\.mjs$/);
   }
   assert.match(installed.stdout, /手动导入/);

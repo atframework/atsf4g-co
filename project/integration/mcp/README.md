@@ -18,7 +18,33 @@ Agent 配置组件（**每产品一个独立配置器模块** `agents/src/agents
 
 ```bash
 node <MCP_DIR>/setup.js
+# 或者使用 Bun / Deno
+bun <MCP_DIR>/setup.js
+deno run -A --no-config --no-lock --node-modules-dir=manual <MCP_DIR>/setup.js
 ```
+
+安装器使用**本次执行 setup.js 的运行时**启动 MCP 包装进程，并把其可执行文件的绝对路径
+写入各 Agent 配置（JSON、JSONC、TOML 和 IDE 导入片段）。例如使用 Bun 安装后，IDE 启动
+的是该 Bun 程序，不再依赖 IDE 的 `PATH` 去寻找 `node`。安装结果会显示运行时、版本和路径。
+
+| 安装时使用的运行时 | 生成的 MCP 启动方式 |
+| --- | --- |
+| Node.js | `<node 的绝对路径> <server.mjs> ...` |
+| Bun | `<bun 的绝对路径> --no-install --no-env-file <server.mjs> ...` |
+| Deno | `<deno 的绝对路径> run <权限与离线参数> <server.mjs> ...` |
+
+Deno 安装命令的 `-A` 用于本地安装所需的文件访问、环境读取和子进程执行。生成的 MCP
+命令只授予 `--allow-read --allow-write --allow-env --allow-run --allow-sys`，并设置
+`--no-prompt --no-config --no-lock --node-modules-dir=manual --cached-only`，使用已准备的
+`node_modules`，不自动安装依赖、不读工程 Deno 配置，也不创建工程 `deno.lock`。
+Bun 使用 `--no-install --no-env-file` 禁止自动安装依赖和加载工作目录的 `.env`。
+见 [Deno 参数](https://docs.deno.com/runtime/reference/cli/run/) 和
+[Bun 自动安装说明](https://bun.sh/docs/runtime/auto-install)。
+
+改用另一个运行时重新执行 setup.js，即可迁移本集成的启动命令；保留已有自定义选项和其他
+服务器。可用 `--skip-prepare` 仅更新配置，或先用 `--dry-run` 预览；交互时保留其他需要的
+Agent 勾选。旧的 `command: "node"` 配置可以迁移，卸载也可以换用另一运行时。
+可执行文件移动或删除后，应从新位置重跑 setup.js；导出片段需在对应 IDE 重新导入。
 
 先进入 Agent 打开的工程目录或其子目录，再运行命令。`<MCP_DIR>` 是这套工具的实际目录，
 可以位于工程之外，也可以改名、移动或复制，无需改源码。
@@ -174,8 +200,11 @@ Windows 与 WSL 的进程号不能互相验证；带平台记录的中断批次�
 
 ### 前置条件
 
-- Node.js >= 20 + npm（包装层与安装器）。CodeGraph 的实际运行时需支持 `node:sqlite`
-  （Node 22.5+）；发现本地安装或准备 npx 缓存时验证，平台包可提供自己的 Node。
+- 包装层与安装器支持 Node.js >= 20、Bun 1.x 或 Deno 2.x；建议使用各自维护中的版本。
+- 依赖准备仍使用 npm（需配套 Node），CodeGraph 获取仍使用固定版本的 npx 缓存流程。
+  CodeGraph 上游实际运行时需支持 `node:sqlite`（Node 22.5+），平台包可提供自己的 Node。
+  这与面向 Agent 的 MCP 包装进程运行时独立：使用 Bun/Deno 安装不会把 Node 专用参数
+  错传给 Bun/Deno，也不会改变已验证的上游后端运行时。
 - 无可复用的 tgrep 时才需要 Git 和 Rust 工具链（edition 2024，rustc 1.98 验证过）。
 - 缺少依赖时需要联网准备固定版本；本地文件和缓存齐全时可用 `--offline`。
 
@@ -589,9 +618,16 @@ console.log('digraph G { rankdir=LR;'); for (const r of rows) console.log(JSON.s
 - 客户端断开（stdin EOF）、SIGINT/SIGTERM 都会停止后端进程树；包装层被强杀时，
   两个后端都会因 stdin 管道断开自行退出（上游已验证的生命线行为）。
 - 后端不监听任何端口、不启用遥测/更新检查/下载；CodeGraph 强制 direct 模式。
-- 诊断：`node <MCP_DIR>/common/tools/doctor.mjs`（只读）。
+- 诊断：用相同运行时执行 `<MCP_DIR>/common/tools/doctor.mjs`（只读；Deno 加安装示例中的
+  `run` 参数）。报告显示实际运行时名称、版本和可执行文件位置。
 
 ## 测试与维护
+
+2026-09-22 多运行时改造在 Windows x64 验证：Node 24.21.0、Bun 1.4.2、Deno 2.9.7。
+三者均完成 setup 安装、重复安装不改配置、dry-run、换用 Node 卸载、两个真实后端的离线
+本地制品准备，以及隔离 UE 小样例的索引、MCP 握手、查询和关闭后无存活包装进程/实例锁。
+四套 Node 回归共 305 项：303 通过，2 项 Windows 不适用的既有用例跳过。Bun/Deno 验证的是
+实际安装和服务调用流程，未声称其 Node 测试运行器兼容；本轮多运行时变更未在 Linux/macOS 验证。
 
 每个组件目录内 `npm install` 后：
 
@@ -625,7 +661,7 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 
 | 平台 | 单元测试 | 真实后端冒烟 |
 | --- | --- | --- |
-| Windows x64（Node 24.21.0） | 298 项（296 通过，2 个 POSIX 权限/文件符号链接用例跳过；2026-09-22，agents 225 + common 52 + tgrep 9 + codegraph 12） | 实际 npx 缓存在线准备、离线启动和库检查；本地 tgrep 复用。UE 小型样例从不同 cwd 首次索引、查询、退出；CodeGraph 验证文件新增/修改/删除、离线修改后的补同步；两个后端正常退出及强杀 wrapper 后均无剩余进程。首次索引取消另有确定性协议测试。镜像及 Kilo 改造：全部 12 个服务端点元数据有效；真实 Cargo 离线验证官方源不继承工程镜像配置（未逐站点下载全部依赖） |
+| Windows x64（Node 24.21.0） | 305 项（303 通过，2 个 POSIX 权限/文件符号链接用例跳过；2026-09-22，agents 231 + common 53 + tgrep 9 + codegraph 12） | 实际 npx 缓存在线准备、离线启动和库检查；本地 tgrep 复用。UE 小型样例从不同 cwd 首次索引、查询、退出；CodeGraph 验证文件新增/修改/删除、离线修改后的补同步；两个后端正常退出及强杀 wrapper 后均无剩余进程。首次索引取消另有确定性协议测试。镜像及 Kilo 改造：全部 12 个服务端点元数据有效；真实 Cargo 离线验证官方源不继承工程镜像配置（未逐站点下载全部依赖） |
 | Linux x64（WSL/Debian，Node 20.19.2） | 默认启用改造前：281/281，零跳过（2026-09-22）；本次新增用例未在 WSL 复跑。独立 ext4 工具副本运行四套测试，包括 POSIX 权限与符号链接 | 本轮未复跑真实后端；既有验收：2026-09-21 真实 prepare、chmod/EXDEV 与 PTY；2026-09-18 后端冒烟 |
 
 macOS 及 arm64 平台未验证。GUI 客户端（VS Code/Cursor/IDE 面板导入）、Kimi/omp（无非交互

@@ -14,6 +14,7 @@ import { parseArgs } from 'node:util';
 
 import { WorkspacePaths, detectWorkspace, projectInfo, selectCodegraphIndex, platformName, resolveBuildDir } from '../src/paths.mjs';
 import { StateStore, isPidAlive } from '../src/state.mjs';
+import { currentRuntime, runtimeSupported } from '../src/runtime.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const MCP_ROOT = path.resolve(HERE, '..', '..');
@@ -44,7 +45,8 @@ function main() {
   const paths = new WorkspacePaths(repoRoot, buildDir);
   const checks = [];
 
-  check(checks, 'node>=20', Number(process.versions.node.split('.')[0]) >= 20, process.version);
+  const runtime = currentRuntime();
+  check(checks, 'wrapper-runtime', runtimeSupported(runtime), `${runtime.kind} ${runtime.version}: ${runtime.executable}`);
 
   const prepared = readJson(paths.preparedStatePath());
   check(checks, 'prepared-state', prepared !== null, prepared ? new Date(prepared.prepared_unix * 1).toISOString() : 'run common/tools/prepare.mjs');
@@ -102,6 +104,7 @@ function main() {
     workspace_detection: workspace.reason,
     build_dir: buildDir,
     node: process.version,
+    runtime,
     checks,
   };
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

@@ -15,6 +15,31 @@ function storeFor(workspace) {
   return createFileStore({ repoRoot: workspace.root, stateDir: workspace.stateDir, tmpDir: workspace.tmpDir });
 }
 
+test('ownership accepts Deno millisecond and legacy Node fractional birth times but rejects a replaced file', () => {
+  const workspace = tmpWorkspace();
+  try {
+    const store = storeFor(workspace);
+    const file = path.join(workspace.root, 'cfg.json');
+    store.write(file, '{}', { relative: 'cfg.json', expectedBefore: null });
+    const stateFile = path.join(workspace.stateDir, 'agent-config-state.json');
+    const state = JSON.parse(fs.readFileSync(stateFile));
+    const stat = fs.statSync(file);
+    for (const time of [Math.trunc(stat.birthtimeMs), stat.birthtimeMs]) {
+      state.files['cfg.json'].file_id = `${stat.dev}:${stat.ino}:${time}`;
+      fs.writeFileSync(stateFile, JSON.stringify(state));
+      assert.equal(store.owns('cfg.json'), true);
+    }
+    state.files['cfg.json'].file_id = `${stat.dev}:${stat.ino}:${Math.trunc(stat.birthtimeMs) + 1}`;
+    fs.writeFileSync(stateFile, JSON.stringify(state));
+    assert.equal(store.owns('cfg.json'), false, 'a different creation time is not ours');
+    state.files['cfg.json'].file_id = `${stat.dev}:${stat.ino}:${stat.birthtimeMs}`;
+    fs.writeFileSync(stateFile, JSON.stringify(state));
+    fs.renameSync(file, file + '.original');
+    fs.writeFileSync(file, '{}');
+    assert.equal(store.owns('cfg.json'), false, 'same bytes in another file do not prove ownership');
+  } finally { fs.rmSync(workspace.root, { recursive: true, force: true }); }
+});
+
 test('write creates the file, records ownership, and is idempotent', () => {
   const workspace = tmpWorkspace();
   try {

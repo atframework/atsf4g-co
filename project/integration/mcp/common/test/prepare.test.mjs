@@ -20,6 +20,30 @@ function fixture(t) {
   return { root, paths, write };
 }
 
+test('a compiled local CodeGraph tries another Node runtime after rejecting an incompatible one', t => {
+  const w = fixture(t);
+  const libraryRoot = path.join(w.root, 'compiled-codegraph');
+  w.write('compiled-codegraph/package.json', JSON.stringify({ name: '@colbymchenry/codegraph', version: '1.6.0' }));
+  w.write('compiled-codegraph/dist/index.js');
+  w.write('compiled-codegraph/dist/bin/codegraph.js');
+  const alternate = w.write('alternate/' + (process.platform === 'win32' ? 'node.exe' : 'node'));
+  const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path') ?? 'PATH';
+  const oldPath = process.env[pathKey];
+  process.env[pathKey] = path.dirname(alternate);
+  t.after(() => { if (oldPath === undefined) delete process.env[pathKey]; else process.env[pathKey] = oldPath; });
+  const attempted = [];
+  const result = prepareCodegraph(w.paths, INTEGRATION_ROOT, { localPath: libraryRoot, offline: true, execute: argv => {
+    attempted.push(argv);
+    if (argv.length === 2 && argv[1] === '--version') return { status: 0, stdout: argv[0] === alternate ? 'v24.21.0\n' : 'v20.19.2\n' };
+    if (argv.includes('--eval')) return { status: 0, stdout: 'MCP_CODEGRAPH_LIBRARY_OK\n' };
+    return { status: 0, stdout: '1.6.0\n' };
+  } });
+  assert.equal(result.runtime, alternate);
+  assert.equal(result.acquisition, 'local');
+  assert.ok(attempted.some(argv => argv[0] !== alternate));
+  assert.ok(attempted.some(argv => argv[0] === alternate && argv.includes('--eval')));
+});
+
 test('official Cargo uses a separate cache and manifest without inheriting project source replacement', t => {
   const w = fixture(t);
   const config = w.write('.cargo/config.toml', '[source.crates-io]\nreplace-with="private-mirror"\n');

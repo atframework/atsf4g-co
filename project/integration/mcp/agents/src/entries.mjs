@@ -9,10 +9,18 @@ import path from 'node:path';
 import { BACKENDS, managedServerIds, backendForServerId } from './backends.mjs';
 import { samePath, isWithin } from '../../common/src/paths.mjs';
 import { AgentConfigError } from './errors.mjs';
+import { parseScriptInvocation, scriptInvocation } from '../../common/src/runtime.mjs';
+
+function invocation(entry) {
+  return parseScriptInvocation(Array.isArray(entry.command) ? entry.command[0] : entry.command,
+    Array.isArray(entry.command) ? entry.command.slice(1) : entry.args);
+}
 
 /** Scope arguments are owned by the installer; optional backend arguments survive. */
 export function entryExtraArgs(entry, repoRoot, launch = {}) {
-  const args = Array.isArray(entry.command) ? entry.command.slice(2) : (entry.args ?? []).slice(1);
+  const parsed = invocation(entry);
+  if (!parsed) throw new AgentConfigError('unrecognized MCP runtime invocation', 'server-conflict');
+  const args = parsed.args;
   const extras = [];
   const seen = new Set();
   for (let i = 0; i < args.length; i++) {
@@ -34,9 +42,9 @@ export function entryExtraArgs(entry, repoRoot, launch = {}) {
 /** A server id alone is not ownership evidence. Resolve only documented paths. */
 export function isOurServerEntry(entry, repoRoot, launch = {}, expectedBackend = null) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
-  const command = Array.isArray(entry.command) ? entry.command[0] : entry.command;
-  const argument = Array.isArray(entry.command) ? entry.command[1] : entry.args?.[0];
-  if (command !== 'node' || typeof argument !== 'string') return false;
+  const parsed = invocation(entry);
+  if (!parsed) return false;
+  const argument = parsed.script;
   const expanded = argument.replace(/^\$\{workspaceFolder\}(?=[\\/])/, () => repoRoot);
   if (!path.isAbsolute(expanded) && typeof entry.cwd !== 'string') return false;
   const base = typeof entry.cwd === 'string' ? path.resolve(repoRoot, entry.cwd) : repoRoot;
@@ -48,8 +56,7 @@ export function isOurServerEntry(entry, repoRoot, launch = {}, expectedBackend =
     if (isWithin(expected, repoRoot)) return true;
     // An external script without an explicit root would fall back to the
     // toolkit's own workspace. Its path alone is not ownership evidence.
-    const args = Array.isArray(entry.command) ? entry.command.slice(2) : (entry.args ?? []).slice(1);
-    return args.some((arg) => typeof arg === 'string' && (arg === '--repo-root' || arg.startsWith('--repo-root=')));
+    return parsed.args.some((arg) => arg === '--repo-root' || arg.startsWith('--repo-root='));
   });
 }
 
@@ -67,31 +74,29 @@ export function serverEntry(format, repoRoot, backend, launch = {}) {
   const scope = ['--repo-root', repoRoot];
   if (launch.buildDir) scope.push('--build-dir', launch.buildDir);
   const relative = path.relative(repoRoot, absolute).split(path.sep).join('/');
+  const invoke = script => scriptInvocation(script, scope, launch.runtime);
   switch (format) {
     case 'vscodeServers':
       return {
         type: 'stdio',
-        command: 'node',
-        args: [local ? '${workspaceFolder}/' + relative : absolute, ...scope],
+        ...invoke(local ? '${workspaceFolder}/' + relative : absolute),
       };
     case 'mcpServersCwd':
       // Kimi Code / Qwen Code: officially supported per-server cwd (stdio only).
       return {
-        command: 'node',
-        args: [local ? relative : absolute, ...scope],
+        ...invoke(local ? relative : absolute),
         cwd: repoRoot,
       };
     case 'zed':
       // Zed context_servers: flat command/args, no type field required.
       return {
-        command: 'node',
-        args: [absolute, ...scope],
+        ...invoke(absolute),
       };
     case 'opencode':
       // OpenCode / Kilo / MiMo: type local, command is [command, ...args].
       return {
         type: 'local',
-        command: ['node', absolute, ...scope],
+        command: [invoke(absolute).command, ...invoke(absolute).args],
         enabled: true,
       };
     // mcpServers (Claude/pi/CodeBuddy/Cursor/Gemini/Kilo-legacy/Roo/WorkBuddy/omp)
@@ -99,8 +104,7 @@ export function serverEntry(format, repoRoot, backend, launch = {}) {
     default:
       return {
         type: 'stdio',
-        command: 'node',
-        args: [absolute, ...scope],
+        ...invoke(absolute),
       };
   }
 }

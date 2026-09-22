@@ -56,7 +56,10 @@ function snippetBackend(repoRoot, file, text, agentId, launch) {
       regenerated = `${JSON.stringify(parsed, null, 2)}\n`;
     }
     const backend = backendForServerId(serverId);
-    if (backend && regenerated === text && entry.type === 'stdio' && Object.keys(entry).sort().join(',') === 'args,command,type'
+    const defaults = spec.entryDefaults ?? {};
+    const knownFields = ['args', 'command', 'type', ...Object.keys(defaults)];
+    const validDefaults = Object.entries(defaults).every(([key, value]) => !Object.hasOwn(entry ?? {}, key) || entry[key] === value);
+    if (backend && regenerated === text && entry.type === 'stdio' && Object.keys(entry).every(key => knownFields.includes(key)) && validDefaults
       && isOurServerEntry(entry, repoRoot, launch, backend) && entryExtraArgs(entry, repoRoot, launch).length === 0) return backend;
   } catch { /* The ordinary conflict below preserves the original file. */ }
   throw new AgentConfigError(`${file}: IDE 导入片段内容已修改，请移走该文件后重新生成`, 'export-conflict');
