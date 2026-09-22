@@ -334,7 +334,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemFiniteGridContainer : public ItemContainer {
   /// 被调用时机: check_sub / check_has / check_move / load / apply_entries / 寻位按 GUID 对账时调用;
   /// 找不到返回 nullptr。
   ITEM_ALGORITHM_API item_entry_ptr_t find_entry_by_guid(int64_t guid) const override;
-  ITEM_ALGORITHM_API bool has_entry_guid(int64_t guid) const;
+  ITEM_ALGORITHM_API bool has_entry_guid(int64_t guid) const override;
   ITEM_ALGORITHM_API void attach_entry_guid(int64_t guid, const item_entry_ptr_t& entry);
   ITEM_ALGORITHM_API void detach_entry_guid(int64_t guid);
 

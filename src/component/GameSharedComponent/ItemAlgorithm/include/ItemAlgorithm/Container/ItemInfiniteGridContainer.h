@@ -216,7 +216,7 @@ class ATFW_UTIL_SYMBOL_VISIBLE ItemInfiniteGridContainer : public ItemContainer 
   ///
   /// 被调用时机: 基类的 validate_item_basic, 即所有 check_* / load / apply_entries 逐条校验时。
   ITEM_ALGORITHM_API bool is_item_valid(const excel_config_group_ptr_t& config_group,
-                                        const PROJECT_NAMESPACE_ID::DItemBasic& basic) const;
+                                        const PROJECT_NAMESPACE_ID::DItemBasic& basic) const override;
 
   /// @brief 位置字段声明 (接入层的位置字段)
   ///

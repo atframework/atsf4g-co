@@ -2138,16 +2138,6 @@ CASE_TEST(ItemContainer, find_positions_for_basics) {
     return b;
   };
 
-  // 带首选格子位置的 DItemBasic (inventory 坐标)
-  auto make_basic_at = [](int32_t type_id, int64_t count, int32_t x, int32_t y) {
-    PROJECT_NAMESPACE_ID::DItemBasic b;
-    b.set_type_id(type_id);
-    b.set_count(count);
-    b.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_x(x);
-    b.mutable_position()->mutable_grid_position()->mutable_user_inventory()->set_y(y);
-    return b;
-  };
-
   // 读取 inventory 坐标分量
   auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
   auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
@@ -2946,9 +2936,6 @@ CASE_TEST(ItemContainer, find_positions_for_basics_two_pass) {
     b.set_count(count);
     return b;
   };
-  auto get_x = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().x(); };
-  auto get_y = [](const PROJECT_NAMESPACE_ID::DItemGridPosition& p) { return p.user_inventory().y(); };
-
   auto call_find = [&](auto& grid, const std::vector<PROJECT_NAMESPACE_ID::DItemBasic>& basics,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& success,
                        google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemBasic>& failed) {

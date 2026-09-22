@@ -588,8 +588,8 @@ ITEM_ALGORITHM_API bool ItemContainer::find_positions_for_instances(
   }
 
   // 输出预留: 成功项最多与输入等长, 失败项最多与输入等长
-  success_item.Reserve(static_cast<int>(success_item.size() + items.size()));
-  failed_item.Reserve(static_cast<int>(failed_item.size() + items.size()));
+  success_item.Reserve(static_cast<int>(success_item.size() + static_cast<int>(items.size())));
+  failed_item.Reserve(static_cast<int>(failed_item.size() + static_cast<int>(items.size())));
 
   return on_find_positions(config_group, items, ignore_item, success_item, failed_item);
 }

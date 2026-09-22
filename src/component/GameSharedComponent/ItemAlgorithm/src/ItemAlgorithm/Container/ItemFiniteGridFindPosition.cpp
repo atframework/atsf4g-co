@@ -562,7 +562,7 @@ bool ItemFiniteGridFindPositionHelper::find_positions_inner(const excel_config_g
   }
 
   failed_item.Clear();
-  success_item.Reserve(static_cast<int>(success_item.size() + items.size()));
+  success_item.Reserve(static_cast<int>(success_item.size() + static_cast<int>(items.size())));
   failed_item.Reserve(static_cast<int>(items.size()));
 
   // ignore_item 存在性校验 + 消耗累计
