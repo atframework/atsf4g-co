@@ -188,7 +188,7 @@ rpc::result_code_type user::create_init(rpc::context &parent_ctx) {
   user_rank_manager_->create_init(ctx);
   user_matching_manager_->create_init(ctx);
   user_team_manager_->create_init(ctx);
-  user_item_container_manager_->create_init(ctx);
+  RPC_AWAIT_IGNORE_VOID(user_item_container_manager_->create_init(ctx));
   ////////////////// 业务Manager开始 ////////////////////
   // TODO(all) init all interval checkpoint
 

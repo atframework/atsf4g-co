@@ -17,6 +17,7 @@
 #include <log/log_wrapper.h>
 
 #include <config/excel/config_manager.h>
+#include <config/excel_config_const_index.h>
 
 #include <data/user.h>
 
@@ -160,13 +161,53 @@ void user_item_container_manager::dump_virtual_inventory(PROJECT_NAMESPACE_ID::D
   virtual_inventory_.dump(out);
 }
 
-void user_item_container_manager::create_init(ATFW_EXPLICIT_UNUSED_ATTR rpc::context& ctx) {
+void user_item_container_manager::dump_virtual_inventory(
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out) const {
+  virtual_inventory_.dump(out);
+}
+
+rpc::result_void_type user_item_container_manager::create_init(rpc::context& ctx) {
   // 初始化分配器
   if (manager_data_.next_container_guid() <= 0) {
     manager_data_.set_next_container_guid(1);
   }
   // 初始化虚拟道具仓库网格
   virtual_inventory_.init_container();
+  // 初始化默认道具
+  if (!excel::get_const_config().creat_init_item().empty()) {
+    google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance> item_instances;
+    int32_t result = RPC_AWAIT_CODE_RESULT(owner_->get_user_item_manager().generate_item_from_offset_cfg(
+        ctx, excel::get_const_config().creat_init_item(), item_instances));
+    if (result != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+      FWLOGERROR("{} user_item_container_manager::create_init failed, result={}({})", *owner_, result,
+                 protobuf_mini_dumper_get_error_msg(result));
+      RPC_RETURN_VOID;
+    }
+    if (item_instances.empty()) {
+      RPC_RETURN_VOID;
+    }
+
+    const int32_t instance_count = static_cast<int32_t>(item_instances.size());
+    if (!owner_->get_user_item_manager().find_position(ctx, item_instances)) {
+      // find_position 返回 false 表示道具未配置或没有可用位置
+      FWLOGERROR("{} user_item_container_manager::create_init add_item failed to find position, instance_count={}",
+                 *owner_, instance_count);
+      RPC_RETURN_VOID;
+    }
+
+    auto checked_request = owner_->get_user_item_manager().check_add(ctx, std::move(item_instances));
+    auto add_result = checked_request.do_operation(ctx);
+    if (add_result.error_code != PROJECT_NAMESPACE_ID::err::EN_SUCCESS) {
+      FWLOGERROR("{} user_item_container_manager::create_init add_item failed, result={}({}), failed_type_id={}",
+                 *owner_, add_result.error_code, protobuf_mini_dumper_get_error_msg(add_result.error_code),
+                 add_result.failed_type_id);
+      RPC_RETURN_VOID;
+    }
+
+    FWLOGDEBUG("{} user_item_container_manager::create_init add_item finish, request_count={}, instance_count={}",
+               *owner_, item_instances.size(), instance_count);
+  }
+  RPC_RETURN_VOID;
 }
 
 void user_item_container_manager::register_find_position_handle(

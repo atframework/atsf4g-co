@@ -27,6 +27,7 @@
 #include <logic/item/user_item_manager.h>
 #include <logic/item/user_item_operation_handler.h>
 #include <logic/item/user_virtual_inventory.h>
+#include <rpc/rpc_utils.h>
 
 #include <cstdint>
 #include <memory>
@@ -125,7 +126,9 @@ class user_item_container_manager : public atfw::util::design_pattern::noncopyab
   void init_from_table_data(rpc::context& ctx, const PROJECT_NAMESPACE_ID::table_user& user_table);
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_user& user_table) const;
   void dump_virtual_inventory(PROJECT_NAMESPACE_ID::DUserVirtualInventoryData& out) const;
-  void create_init(rpc::context& ctx);
+  void dump_virtual_inventory(google::protobuf::RepeatedPtrField<PROJECT_NAMESPACE_ID::DItemInstance>& out) const;
+
+  rpc::result_void_type create_init(rpc::context& ctx);
   void login_init(rpc::context& ctx);
 
   using find_position_handle_t = std::function<bool(
