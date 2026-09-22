@@ -10,12 +10,12 @@ mirrors, agent config writing, switching, and uninstall.
   write. `--uninstall` removes managed entries. Flags: `--backend=`,
   `--agents=<ids>|all` (all = auto-writable targets only; guided imports stay
   opt-in), `--mirror=cn|official`, `--offline`, `--skip-prepare`,
-  `--all-agents`, `--yes`, `--ui=line` (numbered-line menus instead of arrow
+  `--all-agents`, `--yes`, `--repo-root=<dir>`, `--build-dir=<dir>`, `--ui=line` (numbered-line menus instead of arrow
   keys), `--dry-run`, `--help`, `--list-agents`.
 - `agents/` — the agent auto-configuration component (per-agent
   configurators since 2026-09-21):
   `src/agents/` holds ONE module per product (`claude.mjs` … `codebuddy-ide.mjs`,
-  20 total) exporting a configurator built from shared base classes in
+  24 total) exporting a configurator built from shared base classes in
   `src/agents/base.mjs` (`AgentConfigurator`, `JsonServerMapConfigurator`,
   `OpenCodeShapeConfigurator`, `CodexTomlConfigurator`,
   `GuidedImportConfigurator`); the shared `.mcp.json` group target is declared
@@ -38,14 +38,32 @@ mirrors, agent config writing, switching, and uninstall.
   (raw mode keypress events) with a numbered-line fallback; `MenuCancelled`
   restores the terminal on Escape/Ctrl+C/EOF/render errors; empty menus fail
   immediately and a closed stdin never confirms a default.
-- `agents/src/guidance/ideExports.mjs` — guided-import snippets for IDE clients
-  without a verified project file (Cline IDE, CodeBuddy IDE): derived JSON in
+- `agents/src/guidance/ideExports.mjs` — explicit-load snippets for clients
+  without a verified project file (Cline IDE, CodeBuddy IDE, JetBrains Copilot,
+  JetBrains AI Assistant) and DSH's native Cordis patch: derived JSON/YAML in
   `<BUILD_DIR>/integration/mcp/exports/`, written on apply, removed on
   uninstall or deselection. Plan these in the same batch as configs and root
   guidance; never write them after the batch commits. Discover existing snippets
   for default selections. Reject modified snippets and escaped paths before any
   write; rollback and concurrent-edit protection use the existing file store.
   Removing a snippet does not remove entries manually imported into an IDE.
+  Each product's `importSpec` owns its format/rendering and instructions. DSH
+  uses the official `@deepseek-ai/dsh-mcp-client` insert schema and `--patch`;
+  never overwrite user YAML or claim a generated patch loads automatically.
+- Workspace selection is independent of toolkit location. `setup.js` searches
+  upward from cwd for the nearest project marker, falls back to a nearby
+  `.p4ignore`, then cwd. Explicit `--repo-root` accepts existing non-Git
+  workspaces. Toolkit package manifests are not host-project markers. Detection
+  reads local metadata only; see `common/src/paths.mjs` for marker/name priority.
+  The launch context flows through every planner, ownership check, migration and
+  export. All new entries pin `--repo-root`; repeated writes deduplicate managed
+  scope arguments, and mismatching JSON/TOML scope aborts the batch. Build
+  resolution uses explicit input, JSONC VS Code CMake/clangd settings, then a
+  unique immediate-child CMake build belonging to the project; the fallback is
+  `Intermediate/AI/MCP` for UE and `build` otherwise.
+  `common/src/scanPolicy.mjs` detects UE layouts. CodeGraph's `codegraph.json`
+  policy participates in the config transaction, preserves an existing include
+  list and adds generated-directory exclusions. tgrep uses matching UE exclusions.
 - `agents/tools/launch.mjs` — the explicit Cline launcher: sets
   `CLINE_MCP_SETTINGS_PATH` to the repo export file and the repo cwd for the
   child only, spawns a verified entry with `shell:false` (resolution:
@@ -65,7 +83,7 @@ mirrors, agent config writing, switching, and uninstall.
   tgrep clone+patch+cargo build, CodeGraph `npm pack`+verify+extract, mirror
   parameters passed per invocation; no global npm/cargo config is modified).
 - `common/src/agents.mjs` — compatibility shim re-exporting `agents/src/writers.mjs`
-  (server ids `atsf4g-tgrep`, `atsf4g-codegraph`; `AgentConfigError` kinds:
+  (server ids `workspace-tgrep`, `workspace-codegraph`; `AgentConfigError` kinds:
   `unreadable`, `invalid-json`, `duplicate-key`, `not-object`, `map-not-object`,
   `toml-marker`, `conflict`, `concurrent-modification`, `outside-repo`). The
   agents component never imports this shim.
@@ -196,7 +214,11 @@ mirrors, agent config writing, switching, and uninstall.
 | --- | --- | --- |
 | Claude Code + pi + CodeBuddy CLI (shared file, one group) | `.mcp.json` (legacy root `mcp.json` fallback for CodeBuddy) | `mcpServers` |
 | Codex | `.codex/config.toml` | `[mcp_servers.<id>]` + `cwd` + repo-relative args; shared by CLI and IDE |
-| VS Code / Copilot | `.vscode/mcp.json` | `servers` + `${workspaceFolder}` relative args |
+| GitHub Copilot: VS Code / Visual Studio (id `vscode`) | `.vscode/mcp.json` | `servers` + absolute args; aliases `copilot`, `copilot-vscode`, `copilot-visual-studio`, `visual-studio`; same target/code |
+| TRAE / TraeCode IDE and CLI (id `trae`) | `.trae/mcp.json` | `mcpServers`; IDE project-MCP toggle required |
+| JetBrains Copilot (id `copilot-jetbrains`, includes Rider) | guided import | `servers` JSON; use plugin's Add MCP Tools; no assumed internal disk path |
+| JetBrains AI Assistant (id `jetbrains-ai`, includes Rider) | guided import | `mcpServers` JSON; MCP settings / STDIO / project server level |
+| DSH (id `dsh`, alias `deepseek-harness`) | explicit `--patch` | generated YAML overlay, official MCP plugin must be resolvable in the selected profile |
 | Cursor | `.cursor/mcp.json` | `mcpServers` |
 | Gemini CLI | `.gemini/settings.json` | `mcpServers` |
 | OpenCode | `opencode.json(c)` (multiple existing candidates abort) | `mcp`, `type: "local"`, `command: [prog, ...args]`, `environment`, `enabled` |
@@ -209,7 +231,7 @@ mirrors, agent config writing, switching, and uninstall.
 | Qwen Code | `.qwen/settings.json` | `mcpServers` + `cwd` + repo-relative args |
 | WorkBuddy | `.workbuddy/mcp.json` | `mcpServers` |
 | MiMo Code | `mimocode.json(c)` / `.mimocode/mimocode.json(c)`, new default the latter | OpenCode shape |
-| Cline CLI | `.cline/atsf4g-mcp.json` (installer-defined export; Cline does not discover it) | `mcpServers` + explicit launcher |
+| Cline CLI | `.cline/mcp.json` (installer-defined export; Cline does not discover it) | `mcpServers` + explicit launcher |
 | Cline IDE / CodeBuddy IDE (`cline-ide`, `codebuddy-ide`) | none (guided import) | build-dir snippet + panel steps; excluded from `--agents=all` |
 
 Use product names for verified shared CLI/IDE configuration targets; keep
@@ -266,6 +288,16 @@ values and custom options belonging to a different selected backend abort with
 zero writes; do not guess translations or silently discard options.
 Explicit uninstall can remove a verified legacy entry with custom settings.
 
+Old `*-tgrep` / `*-codegraph` keys are candidates, never ownership evidence by
+themselves. Verify the matching backend path and workspace before renaming JSON
+keys or TOML headers/managed markers. Leave string values and comments intact;
+old/new collisions abort before any write. Cline discovers `.cline/*-mcp.json`
+exports and carries their foreign remainder into the new explicit-load file so
+custom servers remain available. Exact historical JSON/Cordis snippets can be
+regenerated; extra fields or edited text still cause an export conflict. These
+portable-path and migration contracts are covered by `generic.test.mjs` and
+`portable.test.mjs`; local root/metadata cases live in `common/test/workspace.test.mjs`.
+
 When adding an agent or doubting a format, add or edit its module under
 `agents/src/agents/`, register it in `agents/src/agents/index.mjs`, re-check
 the vendor's current docs, and update this table plus the README examples
@@ -277,7 +309,7 @@ surface are guarded by a dedicated regression in `agents/test/setup.test.mjs`.
 Verified against released clients in an isolated repo + isolated HOME (both
 configs and connection semantics):
 
-- qwen-code 0.24.1: project entry discovered; `qwen mcp approve atsf4g-tgrep`
+- qwen-code 0.24.1: project entry discovered; `qwen mcp approve <server-id>`
   is the user step; afterwards `qwen mcp list` reports **Connected** (live
   initialize handshake).
 - opencode-ai 1.18.31 / @kilocode/cli 7.7.6 / @mimo-ai/cli 0.1.14 (bin `mimo`;
@@ -301,10 +333,12 @@ configs and connection semantics):
   `@anthropic-ai/claude-code` `bin/claude.exe` is a broken ~500-byte stub; run
   the platform package `claude-code-<plat>-<arch>/claude.exe` directly.
 
-Environment caveats for future acceptance rounds: `TGREP_EXCLUDE_DIRS` matches
-directory NAMES (`build`, `build_jobs_cmake_tools`, ...), so a scratch repo
-nested under the build directory indexes zero files — place real-backend
-scratch projects outside those names (e.g. the OS temp dir). Windows ConPTY
+Environment caveats for future acceptance rounds: tgrep inherits ancestor
+ignore files under `--no-require-git`; a fixture below a parent Git-ignored
+build directory can index zero files even with its own `.gitignore` whitelist.
+Keep real-backend fixtures outside ignored ancestors, using an appropriate
+project's scratch directory. Explicit excludes match directory names too.
+Windows ConPTY
 drives fine via `node-pty` (its exit helper prints a harmless
 `AttachConsole failed`); `winpty` cannot run under piped harness shells.
 Windows notes: SIGKILL maps to TerminateProcess (the parent sees a bare
@@ -332,8 +366,10 @@ guards it; after regenerating a lockfile against any registry, strip foreign
 
 ## Path policy
 
-VS Code entries use `${workspaceFolder}`. Codex, Kimi and Qwen use absolute `cwd`
-+ repo-relative args, so those are still machine-local configs. Cursor supports
+VS Code and Visual Studio share absolute args. Codex, Kimi and Qwen use absolute
+`cwd` + repo-relative args when the toolkit is inside the project; an external
+toolkit requires absolute args. Every new entry also pins `--repo-root`, so
+these remain machine-local configs. Cursor supports
 `${workspaceFolder}` interpolation and Gemini supports `cwd`; this implementation
 currently uses absolute args for them and the other JSON clients. Do not infer a
 client lacks cwd/variable support from the serializer's current choice.
@@ -357,8 +393,8 @@ client lacks cwd/variable support from the serializer's current choice.
    proxy proving no downloads. Add a multi-candidate fixture (e.g. Kilo
    `kilo.json` + `kilo.jsonc`) whenever candidate handling changes and verify
    consolidation merges, deletes after the write, and rolls both back on a
-   later injected failure. Real-backend scratch projects go in the OS temp
-   dir, never under the build directory (see Client acceptance notes).
+   later injected failure. Real-backend scratch projects must not inherit
+   exclusions from the parent build tree (see Client acceptance notes).
    Crash/permission coverage (2026-09-21): `run-crash-cycle.mjs`
    SIGKILLs real setup.js processes mid-apply (NODE_OPTIONS --require hook)
    and must pass on both platforms; `run-acl-cycle.mjs` (Windows read-only

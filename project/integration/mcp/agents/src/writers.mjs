@@ -18,9 +18,11 @@ import { planConfigChanges } from './configPlan.mjs';
 import { createFileStore, readConfigFile, recoverInterruptedBatch, findOpenJournalBatch } from './fileStore.mjs';
 import { planCodegraphGuidance } from './guidance/codegraph.mjs';
 import { planIdeExport } from './guidance/ideExports.mjs';
+import { planWorkspacePolicy } from './guidance/workspace.mjs';
 import * as jsonDocument from './formats/jsonDocument.mjs';
 import * as codexToml from './formats/codexToml.mjs';
 import { BACKENDS, SERVER_IDS, managedServerIds } from './backends.mjs';
+import { configuredServerIds } from './entries.mjs';
 import { agentById, agentDefinitions, legacyLocations, productsForTarget, targetFor } from './agents/index.mjs';
 
 export { AgentConfigError };
@@ -39,10 +41,10 @@ function defaultDirs(repoRoot, { stateDir, tmpDir } = {}) {
 }
 
 /** Managed ids referenced by one JSON config file, or null when unreadable/damaged. */
-function jsonConfiguredIds(text, format, filePath) {
+function jsonConfiguredIds(text, format, filePath, repoRoot, launch) {
   const document = jsonDocument.parseJsonDocument(text, filePath);
   const map = jsonDocument.walkServerMap(document.root, format, filePath);
-  return map === null ? [] : managedServerIds().filter((id) => Object.prototype.hasOwnProperty.call(map, id));
+  return map === null ? [] : configuredServerIds(map, repoRoot, launch).filter((id) => Object.prototype.hasOwnProperty.call(map, id));
 }
 
 /**
@@ -52,7 +54,7 @@ function jsonConfiguredIds(text, format, filePath) {
  * error — configure runs consolidate them — while damaged
  * files still surface as an error.
  */
-export function agentStates(repoRoot) {
+export function agentStates(repoRoot, launch = {}) {
   const states = {};
   for (const agent of agentDefinitions()) {
     const target = targetFor(agent);
@@ -65,7 +67,7 @@ export function agentStates(repoRoot) {
     // Legacy descriptors carry their own format; missing locations are normal.
     const scanFiles = [
       ...existing.map((relative) => ({ relative, format: target.format })),
-      ...legacyLocations(target).map(({ file, format }) => ({ relative: file, format })),
+      ...legacyLocations(target, repoRoot).map(({ file, format }) => ({ relative: file, format })),
     ];
     for (const { relative, format } of scanFiles) {
       const filePath = path.join(repoRoot, relative);
@@ -74,14 +76,14 @@ export function agentStates(repoRoot) {
         if (text === null) continue;
         state.present = true;
         if (format === 'codexToml') {
-          const ids = codexToml.codexManagedTables(text);
+          const ids = codexToml.codexManagedTables(text, repoRoot, launch);
           for (const id of managedServerIds()) {
             if (ids.has(id) && !state.configured.includes(id)) {
               state.configured.push(id);
             }
           }
         } else {
-          for (const id of jsonConfiguredIds(text, format, filePath)) {
+          for (const id of jsonConfiguredIds(text, format, filePath, repoRoot, launch)) {
             if (!state.configured.includes(id)) {
               state.configured.push(id);
             }
@@ -120,16 +122,18 @@ export function buildAgentOperations({ states, selectedIds, backend }) {
   return operations;
 }
 
-export function planAgentConfigChanges({ repoRoot, operations, stateDir, tmpDir, codegraphGuidance = false, ideExports = [] }) {
+export function planAgentConfigChanges({ repoRoot, operations, stateDir, tmpDir, codegraphGuidance = false, ideExports = [], launch = {} }) {
   const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
   const store = createFileStore({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
-  const plan = planConfigChanges({ repoRoot, operations, readFile: store.readFile, ownsFile: store.owns });
+  const plan = planConfigChanges({ repoRoot, operations, launch, readFile: store.readFile, ownsFile: store.owns });
   if (codegraphGuidance) {
-    try { plan.steps.push(planCodegraphGuidance({ repoRoot, readBuffer: store.readBuffer })); }
+    try { plan.steps.push(...planWorkspacePolicy({ repoRoot, readFile: store.readFile })); }
+    catch (error) { plan.problems.push({ targetId: 'workspace-scan-policy', agents: [], error }); }
+    try { plan.steps.push(planCodegraphGuidance({ repoRoot, launch, readBuffer: store.readBuffer })); }
     catch (error) { plan.problems.push({ targetId: 'codegraph-guidance', agents: [], error }); }
   }
   for (const options of ideExports) {
-    try { plan.steps.push(planIdeExport({ ...options, repoRoot, readFile: store.readFile })); }
+    try { plan.steps.push(planIdeExport({ ...options, repoRoot, launch, readFile: store.readFile })); }
     catch (error) { plan.problems.push({ targetId: 'ide-export', agents: [options.agentId], error }); }
   }
   return plan;
@@ -189,10 +193,10 @@ export function applyAgentConfigChanges({ repoRoot, plan, stateDir, tmpDir }) {
  * read-only and does not recover; `recovery` is null unless a crash was
  * recovered in this call.
  */
-export function runAgentConfigBatch({ repoRoot, operations, dryRun = false, stateDir, tmpDir, codegraphGuidance = false, ideExports = [] }) {
+export function runAgentConfigBatch({ repoRoot, operations, dryRun = false, stateDir, tmpDir, codegraphGuidance = false, ideExports = [], launch = {} }) {
   const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
   const recovery = dryRun ? null : recoverInterruptedBatch({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
-  const plan = planAgentConfigChanges({ repoRoot, operations, stateDir, tmpDir, codegraphGuidance, ideExports });
+  const plan = planAgentConfigChanges({ repoRoot, operations, stateDir, tmpDir, codegraphGuidance, ideExports, launch });
   if (plan.problems.length > 0) {
     return { plan, applied: false, recovery };
   }
@@ -220,7 +224,7 @@ function firstChangingStep(plan) {
  *
  * @returns {{agent: object, file: string, action: 'created'|'updated'|'removed-file'|'unchanged'}}
  */
-export function configureAgent({ repoRoot, agentId, backend, dryRun = false, stateDir, tmpDir }) {
+export function configureAgent({ repoRoot, agentId, backend, dryRun = false, stateDir, tmpDir, launch = {} }) {
   const agent = agentById(agentId);
   if (!agent) {
     throw new Error(`unknown agent ${agentId}`);
@@ -230,7 +234,7 @@ export function configureAgent({ repoRoot, agentId, backend, dryRun = false, sta
   }
   const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
   if (!dryRun) recoverInterruptedBatch({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
-  const plan = planAgentConfigChanges({ repoRoot, operations: [{ type: 'configure', agentId, backend }], stateDir, tmpDir });
+  const plan = planAgentConfigChanges({ repoRoot, operations: [{ type: 'configure', agentId, backend }], stateDir, tmpDir, launch });
   if (plan.problems.length > 0) {
     throw plan.problems[0].error;
   }
@@ -248,7 +252,7 @@ export function configureAgent({ repoRoot, agentId, backend, dryRun = false, sta
  *
  * @returns {{agent: object, file: string, action: 'updated'|'removed-file'|'unchanged'}}
  */
-export function removeAgentServers({ repoRoot, agentId, dryRun = false, stateDir, tmpDir }) {
+export function removeAgentServers({ repoRoot, agentId, dryRun = false, stateDir, tmpDir, launch = {} }) {
   const agent = agentById(agentId);
   if (!agent) {
     throw new Error(`unknown agent ${agentId}`);
@@ -258,7 +262,7 @@ export function removeAgentServers({ repoRoot, agentId, dryRun = false, stateDir
   }
   const dirs = defaultDirs(repoRoot, { stateDir, tmpDir });
   if (!dryRun) recoverInterruptedBatch({ repoRoot, stateDir: dirs.stateDir, tmpDir: dirs.tmpDir });
-  const plan = planAgentConfigChanges({ repoRoot, operations: [{ type: 'remove', agentId }], stateDir, tmpDir });
+  const plan = planAgentConfigChanges({ repoRoot, operations: [{ type: 'remove', agentId }], stateDir, tmpDir, launch });
   if (plan.problems.length > 0) {
     throw plan.problems[0].error;
   }

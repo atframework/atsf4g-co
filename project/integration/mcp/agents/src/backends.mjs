@@ -6,21 +6,22 @@
  */
 
 import path from 'node:path';
+import { INTEGRATION_ROOT } from '../../common/src/paths.mjs';
 
 export const SERVER_IDS = Object.freeze({
-  tgrep: 'atsf4g-tgrep',
-  codegraph: 'atsf4g-codegraph',
+  tgrep: 'workspace-tgrep',
+  codegraph: 'workspace-codegraph',
 });
 
 export const BACKENDS = Object.freeze({
   tgrep: {
     serverId: SERVER_IDS.tgrep,
-    entry: path.join('project', 'integration', 'mcp', 'tgrep', 'src', 'server.mjs'),
+    entry: path.join(INTEGRATION_ROOT, 'tgrep', 'src', 'server.mjs'),
     label: 'tgrep — fast text/regex search',
   },
   codegraph: {
     serverId: SERVER_IDS.codegraph,
-    entry: path.join('project', 'integration', 'mcp', 'codegraph', 'src', 'server.mjs'),
+    entry: path.join(INTEGRATION_ROOT, 'codegraph', 'src', 'server.mjs'),
     label: 'CodeGraph — structural code navigation',
   },
 });
@@ -28,4 +29,9 @@ export const BACKENDS = Object.freeze({
 /** All managed server ids; switching backends removes both before writing one. */
 export function managedServerIds() {
   return Object.values(SERVER_IDS);
+}
+
+/** Older project-prefixed ids are candidates only; their command/root must be verified. */
+export function backendForServerId(id) {
+  return Object.keys(BACKENDS).find(backend => id === SERVER_IDS[backend] || (typeof id === 'string' && id.endsWith(`-${backend}`))) ?? null;
 }

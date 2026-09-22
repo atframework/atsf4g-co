@@ -11,7 +11,7 @@ const source = fileURLToPath(new URL('../', import.meta.url));
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-launch-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const integration = path.join(root, 'project/integration/mcp');
+  const integration = path.join(root, 'tools/mcp');
   fs.mkdirSync(path.join(integration, 'agents/tools'), { recursive: true });
   fs.mkdirSync(path.join(integration, 'common/src'), { recursive: true });
   fs.copyFileSync(path.join(source, 'tools/launch.mjs'), path.join(integration, 'agents/tools/launch.mjs'));
@@ -74,14 +74,14 @@ test('launcher requires the exported settings file before starting cline', (t) =
   const { run } = fixture(t);
   const missing = run(['--agent=cline', '--', '--version']);
   assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /atsf4g-mcp\.json/);
+  assert.match(missing.stderr, /mcp\.json/);
   assert.match(missing.stderr, /setup\.js/);
 });
 
 test('launcher rejects Windows shell shims and missing explicit entries', (t) => {
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.cline'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.cline/atsf4g-mcp.json'), '{"mcpServers":{}}\n');
+  fs.writeFileSync(path.join(root, '.cline/mcp.json'), '{"mcpServers":{}}\n');
   const shim = run(['--agent=cline', '--cline', path.join(root, 'cline.cmd'), '--', '--version']);
   assert.equal(shim.status, 1);
   assert.match(shim.stderr, /shell shim/);
@@ -93,12 +93,12 @@ test('launcher rejects Windows shell shims and missing explicit entries', (t) =>
 test('launcher runs a JS entry with CLINE_MCP_SETTINGS_PATH, repo cwd, and passthrough args', (t) => {
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.cline'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.cline/atsf4g-mcp.json'), '{"mcpServers":{}}\n');
+  fs.writeFileSync(path.join(root, '.cline/mcp.json'), '{"mcpServers":{}}\n');
   const { file, report } = writeFakeCline(root);
   const started = run(['--agent=cline', '--cline', file, '--', '--version', '--extra', 'value with space']);
   assert.equal(started.status, 0, started.stderr);
   const observed = JSON.parse(fs.readFileSync(report, 'utf8'));
-  assert.equal(observed.settingsPath, path.join(root, '.cline', 'atsf4g-mcp.json'));
+  assert.equal(observed.settingsPath, path.join(root, '.cline', 'mcp.json'));
   assert.equal(path.resolve(observed.cwd), path.resolve(root));
   assert.deepEqual(observed.argv, ['--version', '--extra', 'value with space']);
 });
@@ -110,7 +110,7 @@ test('launcher reports a clear install hint when no cline entry is resolvable', 
   }
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.cline'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.cline/atsf4g-mcp.json'), '{"mcpServers":{}}\n');
+  fs.writeFileSync(path.join(root, '.cline/mcp.json'), '{"mcpServers":{}}\n');
   const failed = run(['--agent=cline', '--', '--version']);
   assert.equal(failed.status, 1);
   assert.match(failed.stderr, /npm install -g cline/);
@@ -120,7 +120,7 @@ test('launcher reports a clear install hint when no cline entry is resolvable', 
 test('explicit extensionless npm bin/cline runs under Node', (t) => {
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.cline'));
-  fs.writeFileSync(path.join(root, '.cline/atsf4g-mcp.json'), '{"mcpServers":{}}');
+  fs.writeFileSync(path.join(root, '.cline/mcp.json'), '{"mcpServers":{}}');
   const { file, report } = writeFakeCline(root);
   const resolver = path.join(root, 'bin', 'cline');
   fs.mkdirSync(path.dirname(resolver));
@@ -135,7 +135,7 @@ test('explicit extensionless npm bin/cline runs under Node', (t) => {
 test('environment override uses the same entry validation as --cline', (t) => {
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.cline'));
-  fs.writeFileSync(path.join(root, '.cline/atsf4g-mcp.json'), '{"mcpServers":{}}');
+  fs.writeFileSync(path.join(root, '.cline/mcp.json'), '{"mcpServers":{}}');
   const { file, report } = writeFakeCline(root);
   const result = run(['--agent=cline', '--', 'ok'], { CLINE_BIN_PATH: file });
   assert.equal(result.status, 0, result.stderr);
@@ -153,7 +153,7 @@ test('environment override uses the same entry validation as --cline', (t) => {
 test('launcher consumes CLINE_BIN_PATH before running an npm resolver', (t) => {
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.cline'));
-  fs.writeFileSync(path.join(root, '.cline/atsf4g-mcp.json'), '{"mcpServers":{}}');
+  fs.writeFileSync(path.join(root, '.cline/mcp.json'), '{"mcpServers":{}}');
   const { file, report } = writeFakeCline(root);
   fs.appendFileSync(file, '\nif (process.env.CLINE_BIN_PATH) throw new Error("resolver would launch override again");');
   const explicit = run(['--agent=cline', '--cline', file], { CLINE_BIN_PATH: path.join(root, 'wrong-binary') });

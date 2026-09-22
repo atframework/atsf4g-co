@@ -10,7 +10,7 @@ import {
   buildAgentOperations,
   configureAgent,
   removeAgentServers,
-} from '../src/writers.mjs';
+} from './fixtures.mjs';
 import { GUIDED_IMPORTS } from '../src/guidance/ideExports.mjs';
 import { autoConfigurableAgents, guidedAgents } from '../src/registry.mjs';
 
@@ -43,12 +43,12 @@ function read(repo, relative) {
 }
 
 function ourLegacyEntry(repo, backend = 'tgrep') {
-  const entry = { 'project/integration/mcp/tgrep/src/server.mjs': null };
+  const entry = { 'tools/mcp/tgrep/src/server.mjs': null };
   void entry;
   return {
     type: 'stdio',
     command: 'node',
-    args: [path.join(repo, 'project', 'integration', 'mcp', backend, 'src', 'server.mjs')],
+    args: [path.join(repo, 'tools', 'mcp', backend, 'src', 'server.mjs')],
   };
 }
 

@@ -1,6 +1,6 @@
 /**
  * Preparation library for the locally controlled dependencies. The user-facing
- * entry is <repo>/project/integration/mcp/setup.js; this module holds the
+ * entry is <MCP_DIR>/setup.js; this module holds the
  * reusable steps.
  *
  * Downloads are tool dependencies only (pinned upstream sources and npm
@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { WorkspacePaths } from './paths.mjs';
+import { WorkspacePaths, INTEGRATION_ROOT } from './paths.mjs';
 
 export function makeLogger(write) {
   return (message) => write(`prepare: ${message}\n`);
@@ -272,8 +272,8 @@ export function prepareCodegraph(paths, mcpRoot, { offline = false, registry = n
  * payload; the caller (setup.js) serializes it. Throws on any failure --
  * callers must not touch agent configuration when this fails.
  */
-export function runPrepare({ repoRoot, buildDir, backend, offline = false, npmRegistry = null, cargoConfigArgs = [], log = silentLog }) {
-  const mcpRoot = path.join(repoRoot, 'project', 'integration', 'mcp');
+export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], log = silentLog }) {
+  const mcpRoot = integrationRoot ?? INTEGRATION_ROOT;
   const paths = new WorkspacePaths(repoRoot, buildDir);
   paths.ensureDirs();
 

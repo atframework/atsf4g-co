@@ -85,7 +85,7 @@ test('backend stop() ends the fake child', async () => {
 
 test('buildSpawnSpec forces the direct-mode environment and clears injections', async () => {
   const paths = makePaths();
-  const backend = new CodeGraphBackend({ paths, runtime: 'r', cliEntry: 'c', dirName: '.codegraph-atsf4g-test' });
+  const backend = new CodeGraphBackend({ paths, runtime: 'r', cliEntry: 'c', dirName: '.codegraph-workspace-test' });
   const previous = {
     NODE_OPTIONS: process.env.NODE_OPTIONS,
     CODEGRAPH_DAEMON_INTERNAL: process.env.CODEGRAPH_DAEMON_INTERNAL,
@@ -102,7 +102,7 @@ test('buildSpawnSpec forces the direct-mode environment and clears injections', 
     assert.equal(env.CODEGRAPH_NO_UPDATE_CHECK, '1');
     assert.equal(env.CODEGRAPH_NO_DOWNLOAD, '1');
     assert.equal(env.CODEGRAPH_STARTUP_HANDSHAKE_TIMEOUT_MS, '0');
-    assert.equal(env.CODEGRAPH_DIR, '.codegraph-atsf4g-test');
+    assert.equal(env.CODEGRAPH_DIR, '.codegraph-workspace-test');
     assert.ok(env.CODEGRAPH_MCP_TOOLS.startsWith('codegraph_explore,codegraph_status'));
     assert.equal(env.NODE_OPTIONS, undefined);
     assert.equal(env.CODEGRAPH_DAEMON_INTERNAL, undefined);
@@ -122,7 +122,7 @@ test('resolveIndexSelection prefers an existing index over creating one', async 
   const paths = makePaths();
   try {
     assert.deepEqual(resolveIndexSelection(paths.repoRoot), {
-      dirName: indexDirName(),
+      dirName: indexDirName(paths.repoRoot),
       needsInit: true,
     });
     fs.mkdirSync(path.join(paths.repoRoot, '.codegraph'), { recursive: true });

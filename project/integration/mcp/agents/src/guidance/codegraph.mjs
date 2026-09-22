@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { TextDecoder } from 'node:util';
 import { AgentConfigError } from '../errors.mjs';
+import { INTEGRATION_ROOT, defaultIndexDirName } from '../../../common/src/paths.mjs';
 
 export const CODEGRAPH_START = '<!-- CODEGRAPH_START -->';
 export const CODEGRAPH_END = '<!-- CODEGRAPH_END -->';
@@ -18,9 +19,9 @@ export const CODEGRAPH_BODY = [
   '  Verify relevant current source before making changes.',
   '- **Shell fallback:** When a matching CLI is already installed and the index is idle, run',
   '  `codegraph explore "<symbol names or question>"` from the repository root. Prefer this integration\'s prepared,',
-  '  pinned CLI and the direct/offline environment described in `project/integration/mcp/README.md`.',
+  '  pinned CLI and the direct/offline environment described in `<MCP_DIR>/README.md`.',
   '  Set `CODEGRAPH_DIR` to the actual root-level directory **name**, such as `.codegraph` or',
-  '  `.codegraph-atsf4g-windows`; do not use an absolute path, a trailing slash, or another platform\'s index.',
+  '  `<CODEGRAPH_DIR>`; do not use an absolute path, a trailing slash, or another platform\'s index.',
   '  Do not use an unpinned `npx` command that may download a different release.',
   '',
   'If no usable index exists, skip CodeGraph. If it is unavailable, reports `INDEX_NOT_READY`/`INDEX_IN_USE`,',
@@ -74,12 +75,12 @@ function markerPair(text) {
   return { start: starts[0], end: ends[0] };
 }
 
-export function patchCodegraphGuidance(before) {
+export function patchCodegraphGuidance(before, bodyText = CODEGRAPH_BODY) {
   const document = decode(before ?? Buffer.alloc(0));
   const { text } = document;
   const markers = markerPair(text);
   const normalize = (value) => value.replace(/\r\n|\r/g, '\n');
-  const expected = `${CODEGRAPH_BODY}\n`;
+  const expected = `${bodyText}\n`;
   if (markers && normalize(text.slice(markers.start.next, markers.end.offset)) === expected) {
     return { bytes: before, changed: false };
   }
@@ -95,11 +96,12 @@ export function patchCodegraphGuidance(before) {
   return { bytes: encode(after, document), changed: true };
 }
 
-export function planCodegraphGuidance({ repoRoot, readBuffer }) {
+export function planCodegraphGuidance({ repoRoot, readBuffer, launch = {} }) {
   const relative = 'AGENTS.md';
   const file = path.join(repoRoot, relative);
   const before = readBuffer(file);
-  const result = patchCodegraphGuidance(before);
+  const readme = path.relative(repoRoot, path.join(launch.integrationRoot ?? INTEGRATION_ROOT, 'README.md')).split(path.sep).join('/');
+  const result = patchCodegraphGuidance(before, CODEGRAPH_BODY.replace('<MCP_DIR>/README.md', () => readme).replace('<CODEGRAPH_DIR>', () => defaultIndexDirName(repoRoot)));
   return {
     target: { targetId: 'codegraph-guidance' }, relative, file, agents: [], ops: [],
     before, after: result.bytes, action: result.changed ? before === null ? 'create' : 'update' : 'unchanged',

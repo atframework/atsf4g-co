@@ -9,6 +9,9 @@
  * byte-identical — a mismatch is a programming error and fails loudly here.
  */
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { isWithin } from '../../../common/src/paths.mjs';
 import claude from './claude.mjs';
 import pi from './pi.mjs';
 import codebuddy from './codebuddy.mjs';
@@ -29,10 +32,15 @@ import mimocode from './mimocode.mjs';
 import cline from './cline.mjs';
 import clineIde from './cline-ide.mjs';
 import codebuddyIde from './codebuddy-ide.mjs';
+import trae from './trae.mjs';
+import dsh from './dsh.mjs';
+import copilotJetbrains from './copilot-jetbrains.mjs';
+import jetbrainsAi from './jetbrains-ai.mjs';
 
 export const CONFIGURATORS = Object.freeze([
   claude, pi, codebuddy, codex, vscode, cursor, gemini, opencode, kilo, roo,
   zcode, omp, zed, kimiCode, qwen, workbuddy, mimocode, cline, clineIde, codebuddyIde,
+  trae, dsh, copilotJetbrains, jetbrainsAi,
 ]);
 
 export const REGISTRY = Object.freeze(CONFIGURATORS.map((configurator) => configurator.definition()));
@@ -74,8 +82,19 @@ export function targetFor(agent) {
 }
 
 /** Normalize old string locations and locations that declare a different format. */
-export function legacyLocations(target) {
-  return (target.legacyFiles ?? []).map((entry) => typeof entry === 'string' ? { file: entry, format: 'mcpServers' } : entry);
+export function legacyLocations(target, repoRoot) {
+  const locations = (target.legacyFiles ?? []).map((entry) => typeof entry === 'string' ? { file: entry, format: 'mcpServers' } : entry);
+  if (repoRoot && target.legacyDirectory && target.legacyFileSuffix) {
+    const directory = path.join(repoRoot, target.legacyDirectory);
+    if (fs.existsSync(directory)) {
+      if (!isWithin(fs.realpathSync(directory), fs.realpathSync(repoRoot))) throw new Error('legacy config directory escapes the workspace');
+      for (const name of fs.readdirSync(directory).sort()) {
+        const file = path.join(target.legacyDirectory, name);
+        if (name.endsWith(target.legacyFileSuffix) && file !== target.file) locations.push({ file, format: target.format });
+      }
+    }
+  }
+  return locations;
 }
 
 /** Products with a physical repo target that this installer can write. */

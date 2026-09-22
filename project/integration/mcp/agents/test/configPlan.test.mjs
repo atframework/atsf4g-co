@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import { planConfigChanges } from '../src/configPlan.mjs';
+import { planConfigChanges } from './fixtures.mjs';
 
 // Pure planning with injectable I/O: a synthetic registry shares one physical
 // file between two products (the .mcp.json group shape P9.3 will use).
@@ -44,7 +44,7 @@ test('operations on a shared physical file merge into one step', () => {
   assert.deepEqual(plan.steps[0].agents.sort(), ['alpha', 'beta']);
   assert.equal(reader.reads.length, 1, 'file read exactly once');
   assert.equal(plan.steps[0].action, 'create');
-  assert.ok(plan.steps[0].after.includes('atsf4g-tgrep'));
+  assert.ok(plan.steps[0].after.includes('workspace-tgrep'));
 });
 
 test('aliases resolve to the same shared file', () => {
@@ -95,8 +95,8 @@ test('remove-only on a missing file is a no-op step', () => {
 });
 
 test('empty skeleton after removal deletes only with the ownership record', () => {
-  const files = { [SHARED_FILE]: JSON.stringify({ mcpServers: { 'atsf4g-tgrep': {
-    command: 'node', args: [path.join('/repo', 'project/integration/mcp/tgrep/src/server.mjs')],
+  const files = { [SHARED_FILE]: JSON.stringify({ mcpServers: { 'workspace-tgrep': {
+    command: 'node', args: [path.join('/repo', 'tools/mcp/tgrep/src/server.mjs')],
   } } }) };
   for (const owns of [true, false]) {
     const reader = makeReader({ ...files });

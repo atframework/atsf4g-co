@@ -1,9 +1,9 @@
 {
-  "name": "@atsf4g/mcp-codegraph",
+  "name": "mcp-codegraph",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "CodeGraph MCP wrapper for atsf4g-co (stdio, supervised direct-mode backend on the pinned bundle)",
+  "description": "CodeGraph MCP wrapper for any workspace (stdio, supervised direct-mode backend on the pinned bundle)",
   "engines": {
     "node": ">=20"
   },

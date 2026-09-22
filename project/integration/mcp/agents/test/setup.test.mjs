@@ -16,7 +16,7 @@ const source = fileURLToPath(new URL('../../', import.meta.url));
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-setup-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const integration = path.join(root, 'project/integration/mcp');
+  const integration = path.join(root, 'tools/mcp');
   fs.mkdirSync(integration, { recursive: true });
   for (const file of ['setup.js']) fs.copyFileSync(path.join(source, file), path.join(integration, file));
   for (const component of ['agents', 'common']) {
@@ -56,8 +56,8 @@ test('review: CLI recovers before scanning defaults and before the no-agents ear
   const before = fs.readFileSync(file, 'utf8');
   const dirs = {
     repoRoot: root,
-    stateDir: path.join(root, 'build_jobs_cmake_tools/integration/mcp/state'),
-    tmpDir: path.join(root, 'build_jobs_cmake_tools/_agent_tmp/mcp'),
+    stateDir: path.join(root, 'build/integration/mcp/state'),
+    tmpDir: path.join(root, 'build/_agent_tmp/mcp'),
   };
   const store = createFileStore(dirs);
   store.remove(file, { relative: '.cursor/mcp.json', expectedBefore: before });
@@ -89,7 +89,7 @@ test('CLI installs all targets, repeats without writes, switches twice and unins
     assert.equal(result.status, 0, result.stderr + result.stdout);
     for (const agent of agentDefinitions()) {
       if (!targetFor(agent)) continue;
-      assert.deepEqual(agentStates(root)[agent.id].configured, [`atsf4g-${backend}`]);
+      assert.deepEqual(agentStates(root)[agent.id].configured, [`workspace-${backend}`]);
     }
   };
   install('tgrep');
@@ -174,11 +174,11 @@ test('CLI help and list-agents stay consistent with the registry', (t) => {
   // flag surface of setup.js; extend this list when adding an option).
   const help = run(['--help']);
   assert.equal(help.status, 0, help.stderr + help.stdout);
-  for (const flag of ['--backend=', '--agents=', '--mirror=', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui=line', '--dry-run', '--help', '-h', '--list-agents']) {
+  for (const flag of ['--repo-root=', '--build-dir=', '--backend=', '--agents=', '--mirror=', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui=line', '--dry-run', '--help', '-h', '--list-agents']) {
     assert.ok(help.stdout.includes(flag), `help documents ${flag}`);
   }
   const documentedFlags = [...help.stdout.matchAll(/^\s{2}(--[a-z-]+)/gm)].map((match) => match[1]);
-  assert.deepEqual(documentedFlags, ['--backend', '--agents', '--mirror', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui', '--dry-run', '--help', '--list-agents'], 'help lists exactly the accepted options');
+  assert.deepEqual(documentedFlags, ['--repo-root', '--build-dir', '--backend', '--agents', '--mirror', '--offline', '--skip-prepare', '--uninstall', '--all-agents', '--yes', '--ui', '--dry-run', '--help', '--list-agents'], 'help lists exactly the accepted options');
 });
 
 test('CLI cannot silently succeed when default selection encounters damaged configs', (t) => {
@@ -252,15 +252,15 @@ test('CLI agents=all writes the cline export but keeps guided imports out', (t) 
   const { root, run } = fixture(t);
   const result = run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=all']);
   assert.equal(result.status, 0, result.stderr + result.stdout);
-  assert.equal(fs.existsSync(path.join(root, '.cline', 'atsf4g-mcp.json')), true);
-  assert.equal(fs.existsSync(path.join(root, 'build_jobs_cmake_tools', 'integration', 'mcp', 'exports')), false, 'guided snippets are not part of all');
-  assert.match(result.stdout, /launch\.mjs --agent=cline/);
+  assert.equal(fs.existsSync(path.join(root, '.cline', 'mcp.json')), true);
+  assert.equal(fs.existsSync(path.join(root, 'build', 'integration', 'mcp', 'exports')), false, 'guided snippets are not part of all');
+  assert.match(result.stdout, /launch\.mjs" --agent=cline/);
   assert.match(result.stdout, /未纳入 all/);
   assert.match(result.stdout, /显式接入，不等于已自动接入/);
   assert.doesNotMatch(result.stdout, /cline 已接入/);
   for (const agent of agentDefinitions()) {
     if (!targetFor(agent)) continue;
-    assert.deepEqual(agentStates(root)[agent.id].configured, ['atsf4g-tgrep']);
+    assert.deepEqual(agentStates(root)[agent.id].configured, ['workspace-tgrep']);
   }
 });
 
@@ -269,29 +269,29 @@ test('CLI cline export installs, repeats unchanged, and uninstalls', (t) => {
   const args = ['--yes', '--skip-prepare', '--backend=tgrep', '--agents=cline'];
   const dry = run([...args, '--dry-run']);
   assert.equal(dry.status, 0, dry.stderr + dry.stdout);
-  assert.equal(fs.existsSync(path.join(root, '.cline', 'atsf4g-mcp.json')), false);
-  assert.match(dry.stdout, /拟新建：\.cline\/atsf4g-mcp\.json/);
+  assert.equal(fs.existsSync(path.join(root, '.cline', 'mcp.json')), false);
+  assert.match(dry.stdout, /拟新建：\.cline\/mcp\.json/);
 
   const installed = run(args);
   assert.equal(installed.status, 0, installed.stderr + installed.stdout);
-  const parsed = JSON.parse(fs.readFileSync(path.join(root, '.cline', 'atsf4g-mcp.json'), 'utf8'));
-  assert.deepEqual(Object.keys(parsed.mcpServers), ['atsf4g-tgrep']);
+  const parsed = JSON.parse(fs.readFileSync(path.join(root, '.cline', 'mcp.json'), 'utf8'));
+  assert.deepEqual(Object.keys(parsed.mcpServers), ['workspace-tgrep']);
   assert.match(installed.stdout, /显式接入，不等于已自动接入/);
 
   const before = snapshot(root);
   const repeat = run(args);
   assert.equal(repeat.status, 0, repeat.stderr + repeat.stdout);
   assert.deepEqual(snapshot(root), before);
-  assert.match(repeat.stdout, /无变化：\.cline\/atsf4g-mcp\.json/);
+  assert.match(repeat.stdout, /无变化：\.cline\/mcp\.json/);
 
   const removed = run(['--yes', '--uninstall', '--agents=cline']);
   assert.equal(removed.status, 0, removed.stderr + removed.stdout);
-  assert.equal(fs.existsSync(path.join(root, '.cline', 'atsf4g-mcp.json')), false);
+  assert.equal(fs.existsSync(path.join(root, '.cline', 'mcp.json')), false);
 });
 
 test('CLI guided imports write build-dir snippets only and clean up on uninstall', (t) => {
   const { root, run } = fixture(t);
-  const exportsDir = path.join(root, 'build_jobs_cmake_tools', 'integration', 'mcp', 'exports');
+  const exportsDir = path.join(root, 'build', 'integration', 'mcp', 'exports');
   const args = ['--yes', '--skip-prepare', '--backend=codegraph', '--agents=cline-ide,codebuddy-ide'];
   const dry = run([...args, '--dry-run']);
   assert.equal(dry.status, 0, dry.stderr + dry.stdout);
@@ -303,9 +303,9 @@ test('CLI guided imports write build-dir snippets only and clean up on uninstall
   assert.deepEqual(fs.readdirSync(exportsDir).sort(), ['cline-ide-mcp-servers.json', 'codebuddy-ide-mcp-servers.json']);
   for (const file of fs.readdirSync(exportsDir)) {
     const parsed = JSON.parse(fs.readFileSync(path.join(exportsDir, file), 'utf8'));
-    assert.deepEqual(Object.keys(parsed.mcpServers), ['atsf4g-codegraph']);
-    assert.equal(parsed.mcpServers['atsf4g-codegraph'].command, 'node');
-    assert.match(parsed.mcpServers['atsf4g-codegraph'].args[0], /codegraph[\\/]src[\\/]server\.mjs$/);
+    assert.deepEqual(Object.keys(parsed.mcpServers), ['workspace-codegraph']);
+    assert.equal(parsed.mcpServers['workspace-codegraph'].command, 'node');
+    assert.match(parsed.mcpServers['workspace-codegraph'].args[0], /codegraph[\\/]src[\\/]server\.mjs$/);
   }
   assert.match(installed.stdout, /手动导入/);
   assert.doesNotMatch(installed.stdout, /已自动接入/);
@@ -320,11 +320,11 @@ test('CLI guided imports write build-dir snippets only and clean up on uninstall
 test('CLI pi selection reports .pi/mcp.json conflicts without touching that file', (t) => {
   const { root, run } = fixture(t);
   fs.mkdirSync(path.join(root, '.pi'), { recursive: true });
-  const conflictText = '{"mcpServers":{"atsf4g-tgrep":{"command":"node","args":["elsewhere"]}}}';
+  const conflictText = '{"mcpServers":{"workspace-tgrep":{"command":"node","args":["elsewhere"]}}}';
   fs.writeFileSync(path.join(root, '.pi', 'mcp.json'), conflictText);
   const conflict = run(['--yes', '--skip-prepare', '--backend=codegraph', '--agents=pi']);
   assert.equal(conflict.status, 0, conflict.stderr + conflict.stdout);
-  assert.match(conflict.stdout, /\.pi\/mcp\.json 中已存在同名条目 atsf4g-tgrep/);
+  assert.match(conflict.stdout, /\.pi\/mcp\.json 中已存在同名条目 workspace-tgrep/);
   assert.equal(fs.readFileSync(path.join(root, '.pi', 'mcp.json'), 'utf8'), conflictText);
 
   fs.writeFileSync(path.join(root, '.pi', 'mcp.json'), '{ broken');
@@ -364,17 +364,17 @@ test('guided exports participate in final selection and dry-run summaries', (t) 
   assert.equal(dry.status, 0, dry.stderr);
   assert.doesNotMatch(dry.stdout, /已生成本机导入片段/);
   assert.equal(run(args).status, 0);
-  const snippet = path.join(root, 'build_jobs_cmake_tools/integration/mcp/exports/cline-ide-mcp-servers.json');
+  const snippet = path.join(root, 'build/integration/mcp/exports/cline-ide-mcp-servers.json');
   assert.equal(fs.existsSync(snippet), true);
   assert.equal(run(['--yes', '--skip-prepare', '--backend=codegraph']).status, 0);
-  assert.ok(JSON.parse(fs.readFileSync(snippet)).mcpServers['atsf4g-codegraph'], 'default selection keeps existing guided exports');
+  assert.ok(JSON.parse(fs.readFileSync(snippet)).mcpServers['workspace-codegraph'], 'default selection keeps existing guided exports');
   assert.equal(run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=claude']).status, 0);
   assert.equal(fs.existsSync(snippet), false, 'unselected guided export is removed');
 });
 
 test('unreadable IDE export aborts config writes during preflight', (t) => {
   const { root, run } = fixture(t);
-  const snippet = path.join(root, 'build_jobs_cmake_tools/integration/mcp/exports/cline-ide-mcp-servers.json');
+  const snippet = path.join(root, 'build/integration/mcp/exports/cline-ide-mcp-servers.json');
   fs.mkdirSync(snippet, { recursive: true });
   const before = snapshot(root);
   const result = run(['--yes', '--skip-prepare', '--backend=codegraph', '--agents=claude,cline-ide']);
@@ -392,7 +392,7 @@ test('CLI previews and applies Kilo consolidation plus legacy options, then reru
   fs.writeFileSync(native, '{"$schema":"https://app.kilo.ai/config.json"}\n');
   fs.writeFileSync(candidate, '// keep snapshot setting\n{"snapshot":false}\n');
   fs.writeFileSync(legacy, JSON.stringify({ mcpServers: {
-    'atsf4g-tgrep': { command: 'node', args: [path.join(root, 'project/integration/mcp/tgrep/src/server.mjs')], env: { KEEP: 'yes' }, disabled: true },
+    'workspace-tgrep': { command: 'node', args: [path.join(root, 'tools/mcp/tgrep/src/server.mjs')], env: { KEEP: 'yes' }, disabled: true },
     team: { command: 'team-tool' },
   } }));
   const args = ['--yes', '--skip-prepare', '--backend=tgrep', '--agents=kilocode'];
@@ -406,8 +406,8 @@ test('CLI previews and applies Kilo consolidation plus legacy options, then reru
   const nativeText = fs.readFileSync(native, 'utf8');
   const document = parseJsonDocument(nativeText, native).root;
   assert.equal(document.snapshot, false);
-  assert.equal(document.mcp['atsf4g-tgrep'].enabled, false);
-  assert.deepEqual(document.mcp['atsf4g-tgrep'].environment, { KEEP: 'yes' });
+  assert.equal(document.mcp['workspace-tgrep'].enabled, false);
+  assert.deepEqual(document.mcp['workspace-tgrep'].environment, { KEEP: 'yes' });
   assert.match(nativeText, /keep snapshot setting/);
   assert.equal(fs.existsSync(candidate), false);
   assert.deepEqual(JSON.parse(fs.readFileSync(legacy, 'utf8')), { mcpServers: { team: { command: 'team-tool' } } });

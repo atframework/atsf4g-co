@@ -23,10 +23,15 @@ before relying on them after an upgrade.
   The POSIX `bin/codegraph` shell wrapper is never spawned (it re-injects
   `CODEGRAPH_HOST_PPID`).
 - CodeGraph `serve --mcp` never creates the first index; the wrapper runs the
-  library init helper when `<repo>/.codegraph-atsf4g-<platform>/codegraph.db`
+  library init helper when `<repo>/.codegraph-<project>-<platform>/codegraph.db`
   (or a valid `.codegraph/`) is missing. Tool schemas are taken from the
   backend's `tools/list` with `projectPath` stripped; the pinned static schemas
   are only the pre-ready fallback.
+- CodeGraph 1.6.0 hides `codegraph_status` from `tools/list` for indexes with
+  fewer than 500 files, even with an explicit tool allowlist. The wrapper
+  probes that read-only handler before using its pinned schema; a missing
+  handler still fails readiness. Keep both cases in protocol tests and run a
+  real small-workspace smoke test.
 - tgrep speaks newline JSON-RPC (`search`/`files`/`status`; `reload` never
   exposed) through the integration patch adding `--transport stdio`. The patch
   keeps `serve.lock` exclusivity and adds a backend-side 20 000-row cap.
@@ -50,11 +55,22 @@ before relying on them after an upgrade.
 ## Index and state rules
 
 - tgrep index: `<BUILD_DIR>/integration/mcp/state/tgrep/<workspace-id>/<platform>/index`
-  with one fixed exclude list; policy changes must stay identical across
+  with one workspace-selected exclude list (UE layouts omit generated/resource
+  directories but keep source Build directories); policy changes must stay identical across
   index/serve/watch or the index can drop members.
-- CodeGraph index: repository-root `.codegraph-atsf4g-<platform>` (gitignored
-  via `/.codegraph*`); an existing valid `.codegraph/` is reused in place.
-  Windows and WSL must keep separate directories. Manual CLI/SQLite access
+- Explicit wrapper `--repo-root` can refer to a workspace outside the toolkit;
+  every new client config pins this argument. Legacy launches detect the project
+  enclosing the toolkit, falling back to cwd discovery if none exists. Never
+  reintroduce a fixed installer path or project name. Prepare resolves toolkit
+  files separately from workspace state. UE CodeGraph setup plans `codegraph.json` includes/excludes in the same
+  guarded batch as client configs; pinned 1.6.0 `project-config.js` confirms that
+  explicit excludes override includes, including in Perforce-only source trees.
+- CodeGraph index: repository-root `.codegraph-<project>-<platform>`, where
+  project is normalized from metadata by `projectInfo`. Reuse an existing
+  `.codegraph/codegraph.db` first, then exactly one `.codegraph-*-<platform>`
+  database, including an old project prefix. Multiple platform candidates abort;
+  do not pick one silently or create a replacement. Windows and WSL keep separate
+  directories. Ensure project ignore rules cover generated indexes. Manual CLI/SQLite access
   (including the `CODEGRAPH_DIR` incantation and the no-concurrent-writers
   rule) is documented in the README section "手动查询或操作 CodeGraph 索引" —
   keep that section accurate when index handling changes.

@@ -7,6 +7,7 @@
  * Behavior switches via environment:
  *   CODEGRAPH_FAKE_RECORD=<path>  append one JSON line per tools/call
  *   CODEGRAPH_FAKE_NO_STATUS=1    do not register codegraph_status
+ *   CODEGRAPH_FAKE_HIDE_STATUS=1  hide status in tools/list, but keep its handler (small upstream projects)
  * Exits when stdin closes, like the upstream direct-mode server.
  */
 
@@ -68,7 +69,7 @@ const allowlist = (process.env.CODEGRAPH_MCP_TOOLS ?? Object.keys(ALL).join(',')
 const server = new Server({ name: 'fake-codegraph', version: '1.6.0-fake' }, { capabilities: { tools: {} } });
 
 server.setRequestHandler('tools/list', () => ({
-  tools: allowlist.map((name) => ({
+  tools: allowlist.filter((name) => name !== 'codegraph_status' || process.env.CODEGRAPH_FAKE_HIDE_STATUS !== '1').map((name) => ({
     name,
     description: `fake ${name}`,
     inputSchema: ALL[name].inputSchema,

@@ -12,6 +12,20 @@ import { TgrepBackend } from '../src/backend.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const FAKE = path.join(HERE, 'fake-tgrep-serve.mjs');
 
+test('Unreal scans exclude generated data and the selected build directory without hiding source Build folders', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-unreal-scan-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'Game.uproject'), '{}');
+  const backend = new TgrepBackend({ paths: new WorkspacePaths(root, path.join(root, 'custom-cache')), binary: 'tgrep' });
+  const argv = backend.buildArgv();
+  const excludes = argv.filter((value, index) => argv[index - 1] === '--exclude');
+  assert.ok(argv.includes('--no-require-git'));
+  for (const name of ['Intermediate', 'Binaries', 'Saved', 'DerivedDataCache', 'Content', 'custom-cache']) assert.ok(excludes.includes(name));
+  assert.equal(excludes.includes('Source'), false);
+  assert.equal(excludes.includes('Build'), false);
+  assert.deepEqual(backend.buildArgv(), argv, 'building a command must not mutate the shared scan policy');
+});
+
 function makePaths() {
   const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-tgrep-repo-'));
   return new WorkspacePaths(repo, path.join(repo, 'build'));

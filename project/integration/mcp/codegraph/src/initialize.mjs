@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One-shot CodeGraph initializer for the atsf4g-co MCP integration.
+ * One-shot CodeGraph initializer for the workspace MCP integration.
  *
  * Calls the pinned library build (never the CLI, never the installer):
  *   CodeGraph.init(root, { index: false })  -> creates .codegraph dir + DB

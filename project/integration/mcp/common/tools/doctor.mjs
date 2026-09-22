@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import { WorkspacePaths, deriveRepoRoot, platformName, resolveBuildDir } from '../src/paths.mjs';
+import { WorkspacePaths, detectWorkspace, projectInfo, selectCodegraphIndex, platformName, resolveBuildDir } from '../src/paths.mjs';
 import { StateStore, isPidAlive } from '../src/state.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -38,7 +38,8 @@ function main() {
     },
   });
 
-  const repoRoot = deriveRepoRoot(new URL('../../setup.js', import.meta.url), values['repo-root']);
+  const workspace = detectWorkspace(process.cwd(), { explicit: values['repo-root'] });
+  const repoRoot = workspace.root;
   const buildDir = resolveBuildDir(repoRoot, values['build-dir']);
   const paths = new WorkspacePaths(repoRoot, buildDir);
   const checks = [];
@@ -76,7 +77,8 @@ function main() {
     check(checks, 'codegraph.runtime', fs.existsSync(prepared.codegraph.runtime), prepared.codegraph.runtime);
     check(checks, 'codegraph.library', fs.existsSync(prepared.codegraph.library_entry), prepared.codegraph.library_entry);
   }
-  const customIndex = path.join(repoRoot, `.codegraph-atsf4g-${platformName()}`, 'codegraph.db');
+  const selection = selectCodegraphIndex(repoRoot);
+  const customIndex = path.join(repoRoot, selection.dirName ?? '.codegraph', 'codegraph.db');
   const defaultIndex = path.join(repoRoot, '.codegraph', 'codegraph.db');
   check(
     checks,
@@ -96,6 +98,8 @@ function main() {
   const report = {
     platform: platformName(),
     repo_root: repoRoot,
+    project: projectInfo(repoRoot),
+    workspace_detection: workspace.reason,
     build_dir: buildDir,
     node: process.version,
     checks,

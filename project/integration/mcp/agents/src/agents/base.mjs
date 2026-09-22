@@ -38,6 +38,9 @@ function normalizeTarget(target) {
   if (target.candidates) descriptor.candidates = target.candidates.map(toPlatformFile);
   if (target.candidatesMode) descriptor.candidatesMode = target.candidatesMode;
   if (target.legacyFallback) descriptor.legacyFallback = target.legacyFallback;
+  if (target.legacyDirectory) descriptor.legacyDirectory = target.legacyDirectory;
+  if (target.legacyFileSuffix) descriptor.legacyFileSuffix = target.legacyFileSuffix;
+  if (target.copyLegacyRemainder) descriptor.copyLegacyRemainder = true;
   if (target.legacyFiles) {
     descriptor.legacyFiles = target.legacyFiles.map((entry) => (typeof entry === 'string' || Array.isArray(entry)
       ? toPlatformFile(entry)

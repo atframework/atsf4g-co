@@ -56,7 +56,7 @@
   ],
   "index_dir_naming": {
     "reuse": ".codegraph",
-    "wrapper_created": ".codegraph-atsf4g-<platform>",
+    "wrapper_created": ".codegraph-<project>-<platform>",
     "constraint": "CODEGRAPH_DIR accepts a single directory name under the project root only"
   }
 }

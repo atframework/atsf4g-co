@@ -3,11 +3,11 @@
  * 显式启动器：为 Cline CLI 以本仓库的 MCP 导出文件启动 Agent。
  *
  * 用法：
- *   node <PROJECT_DIR>/project/integration/mcp/agents/tools/launch.mjs --agent=cline -- [cline 参数...]
+ *   node <MCP_DIR>/agents/tools/launch.mjs --agent=cline -- [cline 参数...]
  *   node ... --agent=cline --cline <cline 可执行文件或 bin/cline 脚本> -- [cline 参数...]
  *
  * 行为约定：
- * - 仅对子进程设置绝对 CLINE_MCP_SETTINGS_PATH=<repo>/.cline/atsf4g-mcp.json
+ * - 仅对子进程设置绝对 CLINE_MCP_SETTINGS_PATH=<repo>/.cline/mcp.json
  *   与仓库 cwd；不修改用户环境，不生成平台 shell 脚本，不在安装时自动启动。
  * - 显式路径替换 Cline 本次进程的默认 MCP 配置源（不合并全局服务器）；
  *   导出文件中的用户补充条目仍会被读取。
@@ -20,9 +20,9 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { deriveRepoRoot } from '../../common/src/paths.mjs';
+import { detectWorkspace, INTEGRATION_ROOT } from '../../common/src/paths.mjs';
 
-const EXPORT_FILE = path.join('.cline', 'atsf4g-mcp.json');
+const EXPORT_FILE = path.join('.cline', 'mcp.json');
 const PLATFORM_PACKAGE_SUFFIX = {
   win32: { platform: 'windows', binary: 'cline.exe' },
   darwin: { platform: 'darwin', binary: 'cline' },
@@ -56,9 +56,9 @@ function parseArgv(argv) {
 
 function printHelp() {
   const usage = [
-    '用法：node project/integration/mcp/agents/tools/launch.mjs --agent=cline -- [cline 参数...]',
+    '用法：node <MCP_DIR>/agents/tools/launch.mjs --agent=cline -- [cline 参数...]',
     '',
-    '为 Cline CLI 设置 CLINE_MCP_SETTINGS_PATH=<仓库>/.cline/atsf4g-mcp.json 后启动，',
+    '为 Cline CLI 设置 CLINE_MCP_SETTINGS_PATH=<仓库>/.cline/mcp.json 后启动，',
     'cwd 固定为仓库根。该显式路径替换 Cline 本次进程的默认 MCP 配置源，不合并全局服务器。',
     '',
     '选项：',
@@ -170,10 +170,10 @@ function main() {
     fail(`--agent 目前仅支持 cline（收到：${options.agent ?? '未提供'}）`);
     return;
   }
-  const repoRoot = deriveRepoRoot(new URL(import.meta.url), null);
+  const repoRoot = detectWorkspace().root;
   const exportPath = path.join(repoRoot, EXPORT_FILE);
   if (!fs.existsSync(exportPath)) {
-    fail(`未找到 ${EXPORT_FILE}；先运行 node project/integration/mcp/setup.js 并选择 cline。`);
+    fail(`未找到 ${EXPORT_FILE}；先运行 node "${path.join(INTEGRATION_ROOT, 'setup.js')}" 并选择 cline。`);
     return;
   }
   let entry;

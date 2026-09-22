@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { BackendError, ErrorCodes, IndexInUse } from '../../common/src/errors.mjs';
-import { WorkspacePaths, deriveRepoRoot, resolveBuildDir, validateRelativeScope } from '../../common/src/paths.mjs';
+import { WorkspacePaths, deriveRepoRoot, resolveBuildDir, validateRelativeScope, projectInfo } from '../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../common/src/state.mjs';
 import { runWrapperServer, toolText } from '../../common/src/mcpServer.mjs';
 import {
@@ -257,6 +257,14 @@ class CodeGraphService {
     try {
       const listed = await backend.listTools();
       const byName = new Map((listed.tools ?? []).map((tool) => [tool.name, tool]));
+      // Pinned 1.6.0 hides status from tools/list for projects below 500 files,
+      // even with an explicit allowlist, while retaining its read-only handler.
+      // Our status endpoint has a local schema. Verify the handler before
+      // accepting this discovery omission; an absent/broken handler still fails.
+      if (!byName.has('codegraph_status')) {
+        const status = await backend.callTool('codegraph_status', {});
+        if (!status.isError) byName.set('codegraph_status', { name: 'codegraph_status', inputSchema: STATIC_TOOL_SCHEMAS.codegraph_status });
+      }
       const missing = this.allowlist.filter((name) => !byName.has(name));
       if (missing.length > 0) {
         this.state = ServiceState.DEGRADED;
@@ -499,7 +507,7 @@ function main() {
 
   const service = new CodeGraphService(paths, backendArgs);
   void runWrapperServer({
-    name: 'atsf4g-codegraph',
+    name: `${projectInfo(repoRoot).slug}-codegraph`,
     instructions: TOOL_INSTRUCTIONS,
     tools: makeTools(service),
     service,

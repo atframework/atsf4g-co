@@ -11,7 +11,7 @@ import {
   configureAgent,
   removeAgentServers,
   runAgentConfigBatch,
-} from '../src/writers.mjs';
+} from './fixtures.mjs';
 
 function tmpRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-agents-'));
@@ -30,54 +30,56 @@ test('configureAgent writes every supported agent shape', () => {
     }
 
     const claude = JSON.parse(fs.readFileSync(path.join(repo, '.mcp.json'), 'utf8'));
-    const claudeArgs = claude.mcpServers['atsf4g-tgrep'].args[0];
+    const claudeArgs = claude.mcpServers['workspace-tgrep'].args[0];
     assert.ok(claudeArgs.startsWith(repo), 'absolute server path under the repo');
     assert.ok(claudeArgs.endsWith(path.join('tgrep', 'src', 'server.mjs')));
-    assert.equal(claude.mcpServers['atsf4g-tgrep'].command, 'node');
-    assert.equal(claude.mcpServers['atsf4g-tgrep'].type, 'stdio');
+    assert.equal(claude.mcpServers['workspace-tgrep'].command, 'node');
+    assert.equal(claude.mcpServers['workspace-tgrep'].type, 'stdio');
 
     const vscode = JSON.parse(fs.readFileSync(path.join(repo, '.vscode', 'mcp.json'), 'utf8'));
-    assert.match(vscode.servers['atsf4g-tgrep'].args[0], /^\$\{workspaceFolder\}\/project\/integration\/mcp\/tgrep\/src\/server\.mjs$/);
+    // Visual Studio and VS Code share this file; use the common absolute path
+    // form instead of relying on an IDE-specific variable expansion contract.
+    assert.equal(vscode.servers['workspace-tgrep'].args[0], path.join(repo, 'tools/mcp/tgrep/src/server.mjs'));
 
     const codex = fs.readFileSync(path.join(repo, '.codex', 'config.toml'), 'utf8');
-    assert.match(codex, /\[mcp_servers\.atsf4g-tgrep\]/);
-    assert.match(codex, /^args = \["project\/integration\/mcp\/tgrep\/src\/server\.mjs"\]$/m);
+    assert.match(codex, /\[mcp_servers\.workspace-tgrep\]/);
+    assert.deepEqual(JSON.parse(codex.match(/^args = (.+)$/m)[1]), ['tools/mcp/tgrep/src/server.mjs', '--repo-root', repo]);
     assert.match(codex, /^cwd = /m);
 
     const opencode = JSON.parse(fs.readFileSync(path.join(repo, 'opencode.json'), 'utf8'));
-    assert.equal(opencode.mcp['atsf4g-tgrep'].type, 'local');
-    assert.equal(opencode.mcp['atsf4g-tgrep'].command[0], 'node');
-    assert.equal(opencode.mcp['atsf4g-tgrep'].enabled, true);
+    assert.equal(opencode.mcp['workspace-tgrep'].type, 'local');
+    assert.equal(opencode.mcp['workspace-tgrep'].command[0], 'node');
+    assert.equal(opencode.mcp['workspace-tgrep'].enabled, true);
 
     const zcode = JSON.parse(fs.readFileSync(path.join(repo, '.zcode', 'config.json'), 'utf8'));
-    assert.equal(zcode.mcp.servers['atsf4g-tgrep'].command, 'node');
+    assert.equal(zcode.mcp.servers['workspace-tgrep'].command, 'node');
 
     // P9.3 shapes (verified against each vendor's docs).
     const zed = JSON.parse(fs.readFileSync(path.join(repo, '.zed', 'settings.json'), 'utf8'));
-    assert.deepEqual(zed.context_servers['atsf4g-tgrep'], { command: 'node', args: [path.join(repo, 'project', 'integration', 'mcp', 'tgrep', 'src', 'server.mjs')] });
+    assert.deepEqual(zed.context_servers['workspace-tgrep'], { command: 'node', args: [path.join(repo, 'tools', 'mcp', 'tgrep', 'src', 'server.mjs'), '--repo-root', repo] });
 
     const kimi = JSON.parse(fs.readFileSync(path.join(repo, '.kimi-code', 'mcp.json'), 'utf8'));
-    assert.equal(kimi.mcpServers['atsf4g-tgrep'].command, 'node');
-    assert.equal(kimi.mcpServers['atsf4g-tgrep'].cwd, repo);
-    assert.equal(kimi.mcpServers['atsf4g-tgrep'].args[0], 'project/integration/mcp/tgrep/src/server.mjs');
+    assert.equal(kimi.mcpServers['workspace-tgrep'].command, 'node');
+    assert.equal(kimi.mcpServers['workspace-tgrep'].cwd, repo);
+    assert.equal(kimi.mcpServers['workspace-tgrep'].args[0], 'tools/mcp/tgrep/src/server.mjs');
 
     const qwen = JSON.parse(fs.readFileSync(path.join(repo, '.qwen', 'settings.json'), 'utf8'));
-    assert.equal(qwen.mcpServers['atsf4g-tgrep'].cwd, repo);
+    assert.equal(qwen.mcpServers['workspace-tgrep'].cwd, repo);
 
     const workbuddy = JSON.parse(fs.readFileSync(path.join(repo, '.workbuddy', 'mcp.json'), 'utf8'));
-    assert.equal(workbuddy.mcpServers['atsf4g-tgrep'].type, 'stdio');
-    assert.ok(workbuddy.mcpServers['atsf4g-tgrep'].args[0].startsWith(repo));
+    assert.equal(workbuddy.mcpServers['workspace-tgrep'].type, 'stdio');
+    assert.ok(workbuddy.mcpServers['workspace-tgrep'].args[0].startsWith(repo));
 
     const mimo = JSON.parse(fs.readFileSync(path.join(repo, '.mimocode', 'mimocode.json'), 'utf8'));
-    assert.equal(mimo.mcp['atsf4g-tgrep'].type, 'local');
-    assert.deepEqual(mimo.mcp['atsf4g-tgrep'].command.slice(0, 1), ['node']);
+    assert.equal(mimo.mcp['workspace-tgrep'].type, 'local');
+    assert.deepEqual(mimo.mcp['workspace-tgrep'].command.slice(0, 1), ['node']);
 
     const kilo = JSON.parse(fs.readFileSync(path.join(repo, '.kilo', 'kilo.json'), 'utf8'));
-    assert.equal(kilo.mcp['atsf4g-tgrep'].type, 'local');
-    assert.deepEqual(kilo.mcp['atsf4g-tgrep'].command.slice(0, 1), ['node']);
+    assert.equal(kilo.mcp['workspace-tgrep'].type, 'local');
+    assert.deepEqual(kilo.mcp['workspace-tgrep'].command.slice(0, 1), ['node']);
 
     const roo = JSON.parse(fs.readFileSync(path.join(repo, '.roo', 'mcp.json'), 'utf8'));
-    assert.equal(roo.mcpServers['atsf4g-tgrep'].type, 'stdio');
+    assert.equal(roo.mcpServers['workspace-tgrep'].type, 'stdio');
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }
@@ -147,17 +149,17 @@ test('codex config keeps foreign TOML tables through add and uninstall', () => {
     let text = fs.readFileSync(file, 'utf8');
     assert.match(text, /^model = "gpt-5"$/m);
     assert.match(text, /\[mcp_servers\.other\]/);
-    assert.match(text, /\[mcp_servers\.atsf4g-tgrep\]/);
+    assert.match(text, /\[mcp_servers\.workspace-tgrep\]/);
 
     // A second run is idempotent in content (one managed block only).
     configureAgent({ repoRoot: repo, agentId: 'codex', backend: 'tgrep' });
     text = fs.readFileSync(file, 'utf8');
-    assert.equal(text.match(/BEGIN atsf4g-mcp/g).length, 1);
+    assert.equal(text.match(/BEGIN workspace-mcp/g).length, 1);
 
     const result = removeAgentServers({ repoRoot: repo, agentId: 'codex' });
     assert.equal(result.action, 'updated');
     text = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(text, /atsf4g/);
+    assert.doesNotMatch(text, /workspace/);
     assert.match(text, /\[mcp_servers\.other\]/);
     assert.match(text, /^model = "gpt-5"$/m);
   } finally {
@@ -284,7 +286,7 @@ test('agentStates reports damaged configs instead of pretending they are empty',
     assert.deepEqual(states.claude.configured, []);
     assert.ok(states.claude.error, 'damage is reported');
     // JSONC states are readable (comments tolerated).
-    fs.writeFileSync(file, '{ // c\n "mcpServers": { "atsf4g-tgrep": { "command": "node" } } }\n', 'utf8');
+    fs.writeFileSync(file, '{ // c\n "mcpServers": { "workspace-tgrep": { "command": "node" } } }\n', 'utf8');
     assert.deepEqual(agentStates(repo).claude.configured, [SERVER_IDS.tgrep]);
     // A healthy sibling is still scanned normally.
     configureAgent({ repoRoot: repo, agentId: 'cursor', backend: 'tgrep' });
@@ -321,9 +323,9 @@ test('codex legacy managed table removal stops at the next foreign table', () =>
     [
       'model = "gpt-5"',
       '',
-      '[mcp_servers.atsf4g-tgrep]',
+      '[mcp_servers.workspace-tgrep]',
       'command = "node"',
-      'args = ["project/integration/mcp/tgrep/src/server.mjs"]',
+      'args = ["tools/mcp/tgrep/src/server.mjs"]',
       '',
       '[mcp_servers.foreign]',
       'command = "uvx"',
@@ -339,7 +341,7 @@ test('codex legacy managed table removal stops at the next foreign table', () =>
     const result = removeAgentServers({ repoRoot: repo, agentId: 'codex' });
     assert.equal(result.action, 'updated');
     const text = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(text, /atsf4g/);
+    assert.doesNotMatch(text, /workspace/);
     assert.match(text, /\[mcp_servers\.foreign\]/, 'foreign table kept');
     assert.match(text, /\[other_table\]/, 'later foreign table kept');
     assert.match(text, /^model = "gpt-5"$/m);
@@ -348,9 +350,9 @@ test('codex legacy managed table removal stops at the next foreign table', () =>
     fs.writeFileSync(
       file,
       [
-        '[mcp_servers."atsf4g-codegraph"]',
+        '[mcp_servers."workspace-codegraph"]',
         'command = "node"',
-        'args = ["project/integration/mcp/codegraph/src/server.mjs"]',
+        'args = ["tools/mcp/codegraph/src/server.mjs"]',
         '',
         '[mcp_servers.foreign]',
         'command = "uvx"',
@@ -362,9 +364,9 @@ test('codex legacy managed table removal stops at the next foreign table', () =>
     const switched = configureAgent({ repoRoot: repo, agentId: 'codex', backend: 'tgrep' });
     assert.equal(switched.action, 'updated');
     const after = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(after, /"atsf4g-codegraph"\]/, 'quoted legacy table removed');
+    assert.doesNotMatch(after, /"workspace-codegraph"\]/, 'quoted legacy table removed');
     assert.match(after, /\[mcp_servers\.foreign\]/, 'foreign table kept');
-    assert.match(after, /\[mcp_servers\.atsf4g-tgrep\]/, 'new managed table written');
+    assert.match(after, /\[mcp_servers\.workspace-tgrep\]/, 'new managed table written');
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
   }
@@ -377,11 +379,11 @@ test('codex nested managed sub-tables are removed with their parent', () => {
   fs.writeFileSync(
     file,
     [
-      '[mcp_servers.atsf4g-tgrep]',
+      '[mcp_servers.workspace-tgrep]',
       'command = "node"',
-      'args = ["project/integration/mcp/tgrep/src/server.mjs"]',
+      'args = ["tools/mcp/tgrep/src/server.mjs"]',
       '',
-      '[mcp_servers.atsf4g-tgrep.env]',
+      '[mcp_servers.workspace-tgrep.env]',
       'FOO = "bar"',
       '',
       '[mcp_servers.keep]',
@@ -393,7 +395,7 @@ test('codex nested managed sub-tables are removed with their parent', () => {
   try {
     removeAgentServers({ repoRoot: repo, agentId: 'codex' });
     const text = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(text, /atsf4g/);
+    assert.doesNotMatch(text, /workspace/);
     assert.doesNotMatch(text, /FOO/);
     assert.match(text, /\[mcp_servers\.keep\]/);
   } finally {
@@ -408,9 +410,9 @@ test('codex table-header-like lines inside multiline strings are not boundaries'
   fs.writeFileSync(
     file,
     [
-      '[mcp_servers.atsf4g-tgrep]',
+      '[mcp_servers.workspace-tgrep]',
       'command = "node"',
-      'args = ["project/integration/mcp/tgrep/src/server.mjs"]',
+      'args = ["tools/mcp/tgrep/src/server.mjs"]',
       'note = """this doc mentions',
       '[mcp_servers.foreign]',
       'inside a string"""',
@@ -418,9 +420,9 @@ test('codex table-header-like lines inside multiline strings are not boundaries'
       '[mcp_servers.real-foreign]',
       'command = "uvx"',
       '',
-      '[mcp_servers.atsf4g-codegraph]',
+      '[mcp_servers.workspace-codegraph]',
       'command = "node"',
-      'args = ["project/integration/mcp/codegraph/src/server.mjs"]',
+      'args = ["tools/mcp/codegraph/src/server.mjs"]',
       "literal = '''another",
       '[mcp_servers.also-fake]',
       "line'''",
@@ -431,7 +433,7 @@ test('codex table-header-like lines inside multiline strings are not boundaries'
   try {
     removeAgentServers({ repoRoot: repo, agentId: 'codex' });
     const text = fs.readFileSync(file, 'utf8');
-    assert.doesNotMatch(text, /atsf4g/, 'both managed tables removed');
+    assert.doesNotMatch(text, /workspace/, 'both managed tables removed');
     assert.match(text, /\[mcp_servers\.real-foreign\]/, 'real table after the string kept');
     assert.doesNotMatch(text, /inside a string/, 'managed table content (string included) dropped');
     assert.doesNotMatch(text, /\[mcp_servers\.foreign\]/, 'header inside the string was not mistaken for a boundary');
@@ -447,8 +449,8 @@ test('codex unterminated or overlapping managed markers abort without writing', 
   fs.mkdirSync(path.dirname(file), { recursive: true });
   try {
     for (const content of [
-      '# BEGIN atsf4g-mcp (managed by project/integration/mcp/setup.js; keep the marker lines)\n[mcp_servers.atsf4g-tgrep]\ncommand = "node"\n',
-      '# BEGIN atsf4g-mcp (managed by project/integration/mcp/setup.js; keep the marker lines)\n[mcp_servers.atsf4g-tgrep]\n# BEGIN atsf4g-mcp (managed by project/integration/mcp/setup.js; keep the marker lines)\n# END atsf4g-mcp\n',
+      '# BEGIN workspace-mcp (managed by tools/mcp/setup.js; keep the marker lines)\n[mcp_servers.workspace-tgrep]\ncommand = "node"\n',
+      '# BEGIN workspace-mcp (managed by tools/mcp/setup.js; keep the marker lines)\n[mcp_servers.workspace-tgrep]\n# BEGIN workspace-mcp (managed by tools/mcp/setup.js; keep the marker lines)\n# END workspace-mcp\n',
     ]) {
       fs.writeFileSync(file, content, 'utf8');
       assert.throws(() => removeAgentServers({ repoRoot: repo, agentId: 'codex' }));

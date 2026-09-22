@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * atsf4g-co MCP 集成安装入口。
+ * workspace MCP 集成安装入口。
  *
  * 用法：
- *   node project/integration/mcp/setup.js                     交互式安装 / 切换
- *   node project/integration/mcp/setup.js --uninstall         从 Agent 配置移除本集成
+ *   node <MCP_DIR>/setup.js                     交互式安装 / 切换
+ *   node <MCP_DIR>/setup.js --uninstall         从 Agent 配置移除本集成
  *
  * 流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖
  * （npm + cargo / npm pack，全部固定版本）→ 全部成功后才写入所选 Agent 的
@@ -29,6 +29,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { AgentConfigError, BACKENDS, agentStates, buildAgentOperations, findOpenJournalBatch, productsForTarget, runAgentConfigBatch } from './agents/src/writers.mjs';
 import { recoverInterruptedBatch } from './agents/src/fileStore.mjs';
@@ -37,7 +38,9 @@ import { GUIDED_IMPORTS, exportsDirFor, guidedImportGuidance, ideExportStates } 
 import { agentInstallNotes } from './agents/src/agents/index.mjs';
 import { createInteractiveUi } from './agents/src/ui/terminalMenu.mjs';
 import { runPrepare, writePreparedState } from './common/src/prepare.mjs';
-import { WorkspacePaths, deriveRepoRoot, resolveBuildDir } from './common/src/paths.mjs';
+import { WorkspacePaths, detectWorkspace, projectInfo, resolveBuildDir, validateWorkspaceBuildDir } from './common/src/paths.mjs';
+
+const integrationRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const NPM_MIRRORS = {
   cn: 'https://registry.npmmirror.com',
@@ -70,6 +73,8 @@ function parseArgv(argv) {
     else if (arg.startsWith('--backend=')) options.backend = requireValue('--backend', arg.slice('--backend='.length));
     else if (arg.startsWith('--agents=')) options.agents = requireValue('--agents', arg.slice('--agents='.length));
     else if (arg.startsWith('--mirror=')) options.mirror = requireValue('--mirror', arg.slice('--mirror='.length));
+    else if (arg.startsWith('--repo-root=')) options.repoRoot = requireValue('--repo-root', arg.slice('--repo-root='.length));
+    else if (arg.startsWith('--build-dir=')) options.buildDir = requireValue('--build-dir', arg.slice('--build-dir='.length));
     else if (arg.startsWith('--ui=')) {
       options.ui = requireValue('--ui', arg.slice('--ui='.length));
       if (options.ui !== 'line') throw new Error('--ui 仅支持：line');
@@ -89,7 +94,7 @@ function parseArgv(argv) {
 
 function printHelp() {
   const usage = [
-    '用法：node project/integration/mcp/setup.js [选项]',
+    '用法：在 Agent 工作区目录执行 node <MCP_DIR>/setup.js [选项]',
     '',
     '流程：选择检索后端（tgrep / CodeGraph 二选一）→ 选择下载镜像 → 准备本地依赖',
     '（全部固定版本）→ 依赖就绪后把 MCP 服务写入所选 Agent 的项目级配置。',
@@ -98,6 +103,8 @@ function printHelp() {
     'CodeGraph 接入会同批更新根 AGENTS.md 的提示词；编码/换行差异不触发重复写入。',
     '',
     '选项：',
+    '  --repo-root=<dir>          显式工作区；缺省从执行目录向上检测工程根，未找到时使用执行目录',
+    '  --build-dir=<dir>          工作区内的构建/缓存目录（缺省按 .vscode/settings.json 解析）',
     '  --backend=tgrep|codegraph   指定后端（跳过交互）',
     '  --agents=<id1,id2,...>|all  指定要接入的 Agent（跳过交互；--list-agents 查看可选 id；',
     '                              all 只含可自动写入项目配置的目标，面板导入类需显式指定）',
@@ -122,7 +129,8 @@ function printAgentList() {
   process.stdout.write('可配置的 Agent（id — 说明 — 仓库内配置文件）：\n');
   for (const agent of agentDefinitions()) {
     const target = targetFor(agent);
-    const location = target ? target.file.split(path.sep).join('/') : '面板导入 / 引导（不写项目配置）';
+    const location = target ? target.file.split(path.sep).join('/')
+      : agent.capability === 'export' ? '原生片段导出（需显式加载）' : '面板导入 / 引导（不写项目配置）';
     process.stdout.write(`  ${agent.id.padEnd(14)} ${agent.label}  (${location})\n`);
   }
   process.stdout.write('用 --agents=<id,...> 选择；all 只覆盖可自动写入的目标；docs-only 客户端（Windsurf）见 README 手工配置示例。\n');
@@ -162,7 +170,8 @@ function agentEntries(states) {
   return agentDefinitions().map((agent) => {
     const state = states[agent.id] ?? {};
     const note = state.error ? '配置文件异常（相关写入会中止）'
-      : !agent.targetId ? (state.present ? '已生成导入片段（连接需手动导入）' : '面板导入（不写项目配置）')
+      : !agent.targetId ? (state.present ? '已生成片段（需导入或显式加载）'
+        : agent.capability === 'export' ? '原生片段导出（需显式加载）' : '面板导入（不写项目配置）')
       : (state.configured ?? []).length > 0 ? `已配置 ${state.configured.join(', ')}` : '未配置';
     return { key: agent.id, label: agent.label, note };
   });
@@ -222,11 +231,12 @@ function recoverBeforeScan(ui, paths, dryRun) {
 function runConfigBatch(ui, paths, operations, { dryRun, ideExports = [] }) {
   const { plan, recovery } = runAgentConfigBatch({
     repoRoot: paths.repoRoot,
+    launch: paths.launch,
     operations,
     dryRun,
     stateDir: paths.stateDir,
     tmpDir: paths.agentTmpDir,
-    codegraphGuidance: operations.some((op) => op.type === 'configure' && op.backend === 'codegraph'),
+    codegraphGuidance: operations.some((op) => op.type === 'configure' && op.backend === 'codegraph') || ideExports.some((op) => op.backend === 'codegraph'),
     ideExports,
   });
   reportRecovery(ui, recovery);
@@ -288,14 +298,17 @@ async function runSetup(options, ui) {
       : !options.backend || !options.agents || (!options.mirror && !options.offline && !options.skipPrepare && !options.dryRun);
     if (missing) throw new Error('非交互执行缺少必要选项，请显式指定 --backend、--agents、--mirror，或用 --yes 接受已有默认选择');
   }
-  const repoRoot = deriveRepoRoot(new URL('./setup.js', import.meta.url), null);
-  const buildDir = resolveBuildDir(repoRoot, null);
+  const workspace = detectWorkspace(process.cwd(), { explicit: options.repoRoot });
+  const repoRoot = workspace.root;
+  const buildDir = validateWorkspaceBuildDir(repoRoot, resolveBuildDir(repoRoot, options.buildDir));
   const paths = new WorkspacePaths(repoRoot, buildDir);
+  paths.launch = { integrationRoot, ...(options.buildDir ? { buildDir } : {}) };
   const exportsDir = exportsDirFor(paths.integrationDir);
-  const scanStates = () => ({ ...agentStates(repoRoot), ...ideExportStates(repoRoot, exportsDir) });
+  const scanStates = () => ({ ...agentStates(repoRoot, paths.launch), ...ideExportStates(repoRoot, exportsDir, paths.launch) });
 
-  ui.line('atsf4g-co MCP 集成安装');
+  ui.line(`${projectInfo(repoRoot).name} MCP 集成安装`);
   ui.line(`仓库：${repoRoot}`);
+  ui.line(`工作空间依据：${workspace.reason}`);
   ui.line(`构建目录：${buildDir}`);
   ui.line('');
 
@@ -374,6 +387,7 @@ async function runSetup(options, ui) {
     try {
       const result = runPrepare({
         repoRoot,
+        integrationRoot,
         buildDir,
         backend,
         offline: options.offline,
@@ -387,7 +401,7 @@ async function runSetup(options, ui) {
       ui.line('');
       ui.line(`依赖准备失败，未修改任何 Agent 配置。`);
       ui.line(`${error.message}`);
-      ui.line('排查建议：检查网络/镜像可达性后重试；或用 node project/integration/mcp/common/tools/doctor.mjs 查看当前状态。');
+      ui.line(`排查建议：检查网络/镜像可达性后重试；或用 node "${path.join(integrationRoot, 'common/tools/doctor.mjs')}" 查看当前状态。`);
       return 1;
     }
   } else {
@@ -450,21 +464,20 @@ async function runSetup(options, ui) {
     if (!selectedIds.has(agent.id)) continue;
     const spec = GUIDED_IMPORTS[agent.id];
     const snippetFile = path.join(exportsDir, spec.snippetFile);
-    const entry = BACKENDS[backend];
-    for (const guidance of guidedImportGuidance({ agentId: agent.id, snippetFile, relativeEntry: entry.entry.split(path.sep).join('/'), dryRun: options.dryRun })) {
+    for (const guidance of guidedImportGuidance({ agentId: agent.id, snippetFile, relativeEntry: path.join(integrationRoot, backend, 'src/server.mjs'), dryRun: options.dryRun })) {
       ui.line(guidance);
     }
   }
 
   const pending = [];
   for (const agentId of selectedIds) {
-    const notes = agentInstallNotes(agentId, { repoRoot, serverIds: Object.values(SERVER_IDS), dryRun: options.dryRun });
+    const notes = agentInstallNotes(agentId, { repoRoot, integrationRoot, serverIds: Object.values(SERVER_IDS), dryRun: options.dryRun });
     for (const line of notes.guidance) ui.line(line);
     pending.push(...notes.pending);
   }
   for (const agent of guidedAgents()) {
     if (selectedIds.has(agent.id)) {
-      pending.push(`${agent.id}：需在 IDE 面板手动导入片段（见上方步骤），导入完成前不算已接入`);
+      pending.push(`${agent.id}：需按上方步骤手动导入或显式加载片段，完成前不算已接入`);
     }
   }
   if (options.agents === 'all') {
@@ -485,7 +498,7 @@ async function runSetup(options, ui) {
   } else {
     ui.line(`完成。后端：${backend}；重启对应的 Agent 客户端后生效。`);
   }
-  ui.line('诊断：node project/integration/mcp/common/tools/doctor.mjs');
+  ui.line(`诊断：node "${path.join(integrationRoot, 'common/tools/doctor.mjs')}" --repo-root "${repoRoot}"`);
   return 0;
 }
 

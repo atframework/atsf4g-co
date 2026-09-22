@@ -12,7 +12,24 @@ import {
   validateRelativeScope,
   validateRepoRoot,
   workspaceId,
+  resolveBuildDir,
 } from '../src/paths.mjs';
+
+test('build directory honors JSONC settings, clangd fallback and explicit override', (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-build-settings-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, '.vscode'));
+  const file = path.join(root, '.vscode/settings.json');
+  fs.writeFileSync(file, '{ // local build\n "cmake.buildDirectory": "${workspaceFolder}/output with spaces", }');
+  assert.equal(resolveBuildDir(root), path.join(root, 'output with spaces'));
+  assert.equal(resolveBuildDir(root, 'explicit'), path.join(root, 'explicit'));
+  fs.writeFileSync(file, '{"clangd.arguments": ["--compile-commands-dir=${workspaceFolder}/compile"]}');
+  assert.equal(resolveBuildDir(root), path.join(root, 'compile'));
+  fs.writeFileSync(file, '{"cmake.buildDirectory": "${unknown}/build"}');
+  assert.throws(() => resolveBuildDir(root), /unsupported build-directory variable/);
+  fs.writeFileSync(file, '{broken');
+  assert.throws(() => resolveBuildDir(root), /invalid JSON/);
+});
 
 test('validateRelativeScope accepts and normalizes plain subdirectories', () => {
   assert.equal(validateRelativeScope('src//component/'), 'src/component');
@@ -61,15 +78,16 @@ test('WorkspacePaths.ensureDirs creates the tree', () => {
   }
 });
 
-/** A scratch root with the persistent marker (the installer entry). */
+/** A scratch Git worktree; the toolkit can be anywhere inside it. */
 function markedRoot() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-root-'));
-  fs.mkdirSync(path.join(dir, 'project', 'integration', 'mcp'), { recursive: true });
-  fs.writeFileSync(path.join(dir, 'project', 'integration', 'mcp', 'setup.js'), '// marker\n');
+  fs.mkdirSync(path.join(dir, 'tools', 'mcp'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'tools', 'mcp', 'setup.js'), '// marker\n');
+  fs.mkdirSync(path.join(dir, '.git'));
   return dir;
 }
 
-test('validateRepoRoot accepts a root with the persistent marker and returns its canonical form', () => {
+test('validateRepoRoot returns the canonical directory', () => {
   const dir = markedRoot();
   try {
     assert.equal(validateRepoRoot(dir), fs.realpathSync(dir));
@@ -78,10 +96,10 @@ test('validateRepoRoot accepts a root with the persistent marker and returns its
   }
 });
 
-test('validateRepoRoot rejects a root without the marker or a non-directory', () => {
+test('validateRepoRoot accepts an unmarked workspace but rejects a non-directory', () => {
   const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-root-bare-'));
   try {
-    assert.throws(() => validateRepoRoot(bare), /setup\.js not found/);
+    assert.equal(validateRepoRoot(bare), fs.realpathSync(bare));
     const file = path.join(bare, 'file');
     fs.writeFileSync(file, 'x');
     assert.throws(() => validateRepoRoot(file), /not a directory/);
@@ -93,7 +111,7 @@ test('validateRepoRoot rejects a root without the marker or a non-directory', ()
 test('deriveRepoRoot walks up from a nested entry module and honors the explicit root', () => {
   const dir = markedRoot();
   try {
-    const entry = path.join(dir, 'project', 'integration', 'mcp', 'tgrep', 'src');
+    const entry = path.join(dir, 'tools', 'mcp', 'tgrep', 'src');
     fs.mkdirSync(entry, { recursive: true });
     const moduleFile = path.join(entry, 'server.mjs');
     fs.writeFileSync(moduleFile, '// entry\n');
@@ -101,7 +119,7 @@ test('deriveRepoRoot walks up from a nested entry module and honors the explicit
     assert.equal(deriveRepoRoot(pathToFileURL(moduleFile), dir), fs.realpathSync(dir));
     const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-root-bare-'));
     try {
-      assert.throws(() => deriveRepoRoot(pathToFileURL(moduleFile), bare), /setup\.js not found/);
+      assert.equal(deriveRepoRoot(pathToFileURL(moduleFile), bare), fs.realpathSync(bare), 'an explicit workspace does not need to contain the toolkit');
     } finally {
       fs.rmSync(bare, { recursive: true, force: true });
     }
@@ -110,16 +128,15 @@ test('deriveRepoRoot walks up from a nested entry module and honors the explicit
   }
 });
 
-test('deriveRepoRoot fails when no ancestor within the search depth carries the marker', () => {
+test('deriveRepoRoot detects a project more than eight directories above the entry', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-root-lost-'));
   try {
-    // Scratch can live under the real repository's build directory. Keep its
-    // marker outside the bounded search instead of depending on os.tmpdir().
+    fs.mkdirSync(path.join(dir, '.git'));
     const entry = path.join(dir, ...Array.from({ length: 8 }, (_, i) => `level-${i}`));
     fs.mkdirSync(entry, { recursive: true });
     const moduleFile = path.join(entry, 'server.mjs');
     fs.writeFileSync(moduleFile, '// entry\n');
-    assert.throws(() => deriveRepoRoot(pathToFileURL(moduleFile), null), /could not derive the repository root/);
+    assert.equal(deriveRepoRoot(pathToFileURL(moduleFile), null), fs.realpathSync(dir));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

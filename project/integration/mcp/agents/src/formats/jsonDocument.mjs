@@ -24,10 +24,24 @@ const ROOT_PATHS = {
   mcpServers: ['mcpServers'],
   mcpServersCwd: ['mcpServers'],
   vscodeServers: ['servers'],
+  servers: ['servers'],
   zed: ['context_servers'],
   zcode: ['mcp', 'servers'],
   opencode: ['mcp'],
 };
+
+/** Rename only a server key, retaining all option bytes and inline comments. */
+export function renameServerEntry(text, format, oldId, newId) {
+  const document = parseJsonDocument(text, 'server-id migration');
+  const map = walkServerMap(document.root, format, 'server-id migration');
+  if (!map || !Object.hasOwn(map, oldId)) return text;
+  if (Object.hasOwn(map, newId)) throw new AgentConfigError(`${oldId} and ${newId} both exist; merge their settings before migrating`, 'server-conflict');
+  const tree = jsonc.parseTree(document.text, [], { allowTrailingComma: true });
+  const value = jsonc.findNodeAtLocation(tree, [...ROOT_PATHS[format], oldId]);
+  const key = value.parent.children[0];
+  const renamed = document.text.slice(0, key.offset) + JSON.stringify(newId) + document.text.slice(key.offset + key.length);
+  return `${document.hadBom ? '\uFEFF' : ''}${renamed}`;
+}
 
 /**
  * Find a duplicate object key in syntactically valid JSON/JSONC, or null.

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { agentStates, configureAgent, removeAgentServers, planAgentConfigChanges, applyAgentConfigChanges, runAgentConfigBatch } from '../src/writers.mjs';
+import { agentStates, configureAgent, removeAgentServers, planAgentConfigChanges, applyAgentConfigChanges, runAgentConfigBatch } from './fixtures.mjs';
 import { createFileStore } from '../src/fileStore.mjs';
 import { parseJsonDocument, removeServerEntry } from '../src/formats/jsonDocument.mjs';
 import { TOML_BEGIN, TOML_END, removeCodexTomlServers } from '../src/formats/codexToml.mjs';
@@ -87,7 +87,7 @@ test('state scan recognizes generated Codex blocks and tolerates absent legacy f
   const states = agentStates(w.repoRoot);
   for (const agentId of ['codex', 'roo', 'kilo']) {
     assert.equal(states[agentId].error, undefined);
-    assert.deepEqual(states[agentId].configured, ['atsf4g-tgrep']);
+    assert.deepEqual(states[agentId].configured, ['workspace-tgrep']);
   }
 });
 
@@ -107,17 +107,17 @@ test('JSONC duplicate keys separated from colons by comments are rejected', () =
 
 test('JSONC removal preserves comments belonging to adjacent user entries', () => {
   for (const entries of [
-    '"user":{}, // user note\n "atsf4g-tgrep":{}',
-    '"atsf4g-tgrep":{}, // user note\n "user":{}',
+    '"user":{}, // user note\n "workspace-tgrep":{}',
+    '"workspace-tgrep":{}, // user note\n "user":{}',
   ]) {
-    const after = removeServerEntry(`{"mcpServers":{${entries}}}`, 'mcpServers', 'atsf4g-tgrep');
+    const after = removeServerEntry(`{"mcpServers":{${entries}}}`, 'mcpServers', 'workspace-tgrep');
     assert.match(after, /\/\/ user note/);
     assert.deepEqual(parseJsonDocument(after, 'f').root, { mcpServers: { user: {} } });
   }
 });
 
 test('TOML foreign multiline strings preserve blank lines and marker-looking content', () => {
-  const text = `description = """\nfirst\n\n\n${TOML_BEGIN}\n[mcp_servers.atsf4g-tgrep]\n${TOML_END}\nlast\n"""\n`;
+  const text = `description = """\nfirst\n\n\n${TOML_BEGIN}\n[mcp_servers.workspace-tgrep]\n${TOML_END}\nlast\n"""\n`;
   assert.deepEqual(removeCodexTomlServers(text), { text, changed: false });
   const comment = '# ' + '"quoted"'.repeat(1000) + '\n';
   assert.deepEqual(removeCodexTomlServers(comment), { text: comment, changed: false });
@@ -125,7 +125,7 @@ test('TOML foreign multiline strings preserve blank lines and marker-looking con
 
 test('TOML foreign quoted tables and brackets in comments end legacy cleanup', () => {
   const foreign = '[profiles."a]b"] # comment ]\nvalue = 42\n';
-  const text = '[mcp_servers.atsf4g-tgrep]\ncommand = "node"\n' + foreign;
+  const text = '[mcp_servers.workspace-tgrep]\ncommand = "node"\n' + foreign;
   assert.equal(removeCodexTomlServers(text).text, foreign);
 });
 
@@ -139,8 +139,8 @@ test('reconfiguring a JSON server preserves its optional settings and comments',
   configureAgent({ ...w, agentId: 'cursor', backend: 'tgrep' });
   const file = path.join(w.repoRoot, '.cursor/mcp.json');
   const root = JSON.parse(fs.readFileSync(file, 'utf8'));
-  root.mcpServers['atsf4g-tgrep'].env = { KEEP: 'sentinel' };
-  root.mcpServers['atsf4g-tgrep'].timeout = 123;
+  root.mcpServers['workspace-tgrep'].env = { KEEP: 'sentinel' };
+  root.mcpServers['workspace-tgrep'].timeout = 123;
   const before = JSON.stringify(root, null, 2).replace('"timeout":', '// keep this timeout\n      "timeout":') + '\n';
   fs.writeFileSync(file, before);
   configureAgent({ ...w, agentId: 'cursor', backend: 'tgrep' });
@@ -222,8 +222,8 @@ test('one failed restore does not prevent restoration of earlier files', (t) => 
 
 test('same-named foreign JSON and TOML servers abort a batch without any writes', (t) => {
   const w = workspace(t);
-  const json = '{"mcpServers":{"atsf4g-tgrep":{"command":"node","args":["elsewhere.mjs"]}}}';
-  const toml = '[mcp_servers.atsf4g-tgrep]\ncommand="uvx"\nargs=["other"]\n';
+  const json = '{"mcpServers":{"workspace-tgrep":{"command":"node","args":["elsewhere.mjs"]}}}';
+  const toml = '[mcp_servers.workspace-tgrep]\ncommand="uvx"\nargs=["other"]\n';
   for (const [agentId, relative, content] of [['cursor', '.cursor/mcp.json', json], ['codex', '.codex/config.toml', toml]]) {
     const file = w.write(relative, content);
     const result = runAgentConfigBatch({ ...w, operations: [
@@ -238,19 +238,19 @@ test('same-named foreign JSON and TOML servers abort a batch without any writes'
 
 test('Kilo layers coexist, root managed entries migrate using their declared format and retain BOM', (t) => {
   const w = workspace(t);
-  const command = ['node', path.join(w.repoRoot, 'project/integration/mcp/tgrep/src/server.mjs')];
-  const root = w.write('kilo.json', '\uFEFF' + JSON.stringify({ model: 'keep', mcp: { 'atsf4g-tgrep': { type: 'local', command, enabled: true }, user: { type: 'local', command: ['x'] } } }));
+  const command = ['node', path.join(w.repoRoot, 'tools/mcp/tgrep/src/server.mjs')];
+  const root = w.write('kilo.json', '\uFEFF' + JSON.stringify({ model: 'keep', mcp: { 'workspace-tgrep': { type: 'local', command, enabled: true }, user: { type: 'local', command: ['x'] } } }));
   w.write('.kilo/kilo.json', '{}');
   configureAgent({ ...w, agentId: 'kilocode', backend: 'tgrep' });
   const text = fs.readFileSync(root, 'utf8');
   assert.equal(text[0], '\uFEFF');
   assert.deepEqual(parseJsonDocument(text, root).root, { model: 'keep', mcp: { user: { type: 'local', command: ['x'] } } });
-  assert.deepEqual(agentStates(w.repoRoot).kilo.configured, ['atsf4g-tgrep']);
+  assert.deepEqual(agentStates(w.repoRoot).kilo.configured, ['workspace-tgrep']);
 });
 
 test('switching backends refuses to discard legacy custom fields, but uninstall can remove them', (t) => {
   const w = workspace(t);
-  const original = JSON.stringify({ mcpServers: { 'atsf4g-tgrep': { command: 'node', args: [path.join(w.repoRoot, 'project/integration/mcp/tgrep/src/server.mjs')], env: { KEEP: 'value' } } } });
+  const original = JSON.stringify({ mcpServers: { 'workspace-tgrep': { command: 'node', args: [path.join(w.repoRoot, 'tools/mcp/tgrep/src/server.mjs')], env: { KEEP: 'value' } } } });
   const file = w.write('.roo/mcp_settings.json', original);
   assert.throws(() => configureAgent({ ...w, agentId: 'roo', backend: 'codegraph' }), (error) => error.kind === 'legacy-options-conflict');
   assert.equal(fs.readFileSync(file, 'utf8'), original);
@@ -263,14 +263,14 @@ test('Codex repeated setup preserves optional fields, escaped paths, CRLF and co
   const w = workspace(t);
   configureAgent({ ...w, agentId: 'codex', backend: 'tgrep' });
   const file = path.join(w.repoRoot, '.codex/config.toml');
-  const before = fs.readFileSync(file, 'utf8').replace(TOML_END, `startup_timeout_sec = 123 # keep\n[mcp_servers.atsf4g-tgrep.env]\nKEEP = "sentinel"\n${TOML_END}`).replace(/\n/g, '\r\n');
+  const before = fs.readFileSync(file, 'utf8').replace(TOML_END, `startup_timeout_sec = 123 # keep\n[mcp_servers.workspace-tgrep.env]\nKEEP = "sentinel"\n${TOML_END}`).replace(/\n/g, '\r\n');
   fs.writeFileSync(file, before);
   assert.equal(configureAgent({ ...w, agentId: 'codex', backend: 'tgrep' }).action, 'unchanged');
   assert.equal(fs.readFileSync(file, 'utf8'), before);
 });
 
 test('inline or dotted TOML managed definitions are refused instead of duplicated', () => {
-  for (const text of ['mcp_servers.atsf4g-tgrep.command="node"\n', '[mcp_servers]\natsf4g-tgrep={command="node"}\n']) {
+  for (const text of ['mcp_servers.workspace-tgrep.command="node"\n', '[mcp_servers]\nworkspace-tgrep={command="node"}\n']) {
     assert.throws(() => removeCodexTomlServers(text), (error) => error.kind === 'toml-shape');
   }
 });

@@ -11,11 +11,13 @@
  */
 
 import path from 'node:path';
+import fs from 'node:fs';
 
 import { BackendError, ErrorCodes } from '../../common/src/errors.mjs';
 import { LIMITS } from '../../common/src/limits.mjs';
 import { LineJsonRpcClient } from '../../common/src/lineRpc.mjs';
 import { StderrSink, minimalEnvironment, supervise } from '../../common/src/supervisor.mjs';
+import { isUnrealWorkspace, UNREAL_EXCLUDE_DIRS } from '../../common/src/scanPolicy.mjs';
 
 // Scan policy shared by every start mode (index build, catch-up, watcher):
 // keep the vendored framework sources, drop build output, dependency
@@ -24,16 +26,12 @@ export const TGREP_EXCLUDE_DIRS = [
   '.git',
   'node_modules',
   'build',
-  'build_jobs_cmake_tools',
   'target',
   'install',
   'packages',
   '.cache',
   '.tgrep',
   '.codegraph',
-  '.codegraph-atsf4g-windows',
-  '.codegraph-atsf4g-posix',
-  '.codegraph-atsf4g-macos',
 ];
 
 const RESPONSIVE_TIMEOUT_MS = 30_000;
@@ -76,7 +74,13 @@ export class TgrepBackend {
       this.indexDir,
       '--no-require-git',
     ];
-    for (const exclude of TGREP_EXCLUDE_DIRS) {
+    const excludes = isUnrealWorkspace(this.paths.repoRoot)
+      ? [...UNREAL_EXCLUDE_DIRS]
+      : [...TGREP_EXCLUDE_DIRS];
+    excludes.push(...fs.readdirSync(this.paths.repoRoot).filter(name => name.startsWith('.codegraph-')));
+    const buildRelative = path.relative(this.paths.repoRoot, this.paths.buildDir);
+    if (buildRelative && !buildRelative.startsWith('..') && !path.isAbsolute(buildRelative)) excludes.push(path.basename(this.paths.buildDir));
+    for (const exclude of new Set(excludes)) {
       argv.push('--exclude', exclude);
     }
     return argv;

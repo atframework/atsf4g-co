@@ -43,28 +43,28 @@ test('upsertServerEntry creates containers for every format root path', () => {
     ['opencode', '{}\n'],
   ];
   for (const [format, seed] of cases) {
-    const edited = upsertServerEntry(seed, format, 'atsf4g-tgrep', ENTRY);
+    const edited = upsertServerEntry(seed, format, 'workspace-tgrep', ENTRY);
     const document = parseJsonDocument(edited, 'f.json');
     const map = walkServerMap(document.root, format, 'f.json');
     assert.ok(map, `${format} containers created`);
-    assert.deepEqual(map['atsf4g-tgrep'], ENTRY, `${format} entry written`);
+    assert.deepEqual(map['workspace-tgrep'], ENTRY, `${format} entry written`);
   }
 });
 
 test('removeServerEntry restores the original bytes exactly', () => {
   const original = '{\n  // keep me\n  "mcpServers": {\n    "user": { "command": "x" }\n  }\n}\n';
-  const edited = upsertServerEntry(original, 'mcpServers', 'atsf4g-tgrep', ENTRY);
+  const edited = upsertServerEntry(original, 'mcpServers', 'workspace-tgrep', ENTRY);
   assert.notEqual(edited, original);
-  assert.equal(removeServerEntry(edited, 'mcpServers', 'atsf4g-tgrep'), original);
+  assert.equal(removeServerEntry(edited, 'mcpServers', 'workspace-tgrep'), original);
 });
 
 test('edits preserve CRLF line endings', () => {
   const original = '{\r\n  "mcpServers": {\r\n    "user": { "command": "x" }\r\n  }\r\n}\r\n';
-  const edited = upsertServerEntry(original, 'mcpServers', 'atsf4g-tgrep', ENTRY);
+  const edited = upsertServerEntry(original, 'mcpServers', 'workspace-tgrep', ENTRY);
   assert.ok(edited.includes('\r\n'), 'CRLF kept');
   assert.doesNotMatch(edited.replace(/\r\n/g, ''), /(?<!\r)\n/, 'no bare LF introduced');
   const document = parseJsonDocument(edited, 'f.json');
-  assert.ok(document.root.mcpServers['atsf4g-tgrep']);
+  assert.ok(document.root.mcpServers['workspace-tgrep']);
 });
 
 test('walkServerMap refuses non-object containers', () => {

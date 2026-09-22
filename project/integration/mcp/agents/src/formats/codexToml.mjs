@@ -1,7 +1,7 @@
 /** Codex TOML editing over shared lexical boundaries. */
 import { AgentConfigError } from '../errors.mjs';
-import { BACKENDS } from '../backends.mjs';
-import { isOurServerEntry } from '../entries.mjs';
+import { BACKENDS, managedServerIds, backendForServerId } from '../backends.mjs';
+import { isOurServerEntry, serverEntry } from '../entries.mjs';
 import { scanDocument, TOML_BEGIN, TOML_END, parseTableHeader } from './tomlDocument.mjs';
 export { TOML_BEGIN, TOML_END, parseTableHeader, tomlMultilineAfter } from './tomlDocument.mjs';
 
@@ -9,9 +9,10 @@ function tomlQuote(value) {
   return JSON.stringify(String(value)).replace(/\u007f/g, '\\u007f');
 }
 
-export function codexTomlSection(repoRoot, backend) {
+export function codexTomlSection(repoRoot, backend, launch = {}) {
+  const entry = serverEntry('mcpServersCwd', repoRoot, backend, launch);
   return [TOML_BEGIN, `[mcp_servers.${BACKENDS[backend].serverId}]`, 'command = "node"',
-    `args = [${tomlQuote(BACKENDS[backend].entry.split(/[\\/]+/).join('/'))}]`,
+    `args = [${entry.args.map(tomlQuote).join(', ')}]`,
     `cwd = ${tomlQuote(repoRoot)}`, TOML_END].join('\n');
 }
 
@@ -20,8 +21,8 @@ export function removeCodexTomlServers(text) {
   return { text: records.filter((r) => !r.remove).map((r) => r.bytes).join(''), changed: records.some((r) => r.remove) };
 }
 
-export function codexManagedTables(text) {
-  return scanDocument(text).found;
+export function codexManagedTables(text, repoRoot, launch = {}) {
+  return scanDocument(repoRoot ? normalizeCodexServers(text, repoRoot, launch) : text).found;
 }
 
 function assignment(record) {
@@ -37,10 +38,26 @@ function stringPrefix(value) {
   return match ? parseTableHeader(`[${match[1]}]`)?.[0] : undefined;
 }
 
+/** Parse literal string args without evaluating TOML expressions or rewriting it. */
+function argumentStrings(value) {
+  if (!/^\s*\[/.test(value ?? '')) return [];
+  let remaining = value.replace(/^\s*\[/, '');
+  const args = [];
+  while (true) {
+    remaining = remaining.replace(/^(?:\s|#[^\r\n]*(?:\r?\n|$))*/, '');
+    if (remaining.startsWith(']')) return args;
+    const token = remaining.match(/^("(?:\\.|[^"\\])*"|'[^']*')/);
+    if (!token) throw new AgentConfigError('managed TOML args must be literal strings', 'toml-syntax');
+    args.push(stringPrefix(token[0]));
+    remaining = remaining.slice(token[0].length).replace(/^(?:\s|#[^\r\n]*(?:\r?\n|$))*/, '');
+    if (remaining.startsWith(']')) return args;
+    if (!remaining.startsWith(',')) throw new AgentConfigError('managed TOML args must be a string array', 'toml-syntax');
+    remaining = remaining.slice(1);
+  }
+}
+
 /** Validate the command/path before claiming an unmarked or edited server table. */
-export function assertCodexServers(text, repoRoot) {
-  const { records, found } = scanDocument(text);
-  for (const id of found) {
+function entryFromRecords(records, id, repoRoot) {
     const fields = new Map();
     for (let i = 0; i < records.length; i++) {
       const r = records[i];
@@ -52,19 +69,44 @@ export function assertCodexServers(text, repoRoot) {
       for (let j = i + 1; j < records.length && !records[j].valueStart && !records[j].header && records[j].table === r.table; j++) value += records[j].bytes;
       fields.set(field.key, value);
     }
-    const array = fields.get('args');
-    const args = /^\s*\[/.test(array ?? '') ? array.replace(/^\s*\[\s*(?:#[^\n]*(?:\n|$)\s*)*/, '') : undefined;
-    const entry = { command: stringPrefix(fields.get('command')), args: [stringPrefix(args)], cwd: repoRoot };
+    const entry = { command: stringPrefix(fields.get('command')), args: argumentStrings(fields.get('args')), cwd: repoRoot };
     if (fields.has('cwd')) {
       entry.cwd = stringPrefix(fields.get('cwd'));
       if (entry.cwd === undefined) throw new AgentConfigError(`${id}: unsupported cwd expression`, 'server-conflict');
     }
-    if (!isOurServerEntry(entry, repoRoot)) throw new AgentConfigError(`${id}: command/args do not point at this repository's wrapper`, 'server-conflict');
+    return entry;
+}
+
+/** Change verified legacy table keys/markers only; retain options and string values. */
+function normalizeCodexServers(text, repoRoot, launch) {
+  const { records, found } = scanDocument(text, { legacyCandidates: true });
+  const renames = new Map();
+  for (const id of found) {
+    if (managedServerIds().includes(id)) continue;
+    if (!isOurServerEntry(entryFromRecords(records, id, repoRoot), repoRoot, launch, backendForServerId(id))) continue;
+    const next = BACKENDS[backendForServerId(id)].serverId;
+    if (found.has(next) || [...renames.values()].includes(next)) throw new AgentConfigError(`${id} and ${next} both exist; merge their settings before migrating`, 'server-conflict');
+    renames.set(id, next);
   }
+  return records.map(record => {
+    if (record.marker) return (record.marker === 'begin' ? TOML_BEGIN : TOML_END) + (record.bytes.match(/\r?\n$/)?.[0] ?? '');
+    if (!record.header || record.table?.[0] !== 'mcp_servers' || !renames.has(record.table[1])) return record.bytes;
+    return record.bytes.replace(/^(\s*\[+\s*(?:mcp_servers|"mcp_servers"|'mcp_servers')\s*\.\s*)(?:"(?:\\.|[^"\\])*"|'[^']*'|[A-Za-z0-9_-]+)/,
+      (_, prefix) => prefix + renames.get(record.table[1]));
+  }).join('');
+}
+
+export function assertCodexServers(text, repoRoot, launch = {}) {
+  const normalized = normalizeCodexServers(text, repoRoot, launch);
+  const { records, found } = scanDocument(normalized);
+  for (const id of found) {
+    if (!isOurServerEntry(entryFromRecords(records, id, repoRoot), repoRoot, launch)) throw new AgentConfigError(`${id}: command/args do not point at this repository's wrapper`, 'server-conflict');
+  }
+  return normalized;
 }
 
 /** Keep optional fields and subtables when updating the selected server. */
-export function configureCodexToml(text, repoRoot, backend) {
+export function configureCodexToml(text, repoRoot, backend, launch = {}) {
   const original = text ?? '';
   const { records, found } = scanDocument(original);
   const selected = BACKENDS[backend].serverId;
@@ -72,7 +114,7 @@ export function configureCodexToml(text, repoRoot, backend) {
   if (!found.has(selected) || found.size !== 1) {
     let base = removeCodexTomlServers(original).text;
     if (base && !base.endsWith('\n')) base += eol;
-    return base + codexTomlSection(repoRoot, backend).replace(/\n/g, eol) + eol;
+    return base + codexTomlSection(repoRoot, backend, launch).replace(/\n/g, eol) + eol;
   }
   const fields = new Map([
     ['cwd', tomlQuote(repoRoot)],

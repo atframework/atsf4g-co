@@ -13,7 +13,7 @@ import {
   planAgentConfigChanges,
   removeAgentServers,
   runAgentConfigBatch,
-} from '../src/writers.mjs';
+} from './fixtures.mjs';
 
 /**
  * Exclusive-candidate consolidation: several existing
@@ -39,7 +39,7 @@ function workspace(t) {
 }
 
 function ourEntry(w, backend = 'tgrep') {
-  return { type: 'local', command: ['node', path.join(w.repoRoot, 'project/integration/mcp', backend, 'src/server.mjs')], enabled: true };
+  return { type: 'local', command: ['node', path.join(w.repoRoot, 'tools/mcp', backend, 'src/server.mjs')], enabled: true };
 }
 
 test('kilo consolidates the real-world dual-candidate layout ($schema files)', (t) => {
@@ -283,14 +283,14 @@ test('MiMo keeps root and directory settings in their original layers', (t) => {
 
 test('legacy Kilo stdio options migrate into the current native format', (t) => {
   const w = workspace(t);
-  const args = [path.join(w.repoRoot, 'project/integration/mcp/tgrep/src/server.mjs'), '--build-dir', 'build'];
+  const args = [path.join(w.repoRoot, 'tools/mcp/tgrep/src/server.mjs'), '--build-dir', 'build'];
   w.write('.kilocode/mcp.json', JSON.stringify({ mcpServers: {
     [SERVER_IDS.tgrep]: { command: 'node', args, env: { LIMIT: 'one' }, disabled: true },
     foreign: { command: 'company-tool' },
   } }));
   configureAgent({ ...w, agentId: 'kilo', backend: 'tgrep' });
   const migrated = parseJsonDocument(w.read('.kilo/kilo.json'), 'test').root.mcp[SERVER_IDS.tgrep];
-  assert.deepEqual(migrated.command, ['node', ...args]);
+  assert.deepEqual(migrated.command, ['node', args[0], '--repo-root', w.repoRoot, ...args.slice(1)]);
   assert.deepEqual(migrated.environment, { LIMIT: 'one' });
   assert.equal(migrated.enabled, false);
   assert.deepEqual(JSON.parse(w.read('.kilocode/mcp.json')).mcpServers, { foreign: { command: 'company-tool' } });
@@ -393,9 +393,10 @@ test('a concurrently edited consolidation source survives and the destination ro
 test('cleanup requires the merged destination even when its planned action is unchanged', (t) => {
   for (const legacy of [false, true]) {
     const w = workspace(t);
-    w.write('.kilo/kilo.json', JSON.stringify({ snapshot: false, mcp: { [SERVER_IDS.tgrep]: ourEntry(w) } }));
+    const entry = { ...ourEntry(w), command: [...ourEntry(w).command, '--repo-root', w.repoRoot] };
+    w.write('.kilo/kilo.json', JSON.stringify({ snapshot: false, mcp: { [SERVER_IDS.tgrep]: entry } }));
     const source = legacy ? 'kilo.json' : '.kilo/kilo.jsonc';
-    const sourceText = legacy ? JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: ourEntry(w) } }) : '{"snapshot":false}';
+    const sourceText = legacy ? JSON.stringify({ mcp: { [SERVER_IDS.tgrep]: entry } }) : '{"snapshot":false}';
     w.write(source, sourceText);
     const plan = planAgentConfigChanges({ ...w, operations: [{ type: 'configure', agentId: 'kilo', backend: 'tgrep' }] });
     assert.deepEqual(plan.problems, []);

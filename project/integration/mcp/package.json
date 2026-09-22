@@ -1,0 +1,6 @@
+{
+  "name": "mcp-integration",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" }
+}

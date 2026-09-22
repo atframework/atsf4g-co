@@ -25,6 +25,7 @@ import {
   WorkspacePaths,
   deriveRepoRoot,
   resolveBuildDir,
+  projectInfo,
   validateRelativeScope,
 } from '../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../common/src/state.mjs';
@@ -408,7 +409,7 @@ function main() {
 
   const service = new TgrepService(paths, { binary, argvOverride });
   void runWrapperServer({
-    name: 'atsf4g-tgrep',
+    name: `${projectInfo(repoRoot).slug}-tgrep`,
     instructions: TOOL_INSTRUCTIONS,
     tools: makeTools(service),
     service,

@@ -49,8 +49,17 @@ or call the MCP tools do not need this Skill.
   the installer instead.
 - Do not upgrade pinned upstream versions without re-verifying the facts in
   `references/backends-and-lifecycle.md` against the new sources.
-- Keep `README.md` in sync with implemented behavior; use the
-  `<PROJECT_DIR>` placeholder for repository paths in docs and examples.
-- The repository marker used by `common/src/paths.mjs` is the installer entry
-  `project/integration/mcp/setup.js`; keep it resolvable or every entry point
-  (installer, doctor, launcher, wrappers) refuses to start.
+- Keep `README.md` in sync with implemented behavior; use `<PROJECT_DIR>` for
+  workspace paths and `<MCP_DIR>` for the movable toolkit directory. Do not embed
+  this repository's name, checkout path or toolkit layout in the toolkit itself.
+- `setup.js`, doctor and the Cline launcher discover the nearest project above
+  cwd, falling back to cwd; explicit `--repo-root` wins where supported. The
+  toolkit resolves its own location from `import.meta.url`. Propagate both
+  locations through planning, exports and preparation. Every new client entry
+  pins `--repo-root`, including local-toolkit entries. Legacy wrapper launches
+  without that argument detect the project enclosing the toolkit, then fall back
+  to cwd discovery. No installer marker or fixed project path is required.
+- Project names, build/cache defaults and CodeGraph directory names come from
+  local metadata. Client keys remain `workspace-tgrep` / `workspace-codegraph`.
+  Migrate old prefixes only after verifying the backend, wrapper path and scope;
+  preserve options/comments, and abort on old/new key collisions.

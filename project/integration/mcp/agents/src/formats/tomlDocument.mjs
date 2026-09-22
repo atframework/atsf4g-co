@@ -1,9 +1,9 @@
 /** Conservative lexical boundaries for surgical TOML edits; not a full TOML validator. */
 import { AgentConfigError } from '../errors.mjs';
-import { managedServerIds } from '../backends.mjs';
+import { managedServerIds, backendForServerId } from '../backends.mjs';
 
-export const TOML_BEGIN = '# BEGIN atsf4g-mcp (managed by project/integration/mcp/setup.js; keep the marker lines)';
-export const TOML_END = '# END atsf4g-mcp';
+export const TOML_BEGIN = '# BEGIN workspace-mcp (managed by setup.js; keep the marker lines)';
+export const TOML_END = '# END workspace-mcp';
 const MANAGED_IDS = new Set(managedServerIds());
 
 function basicKey(text) {
@@ -109,7 +109,8 @@ function assignmentKeys(line) {
   return null;
 }
 
-export function scanDocument(text) {
+export function scanDocument(text, { legacyCandidates = false } = {}) {
+  const managedId = id => MANAGED_IDS.has(id) || (legacyCandidates && backendForServerId(id));
   const records = [];
   const found = new Set();
   let state = { multiline: null, depth: 0 };
@@ -120,29 +121,32 @@ export function scanDocument(text) {
   for (const bytes of text.match(/[^\n]*\n|[^\n]+$/g) ?? []) {
     const line = bytes.replace(/\r?\n$/, '');
     if (!state.multiline && state.depth === 0) {
-      if (line.trim() === TOML_BEGIN) {
+      const begin = line.trim().match(/^# BEGIN ([A-Za-z0-9_.-]+-mcp) \(managed by (?:.+[\\/])?setup\.js; keep the marker lines\)$/);
+      const end = line.trim().match(/^# END ([A-Za-z0-9_.-]+-mcp)$/);
+      if (begin) {
         if (marked) fail('BEGIN marker inside another managed block (overlapping markers)');
-        marked = true;
+        marked = begin[1];
         table = null;
         managed = false;
-        records.push({ bytes, remove: true });
+        records.push({ bytes, remove: true, marker: 'begin' });
         continue;
       }
-      if (line.trim() === TOML_END) {
+      if (end) {
         if (!marked) fail('END marker without BEGIN');
+        if (marked !== end[1]) fail('BEGIN and END marker names differ');
         marked = false;
         table = null;
         managed = false;
-        records.push({ bytes, remove: true });
+        records.push({ bytes, remove: true, marker: 'end' });
         continue;
       }
       const header = parseTableHeader(line);
       if (header) {
-        if (header[0] === 'mcp_servers' && MANAGED_IDS.has(header[1]) && records.some((r) => r.header && JSON.stringify(r.table) === JSON.stringify(header))) {
+        if (header[0] === 'mcp_servers' && managedId(header[1]) && records.some((r) => r.header && JSON.stringify(r.table) === JSON.stringify(header))) {
           fail('duplicate managed table', 'toml-syntax');
         }
         table = header;
-        managed = header[0] === 'mcp_servers' && MANAGED_IDS.has(header[1]);
+        managed = header[0] === 'mcp_servers' && managedId(header[1]);
         if (marked && !managed) fail('foreign table inside managed markers; move it outside before editing');
         if (managed) found.add(header[1]);
         records.push({ bytes, remove: managed || marked, table, header: true });
@@ -154,7 +158,7 @@ export function scanDocument(text) {
       const keys = assignmentKeys(line);
       const fullPath = [...(table ?? []), ...(keys ?? [])];
       if ((!table || table.length < 2) && fullPath[0] === 'mcp_servers'
-        && (fullPath.length === 1 || MANAGED_IDS.has(fullPath[1]))) {
+        && (fullPath.length === 1 || managedId(fullPath[1]))) {
         fail('inline/dotted managed server definitions require manual migration to tables', 'toml-shape');
       }
     }

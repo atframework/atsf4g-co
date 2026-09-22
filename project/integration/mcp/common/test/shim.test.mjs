@@ -18,8 +18,8 @@ test('common agents shim re-exports the agents component API', () => {
   for (const name of expected) {
     assert.ok(name in agents, `${name} is re-exported`);
   }
-  assert.equal(agents.agentDefinitions().length, 20);
-  assert.deepEqual(agents.allManagedServerIds(), ['atsf4g-tgrep', 'atsf4g-codegraph']);
+  assert.equal(agents.agentDefinitions().length, 24);
+  assert.deepEqual(agents.allManagedServerIds(), ['workspace-tgrep', 'workspace-codegraph']);
   assert.ok(agents.agentById('claude'));
   assert.equal(agents.agentById('no-such-agent'), null);
 });

@@ -1,9 +1,9 @@
 {
-  "name": "@atsf4g/mcp-tgrep",
+  "name": "mcp-tgrep",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "tgrep MCP wrapper for atsf4g-co (stdio, supervised patched tgrep serve)",
+  "description": "tgrep MCP wrapper for any workspace (stdio, supervised patched tgrep serve)",
   "engines": {
     "node": ">=20"
   },

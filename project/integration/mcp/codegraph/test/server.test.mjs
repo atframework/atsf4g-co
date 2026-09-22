@@ -166,6 +166,22 @@ test('extra-tools config extends the allowlist; dispatch re-checks it', async ()
   }
 });
 
+test('a small upstream project can hide status discovery while retaining a working status handler', async () => {
+  const { client, transport, buildDir } = await launchServer({ CODEGRAPH_MCP_FAKE_SCRIPT: FAKE, CODEGRAPH_FAKE_HIDE_STATUS: '1' });
+  try {
+    await waitReady(client);
+    const response = await client.callTool({ name: 'codegraph_explore', arguments: { query: 'small project' } });
+    assert.notEqual(response.isError, true);
+    const status = textOf(await client.callTool({ name: 'codegraph_status', arguments: {} }));
+    assert.equal(status.wrapper_state, 'ready');
+    assert.notEqual(status.backend.isError, true);
+  } finally {
+    await client.close();
+    await waitForPidExit(transport.pid);
+    fs.rmSync(buildDir, { recursive: true, force: true });
+  }
+});
+
 test('not-ready wrapper answers INDEX_NOT_READY and status reports the state', async () => {
   const { client, transport, buildDir } = await launchServer({
     CODEGRAPH_MCP_FAKE_SCRIPT: FAKE,

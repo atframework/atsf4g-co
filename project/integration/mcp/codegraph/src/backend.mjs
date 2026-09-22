@@ -23,7 +23,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 
 import { BackendError, ErrorCodes } from '../../common/src/errors.mjs';
 import { LIMITS } from '../../common/src/limits.mjs';
-import { platformName } from '../../common/src/paths.mjs';
+import { defaultIndexDirName, selectCodegraphIndex, projectInfo } from '../../common/src/paths.mjs';
 import { StderrSink, minimalEnvironment, supervise } from '../../common/src/supervisor.mjs';
 
 const INITIALIZER = path.join(path.dirname(fileURLToPath(import.meta.url)), 'initialize.mjs');
@@ -62,8 +62,8 @@ const CLEARED_ENV = [
   'CODEGRAPH_HOST_PPID',
 ];
 
-export function indexDirName() {
-  return `.codegraph-atsf4g-${platformName()}`;
+export function indexDirName(repoRoot = process.cwd()) {
+  return defaultIndexDirName(repoRoot);
 }
 
 /**
@@ -72,14 +72,7 @@ export function indexDirName() {
  * wrapper-managed per-platform directory (CODEGRAPH_DIR semantics).
  */
 export function resolveIndexSelection(repoRoot) {
-  if (fs.existsSync(path.join(repoRoot, '.codegraph', 'codegraph.db'))) {
-    return { dirName: null, needsInit: false };
-  }
-  const custom = indexDirName();
-  if (fs.existsSync(path.join(repoRoot, custom, 'codegraph.db'))) {
-    return { dirName: custom, needsInit: false };
-  }
-  return { dirName: custom, needsInit: true };
+  return selectCodegraphIndex(repoRoot);
 }
 
 /**
@@ -142,7 +135,7 @@ export class CodeGraphBackend {
    * @param {string|null} [options.dirName] CODEGRAPH_DIR value or null for default
    * @param {string|null} [options.stderrLog]
    */
-  constructor({ paths, runtime, cliEntry, argvOverride = null, extraTools = [], dirName = indexDirName(), stderrLog = null }) {
+  constructor({ paths, runtime, cliEntry, argvOverride = null, extraTools = [], dirName = indexDirName(paths.repoRoot), stderrLog = null }) {
     this.paths = paths;
     this.runtime = runtime;
     this.cliEntry = cliEntry;
@@ -199,7 +192,7 @@ export class CodeGraphBackend {
     this.transport.stderr?.setEncoding('utf8');
     this.transport.stderr?.on('data', (chunk) => this.stderrSink.write(chunk));
     this.transport.onclose = () => this.onExit?.();
-    this.client = new Client({ name: 'atsf4g-codegraph-wrapper', version: '0.1.0' });
+    this.client = new Client({ name: `${projectInfo(this.paths.repoRoot).slug}-codegraph-wrapper`, version: '0.1.0' });
     try {
       await this.client.connect(this.transport); // initialize handshake
     } catch (error) {

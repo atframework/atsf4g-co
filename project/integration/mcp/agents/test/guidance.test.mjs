@@ -3,9 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { platformName } from '../../common/src/paths.mjs';
 
 import { CODEGRAPH_BODY, CODEGRAPH_START, CODEGRAPH_END, patchCodegraphGuidance } from '../src/guidance/codegraph.mjs';
-import { planAgentConfigChanges, applyAgentConfigChanges, runAgentConfigBatch } from '../src/writers.mjs';
+import { planAgentConfigChanges, applyAgentConfigChanges, runAgentConfigBatch } from './fixtures.mjs';
 
 const block = (eol = '\n') => `${CODEGRAPH_START}${eol}${CODEGRAPH_BODY.replace(/\n/g, eol)}${eol}${CODEGRAPH_END}`;
 function encoded(text, format) {
@@ -63,7 +64,9 @@ test('invalid or ambiguous markers and invalid encodings are rejected', () => {
 test('unchanged guidance retains mtime and creates no metadata or backups', (t) => {
   const options = workspace(t);
   const file = path.join(options.repoRoot, 'AGENTS.md');
-  const before = encoded(block('\r\n') + '\r\n', 'utf16le');
+  const current = block('\r\n').replace('<MCP_DIR>/README.md', 'tools/mcp/README.md')
+    .replace('<CODEGRAPH_DIR>', `.codegraph-${path.basename(options.repoRoot).toLowerCase()}-${platformName()}`);
+  const before = encoded(current + '\r\n', 'utf16le');
   fs.writeFileSync(file, before);
   fs.utimesSync(file, new Date(1000000), new Date(1000000));
   const mtime = fs.statSync(file).mtimeMs;

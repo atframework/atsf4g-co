@@ -8,7 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { createFileStore, findOpenJournalBatch, recoverInterruptedBatch } from '../src/fileStore.mjs';
-import { applyAgentConfigChanges, configureAgent, planAgentConfigChanges, removeAgentServers, runAgentConfigBatch } from '../src/writers.mjs';
+import { applyAgentConfigChanges, configureAgent, planAgentConfigChanges, removeAgentServers, runAgentConfigBatch } from './fixtures.mjs';
 
 const digest = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 
