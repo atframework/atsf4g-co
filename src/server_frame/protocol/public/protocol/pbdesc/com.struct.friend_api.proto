@@ -31,25 +31,33 @@ message DFriendGift {
   int64 event_id = 21;  // (服务器内部使用) 最后操作的事件ID
 }
 
+message DFriendGiftHistory {
+  int64 gift_id = 1;
+  uint64 user_id = 2;
+  uint32 zone_id = 3;
+
+  int32 gift_type_id = 5;
+}
+
 // 用户好友赠送记录
 message DFriendStatistics {
   google.protobuf.Timestamp next_daily_reset_time = 1;
   google.protobuf.Timestamp next_weekly_reset_time = 2;
 
-  int32 daily_inviter = 11;
-  int32 weekly_inviter = 12;
-  int32 sum_inviter = 13;
+  uint32 daily_inviter = 11;
+  uint32 weekly_inviter = 12;
+  uint64 sum_inviter = 13;
 
-  int32 daily_invitee = 21;
-  int32 weekly_invitee = 22;
-  int32 sum_invitee = 23;
+  uint32 daily_invitee = 21;
+  uint32 weekly_invitee = 22;
+  uint64 sum_invitee = 23;
 
-  int32 daily_send_gift_times = 31;
-  int32 weekly_send_gift_times = 32;
-  int32 sum_send_gift_times = 33;
-  int32 daily_receive_gift_times = 34;
-  int32 weekly_receive_gift_times = 35;
-  int32 sum_receive_gift_times = 36;
+  uint32 daily_send_gift_times = 31;
+  uint32 weekly_send_gift_times = 32;
+  uint64 sum_send_gift_times = 33;
+  uint32 daily_receive_gift_times = 34;
+  uint32 weekly_receive_gift_times = 35;
+  uint64 sum_receive_gift_times = 36;
 }
 
 // 用户好友数据
@@ -82,7 +90,7 @@ message DFriendSNSInfo {
 
 // 好友通知数据
 message DFriendEvent {
-  int64 event_id = 1;          // 事件ID
+  int64 event_id = 1;                              // 事件ID
   google.protobuf.Timestamp create_timepoint = 2;  // 创建时间
 
   oneof event {
@@ -90,9 +98,13 @@ message DFriendEvent {
     DFriendInvitationInfo remove_inviter = 12;  // 删除被邀请
     DFriendInvitationInfo add_invitee = 13;
     DFriendInvitationInfo remove_invitee = 14;
-
+    DFriendGift add_gift = 15;
+    DFriendGift remove_gift = 16;
     DFriendInfo add_friend_data = 17;     // 添加好友
     DFriendInfo remove_friend_data = 18;  // 删除好友
+
+    DFriendGiftHistory daily_send_list = 21;
+    DFriendGiftHistory daily_receive_list = 22;
 
     bool clear_all_data = 101;
   }

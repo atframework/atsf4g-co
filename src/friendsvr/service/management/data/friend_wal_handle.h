@@ -1,5 +1,5 @@
-// Copyright 2022 atframework
-// Created by owent on 2022-03-01.
+// Copyright 2026 atframework
+// Created by owent on 2026-09-22.
 //
 
 #pragma once

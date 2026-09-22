@@ -23,14 +23,19 @@
 
 #include <config/extern_service_types.h>
 
+#include <router/router_friend_cache.h>
+#include <router/router_friend_manager.h>
+
 #include <utility>
+
+#include "data/friend_object.h"
 
 ATFRAMEWORK_FRIEND_API_FRIENDMANAGEMENTSERVICE_API
 task_action_management_gm_reset_limit::task_action_management_gm_reset_limit(dispatcher_start_data_type&& param)
     : base_type(std::move(param)) {}
 
 ATFRAMEWORK_FRIEND_API_FRIENDMANAGEMENTSERVICE_API
-    task_action_management_gm_reset_limit::~task_action_management_gm_reset_limit() {}
+task_action_management_gm_reset_limit::~task_action_management_gm_reset_limit() {}
 
 ATFRAMEWORK_FRIEND_API_FRIENDMANAGEMENTSERVICE_API const char* task_action_management_gm_reset_limit::name() const {
   return "task_action_management_gm_reset_limit";

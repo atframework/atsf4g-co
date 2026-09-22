@@ -1,5 +1,5 @@
-// Copyright 2022 atframework
-// Created by owent on 2022-03-01.
+// Copyright 2026 atframework
+// Created by owent on 2026-09-22.
 //
 
 #pragma once
@@ -78,13 +78,16 @@ class friend_object : public friend_cache {
 
   void refresh_feature_limit(rpc::context& ctx);
 
-  int32_t check_prepare_transcation(const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events);
+  rpc::result_code_type send_notification(rpc::context& ctx);
+
+  int32_t check_prepare_transcation(rpc::context& ctx,
+                                    const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events);
 
   int64_t allocate_event_id();
 
   void gm_reset_limit();
 
-  bool clear_all_data(int64_t event_id);
+  bool clear_all_data(rpc::context& ctx, int64_t event_id);
 
   bool is_empty() const;
   bool has_relation() const;

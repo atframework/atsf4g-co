@@ -36,6 +36,7 @@
 # AI agent,RAG and other tools
 # codegraph index directories (mcp integration, per-platform)
 .codegraph*
+.tgrep
 .omp
 .codex
 .kilo

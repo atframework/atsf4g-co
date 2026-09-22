@@ -1,11 +1,300 @@
-// Copyright 2022 atframework
-// Created by owent on 2022-03-01.
+// Copyright 2026 atframework
+// Created by owent on 2026-09-22.
 //
 
 #include "data/friend_wal_handle.h"
 
+#include <memory/object_allocator.h>
+
+#include <utility/protobuf_mini_dumper.h>
+
+#include "data/friend_object.h"
+
 namespace atframework {
 namespace friend_api {
+
+namespace {
+
+struct friend_wal_delegate_helper {
+  using wal_object_type = friend_wal_publisher_type::object_type;
+  using wal_publisher_type = friend_wal_publisher_type;
+  using wal_result_code = atfw::util::distributed_system::wal_result_code;
+  using log_const_iterator = wal_object_type::log_const_iterator;
+  using log_iterator = wal_object_type::log_iterator;
+  using log_key_type = wal_object_type::log_key_type;
+  using log_type = wal_object_type::log_type;
+
+  static wal_result_code do_nothing(wal_object_type&, const wal_object_type::log_type&,
+                                    wal_object_type::callback_param_type) {
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code add_inviter(wal_object_type& wal, wal_object_type::log_type& log,
+                                     wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->add_inviter(param.context, log.event_id(), *log.mutable_add_inviter())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code remove_inviter(wal_object_type& wal, wal_object_type::log_type& log,
+                                        wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->remove_inviter(param.context, log.event_id(), *log.mutable_remove_inviter())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code add_invitee(wal_object_type& wal, wal_object_type::log_type& log,
+                                     wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->add_invitee(param.context, log.event_id(), *log.mutable_add_invitee())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code remove_invitee(wal_object_type& wal, wal_object_type::log_type& log,
+                                        wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->remove_invitee(param.context, log.event_id(), *log.mutable_remove_invitee())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code add_gift(wal_object_type& wal, wal_object_type::log_type& log,
+                                  wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->add_gift(param.context, log.event_id(), *log.mutable_add_gift())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code remove_gift(wal_object_type& wal, wal_object_type::log_type& log,
+                                     wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->remove_gift(param.context, log.event_id(), *log.mutable_remove_gift())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code add_friend_data(wal_object_type& wal, wal_object_type::log_type& log,
+                                         wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->add_friend(param.context, log.event_id(), *log.mutable_add_friend_data())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code remove_friend_data(wal_object_type& wal, wal_object_type::log_type& log,
+                                            wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->remove_friend(param.context, log.event_id(), *log.mutable_remove_friend_data())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static wal_result_code clear_all_data(wal_object_type& wal, const wal_object_type::log_type& log,
+                                        wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->clear_all_data(param.context, log.event_id())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
+  static void setup_delegate_actions(friend_wal_publisher_type::object_type::callback_log_group_map_t& actions) {
+    actions[DFriendEvent::kAddInviter].patch = friend_wal_delegate_helper::add_inviter;
+    actions[DFriendEvent::kRemoveInviter].patch = friend_wal_delegate_helper::remove_inviter;
+    actions[DFriendEvent::kAddInvitee].patch = friend_wal_delegate_helper::add_invitee;
+    actions[DFriendEvent::kRemoveInvitee].patch = friend_wal_delegate_helper::remove_invitee;
+    actions[DFriendEvent::kAddGift].patch = friend_wal_delegate_helper::add_gift;
+    actions[DFriendEvent::kRemoveGift].patch = friend_wal_delegate_helper::remove_gift;
+    actions[DFriendEvent::kAddFriendData].patch = friend_wal_delegate_helper::add_friend_data;
+    actions[DFriendEvent::kRemoveFriendData].patch = friend_wal_delegate_helper::remove_friend_data;
+    actions[DFriendEvent::kDailySendList].action = friend_wal_delegate_helper::do_nothing;
+    actions[DFriendEvent::kDailyReceiveList].action = friend_wal_delegate_helper::do_nothing;
+    actions[DFriendEvent::kClearAllData].action = friend_wal_delegate_helper::clear_all_data;
+  }
+};
+
+static friend_wal_publisher_type::vtable_pointer create_friend_publisher_vtable() {
+  using wal_object_type = friend_wal_publisher_type::object_type;
+  using wal_publisher_type = friend_wal_publisher_type;
+  using atfw::util::distributed_system::wal_result_code;
+
+  static wal_publisher_type::vtable_pointer ret;
+  if (ret) {
+    return ret;
+  }
+
+  ret = atfw::memory::stl::make_strong_rc<wal_publisher_type::vtable_type>();
+  if (!ret) {
+    return ret;
+  }
+
+  // callbacks for wal_object
+  ret->load = [](wal_object_type& wal, const wal_object_type::storage_type& from,
+                 wal_object_type::callback_param_type) -> wal_result_code {
+    const table_friend_blob_data* blob_data = from.get_const();
+    if (nullptr == blob_data) {
+      return wal_result_code::kInvalidParam;
+    }
+
+    if (nullptr == wal.get_private_data()) {
+      return wal_result_code::kInitlization;
+    }
+
+    // 好友系统的WAL log为纯内存数据，不需要从数据库读取
+    // Load global ignore
+    if (blob_data->global_finished_event_id() > 0) {
+      wal.set_global_ingore_key(blob_data->global_finished_event_id());
+    }
+    return wal_result_code::kOk;
+  };
+
+  ret->dump = [](const wal_object_type& wal, wal_object_type::storage_type& to,
+                 wal_object_type::callback_param_type) -> wal_result_code {
+    table_friend_blob_data* blob_data = to.get_mutable();
+    if (nullptr == blob_data) {
+      return wal_result_code::kInvalidParam;
+    }
+
+    if (nullptr == wal.get_private_data()) {
+      return wal_result_code::kInitlization;
+    }
+
+    // 好友系统的WAL log为纯内存数据，不需要保存到数据库
+    // Dump global ignore
+    if (wal.get_global_ingore_key()) {
+      blob_data->set_global_finished_event_id(*wal.get_global_ingore_key());
+    }
+    return wal_result_code::kOk;
+  };
+
+  ret->get_meta = [](const wal_object_type&,
+                     const wal_object_type::log_type& log) -> wal_object_type::meta_result_type {
+    return wal_object_type::meta_result_type::make_success(protobuf_to_system_clock(log.create_timepoint()),
+                                                           log.event_id(), log.event_case());
+  };
+
+  ret->set_meta = [](const wal_object_type&, wal_object_type::log_type& log, const wal_object_type::meta_type& meta) {
+    // log.event_case = meta.action_case; // event_case will be created by mutable_*
+    protobuf_from_system_clock(*log.mutable_create_timepoint(), meta.timepoint);
+    log.set_event_id(meta.log_key);
+  };
+
+  ret->merge_log = [](const wal_object_type&, wal_object_type::callback_param_type, wal_object_type::log_type& to,
+                      const wal_object_type::log_type& from) {
+    FWLOGERROR("Merge friend WAL failed(should not happen) from\n{}to\n{}", from.DebugString(), to.DebugString());
+  };
+
+  ret->get_log_key = [](const wal_object_type&, const wal_object_type::log_type& log) -> wal_object_type::log_key_type {
+    return log.event_id();
+  };
+
+  ret->allocate_log_key = [](wal_object_type& wal, const wal_object_type::log_type& log,
+                             wal_object_type::callback_param_type) -> wal_object_type::log_key_result_type {
+    if (log.event_id() > 0) {
+      return wal_object_type::log_key_result_type::make_success(log.event_id());
+    }
+    if (nullptr != wal.get_private_data()) {
+      return wal_object_type::log_key_result_type::make_success(wal.get_private_data()->allocate_event_id());
+    }
+
+    return wal_object_type::log_key_result_type::make_error(wal_result_code::kInitlization);
+  };
+
+  friend_wal_delegate_helper::setup_delegate_actions(ret->log_action_delegate);
+
+  // ============ callbacks for wal_publisher ============
+  ret->send_snapshot = [](wal_publisher_type&, wal_publisher_type::subscriber_iterator,
+                          wal_publisher_type::subscriber_iterator,
+                          wal_publisher_type::callback_param_type) -> wal_result_code {
+    // 好友模块不使用订阅机制，发送快照留空即可
+    return wal_result_code::kOk;
+  };
+
+  // NOLINTBEGIN(performance-unnecessary-value-param)
+  ret->send_logs = [](wal_publisher_type&, wal_publisher_type::log_const_iterator,
+                      wal_publisher_type::log_const_iterator, wal_publisher_type::subscriber_iterator,
+                      wal_publisher_type::subscriber_iterator,
+                      wal_publisher_type::callback_param_type) -> wal_result_code {
+    // 好友模块不使用订阅机制，发送Log留空即可
+    return wal_result_code::kOk;
+  };
+  // NOLINTEND(performance-unnecessary-value-param)
+
+  ret->check_subscriber = [](wal_publisher_type&, const wal_publisher_type::subscriber_pointer& subscriber,
+                             wal_publisher_type::callback_param_type) -> bool {
+    if (!subscriber) {
+      return false;
+    }
+
+    return true;
+  };
+
+  return ret;
+}
+
+static friend_wal_publisher_type::configure_pointer create_friend_publisher_congigure() {
+  friend_wal_publisher_type::configure_pointer ret = friend_wal_publisher_type::make_configure();
+  if (!ret) {
+    return ret;
+  }
+  // ret->enable_last_broadcast_for_removed_subscriber = true;
+  // 好友不需要使用订阅机制，可以随便填. 保留一些log以便调试
+  ret->gc_expire_duration = std::chrono::seconds{900};
+  ret->gc_log_size = 8;
+  ret->max_log_size = 32;
+
+  ret->subscriber_timeout = std::chrono::seconds{180};
+  return ret;
+}
+}  // namespace
 
 friend_wal_publisher_context::friend_wal_publisher_context(rpc::context& ctx, int32_t& output_result)
     : context(std::ref(ctx)), result_code(std::ref(output_result)) {}
@@ -15,9 +304,10 @@ DFriendEvent::EventCase friend_wal_publisher_log_action_getter::operator()(
   return event_data.event_case();
 }
 
-atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context&, friend_object&) {
-  // TODO(owent): ...
-  return nullptr;
+atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context&,
+                                                                                     friend_object& friend_obj) {
+  return friend_wal_publisher_type::create(create_friend_publisher_vtable(), create_friend_publisher_congigure(),
+                                           &friend_obj);
 }
 
 }  // namespace friend_api

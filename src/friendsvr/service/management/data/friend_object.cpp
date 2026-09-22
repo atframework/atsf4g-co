@@ -1,5 +1,5 @@
-// Copyright 2022 atframework
-// Created by owent on 2022-03-01.
+// Copyright 2026 atframework
+// Created by owent on 2026-09-22.
 //
 
 #include "data/friend_object.h"
@@ -30,7 +30,7 @@ namespace atframework {
 namespace friend_api {
 
 namespace {
-std::chrono::system_clock::duration get_configure_friend_invite_expire_timeout() {
+static std::chrono::system_clock::duration get_configure_friend_invite_expire_timeout() {
   const auto& cfg_value = excel::get_const_config().friend_invite_expire();
   if (cfg_value.seconds() > 0) {
     return protobuf_to_system_clock(cfg_value);
@@ -38,7 +38,7 @@ std::chrono::system_clock::duration get_configure_friend_invite_expire_timeout()
   return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::hours{72});
 }
 
-std::chrono::system_clock::duration get_configure_friend_gift_expire_timeout() {
+static std::chrono::system_clock::duration get_configure_friend_gift_expire_timeout() {
   const auto& cfg_value = excel::get_const_config().friend_gift_expire();
   if (cfg_value.seconds() > 0) {
     return protobuf_to_system_clock(cfg_value);
@@ -46,7 +46,7 @@ std::chrono::system_clock::duration get_configure_friend_gift_expire_timeout() {
   return std::chrono::duration_cast<std::chrono::system_clock::duration>(std::chrono::hours{24});
 }
 
-size_t get_configure_friend_total_inviter_limit() {
+static size_t get_configure_friend_total_inviter_limit() {
   auto friend_total_inviter_limit = excel::get_const_config().friend_total_inviter_limit();
   if (friend_total_inviter_limit <= 0) {
     return 100;
@@ -54,9 +54,37 @@ size_t get_configure_friend_total_inviter_limit() {
   return static_cast<size_t>(friend_total_inviter_limit);
 }
 
-std::chrono::system_clock::duration get_configure_transaction_timeout() {
+static std::chrono::system_clock::duration get_configure_transaction_timeout() {
   return protobuf_to_system_clock(logic_config::me()->get_logic_cfg().transaction().timeout());
 }
+
+static size_t get_configure_friend_max_number() {
+  auto friend_max_number = excel::get_const_config().friend_max_number();
+  if (friend_max_number <= 0) {
+    return 200;
+  }
+
+  return static_cast<size_t>(friend_max_number);
+}
+
+static size_t get_configure_friend_daily_invite_limit() {
+  auto friend_daily_invite_limit = excel::get_const_config().friend_daily_invite_limit();
+  if (friend_daily_invite_limit <= 0) {
+    return 200;
+  }
+
+  return static_cast<size_t>(friend_daily_invite_limit);
+}
+
+static size_t get_configure_friend_total_invitee_limit() {
+  auto friend_total_invitee_limit = excel::get_const_config().friend_total_invitee_limit();
+  if (friend_total_invitee_limit <= 0) {
+    return 2000;
+  }
+
+  return static_cast<size_t>(friend_total_invitee_limit);
+}
+
 }  // namespace
 
 friend_object::friend_object(ctor_guard_t& guard)
@@ -571,6 +599,7 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
     stats_data.set_daily_inviter(0);
     stats_data.set_daily_invitee(0);
     stats_data.set_daily_send_gift_times(0);
+    stats_data.set_daily_receive_gift_times(0);
   }
 
   auto next_weekly_reset_time = protobuf_to_system_clock(stats_data.next_weekly_reset_time());
@@ -582,6 +611,7 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
     stats_data.set_weekly_inviter(0);
     stats_data.set_weekly_invitee(0);
     stats_data.set_weekly_send_gift_times(0);
+    stats_data.set_weekly_receive_gift_times(0);
   }
 
   // WAL Tick
@@ -605,8 +635,97 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
   }
 }
 
-int32_t friend_object::check_prepare_transcation(const ::google::protobuf::RepeatedPtrField<DFriendEvent>& /*events*/) {
-  // TODO(owent): ...
+rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
+  // TODO(owent): 打包和下发数据
+  RPC_RETURN_CODE(0);
+}
+
+namespace {
+static void friend_object_merge_transcation_events(size_t& add_invitee_count, size_t& add_inviter_count,
+                                                   size_t& add_friend_count,
+                                                   const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events) {
+  for (int i = 0; i < events.size(); ++i) {
+    switch (events.Get(i).event_case()) {
+      case DFriendEvent::kAddInvitee:
+        ++add_invitee_count;
+        break;
+      case DFriendEvent::kAddInviter:
+        ++add_inviter_count;
+        break;
+      case DFriendEvent::kAddFriendData:
+        ++add_friend_count;
+        break;
+      default:
+        break;
+    }
+  }
+}
+}  // namespace
+
+int32_t friend_object::check_prepare_transcation(rpc::context& ctx,
+                                                 const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events) {
+  size_t add_invitee_count = 0;
+  size_t add_inviter_count = 0;
+  size_t add_friend_count = 0;
+
+  friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, add_friend_count, events);
+  // 也要附加正在运行的事务事件
+  if (transaction_handle_) {
+    for (const auto& running_transaction : transaction_handle_->get_running_transactions()) {
+      if (!running_transaction.second.storage) {
+        continue;
+      }
+
+      auto trans_data = mutable_transaction_participator_data(
+          ctx, running_transaction.second.storage->metadata().transaction_uuid(),
+          friend_key_type{get_zone_id(), get_user_id()}, running_transaction.second.storage->participator_data());
+      if (!trans_data) {
+        continue;
+      }
+      friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, add_friend_count,
+                                             trans_data->event_data());
+    }
+  }
+
+  if (add_invitee_count <= 0 && add_friend_count <= 0 && add_inviter_count <= 0) {
+    return 0;
+  }
+
+  // 检查好友数量上限
+  if (friends_.size() + add_friend_count > get_configure_friend_max_number()) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_MAX_NUMBER_LIMIT;
+  }
+
+  // 好友数量到达上限后不允许再增加邀请和被邀请
+  if (friends_.size() >= get_configure_friend_max_number() && (add_inviter_count > 0 || add_invitee_count > 0)) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_MAX_NUMBER_LIMIT;
+  }
+
+  // 检查每日加邀请的数量
+  if (get_statistics().daily_invitee() + add_invitee_count > get_configure_friend_daily_invite_limit()) {
+    return PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_INVITE_DAILY_LIMIT;
+  }
+
+  auto now = ctx.logical_now();
+
+  // 检查邀请的数量
+  size_t friend_total_invitee_limit = get_configure_friend_total_invitee_limit();
+  if (invitees_.size() + add_invitee_count > friend_total_invitee_limit) {
+    cleanup_invalid_invitees(ctx, now);
+    if (invitees_.size() + add_invitee_count > friend_total_invitee_limit) {
+      return PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_INVITEE_TOTAL_LIMIT;
+    }
+  }
+
+  // 检查被邀请的数量
+  size_t friend_total_inviter_limit = get_configure_friend_total_inviter_limit();
+  if (inviters_.size() + add_inviter_count > friend_total_inviter_limit) {
+    cleanup_invalid_inviters(ctx, now);
+    if (inviters_.size() + add_inviter_count > friend_total_inviter_limit) {
+      return PROJECT_NAMESPACE_ID::EN_ERR_FRIEND_INVITER_TOTAL_LIMIT;
+    }
+  }
+
   return 0;
 }
 
@@ -628,9 +747,82 @@ void friend_object::gm_reset_limit() {
   stats_data.set_sum_inviter(0);
 }
 
-bool friend_object::clear_all_data(int64_t /*event_id*/) {
-  // TODO(owent): ...
-  return false;
+bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
+  wal_publisher_->set_global_log_ingore_key(event_id);
+
+  // 仅仅移除event_id更小的记录
+  {
+    std::vector<int64_t> pending_to_erase;
+    std::vector<friend_key_type> pending_to_erase_index;
+    pending_to_erase.reserve(gifts_.size());
+    pending_to_erase_index.reserve(gifts_.size());
+    for (auto& check : gifts_) {
+      if (check.second.event_id() <= event_id) {
+        pending_to_erase.push_back(check.first);
+      }
+    }
+
+    for (auto& erase_key : pending_to_erase) {
+      auto iter = gifts_.find(erase_key);
+      if (iter == gifts_.end()) {
+        continue;
+      }
+      friend_key_type friend_key;
+      friend_key.user_id = iter->second.from_user().user_id();
+      friend_key.zone_id = iter->second.from_user().zone_id();
+
+      gifts_.erase(iter);
+      auto user_index_iter = gift_sender_index_.find(friend_key);
+      if (user_index_iter != gift_sender_index_.end()) {
+        user_index_iter->second.erase(erase_key);
+        if (user_index_iter->second.empty()) {
+          gift_sender_index_.erase(user_index_iter);
+        }
+      }
+    }
+  }
+
+  {
+    std::vector<friend_key_type> pending_to_erase;
+    pending_to_erase.reserve(inviters_.size());
+    for (auto& check : inviters_) {
+      if (check.second.event_id() <= event_id) {
+        pending_to_erase.push_back(check.first);
+      }
+    }
+
+    for (auto& erase_key : pending_to_erase) {
+      inviters_.erase(erase_key);
+    }
+  }
+  {
+    std::vector<friend_key_type> pending_to_erase;
+    pending_to_erase.reserve(invitees_.size());
+    for (auto& check : invitees_) {
+      if (check.second.event_id() <= event_id) {
+        pending_to_erase.push_back(check.first);
+      }
+    }
+
+    for (auto& erase_key : pending_to_erase) {
+      invitees_.erase(erase_key);
+    }
+  }
+  {
+    std::vector<friend_key_type> pending_to_erase;
+    pending_to_erase.reserve(friends_.size());
+    for (auto& check : friends_) {
+      if (check.second.event_id() <= event_id) {
+        pending_to_erase.push_back(check.first);
+      }
+    }
+
+    for (auto& erase_key : pending_to_erase) {
+      friends_.erase(erase_key);
+    }
+  }
+
+  return true;
 }
 
 bool friend_object::is_empty() const {
