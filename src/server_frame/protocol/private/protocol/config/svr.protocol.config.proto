@@ -218,6 +218,15 @@ message logic_cache_cfg {
   logic_cache_data_cfg data = 2;
 }
 
+message logic_friend_api_cfg {
+  google.protobuf.Duration wal_gc_expire_duration = 1
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "60s" }];
+  google.protobuf.Duration wal_subscriber_timeout = 2
+      [(atframework.atapp.protocol.CONFIGURE) = { default_value: "180s" min_value: "30s" }];
+  uint32 wal_gc_log_size = 3 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "8" min_value: "1" }];
+  uint32 wal_max_log_size = 4 [(atframework.atapp.protocol.CONFIGURE) = { default_value: "64" min_value: "1" }];
+}
+
 message logic_section_cfg {
   uint32 world_id = 1;
   uint32 zone_id = 2;
@@ -242,6 +251,7 @@ message logic_section_cfg {
   logic_rank_cfg rank = 112;
   logic_cache_cfg cache = 113;
   logic_gm_cfg gm = 114;
+  logic_friend_api_cfg friend_api = 115;
 }
 
 message db_group_gateway_cfg {

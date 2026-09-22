@@ -23,6 +23,8 @@ generate_for_pb_add_ss_service(
   "${CMAKE_CURRENT_LIST_DIR}/sdk/management"
   RPC_DLLEXPORT_DECL
   FRIEND_SDK_MANAGEMENT_API
+  EXTERNAL_COMPONENT_PROTOCOLS
+  "distributed-transaction-protocol"
   EXTERNAL_SERVICE_PROTOCOLS
   "friend-protocol-management-pbdesc"
   INCLUDE_HEADERS

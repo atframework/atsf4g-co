@@ -29,17 +29,6 @@ message DFriendSubscribeKey {
   DFriendSubscribeCheckpoint last_received = 2;
 }
 
-message SSFriendManagementGetAllReq {
-  bool need_allocate_event_id = 1;
-  DFriendSubscribeKey with_subscriber = 2;
-}
-
-message SSFriendManagementGetAllRsp {
-  table_friend_blob_data raw_data = 1;
-  uint64 router_target_server_id = 2;
-  uint64 router_target_server_version = 3;
-}
-
 // ====== 事务准备阶段 ======
 message SSFriendTransactionPrepareReq {
   atframework.distributed_system.SSParticipatorTransactionPrepareReq transaction_request = 1;
@@ -77,17 +66,16 @@ message SSFriendGMResetLimitRsp {}
 
 message SSFriendSubscribeReq {
   DFriendSubscribeKey subscriber = 1;
+  bool need_allocate_event_id = 2;
 }
 
-message SSFriendSubscribeRsp {
-}
+message SSFriendSubscribeRsp {}
 
 message SSFriendUnsubscribeReq {
   DFriendSubscribeKey subscriber = 1;
 }
 
-message SSFriendUnsubscribeRsp {
-}
+message SSFriendUnsubscribeRsp {}
 
 message SSFriendRemoveOneInviterReq {
   atframework.shared.DUserIDKey inviter_user_key = 1;
@@ -102,12 +90,6 @@ message SSFriendRemoveAllInviterRsp {}
 service FriendManagementService {
   option (atframework.service_options) = {
     module_name: "friend_api"
-  };
-
-  rpc management_get_all(SSFriendManagementGetAllReq) returns (SSFriendManagementGetAllRsp) {
-    option (atframework.rpc_options) = {
-      api_name: "获取全部好友数据"
-    };
   };
 
   // ======== 增减好友和邀请以外的操作不应该使用分布式事务来执行，以降低开销 ========
@@ -149,6 +131,7 @@ service FriendManagementService {
     };
   };
 
+  // 初始拉取通过订阅接口触发下发快照
   rpc management_subscribe(SSFriendSubscribeReq) returns (SSFriendSubscribeRsp) {
     option (atframework.rpc_options) = {
       api_name: "订阅好友信息"

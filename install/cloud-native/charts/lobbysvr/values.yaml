@@ -35,6 +35,12 @@ cachesvr_shared:
 cs_session:
   enabled: true
 
+friend_api:
+  enabled: true
+
+transaction:
+  enabled: true
+
 httproute:
   port: 7001
   parentRefsName: project-x-tls-gateway

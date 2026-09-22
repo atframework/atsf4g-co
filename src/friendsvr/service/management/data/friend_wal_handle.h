@@ -13,6 +13,7 @@
 // clang-format on
 
 #include <protocol/pbdesc/com.struct.friend_api.pb.h>
+#include <protocol/pbdesc/friend_management_service.pb.h>
 
 // clang-format off
 #include <config/compiler/protobuf_suffix.h>
@@ -84,7 +85,9 @@ struct friend_wal_publisher_log_action_getter {
   DFriendEvent::EventCase operator()(const DFriendEvent&) const noexcept;
 };
 
-struct friend_wal_subscriber_private_data {};
+struct friend_wal_subscriber_private_data {
+  uint64_t subscriber_server_node_id = 0;
+};
 
 struct friend_log_action_hash_type {
   inline size_t operator()(const DFriendEvent::EventCase& key) const noexcept { return std::hash<int>()(key); }
@@ -111,7 +114,7 @@ using friend_wal_publisher_type =
                                                   friend_wal_publisher_context, friend_object*,
                                                   friend_wal_subscriber_type>;
 
-atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context& ctx, friend_object&);
+atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context& ctx);
 
 }  // namespace friend_api
 }  // namespace atframework

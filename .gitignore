@@ -34,6 +34,12 @@
 /rpc-unit-test.yaml
 
 # AI agent,RAG and other tools
+# MCP workspace artifacts, including custom build directories. Toolkit sources stay versioned.
+**/integration/mcp/downloads/
+**/integration/mcp/private/
+**/integration/mcp/state/
+**/integration/mcp/exports/
+**/_agent_tmp/mcp/
 # codegraph index directories (mcp integration, per-platform)
 .codegraph*
 .tgrep

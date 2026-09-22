@@ -131,7 +131,7 @@ symbols or understanding call relationships, if this repository already has an i
   `codegraph explore "<symbol names or question>"` from the repository root. Prefer this integration's prepared,
   pinned CLI and the direct/offline environment described in `project/integration/mcp/README.md`.
   Set `CODEGRAPH_DIR` to the actual root-level directory **name**, such as `.codegraph` or
-  `.codegraph-atsf4g-windows`; do not use an absolute path, a trailing slash, or another platform's index.
+  `.codegraph-atf4g-co-windows`; do not use an absolute path, a trailing slash, or another platform's index.
   Do not use an unpinned `npx` command that may download a different release.
 
 If no usable index exists, skip CodeGraph. If it is unavailable, reports `INDEX_NOT_READY`/`INDEX_IN_USE`,

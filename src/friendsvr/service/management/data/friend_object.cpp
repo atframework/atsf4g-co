@@ -87,8 +87,19 @@ static size_t get_configure_friend_total_invitee_limit() {
 
 }  // namespace
 
-friend_object::friend_object(ctor_guard_t& guard)
-    : friend_cache(guard), already_setup_quick_save_(false), event_id_allocator_(0) {}
+friend_object::friend_object(
+    ctor_guard_t& guard,
+    atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type>>&& wal_publisher,
+    atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle>>&&
+        transaction_handle)
+    : friend_cache(guard),
+      already_setup_quick_save_(false),
+      event_id_allocator_(0),
+      wal_publisher_(std::move(wal_publisher)),
+      transaction_handle_(std::move(transaction_handle)) {
+  transaction_handle_->set_private_data(reinterpret_cast<void*>(this));
+  wal_publisher_->get_private_data() = this;
+}
 
 friend_object::~friend_object() {}
 
@@ -98,24 +109,23 @@ friend_object::ptr_t friend_object::create(rpc::context& ctx, uint32_t zone_id, 
   ctor_guard_t guard;
   guard.zone_id = zone_id;
   guard.user_id = user_id;
-  auto ret = atfw::memory::stl::make_shared<friend_object>(guard);
+
+  util::memory::strong_rc_ptr<friend_transaction_participator_handle> transaction_handle =
+      create_transaction_handle(ctx, zone_id, user_id);
+  if (!transaction_handle) {
+    FCTXLOGERROR(ctx, "malloc friend_transaction_participator_handle failed");
+    return nullptr;
+  }
+
+  auto wal_publisher = create_friend_publisher(ctx);
+  if (!wal_publisher) {
+    FCTXLOGERROR(ctx, "malloc friend_wal_publisher_type failed");
+    return nullptr;
+  }
+
+  auto ret =
+      atfw::memory::stl::make_shared<friend_object>(guard, std::move(wal_publisher), std::move(transaction_handle));
   if (ret) {
-    util::memory::strong_rc_ptr<friend_transaction_participator_handle> transaction_handle =
-        create_transaction_handle(ctx, *ret, zone_id, user_id);
-    if (!transaction_handle) {
-      FCTXLOGERROR(ctx, "malloc friend_transaction_participator_handle failed");
-      return nullptr;
-    }
-
-    auto wal_publisher = create_friend_publisher(ctx, *ret);
-    if (!wal_publisher) {
-      FCTXLOGERROR(ctx, "malloc friend_wal_publisher_type failed");
-      return nullptr;
-    }
-
-    ret->transaction_handle_ = std::move(transaction_handle);
-    ret->wal_publisher_ = std::move(wal_publisher);
-
     ret->init(ctx);
   }
   return ret;
@@ -139,14 +149,14 @@ void friend_object::on_loaded(rpc::context& ctx) {
   event_id_allocator_ = blob_data.event_id_allocator();
 
   // WAL Load
-  if (wal_publisher_) {
+  {
     int32_t result = 0;
     friend_wal_publisher_context wal_param{ctx, result};
     wal_publisher_->load(friend_partipator_storege_type{blob_data}, wal_param);
   }
 
   // 事务 Load
-  if (transaction_handle_ && blob_data.has_transaction_storage()) {
+  if (blob_data.has_transaction_storage()) {
     friend_transaction_participator_handle::snapshot_type storage;
     if (blob_data.transaction_storage().UnpackTo(&storage)) {
       transaction_handle_->load(storage);
@@ -260,7 +270,7 @@ int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& d
   blob_data.set_event_id_allocator(event_id_allocator_);
 
   // WAL Dump
-  if (wal_publisher_) {
+  {
     int32_t result = 0;
     friend_wal_publisher_context wal_param{ctx, result};
     friend_partipator_storege_type storage{blob_data};
@@ -268,7 +278,7 @@ int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& d
   }
 
   // 事务 Dump
-  if (transaction_handle_) {
+  {
     friend_transaction_participator_handle::snapshot_type storage;
     transaction_handle_->dump(storage);
     if (!blob_data.mutable_transaction_storage()->PackFrom(storage)) {
@@ -434,6 +444,42 @@ bool friend_object::remove_inviter(rpc::context& ctx, int64_t event_id, DFriendI
 
   set_quick_save();
   return true;
+}
+
+bool friend_object::remove_all_inviters(rpc::context& ctx, int64_t event_id) {
+  if (inviters_.empty()) {
+    return false;
+  }
+
+  std::unordered_set<friend_key_type, friend_key_hash_type> remove_keys;
+  remove_keys.reserve(inviters_.size());
+
+  for (auto& kv : inviters_) {
+    if (kv.second.event_id() >= event_id) {
+      continue;
+    }
+
+    remove_keys.insert(kv.first);
+  }
+
+  int64_t remove_event_id = 0;
+  if (!remove_keys.empty()) {
+    remove_event_id = allocate_event_id();
+  }
+
+  for (const auto& k : remove_keys) {
+    rpc::context::message_holder<DFriendInvitationInfo> to_remove_inviter{ctx};
+    to_remove_inviter->mutable_from_user()->set_zone_id(k.zone_id);
+    to_remove_inviter->mutable_from_user()->set_user_id(k.user_id);
+    remove_inviter(ctx, remove_event_id, *to_remove_inviter);
+  }
+
+  // TODO(any): OSS
+
+  if (!remove_keys.empty()) {
+    set_quick_save();
+  }
+  return !remove_keys.empty();
 }
 
 bool friend_object::add_invitee(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src) {
@@ -615,13 +661,13 @@ void friend_object::refresh_feature_limit(rpc::context& ctx) {
   }
 
   // WAL Tick
-  if (wal_publisher_) {
+  {
     int32_t result = 0;
     friend_wal_publisher_context wal_param{ctx, result};
     wal_publisher_->tick(now, wal_param);
   }
   // 事务 Tick
-  if (transaction_handle_) {
+  {
     transaction_handle_->tick(ctx, now);
   }
 
@@ -670,7 +716,7 @@ int32_t friend_object::check_prepare_transcation(rpc::context& ctx,
 
   friend_object_merge_transcation_events(add_invitee_count, add_inviter_count, add_friend_count, events);
   // 也要附加正在运行的事务事件
-  if (transaction_handle_) {
+  {
     for (const auto& running_transaction : transaction_handle_->get_running_transactions()) {
       if (!running_transaction.second.storage) {
         continue;
@@ -745,6 +791,47 @@ void friend_object::gm_reset_limit() {
   stats_data.set_sum_receive_gift_times(0);
   stats_data.set_sum_invitee(0);
   stats_data.set_sum_inviter(0);
+}
+
+void friend_object::subscribe(rpc::context& ctx, const DFriendSubscribeKey& subscribe_key,
+                              uint64_t update_server_node_id) {
+  // Implementation for subscribing to friend notifications
+  if (subscribe_key.subscriber_user_key().zone_id() == 0 || subscribe_key.subscriber_user_key().user_id() == 0) {
+    return;
+  }
+
+  int32_t result_code = 0;
+  friend_wal_publisher_context param{ctx, result_code};
+
+  auto subscriber = wal_publisher_->find_subscriber(subscribe_key.subscriber_user_key(), param);
+  if (subscriber) {
+    subscriber->get_private_data().subscriber_server_node_id = update_server_node_id;
+    wal_publisher_->receive_subscribe_request(subscribe_key.subscriber_user_key(),
+                                              subscribe_key.last_received().sequence(),
+                                              subscribe_key.last_received().hash_code(), ctx.logical_now(), param);
+  } else {
+    friend_wal_subscriber_private_data private_data;
+    private_data.subscriber_server_node_id = update_server_node_id;
+    subscriber = wal_publisher_->create_subscriber(
+        subscribe_key.subscriber_user_key(), ctx.logical_now(),
+        {subscribe_key.last_received().sequence(), subscribe_key.last_received().hash_code()}, param, private_data);
+  }
+}
+
+void friend_object::unsubscribe(rpc::context& ctx, const DFriendSubscribeKey& subscribe_key) {
+  // Implementation for unsubscribing from friend notifications
+  if (subscribe_key.subscriber_user_key().zone_id() == 0 || subscribe_key.subscriber_user_key().user_id() == 0) {
+    return;
+  }
+
+  int32_t result_code = 0;
+  friend_wal_publisher_context param{ctx, result_code};
+  auto subscriber = wal_publisher_->find_subscriber(subscribe_key.subscriber_user_key(), param);
+  if (subscriber) {
+    subscriber->get_private_data().subscriber_server_node_id = 0;
+    wal_publisher_->remove_subscriber(subscribe_key.subscriber_user_key(),
+                                      atfw::util::distributed_system::wal_unsubscribe_reason::kClientRequest, param);
+  }
 }
 
 bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
@@ -916,11 +1003,16 @@ void friend_object::cleanup_invalid_friends(rpc::context& ctx, std::chrono::syst
     }
   }
 
+  int64_t new_event_id = 0;
+  if (!expired_keys.empty()) {
+    new_event_id = allocate_event_id();
+  }
+
   for (const auto& k : expired_keys) {
     rpc::context::message_holder<DFriendInfo> to_remove_friend{ctx};
     to_remove_friend->mutable_user_key()->set_user_id(k.user_id);
     to_remove_friend->mutable_user_key()->set_zone_id(k.zone_id);
-    remove_friend(ctx, allocate_event_id(), *to_remove_friend);
+    remove_friend(ctx, new_event_id, *to_remove_friend);
   }
 }
 
@@ -942,11 +1034,16 @@ void friend_object::cleanup_invalid_inviters(rpc::context& ctx, std::chrono::sys
     }
   }
 
+  int64_t new_event_id = 0;
+  if (!expired_keys.empty()) {
+    new_event_id = allocate_event_id();
+  }
+
   for (const auto& k : expired_keys) {
     rpc::context::message_holder<DFriendInvitationInfo> to_remove_inviter{ctx};
     to_remove_inviter->mutable_from_user()->set_zone_id(k.zone_id);
     to_remove_inviter->mutable_from_user()->set_user_id(k.user_id);
-    remove_inviter(ctx, allocate_event_id(), *to_remove_inviter);
+    remove_inviter(ctx, new_event_id, *to_remove_inviter);
   }
 }
 
@@ -968,11 +1065,16 @@ void friend_object::cleanup_invalid_invitees(rpc::context& ctx, std::chrono::sys
     }
   }
 
+  int64_t new_event_id = 0;
+  if (!expired_keys.empty()) {
+    new_event_id = allocate_event_id();
+  }
+
   for (const auto& k : expired_keys) {
     rpc::context::message_holder<DFriendInvitationInfo> to_remove_invitee{ctx};
     to_remove_invitee->mutable_to_user()->set_zone_id(k.zone_id);
     to_remove_invitee->mutable_to_user()->set_user_id(k.user_id);
-    remove_invitee(ctx, allocate_event_id(), *to_remove_invitee);
+    remove_invitee(ctx, new_event_id, *to_remove_invitee);
   }
 }
 
@@ -991,10 +1093,15 @@ void friend_object::cleanup_invalid_gifts(rpc::context& ctx, std::chrono::system
     }
   }
 
+  int64_t new_event_id = 0;
+  if (!expired_ids.empty()) {
+    new_event_id = allocate_event_id();
+  }
+
   for (const auto& k : expired_ids) {
     DFriendGift to_remove_gift;
     to_remove_gift.set_gift_id(k);
-    remove_gift(ctx, allocate_event_id(), to_remove_gift);
+    remove_gift(ctx, new_event_id, to_remove_gift);
   }
 }
 

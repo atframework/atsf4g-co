@@ -67,6 +67,10 @@ logic:
   session:
     {{- toYaml .Values.cs_session | trim | nindent 4 }}
   {{- end }}
+  {{- if and .Values.friend_api }}
+  friend_api:
+    {{- toYaml .Values.friend_api | trim | nindent 4 }}
+  {{- end }}
   telemetry:
     executor:
       max_metric_record_per_loop: {{ dig "executor" "max_metric_record_per_loop" "1000" .Values.telemetry }}

@@ -3,8 +3,8 @@
 
 # ============ friendsvr-management service unit tests (rpc-unit-test based) ============
 # Case sources link service::friendsvr-management::private; the service include directory, SDK/protocol dependencies and
-# the generated-flow build order propagate from it. The skeleton drives the placeholder SS action directly via
-# atfw::testing::invoke_ss_action<task_action_management_get_all>, so it does not call
+# the generated-flow build order propagate from it. The skeleton drives the management_subscribe SS action directly via
+# atfw::testing::invoke_ss_action<task_action_management_subscribe>, so it does not call
 # register_handles_for_friendmanagementservice() and compiles no registration TU here.
 project_add_rpc_unit_test(
   TARGET

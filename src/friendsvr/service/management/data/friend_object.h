@@ -5,6 +5,7 @@
 #pragma once
 
 #include <memory/rc_ptr.h>
+#include <nostd/nullability.h>
 
 #include <data/friend_cache.h>
 
@@ -37,6 +38,7 @@ namespace friend_api {
 
 class DFriendInfo;
 class DFriendInvitationInfo;
+class DFriendSubscribeKey;
 
 class friend_object : public friend_cache {
  public:
@@ -47,7 +49,11 @@ class friend_object : public friend_cache {
   using friend_cache::ctor_guard_t;
 
  public:
-  explicit friend_object(ctor_guard_t&);
+  explicit friend_object(
+      ctor_guard_t&,
+      atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type>>&& wal_publisher,
+      atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle>>&&
+          transaction_handle);
   ~friend_object() override;
 
   void init(rpc::context& ctx) override;
@@ -68,6 +74,8 @@ class friend_object : public friend_cache {
 
   bool remove_inviter(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src);
 
+  bool remove_all_inviters(rpc::context& ctx, int64_t event_id);
+
   bool add_invitee(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src);
 
   bool remove_invitee(rpc::context& ctx, int64_t event_id, DFriendInvitationInfo& src);
@@ -86,6 +94,10 @@ class friend_object : public friend_cache {
   int64_t allocate_event_id();
 
   void gm_reset_limit();
+
+  void subscribe(rpc::context& ctx, const DFriendSubscribeKey& subscribe_key, uint64_t update_server_node_id);
+
+  void unsubscribe(rpc::context& ctx, const DFriendSubscribeKey& subscribe_key);
 
   bool clear_all_data(rpc::context& ctx, int64_t event_id);
 
@@ -122,8 +134,9 @@ class friend_object : public friend_cache {
  private:
   mutable bool already_setup_quick_save_;
   int64_t event_id_allocator_;
-  atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> wal_publisher_;
-  atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle> transaction_handle_;
+  atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type>> wal_publisher_;
+  atfw::util::nostd::nonnull<atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle>>
+      transaction_handle_;
 
   std::unordered_map<int64_t, DFriendGift> gifts_;
   std::unordered_map<friend_key_type, std::unordered_set<int64_t>, friend_key_hash_type> gift_sender_index_;

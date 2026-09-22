@@ -94,6 +94,7 @@ message DFriendEvent {
   google.protobuf.Timestamp create_timepoint = 2;  // 创建时间
 
   oneof event {
+    bool remove_all_inviter = 10;               // 移除全部邀请者
     DFriendInvitationInfo add_inviter = 11;     // 添加被邀请
     DFriendInvitationInfo remove_inviter = 12;  // 删除被邀请
     DFriendInvitationInfo add_invitee = 13;

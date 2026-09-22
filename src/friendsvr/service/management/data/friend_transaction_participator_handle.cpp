@@ -163,8 +163,9 @@ size_t friend_key_hash_type::operator()(const friend_key_type& in) const noexcep
   return _hash_combine(lh(in.zone_id), rh(in.user_id));
 }
 
-atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle> create_transaction_handle(
-    rpc::context&, friend_object& friend_obj, uint32_t zone_id, uint64_t user_id) {
+atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle> create_transaction_handle(rpc::context&,
+                                                                                                    uint32_t zone_id,
+                                                                                                    uint64_t user_id) {
   auto ret = atfw::util::memory::make_strong_rc<friend_transaction_participator_handle>(
       create_friend_transaction_vtable(),
       rpc::friend_api::friend_key_to_transaction_participator_key(zone_id, user_id));
@@ -172,7 +173,6 @@ atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle> create
     return ret;
   }
 
-  ret->set_private_data(reinterpret_cast<void*>(&friend_obj));
   return ret;
 }
 

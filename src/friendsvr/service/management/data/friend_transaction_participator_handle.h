@@ -84,7 +84,6 @@ struct friend_key_hash_type {
 };
 
 atfw::util::memory::strong_rc_ptr<friend_transaction_participator_handle> create_transaction_handle(rpc::context&,
-                                                                                                    friend_object&,
                                                                                                     uint32_t zone_id,
                                                                                                     uint64_t user_id);
 }  // namespace friend_api

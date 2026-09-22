@@ -1,0 +1,10 @@
+# friend_api.yaml
+# vim: set sw=2 sts=2 et:
+# encoding: utf-8
+
+enabled: false
+
+wal_gc_expire_duration: 180s
+wal_subscriber_timeout: 180s
+wal_gc_log_size: 8
+wal_max_log_size: 64

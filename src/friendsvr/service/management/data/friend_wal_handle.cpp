@@ -55,6 +55,19 @@ struct friend_wal_delegate_helper {
     return wal_result_code::kOk;
   }
 
+  static wal_result_code remove_all_inviter(wal_object_type& wal, wal_object_type::log_type& log,
+                                            wal_object_type::callback_param_type param) {
+    friend_object* friend_obj = wal.get_private_data();
+    if (nullptr == friend_obj) {
+      return wal_result_code::kInitlization;
+    }
+
+    if (!friend_obj->remove_all_inviters(param.context, log.event_id())) {
+      return wal_result_code::kIgnore;
+    }
+    return wal_result_code::kOk;
+  }
+
   static wal_result_code add_invitee(wal_object_type& wal, wal_object_type::log_type& log,
                                      wal_object_type::callback_param_type param) {
     friend_object* friend_obj = wal.get_private_data();
@@ -149,6 +162,7 @@ struct friend_wal_delegate_helper {
   static void setup_delegate_actions(friend_wal_publisher_type::object_type::callback_log_group_map_t& actions) {
     actions[DFriendEvent::kAddInviter].patch = friend_wal_delegate_helper::add_inviter;
     actions[DFriendEvent::kRemoveInviter].patch = friend_wal_delegate_helper::remove_inviter;
+    actions[DFriendEvent::kRemoveAllInviter].patch = friend_wal_delegate_helper::remove_all_inviter;
     actions[DFriendEvent::kAddInvitee].patch = friend_wal_delegate_helper::add_invitee;
     actions[DFriendEvent::kRemoveInvitee].patch = friend_wal_delegate_helper::remove_invitee;
     actions[DFriendEvent::kAddGift].patch = friend_wal_delegate_helper::add_gift;
@@ -286,8 +300,7 @@ static friend_wal_publisher_type::configure_pointer create_friend_publisher_cong
     return ret;
   }
   // ret->enable_last_broadcast_for_removed_subscriber = true;
-  // 好友不需要使用订阅机制，可以随便填. 保留一些log以便调试
-  ret->gc_expire_duration = std::chrono::seconds{900};
+  ret->gc_expire_duration = std::chrono::seconds{180};
   ret->gc_log_size = 8;
   ret->max_log_size = 32;
 
@@ -304,10 +317,9 @@ DFriendEvent::EventCase friend_wal_publisher_log_action_getter::operator()(
   return event_data.event_case();
 }
 
-atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context&,
-                                                                                     friend_object& friend_obj) {
+atfw::util::memory::strong_rc_ptr<friend_wal_publisher_type> create_friend_publisher(rpc::context&) {
   return friend_wal_publisher_type::create(create_friend_publisher_vtable(), create_friend_publisher_congigure(),
-                                           &friend_obj);
+                                           nullptr);
 }
 
 }  // namespace friend_api
