@@ -135,7 +135,7 @@ test('an existing patched tgrep can be prepared offline without a source checkou
   const execute = argv => {
     calls.push(argv);
     assert.equal(argv[0], binary);
-    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9\n' : '--transport <tcp|stdio>\n', stderr: '' };
+    return { status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9 (mcp-stdio-v2)\n' : '--transport <tcp|stdio>\n', stderr: '' };
   };
   const state = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute });
   assert.equal(state.binary, binary);
@@ -151,6 +151,64 @@ test('an explicit TCP-only tgrep is rejected before any source download', t => {
   const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9' : 'serve --port 8787', stderr: '' });
   assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /stdio/);
   assert.equal(fs.existsSync(path.join(w.paths.upstreamDir, 'tgrep-src')), false);
+});
+
+test('a stdio-only older integration binary is rejected before source download', t => {
+  const w = fixture(t);
+  const binary = w.write('local/tgrep.exe', 'old stdio binary');
+  const execute = argv => ({ status: 0, stdout: argv.includes('--version') ? 'tgrep 1.0.9' : '--transport tcp stdio', stderr: '' });
+  assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, binary, execute }), /mcp-stdio-v2/);
+  assert.equal(fs.existsSync(w.paths.upstreamDir), true);
+  assert.equal(fs.existsSync(path.join(w.paths.upstreamDir, 'tgrep-src')), false);
+});
+
+test('cached stdio source receives the missing watcher patch and rebuilds stale output offline', t => {
+  const w = fixture(t);
+  const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
+  const srcDir = path.join(w.paths.upstreamDir, 'tgrep-src');
+  const output = w.write(path.relative(w.root, path.join(srcDir, 'target/release', process.platform === 'win32' ? 'tgrep.exe' : 'tgrep')), 'old executable');
+  const applied = new Set([path.basename(lock.patches[0])]);
+  let builds = 0;
+  const execute = (argv, options) => {
+    if (argv[0] === 'git') {
+      if (argv.includes('rev-parse')) return { status: 0, stdout: lock.source_commit };
+      assert.ok(argv.includes('apply'));
+      const patch = path.basename(argv.at(-1));
+      if (argv.includes('--reverse')) return { status: applied.has(patch) ? 0 : 1 };
+      if (argv.includes('--check')) return { status: applied.has(patch) ? 1 : 0 };
+      applied.add(patch);
+      return { status: 0 };
+    }
+    if (argv[0] === 'cargo') {
+      assert.ok(argv.includes('--offline'));
+      assert.ok(argv.includes('--locked'));
+      assert.equal(options.cwd, srcDir);
+      assert.equal(applied.size, lock.patches.length);
+      builds++;
+      fs.writeFileSync(output, 'new executable');
+      return { status: 0 };
+    }
+    return { status: 0, stdout: argv.includes('--version')
+      ? `tgrep 1.0.9${builds ? ' (mcp-stdio-v2)' : ''}` : '--transport tcp stdio' };
+  };
+  const result = prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, execute });
+  assert.equal(builds, 1);
+  assert.equal(result.acquisition, 'build');
+  assert.equal(result.patches.length, 2);
+  assert.equal(fs.readFileSync(result.binary, 'utf8'), 'new executable');
+});
+
+test('conflicting cached tgrep source is neither patched nor built', t => {
+  const w = fixture(t);
+  fs.mkdirSync(path.join(w.paths.upstreamDir, 'tgrep-src'), { recursive: true });
+  const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, 'tools/tgrep/upstream-lock.json')));
+  const execute = argv => {
+    if (argv[0] !== 'git') return { status: 1, stdout: '' };
+    if (argv.includes('rev-parse')) return { status: 0, stdout: lock.source_commit };
+    assert.ok(argv.includes('--check'), 'must not mutate a conflicting checkout');
+    return { status: 1 };
+  };
+  assert.throws(() => prepareTgrep(w.paths, INTEGRATION_ROOT, { offline: true, execute }), /patch conflicts/);
 });
 
 test('a compiled CodeGraph checkout is reused without npm or a platform download', t => {

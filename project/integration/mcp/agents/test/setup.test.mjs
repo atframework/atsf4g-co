@@ -24,6 +24,9 @@ function fixture(t) {
       recursive: true, filter: (file) => !['node_modules', 'test'].includes(path.basename(file)),
     });
   }
+  // Failure fixtures replace this copied module. P4 files can be read-only;
+  // change only the disposable copy, never the source checkout's permissions.
+  fs.chmodSync(path.join(integration, 'common/src/prepare.mjs'), 0o600);
   fs.writeFileSync(path.join(root, 'package.json'), '{"type":"module"}');
   const user = path.join(root, 'user');
   fs.mkdirSync(user);
@@ -48,6 +51,20 @@ function snapshot(root) {
   return files;
 }
 
+test('legacy config ownership is read without legacy writes and uninstall uses workspace data', t => {
+  const { root, run } = fixture(t);
+  const installed = run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=cursor']);
+  assert.equal(installed.status, 0, installed.stderr);
+  const old = path.join(root, 'old-build/integration/mcp');
+  fs.mkdirSync(old, { recursive: true });
+  fs.renameSync(path.join(root, '.mcp-data/state'), path.join(old, 'state'));
+  const before = snapshot(old);
+  const removed = run(['--yes', '--uninstall', '--agents=cursor']);
+  assert.equal(removed.status, 0, removed.stderr + removed.stdout);
+  assert.equal(fs.existsSync(path.join(root, '.cursor/mcp.json')), false);
+  assert.deepEqual(snapshot(old), before);
+});
+
 test('review: CLI recovers before scanning defaults and before the no-agents early return', (t) => {
   const { root, run } = fixture(t);
   const installed = run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=cursor']);
@@ -56,8 +73,8 @@ test('review: CLI recovers before scanning defaults and before the no-agents ear
   const before = fs.readFileSync(file, 'utf8');
   const dirs = {
     repoRoot: root,
-    stateDir: path.join(root, 'build/integration/mcp/state'),
-    tmpDir: path.join(root, 'build/_agent_tmp/mcp'),
+    stateDir: path.join(root, '.mcp-data/state'),
+    tmpDir: path.join(root, '.mcp-data/tmp'),
   };
   const store = createFileStore(dirs);
   store.remove(file, { relative: '.cursor/mcp.json', expectedBefore: before });
@@ -270,7 +287,7 @@ test('CLI agents=all writes the cline export but keeps guided imports out', (t) 
   const result = run(['--yes', '--skip-prepare', '--backend=tgrep', '--agents=all']);
   assert.equal(result.status, 0, result.stderr + result.stdout);
   assert.equal(fs.existsSync(path.join(root, '.cline', 'mcp.json')), true);
-  assert.equal(fs.existsSync(path.join(root, 'build', 'integration', 'mcp', 'exports')), false, 'guided snippets are not part of all');
+  assert.equal(fs.existsSync(path.join(root, '.mcp-data', 'exports')), false, 'guided snippets are not part of all');
   assert.match(result.stdout, /launch\.mjs" --agent=cline/);
   assert.match(result.stdout, /未纳入 all/);
   assert.match(result.stdout, /显式接入，不等于已自动接入/);
@@ -308,7 +325,7 @@ test('CLI cline export installs, repeats unchanged, and uninstalls', (t) => {
 
 test('CLI guided imports write build-dir snippets only and clean up on uninstall', (t) => {
   const { root, run } = fixture(t);
-  const exportsDir = path.join(root, 'build', 'integration', 'mcp', 'exports');
+  const exportsDir = path.join(root, '.mcp-data', 'exports');
   const args = ['--yes', '--skip-prepare', '--backend=codegraph', '--agents=cline-ide,codebuddy-ide'];
   const dry = run([...args, '--dry-run']);
   assert.equal(dry.status, 0, dry.stderr + dry.stdout);
@@ -381,7 +398,7 @@ test('guided exports participate in final selection and dry-run summaries', (t) 
   assert.equal(dry.status, 0, dry.stderr);
   assert.doesNotMatch(dry.stdout, /已生成本机导入片段/);
   assert.equal(run(args).status, 0);
-  const snippet = path.join(root, 'build/integration/mcp/exports/cline-ide-mcp-servers.json');
+  const snippet = path.join(root, '.mcp-data/exports/cline-ide-mcp-servers.json');
   assert.equal(fs.existsSync(snippet), true);
   assert.equal(run(['--yes', '--skip-prepare', '--backend=codegraph']).status, 0);
   assert.ok(JSON.parse(fs.readFileSync(snippet)).mcpServers['workspace-codegraph'], 'default selection keeps existing guided exports');
@@ -391,7 +408,7 @@ test('guided exports participate in final selection and dry-run summaries', (t) 
 
 test('unreadable IDE export aborts config writes during preflight', (t) => {
   const { root, run } = fixture(t);
-  const snippet = path.join(root, 'build/integration/mcp/exports/cline-ide-mcp-servers.json');
+  const snippet = path.join(root, '.mcp-data/exports/cline-ide-mcp-servers.json');
   fs.mkdirSync(snippet, { recursive: true });
   const before = snapshot(root);
   const result = run(['--yes', '--skip-prepare', '--backend=codegraph', '--agents=claude,cline-ide']);

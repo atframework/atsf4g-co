@@ -41,7 +41,7 @@ import { agentInstallNotes } from './agents/src/agents/index.mjs';
 import { createInteractiveUi } from './agents/src/ui/terminalMenu.mjs';
 import { runPrepare, writePreparedState } from './common/src/prepare.mjs';
 import { NPM_MIRRORS, CARGO_MIRRORS, mirrorSettings, selectMirrors, mirrorSummary } from './common/src/mirrors.mjs';
-import { WorkspacePaths, detectWorkspace, projectInfo, resolveBuildDir, validateWorkspaceBuildDir } from './common/src/paths.mjs';
+import { WorkspacePaths, detectWorkspace, projectInfo, validateWorkspaceBuildDir } from './common/src/paths.mjs';
 import { currentRuntime, runtimeSupported } from './common/src/runtime.mjs';
 import { collectConfig, writeConfig as writeSirchmunkConfig } from './tools/sirchmunk/src/config.mjs';
 import { startModelDownload } from './tools/sirchmunk/src/prepare.mjs';
@@ -112,7 +112,7 @@ function printHelp() {
     '',
     '选项：',
     '  --repo-root=<dir>          显式工作区；缺省从执行目录向上检测工程根，未找到时使用执行目录',
-    '  --build-dir=<dir>          工作区内的构建/缓存目录（缺省按 .vscode/settings.json 解析）',
+    '  --build-dir=<dir>          旧缓存的只读查找目录；新数据统一写入工作区 .mcp-data/',
     '  --backend=tgrep|codegraph|sirchmunk   指定后端（跳过交互）',
     '  --agents=<id1,id2,...>|all  指定要接入的 Agent（跳过交互；--list-agents 查看可选 id；',
     '                              all 只含可自动写入项目配置的目标，面板导入类需显式指定）',
@@ -221,7 +221,7 @@ function resolveAgentIds(value) {
 /** Backend recorded by the last successful prepare (read-only; agent configs are not scanned before dependencies exist). */
 function preparedBackend(paths) {
   try {
-    const parsed = JSON.parse(fs.readFileSync(paths.preparedStatePath(), 'utf8'));
+    const parsed = JSON.parse(fs.readFileSync(paths.preparedStateReadPath(), 'utf8'));
     return parsed && typeof parsed === 'object' && Object.hasOwn(BACKENDS, parsed.backend) ? parsed.backend : null;
   } catch {
     return null;
@@ -325,7 +325,7 @@ async function runSetup(options, ui) {
   }
   const workspace = detectWorkspace(process.cwd(), { explicit: options.repoRoot });
   const repoRoot = workspace.root;
-  const buildDir = validateWorkspaceBuildDir(repoRoot, resolveBuildDir(repoRoot, options.buildDir));
+  const buildDir = options.buildDir ? validateWorkspaceBuildDir(repoRoot, path.resolve(repoRoot, options.buildDir)) : undefined;
   const paths = new WorkspacePaths(repoRoot, buildDir);
   const runtime = currentRuntime();
   if (!runtimeSupported(runtime)) throw new Error('需要 Node.js >= 20、Bun >= 1 或 Deno >= 2');
@@ -336,7 +336,7 @@ async function runSetup(options, ui) {
   ui.line(`${projectInfo(repoRoot).name} MCP 集成安装`);
   ui.line(`仓库：${repoRoot}`);
   ui.line(`工作空间依据：${workspace.reason}`);
-  ui.line(`构建目录：${buildDir}`);
+  ui.line(`MCP 数据目录：${paths.integrationDir}`);
   ui.line(`MCP 运行时：${runtime.kind} ${runtime.version}（${runtime.executable}）`);
   ui.line('');
 

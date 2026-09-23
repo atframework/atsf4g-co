@@ -54,6 +54,7 @@ test('closing MCP during the first index cancels the helper and releases the ses
     await client.close();
     assert.ok(await waitForPidExit(wrapperPid));
     assert.ok(await waitForPidExit(childPid));
+    assert.ok(await waitForPidExit(status.shared_service.pid));
     const state = JSON.parse(fs.readFileSync(path.join(paths.toolStateDir('codegraph'), 'wrapper-state.json')));
     assert.equal(state.state, 'stopped');
     assert.equal(state.auto_sync, null);
@@ -72,14 +73,14 @@ async function launchServer(envExtra = {}, entry = SERVER) {
   const buildDir = tmpBuildDir();
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [entry, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+    args: [entry, '--repo-root', buildDir],
     env: {
       ...envExtra,
       SYSTEMROOT: process.env.SYSTEMROOT,
       TEMP: process.env.TEMP,
       TMP: process.env.TMP,
     },
-    cwd: REPO_ROOT,
+    cwd: buildDir,
   });
   const client = new Client({ name: 'cg-server-test', version: '0.0.1' });
   await client.connect(transport);
@@ -96,7 +97,7 @@ test('legacy CodeGraph server entry still serves MCP and forwards module exports
     assert.ok((await client.listTools()).tools.some(tool => tool.name === 'codegraph_explore'));
   } finally {
     await client.close();
-    assert.ok(await waitForPidExit(transport.pid));
+    assert.ok(await waitForServerExit(transport.pid, buildDir));
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
@@ -104,6 +105,19 @@ test('legacy CodeGraph server entry still serves MCP and forwards module exports
 function textOf(result) {
   assert.equal(result.content[0].type, 'text');
   return JSON.parse(result.content[0].text);
+}
+
+// The stdio wrapper and its detached owner have separate process lifetimes.
+// Wait for both before removing their working directory on Windows.
+async function waitForServerExit(pid, root) {
+  const { WorkspacePaths } = await import('../../../common/src/paths.mjs');
+  const exited = await waitForPidExit(pid);
+  const record = path.join(new WorkspacePaths(root).toolStateDir('codegraph'), 'shared-service.json');
+  if (fs.existsSync(record)) {
+    const owner = JSON.parse(fs.readFileSync(record, 'utf8'));
+    assert.ok(await waitForPidExit(owner.pid), 'shared owner must exit before fixture removal');
+  }
+  return exited;
 }
 
 async function waitForPidExit(pid, timeoutMs = 10_000) {
@@ -150,7 +164,7 @@ test('default allowlist is explore + wrapped status, schema has no projectPath',
     }
   } finally {
     await client.close();
-    assert.ok(await waitForPidExit(transport.pid));
+    assert.ok(await waitForServerExit(transport.pid, buildDir));
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
@@ -187,7 +201,7 @@ test('explore is proxied; projectPath and unknown arguments are rejected', async
     assert.deepEqual(explores[0].args, { query: 'team manager', maxFiles: 3 });
   } finally {
     await client.close();
-    await waitForPidExit(transport.pid);
+    await waitForServerExit(transport.pid, buildDir);
     fs.rmSync(buildDir, { recursive: true, force: true });
     fs.rmSync(recordFile, { force: true });
   }
@@ -195,10 +209,10 @@ test('explore is proxied; projectPath and unknown arguments are rejected', async
 
 test('extra-tools config extends the allowlist; dispatch re-checks it', async () => {
   const buildDir = tmpBuildDir();
-  const extraConfig = path.join(buildDir, 'integration', 'mcp', 'state', 'codegraph');
+  const extraConfig = path.join(buildDir, '.mcp-data', 'state', 'codegraph');
   // workspaceId is derived from the repo root; write through the same helper the server uses.
   const { workspaceId, platformName } = await import('../../../common/src/paths.mjs');
-  const toolDir = path.join(extraConfig, workspaceId(REPO_ROOT), platformName());
+  const toolDir = path.join(extraConfig, workspaceId(fs.realpathSync(buildDir)), platformName());
   fs.mkdirSync(toolDir, { recursive: true });
   fs.writeFileSync(path.join(toolDir, 'extra-tools.json'), JSON.stringify({ enabled_tools: ['codegraph_callers'] }));
 
@@ -210,9 +224,9 @@ test('extra-tools config extends the allowlist; dispatch re-checks it', async ()
   };
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [SERVER, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+    args: [SERVER, '--repo-root', buildDir],
     env,
-    cwd: REPO_ROOT,
+    cwd: buildDir,
   });
   const client = new Client({ name: 'extra-tools-test', version: '0.0.1' });
   await client.connect(transport);
@@ -227,7 +241,7 @@ test('extra-tools config extends the allowlist; dispatch re-checks it', async ()
     assert.equal(result.isError, undefined);
   } finally {
     await client.close();
-    await waitForPidExit(transport.pid);
+    await waitForServerExit(transport.pid, buildDir);
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
@@ -243,7 +257,7 @@ test('a small upstream project can hide status discovery while retaining a worki
     assert.notEqual(status.backend.isError, true);
   } finally {
     await client.close();
-    await waitForPidExit(transport.pid);
+    await waitForServerExit(transport.pid, buildDir);
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
@@ -277,7 +291,7 @@ test('not-ready wrapper answers INDEX_NOT_READY and status reports the state', a
     assert.match(status.state_detail, /codegraph_status/);
   } finally {
     await client.close();
-    await waitForPidExit(transport.pid);
+    await waitForServerExit(transport.pid, buildDir);
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });

@@ -144,7 +144,8 @@ export function prepareNodeModules(mcpRoot, { paths = null, offline = false, reg
     if (paths && !verified) {
       const lock = readJson(path.join(source, 'package-lock.json'));
       const packages = Object.entries(lock?.packages ?? {}).filter(([name]) => name.startsWith('node_modules/'));
-      const candidates = [source, ...(dir.startsWith('tools/') ? [path.join(mcpRoot, dir.slice(6))] : [])];
+      const candidates = [...paths.legacyIntegrationDirs.map(base => path.join(base, 'downloads/node', `${process.platform}-${process.arch}`, dir)), source,
+        ...(dir.startsWith('tools/') ? [path.join(mcpRoot, dir.slice(6))] : [])];
       const cached = candidates.find(directory => packages.length && packages.every(([name, info]) => readJson(path.join(directory, name, 'package.json'))?.version === info.version));
       if (cached) {
         log(`reusing installed ${dir} dependencies in the workspace download directory`);
@@ -194,11 +195,11 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
   const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tools/tgrep', 'upstream-lock.json'), 'utf8'));
   const legacySource = path.join(paths.integrationDir, 'upstream/tgrep-src');
   const srcDir = fs.existsSync(legacySource) ? legacySource : path.join(paths.upstreamDir, 'tgrep-src');
-  const patchPath = path.join(mcpRoot, 'tools/tgrep', lock.patches[0]);
+  const patchPaths = lock.patches.map(patch => path.join(mcpRoot, 'tools/tgrep', patch));
   const binaryName = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
   const runtimeBinary = path.join(paths.runtimeDir, binaryName);
 
-  const prepared = readJson(paths.preparedStatePath());
+  const prepared = readJson(paths.preparedStateReadPath());
   const candidates = binary ? [path.resolve(binary)] : [
     prepared?.tgrep?.binary, ...commandPaths('tgrep'), runtimeBinary,
     path.join(paths.integrationDir, 'runtime', binaryName),
@@ -207,9 +208,9 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
   for (const candidate of new Set(candidates.filter(Boolean))) {
     if (!binary && !fs.existsSync(candidate)) continue;
     try {
-      const version = probeTgrep(candidate, lock.declared_version, execute);
+      const version = probeTgrep(candidate, lock.declared_version, execute, lock.integration_revision);
       log('reusing local tgrep: ' + candidate);
-      return { binary: fs.realpathSync(candidate), version, sha256: shaOf(candidate), acquisition: 'local' };
+      return { binary: fs.realpathSync(candidate), version, integration_revision: lock.integration_revision, sha256: shaOf(candidate), acquisition: 'local' };
     } catch (error) {
       if (binary) throw error;
       log('skipping incompatible local tgrep: ' + candidate + ' (' + error.message + ')');
@@ -222,48 +223,53 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
     }
     log(`cloning tgrep at ${lock.source_commit.slice(0, 12)}`);
     fs.mkdirSync(path.dirname(srcDir), { recursive: true });
-    run(['git', 'init', srcDir]);
-    run(['git', '-C', srcDir, 'remote', 'add', 'origin', lock.repo_url]);
-    run(['git', '-C', srcDir, 'fetch', '--quiet', '--depth', '1', 'origin', lock.source_commit]);
-    run(['git', '-C', srcDir, 'checkout', '--quiet', 'FETCH_HEAD']);
+    execute(['git', 'init', srcDir]);
+    execute(['git', '-C', srcDir, 'remote', 'add', 'origin', lock.repo_url]);
+    execute(['git', '-C', srcDir, 'fetch', '--quiet', '--depth', '1', 'origin', lock.source_commit]);
+    execute(['git', '-C', srcDir, 'checkout', '--quiet', 'FETCH_HEAD']);
   }
-  const head = run(['git', '-C', srcDir, 'rev-parse', 'HEAD']).stdout.trim();
+  const head = execute(['git', '-C', srcDir, 'rev-parse', 'HEAD']).stdout.trim();
   if (head !== lock.source_commit) {
     throw new Error(`tgrep checkout is at ${head}, expected ${lock.source_commit}; delete upstream/tgrep-src to re-pin`);
   }
 
-  const status = run(['git', '-C', srcDir, 'status', '--porcelain'], { check: false }).stdout.trim();
-  if (!status) {
-    log('applying integration patch');
-    run(['git', '-C', srcDir, 'apply', '--check', patchPath]);
-    run(['git', '-C', srcDir, 'apply', patchPath]);
-  } else {
-    log('tgrep worktree already carries the integration patch');
+  let patchesChanged = false;
+  for (const patchPath of patchPaths) {
+    if (execute(['git', '-C', srcDir, 'apply', '--reverse', '--check', patchPath], { check: false }).status === 0) continue;
+    // A dirty checkout is not proof that this patch was applied. Verify every
+    // patch in order; a conflict must leave existing source edits intact.
+    if (execute(['git', '-C', srcDir, 'apply', '--check', patchPath], { check: false }).status !== 0) {
+      throw new Error(`tgrep patch conflicts with the cached source: ${path.basename(patchPath)}`);
+    }
+    log('applying integration patch: ' + path.basename(patchPath));
+    execute(['git', '-C', srcDir, 'apply', patchPath]);
+    patchesChanged = true;
   }
 
   const buildOutput = path.join(srcDir, 'target', 'release', binaryName);
-  if (!fs.existsSync(buildOutput)) {
-    if (offline) {
-      throw new Error('tgrep build output missing and --offline given');
-    }
+  let compatibleOutput = false;
+  if (!patchesChanged && fs.existsSync(buildOutput)) {
+    try { probeTgrep(buildOutput, lock.declared_version, execute, lock.integration_revision); compatibleOutput = true; } catch { /* rebuild old output */ }
+  }
+  if (!compatibleOutput) {
     log('building tgrep (cargo release); this can take several minutes');
-    runCargoBuild(paths, srcDir, lock.build_command, { cargoConfigArgs, cargoIsolated });
+    runCargoBuild(paths, srcDir, [...lock.build_command, ...(offline ? ['--offline'] : [])], { cargoConfigArgs, cargoIsolated, execute });
   }
   if (!fs.existsSync(buildOutput)) {
     throw new Error('cargo build finished without producing the binary');
   }
 
+  const version = probeTgrep(buildOutput, lock.declared_version, execute, lock.integration_revision);
   fs.mkdirSync(paths.runtimeDir, { recursive: true });
   fs.copyFileSync(buildOutput, runtimeBinary);
-  const version = probeTgrep(runtimeBinary, lock.declared_version, execute);
   return {
     binary: runtimeBinary,
     acquisition: 'build',
     sha256: shaOf(runtimeBinary),
     version,
     source_commit: head,
-    patch: path.basename(patchPath),
-    patch_sha256: shaOf(patchPath),
+    integration_revision: lock.integration_revision,
+    patches: patchPaths.map(patchPath => ({ patch: path.basename(patchPath), sha256: shaOf(patchPath) })),
   };
 }
 
@@ -284,7 +290,7 @@ export function prepareCodegraph(paths, mcpRoot, {
 } = {}) {
   const lock = readJson(path.join(mcpRoot, 'tools/codegraph/upstream-lock.json'));
   const target = platformTarget();
-  const prepared = readJson(paths.preparedStatePath());
+  const prepared = readJson(paths.preparedStateReadPath());
   const checked = new Set();
   function select(candidates) {
     for (const candidate of candidates.filter(Boolean)) {
@@ -417,6 +423,7 @@ export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null
 
 export function writePreparedState(paths, state) {
   const outPath = paths.preparedStatePath();
-  fs.writeFileSync(outPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  const previous = readJson(paths.preparedStateReadPath());
+  fs.writeFileSync(outPath, `${JSON.stringify({ ...previous, ...state }, null, 2)}\n`, 'utf8');
   return outPath;
 }

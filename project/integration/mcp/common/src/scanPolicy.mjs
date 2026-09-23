@@ -3,7 +3,7 @@ import { projectInfo } from './paths.mjs';
 
 export const UNREAL_EXCLUDE_DIRS = Object.freeze([
   'Binaries', 'Intermediate', 'Saved', 'DerivedDataCache', 'LocalDerivedDataCache',
-  'Content', '.vs', '.idea', '.git', 'node_modules', '.cache', '.tgrep', '.codegraph',
+  '.mcp-data', 'Content', '.vs', '.idea', '.git', 'node_modules', '.cache', '.tgrep', '.codegraph',
 ]);
 
 export function isUnrealWorkspace(root) {

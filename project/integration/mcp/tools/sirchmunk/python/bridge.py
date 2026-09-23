@@ -150,7 +150,7 @@ class Engine:
             mode = params.get("mode", "FAST")
             if not isinstance(query, str) or not query.strip() or len(query) > 8192 or mode not in ("FAST", "DEEP", "FILENAME_ONLY"):
                 raise ValueError("invalid query or mode")
-            excludes = ["**/.git/**", "**/node_modules/**", "**/integration/mcp/**", "**/Intermediate/**", "**/Saved/**", "**/Binaries/**", "**/DerivedDataCache/**", "**/.codegraph*/**", "**/.tgrep/**"]
+            excludes = ["**/.mcp-data/**", "**/.git/**", "**/node_modules/**", "**/integration/mcp/**", "**/Intermediate/**", "**/Saved/**", "**/Binaries/**", "**/DerivedDataCache/**", "**/.codegraph*/**", "**/.tgrep/**"]
             result = await self.searcher.search(query=query, paths=self.scopes(params.get("paths")), mode=mode,
                                                 exclude=excludes, max_loops=5, max_token_budget=32000)
             # Persist completed searches before acknowledging them. EOF and

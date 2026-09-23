@@ -20,7 +20,7 @@ export function validateConfig(input) {
 }
 
 export function readConfig(paths) {
-  const file = configPath(paths);
+  const file = paths.readPath('private/sirchmunk.json');
   validateWorkspaceBuildDir(paths.repoRoot, file);
   if (!fs.existsSync(file)) return null;
   if (fs.lstatSync(file).isSymbolicLink()) throw new Error('Sirchmunk credentials must not be a symlink');

@@ -12,6 +12,7 @@
  */
 
 import fs from 'node:fs';
+if (process.env.MCP_TEST_START_LOG) fs.appendFileSync(process.env.MCP_TEST_START_LOG, process.pid + '\n');
 import { loadSdk } from '../../../common/src/sdk.mjs';
 const { Server } = await loadSdk('tools/codegraph', '@modelcontextprotocol/server');
 const { StdioServerTransport } = await loadSdk('tools/codegraph', '@modelcontextprotocol/server/stdio');

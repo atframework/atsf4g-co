@@ -8,14 +8,14 @@ import { createRequire } from 'node:module';
 const jsonc = createRequire(import.meta.url)('../../vendor/jsonc-parser/lib/umd/main.js');
 
 export function planWorkspacePolicy({ repoRoot, readFile }) {
-  if (!isUnrealWorkspace(repoRoot)) return [];
+  const policy = isUnrealWorkspace(repoRoot) ? unrealCodegraphPolicy() : { exclude: ['**/.mcp-data/**'] };
   const relative = 'codegraph.json';
   const file = path.join(repoRoot, relative);
   const before = readFile(file);
   const document = parseJsonDocument(before ?? '{}\n', file);
   let after = document.text;
   const eol = after.includes('\r\n') ? '\r\n' : '\n';
-  for (const [key, defaults] of Object.entries(unrealCodegraphPolicy())) {
+  for (const [key, defaults] of Object.entries(policy)) {
     const existing = document.root[key] ?? [];
     if (!Array.isArray(existing) || existing.some((value) => typeof value !== 'string' || !value.trim())) {
       throw new AgentConfigError(`${relative}: ${key} must be an array of nonempty patterns`, 'invalid-scan-policy');

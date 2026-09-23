@@ -4,7 +4,7 @@
  * Lifecycle contract (see README 行为要点): stop() sends stdin EOF first (the
  * documented graceful-stop signal for both backends), waits the grace period,
  * then SIGTERM, waits again, then SIGKILL -- only against the pid this
- * instance created. If the wrapper itself is killed, the backend's stdin pipe
+ * instance created. If the shared owner is killed, the backend's stdin pipe
  * breaks and the backend exits on its own (upstream-verified behavior); no
  * Job Object or guardian process is used.
  *

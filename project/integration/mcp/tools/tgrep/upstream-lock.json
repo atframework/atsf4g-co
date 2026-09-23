@@ -2,11 +2,13 @@
   "repo_url": "https://github.com/microsoft/tgrep.git",
   "source_commit": "239711cfb6e69e8780cabf912a8987162a223ff1",
   "declared_version": "1.0.9",
+  "integration_revision": "mcp-stdio-v2",
   "rust_edition": "2024",
   "patches": [
-    "patches/0001-serve-add-private-stdio-transport.patch"
+    "patches/0001-serve-add-private-stdio-transport.patch",
+    "patches/0002-bound-inherited-ignore-matching-to-served-root.patch"
   ],
-  "build_command": ["cargo", "build", "--release", "-p", "tgrep-cli"],
+  "build_command": ["cargo", "build", "--release", "--locked", "-p", "tgrep-cli"],
   "artifact_relative_path": {
     "windows": "target/release/tgrep.exe",
     "posix": "target/release/tgrep"

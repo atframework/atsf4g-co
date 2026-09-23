@@ -24,7 +24,6 @@ import { LIMITS, clampContext, clampResultCount, fitsRequest, truncateRecords } 
 import {
   WorkspacePaths,
   deriveRepoRoot,
-  resolveBuildDir,
   projectInfo,
   validateRelativeScope,
 } from '../../../common/src/paths.mjs';
@@ -59,7 +58,7 @@ class TgrepService {
     this.backend = null;
     this.lockError = null;
     this.ready = false;
-    this.lock = new ToolInstanceLock(paths.toolStateDir('tgrep'), 'tgrep');
+    this.lock = new ToolInstanceLock(paths.toolStateDir('tgrep'), 'tgrep', paths.legacyToolStateDirs('tgrep'));
     this.identity = currentIdentity();
     this.stateStore = new StateStore(path.join(paths.toolStateDir('tgrep'), 'wrapper-state.json'));
     this.background = null;
@@ -91,9 +90,11 @@ class TgrepService {
       argvOverride: this.backendArgs.argvOverride,
       stderrLog: path.join(this.paths.toolStateDir('tgrep'), 'backend.stderr.log'),
     });
+    this.backend = backend;
     try {
       await backend.start();
     } catch (error) {
+      if (this.state === ServiceState.STOPPING || this.state === ServiceState.STOPPED) return;
       if (error instanceof IndexInUse) {
         this.lockError = error;
       }
@@ -102,7 +103,10 @@ class TgrepService {
       this.publishState();
       return;
     }
-    this.backend = backend;
+    if (this.state === ServiceState.STOPPING || this.state === ServiceState.STOPPED) {
+      await backend.stop();
+      return;
+    }
     this.state = ServiceState.INITIALIZING;
     this.publishState();
     backend.watchExit((exit) => this.onBackendExit(exit));
@@ -150,6 +154,7 @@ class TgrepService {
   }
 
   publishState(errorCode = null) {
+    if (!this.lock.locked) return;
     const payload = {
       tool: 'tgrep',
       state: this.state,
@@ -201,8 +206,9 @@ class TgrepService {
     this.publishState();
     if (this.backend) {
       await this.backend.stop();
-      this.backend = null;
     }
+    await this.background;
+    this.backend = null;
     this.state = ServiceState.STOPPED;
     this.publishState();
     this.lock.release();
@@ -376,7 +382,7 @@ function resolveBinary(paths, explicit) {
     return path.resolve(fakeScript); // test double; never executed directly
   }
   let binary = null;
-  const prepared = new StateStore(paths.preparedStatePath()).read();
+  const prepared = new StateStore(paths.preparedStateReadPath()).read();
   if (prepared?.tgrep?.binary) {
     binary = prepared.tgrep.binary;
   }
@@ -402,7 +408,7 @@ function main() {
   });
 
   const repoRoot = deriveRepoRoot(import.meta.url, values['repo-root']);
-  const buildDir = resolveBuildDir(repoRoot, values['build-dir']);
+  const buildDir = values['build-dir'];
   const paths = new WorkspacePaths(repoRoot, buildDir);
   paths.ensureDirs();
 
@@ -413,6 +419,7 @@ function main() {
 
   const service = new TgrepService(paths, { binary, argvOverride });
   void runWrapperServer({
+    sharedTool: 'tgrep',
     name: `${projectInfo(repoRoot).slug}-tgrep`,
     instructions: TOOL_INSTRUCTIONS,
     tools: makeTools(service),

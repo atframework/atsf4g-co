@@ -3,21 +3,22 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { WorkspacePaths, deriveRepoRoot, resolveBuildDir, validateWorkspaceBuildDir, validateRelativeScope } from '../../../common/src/paths.mjs';
+import { WorkspacePaths, deriveRepoRoot, validateWorkspaceBuildDir, validateRelativeScope } from '../../../common/src/paths.mjs';
 import { runWrapperServer, toolText } from '../../../common/src/mcpServer.mjs';
 import { BackendError, ErrorCodes } from '../../../common/src/errors.mjs';
 import { ToolInstanceLock, currentIdentity, StateStore } from '../../../common/src/state.mjs';
+import { modelCacheDirectory } from './prepare.mjs';
 import { supervise, minimalEnvironment, StderrSink } from '../../../common/src/supervisor.mjs';
 import { LineJsonRpcClient } from '../../../common/src/lineRpc.mjs';
 import { scriptInvocation } from '../../../common/src/runtime.mjs';
-import { configPath, readConfig } from './config.mjs';
+import { readConfig } from './config.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export class SirchmunkService {
   constructor(paths) {
     this.paths = paths;
-    this.lock = new ToolInstanceLock(paths.toolStateDir('sirchmunk'), 'sirchmunk');
+    this.lock = new ToolInstanceLock(paths.toolStateDir('sirchmunk'), 'sirchmunk', paths.legacyToolStateDirs('sirchmunk'));
     this.store = new StateStore(path.join(paths.toolStateDir('sirchmunk'), 'wrapper-state.json'));
     this.state = 'starting';
     this.detail = '';
@@ -28,13 +29,18 @@ export class SirchmunkService {
     this.failure = null;
   }
 
-  publish() { if (this.lock.locked) this.store.write({ ...this.backendStatus, state: this.state, state_detail: this.detail }); }
+  publish() {
+    if (!this.lock.locked) return;
+    try { this.store.write({ ...this.backendStatus, state: this.state, state_detail: this.detail }); }
+    catch { /* Diagnostic writes must not interrupt backend cleanup. */ }
+  }
 
   startup() {
     try {
       this.lock.acquire(currentIdentity(), this.paths.repoRoot, 'starting');
-      const prepared = JSON.parse(fs.readFileSync(this.paths.preparedStatePath(), 'utf8')).sirchmunk;
+      const prepared = JSON.parse(fs.readFileSync(this.paths.preparedStateReadPath(), 'utf8')).sirchmunk;
       if (!prepared?.python) throw new Error('Sirchmunk is not prepared; run setup.js --backend=sirchmunk');
+      prepared.model_dir = modelCacheDirectory(this.paths, prepared.model_dir);
       if (!readConfig(this.paths)) throw new Error('Sirchmunk LLM settings are missing; rerun setup.js');
       const work = path.join(this.paths.toolStateDir('sirchmunk'), 'work');
       validateWorkspaceBuildDir(this.paths.repoRoot, work);
@@ -42,8 +48,8 @@ export class SirchmunkService {
       fs.mkdirSync(work, { recursive: true });
       const fake = process.env.SIRCHMUNK_MCP_FAKE_SCRIPT;
       const invoke = fake && scriptInvocation(path.resolve(fake));
-      const argv = invoke ? [invoke.command, ...invoke.args] : [prepared.python, '-I', path.join(HERE, '../python/bridge.py'),
-        configPath(this.paths), this.paths.repoRoot, work, prepared.model_dir, ...(prepared.offline ? ['--offline'] : [])];
+      const argv = invoke ? [invoke.command, ...invoke.args] : [prepared.python, '-I', '-B', path.join(HERE, '../python/bridge.py'),
+        this.paths.readPath('private/sirchmunk.json'), this.paths.repoRoot, work, prepared.model_dir, ...(prepared.offline ? ['--offline'] : [])];
       const dirs = [...new Set(Object.values(prepared.binaries ?? {}).map(file => path.dirname(file)))];
       const env = invoke ? { ...process.env } : minimalEnvironment({
         PATH: [...dirs, process.env.PATH ?? ''].join(path.delimiter), PYTHONUTF8: '1', PYTHONNOUSERSITE: '1',
@@ -113,12 +119,12 @@ export class SirchmunkService {
 function main() {
   const { values } = parseArgs({ options: { 'repo-root': { type: 'string' }, 'build-dir': { type: 'string' } } });
   const root = deriveRepoRoot(import.meta.url, values['repo-root']);
-  const paths = new WorkspacePaths(root, validateWorkspaceBuildDir(root, resolveBuildDir(root, values['build-dir'])));
+  const paths = new WorkspacePaths(root, values['build-dir']);
   const service = new SirchmunkService(paths);
   const tool = (name, method, description, properties, required = []) => ({ name, description,
     inputSchema: { type: 'object', properties, required, additionalProperties: false },
     handler: async args => toolText(await service.call(method, args)) });
-  void runWrapperServer({ name: 'workspace-sirchmunk',
+  void runWrapperServer({ name: 'workspace-sirchmunk', sharedTool: 'sirchmunk',
     instructions: 'Search only this workspace. FAST and DEEP send relevant content to the configured LLM. Check sirchmunk_status for embedding download and knowledge evolution readiness.', service,
     tools: [
       { name: 'sirchmunk_status', description: 'Check backend, embedding and knowledge evolution status.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, handler: () => toolText(service.status()) },

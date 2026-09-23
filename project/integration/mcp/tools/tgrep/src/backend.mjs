@@ -12,12 +12,16 @@
 
 import path from 'node:path';
 import fs from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 import { BackendError, ErrorCodes } from '../../../common/src/errors.mjs';
 import { LIMITS } from '../../../common/src/limits.mjs';
 import { LineJsonRpcClient } from '../../../common/src/lineRpc.mjs';
 import { StderrSink, minimalEnvironment, supervise } from '../../../common/src/supervisor.mjs';
 import { isUnrealWorkspace, UNREAL_EXCLUDE_DIRS } from '../../../common/src/scanPolicy.mjs';
+import { probeTgrep } from '../../../common/src/localTools.mjs';
+
+const UPSTREAM_LOCK = JSON.parse(fs.readFileSync(new URL('../upstream-lock.json', import.meta.url), 'utf8'));
 
 // Scan policy shared by every start mode (index build, catch-up, watcher):
 // keep the vendored framework sources, drop build output, dependency
@@ -77,6 +81,7 @@ export class TgrepBackend {
     const excludes = isUnrealWorkspace(this.paths.repoRoot)
       ? [...UNREAL_EXCLUDE_DIRS]
       : [...TGREP_EXCLUDE_DIRS];
+    excludes.push('.mcp-data');
     excludes.push(...fs.readdirSync(this.paths.repoRoot).filter(name => name.startsWith('.codegraph-')));
     const buildRelative = path.relative(this.paths.repoRoot, this.paths.buildDir);
     if (buildRelative && !buildRelative.startsWith('..') && !path.isAbsolute(buildRelative)) excludes.push(path.basename(this.paths.buildDir));
@@ -89,6 +94,15 @@ export class TgrepBackend {
   async start() {
     // Test doubles are not upstream code; they need the parent environment.
     const env = this.argvOverride ? { ...process.env } : minimalEnvironment();
+    if (!this.argvOverride) {
+      try {
+        probeTgrep(this.binary, UPSTREAM_LOCK.declared_version, (argv, options) => spawnSync(argv[0], argv.slice(1), {
+          ...options, env, encoding: 'utf8', windowsHide: true,
+        }), UPSTREAM_LOCK.integration_revision);
+      } catch (error) {
+        throw new BackendError(ErrorCodes.BACKEND_FAILED, `tgrep binary is incompatible; run setup.js --backend=tgrep to prepare current patches: ${error.message}`);
+      }
+    }
     this.proc = supervise({
       argv: this.buildArgv(),
       cwd: this.paths.repoRoot,

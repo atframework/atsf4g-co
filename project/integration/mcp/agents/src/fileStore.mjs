@@ -17,6 +17,20 @@ import path from 'node:path';
 import { isPidAlive, processStartTimeTicks } from '../../common/src/state.mjs';
 import { AgentConfigError } from './errors.mjs';
 import { withConfigLock } from './configLock.mjs';
+import { WorkspacePaths, samePath } from '../../common/src/paths.mjs';
+
+function legacyOwnershipSource(repoRoot, stateDir) {
+  const paths = new WorkspacePaths(repoRoot);
+  if (!samePath(stateDir, paths.stateDir)) return path.join(stateDir, 'agent-config-state.json');
+  for (const dir of paths.legacyIntegrationDirs) {
+    const tmpDir = path.resolve(dir, '../../_agent_tmp/mcp');
+    assertConfigPath(repoRoot, tmpDir);
+    if (findOpenJournalBatch({ tmpDir })) {
+      throw new AgentConfigError(`unfinished legacy agent-config transaction in ${tmpDir}; recover it with the previous installer before switching data directories`, 'journal-batch-active');
+    }
+  }
+  return paths.readPath('state/agent-config-state.json');
+}
 
 function resolvesInsideRepo(repoRoot, filePath) {
   const root = path.resolve(repoRoot);
@@ -228,6 +242,7 @@ export function findOpenJournalBatch({ tmpDir }) {
  * journal is damaged or the interrupted owner still looks alive.
  */
 export function recoverInterruptedBatch(options) {
+  legacyOwnershipSource(options.repoRoot, options.stateDir);
   const { tmpDir, ownerIsDead = defaultOwnerIsDead } = options;
   const journalPath = path.join(tmpDir, 'agent-config-journal.jsonl');
   let text;
@@ -374,6 +389,7 @@ function recoverUnlocked({ repoRoot, stateDir, tmpDir, ownerIsDead = defaultOwne
 }
 
 export function createFileStore({ repoRoot, stateDir, tmpDir }) {
+  const ownershipSource = () => legacyOwnershipSource(repoRoot, stateDir);
   const backupDir = path.join(tmpDir, 'agent-config-backups');
   const stagingDir = path.join(tmpDir, 'agent-config-staging');
   const journalPath = path.join(tmpDir, 'agent-config-journal.jsonl');
@@ -388,7 +404,7 @@ export function createFileStore({ repoRoot, stateDir, tmpDir }) {
 
   function loadOwnership() {
     let text;
-    try { text = fs.readFileSync(ownershipPath, 'utf8'); } catch (error) {
+    try { text = fs.readFileSync(ownershipSource(), 'utf8'); } catch (error) {
       if (error.code === 'ENOENT') return { files: {} };
       throw error;
     }
@@ -467,7 +483,7 @@ export function createFileStore({ repoRoot, stateDir, tmpDir }) {
     if (batchId !== null && !ownershipSnapshotted) {
       // Snapshot the pre-batch ownership bytes once so crash recovery can undo this batch's records.
       let bytes = null;
-      try { bytes = fs.readFileSync(ownershipPath); } catch (error) {
+      try { bytes = fs.readFileSync(ownershipSource()); } catch (error) {
         if (error.code !== 'ENOENT') throw error;
       }
       if (bytes !== null) {

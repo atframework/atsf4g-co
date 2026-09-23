@@ -4,7 +4,33 @@ import { spawn } from 'node:child_process';
 import { commandPaths, readJson } from '../../../common/src/localTools.mjs';
 import { run } from '../../../common/src/command.mjs';
 import { minimalEnvironment } from '../../../common/src/supervisor.mjs';
-import { INTEGRATION_ROOT, validateWorkspaceBuildDir } from '../../../common/src/paths.mjs';
+import { INTEGRATION_ROOT, validateWorkspaceBuildDir, isWithin } from '../../../common/src/paths.mjs';
+
+/** Import completed legacy model files, never locks, logs or absolute status paths. */
+export function modelCacheDirectory(paths, source) {
+  const target = path.join(paths.downloadsDir, 'models/sirchmunk');
+  validateWorkspaceBuildDir(paths.repoRoot, target);
+  if (fs.existsSync(target) || !source || !fs.existsSync(source)) return target;
+  validateWorkspaceBuildDir(paths.repoRoot, source);
+  if (!['ready', 'downloaded'].includes(readJson(path.join(source, 'download-state.json'))?.state)) return target;
+  const hub = path.join(source, 'huggingface/hub');
+  if (!fs.existsSync(hub)) return target;
+  validateWorkspaceBuildDir(paths.repoRoot, paths.agentTmpDir);
+  fs.mkdirSync(paths.agentTmpDir, { recursive: true });
+  const stage = fs.mkdtempSync(path.join(paths.agentTmpDir, 'model-import-'));
+  try {
+    const canonical = fs.realpathSync(hub);
+    fs.cpSync(hub, path.join(stage, 'huggingface/hub'), { recursive: true, dereference: true, filter: file => {
+      if (path.basename(file) === '.locks' || file.endsWith('.incomplete')) return false;
+      if (!isWithin(fs.realpathSync(file), canonical)) throw new Error('legacy model cache link escapes its cache');
+      return true;
+    } });
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    try { fs.renameSync(stage, target); }
+    catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
+  } finally { fs.rmSync(stage, { recursive: true, force: true }); }
+  return target;
+}
 
 export function pythonExecutable(explicit, execute = run) {
   const candidates = explicit ? [[path.resolve(explicit)]] : [
@@ -31,7 +57,8 @@ export function prepareSirchmunk(paths, mcpRoot, { offline = false, python = nul
   if (result.status !== 0) throw new Error('Sirchmunk preparation failed; see ' + path.join(root, 'prepare.log') + '\n' + String(result.stderr ?? '').slice(-1800));
   const state = readJson(path.join(root, 'prepared.json'));
   if (!state?.python || !state?.version) throw new Error('Sirchmunk preparation did not produce a verified environment');
-  return { ...state, model_dir: path.join(paths.downloadsDir, 'models/sirchmunk'), offline };
+  const old = readJson(paths.preparedStateReadPath())?.sirchmunk?.model_dir;
+  return { ...state, model_dir: modelCacheDirectory(paths, old), offline };
 }
 
 /** This process only downloads/validates a model; it has no LLM credentials. */

@@ -208,7 +208,8 @@ export function validateWorkspaceBuildDir(repoRoot, buildDir) {
 }
 
 export function workspaceId(repoRoot) {
-  return createHash('sha256').update(repoRoot, 'utf8').digest('hex').slice(0, 16);
+  const key = process.platform === 'win32' ? path.normalize(repoRoot).toLowerCase() : repoRoot;
+  return createHash('sha256').update(key, 'utf8').digest('hex').slice(0, 16);
 }
 
 export function platformName() {
@@ -258,11 +259,51 @@ export function validateRelativeScope(scope) {
 export class WorkspacePaths {
   constructor(repoRoot, buildDir) {
     this.repoRoot = repoRoot;
-    this.buildDir = buildDir;
+    // --build-dir is only a hint for reading caches created by older versions.
+    this.explicitBuildDir = buildDir ? path.resolve(repoRoot, buildDir) : null;
+    if (this.explicitBuildDir && fs.existsSync(repoRoot)) validateWorkspaceBuildDir(repoRoot, this.explicitBuildDir);
+    try { this.buildDir = resolveBuildDir(repoRoot, buildDir); }
+    catch { this.buildDir = path.join(repoRoot, 'build'); }
   }
 
   get integrationDir() {
-    return path.join(this.buildDir, 'integration', 'mcp');
+    return path.join(this.repoRoot, '.mcp-data');
+  }
+
+  get legacyIntegrationDirs() {
+    const candidates = [this.buildDir, path.join(this.repoRoot, 'Intermediate/AI/MCP'),
+      ...directoryNames(this.repoRoot).map(name => path.join(this.repoRoot, name))];
+    return [...new Set(candidates.map(dir => path.join(dir, 'integration', 'mcp')))].filter(dir => {
+      if (!fs.existsSync(dir)) return false;
+      try { validateWorkspaceBuildDir(this.repoRoot, dir); return true; } catch { return false; }
+    });
+  }
+
+  /** Read-only compatibility. Never choose a legacy path as a write target. */
+  readPath(relative) {
+    const current = path.join(this.integrationDir, relative);
+    validateWorkspaceBuildDir(this.repoRoot, current);
+    if (fs.existsSync(current)) return current;
+    const toolState = relative.replaceAll('\\', '/').match(/^state\/(tgrep|codegraph|sirchmunk)\/[a-f0-9]{16}\/[^/]+\/(.+)$/);
+    const candidates = toolState ? this.legacyToolStateDirs(toolState[1]).map(dir => path.join(dir, toolState[2]))
+      : this.legacyIntegrationDirs.map(dir => path.join(dir, relative));
+    const old = candidates.filter(file => fs.existsSync(file));
+    for (const file of old) validateWorkspaceBuildDir(this.repoRoot, file);
+    const explicit = this.explicitBuildDir && path.join(this.explicitBuildDir, 'integration/mcp');
+    const selected = explicit ? old.filter(file => isWithin(file, explicit)) : [];
+    if (selected.length === 1) return selected[0];
+    if (old.length > 1) throw new Error(`multiple legacy MCP caches contain ${relative}; use --build-dir to choose the read source`);
+    return old[0] ?? current;
+  }
+
+  legacyToolStateDirs(tool) {
+    // Older Windows versions hashed the caller's spelling, including drive
+    // letter case. Inspect all old workspace IDs in this workspace's cache.
+    return this.legacyIntegrationDirs.flatMap(dir => {
+      const base = path.join(dir, 'state', tool);
+      return directoryNames(base).filter(name => /^[a-f0-9]{16}$/.test(name)).map(name =>
+        validateWorkspaceBuildDir(this.repoRoot, path.join(base, name, platformName())));
+    });
   }
 
   get stateDir() {
@@ -294,7 +335,7 @@ export class WorkspacePaths {
   }
 
   get agentTmpDir() {
-    return path.join(this.buildDir, '_agent_tmp', 'mcp');
+    return path.join(this.integrationDir, 'tmp');
   }
 
   toolStateDir(tool) {
@@ -305,8 +346,13 @@ export class WorkspacePaths {
     return path.join(this.stateDir, 'prepared-state.json');
   }
 
+  preparedStateReadPath() {
+    return this.readPath('state/prepared-state.json');
+  }
+
   ensureDirs() {
     for (const dir of [this.integrationDir, this.stateDir, this.runtimeDir, this.upstreamDir, this.agentTmpDir]) {
+      validateWorkspaceBuildDir(this.repoRoot, dir);
       fs.mkdirSync(dir, { recursive: true });
     }
   }

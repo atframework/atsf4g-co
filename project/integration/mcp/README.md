@@ -69,12 +69,17 @@ Agent 勾选。旧的 `command: "node"` 配置可以迁移，卸载也可以换�
 新配置始终带绝对 `--repo-root`；wrapper 的工作空间不随 IDE 的启动 cwd 改变。
 旧的无此参数配置从 wrapper 所在工具的外层工程推导，找不到时才回到执行目录检测。
 
-`--build-dir=<dir>` 可显式选择工作空间内的缓存目录；缺省依次读取 `.vscode/settings.json`
-的 `cmake.buildDirectory`、`clangd.arguments` 中的 `--compile-commands-dir=`，再检查根目录
-直接子目录中唯一且属于本工程的 `CMakeCache.txt`。否则 UE 工程使用 `Intermediate/AI/MCP`，
-其他工程使用 `build`。支持 JSONC、`${workspaceFolder}` 和 `${sourceDir}`；不猜测其他变量。
-依赖安装在工具副本中，上游制品、配置备份和运行状态放在当前工作空间的构建目录中。
-缓存目录不能等于工作空间根目录，也不能通过 junction/symlink 指到工作空间之外。
+MCP 统一把下载、状态、配置备份、日志和验证文件写入 `<PROJECT_DIR>/.mcp-data/`，
+不依赖 CMake、UE 或 `.vscode/settings.json`。临时文件使用 `.mcp-data/tmp/`。
+目录不能通过 junction/symlink 指向工作空间之外。Git/P4 和三个后端的扫描规则均排除 `.mcp-data/`。
+
+`--build-dir=<dir>` 保留为旧缓存的只读查找提示，不改变新数据目录或共享服务身份。
+缺省可从旧构建设置、工程直接子目录和 UE `Intermediate/AI/MCP` 中查找已有制品；
+构建设置缺失或损坏不阻止新目录使用。多个旧缓存包含同一配置时需显式选择读取来源。
+旧配置归属记录和私有设置可只读复用；新写入进入 `.mcp-data/`。
+已完成的旧 embedding 模型复制到新目录后使用，模型状态与锁不写回旧目录。
+正在使用的旧索引不会被移动或删除；旧 wrapper 尚存活时返回 `INDEX_IN_USE`。
+未完成的旧配置事务必须先由旧版安装器恢复，禁止在新目录继续写入并遗漏原事务。
 
 旧工程前缀的服务键和 TOML 托管标记在验证命令路径、工作空间后迁移。参数、注释、TOML 子表
 和字符串原文保留；新旧服务键同时存在时中止整批写入。Cline 迁移到 `.cline/mcp.json`，
@@ -114,7 +119,7 @@ USTC 即中科大，不重复计数；上交同时提供 npm 和 Cargo 服务。
 | Cargo | `bfsu` | [北京外国语大学 BFSU](https://mirrors.bfsu.edu.cn/help/crates.io-index/)（索引镜像，包仍从官方源下载） |
 
 两类均可独立选 `official`。npm 显式使用官方 registry；Cargo 官方源使用
-`<BUILD_DIR>/integration/mcp/cargo-home-official` 缓存及独立配置环境，避免继承用户或工程的
+`<PROJECT_DIR>/.mcp-data/downloads/cache/cargo-official` 缓存及独立配置环境，避免继承用户或工程的
 源替换设置。国内 Cargo 源仅通过本次构建参数指定。不改写全局 npm/Cargo 配置。
 `--npm-mirror` / `--cargo-mirror` 分别固定对应选项并跳过该项菜单；准备前仍显示两者名称和地址。
 `--list-mirrors` 列出全部实际地址。`--yes` / `--offline` / 非 TTY 不弹出菜单，使用指定项或默认项。
@@ -132,14 +137,16 @@ node <MCP_DIR>/setup.js --backend=codegraph --npm-mirror=official --agents=vscod
 时必须通过检查，不匹配即报错。自动发现依次检查已准备记录、PATH、工程中的安装和旧缓存；
 CodeGraph 还检查 npm 全局安装、用户 npx 缓存与本工作空间 npx 缓存。
 
-- tgrep 需要固定版本及 `serve --transport stdio` 支持；普通 TCP-only 安装不会被误用。
+- tgrep 需要固定版本、`serve --transport stdio` 和 `--version` 中的 `mcp-stdio-v2` 标记。
+  安装器按顺序检查全部补丁，升级旧源码并重编译；旧的 stdio-only 制品也不能继续复用。
+  MCP 启动时同样检查版本；遇到旧制品会提示重新执行 `setup.js --backend=tgrep`。
   无可用本地文件才从固定提交拉源码、打补丁、用 Cargo 构建，并记录二进制 SHA-256。
 - CodeGraph 支持已编译的同版本源码仓库、npm 安装和历史平台包；必须同时具备 CLI、
   `dist/index.js` 库及兼容运行时，检查版本、库接口和 `node:sqlite`，不会只凭 PATH 名称接受。
   已编译源码使用系统 Node 22.5+，平台包使用其自带运行时。
 - 无本地 CodeGraph 时，通过 `npm exec`（[npx 的执行机制](https://docs.npmjs.com/cli/v11/commands/npm-exec/)）
   准备 `@colbymchenry/codegraph@1.6.0`，随后以 `--offline` 再执行一次，再检查实际库依赖。
-  缓存在 `<BUILD_DIR>/integration/mcp/downloads/cache/npm/<platform>-<arch>`；失败时不写 Agent 配置。
+  缓存在 `<PROJECT_DIR>/.mcp-data/downloads/cache/npm/<platform>-<arch>`；失败时不写 Agent 配置。
   正常 MCP 启动直接运行验证后的缓存入口，避免每个会话再次调用 npm。
 
 CodeGraph npm 包依赖平台包，npm 仍可能下载其中的 Node 和编译制品；集成工具不再自行
@@ -167,16 +174,16 @@ jsonc-parser 的局部修改（`agents/vendor/jsonc-parser/`，固定 3.3.1）�
 键序与换行风格保留；插入/删除处可能留下空白，已有条目不经整段格式化。重复配置保留已选服务的
 可选字段和额外参数。同名但 command/args 不指向本仓库包装层的主配置条目会中止写入。
 每次写入前会与规划时的原文比对，期间被外部修改即中止；
-写入前原文备份到 `<BUILD_DIR>/_agent_tmp/mcp/agent-config-backups/`，中途失败自动回滚
+写入前原文备份到 `<PROJECT_DIR>/.mcp-data/tmp/agent-config-backups/`，中途失败自动回滚
 已写文件，包括写入后状态/日志失败的那个文件；逐项报告未恢复文件和备份位置，单个恢复失败不阻断
-其他文件恢复。用户后续修改或删除的文件不被回滚覆盖。临时文件位于构建目录；构建目录与目标跨文件系统
+其他文件恢复。用户后续修改或删除的文件不被回滚覆盖。临时文件位于 `.mcp-data/tmp/`；临时目录与目标跨文件系统
 导致 rename 失败时中止并尝试恢复本轮已写配置。仅当归属记录
-（`<BUILD_DIR>/integration/mcp/state/agent-config-state.json`）证明文件由本安装器创建、
+（`<PROJECT_DIR>/.mcp-data/state/agent-config-state.json`）证明文件由本安装器创建、
 且文件标识仍匹配、卸载后只剩空托管骨架时才整体删除该文件；预存在的空对象不会被删。
 旧归属记录若没有文件标识，则保留卸载后的空文件。路径检查也用于预览和恢复，拒绝仓库外链接及
 配置文件本身的符号链接。
 
-**崩溃后自动恢复**：每次写入批次在操作日志（`<BUILD_DIR>/_agent_tmp/mcp/agent-config-journal.jsonl`）
+**崩溃后自动恢复**：每次写入批次在操作日志（`<PROJECT_DIR>/.mcp-data/tmp/agent-config-journal.jsonl`）
 中记录开始、逐文件计划（含目标内容摘要、原文件权限与标识）、结束。安装器被强杀等中断后，
 下一次运行在依赖准备成功后、读取 Agent 默认选择前恢复；卸载则直接进入恢复。确认原进程已退出后，
 按备份把涉及的文件回滚到批次前状态，打印恢复摘要，再继续本次操作。同一文件的多次修改也恢复到
@@ -224,7 +231,7 @@ LLM 必须提供 OpenAI 兼容接口。FAST/DEEP 检索会将相关内容发送�
 非交互安装使用 `--llm-base-url=<url>`、`--llm-model=<name>` 和环境变量
 `SIRCHMUNK_LLM_API_KEY`；也可通过 `SIRCHMUNK_LLM_BASE_URL` / `SIRCHMUNK_LLM_MODEL` 提供另两项。
 不提供 API Key 命令行参数，避免出现在进程参数中。重跑可保持已保存的值，或输入新值替换。
-设置保存在 `<BUILD_DIR>/integration/mcp/private/sirchmunk.json`，不会复制进 IDE 配置、
+设置保存在 `<PROJECT_DIR>/.mcp-data/private/sirchmunk.json`，不会复制进 IDE 配置、
 prepared-state、诊断输出或导入片段；POSIX 新建文件权限为 `0600`。
 
 首次准备需要本地 Python >= 3.10（优先发现 3.12/3.13），可用 `--sirchmunk-python=<file>` 指定。
@@ -261,9 +268,9 @@ MCP 启动不等待模型下载：初始化后可先执行基础检索；模型�
 
 ## 下载与运行数据目录
 
-所有新下载都位于工作区构建目录内，安装器不把运行依赖写入 toolkit 源码目录：
+所有新下载都位于工作区 `.mcp-data/` 内，安装器不把运行依赖写入 toolkit 源码目录：
 
-| 路径（相对 `<BUILD_DIR>/integration/mcp/`） | 内容 |
+| 路径（相对 `<PROJECT_DIR>/.mcp-data/`） | 内容 |
 | --- | --- |
 | `downloads/node/<platform>-<arch>/` | MCP JavaScript 依赖及安装完成标记 |
 | `downloads/cache/` | npm、Cargo、pip 缓存及下载临时文件 |
@@ -272,14 +279,14 @@ MCP 启动不等待模型下载：初始化后可先执行基础检索；模型�
 | `downloads/archives/`、`downloads/wheels/` | 校验过的原生压缩包和 Python wheel |
 | `downloads/python/<platform>-<arch>/` | Sirchmunk venv、准备日志、已安装版本记录 |
 | `downloads/models/sirchmunk/` | 固定 embedding 模型、后台下载日志和状态 |
+| `tmp/` | 配置事务备份、日志与隔离验证文件 |
 | `private/` | 本机 LLM 设置及 API Key |
 | `state/`、`exports/` | 后端状态、tgrep/Sirchmunk 数据、Agent 归属记录与 IDE 片段 |
 
 CodeGraph 数据库仍位于工程根目录 `.codegraph*`，以兼容上游仓库接入。
 旧的 `runtime/`、`upstream/`、`npm-cache/` 和 toolkit `node_modules/` 可继续复用；
 不会移动正在使用的文件或删除旧缓存。准备时可将已验证版本的旧 JavaScript 依赖复制到新目录。
-Git/P4 排除规则按 `integration/mcp/{downloads,private,state,exports}` 路径生效，
-兼容自定义工作区构建目录；不排除 `tools/` 源码、补丁、锁定清单和测试。
+Git/P4 排除 `.mcp-data/`，并保留旧 `integration/mcp/{downloads,private,state,exports}` 忽略规则；不排除 `tools/` 源码、补丁、锁定清单和测试。
 
 ## 支持的 Agent
 
@@ -317,7 +324,7 @@ Git/P4 排除规则按 `integration/mcp/{downloads,private,state,exports}` 路�
 | `dsh` | DeepSeek Harness，别名 `deepseek-harness`。生成 `dsh-mcp.cordis.yml`，使用官方 `@deepseek-ai/dsh-mcp-client` 的 `insert/config/serverName/transport` 结构。按安装器输出执行 `dsh web --patch "<生成路径>"`；当前 profile 必须能解析匹配宿主版本的插件。见 [官方接入示例](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/mcp-memory.md)。 |
 
 三个显式导入项（`copilot-jetbrains`、`jetbrains-ai`、`dsh`）的文件在
-`<BUILD_DIR>/integration/mcp/exports/`，与已有 Cline IDE / CodeBuddy IDE 共用规划、
+`<PROJECT_DIR>/.mcp-data/exports/`，与已有 Cline IDE / CodeBuddy IDE 共用规划、
 损坏检测、备份、回滚和卸载代码。它们不在 `--agents=all` 内，须显式选择；`--agents` 仍表示
 本次最终集合，添加时请同时列出需要保留的其他客户端。DSH 的 `--patch` 是原生显式加载，
 不会覆盖用户 YAML 或自动安装 DSH 插件。移除导出文件后，已导入 IDE 的服务器仍需在 IDE 中移除。
@@ -389,7 +396,7 @@ node ... --agent=cline --cline <cline 包 bin/cline 脚本或原生可执行文�
 
 **面板导入类（无已核实项目级写入路径，不写任何项目配置文件）**：Cline IDE（`cline-ide`）、
 CodeBuddy IDE（`codebuddy-ide`）。选择它们时安装器在
-`<BUILD_DIR>/integration/mcp/exports/` 生成本机导入片段（只含本次条目与绝对路径），
+`<PROJECT_DIR>/.mcp-data/exports/` 生成本机导入片段（只含本次条目与绝对路径），
 并打印各家面板的导入步骤；卸载/取消选择时删除片段。它们不参与 `--agents=all`。
 片段与项目配置一起预检、写入和失败回滚；片段被手工修改、不可读或经链接指向仓库外时，整批中止。
 修改过的片段需先移走再生成。省略 `--agents` 的更新会保留已有片段选择；重复生成无写入。
@@ -444,8 +451,7 @@ Roo/Zed/WorkBuddy 为 GUI 客户端，同样只在文档层覆盖。
 
 ## 配置条目示例
 
-`<PROJECT_DIR>` 表示选定工作空间，`<MCP_DIR>` 表示工具目录，`<BUILD_DIR>` 表示检测到的
-构建/缓存目录。运行 `setup.js` 时会写入解析后的实际路径（见下节的路径策略）。
+`<PROJECT_DIR>` 表示选定工作空间，`<MCP_DIR>` 表示工具目录。运行 `setup.js` 时会写入解析后的实际路径（见下节的路径策略）。
 
 ### 通用 `mcpServers` 家族（Claude Code / pi / CodeBuddy / Cursor / Gemini CLI / Roo Code / WorkBuddy / oh-my-pi / Cline / Windsurf）
 
@@ -538,29 +544,79 @@ enabled = true
 
 服务端入口支持 `--repo-root <dir>`、`--build-dir <dir>`。安装器始终生成显式根目录参数，
 后端不会依赖 IDE 启动时的 cwd。旧配置未带根参数时，从安装位置向上检测工程，找不到再从 cwd 检测。
-构建目录按上述工作空间设置解析。跨工程配置的旧根参数冲突时中止，不静默改为检索另一个工程。
+`--build-dir` 仅用于读取旧缓存；运行数据统一写入 `.mcp-data/`。跨工程配置的旧根参数冲突时中止，不静默改为检索另一个工程。
 
 ## 首次启动与索引
 
 - MCP 握手立即响应；首次索引在后台进行，此时查询返回 `INDEX_NOT_READY`，
   用 `tgrep_status` / `codegraph_status` 查看进度。
-- tgrep 索引位于 `<BUILD_DIR>/integration/mcp/state/tgrep/...`；
+- tgrep 索引位于 `<PROJECT_DIR>/.mcp-data/state/tgrep/...`；
   CodeGraph 新索引位于仓库根 `.codegraph-<project>-<platform>/`。
   优先复用已有 `.codegraph/codegraph.db`，其次复用当前平台唯一的 `.codegraph-*-<platform>`
   数据库，包括旧工程前缀。若当前平台存在多个候选，则中止并提示选择，不自动重建。
   复制到新工程后，应把这些索引、依赖和缓存加入该工程的版本管理排除规则。
-- 同一工具的第二个实例返回 `INDEX_IN_USE`，不会接管或杀死已有实例。
+- 同一缓存的多个 Agent 共享后端；旧版独占实例或外部写入者占用索引时仍返回 `INDEX_IN_USE`，
+  不接管或杀死已有实例。升级后先断开旧版 MCP，再重新连接各 Agent。
 - 固定 CodeGraph 1.6.0 对不足 500 个索引文件的工程隐藏状态工具的发现条目，但保留处理器。
   包装层会验证该只读处理器后使用自己的状态 schema；真正缺失或失败仍报告降级。
 
+### 多个 Agent 共享缓存服务
+
+单例选举本身不一定需要 IPC，也可以用内核互斥量或操作系统文件锁。此实现的 IPC 同时承担
+查询转发、身份验证和客户端生命周期管理，故不能在 IPC 失效时仅靠 PID 继续服务。
+PID 只能辅助判断进程存活，不能消除“检查后再启动”的竞态，也不能证明身份未被复用。
+当前采用内核独占 IPC 选举；IPC 不可达但记录的 PID 仍存活时，不再启动候选进程，
+等待后返回诊断错误。PID 不授予缓存所有权，也不触发杀进程、删除锁或启动独立后端。
+若将来需要替代传输，应显式设计另一种已认证的本地传输，仍需保留独占所有权和断连清理。
+参考：[Node IPC](https://nodejs.org/api/net.html#ipc-support)、
+[Windows 进程标识生命周期](https://learn.microsoft.com/en-us/windows/win32/procthread/process-handles-and-identifiers)。
+
+每个 Agent 保留独立的 stdio MCP 入口。同一本机用户、工作空间和工具（Windows 路径大小写归一），
+只运行一个共享服务及一套后端。tgrep 的索引和 watcher、CodeGraph 的 direct 引擎与 watcher、
+Sirchmunk 的 Python 引擎、embedding 和知识缓存分别由各自的共享服务拥有。
+三种工具的数据格式和职责不同，不合并为一个索引。不同工作空间不混用；不同构建目录参数不再产生独立服务。
+
+| 方案 | 评估 |
+| --- | --- |
+| 仅使用独占锁 | 可以阻止重复写入，但其他 Agent 无法查询；这是此前的行为。 |
+| 安装常驻系统服务 | 能共享缓存，但需要额外的安装、权限、升级和退出管理；所有 Agent 关闭后仍占资源。 |
+| 按连接存活的本机共享服务（采用） | 同时复用查询引擎和刷新任务，保留现有后端的单写者逻辑；最后一个连接断开后清理。 |
+
+连接使用 Windows 命名管道或 Linux abstract Unix socket，不使用 TCP/HTTP。
+服务先独占绑定固定 IPC 地址，再启动后端；并发启动的短暂候选进程不能打开索引。
+IPC 地址依据真实缓存路径生成，不依赖 Agent 名称、工具副本位置或启动顺序。
+内核在服务死亡时释放地址，避免通过超时删除活锁而产生两个写入者。
+这些机制使用 [Node.js 本机 IPC](https://nodejs.org/api/net.html#ipc-support)。
+
+连接前进行双向 HMAC 验证。随机密钥仅写入 `<PROJECT_DIR>/.mcp-data/private/shared-*.json`，
+不进入 Agent 配置、状态接口或日志；POSIX 文件权限为 0600，新建目录为 0700，Windows 沿用工作空间 ACL。
+未认证连接不保活服务；请求大小、排队数和连接数均有上限。各 Agent 的响应独立关联，
+后端调用集中串行执行，避免 Sirchmunk 知识存储并发写入。
+
+- 首个 Agent 退出或被强杀后，其他 Agent 继续使用同一后端。
+- 最后一个 Agent 断开后，服务先按既有 EOF → SIGTERM → SIGKILL 顺序停止后端，再释放 IPC；
+  首次索引也走相同取消流程。没有连接成功的候选服务最多存活 15 秒。
+- 服务崩溃时，后端通过 stdin 断开清理；存活 Agent 的后续请求重新连接。
+  已发出的请求返回错误，不自动重放，防止重复 LLM 调用或知识写入。
+- 二进制、工具白名单或 Sirchmunk 配置不同的连接返回 `SHARED_CONFIG_MISMATCH`。
+  关闭该缓存的全部旧连接后重新连接，才能应用新配置。
+- `<tool>_status.shared_service` 显示服务 PID、连接数和 IPC 类型；`doctor.mjs` 只读显示相同诊断。
+  状态文件写入失败不会阻断后端停止和锁释放。
+
+共享服务使用已安装或已准备的 Node.js 20.8+，无需新增 npm 包。Bun 保留其 stdio 入口；
+Deno 在 Windows 上直接使用命名管道要求 `--allow-all`，因此使用 stdin 绑定的 Node 中继，
+保留安装器已有权限，不授予 `--allow-all`。Node 可从已准备的 CodeGraph 运行时或 PATH 找到。
+Windows/Linux 已验证；其他 POSIX 平台的普通 socket 在强杀后可能残留路径，此时拒绝启动，
+不自动删除未知归属的 socket。macOS 未验收。
+
 ### CodeGraph 自动刷新与后台进程
 
-MCP 入口拥有后台子进程：首次通过库 API 建索引，然后启动同版本 `serve --mcp`。
+共享服务拥有后台子进程：首次通过库 API 建索引，然后启动同版本 `serve --mcp`。
 该服务自带文件监听和连接时的补同步，因此无需额外启动一个写同一数据库的 watcher/daemon。
 文件增删改由这个服务增量同步；重连后先补齐离线变更，再响应代码查询。
 这是固定 1.6.0 制品的实测行为，升级时需重新验证。
 
-后台进程随 MCP 会话退出，首次索引也支持取消；全部 Agent 关闭期间不常驻。
+后台进程在最后一个 MCP 连接退出后停止，首次索引也支持取消；全部 Agent 关闭期间不常驻。
 这保留 stdio 的进程清理和单写者约束。上游独立 daemon 会跨会话存活，不用于本接入。
 源码仓库接入可以通过 `--codegraph-path` 指向已编译仓库，但不需要自行重写上游监听逻辑。
 
@@ -588,7 +644,7 @@ $env:CODEGRAPH_DIR = '.codegraph-<project>-windows'; <codegraph入口> status .
 ```
 
 **`<codegraph入口>`**：若已全局安装与固定版本一致的 `codegraph` 可直接使用；否则读取
-`<BUILD_DIR>/integration/mcp/state/prepared-state.json` 的 `codegraph.runtime` 和 `cli_entry`：
+`<PROJECT_DIR>/.mcp-data/state/prepared-state.json` 的 `codegraph.runtime` 和 `cli_entry`：
 
 ```text
 <runtime> --liftoff-only --disable-warning=ExperimentalWarning <cli_entry> <子命令>
@@ -688,13 +744,46 @@ console.log('digraph G { rankdir=LR;'); for (const r of rows) console.log(JSON.s
   `projectPath` 参数被拒绝，未在 schema 中的参数被拒绝。
 - 结果带 `truncated` 标记的截断发生在完整记录边界；错误带稳定错误码
   （`INDEX_NOT_READY`、`INDEX_IN_USE`、`INVALID_PARAMS`、`BACKEND_FAILED` 等）。
-- 客户端断开（stdin EOF）、SIGINT/SIGTERM 都会停止后端进程树；包装层被强杀时，
-  后端因 stdin 管道断开退出；Sirchmunk 在 Windows 还使用 Job Object，在 POSIX 使用专用进程组清理原生子进程。
+- 客户端断开（stdin EOF）、SIGINT/SIGTERM 或入口被强杀都会释放本连接；最后一个连接断开才停止共享后端。
+  共享服务被强杀时，后端因 stdin 管道断开退出；Sirchmunk 在 Windows 还使用 Job Object，在 POSIX 使用专用进程组清理原生子进程。
 - 后端不监听端口、关闭遥测/更新检查；CodeGraph 强制 direct 模式。Sirchmunk 允许后台准备固定模型，并按用户配置调用 LLM。
 - 诊断：用相同运行时执行 `<MCP_DIR>/common/tools/doctor.mjs`（只读；Deno 加安装示例中的
   `run` 参数）。报告显示实际运行时名称、版本和可执行文件位置。
 
 ## 测试与维护
+
+2026-09-23 共享服务改造：本目录与 UE 副本在 Windows x64 各完成五套 JS 测试共 326 项，
+324 通过，2 项既有 POSIX 用例跳过；Python 各 9 项通过。新增用例通过实际 MCP 入口验证
+三 Agent 并发只启动一个假后端进程、独立响应、
+单连接/末连接强杀、共享服务崩溃恢复、请求不重放、认证和大小限制、配置冲突、旧锁保护及诊断写失败清理。
+Linux/WSL Node 20.19.2 已运行共享服务与三个入口的最终 24 项测试，全部通过。
+
+Windows Node 24.21.0、Bun 1.4.2、Deno 2.9.7 同时连接真实后端：CodeGraph 通过单后端、
+增删改刷新、离线补同步与强杀清理；Sirchmunk 通过单后端、离线 embedding 就绪、文件名查询与强杀清理，
+未调用真实 LLM。UE 副本也验证三个真实后端的共享与关闭；tgrep 另通过离线修改后的重连补同步。
+当时 tgrep 的 native watcher 修改刷新失败，直接后端同样复现；下述补丁已修复该问题。
+日志和隔离脚本位于 `<BUILD_DIR>/_agent_tmp/mcp-shared/`，不提交缓存、令牌和测试数据。
+
+2026-09-23 tgrep native watcher 修复：首次扫描进入显式指定的工程根，但 watcher 的父级
+忽略匹配继续检查工程根之外的目录。如果上层 `.gitignore` 排除了工程所在的构建目录，
+便会出现首次索引成功、后续修改事件被丢弃的问题。补丁 0002 将父级 `.gitignore`、`.ignore`
+和 `.git/info/exclude` 的路径检查限制到工程根之内，仍应用这些规则对工程内部文件的排除。
+此根因位于扫描与 watcher 的过滤一致性；没有更换 Windows 通知 API 或改用轮询。
+
+旧二进制在真实修改回归中失败，修复后 Windows native 模式的增删改、重命名、离线补同步、
+重连后修改均通过，单次事件约 60 毫秒生效且未触发定时 reconcile。Rust 核心 258 项通过。
+本目录与 UE 副本各五套 JS 共 330 项，328 通过、2 项既有 POSIX 用例跳过；Python 各 9 项通过。
+两份工具均用 Node、Bun、Deno 三 Agent 同连真实 tgrep，验证单后端、增删改刷新、离线补同步及末连接强杀清理。
+公共套件首次遇到一次 Windows 临时目录清理 EPERM，原用例单独运行和完整公共套件复跑通过；
+没有调整断言、增加重试或扩大超时。本轮未复跑 Linux/macOS 真实后端。
+可重跑的真实后端回归（显式传入制品与工作区临时目录，不扫描实际工程）：
+
+```bash
+node <MCP_DIR>/tools/tgrep/tools/native-watcher-smoke.mjs <TGREP_BIN> <PROJECT_DIR>/.mcp-data/tmp/tgrep-native
+```
+
+安装器与后端启动均拒绝旧修订，补丁冲突时停止且不重编译冲突源码。`--offline` 可使用缓存
+依赖重编译；缺少依赖时 Cargo 报错，不回退联网。补丁保留固定源码的换行字节，不能批量转换其换行。
 
 2026-09-22 多运行时改造在 Windows x64 验证：Node 24.21.0、Bun 1.4.2、Deno 2.9.7。
 三者均完成 setup 安装、重复安装不改配置、dry-run、换用 Node 卸载、两个真实后端的离线
@@ -723,8 +812,9 @@ Agent 配置写入的回归测试在 `agents/`（JSON/JSONC 损坏零写入、Co
 共享目标去重、备份恢复、外部工具目录、旧名称迁移等）；`common/test/workspace.test.mjs`
 覆盖根目录、工程名、缓存和旧索引检测。`agents/` 无 npm 运行时依赖（jsonc-parser 已随源码分发）。
 
-真实后端样例应放在不会被父目录忽略规则排除的位置。tgrep 的 `--no-require-git` 仍读取
-父目录 `.gitignore`；若样例位于上层仓库排除的构建目录中，可能得到空索引。
+真实后端样例应明确控制忽略规则。tgrep 的 `--no-require-git` 仍读取父目录 `.gitignore`；
+父级规则若直接匹配工程内的文件，该文件仍会被排除。上述 native 回归特意覆盖显式工程根位于
+被忽略的父目录内，同时验证工程内的忽略文件没有被重新加入索引。
 
 升级固定版本：改对应工具目录的 `upstream-lock.json`（版本、提交、哈希），重跑
 `setup.js`（或 `--skip-prepare` 只调配置），重新执行测试。tgrep 补丁如不适用需在
@@ -737,6 +827,25 @@ npm 12 会以 `EALLOWREMOTE` 拒绝含第三方 tarball 域名的 lockfile，`np
 没有把镜像域名写进 `resolved`。
 
 ## 已验证平台
+
+### 工作区缓存目录与 PID 保护（2026-09-23）
+
+- Windows 源仓库与 UE 副本各执行 335 项 JavaScript 回归：333 通过、2 项既有 POSIX 用例跳过；
+  Python 各 9 项通过。UE 最终按五个组件顺序执行。安装、切换、卸载 dry-run 保持配置内容和 mtime。
+- 两份工具均以 Node 24.21.0、Bun 1.4.2、Deno 2.9.7 三 Agent 验证真实 tgrep、CodeGraph、Sirchmunk：
+  每工具只有一个后端，关闭一个 Agent 不影响其余 Agent，最后断连清理进程树，重连恢复查询。
+  Sirchmunk 验证固定模型加载和文件名搜索，未调用远程 LLM。
+- tgrep Windows native watcher 的修改、新增、重命名、删除、离线补同步和热启动刷新通过，
+  在线事件约 60–124 ms；`.mcp-data/` 中的源码探针不进入索引，不依赖 120 秒轮询。
+- 不同 `--build-dir`、Windows 根路径大小写、IPC 不可达但 PID 存活、旧缓存存活锁、
+  旧配置归属读取和模型导入均有回归；运行中的旧实例不会被终止或解锁。
+- 多组件并发回归曾在 Windows 删除夹具时出现 EPERM/EBUSY。测试检查 owner 与控制台宿主退出，
+  并使用异步删除；未增加删除重试、放宽断言或延长测试超时。最终结果以本段记录为准。
+- WSL Debian / Node 20.19.2：335 项中 333 通过，2 项 POSIX 权限恢复断言未通过。
+  夹具按要求位于工作区 `/mnt/d` 的 drvfs/9p 挂载，其权限返回 0777，无法验证预期 0664/0640；
+  未修改挂载设置或跳过断言，Linux 原生文件系统的这两项尚待验证。
+- 本轮日志位于 `<PROJECT_DIR>/.mcp-data/tmp/`。此前验收段落中的构建目录路径仅为历史记录，
+  后续验证统一使用工作区临时目录。Git/P4 与扫描规则均已排除 `.mcp-data/`。
 
 | 平台 | 单元测试 | 真实后端冒烟 |
 | --- | --- | --- |

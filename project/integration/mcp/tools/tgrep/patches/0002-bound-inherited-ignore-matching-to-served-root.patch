@@ -1,0 +1,151 @@
+diff --git a/tgrep-cli/src/main.rs b/tgrep-cli/src/main.rs
+index 8def457b..4c2c4720 100644
+--- a/tgrep-cli/src/main.rs
++++ b/tgrep-cli/src/main.rs
+@@ -34,7 +34,7 @@ static ERRORED: AtomicBool = AtomicBool::new(false);
+ #[command(
+     name = "tgrep",
+     about = "Trigram-indexed grep — fast regex search for large codebases",
+-    version
++    version = concat!(env!("CARGO_PKG_VERSION"), " (mcp-stdio-v2)")
+ )]
+ struct Cli {
+     #[command(subcommand)]
+diff --git a/tgrep-core/src/gitignore.rs b/tgrep-core/src/gitignore.rs
+index 92b42ca..229d227 100644
+--- a/tgrep-core/src/gitignore.rs
++++ b/tgrep-core/src/gitignore.rs
+@@ -239,6 +239,29 @@ impl IgnoreMatcher {
+         let rel = path.to_string_lossy().replace('\\', "/");
+         let rel = rel.trim_start_matches("./").trim_start_matches('/');
+ 
++        // An explicitly served root is entered even when an ancestor ignores
++        // that directory. Match inherited rules against the file and only its
++        // parents *below* that root, just as the walk does. Asking an ancestor
++        // matcher for every parent also tests the root's enclosing directories
++        // and can silently discard every native watcher event after a good build.
++        let matched_ancestor = |matcher: &Gitignore, prefix: &str| {
++            let mut under = Path::new(rel);
++            let mut directory = is_dir;
++            while !under.as_os_str().is_empty() {
++                match matcher.matched(Path::new(prefix).join(under), directory) {
++                    Match::Ignore(_) => return Some(true),
++                    Match::Whitelist(_) => return Some(false),
++                    Match::None => (),
++                }
++                if !parents {
++                    break;
++                }
++                under = under.parent()?;
++                directory = true;
++            }
++            None
++        };
++
+         // The ignore crate resolves each source independently, then gives
+         // `.ignore` files precedence over every `.gitignore`, regardless of
+         // directory depth.
+@@ -260,12 +283,7 @@ impl IgnoreMatcher {
+             }
+ 
+             for entry in self.ancestors.iter().filter(|entry| entry.kind == kind) {
+-                let path = if entry.prefix.is_empty() {
+-                    rel.to_string()
+-                } else {
+-                    format!("{}/{rel}", entry.prefix)
+-                };
+-                if let Some(decision) = matched(&entry.matcher, Path::new(&path)) {
++                if let Some(decision) = matched_ancestor(&entry.matcher, &entry.prefix) {
+                     standard_decision = Some(decision);
+                     break;
+                 }
+@@ -284,12 +302,7 @@ impl IgnoreMatcher {
+         if standard_decision.is_none()
+             && let Some((prefix, matcher)) = &self.repo_exclude
+         {
+-            let path = if prefix.is_empty() {
+-                rel.to_string()
+-            } else {
+-                format!("{prefix}/{rel}")
+-            };
+-            standard_decision = matched(matcher, Path::new(&path));
++            standard_decision = matched_ancestor(matcher, prefix);
+         }
+ 
+         if standard_decision.is_none() {
+@@ -1021,6 +1034,75 @@ mod tests {
+     use super::*;
+     use tempfile::TempDir;
+ 
++    #[test]
++    fn explicit_root_below_ignored_parent_matches_walk() {
++        for filename in [GITIGNORE_FILENAME, DOT_IGNORE_FILENAME] {
++            for no_require_git in [false, true] {
++                let tmp = TempDir::new().unwrap();
++                std::fs::create_dir(tmp.path().join(".git")).unwrap();
++                std::fs::write(tmp.path().join(filename), "/ignored/\n*.log\nvendor/\n").unwrap();
++                let root = tmp.path().join("ignored/checkout");
++                std::fs::create_dir_all(root.join("src")).unwrap();
++                std::fs::create_dir(root.join("vendor")).unwrap();
++                for name in ["src/kept.rs", "src/hidden.log", "vendor/hidden.rs"] {
++                    std::fs::write(root.join(name), "fn marker() {}\n").unwrap();
++                }
++                let root = std::fs::canonicalize(root).unwrap();
++                let walked = crate::walker::walk_file_metadata(
++                    &root,
++                    &crate::walker::MetaWalkOptions {
++                        no_require_git,
++                        ..Default::default()
++                    },
++                );
++                let names: Vec<_> = walked
++                    .files
++                    .iter()
++                    .map(|file| file.relative_path.as_str())
++                    .collect();
++                assert_eq!(
++                    names,
++                    ["src/kept.rs"],
++                    "{filename}, no_require_git={no_require_git}"
++                );
++                let matcher = matcher_from_ignore_paths_with_options(
++                    &root,
++                    &walked.gitignore_files,
++                    &walked.ignore_files,
++                    no_require_git,
++                )
++                .unwrap();
++                assert!(
++                    !matcher.is_ignored(Path::new("src/kept.rs"), false),
++                    "watcher must agree with explicit-root walk: {filename}, no_require_git={no_require_git}"
++                );
++                assert!(matcher.is_ignored(Path::new("src/hidden.log"), false));
++                assert!(matcher.is_ignored(Path::new("vendor/hidden.rs"), false));
++                assert!(matcher.is_ignored(Path::new("vendor"), true));
++            }
++        }
++    }
++
++    #[test]
++    fn explicit_root_below_repo_exclude_matches_walk() {
++        let tmp = TempDir::new().unwrap();
++        std::fs::create_dir_all(tmp.path().join(".git/info")).unwrap();
++        std::fs::write(tmp.path().join(".git/info/exclude"), "/ignored/\n*.log\n").unwrap();
++        let root = tmp.path().join("ignored/checkout");
++        std::fs::create_dir_all(&root).unwrap();
++        std::fs::write(root.join("kept.rs"), "fn kept() {}\n").unwrap();
++        std::fs::write(root.join("hidden.log"), "hidden\n").unwrap();
++        let root = std::fs::canonicalize(root).unwrap();
++        let walked = crate::walker::walk_file_metadata(&root, &Default::default());
++        assert_eq!(walked.files.len(), 1);
++        assert_eq!(walked.files[0].relative_path, "kept.rs");
++        let matcher =
++            matcher_from_ignore_paths(&root, &walked.gitignore_files, &walked.ignore_files)
++                .unwrap();
++        assert!(!matcher.is_ignored(Path::new("kept.rs"), false));
++        assert!(matcher.is_ignored(Path::new("hidden.log"), false));
++    }
++
+     #[test]
+     fn collects_a_gitignore_that_its_own_rules_ignore() {
+         // `build/.gitignore` holding `*` matches itself, so the walk never

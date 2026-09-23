@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import { BackendError, ErrorCodes, IndexInUse } from '../../../common/src/errors.mjs';
-import { WorkspacePaths, deriveRepoRoot, resolveBuildDir, validateRelativeScope, projectInfo } from '../../../common/src/paths.mjs';
+import { WorkspacePaths, deriveRepoRoot, validateRelativeScope, projectInfo } from '../../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../../common/src/state.mjs';
 import { runWrapperServer, toolText } from '../../../common/src/mcpServer.mjs';
 import { scriptInvocation } from '../../../common/src/runtime.mjs';
@@ -170,13 +170,13 @@ class CodeGraphService {
     this.backendSchemas = new Map();
     this.schemaSource = 'static';
     this.allowlist = [...DEFAULT_TOOL_ALLOWLIST, ...CodeGraphService.loadExtraTools(paths)];
-    this.lock = new ToolInstanceLock(paths.toolStateDir('codegraph'), 'codegraph');
+    this.lock = new ToolInstanceLock(paths.toolStateDir('codegraph'), 'codegraph', paths.legacyToolStateDirs('codegraph'));
     this.identity = currentIdentity();
     this.stateStore = new StateStore(path.join(paths.toolStateDir('codegraph'), 'wrapper-state.json'));
   }
 
   static loadExtraTools(paths) {
-    const configPath = path.join(paths.toolStateDir('codegraph'), 'extra-tools.json');
+    const configPath = paths.readPath(path.relative(paths.integrationDir, path.join(paths.toolStateDir('codegraph'), 'extra-tools.json')));
     try {
       const raw = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       if (raw && Array.isArray(raw.enabled_tools)) {
@@ -309,6 +309,7 @@ class CodeGraphService {
   }
 
   publishState(errorCode = null) {
+    if (!this.lock.locked) return;
     const payload = {
       tool: 'codegraph',
       state: this.state,
@@ -490,7 +491,7 @@ function resolveBundle(paths, runtimeArg, cliArg) {
   let runtime = runtimeArg ?? null;
   let cliEntry = cliArg ?? null;
   let libraryDir = null;
-  const prepared = new StateStore(paths.preparedStatePath()).read();
+  const prepared = new StateStore(paths.preparedStateReadPath()).read();
   if (prepared?.codegraph) {
     runtime = runtime ?? prepared.codegraph.runtime;
     cliEntry = cliEntry ?? prepared.codegraph.cli_entry;
@@ -514,7 +515,7 @@ function main() {
   });
 
   const repoRoot = deriveRepoRoot(import.meta.url, values['repo-root']);
-  const buildDir = resolveBuildDir(repoRoot, values['build-dir']);
+  const buildDir = values['build-dir'];
   const paths = new WorkspacePaths(repoRoot, buildDir);
   paths.ensureDirs();
 
@@ -530,6 +531,7 @@ function main() {
 
   const service = new CodeGraphService(paths, backendArgs);
   void runWrapperServer({
+    sharedTool: 'codegraph',
     name: `${projectInfo(repoRoot).slug}-codegraph`,
     instructions: TOOL_INSTRUCTIONS,
     tools: makeTools(service),

@@ -49,12 +49,12 @@ or call the MCP tools do not need this Skill.
 
 - Sirchmunk 0.2.0 uses `tools/sirchmunk/python/bridge.py` behind the JS stdio wrapper.
   Validate all three LLM settings before preparation; keep the key only in the
-  workspace's ignored `integration/mcp/private/` directory. It may send search
+  workspace's ignored `.mcp-data/private/` directory. It may send search
   content to that explicitly configured LLM and download the pinned embedding model.
   Enable knowledge evolution only after model load and warm-up succeed. Model
   preparation can outlive setup; the serving backend and native children cannot
   outlive MCP stdin. Run `tools/sirchmunk/test/bridge_test.py` as well as the JS suites.
-- Put new downloads under `<BUILD_DIR>/integration/mcp/downloads/`; SDK loading
+- Put new downloads under `<PROJECT_DIR>/.mcp-data/downloads/`; SDK loading
   resolves the selected workspace's prepared packages. Keep verified old artifact
   paths usable. Old `tgrep/src/*.mjs` and `codegraph/src/*.mjs` only forward to `tools/`.
 
@@ -72,7 +72,7 @@ or call the MCP tools do not need this Skill.
   pins `--repo-root`, including local-toolkit entries. Legacy wrapper launches
   without that argument detect the project enclosing the toolkit, then fall back
   to cwd discovery. No installer marker or fixed project path is required.
-- Project names, build/cache defaults and CodeGraph directory names come from
+- Project names and CodeGraph directory names come from
   local metadata. Client keys are `workspace-tgrep`, `workspace-codegraph`, `workspace-sirchmunk`.
   Migrate old prefixes only after verifying the backend, wrapper path and scope;
   preserve options/comments, and abort on old/new key collisions.

@@ -1,4 +1,6 @@
 import readline from 'node:readline';
+import fs from 'node:fs';
+if (process.env.MCP_TEST_START_LOG) fs.appendFileSync(process.env.MCP_TEST_START_LOG, process.pid + '\n');
 const input = readline.createInterface({ input: process.stdin });
 input.on('line', line => {
   const request = JSON.parse(line);

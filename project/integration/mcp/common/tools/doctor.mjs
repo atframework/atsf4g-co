@@ -12,7 +12,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import { WorkspacePaths, detectWorkspace, projectInfo, selectCodegraphIndex, platformName, resolveBuildDir } from '../src/paths.mjs';
+import { WorkspacePaths, detectWorkspace, projectInfo, selectCodegraphIndex, platformName } from '../src/paths.mjs';
 import { StateStore, isPidAlive } from '../src/state.mjs';
 import { currentRuntime, runtimeSupported } from '../src/runtime.mjs';
 
@@ -41,14 +41,14 @@ function main() {
 
   const workspace = detectWorkspace(process.cwd(), { explicit: values['repo-root'] });
   const repoRoot = workspace.root;
-  const buildDir = resolveBuildDir(repoRoot, values['build-dir']);
+  const buildDir = values['build-dir'];
   const paths = new WorkspacePaths(repoRoot, buildDir);
   const checks = [];
 
   const runtime = currentRuntime();
   check(checks, 'wrapper-runtime', runtimeSupported(runtime), `${runtime.kind} ${runtime.version}: ${runtime.executable}`);
 
-  const prepared = readJson(paths.preparedStatePath());
+  const prepared = readJson(paths.preparedStateReadPath());
   check(checks, 'prepared-state', prepared !== null, prepared ? new Date(prepared.prepared_unix * 1).toISOString() : 'run setup.js');
 
   for (const tool of ['tgrep', 'codegraph', 'sirchmunk']) {
@@ -62,10 +62,23 @@ function main() {
     );
 
     const holder = readJson(path.join(toolDir, `${tool}.holder.json`));
+    const shared = readJson(path.join(toolDir, 'shared-service.json'));
+    const sharedAlive = shared?.state === 'serving' && isPidAlive(shared.pid);
+    check(checks, `${tool}.shared-service`, true, sharedAlive
+      ? `pid ${shared.pid}, clients=${shared.clients}, ${shared.transport}` : 'no live shared service');
     if (holder?.identity?.pid) {
-      check(checks, `${tool}.lock-holder`, false, `held by pid ${holder.identity.pid} (${holder.stage ?? '?'}, alive=${isPidAlive(holder.identity.pid)})`);
+      check(checks, `${tool}.lock-holder`, sharedAlive && shared.pid === holder.identity.pid,
+        `held by pid ${holder.identity.pid} (${holder.stage ?? '?'}, alive=${isPidAlive(holder.identity.pid)})`);
     } else {
       check(checks, `${tool}.lock-holder`, true, 'no live wrapper instance');
+    }
+    for (const legacy of paths.legacyToolStateDirs(tool)) {
+      const file = path.join(legacy, `${tool}.instance.lock`);
+      if (!fs.existsSync(file)) continue;
+      const record = readJson(path.join(legacy, `${tool}.holder.json`)) ?? readJson(file);
+      const pid = record?.identity?.pid;
+      check(checks, `${tool}.legacy-lock`, !!pid && !isPidAlive(pid),
+        `legacy owner pid ${pid ?? 'unknown'}; close the old Agent before using .mcp-data: ${file}`);
     }
   }
 
@@ -75,7 +88,7 @@ function main() {
     check(checks, 'sirchmunk.embedding', model?.state === 'ready', model?.state ?? 'not downloaded');
     const state = readJson(path.join(paths.toolStateDir('sirchmunk'), 'wrapper-state.json'));
     check(checks, 'sirchmunk.knowledge-evolution', state?.enable_knowledge_evolution === true, state?.state ?? 'never started');
-    check(checks, 'sirchmunk.credentials', fs.existsSync(path.join(paths.privateDir, 'sirchmunk.json')), 'local private configuration (contents omitted)');
+    check(checks, 'sirchmunk.credentials', fs.existsSync(paths.readPath('private/sirchmunk.json')), 'local private configuration (contents omitted)');
   }
 
   if (prepared?.tgrep?.binary) {
@@ -111,7 +124,8 @@ function main() {
     repo_root: repoRoot,
     project: projectInfo(repoRoot),
     workspace_detection: workspace.reason,
-    build_dir: buildDir,
+    data_dir: paths.integrationDir,
+    legacy_cache_dirs: paths.legacyIntegrationDirs,
     node: process.version,
     runtime,
     checks,

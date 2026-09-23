@@ -10,6 +10,17 @@ Each fact below was verified against the pinned upstream sources/artifacts
 "已验证平台" table records when). Re-verify against the new pinned sources
 before relying on them after an upgrade.
 
+- `common/src/sharedService.mjs` owns one backend per user/workspace/tool/cache.
+  Each Agent keeps a stdio frontend; authenticated local IPC connections own the
+  shared lifetime. Kernel-exclusive Windows named pipes/Linux abstract sockets
+  elect the worker before backend startup. A frontend exit releases its own
+  connection; the last disconnect stops the backend before releasing IPC.
+  Losing candidate workers never open the index. Do not add TCP, steal live
+  ownership, or replay in-flight requests after a worker crash. Configuration
+  mismatch fails explicitly; diagnostic writes cannot block cleanup.
+  Workers use installed Node 20.8+; Deno uses an EOF-bound Node relay without
+  widening its permissions. Other POSIX socket crash recovery is unverified
+  and fails closed instead of unlinking an endpoint of unknown ownership.
 - Both backends exit on stdin EOF; CodeGraph direct mode additionally has a
   PPID watchdog and a liveness-watchdog child that exits on its own stdin
   lifeline. This is why the wrappers need no Windows Job Object or POSIX
@@ -41,11 +52,19 @@ before relying on them after an upgrade.
 - tgrep speaks newline JSON-RPC (`search`/`files`/`status`; `reload` never
   exposed) through the integration patch adding `--transport stdio`. The patch
   keeps `serve.lock` exclusivity and adds a backend-side 20 000-row cap.
+  Revision `mcp-stdio-v2` also fixes inherited ignore matching above an explicit
+  served root: the walk enters that root, so watcher parent checks must stop
+  there while preserving rules for descendants. Patch 0002 covers `.gitignore`,
+  `.ignore` and repository excludes; preserve its CR bytes (pinned core source
+  uses CRLF). Prepare verifies every patch and rebuilds incompatible output;
+  runtime startup rejects older binaries. Do not infer freshness from
+  watcher_active: run `tools/tgrep/tools/native-watcher-smoke.mjs <binary>
+  <build-scratch-dir>` for real add/edit/rename/delete, reconnect and warm edits.
 
 ## Upgrade flow (pinned upstream)
 
 1. Update the tool's `upstream-lock.json` (commit, version, shasums). For a new
-   tgrep pin, delete `<BUILD_DIR>/integration/mcp/downloads/sources/tgrep-src` so prepare
+   tgrep pin, delete `<PROJECT_DIR>/.mcp-data/downloads/sources/tgrep-src` so prepare
    re-clones; re-apply the patch (regenerate it if it no longer fits) and record
    the new patch sha.
 2. Re-verify the facts listed above against the new sources before changing
@@ -75,7 +94,7 @@ before relying on them after an upgrade.
   EOF cleanup and Windows Job Object cleanup on forced exit. Its installer-only
   model worker intentionally survives setup and exits after preparation.
 
-- tgrep index: `<BUILD_DIR>/integration/mcp/state/tgrep/<workspace-id>/<platform>/index`
+- tgrep index: `<PROJECT_DIR>/.mcp-data/state/tgrep/<workspace-id>/<platform>/index`
   with one workspace-selected exclude list (UE layouts omit generated/resource
   directories but keep source Build directories); policy changes must stay identical across
   index/serve/watch or the index can drop members.
@@ -95,6 +114,9 @@ before relying on them after an upgrade.
   (including the `CODEGRAPH_DIR` incantation and the no-concurrent-writers
   rule) is documented in the README section "手动查询或操作 CodeGraph 索引" —
   keep that section accurate when index handling changes.
+- Shared service status: `shared-service.json` reports PID and client count;
+  authentication material belongs only in the ignored `private/` directory.
+  Status writes are best effort and never a prerequisite for shutdown.
 - Wrapper state/locks: `wrapper-state.json` (atomic replace) and the O_EXCL
   instance lock with pid-liveness steal; backends' own locks (`serve.lock`,
   `writer.pid`) are the final exclusivity. Never kill by process name or stale
@@ -105,10 +127,18 @@ before relying on them after an upgrade.
 1. Unit tests in all five packages; protocol tests spawn the real server
    entry with a fake backend — keep them free of real-index dependencies.
 2. Real-backend smoke (scratch script pattern under
-   `<BUILD_DIR>/_agent_tmp/mcp/smoke.mjs`): first index, reuse start, one real
+   `<PROJECT_DIR>/.mcp-data/tmp/smoke.mjs`): first index, reuse start, one real
    query, client close → server and backend exit, no leftover processes, locks
    released. Check add/edit/delete refresh and offline edits caught up after
    reconnect. Dependency changes also require a real npx cache warm-up plus
    offline execution/library verification, and existing-local-tool reuse.
-3. For lifecycle changes, also verify the forced-kill path (kill the wrapper,
-   observe backends exit via their stdin lifeline) and report timings.
+3. For lifecycle changes, test simultaneous Agents, one frontend closing while
+   others query, last-connection cleanup, and forced shared-worker exit. Check
+   actual backend process counts and no replay of interrupted calls. Keep
+   `common/test/shared-service.test.mjs` in the common suite.
+
+Workspace data is fixed at `<PROJECT_DIR>/.mcp-data/`; use `tmp/` for verification logs and fixtures.
+`--build-dir` only locates legacy read sources. Build settings never select another shared service.
+Normalize Windows workspace identity case, preserve live legacy locks, and keep IPC mandatory for
+query forwarding and lifecycle. A live PID with unreachable IPC suppresses new candidates; it never
+grants ownership. Reap owned election losers after authenticated attachment to avoid late idle owners.

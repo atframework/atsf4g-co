@@ -57,7 +57,7 @@ mirrors, agent config writing, switching, and uninstall.
 - `agents/src/guidance/ideExports.mjs` — explicit-load snippets for clients
   without a verified project file (Cline IDE, CodeBuddy IDE, JetBrains Copilot,
   JetBrains AI Assistant) and DSH's native Cordis patch: derived JSON/YAML in
-  `<BUILD_DIR>/integration/mcp/exports/`, written on apply, removed on
+  `<PROJECT_DIR>/.mcp-data/exports/`, written on apply, removed on
   uninstall or deselection. Plan these in the same batch as configs and root
   guidance; never write them after the batch commits. Discover existing snippets
   for default selections. Reject modified snippets and escaped paths before any
@@ -189,7 +189,7 @@ mirrors, agent config writing, switching, and uninstall.
   This covers process interruption, not power-loss durability. Apply
   writes via temp-file+rename from the build
   directory (EXDEV fails before replacement), re-compares against the planned original bytes (concurrent edits
-  abort), backs up pre-write bytes under `<BUILD_DIR>/_agent_tmp/mcp/
+  abort), backs up pre-write bytes under `<PROJECT_DIR>/.mcp-data/tmp/
   agent-config-backups/`, and rolls back already-written files when a later
   file fails. Record each config mutation before ownership/journal writes, so a
   post-rename metadata error also rolls back that file. Try all restores in reverse
@@ -200,7 +200,7 @@ mirrors, agent config writing, switching, and uninstall.
   end with committed/rolled-back/crash-recovered) are what make the next run's
   recovery possible.
 - Whole-file deletion on uninstall requires the ownership record
-  (`<BUILD_DIR>/integration/mcp/state/agent-config-state.json`) proving this
+  (`<PROJECT_DIR>/.mcp-data/state/agent-config-state.json`) proving this
   integration created the file, its recorded file identity still matching, AND the
   remaining content being an empty comment-free managed skeleton. Old records
   without identity and pre-existing empty objects are kept. Restore ownership as
@@ -423,7 +423,7 @@ client lacks cwd/variable support from the serializer's current choice.
    (`git status --porcelain` before/after). Also spot-check `--help`,
    `--list-agents`, and an unknown `--agents` id (must fail before any prompt).
 3. Full-cycle acceptance (when the agent-config code changes): run
-   `node <BUILD_DIR>/_agent_tmp/mcp/run-cli-cycle.mjs` on Windows and WSL —
+   `node <PROJECT_DIR>/.mcp-data/tmp/run-cli-cycle.mjs` on Windows and WSL —
    install → idempotent rerun → double switch → uninstall ×2 → dry-runs →
    corrupted-last-target abort, with byte-level repo+HOME snapshots and a dead
    proxy proving no downloads. Add a multi-candidate fixture (e.g. Kilo

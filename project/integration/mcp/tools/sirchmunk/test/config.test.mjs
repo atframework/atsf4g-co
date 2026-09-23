@@ -6,6 +6,27 @@ import test from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { WorkspacePaths, INTEGRATION_ROOT } from '../../../common/src/paths.mjs';
 import { collectConfig, readConfig, writeConfig, configPath, validateConfig } from '../src/config.mjs';
+import { modelCacheDirectory } from '../src/prepare.mjs';
+
+test('completed legacy models are copied into workspace data without rewriting legacy state', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-model-import-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const paths = new WorkspacePaths(root);
+  const source = path.join(root, 'old-build/model');
+  fs.mkdirSync(path.join(source, 'huggingface/hub/.locks'), { recursive: true });
+  fs.writeFileSync(path.join(source, 'huggingface/hub/weights'), 'model');
+  fs.writeFileSync(path.join(source, 'huggingface/hub/.locks/old.lock'), 'owner');
+  const record = '{"state":"ready","snapshot":"old absolute path"}';
+  fs.writeFileSync(path.join(source, 'download-state.json'), record);
+  const target = modelCacheDirectory(paths, source);
+  assert.equal(target, path.join(root, '.mcp-data/downloads/models/sirchmunk'));
+  assert.equal(fs.readFileSync(path.join(target, 'huggingface/hub/weights'), 'utf8'), 'model');
+  assert.equal(fs.existsSync(path.join(target, 'huggingface/hub/.locks')), false);
+  assert.equal(fs.existsSync(path.join(target, 'download-state.json')), false);
+  fs.writeFileSync(path.join(target, 'huggingface/hub/weights'), 'new');
+  assert.equal(fs.readFileSync(path.join(source, 'huggingface/hub/weights'), 'utf8'), 'model');
+  assert.equal(fs.readFileSync(path.join(source, 'download-state.json'), 'utf8'), record);
+});
 import { configureAgent } from '../../../agents/src/writers.mjs';
 
 function fixture(t) {

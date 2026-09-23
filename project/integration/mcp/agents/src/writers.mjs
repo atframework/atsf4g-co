@@ -12,7 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { resolveBuildDir, WorkspacePaths } from '../../common/src/paths.mjs';
+import { WorkspacePaths } from '../../common/src/paths.mjs';
 import { AgentConfigError } from './errors.mjs';
 import { planConfigChanges } from './configPlan.mjs';
 import { createFileStore, readConfigFile, recoverInterruptedBatch, findOpenJournalBatch } from './fileStore.mjs';
@@ -36,7 +36,7 @@ function defaultDirs(repoRoot, { stateDir, tmpDir } = {}) {
   if (stateDir && tmpDir) {
     return { stateDir, tmpDir };
   }
-  const paths = new WorkspacePaths(repoRoot, resolveBuildDir(repoRoot, null));
+  const paths = new WorkspacePaths(repoRoot);
   return { stateDir: stateDir ?? paths.stateDir, tmpDir: tmpDir ?? paths.agentTmpDir };
 }
 

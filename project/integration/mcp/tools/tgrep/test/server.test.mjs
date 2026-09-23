@@ -22,14 +22,14 @@ async function launchServer(envExtra = {}, entry = SERVER) {
   const buildDir = tmpBuildDir();
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [entry, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+    args: [entry, '--repo-root', buildDir],
     env: {
       ...envExtra,
       SYSTEMROOT: process.env.SYSTEMROOT,
       TEMP: process.env.TEMP,
       TMP: process.env.TMP,
     },
-    cwd: REPO_ROOT,
+    cwd: buildDir,
   });
   const client = new Client({ name: 'tgrep-server-test', version: '0.0.1' });
   await client.connect(transport);
@@ -45,7 +45,7 @@ test('legacy tgrep server entry still serves MCP and forwards module exports', a
     assert.ok((await client.listTools()).tools.some(tool => tool.name === 'tgrep_search'));
   } finally {
     await client.close();
-    assert.ok(await waitForPidExit(transport.pid));
+    assert.ok(await waitForServerExit(transport.pid, buildDir));
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
@@ -53,6 +53,19 @@ test('legacy tgrep server entry still serves MCP and forwards module exports', a
 function textOf(result) {
   assert.equal(result.content[0].type, 'text');
   return JSON.parse(result.content[0].text);
+}
+
+// The stdio wrapper and its detached owner have separate process lifetimes.
+// Wait for both before removing their working directory on Windows.
+async function waitForServerExit(pid, root) {
+  const { WorkspacePaths } = await import('../../../common/src/paths.mjs');
+  const exited = await waitForPidExit(pid);
+  const record = path.join(new WorkspacePaths(root).toolStateDir('tgrep'), 'shared-service.json');
+  if (fs.existsSync(record)) {
+    const owner = JSON.parse(fs.readFileSync(record, 'utf8'));
+    assert.ok(await waitForPidExit(owner.pid), 'shared owner must exit before fixture removal');
+  }
+  return exited;
 }
 
 async function waitForPidExit(pid, timeoutMs = 10_000) {
@@ -83,7 +96,7 @@ test('handshake exposes the fixed three-tool list', async () => {
     }
   } finally {
     await client.close();
-    const exited = await waitForPidExit(transport.pid);
+    const exited = await waitForServerExit(transport.pid, buildDir);
     assert.ok(exited, 'server process must exit after client close');
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
@@ -121,7 +134,7 @@ test('tgrep_search proxies matches; bad scope is rejected', async () => {
     assert.equal(textOf(bad).code, 'INVALID_PARAMS');
   } finally {
     await client.close();
-    await waitForPidExit(transport.pid);
+    await waitForServerExit(transport.pid, buildDir);
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
@@ -141,12 +154,12 @@ test('queries before the index is ready fail with INDEX_NOT_READY', async () => 
     assert.ok(['starting', 'initializing'].includes(textOf(status).wrapper_state));
   } finally {
     await client.close();
-    await waitForPidExit(transport.pid);
+    await waitForServerExit(transport.pid, buildDir);
     fs.rmSync(buildDir, { recursive: true, force: true });
   }
 });
 
-test('a second instance reports INDEX_IN_USE', async () => {
+test('a second Agent shares the backend and survives the first Agent closing', async () => {
   const buildDir = tmpBuildDir();
   const env = {
     SYSTEMROOT: process.env.SYSTEMROOT,
@@ -156,9 +169,9 @@ test('a second instance reports INDEX_IN_USE', async () => {
   };
   const first = new StdioClientTransport({
     command: process.execPath,
-    args: [SERVER, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+    args: [SERVER, '--repo-root', buildDir],
     env,
-    cwd: REPO_ROOT,
+    cwd: buildDir,
   });
   const firstClient = new Client({ name: 'first', version: '0.0.1' });
   await firstClient.connect(first);
@@ -169,21 +182,24 @@ test('a second instance reports INDEX_IN_USE', async () => {
     });
     const second = new StdioClientTransport({
       command: process.execPath,
-      args: [SERVER, '--repo-root', REPO_ROOT, '--build-dir', buildDir],
+      args: [SERVER, '--repo-root', buildDir],
       env,
-      cwd: REPO_ROOT,
+      cwd: buildDir,
     });
     const secondClient = new Client({ name: 'second', version: '0.0.1' });
     await secondClient.connect(second);
     try {
-      // tgrep_status stays queryable in the lock-conflict state and embeds
-      // the error payload; real queries fail with INDEX_IN_USE.
+      await waitReady(firstClient);
       const status = await secondClient.callTool({ name: 'tgrep_status', arguments: {} });
-      assert.equal(textOf(status).wrapper_state, 'failed');
-      assert.equal(textOf(status).error.code, 'INDEX_IN_USE');
+      assert.equal(textOf(status).wrapper_state, 'ready');
+      assert.equal(textOf(status).shared_service.clients, 2);
+      const firstStatus = textOf(await firstClient.callTool({ name: 'tgrep_status', arguments: {} }));
+      assert.equal(textOf(status).shared_service.pid, firstStatus.shared_service.pid);
+      await firstClient.close();
+      assert.ok(await waitForPidExit(first.pid));
       const search = await secondClient.callTool({ name: 'tgrep_search', arguments: { pattern: 'x' } });
-      assert.equal(search.isError, true);
-      assert.equal(textOf(search).code, 'INDEX_IN_USE');
+      assert.notEqual(search.isError, true);
+      assert.equal(textOf(search).num_matches, 2);
     } finally {
       await secondClient.close();
       await waitForPidExit(second.pid);

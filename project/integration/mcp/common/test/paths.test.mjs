@@ -57,13 +57,15 @@ test('isWithin uses path components, not prefixes', () => {
 test('workspaceId is stable and distinct', () => {
   assert.equal(workspaceId('C:\\a\\b'), workspaceId('C:\\a\\b'));
   assert.notEqual(workspaceId('C:\\a\\b'), workspaceId('C:\\a\\c'));
+  if (process.platform === 'win32') assert.equal(workspaceId('C:\\a\\b'), workspaceId('c:\\A\\B'));
 });
 
-test('WorkspacePaths nests tool state under build dir', () => {
+test('WorkspacePaths shares workspace data regardless of build directory', () => {
   const paths = new WorkspacePaths(path.resolve('/repo'), path.resolve('/repo/build'));
   const toolDir = paths.toolStateDir('tgrep');
-  assert.ok(toolDir.includes(path.join('integration', 'mcp', 'state', 'tgrep')));
-  assert.ok(toolDir.startsWith(path.resolve('/repo/build')));
+  assert.ok(toolDir.startsWith(path.resolve('/repo/.mcp-data/state/tgrep')));
+  assert.equal(toolDir, new WorkspacePaths(path.resolve('/repo'), path.resolve('/repo/other-build')).toolStateDir('tgrep'));
+  assert.equal(paths.agentTmpDir, path.resolve('/repo/.mcp-data/tmp'));
 });
 
 test('WorkspacePaths.ensureDirs creates the tree', () => {
@@ -73,9 +75,28 @@ test('WorkspacePaths.ensureDirs creates the tree', () => {
     paths.ensureDirs();
     assert.ok(fs.statSync(paths.stateDir, { throwIfNoEntry: false })?.isDirectory());
     assert.ok(fs.statSync(paths.runtimeDir, { throwIfNoEntry: false })?.isDirectory());
+    assert.equal(fs.existsSync(path.join(dir, 'build')), false);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('workspace data ignores broken build settings and reads legacy preparation without writing there', t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-legacy-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, '.vscode'));
+  fs.writeFileSync(path.join(root, '.vscode/settings.json'), '{broken');
+  const old = path.join(root, 'previous-build/integration/mcp/state/prepared-state.json');
+  fs.mkdirSync(path.dirname(old), { recursive: true });
+  fs.writeFileSync(old, '{"backend":"tgrep"}');
+  const before = fs.statSync(old).mtimeMs;
+  const paths = new WorkspacePaths(root);
+  paths.ensureDirs();
+  assert.equal(paths.preparedStateReadPath(), old);
+  assert.equal(fs.statSync(old).mtimeMs, before);
+  assert.equal(fs.existsSync(path.join(root, 'build')), false);
+  fs.writeFileSync(paths.preparedStatePath(), '{"backend":"codegraph"}');
+  assert.equal(paths.preparedStateReadPath(), paths.preparedStatePath());
 });
 
 /** A scratch Git worktree; the toolkit can be anywhere inside it. */

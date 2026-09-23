@@ -31,6 +31,16 @@ function makePaths() {
   return new WorkspacePaths(repo, path.join(repo, 'build'));
 }
 
+test('an incompatible executable fails before starting a backend or creating an index', async (t) => {
+  const paths = makePaths();
+  t.after(() => fs.rmSync(paths.repoRoot, { recursive: true, force: true }));
+  const backend = new TgrepBackend({ paths, binary: process.execPath });
+  await assert.rejects(backend.start(), error => error instanceof BackendError
+    && error.code === 'BACKEND_FAILED' && /run setup.js --backend=tgrep/.test(error.message));
+  assert.equal(backend.proc, null);
+  assert.equal(fs.existsSync(backend.indexDir), false);
+});
+
 async function withBackend(env, run) {
   const paths = makePaths();
   const backend = new TgrepBackend({

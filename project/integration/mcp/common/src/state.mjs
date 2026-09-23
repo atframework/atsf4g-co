@@ -115,14 +115,27 @@ export class StateStore {
 }
 
 export class ToolInstanceLock {
-  constructor(directory, tool) {
+  constructor(directory, tool, legacyDirectories = []) {
     this.path = path.join(directory, `${tool}.instance.lock`);
     this.holderPath = path.join(directory, `${tool}.holder.json`);
     this.handle = null;
     this.locked = false;
+    this.legacyDirectories = legacyDirectories;
+    this.tool = tool;
   }
 
   acquire(identity, repoRoot, stage) {
+    // An older wrapper may still own the previous directory. Never steal its
+    // lock or start a second writer while its owner is alive or unknown.
+    for (const directory of this.legacyDirectories) {
+      const lock = path.join(directory, `${this.tool}.instance.lock`);
+      if (!fs.existsSync(lock)) continue;
+      const holder = new StateStore(path.join(directory, `${this.tool}.holder.json`)).read()
+        ?? new StateStore(lock).read();
+      if (!holder?.identity?.pid || !holderIsStale(holder)) {
+        throw new IndexInUse('an older wrapper owns the legacy cache; close its Agent before restarting', { lock_file: lock, holder });
+      }
+    }
     fs.mkdirSync(path.dirname(this.path), { recursive: true });
     let handle = null;
     try {
@@ -189,7 +202,7 @@ export class ToolInstanceLock {
     }
     this.locked = false;
     try {
-      this.handle?.close();
+      if (this.handle !== null) fs.closeSync(this.handle);
     } catch {
       /* already closed */
     }

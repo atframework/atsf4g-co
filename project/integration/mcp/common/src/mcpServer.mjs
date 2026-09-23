@@ -6,9 +6,9 @@
  * - The tool list is fixed at startup; handler failures become tool results
  *   with `isError: true` and a stable error-code payload.
  * - EOF on stdin, SIGINT, SIGTERM, and transport close all enter the same
- *   shutdown: stop the service (backend tree first), close the transport,
- *   exit. If this process is SIGKILLed, the backends observe the stdin pipe
- *   break and exit on their own (stdin-lifeline contract).
+ *   shutdown: release this Agent's shared connection, close transport, exit.
+ *   The shared owner stops its backend after the last connection disappears.
+ *   If the owner is killed, backend stdin pipes break and its children exit.
  */
 
 import { loadSdk } from './sdk.mjs';
@@ -16,6 +16,7 @@ const { Server } = await loadSdk('common', '@modelcontextprotocol/server');
 const { StdioServerTransport } = await loadSdk('common', '@modelcontextprotocol/server/stdio');
 
 import { BackendError, ErrorCodes } from './errors.mjs';
+import { SharedClient, sharedLocation, serveShared, isSharedWorker, relayDeno, configurationIdentity } from './sharedService.mjs';
 
 export function toolText(payload) {
   return { content: [{ type: 'text', text: JSON.stringify(payload, null, 1) }] };
@@ -40,25 +41,29 @@ export function toolErrorResult(error) {
  *   (() => Array<object>)} options.tools fixed tool table, or a getter when
  *   schemas refresh from the backend (tool names must stay fixed either way)
  * @param {{startup: () => void|Promise<void>, shutdown: (reason: string) => Promise<void>}} options.service
+ * @param {'tgrep'|'codegraph'|'sirchmunk'} options.sharedTool cache owner identity
  */
-export async function runWrapperServer({ name, instructions, tools, service }) {
+export async function runWrapperServer({ name, instructions, tools, service, sharedTool }) {
+  if (await relayDeno(service.paths)) return;
+  const getTools = typeof tools === 'function' ? tools : () => tools;
+  const configuration = configurationIdentity(service, sharedTool);
+  const toolMap = new Map(getTools().map((tool) => [tool.name, tool]));
+  const callTool = async (toolName, args) => {
+    const tool = toolMap.get(toolName);
+    if (!tool) return toolErrorResult(new BackendError(ErrorCodes.INVALID_PARAMS, `unknown tool ${toolName}`));
+    try { return await tool.handler(args ?? {}); } catch (error) { return toolErrorResult(error); }
+  };
+  if (isSharedWorker()) {
+    await serveShared({ location: sharedLocation(service.paths, sharedTool), service, getTools, callTool, tool: sharedTool, configuration });
+    return;
+  }
+  const shared = new SharedClient(service.paths, sharedTool, configuration);
+  service = { startup: () => shared.connect(), shutdown: () => shared.shutdown() };
   const server = new Server(
     { name, version: '0.1.0' },
     { capabilities: { tools: {} }, instructions }
   );
-  const getTools = typeof tools === 'function' ? tools : () => tools;
-  // Tool names and handlers are fixed at startup; only schema metadata may
-  // refresh through the getter.
-  const toolMap = new Map(getTools().map((tool) => [tool.name, tool]));
-
-  server.setRequestHandler('tools/list', () => ({
-    tools: getTools().map(({ name: toolName, description, inputSchema, annotations }) => ({
-      name: toolName,
-      description,
-      inputSchema,
-      ...(annotations ? { annotations } : {}),
-    })),
-  }));
+  server.setRequestHandler('tools/list', () => shared.request('list'));
 
   server.setRequestHandler('tools/call', async (request) => {
     const tool = toolMap.get(request.params?.name);
@@ -68,7 +73,7 @@ export async function runWrapperServer({ name, instructions, tools, service }) {
       );
     }
     try {
-      return await tool.handler(request.params?.arguments ?? {});
+      return await shared.request('call', { name: tool.name, args: request.params?.arguments ?? {} });
     } catch (error) {
       return toolErrorResult(error);
     }

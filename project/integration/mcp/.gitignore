@@ -1,4 +1,4 @@
-# Development installs only; setup.js writes production dependencies under BUILD_DIR.
+# Development installs only; setup.js writes production dependencies under the workspace .mcp-data/ directory.
 **/node_modules/
 **/__pycache__/
 *.pyc

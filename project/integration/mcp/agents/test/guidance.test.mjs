@@ -63,6 +63,7 @@ test('invalid or ambiguous markers and invalid encodings are rejected', () => {
 
 test('unchanged guidance retains mtime and creates no metadata or backups', (t) => {
   const options = workspace(t);
+  fs.writeFileSync(path.join(options.repoRoot, 'codegraph.json'), '{"exclude":["**/.mcp-data/**"]}');
   const file = path.join(options.repoRoot, 'AGENTS.md');
   const current = block('\r\n').replace('<MCP_DIR>/README.md', 'tools/mcp/README.md')
     .replace('<CODEGRAPH_DIR>', `.codegraph-${path.basename(options.repoRoot).toLowerCase()}-${platformName()}`);
@@ -74,7 +75,7 @@ test('unchanged guidance retains mtime and creates no metadata or backups', (t) 
   assert.equal(result.plan.steps[0].action, 'unchanged');
   assert.deepEqual(fs.readFileSync(file), before);
   assert.equal(fs.statSync(file).mtimeMs, mtime);
-  assert.deepEqual(fs.readdirSync(options.repoRoot), ['AGENTS.md']);
+  assert.deepEqual(fs.readdirSync(options.repoRoot), ['AGENTS.md', 'codegraph.json']);
 });
 
 test('malformed guidance aborts config writes, and damaged configs abort guidance writes', (t) => {
@@ -104,7 +105,7 @@ test('a post-write failure restores the original encoded guidance and earlier ag
   });
   const plan = planAgentConfigChanges({ ...options, operations: [{ type: 'configure', agentId: 'claude', backend: 'codegraph' }], codegraphGuidance: true });
   assert.throws(() => applyAgentConfigChanges({ ...options, plan }), (error) => {
-    assert.deepEqual(error.rollback.map((entry) => entry.restored), [true, true]);
+    assert.deepEqual(error.rollback.map((entry) => [entry.relative, entry.restored]), [['AGENTS.md', true], ['codegraph.json', true], ['.mcp.json', true]]);
     return true;
   });
   assert.deepEqual(fs.readFileSync(file), before);
@@ -121,7 +122,7 @@ test('concurrent re-encoding after planning is preserved and earlier config writ
   fs.writeFileSync(file, concurrent);
   assert.throws(() => applyAgentConfigChanges({ ...options, plan }), (error) => {
     assert.equal(error.cause.kind, 'concurrent-modification');
-    assert.deepEqual(error.rollback.map((entry) => [entry.relative, entry.restored]), [['.mcp.json', true]]);
+    assert.deepEqual(error.rollback.map((entry) => [entry.relative, entry.restored]), [['codegraph.json', true], ['.mcp.json', true]]);
     return true;
   });
   assert.deepEqual(fs.readFileSync(file), concurrent);

@@ -36,12 +36,13 @@ export function nodeExecutables() {
     .map(file => fs.realpathSync(file)))];
 }
 
-export function probeTgrep(binary, version, execute) {
+export function probeTgrep(binary, version, execute, integrationRevision) {
   if (!isFile(binary) || /\.(?:cmd|bat|ps1)$/i.test(binary)) throw new Error('tgrep requires an executable file, not a shell shim');
   const result = execute([binary, '--version'], { timeout: 15000 });
   if (result.status !== 0 || !sameVersion(result.stdout, version)) throw new Error(`tgrep must report version ${version}`);
   const help = execute([binary, 'serve', '--help'], { timeout: 15000 });
   if (help.status !== 0 || !/--transport/.test(help.stdout) || !/\bstdio\b/.test(help.stdout)) throw new Error('tgrep requires the integration stdio transport patch');
+  if (integrationRevision && !result.stdout.includes(`(${integrationRevision})`)) throw new Error(`tgrep requires integration revision ${integrationRevision}; rebuild with the current patches`);
   return result.stdout.trim();
 }
 

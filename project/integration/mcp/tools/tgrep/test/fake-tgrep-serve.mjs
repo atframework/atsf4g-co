@@ -12,6 +12,8 @@
  */
 
 import { createInterface } from 'node:readline';
+import fs from 'node:fs';
+if (process.env.MCP_TEST_START_LOG) fs.appendFileSync(process.env.MCP_TEST_START_LOG, process.pid + '\n');
 
 const neverReady = process.env.TGREP_FAKE_NEVER_READY === '1';
 const delayMs = Number(process.env.TGREP_FAKE_DELAY_MS ?? '0');
@@ -63,6 +65,8 @@ readline.on('line', async (line) => {
       });
       return;
     case 'search':
+      if (process.env.TGREP_FAKE_SEARCH_RECEIPT) fs.appendFileSync(process.env.TGREP_FAKE_SEARCH_RECEIPT, params.pattern + '\n');
+      if (process.env.TGREP_FAKE_HOLD_SEARCH === '1') return;
       write({
         jsonrpc: '2.0',
         id: request.id,

@@ -75,6 +75,9 @@ opencode.jsonc
 # node packages
 node_modules/
 
+# Workspace-local MCP caches, credentials, logs and verification fixtures
+.mcp-data/
+
 # external libs
 ## libiniloader
 

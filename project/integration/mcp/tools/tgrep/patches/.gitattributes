@@ -1,0 +1,2 @@
+# Preserve CR bytes in hunks for the pinned upstream gitignore.rs (stored as CRLF).
+0002-bound-inherited-ignore-matching-to-served-root.patch -text

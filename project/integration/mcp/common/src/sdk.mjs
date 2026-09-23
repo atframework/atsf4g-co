@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { INTEGRATION_ROOT, WorkspacePaths, deriveRepoRoot, resolveBuildDir } from './paths.mjs';
+import { INTEGRATION_ROOT, WorkspacePaths, deriveRepoRoot } from './paths.mjs';
 
 export async function loadSdk(component, name) {
   const value = flag => {
@@ -11,8 +11,8 @@ export async function loadSdk(component, name) {
     return index >= 0 ? process.argv[index + 1] : process.argv.find(arg => arg.startsWith(flag + '='))?.slice(flag.length + 1);
   };
   const root = deriveRepoRoot(import.meta.url, value('--repo-root'));
-  const paths = new WorkspacePaths(root, resolveBuildDir(root, value('--build-dir')));
-  const candidates = [paths.nodePackageDir(component), path.join(INTEGRATION_ROOT, component)];
+  const paths = new WorkspacePaths(root, value('--build-dir'));
+  const candidates = [paths.nodePackageDir(component), ...paths.legacyIntegrationDirs.map(dir => path.join(dir, 'downloads/node', `${process.platform}-${process.arch}`, component)), path.join(INTEGRATION_ROOT, component)];
   if (component.startsWith('tools/')) candidates.push(path.join(INTEGRATION_ROOT, component.slice(6)));
   const packageName = name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
   const lock = JSON.parse(fs.readFileSync(path.join(INTEGRATION_ROOT, component, 'package-lock.json'), 'utf8'));
