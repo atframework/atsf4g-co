@@ -67,18 +67,14 @@ task_action_management_subscribe::operator()() {
     TASK_ACTION_RETURN_CODE(get_response_code());
   }
 
-  if (get_response_code() < 0 || !router_cache) {
-    FWLOGERROR("try to get router object for {} and friend {}:{} failed. res: {}({})", name(), zone_id, user_id,
-               get_response_code(), protobuf_mini_dumper_get_error_msg(get_response_code()));
-    TASK_ACTION_RETURN_CODE(get_response_code());
-  }
-
-  atfw::friend_api::friend_object::ptr_t friend_obj =
-      std::static_pointer_cast<atfw::friend_api::friend_object>(router_cache->get_object());
-  if (!friend_obj) {
+  auto friend_cache_obj = router_cache->get_object();
+  if (!friend_cache_obj || !friend_cache_obj->is_writable()) {
     FWLOGERROR("try to get friend_object for {} and friend {}:{} failed.", name(), zone_id, user_id);
     TASK_ACTION_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_ROUTER_NOT_WRITABLE);
   }
+
+  atfw::friend_api::friend_object::ptr_t friend_obj =
+      std::static_pointer_cast<atfw::friend_api::friend_object>(friend_cache_obj);
 
   // 分配新event id
   if (req_body.need_allocate_event_id()) {

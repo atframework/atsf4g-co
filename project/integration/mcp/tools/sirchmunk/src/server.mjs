@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { WorkspacePaths, deriveRepoRoot, validateWorkspaceBuildDir, validateRelativeScope } from '../../../common/src/paths.mjs';
-import { runWrapperServer, toolText } from '../../../common/src/mcpServer.mjs';
+import { runWrapperServer, runWrapperMain, toolText } from '../../../common/src/mcpServer.mjs';
 import { BackendError, ErrorCodes } from '../../../common/src/errors.mjs';
 import { ToolInstanceLock, currentIdentity, StateStore } from '../../../common/src/state.mjs';
 import { modelCacheDirectory } from './prepare.mjs';
@@ -27,6 +27,8 @@ export class SirchmunkService {
     this.timer = null;
     this.backendStatus = null;
     this.failure = null;
+    this.importAbort = new AbortController();
+    this.starting = null;
   }
 
   publish() {
@@ -36,12 +38,19 @@ export class SirchmunkService {
   }
 
   startup() {
+    // Keep IPC authentication, status and disconnect handling available during
+    // a large model import. Only this elected owner prepares the backend.
+    this.starting ??= this.initialize();
+  }
+
+  async initialize() {
     try {
       this.lock.acquire(currentIdentity(), this.paths.repoRoot, 'starting');
       const prepared = JSON.parse(fs.readFileSync(this.paths.preparedStateReadPath(), 'utf8')).sirchmunk;
       if (!prepared?.python) throw new Error('Sirchmunk is not prepared; run setup.js --backend=sirchmunk');
-      prepared.model_dir = modelCacheDirectory(this.paths, prepared.model_dir);
       if (!readConfig(this.paths)) throw new Error('Sirchmunk LLM settings are missing; rerun setup.js');
+      prepared.model_dir = await modelCacheDirectory(this.paths, prepared.model_dir, { signal: this.importAbort.signal });
+      if (this.state === 'stopped') return;
       const work = path.join(this.paths.toolStateDir('sirchmunk'), 'work');
       validateWorkspaceBuildDir(this.paths.repoRoot, work);
       validateWorkspaceBuildDir(this.paths.repoRoot, prepared.model_dir);
@@ -64,6 +73,7 @@ export class SirchmunkService {
       });
       void this.poll();
     } catch (error) {
+      if (this.state === 'stopped') return;
       this.failure = error;
       this.state = 'failed'; this.detail = error.message; this.publish();
     }
@@ -101,6 +111,8 @@ export class SirchmunkService {
 
   async shutdown(reason) {
     this.state = 'stopped'; this.detail = reason;
+    this.importAbort.abort();
+    await this.starting;
     clearTimeout(this.timer);
     let deadline;
     try {
@@ -124,7 +136,7 @@ function main() {
   const tool = (name, method, description, properties, required = []) => ({ name, description,
     inputSchema: { type: 'object', properties, required, additionalProperties: false },
     handler: async args => toolText(await service.call(method, args)) });
-  void runWrapperServer({ name: 'workspace-sirchmunk', sharedTool: 'sirchmunk',
+  return runWrapperServer({ name: 'workspace-sirchmunk', sharedTool: 'sirchmunk',
     instructions: 'Search only this workspace. FAST and DEEP send relevant content to the configured LLM. Check sirchmunk_status for embedding download and knowledge evolution readiness.', service,
     tools: [
       { name: 'sirchmunk_status', description: 'Check backend, embedding and knowledge evolution status.', inputSchema: { type: 'object', properties: {}, additionalProperties: false }, handler: () => toolText(service.status()) },
@@ -135,4 +147,4 @@ function main() {
     ] });
 }
 
-main();
+runWrapperMain('sirchmunk-mcp', main);

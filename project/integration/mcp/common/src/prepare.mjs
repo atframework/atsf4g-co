@@ -5,7 +5,7 @@
  *
  * Downloads are tool dependencies only (pinned upstream sources and npm
  * packages); nothing here uploads repository source code. Verified tool paths are
- * recorded into <BUILD_DIR>/integration/mcp/state/prepared-state.json
+ * recorded into <PROJECT_DIR>/.mcp-data/state/prepared-state.json
  * and reused as-is on later runs.
  *
  * Mirror support: `npmRegistry` is passed to every npm invocation (e.g.
@@ -163,11 +163,49 @@ export function prepareNodeModules(mcpRoot, { paths = null, offline = false, reg
 
 // -- tgrep --------------------------------------------------------------------
 
+/** Import mutable inputs before patching/building. Never write through a legacy
+ * link or publish an incomplete copy as a usable current directory.
+ */
+function importDirectory(paths, source, target, filter = () => true) {
+  if (fs.existsSync(target) || !fs.existsSync(source)) return;
+  validateWorkspaceBuildDir(paths.repoRoot, source);
+  validateWorkspaceBuildDir(paths.repoRoot, target);
+  validateWorkspaceBuildDir(paths.repoRoot, paths.agentTmpDir);
+  fs.mkdirSync(paths.agentTmpDir, { recursive: true });
+  const stage = fs.mkdtempSync(path.join(paths.agentTmpDir, 'cache-import-'));
+  const canonical = fs.realpathSync(source);
+  try {
+    fs.cpSync(source, path.join(stage, 'data'), { recursive: true, dereference: true, filter: file => {
+      if (!filter(path.relative(source, file))) return false;
+      if (!isWithin(fs.realpathSync(file), canonical)) throw new Error('legacy cache link escapes its source');
+      return true;
+    } });
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.renameSync(path.join(stage, 'data'), target);
+  } finally { fs.rmSync(stage, { recursive: true, force: true }); }
+}
+
+function importCargoCache(paths, official) {
+  const name = official ? 'cargo-official' : 'cargo';
+  const target = path.join(paths.cacheDir, name);
+  const source = paths.readPath(`downloads/cache/${name}`, [official ? 'cargo-home-official' : 'cargo-home']);
+  if (source !== target) {
+    // Cargo re-extracts crates and checkouts. Do not import credentials,
+    // source overrides, installed binaries or active package-cache locks.
+    importDirectory(paths, source, target, relative => {
+      const name = relative.split(path.sep).join('/');
+      return ['', 'registry', 'git'].includes(name) || ['registry/index', 'registry/cache', 'git/db']
+        .some(prefix => name === prefix || name.startsWith(prefix + '/'));
+    });
+  }
+}
+
 /** Official Cargo must not inherit a user's crates-io replacement. Cargo cannot
  * override replace-with back to crates-io (that creates a source cycle). Use a
  * workspace cache and a neutral cwd; --manifest-path keeps all build output local.
  */
 export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], cargoIsolated = false, execute = run } = {}) {
+  importCargoCache(paths, cargoIsolated);
   if (!cargoIsolated) {
     const cargoHome = path.join(paths.cacheDir, 'cargo');
     validateWorkspaceBuildDir(paths.repoRoot, cargoHome);
@@ -193,19 +231,25 @@ export function runCargoBuild(paths, srcDir, command, { cargoConfigArgs = [], ca
 
 export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs = [], cargoIsolated = false, binary = null, execute = run, log = silentLog } = {}) {
   const lock = JSON.parse(fs.readFileSync(path.join(mcpRoot, 'tools/tgrep', 'upstream-lock.json'), 'utf8'));
-  const legacySource = path.join(paths.integrationDir, 'upstream/tgrep-src');
-  const srcDir = fs.existsSync(legacySource) ? legacySource : path.join(paths.upstreamDir, 'tgrep-src');
+  const srcDir = path.join(paths.upstreamDir, 'tgrep-src');
   const patchPaths = lock.patches.map(patch => path.join(mcpRoot, 'tools/tgrep', patch));
   const binaryName = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
   const runtimeBinary = path.join(paths.runtimeDir, binaryName);
 
   const prepared = readJson(paths.preparedStateReadPath());
-  const candidates = binary ? [path.resolve(binary)] : [
-    prepared?.tgrep?.binary, ...commandPaths('tgrep'), runtimeBinary,
-    path.join(paths.integrationDir, 'runtime', binaryName),
-    path.join(srcDir, 'target/release', binaryName),
-  ];
-  for (const candidate of new Set(candidates.filter(Boolean))) {
+  function* localCandidates() {
+    yield prepared?.tgrep?.binary;
+    yield* commandPaths('tgrep');
+    yield runtimeBinary;
+    yield path.join(srcDir, 'target/release', binaryName);
+    // Discover old caches only when no verified current artifact was found.
+    yield paths.readPath(`downloads/bin/${process.platform}-${process.arch}/${binaryName}`, [`runtime/${binaryName}`]);
+    yield path.join(paths.readPath('downloads/sources/tgrep-src', ['upstream/tgrep-src']), 'target/release', binaryName);
+  }
+  const checked = new Set();
+  for (const candidate of binary ? [path.resolve(binary)] : localCandidates()) {
+    if (!candidate || checked.has(candidate)) continue;
+    checked.add(candidate);
     if (!binary && !fs.existsSync(candidate)) continue;
     try {
       const version = probeTgrep(candidate, lock.declared_version, execute, lock.integration_revision);
@@ -217,6 +261,15 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
     }
   }
 
+  if (!fs.existsSync(srcDir)) {
+    const oldSource = paths.readPath('downloads/sources/tgrep-src', ['upstream/tgrep-src']);
+    if (fs.existsSync(oldSource)) {
+      if (fs.existsSync(path.join(oldSource, '.git')) && !fs.statSync(path.join(oldSource, '.git')).isDirectory()) {
+        throw new Error('legacy tgrep source uses an external Git directory; prepare a standalone checkout');
+      }
+      importDirectory(paths, oldSource, srcDir, relative => relative.split(path.sep)[0] !== 'target');
+    }
+  }
   if (!fs.existsSync(srcDir)) {
     if (offline) {
       throw new Error('tgrep source missing and --offline given');
@@ -230,7 +283,7 @@ export function prepareTgrep(paths, mcpRoot, { offline = false, cargoConfigArgs 
   }
   const head = execute(['git', '-C', srcDir, 'rev-parse', 'HEAD']).stdout.trim();
   if (head !== lock.source_commit) {
-    throw new Error(`tgrep checkout is at ${head}, expected ${lock.source_commit}; delete upstream/tgrep-src to re-pin`);
+    throw new Error(`tgrep checkout is at ${head}, expected ${lock.source_commit}; inspect ${srcDir} before re-pinning`);
   }
 
   let patchesChanged = false;
@@ -320,7 +373,6 @@ export function prepareCodegraph(paths, mcpRoot, {
     path.join(mcpRoot, 'node_modules/@colbymchenry/codegraph'),
     path.join(paths.repoRoot, 'node_modules/@colbymchenry/codegraph'),
     path.join(paths.upstreamDir, 'codegraph-bundle'),
-    path.join(paths.integrationDir, 'upstream/codegraph-bundle'),
     path.join(process.env.CODEGRAPH_INSTALL_DIR || path.join(os.homedir(), '.codegraph'), 'bundles', target + '-' + lock.version),
   ]);
   if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
@@ -337,8 +389,12 @@ export function prepareCodegraph(paths, mcpRoot, {
     globalRoot && path.join(globalRoot, '@colbymchenry/codegraph'),
     ...(userCache ? npxPackageRoots(userCache) : []),
     ...npxPackageRoots(cache),
-    ...npxPackageRoots(path.join(paths.integrationDir, 'npm-cache', target)),
   ]);
+  if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
+
+  selected = select([paths.readPath('downloads/sources/codegraph-bundle', ['upstream/codegraph-bundle'])]);
+  if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
+  selected = select(npxPackageRoots(paths.readPath(`downloads/cache/npm/${target}`, [`npm-cache/${target}`])));
   if (selected) { log('reusing local CodeGraph: ' + selected.package_root); return state(selected, 'local'); }
 
   const cached = prepareCodegraphNpxCache(paths, lock, { offline, registry, execute, log });
@@ -391,7 +447,7 @@ export function prepareCodegraphNpxCache(paths, lock, { offline = false, registr
  * payload; the caller (setup.js) serializes it. Throws on any failure --
  * callers must not touch agent configuration when this fails.
  */
-export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], cargoIsolated = false, tgrepBinary = null, codegraphPath = null, sirchmunkPython = null, pipIndexURL = 'https://pypi.org/simple', log = silentLog }) {
+export async function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null, offline = false, npmRegistry = null, cargoConfigArgs = [], cargoIsolated = false, tgrepBinary = null, codegraphPath = null, sirchmunkPython = null, pipIndexURL = 'https://pypi.org/simple', log = silentLog }) {
   const mcpRoot = integrationRoot ?? INTEGRATION_ROOT;
   const paths = new WorkspacePaths(repoRoot, buildDir);
   paths.ensureDirs();
@@ -412,7 +468,7 @@ export function runPrepare({ repoRoot, buildDir, backend, integrationRoot = null
     state.tgrep = prepareTgrep(paths, mcpRoot, { offline, cargoConfigArgs, cargoIsolated, binary: tgrepBinary, log });
     log(`tgrep ready: ${state.tgrep.version}`);
   } else if (backend === 'sirchmunk') {
-    state.sirchmunk = prepareSirchmunk(paths, mcpRoot, { offline, python: sirchmunkPython, indexURL: pipIndexURL, log });
+    state.sirchmunk = await prepareSirchmunk(paths, mcpRoot, { offline, python: sirchmunkPython, indexURL: pipIndexURL, log });
     log(`Sirchmunk ready: ${state.sirchmunk.version}`);
   } else {
     state.codegraph = prepareCodegraph(paths, mcpRoot, { offline, registry: npmRegistry, localPath: codegraphPath, log });

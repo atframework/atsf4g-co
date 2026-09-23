@@ -29,7 +29,7 @@ import { parseArgs } from 'node:util';
 import { BackendError, ErrorCodes, IndexInUse } from '../../../common/src/errors.mjs';
 import { WorkspacePaths, deriveRepoRoot, validateRelativeScope, projectInfo } from '../../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../../common/src/state.mjs';
-import { runWrapperServer, toolText } from '../../../common/src/mcpServer.mjs';
+import { runWrapperServer, runWrapperMain, toolText } from '../../../common/src/mcpServer.mjs';
 import { scriptInvocation } from '../../../common/src/runtime.mjs';
 import {
   DEFAULT_TOOL_ALLOWLIST,
@@ -530,14 +530,13 @@ function main() {
   }
 
   const service = new CodeGraphService(paths, backendArgs);
-  void runWrapperServer({
+  return runWrapperServer({
     sharedTool: 'codegraph',
     name: `${projectInfo(repoRoot).slug}-codegraph`,
     instructions: TOOL_INSTRUCTIONS,
     tools: makeTools(service),
     service,
   });
-  return service;
 }
 
-main();
+runWrapperMain('codegraph-mcp', main);

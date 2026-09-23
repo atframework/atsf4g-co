@@ -272,6 +272,8 @@ void friend_object::on_saved(rpc::context& ctx, uint64_t svr_id) {
   }
 }
 
+bool friend_object::is_writable() const noexcept { return true; }
+
 int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& db_data) {
   refresh_feature_limit(ctx);
 
@@ -282,12 +284,12 @@ int friend_object::dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& d
   already_setup_quick_save_ = false;
 
   table_friend_blob_data& blob_data = *db_data.mutable_blob_data();
-  dump(ctx, blob_data);
+  dump(ctx, blob_data, true);
 
   return ret;
 }
 
-void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data) {
+void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data, bool with_transaction_data) {
   auto now = ctx.logical_now();
 
   blob_data.clear_friend_list();
@@ -306,7 +308,7 @@ void friend_object::dump(rpc::context& ctx, table_friend_blob_data& blob_data) {
   }
 
   // 事务 Dump
-  {
+  if (with_transaction_data) {
     friend_transaction_participator_handle::snapshot_type storage;
     transaction_handle_->dump(storage);
     if (!blob_data.mutable_transaction_storage()->PackFrom(storage)) {
@@ -753,7 +755,7 @@ rpc::result_code_type friend_object::send_notification(rpc::context& ctx) {
         protobuf_copy_message(*event_target->add_subscriber_key(), user_id_key);
       }
 
-      dump(ctx, *event_target->mutable_snapshot());
+      dump(ctx, *event_target->mutable_snapshot(), false);
     }
   } while (false);
 
@@ -835,7 +837,7 @@ static void friend_object_merge_transcation_events(size_t& add_invitee_count, si
 }
 }  // namespace
 
-int32_t friend_object::check_prepare_transcation(rpc::context& ctx,
+int32_t friend_object::check_prepare_transcation(rpc::context& ctx, const std::string& transaction_uuid,
                                                  const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events) {
   size_t add_invitee_count = 0;
   size_t add_inviter_count = 0;
@@ -846,6 +848,11 @@ int32_t friend_object::check_prepare_transcation(rpc::context& ctx,
   {
     for (const auto& running_transaction : transaction_handle_->get_running_transactions()) {
       if (!running_transaction.second.storage) {
+        continue;
+      }
+
+      // 保持幂等性，不重复计数
+      if (transaction_uuid == running_transaction.second.storage->metadata().transaction_uuid()) {
         continue;
       }
 
@@ -964,6 +971,7 @@ void friend_object::unsubscribe(rpc::context& ctx, const DFriendSubscribeKey& su
 bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
   wal_publisher_->set_global_log_ingore_key(event_id);
 
+  bool has_event = false;
   // 仅仅移除event_id更小的记录
   {
     std::vector<int64_t> pending_to_erase;
@@ -993,6 +1001,7 @@ bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
           gift_sender_index_.erase(user_index_iter);
         }
       }
+      has_event = true;
     }
   }
 
@@ -1005,6 +1014,7 @@ bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
       }
     }
 
+    has_event = has_event || !pending_to_erase.empty();
     for (auto& erase_key : pending_to_erase) {
       inviters_.erase(erase_key);
     }
@@ -1018,6 +1028,7 @@ bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
       }
     }
 
+    has_event = has_event || !pending_to_erase.empty();
     for (auto& erase_key : pending_to_erase) {
       invitees_.erase(erase_key);
     }
@@ -1031,9 +1042,14 @@ bool friend_object::clear_all_data(rpc::context& /*ctx*/, int64_t event_id) {
       }
     }
 
+    has_event = has_event || !pending_to_erase.empty();
     for (auto& erase_key : pending_to_erase) {
       friends_.erase(erase_key);
     }
+  }
+
+  if (has_event) {
+    set_quick_save();
   }
 
   return true;

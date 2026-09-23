@@ -68,9 +68,11 @@ class friend_object : public friend_cache, public std::enable_shared_from_this<f
 
   void on_saved(rpc::context& ctx, uint64_t svr_id) override;
 
+  bool is_writable() const noexcept override;
+
   int dump(rpc::context& ctx, PROJECT_NAMESPACE_ID::table_friend& db_data) override;
 
-  void dump(rpc::context& ctx, table_friend_blob_data& blob_data);
+  void dump(rpc::context& ctx, table_friend_blob_data& blob_data, bool with_transaction_data);
 
   bool add_friend(rpc::context& ctx, int64_t event_id, DFriendInfo& friend_data);
 
@@ -94,7 +96,7 @@ class friend_object : public friend_cache, public std::enable_shared_from_this<f
 
   rpc::result_code_type send_notification(rpc::context& ctx);
 
-  int32_t check_prepare_transcation(rpc::context& ctx,
+  int32_t check_prepare_transcation(rpc::context& ctx, const std::string& transaction_uuid,
                                     const ::google::protobuf::RepeatedPtrField<DFriendEvent>& events);
 
   int64_t allocate_event_id();

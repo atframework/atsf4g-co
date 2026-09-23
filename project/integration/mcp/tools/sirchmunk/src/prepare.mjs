@@ -7,7 +7,7 @@ import { minimalEnvironment } from '../../../common/src/supervisor.mjs';
 import { INTEGRATION_ROOT, validateWorkspaceBuildDir, isWithin } from '../../../common/src/paths.mjs';
 
 /** Import completed legacy model files, never locks, logs or absolute status paths. */
-export function modelCacheDirectory(paths, source) {
+export async function modelCacheDirectory(paths, source, { signal } = {}) {
   const target = path.join(paths.downloadsDir, 'models/sirchmunk');
   validateWorkspaceBuildDir(paths.repoRoot, target);
   if (fs.existsSync(target) || !source || !fs.existsSync(source)) return target;
@@ -16,19 +16,23 @@ export function modelCacheDirectory(paths, source) {
   const hub = path.join(source, 'huggingface/hub');
   if (!fs.existsSync(hub)) return target;
   validateWorkspaceBuildDir(paths.repoRoot, paths.agentTmpDir);
-  fs.mkdirSync(paths.agentTmpDir, { recursive: true });
-  const stage = fs.mkdtempSync(path.join(paths.agentTmpDir, 'model-import-'));
+  signal?.throwIfAborted();
+  await fs.promises.mkdir(paths.agentTmpDir, { recursive: true });
+  const stage = await fs.promises.mkdtemp(path.join(paths.agentTmpDir, 'model-import-'));
   try {
-    const canonical = fs.realpathSync(hub);
-    fs.cpSync(hub, path.join(stage, 'huggingface/hub'), { recursive: true, dereference: true, filter: file => {
+    const canonical = await fs.promises.realpath(hub);
+    await fs.promises.cp(hub, path.join(stage, 'huggingface/hub'), { recursive: true, dereference: true, filter: async file => {
+      signal?.throwIfAborted();
       if (path.basename(file) === '.locks' || file.endsWith('.incomplete')) return false;
-      if (!isWithin(fs.realpathSync(file), canonical)) throw new Error('legacy model cache link escapes its cache');
+      if (!isWithin(await fs.promises.realpath(file), canonical)) throw new Error('legacy model cache link escapes its cache');
       return true;
     } });
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    try { fs.renameSync(stage, target); }
+    signal?.throwIfAborted();
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+    signal?.throwIfAborted();
+    try { await fs.promises.rename(stage, target); }
     catch (error) { if (!['EEXIST', 'ENOTEMPTY'].includes(error.code)) throw error; }
-  } finally { fs.rmSync(stage, { recursive: true, force: true }); }
+  } finally { await fs.promises.rm(stage, { recursive: true, force: true }); }
   return target;
 }
 
@@ -44,7 +48,7 @@ export function pythonExecutable(explicit, execute = run) {
   throw new Error('Sirchmunk requires Python >= 3.10 with venv/pip; install Python or pass --sirchmunk-python=<python executable>');
 }
 
-export function prepareSirchmunk(paths, mcpRoot, { offline = false, python = null, indexURL = 'https://pypi.org/simple', execute = run, log = () => {} } = {}) {
+export async function prepareSirchmunk(paths, mcpRoot, { offline = false, python = null, indexURL = 'https://pypi.org/simple', execute = run, log = () => {} } = {}) {
   const script = path.join(mcpRoot, 'tools/sirchmunk/python/bootstrap.py');
   const root = path.join(paths.downloadsDir, 'python', `${process.platform}-${process.arch}`, 'sirchmunk');
   validateWorkspaceBuildDir(paths.repoRoot, root);
@@ -58,7 +62,7 @@ export function prepareSirchmunk(paths, mcpRoot, { offline = false, python = nul
   const state = readJson(path.join(root, 'prepared.json'));
   if (!state?.python || !state?.version) throw new Error('Sirchmunk preparation did not produce a verified environment');
   const old = readJson(paths.preparedStateReadPath())?.sirchmunk?.model_dir;
-  return { ...state, model_dir: modelCacheDirectory(paths, old), offline };
+  return { ...state, model_dir: await modelCacheDirectory(paths, old), offline };
 }
 
 /** This process only downloads/validates a model; it has no LLM credentials. */

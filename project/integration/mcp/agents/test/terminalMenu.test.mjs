@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { PassThrough } from 'node:stream';
+import { spawnSync } from 'node:child_process';
 import test, { beforeEach } from 'node:test';
 
 import { MenuCancelled, MenuInputError, arrowsSupported, createInteractiveUi } from '../src/ui/terminalMenu.mjs';
@@ -38,8 +39,9 @@ async function withTimeout(promise, milliseconds = 4000) {
 }
 
 test('secret input never echoes input or saved defaults and restores raw mode on cancellation', async () => {
-  for (const cancel of [false, true]) {
+  for (const [previousRaw, cancel] of [[false, false], [false, true], [true, false], [true, true]]) {
     const streams = fakeStreams();
+    streams.input.isRaw = previousRaw;
     const ui = createInteractiveUi(streams);
     const pending = withTimeout(ui.textInput('API Key', { defaultValue: 'saved-secret', secret: true }));
     streams.input.write('new-secret');
@@ -47,10 +49,103 @@ test('secret input never echoes input or saved defaults and restores raw mode on
     if (cancel) await assert.rejects(pending, MenuCancelled);
     else assert.equal(await pending, 'new-secret');
     assert.equal(streams.read().includes('secret'), false);
-    assert.equal(streams.rawModeStates.at(-1), false);
+    assert.equal(streams.rawModeStates.at(-1), previousRaw);
     assert.equal(streams.input.listenerCount('keypress'), 0);
     ui.close();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(streams.output.listenerCount('error'), 0);
   }
+});
+
+test('secret input preserves cancellation when stdin is destroyed', async t => {
+  for (const error of [undefined, new Error('terminal disconnected')]) {
+    const streams = fakeStreams();
+    const ui = createInteractiveUi(streams);
+    t.after(() => ui.close());
+    const setRawMode = streams.input.setRawMode;
+    streams.input.setRawMode = state => {
+      if (streams.input.destroyed) throw Object.assign(new Error('stream destroyed'), { code: 'ERR_DESTROYED' });
+      setRawMode(state);
+    };
+    const pending = withTimeout(ui.textInput('API Key', { secret: true }));
+    streams.input.write('private-value');
+    streams.input.destroy(error);
+    await assert.rejects(pending, error => error instanceof MenuCancelled && /输入已关闭/.test(error.message));
+    assert.equal(streams.input.listenerCount('keypress'), 0);
+    assert.equal(streams.read().includes('private-value'), false);
+  }
+});
+
+test('secret input cleanup failures preserve cancellation and still release input', async t => {
+  for (const failure of ['raw-mode', 'newline']) {
+    const streams = fakeStreams();
+    const ui = createInteractiveUi(streams);
+    t.after(() => ui.close());
+    const pending = withTimeout(ui.textInput('API Key', { secret: true }));
+    if (failure === 'raw-mode') streams.input.setRawMode = () => { throw new Error('raw mode restore failed'); };
+    else streams.output.write = () => { throw new Error('terminal write failed'); };
+    streams.input.write('\x03');
+    await assert.rejects(pending, MenuCancelled);
+    assert.equal(streams.input.listenerCount('keypress'), 0);
+    assert.equal(streams.input.isPaused(), true);
+  }
+});
+
+test('secret input does not write cleanup output after a stream error or UI close', async t => {
+  for (const failure of ['output-error', 'ui-close']) {
+    const streams = fakeStreams();
+    const ui = createInteractiveUi(streams);
+    t.after(() => ui.close());
+    const pending = withTimeout(ui.textInput('API Key', { secret: true }));
+    const before = streams.read();
+    if (failure === 'output-error') streams.output.destroy(new Error('output failed'));
+    else ui.close();
+    const write = t.mock.method(streams.output, 'write', streams.output.write.bind(streams.output));
+    await assert.rejects(pending, MenuCancelled);
+    assert.equal(write.mock.callCount(), 0);
+    assert.equal(streams.read(), before);
+    assert.equal(streams.input.listenerCount('keypress'), 0);
+    assert.equal(streams.input.isPaused(), true);
+  }
+});
+
+test('a delayed cleanup write error cannot crash after the secret prompt and UI have closed', () => {
+  const module = new URL('../src/ui/terminalMenu.mjs', import.meta.url).href;
+  // A real Writable reports errors asynchronously. Isolate the process so an
+  // unhandled error proves the regression without crashing the test runner.
+  const script = `
+    import assert from 'node:assert/strict';
+    import { PassThrough, Writable } from 'node:stream';
+    import { MenuCancelled, createInteractiveUi } from ${JSON.stringify(module)};
+    for (const [cancel, closeOutput] of [[false, false], [true, false], [true, true]]) {
+      const input = new PassThrough();
+      input.isTTY = true;
+      input.setRawMode = value => { input.isRaw = value; };
+      let finishWrite;
+      const output = new Writable({ write(chunk, encoding, callback) {
+        if (chunk.toString() === '\\n') finishWrite = callback;
+        else callback();
+      } });
+      const ui = createInteractiveUi({ input, output });
+      const pending = ui.textInput('API Key', { secret: true });
+      input.write('private-value');
+      input.write(cancel ? '\\x03' : '\\r');
+      if (cancel) await assert.rejects(pending, MenuCancelled);
+      else assert.equal(await pending, 'private-value');
+      ui.close();
+      assert.equal(input.isRaw, false);
+      assert.equal(input.listenerCount('keypress'), 0);
+      assert.equal(typeof finishWrite, 'function');
+      if (closeOutput) output.destroy();
+      else finishWrite(new Error('delayed terminal write failure'));
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(output.listenerCount('error'), 0);
+      assert.equal(output.listenerCount('close'), 0);
+    }
+  `;
+  const result = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { encoding: 'utf8', timeout: 5000 });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
 });
 
 test('EOF without stream close cancels both modes and future questions', async () => {

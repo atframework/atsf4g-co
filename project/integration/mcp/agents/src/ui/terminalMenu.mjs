@@ -143,7 +143,26 @@ export function createInteractiveUi({ input, output, forceLine = false }) {
         input.resume();
       });
     } finally {
-      cleanup?.(); input.setRawMode(previousRaw); input.pause(); output.write('\n');
+      cleanup?.();
+      // Terminal teardown must not replace the prompt's result or cancellation.
+      if (!input.destroyed) {
+        try { input.setRawMode(previousRaw); } catch { /* terminal may already be gone */ }
+      }
+      try { input.pause(); } catch { /* still release listeners if the stream closed */ }
+      if (!inputClosed && !output.destroyed && !output.writableEnded && !output.errored) {
+        // write() can fail after ui.close() removes the UI's error listener.
+        // On failure its callback precedes 'error', so retain this one-shot
+        // listener until error/close; on success remove it immediately.
+        const finishWrite = () => {
+          output.removeListener('error', finishWrite);
+          output.removeListener('close', finishWrite);
+        };
+        output.once('error', finishWrite);
+        output.once('close', finishWrite);
+        try {
+          output.write('\n', error => { if (!error) finishWrite(); });
+        } catch { finishWrite(); }
+      }
     }
   }
 

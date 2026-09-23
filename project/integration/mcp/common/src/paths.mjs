@@ -280,13 +280,17 @@ export class WorkspacePaths {
   }
 
   /** Read-only compatibility. Never choose a legacy path as a write target. */
-  readPath(relative) {
+  readPath(relative, aliases = []) {
     const current = path.join(this.integrationDir, relative);
-    validateWorkspaceBuildDir(this.repoRoot, current);
-    if (fs.existsSync(current)) return current;
+    const relatives = [relative, ...aliases];
+    for (const name of relatives) {
+      const file = path.join(this.integrationDir, name);
+      validateWorkspaceBuildDir(this.repoRoot, file);
+      if (fs.existsSync(file)) return file;
+    }
     const toolState = relative.replaceAll('\\', '/').match(/^state\/(tgrep|codegraph|sirchmunk)\/[a-f0-9]{16}\/[^/]+\/(.+)$/);
     const candidates = toolState ? this.legacyToolStateDirs(toolState[1]).map(dir => path.join(dir, toolState[2]))
-      : this.legacyIntegrationDirs.map(dir => path.join(dir, relative));
+      : this.legacyIntegrationDirs.map(dir => relatives.map(name => path.join(dir, name)).find(file => fs.existsSync(file))).filter(Boolean);
     const old = candidates.filter(file => fs.existsSync(file));
     for (const file of old) validateWorkspaceBuildDir(this.repoRoot, file);
     const explicit = this.explicitBuildDir && path.join(this.explicitBuildDir, 'integration/mcp');

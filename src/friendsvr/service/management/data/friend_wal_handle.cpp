@@ -8,6 +8,8 @@
 
 #include <utility/protobuf_mini_dumper.h>
 
+#include <config/logic_config.h>
+
 #include <rpc/rpc_context.h>
 
 #include "data/friend_object.h"
@@ -319,11 +321,12 @@ static friend_wal_publisher_type::configure_pointer create_friend_publisher_cong
     return ret;
   }
   // ret->enable_last_broadcast_for_removed_subscriber = true;
-  ret->gc_expire_duration = std::chrono::seconds{180};
-  ret->gc_log_size = 8;
-  ret->max_log_size = 32;
+  const auto& cfg = logic_config::me()->get_logic_cfg().friend_api();
+  ret->gc_expire_duration = protobuf_to_system_clock(cfg.wal_gc_expire_duration());
+  ret->gc_log_size = cfg.wal_gc_log_size() > 0 ? cfg.wal_gc_log_size() : 8;
+  ret->max_log_size = cfg.wal_max_log_size() > 0 ? cfg.wal_max_log_size() : 64;
 
-  ret->subscriber_timeout = std::chrono::seconds{180};
+  ret->subscriber_timeout = protobuf_to_system_clock(cfg.wal_subscriber_timeout());
   return ret;
 }
 }  // namespace

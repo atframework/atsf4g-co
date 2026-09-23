@@ -28,7 +28,7 @@ import {
   validateRelativeScope,
 } from '../../../common/src/paths.mjs';
 import { ServiceState, StateStore, ToolInstanceLock, currentIdentity } from '../../../common/src/state.mjs';
-import { runWrapperServer, toolText } from '../../../common/src/mcpServer.mjs';
+import { runWrapperServer, runWrapperMain, toolText } from '../../../common/src/mcpServer.mjs';
 import { scriptInvocation } from '../../../common/src/runtime.mjs';
 import { TgrepBackend } from './backend.mjs';
 
@@ -388,8 +388,7 @@ function resolveBinary(paths, explicit) {
   }
   if (!binary) {
     const name = process.platform === 'win32' ? 'tgrep.exe' : 'tgrep';
-    const legacy = path.join(paths.integrationDir, 'runtime', name);
-    binary = fs.existsSync(path.join(paths.runtimeDir, name)) ? path.join(paths.runtimeDir, name) : legacy;
+    binary = paths.readPath(`downloads/bin/${process.platform}-${process.arch}/${name}`, [`runtime/${name}`]);
   }
   if (!fs.existsSync(binary)) {
     process.stderr.write('tgrep-mcp: prepared tgrep binary not found; run common/tools/prepare.mjs first\n');
@@ -418,14 +417,13 @@ function main() {
   const binary = resolveBinary(paths, values['tgrep-binary']);
 
   const service = new TgrepService(paths, { binary, argvOverride });
-  void runWrapperServer({
+  return runWrapperServer({
     sharedTool: 'tgrep',
     name: `${projectInfo(repoRoot).slug}-tgrep`,
     instructions: TOOL_INSTRUCTIONS,
     tools: makeTools(service),
     service,
   });
-  return service;
 }
 
-main();
+runWrapperMain('tgrep-mcp', main);

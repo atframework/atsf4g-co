@@ -94,7 +94,8 @@ create_friend_transaction_vtable() {
       RPC_RETURN_CODE(PROJECT_NAMESPACE_ID::err::EN_SYS_UNPACK);
     }
 
-    RPC_RETURN_CODE(friend_obj->check_prepare_transcation(ctx, event_data->event_data()));
+    RPC_RETURN_CODE(
+        friend_obj->check_prepare_transcation(ctx, storage.metadata().transaction_uuid(), event_data->event_data()));
   };
 
   ret->check_writable = [](rpc::context&, atframework::distributed_system::transaction_participator_handle& handle,

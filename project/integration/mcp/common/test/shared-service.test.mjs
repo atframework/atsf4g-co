@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import test from 'node:test';
 import { WorkspacePaths, deriveRepoRoot } from '../src/paths.mjs';
 import { isPidAlive, ToolInstanceLock, currentIdentity } from '../src/state.mjs';
@@ -132,6 +132,60 @@ for (const tool of ['tgrep', 'codegraph', 'sirchmunk']) {
     await Promise.all(agents.map(agent => f.query(agent.client, 'after-recovery')));
   });
 }
+
+for (const cancel of [false, true]) test(`Sirchmunk model import keeps Agents responsive (${cancel ? 'cancel on last disconnect' : 'complete once'})`, async t => {
+  const f = await fixture(t, 'sirchmunk');
+  const repo = f.paths.repoRoot;
+  const source = path.join(repo, 'old-model');
+  fs.mkdirSync(path.join(source, 'huggingface/hub'), { recursive: true });
+  fs.writeFileSync(path.join(source, 'huggingface/hub/weights'), 'fixture model');
+  fs.writeFileSync(path.join(source, 'download-state.json'), '{"state":"downloaded"}');
+  fs.writeFileSync(f.paths.preparedStatePath(), JSON.stringify({ sirchmunk: { python: 'fake', model_dir: source } }));
+  const marker = path.join(repo, 'copy-started');
+  const release = path.join(repo, 'copy-release');
+  const hook = path.join(repo, 'slow-disk.mjs');
+  // Hold only the external copy boundary; use real MCP transports, election,
+  // lifecycle and model validation while simulating a slow filesystem.
+  fs.writeFileSync(hook, `import fs from 'node:fs';
+    const copy = fs.promises.cp;
+    fs.promises.cp = async (...args) => {
+      fs.appendFileSync(${JSON.stringify(marker)}, 'copy\\n');
+      while (!fs.existsSync(${JSON.stringify(release)})) await new Promise(resolve => setTimeout(resolve, 20));
+      return copy(...args);
+    };
+  `);
+  const env = { NODE_OPTIONS: '--import=' + pathToFileURL(hook).href };
+  const first = await f.launch(env);
+  try {
+    await until(() => fs.existsSync(marker), 'model import must start');
+    const second = await f.launch(env);
+    const states = await Promise.all([f.status(first.client), f.status(second.client)]);
+    assert.equal(states[0].state, 'starting');
+    assert.equal(states[1].shared_service.pid, states[0].shared_service.pid);
+    assert.equal(states[1].shared_service.clients, 2);
+    assert.deepEqual(f.backends(), [], 'backend must wait for the completed model');
+    const result = await second.client.callTool({ name: 'sirchmunk_search', arguments: { query: 'during import' } });
+    assert.equal(text(result).code, 'INDEX_NOT_READY');
+    assert.equal(fs.readFileSync(marker, 'utf8'), 'copy\n', 'only the elected owner may import models');
+    if (cancel) {
+      await Promise.all([first.client.close(), second.client.close()]);
+      const stateFile = sharedLocation(f.paths, 'sirchmunk').state;
+      await until(() => JSON.parse(fs.readFileSync(stateFile, 'utf8')).state === 'stopping', 'last disconnect must start shutdown before the copy finishes');
+      fs.writeFileSync(release, 'continue');
+      await until(() => !isPidAlive(states[0].shared_service.pid), 'cancelled import must release the shared owner');
+      assert.deepEqual(f.backends(), [], 'shutdown must not launch a delayed backend');
+      assert.equal(fs.existsSync(path.join(f.paths.downloadsDir, 'models/sirchmunk')), false);
+      assert.equal(fs.existsSync(path.join(f.paths.toolStateDir('sirchmunk'), 'sirchmunk.instance.lock')), false);
+      assert.equal(fs.readdirSync(f.paths.agentTmpDir).some(name => name.startsWith('model-import-')), false);
+    } else {
+      fs.writeFileSync(release, 'continue');
+      await Promise.all([f.ready(first.client), f.ready(second.client)]);
+      assert.equal(f.backends().length, 1);
+      await f.query(second.client, 'after import');
+    }
+    assert.equal(fs.readFileSync(path.join(source, 'huggingface/hub/weights'), 'utf8'), 'fixture model');
+  } finally { fs.writeFileSync(release, 'continue'); }
+});
 
 test('unauthenticated or oversized IPC cannot query or retain a cache service', async t => {
   const f = await fixture(t, 'tgrep');

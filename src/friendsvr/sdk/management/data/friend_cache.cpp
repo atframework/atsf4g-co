@@ -74,6 +74,8 @@ FRIEND_SDK_MANAGEMENT_API void friend_cache::on_loaded(rpc::context& /*ctx*/) {}
 
 FRIEND_SDK_MANAGEMENT_API void friend_cache::on_saved(rpc::context& /*ctx*/, uint64_t /*obj_svr_id*/) {}
 
+FRIEND_SDK_MANAGEMENT_API bool friend_cache::is_writable() const noexcept { return false; }
+
 FRIEND_SDK_MANAGEMENT_API int friend_cache::dump(rpc::context& /*ctx*/, PROJECT_NAMESPACE_ID::table_friend& db_data) {
   protobuf_copy_message(*db_data.mutable_blob_data(), data_->db_blob_data);
 

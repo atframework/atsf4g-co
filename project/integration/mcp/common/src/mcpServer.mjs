@@ -18,6 +18,16 @@ const { StdioServerTransport } = await loadSdk('common', '@modelcontextprotocol/
 import { BackendError, ErrorCodes } from './errors.mjs';
 import { SharedClient, sharedLocation, serveShared, isSharedWorker, relayDeno, configurationIdentity } from './sharedService.mjs';
 
+/** Include synchronous entry resolution and asynchronous pre-transport setup in
+ * the same error boundary. Startup diagnostics must never corrupt MCP stdout.
+ */
+export function runWrapperMain(name, main) {
+  void Promise.resolve().then(main).catch(error => {
+    process.stderr.write(`${name}: startup failed: ${error.message}\n`);
+    process.exit(2);
+  });
+}
+
 export function toolText(payload) {
   return { content: [{ type: 'text', text: JSON.stringify(payload, null, 1) }] };
 }

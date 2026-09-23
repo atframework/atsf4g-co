@@ -70,6 +70,13 @@ class ATFW_UTIL_SYMBOL_VISIBLE friend_cache {
   FRIEND_SDK_MANAGEMENT_API virtual void on_saved(rpc::context& ctx, uint64_t obj_svr_id);
 
   /**
+   * @brief 是否可写对象，缓存兑现不可写
+   *
+   * @return 是否可写对象
+   */
+  FRIEND_SDK_MANAGEMENT_API virtual bool is_writable() const noexcept;
+
+  /**
    * @brief 转储数据
    * @param user 转储目标
    * @return 0或错误码

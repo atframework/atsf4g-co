@@ -149,10 +149,10 @@ test('CLI help/list/dry-runs and rejected arguments are read-only and never wait
   }
 });
 
-test('CLI prepare failure occurs before reading damaged agent configs', (t) => {
+test('CLI asynchronous prepare failure occurs before reading damaged agent configs', (t) => {
   const { root, integration, run } = fixture(t);
   fs.writeFileSync(path.join(integration, 'common/src/prepare.mjs'),
-    'export function runPrepare() { throw new Error("INJECTED_PREPARE_FAILURE"); }\nexport function writePreparedState() { throw new Error("unexpected write"); }\n');
+    'export async function runPrepare() { await new Promise(resolve => setImmediate(resolve)); throw new Error("INJECTED_PREPARE_FAILURE"); }\nexport function writePreparedState() { throw new Error("unexpected write"); }\n');
   fs.writeFileSync(path.join(root, '.mcp.json'), '{ invalid');
   const before = snapshot(root);
   const result = run(['--yes', '--backend=tgrep', '--agents=claude', '--mirror=official']);

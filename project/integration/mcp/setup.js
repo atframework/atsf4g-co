@@ -406,7 +406,7 @@ async function runSetup(options, ui) {
     ui.line('');
     ui.line(`准备依赖（后端：${backend}，${mirrorSummary(mirrors, backend)}）…`);
     try {
-      const result = runPrepare({
+      const result = await runPrepare({
         repoRoot,
         integrationRoot,
         buildDir,
